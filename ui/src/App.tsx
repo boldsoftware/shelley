@@ -23,6 +23,10 @@ function getSlugFromPath(): string | null {
   return null;
 }
 
+// Capture the initial slug from URL BEFORE React renders, so it won't be affected
+// by the useEffect that updates the URL based on current conversation.
+const initialSlugFromUrl = getSlugFromPath();
+
 // Update the URL to reflect the current conversation slug
 function updateUrlWithSlug(conversation: Conversation | undefined) {
   const currentSlug = getSlugFromPath();
@@ -61,12 +65,14 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const initialSlugResolved = useRef(false);
 
-  // Resolve initial slug from URL
+  // Resolve initial slug from URL - uses the captured initialSlugFromUrl
   const resolveInitialSlug = useCallback(async (convs: Conversation[]) => {
     if (initialSlugResolved.current) return null;
     initialSlugResolved.current = true;
 
-    const urlSlug = getSlugFromPath();
+    // Use the slug captured at module load time, not the current URL
+    // (which may have been changed by updateUrlWithSlug before this runs)
+    const urlSlug = initialSlugFromUrl;
     if (!urlSlug) return null;
 
     // First check if we already have this conversation in our list
