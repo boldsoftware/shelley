@@ -104,6 +104,8 @@ function DiffViewer({ cwd, isOpen, onClose, onCommentTextChange, initialCommit }
   } | null>(null);
   const [commentText, setCommentText] = useState("");
   const [mode, setMode] = useState<ViewMode>("comment");
+  const [showKeyboardHint, setShowKeyboardHint] = useState(false);
+  const hasShownKeyboardHint = useRef(false);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -155,6 +157,16 @@ function DiffViewer({ cwd, isOpen, onClose, onCommentTextChange, initialCommit }
         });
     }
   }, [isOpen, monacoLoaded]);
+
+  // Show keyboard hint toast on first open (desktop only)
+  useEffect(() => {
+    if (isOpen && !isMobile && !hasShownKeyboardHint.current && fileDiff) {
+      hasShownKeyboardHint.current = true;
+      setShowKeyboardHint(true);
+      const timer = setTimeout(() => setShowKeyboardHint(false), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, isMobile, fileDiff]);
 
   // Load diffs when viewer opens, reset state when it closes
   useEffect(() => {
@@ -259,6 +271,20 @@ function DiffViewer({ cwd, isOpen, onClose, onCommentTextChange, initialCommit }
     });
 
     editorRef.current = diffEditor;
+
+    // Auto-scroll to first diff after editor is ready
+    // Use setTimeout to allow Monaco to compute the diff
+    setTimeout(() => {
+      const changes = diffEditor.getLineChanges();
+      if (changes && changes.length > 0) {
+        const firstChange = changes[0];
+        const targetLine = firstChange.modifiedStartLineNumber || 1;
+        const editor = diffEditor.getModifiedEditor();
+        editor.revealLineInCenter(targetLine);
+        editor.setPosition({ lineNumber: targetLine, column: 1 });
+        setCurrentChangeIndex(0);
+      }
+    }, 100);
 
     // Add click handler for commenting - clicking on a line in comment mode opens dialog
     const modifiedEditor = diffEditor.getModifiedEditor();
@@ -458,14 +484,26 @@ function DiffViewer({ cwd, isOpen, onClose, onCommentTextChange, initialCommit }
     }
 
     const modifiedEditor = editorRef.current.getModifiedEditor();
-    const nextIdx = currentChangeIndex + 1;
+    const visibleRanges = modifiedEditor.getVisibleRanges();
+    const viewBottom = visibleRanges.length > 0 ? visibleRanges[0].endLineNumber : 0;
 
-    if (nextIdx >= changes.length) {
-      // At end of file, try to go to next file
+    // Find the next change that starts below the current view
+    // This ensures we always move "down" and never scroll up
+    let nextIdx = -1;
+    for (let i = 0; i < changes.length; i++) {
+      const changeLine = changes[i].modifiedStartLineNumber || 1;
+      if (changeLine > viewBottom) {
+        nextIdx = i;
+        break;
+      }
+    }
+
+    if (nextIdx === -1) {
+      // No more changes below current view, try to go to next file
       if (goToNextFile()) {
         return;
       }
-      // No next file, stay at last change
+      // No next file, stay where we are
       return;
     }
 
@@ -474,7 +512,7 @@ function DiffViewer({ cwd, isOpen, onClose, onCommentTextChange, initialCommit }
     modifiedEditor.revealLineInCenter(targetLine);
     modifiedEditor.setPosition({ lineNumber: targetLine, column: 1 });
     setCurrentChangeIndex(nextIdx);
-  }, [currentChangeIndex, goToNextFile]);
+  }, [goToNextFile]);
 
   const goToPreviousChange = useCallback(() => {
     if (!editorRef.current) return;
@@ -707,22 +745,28 @@ function DiffViewer({ cwd, isOpen, onClose, onCommentTextChange, initialCommit }
     </select>
   );
 
+  const fileIndexIndicator =
+    files.length > 1 && currentFileIndex >= 0 ? `(${currentFileIndex + 1}/${files.length})` : null;
+
   const fileSelector = (
-    <select
-      value={selectedFile || ""}
-      onChange={(e) => setSelectedFile(e.target.value || null)}
-      className="diff-viewer-select"
-      disabled={files.length === 0}
-    >
-      <option value="">{files.length === 0 ? "No files" : "Choose file..."}</option>
-      {files.map((file) => (
-        <option key={file.path} value={file.path}>
-          {getStatusSymbol(file.status)} {file.path}
-          {file.additions > 0 && ` (+${file.additions})`}
-          {file.deletions > 0 && ` (-${file.deletions})`}
-        </option>
-      ))}
-    </select>
+    <div className="diff-viewer-file-selector-wrapper">
+      <select
+        value={selectedFile || ""}
+        onChange={(e) => setSelectedFile(e.target.value || null)}
+        className="diff-viewer-select"
+        disabled={files.length === 0}
+      >
+        <option value="">{files.length === 0 ? "No files" : "Choose file..."}</option>
+        {files.map((file) => (
+          <option key={file.path} value={file.path}>
+            {getStatusSymbol(file.status)} {file.path}
+            {file.additions > 0 && ` (+${file.additions})`}
+            {file.deletions > 0 && ` (-${file.deletions})`}
+          </option>
+        ))}
+      </select>
+      {fileIndexIndicator && <span className="diff-viewer-file-index">{fileIndexIndicator}</span>}
+    </div>
   );
 
   const modeToggle = (
@@ -790,6 +834,11 @@ function DiffViewer({ cwd, isOpen, onClose, onCommentTextChange, initialCommit }
             {saveStatus === "saving" && "💾 Saving..."}
             {saveStatus === "saved" && "✅ Saved"}
             {saveStatus === "error" && "❌ Error saving"}
+          </div>
+        )}
+        {showKeyboardHint && (
+          <div className="diff-viewer-toast diff-viewer-toast-hint">
+            ⌨️ Use . , for next/prev change, &lt; &gt; for files
           </div>
         )}
 

@@ -2707,6 +2707,26 @@ svg {
   max-width: none;
 }
 
+.diff-viewer-file-selector-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.diff-viewer-file-selector-wrapper .diff-viewer-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.diff-viewer-file-index {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .diff-viewer-controls-row {
   display: flex;
   align-items: center;
@@ -2851,6 +2871,12 @@ svg {
 
 .diff-viewer-toast-error {
   background: #d32f2f;
+}
+
+.diff-viewer-toast-hint {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
 }
 
 @keyframes toast-fade-in {
