@@ -62,5 +62,6 @@ homebrew_casks:
     homepage: https://github.com/boldsoftware/shelley
     description: "A mobile-friendly, web-based, multi-modal coding agent"
     hooks:
-      post_install: |
-        system "xattr", "-dr", "com.apple.quarantine", "#{caskroom_path}"
+      post:
+        install: |
+          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{caskroom_path}"]
