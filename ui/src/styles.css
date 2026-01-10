@@ -1238,6 +1238,38 @@ button {
   overflow: hidden;
 }
 
+/* Monaco line hover highlighting (via decoration API) */
+.patch-tool-monaco-editor .monaco-editor .patch-line-hover {
+  background-color: rgba(37, 99, 235, 0.08) !important;
+}
+
+.dark .patch-tool-monaco-editor .monaco-editor .patch-line-hover {
+  background-color: rgba(96, 165, 250, 0.12) !important;
+}
+
+/* Comment indicator glyph in margin */
+.patch-tool-monaco-editor .monaco-editor .patch-comment-glyph {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'%3E%3C/path%3E%3Cline x1='9' y1='10' x2='15' y2='10'%3E%3C/line%3E%3C/svg%3E");
+  background-size: 14px 14px;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.patch-tool-monaco-editor .monaco-editor .patch-comment-glyph:hover {
+  opacity: 1;
+}
+
+.dark .patch-tool-monaco-editor .monaco-editor .patch-comment-glyph {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'%3E%3C/path%3E%3Cline x1='9' y1='10' x2='15' y2='10'%3E%3C/line%3E%3C/svg%3E");
+}
+
+/* Make Monaco lines clickable with pointer cursor */
+.patch-tool-monaco-editor .monaco-editor .view-lines {
+  cursor: pointer;
+}
+
 /* Patch Tool Comment Dialog */
 .patch-tool-comment-dialog {
   position: fixed;

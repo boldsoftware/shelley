@@ -85,6 +85,7 @@ function PatchTool({
   const editorRef = useRef<Monaco.editor.IStandaloneDiffEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
+  const hoverDecorationsRef = useRef<string[]>([]);
 
   // Track viewport size
   useEffect(() => {
@@ -192,7 +193,7 @@ function PatchTool({
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       wordWrap: "on",
-      glyphMargin: false,
+      glyphMargin: !isMobile, // Enable glyph margin for comment indicator
       lineDecorationsWidth: isMobile ? 0 : 10,
       lineNumbersMinChars: isMobile ? 0 : 3,
       quickSuggestions: false,
@@ -243,6 +244,47 @@ function PatchTool({
             openCommentDialog(position.lineNumber);
           }
         }
+      });
+
+      // Add hover highlighting with comment indicator
+      let lastHoveredLine = -1;
+      modifiedEditor.onMouseMove((e: Monaco.editor.IEditorMouseEvent) => {
+        const position = e.target.position;
+        const lineNumber = position?.lineNumber ?? -1;
+
+        if (lineNumber === lastHoveredLine) return;
+        lastHoveredLine = lineNumber;
+
+        if (lineNumber > 0) {
+          hoverDecorationsRef.current = modifiedEditor.deltaDecorations(
+            hoverDecorationsRef.current,
+            [
+              {
+                range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+                options: {
+                  isWholeLine: true,
+                  className: "patch-line-hover",
+                  glyphMarginClassName: "patch-comment-glyph",
+                },
+              },
+            ],
+          );
+        } else {
+          // Clear decorations when not hovering a line
+          hoverDecorationsRef.current = modifiedEditor.deltaDecorations(
+            hoverDecorationsRef.current,
+            [],
+          );
+        }
+      });
+
+      // Clear decorations when mouse leaves editor
+      modifiedEditor.onMouseLeave(() => {
+        lastHoveredLine = -1;
+        hoverDecorationsRef.current = modifiedEditor.deltaDecorations(
+          hoverDecorationsRef.current,
+          [],
+        );
       });
     }
 
