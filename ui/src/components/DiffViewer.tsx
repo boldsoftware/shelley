@@ -113,6 +113,7 @@ function DiffViewer({ cwd, isOpen, onClose, onCommentTextChange, initialCommit }
   const monacoRef = useRef<typeof Monaco | null>(null);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
   const modeRef = useRef<ViewMode>(mode);
+  const hoverDecorationsRef = useRef<string[]>([]);
 
   // Keep modeRef in sync with mode state and update editor options
   useEffect(() => {
@@ -252,7 +253,7 @@ function DiffViewer({ cwd, isOpen, onClose, onCommentTextChange, initialCommit }
       minimap: { enabled: false },
       scrollBeyondLastLine: true, // Enable scroll past end for mobile floating buttons
       wordWrap: "on",
-      glyphMargin: false, // No glyph margin - click on lines to comment
+      glyphMargin: !isMobile, // Enable glyph margin for comment indicator on hover
       lineDecorationsWidth: isMobile ? 0 : 10,
       lineNumbersMinChars: isMobile ? 0 : 3,
       quickSuggestions: false,
@@ -345,6 +346,54 @@ function DiffViewer({ cwd, isOpen, onClose, onCommentTextChange, initialCommit }
         }
       });
     }
+
+    // Add hover highlighting with comment indicator (comment mode only)
+    let lastHoveredLine = -1;
+    modifiedEditor.onMouseMove((e: Monaco.editor.IEditorMouseEvent) => {
+      // Only show hover effects in comment mode
+      if (modeRef.current !== "comment") {
+        if (hoverDecorationsRef.current.length > 0) {
+          hoverDecorationsRef.current = modifiedEditor.deltaDecorations(
+            hoverDecorationsRef.current,
+            [],
+          );
+        }
+        return;
+      }
+
+      const position = e.target.position;
+      const lineNumber = position?.lineNumber ?? -1;
+
+      if (lineNumber === lastHoveredLine) return;
+      lastHoveredLine = lineNumber;
+
+      if (lineNumber > 0) {
+        hoverDecorationsRef.current = modifiedEditor.deltaDecorations(hoverDecorationsRef.current, [
+          {
+            range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+            options: {
+              isWholeLine: true,
+              className: "diff-viewer-line-hover",
+              glyphMarginClassName: "diff-viewer-comment-glyph",
+            },
+          },
+        ]);
+      } else {
+        hoverDecorationsRef.current = modifiedEditor.deltaDecorations(
+          hoverDecorationsRef.current,
+          [],
+        );
+      }
+    });
+
+    // Clear decorations when mouse leaves editor
+    modifiedEditor.onMouseLeave(() => {
+      lastHoveredLine = -1;
+      hoverDecorationsRef.current = modifiedEditor.deltaDecorations(
+        hoverDecorationsRef.current,
+        [],
+      );
+    });
 
     // Add content change listener for auto-save
     contentChangeDisposableRef.current?.dispose();
