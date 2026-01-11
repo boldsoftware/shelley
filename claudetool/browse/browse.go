@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/browser"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/google/uuid"
@@ -25,8 +27,23 @@ import (
 // ScreenshotDir is the directory where screenshots are stored
 const ScreenshotDir = "/tmp/shelley-screenshots"
 
+// DownloadDir is the directory where browser downloads are stored
+const DownloadDir = "/tmp/shelley-downloads"
+
 // DefaultIdleTimeout is how long to wait before shutting down an idle browser
 const DefaultIdleTimeout = 30 * time.Minute
+
+// downloadInfo tracks the state of an in-progress or completed download
+type downloadInfo struct {
+	GUID              string
+	URL               string
+	SuggestedFilename string
+	FilePath          string
+	State             browser.DownloadProgressState
+	TotalBytes        float64
+	ReceivedBytes     float64
+	Done              chan struct{}
+}
 
 // BrowseTools contains all browser tools and manages a shared browser instance
 type BrowseTools struct {
@@ -43,6 +60,9 @@ type BrowseTools struct {
 	consoleLogs      []*runtime.EventConsoleAPICalled
 	consoleLogsMutex sync.Mutex
 	maxConsoleLogs   int
+	// Download tracking
+	downloads      map[string]*downloadInfo // keyed by GUID
+	downloadsMutex sync.Mutex
 	// Idle timeout management
 	idleTimeout time.Duration
 	idleTimer   *time.Timer
@@ -60,12 +80,16 @@ func NewBrowseTools(ctx context.Context, idleTimeout time.Duration, maxImageDime
 	if err := os.MkdirAll(ScreenshotDir, 0o755); err != nil {
 		log.Printf("Failed to create screenshot directory: %v", err)
 	}
+	if err := os.MkdirAll(DownloadDir, 0o755); err != nil {
+		log.Printf("Failed to create download directory: %v", err)
+	}
 
 	return &BrowseTools{
 		ctx:               ctx,
 		screenshots:       make(map[string]time.Time),
 		consoleLogs:       make([]*runtime.EventConsoleAPICalled, 0),
 		maxConsoleLogs:    100,
+		downloads:         make(map[string]*downloadInfo),
 		maxImageDimension: maxImageDimension,
 		idleTimeout:       idleTimeout,
 	}
@@ -96,10 +120,15 @@ func (b *BrowseTools) GetBrowserContext() (context.Context, error) {
 		chromedp.WithBrowserOption(chromedp.WithDialTimeout(60*time.Second)),
 	)
 
-	// Set up console log listener
+	// Set up console log and download event listeners
 	chromedp.ListenTarget(browserCtx, func(ev any) {
-		if e, ok := ev.(*runtime.EventConsoleAPICalled); ok {
+		switch e := ev.(type) {
+		case *runtime.EventConsoleAPICalled:
 			b.captureConsoleLog(e)
+		case *browser.EventDownloadWillBegin:
+			b.handleDownloadWillBegin(e)
+		case *browser.EventDownloadProgress:
+			b.handleDownloadProgress(e)
 		}
 	})
 
@@ -107,6 +136,15 @@ func (b *BrowseTools) GetBrowserContext() (context.Context, error) {
 	if err := chromedp.Run(browserCtx); err != nil {
 		allocCancel()
 		return nil, fmt.Errorf("failed to start browser (please apt get chromium or equivalent): %w", err)
+	}
+
+	// Configure download behavior - allow downloads and save to our directory
+	if err := chromedp.Run(browserCtx,
+		browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorAllowAndName).
+			WithDownloadPath(DownloadDir).
+			WithEventsEnabled(true),
+	); err != nil {
+		log.Printf("Warning: failed to configure download behavior: %v", err)
 	}
 
 	// Set default viewport size to 1280x720 (16:9 widescreen)
@@ -229,14 +267,45 @@ func (b *BrowseTools) navigateRun(ctx context.Context, m json.RawMessage) llm.To
 		return llm.ErrorToolOut(err)
 	}
 
+	// Clear any previous download tracking before navigating
+	b.clearDownloads()
+
 	// Create a timeout context for this operation
 	timeoutCtx, cancel := context.WithTimeout(browserCtx, parseTimeout(input.Timeout))
 	defer cancel()
 
-	err = chromedp.Run(timeoutCtx,
-		chromedp.Navigate(input.URL),
-		chromedp.WaitReady("body"),
-	)
+	// Use page.Navigate directly to get the isDownload flag
+	var isDownload bool
+	var errorText string
+	err = chromedp.Run(timeoutCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+		_, _, errorText, isDownload, err = page.Navigate(input.URL).Do(ctx)
+		return err
+	}))
+	if err != nil {
+		return llm.ErrorToolOut(err)
+	}
+	if errorText != "" && !isDownload {
+		return llm.ErrorToolOut(fmt.Errorf("navigation failed: %s", errorText))
+	}
+
+	// If this triggered a download, wait for it to complete
+	if isDownload {
+		downloadCtx, downloadCancel := context.WithTimeout(browserCtx, 60*time.Second)
+		defer downloadCancel()
+
+		downloadInfo, downloadErr := b.waitForDownload(downloadCtx)
+		if downloadErr != nil {
+			return llm.ErrorToolOut(fmt.Errorf("download failed: %w", downloadErr))
+		}
+		return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf(
+			"File downloaded to: %s (%.0f bytes)",
+			downloadInfo.FilePath,
+			downloadInfo.TotalBytes,
+		))}
+	}
+
+	// Normal page load - wait for body to be ready
+	err = chromedp.Run(timeoutCtx, chromedp.WaitReady("body"))
 	if err != nil {
 		return llm.ErrorToolOut(err)
 	}
@@ -646,6 +715,149 @@ func (b *BrowseTools) captureConsoleLog(e *runtime.EventConsoleAPICalled) {
 	if len(b.consoleLogs) > b.maxConsoleLogs {
 		b.consoleLogs = b.consoleLogs[len(b.consoleLogs)-b.maxConsoleLogs:]
 	}
+}
+
+// handleDownloadWillBegin is called when a download starts
+func (b *BrowseTools) handleDownloadWillBegin(e *browser.EventDownloadWillBegin) {
+	b.downloadsMutex.Lock()
+	defer b.downloadsMutex.Unlock()
+
+	b.downloads[e.GUID] = &downloadInfo{
+		GUID:              e.GUID,
+		URL:               e.URL,
+		SuggestedFilename: e.SuggestedFilename,
+		State:             browser.DownloadProgressStateInProgress,
+		Done:              make(chan struct{}),
+	}
+	log.Printf("Download started: %s -> %s", e.URL, e.SuggestedFilename)
+}
+
+// uniqueFilePath returns a unique file path, adding (1), (2), etc. if the file exists
+// e.g., "file.pdf" -> "file (1).pdf" -> "file (2).pdf"
+func uniqueFilePath(dir, filename string) string {
+	path := filepath.Join(dir, filename)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return path
+	}
+
+	ext := filepath.Ext(filename)
+	base := strings.TrimSuffix(filename, ext)
+
+	for i := 1; ; i++ {
+		path = filepath.Join(dir, fmt.Sprintf("%s (%d)%s", base, i, ext))
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return path
+		}
+	}
+}
+
+// handleDownloadProgress is called as download progresses and completes
+func (b *BrowseTools) handleDownloadProgress(e *browser.EventDownloadProgress) {
+	b.downloadsMutex.Lock()
+	defer b.downloadsMutex.Unlock()
+
+	info, ok := b.downloads[e.GUID]
+	if !ok {
+		return
+	}
+
+	info.State = e.State
+	info.TotalBytes = e.TotalBytes
+	info.ReceivedBytes = e.ReceivedBytes
+
+	if e.State == browser.DownloadProgressStateCompleted {
+		// Chrome saves the file with the GUID as filename in DownloadDir
+		// Move it to the suggested filename, adding (1), (2), etc. if needed
+		guidPath := filepath.Join(DownloadDir, e.GUID)
+		finalPath := uniqueFilePath(DownloadDir, info.SuggestedFilename)
+
+		if err := os.Rename(guidPath, finalPath); err != nil {
+			log.Printf("Failed to rename download %s to %s: %v", guidPath, finalPath, err)
+			finalPath = guidPath // Fall back to GUID path
+		}
+
+		info.FilePath = finalPath
+		log.Printf("Download completed: %s", finalPath)
+		close(info.Done)
+	} else if e.State == browser.DownloadProgressStateCanceled {
+		log.Printf("Download canceled: %s", info.URL)
+		close(info.Done)
+	}
+}
+
+// waitForDownload waits for any pending download to complete and returns its info
+func (b *BrowseTools) waitForDownload(ctx context.Context) (*downloadInfo, error) {
+	// Poll for download to start or complete
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		b.downloadsMutex.Lock()
+		var pending *downloadInfo
+		var completed *downloadInfo
+		for _, info := range b.downloads {
+			if info.State == browser.DownloadProgressStateInProgress {
+				pending = info
+				break
+			}
+			if info.State == browser.DownloadProgressStateCompleted && info.FilePath != "" {
+				// Track most recent completed download
+				if completed == nil {
+					completed = info
+				}
+			}
+		}
+		b.downloadsMutex.Unlock()
+
+		// If we have a pending download, wait for it
+		if pending != nil {
+			select {
+			case <-pending.Done:
+				if pending.State == browser.DownloadProgressStateCanceled {
+					return nil, fmt.Errorf("download was canceled")
+				}
+				return pending, nil
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+
+		// If we have a recently completed download, return it
+		if completed != nil {
+			return completed, nil
+		}
+
+		// Wait before checking again, or timeout
+		select {
+		case <-ticker.C:
+			// Continue polling
+		case <-ctx.Done():
+			return nil, fmt.Errorf("no download detected: %w", ctx.Err())
+		}
+	}
+}
+
+// getMostRecentDownload returns the most recently completed download
+func (b *BrowseTools) getMostRecentDownload() *downloadInfo {
+	b.downloadsMutex.Lock()
+	defer b.downloadsMutex.Unlock()
+
+	var mostRecent *downloadInfo
+	for _, info := range b.downloads {
+		if info.State == browser.DownloadProgressStateCompleted {
+			if mostRecent == nil || info.FilePath > mostRecent.FilePath {
+				mostRecent = info
+			}
+		}
+	}
+	return mostRecent
+}
+
+// clearDownloads removes all tracked downloads
+func (b *BrowseTools) clearDownloads() {
+	b.downloadsMutex.Lock()
+	defer b.downloadsMutex.Unlock()
+	b.downloads = make(map[string]*downloadInfo)
 }
 
 // RecentConsoleLogsTool definition

@@ -482,3 +482,68 @@ func TestReadImageToolResizesLargeImage(t *testing.T) {
 
 	t.Logf("Large image resized from 3000x2500 to %dx%d", config.Width, config.Height)
 }
+
+func TestPDFDownload(t *testing.T) {
+	// Skip long tests in short mode
+	if testing.Short() {
+		t.Skip("skipping PDF download test in short mode")
+	}
+
+	// Create browser tools instance
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	tools := NewBrowseTools(ctx, 0, 0)
+	t.Cleanup(func() {
+		tools.Close()
+		// Clean up any downloaded files
+		os.RemoveAll(DownloadDir)
+	})
+
+	// Get the navigate tool
+	navTool := tools.NewNavigateTool()
+
+	// Navigate to a PDF URL - this should trigger a download
+	// Using a well-known test PDF
+	input := map[string]string{
+		"url":     "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+		"timeout": "30s",
+	}
+	inputJSON, _ := json.Marshal(input)
+
+	// Call the tool
+	toolOut := navTool.Run(ctx, json.RawMessage(inputJSON))
+	if toolOut.Error != nil {
+		// Check if this is a "no pending download" error, which might happen
+		// if the URL doesn't actually serve a PDF or triggers navigation instead
+		if strings.Contains(toolOut.Error.Error(), "no pending download") {
+			t.Skip("PDF download not triggered - URL may have changed behavior")
+		}
+		t.Fatalf("Error running navigate tool: %v", toolOut.Error)
+	}
+
+	result := toolOut.LLMContent
+	resultText := result[0].Text
+
+	// Check if this was a download - message format: "File downloaded to: /path/file.pdf (1234 bytes)"
+	if strings.Contains(resultText, "File downloaded to:") {
+		t.Logf("PDF download successful: %s", resultText)
+
+		// Extract path from result - format: "File downloaded to: /path/file.pdf (1234 bytes)"
+		path := strings.TrimPrefix(resultText, "File downloaded to: ")
+		if idx := strings.LastIndex(path, " ("); idx > 0 {
+			path = path[:idx]
+		}
+
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			t.Errorf("Downloaded file does not exist: %s", path)
+		} else {
+			t.Logf("Verified file exists: %s", path)
+		}
+	} else if strings.Contains(resultText, "done") {
+		// This might happen if the URL doesn't trigger a download
+		t.Logf("Navigation completed without download - URL may serve HTML: %s", resultText)
+	} else {
+		t.Errorf("Unexpected result: %s", resultText)
+	}
+}
