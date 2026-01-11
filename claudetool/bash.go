@@ -141,6 +141,11 @@ type bashInput struct {
 	Background bool   `json:"background,omitempty"`
 }
 
+// BashDisplayData is the display data sent to the UI for bash tool results.
+type BashDisplayData struct {
+	WorkingDir string `json:"workingDir"`
+}
+
 type BackgroundResult struct {
 	PID     int
 	OutFile string
@@ -203,13 +208,15 @@ func (b *BashTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
 
 	timeout := req.timeout(b.Timeouts)
 
+	display := BashDisplayData{WorkingDir: wd}
+
 	// If Background is set to true, use executeBackgroundBash
 	if req.Background {
 		result, err := b.executeBackgroundBash(ctx, req, timeout)
 		if err != nil {
 			return llm.ErrorToolOut(err)
 		}
-		return llm.ToolOut{LLMContent: llm.TextContent(result.XMLish())}
+		return llm.ToolOut{LLMContent: llm.TextContent(result.XMLish()), Display: display}
 	}
 
 	// For foreground commands, use executeBash
@@ -217,7 +224,7 @@ func (b *BashTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
 	if execErr != nil {
 		return llm.ErrorToolOut(execErr)
 	}
-	return llm.ToolOut{LLMContent: llm.TextContent(out)}
+	return llm.ToolOut{LLMContent: llm.TextContent(out), Display: display}
 }
 
 const maxBashOutputLength = 131072

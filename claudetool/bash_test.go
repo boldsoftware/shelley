@@ -87,6 +87,15 @@ func TestBashTool(t *testing.T) {
 		if len(result) == 0 || result[0].Text != expected {
 			t.Errorf("Expected %q, got %q", expected, result[0].Text)
 		}
+
+		// Verify Display data contains working directory
+		display, ok := toolOut.Display.(BashDisplayData)
+		if !ok {
+			t.Fatalf("Expected Display to be BashDisplayData, got %T", toolOut.Display)
+		}
+		if display.WorkingDir != "/" {
+			t.Errorf("Expected WorkingDir to be '/', got %q", display.WorkingDir)
+		}
 	})
 
 	// Test with arguments

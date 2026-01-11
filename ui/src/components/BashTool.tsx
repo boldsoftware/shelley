@@ -1,6 +1,11 @@
 import React, { useState } from "react";
 import { LLMContent } from "../types";
 
+// Display data from the bash tool backend
+interface BashDisplayData {
+  workingDir: string;
+}
+
 interface BashToolProps {
   // For tool_use (pending state)
   toolInput?: unknown;
@@ -10,10 +15,27 @@ interface BashToolProps {
   toolResult?: LLMContent[];
   hasError?: boolean;
   executionTime?: string;
+  display?: unknown;
 }
 
-function BashTool({ toolInput, isRunning, toolResult, hasError, executionTime }: BashToolProps) {
+function BashTool({
+  toolInput,
+  isRunning,
+  toolResult,
+  hasError,
+  executionTime,
+  display,
+}: BashToolProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Extract working directory from display data
+  const displayData: BashDisplayData | null =
+    display &&
+    typeof display === "object" &&
+    "workingDir" in display &&
+    typeof display.workingDir === "string"
+      ? (display as BashDisplayData)
+      : null;
 
   // Extract command from toolInput
   const command =
@@ -51,6 +73,11 @@ function BashTool({ toolInput, isRunning, toolResult, hasError, executionTime }:
         <div className="bash-tool-summary">
           <span className={`bash-tool-emoji ${isRunning ? "running" : ""}`}>🛠️</span>
           <span className="bash-tool-command">{displayCommand}</span>
+          {displayData?.workingDir && (
+            <span className="bash-tool-cwd" title={displayData.workingDir}>
+              in {displayData.workingDir}
+            </span>
+          )}
           {isComplete && isCancelled && <span className="bash-tool-cancelled">✗ cancelled</span>}
           {isComplete && hasError && !isCancelled && <span className="bash-tool-error">✗</span>}
           {isComplete && !hasError && <span className="bash-tool-success">✓</span>}
@@ -84,6 +111,12 @@ function BashTool({ toolInput, isRunning, toolResult, hasError, executionTime }:
 
       {isExpanded && (
         <div className="bash-tool-details">
+          {displayData?.workingDir && (
+            <div className="bash-tool-section">
+              <div className="bash-tool-label">Working Directory:</div>
+              <pre className="bash-tool-code bash-tool-code-cwd">{displayData.workingDir}</pre>
+            </div>
+          )}
           <div className="bash-tool-section">
             <div className="bash-tool-label">Command:</div>
             <pre className="bash-tool-code">{command}</pre>
