@@ -3,6 +3,8 @@ package oai
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -412,4 +414,105 @@ func TestResponsesServiceIntegration(t *testing.T) {
 			t.Error("expected to find tool use in response")
 		}
 	})
+}
+
+// Test system content with all empty text (should return nil)
+func TestFromLLMSystemResponsesAllEmpty(t *testing.T) {
+	items := fromLLMSystemResponses([]llm.SystemContent{
+		{Text: ""},
+		{Text: ""},
+		{Text: ""},
+	})
+	if items != nil {
+		t.Errorf("fromLLMSystemResponses(all empty) = %v, expected nil", items)
+	}
+}
+
+func TestResponsesServiceDo(t *testing.T) {
+	// Create a mock Responses server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/responses" {
+			t.Errorf("Expected path /responses, got %s", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer test-api-key" {
+			t.Errorf("Expected Authorization header, got %s", r.Header.Get("Authorization"))
+		}
+
+		// Send a mock response
+		response := responsesResponse{
+			ID:    "responses-test123",
+			Model: "test-model",
+			Output: []responsesOutputItem{
+				{
+					Type: "message",
+					Role: "assistant",
+					Content: []responsesContent{
+						{
+							Type: "text",
+							Text: "Hello! How can I help you today?",
+						},
+					},
+				},
+			},
+			Usage: responsesUsage{
+				InputTokens:  10,
+				OutputTokens: 20,
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	// Create a service with the mock server
+	ctx := context.Background()
+	svc := &ResponsesService{
+		APIKey:   "test-api-key",
+		Model:    GPT41,
+		ModelURL: server.URL,
+	}
+
+	// Create a test request
+	req := &llm.Request{
+		Messages: []llm.Message{
+			{
+				Role: llm.MessageRoleUser,
+				Content: []llm.Content{
+					{Type: llm.ContentTypeText, Text: "Hello!"},
+				},
+			},
+		},
+	}
+
+	// Call the Do method
+	resp, err := svc.Do(ctx, req)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+
+	// Verify the response
+	if resp == nil {
+		t.Fatal("Do() returned nil response")
+	}
+	if resp.Role != llm.MessageRoleAssistant {
+		t.Errorf("resp.Role = %v, expected %v", resp.Role, llm.MessageRoleAssistant)
+	}
+	if len(resp.Content) != 1 {
+		t.Errorf("resp.Content length = %d, expected 1", len(resp.Content))
+	} else {
+		content := resp.Content[0]
+		if content.Type != llm.ContentTypeText {
+			t.Errorf("content.Type = %v, expected %v", content.Type, llm.ContentTypeText)
+		}
+		if content.Text != "Hello! How can I help you today?" {
+			t.Errorf("content.Text = %q, expected %q", content.Text, "Hello! How can I help you today?")
+		}
+	}
+	if resp.Usage.InputTokens != 10 {
+		t.Errorf("resp.Usage.InputTokens = %d, expected 10", resp.Usage.InputTokens)
+	}
+	if resp.Usage.OutputTokens != 20 {
+		t.Errorf("resp.Usage.OutputTokens = %d, expected 20", resp.Usage.OutputTokens)
+	}
 }

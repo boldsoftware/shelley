@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -453,5 +454,67 @@ func TestMessageService_CountByType(t *testing.T) {
 	}
 	if toolCount != 1 {
 		t.Errorf("Expected 1 tool message, got %d", toolCount)
+	}
+}
+
+func TestMessageService_ListMessagesByConversationPaginated(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create a test conversation
+	conv, err := db.CreateConversation(ctx, stringPtr("test-conversation-paginated"), true, nil)
+	if err != nil {
+		t.Fatalf("Failed to create test conversation: %v", err)
+	}
+
+	// Create multiple test messages
+	for i := 0; i < 5; i++ {
+		_, err := db.CreateMessage(ctx, CreateMessageParams{
+			ConversationID: conv.ConversationID,
+			Type:           MessageTypeUser,
+			LLMData:        map[string]string{"text": fmt.Sprintf("test message %d", i)},
+		})
+		if err != nil {
+			t.Fatalf("Failed to create test message %d: %v", i, err)
+		}
+	}
+
+	// Test ListMessagesByConversationPaginated with limit and offset
+	messages, err := db.ListMessagesByConversationPaginated(ctx, conv.ConversationID, 3, 0)
+	if err != nil {
+		t.Errorf("ListMessagesByConversationPaginated() error = %v", err)
+	}
+
+	if len(messages) != 3 {
+		t.Errorf("Expected 3 messages, got %d", len(messages))
+	}
+
+	// Test with offset
+	messages2, err := db.ListMessagesByConversationPaginated(ctx, conv.ConversationID, 3, 3)
+	if err != nil {
+		t.Errorf("ListMessagesByConversationPaginated() with offset error = %v", err)
+	}
+
+	if len(messages2) != 2 {
+		t.Errorf("Expected 2 messages with offset, got %d", len(messages2))
+	}
+
+	// Verify no duplicate messages between pages
+	messageIDs := make(map[string]bool)
+	for _, msg := range messages {
+		if messageIDs[msg.MessageID] {
+			t.Error("Found duplicate message ID in first page")
+		}
+		messageIDs[msg.MessageID] = true
+	}
+
+	for _, msg := range messages2 {
+		if messageIDs[msg.MessageID] {
+			t.Error("Found duplicate message ID in second page")
+		}
+		messageIDs[msg.MessageID] = true
 	}
 }

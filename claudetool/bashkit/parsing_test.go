@@ -144,3 +144,62 @@ func TestExtractCommandsPathFiltering(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractCommandsEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name:     "empty command name",
+			input:    "",
+			expected: []string{},
+		},
+		{
+			name:     "duplicate commands deduplication",
+			input:    "ls -la && ls -la",
+			expected: []string{"ls"},
+		},
+		{
+			name:     "multiple duplicates with different order",
+			input:    "git status && ls -la && git add . && ls -la",
+			expected: []string{"git", "ls"},
+		},
+		{
+			name:     "variable assignment with non-builtin command",
+			input:    "TEST=value mytool",
+			expected: []string{"mytool"},
+		},
+		{
+			name:     "command with slash in name filtered out",
+			input:    "path/to/command --help",
+			expected: []string{},
+		},
+		{
+			name:     "command with empty name",
+			input:    "\"\" arg", // Command with empty string name
+			expected: []string{},
+		},
+		{
+			name:     "builtin command filtered out",
+			input:    "echo hello",
+			expected: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ExtractCommands(tt.input)
+			if err != nil {
+				t.Fatalf("ExtractCommands() error = %v", err)
+			}
+			if len(result) == 0 && len(tt.expected) == 0 {
+				return
+			}
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("ExtractCommands() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}

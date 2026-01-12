@@ -163,7 +163,7 @@ func TestNavigateTool(t *testing.T) {
 	inputJSON, _ := json.Marshal(input)
 
 	// Call the tool
-	toolOut := navTool.Run(ctx, json.RawMessage(inputJSON))
+	toolOut := navTool.Run(ctx, []byte(inputJSON))
 	if toolOut.Error != nil {
 		t.Fatalf("Error running navigate tool: %v", toolOut.Error)
 	}
@@ -275,7 +275,7 @@ func TestReadImageTool(t *testing.T) {
 	input := fmt.Sprintf(`{"path": "%s"}`, testImagePath)
 
 	// Run the tool
-	toolOut := readImageTool.Run(ctx, json.RawMessage(input))
+	toolOut := readImageTool.Run(ctx, []byte(input))
 	if toolOut.Error != nil {
 		t.Fatalf("Read image tool failed: %v", toolOut.Error)
 	}
@@ -315,7 +315,7 @@ func TestDefaultViewportSize(t *testing.T) {
 	})
 
 	// Navigate to a simple page to ensure the browser is ready
-	navInput := json.RawMessage(`{"url": "about:blank"}`)
+	navInput := []byte(`{"url": "about:blank"}`)
 	toolOut := tools.NewNavigateTool().Run(ctx, navInput)
 	if toolOut.Error != nil {
 		if strings.Contains(toolOut.Error.Error(), "browser automation not available") {
@@ -329,7 +329,7 @@ func TestDefaultViewportSize(t *testing.T) {
 	}
 
 	// Check default viewport dimensions via JavaScript
-	evalInput := json.RawMessage(`{"expression": "({width: window.innerWidth, height: window.innerHeight})"}`)
+	evalInput := []byte(`{"expression": "({width: window.innerWidth, height: window.innerHeight})"}`)
 	toolOut = tools.NewEvalTool().Run(ctx, evalInput)
 	if toolOut.Error != nil {
 		t.Fatalf("Evaluation error: %v", toolOut.Error)
@@ -405,7 +405,7 @@ func TestBrowserIdleShutdownAndRestart(t *testing.T) {
 
 	// Verify the new browser actually works
 	navTool := tools.NewNavigateTool()
-	input := json.RawMessage(`{"url": "about:blank"}`)
+	input := []byte(`{"url": "about:blank"}`)
 	toolOut := navTool.Run(ctx, input)
 	if toolOut.Error != nil {
 		t.Fatalf("Navigate failed after restart: %v", toolOut.Error)
@@ -449,7 +449,7 @@ func TestReadImageToolResizesLargeImage(t *testing.T) {
 	input := fmt.Sprintf(`{"path": "%s"}`, testImagePath)
 
 	// Run the tool
-	toolOut := readImageTool.Run(ctx, json.RawMessage(input))
+	toolOut := readImageTool.Run(ctx, []byte(input))
 	if toolOut.Error != nil {
 		t.Fatalf("Read image tool failed: %v", toolOut.Error)
 	}
@@ -481,4 +481,170 @@ func TestReadImageToolResizesLargeImage(t *testing.T) {
 	}
 
 	t.Logf("Large image resized from 3000x2500 to %dx%d", config.Width, config.Height)
+}
+
+// TestIsPort80 tests the isPort80 function
+func TestIsPort80(t *testing.T) {
+	tests := []struct {
+		url      string
+		expected bool
+		name     string
+	}{
+		{"http://example.com:80", true, "http with explicit port 80"},
+		{"http://example.com", true, "http without explicit port"},
+		{"https://example.com:80", true, "https with explicit port 80"},
+		{"http://example.com:8080", false, "http with different port"},
+		{"https://example.com", false, "https without explicit port"},
+		{"https://example.com:443", false, "https with standard port"},
+		{"invalid-url", false, "invalid URL"},
+		{"ftp://example.com:80", true, "ftp with port 80"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isPort80(tt.url)
+			if result != tt.expected {
+				t.Errorf("isPort80(%q) = %v, want %v", tt.url, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestResizeRunErrorPaths tests error paths in resizeRun
+func TestResizeRunErrorPaths(t *testing.T) {
+	ctx := context.Background()
+	tools := NewBrowseTools(ctx, 0, 0)
+	t.Cleanup(func() {
+		tools.Close()
+	})
+
+	// Test with invalid JSON input
+	invalidInput := []byte(`{"width": "not-a-number"}`)
+	toolOut := tools.resizeRun(ctx, invalidInput)
+	if toolOut.Error == nil {
+		t.Error("No error expected for invalid JSON input in clearConsoleLogsRun")
+	}
+
+	// Test with negative dimensions
+	negativeInput := []byte(`{"width": -100, "height": 100}`)
+	toolOut = tools.resizeRun(ctx, negativeInput)
+	if toolOut.Error == nil {
+		t.Error("Expected error for negative width")
+	}
+
+	// Test with zero dimensions
+	zeroInput := []byte(`{"width": 0, "height": 100}`)
+	toolOut = tools.resizeRun(ctx, zeroInput)
+	if toolOut.Error == nil {
+		t.Error("Expected error for zero width")
+	}
+}
+
+// TestScreenshotRunErrorPaths tests error paths in screenshotRun
+func TestScreenshotRunErrorPaths(t *testing.T) {
+	ctx := context.Background()
+	tools := NewBrowseTools(ctx, 0, 0)
+	t.Cleanup(func() {
+		tools.Close()
+	})
+
+	// Test with invalid JSON input
+	invalidInput := []byte(`{"selector": 123}`)
+	toolOut := tools.screenshotRun(ctx, invalidInput)
+	if toolOut.Error == nil {
+		t.Error("No error expected for invalid JSON input in clearConsoleLogsRun")
+	}
+}
+
+func TestRecentConsoleLogsRunErrorPaths(t *testing.T) {
+	ctx := context.Background()
+	tools := NewBrowseTools(ctx, 0, 0)
+	t.Cleanup(func() {
+		tools.Close()
+	})
+
+	// Test with invalid JSON input
+	invalidInput := []byte(`{"limit": "not-a-number"}`)
+	toolOut := tools.recentConsoleLogsRun(ctx, invalidInput)
+	if toolOut.Error == nil {
+		t.Error("No error expected for invalid JSON input in clearConsoleLogsRun")
+	}
+}
+
+// TestParseTimeout tests the parseTimeout function
+func TestParseTimeout(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected time.Duration
+		name     string
+	}{
+		{"10s", 10 * time.Second, "valid duration"},
+		{"5m", 5 * time.Minute, "valid minutes"},
+		{"", 15 * time.Second, "empty string defaults to 15s"},
+		{"invalid", 15 * time.Second, "invalid duration defaults to 15s"},
+		{"30ms", 30 * time.Millisecond, "valid milliseconds"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseTimeout(tt.input)
+			if result != tt.expected {
+				t.Errorf("parseTimeout(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestRegisterBrowserTools tests the RegisterBrowserTools function
+func TestRegisterBrowserTools(t *testing.T) {
+	ctx := context.Background()
+
+	// Test with screenshots enabled
+	tools, cleanup := RegisterBrowserTools(ctx, true, 0)
+	t.Cleanup(cleanup)
+
+	if len(tools) != 7 {
+		t.Errorf("Expected 7 tools with screenshots, got %d", len(tools))
+	}
+
+	// Test with screenshots disabled
+	tools, cleanup = RegisterBrowserTools(ctx, false, 0)
+	t.Cleanup(cleanup)
+
+	if len(tools) != 5 {
+		t.Errorf("Expected 5 tools without screenshots, got %d", len(tools))
+	}
+
+	// Verify that cleanup function works (doesn't panic)
+	cleanup()
+}
+
+// TestGetScreenshotPath tests the GetScreenshotPath function
+func TestGetScreenshotPath(t *testing.T) {
+	id := "test-id"
+	expected := filepath.Join(ScreenshotDir, id+".png")
+	actual := GetScreenshotPath(id)
+
+	if actual != expected {
+		t.Errorf("GetScreenshotPath(%q) = %q, want %q", id, actual, expected)
+	}
+}
+
+// TestSaveScreenshotErrorPath tests error paths in SaveScreenshot
+func TestSaveScreenshotErrorPath(t *testing.T) {
+	ctx := context.Background()
+	tools := NewBrowseTools(ctx, 0, 0)
+	t.Cleanup(func() {
+		tools.Close()
+	})
+
+	// Test with empty data (this should still work)
+	id := tools.SaveScreenshot([]byte{})
+	if id == "" {
+		t.Error("Expected non-empty ID for empty data")
+	}
+
+	// Clean up the test file
+	filePath := GetScreenshotPath(id)
+	os.Remove(filePath)
 }

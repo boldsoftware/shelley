@@ -260,3 +260,108 @@ func TestSubPubMultiplePublishes(t *testing.T) {
 		}
 	})
 }
+
+// TestSubPubSubscriberContextCancelled tests that subscribers properly handle context cancellation
+func TestSubPubSubscriberContextCancelled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		sp := New[string]()
+		ctx, cancel := context.WithCancel(context.Background())
+
+		next := sp.Subscribe(ctx, 0)
+
+		// Cancel context before publishing
+		cancel()
+
+		// Publish a message
+		sp.Publish(1, "test")
+
+		// Should return false when context is cancelled
+		_, ok := next()
+		if ok {
+			t.Error("Expected closed channel after context cancellation")
+		}
+	})
+}
+
+// TestSubPubSubscriberDisconnected tests that subscribers get disconnected when channel is full
+func TestSubPubSubscriberDisconnected(t *testing.T) {
+	sp := New[string]()
+	ctx := context.Background()
+
+	// Create subscriber
+	next := sp.Subscribe(ctx, 0)
+
+	// Fill up the channel buffer (10 messages) + 1 more to trigger disconnection
+	for i := 1; i <= 11; i++ {
+		sp.Publish(int64(i), fmt.Sprintf("message%d", i))
+	}
+
+	// Try to receive all messages - should get exactly 10, then be disconnected
+	received := 0
+	for {
+		_, ok := next()
+		if !ok {
+			break
+		}
+		received++
+		if received > 11 {
+			t.Fatal("Received more messages than expected")
+		}
+	}
+
+	// Should have received exactly 10 messages before being disconnected
+	if received != 10 {
+		t.Errorf("Expected to receive 10 buffered messages, got %d", received)
+	}
+}
+
+// TestSubPubSubscriberNotInterested tests that subscribers don't receive messages they're not interested in
+func TestSubPubSubscriberNotInterested(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		sp := New[int]()
+		ctx := context.Background()
+
+		// Subscriber already has index 5, waiting for messages after index 5
+		next := sp.Subscribe(ctx, 5)
+
+		// Publish at index 5 (subscriber already has this)
+		sp.Publish(5, 100)
+
+		// Publish at index 4 (subscriber is ahead of this)
+		sp.Publish(4, 200)
+
+		// Publish at index 6 (subscriber should get this)
+		go func() {
+			sp.Publish(6, 300)
+		}()
+
+		msg, ok := next()
+		if !ok {
+			t.Fatal("Expected to receive message, got closed channel")
+		}
+		if msg != 300 {
+			t.Errorf("Expected 300, got %d", msg)
+		}
+	})
+}
+
+// TestSubPubSubscriberContextDoneDuringPublish tests subscriber context cancellation during publish
+func TestSubPubSubscriberContextDoneDuringPublish(t *testing.T) {
+	sp := New[string]()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Create subscriber
+	next := sp.Subscribe(ctx, 0)
+
+	// Cancel context
+	cancel()
+
+	// Publish a message - subscriber should be removed
+	sp.Publish(1, "test")
+
+	// Try to receive - should be closed
+	_, ok := next()
+	if ok {
+		t.Error("Expected closed channel after context cancellation")
+	}
+}

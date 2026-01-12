@@ -364,3 +364,400 @@ func TestHeaderCostIntegration(t *testing.T) {
 		t.Fatalf("Expected output tokens to be estimated, got 0")
 	}
 }
+
+func TestTokenContextWindow(t *testing.T) {
+	tests := []struct {
+		name     string
+		model    string
+		expected int
+	}{
+		{
+			name:     "gemini-2.5-pro-preview-03-25",
+			model:    "gemini-2.5-pro-preview-03-25",
+			expected: 1000000,
+		},
+		{
+			name:     "gemini-2.0-flash-exp",
+			model:    "gemini-2.0-flash-exp",
+			expected: 1000000,
+		},
+		{
+			name:     "gemini-1.5-pro",
+			model:    "gemini-1.5-pro",
+			expected: 2000000,
+		},
+		{
+			name:     "gemini-1.5-pro-latest",
+			model:    "gemini-1.5-pro-latest",
+			expected: 2000000,
+		},
+		{
+			name:     "gemini-1.5-flash",
+			model:    "gemini-1.5-flash",
+			expected: 1000000,
+		},
+		{
+			name:     "gemini-1.5-flash-latest",
+			model:    "gemini-1.5-flash-latest",
+			expected: 1000000,
+		},
+		{
+			name:     "default model",
+			model:    "",
+			expected: 1000000,
+		},
+		{
+			name:     "unknown model",
+			model:    "unknown-model",
+			expected: 1000000,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &Service{
+				Model: tt.model,
+			}
+			got := service.TokenContextWindow()
+			if got != tt.expected {
+				t.Errorf("TokenContextWindow() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMaxImageDimension(t *testing.T) {
+	service := &Service{}
+	got := service.MaxImageDimension()
+	// Currently returns 0 as per implementation
+	expected := 0
+	if got != expected {
+		t.Errorf("MaxImageDimension() = %v, want %v", got, expected)
+	}
+}
+
+func TestEnsureToolIDs(t *testing.T) {
+	tests := []struct {
+		name     string
+		contents []llm.Content
+		wantIDs  bool
+	}{
+		{
+			name: "no tool uses",
+			contents: []llm.Content{
+				{
+					Type: llm.ContentTypeText,
+					Text: "Hello",
+				},
+			},
+			wantIDs: false,
+		},
+		{
+			name: "tool use with existing ID",
+			contents: []llm.Content{
+				{
+					ID:       "existing-id",
+					Type:     llm.ContentTypeToolUse,
+					ToolName: "test-tool",
+				},
+			},
+			wantIDs: true,
+		},
+		{
+			name: "tool use without ID",
+			contents: []llm.Content{
+				{
+					Type:     llm.ContentTypeToolUse,
+					ToolName: "test-tool",
+				},
+			},
+			wantIDs: true,
+		},
+		{
+			name: "mixed content",
+			contents: []llm.Content{
+				{
+					Type: llm.ContentTypeText,
+					Text: "Hello",
+				},
+				{
+					Type:     llm.ContentTypeToolUse,
+					ToolName: "test-tool",
+				},
+				{
+					ID:       "existing-id",
+					Type:     llm.ContentTypeToolUse,
+					ToolName: "test-tool-2",
+				},
+			},
+			wantIDs: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Make a copy to avoid modifying the test data
+			contents := make([]llm.Content, len(tt.contents))
+			copy(contents, tt.contents)
+
+			ensureToolIDs(contents)
+
+			// Check if tool uses have IDs
+			hasGeneratedIDs := false
+			for _, content := range contents {
+				if content.Type == llm.ContentTypeToolUse {
+					if content.ID == "" {
+						t.Errorf("Tool use missing ID")
+					} else if content.ID != "existing-id" {
+						// This is a generated ID
+						hasGeneratedIDs = true
+					}
+				}
+			}
+
+			// If we expected IDs to be generated, check that at least one was
+			if tt.wantIDs && !hasGeneratedIDs {
+				// Check if all tool uses had existing IDs
+				hasExistingIDs := false
+				for _, content := range tt.contents {
+					if content.Type == llm.ContentTypeToolUse && content.ID != "" {
+						hasExistingIDs = true
+					}
+				}
+				if !hasExistingIDs {
+					t.Errorf("Expected generated IDs but none were found")
+				}
+			}
+		})
+	}
+}
+
+func TestCalculateUsage(t *testing.T) {
+	// Test with a simple request and response
+	req := &gemini.Request{
+		SystemInstruction: &gemini.Content{
+			Parts: []gemini.Part{
+				{Text: "You are a helpful assistant."},
+			},
+		},
+		Contents: []gemini.Content{
+			{
+				Parts: []gemini.Part{
+					{Text: "Hello, how are you?"},
+				},
+				Role: "user",
+			},
+		},
+	}
+
+	res := &gemini.Response{
+		Candidates: []gemini.Candidate{
+			{
+				Content: gemini.Content{
+					Parts: []gemini.Part{
+						{Text: "I'm doing well, thank you for asking!"},
+					},
+				},
+			},
+		},
+	}
+
+	usage := calculateUsage(req, res)
+
+	// Verify that we got some token counts (they'll be estimated)
+	if usage.InputTokens == 0 {
+		t.Errorf("Expected input tokens to be greater than 0, got %d", usage.InputTokens)
+	}
+	if usage.OutputTokens == 0 {
+		t.Errorf("Expected output tokens to be greater than 0, got %d", usage.OutputTokens)
+	}
+
+	// Test with nil response
+	usageNil := calculateUsage(req, nil)
+	if usageNil.InputTokens == 0 {
+		t.Errorf("Expected input tokens with nil response to be greater than 0, got %d", usageNil.InputTokens)
+	}
+	if usageNil.OutputTokens != 0 {
+		t.Errorf("Expected output tokens with nil response to be 0, got %d", usageNil.OutputTokens)
+	}
+
+	// Test with function calls
+	reqWithFunction := &gemini.Request{
+		Contents: []gemini.Content{
+			{
+				Parts: []gemini.Part{
+					{
+						FunctionCall: &gemini.FunctionCall{
+							Name: "test_function",
+							Args: map[string]any{
+								"param1": "value1",
+							},
+						},
+					},
+				},
+				Role: "user",
+			},
+		},
+	}
+
+	resWithFunction := &gemini.Response{
+		Candidates: []gemini.Candidate{
+			{
+				Content: gemini.Content{
+					Parts: []gemini.Part{
+						{
+							FunctionCall: &gemini.FunctionCall{
+								Name: "response_function",
+								Args: map[string]any{
+									"result": "success",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	usageWithFunction := calculateUsage(reqWithFunction, resWithFunction)
+	if usageWithFunction.InputTokens == 0 {
+		t.Errorf("Expected input tokens with function calls to be greater than 0, got %d", usageWithFunction.InputTokens)
+	}
+	if usageWithFunction.OutputTokens == 0 {
+		t.Errorf("Expected output tokens with function calls to be greater than 0, got %d", usageWithFunction.OutputTokens)
+	}
+}
+
+func TestCalculateUsageWithFunctionResponse(t *testing.T) {
+	// Test with function response in input (tool result)
+	reqWithFunctionResponse := &gemini.Request{
+		Contents: []gemini.Content{
+			{
+				Parts: []gemini.Part{
+					{
+						FunctionResponse: &gemini.FunctionResponse{
+							Name: "test_function",
+							Response: map[string]any{
+								"result": "success",
+								"error":  nil,
+							},
+						},
+					},
+				},
+				Role: "user",
+			},
+		},
+	}
+
+	res := &gemini.Response{
+		Candidates: []gemini.Candidate{
+			{
+				Content: gemini.Content{
+					Parts: []gemini.Part{
+						{Text: "Hello"},
+					},
+				},
+			},
+		},
+	}
+
+	usage := calculateUsage(reqWithFunctionResponse, res)
+	// Should have some input tokens from the function response
+	if usage.InputTokens == 0 {
+		t.Errorf("Expected input tokens with function response to be greater than 0, got %d", usage.InputTokens)
+	}
+	if usage.OutputTokens == 0 {
+		t.Errorf("Expected output tokens to be greater than 0, got %d", usage.OutputTokens)
+	}
+}
+
+func TestCalculateUsageWithEmptyText(t *testing.T) {
+	// Test with empty text parts
+	req := &gemini.Request{
+		Contents: []gemini.Content{
+			{
+				Parts: []gemini.Part{
+					{Text: ""}, // Empty text
+				},
+				Role: "user",
+			},
+		},
+	}
+
+	res := &gemini.Response{
+		Candidates: []gemini.Candidate{
+			{
+				Content: gemini.Content{
+					Parts: []gemini.Part{
+						{Text: ""}, // Empty text
+					},
+				},
+			},
+		},
+	}
+
+	usage := calculateUsage(req, res)
+	// Should have 0 tokens for empty text
+	if usage.InputTokens != 0 {
+		t.Errorf("Expected input tokens to be 0 for empty text, got %d", usage.InputTokens)
+	}
+	if usage.OutputTokens != 0 {
+		t.Errorf("Expected output tokens to be 0 for empty text, got %d", usage.OutputTokens)
+	}
+}
+
+func TestCalculateUsageWithComplexFunctionCall(t *testing.T) {
+	// Test with complex function call arguments
+	req := &gemini.Request{
+		Contents: []gemini.Content{
+			{
+				Parts: []gemini.Part{
+					{
+						FunctionCall: &gemini.FunctionCall{
+							Name: "complex_function",
+							Args: map[string]any{
+								"string_param": "value",
+								"int_param":    42,
+								"array_param":  []any{"item1", "item2"},
+								"object_param": map[string]any{
+									"nested": "value",
+								},
+							},
+						},
+					},
+				},
+				Role: "user",
+			},
+		},
+	}
+
+	res := &gemini.Response{
+		Candidates: []gemini.Candidate{
+			{
+				Content: gemini.Content{
+					Parts: []gemini.Part{
+						{
+							FunctionCall: &gemini.FunctionCall{
+								Name: "response_function",
+								Args: map[string]any{
+									"complex_result": map[string]any{
+										"status": "success",
+										"data":   []any{1, 2, 3},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	usage := calculateUsage(req, res)
+	if usage.InputTokens == 0 {
+		t.Errorf("Expected input tokens with complex function call to be greater than 0, got %d", usage.InputTokens)
+	}
+	if usage.OutputTokens == 0 {
+		t.Errorf("Expected output tokens with complex function call to be greater than 0, got %d", usage.OutputTokens)
+	}
+}

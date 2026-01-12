@@ -1,6 +1,7 @@
 package patchkit
 
 import (
+	"go/token"
 	"strings"
 	"testing"
 
@@ -103,6 +104,20 @@ func TestUniqueDedent(t *testing.T) {
 			wantOK:   true,
 		},
 		{
+			name:     "cut_prefix_case",
+			haystack: "  hello\n  world",
+			needle:   "hello\nworld",
+			replace:  "  hi\n  there",
+			wantOK:   true,
+		},
+		{
+			name:     "empty_line_handling",
+			haystack: "  hello\n\n  world",
+			needle:   "hello\n\nworld",
+			replace:  "hi\n\nthere",
+			wantOK:   true,
+		},
+		{
 			name:     "no_match",
 			haystack: "func test() {\n\treturn 1\n}",
 			needle:   "func missing() {\n\treturn 2\n}",
@@ -113,6 +128,13 @@ func TestUniqueDedent(t *testing.T) {
 			name:     "multiple_matches",
 			haystack: "hello\nhello\n",
 			needle:   "hello",
+			replace:  "hi",
+			wantOK:   false,
+		},
+		{
+			name:     "empty_needle",
+			haystack: "hello\nworld",
+			needle:   "",
 			replace:  "hi",
 			wantOK:   false,
 		},
@@ -282,6 +304,13 @@ func TestUniqueTrim(t *testing.T) {
 			haystack: "single line",
 			needle:   "single",
 			replace:  "modified",
+			wantOK:   false,
+		},
+		{
+			name:     "first_lines_dont_match",
+			haystack: "line1\nline2\nline3",
+			needle:   "different\nline2",
+			replace:  "mismatch\nmodified",
 			wantOK:   false,
 		},
 	}
@@ -568,5 +597,327 @@ func BenchmarkUniqueGoTokens(b *testing.B) {
 		if !ok {
 			b.Fatal("expected successful match")
 		}
+	}
+}
+
+func TestTokensEqual(t *testing.T) {
+	tests := []struct {
+		name string
+		a    []tok
+		b    []tok
+		want bool
+	}{
+		{
+			name: "equal_slices",
+			a:    []tok{{tok: token.IDENT, lit: "hello"}, {tok: token.STRING, lit: "\"world\""}},
+			b:    []tok{{tok: token.IDENT, lit: "hello"}, {tok: token.STRING, lit: "\"world\""}},
+			want: true,
+		},
+		{
+			name: "different_lengths",
+			a:    []tok{{tok: token.IDENT, lit: "hello"}},
+			b:    []tok{{tok: token.IDENT, lit: "hello"}, {tok: token.STRING, lit: "\"world\""}},
+			want: false,
+		},
+		{
+			name: "different_tokens",
+			a:    []tok{{tok: token.IDENT, lit: "hello"}},
+			b:    []tok{{tok: token.STRING, lit: "\"hello\""}},
+			want: false,
+		},
+		{
+			name: "different_literals",
+			a:    []tok{{tok: token.IDENT, lit: "hello"}},
+			b:    []tok{{tok: token.IDENT, lit: "world"}},
+			want: false,
+		},
+		{
+			name: "empty_slices",
+			a:    []tok{},
+			b:    []tok{},
+			want: true,
+		},
+		{
+			name: "one_empty_slice",
+			a:    []tok{},
+			b:    []tok{{tok: token.IDENT, lit: "hello"}},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tokensEqual(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("tokensEqual() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTokensUniqueMatch(t *testing.T) {
+	tests := []struct {
+		name     string
+		haystack []tok
+		needle   []tok
+		want     int
+	}{
+		{
+			name:     "unique_match_at_start",
+			haystack: []tok{{tok: token.IDENT, lit: "a"}, {tok: token.IDENT, lit: "b"}, {tok: token.IDENT, lit: "c"}},
+			needle:   []tok{{tok: token.IDENT, lit: "a"}, {tok: token.IDENT, lit: "b"}},
+			want:     0,
+		},
+		{
+			name:     "unique_match_in_middle",
+			haystack: []tok{{tok: token.IDENT, lit: "a"}, {tok: token.IDENT, lit: "b"}, {tok: token.IDENT, lit: "c"}, {tok: token.IDENT, lit: "d"}},
+			needle:   []tok{{tok: token.IDENT, lit: "b"}, {tok: token.IDENT, lit: "c"}},
+			want:     1,
+		},
+		{
+			name:     "no_match",
+			haystack: []tok{{tok: token.IDENT, lit: "a"}, {tok: token.IDENT, lit: "b"}},
+			needle:   []tok{{tok: token.IDENT, lit: "c"}, {tok: token.IDENT, lit: "d"}},
+			want:     -1,
+		},
+		{
+			name:     "multiple_matches",
+			haystack: []tok{{tok: token.IDENT, lit: "a"}, {tok: token.IDENT, lit: "b"}, {tok: token.IDENT, lit: "a"}, {tok: token.IDENT, lit: "b"}},
+			needle:   []tok{{tok: token.IDENT, lit: "a"}, {tok: token.IDENT, lit: "b"}},
+			want:     -1,
+		},
+		{
+			name:     "needle_longer_than_haystack",
+			haystack: []tok{{tok: token.IDENT, lit: "a"}},
+			needle:   []tok{{tok: token.IDENT, lit: "a"}, {tok: token.IDENT, lit: "b"}},
+			want:     -1,
+		},
+		{
+			name:     "empty_needle",
+			haystack: []tok{{tok: token.IDENT, lit: "a"}},
+			needle:   []tok{},
+			want:     0,
+		},
+		{
+			name:     "empty_haystack_and_needle",
+			haystack: []tok{},
+			needle:   []tok{},
+			want:     -1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tokensUniqueMatch(tt.haystack, tt.needle)
+			if got != tt.want {
+				t.Errorf("tokensUniqueMatch() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUniqueGoTokensEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		haystack string
+		needle   string
+		replace  string
+		wantOK   bool
+	}{
+		{
+			name:     "invalid_needle",
+			haystack: "a+b",
+			needle:   "invalid @#$",
+			replace:  "valid",
+			wantOK:   false,
+		},
+		{
+			name:     "invalid_haystack",
+			haystack: "not go code @#$",
+			needle:   "a+b",
+			replace:  "a*b",
+			wantOK:   false,
+		},
+		{
+			name:     "multiple_matches_in_tokens",
+			haystack: "a+b+a+b",
+			needle:   "a+b",
+			replace:  "a*b",
+			wantOK:   false,
+		},
+		{
+			name:     "no_match_in_tokens",
+			haystack: "a+b",
+			needle:   "c+d",
+			replace:  "c*d",
+			wantOK:   false,
+		},
+		{
+			name:     "match_at_end_of_file",
+			haystack: "func main() { a+b }",
+			needle:   "a+b }",
+			replace:  "a*b }",
+			wantOK:   true,
+		},
+		{
+			name:     "needle_tokenization_fails",
+			haystack: "a+b",
+			needle:   "invalid @#$",
+			replace:  "valid",
+			wantOK:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec, ok := UniqueGoTokens(tt.haystack, tt.needle, tt.replace)
+			if ok != tt.wantOK {
+				t.Errorf("UniqueGoTokens() ok = %v, want %v", ok, tt.wantOK)
+				return
+			}
+			if ok {
+				// Test that it can be applied
+				buf := editbuf.NewBuffer([]byte(tt.haystack))
+				spec.ApplyToEditBuf(buf)
+				result, err := buf.Bytes()
+				if err != nil {
+					t.Errorf("failed to apply spec: %v", err)
+				}
+				// Check that replacement occurred
+				if !strings.Contains(string(result), tt.replace) {
+					t.Errorf("replacement not found in result: %q", string(result))
+				}
+			}
+		})
+	}
+}
+
+func TestUniqueInValidGoEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		haystack string
+		needle   string
+		replace  string
+		wantOK   bool
+	}{
+		{
+			name:     "no_match_after_trim",
+			haystack: "func test() { return 1 }",
+			needle:   "func missing() { return 2 }",
+			replace:  "func found() { return 3 }",
+			wantOK:   false,
+		},
+		{
+			name:     "multiple_matches_after_trim",
+			haystack: "hello\nhello",
+			needle:   "hello",
+			replace:  "hi",
+			wantOK:   false,
+		},
+		{
+			name:     "no_match_case",
+			haystack: "func test() { return 1 }",
+			needle:   "func missing() { return 2 }",
+			replace:  "func found() { return 3 }",
+			wantOK:   false,
+		},
+		{
+			name:     "empty_needle_lines",
+			haystack: "hello\nworld",
+			needle:   "",
+			replace:  "hi",
+			wantOK:   false,
+		},
+		{
+			name:     "invalid_go_code_error_count",
+			haystack: "invalid @#$ code",
+			needle:   "invalid",
+			replace:  "valid",
+			wantOK:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec, ok := UniqueInValidGo(tt.haystack, tt.needle, tt.replace)
+			if ok != tt.wantOK {
+				t.Errorf("UniqueInValidGo() ok = %v, want %v", ok, tt.wantOK)
+				return
+			}
+			if ok {
+				// Test that it can be applied
+				buf := editbuf.NewBuffer([]byte(tt.haystack))
+				spec.ApplyToEditBuf(buf)
+				result, err := buf.Bytes()
+				if err != nil {
+					t.Errorf("failed to apply spec: %v", err)
+				}
+				// Check that replacement occurred
+				if !strings.Contains(string(result), "modified") {
+					t.Errorf("expected replacement not found in result: %q", string(result))
+				}
+			}
+		})
+	}
+}
+
+func TestImproveNeedle(t *testing.T) {
+	tests := []struct {
+		name        string
+		haystack    string
+		needle      string
+		replacement string
+		matchLine   int
+		wantNeedle  string
+		wantRepl    string
+	}{
+		{
+			name:        "add_trailing_newline",
+			haystack:    "line1\nline2\nline3\n",
+			needle:      "line2",
+			replacement: "modified2",
+			matchLine:   1,
+			wantNeedle:  "line2\n",
+			wantRepl:    "modified2\n",
+		},
+		{
+			name:        "add_leading_prefix",
+			haystack:    "\tline1\n\tline2\n\tline3",
+			needle:      "line1\n",
+			replacement: "modified1\n",
+			matchLine:   0,
+			wantNeedle:  "\tline1\n",
+			wantRepl:    "\tmodified1\n",
+		},
+		{
+			name:        "empty_needle_lines",
+			haystack:    "hello\nworld",
+			needle:      "",
+			replacement: "hi",
+			matchLine:   0,
+			wantNeedle:  "",
+			wantRepl:    "hi",
+		},
+		{
+			name:        "match_line_out_of_bounds",
+			haystack:    "line1\nline2",
+			needle:      "line3",
+			replacement: "line3_modified",
+			matchLine:   5,
+			wantNeedle:  "line3",
+			wantRepl:    "line3_modified",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotNeedle, gotRepl := improveNeedle(tt.haystack, tt.needle, tt.replacement, tt.matchLine)
+			if gotNeedle != tt.wantNeedle {
+				t.Errorf("improveNeedle() needle = %q, want %q", gotNeedle, tt.wantNeedle)
+			}
+			if gotRepl != tt.wantRepl {
+				t.Errorf("improveNeedle() replacement = %q, want %q", gotRepl, tt.wantRepl)
+			}
+		})
 	}
 }

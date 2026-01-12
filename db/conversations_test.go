@@ -407,3 +407,200 @@ func TestConversationService_SlugUniquenessWhenNotNull(t *testing.T) {
 		t.Errorf("Expected UNIQUE constraint error, got: %v", err)
 	}
 }
+
+func TestConversationService_ArchiveUnarchive(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create a test conversation
+	conv, err := db.CreateConversation(ctx, stringPtr("test-conversation"), true, nil)
+	if err != nil {
+		t.Fatalf("Failed to create test conversation: %v", err)
+	}
+
+	// Test ArchiveConversation
+	archivedConv, err := db.ArchiveConversation(ctx, conv.ConversationID)
+	if err != nil {
+		t.Errorf("ArchiveConversation() error = %v", err)
+	}
+
+	if !archivedConv.Archived {
+		t.Error("Expected conversation to be archived")
+	}
+
+	// Test UnarchiveConversation
+	unarchivedConv, err := db.UnarchiveConversation(ctx, conv.ConversationID)
+	if err != nil {
+		t.Errorf("UnarchiveConversation() error = %v", err)
+	}
+
+	if unarchivedConv.Archived {
+		t.Error("Expected conversation to be unarchived")
+	}
+}
+
+func TestConversationService_ListArchivedConversations(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create test conversations
+	conv1, err := db.CreateConversation(ctx, stringPtr("test-conversation-1"), true, nil)
+	if err != nil {
+		t.Fatalf("Failed to create test conversation 1: %v", err)
+	}
+
+	conv2, err := db.CreateConversation(ctx, stringPtr("test-conversation-2"), true, nil)
+	if err != nil {
+		t.Fatalf("Failed to create test conversation 2: %v", err)
+	}
+
+	// Archive both conversations
+	_, err = db.ArchiveConversation(ctx, conv1.ConversationID)
+	if err != nil {
+		t.Fatalf("Failed to archive conversation 1: %v", err)
+	}
+
+	_, err = db.ArchiveConversation(ctx, conv2.ConversationID)
+	if err != nil {
+		t.Fatalf("Failed to archive conversation 2: %v", err)
+	}
+
+	// Test ListArchivedConversations
+	conversations, err := db.ListArchivedConversations(ctx, 10, 0)
+	if err != nil {
+		t.Errorf("ListArchivedConversations() error = %v", err)
+	}
+
+	if len(conversations) != 2 {
+		t.Errorf("Expected 2 archived conversations, got %d", len(conversations))
+	}
+
+	// Check that all returned conversations are archived
+	for _, conv := range conversations {
+		if !conv.Archived {
+			t.Error("Expected all conversations to be archived")
+			break
+		}
+	}
+}
+
+func TestConversationService_SearchArchivedConversations(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create test conversations
+	conv1, err := db.CreateConversation(ctx, stringPtr("test-conversation-search-1"), true, nil)
+	if err != nil {
+		t.Fatalf("Failed to create test conversation 1: %v", err)
+	}
+
+	conv2, err := db.CreateConversation(ctx, stringPtr("another-conversation"), true, nil)
+	if err != nil {
+		t.Fatalf("Failed to create test conversation 2: %v", err)
+	}
+
+	// Archive both conversations
+	_, err = db.ArchiveConversation(ctx, conv1.ConversationID)
+	if err != nil {
+		t.Fatalf("Failed to archive conversation 1: %v", err)
+	}
+
+	_, err = db.ArchiveConversation(ctx, conv2.ConversationID)
+	if err != nil {
+		t.Fatalf("Failed to archive conversation 2: %v", err)
+	}
+
+	// Test SearchArchivedConversations
+	conversations, err := db.SearchArchivedConversations(ctx, "test-conversation", 10, 0)
+	if err != nil {
+		t.Errorf("SearchArchivedConversations() error = %v", err)
+	}
+
+	if len(conversations) != 1 {
+		t.Errorf("Expected 1 archived conversation matching search, got %d", len(conversations))
+	}
+
+	if len(conversations) > 0 && conversations[0].Slug == nil {
+		t.Error("Expected conversation to have a slug")
+	} else if len(conversations) > 0 && !strings.Contains(*conversations[0].Slug, "test-conversation") {
+		t.Errorf("Expected conversation slug to contain 'test-conversation', got %s", *conversations[0].Slug)
+	}
+}
+
+func TestConversationService_DeleteConversation(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create a test conversation
+	conv, err := db.CreateConversation(ctx, stringPtr("test-conversation-to-delete"), true, nil)
+	if err != nil {
+		t.Fatalf("Failed to create test conversation: %v", err)
+	}
+
+	// Add a message to the conversation
+	_, err = db.CreateMessage(ctx, CreateMessageParams{
+		ConversationID: conv.ConversationID,
+		Type:           MessageTypeUser,
+		LLMData:        map[string]string{"text": "test message"},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test message: %v", err)
+	}
+
+	// Test DeleteConversation
+	err = db.DeleteConversation(ctx, conv.ConversationID)
+	if err != nil {
+		t.Errorf("DeleteConversation() error = %v", err)
+	}
+
+	// Verify conversation is deleted
+	_, err = db.GetConversationByID(ctx, conv.ConversationID)
+	if err == nil {
+		t.Error("Expected error when getting deleted conversation, got none")
+	}
+}
+
+func TestConversationService_UpdateConversationCwd(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create a test conversation
+	conv, err := db.CreateConversation(ctx, stringPtr("test-conversation-cwd"), true, nil)
+	if err != nil {
+		t.Fatalf("Failed to create test conversation: %v", err)
+	}
+
+	// Test UpdateConversationCwd
+	newCwd := "/test/new/working/directory"
+	err = db.UpdateConversationCwd(ctx, conv.ConversationID, newCwd)
+	if err != nil {
+		t.Errorf("UpdateConversationCwd() error = %v", err)
+	}
+
+	// Verify the cwd was updated
+	updatedConv, err := db.GetConversationByID(ctx, conv.ConversationID)
+	if err != nil {
+		t.Fatalf("Failed to get updated conversation: %v", err)
+	}
+
+	if updatedConv.Cwd == nil {
+		t.Error("Expected conversation to have a cwd")
+	} else if *updatedConv.Cwd != newCwd {
+		t.Errorf("Expected cwd %s, got %s", newCwd, *updatedConv.Cwd)
+	}
+}

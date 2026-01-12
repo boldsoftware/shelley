@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -174,5 +175,45 @@ func TestDB_ForeignKeyConstraints(t *testing.T) {
 	// Verify the error is related to foreign key constraint
 	if !strings.Contains(err.Error(), "FOREIGN KEY constraint failed") {
 		t.Errorf("Expected foreign key constraint error, got: %v", err)
+	}
+}
+
+func TestDB_Pool(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	// Test Pool method
+	pool := db.Pool()
+	if pool == nil {
+		t.Error("Expected non-nil pool")
+	}
+}
+
+func TestDB_WithTxRes(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Test WithTxRes with a simple function that returns a string
+	result, err := WithTxRes[string](db, ctx, func(queries *generated.Queries) (string, error) {
+		return "test result", nil
+	})
+	if err != nil {
+		t.Errorf("WithTxRes() error = %v", err)
+	}
+
+	if result != "test result" {
+		t.Errorf("Expected 'test result', got %s", result)
+	}
+
+	// Test WithTxRes with error handling
+	_, err = WithTxRes[string](db, ctx, func(queries *generated.Queries) (string, error) {
+		return "", fmt.Errorf("test error")
+	})
+
+	if err == nil {
+		t.Error("Expected error from WithTxRes, got none")
 	}
 }

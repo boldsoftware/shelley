@@ -213,3 +213,25 @@ func TestBashToolMissingWorkingDir(t *testing.T) {
 		t.Errorf("expected error to mention change_dir tool, got: %s", errStr)
 	}
 }
+
+func TestChangeDirTool_Method(t *testing.T) {
+	wd := NewMutableWorkingDir("/test")
+	tool := &ChangeDirTool{WorkingDir: wd}
+	llmTool := tool.Tool()
+
+	if llmTool == nil {
+		t.Fatal("Tool() returned nil")
+	}
+
+	if llmTool.Name != changeDirName {
+		t.Errorf("expected name %q, got %q", changeDirName, llmTool.Name)
+	}
+
+	if llmTool.Description != changeDirDescription {
+		t.Errorf("expected description %q, got %q", changeDirDescription, llmTool.Description)
+	}
+
+	if llmTool.Run == nil {
+		t.Error("Run function not set")
+	}
+}

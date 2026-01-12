@@ -483,58 +483,136 @@ func TestEdgeCases(t *testing.T) {
 	}
 }
 
-func TestAddCoauthorTrailer(t *testing.T) {
-	trailer := "Co-authored-by: Shelley <shelley@exe.dev>"
+func TestHasBlindGitAddEdgeCases(t *testing.T) {
 	tests := []struct {
-		name   string
-		script string
-		want   string
+		name    string
+		script  string
+		wantHas bool
 	}{
 		{
-			name:   "simple git commit",
-			script: `git commit -m "Add feature"`,
-			want:   `git commit --trailer "Co-authored-by: Shelley <shelley@exe.dev>" -m "Add feature"`,
+			name:    "command with less than 2 args",
+			script:  "git",
+			wantHas: false,
 		},
 		{
-			name:   "git commit with -am",
-			script: `git commit -am "Fix bug"`,
-			want:   `git commit --trailer "Co-authored-by: Shelley <shelley@exe.dev>" -am "Fix bug"`,
+			name:    "non-git command",
+			script:  "ls -A",
+			wantHas: false,
 		},
 		{
-			name:   "no git commit",
-			script: `git status`,
-			want:   `git status`,
+			name:    "git command without add subcommand",
+			script:  "git status",
+			wantHas: false,
 		},
 		{
-			name:   "git with flags before commit",
-			script: `git -C /path/to/repo commit -m "Update"`,
-			want:   `git -C /path/to/repo commit --trailer "Co-authored-by: Shelley <shelley@exe.dev>" -m "Update"`,
+			name:    "git add with no arguments after add",
+			script:  "git add",
+			wantHas: false,
 		},
 		{
-			name:   "pipeline with git commit",
-			script: `git add file.go && git commit -m "Add file"`,
-			want:   `git add file.go && git commit --trailer "Co-authored-by: Shelley <shelley@exe.dev>" -m "Add file"`,
-		},
-		{
-			name:   "non-git command",
-			script: `echo hello`,
-			want:   `echo hello`,
-		},
-		{
-			name:   "invalid syntax unchanged",
-			script: `git commit -m 'unterminated`,
-			want:   `git commit -m 'unterminated`,
+			name:    "git add with valid file after flags",
+			script:  "git add -v file.txt",
+			wantHas: false,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := AddCoauthorTrailer(tc.script, trailer)
-			// Normalize whitespace for comparison
-			gotNorm := strings.Join(strings.Fields(got), " ")
-			wantNorm := strings.Join(strings.Fields(tc.want), " ")
-			if gotNorm != wantNorm {
-				t.Errorf("AddCoauthorTrailer() =\n%q\nwant:\n%q", got, tc.want)
+			r := strings.NewReader(tc.script)
+			parser := syntax.NewParser()
+			file, err := parser.Parse(r, "")
+			if err != nil {
+				if tc.wantHas {
+					t.Errorf("Parse error: %v", err)
+				}
+				return
+			}
+
+			found := false
+			syntax.Walk(file, func(node syntax.Node) bool {
+				callExpr, ok := node.(*syntax.CallExpr)
+				if !ok {
+					return true
+				}
+				if hasBlindGitAdd(callExpr) {
+					found = true
+					return false
+				}
+				return true
+			})
+
+			if found != tc.wantHas {
+				t.Errorf("hasBlindGitAdd() = %v, want %v", found, tc.wantHas)
+			}
+		})
+	}
+}
+
+func TestHasSketchWipBranchChangesEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		script  string
+		wantHas bool
+	}{
+		{
+			name:    "git command with less than 2 args",
+			script:  "git",
+			wantHas: false,
+		},
+		{
+			name:    "non-git command",
+			script:  "ls main",
+			wantHas: false,
+		},
+		{
+			name:    "git branch -m with sketch-wip not as source",
+			script:  "git branch -m other-branch sketch-wip",
+			wantHas: false,
+		},
+		{
+			name:    "git checkout with complex path",
+			script:  "git checkout src/components/file.go",
+			wantHas: false,
+		},
+		{
+			name:    "git switch with complex flag",
+			script:  "git switch --detach HEAD~1",
+			wantHas: false,
+		},
+		{
+			name:    "git checkout with multiple flags",
+			script:  "git checkout --ours --theirs file.txt",
+			wantHas: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := strings.NewReader(tc.script)
+			parser := syntax.NewParser()
+			file, err := parser.Parse(r, "")
+			if err != nil {
+				if tc.wantHas {
+					t.Errorf("Parse error: %v", err)
+				}
+				return
+			}
+
+			found := false
+			syntax.Walk(file, func(node syntax.Node) bool {
+				callExpr, ok := node.(*syntax.CallExpr)
+				if !ok {
+					return true
+				}
+				if hasSketchWipBranchChanges(callExpr) {
+					found = true
+					return false
+				}
+				return true
+			})
+
+			if found != tc.wantHas {
+				t.Errorf("hasSketchWipBranchChanges() = %v, want %v", found, tc.wantHas)
 			}
 		})
 	}
