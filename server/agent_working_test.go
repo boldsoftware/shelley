@@ -1,14 +1,11 @@
 package server
 
 import (
+	"fmt"
 	"testing"
 
 	"shelley.exe.dev/db"
 )
-
-func boolPtr(b bool) *bool {
-	return &b
-}
 
 func TestAgentWorking(t *testing.T) {
 	tests := []struct {
@@ -24,14 +21,14 @@ func TestAgentWorking(t *testing.T) {
 		{
 			name: "agent with end_of_turn true",
 			messages: []APIMessage{
-				{Type: string(db.MessageTypeAgent), EndOfTurn: boolPtr(true)},
+				{Type: string(db.MessageTypeAgent), EndOfTurn: truePtr},
 			},
 			want: false,
 		},
 		{
 			name: "agent with end_of_turn false",
 			messages: []APIMessage{
-				{Type: string(db.MessageTypeAgent), EndOfTurn: boolPtr(false)},
+				{Type: string(db.MessageTypeAgent), EndOfTurn: falsePtr},
 			},
 			want: true,
 		},
@@ -52,7 +49,7 @@ func TestAgentWorking(t *testing.T) {
 		{
 			name: "agent end_of_turn then tool message means working",
 			messages: []APIMessage{
-				{Type: string(db.MessageTypeAgent), EndOfTurn: boolPtr(true)},
+				{Type: string(db.MessageTypeAgent), EndOfTurn: truePtr},
 				{Type: string(db.MessageTypeTool)},
 			},
 			want: true,
@@ -60,7 +57,7 @@ func TestAgentWorking(t *testing.T) {
 		{
 			name: "gitinfo after agent end_of_turn should NOT indicate working",
 			messages: []APIMessage{
-				{Type: string(db.MessageTypeAgent), EndOfTurn: boolPtr(true)},
+				{Type: string(db.MessageTypeAgent), EndOfTurn: truePtr},
 				{Type: string(db.MessageTypeGitInfo)},
 			},
 			want: false,
@@ -68,7 +65,7 @@ func TestAgentWorking(t *testing.T) {
 		{
 			name: "multiple gitinfo after agent end_of_turn should NOT indicate working",
 			messages: []APIMessage{
-				{Type: string(db.MessageTypeAgent), EndOfTurn: boolPtr(true)},
+				{Type: string(db.MessageTypeAgent), EndOfTurn: truePtr},
 				{Type: string(db.MessageTypeGitInfo)},
 				{Type: string(db.MessageTypeGitInfo)},
 			},
@@ -77,7 +74,7 @@ func TestAgentWorking(t *testing.T) {
 		{
 			name: "gitinfo after agent not end_of_turn should indicate working",
 			messages: []APIMessage{
-				{Type: string(db.MessageTypeAgent), EndOfTurn: boolPtr(false)},
+				{Type: string(db.MessageTypeAgent), EndOfTurn: falsePtr},
 				{Type: string(db.MessageTypeGitInfo)},
 			},
 			want: true,
@@ -95,8 +92,12 @@ func TestAgentWorking(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := agentWorking(tt.messages)
-			if got != tt.want {
-				t.Errorf("agentWorking() = %v, want %v", got, tt.want)
+			if got == nil || *got != tt.want {
+				gotVal := "nil"
+				if got != nil {
+					gotVal = fmt.Sprintf("%v", *got)
+				}
+				t.Errorf("agentWorking() = %v, want %v", gotVal, tt.want)
 			}
 		})
 	}

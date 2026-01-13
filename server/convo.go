@@ -557,7 +557,7 @@ func (cm *ConversationManager) notifyGitStateChange(ctx context.Context, msg *ge
 	streamData := StreamResponse{
 		Messages:     apiMessages,
 		Conversation: conversation,
-		AgentWorking: false, // Gitinfo is recorded at end of turn, agent is done
+		AgentWorking: falsePtr, // Gitinfo is recorded at end of turn, agent is done
 	}
 	cm.subpub.Publish(msg.SequenceID, streamData)
 }

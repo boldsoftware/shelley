@@ -40,7 +40,7 @@ export interface ApiMessageForTS {
 export interface StreamResponseForTS {
   messages: ApiMessageForTS[] | null;
   conversation: Conversation;
-  agent_working: boolean;
+  agent_working?: boolean | null;
 }
 
 export type MessageType = "user" | "agent" | "tool" | "error" | "system" | "gitinfo";

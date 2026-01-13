@@ -90,5 +90,5 @@ type apiMessageForTS struct {
 type streamResponseForTS struct {
 	Messages     []apiMessageForTS      `json:"messages"`
 	Conversation generated.Conversation `json:"conversation"`
-	AgentWorking bool                   `json:"agent_working"`
+	AgentWorking *bool                  `json:"agent_working,omitempty"`
 }
