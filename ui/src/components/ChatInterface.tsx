@@ -8,6 +8,7 @@ import {
 } from "../types";
 import { api } from "../services/api";
 import { ThemeMode, getStoredTheme, setStoredTheme, applyTheme } from "../services/theme";
+import { setFaviconStatus } from "../services/favicon";
 import MessageComponent from "./Message";
 import MessageInput from "./MessageInput";
 import DiffViewer from "./DiffViewer";
@@ -495,6 +496,11 @@ function ChatInterface({
       }
     };
   }, [conversationId]);
+
+  // Update favicon when agent working state changes
+  useEffect(() => {
+    setFaviconStatus(agentWorking ? "working" : "ready");
+  }, [agentWorking]);
 
   // Check scroll position and handle scroll-to-bottom button
   useEffect(() => {
