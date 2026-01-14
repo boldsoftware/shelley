@@ -7,10 +7,8 @@ all: build
 
 # Build templates into tarballs
 templates:
-	@echo "Building template tarballs..."
 	@for dir in templates/*/; do \
 		name=$$(basename "$$dir"); \
-		echo "  Creating $$name.tar.gz..."; \
 		tar -czf "templates/$$name.tar.gz" -C "templates/$$name" --exclude='.DS_Store' .; \
 	done
 
@@ -42,8 +40,7 @@ build-linux-x86: ui templates
 
 # Build UI
 ui:
-	@echo "Building UI..."
-	cd ui && pnpm install --frozen-lockfile && pnpm run build
+	@cd ui && pnpm install --frozen-lockfile --silent && pnpm run --silent build
 
 # Run Go tests
 test-go: ui
