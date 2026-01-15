@@ -40,6 +40,7 @@ type ConversationManager struct {
 
 	hydrated              bool
 	hasConversationEvents bool
+	needsSystemPrompt     bool
 	cwd                   string // working directory for tools
 }
 
@@ -87,15 +88,7 @@ func (cm *ConversationManager) Hydrate(ctx context.Context) error {
 		return fmt.Errorf("failed to get conversation history: %w", err)
 	}
 
-	if conversation.UserInitiated && !hasSystemMessage(messages) {
-		systemMsg, err := cm.createSystemPrompt(ctx)
-		if err != nil {
-			return err
-		}
-		if systemMsg != nil {
-			messages = append(messages, *systemMsg)
-		}
-	}
+	cm.needsSystemPrompt = conversation.UserInitiated && !hasSystemMessage(messages)
 
 	history, system := cm.partitionMessages(messages)
 
@@ -133,6 +126,17 @@ func (cm *ConversationManager) AcceptUserMessage(ctx context.Context, service ll
 
 	if err := cm.ensureLoop(service, modelID); err != nil {
 		return false, err
+	}
+
+	// Create system prompt now that we know the model
+	cm.mu.Lock()
+	needsSystemPrompt := cm.needsSystemPrompt
+	cm.needsSystemPrompt = false
+	cm.mu.Unlock()
+	if needsSystemPrompt {
+		if _, err := cm.createSystemPrompt(ctx); err != nil {
+			return false, fmt.Errorf("failed to create system prompt: %w", err)
+		}
 	}
 
 	cm.mu.Lock()
