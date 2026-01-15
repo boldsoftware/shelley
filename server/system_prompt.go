@@ -35,6 +35,7 @@ type CodebaseInfo struct {
 	InjectFiles        []string
 	InjectFileContents map[string]string
 	GuidanceFiles      []string
+	SkillPreambles     []string // Preambles from installed skills
 }
 
 // GenerateSystemPrompt generates the system prompt using the embedded template.
@@ -162,6 +163,9 @@ func collectCodebaseInfo(wd string, gitInfo *GitInfo) (*CodebaseInfo, error) {
 				seenFiles[lowerPath] = true
 			}
 		}
+
+		// Load installed skills from ~/.config/shelley/skills/
+		info.SkillPreambles = loadSkillPreambles(home)
 	}
 
 	// Determine the root directory to search
@@ -286,4 +290,83 @@ func isSudoAvailable() bool {
 	cmd := exec.Command("sudo", "-n", "id")
 	_, err := cmd.CombinedOutput()
 	return err == nil
+}
+
+// loadSkillPreambles reads SKILL.md files from ~/.claude/skills/ (following
+// Anthropic's skill format) and extracts name + description from YAML frontmatter.
+func loadSkillPreambles(home string) []string {
+	skillsDir := filepath.Join(home, ".claude", "skills")
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		return nil
+	}
+
+	var preambles []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		skillFile := filepath.Join(skillsDir, entry.Name(), "SKILL.md")
+		content, err := os.ReadFile(skillFile)
+		if err != nil {
+			continue
+		}
+		if preamble := parseSkillPreamble(string(content)); preamble != "" {
+			preambles = append(preambles, preamble)
+		}
+	}
+	return preambles
+}
+
+// parseSkillPreamble extracts name and description from YAML frontmatter,
+// following Anthropic's skill format (https://docs.anthropic.com/en/docs/claude-code/skills).
+// Returns "name: description" for injection into the system prompt.
+func parseSkillPreamble(content string) string {
+	if !strings.HasPrefix(content, "---") {
+		return ""
+	}
+	// Find the closing ---
+	endIdx := strings.Index(content[3:], "\n---")
+	if endIdx == -1 {
+		return ""
+	}
+	frontmatter := content[4 : endIdx+3] // Skip initial ---\n
+
+	// Extract name and description fields
+	var name, description string
+	lines := strings.Split(frontmatter, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "name:") {
+			name = strings.TrimSpace(strings.TrimPrefix(trimmed, "name:"))
+		} else if strings.HasPrefix(trimmed, "description:") {
+			// Check if it's inline or multiline (> or |)
+			value := strings.TrimSpace(strings.TrimPrefix(trimmed, "description:"))
+			if value != "" && value != "|" && value != ">" {
+				description = value
+			} else {
+				// Multiline: collect indented lines
+				var multiline []string
+				for j := i + 1; j < len(lines); j++ {
+					if len(lines[j]) == 0 {
+						continue
+					}
+					if lines[j][0] == ' ' || lines[j][0] == '\t' {
+						multiline = append(multiline, strings.TrimSpace(lines[j]))
+					} else {
+						break
+					}
+				}
+				description = strings.Join(multiline, " ")
+			}
+		}
+	}
+
+	if name == "" {
+		return ""
+	}
+	if description == "" {
+		return name
+	}
+	return name + ": " + description
 }
