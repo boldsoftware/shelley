@@ -213,6 +213,14 @@ func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generat
 		cm.logger.Warn("Failed to update conversation timestamp after system prompt", "error", err)
 	}
 
+	// Update the loop's system prompt if it's already running
+	cm.mu.Lock()
+	loopInstance := cm.loop
+	cm.mu.Unlock()
+	if loopInstance != nil {
+		loopInstance.SetSystem([]llm.SystemContent{{Type: "text", Text: systemPrompt}})
+	}
+
 	cm.logger.Info("Stored system prompt", "length", len(systemPrompt))
 	return created, nil
 }

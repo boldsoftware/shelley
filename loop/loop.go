@@ -82,6 +82,16 @@ func NewLoop(config Config) *Loop {
 	}
 }
 
+// SetSystem sets the system prompt for the loop.
+// This should be called before processing any messages if the system
+// prompt wasn't available at loop creation time.
+func (l *Loop) SetSystem(system []llm.SystemContent) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.system = system
+	l.logger.Debug("set system prompt", "system_items", len(system))
+}
+
 // QueueUserMessage adds a user message to the queue to be processed
 func (l *Loop) QueueUserMessage(message llm.Message) {
 	l.mu.Lock()
