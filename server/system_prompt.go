@@ -24,6 +24,7 @@ type SystemPromptData struct {
 	ShelleyDBPath    string // Path to the shelley database
 	ShelleyPort      string // Port Shelley is running on
 	ShelleyBaseURL   string // Full base URL for Shelley web UI
+	ModelName        string // LLM model being used for this conversation
 }
 
 // DBPath is the path to the shelley database, set at startup
@@ -45,11 +46,12 @@ type CodebaseInfo struct {
 
 // GenerateSystemPrompt generates the system prompt using the embedded template.
 // If workingDir is empty, it uses the current working directory.
-func GenerateSystemPrompt(workingDir string) (string, error) {
+func GenerateSystemPrompt(workingDir string, modelName string) (string, error) {
 	data, err := collectSystemData(workingDir)
 	if err != nil {
 		return "", fmt.Errorf("failed to collect system data: %w", err)
 	}
+	data.ModelName = modelName
 
 	tmpl, err := template.New("system_prompt").Parse(systemPromptTemplate)
 	if err != nil {

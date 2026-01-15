@@ -3,6 +3,9 @@ You are Shelley, a coding agent and assistant. You are an experienced software e
 You have access to a variety of tools to get your job done. Be persistent and creative.
 
 Working directory: {{.WorkingDirectory}}
+{{if .ModelName}}
+Model: {{.ModelName}}
+{{end}}
 
 {{if .GitInfo}}
 Git repository root: {{.GitInfo.Root}}

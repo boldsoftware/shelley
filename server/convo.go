@@ -178,7 +178,7 @@ func hasSystemMessage(messages []generated.Message) bool {
 }
 
 func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generated.Message, error) {
-	systemPrompt, err := GenerateSystemPrompt(cm.cwd)
+	systemPrompt, err := GenerateSystemPrompt(cm.cwd, cm.modelID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate system prompt: %w", err)
 	}
