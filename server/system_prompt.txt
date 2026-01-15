@@ -66,10 +66,7 @@ Direct user instructions from the current conversation always take highest prece
 Skills extend Shelley with additional capabilities, following Anthropic's skill format.
 Skills are installed in ~/.claude/skills/<name>/SKILL.md.
 
-To install a skill from a URL (.skill file is a ZIP archive):
-1. Download: curl -sL <url> -o /tmp/skill.zip
-2. Extract skill name: unzip -p /tmp/skill.zip SKILL.md | grep '^name:' | cut -d: -f2 | tr -d ' '
-3. Create dir and extract: mkdir -p ~/.claude/skills/<name> && unzip -o /tmp/skill.zip -d ~/.claude/skills/<name>
+To install a skill from a URL: curl -sL <url> -o /tmp/s.zip && n=$(unzip -p /tmp/s.zip SKILL.md | grep '^name:' | cut -d: -f2 | tr -d ' ') && mkdir -p ~/.claude/skills/$n && unzip -o /tmp/s.zip -d ~/.claude/skills/$n
 {{if .Codebase.SkillPreambles}}
 Installed skills:
 {{range .Codebase.SkillPreambles}}- {{.}}
@@ -77,6 +74,13 @@ Installed skills:
 {{end}}
 To check for newly installed skills or get full details, read ~/.claude/skills/ and each skill's SKILL.md.
 </skills>
+{{if .ShelleyBaseURL}}
+<shelley_web_ui>
+Shelley web UI: {{.ShelleyBaseURL}}
+To link to a conversation: {{.ShelleyBaseURL}}/c/<slug>
+To link to this conversation, use the slug from the current URL or query the database.
+</shelley_web_ui>
+{{end}}
 {{if .ShelleyDBPath}}
 <previous_conversations>
 Your conversation history is stored in a SQLite database at: {{.ShelleyDBPath}}

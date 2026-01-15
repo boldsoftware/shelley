@@ -22,10 +22,15 @@ type SystemPromptData struct {
 	IsSudoAvailable  bool
 	Hostname         string // For exe.dev, the public hostname (e.g., "vmname.exe.xyz")
 	ShelleyDBPath    string // Path to the shelley database
+	ShelleyPort      string // Port Shelley is running on
+	ShelleyBaseURL   string // Full base URL for Shelley web UI
 }
 
 // DBPath is the path to the shelley database, set at startup
 var DBPath string
+
+// Port is the port Shelley is running on, set at startup
+var Port string
 
 type GitInfo struct {
 	Root string
@@ -100,6 +105,25 @@ func collectSystemData(workingDir string) (*SystemPromptData, error) {
 				hostname = hostname + ".exe.xyz"
 			}
 			data.Hostname = hostname
+		}
+	}
+
+	// Set Shelley port and base URL
+	if Port != "" {
+		data.ShelleyPort = Port
+		if data.IsExeDev {
+			if Port == "9999" {
+				// Default port uses shelley.exe.xyz subdomain
+				if hostname, err := os.Hostname(); err == nil {
+					data.ShelleyBaseURL = "https://" + hostname + ".shelley.exe.xyz"
+				}
+			} else {
+				// Other ports use hostname:port
+				data.ShelleyBaseURL = "https://" + data.Hostname + ":" + Port
+			}
+		} else {
+			// Not exe.dev - use localhost
+			data.ShelleyBaseURL = "http://localhost:" + Port
 		}
 	}
 
