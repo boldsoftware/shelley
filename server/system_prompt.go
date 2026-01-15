@@ -316,10 +316,10 @@ func isSudoAvailable() bool {
 	return err == nil
 }
 
-// loadSkillPreambles reads SKILL.md files from ~/.claude/skills/ (following
+// loadSkillPreambles reads SKILL.md files from ~/.config/shelley/skills/ (following
 // Anthropic's skill format) and extracts name + description from YAML frontmatter.
 func loadSkillPreambles(home string) []string {
-	skillsDir := filepath.Join(home, ".claude", "skills")
+	skillsDir := filepath.Join(home, ".config", "shelley", "skills")
 	entries, err := os.ReadDir(skillsDir)
 	if err != nil {
 		return nil
