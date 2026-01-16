@@ -40,6 +40,7 @@ type ConversationManager struct {
 
 	hydrated              bool
 	hasConversationEvents bool
+	needsSystemPrompt     bool
 	cwd                   string // working directory for tools
 
 	// agentWorking tracks whether the agent is currently working.
@@ -124,15 +125,7 @@ func (cm *ConversationManager) Hydrate(ctx context.Context) error {
 		return fmt.Errorf("failed to get conversation history: %w", err)
 	}
 
-	if conversation.UserInitiated && !hasSystemMessage(messages) {
-		systemMsg, err := cm.createSystemPrompt(ctx)
-		if err != nil {
-			return err
-		}
-		if systemMsg != nil {
-			messages = append(messages, *systemMsg)
-		}
-	}
+	cm.needsSystemPrompt = conversation.UserInitiated && !hasSystemMessage(messages)
 
 	history, system := cm.partitionMessages(messages)
 
@@ -170,6 +163,17 @@ func (cm *ConversationManager) AcceptUserMessage(ctx context.Context, service ll
 
 	if err := cm.ensureLoop(service, modelID); err != nil {
 		return false, err
+	}
+
+	// Create system prompt now that we know the model
+	cm.mu.Lock()
+	needsSystemPrompt := cm.needsSystemPrompt
+	cm.needsSystemPrompt = false
+	cm.mu.Unlock()
+	if needsSystemPrompt {
+		if _, err := cm.createSystemPrompt(ctx); err != nil {
+			return false, fmt.Errorf("failed to create system prompt: %w", err)
+		}
 	}
 
 	cm.mu.Lock()
@@ -218,7 +222,7 @@ func hasSystemMessage(messages []generated.Message) bool {
 }
 
 func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generated.Message, error) {
-	systemPrompt, err := GenerateSystemPrompt(cm.cwd)
+	systemPrompt, err := GenerateSystemPrompt(cm.cwd, cm.modelID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate system prompt: %w", err)
 	}
@@ -247,6 +251,14 @@ func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generat
 		return q.UpdateConversationTimestamp(ctx, cm.conversationID)
 	}); err != nil {
 		cm.logger.Warn("Failed to update conversation timestamp after system prompt", "error", err)
+	}
+
+	// Update the loop's system prompt if it's already running
+	cm.mu.Lock()
+	loopInstance := cm.loop
+	cm.mu.Unlock()
+	if loopInstance != nil {
+		loopInstance.SetSystem([]llm.SystemContent{{Type: "text", Text: systemPrompt}})
 	}
 
 	cm.logger.Info("Stored system prompt", "length", len(systemPrompt))
