@@ -41,11 +41,24 @@ type APIMessage struct {
 	EndOfTurn      *bool     `json:"end_of_turn,omitempty"`
 }
 
+// ConversationState represents the current state of a conversation.
+// This is broadcast to all subscribers whenever the state changes.
+type ConversationState struct {
+	ConversationID string `json:"conversation_id"`
+	Working        bool   `json:"working"`
+}
+
+// ConversationWithState combines a conversation with its working state.
+type ConversationWithState struct {
+	generated.Conversation
+	Working bool `json:"working"`
+}
+
 // StreamResponse represents the response format for conversation streaming
 type StreamResponse struct {
 	Messages          []APIMessage           `json:"messages"`
 	Conversation      generated.Conversation `json:"conversation"`
-	AgentWorking      *bool                  `json:"agent_working,omitempty"`
+	ConversationState *ConversationState     `json:"conversation_state,omitempty"`
 	ContextWindowSize uint64                 `json:"context_window_size,omitempty"`
 	// ConversationListUpdate is set when another conversation in the list changed
 	ConversationListUpdate *ConversationListUpdate `json:"conversation_list_update,omitempty"`
@@ -149,68 +162,11 @@ func calculateContextWindowSize(messages []APIMessage) uint64 {
 	return 0
 }
 
-var (
-	truePtr  = ptr(true)
-	falsePtr = ptr(false)
-)
-
-func ptr[T any](v T) *T { return &v }
-
-func agentWorking(messages []APIMessage) *bool {
-	if len(messages) == 0 {
-		return falsePtr
-	}
-
-	// Find the last non-gitinfo message (gitinfo messages are passive notifications)
-	lastIdx := len(messages) - 1
-	for lastIdx >= 0 && messages[lastIdx].Type == string(db.MessageTypeGitInfo) {
-		lastIdx--
-	}
-	if lastIdx < 0 {
-		return falsePtr
-	}
-	last := messages[lastIdx]
-
-	// If the last message is an error, agent is not working
-	if last.Type == string(db.MessageTypeError) {
-		return falsePtr
-	}
-
-	if last.Type == string(db.MessageTypeAgent) {
-		if last.EndOfTurn == nil {
-			return truePtr
-		}
-		if *last.EndOfTurn {
-			return falsePtr
-		}
-		return truePtr
-	}
-
-	for i := lastIdx; i >= 0; i-- {
-		msg := messages[i]
-		if msg.Type != string(db.MessageTypeAgent) {
-			continue
-		}
-		// Agent ended turn, but newer non-agent messages exist, so agent is working again.
-		return truePtr
-	}
-
-	// No agent message found yet but conversation has activity, assume agent is working.
-	return truePtr
-}
-
-// isEndOfTurn checks if a database message represents end of turn
-func isEndOfTurn(msg *generated.Message) bool {
+// isAgentEndOfTurn checks if a message is an agent message with end_of_turn=true.
+// This indicates the agent loop has finished processing.
+func isAgentEndOfTurn(msg *generated.Message) bool {
 	if msg == nil {
 		return false
-	}
-	// Error messages end the turn
-	if msg.Type == string(db.MessageTypeError) {
-		return true
-	}
-	// Gitinfo messages always come at end of turn (after a commit)
-	if msg.Type == string(db.MessageTypeGitInfo) {
-		return true
 	}
 	// Only agent messages can have end_of_turn
 	if msg.Type != string(db.MessageTypeAgent) {
@@ -480,7 +436,11 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 			return s.recordMessage(ctx, conversationID, message, usage)
 		}
 
-		manager := NewConversationManager(conversationID, s.db, s.logger, s.toolSetConfig, recordMessage)
+		onStateChange := func(state ConversationState) {
+			s.publishConversationState(state)
+		}
+
+		manager := NewConversationManager(conversationID, s.db, s.logger, s.toolSetConfig, recordMessage, onStateChange)
 		if err := manager.Hydrate(ctx); err != nil {
 			return nil, err
 		}
@@ -682,15 +642,15 @@ func (s *Server) notifySubscribersNewMessage(ctx context.Context, conversationID
 	// Convert the single new message to API format
 	apiMessages := toAPIMessages([]generated.Message{*newMsg})
 
-	// Publish only the new message
-	agentWorking := falsePtr
-	if !isEndOfTurn(newMsg) {
-		agentWorking = truePtr
+	// Update agent working state based on message type
+	if isAgentEndOfTurn(newMsg) {
+		manager.SetAgentWorking(false)
 	}
+
+	// Publish only the new message
 	streamData := StreamResponse{
 		Messages:     apiMessages,
 		Conversation: conversation,
-		AgentWorking: agentWorking,
 		// ContextWindowSize: 0 for messages without usage data (user/tool messages).
 		// With omitempty, 0 is omitted from JSON, so the UI keeps its cached value.
 		// Only agent messages have usage data, so context window updates when they arrive.
@@ -719,6 +679,35 @@ func (s *Server) publishConversationListUpdate(update ConversationListUpdate) {
 		}
 		manager.subpub.Broadcast(streamData)
 	}
+}
+
+// publishConversationState broadcasts a conversation state update to ALL active
+// conversation streams. This allows clients to see the working state of other conversations.
+func (s *Server) publishConversationState(state ConversationState) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Broadcast to all active conversation managers
+	for _, manager := range s.activeConversations {
+		streamData := StreamResponse{
+			ConversationState: &state,
+		}
+		manager.subpub.Broadcast(streamData)
+	}
+}
+
+// getWorkingConversations returns a map of conversation IDs that are currently working.
+func (s *Server) getWorkingConversations() map[string]bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	working := make(map[string]bool)
+	for id, manager := range s.activeConversations {
+		if manager.IsAgentWorking() {
+			working[id] = true
+		}
+	}
+	return working
 }
 
 // Cleanup removes inactive conversation managers

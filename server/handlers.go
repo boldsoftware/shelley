@@ -520,8 +520,20 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get working states for all active conversations
+	workingStates := s.getWorkingConversations()
+
+	// Build response with working state included
+	result := make([]ConversationWithState, len(conversations))
+	for i, conv := range conversations {
+		result[i] = ConversationWithState{
+			Conversation: conv,
+			Working:      workingStates[conv.ConversationID],
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(conversations)
+	json.NewEncoder(w).Encode(result)
 }
 
 // conversationMux returns a mux for /api/conversation/<id>/* routes
@@ -593,9 +605,9 @@ func (s *Server) handleGetConversation(w http.ResponseWriter, r *http.Request, c
 	w.Header().Set("Content-Type", "application/json")
 	apiMessages := toAPIMessages(messages)
 	json.NewEncoder(w).Encode(StreamResponse{
-		Messages:          apiMessages,
-		Conversation:      conversation,
-		AgentWorking:      agentWorking(apiMessages),
+		Messages:     apiMessages,
+		Conversation: conversation,
+		// ConversationState is sent via the streaming endpoint, not on initial load
 		ContextWindowSize: calculateContextWindowSize(apiMessages),
 	})
 }
@@ -863,24 +875,27 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Send current messages and conversation data
-	apiMessages := toAPIMessages(messages)
-	streamData := StreamResponse{
-		Messages:          apiMessages,
-		Conversation:      conversation,
-		AgentWorking:      agentWorking(apiMessages),
-		ContextWindowSize: calculateContextWindowSize(apiMessages),
-	}
-	data, _ := json.Marshal(streamData)
-	fmt.Fprintf(w, "data: %s\n\n", data)
-	w.(http.Flusher).Flush()
-
-	// Get or create conversation manager
+	// Get or create conversation manager to access working state
 	manager, err := s.getOrCreateConversationManager(ctx, conversationID)
 	if err != nil {
 		s.logger.Error("Failed to get conversation manager", "conversationID", conversationID, "error", err)
 		return
 	}
+
+	// Send current messages, conversation data, and conversation state
+	apiMessages := toAPIMessages(messages)
+	streamData := StreamResponse{
+		Messages:     apiMessages,
+		Conversation: conversation,
+		ConversationState: &ConversationState{
+			ConversationID: conversationID,
+			Working:        manager.IsAgentWorking(),
+		},
+		ContextWindowSize: calculateContextWindowSize(apiMessages),
+	}
+	data, _ := json.Marshal(streamData)
+	fmt.Fprintf(w, "data: %s\n\n", data)
+	w.(http.Flusher).Flush()
 
 	// Subscribe to new messages after the last one we sent
 	last := int64(-1)

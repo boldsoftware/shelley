@@ -353,6 +353,11 @@ function AnimatedWorkingStatus() {
   );
 }
 
+interface ConversationStateUpdate {
+  conversation_id: string;
+  working: boolean;
+}
+
 interface ChatInterfaceProps {
   conversationId: string | null;
   onOpenDrawer: () => void;
@@ -360,6 +365,7 @@ interface ChatInterfaceProps {
   currentConversation?: Conversation;
   onConversationUpdate?: (conversation: Conversation) => void;
   onConversationListUpdate?: (update: ConversationListUpdate) => void;
+  onConversationStateUpdate?: (state: ConversationStateUpdate) => void;
   onFirstMessage?: (message: string, model: string, cwd?: string) => Promise<void>;
   mostRecentCwd?: string | null;
   isDrawerCollapsed?: boolean;
@@ -374,6 +380,7 @@ function ChatInterface({
   currentConversation,
   onConversationUpdate,
   onConversationListUpdate,
+  onConversationStateUpdate,
   onFirstMessage,
   mostRecentCwd,
   isDrawerCollapsed,
@@ -578,7 +585,8 @@ function ChatInterface({
       setError(null);
       const response = await api.getConversation(conversationId);
       setMessages(response.messages ?? []);
-      setAgentWorking(Boolean(response.agent_working));
+      // ConversationState is sent via the streaming endpoint, not on initial load
+      // We don't update agentWorking here - the stream will provide the current state
       // Always update context window size when loading a conversation.
       // If omitted from response (due to omitempty when 0), default to 0.
       setContextWindowSize(response.context_window_size ?? 0);
@@ -638,8 +646,16 @@ function ChatInterface({
           onConversationListUpdate(streamResponse.conversation_list_update);
         }
 
-        if (typeof streamResponse.agent_working === "boolean") {
-          setAgentWorking(streamResponse.agent_working);
+        // Handle conversation state updates (explicit from server)
+        if (streamResponse.conversation_state) {
+          // Update the conversations list with new working state
+          if (onConversationStateUpdate) {
+            onConversationStateUpdate(streamResponse.conversation_state);
+          }
+          // Update local state if this is for our conversation
+          if (streamResponse.conversation_state.conversation_id === conversationId) {
+            setAgentWorking(streamResponse.conversation_state.working);
+          }
         }
 
         if (typeof streamResponse.context_window_size === "number") {

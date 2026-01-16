@@ -1,5 +1,6 @@
 import {
   Conversation,
+  ConversationWithState,
   StreamResponse,
   ChatRequest,
   GitDiffInfo,
@@ -16,7 +17,7 @@ class ApiService {
     "X-Shelley-Request": "1",
   };
 
-  async getConversations(): Promise<Conversation[]> {
+  async getConversations(): Promise<ConversationWithState[]> {
     const response = await fetch(`${this.baseUrl}/conversations`);
     if (!response.ok) {
       throw new Error(`Failed to get conversations: ${response.statusText}`);
@@ -24,7 +25,7 @@ class ApiService {
     return response.json();
   }
 
-  async searchConversations(query: string): Promise<Conversation[]> {
+  async searchConversations(query: string): Promise<ConversationWithState[]> {
     const params = new URLSearchParams({
       q: query,
       search_content: "true",

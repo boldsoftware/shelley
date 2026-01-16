@@ -41,10 +41,18 @@ type ConversationManager struct {
 	hydrated              bool
 	hasConversationEvents bool
 	cwd                   string // working directory for tools
+
+	// agentWorking tracks whether the agent is currently working.
+	// This is explicitly managed and broadcast to subscribers when it changes.
+	agentWorking bool
+
+	// onStateChange is called when the conversation state changes.
+	// This allows the server to broadcast state changes to all subscribers.
+	onStateChange func(state ConversationState)
 }
 
 // NewConversationManager constructs a manager with dependencies but defers hydration until needed.
-func NewConversationManager(conversationID string, database *db.DB, baseLogger *slog.Logger, toolSetConfig claudetool.ToolSetConfig, recordMessage loop.MessageRecordFunc) *ConversationManager {
+func NewConversationManager(conversationID string, database *db.DB, baseLogger *slog.Logger, toolSetConfig claudetool.ToolSetConfig, recordMessage loop.MessageRecordFunc, onStateChange func(ConversationState)) *ConversationManager {
 	logger := baseLogger
 	if logger == nil {
 		logger = slog.Default()
@@ -59,7 +67,36 @@ func NewConversationManager(conversationID string, database *db.DB, baseLogger *
 		logger:         logger,
 		toolSetConfig:  toolSetConfig,
 		subpub:         subpub.New[StreamResponse](),
+		onStateChange:  onStateChange,
 	}
+}
+
+// SetAgentWorking updates the agent working state and notifies the server to broadcast.
+func (cm *ConversationManager) SetAgentWorking(working bool) {
+	cm.mu.Lock()
+	if cm.agentWorking == working {
+		cm.mu.Unlock()
+		return
+	}
+	cm.agentWorking = working
+	onStateChange := cm.onStateChange
+	convID := cm.conversationID
+	cm.mu.Unlock()
+
+	cm.logger.Debug("agent working state changed", "working", working)
+	if onStateChange != nil {
+		onStateChange(ConversationState{
+			ConversationID: convID,
+			Working:        working,
+		})
+	}
+}
+
+// IsAgentWorking returns the current agent working state.
+func (cm *ConversationManager) IsAgentWorking() bool {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	return cm.agentWorking
 }
 
 // Hydrate loads conversation state from the database, generating a system prompt if missing.
@@ -157,6 +194,9 @@ func (cm *ConversationManager) AcceptUserMessage(ctx context.Context, service ll
 	}
 
 	loopInstance.QueueUserMessage(message)
+
+	// Mark agent as working - we just queued work for the loop
+	cm.SetAgentWorking(true)
 
 	return isFirst, nil
 }
@@ -480,6 +520,9 @@ func (cm *ConversationManager) CancelConversation(ctx context.Context) error {
 		return fmt.Errorf("failed to record end turn message: %w", err)
 	}
 
+	// Mark agent as not working
+	cm.SetAgentWorking(false)
+
 	cm.mu.Lock()
 	cm.loopCancel = nil
 	cm.loopCtx = nil
@@ -557,7 +600,6 @@ func (cm *ConversationManager) notifyGitStateChange(ctx context.Context, msg *ge
 	streamData := StreamResponse{
 		Messages:     apiMessages,
 		Conversation: conversation,
-		AgentWorking: falsePtr, // Gitinfo is recorded at end of turn, agent is done
 	}
 	cm.subpub.Publish(msg.SequenceID, streamData)
 }

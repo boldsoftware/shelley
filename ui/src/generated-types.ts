@@ -37,10 +37,26 @@ export interface ApiMessageForTS {
   end_of_turn?: boolean | null;
 }
 
+export interface ConversationStateForTS {
+  conversation_id: string;
+  working: boolean;
+}
+
 export interface StreamResponseForTS {
   messages: ApiMessageForTS[] | null;
   conversation: Conversation;
-  agent_working?: boolean | null;
+  conversation_state?: ConversationStateForTS | null;
+}
+
+export interface ConversationWithStateForTS {
+  conversation_id: string;
+  slug: string | null;
+  user_initiated: boolean;
+  created_at: string;
+  updated_at: string;
+  cwd: string | null;
+  archived: boolean;
+  working: boolean;
 }
 
 export type MessageType = "user" | "agent" | "tool" | "error" | "system" | "gitinfo";

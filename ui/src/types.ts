@@ -1,6 +1,7 @@
 // Types for Shelley UI
 import {
   Conversation as GeneratedConversation,
+  ConversationWithStateForTS,
   ApiMessageForTS,
   StreamResponseForTS,
   Usage as GeneratedUsage,
@@ -9,6 +10,7 @@ import {
 
 // Re-export generated types
 export type Conversation = GeneratedConversation;
+export type ConversationWithState = ConversationWithStateForTS;
 export type Usage = GeneratedUsage;
 export type MessageType = GeneratedMessageType;
 

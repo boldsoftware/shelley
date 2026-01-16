@@ -66,6 +66,7 @@ func TS() *go2ts.Go2TS {
 	generator.AddMultiple(
 		apiMessageForTS{},
 		streamResponseForTS{},
+		conversationWithStateForTS{},
 	)
 
 	// Generate clean nominal types
@@ -87,8 +88,24 @@ type apiMessageForTS struct {
 	EndOfTurn      *bool     `json:"end_of_turn,omitempty"`
 }
 
+type conversationStateForTS struct {
+	ConversationID string `json:"conversation_id"`
+	Working        bool   `json:"working"`
+}
+
+type conversationWithStateForTS struct {
+	ConversationID string  `json:"conversation_id"`
+	Slug           *string `json:"slug"`
+	UserInitiated  bool    `json:"user_initiated"`
+	CreatedAt      string  `json:"created_at"`
+	UpdatedAt      string  `json:"updated_at"`
+	Cwd            *string `json:"cwd"`
+	Archived       bool    `json:"archived"`
+	Working        bool    `json:"working"`
+}
+
 type streamResponseForTS struct {
-	Messages     []apiMessageForTS      `json:"messages"`
-	Conversation generated.Conversation `json:"conversation"`
-	AgentWorking *bool                  `json:"agent_working,omitempty"`
+	Messages          []apiMessageForTS       `json:"messages"`
+	Conversation      generated.Conversation  `json:"conversation"`
+	ConversationState *conversationStateForTS `json:"conversation_state,omitempty"`
 }

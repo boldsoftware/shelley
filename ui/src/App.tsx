@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import ChatInterface from "./components/ChatInterface";
 import ConversationDrawer from "./components/ConversationDrawer";
 import CommandPalette from "./components/CommandPalette";
-import { Conversation, ConversationListUpdate } from "./types";
+import { Conversation, ConversationWithState, ConversationListUpdate } from "./types";
 import { api } from "./services/api";
 
 // Check if a slug is a generated ID (format: cXXXX where X is alphanumeric)
@@ -59,7 +59,7 @@ function updatePageTitle(conversation: Conversation | undefined) {
 }
 
 function App() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversations, setConversations] = useState<ConversationWithState[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerCollapsed, setDrawerCollapsed] = useState(false);
@@ -127,19 +127,37 @@ function App() {
         );
 
         if (existingIndex >= 0) {
-          // Update existing conversation in place (don't re-sort to avoid distracting jumps)
+          // Update existing conversation in place, preserving working state
+          // (working state is updated separately via conversation_state)
           const updated = [...prev];
-          updated[existingIndex] = update.conversation!;
+          updated[existingIndex] = {
+            ...update.conversation!,
+            working: prev[existingIndex].working,
+          };
           return updated;
         } else {
-          // Add new conversation at the top
-          return [update.conversation!, ...prev];
+          // Add new conversation at the top (not working by default)
+          return [{ ...update.conversation!, working: false }, ...prev];
         }
       });
     } else if (update.type === "delete" && update.conversation_id) {
       setConversations((prev) => prev.filter((c) => c.conversation_id !== update.conversation_id));
     }
   }, []);
+
+  // Handle conversation state updates (working state changes)
+  const handleConversationStateUpdate = useCallback(
+    (state: { conversation_id: string; working: boolean }) => {
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.conversation_id === state.conversation_id
+            ? { ...conv, working: state.working }
+            : conv,
+        ),
+      );
+    },
+    [],
+  );
 
   // Update page title and URL when conversation changes
   useEffect(() => {
@@ -193,7 +211,9 @@ function App() {
   const updateConversation = (updatedConversation: Conversation) => {
     setConversations((prev) =>
       prev.map((conv) =>
-        conv.conversation_id === updatedConversation.conversation_id ? updatedConversation : conv,
+        conv.conversation_id === updatedConversation.conversation_id
+          ? { ...updatedConversation, working: conv.working }
+          : conv,
       ),
     );
   };
@@ -208,14 +228,18 @@ function App() {
   };
 
   const handleConversationUnarchived = (conversation: Conversation) => {
-    // Add the unarchived conversation back to the list
-    setConversations((prev) => [conversation, ...prev]);
+    // Add the unarchived conversation back to the list (not working by default)
+    setConversations((prev) => [{ ...conversation, working: false }, ...prev]);
   };
 
   const handleConversationRenamed = (conversation: Conversation) => {
-    // Update the conversation in the list with the new slug
+    // Update the conversation in the list with the new slug, preserving working state
     setConversations((prev) =>
-      prev.map((c) => (c.conversation_id === conversation.conversation_id ? conversation : c)),
+      prev.map((c) =>
+        c.conversation_id === conversation.conversation_id
+          ? { ...conversation, working: c.working }
+          : c,
+      ),
     );
   };
 
@@ -294,6 +318,7 @@ function App() {
           currentConversation={currentConversation}
           onConversationUpdate={updateConversation}
           onConversationListUpdate={handleConversationListUpdate}
+          onConversationStateUpdate={handleConversationStateUpdate}
           onFirstMessage={handleFirstMessage}
           mostRecentCwd={mostRecentCwd}
           isDrawerCollapsed={drawerCollapsed}

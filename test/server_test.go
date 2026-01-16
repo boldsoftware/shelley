@@ -644,7 +644,8 @@ func TestSSEIncrementalUpdates(t *testing.T) {
 	defer client1.Body.Close()
 
 	// Read initial response from client1 (should contain the first message)
-	buf1 := make([]byte, 2048)
+	// Buffer must be large enough to hold the full response including system prompt
+	buf1 := make([]byte, 32768)
 	n1, err := client1.Body.Read(buf1)
 	if err != nil && err != io.EOF {
 		t.Fatalf("Failed to read from client1: %v", err)
@@ -678,7 +679,7 @@ func TestSSEIncrementalUpdates(t *testing.T) {
 	defer client2.Body.Close()
 
 	// Read response from client2 (should contain both messages since it's a new client)
-	buf2 := make([]byte, 2048)
+	buf2 := make([]byte, 32768)
 	n2, err := client2.Body.Read(buf2)
 	if err != nil && err != io.EOF {
 		t.Fatalf("Failed to read from client2: %v", err)

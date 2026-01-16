@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Conversation } from "../types";
+import { Conversation, ConversationWithState } from "../types";
 import { api } from "../services/api";
 
 interface ConversationDrawerProps {
@@ -7,7 +7,7 @@ interface ConversationDrawerProps {
   isCollapsed: boolean;
   onClose: () => void;
   onToggleCollapse: () => void;
-  conversations: Conversation[];
+  conversations: ConversationWithState[];
   currentConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onNewConversation: () => void;
@@ -279,33 +279,53 @@ function ConversationDrawer({
                     style={{ cursor: showArchived ? "default" : "pointer" }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      {editingId === conversation.conversation_id ? (
-                        <input
-                          ref={renameInputRef}
-                          type="text"
-                          value={editingSlug}
-                          onChange={(e) => setEditingSlug(e.target.value)}
-                          onBlur={() => handleRename(conversation.conversation_id)}
-                          onKeyDown={(e) => handleRenameKeyDown(e, conversation.conversation_id)}
-                          onClick={(e) => e.stopPropagation()}
-                          autoFocus
-                          className="conversation-title"
-                          style={{
-                            width: "100%",
-                            background: "transparent",
-                            border: "none",
-                            borderBottom: "1px solid var(--text-secondary)",
-                            outline: "none",
-                            padding: 0,
-                            font: "inherit",
-                            color: "inherit",
-                          }}
-                        />
-                      ) : (
-                        <div className="conversation-title">
-                          {getConversationPreview(conversation)}
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {editingId === conversation.conversation_id ? (
+                            <input
+                              ref={renameInputRef}
+                              type="text"
+                              value={editingSlug}
+                              onChange={(e) => setEditingSlug(e.target.value)}
+                              onBlur={() => handleRename(conversation.conversation_id)}
+                              onKeyDown={(e) =>
+                                handleRenameKeyDown(e, conversation.conversation_id)
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                              autoFocus
+                              className="conversation-title"
+                              style={{
+                                width: "100%",
+                                background: "transparent",
+                                border: "none",
+                                borderBottom: "1px solid var(--text-secondary)",
+                                outline: "none",
+                                padding: 0,
+                                font: "inherit",
+                                color: "inherit",
+                              }}
+                            />
+                          ) : (
+                            <div className="conversation-title">
+                              {getConversationPreview(conversation)}
+                            </div>
+                          )}
                         </div>
-                      )}
+                        {(conversation as ConversationWithState).working && (
+                          <span
+                            className="working-indicator"
+                            title="Agent is working"
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              backgroundColor: "var(--accent-color, #3b82f6)",
+                              flexShrink: 0,
+                              animation: "pulse 2s ease-in-out infinite",
+                            }}
+                          />
+                        )}
+                      </div>
                       <div className="conversation-meta">
                         <span className="conversation-date">
                           {formatDate(conversation.updated_at)}
@@ -315,100 +335,102 @@ function ConversationDrawer({
                             {formatCwdForDisplay(conversation.cwd)}
                           </span>
                         )}
+                        {!showArchived && (
+                          <div
+                            className="conversation-actions"
+                            style={{ display: "flex", gap: "0.25rem", marginLeft: "auto" }}
+                          >
+                            <button
+                              onClick={(e) => handleStartRename(e, conversation)}
+                              className="btn-icon-sm"
+                              title="Rename"
+                              aria-label="Rename conversation"
+                            >
+                              <svg
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                style={{ width: "1rem", height: "1rem" }}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={(e) => handleArchive(e, conversation.conversation_id)}
+                              className="btn-icon-sm"
+                              title="Archive"
+                              aria-label="Archive conversation"
+                            >
+                              <svg
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                style={{ width: "1rem", height: "1rem" }}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div
-                      className="conversation-actions"
-                      style={{ display: "flex", gap: "0.25rem", marginLeft: "0.5rem" }}
-                    >
-                      {showArchived ? (
-                        <>
-                          <button
-                            onClick={(e) => handleUnarchive(e, conversation.conversation_id)}
-                            className="btn-icon-sm"
-                            title="Restore"
-                            aria-label="Restore conversation"
+                    {showArchived && (
+                      <div
+                        className="conversation-actions"
+                        style={{ display: "flex", gap: "0.25rem", marginLeft: "0.5rem" }}
+                      >
+                        <button
+                          onClick={(e) => handleUnarchive(e, conversation.conversation_id)}
+                          className="btn-icon-sm"
+                          title="Restore"
+                          aria-label="Restore conversation"
+                        >
+                          <svg
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            style={{ width: "1rem", height: "1rem" }}
                           >
-                            <svg
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              style={{ width: "1rem", height: "1rem" }}
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={(e) => handleDelete(e, conversation.conversation_id)}
-                            className="btn-icon-sm btn-danger"
-                            title="Delete permanently"
-                            aria-label="Delete conversation"
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => handleDelete(e, conversation.conversation_id)}
+                          className="btn-icon-sm btn-danger"
+                          title="Delete permanently"
+                          aria-label="Delete conversation"
+                        >
+                          <svg
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            style={{ width: "1rem", height: "1rem" }}
                           >
-                            <svg
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              style={{ width: "1rem", height: "1rem" }}
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              />
-                            </svg>
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={(e) => handleStartRename(e, conversation)}
-                            className="btn-icon-sm"
-                            title="Rename"
-                            aria-label="Rename conversation"
-                          >
-                            <svg
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              style={{ width: "1rem", height: "1rem" }}
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={(e) => handleArchive(e, conversation.conversation_id)}
-                            className="btn-icon-sm"
-                            title="Archive"
-                            aria-label="Archive conversation"
-                          >
-                            <svg
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              style={{ width: "1rem", height: "1rem" }}
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-                              />
-                            </svg>
-                          </button>
-                        </>
-                      )}
-                    </div>
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
