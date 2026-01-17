@@ -24,6 +24,7 @@ import BrowserConsoleLogsTool from "./BrowserConsoleLogsTool";
 import ChangeDirTool from "./ChangeDirTool";
 import BrowserResizeTool from "./BrowserResizeTool";
 import DirectoryPickerModal from "./DirectoryPickerModal";
+import { Markdown } from "./Markdown";
 
 interface ContextUsageBarProps {
   contextWindowSize: number;
@@ -214,8 +215,12 @@ function CoalescedToolCall({
 
   const renderContent = (content: LLMContent) => {
     if (content.Type === 2) {
-      // text
-      return <div className="whitespace-pre-wrap break-words">{content.Text || ""}</div>;
+      // text - use Markdown for richer rendering (tables, code, etc)
+      return (
+        <div className="markdown-content">
+          <Markdown>{content.Text || ""}</Markdown>
+        </div>
+      );
     }
     return <div className="text-secondary text-sm italic">[Content type {content.Type}]</div>;
   };
