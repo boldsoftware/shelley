@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { linkifyText } from "../utils/linkify";
+import { Markdown } from "./Markdown";
 import { Message as MessageType, LLMMessage, LLMContent, Usage } from "../types";
 import BashTool from "./BashTool";
 import PatchTool from "./PatchTool";
@@ -315,8 +316,11 @@ function Message({ message, onOpenDiffViewer, onCommentTextChange }: MessageProp
           </div>
         );
       case "text":
+        // Use Markdown renderer for richer content (tables, lists, code blocks)
         return (
-          <div className="whitespace-pre-wrap break-words">{linkifyText(content.Text || "")}</div>
+          <div className="markdown-content">
+            <Markdown>{content.Text || ""}</Markdown>
+          </div>
         );
       case "tool_use":
         // IMPORTANT: When adding a new tool component here, also add it to:
