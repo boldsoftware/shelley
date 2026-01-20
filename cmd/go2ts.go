@@ -94,14 +94,15 @@ type conversationStateForTS struct {
 }
 
 type conversationWithStateForTS struct {
-	ConversationID string  `json:"conversation_id"`
-	Slug           *string `json:"slug"`
-	UserInitiated  bool    `json:"user_initiated"`
-	CreatedAt      string  `json:"created_at"`
-	UpdatedAt      string  `json:"updated_at"`
-	Cwd            *string `json:"cwd"`
-	Archived       bool    `json:"archived"`
-	Working        bool    `json:"working"`
+	ConversationID       string  `json:"conversation_id"`
+	Slug                 *string `json:"slug"`
+	UserInitiated        bool    `json:"user_initiated"`
+	CreatedAt            string  `json:"created_at"`
+	UpdatedAt            string  `json:"updated_at"`
+	Cwd                  *string `json:"cwd"`
+	Archived             bool    `json:"archived"`
+	ParentConversationID *string `json:"parent_conversation_id"`
+	Working              bool    `json:"working"`
 }
 
 type streamResponseForTS struct {

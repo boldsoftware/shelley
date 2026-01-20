@@ -50,6 +50,13 @@ type ToolSetConfig struct {
 	// OnWorkingDirChange is called when the working directory changes.
 	// This can be used to persist the change to a database.
 	OnWorkingDirChange func(newDir string)
+	// SubagentRunner is the runner for subagent conversations.
+	// If set, the subagent tool will be available.
+	SubagentRunner SubagentRunner
+	// SubagentDB is the database for subagent conversations.
+	SubagentDB SubagentDB
+	// ParentConversationID is the ID of the parent conversation (for subagent tool).
+	ParentConversationID string
 }
 
 // ToolSet holds a set of tools for a single conversation.
@@ -118,6 +125,17 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		patchTool.Tool(),
 		keywordTool.Tool(),
 		changeDirTool.Tool(),
+	}
+
+	// Add subagent tool if configured
+	if cfg.SubagentRunner != nil && cfg.SubagentDB != nil && cfg.ParentConversationID != "" {
+		subagentTool := &SubagentTool{
+			DB:                   cfg.SubagentDB,
+			ParentConversationID: cfg.ParentConversationID,
+			WorkingDir:           wd,
+			Runner:               cfg.SubagentRunner,
+		}
+		tools = append(tools, subagentTool.Tool())
 	}
 
 	var cleanup func()

@@ -221,7 +221,7 @@ type Server struct {
 
 // NewServer creates a new server instance
 func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool.ToolSetConfig, logger *slog.Logger, predictableOnly bool, terminalURL, defaultModel, requireHeader string, links []Link) *Server {
-	return &Server{
+	s := &Server{
 		db:                  database,
 		llmManager:          llmManager,
 		toolSetConfig:       toolSetConfig,
@@ -233,6 +233,12 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		requireHeader:       requireHeader,
 		links:               links,
 	}
+
+	// Set up subagent support
+	s.toolSetConfig.SubagentRunner = NewSubagentRunner(s)
+	s.toolSetConfig.SubagentDB = &db.SubagentDBAdapter{DB: database}
+
+	return s
 }
 
 // RegisterRoutes registers HTTP routes on the given mux

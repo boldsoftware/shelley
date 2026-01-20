@@ -13,6 +13,9 @@ import (
 //go:embed system_prompt.txt
 var systemPromptTemplate string
 
+//go:embed subagent_system_prompt.txt
+var subagentSystemPromptTemplate string
+
 // SystemPromptData contains all the data needed to render the system prompt template
 type SystemPromptData struct {
 	WorkingDirectory string
@@ -286,4 +289,45 @@ func isSudoAvailable() bool {
 	cmd := exec.Command("sudo", "-n", "id")
 	_, err := cmd.CombinedOutput()
 	return err == nil
+}
+
+// SubagentSystemPromptData contains data for subagent system prompts (minimal subset)
+type SubagentSystemPromptData struct {
+	WorkingDirectory string
+	GitInfo          *GitInfo
+}
+
+// GenerateSubagentSystemPrompt generates a minimal system prompt for subagent conversations.
+func GenerateSubagentSystemPrompt(workingDir string) (string, error) {
+	wd := workingDir
+	if wd == "" {
+		var err error
+		wd, err = os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to get working directory: %w", err)
+		}
+	}
+
+	data := &SubagentSystemPromptData{
+		WorkingDirectory: wd,
+	}
+
+	// Try to collect git info
+	gitInfo, err := collectGitInfo()
+	if err == nil {
+		data.GitInfo = gitInfo
+	}
+
+	tmpl, err := template.New("subagent_system_prompt").Parse(subagentSystemPromptTemplate)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse subagent template: %w", err)
+	}
+
+	var buf strings.Builder
+	err = tmpl.Execute(&buf, data)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute subagent template: %w", err)
+	}
+
+	return buf.String(), nil
 }

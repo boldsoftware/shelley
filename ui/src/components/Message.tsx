@@ -13,6 +13,7 @@ import ReadImageTool from "./ReadImageTool";
 import BrowserConsoleLogsTool from "./BrowserConsoleLogsTool";
 import ChangeDirTool from "./ChangeDirTool";
 import BrowserResizeTool from "./BrowserResizeTool";
+import SubagentTool from "./SubagentTool";
 import UsageDetailModal from "./UsageDetailModal";
 import MessageActionBar from "./MessageActionBar";
 
@@ -370,6 +371,10 @@ function Message({ message, onOpenDiffViewer, onCommentTextChange }: MessageProp
         if (content.ToolName === "browser_resize") {
           return <BrowserResizeTool toolInput={content.ToolInput} isRunning={true} />;
         }
+        // Use specialized component for subagent tool
+        if (content.ToolName === "subagent") {
+          return <SubagentTool toolInput={content.ToolInput} isRunning={true} />;
+        }
         // Use specialized component for browser console logs tools
         if (
           content.ToolName === "browser_recent_console_logs" ||
@@ -565,6 +570,20 @@ function Message({ message, onOpenDiffViewer, onCommentTextChange }: MessageProp
               toolResult={content.ToolResult}
               hasError={hasError}
               executionTime={executionTime}
+            />
+          );
+        }
+
+        // Use specialized component for subagent tool
+        if (toolName === "subagent") {
+          return (
+            <SubagentTool
+              toolInput={toolInput}
+              isRunning={false}
+              toolResult={content.ToolResult}
+              hasError={hasError}
+              executionTime={executionTime}
+              displayData={content.Display as { slug?: string; conversation_id?: string }}
             />
           );
         }

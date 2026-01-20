@@ -552,6 +552,9 @@ func (s *Server) conversationMux() *http.ServeMux {
 	mux.HandleFunc("POST /{id}/rename", func(w http.ResponseWriter, r *http.Request) {
 		s.handleRenameConversation(w, r, r.PathValue("id"))
 	})
+	mux.HandleFunc("GET /{id}/subagents", func(w http.ResponseWriter, r *http.Request) {
+		s.handleGetSubagents(w, r, r.PathValue("id"))
+	})
 	return mux
 }
 

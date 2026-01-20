@@ -13,7 +13,7 @@ WHERE slug = ?;
 
 -- name: ListConversations :many
 SELECT * FROM conversations
-WHERE archived = FALSE
+WHERE archived = FALSE AND parent_conversation_id IS NULL
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?;
 
@@ -25,12 +25,13 @@ LIMIT ? OFFSET ?;
 
 -- name: SearchConversations :many
 SELECT * FROM conversations
-WHERE slug LIKE '%' || ? || '%' AND archived = FALSE
+WHERE slug LIKE '%' || ? || '%' AND archived = FALSE AND parent_conversation_id IS NULL
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?;
 
 -- name: SearchConversationsWithMessages :many
 -- Search conversations by slug OR message content (user messages and agent responses, not system prompts)
+-- Includes both top-level conversations and subagent conversations
 SELECT DISTINCT c.* FROM conversations c
 LEFT JOIN messages m ON c.conversation_id = m.conversation_id AND m.type IN ('user', 'agent')
 WHERE c.archived = FALSE
@@ -64,7 +65,7 @@ DELETE FROM conversations
 WHERE conversation_id = ?;
 
 -- name: CountConversations :one
-SELECT COUNT(*) FROM conversations WHERE archived = FALSE;
+SELECT COUNT(*) FROM conversations WHERE archived = FALSE AND parent_conversation_id IS NULL;
 
 -- name: CountArchivedConversations :one
 SELECT COUNT(*) FROM conversations WHERE archived = TRUE;
@@ -86,3 +87,18 @@ UPDATE conversations
 SET cwd = ?, updated_at = CURRENT_TIMESTAMP
 WHERE conversation_id = ?
 RETURNING *;
+
+
+-- name: CreateSubagentConversation :one
+INSERT INTO conversations (conversation_id, slug, user_initiated, cwd, parent_conversation_id)
+VALUES (?, ?, FALSE, ?, ?)
+RETURNING *;
+
+-- name: GetSubagents :many
+SELECT * FROM conversations
+WHERE parent_conversation_id = ?
+ORDER BY created_at ASC;
+
+-- name: GetConversationBySlugAndParent :one
+SELECT * FROM conversations
+WHERE slug = ? AND parent_conversation_id = ?;

@@ -14,6 +14,8 @@ interface ConversationDrawerProps {
   onConversationArchived?: (id: string) => void;
   onConversationUnarchived?: (conversation: Conversation) => void;
   onConversationRenamed?: (conversation: Conversation) => void;
+  subagentUpdate?: Conversation | null; // When a subagent is created/updated
+  subagentStateUpdate?: { conversation_id: string; working: boolean } | null; // When a subagent's working state changes
 }
 
 function ConversationDrawer({
@@ -28,12 +30,16 @@ function ConversationDrawer({
   onConversationArchived,
   onConversationUnarchived,
   onConversationRenamed,
+  subagentUpdate,
+  subagentStateUpdate,
 }: ConversationDrawerProps) {
   const [showArchived, setShowArchived] = useState(false);
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [loadingArchived, setLoadingArchived] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingSlug, setEditingSlug] = useState("");
+  const [subagents, setSubagents] = useState<Record<string, ConversationWithState[]>>({});
+  const [expandedSubagents, setExpandedSubagents] = useState<Set<string>>(new Set());
   const renameInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -41,6 +47,88 @@ function ConversationDrawer({
       loadArchivedConversations();
     }
   }, [showArchived]);
+
+  // Load subagents for the current conversation
+  useEffect(() => {
+    if (currentConversationId && !showArchived) {
+      loadSubagents(currentConversationId);
+      // Auto-expand the current conversation's subagents
+      setExpandedSubagents((prev) => new Set([...prev, currentConversationId]));
+    }
+  }, [currentConversationId, showArchived]);
+
+  // Handle real-time subagent updates
+  useEffect(() => {
+    if (subagentUpdate && subagentUpdate.parent_conversation_id) {
+      const parentId = subagentUpdate.parent_conversation_id;
+      setSubagents((prev) => {
+        const existing = prev[parentId] || [];
+        // Check if this subagent already exists
+        const existingIndex = existing.findIndex(
+          (s) => s.conversation_id === subagentUpdate.conversation_id,
+        );
+        if (existingIndex >= 0) {
+          // Update existing, preserving working state
+          const updated = [...existing];
+          updated[existingIndex] = { ...subagentUpdate, working: existing[existingIndex].working };
+          return { ...prev, [parentId]: updated };
+        } else {
+          // Add new subagent (not working by default)
+          return { ...prev, [parentId]: [...existing, { ...subagentUpdate, working: false }] };
+        }
+      });
+      // Auto-expand parent to show the new subagent
+      setExpandedSubagents((prev) => new Set([...prev, parentId]));
+    }
+  }, [subagentUpdate]);
+
+  // Handle subagent working state updates
+  useEffect(() => {
+    if (subagentStateUpdate) {
+      setSubagents((prev) => {
+        // Find which parent contains this subagent
+        for (const [parentId, subs] of Object.entries(prev)) {
+          const subIndex = subs.findIndex((s) => s.conversation_id === subagentStateUpdate.conversation_id);
+          if (subIndex >= 0) {
+            const updated = [...subs];
+            updated[subIndex] = { ...updated[subIndex], working: subagentStateUpdate.working };
+            return { ...prev, [parentId]: updated };
+          }
+        }
+        return prev;
+      });
+    }
+  }, [subagentStateUpdate]);
+
+  const loadSubagents = async (conversationId: string) => {
+    // Skip if already loaded
+    if (subagents[conversationId]) return;
+    try {
+      const subs = await api.getSubagents(conversationId);
+      if (subs && subs.length > 0) {
+        // Add working: false to each subagent
+        const subsWithState = subs.map((s) => ({ ...s, working: false }));
+        setSubagents((prev) => ({ ...prev, [conversationId]: subsWithState }));
+      }
+    } catch (err) {
+      console.error("Failed to load subagents:", err);
+    }
+  };
+
+  const toggleSubagents = (e: React.MouseEvent, conversationId: string) => {
+    e.stopPropagation();
+    setExpandedSubagents((prev) => {
+      const next = new Set(prev);
+      if (next.has(conversationId)) {
+        next.delete(conversationId);
+      } else {
+        next.add(conversationId);
+        // Load subagents if not already loaded
+        loadSubagents(conversationId);
+      }
+      return next;
+    });
+  };
 
   const loadArchivedConversations = async () => {
     setLoadingArchived(true);
@@ -267,171 +355,267 @@ function ConversationDrawer({
             <div className="conversation-list">
               {displayedConversations.map((conversation) => {
                 const isActive = conversation.conversation_id === currentConversationId;
+                const hasSubagents = subagents[conversation.conversation_id]?.length > 0;
+                const isExpanded = expandedSubagents.has(conversation.conversation_id);
+                const conversationSubagents = subagents[conversation.conversation_id] || [];
                 return (
-                  <div
-                    key={conversation.conversation_id}
-                    className={`conversation-item ${isActive ? "active" : ""}`}
-                    onClick={() => {
-                      if (!showArchived) {
-                        onSelectConversation(conversation.conversation_id);
-                      }
-                    }}
-                    style={{ cursor: showArchived ? "default" : "pointer" }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          {editingId === conversation.conversation_id ? (
-                            <input
-                              ref={renameInputRef}
-                              type="text"
-                              value={editingSlug}
-                              onChange={(e) => setEditingSlug(e.target.value)}
-                              onBlur={() => handleRename(conversation.conversation_id)}
-                              onKeyDown={(e) =>
-                                handleRenameKeyDown(e, conversation.conversation_id)
-                              }
-                              onClick={(e) => e.stopPropagation()}
-                              autoFocus
-                              className="conversation-title"
+                  <React.Fragment key={conversation.conversation_id}>
+                    <div
+                      className={`conversation-item ${isActive ? "active" : ""}`}
+                      onClick={() => {
+                        if (!showArchived) {
+                          onSelectConversation(conversation.conversation_id);
+                        }
+                      }}
+                      style={{ cursor: showArchived ? "default" : "pointer" }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {editingId === conversation.conversation_id ? (
+                              <input
+                                ref={renameInputRef}
+                                type="text"
+                                value={editingSlug}
+                                onChange={(e) => setEditingSlug(e.target.value)}
+                                onBlur={() => handleRename(conversation.conversation_id)}
+                                onKeyDown={(e) =>
+                                  handleRenameKeyDown(e, conversation.conversation_id)
+                                }
+                                onClick={(e) => e.stopPropagation()}
+                                autoFocus
+                                className="conversation-title"
+                                style={{
+                                  width: "100%",
+                                  background: "transparent",
+                                  border: "none",
+                                  borderBottom: "1px solid var(--text-secondary)",
+                                  outline: "none",
+                                  padding: 0,
+                                  font: "inherit",
+                                  color: "inherit",
+                                }}
+                              />
+                            ) : (
+                              <div className="conversation-title">
+                                {getConversationPreview(conversation)}
+                              </div>
+                            )}
+                          </div>
+                          {(conversation as ConversationWithState).working && (
+                            <span
+                              className="working-indicator"
+                              title="Agent is working"
                               style={{
-                                width: "100%",
-                                background: "transparent",
-                                border: "none",
-                                borderBottom: "1px solid var(--text-secondary)",
-                                outline: "none",
-                                padding: 0,
-                                font: "inherit",
-                                color: "inherit",
+                                width: "8px",
+                                height: "8px",
+                                borderRadius: "50%",
+                                backgroundColor: "var(--accent-color, #3b82f6)",
+                                flexShrink: 0,
+                                animation: "pulse 2s ease-in-out infinite",
                               }}
                             />
-                          ) : (
-                            <div className="conversation-title">
-                              {getConversationPreview(conversation)}
+                          )}
+                        </div>
+                        <div className="conversation-meta">
+                          <span className="conversation-date">
+                            {formatDate(conversation.updated_at)}
+                          </span>
+                          {conversation.cwd && (
+                            <span className="conversation-cwd" title={conversation.cwd}>
+                              {formatCwdForDisplay(conversation.cwd)}
+                            </span>
+                          )}
+                          {!showArchived && (
+                            <div
+                              className="conversation-actions"
+                              style={{ display: "flex", gap: "0.25rem", marginLeft: "auto" }}
+                            >
+                              <button
+                                onClick={(e) => handleStartRename(e, conversation)}
+                                className="btn-icon-sm"
+                                title="Rename"
+                                aria-label="Rename conversation"
+                              >
+                                <svg
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                  style={{ width: "1rem", height: "1rem" }}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                  />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={(e) => handleArchive(e, conversation.conversation_id)}
+                                className="btn-icon-sm"
+                                title="Archive"
+                                aria-label="Archive conversation"
+                              >
+                                <svg
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                  style={{ width: "1rem", height: "1rem" }}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+                                  />
+                                </svg>
+                              </button>
+                              {/* Subagent count indicator */}
+                              {hasSubagents && (
+                                <button
+                                  onClick={(e) => toggleSubagents(e, conversation.conversation_id)}
+                                  className="btn-icon-sm"
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.125rem",
+                                    fontSize: "0.75rem",
+                                    minWidth: "auto",
+                                    padding: "0.125rem 0.25rem",
+                                  }}
+                                  title={isExpanded ? "Hide subagents" : "Show subagents"}
+                                  aria-label={isExpanded ? "Collapse subagents" : "Expand subagents"}
+                                >
+                                  <span style={{ fontWeight: 500 }}>
+                                    {conversationSubagents.length}
+                                  </span>
+                                  <svg
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                    style={{
+                                      width: "0.625rem",
+                                      height: "0.625rem",
+                                      transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                                      transition: "transform 0.15s ease",
+                                    }}
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M9 5l7 7-7 7"
+                                    />
+                                  </svg>
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
-                        {(conversation as ConversationWithState).working && (
-                          <span
-                            className="working-indicator"
-                            title="Agent is working"
-                            style={{
-                              width: "8px",
-                              height: "8px",
-                              borderRadius: "50%",
-                              backgroundColor: "var(--accent-color, #3b82f6)",
-                              flexShrink: 0,
-                              animation: "pulse 2s ease-in-out infinite",
-                            }}
-                          />
-                        )}
                       </div>
-                      <div className="conversation-meta">
-                        <span className="conversation-date">
-                          {formatDate(conversation.updated_at)}
-                        </span>
-                        {conversation.cwd && (
-                          <span className="conversation-cwd" title={conversation.cwd}>
-                            {formatCwdForDisplay(conversation.cwd)}
-                          </span>
-                        )}
-                        {!showArchived && (
-                          <div
-                            className="conversation-actions"
-                            style={{ display: "flex", gap: "0.25rem", marginLeft: "auto" }}
+                      {showArchived && (
+                        <div
+                          className="conversation-actions"
+                          style={{ display: "flex", gap: "0.25rem", marginLeft: "0.5rem" }}
+                        >
+                          <button
+                            onClick={(e) => handleUnarchive(e, conversation.conversation_id)}
+                            className="btn-icon-sm"
+                            title="Restore"
+                            aria-label="Restore conversation"
                           >
-                            <button
-                              onClick={(e) => handleStartRename(e, conversation)}
-                              className="btn-icon-sm"
-                              title="Rename"
-                              aria-label="Rename conversation"
+                            <svg
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                              style={{ width: "1rem", height: "1rem" }}
                             >
-                              <svg
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                                style={{ width: "1rem", height: "1rem" }}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={(e) => handleArchive(e, conversation.conversation_id)}
-                              className="btn-icon-sm"
-                              title="Archive"
-                              aria-label="Archive conversation"
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                              />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => handleDelete(e, conversation.conversation_id)}
+                            className="btn-icon-sm btn-danger"
+                            title="Delete permanently"
+                            aria-label="Delete conversation"
+                          >
+                            <svg
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                              style={{ width: "1rem", height: "1rem" }}
                             >
-                              <svg
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                                style={{ width: "1rem", height: "1rem" }}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-                                />
-                              </svg>
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {showArchived && (
-                      <div
-                        className="conversation-actions"
-                        style={{ display: "flex", gap: "0.25rem", marginLeft: "0.5rem" }}
-                      >
-                        <button
-                          onClick={(e) => handleUnarchive(e, conversation.conversation_id)}
-                          className="btn-icon-sm"
-                          title="Restore"
-                          aria-label="Restore conversation"
-                        >
-                          <svg
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            style={{ width: "1rem", height: "1rem" }}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={(e) => handleDelete(e, conversation.conversation_id)}
-                          className="btn-icon-sm btn-danger"
-                          title="Delete permanently"
-                          aria-label="Delete conversation"
-                        >
-                          <svg
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            style={{ width: "1rem", height: "1rem" }}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
-                        </button>
+                    {/* Render subagents if expanded */}
+                    {!showArchived && isExpanded && conversationSubagents.length > 0 && (
+                      <div className="subagent-list" style={{ marginLeft: "1.5rem" }}>
+                        {conversationSubagents.map((sub) => {
+                          const isSubActive = sub.conversation_id === currentConversationId;
+                          return (
+                            <div
+                              key={sub.conversation_id}
+                              className={`conversation-item subagent-item ${isSubActive ? "active" : ""}`}
+                              onClick={() => onSelectConversation(sub.conversation_id)}
+                              style={{
+                                cursor: "pointer",
+                                fontSize: "0.9em",
+                                paddingLeft: "0.5rem",
+                                borderLeft: "2px solid var(--border-color)",
+                              }}
+                            >
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div className="conversation-title">
+                                      {sub.slug || sub.conversation_id}
+                                    </div>
+                                  </div>
+                                  {sub.working && (
+                                    <span
+                                      className="working-indicator"
+                                      title="Subagent is working"
+                                      style={{
+                                        width: "6px",
+                                        height: "6px",
+                                        borderRadius: "50%",
+                                        backgroundColor: "var(--accent-color, #3b82f6)",
+                                        flexShrink: 0,
+                                        animation: "pulse 2s ease-in-out infinite",
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                                <div className="conversation-meta">
+                                  <span
+                                    className="conversation-date"
+                                    style={{ fontSize: "0.85em" }}
+                                  >
+                                    {formatDate(sub.updated_at)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
-                  </div>
+                  </React.Fragment>
                 );
               })}
             </div>

@@ -21,6 +21,7 @@ import (
 //   - "echo: <text>" - echoes the text back
 //   - "bash: <command>" - triggers bash tool with command
 //   - "think: <thoughts>" - triggers think tool
+//   - "subagent: <slug> <prompt>" - triggers subagent tool
 //   - "delay: <seconds>" - delays response by specified seconds
 //   - See Do() method for complete list of supported patterns
 type PredictableService struct {
@@ -162,6 +163,17 @@ func (s *PredictableService) Do(ctx context.Context, req *llm.Request) (*llm.Res
 		if strings.HasPrefix(inputText, "screenshot: ") {
 			selector := strings.TrimSpace(strings.TrimPrefix(inputText, "screenshot: "))
 			return s.makeScreenshotToolResponse(selector, inputTokens), nil
+		}
+
+		if strings.HasPrefix(inputText, "subagent: ") {
+			// Format: "subagent: <slug> <prompt>"
+			parts := strings.SplitN(strings.TrimPrefix(inputText, "subagent: "), " ", 2)
+			slug := parts[0]
+			prompt := "do the task"
+			if len(parts) > 1 {
+				prompt = parts[1]
+			}
+			return s.makeSubagentToolResponse(slug, prompt, inputTokens), nil
 		}
 
 		if strings.HasPrefix(inputText, "delay: ") {
@@ -508,6 +520,41 @@ func (s *PredictableService) makeScreenshotToolResponse(selector string, inputTo
 				ID:        fmt.Sprintf("tool_%d", time.Now().UnixNano()%1000),
 				Type:      llm.ContentTypeToolUse,
 				ToolName:  "browser_take_screenshot",
+				ToolInput: toolInput,
+			},
+		},
+		StopReason: llm.StopReasonToolUse,
+		Usage: llm.Usage{
+			InputTokens:  inputTokens,
+			OutputTokens: outputTokens,
+			CostUSD:      0.0,
+		},
+	}
+}
+
+func (s *PredictableService) makeSubagentToolResponse(slug, prompt string, inputTokens uint64) *llm.Response {
+	toolInputData := map[string]any{
+		"slug":   slug,
+		"prompt": prompt,
+	}
+	toolInputBytes, _ := json.Marshal(toolInputData)
+	toolInput := json.RawMessage(toolInputBytes)
+	responseText := fmt.Sprintf("Delegating to subagent '%s'...", slug)
+	outputTokens := uint64(len(responseText)/4 + len(toolInputBytes)/4)
+	if outputTokens == 0 {
+		outputTokens = 1
+	}
+	return &llm.Response{
+		ID:    fmt.Sprintf("pred-subagent-%d", time.Now().UnixNano()),
+		Type:  "message",
+		Role:  llm.MessageRoleAssistant,
+		Model: "predictable-v1",
+		Content: []llm.Content{
+			{Type: llm.ContentTypeText, Text: responseText},
+			{
+				ID:        fmt.Sprintf("tool_%d", time.Now().UnixNano()%1000),
+				Type:      llm.ContentTypeToolUse,
+				ToolName:  "subagent",
 				ToolInput: toolInput,
 			},
 		},

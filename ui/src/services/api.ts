@@ -200,6 +200,14 @@ class ApiService {
     }
     return response.json();
   }
+
+  async getSubagents(conversationId: string): Promise<Conversation[]> {
+    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/subagents`);
+    if (!response.ok) {
+      throw new Error(`Failed to get subagents: ${response.statusText}`);
+    }
+    return response.json();
+  }
 }
 
 export const api = new ApiService();

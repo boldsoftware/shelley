@@ -597,3 +597,95 @@ func (db *DB) DeleteConversation(ctx context.Context, conversationID string) err
 		return q.DeleteConversation(ctx, conversationID)
 	})
 }
+
+// CreateSubagentConversation creates a new subagent conversation with a parent
+func (db *DB) CreateSubagentConversation(ctx context.Context, slug, parentID string, cwd *string) (*generated.Conversation, error) {
+	conversationID, err := generateConversationID()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate conversation ID: %w", err)
+	}
+	var conversation generated.Conversation
+	err = db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		conversation, err = q.CreateSubagentConversation(ctx, generated.CreateSubagentConversationParams{
+			ConversationID:       conversationID,
+			Slug:                 &slug,
+			Cwd:                  cwd,
+			ParentConversationID: &parentID,
+		})
+		return err
+	})
+	return &conversation, err
+}
+
+// GetSubagents retrieves all subagent conversations for a parent conversation
+func (db *DB) GetSubagents(ctx context.Context, parentID string) ([]generated.Conversation, error) {
+	var conversations []generated.Conversation
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		q := generated.New(rx.Conn())
+		var err error
+		conversations, err = q.GetSubagents(ctx, &parentID)
+		return err
+	})
+	return conversations, err
+}
+
+// GetConversationBySlugAndParent retrieves a subagent conversation by slug and parent ID
+func (db *DB) GetConversationBySlugAndParent(ctx context.Context, slug, parentID string) (*generated.Conversation, error) {
+	var conversation generated.Conversation
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		q := generated.New(rx.Conn())
+		var err error
+		conversation, err = q.GetConversationBySlugAndParent(ctx, generated.GetConversationBySlugAndParentParams{
+			Slug:                 &slug,
+			ParentConversationID: &parentID,
+		})
+		return err
+	})
+	if err == sql.ErrNoRows {
+		return nil, nil // Not found, return nil without error
+	}
+	return &conversation, err
+}
+
+// SubagentDBAdapter adapts *DB to the claudetool.SubagentDB interface.
+type SubagentDBAdapter struct {
+	DB *DB
+}
+
+// GetOrCreateSubagentConversation implements claudetool.SubagentDB.
+// Returns the conversation ID and the actual slug used (may differ if a suffix was added).
+func (a *SubagentDBAdapter) GetOrCreateSubagentConversation(ctx context.Context, slug, parentID, cwd string) (string, string, error) {
+	// Try to find existing with exact slug
+	existing, err := a.DB.GetConversationBySlugAndParent(ctx, slug, parentID)
+	if err != nil {
+		return "", "", err
+	}
+	if existing != nil {
+		return existing.ConversationID, *existing.Slug, nil
+	}
+
+	// Try to create new, handling unique constraint violations by appending numbers
+	baseSlug := slug
+	actualSlug := slug
+	for attempt := 0; attempt < 100; attempt++ {
+		conv, err := a.DB.CreateSubagentConversation(ctx, actualSlug, parentID, &cwd)
+		if err == nil {
+			return conv.ConversationID, actualSlug, nil
+		}
+
+		// Check if this is a unique constraint violation
+		errLower := strings.ToLower(err.Error())
+		if strings.Contains(errLower, "unique constraint") ||
+			strings.Contains(errLower, "duplicate") {
+			// Try with a numeric suffix
+			actualSlug = fmt.Sprintf("%s-%d", baseSlug, attempt+1)
+			continue
+		}
+
+		// Some other error occurred
+		return "", "", err
+	}
+
+	return "", "", fmt.Errorf("failed to create unique subagent slug after 100 attempts")
+}

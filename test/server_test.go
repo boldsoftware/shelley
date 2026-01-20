@@ -1132,3 +1132,134 @@ func TestGitStateChangeCreatesGitInfoMessage(t *testing.T) {
 		t.Fatal("Expected a gitinfo message to be created after git commit, but none was found")
 	}
 }
+
+func TestSubagentEndToEnd(t *testing.T) {
+	// Create temporary database
+	tempDB := t.TempDir() + "/test.db"
+	database, err := db.New(db.Config{DSN: tempDB})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer database.Close()
+
+	// Run migrations
+	if err := database.Migrate(context.Background()); err != nil {
+		t.Fatalf("Failed to migrate database: %v", err)
+	}
+
+	// Create logger
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+
+	// Create LLM service manager with predictable service
+	llmManager := server.NewLLMServiceManager(&server.LLMConfig{Logger: logger}, nil)
+
+	// Set up tools config
+	toolSetConfig := claudetool.ToolSetConfig{
+		WorkingDir:    t.TempDir(),
+		EnableBrowser: false,
+	}
+
+	// Create server (predictable-only mode)
+	svr := server.NewServer(database, llmManager, toolSetConfig, logger, true, "", "", "", nil)
+
+	// Set up HTTP server
+	mux := http.NewServeMux()
+	svr.RegisterRoutes(mux)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	client := &http.Client{Timeout: 60 * time.Second}
+
+	// Create a new conversation that will spawn a subagent
+	// The predictable service will respond with a subagent tool call for "subagent: test-worker echo hello"
+	chatReq := map[string]interface{}{
+		"message": "subagent: test-worker echo hello",
+		"model":   "predictable",
+	}
+	reqBody, _ := json.Marshal(chatReq)
+
+	resp, err := client.Post(ts.URL+"/api/conversations/new", "application/json", bytes.NewBuffer(reqBody))
+	if err != nil {
+		t.Fatalf("Failed to create conversation: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("Expected 200/201, got %d: %s", resp.StatusCode, string(body))
+	}
+
+	var createResp struct {
+		ConversationID string `json:"conversation_id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&createResp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	parentConvID := createResp.ConversationID
+	t.Logf("Created parent conversation: %s", parentConvID)
+
+	// Wait for the conversation to complete (subagent should be created and executed)
+	time.Sleep(3 * time.Second)
+
+	// Check that subagents were created
+	subagentsResp, err := client.Get(ts.URL + "/api/conversation/" + parentConvID + "/subagents")
+	if err != nil {
+		t.Fatalf("Failed to get subagents: %v", err)
+	}
+	defer subagentsResp.Body.Close()
+
+	var subagents []generated.Conversation
+	if err := json.NewDecoder(subagentsResp.Body).Decode(&subagents); err != nil {
+		t.Fatalf("Failed to decode subagents: %v", err)
+	}
+
+	if len(subagents) == 0 {
+		t.Fatal("Expected at least one subagent to be created")
+	}
+
+	t.Logf("Created %d subagent(s)", len(subagents))
+	for _, sub := range subagents {
+		t.Logf("  - Subagent: %s (slug: %v)", sub.ConversationID, sub.Slug)
+	}
+
+	// Verify the subagent has the expected slug (or a suffixed version)
+	foundExpectedSlug := false
+	for _, sub := range subagents {
+		if sub.Slug != nil && (strings.HasPrefix(*sub.Slug, "test-worker")) {
+			foundExpectedSlug = true
+			break
+		}
+	}
+	if !foundExpectedSlug {
+		t.Errorf("Expected to find subagent with slug starting with 'test-worker'")
+	}
+
+	// Verify the subagent has a parent_conversation_id set
+	for _, sub := range subagents {
+		if sub.ParentConversationID == nil || *sub.ParentConversationID != parentConvID {
+			t.Errorf("Subagent %s has wrong parent_conversation_id: %v", sub.ConversationID, sub.ParentConversationID)
+		}
+	}
+
+	// Verify the subagent conversation has messages
+	subConvResp, err := client.Get(ts.URL + "/api/conversation/" + subagents[0].ConversationID)
+	if err != nil {
+		t.Fatalf("Failed to get subagent conversation: %v", err)
+	}
+	defer subConvResp.Body.Close()
+
+	var subConvData struct {
+		Messages []json.RawMessage `json:"messages"`
+	}
+	if err := json.NewDecoder(subConvResp.Body).Decode(&subConvData); err != nil {
+		t.Fatalf("Failed to decode subagent conversation: %v", err)
+	}
+
+	if len(subConvData.Messages) == 0 {
+		t.Error("Expected subagent conversation to have messages")
+	}
+	t.Logf("Subagent conversation has %d messages", len(subConvData.Messages))
+}

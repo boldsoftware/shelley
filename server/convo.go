@@ -124,8 +124,19 @@ func (cm *ConversationManager) Hydrate(ctx context.Context) error {
 		return fmt.Errorf("failed to get conversation history: %w", err)
 	}
 
-	if conversation.UserInitiated && !hasSystemMessage(messages) {
-		systemMsg, err := cm.createSystemPrompt(ctx)
+	// Generate system prompt if missing:
+	// - For user-initiated conversations: full system prompt
+	// - For subagent conversations (has parent): minimal subagent prompt
+	if !hasSystemMessage(messages) {
+		var systemMsg *generated.Message
+		var err error
+		if conversation.ParentConversationID != nil {
+			// Subagent conversation - use minimal prompt
+			systemMsg, err = cm.createSubagentSystemPrompt(ctx)
+		} else if conversation.UserInitiated {
+			// User-initiated conversation - use full prompt
+			systemMsg, err = cm.createSystemPrompt(ctx)
+		}
 		if err != nil {
 			return err
 		}
@@ -253,6 +264,36 @@ func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generat
 	return created, nil
 }
 
+func (cm *ConversationManager) createSubagentSystemPrompt(ctx context.Context) (*generated.Message, error) {
+	systemPrompt, err := GenerateSubagentSystemPrompt(cm.cwd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate subagent system prompt: %w", err)
+	}
+
+	if systemPrompt == "" {
+		cm.logger.Info("Skipping empty subagent system prompt generation")
+		return nil, nil
+	}
+
+	systemMessage := llm.Message{
+		Role:    llm.MessageRoleUser,
+		Content: []llm.Content{{Type: llm.ContentTypeText, Text: systemPrompt}},
+	}
+
+	created, err := cm.db.CreateMessage(ctx, db.CreateMessageParams{
+		ConversationID: cm.conversationID,
+		Type:           db.MessageTypeSystem,
+		LLMData:        systemMessage,
+		UsageData:      llm.Usage{},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to store subagent system prompt: %w", err)
+	}
+
+	cm.logger.Info("Stored subagent system prompt", "length", len(systemPrompt))
+	return created, nil
+}
+
 func (cm *ConversationManager) partitionMessages(messages []generated.Message) ([]llm.Message, []llm.SystemContent) {
 	var history []llm.Message
 	var system []llm.SystemContent
@@ -321,6 +362,7 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 	// Create tools for this conversation with the conversation's working directory
 	toolSetConfig.WorkingDir = cwd
 	toolSetConfig.ModelID = modelID
+	toolSetConfig.ParentConversationID = conversationID // For subagent tool
 	toolSetConfig.OnWorkingDirChange = func(newDir string) {
 		// Persist working directory change to database
 		if err := db.UpdateConversationCwd(context.Background(), conversationID, newDir); err != nil {

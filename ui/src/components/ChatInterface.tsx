@@ -23,6 +23,7 @@ import ReadImageTool from "./ReadImageTool";
 import BrowserConsoleLogsTool from "./BrowserConsoleLogsTool";
 import ChangeDirTool from "./ChangeDirTool";
 import BrowserResizeTool from "./BrowserResizeTool";
+import SubagentTool from "./SubagentTool";
 import DirectoryPickerModal from "./DirectoryPickerModal";
 
 interface ContextUsageBarProps {
@@ -152,6 +153,7 @@ const TOOL_COMPONENTS: Record<string, React.ComponentType<any>> = {
   browser_clear_console_logs: BrowserConsoleLogsTool,
   change_dir: ChangeDirTool,
   browser_resize: BrowserResizeTool,
+  subagent: SubagentTool,
 };
 
 function CoalescedToolCall({

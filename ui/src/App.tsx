@@ -67,6 +67,8 @@ function App() {
   const [diffViewerTrigger, setDiffViewerTrigger] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [subagentUpdate, setSubagentUpdate] = useState<Conversation | null>(null);
+  const [subagentStateUpdate, setSubagentStateUpdate] = useState<{ conversation_id: string; working: boolean } | null>(null);
   const initialSlugResolved = useRef(false);
 
   // Resolve initial slug from URL - uses the captured initialSlugFromUrl
@@ -120,6 +122,11 @@ function App() {
   // Handle conversation list updates from the message stream
   const handleConversationListUpdate = useCallback((update: ConversationListUpdate) => {
     if (update.type === "update" && update.conversation) {
+      // Handle subagent conversations separately
+      if (update.conversation.parent_conversation_id) {
+        setSubagentUpdate(update.conversation);
+        return;
+      }
       setConversations((prev) => {
         // Check if this conversation already exists
         const existingIndex = prev.findIndex(
@@ -148,13 +155,21 @@ function App() {
   // Handle conversation state updates (working state changes)
   const handleConversationStateUpdate = useCallback(
     (state: { conversation_id: string; working: boolean }) => {
-      setConversations((prev) =>
-        prev.map((conv) =>
-          conv.conversation_id === state.conversation_id
-            ? { ...conv, working: state.working }
-            : conv,
-        ),
-      );
+      // Check if this is a top-level conversation
+      setConversations((prev) => {
+        const found = prev.find((conv) => conv.conversation_id === state.conversation_id);
+        if (found) {
+          return prev.map((conv) =>
+            conv.conversation_id === state.conversation_id
+              ? { ...conv, working: state.working }
+              : conv,
+          );
+        }
+        // Not a top-level conversation, might be a subagent
+        // Pass the state update to the drawer
+        setSubagentStateUpdate(state);
+        return prev;
+      });
     },
     [],
   );
@@ -209,6 +224,10 @@ function App() {
   };
 
   const updateConversation = (updatedConversation: Conversation) => {
+    // Skip subagent conversations for the main list
+    if (updatedConversation.parent_conversation_id) {
+      return;
+    }
     setConversations((prev) =>
       prev.map((conv) =>
         conv.conversation_id === updatedConversation.conversation_id
@@ -307,6 +326,8 @@ function App() {
         onConversationArchived={handleConversationArchived}
         onConversationUnarchived={handleConversationUnarchived}
         onConversationRenamed={handleConversationRenamed}
+        subagentUpdate={subagentUpdate}
+        subagentStateUpdate={subagentStateUpdate}
       />
 
       {/* Main chat interface */}
