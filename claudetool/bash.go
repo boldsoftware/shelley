@@ -255,8 +255,15 @@ func (b *BashTool) makeBashCommand(ctx context.Context, command string, out io.W
 	// Remove SKETCH_MODEL_URL, SKETCH_PUB_KEY, SKETCH_MODEL_API_KEY,
 	// and any other future SKETCH_ goodies from the environment.
 	// ...except for SKETCH_PROXY_ID, which is intentionally available.
+	// Also remove SHELLEY_CONVERSATION_ID to prevent inheriting from parent process.
 	env := slices.DeleteFunc(os.Environ(), func(s string) bool {
-		return strings.HasPrefix(s, "SKETCH_") && s != "SKETCH_PROXY_ID"
+		if strings.HasPrefix(s, "SKETCH_") && !strings.HasPrefix(s, "SKETCH_PROXY_ID=") {
+			return true
+		}
+		if strings.HasPrefix(s, "SHELLEY_CONVERSATION_ID=") {
+			return true
+		}
+		return false
 	})
 	env = append(env, "SKETCH=1")          // signal that this has been run by Sketch, sometimes useful for scripts
 	env = append(env, "EDITOR=/bin/false") // interactive editors won't work
