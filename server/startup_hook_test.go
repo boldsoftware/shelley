@@ -7,28 +7,26 @@ import (
 	"testing"
 )
 
-// setupStartupHookTest creates a test hook and configures the environment.
-// Must be called before NewTestHarness.
-func setupStartupHookTest(t *testing.T, hookScript string) {
+// createStartupHook creates a startup hook in the given home directory.
+func createStartupHook(t *testing.T, homeDir, hookScript string) {
 	t.Helper()
 
-	hookDir := t.TempDir()
-	configDir := filepath.Join(hookDir, ".config", "shelley")
+	configDir := filepath.Join(homeDir, ".config", "shelley")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("failed to create config dir: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(configDir, "on-conversation-start"), []byte(hookScript), 0755); err != nil {
 		t.Fatalf("failed to create hook: %v", err)
 	}
-	t.Setenv("HOME", hookDir)
-	// Don't disable startup hook for this test
-	t.Setenv("SHELLEY_DISABLE_STARTUP_HOOK", "")
 }
 
 func TestStartupHookPrependedToFirstMessage(t *testing.T) {
-	setupStartupHookTest(t, "#!/bin/bash\necho 'hook output'\n")
+	// Set HOME first so setupTestDB uses it, then create hook there
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	createStartupHook(t, homeDir, "#!/bin/bash\necho 'hook output'\n")
 
-	h := NewTestHarnessWithoutDisablingStartupHook(t)
+	h := NewTestHarness(t)
 	defer h.Close()
 
 	h.NewConversation("hello", "/tmp")
@@ -68,9 +66,11 @@ func TestStartupHookPrependedToFirstMessage(t *testing.T) {
 }
 
 func TestStartupHookErrorPrependedToFirstMessage(t *testing.T) {
-	setupStartupHookTest(t, "#!/bin/bash\nexit 1\n")
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	createStartupHook(t, homeDir, "#!/bin/bash\nexit 1\n")
 
-	h := NewTestHarnessWithoutDisablingStartupHook(t)
+	h := NewTestHarness(t)
 	defer h.Close()
 
 	h.NewConversation("hello", "/tmp")

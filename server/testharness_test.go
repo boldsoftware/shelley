@@ -53,44 +53,6 @@ func NewTestHarness(t *testing.T) *TestHarness {
 	}
 }
 
-// NewTestHarnessWithoutDisablingStartupHook creates a test harness without disabling the startup hook.
-// Use this for tests that specifically test startup hook behavior.
-func NewTestHarnessWithoutDisablingStartupHook(t *testing.T) *TestHarness {
-	t.Helper()
-
-	// Don't call setupTestDB since it disables startup hook
-	tmpDir := t.TempDir()
-	database, err := db.New(db.Config{DSN: tmpDir + "/test.db"})
-	if err != nil {
-		t.Fatalf("Failed to create test database: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := database.Migrate(ctx); err != nil {
-		t.Fatalf("Failed to migrate test database: %v", err)
-	}
-
-	cleanup := func() { database.Close() }
-
-	predictableService := loop.NewPredictableService()
-	llmManager := &testLLMManager{service: predictableService}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelWarn}))
-
-	toolSetConfig := claudetool.ToolSetConfig{EnableBrowser: false}
-	server := NewServer(database, llmManager, toolSetConfig, logger, true, "", "predictable", "", nil)
-
-	return &TestHarness{
-		t:       t,
-		db:      database,
-		server:  server,
-		cleanup: cleanup,
-		llm:     predictableService,
-		timeout: 5 * time.Second,
-	}
-}
-
 // Close cleans up the test harness resources.
 func (h *TestHarness) Close() {
 	h.cleanup()

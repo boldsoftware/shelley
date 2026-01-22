@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,11 @@ import (
 // setupTestDB creates a test database
 func setupTestDB(t *testing.T) (*db.DB, func()) {
 	t.Helper()
-	t.Setenv("SHELLEY_DISABLE_STARTUP_HOOK", "1")
+	// Use temp dir as HOME to isolate tests from real ~/.config/shelley,
+	// unless the test already set HOME (e.g., for startup hook testing)
+	if os.Getenv("HOME") == "" || !strings.HasPrefix(os.Getenv("HOME"), os.TempDir()) {
+		t.Setenv("HOME", t.TempDir())
+	}
 	tmpDir := t.TempDir()
 	database, err := db.New(db.Config{DSN: tmpDir + "/test.db"})
 	if err != nil {
