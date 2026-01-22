@@ -358,7 +358,7 @@ const (
 	MessageTypeSystem      MessageType = "system"
 	MessageTypeError       MessageType = "error"
 	MessageTypeGitInfo     MessageType = "gitinfo"      // user-visible only, not sent to LLM
-	MessageTypeStartupHook MessageType = "startup-hook" // user-visible AND sent to LLM
+	MessageTypeStartupHook MessageType = "startup-hook" // user-visible only, prepended to first user message for LLM
 )
 
 // CreateMessageParams contains parameters for creating a message

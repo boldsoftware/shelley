@@ -42,6 +42,7 @@ type ConversationManager struct {
 	hydrated              bool
 	hasConversationEvents bool
 	cwd                   string // working directory for tools
+	startupHookOutput     string // output from startup hook, prepended to first user message
 
 	// agentWorking tracks whether the agent is currently working.
 	// This is explicitly managed and broadcast to subscribers when it changes.
@@ -202,6 +203,8 @@ func (cm *ConversationManager) AcceptUserMessage(ctx context.Context, service ll
 	loopInstance := cm.loop
 	cm.lastActivity = time.Now()
 	recordMessage := cm.recordMessage
+	startupHookOutput := cm.startupHookOutput
+	cm.startupHookOutput = "" // consume it
 	cm.mu.Unlock()
 
 	if loopInstance == nil {
@@ -217,7 +220,13 @@ func (cm *ConversationManager) AcceptUserMessage(ctx context.Context, service ll
 		}
 	}
 
-	loopInstance.QueueUserMessage(message)
+	// Prepend startup hook output to first user message for the LLM
+	llmMessage := message
+	if startupHookOutput != "" {
+		llmMessage = prependStartupHook(message, startupHookOutput)
+	}
+
+	loopInstance.QueueUserMessage(llmMessage)
 
 	// Mark agent as working - we just queued work for the loop
 	cm.SetAgentWorking(true)
@@ -312,8 +321,8 @@ func (cm *ConversationManager) partitionMessages(messages []generated.Message) (
 	var system []llm.SystemContent
 
 	for _, msg := range messages {
-		// Skip gitinfo messages - they are user-visible only, not sent to LLM
-		if msg.Type == string(db.MessageTypeGitInfo) {
+		// Skip messages that are user-visible only, not sent to LLM
+		if msg.Type == string(db.MessageTypeGitInfo) || msg.Type == string(db.MessageTypeStartupHook) {
 			continue
 		}
 
@@ -662,7 +671,25 @@ func (cm *ConversationManager) notifyGitStateChange(ctx context.Context, msg *ge
 	cm.subpub.Publish(msg.SequenceID, streamData)
 }
 
+// prependStartupHook prepends startup hook output to the first text content in a user message.
+func prependStartupHook(message llm.Message, hookOutput string) llm.Message {
+	result := llm.Message{
+		Role:    message.Role,
+		Content: make([]llm.Content, len(message.Content)),
+	}
+	copy(result.Content, message.Content)
+
+	for i, content := range result.Content {
+		if content.Type == llm.ContentTypeText {
+			result.Content[i].Text = "[Startup hook output]\n" + hookOutput + "\n\n[User message]\n" + content.Text
+			break
+		}
+	}
+	return result
+}
+
 // runStartupHook runs the startup hook and creates a startup-hook message if output is produced.
+// The output is stored for later prepending to the first user message.
 func (cm *ConversationManager) runStartupHook(ctx context.Context) (*generated.Message, error) {
 	result := RunStartupHook(ctx, cm.cwd)
 	if result == nil {
@@ -685,7 +712,12 @@ func (cm *ConversationManager) runStartupHook(ctx context.Context) (*generated.M
 		return nil, nil // No output
 	}
 
-	// Create message - use user role so it's included in context sent to LLM
+	// Store for prepending to first user message
+	cm.mu.Lock()
+	cm.startupHookOutput = text
+	cm.mu.Unlock()
+
+	// Create message for UI display (not sent to LLM directly)
 	message := llm.Message{
 		Role:    llm.MessageRoleUser,
 		Content: []llm.Content{{Type: llm.ContentTypeText, Text: text}},

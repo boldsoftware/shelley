@@ -20,6 +20,7 @@ import (
 // setupTestDB creates a test database
 func setupTestDB(t *testing.T) (*db.DB, func()) {
 	t.Helper()
+	t.Setenv("SHELLEY_DISABLE_STARTUP_HOOK", "1")
 	tmpDir := t.TempDir()
 	database, err := db.New(db.Config{DSN: tmpDir + "/test.db"})
 	if err != nil {
