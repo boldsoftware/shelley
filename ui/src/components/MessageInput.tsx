@@ -381,6 +381,29 @@ function MessageInput({
     }
   }, [autoFocus]);
 
+  // Handle virtual keyboard appearance on mobile (especially Android Firefox)
+  // The visualViewport API lets us detect when the keyboard shrinks the viewport
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) {
+      return;
+    }
+
+    const handleViewportResize = () => {
+      // Only scroll if our textarea is focused (keyboard is for us)
+      if (document.activeElement === textareaRef.current) {
+        // Small delay to let the viewport settle after resize
+        requestAnimationFrame(() => {
+          textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      }
+    };
+
+    window.visualViewport.addEventListener("resize", handleViewportResize);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", handleViewportResize);
+    };
+  }, []);
+
   const isDisabled = disabled || uploadsInProgress > 0;
   const canSubmit = message.trim() && !isDisabled && !submitting;
 
@@ -434,7 +457,11 @@ function MessageInput({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onFocus={() => {
-            // Scroll to bottom after keyboard animation settles
+            // Scroll the input into view when keyboard appears (especially on mobile)
+            // Use a small delay to let the keyboard animation start
+            setTimeout(() => {
+              textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 100);
             if (onFocus) {
               requestAnimationFrame(() => requestAnimationFrame(onFocus));
             }
