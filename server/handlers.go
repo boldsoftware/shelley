@@ -782,7 +782,8 @@ type ContinueConversationRequest struct {
 }
 
 // handleContinueConversation handles POST /api/conversations/continue
-// Creates a new conversation with a summary of the source conversation as the initial message
+// Creates a new conversation with a summary of the source conversation as the initial user message,
+// but does NOT start the agent. The user can then add additional instructions before sending.
 func (s *Server) handleContinueConversation(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -826,20 +827,13 @@ func (s *Server) handleContinueConversation(w http.ResponseWriter, r *http.Reque
 	}
 	summary := buildConversationSummary(sourceSlug, messages)
 
-	// Get LLM service for the requested model
+	// Determine model to use
 	modelID := req.Model
 	if modelID == "" && sourceConv.Model != nil {
 		modelID = *sourceConv.Model
 	}
 	if modelID == "" {
 		modelID = "qwen3-coder-fireworks"
-	}
-
-	llmService, err := s.llmManager.GetService(modelID)
-	if err != nil {
-		s.logger.Error("Unsupported model requested", "model", modelID, "error", err)
-		http.Error(w, fmt.Sprintf("Unsupported model: %s", modelID), http.StatusBadRequest)
-		return
 	}
 
 	// Create new conversation with cwd from request or source conversation
@@ -863,19 +857,8 @@ func (s *Server) handleContinueConversation(w http.ResponseWriter, r *http.Reque
 		Conversation: conversation,
 	})
 
-	// Get or create conversation manager
-	manager, err := s.getOrCreateConversationManager(ctx, conversationID)
-	if errors.Is(err, errConversationModelMismatch) {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err != nil {
-		s.logger.Error("Failed to get conversation manager", "conversationID", conversationID, "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	// Create user message with the summary
+	// Create and record the user message with the summary, but do NOT start the agent loop.
+	// This allows the user to see the summary and add additional instructions before sending.
 	userMessage := llm.Message{
 		Role: llm.MessageRoleUser,
 		Content: []llm.Content{
@@ -883,36 +866,29 @@ func (s *Server) handleContinueConversation(w http.ResponseWriter, r *http.Reque
 		},
 	}
 
-	firstMessage, err := manager.AcceptUserMessage(ctx, llmService, modelID, userMessage)
-	if errors.Is(err, errConversationModelMismatch) {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err != nil {
-		s.logger.Error("Failed to accept user message", "conversationID", conversationID, "error", err)
+	if err := s.recordMessage(ctx, conversationID, userMessage, llm.Usage{}); err != nil {
+		s.logger.Error("Failed to record summary message", "conversationID", conversationID, "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	// Generate slug for the new conversation
-	if firstMessage {
-		ctxNoCancel := context.WithoutCancel(ctx)
-		go func() {
-			slugCtx, cancel := context.WithTimeout(ctxNoCancel, 15*time.Second)
-			defer cancel()
-			_, err := slug.GenerateSlug(slugCtx, s.llmManager, s.db, s.logger, conversationID, summary, modelID)
-			if err != nil {
-				s.logger.Warn("Failed to generate slug for conversation", "conversationID", conversationID, "error", err)
-			} else {
-				go s.notifySubscribers(ctxNoCancel, conversationID)
-			}
-		}()
-	}
+	// Generate slug for the new conversation in background
+	ctxNoCancel := context.WithoutCancel(ctx)
+	go func() {
+		slugCtx, cancel := context.WithTimeout(ctxNoCancel, 15*time.Second)
+		defer cancel()
+		_, err := slug.GenerateSlug(slugCtx, s.llmManager, s.db, s.logger, conversationID, summary, modelID)
+		if err != nil {
+			s.logger.Warn("Failed to generate slug for conversation", "conversationID", conversationID, "error", err)
+		} else {
+			go s.notifySubscribers(ctxNoCancel, conversationID)
+		}
+	}()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":          "accepted",
+		"status":          "created",
 		"conversation_id": conversationID,
 	})
 }

@@ -1455,5 +1455,73 @@ func TestContinueConversation(t *testing.T) {
 		t.Error("Summary should contain tool name")
 	}
 
+	// Verify that the agent was NOT started - there should only be a user message,
+	// no agent response. The user should be able to add instructions before sending.
+	var hasAgentMessage bool
+	for _, msg := range messages {
+		if msg.Type == string(db.MessageTypeAgent) {
+			hasAgentMessage = true
+			break
+		}
+	}
+	if hasAgentMessage {
+		t.Error("Expected no agent message - the agent should NOT be started automatically")
+	}
+
+	// Verify the status is "created" not "accepted" (since agent wasn't started)
+	if status, ok := result["status"].(string); !ok || status != "created" {
+		t.Errorf("Expected status 'created', got %v", result["status"])
+	}
+
 	t.Logf("Successfully continued conversation from %s to %s", sourceConv.ConversationID, newConversationID)
+
+	// Now test that sending a follow-up message works correctly.
+	// The agent should receive both the summary message AND the new message.
+	followUpReq := map[string]string{
+		"message": "Please focus on the bash commands.",
+		"model":   "predictable",
+	}
+	followUpBody, _ := json.Marshal(followUpReq)
+
+	followUpResp, err := http.Post(testServer.URL+"/api/conversation/"+newConversationID+"/chat", "application/json", bytes.NewBuffer(followUpBody))
+	if err != nil {
+		t.Fatalf("Failed to send follow-up message: %v", err)
+	}
+	defer followUpResp.Body.Close()
+
+	if followUpResp.StatusCode != http.StatusAccepted {
+		bodyBytes, _ := io.ReadAll(followUpResp.Body)
+		t.Fatalf("Expected status 202 for follow-up, got %d: %s", followUpResp.StatusCode, string(bodyBytes))
+	}
+
+	// Wait briefly for the agent to process
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify we now have messages: summary (user), follow-up (user), and agent response
+	updatedMessages, err := database.ListMessages(ctx, newConversationID)
+	if err != nil {
+		t.Fatalf("Failed to list updated messages: %v", err)
+	}
+
+	// Count message types
+	userCount := 0
+	agentCount := 0
+	for _, msg := range updatedMessages {
+		switch msg.Type {
+		case string(db.MessageTypeUser):
+			userCount++
+		case string(db.MessageTypeAgent):
+			agentCount++
+		}
+	}
+
+	// Should have 2 user messages (summary + follow-up) and at least 1 agent response
+	if userCount != 2 {
+		t.Errorf("Expected 2 user messages, got %d", userCount)
+	}
+	if agentCount < 1 {
+		t.Errorf("Expected at least 1 agent message after follow-up, got %d", agentCount)
+	}
+
+	t.Logf("Follow-up message processed: %d user messages, %d agent messages", userCount, agentCount)
 }
