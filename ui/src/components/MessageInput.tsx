@@ -457,11 +457,6 @@ function MessageInput({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onFocus={() => {
-            // Scroll the input into view when keyboard appears (especially on mobile)
-            // Use a small delay to let the keyboard animation start
-            setTimeout(() => {
-              textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-            }, 100);
             if (onFocus) {
               requestAnimationFrame(() => requestAnimationFrame(onFocus));
             }
