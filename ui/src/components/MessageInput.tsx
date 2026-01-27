@@ -457,6 +457,7 @@ function MessageInput({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onFocus={() => {
+            // Scroll to bottom after keyboard animation settles
             if (onFocus) {
               requestAnimationFrame(() => requestAnimationFrame(onFocus));
             }
