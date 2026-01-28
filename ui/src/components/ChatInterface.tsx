@@ -1204,9 +1204,17 @@ function ChatInterface({
               </a>
               .
             </p>
-            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              Send a message to start the conversation.
-            </p>
+            {models.length === 0 ? (
+              <div className="add-model-hint">
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  No AI models configured. Press <kbd>Ctrl</kbd><span>+</span><kbd>K</kbd> or <kbd>⌘</kbd><span>+</span><kbd>K</kbd> to add a model.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                Send a message to start the conversation.
+              </p>
+            )}
           </div>
         </div>
       );

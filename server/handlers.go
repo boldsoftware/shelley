@@ -1088,7 +1088,7 @@ type ModelInfo struct {
 
 // getModelList returns the list of available models
 func (s *Server) getModelList() []ModelInfo {
-	var modelList []ModelInfo
+	modelList := []ModelInfo{}
 	if s.predictableOnly {
 		modelList = append(modelList, ModelInfo{ID: "predictable", Ready: true, MaxContextTokens: 200000})
 	} else {

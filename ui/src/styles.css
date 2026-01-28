@@ -4087,18 +4087,6 @@ svg {
   flex-shrink: 0;
 }
 
-.command-palette-shortcut kbd,
-.command-palette-footer kbd {
-  display: inline-block;
-  padding: 0.125rem 0.375rem;
-  font-size: 0.75rem;
-  font-family: inherit;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 0.25rem;
-  color: var(--text-secondary);
-}
-
 .command-palette-list {
   flex: 1;
   overflow-y: auto;
@@ -4815,3 +4803,15 @@ svg {
   margin-top: 1rem;
   padding-bottom: 0.5rem;
 }
+
+kbd {
+  display: inline-block;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.25rem;
+  color: var(--text-secondary);
+}
+
