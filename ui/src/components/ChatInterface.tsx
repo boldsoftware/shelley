@@ -29,6 +29,7 @@ import DirectoryPickerModal from "./DirectoryPickerModal";
 import { useVersionChecker } from "./VersionChecker";
 import TerminalWidget from "./TerminalWidget";
 import ModelPicker from "./ModelPicker";
+import SystemPromptView from "./SystemPromptView";
 
 // Ephemeral terminal instance (not persisted to database)
 interface EphemeralTerminal {
@@ -1251,8 +1252,15 @@ function ChatInterface({
       return null;
     });
 
+    // Find system message to render at the top
+    const systemMessage = messages.find((m) => m.type === "system");
+
     // Append ephemeral terminals at the end
-    return [...rendered, ...terminalElements];
+    return [
+      systemMessage && <SystemPromptView key="system-prompt" message={systemMessage} />,
+      ...rendered,
+      ...terminalElements,
+    ];
   };
 
   return (
