@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"shelley.exe.dev/paths"
 )
 
 const (
@@ -29,12 +31,15 @@ type Skill struct {
 
 // Discover finds all skills in the given directories.
 // It scans each directory for subdirectories containing SKILL.md files.
+// Directories are processed in order, so earlier directories take precedence
+// for skills with the same name (first occurrence wins).
 func Discover(dirs []string) []Skill {
 	var skills []Skill
-	seen := make(map[string]bool)
+	seenPath := make(map[string]bool)
+	seenName := make(map[string]bool)
 
 	for _, dir := range dirs {
-		dir = expandPath(dir)
+		dir = paths.ExpandPath(dir)
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			continue
@@ -51,15 +56,15 @@ func Discover(dirs []string) []Skill {
 				continue
 			}
 
-			// Avoid duplicates
+			// Avoid duplicates by path
 			absPath, err := filepath.Abs(skillMD)
 			if err != nil {
 				continue
 			}
-			if seen[absPath] {
+			if seenPath[absPath] {
 				continue
 			}
-			seen[absPath] = true
+			seenPath[absPath] = true
 
 			skill, err := Parse(skillMD)
 			if err != nil {
@@ -70,6 +75,12 @@ func Discover(dirs []string) []Skill {
 			if skill.Name != entry.Name() {
 				continue
 			}
+
+			// Avoid duplicates by name (first occurrence wins)
+			if seenName[skill.Name] {
+				continue
+			}
+			seenName[skill.Name] = true
 
 			skills = append(skills, skill)
 		}
@@ -303,13 +314,16 @@ func ToPromptXML(skills []Skill) string {
 }
 
 // DefaultDirs returns the default skill directories to search.
+// Directories are returned in precedence order:
+// 1. ~/.config/shelley/ (highest precedence, shelley-specific)
+// 2. ~/.shelley/ (legacy location)
+// 3. ~/.config/agents/skills (shared across agents like octofriend/crush/amp)
 func DefaultDirs() []string {
 	dirs := []string{}
 
-	// User-level skills from ~/.config/shelley/ (XDG convention)
-	// We scan all subdirectories of ~/.config/shelley/ for skills
-	if home, err := os.UserHomeDir(); err == nil {
-		configDir := filepath.Join(home, ".config", "shelley")
+	// User-level skills from $XDG_CONFIG_HOME/shelley/
+	// We scan all subdirectories of the shelley config dir for skills
+	if configDir := paths.ShelleyConfigDir(); configDir != "" {
 		if entries, err := os.ReadDir(configDir); err == nil {
 			for _, entry := range entries {
 				if entry.IsDir() {
@@ -328,7 +342,10 @@ func DefaultDirs() []string {
 				}
 			}
 		}
-		// Also check legacy ~/.shelley/ location
+	}
+
+	// Also check legacy ~/.shelley/ location
+	if home, err := os.UserHomeDir(); err == nil {
 		shelleyDir := filepath.Join(home, ".shelley")
 		if entries, err := os.ReadDir(shelleyDir); err == nil {
 			for _, entry := range entries {
@@ -343,6 +360,15 @@ func DefaultDirs() []string {
 					}
 				}
 			}
+		}
+	}
+
+	// Shared skills from $XDG_CONFIG_HOME/agents/skills (used by octofriend/crush/amp)
+	// Added after shelley-specific locations so shelley skills take precedence
+	if configHome := paths.ConfigHome(); configHome != "" {
+		sharedSkillsDir := filepath.Join(configHome, "agents", "skills")
+		if _, err := os.Stat(sharedSkillsDir); err == nil {
+			dirs = append(dirs, sharedSkillsDir)
 		}
 	}
 
@@ -363,16 +389,6 @@ func hasSkillSubdirs(dir string) bool {
 		}
 	}
 	return false
-}
-
-// expandPath expands ~ to the user's home directory.
-func expandPath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, path[2:])
-		}
-	}
-	return path
 }
 
 // ProjectSkillsDirs returns all .skills directories found by walking up from
