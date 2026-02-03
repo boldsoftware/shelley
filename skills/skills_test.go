@@ -180,6 +180,72 @@ description: Name doesn't match directory.
 	}
 }
 
+func TestDiscoverPrecedence(t *testing.T) {
+	// Test that skills from earlier directories take precedence over later ones
+	// This simulates shelley-specific skills overriding shared agent skills
+	dir1 := t.TempDir() // Higher precedence (e.g., ~/.config/shelley)
+	dir2 := t.TempDir() // Lower precedence (e.g., ~/.config/agents/skills)
+
+	// Create same-named skill in both directories with different descriptions
+	skillContent1 := `---
+name: my-skill
+description: Shelley-specific version.
+---
+`
+	skillContent2 := `---
+name: my-skill
+description: Shared agent version.
+---
+`
+
+	skillDir1 := filepath.Join(dir1, "my-skill")
+	skillDir2 := filepath.Join(dir2, "my-skill")
+
+	if err := os.MkdirAll(skillDir1, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(skillDir2, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(skillDir1, "SKILL.md"), []byte(skillContent1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir2, "SKILL.md"), []byte(skillContent2), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Discover with dir1 first (higher precedence)
+	skills := Discover([]string{dir1, dir2})
+
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 skill (duplicate by name should be skipped), got %d", len(skills))
+	}
+
+	if skills[0].Description != "Shelley-specific version." {
+		t.Errorf("expected shelley-specific skill to win, got description: %q", skills[0].Description)
+	}
+
+	// Also test unique skills from both directories are included
+	uniqueContent := `---
+name: unique-skill
+description: Only in shared directory.
+---
+`
+	uniqueDir := filepath.Join(dir2, "unique-skill")
+	if err := os.MkdirAll(uniqueDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(uniqueDir, "SKILL.md"), []byte(uniqueContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	skills = Discover([]string{dir1, dir2})
+	if len(skills) != 2 {
+		t.Fatalf("expected 2 skills, got %d", len(skills))
+	}
+}
+
 func TestToPromptXML(t *testing.T) {
 	skills := []Skill{
 		{
