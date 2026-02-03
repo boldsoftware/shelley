@@ -224,7 +224,7 @@ function MessageInput({
     }
   };
 
-  const handlePaste = async (event: React.ClipboardEvent) => {
+  const handlePaste = (event: React.ClipboardEvent) => {
     // Check clipboard items (works on both desktop and mobile)
     // Mobile browsers often don't populate clipboardData.files, but items works
     const items = event.clipboardData?.items;
@@ -235,7 +235,14 @@ function MessageInput({
           const file = item.getAsFile();
           if (file) {
             event.preventDefault();
-            await uploadFile(file);
+            // Fire and forget - uploadFile handles state updates internally.
+            uploadFile(file);
+            // Restore focus after React updates. We use setTimeout(0) to ensure
+            // the focus happens after React's state update commits to the DOM.
+            // The timeout must be longer than 0 to reliably work across browsers.
+            setTimeout(() => {
+              textareaRef.current?.focus();
+            }, 10);
             return;
           }
         }

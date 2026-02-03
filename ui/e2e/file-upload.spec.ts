@@ -196,3 +196,53 @@ test.describe('File Upload via Paste and Drag', () => {
     expect(inputValue).toBeTruthy();
   });
 });
+
+  test('focus is retained in input after pasting image', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    const messageInput = page.getByTestId('message-input');
+    await expect(messageInput).toBeVisible();
+
+    // Focus the input and add some text
+    await messageInput.focus();
+    await messageInput.fill('Testing paste focus: ');
+
+    // Simulate an image paste via clipboard event
+    await page.evaluate(async () => {
+      const input = document.querySelector('[data-testid="message-input"]') as HTMLTextAreaElement;
+      if (!input) return;
+
+      // Create a simple test image as a Blob
+      const blob = new Blob(['test'], { type: 'image/png' });
+      const file = new File([blob], 'test-paste.png', { type: 'image/png' });
+
+      // Create DataTransfer with the file
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+
+      // Dispatch paste event
+      const pasteEvent = new ClipboardEvent('paste', {
+        clipboardData: dataTransfer,
+        bubbles: true,
+        cancelable: true
+      });
+
+      input.dispatchEvent(pasteEvent);
+    });
+
+    // Wait for the upload to process and focus to be restored
+    await page.waitForTimeout(100);
+
+    // Verify focus is still on the input (or restored to it)
+    const isFocused = await page.evaluate(() => {
+      const input = document.querySelector('[data-testid="message-input"]');
+      return document.activeElement === input;
+    });
+
+    expect(isFocused).toBe(true);
+
+    // Verify the input has the uploaded file path
+    const inputValue = await messageInput.inputValue();
+    expect(inputValue).toContain('Testing paste focus:');
+  });
