@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -720,4 +721,42 @@ func waitForProcessDeath(t *testing.T, pid int) {
 			}
 		}
 	}
+}
+
+func TestIsNoTrailerSet(t *testing.T) {
+	bashTool := &BashTool{WorkingDir: NewMutableWorkingDir("/")}
+
+	// Test when config is not set (default)
+	t.Run("Default No Config", func(t *testing.T) {
+		if bashTool.isNoTrailerSet() {
+			t.Error("Expected isNoTrailerSet() to be false when not configured")
+		}
+	})
+
+	// Test when config is set to true
+	t.Run("Config Set True", func(t *testing.T) {
+		// Set the global config
+		cmd := exec.Command("git", "config", "--global", "shelley.no-trailer", "true")
+		if err := cmd.Run(); err != nil {
+			t.Skipf("Could not set git config: %v", err)
+		}
+		defer exec.Command("git", "config", "--global", "--unset", "shelley.no-trailer").Run()
+
+		if !bashTool.isNoTrailerSet() {
+			t.Error("Expected isNoTrailerSet() to be true when shelley.no-trailer=true")
+		}
+	})
+
+	// Test when config is set to false
+	t.Run("Config Set False", func(t *testing.T) {
+		cmd := exec.Command("git", "config", "--global", "shelley.no-trailer", "false")
+		if err := cmd.Run(); err != nil {
+			t.Skipf("Could not set git config: %v", err)
+		}
+		defer exec.Command("git", "config", "--global", "--unset", "shelley.no-trailer").Run()
+
+		if bashTool.isNoTrailerSet() {
+			t.Error("Expected isNoTrailerSet() to be false when shelley.no-trailer=false")
+		}
+	})
 }
