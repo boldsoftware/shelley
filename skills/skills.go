@@ -41,11 +41,13 @@ func Discover(dirs []string) []Skill {
 		}
 
 		for _, entry := range entries {
-			if !entry.IsDir() {
+			skillDir := filepath.Join(dir, entry.Name())
+			// Use os.Stat to get info about skill dirs, because they might be
+			// symlinks. os.Stat looks at the link target while entry.IsDir
+			// looks at the link itself.
+			if info, err := os.Stat(skillDir); err != nil || !info.IsDir() {
 				continue
 			}
-
-			skillDir := filepath.Join(dir, entry.Name())
 			skillMD := findSkillMD(skillDir)
 			if skillMD == "" {
 				continue

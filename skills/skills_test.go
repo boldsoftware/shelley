@@ -560,3 +560,46 @@ func TestSkillsFoundRegardlessOfWorkingDir(t *testing.T) {
 
 	_ = projectDir // used above
 }
+
+func TestDiscoverFollowsSymlinks(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a real skill directory (the symlink target)
+	realSkillDir := filepath.Join(tmpDir, "real-skills", "my-skill")
+	if err := os.MkdirAll(realSkillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skillContent := `---
+name: my-skill
+description: A symlinked skill.
+---
+
+Test instructions.
+`
+	if err := os.WriteFile(filepath.Join(realSkillDir, "SKILL.md"), []byte(skillContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Directory containing only a symlink to the skill
+	symlinkParent := filepath.Join(tmpDir, "symlinked-skills")
+	if err := os.MkdirAll(symlinkParent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(realSkillDir, filepath.Join(symlinkParent, "my-skill")); err != nil {
+		t.Fatal(err)
+	}
+
+	// A broken symlink should be silently skipped
+	if err := os.Symlink(filepath.Join(tmpDir, "nonexistent"), filepath.Join(symlinkParent, "broken-skill")); err != nil {
+		t.Fatal(err)
+	}
+
+	skills := Discover([]string{symlinkParent})
+
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 skill via symlink, got %d", len(skills))
+	}
+	if skills[0].Name != "my-skill" {
+		t.Errorf("skill name = %q, want %q", skills[0].Name, "my-skill")
+	}
+}
