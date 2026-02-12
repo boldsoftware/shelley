@@ -40,6 +40,8 @@ type ConfigField struct {
 	Type        string   `json:"type"`
 	Required    bool     `json:"required"`
 	Placeholder string   `json:"placeholder,omitempty"`
+	Default     string   `json:"default,omitempty"`
+	Description string   `json:"description,omitempty"`
 	Options     []string `json:"options,omitempty"`
 }
 
@@ -68,13 +70,13 @@ var channelTypeInfo = map[string]ChannelTypeInfo{
 		Type:  "ntfy",
 		Label: "ntfy",
 		ConfigFields: []ConfigField{
-			{Name: "server", Label: "Server URL", Type: "string", Required: true, Placeholder: "https://ntfy.sh"},
+			{Name: "server", Label: "Server URL", Type: "string", Required: true, Placeholder: "https://ntfy.sh", Default: "https://ntfy.sh"},
 			{Name: "topic", Label: "Topic", Type: "string", Required: true, Placeholder: "my-shelley-notifications"},
-			{Name: "token", Label: "Access Token", Type: "password", Placeholder: "tk_..."},
+			{Name: "token", Label: "Access Token", Type: "password", Placeholder: "tk_...", Description: "Provide either an access token or username and password."},
 			{Name: "username", Label: "Username", Type: "string"},
 			{Name: "password", Label: "Password", Type: "password"},
-			{Name: "done_priority", Label: "Done Priority", Type: "string", Required: true, Options: []string{"min", "low", "default", "high", "max"}},
-			{Name: "error_priority", Label: "Error Priority", Type: "string", Required: true, Options: []string{"min", "low", "default", "high", "max"}},
+			{Name: "done_priority", Label: "Done Priority", Type: "string", Required: true, Default: "default", Options: []string{"min", "low", "default", "high", "max"}},
+			{Name: "error_priority", Label: "Error Priority", Type: "string", Required: true, Default: "high", Options: []string{"min", "low", "default", "high", "max"}},
 		},
 	},
 }

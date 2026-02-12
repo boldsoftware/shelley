@@ -89,9 +89,18 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
     setShowForm(true);
   };
 
+  const defaultConfigFor = (typeName: string): Record<string, string> => {
+    const info = getTypeInfo(typeName);
+    const config: Record<string, string> = {};
+    for (const field of info?.config_fields || []) {
+      if (field.default) config[field.name] = field.default;
+    }
+    return config;
+  };
+
   const handleAdd = () => {
     const defaultType = channelTypes.length > 0 ? channelTypes[0].type : "";
-    setForm({ ...emptyForm, channel_type: defaultType, config: {} });
+    setForm({ ...emptyForm, channel_type: defaultType, config: defaultConfigFor(defaultType) });
     setEditingChannelId(null);
     setTestResult(null);
     setShowForm(true);
@@ -209,7 +218,7 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
                 <button
                   key={ct.type}
                   className={`provider-btn${form.channel_type === ct.type ? " selected" : ""}`}
-                  onClick={() => setForm({ ...form, channel_type: ct.type, config: {} })}
+                  onClick={() => setForm({ ...form, channel_type: ct.type, config: defaultConfigFor(ct.type) })}
                 >
                   {ct.label}
                 </button>
@@ -228,46 +237,62 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
           />
         </div>
 
-        {configFields.map((field) => (
-          <div className="form-group" key={field.name}>
-            <label>
-              {field.label}
-              {field.required && " *"}
-            </label>
-            {field.options && field.options.length > 0 ? (
-              <select
-                className="form-input"
-                value={form.config[field.name] || ""}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    config: { ...form.config, [field.name]: e.target.value },
-                  })
-                }
-              >
-                <option value="">Select...</option>
-                {field.options.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                className="form-input"
-                type={field.type === "password" ? "password" : "text"}
-                value={form.config[field.name] || ""}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    config: { ...form.config, [field.name]: e.target.value },
-                  })
-                }
-                placeholder={field.placeholder}
-              />
-            )}
-          </div>
-        ))}
+        {configFields.map((field) => {
+          const inputId = `config-${field.name}`;
+          const descId = `${inputId}-desc`;
+          return (
+            <div className="form-group" key={field.name}>
+              <label htmlFor={inputId}>
+                {field.label}
+                {field.required && " *"}
+              </label>
+              {field.options && field.options.length > 0 ? (
+                <select
+                  id={inputId}
+                  className="form-input"
+                  value={form.config[field.name] || ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      config: { ...form.config, [field.name]: e.target.value },
+                    })
+                  }
+                  aria-describedby={field.description ? descId : undefined}
+                >
+                  <option value="">Select...</option>
+                  {field.options.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id={inputId}
+                  className="form-input"
+                  type={field.type === "password" ? "password" : "text"}
+                  value={form.config[field.name] || ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      config: { ...form.config, [field.name]: e.target.value },
+                    })
+                  }
+                  placeholder={field.placeholder}
+                  aria-describedby={field.description ? descId : undefined}
+                />
+              )}
+              {field.description && (
+                <span
+                  id={descId}
+                  style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.25rem", display: "block" }}
+                >
+                  {field.description}
+                </span>
+              )}
+            </div>
+          );
+        })}
 
         {testResult && (
           <div className={`test-result ${testResult.success ? "success" : "error"}`}>

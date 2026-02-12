@@ -489,6 +489,8 @@ export interface ChannelTypeInfo {
     type: string;
     required: boolean;
     placeholder?: string;
+    default?: string;
+    description?: string;
     options?: string[];
   }[];
 }
