@@ -1444,6 +1444,7 @@ func (s *Server) handleVersionChangelog(w http.ResponseWriter, r *http.Request) 
 }
 
 // handleUpgrade performs a self-update of the Shelley binary
+// If restart=true query parameter is set, it will also restart after upgrade
 func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 	err := s.versionChecker.DoUpgrade(r.Context())
 	if err != nil {
@@ -1452,8 +1453,27 @@ func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if restart was requested
+	restart := r.URL.Query().Get("restart") == "true"
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Upgrade complete. Restart to apply."})
+	if restart {
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Upgrade complete. Restarting..."})
+
+		// Flush the response
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+
+		// Exit after a short delay to allow response to be sent
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			s.logger.Info("Exiting Shelley after upgrade")
+			os.Exit(0)
+		}()
+	} else {
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Upgrade complete. Restart to apply."})
+	}
 }
 
 // handleExit exits the process, expecting systemd or similar to restart it
@@ -1473,4 +1493,53 @@ func (s *Server) handleExit(w http.ResponseWriter, r *http.Request) {
 		s.logger.Info("Exiting Shelley via /exit endpoint")
 		os.Exit(0)
 	}()
+}
+
+// handleGetSettings retrieves all settings
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.db.GetAllSettings(r.Context())
+	if err != nil {
+		s.logger.Error("Failed to get settings", "error", err)
+		http.Error(w, fmt.Sprintf("Failed to get settings: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(settings)
+}
+
+// handleSetSetting sets a single setting
+func (s *Server) handleSetSetting(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Key == "" {
+		http.Error(w, "Key is required", http.StatusBadRequest)
+		return
+	}
+
+	// Only allow known setting keys
+	allowedKeys := map[string]bool{
+		"auto_upgrade": true,
+	}
+	if !allowedKeys[req.Key] {
+		http.Error(w, fmt.Sprintf("Invalid setting key: %s", req.Key), http.StatusBadRequest)
+		return
+	}
+
+	if err := s.db.SetSetting(r.Context(), req.Key, req.Value); err != nil {
+		s.logger.Error("Failed to set setting", "error", err, "key", req.Key)
+		http.Error(w, fmt.Sprintf("Failed to set setting: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }

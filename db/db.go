@@ -1052,3 +1052,50 @@ func (db *DB) DeleteNotificationChannel(ctx context.Context, channelID string) e
 		return q.DeleteNotificationChannel(ctx, channelID)
 	})
 }
+
+// GetSetting retrieves a setting value by key
+// Returns empty string and nil error if the setting doesn't exist
+func (db *DB) GetSetting(ctx context.Context, key string) (string, error) {
+	var value string
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		q := generated.New(rx.Conn())
+		var err error
+		value, err = q.GetSetting(ctx, key)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return err
+	})
+	return value, err
+}
+
+// SetSetting sets a setting value by key
+func (db *DB) SetSetting(ctx context.Context, key, value string) error {
+	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		return q.SetSetting(ctx, generated.SetSettingParams{
+			Key:   key,
+			Value: value,
+		})
+	})
+}
+
+// GetAllSettings retrieves all settings
+func (db *DB) GetAllSettings(ctx context.Context) (map[string]string, error) {
+	var rows []generated.GetAllSettingsRow
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		q := generated.New(rx.Conn())
+		var err error
+		rows, err = q.GetAllSettings(ctx)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	settings := make(map[string]string)
+	for _, row := range rows {
+		settings[row.Key] = row.Value
+	}
+	return settings, nil
+}

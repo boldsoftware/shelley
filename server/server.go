@@ -229,6 +229,7 @@ type Server struct {
 	conversationGroup   singleflight.Group[string, *ConversationManager]
 	versionChecker      *VersionChecker
 	notifDispatcher     *notifications.Dispatcher
+	shutdownCh          chan struct{} // Signals background routines to stop
 }
 
 // NewServer creates a new server instance
@@ -246,6 +247,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		links:               links,
 		versionChecker:      NewVersionChecker(),
 		notifDispatcher:     notifications.NewDispatcher(logger),
+		shutdownCh:          make(chan struct{}),
 	}
 
 	// Set up subagent support
@@ -302,6 +304,8 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /version-changelog", http.HandlerFunc(s.handleVersionChangelog))
 	mux.Handle("POST /upgrade", http.HandlerFunc(s.handleUpgrade))
 	mux.Handle("POST /exit", http.HandlerFunc(s.handleExit))
+	mux.Handle("GET /settings", http.HandlerFunc(s.handleGetSettings))
+	mux.Handle("POST /settings", http.HandlerFunc(s.handleSetSetting))
 
 	// Debug endpoints
 	mux.Handle("GET /debug/conversations", http.HandlerFunc(s.handleDebugConversationsPage))
@@ -1072,6 +1076,9 @@ func (s *Server) StartWithListener(listener net.Listener) error {
 		}
 	}()
 
+	// Start auto-upgrade routine
+	go s.autoUpgradeRoutine()
+
 	// Get actual port from listener
 	actualPort := listener.Addr().(*net.TCPAddr).Port
 
@@ -1091,10 +1098,14 @@ func (s *Server) StartWithListener(listener net.Listener) error {
 	select {
 	case err := <-serverErrCh:
 		s.logger.Error("Server failed", "error", err)
+		close(s.shutdownCh)
 		return err
 	case <-quit:
 		s.logger.Info("Shutting down server")
 	}
+
+	// Signal background routines to stop
+	close(s.shutdownCh)
 
 	// Graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1107,6 +1118,119 @@ func (s *Server) StartWithListener(listener net.Listener) error {
 
 	s.logger.Info("Server exited")
 	return nil
+}
+
+// autoUpgradeRoutine checks for upgrades every 24 hours if auto-upgrade is enabled
+func (s *Server) autoUpgradeRoutine() {
+	// Wait a bit before starting to let the server fully initialize
+	timer := time.NewTimer(1 * time.Minute)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		// Continue to main loop
+	case <-s.shutdownCh:
+		return
+	}
+
+	// Do initial check after startup delay
+	s.tryAutoUpgrade()
+
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			s.tryAutoUpgrade()
+		case <-s.shutdownCh:
+			return
+		}
+	}
+}
+
+// tryAutoUpgrade attempts to upgrade if auto-upgrade is enabled and server is idle
+func (s *Server) tryAutoUpgrade() {
+	ctx := context.Background()
+
+	// Check if auto-upgrade is enabled
+	autoUpgradeEnabled, err := s.db.GetSetting(ctx, "auto_upgrade")
+	if err != nil || autoUpgradeEnabled != "true" {
+		return
+	}
+
+	// Check for updates first
+	versionInfo, err := s.versionChecker.Check(ctx, true)
+	if err != nil {
+		s.logger.Error("Auto-upgrade version check failed", "error", err)
+		return
+	}
+
+	if !versionInfo.HasUpdate {
+		s.logger.Debug("Auto-upgrade: no update available")
+		return
+	}
+
+	s.logger.Info("Auto-upgrade: update available", "current", versionInfo.CurrentTag, "latest", versionInfo.LatestTag)
+
+	// Try to find an idle spot for up to 1 hour (check every 10 minutes)
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	timeout := time.After(1 * time.Hour)
+
+	// Check immediately first
+	if s.isServerIdle() {
+		s.performUpgradeAndRestart(ctx, versionInfo)
+		return
+	}
+
+	s.logger.Info("Auto-upgrade: waiting for idle window (will retry for 1 hour)")
+
+	for {
+		select {
+		case <-ticker.C:
+			if s.isServerIdle() {
+				s.performUpgradeAndRestart(ctx, versionInfo)
+				return
+			}
+			s.logger.Debug("Auto-upgrade: server still busy, will retry")
+		case <-timeout:
+			s.logger.Info("Auto-upgrade: timed out waiting for idle window (1 hour)")
+			return
+		case <-s.shutdownCh:
+			return
+		}
+	}
+}
+
+// isServerIdle checks if any conversations are actively running
+func (s *Server) isServerIdle() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, cm := range s.activeConversations {
+		if cm.IsAgentWorking() {
+			return false
+		}
+	}
+	return true
+}
+
+// performUpgradeAndRestart performs the upgrade and restarts the server
+func (s *Server) performUpgradeAndRestart(ctx context.Context, versionInfo *VersionInfo) {
+	s.logger.Info("Auto-upgrade: starting upgrade", "current", versionInfo.CurrentTag, "latest", versionInfo.LatestTag)
+
+	err := s.versionChecker.DoUpgrade(ctx)
+	if err != nil {
+		s.logger.Error("Auto-upgrade failed", "error", err)
+		return
+	}
+
+	s.logger.Info("Auto-upgrade complete, restarting")
+
+	// Exit to trigger restart (systemd will restart us)
+	time.Sleep(100 * time.Millisecond)
+	os.Exit(0)
 }
 
 // getPortOwnerInfo tries to identify what process is using a port.

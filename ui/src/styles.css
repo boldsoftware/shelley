@@ -4458,6 +4458,26 @@ svg {
   padding: 0.5rem 0;
 }
 
+.version-auto-upgrade {
+  padding: 1rem 0;
+  border-top: 1px solid var(--border-color);
+  margin-top: 1rem;
+}
+
+.version-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.version-checkbox-label input[type="checkbox"] {
+  cursor: pointer;
+  width: 1rem;
+  height: 1rem;
+}
+
 .version-actions {
   display: flex;
   flex-direction: column;

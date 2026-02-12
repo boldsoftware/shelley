@@ -298,9 +298,11 @@ class ApiService {
     return response.json();
   }
 
-  async upgrade(): Promise<{ status: string; message: string }> {
-    const response = await fetch("/upgrade", {
+  async upgrade(restart: boolean = false): Promise<{ status: string; message: string }> {
+    const url = restart ? "/upgrade?restart=true" : "/upgrade";
+    const response = await fetch(url, {
       method: "POST",
+      headers: { "X-Shelley-Request": "1" },
     });
     if (!response.ok) {
       const text = await response.text();
@@ -315,6 +317,30 @@ class ApiService {
     });
     if (!response.ok) {
       throw new Error(`Failed to exit: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  async getSettings(): Promise<Record<string, string>> {
+    const response = await fetch("/settings");
+    if (!response.ok) {
+      throw new Error(`Failed to get settings: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  async setSetting(key: string, value: string): Promise<{ status: string }> {
+    const response = await fetch("/settings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shelley-Request": "1",
+      },
+      body: JSON.stringify({ key, value }),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || response.statusText);
     }
     return response.json();
   }

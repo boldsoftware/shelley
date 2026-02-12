@@ -17,15 +17,41 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
   const [commits, setCommits] = useState<CommitInfo[]>([]);
   const [loadingCommits, setLoadingCommits] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
-  const [restarting, setRestarting] = useState(false);
-  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
+  const [autoUpgrade, setAutoUpgrade] = useState(false);
+  const [loadingAutoUpgrade, setLoadingAutoUpgrade] = useState(true);
 
   useEffect(() => {
-    if (isOpen && versionInfo?.has_update && versionInfo.current_tag && versionInfo.latest_tag) {
-      loadCommits(versionInfo.current_tag, versionInfo.latest_tag);
+    if (isOpen) {
+      if (versionInfo?.has_update && versionInfo.current_tag && versionInfo.latest_tag) {
+        loadCommits(versionInfo.current_tag, versionInfo.latest_tag);
+      }
+      loadAutoUpgradeSetting();
     }
   }, [isOpen, versionInfo]);
+
+  const loadAutoUpgradeSetting = async () => {
+    setLoadingAutoUpgrade(true);
+    try {
+      const settings = await api.getSettings();
+      setAutoUpgrade(settings.auto_upgrade === "true");
+    } catch (err) {
+      console.error("Failed to load auto-upgrade setting:", err);
+    } finally {
+      setLoadingAutoUpgrade(false);
+    }
+  };
+
+  const handleAutoUpgradeChange = async (enabled: boolean) => {
+    try {
+      await api.setSetting("auto_upgrade", enabled ? "true" : "false");
+      setAutoUpgrade(enabled);
+    } catch (err) {
+      console.error("Failed to set auto-upgrade:", err);
+      // Revert the checkbox
+      setAutoUpgrade(!enabled);
+    }
+  };
 
   const loadCommits = async (currentTag: string, latestTag: string) => {
     setLoadingCommits(true);
@@ -40,33 +66,19 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
     }
   };
 
-  const handleUpgrade = async () => {
+  const handleUpgradeAndRestart = async () => {
     setUpgrading(true);
     setUpgradeError(null);
-    setUpgradeMessage(null);
     try {
-      const result = await api.upgrade();
-      setUpgradeMessage(result.message);
+      await api.upgrade(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setUpgradeError(message);
-    } finally {
-      setUpgrading(false);
+      // Connection drop is expected when server restarts, treat as success
+      console.log("Upgrade response failed (expected during restart):", err);
     }
-  };
-
-  const handleExit = async () => {
-    setRestarting(true);
-    try {
-      await api.exit();
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    } catch {
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    }
+    // Wait a bit for server to restart, then reload the page
+    setTimeout(() => {
+      window.location.reload();
+    }, 2000);
   };
 
   if (!isOpen) return null;
@@ -176,41 +188,38 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
                 </div>
               )}
 
-              {/* Upgrade/Restart buttons */}
+              {/* Auto-upgrade setting */}
+              {!loadingAutoUpgrade && (
+                <div className="version-auto-upgrade">
+                  <label className="version-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={autoUpgrade}
+                      onChange={(e) => handleAutoUpgradeChange(e.target.checked)}
+                    />
+                    <span>Auto-upgrade when idle (checks daily)</span>
+                  </label>
+                </div>
+              )}
+
+              {/* Upgrade & Restart button */}
               {versionInfo.has_update && versionInfo.download_url && (
                 <div className="version-actions">
-                  {upgradeMessage && (
-                    <div className="version-success">
-                      Upgraded {versionInfo.executable_path || "shelley"}
-                    </div>
-                  )}
                   {upgradeError && <div className="version-error">{upgradeError}</div>}
 
-                  {!upgradeMessage ? (
-                    <button
-                      onClick={handleUpgrade}
-                      disabled={upgrading}
-                      className="version-btn version-btn-primary"
-                    >
-                      {upgrading
-                        ? "Upgrading..."
-                        : `Upgrade ${versionInfo.executable_path || "shelley"} in place`}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleExit}
-                      disabled={restarting}
-                      className="version-btn version-btn-primary"
-                    >
-                      {restarting
-                        ? versionInfo.running_under_systemd
-                          ? "Restarting..."
-                          : "Killing..."
-                        : versionInfo.running_under_systemd
-                          ? "Restart"
-                          : "Kill Shelley Server"}
-                    </button>
-                  )}
+                  <button
+                    onClick={handleUpgradeAndRestart}
+                    disabled={upgrading}
+                    className="version-btn version-btn-primary"
+                  >
+                    {upgrading
+                      ? versionInfo.running_under_systemd
+                        ? "Upgrading & Restarting..."
+                        : "Upgrading & Killing..."
+                      : versionInfo.running_under_systemd
+                        ? "Upgrade & Restart"
+                        : "Upgrade & Kill Shelley Server"}
+                  </button>
                 </div>
               )}
             </>
