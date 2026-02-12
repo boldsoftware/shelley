@@ -234,17 +234,38 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
               {field.label}
               {field.required && " *"}
             </label>
-            <input
-              className="form-input"
-              value={form.config[field.name] || ""}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  config: { ...form.config, [field.name]: e.target.value },
-                })
-              }
-              placeholder={field.placeholder}
-            />
+            {field.options && field.options.length > 0 ? (
+              <select
+                className="form-input"
+                value={form.config[field.name] || ""}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    config: { ...form.config, [field.name]: e.target.value },
+                  })
+                }
+              >
+                <option value="">Select...</option>
+                {field.options.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                className="form-input"
+                type={field.type === "password" ? "password" : "text"}
+                value={form.config[field.name] || ""}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    config: { ...form.config, [field.name]: e.target.value },
+                  })
+                }
+                placeholder={field.placeholder}
+              />
+            )}
           </div>
         ))}
 
