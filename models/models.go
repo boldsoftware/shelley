@@ -211,6 +211,7 @@ func All() []Model {
 			ID:              "claude-haiku-4.5",
 			Provider:        ProviderAnthropic,
 			Description:     "Claude Haiku 4.5",
+			Tags:            "slug-backup",
 			RequiredEnvVars: []string{"ANTHROPIC_API_KEY"},
 			GatewayEnabled:  true,
 			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
@@ -276,17 +277,17 @@ func All() []Model {
 			},
 		},
 		{
-			ID:              "qwen3-coder-fireworks",
+			ID:              "gpt-oss-20b-fireworks",
 			Provider:        ProviderFireworks,
-			Description:     "Qwen3 Coder 480B on Fireworks",
+			Description:     "GPT-OSS 20B on Fireworks",
 			Tags:            "slug",
 			RequiredEnvVars: []string{"FIREWORKS_API_KEY"},
 			GatewayEnabled:  true,
 			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
 				if config.FireworksAPIKey == "" {
-					return nil, fmt.Errorf("qwen3-coder-fireworks requires FIREWORKS_API_KEY")
+					return nil, fmt.Errorf("gpt-oss-20b-fireworks requires FIREWORKS_API_KEY")
 				}
-				svc := &oai.Service{Model: oai.Qwen3CoderFireworks, APIKey: config.FireworksAPIKey, HTTPC: httpc}
+				svc := &oai.Service{Model: oai.GPTOSS20B, APIKey: config.FireworksAPIKey, HTTPC: httpc}
 				if url := config.getFireworksURL(); url != "" {
 					svc.ModelURL = url
 				}

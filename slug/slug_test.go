@@ -461,3 +461,77 @@ func (m *MockLLMProviderPredictableFallback) GetAvailableModels() []string {
 func (m *MockLLMProviderPredictableFallback) GetModelInfo(modelID string) *models.ModelInfo {
 	return nil
 }
+
+// TestGenerateSlug_FallbackToSlugBackup tests that when a "slug"-tagged model fails,
+// generation falls back to a "slug-backup"-tagged model.
+func TestGenerateSlug_FallbackToSlugBackup(t *testing.T) {
+	mockLLM := &mockFallbackProvider{
+		services: map[string]llm.Service{
+			"fireworks-model": &MockLLMServiceWithError{},
+			"haiku-model":     &MockLLMService{ResponseText: "backup-slug"},
+		},
+		models: []string{"fireworks-model", "haiku-model"},
+		modelInfo: map[string]*models.ModelInfo{
+			"fireworks-model": {Tags: "slug"},
+			"haiku-model":     {Tags: "slug-backup"},
+		},
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+
+	slug, err := generateSlugText(context.Background(), mockLLM, logger, "Test message", "")
+	if err != nil {
+		t.Fatalf("Expected fallback to slug-backup model, got error: %v", err)
+	}
+	if slug != "backup-slug" {
+		t.Errorf("Expected 'backup-slug', got %q", slug)
+	}
+}
+
+// TestHasTag tests the hasTag helper.
+func TestHasTag(t *testing.T) {
+	tests := []struct {
+		tags string
+		tag  string
+		want bool
+	}{
+		{"slug", "slug", true},
+		{"slug-backup", "slug", false},
+		{"slug,slug-backup", "slug", true},
+		{"slug,slug-backup", "slug-backup", true},
+		{"foo, slug , bar", "slug", true},
+		{"", "slug", false},
+		{"slug", "", false},
+	}
+	for _, tt := range tests {
+		got := hasTag(tt.tags, tt.tag)
+		if got != tt.want {
+			t.Errorf("hasTag(%q, %q) = %v, want %v", tt.tags, tt.tag, got, tt.want)
+		}
+	}
+}
+
+// mockFallbackProvider is an LLM provider that supports per-model services and info.
+type mockFallbackProvider struct {
+	services  map[string]llm.Service
+	models    []string
+	modelInfo map[string]*models.ModelInfo
+}
+
+func (m *mockFallbackProvider) GetService(modelID string) (llm.Service, error) {
+	svc, ok := m.services[modelID]
+	if !ok {
+		return nil, fmt.Errorf("model not available: %s", modelID)
+	}
+	return svc, nil
+}
+
+func (m *mockFallbackProvider) GetAvailableModels() []string {
+	return m.models
+}
+
+func (m *mockFallbackProvider) GetModelInfo(modelID string) *models.ModelInfo {
+	return m.modelInfo[modelID]
+}

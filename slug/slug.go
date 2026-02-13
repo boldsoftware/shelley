@@ -58,53 +58,66 @@ func GenerateSlug(ctx context.Context, llmProvider LLMServiceProvider, database 
 // generateSlugText generates a human-readable slug for a conversation based on the user message
 // Priority order:
 // 1. If conversationModelID is "predictable", use it
-// 2. Try models tagged with "slug"
-// 3. Fall back to the conversation's model (conversationModelID)
+// 2. Try models tagged with "slug" (try the LLM call; if it fails, continue)
+// 3. Try models tagged with "slug-backup"
+// 4. Fall back to the conversation's model (conversationModelID)
 func generateSlugText(ctx context.Context, llmProvider LLMServiceProvider, logger *slog.Logger, userMessage, conversationModelID string) (string, error) {
-	var llmService llm.Service
-	var err error
-
 	// If conversation is using predictable model, use it for slug generation too
 	if conversationModelID == "predictable" {
-		llmService, err = llmProvider.GetService("predictable")
+		llmService, err := llmProvider.GetService("predictable")
 		if err == nil {
 			logger.Debug("Using predictable model for slug generation")
-		} else {
-			logger.Debug("Predictable model not available for slug generation", "error", err)
+			return callSlugLLM(ctx, llmService, userMessage)
 		}
+		logger.Debug("Predictable model not available for slug generation", "error", err)
 	}
 
-	// Try models tagged with "slug"
-	if llmService == nil {
+	// Try models tagged with "slug", then "slug-backup"
+	for _, tag := range []string{"slug", "slug-backup"} {
 		for _, modelID := range llmProvider.GetAvailableModels() {
 			info := llmProvider.GetModelInfo(modelID)
-			if info != nil && strings.Contains(info.Tags, "slug") {
-				llmService, err = llmProvider.GetService(modelID)
-				if err == nil {
-					logger.Debug("Using slug-tagged model for slug generation", "model", modelID)
-				} else {
-					logger.Debug("Failed to get slug-tagged model", "model", modelID, "error", err)
-				}
-				break
+			if info == nil || !hasTag(info.Tags, tag) {
+				continue
 			}
+			llmService, err := llmProvider.GetService(modelID)
+			if err != nil {
+				logger.Debug("Failed to get model for slug generation", "model", modelID, "tag", tag, "error", err)
+				continue
+			}
+			logger.Debug("Trying model for slug generation", "model", modelID, "tag", tag)
+			slug, err := callSlugLLM(ctx, llmService, userMessage)
+			if err == nil {
+				return slug, nil
+			}
+			logger.Warn("Slug generation failed, trying next model", "model", modelID, "tag", tag, "error", err)
 		}
 	}
 
 	// Fall back to the conversation's model
-	if llmService == nil && conversationModelID != "" && conversationModelID != "predictable" {
-		llmService, err = llmProvider.GetService(conversationModelID)
+	if conversationModelID != "" && conversationModelID != "predictable" {
+		llmService, err := llmProvider.GetService(conversationModelID)
 		if err == nil {
 			logger.Debug("Using conversation model for slug generation", "model", conversationModelID)
-		} else {
-			logger.Debug("Conversation model not available for slug generation", "model", conversationModelID, "error", err)
+			return callSlugLLM(ctx, llmService, userMessage)
+		}
+		logger.Debug("Conversation model not available for slug generation", "model", conversationModelID, "error", err)
+	}
+
+	return "", fmt.Errorf("no suitable model available for slug generation")
+}
+
+// hasTag checks if a comma-separated tag list contains the exact given tag.
+func hasTag(tags, tag string) bool {
+	for _, t := range strings.Split(tags, ",") {
+		if strings.TrimSpace(t) == tag {
+			return true
 		}
 	}
+	return false
+}
 
-	if llmService == nil {
-		return "", fmt.Errorf("no suitable model available for slug generation")
-	}
-
-	// Create a focused prompt for slug generation
+// callSlugLLM calls an LLM service to generate a slug from a user message.
+func callSlugLLM(ctx context.Context, llmService llm.Service, userMessage string) (string, error) {
 	slugPrompt := fmt.Sprintf(`Generate a short, descriptive slug (2-6 words, lowercase, hyphen-separated) for a conversation that starts with this user message:
 
 %s
@@ -128,7 +141,6 @@ Respond with only the slug, nothing else.`, userMessage)
 		Messages: []llm.Message{message},
 	}
 
-	// Make LLM request with timeout
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -137,14 +149,11 @@ Respond with only the slug, nothing else.`, userMessage)
 		return "", fmt.Errorf("failed to generate slug: %w", err)
 	}
 
-	// Extract text from response
 	if len(response.Content) == 0 {
 		return "", fmt.Errorf("empty response from LLM")
 	}
 
 	slug := strings.TrimSpace(response.Content[0].Text)
-
-	// Clean and validate the slug
 	slug = Sanitize(slug)
 	if slug == "" {
 		return "", fmt.Errorf("generated slug is empty after sanitization")

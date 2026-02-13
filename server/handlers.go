@@ -698,8 +698,8 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 	// Get LLM service for the requested model
 	modelID := req.Model
 	if modelID == "" {
-		// Default to Qwen3 Coder on Fireworks
-		modelID = "qwen3-coder-fireworks"
+		// Default to GPT-OSS 20B on Fireworks
+		modelID = "gpt-oss-20b-fireworks"
 	}
 
 	llmService, err := s.llmManager.GetService(modelID)
@@ -840,7 +840,7 @@ func (s *Server) handleContinueConversation(w http.ResponseWriter, r *http.Reque
 		modelID = *sourceConv.Model
 	}
 	if modelID == "" {
-		modelID = "qwen3-coder-fireworks"
+		modelID = "gpt-oss-20b-fireworks"
 	}
 
 	// Create new conversation with cwd from request or source conversation

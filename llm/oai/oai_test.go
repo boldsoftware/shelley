@@ -1174,16 +1174,6 @@ func TestTokenContextWindowAdditionalCases(t *testing.T) {
 			expected: 200000,
 		},
 		{
-			name:     "Qwen3 Coder Fireworks model",
-			model:    Qwen3CoderFireworks,
-			expected: 256000,
-		},
-		{
-			name:     "Qwen3 Coder Cerebras model",
-			model:    Qwen3CoderCerebras,
-			expected: 128000, // The model name "qwen-3-coder-480b" is not in the special cases, so it defaults to 128k
-		},
-		{
 			name:     "GLM model",
 			model:    GLM,
 			expected: 128000,

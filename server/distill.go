@@ -100,7 +100,7 @@ func (s *Server) handleDistillConversation(w http.ResponseWriter, r *http.Reques
 		modelID = *sourceConv.Model
 	}
 	if modelID == "" {
-		modelID = "qwen3-coder-fireworks"
+		modelID = "gpt-oss-20b-fireworks"
 	}
 
 	// Create new conversation
