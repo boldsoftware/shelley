@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { copyToClipboard } from "../utils/clipboard";
 import { linkifyText } from "../utils/linkify";
 import { useMarkdown } from "../contexts/MarkdownContext";
 import MarkdownContent from "./MarkdownContent";
@@ -149,7 +150,7 @@ function GitInfoMessage({
   const handleCopyHash = (e: React.MouseEvent) => {
     e.preventDefault();
     if (commitHash) {
-      navigator.clipboard.writeText(commitHash).then(() => {
+      copyToClipboard(commitHash).then(() => {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       });
@@ -401,7 +402,7 @@ const Message = React.memo(function Message({
   const handleCopy = () => {
     const text = getMessageText();
     if (text) {
-      navigator.clipboard.writeText(text).catch((err) => {
+      copyToClipboard(text).catch((err) => {
         console.error("Failed to copy text:", err);
       });
     }
