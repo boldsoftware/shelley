@@ -37,10 +37,6 @@ func init() {
 		username, _ := config["username"].(string)
 		password, _ := config["password"].(string)
 
-		if token == "" && (username == "" || password == "") {
-			return nil, fmt.Errorf("ntfy channel requires either \"token\" or \"username\"+\"password\" for authentication")
-		}
-
 		donePriorityStr, _ := config["done_priority"].(string)
 		if donePriorityStr == "" {
 			donePriorityStr = "default"

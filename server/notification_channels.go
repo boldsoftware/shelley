@@ -72,9 +72,9 @@ var channelTypeInfo = map[string]ChannelTypeInfo{
 		ConfigFields: []ConfigField{
 			{Name: "server", Label: "Server URL", Type: "string", Required: true, Placeholder: "https://ntfy.sh", Default: "https://ntfy.sh"},
 			{Name: "topic", Label: "Topic", Type: "string", Required: true, Placeholder: "my-shelley-notifications"},
-			{Name: "token", Label: "Access Token", Type: "password", Placeholder: "tk_...", Description: "Provide either an access token or username and password."},
-			{Name: "username", Label: "Username", Type: "string"},
-			{Name: "password", Label: "Password", Type: "password"},
+			{Name: "token", Label: "Access Token", Type: "password", Placeholder: "tk_...", Description: "Optional. For private topics, provide either an access token or username and password."},
+			{Name: "username", Label: "Username", Type: "string", Description: "Optional. For private topics, use with password as an alternative to access token."},
+			{Name: "password", Label: "Password", Type: "password", Description: "Optional. For private topics, use with username."},
 			{Name: "done_priority", Label: "Done Priority", Type: "string", Required: true, Default: "default", Options: []string{"min", "low", "default", "high", "max"}},
 			{Name: "error_priority", Label: "Error Priority", Type: "string", Required: true, Default: "high", Options: []string{"min", "low", "default", "high", "max"}},
 		},
