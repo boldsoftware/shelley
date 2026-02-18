@@ -361,6 +361,17 @@ function MessageInput({
     adjustTextareaHeight();
   }, [message]);
 
+  // Re-focus textarea after submission completes and it's re-enabled.
+  // Only restore focus if it fell to document.body (i.e. the user didn't
+  // deliberately move focus elsewhere while the message was submitting).
+  // Skip on mobile to avoid popping up the soft keyboard unexpectedly.
+  useEffect(() => {
+    const isMobile = "ontouchstart" in window;
+    if (!submitting && !isMobile && document.activeElement === document.body) {
+      textareaRef.current?.focus();
+    }
+  }, [submitting]);
+
   // Persist draft to localStorage when persistKey is set
   useEffect(() => {
     if (persistKey) {
