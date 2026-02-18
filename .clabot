@@ -18,7 +18,8 @@
 		"fischman",
 		"loveloki",
 		"Amolith",
-		"dwb"
+		"dwb",
+		"alexmdac"
 	],
 	"message": "We require contributors to sign our Contributor License Agreement, and we don't have you on file. In order for us to review and merge your code, please contact @crawshaw at david@bold.dev to get yourself added."
 }
