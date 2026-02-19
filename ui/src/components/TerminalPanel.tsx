@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { copyToClipboard } from "../utils/clipboard";
 import { isDarkModeActive } from "../services/theme";
 import "@xterm/xterm/css/xterm.css";
 
@@ -441,12 +442,12 @@ export default function TerminalPanel({
   );
 
   const copyScreen = useCallback(() => {
-    navigator.clipboard.writeText(getBufferText("screen"));
+    copyToClipboard(getBufferText("screen"));
     showFeedback("copyScreen");
   }, [getBufferText, showFeedback]);
 
   const copyAll = useCallback(() => {
-    navigator.clipboard.writeText(getBufferText("all"));
+    copyToClipboard(getBufferText("all"));
     showFeedback("copyAll");
   }, [getBufferText, showFeedback]);
 

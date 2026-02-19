@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { copyToClipboard } from "../utils/clipboard";
 import { linkifyText } from "../utils/linkify";
 import {
   Message as MessageType,
@@ -124,7 +125,7 @@ function GitInfoMessage({
   const handleCopyHash = (e: React.MouseEvent) => {
     e.preventDefault();
     if (commitHash) {
-      navigator.clipboard.writeText(commitHash).then(() => {
+      copyToClipboard(commitHash).then(() => {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       });
@@ -419,7 +420,7 @@ function Message({ message, onOpenDiffViewer, onCommentTextChange }: MessageProp
   const handleCopy = () => {
     const text = getMessageText();
     if (text) {
-      navigator.clipboard.writeText(text).catch((err) => {
+      copyToClipboard(text).catch((err) => {
         console.error("Failed to copy text:", err);
       });
     }
