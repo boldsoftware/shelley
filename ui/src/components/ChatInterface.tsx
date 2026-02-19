@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import {
   Message,
   Conversation,
@@ -653,7 +653,6 @@ function ChatInterface({
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [terminalInjectedText, setTerminalInjectedText] = useState<string | null>(null);
   const [terminalAutoFocusId, setTerminalAutoFocusId] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const overflowMenuRef = useRef<HTMLDivElement>(null);
@@ -663,6 +662,9 @@ function ChatInterface({
   const lastSequenceIdRef = useRef<number>(-1);
   const hasConnectedRef = useRef(false);
   const userScrolledRef = useRef(false);
+  const loadingRef = useRef(false);
+  // Pending scroll target from loadMessages: undefined = none, null = bottom, number = saved position
+  const pendingScrollRef = useRef<number | null | undefined>(undefined);
 
   // Load messages and set up streaming
   useEffect(() => {
@@ -674,6 +676,7 @@ function ChatInterface({
       // No conversation yet, show empty state
       setMessages([]);
       setContextWindowSize(0);
+      loadingRef.current = false;
       setLoading(false);
     }
 
@@ -703,7 +706,40 @@ function ChatInterface({
     }
   }, [agentWorking]);
 
-  // Check scroll position and handle scroll-to-bottom button
+  const scrollStore = useMemo(() => {
+    const key = conversationId ? `shelley_scroll_${conversationId}` : null;
+    return {
+      save(scrollTop: number) {
+        if (key) localStorage.setItem(key, String(scrollTop));
+      },
+      load(): number | null {
+        if (!key) return null;
+        const v = localStorage.getItem(key);
+        return v != null ? Number(v) : null;
+      },
+    };
+  }, [conversationId]);
+
+  // Save scroll position to localStorage on page hide/unload
+  useEffect(() => {
+    const save = () => {
+      const container = messagesContainerRef.current;
+      if (!container || !conversationId) return;
+      scrollStore.save(container.scrollTop);
+    };
+    const onVisChange = () => {
+      if (document.visibilityState === "hidden") save();
+    };
+    document.addEventListener("visibilitychange", onVisChange);
+    window.addEventListener("beforeunload", save);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisChange);
+      window.removeEventListener("beforeunload", save);
+    };
+  }, [conversationId]);
+
+  // Check scroll position, handle scroll-to-bottom button, and re-scroll on content resize
+  const scrollSaveTimerRef = useRef<number | null>(null);
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -713,18 +749,75 @@ function ChatInterface({
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
       setShowScrollToBottom(!isNearBottom);
       userScrolledRef.current = !isNearBottom;
+      // Debounced save — 100ms after scroll settles
+      if (scrollSaveTimerRef.current) clearTimeout(scrollSaveTimerRef.current);
+      scrollSaveTimerRef.current = window.setTimeout(() => {
+        if (!loadingRef.current) scrollStore.save(container.scrollTop);
+      }, 100);
     };
 
     container.addEventListener("scroll", handleScroll);
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, []);
 
-  // Auto-scroll to bottom when new messages arrive (only if user is already at bottom)
-  useEffect(() => {
-    if (!userScrolledRef.current) {
+    // Re-scroll to bottom when content expands (images loading, tool outputs rendering)
+    // but only if the user hasn't scrolled away.
+    let lastScrollHeight = container.scrollHeight;
+    const ro = new ResizeObserver(() => {
+      if (container.scrollHeight === lastScrollHeight) return;
+      lastScrollHeight = container.scrollHeight;
+      if (!userScrolledRef.current && !catchingUpRef.current) {
+        container.scrollTop = container.scrollHeight;
+      }
+    });
+    // .messages-list may not exist yet (loading spinner). Use MutationObserver
+    // to attach ResizeObserver when it appears.
+    const attachRO = () => {
+      const list = container.querySelector(".messages-list");
+      if (list) {
+        ro.observe(list);
+        return true;
+      }
+      return false;
+    };
+    let mo: MutationObserver | null = null;
+    if (!attachRO()) {
+      mo = new MutationObserver((_, self) => {
+        if (attachRO()) { self.disconnect(); mo = null; }
+      });
+      mo.observe(container, { childList: true, subtree: true });
+    }
+
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      if (scrollSaveTimerRef.current) clearTimeout(scrollSaveTimerRef.current);
+      mo?.disconnect();
+      ro.disconnect();
+    };
+  }, [scrollStore]);
+
+  // Scroll after React commits the DOM, before the browser paints.
+  // Handles both initial load (pending scroll from loadMessages) and streaming updates.
+  useLayoutEffect(() => {
+    if (loading) return;
+    const pending = pendingScrollRef.current;
+    if (pending !== undefined) {
+      pendingScrollRef.current = undefined;
+      if (pending != null) {
+        const container = messagesContainerRef.current;
+        if (container) {
+          container.scrollTop = pending;
+          const isNearBottom = container.scrollHeight - pending - container.clientHeight < 100;
+          userScrolledRef.current = !isNearBottom;
+          setShowScrollToBottom(!isNearBottom);
+        }
+      } else {
+        scrollToBottom();
+      }
+      return;
+    }
+    if (!userScrolledRef.current && !catchingUpRef.current) {
       scrollToBottom();
     }
-  }, [messages]);
+  }, [messages, loading]);
 
   // Close overflow menu when clicking outside
   useEffect(() => {
@@ -742,10 +835,6 @@ function ChatInterface({
     }
   }, [showOverflowMenu]);
 
-  // Reconnect when page becomes visible, focused, or online
-  // Store reconnect function in a ref so event listeners always have the latest version
-  const reconnectRef = useRef<() => void>(() => {});
-
   // Check connection health - returns true if connection needs to be re-established
   const checkConnectionHealth = useCallback(() => {
     if (!conversationId) return false;
@@ -760,53 +849,24 @@ function ChatInterface({
     return false;
   }, [conversationId]);
 
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        // When tab becomes visible, always check connection health
-        if (checkConnectionHealth()) {
-          console.log("Tab visible: connection unhealthy, reconnecting");
-          reconnectRef.current();
-        } else {
-          console.log("Tab visible: connection healthy");
-        }
-      }
-    };
+  // Track when the page was last hidden (for detecting stale connections on iOS Safari)
+  const hiddenAtRef = useRef<number | null>(null);
 
-    const handleFocus = () => {
-      // On focus, check connection health
-      if (checkConnectionHealth()) {
-        console.log("Window focus: connection unhealthy, reconnecting");
-        reconnectRef.current();
-      }
-    };
-
-    const handleOnline = () => {
-      // Coming back online - definitely try to reconnect if needed
-      if (checkConnectionHealth()) {
-        console.log("Online: connection unhealthy, reconnecting");
-        reconnectRef.current();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("online", handleOnline);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("online", handleOnline);
-    };
-  }, [checkConnectionHealth]);
+  // Suppress auto-scroll during catch-up after returning from a backgrounded tab
+  const catchingUpRef = useRef(false);
 
   const loadMessages = async () => {
     if (!conversationId) return;
     try {
+      loadingRef.current = true;
       setLoading(true);
       setError(null);
       const response = await api.getConversation(conversationId);
+      // Set pending scroll target before state updates so useLayoutEffect can handle it.
+      pendingScrollRef.current = scrollStore.load();
       setMessages(response.messages ?? []);
+      loadingRef.current = false;
+      setLoading(false);
       // ConversationState is sent via the streaming endpoint, not on initial load
       // We don't update agentWorking here - the stream will provide the current state
       // Always update context window size when loading a conversation.
@@ -818,29 +878,27 @@ function ChatInterface({
     } catch (err) {
       console.error("Failed to load messages:", err);
       setError("Failed to load messages");
-    } finally {
-      // Always set loading to false, even if other operations fail
+      loadingRef.current = false;
       setLoading(false);
     }
   };
 
-  // Reset heartbeat timeout - called on every message received
-  const resetHeartbeatTimeout = () => {
-    if (heartbeatTimeoutRef.current) {
-      clearTimeout(heartbeatTimeoutRef.current);
-    }
-    // If we don't receive any message (including heartbeat) within 60 seconds, reconnect
-    heartbeatTimeoutRef.current = window.setTimeout(() => {
-      console.warn("No heartbeat received in 60 seconds, reconnecting...");
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
+  const setupMessageStream = useCallback(() => {
+    const resetHeartbeatTimeout = () => {
+      if (heartbeatTimeoutRef.current) {
+        clearTimeout(heartbeatTimeoutRef.current);
       }
-      setupMessageStream();
-    }, 60000);
-  };
+      // If we don't receive any message (including heartbeat) within 60 seconds, reconnect
+      heartbeatTimeoutRef.current = window.setTimeout(() => {
+        console.warn("No heartbeat received in 60 seconds, reconnecting...");
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
+        setupMessageStream();
+      }, 60000);
+    };
 
-  const setupMessageStream = () => {
     if (!conversationId) return;
 
     if (eventSourceRef.current) {
@@ -863,6 +921,10 @@ function ChatInterface({
     eventSource.onmessage = (event) => {
       // Reset heartbeat timeout on every message
       resetHeartbeatTimeout();
+
+      // Clear catch-up flag after the first message event (the catch-up batch)
+      // so that subsequent messages auto-scroll normally again.
+      catchingUpRef.current = false;
 
       try {
         const streamResponse: StreamResponse = JSON.parse(event.data);
@@ -1002,7 +1064,86 @@ function ChatInterface({
       // Start heartbeat timeout monitoring
       resetHeartbeatTimeout();
     };
-  };
+  }, [conversationId, onConversationUpdate, onConversationListUpdate, onConversationStateUpdate]);
+
+  // Force-reconnect: close existing connection and reconnect to get missed messages
+  const forceReconnect = useCallback(() => {
+    if (!conversationId) return;
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    if (periodicRetryRef.current) {
+      clearInterval(periodicRetryRef.current);
+      periodicRetryRef.current = null;
+    }
+    setIsDisconnected(false);
+    setIsReconnecting(false);
+    setReconnectAttempts(0);
+    setupMessageStream();
+  }, [conversationId, setupMessageStream]);
+
+  // Reconnect only if connection is dead
+  const reconnect = useCallback(() => {
+    if (!eventSourceRef.current || eventSourceRef.current.readyState === 2) {
+      forceReconnect();
+    }
+  }, [forceReconnect]);
+
+  // Reconnect when page becomes visible, focused, or online
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAtRef.current = Date.now();
+        return;
+      }
+      // Page became visible
+      const hiddenFor = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
+      hiddenAtRef.current = null;
+
+      if (checkConnectionHealth()) {
+        // Connection is already known-dead
+        console.log("Tab visible: connection unhealthy, reconnecting");
+        catchingUpRef.current = true;
+        reconnect();
+      } else if (hiddenFor > 5000) {
+        // On iOS Safari, backgrounded tabs have their TCP connections killed
+        // but EventSource.readyState may still show OPEN. Force reconnect
+        // to pick up any missed messages from the server.
+        console.log(`Tab visible after ${Math.round(hiddenFor / 1000)}s hidden, force reconnecting`);
+        catchingUpRef.current = true;
+        forceReconnect();
+      }
+    };
+
+    const handleFocus = () => {
+      if (checkConnectionHealth()) {
+        console.log("Window focus: connection unhealthy, reconnecting");
+        reconnect();
+      }
+    };
+
+    const handleOnline = () => {
+      if (checkConnectionHealth()) {
+        console.log("Online: connection unhealthy, reconnecting");
+        reconnect();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [checkConnectionHealth, reconnect, forceReconnect]);
 
   const sendMessage = async (message: string) => {
     if (!message.trim() || sending) return;
@@ -1067,7 +1208,10 @@ function ChatInterface({
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
     userScrolledRef.current = false;
     setShowScrollToBottom(false);
   };
@@ -1076,47 +1220,6 @@ function ChatInterface({
   const handleInsertFromTerminal = useCallback((text: string) => {
     setTerminalInjectedText(text);
   }, []);
-
-  const handleManualReconnect = () => {
-    if (!conversationId || eventSourceRef.current) return;
-    setIsDisconnected(false);
-    setIsReconnecting(false);
-    setReconnectAttempts(0);
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-    if (periodicRetryRef.current) {
-      clearInterval(periodicRetryRef.current);
-      periodicRetryRef.current = null;
-    }
-    setupMessageStream();
-  };
-
-  // Update the reconnect ref - always attempt reconnect if connection is unhealthy
-  useEffect(() => {
-    reconnectRef.current = () => {
-      if (!conversationId) return;
-      // Always try to reconnect if there's no active connection
-      if (!eventSourceRef.current || eventSourceRef.current.readyState === 2) {
-        console.log("Reconnect triggered: no active connection");
-        // Clear any pending reconnect attempts
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = null;
-        }
-        if (periodicRetryRef.current) {
-          clearInterval(periodicRetryRef.current);
-          periodicRetryRef.current = null;
-        }
-        // Reset state and reconnect
-        setIsDisconnected(false);
-        setIsReconnecting(false);
-        setReconnectAttempts(0);
-        setupMessageStream();
-      }
-    };
-  }, [conversationId]);
 
   // Handle external trigger to open diff viewer
   useEffect(() => {
@@ -1766,7 +1869,6 @@ function ChatInterface({
             <div className="messages-list">
               {renderMessages()}
 
-              <div ref={messagesEndRef} />
             </div>
           )}
         </div>
@@ -1818,7 +1920,7 @@ function ChatInterface({
             <>
               <span className="status-message status-warning">Disconnected</span>
               <button
-                onClick={handleManualReconnect}
+                onClick={reconnect}
                 className="status-button status-button-primary"
               >
                 Retry
