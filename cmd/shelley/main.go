@@ -255,10 +255,11 @@ func setupToolSetConfig(llmProvider claudetool.LLMServiceProvider) claudetool.To
 		wd = "/"
 	}
 	return claudetool.ToolSetConfig{
-		WorkingDir:       wd,
-		LLMProvider:      llmProvider,
-		EnableJITInstall: claudetool.EnableBashToolJITInstall,
-		EnableBrowser:    true,
+		WorkingDir:             wd,
+		LLMProvider:            llmProvider,
+		EnableJITInstall:       claudetool.EnableBashToolJITInstall,
+		EnableBrowser:          true,
+		EnableCodeIntelligence: true,
 	}
 }
 
