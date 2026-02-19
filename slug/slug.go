@@ -149,11 +149,19 @@ Respond with only the slug, nothing else.`, userMessage)
 		return "", fmt.Errorf("failed to generate slug: %w", err)
 	}
 
-	if len(response.Content) == 0 {
-		return "", fmt.Errorf("empty response from LLM")
+	// Find the first text content block, skipping thinking blocks
+	var rawSlug string
+	for _, c := range response.Content {
+		if c.Type == llm.ContentTypeText && c.Text != "" {
+			rawSlug = c.Text
+			break
+		}
+	}
+	if rawSlug == "" {
+		return "", fmt.Errorf("no text content in LLM response")
 	}
 
-	slug := strings.TrimSpace(response.Content[0].Text)
+	slug := strings.TrimSpace(rawSlug)
 	slug = Sanitize(slug)
 	if slug == "" {
 		return "", fmt.Errorf("generated slug is empty after sanitization")

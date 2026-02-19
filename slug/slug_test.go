@@ -74,9 +74,13 @@ func TestGenerateSlug_UniquenessSuffix(t *testing.T) {
 // MockLLMService provides a mock LLM service for testing
 type MockLLMService struct {
 	ResponseText string
+	Response     *llm.Response // if set, returned directly instead of wrapping ResponseText
 }
 
 func (m *MockLLMService) Do(ctx context.Context, req *llm.Request) (*llm.Response, error) {
+	if m.Response != nil {
+		return m.Response, nil
+	}
 	return &llm.Response{
 		Content: []llm.Content{
 			{Type: llm.ContentTypeText, Text: m.ResponseText},
@@ -284,8 +288,8 @@ func TestGenerateSlug_EmptyResponse(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for empty LLM response, got nil")
 	}
-	if err.Error() != "empty response from LLM" {
-		t.Errorf("Expected 'empty response' error, got %q", err.Error())
+	if err.Error() != "no text content in LLM response" {
+		t.Errorf("Expected 'no text content in LLM response' error, got %q", err.Error())
 	}
 }
 
@@ -534,4 +538,28 @@ func (m *mockFallbackProvider) GetAvailableModels() []string {
 
 func (m *mockFallbackProvider) GetModelInfo(modelID string) *models.ModelInfo {
 	return m.modelInfo[modelID]
+}
+
+// TestGenerateSlug_ThinkingBlocks tests that slug extraction works when response contains thinking blocks
+func TestGenerateSlug_ThinkingBlocks(t *testing.T) {
+	mockLLM := &MockLLMProvider{
+		Service: &MockLLMService{
+			Response: &llm.Response{
+				Content: []llm.Content{
+					{Type: llm.ContentTypeThinking, Thinking: "Let me think about a good slug..."},
+					{Type: llm.ContentTypeText, Text: "fix-auto-titling-bug"},
+				},
+			},
+		},
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	slug, err := generateSlugText(context.Background(), mockLLM, logger, "Test message", "test-model")
+	if err != nil {
+		t.Fatalf("Failed to generate slug with thinking blocks: %v", err)
+	}
+	if slug != "fix-auto-titling-bug" {
+		t.Errorf("Expected 'fix-auto-titling-bug', got %q", slug)
+	}
 }
