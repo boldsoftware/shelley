@@ -161,22 +161,21 @@ func collectCodebaseInfo(wd string, gitInfo *GitInfo) (*CodebaseInfo, error) {
 	// Track seen files to avoid duplicates on case-insensitive file systems
 	seenFiles := make(map[string]bool)
 
-	// Check for user-level agent instructions in ~/.config/shelley/AGENTS.md and ~/.shelley/AGENTS.md
+	// Check for user-level agent instructions in ~/.config/AGENTS.md, ~/.config/shelley/AGENTS.md, and ~/.shelley/AGENTS.md
 	if home, err := os.UserHomeDir(); err == nil {
-		// Prefer ~/.config/shelley/AGENTS.md (XDG convention)
-		configAgentsFile := filepath.Join(home, ".config", "shelley", "AGENTS.md")
-		if content, err := os.ReadFile(configAgentsFile); err == nil && len(content) > 0 {
-			info.InjectFiles = append(info.InjectFiles, configAgentsFile)
-			info.InjectFileContents[configAgentsFile] = string(content)
-			seenFiles[strings.ToLower(configAgentsFile)] = true
+		userAgentsFiles := []string{
+			filepath.Join(home, ".config", "AGENTS.md"),
+			filepath.Join(home, ".config", "shelley", "AGENTS.md"),
+			filepath.Join(home, ".shelley", "AGENTS.md"),
 		}
-		// Also check legacy ~/.shelley/AGENTS.md location
-		shelleyAgentsFile := filepath.Join(home, ".shelley", "AGENTS.md")
-		if content, err := os.ReadFile(shelleyAgentsFile); err == nil && len(content) > 0 {
-			lowerPath := strings.ToLower(shelleyAgentsFile)
-			if !seenFiles[lowerPath] {
-				info.InjectFiles = append(info.InjectFiles, shelleyAgentsFile)
-				info.InjectFileContents[shelleyAgentsFile] = string(content)
+		for _, f := range userAgentsFiles {
+			lowerPath := strings.ToLower(f)
+			if seenFiles[lowerPath] {
+				continue
+			}
+			if content, err := os.ReadFile(f); err == nil && len(content) > 0 {
+				info.InjectFiles = append(info.InjectFiles, f)
+				info.InjectFileContents[f] = string(content)
 				seenFiles[lowerPath] = true
 			}
 		}
