@@ -6,11 +6,11 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 
 	"shelley.exe.dev/llm"
 )
@@ -91,17 +91,28 @@ func (l *claudeCodeLoop) processMessage(ctx context.Context, msg llm.Message) er
 	// Generate deterministic UUID for Claude's session persistence
 	sessionID := conversationIDToUUID(l.cm.conversationID)
 
-	// Build the command
-	cmd := exec.CommandContext(ctx, "claude",
+	l.mu.Lock()
+	isFirstTurn := len(l.history) == 0
+	l.mu.Unlock()
+
+	args := []string{
 		"-p", prompt,
 		"--verbose",
 		"--output-format", "stream-json",
 		"--max-turns", "25",
 		"--permission-mode", "bypassPermissions",
 		"--mcp-config", mcpFile,
-		"--session-id", sessionID,
 		"--include-partial-messages", // Stream text tokens
-	)
+	}
+
+	if isFirstTurn {
+		args = append(args, "--session-id", sessionID)
+	} else {
+		args = append(args, "--resume", sessionID)
+	}
+
+	// Build the command
+	cmd := exec.CommandContext(ctx, "claude", args...)
 
 	l.cm.mu.Lock()
 	cwd := l.cm.cwd
@@ -146,9 +157,9 @@ func (l *claudeCodeLoop) processMessage(ctx context.Context, msg llm.Message) er
 				}
 			}
 			l.mu.Lock()
-				l.history = append(l.history, *currentAssistantMsg)
-				l.mu.Unlock()
-				currentAssistantMsg = nil
+			l.history = append(l.history, *currentAssistantMsg)
+			l.mu.Unlock()
+			currentAssistantMsg = nil
 		}
 	}
 
@@ -164,9 +175,9 @@ func (l *claudeCodeLoop) processMessage(ctx context.Context, msg llm.Message) er
 				}
 			}
 			l.mu.Lock()
-				l.history = append(l.history, *currentUserMsg)
-				l.mu.Unlock()
-				currentUserMsg = nil
+			l.history = append(l.history, *currentUserMsg)
+			l.mu.Unlock()
+			currentUserMsg = nil
 		}
 	}
 
