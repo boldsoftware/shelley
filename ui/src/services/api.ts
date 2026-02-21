@@ -489,6 +489,9 @@ export interface ChannelTypeInfo {
     type: string;
     required: boolean;
     placeholder?: string;
+    default?: string;
+    description?: string;
+    options?: string[];
   }[];
 }
 
@@ -499,11 +502,15 @@ class NotificationChannelsApi {
     "Content-Type": "application/json",
   };
 
+  private async throwIfNotOk(response: Response, fallback: string): Promise<void> {
+    if (response.ok) return;
+    const body = await response.text().catch(() => "");
+    throw new Error(body.trim() || `${fallback}: ${response.statusText}`);
+  }
+
   async getChannels(): Promise<NotificationChannelAPI[]> {
     const response = await fetch(`${this.baseUrl}/notification-channels`);
-    if (!response.ok) {
-      throw new Error(`Failed to get notification channels: ${response.statusText}`);
-    }
+    await this.throwIfNotOk(response, "Failed to get notification channels");
     return response.json();
   }
 
@@ -513,9 +520,7 @@ class NotificationChannelsApi {
       headers: this.postHeaders,
       body: JSON.stringify(request),
     });
-    if (!response.ok) {
-      throw new Error(`Failed to create notification channel: ${response.statusText}`);
-    }
+    await this.throwIfNotOk(response, "Failed to create notification channel");
     return response.json();
   }
 
@@ -528,9 +533,7 @@ class NotificationChannelsApi {
       headers: this.postHeaders,
       body: JSON.stringify(request),
     });
-    if (!response.ok) {
-      throw new Error(`Failed to update notification channel: ${response.statusText}`);
-    }
+    await this.throwIfNotOk(response, "Failed to update notification channel");
     return response.json();
   }
 
@@ -538,9 +541,7 @@ class NotificationChannelsApi {
     const response = await fetch(`${this.baseUrl}/notification-channels/${channelId}`, {
       method: "DELETE",
     });
-    if (!response.ok) {
-      throw new Error(`Failed to delete notification channel: ${response.statusText}`);
-    }
+    await this.throwIfNotOk(response, "Failed to delete notification channel");
   }
 
   async testChannel(channelId: string): Promise<{ success: boolean; message: string }> {
@@ -548,9 +549,7 @@ class NotificationChannelsApi {
       method: "POST",
       headers: this.postHeaders,
     });
-    if (!response.ok) {
-      throw new Error(`Failed to test notification channel: ${response.statusText}`);
-    }
+    await this.throwIfNotOk(response, "Failed to test notification channel");
     return response.json();
   }
 }

@@ -35,11 +35,14 @@ type UpdateNotificationChannelRequest struct {
 }
 
 type ConfigField struct {
-	Name        string `json:"name"`
-	Label       string `json:"label"`
-	Type        string `json:"type"`
-	Required    bool   `json:"required"`
-	Placeholder string `json:"placeholder,omitempty"`
+	Name        string   `json:"name"`
+	Label       string   `json:"label"`
+	Type        string   `json:"type"`
+	Required    bool     `json:"required"`
+	Placeholder string   `json:"placeholder,omitempty"`
+	Default     string   `json:"default,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Options     []string `json:"options,omitempty"`
 }
 
 type ChannelTypeInfo struct {
@@ -61,6 +64,19 @@ var channelTypeInfo = map[string]ChannelTypeInfo{
 		Label: "Email (exe.dev)",
 		ConfigFields: []ConfigField{
 			{Name: "to", Label: "Recipient Email", Type: "string", Required: true, Placeholder: "you@example.com"},
+		},
+	},
+	"ntfy": {
+		Type:  "ntfy",
+		Label: "ntfy",
+		ConfigFields: []ConfigField{
+			{Name: "server", Label: "Server URL", Type: "string", Required: true, Placeholder: "https://ntfy.sh", Default: "https://ntfy.sh"},
+			{Name: "topic", Label: "Topic", Type: "string", Required: true, Placeholder: "my-shelley-notifications"},
+			{Name: "token", Label: "Access Token", Type: "password", Placeholder: "tk_...", Description: "Optional. For private topics, provide either an access token or username and password."},
+			{Name: "username", Label: "Username", Type: "string", Description: "Optional. For private topics, use with password as an alternative to access token."},
+			{Name: "password", Label: "Password", Type: "password", Description: "Optional. For private topics, use with username."},
+			{Name: "done_priority", Label: "Done Priority", Type: "string", Required: true, Default: "default", Options: []string{"min", "low", "default", "high", "max"}},
+			{Name: "error_priority", Label: "Error Priority", Type: "string", Required: true, Default: "high", Options: []string{"min", "low", "default", "high", "max"}},
 		},
 	},
 }
@@ -138,6 +154,19 @@ func (s *Server) handleCreateNotificationChannel(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Validate config by attempting to create the channel
+	validationConfig := map[string]any{"type": req.ChannelType}
+	var configMap map[string]any
+	if err := json.Unmarshal(configJSON, &configMap); err == nil {
+		for k, v := range configMap {
+			validationConfig[k] = v
+		}
+	}
+	if _, err := notifications.CreateFromConfig(validationConfig, s.logger); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	channelID := "notif-" + uuid.New().String()[:8]
 	var enabled int64
 	if req.Enabled {
@@ -210,7 +239,7 @@ func (s *Server) handleGetNotificationChannel(w http.ResponseWriter, r *http.Req
 }
 
 func (s *Server) handleUpdateNotificationChannel(w http.ResponseWriter, r *http.Request, channelID string) {
-	_, err := s.db.GetNotificationChannel(r.Context(), channelID)
+	existing, err := s.db.GetNotificationChannel(r.Context(), channelID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Channel not found: %v", err), http.StatusNotFound)
 		return
@@ -225,6 +254,19 @@ func (s *Server) handleUpdateNotificationChannel(w http.ResponseWriter, r *http.
 	configJSON, err := json.Marshal(req.Config)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid config: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Validate config by attempting to create the channel
+	validationConfig := map[string]any{"type": existing.ChannelType}
+	var configMap map[string]any
+	if err := json.Unmarshal(configJSON, &configMap); err == nil {
+		for k, v := range configMap {
+			validationConfig[k] = v
+		}
+	}
+	if _, err := notifications.CreateFromConfig(validationConfig, s.logger); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
