@@ -215,6 +215,7 @@ type ConversationListUpdate struct {
 
 // Server manages the HTTP API and active conversations
 type Server struct {
+	listenAddr          string
 	db                  *db.DB
 	llmManager          LLMProvider
 	toolSetConfig       claudetool.ToolSetConfig
@@ -273,6 +274,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/conversations/continue", http.HandlerFunc(s.handleContinueConversation)) // Small response
 	mux.Handle("/api/conversations/distill", http.HandlerFunc(s.handleDistillConversation))   // Small response
 	mux.Handle("/api/conversation/", http.StripPrefix("/api/conversation", s.conversationMux()))
+	mux.Handle("/api/conversation/{id}/mcp", http.HandlerFunc(s.handleMCP))
 	mux.Handle("/api/conversation-by-slug/", gzipHandler(http.HandlerFunc(s.handleConversationBySlug)))
 	mux.Handle("/api/validate-cwd", http.HandlerFunc(s.handleValidateCwd)) // Small response
 	mux.Handle("/api/list-directory", gzipHandler(http.HandlerFunc(s.handleListDirectory)))
@@ -647,6 +649,15 @@ func (s *Server) handleCreateDirectory(w http.ResponseWriter, r *http.Request) {
 }
 
 // getOrCreateConversationManager gets an existing conversation manager or creates a new one.
+func (s *Server) mcpURL(conversationID string) string {
+	port := "8000"
+	parts := strings.Split(s.listenAddr, ":")
+	if len(parts) > 1 {
+		port = parts[len(parts)-1]
+	}
+	return fmt.Sprintf("http://localhost:%s/api/conversation/%s/mcp", port, conversationID)
+}
+
 func (s *Server) getOrCreateConversationManager(ctx context.Context, conversationID string) (*ConversationManager, error) {
 	manager, err, _ := s.conversationGroup.Do(conversationID, func() (*ConversationManager, error) {
 		s.mu.Lock()
@@ -664,9 +675,20 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 			s.publishConversationState(state)
 		}
 
-		manager := NewConversationManager(conversationID, s.db, s.logger, s.toolSetConfig, recordMessage, onStateChange)
+		manager := NewConversationManager(conversationID, s.db, s.logger, s.toolSetConfig, recordMessage, onStateChange, s.mcpURL(conversationID))
 		if err := manager.Hydrate(ctx); err != nil {
 			return nil, err
+		}
+
+		// Wire the CC subagent bridge so claudeCodeLoop can create subconversations
+		// for subagents spawned by CC's Task tool and record/stream their messages.
+		dbAdapter := &db.SubagentDBAdapter{DB: s.db}
+		manager.ccSubagentBridge = func(ctx context.Context, slug, parentID, cwd string) (*ConversationManager, error) {
+			convID, _, err := dbAdapter.GetOrCreateSubagentConversation(ctx, slug, parentID, cwd)
+			if err != nil {
+				return nil, err
+			}
+			return s.getOrCreateSubagentConversationManager(ctx, convID)
 		}
 
 		s.activeConversations[conversationID] = manager
@@ -702,7 +724,7 @@ func (s *Server) getOrCreateSubagentConversationManager(ctx context.Context, con
 		subagentConfig := s.toolSetConfig
 		subagentConfig.SubagentDepth = s.toolSetConfig.SubagentDepth + 1
 
-		manager := NewConversationManager(conversationID, s.db, s.logger, subagentConfig, recordMessage, onStateChange)
+		manager := NewConversationManager(conversationID, s.db, s.logger, subagentConfig, recordMessage, onStateChange, s.mcpURL(conversationID))
 		if err := manager.Hydrate(ctx); err != nil {
 			return nil, err
 		}
@@ -1061,6 +1083,7 @@ func (s *Server) StartWithListener(listener net.Listener) error {
 func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string) error {
 	// Set up shared mux with routes
 	mux := http.NewServeMux()
+	s.listenAddr = tcpListener.Addr().String()
 	s.RegisterRoutes(mux)
 
 	// TCP handler: full middleware (applied in reverse order: last added = first executed)

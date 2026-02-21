@@ -20,16 +20,23 @@ import (
 
 var errConversationModelMismatch = errors.New("conversation model mismatch")
 
+type ConversationLoop interface {
+	QueueUserMessage(message llm.Message)
+	Go(ctx context.Context) error
+	GetHistory() []llm.Message
+}
+
 // ConversationManager manages a single active conversation
 type ConversationManager struct {
 	conversationID string
 	db             *db.DB
-	loop           *loop.Loop
+	loop           ConversationLoop
 	loopCancel     context.CancelFunc
 	loopCtx        context.Context
 	mu             sync.Mutex
 	lastActivity   time.Time
 	modelID        string
+	mcpURL         string // Full URL to the MCP endpoint
 	recordMessage  loop.MessageRecordFunc
 	logger         *slog.Logger
 	toolSetConfig  claudetool.ToolSetConfig
@@ -48,10 +55,15 @@ type ConversationManager struct {
 	// onStateChange is called when the conversation state changes.
 	// This allows the server to broadcast state changes to all subscribers.
 	onStateChange func(state ConversationState)
+
+	// ccSubagentBridge creates a subagent ConversationManager when the Claude Code
+	// main loop detects that CC's Task tool has spawned a subagent. Set by the server
+	// for claude-code conversations; nil otherwise.
+	ccSubagentBridge func(ctx context.Context, slug, parentID, cwd string) (*ConversationManager, error)
 }
 
 // NewConversationManager constructs a manager with dependencies but defers hydration until needed.
-func NewConversationManager(conversationID string, database *db.DB, baseLogger *slog.Logger, toolSetConfig claudetool.ToolSetConfig, recordMessage loop.MessageRecordFunc, onStateChange func(ConversationState)) *ConversationManager {
+func NewConversationManager(conversationID string, database *db.DB, baseLogger *slog.Logger, toolSetConfig claudetool.ToolSetConfig, recordMessage loop.MessageRecordFunc, onStateChange func(ConversationState), mcpURL string) *ConversationManager {
 	logger := baseLogger
 	if logger == nil {
 		logger = slog.Default()
@@ -63,6 +75,7 @@ func NewConversationManager(conversationID string, database *db.DB, baseLogger *
 		db:             database,
 		lastActivity:   time.Now(),
 		recordMessage:  recordMessage,
+		mcpURL:         mcpURL,
 		logger:         logger,
 		toolSetConfig:  toolSetConfig,
 		subpub:         subpub.New[StreamResponse](),
@@ -439,19 +452,24 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 	processCtx, cancel := context.WithTimeout(baseCtx, 12*time.Hour)
 	toolSet := claudetool.NewToolSet(processCtx, toolSetConfig)
 
-	loopInstance := loop.NewLoop(loop.Config{
-		LLM:           service,
-		History:       history,
-		Tools:         toolSet.Tools(),
-		RecordMessage: recordMessage,
-		Logger:        logger,
-		System:        system,
-		WorkingDir:    cwd,
-		GetWorkingDir: toolSet.WorkingDir().Get,
-		OnGitStateChange: func(ctx context.Context, state *gitstate.GitState) {
-			cm.recordGitStateChange(ctx, state)
-		},
-	})
+	var loopInstance ConversationLoop
+	if modelID == "claude-code" {
+		loopInstance = newClaudeCodeLoop(cm)
+	} else {
+		loopInstance = loop.NewLoop(loop.Config{
+			LLM:           service,
+			History:       history,
+			Tools:         toolSet.Tools(),
+			RecordMessage: recordMessage,
+			Logger:        logger,
+			System:        system,
+			WorkingDir:    cwd,
+			GetWorkingDir: toolSet.WorkingDir().Get,
+			OnGitStateChange: func(ctx context.Context, state *gitstate.GitState) {
+				cm.recordGitStateChange(ctx, state)
+			},
+		})
+	}
 
 	cm.mu.Lock()
 	if cm.loop != nil {
