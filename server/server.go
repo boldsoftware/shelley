@@ -653,6 +653,15 @@ func (s *Server) handleCreateDirectory(w http.ResponseWriter, r *http.Request) {
 }
 
 // getOrCreateConversationManager gets an existing conversation manager or creates a new one.
+func (s *Server) mcpURL(conversationID string) string {
+	port := "8000"
+	parts := strings.Split(s.listenAddr, ":")
+	if len(parts) > 1 {
+		port = parts[len(parts)-1]
+	}
+	return fmt.Sprintf("http://localhost:%s/api/conversation/%s/mcp", port, conversationID)
+}
+
 func (s *Server) getOrCreateConversationManager(ctx context.Context, conversationID string) (*ConversationManager, error) {
 	manager, err, _ := s.conversationGroup.Do(conversationID, func() (*ConversationManager, error) {
 		s.mu.Lock()
@@ -670,7 +679,7 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 			s.publishConversationState(state)
 		}
 
-		manager := NewConversationManager(conversationID, s.db, s.logger, s.toolSetConfig, recordMessage, onStateChange)
+		manager := NewConversationManager(conversationID, s.db, s.logger, s.toolSetConfig, recordMessage, onStateChange, s.mcpURL(conversationID))
 		if err := manager.Hydrate(ctx); err != nil {
 			return nil, err
 		}
@@ -708,7 +717,7 @@ func (s *Server) getOrCreateSubagentConversationManager(ctx context.Context, con
 		subagentConfig := s.toolSetConfig
 		subagentConfig.SubagentDepth = s.toolSetConfig.SubagentDepth + 1
 
-		manager := NewConversationManager(conversationID, s.db, s.logger, subagentConfig, recordMessage, onStateChange)
+		manager := NewConversationManager(conversationID, s.db, s.logger, subagentConfig, recordMessage, onStateChange, s.mcpURL(conversationID))
 		if err := manager.Hydrate(ctx); err != nil {
 			return nil, err
 		}

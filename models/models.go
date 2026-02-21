@@ -343,6 +343,16 @@ func All() []Model {
 			},
 		},
 		{
+			ID:              "claude-code",
+			Provider:        ProviderBuiltIn,
+			Description:     "Bring Your Own Claude Code",
+			GatewayEnabled:  true,
+			RequiredEnvVars: []string{},
+			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
+				return loop.NewPredictableService(), nil
+			},
+		},
+		{
 			ID:          "predictable",
 			Provider:    ProviderBuiltIn,
 			Description: "Deterministic test model (no API key)",

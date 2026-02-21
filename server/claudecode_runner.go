@@ -61,7 +61,14 @@ func (r *ClaudeCodeRunner) RunSubagent(ctx context.Context, conversationID, prom
 }
 
 type claudeStreamMessage struct {
-	Role    string `json:"role"`
+	Role  string `json:"role"`
+	ID    string `json:"id,omitempty"`
+	Usage struct {
+		InputTokens              uint64 `json:"input_tokens,omitempty"`
+		OutputTokens             uint64 `json:"output_tokens,omitempty"`
+		CacheCreationInputTokens uint64 `json:"cache_creation_input_tokens,omitempty"`
+		CacheReadInputTokens     uint64 `json:"cache_read_input_tokens,omitempty"`
+	} `json:"usage,omitempty"`
 	Content []struct {
 		Type      string          `json:"type"`
 		Text      string          `json:"text,omitempty"`
