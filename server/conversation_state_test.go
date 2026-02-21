@@ -90,7 +90,7 @@ func TestConversationStateAfterServerRestart(t *testing.T) {
 	server := NewServer(database, &testLLMManager{service: ps},
 		claudetool.ToolSetConfig{EnableBrowser: false},
 		slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelWarn})),
-		true, "", "predictable", "", nil, false)
+		true, "", "predictable", "", nil)
 
 	mux := http.NewServeMux()
 	server.RegisterRoutes(mux)
@@ -199,7 +199,7 @@ func TestModelRestorationAfterServerRestart(t *testing.T) {
 	server := NewServer(database, &testLLMManager{service: ps},
 		claudetool.ToolSetConfig{EnableBrowser: false},
 		slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelWarn})),
-		true, "", "predictable", "", nil, false)
+		true, "", "predictable", "", nil)
 
 	mux := http.NewServeMux()
 	server.RegisterRoutes(mux)

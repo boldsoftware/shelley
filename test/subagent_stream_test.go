@@ -95,7 +95,7 @@ func setupTestServerForSubagent(t *testing.T) (*server.Server, *db.DB, *httptest
 		EnableBrowser: false,
 	}
 
-	svr := server.NewServer(database, llmManager, toolSetConfig, logger, true, "", "predictable", "", nil, false)
+	svr := server.NewServer(database, llmManager, toolSetConfig, logger, true, "", "predictable", "", nil)
 
 	mux := http.NewServeMux()
 	svr.RegisterRoutes(mux)

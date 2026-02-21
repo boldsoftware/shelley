@@ -87,7 +87,6 @@ func runServe(global GlobalConfig, args []string) {
 	systemdActivation := fs.Bool("systemd-activation", false, "Use systemd socket activation (listen on fd from systemd)")
 	requireHeader := fs.String("require-header", "", "Require this header on all API requests (e.g., X-Exedev-Userid)")
 	socketPath := fs.String("socket", client.DefaultSocketPath(), "Path to Unix socket for local CLI client access (set to 'none' to disable)")
-	useClaudeCode := fs.Bool("claude-code-subagent", false, "Use Claude Code CLI as the subagent backend")
 	fs.Parse(args)
 
 	logger := setupLogging(global.Debug)
@@ -111,7 +110,7 @@ func runServe(global GlobalConfig, args []string) {
 	toolSetConfig := setupToolSetConfig(llmManager)
 
 	// Create server
-	svr := server.NewServer(database, llmManager, toolSetConfig, logger, global.PredictableOnly, llmConfig.TerminalURL, llmConfig.DefaultModel, *requireHeader, llmConfig.Links, *useClaudeCode)
+	svr := server.NewServer(database, llmManager, toolSetConfig, logger, global.PredictableOnly, llmConfig.TerminalURL, llmConfig.DefaultModel, *requireHeader, llmConfig.Links)
 
 	// Seed notification channels from config file if DB is empty (one-time migration)
 	svr.SeedNotificationChannelsFromConfig(llmConfig.NotificationChannels)

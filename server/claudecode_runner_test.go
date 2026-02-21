@@ -32,8 +32,7 @@ func TestClaudeCodeRunner_RunSubagent(t *testing.T) {
 	}
 	llmManager := &claudeLLMManager{service: service}
 
-	// Create server with claude code subagent enabled
-	server := NewServer(database, llmManager, toolSetConfig, logger, true, "", "claude", "", nil, true)
+	server := NewServer(database, llmManager, toolSetConfig, logger, true, "", "claude", "", nil)
 
 	// We need a real HTTP server for the claude CLI to connect back via MCP
 	mux := http.NewServeMux()

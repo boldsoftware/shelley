@@ -234,7 +234,7 @@ type Server struct {
 }
 
 // NewServer creates a new server instance
-func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool.ToolSetConfig, logger *slog.Logger, predictableOnly bool, terminalURL, defaultModel, requireHeader string, links []Link, useClaudeCodeSubagent bool) *Server {
+func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool.ToolSetConfig, logger *slog.Logger, predictableOnly bool, terminalURL, defaultModel, requireHeader string, links []Link) *Server {
 	s := &Server{
 		db:                  database,
 		llmManager:          llmManager,
@@ -252,11 +252,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	}
 
 	// Set up subagent support
-	if useClaudeCodeSubagent {
-		s.toolSetConfig.SubagentRunner = NewClaudeCodeRunner(s)
-	} else {
-		s.toolSetConfig.SubagentRunner = NewSubagentRunner(s)
-	}
+	s.toolSetConfig.SubagentRunner = NewSubagentRunner(s)
 	s.toolSetConfig.SubagentDB = &db.SubagentDBAdapter{DB: database}
 	s.toolSetConfig.MaxSubagentDepth = 1 // Only top-level conversations can spawn subagents
 
@@ -682,6 +678,17 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		manager := NewConversationManager(conversationID, s.db, s.logger, s.toolSetConfig, recordMessage, onStateChange, s.mcpURL(conversationID))
 		if err := manager.Hydrate(ctx); err != nil {
 			return nil, err
+		}
+
+		// Wire the CC subagent bridge so claudeCodeLoop can create subconversations
+		// for subagents spawned by CC's Task tool and record/stream their messages.
+		dbAdapter := &db.SubagentDBAdapter{DB: s.db}
+		manager.ccSubagentBridge = func(ctx context.Context, slug, parentID, cwd string) (*ConversationManager, error) {
+			convID, _, err := dbAdapter.GetOrCreateSubagentConversation(ctx, slug, parentID, cwd)
+			if err != nil {
+				return nil, err
+			}
+			return s.getOrCreateSubagentConversationManager(ctx, convID)
 		}
 
 		s.activeConversations[conversationID] = manager

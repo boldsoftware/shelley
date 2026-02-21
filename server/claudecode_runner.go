@@ -83,9 +83,26 @@ type claudeStreamMessage struct {
 }
 
 type subagentStreamEvent struct {
-	Type    string              `json:"type"`
-	Message claudeStreamMessage `json:"message,omitempty"`
-	Result  string              `json:"result,omitempty"`
+	Type            string              `json:"type"`
+	Subtype         string              `json:"subtype,omitempty"`
+	Message         claudeStreamMessage `json:"message,omitempty"`
+	Result          string              `json:"result,omitempty"`
+	ParentToolUseID string              `json:"parent_tool_use_id"`
+	ToolUseResult   *ccToolUseResult    `json:"tool_use_result,omitempty"`
+	// For system task_started events:
+	TaskID      string `json:"task_id,omitempty"`
+	ToolUseID   string `json:"tool_use_id,omitempty"`
+	Description string `json:"description,omitempty"`
+	TaskType    string `json:"task_type,omitempty"`
+}
+
+// ccToolUseResult is the metadata CC attaches to a user event when a Task subagent finishes.
+type ccToolUseResult struct {
+	Status            string `json:"status"`
+	AgentID           string `json:"agentId"`
+	TotalDurationMs   int64  `json:"totalDurationMs"`
+	TotalTokens       int64  `json:"totalTokens"`
+	TotalToolUseCount int    `json:"totalToolUseCount"`
 }
 
 func (r *ClaudeCodeRunner) run(ctx context.Context, conversationID, prompt string, timeout time.Duration) (string, error) {

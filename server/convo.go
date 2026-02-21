@@ -55,6 +55,11 @@ type ConversationManager struct {
 	// onStateChange is called when the conversation state changes.
 	// This allows the server to broadcast state changes to all subscribers.
 	onStateChange func(state ConversationState)
+
+	// ccSubagentBridge creates a subagent ConversationManager when the Claude Code
+	// main loop detects that CC's Task tool has spawned a subagent. Set by the server
+	// for claude-code conversations; nil otherwise.
+	ccSubagentBridge func(ctx context.Context, slug, parentID, cwd string) (*ConversationManager, error)
 }
 
 // NewConversationManager constructs a manager with dependencies but defers hydration until needed.

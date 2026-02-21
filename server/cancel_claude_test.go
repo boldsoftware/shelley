@@ -80,7 +80,7 @@ func NewClaudeTestHarness(t *testing.T) *ClaudeTestHarness {
 		EnableBrowser: false,
 	}
 
-	server := NewServer(database, llmManager, toolSetConfig, logger, true, "", "claude", "", nil, false)
+	server := NewServer(database, llmManager, toolSetConfig, logger, true, "", "claude", "", nil)
 	h.server = server
 
 	return h
