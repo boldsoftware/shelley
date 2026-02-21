@@ -65,11 +65,12 @@ type claudeStreamMessage struct {
 	Content []struct {
 		Type      string          `json:"type"`
 		Text      string          `json:"text,omitempty"`
+		Thinking  string          `json:"thinking,omitempty"`
 		ID        string          `json:"id,omitempty"`
 		Name      string          `json:"name,omitempty"`
 		Input     json.RawMessage `json:"input,omitempty"`
 		ToolUseID string          `json:"tool_use_id,omitempty"`
-		Content   string          `json:"content,omitempty"`
+		Content   json.RawMessage `json:"content,omitempty"`
 		IsError   bool            `json:"is_error,omitempty"`
 	} `json:"content"`
 }
@@ -186,6 +187,12 @@ func (r *ClaudeCodeRunner) run(ctx context.Context, conversationID, prompt strin
 						Text: c.Text,
 					})
 					hasContent = true
+				case "thinking":
+					msg.Content = append(msg.Content, llm.Content{
+						Type:     llm.ContentTypeThinking,
+						Thinking: c.Thinking,
+					})
+					hasContent = true
 				case "tool_use":
 					msg.Content = append(msg.Content, llm.Content{
 						Type:      llm.ContentTypeToolUse,
@@ -195,10 +202,44 @@ func (r *ClaudeCodeRunner) run(ctx context.Context, conversationID, prompt strin
 					})
 					hasContent = true
 				case "tool_result":
+					var resultContents []llm.Content
+
+					var plainText string
+					if err := json.Unmarshal(c.Content, &plainText); err == nil {
+						resultContents = append(resultContents, llm.Content{Type: llm.ContentTypeText, Text: plainText})
+					} else {
+						var blocks []struct {
+							Type   string `json:"type"`
+							Text   string `json:"text,omitempty"`
+							Source *struct {
+								Type      string `json:"type"`
+								MediaType string `json:"media_type,omitempty"`
+								Data      string `json:"data,omitempty"`
+							} `json:"source,omitempty"`
+						}
+						if err := json.Unmarshal(c.Content, &blocks); err == nil {
+							for _, bl := range blocks {
+								if bl.Type == "text" {
+									resultContents = append(resultContents, llm.Content{Type: llm.ContentTypeText, Text: bl.Text})
+								} else if bl.Type == "image" && bl.Source != nil && bl.Source.Type == "base64" {
+									// Store image data in the llm.Content
+									resultContents = append(resultContents, llm.Content{
+										Type:      llm.ContentTypeText, // images are part of text content array in shelley generally, or let's use Data
+										MediaType: bl.Source.MediaType,
+										Data:      bl.Source.Data,
+									})
+								}
+							}
+						} else {
+							// fallback
+							resultContents = append(resultContents, llm.Content{Type: llm.ContentTypeText, Text: string(c.Content)})
+						}
+					}
+
 					msg.Content = append(msg.Content, llm.Content{
 						Type:       llm.ContentTypeToolResult,
 						ToolUseID:  c.ToolUseID,
-						ToolResult: []llm.Content{{Type: llm.ContentTypeText, Text: c.Content}},
+						ToolResult: resultContents,
 						ToolError:  c.IsError,
 					})
 					hasContent = true
