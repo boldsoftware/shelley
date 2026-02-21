@@ -215,6 +215,7 @@ type ConversationListUpdate struct {
 
 // Server manages the HTTP API and active conversations
 type Server struct {
+	listenAddr          string
 	db                  *db.DB
 	llmManager          LLMProvider
 	toolSetConfig       claudetool.ToolSetConfig
@@ -233,7 +234,7 @@ type Server struct {
 }
 
 // NewServer creates a new server instance
-func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool.ToolSetConfig, logger *slog.Logger, predictableOnly bool, terminalURL, defaultModel, requireHeader string, links []Link) *Server {
+func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool.ToolSetConfig, logger *slog.Logger, predictableOnly bool, terminalURL, defaultModel, requireHeader string, links []Link, useClaudeCodeSubagent bool) *Server {
 	s := &Server{
 		db:                  database,
 		llmManager:          llmManager,
@@ -251,7 +252,11 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	}
 
 	// Set up subagent support
-	s.toolSetConfig.SubagentRunner = NewSubagentRunner(s)
+	if useClaudeCodeSubagent {
+		s.toolSetConfig.SubagentRunner = NewClaudeCodeRunner(s)
+	} else {
+		s.toolSetConfig.SubagentRunner = NewSubagentRunner(s)
+	}
 	s.toolSetConfig.SubagentDB = &db.SubagentDBAdapter{DB: database}
 	s.toolSetConfig.MaxSubagentDepth = 1 // Only top-level conversations can spawn subagents
 
@@ -273,6 +278,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/conversations/continue", http.HandlerFunc(s.handleContinueConversation)) // Small response
 	mux.Handle("/api/conversations/distill", http.HandlerFunc(s.handleDistillConversation))   // Small response
 	mux.Handle("/api/conversation/", http.StripPrefix("/api/conversation", s.conversationMux()))
+	mux.Handle("/api/conversation/{id}/mcp", http.HandlerFunc(s.handleMCP))
 	mux.Handle("/api/conversation-by-slug/", gzipHandler(http.HandlerFunc(s.handleConversationBySlug)))
 	mux.Handle("/api/validate-cwd", http.HandlerFunc(s.handleValidateCwd)) // Small response
 	mux.Handle("/api/list-directory", gzipHandler(http.HandlerFunc(s.handleListDirectory)))
@@ -1061,6 +1067,7 @@ func (s *Server) StartWithListener(listener net.Listener) error {
 func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string) error {
 	// Set up shared mux with routes
 	mux := http.NewServeMux()
+	s.listenAddr = tcpListener.Addr().String()
 	s.RegisterRoutes(mux)
 
 	// TCP handler: full middleware (applied in reverse order: last added = first executed)

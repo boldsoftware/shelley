@@ -62,7 +62,7 @@ func newTestServer(t *testing.T) (*Server, *db.DB, *loop.PredictableService) {
 	svr := NewServer(database, &testLLMManager{service: ps},
 		claudetool.ToolSetConfig{EnableBrowser: false},
 		slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelWarn})),
-		true, "", "predictable", "", nil)
+		true, "", "predictable", "", nil, false)
 	return svr, database, ps
 }
 
