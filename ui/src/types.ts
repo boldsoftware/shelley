@@ -52,7 +52,7 @@ export interface LLMContent {
 export interface Model {
   id: string;
   display_name?: string;
-  source?: string; // Human-readable source (e.g., "exe.dev gateway", "$ANTHROPIC_API_KEY")
+  source?: string; // Human-readable source (e.g., "gateway", "$ANTHROPIC_API_KEY")
   ready: boolean;
   max_context_tokens?: number;
 }

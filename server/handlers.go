@@ -417,14 +417,10 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		}
 	}
 
-	// Get hostname (add .exe.xyz suffix if no dots, matching system_prompt.go)
+	// Get hostname for display in the UI
 	hostname := "localhost"
 	if h, err := os.Hostname(); err == nil {
-		if !strings.Contains(h, ".") {
-			hostname = h + ".exe.xyz"
-		} else {
-			hostname = h
-		}
+		hostname = h
 	}
 
 	// Get default working directory
@@ -1109,7 +1105,7 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 type ModelInfo struct {
 	ID               string `json:"id"`
 	DisplayName      string `json:"display_name,omitempty"`
-	Source           string `json:"source,omitempty"` // Human-readable source (e.g., "exe.dev gateway", "$ANTHROPIC_API_KEY")
+	Source           string `json:"source,omitempty"` // Human-readable source (e.g., "gateway", "$ANTHROPIC_API_KEY")
 	Ready            bool   `json:"ready"`
 	MaxContextTokens int    `json:"max_context_tokens,omitempty"`
 }

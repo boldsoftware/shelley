@@ -37,7 +37,8 @@ type SystemPromptData struct {
 	Codebase         *CodebaseInfo
 	IsExeDev         bool
 	IsSudoAvailable  bool
-	Hostname         string // For exe.dev, the public hostname (e.g., "vmname.exe.xyz")
+	Hostname         string // The machine hostname
+	ShelleyDBPath    string // Path to the shelley database
 	SkillsXML        string // XML block for available skills
 	UserEmail        string // The exe.dev auth email of the user, if known
 }
@@ -155,15 +156,9 @@ func collectSystemData(workingDir string) (*SystemPromptData, error) {
 	// Check sudo availability
 	data.IsSudoAvailable = isSudoAvailable()
 
-	// Get hostname for exe.dev
-	if data.IsExeDev {
-		if hostname, err := os.Hostname(); err == nil {
-			// If hostname doesn't contain dots, add .exe.xyz suffix
-			if !strings.Contains(hostname, ".") {
-				hostname = hostname + ".exe.xyz"
-			}
-			data.Hostname = hostname
-		}
+	// Get hostname
+	if hostname, err := os.Hostname(); err == nil {
+		data.Hostname = hostname
 	}
 
 	// Discover and load skills

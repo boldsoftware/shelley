@@ -61,7 +61,7 @@ var channelTypeInfo = map[string]ChannelTypeInfo{
 	},
 	"email": {
 		Type:  "email",
-		Label: "Email (exe.dev)",
+		Label: "Email",
 		ConfigFields: []ConfigField{
 			{Name: "to", Label: "Recipient Email", Type: "string", Required: true, Placeholder: "you@example.com"},
 		},

@@ -189,7 +189,7 @@ export const es: TranslationKeys = {
   welcomeTitle: "Shelley Agent",
   welcomeSubtitle: "",
   welcomeMessage:
-    "Shelley es un agente que se ejecuta en {hostname}. Puede pedirle a Shelley que haga cosas. Si crea un sitio web con Shelley, puede usar las funciones de proxy de exe.dev (ver {docsLink}) para visitarlo en {proxyLink}.",
+    "Shelley es un agente que se ejecuta en {hostname}. Puede pedirle a Shelley que haga cosas.",
   sendMessageToStart: "Envíe un mensaje para iniciar la conversación.",
   noModelsConfiguredHint:
     "No hay modelos de IA configurados. Presione Ctrl+K o ⌘+K para agregar un modelo.",

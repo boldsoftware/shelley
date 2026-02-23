@@ -33,7 +33,7 @@ const (
 type ModelSource string
 
 const (
-	SourceGateway ModelSource = "exe.dev gateway"
+	SourceGateway ModelSource = "gateway"
 	SourceEnvVar  ModelSource = "env"    // Will be combined with env var name
 	SourceCustom  ModelSource = "custom" // User-configured custom model
 )
@@ -63,7 +63,7 @@ type Model struct {
 }
 
 // Source returns a human-readable description of where this model's configuration comes from.
-// For example: "exe.dev gateway", "$ANTHROPIC_API_KEY", etc.
+// For example: "gateway", "$ANTHROPIC_API_KEY", etc.
 func (m Model) Source(cfg *Config) string {
 	// Predictable model has no source
 	if m.ID == "predictable" {
@@ -415,7 +415,7 @@ type serviceEntry struct {
 	service     llm.Service
 	provider    Provider
 	modelID     string
-	source      string // Human-readable source (e.g., "exe.dev gateway", "$ANTHROPIC_API_KEY")
+	source      string // Human-readable source (e.g., "gateway", "$ANTHROPIC_API_KEY")
 	displayName string // For custom models, the user-provided display name
 	tags        string // For custom models, user-provided tags
 }
@@ -728,7 +728,7 @@ func (m *Manager) HasModel(modelID string) bool {
 type ModelInfo struct {
 	DisplayName string
 	Tags        string
-	Source      string // Human-readable source (e.g., "exe.dev gateway", "$ANTHROPIC_API_KEY", "custom")
+	Source      string // Human-readable source (e.g., "gateway", "$ANTHROPIC_API_KEY", "custom")
 }
 
 // GetModelInfo returns the display name, tags, and source for a model

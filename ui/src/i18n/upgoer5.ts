@@ -189,7 +189,7 @@ export const upgoer5: TranslationKeys = {
   welcomeTitle: "Your Helper",
   welcomeSubtitle: "",
   welcomeMessage:
-    "This is a helper, running on {hostname}. You can ask it to do stuff. If you build something for people to see, you can use the pass through (see {docsLink}) to visit it at {proxyLink}.",
+    "This is a helper, running on {hostname}. You can ask it to do stuff.",
   sendMessageToStart: "Send a note to start talking.",
   noModelsConfiguredHint: "No brains set up yet. You need to add one to get started.",
 

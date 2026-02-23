@@ -189,7 +189,7 @@ export const en: TranslationKeys = {
   welcomeTitle: "Shelley Agent",
   welcomeSubtitle: "",
   welcomeMessage:
-    "Shelley is an agent, running on {hostname}. You can ask Shelley to do stuff. If you build a web site with Shelley, you can use exe.dev's proxy features (see {docsLink}) to visit it over the web at {proxyLink}.",
+    "Shelley is an agent, running on {hostname}. You can ask Shelley to do stuff.",
   sendMessageToStart: "Send a message to start the conversation.",
   noModelsConfiguredHint: "No AI models configured. Press Ctrl+K or ⌘+K to add a model.",
 
