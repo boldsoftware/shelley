@@ -1047,6 +1047,7 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 	// message during hydration, and we want to return the messages as they were before.
 	var messages []generated.Message
 	var conversation generated.Conversation
+	resuming := lastSeqID >= 0
 	if lastSeqID < 0 {
 		err := s.db.Queries(ctx, func(q *generated.Queries) error {
 			var err error
@@ -1067,9 +1068,16 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 			lastSeqID = messages[len(messages)-1].SequenceID
 		}
 	} else {
-		// Resuming - just get conversation metadata
+		// Resuming - fetch any messages we missed while disconnected
 		err := s.db.Queries(ctx, func(q *generated.Queries) error {
 			var err error
+			messages, err = q.ListMessagesSince(ctx, generated.ListMessagesSinceParams{
+				ConversationID: conversationID,
+				SequenceID:     lastSeqID,
+			})
+			if err != nil {
+				return err
+			}
 			conversation, err = q.GetConversation(ctx, conversationID)
 			return err
 		})
@@ -1077,6 +1085,10 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 			s.logger.Error("Failed to get conversation data", "conversationID", conversationID, "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
+		}
+		// Update lastSeqID so the subscription starts after these messages
+		if len(messages) > 0 {
+			lastSeqID = messages[len(messages)-1].SequenceID
 		}
 	}
 
@@ -1088,10 +1100,16 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Send initial response
+	// Send initial response (all messages for fresh connections, missed messages for resumes)
 	if len(messages) > 0 {
-		// Fresh connection - send all messages
 		apiMessages := toAPIMessages(messages)
+		// Only send context_window_size for fresh connections where we have all messages.
+		// On resume we only have the missed messages, so the calculation would be wrong.
+		// The client keeps its previous value and gets updates from subsequent stream events.
+		var ctxSize uint64
+		if !resuming {
+			ctxSize = calculateContextWindowSize(apiMessages)
+		}
 		streamData := StreamResponse{
 			Messages:     apiMessages,
 			Conversation: conversation,
@@ -1100,7 +1118,7 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 				Working:        manager.IsAgentWorking(),
 				Model:          manager.GetModel(),
 			},
-			ContextWindowSize: calculateContextWindowSize(apiMessages),
+			ContextWindowSize: ctxSize,
 		}
 		data, _ := json.Marshal(streamData)
 		fmt.Fprintf(w, "data: %s\n\n", data)
