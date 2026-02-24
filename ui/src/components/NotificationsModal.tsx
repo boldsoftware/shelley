@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Modal from "./Modal";
+import ConfigFieldInput from "./ConfigFieldInput";
 import { notificationChannelsApi, NotificationChannelAPI, ChannelTypeInfo } from "../services/api";
 import {
   getBrowserNotificationState,
@@ -237,62 +238,16 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
           />
         </div>
 
-        {configFields.map((field) => {
-          const inputId = `config-${field.name}`;
-          const descId = `${inputId}-desc`;
-          return (
-            <div className="form-group" key={field.name}>
-              <label htmlFor={inputId}>
-                {field.label}
-                {field.required && " *"}
-              </label>
-              {field.options && field.options.length > 0 ? (
-                <select
-                  id={inputId}
-                  className="form-input"
-                  value={form.config[field.name] || ""}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      config: { ...form.config, [field.name]: e.target.value },
-                    })
-                  }
-                  aria-describedby={field.description ? descId : undefined}
-                >
-                  <option value="">Select...</option>
-                  {field.options.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  id={inputId}
-                  className="form-input"
-                  type={field.type === "password" ? "password" : "text"}
-                  value={form.config[field.name] || ""}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      config: { ...form.config, [field.name]: e.target.value },
-                    })
-                  }
-                  placeholder={field.placeholder}
-                  aria-describedby={field.description ? descId : undefined}
-                />
-              )}
-              {field.description && (
-                <span
-                  id={descId}
-                  style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.25rem", display: "block" }}
-                >
-                  {field.description}
-                </span>
-              )}
-            </div>
-          );
-        })}
+        {configFields.map((field) => (
+          <ConfigFieldInput
+            key={field.name}
+            field={field}
+            value={form.config[field.name] || ""}
+            onChange={(val) =>
+              setForm({ ...form, config: { ...form.config, [field.name]: val } })
+            }
+          />
+        ))}
 
         {testResult && (
           <div className={`test-result ${testResult.success ? "success" : "error"}`}>
