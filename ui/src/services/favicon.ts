@@ -4,49 +4,57 @@
 type FaviconStatus = "working" | "ready";
 
 let currentStatus: FaviconStatus = "ready";
-let originalSVG: string | null = null;
+let originalImageData: string | null = null;
+let faviconImage: HTMLImageElement | null = null;
+let imageLoaded = false;
 
 // Get the existing favicon link (injected by server)
 function getFaviconLink(): HTMLLinkElement | null {
   return document.querySelector('link[rel="icon"]');
 }
 
-// Extract and decode the SVG from the data URI
-function extractSVGFromDataURI(dataURI: string): string | null {
-  if (!dataURI.startsWith("data:image/svg+xml,")) {
-    return null;
-  }
-  try {
-    return decodeURIComponent(dataURI.substring("data:image/svg+xml,".length));
-  } catch {
-    return null;
-  }
-}
-
-// Add a status dot to the SVG
-function addStatusDot(svg: string, status: FaviconStatus): string {
-  // Remove the closing </svg> tag
-  const closingTagIndex = svg.lastIndexOf("</svg>");
-  if (closingTagIndex === -1) {
-    return svg;
+// Draw the favicon with status dot using canvas
+function drawFaviconWithStatus(
+  status: FaviconStatus,
+  onComplete: (dataUrl: string) => void
+): void {
+  if (!faviconImage || !imageLoaded) {
+    return;
   }
 
-  const svgWithoutClose = svg.substring(0, closingTagIndex);
+  const size = 64; // Standard favicon size
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
 
-  // Add the status dot in the bottom-right corner
-  // New viewBox is 400x400, so position dot near bottom-right at ~350,350
-  const dotColor = status === "working" ? "#f59e0b" : "#22c55e";
-  const statusDot = `
-  <circle cx="340" cy="340" r="50" fill="white"/>
-  <circle cx="340" cy="340" r="40" fill="${dotColor}"/>
-`;
+  // Draw the original image
+  ctx.drawImage(faviconImage, 0, 0, size, size);
 
-  return svgWithoutClose + statusDot + "</svg>";
+  // Draw status dot in bottom-right corner
+  const dotRadius = 10;
+  const dotX = size - dotRadius - 4;
+  const dotY = size - dotRadius - 4;
+
+  // White border
+  ctx.beginPath();
+  ctx.arc(dotX, dotY, dotRadius + 2, 0, Math.PI * 2);
+  ctx.fillStyle = "white";
+  ctx.fill();
+
+  // Colored dot
+  ctx.beginPath();
+  ctx.arc(dotX, dotY, dotRadius, 0, Math.PI * 2);
+  ctx.fillStyle = status === "working" ? "#f59e0b" : "#22c55e";
+  ctx.fill();
+
+  onComplete(canvas.toDataURL("image/png"));
 }
 
 // Update the favicon to reflect the current status
 export function setFaviconStatus(status: FaviconStatus): void {
-  if (status === currentStatus && originalSVG !== null) {
+  if (status === currentStatus && originalImageData !== null) {
     return;
   }
 
@@ -55,25 +63,31 @@ export function setFaviconStatus(status: FaviconStatus): void {
     return;
   }
 
-  // Capture the original SVG on first call
-  if (originalSVG === null) {
-    const extracted = extractSVGFromDataURI(link.href);
-    if (extracted) {
-      originalSVG = extracted;
-    } else {
-      // If we can't extract SVG, give up
-      return;
-    }
+  // Capture the original image on first call
+  if (originalImageData === null) {
+    originalImageData = link.href;
+
+    // Load the image
+    faviconImage = new Image();
+    faviconImage.crossOrigin = "anonymous";
+    faviconImage.onload = () => {
+      imageLoaded = true;
+      // Now that image is loaded, apply the status
+      drawFaviconWithStatus(status, (dataUrl) => {
+        link.href = dataUrl;
+      });
+    };
+    faviconImage.src = originalImageData;
   }
 
   currentStatus = status;
 
-  // Generate new SVG with status dot
-  const newSVG = addStatusDot(originalSVG, status);
-  const newDataURI = "data:image/svg+xml," + encodeURIComponent(newSVG);
-
-  // Update the favicon
-  link.href = newDataURI;
+  // If image already loaded, update immediately
+  if (imageLoaded) {
+    drawFaviconWithStatus(status, (dataUrl) => {
+      link.href = dataUrl;
+    });
+  }
 }
 
 // Initialize the favicon service (call on app start)
