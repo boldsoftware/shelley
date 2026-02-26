@@ -384,13 +384,16 @@ function MessageInput({
   }, [message, persistKey]);
 
   useEffect(() => {
-    if (autoFocus && textareaRef.current) {
+    // Guard on !disabled (and depend on disabled) so focus is re-attempted
+    // when the textarea becomes enabled — on page load it's briefly disabled
+    // while messages load.
+    if (autoFocus && !disabled && textareaRef.current) {
       // Use setTimeout to ensure the component is fully rendered
       setTimeout(() => {
         textareaRef.current?.focus();
       }, 0);
     }
-  }, [autoFocus]);
+  }, [autoFocus, disabled]);
 
   // Handle virtual keyboard appearance on mobile (especially Android Firefox)
   // The visualViewport API lets us detect when the keyboard shrinks the viewport
