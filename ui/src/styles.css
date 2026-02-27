@@ -5221,7 +5221,6 @@ kbd {
 /* Markdown content rendering */
 .markdown-content {
   line-height: 1.6;
-  overflow-x: auto;
 }
 
 .markdown-content p {
@@ -5312,6 +5311,8 @@ kbd {
   border-collapse: collapse;
   margin: 0.75em 0;
   word-break: normal;
+  display: block;
+  overflow-x: auto;
 }
 
 .markdown-content th,
