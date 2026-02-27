@@ -342,7 +342,7 @@ function MessageInput({
       // I'm not convinced the divergence from desktop is the correct answer,
       // but we can try it and see how it feels.
       const isMobile = "ontouchstart" in window;
-      if (isMobile) {
+      if (isMobile && !(e.ctrlKey || e.metaKey)) {
         return;
       }
       e.preventDefault();
