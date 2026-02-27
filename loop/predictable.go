@@ -118,6 +118,9 @@ func (s *PredictableService) Do(ctx context.Context, req *llm.Request) (*llm.Res
 		// Trigger a screenshot of the current page
 		return s.makeScreenshotToolResponse("", inputTokens), nil
 
+	case "wide tables":
+		return s.makeResponse(wideTablesMarkdown, inputTokens), nil
+
 	case "tool smorgasbord":
 		// Return a response with all tool types for testing
 		return s.makeToolSmorgasbordResponse(inputTokens), nil
@@ -716,3 +719,46 @@ func (s *PredictableService) makeToolSmorgasbordResponse(inputTokens uint64) *ll
 		},
 	}
 }
+
+const wideTablesMarkdown = `Here are some wide tables to test rendering:
+
+## Narrow Table (should look fine)
+
+| Name | Age | City |
+|------|-----|------|
+| Alice | 30 | NYC |
+| Bob | 25 | LA |
+
+## Wide Table (many columns)
+
+| ID | First Name | Last Name | Email Address | Phone Number | Street Address | City | State | Zip Code | Country | Department | Job Title | Start Date | Salary | Manager |
+|----|-----------|-----------|--------------|-------------|---------------|------|-------|----------|---------|-----------|-----------|-----------|--------|--------|
+| 1 | Alexander | Montgomery | alexander.montgomery@longcompanyname.com | +1-555-0123 | 1234 Willowbrook Lane | San Francisco | California | 94102 | United States | Engineering | Senior Staff Engineer | 2019-03-15 | $185,000 | Sarah Johnson |
+| 2 | Elizabeth | Fitzgerald | elizabeth.fitzgerald@longcompanyname.com | +1-555-0456 | 5678 Meadowridge Drive | New York | New York | 10001 | United States | Product Management | Director of Product | 2018-07-22 | $210,000 | Michael Chen |
+| 3 | Christopher | Worthington | christopher.worthington@longcompanyname.com | +1-555-0789 | 9012 Thunderbird Road | Chicago | Illinois | 60601 | United States | Data Science | Principal Data Scientist | 2020-01-10 | $195,000 | Sarah Johnson |
+
+## Table with Code and Long Content
+
+| Function | Signature | Description | Example Usage | Return Type |
+|----------|-----------|-------------|---------------|-------------|
+| ` + "`processDataPipeline`" + ` | ` + "`func processDataPipeline(ctx context.Context, input []DataRecord, opts ...ProcessOption) (*PipelineResult, error)`" + ` | Processes a batch of data records through the configured pipeline stages | ` + "`result, err := processDataPipeline(ctx, records, WithParallelism(4), WithTimeout(30*time.Second))`" + ` | ` + "`*PipelineResult`" + ` |
+| ` + "`validateConfiguration`" + ` | ` + "`func validateConfiguration(cfg *Config, validators ...ConfigValidator) ([]ValidationError, error)`" + ` | Validates the configuration against all registered validators | ` + "`errs, err := validateConfiguration(cfg, RequiredFieldsValidator{}, RangeValidator{})`" + ` | ` + "`[]ValidationError`" + ` |
+
+## Table with Long Headers
+
+| Configuration Parameter Name | Default Value | Minimum Allowed Value | Maximum Allowed Value | Environment Variable Override | Description of Behavior |
+|------------------------------|---------------|----------------------|----------------------|------------------------------|-------------------------|
+| max_concurrent_connections | 100 | 1 | 10000 | APP_MAX_CONNECTIONS | Limits simultaneous connections |
+| request_timeout_seconds | 30 | 1 | 300 | APP_REQUEST_TIMEOUT | Per-request timeout |
+| background_worker_pool_size | 4 | 1 | 64 | APP_WORKER_POOL | Number of background workers |
+
+## Numeric Data Table
+
+| Metric | Q1 2024 | Q2 2024 | Q3 2024 | Q4 2024 | YoY Change | Trend |
+|--------|---------|---------|---------|---------|------------|-------|
+| Revenue ($M) | 12.45 | 13.82 | 15.01 | 16.73 | +34.4% | 📈 |
+| Active Users | 1,234,567 | 1,456,789 | 1,678,901 | 1,890,123 | +53.2% | 📈 |
+| Churn Rate | 4.2% | 3.8% | 3.5% | 3.1% | -26.2% | 📉 |
+| NPS Score | 42 | 45 | 48 | 52 | +23.8% | 📈 |
+
+That's a variety of table widths for testing!`
