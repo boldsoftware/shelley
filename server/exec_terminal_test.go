@@ -332,14 +332,11 @@ func TestExecTerminal_ControlCharacters(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	// Start tmux with -f /dev/null to use the default Ctrl-B prefix,
-	// and a unique socket to avoid interfering with other sessions.
-	tmpHome := t.TempDir()
-	socketName := "test-ctrl-" + t.Name()
-	cmd := "env HOME=" + tmpHome + " tmux -L " + socketName + " -f /dev/null new-session"
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/exec-ws?cmd=" + strings.ReplaceAll(cmd, " ", "+")
+	// Use cat -v which renders control characters as ^X notation.
+	// Sending Ctrl-B (\x02) should appear as "^B" in the output.
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/exec-ws?cmd=cat+-v"
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	conn, _, err := websocket.Dial(ctx, wsURL, nil)
@@ -353,54 +350,29 @@ func TestExecTerminal_ControlCharacters(t *testing.T) {
 		t.Fatalf("Failed to write init message: %v", err)
 	}
 
+	// Send Ctrl-B (\x02) followed by newline to flush the line buffer.
+	if err := wsjson.Write(ctx, conn, ExecMessage{Type: "input", Data: "\x02\n"}); err != nil {
+		t.Fatalf("Failed to write input: %v", err)
+	}
+
+	// Read output until we see ^B (cat -v notation for \x02).
 	var output strings.Builder
-	readUntil := func(substr string) bool {
-		deadline := time.Now().Add(5 * time.Second)
-		for time.Now().Before(deadline) {
-			readCtx, readCancel := context.WithTimeout(ctx, 200*time.Millisecond)
-			var msg ExecMessage
-			err := wsjson.Read(readCtx, conn, &msg)
-			readCancel()
-			if err != nil {
-				continue
-			}
-			if msg.Type == "output" {
-				data, _ := base64.StdEncoding.DecodeString(msg.Data)
-				output.Write(data)
-			}
-			if strings.Contains(output.String(), substr) {
-				return true
-			}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		readCtx, readCancel := context.WithTimeout(ctx, 200*time.Millisecond)
+		var msg ExecMessage
+		err := wsjson.Read(readCtx, conn, &msg)
+		readCancel()
+		if err != nil {
+			continue
 		}
-		return false
+		if msg.Type == "output" {
+			data, _ := base64.StdEncoding.DecodeString(msg.Data)
+			output.Write(data)
+		}
+		if strings.Contains(output.String(), "^B") {
+			return // success
+		}
 	}
-
-	if !readUntil("$") {
-		t.Fatalf("tmux did not start, output so far: %q", output.String())
-	}
-
-	// Clear output buffer so we can detect new content.
-	output.Reset()
-
-	// Send Ctrl-B (\x02) — the default tmux prefix key — then 'c' to
-	// create a new window. If Ctrl-B is delivered through the pty correctly,
-	// tmux creates a second window and the status bar changes from
-	// "0:bash*" to show two windows ("0:bash- 1:bash*").
-	if err := wsjson.Write(ctx, conn, ExecMessage{Type: "input", Data: "\x02"}); err != nil {
-		t.Fatalf("Failed to write Ctrl-B: %v", err)
-	}
-	time.Sleep(50 * time.Millisecond)
-	if err := wsjson.Write(ctx, conn, ExecMessage{Type: "input", Data: "c"}); err != nil {
-		t.Fatalf("Failed to write 'c': %v", err)
-	}
-
-	// The new window's status bar will show "1:bash*" as the active window.
-	if !readUntil("1:bash*") {
-		t.Errorf("Ctrl-B was not received by tmux; expected status bar with '1:bash*', got: %q", output.String())
-	}
-
-	// Clean up
-	_ = wsjson.Write(ctx, conn, ExecMessage{Type: "input", Data: "exit\n"})
-	time.Sleep(50 * time.Millisecond)
-	_ = wsjson.Write(ctx, conn, ExecMessage{Type: "input", Data: "exit\n"})
+	t.Errorf("Ctrl-B (\\x02) was not delivered through pty; cat -v output: %q", output.String())
 }
