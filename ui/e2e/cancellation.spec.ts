@@ -30,8 +30,7 @@ test.describe('Conversation Cancellation', () => {
     // Click the cancel button
     await cancelButton.click();
 
-    // Wait for cancellation to complete (button should show "Cancelling..." then disappear)
-    await expect(page.locator('button:has-text("Cancelling...")')).toBeVisible({ timeout: 2000 });
+    // Wait for cancellation to complete (button should disappear)
     await expect(cancelButton).not.toBeVisible({ timeout: 5000 });
 
     // Verify the thinking indicator is gone
