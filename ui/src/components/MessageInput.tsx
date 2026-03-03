@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useI18n } from "../i18n";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -70,6 +71,7 @@ function MessageInput({
   initialRows = 1,
   statusSlot,
 }: MessageInputProps) {
+  const { t } = useI18n();
   const [message, setMessage] = useState(() => {
     // Load persisted draft if persistKey is set
     if (persistKey) {
@@ -98,8 +100,8 @@ function MessageInput({
 
   // Responsive placeholder text
   const placeholderText = useMemo(
-    () => (isSmallScreen ? "Message..." : "Message, paste image, or attach file..."),
-    [isSmallScreen],
+    () => (isSmallScreen ? t("messagePlaceholderShort") : t("messagePlaceholder")),
+    [isSmallScreen, t],
   );
 
   // Track screen size for responsive placeholder
@@ -441,7 +443,7 @@ function MessageInput({
     >
       {isDraggingOver && (
         <div className="drag-overlay">
-          <div className="drag-overlay-content">Drop files here</div>
+          <div className="drag-overlay-content">{t("dropFilesHere")}</div>
         </div>
       )}
       <form onSubmit={handleSubmit} className="message-input-form">
@@ -498,7 +500,7 @@ function MessageInput({
             onClick={handleAttachClick}
             disabled={isDisabled}
             className="message-attach-btn"
-            aria-label="Attach file"
+            aria-label={t("attachFile")}
             data-testid="attach-button"
           >
             <svg
@@ -522,7 +524,7 @@ function MessageInput({
               onClick={toggleListening}
               disabled={isDisabled}
               className={`message-voice-btn ${isListening ? "listening" : ""}`}
-              aria-label={isListening ? "Stop voice input" : "Start voice input"}
+              aria-label={isListening ? t("stopVoiceInput") : t("startVoiceInput")}
               data-testid="voice-button"
             >
               {isListening ? (
@@ -540,7 +542,7 @@ function MessageInput({
             type="submit"
             disabled={!canSubmit}
             className="message-send-btn"
-            aria-label="Send message"
+            aria-label={t("sendMessage")}
             data-testid="send-button"
           >
             {isDisabled || submitting ? (

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Modal from "./Modal";
+import { useI18n } from "../i18n";
 import ConfigFieldInput from "./ConfigFieldInput";
 import { notificationChannelsApi, NotificationChannelAPI, ChannelTypeInfo } from "../services/api";
 import {
@@ -31,6 +32,7 @@ const emptyForm: FormData = {
 };
 
 function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
+  const { t } = useI18n();
   const [channels, setChannels] = useState<NotificationChannelAPI[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -202,7 +204,7 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title={editingChannelId ? "Edit Channel" : "Add Channel"}
+        title={editingChannelId ? t("editChannel") : t("addChannel")}
         className="modal-wide"
       >
         {error && (
@@ -213,7 +215,7 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
 
         {!editingChannelId && channelTypes.length > 1 && (
           <div className="form-group">
-            <label>Channel Type</label>
+            <label>{t("channelType")}</label>
             <div style={{ display: "flex", gap: "0.5rem" }}>
               {channelTypes.map((ct) => (
                 <button
@@ -231,7 +233,7 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
         )}
 
         <div className="form-group">
-          <label>Display Name</label>
+          <label>{t("displayName")}</label>
           <input
             className="form-input"
             value={form.display_name}
@@ -257,7 +259,7 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
 
         <div className="form-actions">
           <button className="btn btn-secondary" onClick={handleCancel}>
-            Cancel
+            {t("cancel")}
           </button>
           {editingChannelId && (
             <button
@@ -265,11 +267,11 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
               onClick={() => handleTest(editingChannelId)}
               disabled={testing}
             >
-              {testing ? "Testing..." : "Test"}
+              {testing ? t("testingButton") : t("testButton")}
             </button>
           )}
           <button className="btn btn-primary" onClick={handleSave} disabled={!canSave}>
-            {editingChannelId ? "Save" : "Add Channel"}
+            {editingChannelId ? t("save") : t("addChannel")}
           </button>
         </div>
       </Modal>
@@ -281,12 +283,12 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Notifications"
+      title={t("notifications")}
       className="modal-wide"
       titleRight={
         channelTypes.length > 0 ? (
           <button className="btn btn-primary btn-sm" onClick={handleAdd}>
-            + Add Channel
+            + {t("addChannel")}
           </button>
         ) : undefined
       }
@@ -325,13 +327,13 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
             }}
           >
             <div>
-              <div style={{ fontWeight: 500 }}>Browser Notifications</div>
+              <div style={{ fontWeight: 500 }}>{t("browserNotifications")}</div>
               <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
                 {browserPermission === "denied"
-                  ? "Blocked by browser"
+                  ? t("blockedByBrowser")
                   : browserPermission === "granted"
-                    ? "OS notifications when tab is hidden"
-                    : "Requires browser permission"}
+                    ? t("osNotificationsWhenHidden")
+                    : t("requiresBrowserPermission")}
               </div>
             </div>
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
@@ -356,11 +358,13 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
                     setBrowserEnabled(newVal);
                   }}
                 >
-                  {browserEnabled ? "On" : "Off"}
+                  {browserEnabled ? t("on") : t("off")}
                 </button>
               )}
               {browserPermission === "denied" && (
-                <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Denied</span>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                  {t("denied")}
+                </span>
               )}
             </div>
           </div>
@@ -378,7 +382,7 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
           }}
         >
           <div>
-            <div style={{ fontWeight: 500 }}>Favicon</div>
+            <div style={{ fontWeight: 500 }}>{t("faviconBadge")}</div>
             <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
               Tab icon changes when agent finishes
             </div>
@@ -391,7 +395,7 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
               setFaviconEnabled(newVal);
             }}
           >
-            {faviconEnabled ? "On" : "Off"}
+            {faviconEnabled ? t("on") : t("off")}
           </button>
         </div>
       </div>
@@ -417,7 +421,7 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
 
         {!loading && channels.length === 0 && (
           <div style={{ padding: "1rem", color: "var(--text-secondary)", textAlign: "center" }}>
-            No server channels configured.
+            {t("noServerChannelsConfigured")}
             {channelTypes.length > 0 && (
               <>
                 {" "}
@@ -433,7 +437,7 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
                     font: "inherit",
                   }}
                 >
-                  Add one
+                  {t("addOne")}
                 </button>
               </>
             )}
@@ -475,10 +479,10 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
                 className={`btn btn-sm ${ch.enabled ? "btn-primary" : "btn-secondary"}`}
                 onClick={() => handleToggleEnabled(ch)}
               >
-                {ch.enabled ? "On" : "Off"}
+                {ch.enabled ? t("on") : t("off")}
               </button>
               <button className="btn btn-secondary btn-sm" onClick={() => handleEdit(ch)}>
-                Edit
+                {t("edit")}
               </button>
               <button
                 className="btn btn-secondary btn-sm"

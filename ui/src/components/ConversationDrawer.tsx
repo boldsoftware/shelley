@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Conversation, ConversationWithState } from "../types";
 import { api } from "../services/api";
+import { useI18n } from "../i18n";
 
 type GroupBy = "none" | "cwd" | "git_repo";
 
@@ -39,6 +40,7 @@ function ConversationDrawer({
   subagentStateUpdate,
   showActiveTrigger,
 }: ConversationDrawerProps) {
+  const { t } = useI18n();
   const [showArchived, setShowArchived] = useState(false);
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [loadingArchived, setLoadingArchived] = useState(false);
@@ -202,9 +204,9 @@ function ConversationDrawer({
     if (diffDays === 0) {
       return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     } else if (diffDays === 1) {
-      return "Yesterday";
+      return t("yesterday");
     } else if (diffDays < 7) {
-      return `${diffDays} days ago`;
+      return `${diffDays} ${t("daysAgo")}`;
     } else {
       return date.toLocaleDateString();
     }
@@ -258,7 +260,7 @@ function ConversationDrawer({
 
   const handleDelete = async (e: React.MouseEvent, conversationId: string) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to permanently delete this conversation?")) {
+    if (!confirm(t("confirmDelete"))) {
       return;
     }
     try {
@@ -301,7 +303,7 @@ function ConversationDrawer({
       (c) => c.slug === sanitized && c.conversation_id !== conversationId,
     );
     if (isDuplicate) {
-      alert("A conversation with this name already exists");
+      alert(t("duplicateName"));
       return;
     }
 
@@ -404,11 +406,11 @@ function ConversationDrawer({
     );
 
     if (ungrouped.length > 0) {
-      sorted.push(["__ungrouped__", { label: "Other", conversations: ungrouped }]);
+      sorted.push(["__ungrouped__", { label: t("other"), conversations: ungrouped }]);
     }
 
     return sorted;
-  }, [conversations, groupBy, showArchived]);
+  }, [conversations, groupBy, showArchived, t]);
 
   const renderConversationItem = (conversation: Conversation | ConversationWithState) => {
     const convState = conversation as ConversationWithState;
@@ -463,7 +465,7 @@ function ConversationDrawer({
               {(conversation as ConversationWithState).working && (
                 <span
                   className="working-indicator"
-                  title="Agent is working"
+                  title={t("agentIsWorking")}
                   style={{
                     width: "8px",
                     height: "8px",
@@ -486,8 +488,8 @@ function ConversationDrawer({
                 <button
                   onClick={(e) => toggleSubagents(e, conversation.conversation_id)}
                   className="subagent-count-badge"
-                  title={isExpanded ? "Hide subagents" : "Show subagents"}
-                  aria-label={isExpanded ? "Collapse subagents" : "Expand subagents"}
+                  title={isExpanded ? t("hideSubagents") : t("showSubagents")}
+                  aria-label={isExpanded ? t("collapseSubagents") : t("expandSubagents")}
                 >
                   <span style={{ fontWeight: 500 }}>{subagentCount}</span>
                   <svg
@@ -518,8 +520,8 @@ function ConversationDrawer({
                   <button
                     onClick={(e) => handleStartRename(e, conversation)}
                     className="btn-icon-sm"
-                    title="Rename"
-                    aria-label="Rename conversation"
+                    title={t("rename")}
+                    aria-label={t("rename")}
                   >
                     <svg
                       fill="none"
@@ -538,8 +540,8 @@ function ConversationDrawer({
                   <button
                     onClick={(e) => handleArchive(e, conversation.conversation_id)}
                     className="btn-icon-sm"
-                    title="Archive"
-                    aria-label="Archive conversation"
+                    title={t("archive")}
+                    aria-label={t("archive")}
                   >
                     <svg
                       fill="none"
@@ -610,8 +612,8 @@ function ConversationDrawer({
               <button
                 onClick={(e) => handleUnarchive(e, conversation.conversation_id)}
                 className="btn-icon-sm"
-                title="Restore"
-                aria-label="Restore conversation"
+                title={t("restore")}
+                aria-label={t("restore")}
               >
                 <svg
                   fill="none"
@@ -630,8 +632,8 @@ function ConversationDrawer({
               <button
                 onClick={(e) => handleDelete(e, conversation.conversation_id)}
                 className="btn-icon-sm btn-danger"
-                title="Delete permanently"
-                aria-label="Delete conversation"
+                title={t("deletePermanently")}
+                aria-label={t("delete_")}
               >
                 <svg
                   fill="none"
@@ -675,7 +677,7 @@ function ConversationDrawer({
                       {sub.working && (
                         <span
                           className="working-indicator"
-                          title="Subagent is working"
+                          title={t("subagentIsWorking")}
                           style={{
                             width: "6px",
                             height: "6px",
@@ -708,7 +710,7 @@ function ConversationDrawer({
       <div className={`drawer ${isOpen ? "open" : ""} ${isCollapsed ? "collapsed" : ""}`}>
         {/* Header */}
         <div className="drawer-header">
-          <h2 className="drawer-title">{showArchived ? "Archived" : "Conversations"}</h2>
+          <h2 className="drawer-title">{showArchived ? t("archived") : t("conversations")}</h2>
           <div className="drawer-header-actions">
             {/* Group by button */}
             {!showArchived && (
@@ -716,8 +718,8 @@ function ConversationDrawer({
                 <button
                   onClick={() => setGroupMenuOpen((v) => !v)}
                   className={`btn-icon${groupBy !== "none" ? " group-by-active" : ""}`}
-                  aria-label="Group conversations"
-                  title="Group conversations"
+                  aria-label={t("groupConversations")}
+                  title={t("groupConversations")}
                 >
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -732,9 +734,9 @@ function ConversationDrawer({
                   <div className="group-by-menu">
                     {(["none", "cwd", "git_repo"] as GroupBy[]).map((value) => {
                       const labels: Record<GroupBy, string> = {
-                        none: "No grouping",
-                        cwd: "Directory",
-                        git_repo: "Git repo",
+                        none: t("noGrouping"),
+                        cwd: t("directory"),
+                        git_repo: t("gitRepo"),
                       };
                       return (
                         <button
@@ -758,7 +760,7 @@ function ConversationDrawer({
               <button
                 onClick={onNewConversation}
                 className="btn-icon hide-on-desktop"
-                aria-label="New conversation"
+                aria-label={t("newConversation")}
               >
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -773,7 +775,7 @@ function ConversationDrawer({
             <button
               onClick={onClose}
               className="btn-icon hide-on-desktop"
-              aria-label="Close conversations"
+              aria-label={t("closeConversations")}
             >
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -788,8 +790,8 @@ function ConversationDrawer({
             <button
               onClick={onToggleCollapse}
               className="btn-icon show-on-desktop-only"
-              aria-label="Collapse sidebar"
-              title="Collapse sidebar"
+              aria-label={t("collapseSidebar")}
+              title={t("collapseSidebar")}
             >
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -807,14 +809,14 @@ function ConversationDrawer({
         <div className="drawer-body scrollable">
           {loadingArchived && showArchived ? (
             <div style={{ padding: "1rem", textAlign: "center" }} className="text-secondary">
-              <p>Loading...</p>
+              <p>{t("loading")}</p>
             </div>
           ) : displayedConversations.length === 0 ? (
             <div style={{ padding: "1rem", textAlign: "center" }} className="text-secondary">
-              <p>{showArchived ? "No archived conversations" : "No conversations yet"}</p>
+              <p>{showArchived ? t("noArchivedConversations") : t("noConversationsYet")}</p>
               {!showArchived && (
                 <p className="text-sm" style={{ marginTop: "0.25rem" }}>
-                  Start a new conversation to get started
+                  {t("startNewToGetStarted")}
                 </p>
               )}
             </div>
@@ -896,7 +898,7 @@ function ConversationDrawer({
                 />
               )}
             </svg>
-            <span>{showArchived ? "Back to Conversations" : "View Archived"}</span>
+            <span>{showArchived ? t("backToConversations") : t("viewArchived")}</span>
           </button>
         </div>
       </div>

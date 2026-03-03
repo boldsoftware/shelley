@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { ConversationWithState } from "../types";
 import { api } from "../services/api";
 import { useMarkdown } from "../contexts/MarkdownContext";
+import { useI18n } from "../i18n";
 
 interface CommandItem {
   id: string;
@@ -92,6 +93,7 @@ function CommandPalette({
   const [isSearching, setIsSearching] = useState(false);
   const [isCreatingWorktree, setIsCreatingWorktree] = useState(false);
   const { markdownMode, setMarkdownMode } = useMarkdown();
+  const { t, locale, setLocale } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<number | null>(null);
@@ -145,8 +147,8 @@ function CommandPalette({
     items.push({
       id: "new-conversation",
       type: "action",
-      title: "New Conversation",
-      subtitle: "Start a new conversation",
+      title: t("newConversationAction"),
+      subtitle: t("startNewConversation"),
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -162,8 +164,8 @@ function CommandPalette({
     items.push({
       id: "next-conversation",
       type: "action",
-      title: "Next Conversation",
-      subtitle: "Switch to the next conversation",
+      title: t("nextConversation"),
+      subtitle: t("switchToNext"),
       shortcut: "Alt+↓",
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
@@ -185,8 +187,8 @@ function CommandPalette({
     items.push({
       id: "previous-conversation",
       type: "action",
-      title: "Previous Conversation",
-      subtitle: "Switch to the previous conversation",
+      title: t("previousConversation"),
+      subtitle: t("switchToPrevious"),
       shortcut: "Alt+↑",
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
@@ -208,8 +210,8 @@ function CommandPalette({
     items.push({
       id: "next-user-message",
       type: "action",
-      title: "Next User Message",
-      subtitle: "Jump to the next message you sent",
+      title: t("nextUserMessage"),
+      subtitle: t("jumpToNextMessage"),
       shortcut: "Ctrl+M, N",
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
@@ -231,8 +233,8 @@ function CommandPalette({
     items.push({
       id: "previous-user-message",
       type: "action",
-      title: "Previous User Message",
-      subtitle: "Jump to the previous message you sent",
+      title: t("previousUserMessage"),
+      subtitle: t("jumpToPreviousMessage"),
       shortcut: "Ctrl+M, P",
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
@@ -255,8 +257,8 @@ function CommandPalette({
       items.push({
         id: "open-diffs",
         type: "action",
-        title: "View Diffs",
-        subtitle: "Open the git diff viewer",
+        title: t("viewDiffs"),
+        subtitle: t("openGitDiffViewer"),
         icon: (
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
             <path
@@ -278,8 +280,8 @@ function CommandPalette({
     items.push({
       id: "manage-models",
       type: "action",
-      title: "Add/Remove Models/Keys",
-      subtitle: "Configure custom AI models and API keys",
+      title: t("addRemoveModelsKeys"),
+      subtitle: t("configureModels"),
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
           <path
@@ -316,8 +318,8 @@ function CommandPalette({
     items.push({
       id: "notification-settings",
       type: "action",
-      title: "Notification Settings",
-      subtitle: "Configure notification channels",
+      title: t("notificationSettings"),
+      subtitle: t("configureNotifications"),
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
           <path
@@ -340,16 +342,16 @@ function CommandPalette({
       { title: string; subtitle: string; next: "off" | "agent" | "all" }
     > = {
       off: {
-        title: "Enable Markdown (Agent)",
-        subtitle: "Render markdown for agent messages",
+        title: t("enableMarkdownAgent"),
+        subtitle: t("renderMarkdownAgent"),
         next: "agent",
       },
       agent: {
-        title: "Enable Markdown (All)",
-        subtitle: "Render markdown for all messages",
+        title: t("enableMarkdownAll"),
+        subtitle: t("renderMarkdownAll"),
         next: "all",
       },
-      all: { title: "Disable Markdown", subtitle: "Show all messages as plain text", next: "off" },
+      all: { title: t("disableMarkdown"), subtitle: t("showPlainText"), next: "off" },
     };
     const md = mdLabels[markdownMode];
     items.push({
@@ -379,8 +381,8 @@ function CommandPalette({
       items.push({
         id: "archive-conversation",
         type: "action",
-        title: "Archive Conversation",
-        subtitle: "Archive the current conversation",
+        title: t("archiveConversationAction"),
+        subtitle: t("archiveCurrentConversation"),
         icon: (
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
             <path
@@ -404,7 +406,7 @@ function CommandPalette({
       items.push({
         id: "new-in-repo-root",
         type: "action",
-        title: "New Conversation in Main Repo",
+        title: t("newConversationInMainRepo"),
         subtitle: currentConversation.git_worktree_root,
         icon: (
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
@@ -429,8 +431,8 @@ function CommandPalette({
       items.push({
         id: "new-in-worktree",
         type: "action",
-        title: "New Conversation in New Worktree",
-        subtitle: "Create a new git worktree and start a conversation there",
+        title: t("newConversationInNewWorktree"),
+        subtitle: t("createNewWorktree"),
         icon: (
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
             <path
@@ -460,8 +462,58 @@ function CommandPalette({
       });
     }
 
+    // Language switcher
+    const localeNames: Record<string, string> = {
+      en: t("english"),
+      ja: t("japanese"),
+      fr: t("french"),
+      ru: t("russian"),
+      es: t("spanish"),
+    };
+    const localeOrder: Array<"en" | "ja" | "fr" | "ru" | "es"> = ["en", "ja", "fr", "ru", "es"];
+    const currentIndex = localeOrder.indexOf(locale);
+    const nextLocale = localeOrder[(currentIndex + 1) % localeOrder.length];
+    items.push({
+      id: "switch-language",
+      type: "action",
+      title: `${t("language")}: ${localeNames[locale]}`,
+      subtitle: `${t("switchLanguage")} → ${localeNames[nextLocale]}`,
+      icon: (
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+          />
+        </svg>
+      ),
+      action: () => {
+        setLocale(nextLocale);
+        onClose();
+      },
+      keywords: [
+        "language",
+        "locale",
+        "translate",
+        "i18n",
+        "english",
+        "japanese",
+        "french",
+        "russian",
+        "spanish",
+        "日本語",
+        "français",
+        "русский",
+        "español",
+      ],
+    });
+
     return items;
   }, [
+    locale,
+    setLocale,
+    t,
     onNewConversation,
     onNextConversation,
     onPreviousConversation,
@@ -606,7 +658,7 @@ function CommandPalette({
             ref={inputRef}
             type="text"
             className="command-palette-input"
-            placeholder="Search conversations or actions..."
+            placeholder={t("searchPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -620,7 +672,7 @@ function CommandPalette({
         <div className="command-palette-list" ref={listRef}>
           {displayItems.length === 0 ? (
             <div className="command-palette-empty">
-              {isSearching ? "Searching..." : "No results found"}
+              {isSearching ? t("searching") : t("noResults")}
             </div>
           ) : (
             displayItems.map((item, index) => (
@@ -644,7 +696,7 @@ function CommandPalette({
                   </div>
                 )}
                 {item.type === "action" && !item.shortcut && (
-                  <div className="command-palette-item-badge">Action</div>
+                  <div className="command-palette-item-badge">{t("action")}</div>
                 )}
               </div>
             ))
@@ -654,13 +706,13 @@ function CommandPalette({
         <div className="command-palette-footer">
           <span>
             <kbd>↑</kbd>
-            <kbd>↓</kbd> to navigate
+            <kbd>↓</kbd> {t("toNavigate")}
           </span>
           <span>
-            <kbd>↵</kbd> to select
+            <kbd>↵</kbd> {t("toSelect")}
           </span>
           <span>
-            <kbd>esc</kbd> to close
+            <kbd>esc</kbd> {t("toClose")}
           </span>
         </div>
       </div>

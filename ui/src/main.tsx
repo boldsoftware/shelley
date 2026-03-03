@@ -4,6 +4,7 @@ import App from "./App";
 import { initializeTheme } from "./services/theme";
 import { initializeNotifications } from "./services/notifications";
 import { MarkdownProvider } from "./contexts/MarkdownContext";
+import { I18nProvider } from "./i18n";
 
 // Apply theme before render to avoid flash
 initializeTheme();
@@ -17,7 +18,9 @@ if (!rootContainer) throw new Error("Root container not found");
 
 const root = createRoot(rootContainer);
 root.render(
-  <MarkdownProvider>
-    <App />
-  </MarkdownProvider>,
+  <I18nProvider>
+    <MarkdownProvider>
+      <App />
+    </MarkdownProvider>
+  </I18nProvider>,
 );

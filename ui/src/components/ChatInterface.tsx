@@ -10,6 +10,7 @@ import {
 import { api } from "../services/api";
 import { ThemeMode, getStoredTheme, setStoredTheme, applyTheme } from "../services/theme";
 import { useMarkdown } from "../contexts/MarkdownContext";
+import { useI18n } from "../i18n";
 import { setFaviconStatus } from "../services/favicon";
 import {
   handleNotificationEvent,
@@ -641,6 +642,7 @@ function ChatInterface({
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(getStoredTheme);
   const { markdownMode, setMarkdownMode } = useMarkdown();
+  const { t, locale, setLocale } = useI18n();
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
 
   useEffect(() => {
@@ -1535,41 +1537,46 @@ function ChatInterface({
         <div className="empty-state">
           <div className="empty-state-content">
             <p className="text-base" style={{ marginBottom: "1rem", lineHeight: "1.6" }}>
-              Shelley is an agent, running on <strong>{hostname}</strong>. You can ask Shelley to do
-              stuff. If you build a web site with Shelley, you can use exe.dev&apos;s proxy features
-              (see{" "}
-              <a
-                href="https://exe.dev/docs/proxy"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: "var(--blue-text)", textDecoration: "underline" }}
-              >
-                docs
-              </a>
-              ) to visit it over the web at{" "}
-              <a
-                href={proxyURL}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: "var(--blue-text)", textDecoration: "underline" }}
-              >
-                {proxyURL}
-              </a>
-              .
+              {t("welcomeMessage")
+                .split(/(\{hostname\}|\{docsLink\}|\{proxyLink\})/)
+                .map((part, i) => {
+                  if (part === "{hostname}") return <strong key={i}>{hostname}</strong>;
+                  if (part === "{docsLink}")
+                    return (
+                      <a
+                        key={i}
+                        href="https://exe.dev/docs/proxy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "var(--blue-text)", textDecoration: "underline" }}
+                      >
+                        docs
+                      </a>
+                    );
+                  if (part === "{proxyLink}")
+                    return (
+                      <a
+                        key={i}
+                        href={proxyURL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "var(--blue-text)", textDecoration: "underline" }}
+                      >
+                        {proxyURL}
+                      </a>
+                    );
+                  return part;
+                })}
             </p>
             {models.length === 0 ? (
               <div className="add-model-hint">
                 <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                  No AI models configured. Press <kbd>Ctrl</kbd>
-                  <span>+</span>
-                  <kbd>K</kbd> or <kbd>⌘</kbd>
-                  <span>+</span>
-                  <kbd>K</kbd> to add a model.
+                  {t("noModelsConfiguredHint")}
                 </p>
               </div>
             ) : (
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                Send a message to start the conversation.
+                {t("sendMessageToStart")}
               </p>
             )}
           </div>
@@ -1692,7 +1699,7 @@ function ChatInterface({
           className="status-field status-field-model"
           title="AI model to use for this conversation"
         >
-          <span className="status-field-label">Model:</span>
+          <span className="status-field-label">{t("modelLabel")}</span>
           <ModelPicker
             models={models}
             selectedModel={selectedModel}
@@ -1705,7 +1712,7 @@ function ChatInterface({
           className={`status-field status-field-cwd${cwdError ? " status-field-error" : ""}`}
           title={cwdError || "Working directory for file operations"}
         >
-          <span className="status-field-label">Dir:</span>
+          <span className="status-field-label">{t("dirLabel")}</span>
           <button
             className={`status-chip${cwdError ? " status-chip-error" : ""}`}
             onClick={() => setShowDirectoryPicker(true)}
@@ -1744,7 +1751,7 @@ function ChatInterface({
           <button
             onClick={onOpenDrawer}
             className="btn-icon hide-on-desktop"
-            aria-label="Open conversations"
+            aria-label={t("openConversations")}
           >
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -1761,8 +1768,8 @@ function ChatInterface({
             <button
               onClick={onToggleDrawerCollapse}
               className="btn-icon show-on-desktop-only"
-              aria-label="Expand sidebar"
-              title="Expand sidebar"
+              aria-label={t("expandSidebar")}
+              title={t("expandSidebar")}
             >
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -1782,7 +1789,7 @@ function ChatInterface({
 
         <div className="header-actions">
           {/* Green + icon in circle for new conversation */}
-          <button onClick={onNewConversation} className="btn-new" aria-label="New conversation">
+          <button onClick={onNewConversation} className="btn-new" aria-label={t("newConversation")}>
             <svg
               fill="none"
               stroke="currentColor"
@@ -1803,7 +1810,7 @@ function ChatInterface({
             <button
               onClick={() => setShowOverflowMenu(!showOverflowMenu)}
               className="btn-icon"
-              aria-label="More options"
+              aria-label={t("moreOptions")}
             >
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -1840,7 +1847,7 @@ function ChatInterface({
                         d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                       />
                     </svg>
-                    Diffs
+                    {t("diffs")}
                   </button>
                 )}
                 {terminalURL && (
@@ -1866,7 +1873,7 @@ function ChatInterface({
                         d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                       />
                     </svg>
-                    Terminal
+                    {t("terminal")}
                   </button>
                 )}
                 {links.map((link, index) => (
@@ -1925,7 +1932,7 @@ function ChatInterface({
                           d="M5 8h14M8 8V6a4 4 0 118 0v2m-9 0v10a2 2 0 002 2h6a2 2 0 002-2V8"
                         />
                       </svg>
-                      Archive Conversation
+                      {t("archiveConversation")}
                     </button>
                   </>
                 )}
@@ -1952,7 +1959,7 @@ function ChatInterface({
                       d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                     />
                   </svg>
-                  Check for New Version
+                  {t("checkForNewVersion")}
                   {hasUpdate && <span className="version-menu-dot" />}
                 </button>
 
@@ -1966,7 +1973,7 @@ function ChatInterface({
                       applyTheme("system");
                     }}
                     className={`theme-toggle-btn${themeMode === "system" ? " theme-toggle-btn-selected" : ""}`}
-                    title="System"
+                    title={t("system")}
                   >
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
@@ -1984,7 +1991,7 @@ function ChatInterface({
                       applyTheme("light");
                     }}
                     className={`theme-toggle-btn${themeMode === "light" ? " theme-toggle-btn-selected" : ""}`}
-                    title="Light"
+                    title={t("light")}
                   >
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
@@ -2002,7 +2009,7 @@ function ChatInterface({
                       applyTheme("dark");
                     }}
                     className={`theme-toggle-btn${themeMode === "dark" ? " theme-toggle-btn-selected" : ""}`}
-                    title="Dark"
+                    title={t("dark")}
                   >
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
@@ -2031,8 +2038,8 @@ function ChatInterface({
                         className={`theme-toggle-btn${browserNotifsEnabled ? " theme-toggle-btn-selected" : ""}`}
                         title={
                           getBrowserNotificationState() === "denied"
-                            ? "Blocked by browser"
-                            : "Enable notifications"
+                            ? t("blockedByBrowser")
+                            : t("enableNotifications")
                         }
                         disabled={getBrowserNotificationState() === "denied"}
                       >
@@ -2052,7 +2059,7 @@ function ChatInterface({
                           setBrowserNotifsEnabled(false);
                         }}
                         className={`theme-toggle-btn${!browserNotifsEnabled ? " theme-toggle-btn-selected" : ""}`}
-                        title="Disable notifications"
+                        title={t("disableNotifications")}
                       >
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path
@@ -2070,29 +2077,66 @@ function ChatInterface({
                 {/* Markdown rendering toggle */}
                 <div className="overflow-menu-divider" />
                 <div className="md-toggle-row">
-                  <div className="md-toggle-label">Markdown</div>
+                  <div className="md-toggle-label">{t("markdown")}</div>
                   <div className="md-toggle-buttons">
                     <button
                       onClick={() => setMarkdownMode("off")}
                       className={`md-toggle-btn${markdownMode === "off" ? " md-toggle-btn-selected" : ""}`}
-                      title="Plain text"
+                      title={t("showPlainText")}
                     >
-                      Off
+                      {t("off")}
                     </button>
                     <button
                       onClick={() => setMarkdownMode("agent")}
                       className={`md-toggle-btn${markdownMode === "agent" ? " md-toggle-btn-selected" : ""}`}
-                      title="Render markdown for agent messages"
+                      title={t("renderMarkdownAgent")}
                     >
-                      Agent
+                      {t("agent")}
                     </button>
                     <button
                       onClick={() => setMarkdownMode("all")}
                       className={`md-toggle-btn${markdownMode === "all" ? " md-toggle-btn-selected" : ""}`}
-                      title="Render markdown for all messages"
+                      title={t("renderMarkdownAll")}
                     >
-                      All
+                      {t("all")}
                     </button>
+                  </div>
+                </div>
+
+                {/* Language selector */}
+                <div className="overflow-menu-divider" />
+                <div className="md-toggle-row">
+                  <div className="md-toggle-label">{t("language")}</div>
+                  <div className="md-toggle-buttons">
+                    {(["en", "ja", "fr", "ru", "es"] as const).map((loc) => {
+                      const labels: Record<string, string> = {
+                        en: "EN",
+                        ja: "JA",
+                        fr: "FR",
+                        ru: "RU",
+                        es: "ES",
+                      };
+                      return (
+                        <button
+                          key={loc}
+                          onClick={() => setLocale(loc)}
+                          className={`md-toggle-btn${locale === loc ? " md-toggle-btn-selected" : ""}`}
+                          title={t(
+                            loc === "en"
+                              ? "english"
+                              : loc === "ja"
+                                ? "japanese"
+                                : loc === "fr"
+                                  ? "french"
+                                  : loc === "ru"
+                                    ? "russian"
+                                    : "spanish",
+                          )}
+                        >
+                          {labels[loc]}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

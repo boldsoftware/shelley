@@ -9,6 +9,7 @@ import ModelsModal from "./components/ModelsModal";
 import NotificationsModal from "./components/NotificationsModal";
 import { Conversation, ConversationWithState, ConversationListUpdate } from "./types";
 import { api } from "./services/api";
+import { useI18n } from "./i18n";
 
 // Worker pool configuration for @pierre/diffs syntax highlighting
 // Workers run tokenization off the main thread for better performance with large diffs
@@ -102,6 +103,7 @@ function updatePageTitle(conversation: Conversation | undefined) {
 }
 
 function App() {
+  const { t } = useI18n();
   const [conversations, setConversations] = useState<ConversationWithState[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   // Track viewed conversation separately (needed for subagents which aren't in main list)
@@ -526,7 +528,7 @@ function App() {
       <div className="loading-container">
         <div className="loading-content">
           <div className="spinner" style={{ margin: "0 auto 1rem" }}></div>
-          <p className="text-secondary">Loading...</p>
+          <p className="text-secondary">{t("loading")}</p>
         </div>
       </div>
     );
@@ -540,7 +542,7 @@ function App() {
             {error}
           </p>
           <button onClick={loadConversations} className="btn-primary">
-            Retry
+            {t("retry")}
           </button>
         </div>
       </div>

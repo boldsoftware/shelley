@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Modal from "./Modal";
+import { useI18n } from "../i18n";
 import {
   customModelsApi,
   CustomModel,
@@ -74,6 +75,7 @@ const emptyForm: FormData = {
 };
 
 function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
+  const { t } = useI18n();
   const [models, setModels] = useState<CustomModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -145,11 +147,11 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
   const handleTest = async () => {
     // Need model_name always, and either api_key or editing an existing model
     if (!form.model_name) {
-      setTestResult({ success: false, message: "Model name is required" });
+      setTestResult({ success: false, message: t("modelNameRequired") });
       return;
     }
     if (!form.api_key && !editingModelId) {
-      setTestResult({ success: false, message: "API key is required" });
+      setTestResult({ success: false, message: t("apiKeyRequired") });
       return;
     }
 
@@ -265,7 +267,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
 
   const headerRight = !showForm ? (
     <button className="btn-primary btn-sm" onClick={handleAddNew}>
-      + Add Model
+      + {t("addModel")}
     </button>
   ) : null;
 
@@ -273,7 +275,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Manage Models"
+      title={t("manageModels")}
       titleRight={headerRight}
       className="modal-wide"
     >
@@ -290,16 +292,16 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
         {loading ? (
           <div className="models-loading">
             <div className="spinner"></div>
-            <span>Loading models...</span>
+            <span>{t("loadingModels")}</span>
           </div>
         ) : showForm ? (
           // Add/Edit form
           <div className="model-form">
-            <h3>{editingModelId ? "Edit Model" : "Add Model"}</h3>
+            <h3>{editingModelId ? t("editModel") : t("addModel")}</h3>
 
             {/* Provider Selection */}
             <div className="form-group">
-              <label>Provider / API Format</label>
+              <label>{t("providerApiFormat")}</label>
               <div className="provider-buttons">
                 {(["anthropic", "openai", "openai-responses", "gemini"] as ProviderType[]).map(
                   (p) => (
@@ -318,21 +320,21 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
 
             {/* Endpoint Selection */}
             <div className="form-group">
-              <label>Endpoint</label>
+              <label>{t("endpoint")}</label>
               <div className="endpoint-toggle">
                 <button
                   type="button"
                   className={`toggle-btn ${!form.endpoint_custom ? "selected" : ""}`}
                   onClick={() => handleEndpointModeChange(false)}
                 >
-                  Default
+                  {t("defaultEndpoint")}
                 </button>
                 <button
                   type="button"
                   className={`toggle-btn ${form.endpoint_custom ? "selected" : ""}`}
                   onClick={() => handleEndpointModeChange(true)}
                 >
-                  Custom
+                  {t("customEndpoint")}
                 </button>
               </div>
               {form.endpoint_custom ? (
@@ -350,7 +352,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
 
             {/* Model Name with Presets */}
             <div className="form-group">
-              <label>Model</label>
+              <label>{t("model")}</label>
               <div className="model-presets">
                 {DEFAULT_MODELS[form.provider_type].map((preset) => (
                   <button
@@ -374,24 +376,24 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
 
             {/* Display Name */}
             <div className="form-group">
-              <label>Display Name</label>
+              <label>{t("displayName")}</label>
               <input
                 type="text"
                 value={form.display_name}
                 onChange={(e) => setForm((prev) => ({ ...prev, display_name: e.target.value }))}
-                placeholder="Name shown in model selector"
+                placeholder={t("nameShownInSelector")}
                 className="form-input"
               />
             </div>
 
             {/* API Key */}
             <div className="form-group">
-              <label>API Key</label>
+              <label>{t("apiKey")}</label>
               <input
                 type="text"
                 value={form.api_key}
                 onChange={(e) => setForm((prev) => ({ ...prev, api_key: e.target.value }))}
-                placeholder="Enter API key"
+                placeholder={t("enterApiKey")}
                 className="form-input"
                 autoComplete="off"
               />
@@ -399,7 +401,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
 
             {/* Max Tokens */}
             <div className="form-group">
-              <label>Max Context Tokens</label>
+              <label>{t("maxContextTokens")}</label>
               <input
                 type="number"
                 value={form.max_tokens}
@@ -413,7 +415,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
             {/* Tags */}
             <div className="form-group">
               <label>
-                Tags
+                {t("tags")}
                 <span
                   className="info-icon-wrapper"
                   onClick={(e) => {
@@ -438,20 +440,14 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                       />
                     </svg>
                   </span>
-                  {showTagsTooltip && (
-                    <span className="info-tooltip">
-                      Comma-separated tags for this model. Use "slug" to mark this model for
-                      generating conversation titles. If no model has the "slug" tag, the
-                      conversation's model will be used.
-                    </span>
-                  )}
+                  {showTagsTooltip && <span className="info-tooltip">{t("tagsTooltip")}</span>}
                 </span>
               </label>
               <input
                 type="text"
                 value={form.tags}
                 onChange={(e) => setForm((prev) => ({ ...prev, tags: e.target.value }))}
-                placeholder="comma-separated, e.g., slug, cheap"
+                placeholder={t("tagsPlaceholder")}
                 className="form-input"
               />
             </div>
@@ -466,7 +462,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
             {/* Form Actions */}
             <div className="form-actions">
               <button type="button" className="btn-secondary" onClick={handleCancel}>
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 type="button"
@@ -481,7 +477,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                       : ""
                 }
               >
-                {testing ? "Testing..." : "Test"}
+                {testing ? t("testingButton") : t("testButton")}
               </button>
               <button
                 type="button"
@@ -489,7 +485,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                 onClick={handleSave}
                 disabled={!form.display_name || !form.api_key || !form.model_name}
               >
-                {editingModelId ? "Save" : "Add Model"}
+                {editingModelId ? t("save") : t("addModel")}
               </button>
             </div>
           </div>
@@ -531,7 +527,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                       <button
                         className="btn-icon"
                         onClick={() => handleDuplicate(model)}
-                        title="Duplicate"
+                        title={t("duplicate")}
                       >
                         <svg
                           fill="none"
@@ -548,7 +544,11 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                           />
                         </svg>
                       </button>
-                      <button className="btn-icon" onClick={() => handleEdit(model)} title="Edit">
+                      <button
+                        className="btn-icon"
+                        onClick={() => handleEdit(model)}
+                        title={t("editModel")}
+                      >
                         <svg
                           fill="none"
                           stroke="currentColor"
@@ -567,7 +567,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                       <button
                         className="btn-icon btn-danger"
                         onClick={() => handleDelete(model.model_id)}
-                        title="Delete"
+                        title={t("delete_")}
                       >
                         <svg
                           fill="none"
@@ -596,11 +596,8 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
               {/* Empty state when no models at all */}
               {builtInModels.length === 0 && models.length === 0 && (
                 <div className="models-empty">
-                  <p>No models configured.</p>
-                  <p className="models-empty-hint">
-                    Set environment variables like ANTHROPIC_API_KEY, or use the -gateway flag, or
-                    add a custom model below.
-                  </p>
+                  <p>{t("noModelsConfigured")}</p>
+                  <p className="models-empty-hint">{t("noModelsHint")}</p>
                 </div>
               )}
             </div>
