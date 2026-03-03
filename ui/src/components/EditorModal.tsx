@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { useEscapeClose } from "./useEscapeClose";
 
 type Editor = "vscode" | "cursor" | "zed";
 
@@ -36,6 +37,8 @@ function EditorModal({ isOpen, onClose, hostname, cwd }: EditorModalProps) {
   });
   const [workingDir, setWorkingDir] = useState(cwd);
   const [copied, setCopied] = useState(false);
+
+  useEscapeClose(isOpen, useCallback(() => onClose(), [onClose]));
 
   useEffect(() => {
     if (isOpen) {
