@@ -140,6 +140,11 @@ func (cm *ConversationManager) Hydrate(ctx context.Context) error {
 		modelID = *conversation.Model
 	}
 
+	// Set ParentConversationID on toolSetConfig so that subagent tool is included
+	// in the display_data tools list when generating system prompt.
+	// This is also set in ensureLoop, but must be set here for Hydrate's system prompt creation.
+	cm.toolSetConfig.ParentConversationID = cm.conversationID
+
 	// Generate system prompt if missing:
 	// - For user-initiated conversations: full system prompt
 	// - For subagent conversations (has parent): minimal subagent prompt
