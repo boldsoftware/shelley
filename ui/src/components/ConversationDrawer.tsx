@@ -54,7 +54,7 @@ function ConversationDrawer({
   });
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
-  const [copiedHash, setCopiedHash] = useState<string | null>(null);
+  const [copiedConvId, setCopiedConvId] = useState<string | null>(null);
   const groupMenuRef = React.useRef<HTMLDivElement>(null);
   const renameInputRef = React.useRef<HTMLInputElement>(null);
   const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -335,14 +335,14 @@ function ConversationDrawer({
     };
   }, []);
 
-  const handleCopyGitHash = useCallback((e: React.MouseEvent, hash: string) => {
+  const handleCopyGitHash = useCallback((e: React.MouseEvent, hash: string, convId: string) => {
     e.stopPropagation();
     navigator.clipboard
       .writeText(hash)
       .then(() => {
-        setCopiedHash(hash);
+        setCopiedConvId(convId);
         if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-        copyTimeoutRef.current = setTimeout(() => setCopiedHash(null), 1500);
+        copyTimeoutRef.current = setTimeout(() => setCopiedConvId(null), 1500);
       })
       .catch(() => {});
   }, []);
@@ -572,18 +572,20 @@ function ConversationDrawer({
                 }}
               >
                 <span
-                  onClick={(e) => handleCopyGitHash(e, convState.git_commit!)}
+                  onClick={(e) =>
+                    handleCopyGitHash(e, convState.git_commit!, conversation.conversation_id)
+                  }
                   title={`Click to copy ${convState.git_commit}`}
                   style={{
                     fontFamily: "var(--font-mono, monospace)",
                     cursor: "pointer",
                     color:
-                      copiedHash === convState.git_commit
+                      copiedConvId === conversation.conversation_id
                         ? "var(--success-color, #22c55e)"
                         : "inherit",
                   }}
                 >
-                  {copiedHash === convState.git_commit
+                  {copiedConvId === conversation.conversation_id
                     ? "copied!".padEnd(convState.git_commit!.length, "\u00a0")
                     : convState.git_commit}
                 </span>
