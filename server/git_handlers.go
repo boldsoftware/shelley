@@ -212,8 +212,10 @@ func (s *Server) handleGitDiffFiles(w http.ResponseWriter, r *http.Request) {
 		cmd = exec.Command("git", "diff", "--name-status", "HEAD")
 		statBaseArg = "HEAD"
 	} else {
+		// Diff from the selected commit's parent to the working tree,
+		// showing all changes from that point through the current state.
 		parent := parentRef(gitRoot, diffID)
-		cmd = exec.Command("git", "diff", "--name-status", parent, diffID)
+		cmd = exec.Command("git", "diff", "--name-status", parent)
 		statBaseArg = parent
 	}
 	cmd.Dir = gitRoot
@@ -247,12 +249,8 @@ func (s *Server) handleGitDiffFiles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Get additions/deletions for this file
-		var statCmd *exec.Cmd
-		if diffID == "working" {
-			statCmd = exec.Command("git", "diff", statBaseArg, "--numstat", "--", parts[1])
-		} else {
-			statCmd = exec.Command("git", "diff", statBaseArg, diffID, "--numstat", "--", parts[1])
-		}
+		// For both working and commit diffs, we compare statBaseArg to working tree
+		statCmd := exec.Command("git", "diff", statBaseArg, "--numstat", "--", parts[1])
 		statCmd.Dir = gitRoot
 		statOutput, _ := statCmd.Output()
 		additions, deletions := 0, 0
@@ -342,40 +340,34 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var oldContent string
+	// Left side: state before the selected commit (or HEAD for working changes)
+	var baseRef string
 	if diffID == "working" {
-		oldCmd := exec.Command("git", "show", "HEAD:"+filePath)
+		baseRef = "HEAD"
+	} else {
+		baseRef = parentRef(gitRoot, diffID)
+	}
+
+	var oldContent string
+	if baseRef == emptyTreeHash {
+		oldContent = ""
+	} else {
+		oldCmd := exec.Command("git", "show", baseRef+":"+filePath)
 		oldCmd.Dir = gitRoot
 		oldOutput, _ := oldCmd.Output()
 		oldContent = string(oldOutput)
-	} else {
-		parent := parentRef(gitRoot, diffID)
-		if parent == emptyTreeHash {
-			oldContent = ""
-		} else {
-			oldCmd := exec.Command("git", "show", parent+":"+filePath)
-			oldCmd.Dir = gitRoot
-			oldOutput, _ := oldCmd.Output()
-			oldContent = string(oldOutput)
-		}
 	}
 
+	// Right side: always the current working tree state.
+	// For commit diffs this shows all changes from that commit through now,
+	// making edits safe since they operate on the actual current file.
 	var newContent string
-	if diffID == "working" {
-		// Working changes: read from disk
-		fullPath := filepath.Join(gitRoot, cleanPath)
-		if file, err := os.Open(fullPath); err == nil {
-			if fileData, err := io.ReadAll(file); err == nil {
-				newContent = string(fileData)
-			}
-			file.Close()
+	fullPath := filepath.Join(gitRoot, cleanPath)
+	if file, err := os.Open(fullPath); err == nil {
+		defer file.Close()
+		if fileData, err := io.ReadAll(file); err == nil {
+			newContent = string(fileData)
 		}
-	} else {
-		// Commit diff: read from the commit
-		newCmd := exec.Command("git", "show", diffID+":"+filePath)
-		newCmd.Dir = gitRoot
-		newOutput, _ := newCmd.Output()
-		newContent = string(newOutput)
 	}
 
 	fileDiff := GitFileDiff{

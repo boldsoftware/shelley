@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -430,6 +431,101 @@ func TestHandleGitFileDiff(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400 for path traversal attempt, got %d", w.Code)
+	}
+}
+
+// TestCumulativeDiff verifies that selecting a commit shows cumulative changes
+// from that commit's parent through the current working tree state.
+func TestCumulativeDiff(t *testing.T) {
+	h := NewTestHarness(t)
+
+	// Create a repo with multiple commits and working changes
+	tempDir := t.TempDir()
+	run := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = tempDir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v failed: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+
+	run("git", "init")
+	run("git", "config", "user.name", "Test")
+	run("git", "config", "user.email", "test@test.com")
+
+	// Commit 1: create file with "line1"
+	os.WriteFile(filepath.Join(tempDir, "f.txt"), []byte("line1\n"), 0o644)
+	run("git", "add", "f.txt")
+	run("git", "commit", "-m", "commit1\n\nPrompt: test")
+	commit1 := run("git", "rev-parse", "HEAD")
+
+	// Commit 2: append "line2"
+	os.WriteFile(filepath.Join(tempDir, "f.txt"), []byte("line1\nline2\n"), 0o644)
+	run("git", "add", "f.txt")
+	run("git", "commit", "-m", "commit2\n\nPrompt: test")
+	commit2 := run("git", "rev-parse", "HEAD")
+
+	// Working tree: append "line3"
+	os.WriteFile(filepath.Join(tempDir, "f.txt"), []byte("line1\nline2\nline3\n"), 0o644)
+
+	// When selecting commit2, the diff should show changes from commit1 (parent of commit2)
+	// through the current working tree, i.e., old="line1\n", new="line1\nline2\nline3\n"
+
+	// Test file list: selecting commit2 should include f.txt (changed from commit1's parent to working tree)
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/git/diffs/%s/files?cwd=%s",
+		run("git", "rev-parse", "HEAD"), tempDir), nil)
+	w := httptest.NewRecorder()
+	h.server.handleGitDiffFiles(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var files []GitFileInfo
+	if err := json.Unmarshal(w.Body.Bytes(), &files); err != nil {
+		t.Fatalf("failed to unmarshal files: %v", err)
+	}
+	if len(files) != 1 || files[0].Path != "f.txt" {
+		t.Fatalf("expected [f.txt], got %+v", files)
+	}
+
+	// Test file diff content for commit1 (oldest commit):
+	// parent is empty tree, so old="", new=current working tree
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/git/file-diff/%s/f.txt?cwd=%s", commit1, tempDir), nil)
+	w = httptest.NewRecorder()
+	h.server.handleGitFileDiff(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var diff1 GitFileDiff
+	if err := json.Unmarshal(w.Body.Bytes(), &diff1); err != nil {
+		t.Fatalf("failed to unmarshal diff1: %v", err)
+	}
+	if diff1.OldContent != "" {
+		t.Errorf("commit1 old content: expected empty (root commit), got %q", diff1.OldContent)
+	}
+	if diff1.NewContent != "line1\nline2\nline3\n" {
+		t.Errorf("commit1 new content: expected working tree content, got %q", diff1.NewContent)
+	}
+
+	// Test file diff for commit2: old=content before commit2 (i.e. "line1\n"),
+	// new=current working tree ("line1\nline2\nline3\n")
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/git/file-diff/%s/f.txt?cwd=%s", commit2, tempDir), nil)
+	w = httptest.NewRecorder()
+	h.server.handleGitFileDiff(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var diff2 GitFileDiff
+	if err := json.Unmarshal(w.Body.Bytes(), &diff2); err != nil {
+		t.Fatalf("failed to unmarshal diff2: %v", err)
+	}
+	if diff2.OldContent != "line1\n" {
+		t.Errorf("commit2 old content: expected %q, got %q", "line1\n", diff2.OldContent)
+	}
+	if diff2.NewContent != "line1\nline2\nline3\n" {
+		t.Errorf("commit2 new content: expected working tree content %q, got %q", "line1\nline2\nline3\n", diff2.NewContent)
 	}
 }
 
