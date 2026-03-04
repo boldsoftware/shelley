@@ -1417,6 +1417,21 @@ button {
   color: var(--text-secondary);
 }
 
+.patch-tool-raw-diff {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.75rem;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text-secondary);
+  max-height: 400px;
+}
+
 /* Patch Tool Simple Diff View */
 .patch-tool-diff {
   font-family: var(--font-mono);

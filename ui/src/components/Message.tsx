@@ -1036,27 +1036,53 @@ const Message = React.memo(function Message({
     // Infer tool type from display content if tool name not provided
     const inferredToolName =
       toolName ||
+      // String diffs (very old format)
       (typeof display === "string" && display.includes("---") && display.includes("+++")
         ? "patch"
-        : undefined);
+        : // Object display with path + diff or oldContent/newContent (legacy structured format)
+          typeof display === "object" &&
+            display !== null &&
+            "path" in display &&
+            ("diff" in display || "oldContent" in display)
+          ? "patch"
+          : undefined);
 
     // Render patch tool displays using PatchTool component
-    if (inferredToolName === "patch" && typeof display === "string") {
-      // Create a mock toolResult with the diff in Text field
+    if (inferredToolName === "patch") {
+      if (typeof display === "string") {
+        // Very old format: raw diff string
+        const mockToolResult: LLMContent[] = [
+          {
+            ID: toolDisplay.tool_use_id,
+            Type: 6, // tool_result
+            Text: display,
+          },
+        ];
+        return (
+          <PatchTool
+            toolInput={{}}
+            isRunning={false}
+            toolResult={mockToolResult}
+            hasError={false}
+            onCommentTextChange={onCommentTextChange}
+          />
+        );
+      }
+      // Structured object with path, diff, and/or oldContent/newContent
       const mockToolResult: LLMContent[] = [
         {
           ID: toolDisplay.tool_use_id,
           Type: 6, // tool_result
-          Text: display,
+          Text: "",
         },
       ];
-
       return (
         <PatchTool
           toolInput={{}}
           isRunning={false}
           toolResult={mockToolResult}
           hasError={false}
+          display={display}
           onCommentTextChange={onCommentTextChange}
         />
       );
