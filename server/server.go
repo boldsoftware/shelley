@@ -1099,9 +1099,13 @@ func (s *Server) IsAgentWorking(conversationID string) bool {
 
 // Cleanup removes inactive conversation managers
 func (s *Server) Cleanup() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Collect managers to clean up under the lock, but don't call stopLoop
+	// while holding s.mu. stopLoop can block on browser shutdown, and holding
+	// s.mu would block all /api/conversations requests and getOrCreateConversationManager.
+	var toCleanup []*ConversationManager
+	var toCleanupIDs []string
 
+	s.mu.Lock()
 	now := time.Now()
 	for id, manager := range s.activeConversations {
 		// Remove managers that have been inactive for more than 30 minutes
@@ -1109,10 +1113,17 @@ func (s *Server) Cleanup() {
 		lastActivity := manager.lastActivity
 		manager.mu.Unlock()
 		if now.Sub(lastActivity) > 30*time.Minute {
-			manager.stopLoop()
+			toCleanup = append(toCleanup, manager)
+			toCleanupIDs = append(toCleanupIDs, id)
 			delete(s.activeConversations, id)
-			s.logger.Debug("Cleaned up inactive conversation", "conversationID", id)
 		}
+	}
+	s.mu.Unlock()
+
+	// Stop loops outside the lock to avoid blocking other requests.
+	for i, manager := range toCleanup {
+		manager.stopLoop()
+		s.logger.Debug("Cleaned up inactive conversation", "conversationID", toCleanupIDs[i])
 	}
 }
 

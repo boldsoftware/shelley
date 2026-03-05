@@ -210,24 +210,35 @@ func (b *BrowseTools) idleShutdown() {
 }
 
 // closeBrowserLocked shuts down the browser. Caller must hold b.mux.
+// It extracts the cancel functions and clears state under the lock,
+// then releases the lock to call the cancel functions (which may block
+// waiting for the chrome process to exit).
 func (b *BrowseTools) closeBrowserLocked() {
 	if b.idleTimer != nil {
 		b.idleTimer.Stop()
 		b.idleTimer = nil
 	}
 
-	if b.browserCtxCancel != nil {
-		b.browserCtxCancel()
-		b.browserCtxCancel = nil
-	}
-
-	if b.allocCancel != nil {
-		b.allocCancel()
-		b.allocCancel = nil
-	}
-
+	browserCancel := b.browserCtxCancel
+	allocCancel := b.allocCancel
+	b.browserCtxCancel = nil
+	b.allocCancel = nil
 	b.browserCtx = nil
 	b.allocCtx = nil
+
+	// Release the lock before calling cancel functions. allocCancel in
+	// particular can block waiting for the chrome process to exit, and
+	// holding the mux would prevent GetBrowserContext from proceeding
+	// (it would see browserCtx == nil and start a new browser).
+	b.mux.Unlock()
+	defer b.mux.Lock()
+
+	if browserCancel != nil {
+		browserCancel()
+	}
+	if allocCancel != nil {
+		allocCancel()
+	}
 }
 
 // Close shuts down the browser
