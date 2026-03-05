@@ -732,8 +732,7 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 	// Get LLM service for the requested model
 	modelID := req.Model
 	if modelID == "" {
-		// Default to GPT-OSS 20B on Fireworks
-		modelID = "gpt-oss-20b-fireworks"
+		modelID = s.defaultModel
 	}
 
 	llmService, err := s.llmManager.GetService(modelID)
