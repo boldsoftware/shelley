@@ -312,6 +312,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 
 	// Debug endpoints
 	mux.Handle("GET /debug/conversations", http.HandlerFunc(s.handleDebugConversationsPage))
+	mux.Handle("GET /debug/stylebook", http.HandlerFunc(s.handleDebugStylebook))
 	mux.Handle("GET /debug/llm_requests", http.HandlerFunc(s.handleDebugLLMRequests))
 	mux.Handle("GET /debug/llm_requests/api", http.HandlerFunc(s.handleDebugLLMRequestsAPI))
 	mux.Handle("GET /debug/llm_requests/{id}/request", http.HandlerFunc(s.handleDebugLLMRequestBody))
