@@ -344,10 +344,7 @@ function OutputIframeTool({
               viewBox="0 0 12 12"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
-              style={{
-                transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                transition: "transform 0.2s",
-              }}
+              className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
             >
               <path
                 d="M4.5 3L7.5 6L4.5 9"
@@ -377,12 +374,9 @@ function OutputIframeTool({
                   srcDoc={htmlWithHeightReporter}
                   sandbox="allow-scripts"
                   title={title}
+                  className="output-iframe-wrapper"
                   style={{
-                    width: "100%",
                     height: `${iframeHeight}px`,
-                    border: "1px solid var(--border-color, #e5e7eb)",
-                    borderRadius: "4px",
-                    backgroundColor: "white",
                   }}
                 />
               </div>

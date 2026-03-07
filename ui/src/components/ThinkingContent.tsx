@@ -18,49 +18,14 @@ function ThinkingContent({ thinking }: ThinkingContentProps) {
   const preview = truncateThinking(thinking);
 
   return (
-    <div
-      className="thinking-content"
-      data-testid="thinking-content"
-      style={{
-        marginBottom: "0.5rem",
-      }}
-    >
-      <div
-        onClick={() => setIsExpanded(!isExpanded)}
-        style={{
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "flex-start",
-          gap: "0.5rem",
-          marginLeft: 0,
-        }}
-      >
-        <span style={{ flexShrink: 0 }}>💭</span>
-        <div
-          style={{
-            flex: 1,
-            fontStyle: "italic",
-            color: "var(--text-secondary)",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          }}
-        >
-          {isExpanded ? thinking : preview}
-        </div>
+    <div className="thinking-content thinking-content-wrapper" data-testid="thinking-content">
+      <div onClick={() => setIsExpanded(!isExpanded)} className="thinking-clickable-area">
+        <span className="thinking-emoji">💭</span>
+        <div className="thinking-text">{isExpanded ? thinking : preview}</div>
         <button
-          className="thinking-toggle"
+          className="thinking-toggle thinking-toggle-button"
           aria-label={isExpanded ? "Collapse" : "Expand"}
           aria-expanded={isExpanded}
-          style={{
-            background: "none",
-            border: "none",
-            padding: "0.25rem",
-            cursor: "pointer",
-            color: "var(--text-tertiary)",
-            display: "flex",
-            alignItems: "center",
-            flexShrink: 0,
-          }}
         >
           <svg
             width="12"
@@ -68,10 +33,7 @@ function ThinkingContent({ thinking }: ThinkingContentProps) {
             viewBox="0 0 12 12"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
-            style={{
-              transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-              transition: "transform 0.2s",
-            }}
+            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
           >
             <path
               d="M4.5 3L7.5 6L4.5 9"

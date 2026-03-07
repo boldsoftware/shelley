@@ -5686,3 +5686,700 @@ kbd {
     transform: translateX(300%);
   }
 }
+
+/* Usage Detail Modal */
+.usage-detail-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  padding: 1rem;
+}
+
+.usage-detail-modal {
+  background-color: var(--bg-base);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  max-width: 31.25rem;
+  width: 100%;
+  box-shadow:
+    0 1.25rem 1.5625rem -0.3125rem rgba(0, 0, 0, 0.1),
+    0 0.625rem 0.625rem -0.3125rem rgba(0, 0, 0, 0.04);
+}
+
+.usage-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.usage-detail-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.usage-detail-close-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+}
+
+.usage-detail-close-button:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.usage-detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem 1.25rem;
+  font-size: 0.875rem;
+}
+
+.usage-detail-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.usage-detail-value {
+  color: var(--text-primary);
+}
+
+/* NotificationsModal styles */
+.notifications-error-message {
+  margin-bottom: 1rem;
+}
+
+.notifications-type-selector {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.notifications-section {
+  margin-bottom: 1rem;
+}
+
+.notifications-section-label {
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.notifications-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.notifications-card-title {
+  font-weight: 500;
+}
+
+.notifications-card-description {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.notifications-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.notifications-denied-text {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.notifications-loading {
+  padding: 1rem;
+  color: var(--text-secondary);
+}
+
+.notifications-empty-state {
+  padding: 1rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.notifications-link-button {
+  color: var(--primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
+}
+
+.notifications-channel-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notifications-channel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.notifications-channel-name {
+  font-weight: 500;
+}
+
+.notifications-channel-type-badge {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.notifications-channel-actions {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Message component styles */
+.msg-icon-middle {
+  vertical-align: middle;
+}
+
+.msg-gitinfo-container {
+  padding: 0.4rem 1rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  text-align: center;
+  font-style: italic;
+}
+
+.msg-worktree {
+  font-family: monospace;
+  font-size: 0.75rem;
+  margin-right: 0.5em;
+}
+
+.msg-branch {
+  font-weight: 500;
+  font-style: normal;
+}
+
+.msg-commit-hash {
+  font-family: monospace;
+  font-size: 0.75rem;
+  background: var(--bg-tertiary);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.msg-copy-button {
+  background: none;
+  border: none;
+  padding: 0.1em 0.3em;
+  cursor: pointer;
+  vertical-align: middle;
+  margin-left: 0.2em;
+}
+
+.msg-copy-button:not(.copied) {
+  color: var(--text-tertiary);
+}
+
+.msg-copy-button.copied {
+  color: var(--success-text);
+}
+
+.msg-subject {
+  margin-left: 0.3em;
+}
+
+.msg-diff-link {
+  color: var(--blue-text);
+  text-decoration: underline;
+}
+
+.msg-distill-container {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  text-align: center;
+  font-style: italic;
+}
+
+.msg-distill-container.error {
+  color: var(--error-text);
+}
+
+.msg-spinner-inline {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.msg-unexpected-role {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: 0.25rem;
+  padding: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.msg-unexpected-role-text {
+  color: var(--warning-text);
+  font-family: var(--font-mono);
+}
+
+.msg-unexpected-content {
+  margin-top: 0.25rem;
+}
+
+.msg-unknown-content {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.75rem;
+}
+
+.msg-unknown-content-label {
+  margin-bottom: 0.5rem;
+  font-family: monospace;
+}
+
+.msg-media-section {
+  margin-bottom: 0.5rem;
+}
+
+.msg-media-type-label {
+  margin-bottom: 0.25rem;
+}
+
+.msg-media-image {
+  max-width: 100%;
+  height: auto;
+  max-height: 300px;
+}
+
+.msg-raw-content-summary {
+  cursor: pointer;
+}
+
+.msg-raw-content-pre {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-base);
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  overflow: auto;
+}
+
+.msg-container-relative {
+  position: relative;
+}
+
+/* ChatInterface styles */
+
+/* Context usage popup - static styles (dynamic position stays inline) */
+.chat-context-popup {
+  position: fixed;
+  padding: 6px 10px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+}
+
+.chat-popup-model-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.chat-popup-warning {
+  margin-top: 6px;
+  color: var(--warning-text, #f59e0b);
+}
+
+.chat-distill-container {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chat-distill-button {
+  padding: 4px 8px;
+  background-color: var(--blue-text);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.chat-distill-button:not(:disabled) {
+  cursor: pointer;
+}
+
+.chat-distill-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.chat-tool-icon {
+  width: 1rem;
+  height: 1rem;
+  color: var(--blue-text);
+}
+
+.chat-welcome-text {
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.chat-welcome-link {
+  color: var(--blue-text);
+  text-decoration: underline;
+}
+
+.chat-secondary-text {
+  color: var(--text-secondary);
+}
+
+.chat-icon-1rem {
+  width: 1rem;
+  height: 1rem;
+}
+
+.chat-overflow-menu-wrapper {
+  position: relative;
+}
+
+.chat-menu-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-right: 0.75rem;
+}
+
+.chat-scroll-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* Tool chevron animation */
+.tool-chevron {
+  transition: transform 0.2s;
+}
+
+.tool-chevron-expanded {
+  transform: rotate(90deg);
+}
+
+/* ThinkingContent styles */
+.thinking-content-wrapper {
+  margin-bottom: 0.5rem;
+}
+
+.thinking-clickable-area {
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-left: 0;
+}
+
+.thinking-emoji {
+  flex-shrink: 0;
+}
+
+.thinking-text {
+  flex: 1;
+  font-style: italic;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.thinking-toggle-button {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* BrowserProfileTool styles */
+.profile-file-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.profile-file-path {
+  background: var(--bg-tertiary);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  word-break: break-all;
+}
+
+.profile-copy-button {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.profile-speedscope-link {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  color: var(--text-primary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* MessageActionBar styles */
+.message-action-bar-wrapper {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 2px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px;
+  z-index: 10;
+}
+
+.message-action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.message-action-button-success {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+/* MessageInput styles */
+.message-input-hidden {
+  display: none;
+}
+
+.message-send-spinner-white {
+  border-top-color: white;
+}
+
+/* OutputIframeTool styles */
+.output-iframe-wrapper {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--bg-base);
+}
+
+/* ReadImageTool and ScreenshotTool styles */
+.tool-image-responsive {
+  max-width: 100%;
+  height: auto;
+}
+
+/* SubagentTool styles */
+.subagent-link {
+  color: var(--link-color);
+  text-decoration: underline;
+}
+
+/* ConfigFieldInput styles */
+.config-field-description {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+  display: block;
+}
+
+/* ConversationDrawer styles */
+.drawer-conversation-item-flex-container {
+  flex: 1;
+  min-width: 0;
+}
+
+.drawer-conversation-header-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.drawer-rename-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--text-secondary);
+  outline: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.drawer-working-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--primary);
+  flex-shrink: 0;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.drawer-subagent-count-badge-text {
+  font-weight: 500;
+}
+
+.drawer-subagent-chevron {
+  width: 0.625rem;
+  height: 0.625rem;
+  transition: transform 0.15s ease;
+}
+
+.drawer-subagent-chevron-expanded {
+  transform: rotate(90deg);
+}
+
+.drawer-subagent-chevron-collapsed {
+  transform: rotate(0deg);
+}
+
+.drawer-actions-row {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.drawer-actions-row-offset {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+}
+
+.drawer-icon-size {
+  width: 1rem;
+  height: 1rem;
+}
+
+.drawer-git-info {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.drawer-git-info-active {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.drawer-git-hash {
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+}
+
+.drawer-git-hash-copied {
+  color: var(--success-text);
+}
+
+.drawer-git-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.drawer-subagent-list {
+  margin-left: 1.5rem;
+}
+
+.drawer-subagent-item-style {
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--border-color);
+}
+
+.drawer-subagent-working-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--primary);
+  flex-shrink: 0;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.drawer-subagent-date {
+  font-size: 0.875rem;
+}
+
+.drawer-empty-state {
+  padding: 1rem;
+  text-align: center;
+}
+
+.drawer-empty-state-hint {
+  margin-top: 0.25rem;
+}
+
+.drawer-footer-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}

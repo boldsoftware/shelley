@@ -148,51 +148,26 @@ function ContextUsageBar({
     <div ref={barRef}>
       {showPopup && popupPosition && (
         <div
+          className="chat-context-popup"
           style={{
-            position: "fixed",
             bottom: popupPosition.bottom,
             right: popupPosition.right,
             maxWidth: `calc(100vw - ${popupPosition.right + 8}px)`,
-            padding: "6px 10px",
-            backgroundColor: "var(--bg-secondary)",
-            border: "1px solid var(--border-color)",
-            borderRadius: "4px",
-            fontSize: "0.75rem",
-            color: "var(--text-secondary)",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            zIndex: 100,
           }}
         >
-          {modelName && (
-            <div style={{ fontWeight: 500, color: "var(--text-primary)", marginBottom: "4px" }}>
-              {modelName}
-            </div>
-          )}
+          {modelName && <div className="chat-popup-model-name">{modelName}</div>}
           {formatTokens(contextWindowSize)} / {formatTokens(maxContextTokens)} (
           {percentage.toFixed(1)}%) tokens used
           {showLongConversationWarning && (
-            <div style={{ marginTop: "6px", color: "var(--warning-text, #f59e0b)" }}>
+            <div className="chat-popup-warning">
               This conversation is getting long.
               <br />
               For best results, start a new conversation.
             </div>
           )}
           {onDistillConversation && conversationId && (
-            <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
-              <button
-                onClick={handleDistill}
-                disabled={distilling}
-                style={{
-                  padding: "4px 8px",
-                  backgroundColor: "var(--blue-text)",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: distilling ? "not-allowed" : "pointer",
-                  fontSize: "0.75rem",
-                  opacity: distilling ? 0.7 : 1,
-                }}
-              >
+            <div className="chat-distill-container">
+              <button onClick={handleDistill} disabled={distilling} className="chat-distill-button">
                 {distilling ? "Distilling..." : "Distill & Continue in New Conversation"}
               </button>
             </div>
@@ -348,12 +323,7 @@ const CoalescedToolCall = React.memo(function CoalescedToolCall({
         <div className="message-content">
           <div className="tool-running">
             <div className="tool-running-header">
-              <svg
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                style={{ width: "1rem", height: "1rem", color: "var(--blue-text)" }}
-              >
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="chat-tool-icon">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -393,7 +363,7 @@ const CoalescedToolCall = React.memo(function CoalescedToolCall({
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
-                  style={{ width: "1rem", height: "1rem", color: "var(--blue-text)" }}
+                  className="chat-tool-icon"
                 >
                   <path
                     strokeLinecap="round"
@@ -1757,7 +1727,7 @@ function ChatInterface({
       return (
         <div className="empty-state">
           <div className="empty-state-content">
-            <p className="text-base" style={{ marginBottom: "1rem", lineHeight: "1.6" }}>
+            <p className="text-base chat-welcome-text">
               {t("welcomeMessage")
                 .split(/(\{hostname\}|\{docsLink\}|\{proxyLink\})/)
                 .map((part, i) => {
@@ -1769,7 +1739,7 @@ function ChatInterface({
                         href="https://exe.dev/docs/proxy"
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ color: "var(--blue-text)", textDecoration: "underline" }}
+                        className="chat-welcome-link"
                       >
                         docs
                       </a>
@@ -1781,7 +1751,7 @@ function ChatInterface({
                         href={proxyURL}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ color: "var(--blue-text)", textDecoration: "underline" }}
+                        className="chat-welcome-link"
                       >
                         {proxyURL}
                       </a>
@@ -1791,14 +1761,10 @@ function ChatInterface({
             </p>
             {models.length === 0 ? (
               <div className="add-model-hint">
-                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                  {t("noModelsConfiguredHint")}
-                </p>
+                <p className="text-sm chat-secondary-text">{t("noModelsConfiguredHint")}</p>
               </div>
             ) : (
-              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                {t("sendMessageToStart")}
-              </p>
+              <p className="text-sm chat-secondary-text">{t("sendMessageToStart")}</p>
             )}
           </div>
         </div>
@@ -2011,12 +1977,7 @@ function ChatInterface({
         <div className="header-actions">
           {/* Green + icon in circle for new conversation */}
           <button onClick={onNewConversation} className="btn-new" aria-label={t("newConversation")}>
-            <svg
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              style={{ width: "1rem", height: "1rem" }}
-            >
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="chat-icon-1rem">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -2027,7 +1988,7 @@ function ChatInterface({
           </button>
 
           {/* Overflow menu */}
-          <div ref={overflowMenuRef} style={{ position: "relative" }}>
+          <div ref={overflowMenuRef} className="chat-overflow-menu-wrapper">
             <button
               onClick={() => setShowOverflowMenu(!showOverflowMenu)}
               className="btn-icon"
@@ -2059,7 +2020,7 @@ function ChatInterface({
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      style={{ width: "1.25rem", height: "1.25rem", marginRight: "0.75rem" }}
+                      className="chat-menu-icon"
                     >
                       <path
                         strokeLinecap="round"
@@ -2085,7 +2046,7 @@ function ChatInterface({
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      style={{ width: "1.25rem", height: "1.25rem", marginRight: "0.75rem" }}
+                      className="chat-menu-icon"
                     >
                       <path
                         strokeLinecap="round"
@@ -2110,7 +2071,7 @@ function ChatInterface({
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      style={{ width: "1.25rem", height: "1.25rem", marginRight: "0.75rem" }}
+                      className="chat-menu-icon"
                     >
                       <path
                         strokeLinecap="round"
@@ -2144,7 +2105,7 @@ function ChatInterface({
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
-                        style={{ width: "1.25rem", height: "1.25rem", marginRight: "0.75rem" }}
+                        className="chat-menu-icon"
                       >
                         <path
                           strokeLinecap="round"
@@ -2171,7 +2132,7 @@ function ChatInterface({
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
-                    style={{ width: "1.25rem", height: "1.25rem", marginRight: "0.75rem" }}
+                    className="chat-menu-icon"
                   >
                     <path
                       strokeLinecap="round"
@@ -2408,12 +2369,7 @@ function ChatInterface({
             onClick={scrollToBottom}
             aria-label="Scroll to bottom"
           >
-            <svg
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              style={{ width: "1.25rem", height: "1.25rem" }}
-            >
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="chat-scroll-icon">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"

@@ -431,11 +431,11 @@ function ConversationDrawer({
               onSelectConversation(conversation);
             }
           }}
-          style={{ cursor: showArchived ? "default" : "pointer" }}
+          style={{ cursor: showArchived ? "default" : "pointer" }} // Dynamic: cursor depends on showArchived state
         >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="drawer-conversation-item-flex-container">
+            <div className="drawer-conversation-header-row">
+              <div className="drawer-conversation-item-flex-container">
                 {editingId === conversation.conversation_id ? (
                   <input
                     ref={renameInputRef}
@@ -446,17 +446,7 @@ function ConversationDrawer({
                     onKeyDown={(e) => handleRenameKeyDown(e, conversation.conversation_id)}
                     onClick={(e) => e.stopPropagation()}
                     autoFocus
-                    className="conversation-title"
-                    style={{
-                      width: "100%",
-                      background: "transparent",
-                      border: "none",
-                      borderBottom: "1px solid var(--text-secondary)",
-                      outline: "none",
-                      padding: 0,
-                      font: "inherit",
-                      color: "inherit",
-                    }}
+                    className="conversation-title drawer-rename-input"
                   />
                 ) : (
                   <div className="conversation-title">{getConversationPreview(conversation)}</div>
@@ -464,16 +454,8 @@ function ConversationDrawer({
               </div>
               {(conversation as ConversationWithState).working && (
                 <span
-                  className="working-indicator"
+                  className="working-indicator drawer-working-indicator"
                   title={t("agentIsWorking")}
-                  style={{
-                    width: "8px",
-                    height: "8px",
-                    borderRadius: "50%",
-                    backgroundColor: "var(--accent-color, #3b82f6)",
-                    flexShrink: 0,
-                    animation: "pulse 2s ease-in-out infinite",
-                  }}
                 />
               )}
             </div>
@@ -491,17 +473,16 @@ function ConversationDrawer({
                   title={isExpanded ? t("hideSubagents") : t("showSubagents")}
                   aria-label={isExpanded ? t("collapseSubagents") : t("expandSubagents")}
                 >
-                  <span style={{ fontWeight: 500 }}>{subagentCount}</span>
+                  <span className="drawer-subagent-count-badge-text">{subagentCount}</span>
                   <svg
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
-                    style={{
-                      width: "0.625rem",
-                      height: "0.625rem",
-                      transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                      transition: "transform 0.15s ease",
-                    }}
+                    className={`drawer-subagent-chevron ${
+                      isExpanded
+                        ? "drawer-subagent-chevron-expanded"
+                        : "drawer-subagent-chevron-collapsed"
+                    }`}
                   >
                     <path
                       strokeLinecap="round"
@@ -513,10 +494,7 @@ function ConversationDrawer({
                 </button>
               )}
               {!showArchived && (
-                <div
-                  className="conversation-actions"
-                  style={{ display: "flex", gap: "0.25rem", marginLeft: "auto" }}
-                >
+                <div className="conversation-actions drawer-actions-row">
                   <button
                     onClick={(e) => handleStartRename(e, conversation)}
                     className="btn-icon-sm"
@@ -527,7 +505,7 @@ function ConversationDrawer({
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      style={{ width: "1rem", height: "1rem" }}
+                      className="drawer-icon-size"
                     >
                       <path
                         strokeLinecap="round"
@@ -547,7 +525,7 @@ function ConversationDrawer({
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      style={{ width: "1rem", height: "1rem" }}
+                      className="drawer-icon-size"
                     >
                       <path
                         strokeLinecap="round"
@@ -562,44 +540,25 @@ function ConversationDrawer({
             </div>
             {convState.git_commit && (
               <div
-                className="conversation-git"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.3em",
-                  fontSize: "0.75rem",
-                  color: isActive ? "rgba(255,255,255,0.7)" : "var(--text-secondary)",
-                }}
+                className={`conversation-git drawer-git-info ${
+                  isActive ? "drawer-git-info-active" : ""
+                }`}
               >
                 <span
                   onClick={(e) =>
                     handleCopyGitHash(e, convState.git_commit!, conversation.conversation_id)
                   }
                   title={`Click to copy ${convState.git_commit}`}
-                  style={{
-                    fontFamily: "var(--font-mono, monospace)",
-                    cursor: "pointer",
-                    color:
-                      copiedConvId === conversation.conversation_id
-                        ? "var(--success-color, #22c55e)"
-                        : "inherit",
-                  }}
+                  className={`drawer-git-hash ${
+                    copiedConvId === conversation.conversation_id ? "drawer-git-hash-copied" : ""
+                  }`}
                 >
                   {copiedConvId === conversation.conversation_id
                     ? "copied!".padEnd(convState.git_commit!.length, "\u00a0")
                     : convState.git_commit}
                 </span>
                 {convState.git_subject && (
-                  <span
-                    title={convState.git_subject}
-                    style={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      minWidth: 0,
-                      color: "inherit",
-                    }}
-                  >
+                  <span title={convState.git_subject} className="drawer-git-subject">
                     {convState.git_subject}
                   </span>
                 )}
@@ -607,10 +566,7 @@ function ConversationDrawer({
             )}
           </div>
           {showArchived && (
-            <div
-              className="conversation-actions"
-              style={{ display: "flex", gap: "0.25rem", marginLeft: "0.5rem" }}
-            >
+            <div className="conversation-actions drawer-actions-row-offset">
               <button
                 onClick={(e) => handleUnarchive(e, conversation.conversation_id)}
                 className="btn-icon-sm"
@@ -621,7 +577,7 @@ function ConversationDrawer({
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
-                  style={{ width: "1rem", height: "1rem" }}
+                  className="drawer-icon-size"
                 >
                   <path
                     strokeLinecap="round"
@@ -641,7 +597,7 @@ function ConversationDrawer({
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
-                  style={{ width: "1rem", height: "1rem" }}
+                  className="drawer-icon-size"
                 >
                   <path
                     strokeLinecap="round"
@@ -656,43 +612,29 @@ function ConversationDrawer({
         </div>
         {/* Render subagents if expanded */}
         {!showArchived && isExpanded && conversationSubagents.length > 0 && (
-          <div className="subagent-list" style={{ marginLeft: "1.5rem" }}>
+          <div className="subagent-list drawer-subagent-list">
             {conversationSubagents.map((sub) => {
               const isSubActive = sub.conversation_id === currentConversationId;
               return (
                 <div
                   key={sub.conversation_id}
-                  className={`conversation-item subagent-item ${isSubActive ? "active" : ""}`}
+                  className={`conversation-item subagent-item drawer-subagent-item-style ${isSubActive ? "active" : ""}`}
                   onClick={() => onSelectConversation(sub)}
-                  style={{
-                    cursor: "pointer",
-                    fontSize: "0.875rem",
-                    paddingLeft: "0.5rem",
-                    borderLeft: "2px solid var(--border-color)",
-                  }}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="drawer-conversation-item-flex-container">
+                    <div className="drawer-conversation-header-row">
+                      <div className="drawer-conversation-item-flex-container">
                         <div className="conversation-title">{sub.slug || sub.conversation_id}</div>
                       </div>
                       {sub.working && (
                         <span
-                          className="working-indicator"
+                          className="working-indicator drawer-subagent-working-indicator"
                           title={t("subagentIsWorking")}
-                          style={{
-                            width: "6px",
-                            height: "6px",
-                            borderRadius: "50%",
-                            backgroundColor: "var(--accent-color, #3b82f6)",
-                            flexShrink: 0,
-                            animation: "pulse 2s ease-in-out infinite",
-                          }}
                         />
                       )}
                     </div>
                     <div className="conversation-meta">
-                      <span className="conversation-date" style={{ fontSize: "0.875rem" }}>
+                      <span className="conversation-date drawer-subagent-date">
                         {formatDate(sub.updated_at)}
                       </span>
                     </div>
@@ -810,16 +752,14 @@ function ConversationDrawer({
         {/* Conversations list */}
         <div className="drawer-body scrollable">
           {loadingArchived && showArchived ? (
-            <div style={{ padding: "1rem", textAlign: "center" }} className="text-secondary">
+            <div className="text-secondary drawer-empty-state">
               <p>{t("loading")}</p>
             </div>
           ) : displayedConversations.length === 0 ? (
-            <div style={{ padding: "1rem", textAlign: "center" }} className="text-secondary">
+            <div className="text-secondary drawer-empty-state">
               <p>{showArchived ? t("noArchivedConversations") : t("noConversationsYet")}</p>
               {!showArchived && (
-                <p className="text-sm" style={{ marginTop: "0.25rem" }}>
-                  {t("startNewToGetStarted")}
-                </p>
+                <p className="text-sm drawer-empty-state-hint">{t("startNewToGetStarted")}</p>
               )}
             </div>
           ) : groupedConversations ? (
@@ -836,7 +776,7 @@ function ConversationDrawer({
                         className="conversation-group-chevron"
                         style={{
                           transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
-                        }}
+                        }} // Dynamic: transform depends on isCollapsed state
                       >
                         <path
                           strokeLinecap="round"
@@ -869,21 +809,9 @@ function ConversationDrawer({
         <div className="drawer-footer">
           <button
             onClick={() => setShowArchived(!showArchived)}
-            className="btn-secondary"
-            style={{
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-            }}
+            className="btn-secondary drawer-footer-button"
           >
-            <svg
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              style={{ width: "1rem", height: "1rem" }}
-            >
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="drawer-icon-size">
               {showArchived ? (
                 <path
                   strokeLinecap="round"

@@ -207,16 +207,12 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
         title={editingChannelId ? t("editChannel") : t("addChannel")}
         className="modal-wide"
       >
-        {error && (
-          <div className="test-result error" style={{ marginBottom: "1rem" }}>
-            {error}
-          </div>
-        )}
+        {error && <div className="test-result error notifications-error-message">{error}</div>}
 
         {!editingChannelId && channelTypes.length > 1 && (
           <div className="form-group">
             <label>{t("channelType")}</label>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+            <div className="notifications-type-selector">
               {channelTypes.map((ct) => (
                 <button
                   key={ct.type}
@@ -293,42 +289,18 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
         ) : undefined
       }
     >
-      {error && (
-        <div className="test-result error" style={{ marginBottom: "1rem" }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="test-result error notifications-error-message">{error}</div>}
 
       {/* Local channels section */}
-      <div style={{ marginBottom: "1rem" }}>
-        <div
-          className="overflow-menu-label"
-          style={{
-            marginBottom: "0.5rem",
-            fontSize: "0.75rem",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            color: "var(--text-secondary)",
-          }}
-        >
-          Local
-        </div>
+      <div className="notifications-section">
+        <div className="overflow-menu-label notifications-section-label">Local</div>
 
         {/* Browser notifications */}
         {typeof Notification !== "undefined" && (
-          <div
-            className="model-card"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "0.75rem 1rem",
-              marginBottom: "0.5rem",
-            }}
-          >
+          <div className="model-card notifications-card">
             <div>
-              <div style={{ fontWeight: 500 }}>{t("browserNotifications")}</div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+              <div className="notifications-card-title">{t("browserNotifications")}</div>
+              <div className="notifications-card-description">
                 {browserPermission === "denied"
                   ? t("blockedByBrowser")
                   : browserPermission === "granted"
@@ -336,7 +308,7 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
                     : t("requiresBrowserPermission")}
               </div>
             </div>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <div className="notifications-card-actions">
               {browserPermission === "default" && !browserEnabled && (
                 <button
                   className="btn btn-secondary btn-sm"
@@ -362,28 +334,17 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
                 </button>
               )}
               {browserPermission === "denied" && (
-                <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                  {t("denied")}
-                </span>
+                <span className="notifications-denied-text">{t("denied")}</span>
               )}
             </div>
           </div>
         )}
 
         {/* Favicon */}
-        <div
-          className="model-card"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0.75rem 1rem",
-            marginBottom: "0.5rem",
-          }}
-        >
+        <div className="model-card notifications-card">
           <div>
-            <div style={{ fontWeight: 500 }}>{t("faviconBadge")}</div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+            <div className="notifications-card-title">{t("faviconBadge")}</div>
+            <div className="notifications-card-description">
               Tab icon changes when agent finishes
             </div>
           </div>
@@ -402,41 +363,17 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
 
       {/* Backend channels section */}
       <div>
-        <div
-          className="overflow-menu-label"
-          style={{
-            marginBottom: "0.5rem",
-            fontSize: "0.75rem",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            color: "var(--text-secondary)",
-          }}
-        >
-          Server
-        </div>
+        <div className="overflow-menu-label notifications-section-label">Server</div>
 
-        {loading && (
-          <div style={{ padding: "1rem", color: "var(--text-secondary)" }}>Loading...</div>
-        )}
+        {loading && <div className="notifications-loading">Loading...</div>}
 
         {!loading && channels.length === 0 && (
-          <div style={{ padding: "1rem", color: "var(--text-secondary)", textAlign: "center" }}>
+          <div className="notifications-empty-state">
             {t("noServerChannelsConfigured")}
             {channelTypes.length > 0 && (
               <>
                 {" "}
-                <button
-                  className="btn-link"
-                  onClick={handleAdd}
-                  style={{
-                    color: "var(--primary)",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                    font: "inherit",
-                  }}
-                >
+                <button className="btn-link notifications-link-button" onClick={handleAdd}>
                   {t("addOne")}
                 </button>
               </>
@@ -445,36 +382,16 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
         )}
 
         {channels.map((ch) => (
-          <div
-            key={ch.channel_id}
-            className="model-card"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "0.75rem 1rem",
-              marginBottom: "0.5rem",
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <span style={{ fontWeight: 500 }}>{ch.display_name}</span>
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    padding: "0.125rem 0.375rem",
-                    borderRadius: "0.25rem",
-                    background: "var(--bg-tertiary)",
-                    color: "var(--text-secondary)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
+          <div key={ch.channel_id} className="model-card notifications-card">
+            <div className="notifications-channel-content">
+              <div className="notifications-channel-header">
+                <span className="notifications-channel-name">{ch.display_name}</span>
+                <span className="notifications-channel-type-badge">
                   {getTypeLabel(ch.channel_type)}
                 </span>
               </div>
             </div>
-            <div style={{ display: "flex", gap: "0.375rem", alignItems: "center", flexShrink: 0 }}>
+            <div className="notifications-channel-actions">
               <button
                 className={`btn btn-sm ${ch.enabled ? "btn-primary" : "btn-secondary"}`}
                 onClick={() => handleToggleEnabled(ch)}

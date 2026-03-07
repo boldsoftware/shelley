@@ -25,39 +25,12 @@ function MessageActionBar({ onCopy, onShowUsage }: MessageActionBarProps) {
   };
 
   return (
-    <div
-      className="message-action-bar"
-      data-action-bar
-      style={{
-        position: "absolute",
-        top: "8px",
-        right: "8px",
-        display: "flex",
-        gap: "2px",
-        background: "var(--bg-base)",
-        border: "1px solid var(--border)",
-        borderRadius: "4px",
-        padding: "2px",
-        zIndex: 10,
-      }}
-    >
+    <div className="message-action-bar message-action-bar-wrapper" data-action-bar>
       {onCopy && (
         <button
           onClick={handleCopy}
           title="Copy"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "24px",
-            height: "24px",
-            borderRadius: "4px",
-            border: "none",
-            background: copyFeedback ? "var(--success-bg)" : "transparent",
-            cursor: "pointer",
-            color: copyFeedback ? "var(--success-text)" : "var(--text-secondary)",
-            transition: "background-color 0.15s, color 0.15s",
-          }}
+          className={`message-action-button${copyFeedback ? " message-action-button-success" : ""}`}
           onMouseEnter={(e) => {
             if (!copyFeedback) {
               e.currentTarget.style.backgroundColor = "var(--bg-tertiary)";
@@ -103,19 +76,7 @@ function MessageActionBar({ onCopy, onShowUsage }: MessageActionBarProps) {
         <button
           onClick={handleShowUsage}
           title="Usage Details"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "24px",
-            height: "24px",
-            borderRadius: "4px",
-            border: "none",
-            background: "transparent",
-            cursor: "pointer",
-            color: "var(--text-secondary)",
-            transition: "background-color 0.15s",
-          }}
+          className="message-action-button"
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = "var(--bg-tertiary)";
           }}

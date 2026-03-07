@@ -53,15 +53,7 @@ export default function ConfigFieldInput({ field, value, onChange }: ConfigField
         />
       )}
       {field.description && (
-        <span
-          id={descId}
-          style={{
-            fontSize: "0.75rem",
-            color: "var(--text-secondary)",
-            marginTop: "0.25rem",
-            display: "block",
-          }}
-        >
+        <span id={descId} className="config-field-description">
           {field.description}
         </span>
       )}

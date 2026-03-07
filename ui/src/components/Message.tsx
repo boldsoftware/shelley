@@ -70,7 +70,7 @@ const CopyIcon = () => (
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
-    style={{ verticalAlign: "middle" }}
+    className="msg-icon-middle"
   >
     <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
@@ -87,7 +87,7 @@ const CheckIcon = () => (
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
-    style={{ verticalAlign: "middle" }}
+    className="msg-icon-middle"
   >
     <polyline points="20 6 9 17 4 12" />
   </svg>
@@ -156,71 +156,27 @@ function GitInfoMessage({
   const truncatedSubject = subject && subject.length > 40 ? subject.slice(0, 37) + "..." : subject;
 
   return (
-    <div
-      className="message message-gitinfo"
-      data-testid="message-gitinfo"
-      style={{
-        padding: "0.4rem 1rem",
-        fontSize: "0.875rem",
-        color: "var(--text-secondary)",
-        textAlign: "center",
-        fontStyle: "italic",
-      }}
-    >
+    <div className="message message-gitinfo msg-gitinfo-container" data-testid="message-gitinfo">
       <span>
-        {worktree && (
-          <span
-            style={{
-              fontFamily: "monospace",
-              fontSize: "0.75rem",
-              marginRight: "0.5em",
-            }}
-          >
-            {worktree}
-          </span>
-        )}
-        {branch && (
-          <span
-            style={{
-              fontWeight: 500,
-              fontStyle: "normal",
-            }}
-          >
-            {branch}
-          </span>
-        )}
+        {worktree && <span className="msg-worktree">{worktree}</span>}
+        {branch && <span className="msg-branch">{branch}</span>}
         {branch ? " now at " : "now at "}
         <code
           onClick={handleCopyHash}
           title="Click to copy commit hash"
-          style={{
-            fontFamily: "monospace",
-            fontSize: "0.75rem",
-            background: "var(--bg-tertiary)",
-            padding: "0.1em 0.3em",
-            borderRadius: "3px",
-            cursor: "pointer",
-          }}
+          className="msg-commit-hash"
         >
           {commitHash}
         </code>
         <button
           onClick={handleCopyHash}
           title="Copy commit hash"
-          style={{
-            background: "none",
-            border: "none",
-            padding: "0.1em 0.3em",
-            cursor: "pointer",
-            color: copied ? "var(--success-color, #22c55e)" : "var(--text-tertiary)",
-            verticalAlign: "middle",
-            marginLeft: "0.2em",
-          }}
+          className={copied ? "msg-copy-button copied" : "msg-copy-button"}
         >
           {copied ? <CheckIcon /> : <CopyIcon />}
         </button>
         {truncatedSubject && (
-          <span style={{ marginLeft: "0.3em" }} title={subject || undefined}>
+          <span className="msg-subject" title={subject || undefined}>
             "{truncatedSubject}"
           </span>
         )}
@@ -233,10 +189,7 @@ function GitInfoMessage({
                 e.preventDefault();
                 handleDiffClick();
               }}
-              style={{
-                color: "var(--link-color, #0066cc)",
-                textDecoration: "underline",
-              }}
+              className="msg-diff-link"
             >
               diff
             </a>
@@ -268,25 +221,15 @@ function DistillStatusMessage({ message }: { message: MessageType }) {
 
   return (
     <div
-      className="message message-gitinfo"
-      style={{
-        padding: "0.5rem 1rem",
-        fontSize: "0.875rem",
-        color: isError ? "var(--error-text)" : "var(--text-secondary)",
-        textAlign: "center",
-        fontStyle: "italic",
-      }}
+      className={
+        isError
+          ? "message message-gitinfo msg-distill-container error"
+          : "message message-gitinfo msg-distill-container"
+      }
     >
       {isInProgress && (
         <span data-testid="distill-in-progress">
-          <span
-            className="spinner spinner-small"
-            style={{
-              display: "inline-block",
-              marginRight: "6px",
-              verticalAlign: "middle",
-            }}
-          />
+          <span className="spinner spinner-small msg-spinner-inline" />
           Distilling conversation{sourceSlug ? ` "${sourceSlug}"` : ""}…
         </span>
       )}
@@ -533,19 +476,11 @@ const Message = React.memo(function Message({
       case "message_role_assistant":
         // These shouldn't occur in Content objects, but display as text if they do
         return (
-          <div
-            style={{
-              background: "#fff7ed",
-              border: "1px solid #fed7aa",
-              borderRadius: "0.25rem",
-              padding: "0.5rem",
-              fontSize: "0.875rem",
-            }}
-          >
-            <div style={{ color: "#9a3412", fontFamily: "monospace" }}>
+          <div className="msg-unexpected-role">
+            <div className="msg-unexpected-role-text">
               [Unexpected message role content: {contentType}]
             </div>
-            <div style={{ marginTop: "0.25rem" }}>{content.Text || JSON.stringify(content)}</div>
+            <div className="msg-unexpected-content">{content.Text || JSON.stringify(content)}</div>
           </div>
         );
       case "text":
@@ -956,33 +891,22 @@ const Message = React.memo(function Message({
         );
 
         return (
-          <div
-            style={{
-              background: "var(--bg-tertiary)",
-              border: "1px solid var(--border)",
-              borderRadius: "0.25rem",
-              padding: "0.75rem",
-            }}
-          >
-            <div
-              className="text-xs text-secondary"
-              style={{ marginBottom: "0.5rem", fontFamily: "monospace" }}
-            >
+          <div className="msg-unknown-content">
+            <div className="text-xs text-secondary msg-unknown-content-label">
               Unknown content type: {contentType} (value: {content.Type})
             </div>
 
             {/* Show media content if available */}
             {hasMediaType && (
-              <div style={{ marginBottom: "0.5rem" }}>
-                <div className="text-xs text-secondary" style={{ marginBottom: "0.25rem" }}>
+              <div className="msg-media-section">
+                <div className="text-xs text-secondary msg-media-type-label">
                   Media Type: {content.MediaType}
                 </div>
                 {content.MediaType?.startsWith("image/") && content.Data && (
                   <img
                     src={`data:${content.MediaType};base64,${content.Data}`}
                     alt="Tool output image"
-                    className="rounded border"
-                    style={{ maxWidth: "100%", height: "auto", maxHeight: "300px" }}
+                    className="rounded border msg-media-image"
                   />
                 )}
               </div>
@@ -996,21 +920,10 @@ const Message = React.memo(function Message({
             {/* Show raw JSON for debugging if no text content */}
             {!displayText && hasOtherData && (
               <details className="text-xs">
-                <summary className="text-secondary" style={{ cursor: "pointer" }}>
+                <summary className="text-secondary msg-raw-content-summary">
                   Show raw content
                 </summary>
-                <pre
-                  style={{
-                    marginTop: "0.5rem",
-                    padding: "0.5rem",
-                    background: "var(--bg-base)",
-                    borderRadius: "0.25rem",
-                    fontSize: "0.75rem",
-                    overflow: "auto",
-                  }}
-                >
-                  {JSON.stringify(content, null, 2)}
-                </pre>
+                <pre className="msg-raw-content-pre">{JSON.stringify(content, null, 2)}</pre>
               </details>
             )}
           </div>
@@ -1134,11 +1047,10 @@ const Message = React.memo(function Message({
       <>
         <div
           ref={messageRef}
-          className={getMessageClasses()}
+          className={`${getMessageClasses()} msg-container-relative`}
           onClick={handleMessageClick}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
-          style={{ position: "relative" }}
           data-testid="message"
           role="alert"
           aria-label="Error message"
@@ -1170,11 +1082,10 @@ const Message = React.memo(function Message({
       <>
         <div
           ref={messageRef}
-          className={getMessageClasses()}
+          className={`${getMessageClasses()} msg-container-relative`}
           onClick={handleMessageClick}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
-          style={{ position: "relative" }}
           data-testid="message"
           role="article"
         >
@@ -1243,11 +1154,10 @@ const Message = React.memo(function Message({
     <>
       <div
         ref={messageRef}
-        className={getMessageClasses()}
+        className={`${getMessageClasses()} msg-container-relative`}
         onClick={handleMessageClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        style={{ position: "relative" }}
         data-testid="message"
         role="article"
       >

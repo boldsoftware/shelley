@@ -451,7 +451,7 @@ function MessageInput({
           type="file"
           ref={fileInputRef}
           onChange={handleFileSelect}
-          style={{ display: "none" }}
+          className="message-input-hidden"
           multiple
           accept="image/*,video/*,audio/*,.pdf,.txt,.md,.json,.csv,.xml,.html,.css,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.c,.cpp,.h,.hpp,.sh,.yaml,.yml,.toml,.sql,.log,*"
           aria-hidden="true"
@@ -547,7 +547,7 @@ function MessageInput({
           >
             {isDisabled || submitting ? (
               <div className="flex items-center justify-center">
-                <div className="spinner spinner-small" style={{ borderTopColor: "white" }}></div>
+                <div className="spinner spinner-small message-send-spinner-white"></div>
               </div>
             ) : (
               <svg fill="currentColor" viewBox="0 0 24 24" width="20" height="20">

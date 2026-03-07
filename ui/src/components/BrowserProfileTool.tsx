@@ -67,10 +67,7 @@ function BrowserProfileTool({
             viewBox="0 0 12 12"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
-            style={{
-              transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-              transition: "transform 0.2s",
-            }}
+            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
           >
             <path
               d="M4.5 3L7.5 6L4.5 9"
@@ -110,32 +107,9 @@ function BrowserProfileTool({
           {isComplete && savedFilePath && !hasError && (
             <div className="tool-section">
               <div className="tool-label">Profile/Trace file:</div>
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}
-              >
-                <code
-                  style={{
-                    background: "var(--bg-tertiary)",
-                    padding: "0.25rem 0.5rem",
-                    borderRadius: "0.25rem",
-                    fontSize: "0.875rem",
-                    wordBreak: "break-all",
-                  }}
-                >
-                  {savedFilePath}
-                </code>
-                <button
-                  onClick={handleCopyPath}
-                  style={{
-                    padding: "0.25rem 0.5rem",
-                    fontSize: "0.75rem",
-                    background: "var(--bg-secondary)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "0.25rem",
-                    cursor: "pointer",
-                    color: "var(--text-primary)",
-                  }}
-                >
+              <div className="profile-file-wrapper">
+                <code className="profile-file-path">{savedFilePath}</code>
+                <button onClick={handleCopyPath} className="profile-copy-button">
                   {copied ? "✓ Copied" : "📋 Copy path"}
                 </button>
                 {(action === "cpu_stop" || action === "trace_stop") && (
@@ -144,19 +118,7 @@ function BrowserProfileTool({
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    style={{
-                      padding: "0.25rem 0.75rem",
-                      fontSize: "0.75rem",
-                      background: "var(--bg-secondary)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "0.25rem",
-                      cursor: "pointer",
-                      color: "var(--text-primary)",
-                      textDecoration: "none",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.25rem",
-                    }}
+                    className="profile-speedscope-link"
                   >
                     🔥 Open in Speedscope
                   </a>
