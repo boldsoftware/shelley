@@ -1,0 +1,213 @@
+import type { TranslationKeys } from "./types";
+
+export const zhCN: TranslationKeys = {
+  // App-level
+  loading: "加载中...",
+  retry: "重试",
+  failedToLoadConversations: "加载对话失败，请刷新页面。",
+
+  // Chat Header & Actions
+  newConversation: "新建对话",
+  moreOptions: "更多选项",
+  conversations: "对话",
+
+  // Overflow Menu
+  diffs: "差异对比",
+  terminal: "终端",
+  archiveConversation: "归档对话",
+  checkForNewVersion: "检查新版本",
+  markdown: "Markdown",
+  off: "关闭",
+  agent: "代理",
+  all: "全部",
+
+  // Theme
+  system: "跟随系统",
+  light: "浅色",
+  dark: "深色",
+
+  // Notifications
+  enableNotifications: "启用通知",
+  disableNotifications: "禁用通知",
+  blockedByBrowser: "已被浏览器拦截",
+  osNotificationsWhenHidden: "标签页隐藏时发送系统通知",
+  requiresBrowserPermission: "需要浏览器授权",
+  on: "开启",
+
+  // Command Palette
+  searchPlaceholder: "搜索对话或操作...",
+  searching: "搜索中...",
+  noResults: "未找到结果",
+  toNavigate: "导航",
+  toSelect: "选择",
+  toClose: "关闭",
+  action: "操作",
+
+  // Command Palette Actions
+  newConversationAction: "新建对话",
+  startNewConversation: "开始新对话",
+  nextConversation: "下一个对话",
+  switchToNext: "切换到下一个对话",
+  previousConversation: "上一个对话",
+  switchToPrevious: "切换到上一个对话",
+  nextUserMessage: "下一条用户消息",
+  jumpToNextMessage: "跳转到下一条用户消息",
+  previousUserMessage: "上一条用户消息",
+  jumpToPreviousMessage: "跳转到上一条用户消息",
+  viewDiffs: "查看差异",
+  openGitDiffViewer: "打开 Git 差异查看器",
+  addRemoveModelsKeys: "添加/移除模型和密钥",
+  configureModels: "配置 AI 模型和 API 密钥",
+  notificationSettings: "通知设置",
+  configureNotifications: "配置通知偏好",
+  enableMarkdownAgent: "启用 Markdown（代理）",
+  renderMarkdownAgent: "以 Markdown 渲染代理消息",
+  enableMarkdownAll: "启用 Markdown（全部）",
+  renderMarkdownAll: "以 Markdown 渲染所有消息",
+  disableMarkdown: "禁用 Markdown",
+  showPlainText: "以纯文本显示所有消息",
+  archiveConversationAction: "归档对话",
+  archiveCurrentConversation: "归档当前对话",
+  newConversationInMainRepo: "在主仓库中新建对话",
+  newConversationInNewWorktree: "在新工作树中新建对话",
+  createNewWorktree: "为此对话创建新的 Git 工作树",
+
+  // Conversation Drawer
+  archived: "已归档",
+  noArchivedConversations: "没有已归档的对话",
+  noConversationsYet: "暂无对话",
+  startNewToGetStarted: "开始新对话以继续",
+  backToConversations: "返回对话列表",
+  viewArchived: "查看已归档",
+  rename: "重命名",
+  archive: "归档",
+  restore: "恢复",
+  deletePermanently: "永久删除",
+  confirmDelete: "确定要删除吗？此操作无法撤消。",
+  duplicateName: "已存在同名对话",
+  agentIsWorking: "代理正在工作...",
+  subagentIsWorking: "子代理正在工作...",
+  hideSubagents: "隐藏子代理",
+  showSubagents: "显示子代理",
+  groupConversations: "对话分组",
+  noGrouping: "不分组",
+  directory: "目录",
+  gitRepo: "Git 仓库",
+  other: "其他",
+  collapseSubagents: "折叠子代理",
+  expandSubagents: "展开子代理",
+  collapseSidebar: "折叠侧边栏",
+  closeConversations: "关闭对话",
+  yesterday: "昨天",
+  daysAgo: "天前",
+
+  // Message Input
+  messagePlaceholder: "输入消息、粘贴图片或附加文件...",
+  messagePlaceholderShort: "输入消息...",
+  attachFile: "附加文件",
+  sendMessage: "发送消息",
+  startVoiceInput: "开始语音输入",
+  stopVoiceInput: "停止语音输入",
+  dropFilesHere: "拖放文件到此处",
+  uploading: "上传中...",
+  uploadFailed: "上传失败",
+
+  // Models Modal
+  manageModels: "管理模型",
+  addModel: "添加模型",
+  editModel: "编辑模型",
+  loadingModels: "加载模型中...",
+  providerApiFormat: "提供商 / API 格式",
+  endpoint: "端点",
+  defaultEndpoint: "默认端点",
+  customEndpoint: "自定义端点",
+  model: "模型",
+  displayName: "显示名称",
+  nameShownInSelector: "在模型选择器中显示的名称",
+  apiKey: "API 密钥",
+  enterApiKey: "输入 API 密钥",
+  maxContextTokens: "最大上下文令牌数",
+  tags: "标签",
+  tagsPlaceholder: "逗号分隔，例如：slug, cheap",
+  tagsTooltip: '此模型的逗号分隔标签。使用 "slug" 标记此模型用于生成对话标题。如果没有模型带有 "slug" 标签，将使用对话当前的模型。',
+  testButton: "测试",
+  testingButton: "测试中...",
+  save: "保存",
+  cancel: "取消",
+  duplicate: "复制",
+  delete_: "删除",
+  modelNameRequired: "模型名称为必填项",
+  apiKeyRequired: "API 密钥为必填项",
+  noModelsConfigured: "未配置模型",
+  noModelsHint: "设置环境变量（如 ANTHROPIC_API_KEY），或使用 -gateway 参数，或在下方添加自定义模型。",
+
+  // Notifications Modal
+  notifications: "通知",
+  browserNotifications: "浏览器通知",
+  faviconBadge: "图标徽章",
+  editChannel: "编辑频道",
+  addChannel: "添加频道",
+  customChannels: "自定义频道",
+  noCustomChannels: "未配置自定义频道",
+  addWebhookHint: "添加 Webhook URL 以接收通知",
+  channelName: "频道名称",
+  channelType: "频道类型",
+  webhookUrl: "Webhook URL",
+  enabled: "已启用",
+  testNotification: "测试通知",
+  denied: "已拒绝",
+  noServerChannelsConfigured: "未配置服务器频道",
+  addOne: "添加一个",
+  edit: "编辑",
+
+  // Diff Viewer
+  noFiles: "无文件",
+  chooseFile: "选择文件以查看差异",
+  commentMode: "评论模式",
+  editMode: "编辑模式",
+
+  // Directory Picker
+  newFolderName: "新建文件夹名称",
+  create: "创建",
+  noMatchingDirectories: "没有匹配的目录",
+  noSubdirectories: "没有子目录",
+  createNewFolder: "创建新文件夹",
+
+  // Messages
+  copyCommitHash: "复制提交哈希",
+  clickToCopyCommitHash: "点击复制提交哈希",
+  unknownTool: "未知工具",
+  toolOutput: "工具输出",
+  errorOccurred: "发生错误",
+
+  // Version
+  updateAvailable: "有可用更新",
+
+  // Welcome / Empty State
+  welcomeTitle: "Shelley Agent",
+  welcomeSubtitle: "",
+  welcomeMessage: "Shelley 是一个运行在 {hostname} 上的代理。您可以让 Shelley 帮您完成各种任务。如果您使用 Shelley 构建了网站，可以通过 exe.dev 的代理功能（参见 {docsLink}）在 {proxyLink} 上访问。",
+  sendMessageToStart: "发送消息以开始对话。",
+  noModelsConfiguredHint: "未配置 AI 模型。按 Ctrl+K 或 ⌘+K 添加模型。",
+
+  // Status Bar
+  modelLabel: "模型：",
+  dirLabel: "目录：",
+
+  // Sidebar buttons
+  openConversations: "打开对话",
+  expandSidebar: "展开侧边栏",
+
+  // Language
+  language: "语言",
+  switchLanguage: "切换语言",
+  reportBug: "报告错误",
+  english: "English",
+  japanese: "日本語",
+  french: "Français",
+  russian: "Русский",
+  spanish: "Español",
+  upgoerFive: "Up-Goer Five",
+  simplifiedChinese: "简体中文",
+  traditionalChinese: "繁體中文",
+};

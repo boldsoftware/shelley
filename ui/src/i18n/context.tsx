@@ -6,6 +6,8 @@ import { fr } from "./fr";
 import { ru } from "./ru";
 import { es } from "./es";
 import { upgoer5 } from "./upgoer5";
+import { zhCN } from "./zh-CN";
+import { zhTW } from "./zh-TW";
 
 const LOCALE_STORAGE_KEY = "shelley-locale";
 
@@ -15,6 +17,8 @@ const translations: Record<Locale, TranslationKeys> = {
   fr,
   ru,
   es,
+  "zh-CN": zhCN,
+  "zh-TW": zhTW,
   upgoer5,
 };
 
