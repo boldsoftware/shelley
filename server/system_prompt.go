@@ -306,7 +306,7 @@ func findGuidanceFilesInDir(dir string) []string {
 // isGuidanceFile returns true if the lowercased filename is a recognized guidance file.
 func isGuidanceFile(lowerName string) bool {
 	switch lowerName {
-	case "agents.md", "agent.md", "claude.md", "dear_llm.md", "readme.md":
+	case "agents.md", "agent.md", "claude.md", "dear_llm.md", "readme.md", "shelley.md":
 		return true
 	}
 	return false
