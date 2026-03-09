@@ -466,7 +466,7 @@ function CommandPalette({
     const languageOptions: {
       loc: Locale;
       flag: string;
-      name: "english" | "japanese" | "french" | "russian" | "spanish" | "upgoerFive";
+      name: "english" | "japanese" | "french" | "russian" | "spanish" | "simplifiedChinese" | "traditionalChinese" | "upgoerFive";
       nativeName: string;
       keywords: string[];
     }[] = [
@@ -504,6 +504,20 @@ function CommandPalette({
         name: "spanish",
         nativeName: "Espa\u00f1ol",
         keywords: ["spanish", "es", "espa\u00f1ol"],
+      },
+      {
+        loc: "zh-CN",
+        flag: "\ud83c\udde8\ud83c\uddf3",
+        name: "simplifiedChinese",
+        nativeName: "\u7b80\u4f53\u4e2d\u6587",
+        keywords: ["chinese", "simplified", "zh", "zh-cn", "\u4e2d\u6587", "\u7b80\u4f53"],
+      },
+      {
+        loc: "zh-TW",
+        flag: "\ud83c\uddf9\ud83c\uddfc",
+        name: "traditionalChinese",
+        nativeName: "\u7e41\u9ad4\u4e2d\u6587",
+        keywords: ["chinese", "traditional", "zh", "zh-tw", "\u4e2d\u6587", "\u7e41\u9ad4"],
       },
       {
         loc: "upgoer5",

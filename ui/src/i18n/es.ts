@@ -212,4 +212,6 @@ export const es: TranslationKeys = {
   russian: "Русский",
   spanish: "Español",
   upgoerFive: "Up-Goer Five",
+  simplifiedChinese: "简体中文",
+  traditionalChinese: "繁體中文",
 };
