@@ -42,6 +42,10 @@ func TestByID(t *testing.T) {
 		{id: "claude-haiku-4.5", wantID: "claude-haiku-4.5", wantNil: false},
 		{id: "claude-opus-4.5", wantID: "claude-opus-4.5", wantNil: false},
 		{id: "claude-opus-4.6", wantID: "claude-opus-4.6", wantNil: false},
+		{id: "gemini-3-pro-vertex", wantID: "gemini-3-pro-vertex", wantNil: false},
+		{id: "gemini-3-flash-preview-vertex", wantID: "gemini-3-flash-preview-vertex", wantNil: false},
+		{id: "gemini-3.1-pro-preview-vertex", wantID: "gemini-3.1-pro-preview-vertex", wantNil: false},
+		{id: "gemini-2.5-pro-vertex", wantID: "gemini-2.5-pro-vertex", wantNil: false},
 		{id: "nonexistent", wantNil: true},
 	}
 

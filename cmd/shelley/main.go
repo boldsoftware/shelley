@@ -285,14 +285,17 @@ func setupToolSetConfig(llmProvider claudetool.LLMServiceProvider, llmManager se
 // buildLLMConfig constructs LLMConfig from environment variables and optional config file
 func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel string, database *db.DB) *server.LLMConfig {
 	llmCfg := &server.LLMConfig{
-		AnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
-		OpenAIAPIKey:    os.Getenv("OPENAI_API_KEY"),
-		GeminiAPIKey:    os.Getenv("GEMINI_API_KEY"),
-		FireworksAPIKey: os.Getenv("FIREWORKS_API_KEY"),
-		TerminalURL:     terminalURL,
-		DefaultModel:    defaultModel,
-		DB:              database,
-		Logger:          logger,
+		AnthropicAPIKey:     os.Getenv("ANTHROPIC_API_KEY"),
+		OpenAIAPIKey:        os.Getenv("OPENAI_API_KEY"),
+		GeminiAPIKey:        os.Getenv("GEMINI_API_KEY"),
+		FireworksAPIKey:     os.Getenv("FIREWORKS_API_KEY"),
+		VertexAICredentials: os.Getenv("GOOGLE_VERTEX_AI_CREDENTIALS"),
+		VertexAIProjectID:   os.Getenv("GOOGLE_CLOUD_PROJECT"),
+		VertexAIRegion:      os.Getenv("GOOGLE_VERTEX_AI_REGION"),
+		TerminalURL:         terminalURL,
+		DefaultModel:        defaultModel,
+		DB:                  database,
+		Logger:              logger,
 	}
 
 	if configPath != "" {
@@ -310,6 +313,9 @@ func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel s
 			DefaultModel         string           `json:"default_model"`
 			Links                []server.Link    `json:"links"`
 			NotificationChannels []map[string]any `json:"notification_channels"`
+			VertexAICredentials  string           `json:"vertex_ai_credentials"`
+			VertexAIProjectID    string           `json:"vertex_ai_project_id"`
+			VertexAIRegion       string           `json:"vertex_ai_region"`
 		}
 		if err := json.Unmarshal(data, &cfg); err != nil {
 			logger.Warn("Failed to parse config file", "path", configPath, "error", err)
@@ -357,6 +363,17 @@ func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel s
 		if len(cfg.NotificationChannels) > 0 {
 			llmCfg.NotificationChannels = cfg.NotificationChannels
 			logger.Info("Notification channels configured", "count", len(cfg.NotificationChannels))
+		}
+
+		// Vertex AI config from file overrides env vars
+		if cfg.VertexAICredentials != "" && llmCfg.VertexAICredentials == "" {
+			llmCfg.VertexAICredentials = cfg.VertexAICredentials
+		}
+		if cfg.VertexAIProjectID != "" && llmCfg.VertexAIProjectID == "" {
+			llmCfg.VertexAIProjectID = cfg.VertexAIProjectID
+		}
+		if cfg.VertexAIRegion != "" && llmCfg.VertexAIRegion == "" {
+			llmCfg.VertexAIRegion = cfg.VertexAIRegion
 		}
 	}
 

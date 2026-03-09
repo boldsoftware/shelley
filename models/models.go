@@ -14,6 +14,7 @@ import (
 	"shelley.exe.dev/llm/gem"
 	"shelley.exe.dev/llm/llmhttp"
 	"shelley.exe.dev/llm/oai"
+	"shelley.exe.dev/llm/vertex"
 	"shelley.exe.dev/loop"
 )
 
@@ -26,6 +27,7 @@ const (
 	ProviderFireworks Provider = "fireworks"
 	ProviderGemini    Provider = "gemini"
 	ProviderBuiltIn   Provider = "builtin"
+	ProviderVertexAI  Provider = "vertex"
 )
 
 // ModelSource describes where a model's configuration comes from
@@ -96,6 +98,11 @@ func (m Model) Source(cfg *Config) string {
 		}
 	}
 
+	// Vertex AI uses a credentials file, not a gateway key
+	if m.Provider == ProviderVertexAI {
+		return "$" + vertex.CredentialsFileEnv
+	}
+
 	// No gateway - use env var names based on RequiredEnvVars
 	if len(m.RequiredEnvVars) > 0 {
 		return "$" + m.RequiredEnvVars[0]
@@ -110,6 +117,11 @@ type Config struct {
 	OpenAIAPIKey    string
 	GeminiAPIKey    string
 	FireworksAPIKey string
+
+	// Vertex AI configuration
+	VertexAICredentials string // path to service account JSON key file
+	VertexAIProjectID   string // Google Cloud project ID (optional, inferred from credentials)
+	VertexAIRegion      string // Vertex AI region (optional, defaults to "global")
 
 	// Gateway is the base URL of the LLM gateway (optional)
 	// If set, model-specific suffixes will be appended
@@ -377,6 +389,82 @@ func All() []Model {
 			},
 		},
 		{
+			ID:              "gemini-3-pro-vertex",
+			Provider:        ProviderVertexAI,
+			Description:     "Gemini 3 Pro via Vertex AI",
+			RequiredEnvVars: []string{vertex.CredentialsFileEnv},
+			GatewayEnabled:  true,
+			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
+				if config.VertexAICredentials == "" {
+					return nil, fmt.Errorf("gemini-3-pro-vertex requires %s", vertex.CredentialsFileEnv)
+				}
+				return vertex.NewServiceFromCredentialsFile(
+					config.VertexAICredentials,
+					config.VertexAIProjectID,
+					config.VertexAIRegion,
+					vertex.PublisherGoogle,
+					vertex.Gemini30Pro,
+				)
+			},
+		},
+		{
+			ID:              "gemini-3-flash-preview-vertex",
+			Provider:        ProviderVertexAI,
+			Description:     "Gemini 3 Flash (preview) via Vertex AI",
+			RequiredEnvVars: []string{vertex.CredentialsFileEnv},
+			GatewayEnabled:  true,
+			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
+				if config.VertexAICredentials == "" {
+					return nil, fmt.Errorf("gemini-3-flash-preview-vertex requires %s", vertex.CredentialsFileEnv)
+				}
+				return vertex.NewServiceFromCredentialsFile(
+					config.VertexAICredentials,
+					config.VertexAIProjectID,
+					config.VertexAIRegion,
+					vertex.PublisherGoogle,
+					vertex.Gemini30FlashPreview,
+				)
+			},
+		},
+		{
+			ID:              "gemini-3.1-pro-preview-vertex",
+			Provider:        ProviderVertexAI,
+			Description:     "Gemini 3.1 Pro (preview) via Vertex AI",
+			RequiredEnvVars: []string{vertex.CredentialsFileEnv},
+			GatewayEnabled:  true,
+			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
+				if config.VertexAICredentials == "" {
+					return nil, fmt.Errorf("gemini-3.1-pro-preview-vertex requires %s", vertex.CredentialsFileEnv)
+				}
+				return vertex.NewServiceFromCredentialsFile(
+					config.VertexAICredentials,
+					config.VertexAIProjectID,
+					config.VertexAIRegion,
+					vertex.PublisherGoogle,
+					vertex.Gemini31ProPreview,
+				)
+			},
+		},
+		{
+			ID:              "gemini-2.5-pro-vertex",
+			Provider:        ProviderVertexAI,
+			Description:     "Gemini 2.5 Pro via Vertex AI",
+			RequiredEnvVars: []string{vertex.CredentialsFileEnv},
+			GatewayEnabled:  true,
+			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
+				if config.VertexAICredentials == "" {
+					return nil, fmt.Errorf("gemini-2.5-pro-vertex requires %s", vertex.CredentialsFileEnv)
+				}
+				return vertex.NewServiceFromCredentialsFile(
+					config.VertexAICredentials,
+					config.VertexAIProjectID,
+					config.VertexAIRegion,
+					vertex.PublisherGoogle,
+					vertex.Gemini25Pro,
+				)
+			},
+		},
+		{
 			ID:          "predictable",
 			Provider:    ProviderBuiltIn,
 			Description: "Deterministic test model (no API key)",
@@ -604,10 +692,16 @@ func NewManager(cfg *Config) (*Manager, error) {
 	for _, model := range All() {
 		// Skip non-gateway-enabled models when using a gateway
 		if useGateway && !model.GatewayEnabled {
+			if cfg.Logger != nil {
+				cfg.Logger.Warn("Model "+model.ID+" not enabled with gateway", "error", nil)
+			}
 			continue
 		}
 		svc, err := model.Factory(cfg, httpc)
 		if err != nil {
+			if cfg.Logger != nil {
+				cfg.Logger.Warn("Model "+model.ID+" not available", "error", err)
+			}
 			// Model not available (e.g., missing API key) - skip it
 			continue
 		}

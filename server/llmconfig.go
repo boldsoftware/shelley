@@ -21,6 +21,11 @@ type LLMConfig struct {
 	GeminiAPIKey    string
 	FireworksAPIKey string
 
+	// Vertex AI configuration
+	VertexAICredentials string // path to service account JSON key file
+	VertexAIProjectID   string // Google Cloud project ID (optional, inferred from credentials)
+	VertexAIRegion      string // Vertex AI region (optional, defaults to "global")
+
 	// Gateway is the base URL of the LLM gateway (optional)
 	Gateway string
 

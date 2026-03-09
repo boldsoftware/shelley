@@ -90,13 +90,16 @@ type LLMProvider interface {
 func NewLLMServiceManager(cfg *LLMConfig) LLMProvider {
 	// Convert LLMConfig to models.Config
 	modelConfig := &models.Config{
-		AnthropicAPIKey: cfg.AnthropicAPIKey,
-		OpenAIAPIKey:    cfg.OpenAIAPIKey,
-		GeminiAPIKey:    cfg.GeminiAPIKey,
-		FireworksAPIKey: cfg.FireworksAPIKey,
-		Gateway:         cfg.Gateway,
-		Logger:          cfg.Logger,
-		DB:              cfg.DB,
+		AnthropicAPIKey:     cfg.AnthropicAPIKey,
+		OpenAIAPIKey:        cfg.OpenAIAPIKey,
+		GeminiAPIKey:        cfg.GeminiAPIKey,
+		FireworksAPIKey:     cfg.FireworksAPIKey,
+		VertexAICredentials: cfg.VertexAICredentials,
+		VertexAIProjectID:   cfg.VertexAIProjectID,
+		VertexAIRegion:      cfg.VertexAIRegion,
+		Gateway:             cfg.Gateway,
+		Logger:              cfg.Logger,
+		DB:                  cfg.DB,
 	}
 
 	manager, err := models.NewManager(modelConfig)
