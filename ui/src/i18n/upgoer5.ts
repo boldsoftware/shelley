@@ -46,6 +46,8 @@ export const upgoer5: TranslationKeys = {
   // Command Palette Actions
   newConversationAction: "New Talk",
   startNewConversation: "Start a new talk",
+  changeDirectory: "Change Place",
+  changeWorkingDirectory: "Change where things happen",
   nextConversation: "Next Talk",
   switchToNext: "Go to the next talk",
   previousConversation: "Talk Before This",

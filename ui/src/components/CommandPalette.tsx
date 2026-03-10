@@ -31,6 +31,7 @@ interface CommandPaletteProps {
   onPreviousConversation: () => void;
   onNextUserMessage: () => void;
   onPreviousUserMessage: () => void;
+  onOpenDirectoryPicker: () => void;
   hasCwd: boolean;
 }
 
@@ -85,6 +86,7 @@ function CommandPalette({
   onPreviousConversation,
   onNextUserMessage,
   onPreviousUserMessage,
+  onOpenDirectoryPicker,
   hasCwd,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
@@ -97,6 +99,7 @@ function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<number | null>(null);
+  const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
 
   // Search conversations on the server
   const searchConversations = useCallback(async (searchQuery: string) => {
@@ -159,6 +162,29 @@ function CommandPalette({
         onClose();
       },
       keywords: ["new", "create", "start", "conversation", "chat"],
+    });
+
+    items.push({
+      id: "change-directory",
+      type: "action",
+      title: t("changeDirectory"),
+      subtitle: t("changeWorkingDirectory"),
+      shortcut: isMac ? "⌘⇧D" : "Ctrl+Shift+D",
+      icon: (
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+          />
+        </svg>
+      ),
+      action: () => {
+        onOpenDirectoryPicker();
+        onClose();
+      },
+      keywords: ["directory", "folder", "cwd", "working", "path", "dir", "change"],
     });
 
     items.push({
@@ -574,6 +600,7 @@ function CommandPalette({
     onOpenDiffViewer,
     onOpenModelsModal,
     onOpenNotificationsModal,
+    onOpenDirectoryPicker,
     onArchiveConversation,
     onNewConversationWithCwd,
     onClose,
