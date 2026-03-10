@@ -46,6 +46,8 @@ export const ja: TranslationKeys = {
   // Command Palette Actions
   newConversationAction: "新しい会話",
   startNewConversation: "新しい会話を始める",
+  changeDirectory: "ディレクトリを変更",
+  changeWorkingDirectory: "作業ディレクトリを変更",
   nextConversation: "次の会話",
   switchToNext: "次の会話に切り替える",
   previousConversation: "前の会話",

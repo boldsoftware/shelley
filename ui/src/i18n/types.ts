@@ -46,6 +46,8 @@ export interface TranslationKeys {
   // Command Palette Actions
   newConversationAction: string;
   startNewConversation: string;
+  changeDirectory: string;
+  changeWorkingDirectory: string;
   nextConversation: string;
   switchToNext: string;
   previousConversation: string;

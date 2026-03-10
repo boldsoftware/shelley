@@ -46,6 +46,8 @@ export const es: TranslationKeys = {
   // Command Palette Actions
   newConversationAction: "Nueva conversación",
   startNewConversation: "Iniciar una nueva conversación",
+  changeDirectory: "Cambiar directorio",
+  changeWorkingDirectory: "Cambiar directorio de trabajo",
   nextConversation: "Siguiente conversación",
   switchToNext: "Cambiar a la siguiente conversación",
   previousConversation: "Conversación anterior",

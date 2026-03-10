@@ -38,6 +38,7 @@ function DirectoryPickerModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // State for create directory mode
   const [isCreating, setIsCreating] = useState(false);
@@ -196,9 +197,47 @@ function DirectoryPickerModal({
     }
   };
 
+  // Track which entry is highlighted for keyboard navigation
+  const [selectedEntryIndex, setSelectedEntryIndex] = useState(-1);
+
+  // Reset selection when filter changes
+  useEffect(() => {
+    setSelectedEntryIndex(-1);
+  }, [filterPrefix, displayDir?.path]);
+
+  // Scroll selected entry into view
+  useEffect(() => {
+    if (selectedEntryIndex >= 0 && listRef.current) {
+      const el = listRef.current.querySelector(`[data-entry-index="${selectedEntryIndex}"]`);
+      el?.scrollIntoView({ block: "nearest" });
+    }
+  }, [selectedEntryIndex]);
+
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // Don't submit while IME is composing (e.g., converting Japanese hiragana to kanji)
     if (e.nativeEvent.isComposing) {
+      return;
+    }
+    if (e.key === "Tab" && filteredEntries.length > 0) {
+      // Tab-complete first matching entry
+      e.preventDefault();
+      const idx = selectedEntryIndex >= 0 ? selectedEntryIndex : 0;
+      const entry = filteredEntries[idx];
+      if (entry?.is_dir) {
+        const basePath = displayDir?.path || "";
+        const newPath = basePath === "/" ? `/${entry.name}/` : `${basePath}/${entry.name}/`;
+        setInputPath(newPath);
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedEntryIndex((prev) => Math.min(prev + 1, filteredEntries.length - 1));
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedEntryIndex((prev) => Math.max(prev - 1, -1));
       return;
     }
     if (e.key === "Enter") {
@@ -208,7 +247,41 @@ function DirectoryPickerModal({
   };
 
   const handleSelect = () => {
-    // Use the current directory path for selection
+    // If an entry is explicitly selected via arrow keys, use it
+    if (selectedEntryIndex >= 0 && filteredEntries[selectedEntryIndex]) {
+      const entry = filteredEntries[selectedEntryIndex];
+      if (entry.is_dir) {
+        const basePath = displayDir?.path || "";
+        const selectedPath = basePath === "/" ? `/${entry.name}` : `${basePath}/${entry.name}`;
+        onSelect(selectedPath);
+        onClose();
+        return;
+      }
+    }
+
+    // If there's a filter prefix and exactly one matching directory, select it
+    if (filterPrefix) {
+      const matchingDirs = filteredEntries.filter((e) => e.is_dir);
+      if (matchingDirs.length === 1) {
+        const basePath = displayDir?.path || "";
+        const selectedPath =
+          basePath === "/" ? `/${matchingDirs[0].name}` : `${basePath}/${matchingDirs[0].name}`;
+        onSelect(selectedPath);
+        onClose();
+        return;
+      }
+      // Multiple matches — navigate into the first one (like shell tab completion)
+      if (matchingDirs.length > 0) {
+        const basePath = displayDir?.path || "";
+        const selectedPath =
+          basePath === "/" ? `/${matchingDirs[0].name}` : `${basePath}/${matchingDirs[0].name}`;
+        onSelect(selectedPath);
+        onClose();
+        return;
+      }
+    }
+
+    // No filter — select the current directory
     const { dirPath } = parseInputPath(inputPath);
     const selectedPath = inputPath.endsWith("/") ? (dirPath === "/" ? "/" : dirPath) : dirPath;
     onSelect(selectedPath || displayDir?.path || "");
@@ -387,7 +460,7 @@ function DirectoryPickerModal({
 
           {/* Directory listing */}
           {!loading && !error && (
-            <div className="directory-picker-list">
+            <div className="directory-picker-list" ref={listRef}>
               {/* Parent directory entry */}
               {showParent && (
                 <button
@@ -412,11 +485,13 @@ function DirectoryPickerModal({
               )}
 
               {/* Directory entries */}
-              {filteredEntries.map((entry) => (
+              {filteredEntries.map((entry, index) => (
                 <button
                   key={entry.name}
-                  className={`directory-picker-entry${entry.git_head_subject ? " directory-picker-entry-git" : ""}`}
+                  className={`directory-picker-entry${entry.git_head_subject ? " directory-picker-entry-git" : ""}${index === selectedEntryIndex ? " directory-picker-entry-selected" : ""}`}
                   onClick={() => handleEntryClick(entry)}
+                  data-entry-index={index}
+                  onMouseEnter={() => setSelectedEntryIndex(index)}
                 >
                   <svg
                     fill="none"

@@ -46,6 +46,8 @@ export const zhCN: TranslationKeys = {
   // Command Palette Actions
   newConversationAction: "新建对话",
   startNewConversation: "开始新对话",
+  changeDirectory: "更改目录",
+  changeWorkingDirectory: "更改工作目录",
   nextConversation: "下一个对话",
   switchToNext: "切换到下一个对话",
   previousConversation: "上一个对话",

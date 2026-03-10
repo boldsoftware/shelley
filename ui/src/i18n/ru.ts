@@ -46,6 +46,8 @@ export const ru: TranslationKeys = {
   // Command Palette Actions
   newConversationAction: "Новый диалог",
   startNewConversation: "Начать новый диалог",
+  changeDirectory: "Сменить каталог",
+  changeWorkingDirectory: "Изменить рабочий каталог",
   nextConversation: "Следующий диалог",
   switchToNext: "Перейти к следующему диалогу",
   previousConversation: "Предыдущий диалог",

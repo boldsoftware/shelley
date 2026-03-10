@@ -46,6 +46,8 @@ export const zhTW: TranslationKeys = {
   // Command Palette Actions
   newConversationAction: "新建對話",
   startNewConversation: "開始新對話",
+  changeDirectory: "變更目錄",
+  changeWorkingDirectory: "變更工作目錄",
   nextConversation: "下一個對話",
   switchToNext: "切換到下一個對話",
   previousConversation: "上一個對話",
