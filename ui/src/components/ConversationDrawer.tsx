@@ -4,6 +4,7 @@ import { api } from "../services/api";
 import { useI18n } from "../i18n";
 
 type GroupBy = "none" | "cwd" | "git_repo";
+type SortBy = "activity" | "created" | "name";
 
 interface ConversationDrawerProps {
   isOpen: boolean;
@@ -51,6 +52,10 @@ function ConversationDrawer({
   const [groupBy, setGroupBy] = useState<GroupBy>(() => {
     const stored = localStorage.getItem("shelley-group-by");
     return stored === "cwd" || stored === "git_repo" ? stored : "none";
+  });
+  const [sortBy, setSortBy] = useState<SortBy>(() => {
+    const stored = localStorage.getItem("shelley-sort-by");
+    return stored === "created" || stored === "name" ? stored : "activity";
   });
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
@@ -353,6 +358,11 @@ function ConversationDrawer({
     setCollapsedGroups(new Set());
   };
 
+  const handleSortByChange = (value: SortBy) => {
+    setSortBy(value);
+    localStorage.setItem("shelley-sort-by", value);
+  };
+
   const toggleGroup = (groupKey: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
@@ -365,7 +375,27 @@ function ConversationDrawer({
     });
   };
 
-  const displayedConversations = showArchived ? archivedConversations : conversations;
+  const sortComparator = useCallback(
+    (a: Conversation, b: Conversation) => {
+      switch (sortBy) {
+        case "created":
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case "name":
+          return (a.slug || a.conversation_id).localeCompare(b.slug || b.conversation_id);
+        case "activity":
+        default:
+          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+      }
+    },
+    [sortBy],
+  );
+
+  const sortedConversations = useMemo(
+    () => [...conversations].sort(sortComparator),
+    [conversations, sortComparator],
+  );
+
+  const displayedConversations = showArchived ? archivedConversations : sortedConversations;
 
   // Compute grouped conversations
   const groupedConversations = useMemo(() => {
@@ -374,7 +404,7 @@ function ConversationDrawer({
     const groups = new Map<string, { label: string; conversations: ConversationWithState[] }>();
     const ungrouped: ConversationWithState[] = [];
 
-    for (const conv of conversations) {
+    for (const conv of sortedConversations) {
       let key: string | null = null;
 
       if (groupBy === "cwd") {
@@ -397,20 +427,20 @@ function ConversationDrawer({
       group.conversations.push(conv);
     }
 
-    const maxTime = (convs: ConversationWithState[]) =>
-      Math.max(...convs.map((c) => new Date(c.updated_at).getTime()));
-
-    // Sort groups by most recent conversation
-    const sorted = [...groups.entries()].sort(
-      (a, b) => maxTime(b[1].conversations) - maxTime(a[1].conversations),
-    );
+    // Sort groups by the first conversation in each group (already sorted by sortComparator)
+    const sorted = [...groups.entries()].sort((a, b) => {
+      const aFirst = a[1].conversations[0];
+      const bFirst = b[1].conversations[0];
+      if (!aFirst || !bFirst) return 0;
+      return sortComparator(aFirst, bFirst);
+    });
 
     if (ungrouped.length > 0) {
       sorted.push(["__ungrouped__", { label: t("other"), conversations: ungrouped }]);
     }
 
     return sorted;
-  }, [conversations, groupBy, showArchived, t]);
+  }, [sortedConversations, groupBy, showArchived, sortComparator, t]);
 
   const renderConversationItem = (conversation: Conversation | ConversationWithState) => {
     const convState = conversation as ConversationWithState;
@@ -661,7 +691,7 @@ function ConversationDrawer({
               <div className="group-by-wrapper" ref={groupMenuRef}>
                 <button
                   onClick={() => setGroupMenuOpen((v) => !v)}
-                  className={`btn-icon${groupBy !== "none" ? " group-by-active" : ""}`}
+                  className={`btn-icon${groupBy !== "none" || sortBy !== "activity" ? " group-by-active" : ""}`}
                   aria-label={t("groupConversations")}
                   title={t("groupConversations")}
                 >
@@ -676,6 +706,7 @@ function ConversationDrawer({
                 </button>
                 {groupMenuOpen && (
                   <div className="group-by-menu">
+                    <div className="group-by-menu-section-label">{t("groupConversations")}</div>
                     {(["none", "cwd", "git_repo"] as GroupBy[]).map((value) => {
                       const labels: Record<GroupBy, string> = {
                         none: t("noGrouping"),
@@ -688,6 +719,27 @@ function ConversationDrawer({
                           className={`group-by-menu-item${groupBy === value ? " active" : ""}`}
                           onClick={() => {
                             handleGroupByChange(value);
+                            setGroupMenuOpen(false);
+                          }}
+                        >
+                          {labels[value]}
+                        </button>
+                      );
+                    })}
+                    <div className="group-by-menu-divider" />
+                    <div className="group-by-menu-section-label">{t("sortConversations")}</div>
+                    {(["activity", "created", "name"] as SortBy[]).map((value) => {
+                      const labels: Record<SortBy, string> = {
+                        activity: t("sortByActivity"),
+                        created: t("sortByCreated"),
+                        name: t("sortByName"),
+                      };
+                      return (
+                        <button
+                          key={value}
+                          className={`group-by-menu-item${sortBy === value ? " active" : ""}`}
+                          onClick={() => {
+                            handleSortByChange(value);
                             setGroupMenuOpen(false);
                           }}
                         >

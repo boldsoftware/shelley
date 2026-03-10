@@ -541,6 +541,21 @@ button {
   color: var(--primary);
 }
 
+.group-by-menu-divider {
+  height: 1px;
+  margin: 0.25rem 0;
+  background: var(--border);
+}
+
+.group-by-menu-section-label {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
 /* Conversation Groups */
 .conversation-group {
   margin-bottom: 0.25rem;
