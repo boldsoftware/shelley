@@ -37,6 +37,10 @@ type LLMConfig struct {
 	// Each entry is a map with at least a "type" key, plus channel-specific fields.
 	NotificationChannels []map[string]any
 
+	// Slack integration tokens (optional)
+	SlackBotToken string
+	SlackAppToken string
+
 	// DB is the database for recording LLM requests (optional)
 	DB *db.DB
 
