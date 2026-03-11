@@ -186,6 +186,7 @@ func runServe(global GlobalConfig, args []string) {
 			logger.Error("Failed to create Slack bot", "error", err)
 			os.Exit(1)
 		}
+		svr.SetOnAgentDone(bot.OnAgentDone)
 		go func() {
 			if err := bot.Run(context.Background()); err != nil {
 				logger.Error("Slack bot stopped", "error", err)

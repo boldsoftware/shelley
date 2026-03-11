@@ -27,9 +27,8 @@ type ConversationAPI interface {
 	// SendMessage sends a message to an existing conversation.
 	SendMessage(ctx context.Context, conversationID, message, model string) error
 
-	// WatchConversation registers a callback that fires when the agent finishes a turn.
-	// The callback receives the final text response. Returns a cancel function.
-	WatchConversation(conversationID string, callback func(response string)) func()
+	// GetLatestAgentResponse returns the message ID and text of the latest agent message.
+	GetLatestAgentResponse(conversationID string) (messageID string, text string)
 }
 
 // Bot is a Slack bot that bridges Slack threads to Shelley conversations.
@@ -44,6 +43,10 @@ type Bot struct {
 	// thread mapping: slack "channel:thread_ts" -> shelley conversation ID
 	mu      sync.RWMutex
 	threads map[string]string // key: "C123:1234567890.123456" -> conversation_id
+	reverse map[string]string // key: conversation_id -> "C123:1234567890.123456"
+
+	// dedup: last message ID we posted per conversation to avoid re-posting
+	lastPosted map[string]string // key: conversation_id -> message_id
 }
 
 // Config holds configuration for the Slack bot.
@@ -74,12 +77,14 @@ func NewBot(cfg Config) (*Bot, error) {
 	socket := socketmode.New(api)
 
 	return &Bot{
-		api:     api,
-		socket:  socket,
-		convo:   cfg.Convo,
-		logger:  cfg.Logger.With("component", "slack"),
-		model:   cfg.Model,
-		threads: make(map[string]string),
+		api:        api,
+		socket:     socket,
+		convo:      cfg.Convo,
+		logger:     cfg.Logger.With("component", "slack"),
+		model:      cfg.Model,
+		threads:    make(map[string]string),
+		reverse:    make(map[string]string),
+		lastPosted: make(map[string]string),
 	}, nil
 }
 
@@ -96,6 +101,35 @@ func (b *Bot) Run(ctx context.Context) error {
 	go b.handleEvents(ctx)
 
 	return b.socket.RunContext(ctx)
+}
+
+// OnAgentDone is called by the server when any conversation's agent finishes a turn.
+// It checks whether the conversation belongs to a Slack thread and posts the response.
+func (b *Bot) OnAgentDone(conversationID string) {
+	b.mu.RLock()
+	key, ok := b.reverse[conversationID]
+	b.mu.RUnlock()
+	if !ok {
+		return
+	}
+
+	msgID, response := b.convo.GetLatestAgentResponse(conversationID)
+	if response == "" {
+		return
+	}
+
+	// Dedup: don't re-post the same message
+	b.mu.Lock()
+	if b.lastPosted[conversationID] == msgID {
+		b.mu.Unlock()
+		return
+	}
+	b.lastPosted[conversationID] = msgID
+	b.mu.Unlock()
+
+	parts := strings.SplitN(key, ":", 2)
+	channel, threadTS := parts[0], parts[1]
+	b.postMessage(channel, threadTS, response)
 }
 
 func (b *Bot) handleEvents(ctx context.Context) {
@@ -189,13 +223,11 @@ func (b *Bot) handleMention(ctx context.Context, event *slackevents.AppMentionEv
 
 	b.logger.Info("new conversation from slack", "conversation_id", convID, "channel", channel, "thread_ts", threadTS)
 
-	// Map thread to conversation
+	// Map thread <-> conversation
 	b.mu.Lock()
 	b.threads[key] = convID
+	b.reverse[convID] = key
 	b.mu.Unlock()
-
-	// Watch for agent responses
-	b.watchAndReply(convID, channel, threadTS)
 }
 
 // handleThreadMessage handles a message in a thread that the bot is watching.
@@ -239,16 +271,6 @@ func (b *Bot) sendToConversation(ctx context.Context, convID, channel, threadTS,
 		b.logger.Error("failed to send message", "error", err, "conversation_id", convID)
 		b.postMessage(channel, threadTS, "Sorry, I couldn't process your message. Please try again.")
 	}
-}
-
-// watchAndReply sets up a watcher that posts agent responses to the Slack thread.
-func (b *Bot) watchAndReply(convID, channel, threadTS string) {
-	b.convo.WatchConversation(convID, func(response string) {
-		if response == "" {
-			return
-		}
-		b.postMessage(channel, threadTS, response)
-	})
 }
 
 const slackMaxMessageLength = 3900 // leave room for formatting; actual limit is 4000

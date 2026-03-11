@@ -104,52 +104,8 @@ func (a *SlackConversationAPI) SendMessage(ctx context.Context, conversationID, 
 	return nil
 }
 
-// WatchConversation subscribes to a conversation and calls the callback each time
-// the agent finishes a turn with the full text of the agent's last message.
-// Returns a cancel function.
-func (a *SlackConversationAPI) WatchConversation(conversationID string, callback func(response string)) func() {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Get the conversation manager
-	manager, err := a.server.getOrCreateConversationManager(ctx, conversationID, "")
-	if err != nil {
-		a.server.logger.Error("failed to get manager for watch", "conversation_id", conversationID, "error", err)
-		return cancel
-	}
-
-	next := manager.subpub.Subscribe(ctx, 0)
-
-	go func() {
-		var lastMessageID string
-		for {
-			data, ok := next()
-			if !ok {
-				return
-			}
-
-			// We care about state transitions to "not working"
-			if data.ConversationState == nil || data.ConversationState.Working {
-				continue
-			}
-			if data.ConversationState.ConversationID != conversationID {
-				continue
-			}
-
-			// Fetch the latest agent message from the database
-			msgID, response := a.getLatestAgentResponse(conversationID)
-			if response == "" || msgID == lastMessageID {
-				continue
-			}
-			lastMessageID = msgID
-			callback(response)
-		}
-	}()
-
-	return cancel
-}
-
-// getLatestAgentResponse fetches the message ID and text of the latest agent message.
-func (a *SlackConversationAPI) getLatestAgentResponse(conversationID string) (messageID string, text string) {
+// GetLatestAgentResponse returns the message ID and text of the latest agent message.
+func (a *SlackConversationAPI) GetLatestAgentResponse(conversationID string) (messageID string, text string) {
 	msg, err := a.server.db.GetLatestMessage(context.Background(), conversationID)
 	if err != nil {
 		a.server.logger.Error("failed to get latest message", "conversation_id", conversationID, "error", err)
