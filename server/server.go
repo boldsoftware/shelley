@@ -1105,7 +1105,7 @@ func (s *Server) publishConversationState(state ConversationState) {
 		notifEvent = &event
 
 		if s.onAgentDone != nil {
-			s.onAgentDone(state.ConversationID)
+			go s.onAgentDone(state.ConversationID)
 		}
 	}
 
