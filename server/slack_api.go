@@ -120,6 +120,7 @@ func (a *SlackConversationAPI) WatchConversation(conversationID string, callback
 	next := manager.subpub.Subscribe(ctx, 0)
 
 	go func() {
+		var lastMessageID string
 		for {
 			data, ok := next()
 			if !ok {
@@ -135,39 +136,40 @@ func (a *SlackConversationAPI) WatchConversation(conversationID string, callback
 			}
 
 			// Fetch the latest agent message from the database
-			response := a.getLatestAgentResponse(conversationID)
-			if response != "" {
-				callback(response)
+			msgID, response := a.getLatestAgentResponse(conversationID)
+			if response == "" || msgID == lastMessageID {
+				continue
 			}
+			lastMessageID = msgID
+			callback(response)
 		}
 	}()
 
 	return cancel
 }
 
-// getLatestAgentResponse fetches the text of the latest agent message in a conversation.
-func (a *SlackConversationAPI) getLatestAgentResponse(conversationID string) string {
+// getLatestAgentResponse fetches the message ID and text of the latest agent message.
+func (a *SlackConversationAPI) getLatestAgentResponse(conversationID string) (messageID string, text string) {
 	msg, err := a.server.db.GetLatestMessage(context.Background(), conversationID)
 	if err != nil {
 		a.server.logger.Error("failed to get latest message", "conversation_id", conversationID, "error", err)
-		return ""
+		return "", ""
 	}
 
 	if msg.Type != string(db.MessageTypeAgent) || msg.LlmData == nil {
-		return ""
+		return "", ""
 	}
 
 	var llmMsg llm.Message
 	if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err != nil {
-		return ""
+		return "", ""
 	}
 
-	var text string
 	for _, c := range llmMsg.Content {
 		if c.Type == llm.ContentTypeText && c.Text != "" {
 			text = c.Text
 		}
 	}
 
-	return text
+	return msg.MessageID, text
 }
