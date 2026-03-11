@@ -1759,6 +1759,21 @@ function ChatInterface({
     }
   };
 
+  // Ctrl+C to cancel agent turn
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "c" && (e.ctrlKey || e.metaKey) && agentWorking) {
+        // Only cancel if there's no text selection (preserve normal copy)
+        const selection = window.getSelection();
+        if (selection && selection.toString().length > 0) return;
+        e.preventDefault();
+        handleCancel();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [agentWorking, cancelling, conversationId]);
+
   // Handler to distill and continue conversation
   const handleDistillConversation = async () => {
     if (!conversationId || !onDistillConversation) return;
@@ -2086,7 +2101,7 @@ function ChatInterface({
             onClick={handleCancel}
             disabled={cancelling}
             className="status-stop-button"
-            title={cancelling ? "Cancelling..." : "Stop"}
+            title={cancelling ? "Cancelling..." : "Stop (Ctrl+C)"}
           >
             <svg viewBox="0 0 24 24" fill="currentColor">
               <rect x="6" y="6" width="12" height="12" rx="1" />
