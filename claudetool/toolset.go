@@ -73,6 +73,8 @@ type ToolSetConfig struct {
 	// AvailableModels is the list of models the subagent can choose from.
 	// If nil, the list is built from LLMProvider.GetAvailableModels().
 	AvailableModels []AvailableModel
+	// SlackAPI, if set, enables the Slack tool.
+	SlackAPI SlackAPI
 }
 
 // ToolSet holds a set of tools for a single conversation.
@@ -303,6 +305,11 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 			AvailableModels: availableModels,
 		}
 		tools = append(tools, llmOneShotTool.Tool())
+	}
+
+	if cfg.SlackAPI != nil {
+		slackTool := &SlackTool{API: cfg.SlackAPI}
+		tools = append(tools, slackTool.Tool())
 	}
 
 	var cleanup func()

@@ -275,6 +275,11 @@ func (s *Server) SetOnAgentDone(fn func(conversationID string)) {
 	s.onAgentDone = fn
 }
 
+// SetSlackAPI enables the Slack tool for all conversations.
+func (s *Server) SetSlackAPI(api claudetool.SlackAPI) {
+	s.toolSetConfig.SlackAPI = api
+}
+
 // RegisterNotificationChannel adds a backend notification channel to the dispatcher.
 func (s *Server) RegisterNotificationChannel(ch notifications.Channel) {
 	s.notifDispatcher.Register(ch)

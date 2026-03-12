@@ -187,6 +187,7 @@ func runServe(global GlobalConfig, args []string) {
 			os.Exit(1)
 		}
 		svr.SetOnAgentDone(bot.OnAgentDone)
+		svr.SetSlackAPI(bot)
 		go func() {
 			if err := bot.Run(context.Background()); err != nil {
 				logger.Error("Slack bot stopped", "error", err)
