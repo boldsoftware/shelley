@@ -129,7 +129,9 @@ func (b *Bot) OnAgentDone(conversationID string) {
 
 	parts := strings.SplitN(key, ":", 2)
 	channel, threadTS := parts[0], parts[1]
-	b.PostMessage(channel, threadTS, response)
+	if err := b.PostMessage(channel, threadTS, response); err != nil {
+		b.logger.Error("failed to post agent response", "error", err, "channel", channel)
+	}
 }
 
 func (b *Bot) handleEvents(ctx context.Context) {
@@ -217,7 +219,9 @@ func (b *Bot) handleMention(ctx context.Context, event *slackevents.AppMentionEv
 	convID, err := b.convo.NewConversation(ctx, slackContext, b.model)
 	if err != nil {
 		b.logger.Error("failed to create conversation", "error", err, "channel", channel)
-		b.PostMessage(channel, threadTS, "Sorry, I couldn't start a conversation. Please try again.")
+		if err2 := b.PostMessage(channel, threadTS, "Sorry, I couldn't start a conversation. Please try again."); err2 != nil {
+			b.logger.Error("failed to post error message", "error", err2, "channel", channel)
+		}
 		return
 	}
 
@@ -269,14 +273,16 @@ func (b *Bot) handleThreadMessage(ctx context.Context, event *slackevents.Messag
 func (b *Bot) sendToConversation(ctx context.Context, convID, channel, threadTS, text string) {
 	if err := b.convo.SendMessage(ctx, convID, text, b.model); err != nil {
 		b.logger.Error("failed to send message", "error", err, "conversation_id", convID)
-		b.PostMessage(channel, threadTS, "Sorry, I couldn't process your message. Please try again.")
+		if err2 := b.PostMessage(channel, threadTS, "Sorry, I couldn't process your message. Please try again."); err2 != nil {
+			b.logger.Error("failed to post error message", "error", err2, "channel", channel)
+		}
 	}
 }
 
 const slackMaxMessageLength = 3900 // leave room for formatting; actual limit is 4000
 
-// postMessage sends a message to a Slack channel/thread, chunking if necessary.
-func (b *Bot) PostMessage(channel, threadTS, text string) {
+// PostMessage sends a message to a Slack channel/thread, chunking if necessary.
+func (b *Bot) PostMessage(channel, threadTS, text string) error {
 	chunks := chunkText(text, slackMaxMessageLength)
 	for _, chunk := range chunks {
 		opts := []slack.MsgOption{
@@ -287,10 +293,10 @@ func (b *Bot) PostMessage(channel, threadTS, text string) {
 		}
 		_, _, err := b.api.PostMessage(channel, opts...)
 		if err != nil {
-			b.logger.Error("failed to post slack message", "error", err, "channel", channel)
-			return
+			return fmt.Errorf("post to %s: %w", channel, err)
 		}
 	}
+	return nil
 }
 
 // chunkText splits text into chunks of at most maxLen bytes,

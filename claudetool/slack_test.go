@@ -11,8 +11,23 @@ type fakeSlackAPI struct {
 	posted []struct{ channel, threadTS, text string }
 }
 
-func (f *fakeSlackAPI) PostMessage(channel, threadTS, text string) {
+func (f *fakeSlackAPI) PostMessage(channel, threadTS, text string) error {
 	f.posted = append(f.posted, struct{ channel, threadTS, text string }{channel, threadTS, text})
+	return nil
+}
+
+func (f *fakeSlackAPI) ResolveChannel(_ context.Context, nameOrID string) (string, error) {
+	// Simulate resolution: strip # and map known names
+	switch nameOrID {
+	case "C001", "C002":
+		return nameOrID, nil
+	case "general":
+		return "C001", nil
+	case "#general":
+		return "C001", nil
+	default:
+		return "", fmt.Errorf("channel %q not found", nameOrID)
+	}
 }
 
 func (f *fakeSlackAPI) GetHistory(_ context.Context, channel string, limit int) ([]SlackMessage, error) {
@@ -54,6 +69,8 @@ func TestSlackTool(t *testing.T) {
 		wantErr bool
 	}{
 		{"send_message", slackInput{Action: "send_message", Channel: "C001", Text: "hi"}, false},
+		{"send_message_by_name", slackInput{Action: "send_message", Channel: "#general", Text: "hi"}, false},
+		{"send_message_unknown_channel", slackInput{Action: "send_message", Channel: "#nonexistent", Text: "hi"}, true},
 		{"send_message_no_channel", slackInput{Action: "send_message", Text: "hi"}, true},
 		{"send_message_no_text", slackInput{Action: "send_message", Channel: "C001"}, true},
 		{"get_history", slackInput{Action: "get_history", Channel: "C001"}, false},
@@ -77,11 +94,15 @@ func TestSlackTool(t *testing.T) {
 		})
 	}
 
-	// Verify send_message actually called the API
-	if len(api.posted) != 1 {
-		t.Fatalf("expected 1 posted message, got %d", len(api.posted))
+	// Verify send_message actually called the API (2 successful sends: by ID and by name)
+	if len(api.posted) != 2 {
+		t.Fatalf("expected 2 posted messages, got %d", len(api.posted))
 	}
 	if api.posted[0].text != "hi" {
 		t.Errorf("posted text = %q, want %q", api.posted[0].text, "hi")
+	}
+	// Channel name should have been resolved to ID
+	if api.posted[1].channel != "C001" {
+		t.Errorf("resolved channel = %q, want %q", api.posted[1].channel, "C001")
 	}
 }

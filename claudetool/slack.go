@@ -11,7 +11,8 @@ import (
 
 // SlackAPI is the interface the Slack tool needs. Implemented by the slack.Bot.
 type SlackAPI interface {
-	PostMessage(channel, threadTS, text string)
+	PostMessage(channel, threadTS, text string) error
+	ResolveChannel(ctx context.Context, nameOrID string) (string, error)
 	GetHistory(ctx context.Context, channel string, limit int) ([]SlackMessage, error)
 	GetThread(ctx context.Context, channel, threadTS string, limit int) ([]SlackMessage, error)
 	ListChannels(ctx context.Context) ([]SlackChannel, error)
@@ -72,7 +73,7 @@ const (
     },
     "channel": {
       "type": "string",
-      "description": "Channel ID (e.g. C01234567)"
+      "description": "Channel ID (e.g. C01234567) or channel name (e.g. #general)"
     },
     "text": {
       "type": "string",
@@ -126,7 +127,7 @@ func (s *SlackTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
 
 	switch req.Action {
 	case "send_message":
-		return s.sendMessage(req)
+		return s.sendMessage(ctx, req)
 	case "get_history":
 		return s.getHistory(ctx, req)
 	case "get_thread":
@@ -140,26 +141,37 @@ func (s *SlackTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
 	}
 }
 
-func (s *SlackTool) sendMessage(req slackInput) llm.ToolOut {
-	if req.Channel == "" {
-		return llm.ErrorfToolOut("channel is required")
+func (s *SlackTool) resolveChannel(ctx context.Context, nameOrID string) (string, error) {
+	if nameOrID == "" {
+		return "", fmt.Errorf("channel is required")
+	}
+	return s.API.ResolveChannel(ctx, nameOrID)
+}
+
+func (s *SlackTool) sendMessage(ctx context.Context, req slackInput) llm.ToolOut {
+	channel, err := s.resolveChannel(ctx, req.Channel)
+	if err != nil {
+		return llm.ErrorfToolOut("%v", err)
 	}
 	if req.Text == "" {
 		return llm.ErrorfToolOut("text is required")
 	}
-	s.API.PostMessage(req.Channel, req.ThreadTS, req.Text)
+	if err := s.API.PostMessage(channel, req.ThreadTS, req.Text); err != nil {
+		return llm.ErrorfToolOut("send message: %v", err)
+	}
 	return llm.ToolOut{LLMContent: llm.TextContent("Message sent.")}
 }
 
 func (s *SlackTool) getHistory(ctx context.Context, req slackInput) llm.ToolOut {
-	if req.Channel == "" {
-		return llm.ErrorfToolOut("channel is required")
+	channel, err := s.resolveChannel(ctx, req.Channel)
+	if err != nil {
+		return llm.ErrorfToolOut("%v", err)
 	}
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 20
 	}
-	msgs, err := s.API.GetHistory(ctx, req.Channel, limit)
+	msgs, err := s.API.GetHistory(ctx, channel, limit)
 	if err != nil {
 		return llm.ErrorfToolOut("get history: %v", err)
 	}
@@ -167,8 +179,9 @@ func (s *SlackTool) getHistory(ctx context.Context, req slackInput) llm.ToolOut 
 }
 
 func (s *SlackTool) getThread(ctx context.Context, req slackInput) llm.ToolOut {
-	if req.Channel == "" {
-		return llm.ErrorfToolOut("channel is required")
+	channel, err := s.resolveChannel(ctx, req.Channel)
+	if err != nil {
+		return llm.ErrorfToolOut("%v", err)
 	}
 	if req.ThreadTS == "" {
 		return llm.ErrorfToolOut("thread_ts is required")
@@ -177,7 +190,7 @@ func (s *SlackTool) getThread(ctx context.Context, req slackInput) llm.ToolOut {
 	if limit <= 0 {
 		limit = 50
 	}
-	msgs, err := s.API.GetThread(ctx, req.Channel, req.ThreadTS, limit)
+	msgs, err := s.API.GetThread(ctx, channel, req.ThreadTS, limit)
 	if err != nil {
 		return llm.ErrorfToolOut("get thread: %v", err)
 	}
@@ -200,8 +213,9 @@ func (s *SlackTool) listChannels(ctx context.Context) llm.ToolOut {
 }
 
 func (s *SlackTool) addReaction(ctx context.Context, req slackInput) llm.ToolOut {
-	if req.Channel == "" {
-		return llm.ErrorfToolOut("channel is required")
+	channel, err := s.resolveChannel(ctx, req.Channel)
+	if err != nil {
+		return llm.ErrorfToolOut("%v", err)
 	}
 	if req.Timestamp == "" {
 		return llm.ErrorfToolOut("timestamp is required")
@@ -209,7 +223,7 @@ func (s *SlackTool) addReaction(ctx context.Context, req slackInput) llm.ToolOut
 	if req.Emoji == "" {
 		return llm.ErrorfToolOut("emoji is required")
 	}
-	if err := s.API.AddReaction(ctx, req.Channel, req.Timestamp, req.Emoji); err != nil {
+	if err := s.API.AddReaction(ctx, channel, req.Timestamp, req.Emoji); err != nil {
 		return llm.ErrorfToolOut("add reaction: %v", err)
 	}
 	return llm.ToolOut{LLMContent: llm.TextContent("Reaction added.")}

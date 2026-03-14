@@ -3,6 +3,7 @@ package slack
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/slack-go/slack"
 
@@ -80,6 +81,27 @@ func (b *Bot) ListChannels(ctx context.Context) ([]claudetool.SlackChannel, erro
 		cursor = nextCursor
 	}
 	return all, nil
+}
+
+// ResolveChannel resolves a channel name (e.g. "#general" or "general") to a channel ID.
+// If the input already looks like a channel ID (starts with C/G/D), it is returned as-is.
+func (b *Bot) ResolveChannel(ctx context.Context, nameOrID string) (string, error) {
+	nameOrID = strings.TrimPrefix(nameOrID, "#")
+	// Already a channel ID
+	if len(nameOrID) > 0 && (nameOrID[0] == 'C' || nameOrID[0] == 'G' || nameOrID[0] == 'D') && !strings.ContainsAny(nameOrID, " -") {
+		return nameOrID, nil
+	}
+	// Search for matching channel name
+	channels, err := b.ListChannels(ctx)
+	if err != nil {
+		return "", fmt.Errorf("list channels: %w", err)
+	}
+	for _, ch := range channels {
+		if strings.EqualFold(ch.Name, nameOrID) {
+			return ch.ID, nil
+		}
+	}
+	return "", fmt.Errorf("channel %q not found (bot may not be a member)", nameOrID)
 }
 
 // AddReaction adds an emoji reaction to a message.
