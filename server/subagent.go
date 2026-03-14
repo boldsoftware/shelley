@@ -374,13 +374,32 @@ func (s *Server) handleGetSubagents(w http.ResponseWriter, r *http.Request, conv
 		return
 	}
 
-	subagents, err := s.db.GetSubagents(r.Context(), conversationID)
+	ctx := r.Context()
+	subagents, err := s.db.GetSubagents(ctx, conversationID)
 	if err != nil {
 		s.logger.Error("Failed to get subagents", "conversationID", conversationID, "error", err)
 		http.Error(w, "Failed to get subagents", 500)
 		return
 	}
 
+	// Get subagent counts so the UI knows which subagents have their own children
+	subagentCounts, err := s.db.GetSubagentCounts(ctx)
+	if err != nil {
+		s.logger.Error("Failed to get subagent counts", "error", err)
+		// Non-fatal, continue with zero counts
+		subagentCounts = make(map[string]int64)
+	}
+
+	result := make([]ConversationWithState, len(subagents))
+	workingStates := s.getWorkingConversations()
+	for i, sub := range subagents {
+		result[i] = ConversationWithState{
+			Conversation:  sub,
+			Working:       workingStates[sub.ConversationID],
+			SubagentCount: subagentCounts[sub.ConversationID],
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(subagents)
+	json.NewEncoder(w).Encode(result)
 }

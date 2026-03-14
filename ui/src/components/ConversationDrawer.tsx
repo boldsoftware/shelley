@@ -89,15 +89,45 @@ function ConversationDrawer({
     }
   }, [showActiveTrigger]);
 
-  // Load subagents for the current conversation (or parent if viewing a subagent)
-  // but don't auto-expand — expansion is explicit or triggered by real-time subagent creation.
+  // Load subagents for the current conversation (or ancestors if viewing a subagent).
+  // Walks up the parent chain to ensure all ancestor subagent lists are loaded and expanded.
   useEffect(() => {
     if (!showArchived && currentConversationId) {
       const parentId = viewedConversation?.parent_conversation_id;
       if (parentId) {
-        loadSubagents(parentId);
-        // Auto-expand parent when viewing one of its subagents
-        setExpandedSubagents((prev) => new Set([...prev, parentId]));
+        // Walk up the ancestor chain: load subagents for each ancestor and expand them
+        const expandAncestors = async (childParentId: string) => {
+          const idsToExpand: string[] = [childParentId];
+          let currentParentId: string | null = childParentId;
+
+          // Walk up the parent chain by fetching each parent's info
+          while (currentParentId) {
+            try {
+              await loadSubagents(currentParentId);
+              const parentConv = await api.getConversationInfo(currentParentId);
+              if (parentConv.parent_conversation_id) {
+                idsToExpand.push(parentConv.parent_conversation_id);
+                currentParentId = parentConv.parent_conversation_id;
+              } else {
+                // Reached the top-level conversation — load its subagents too
+                await loadSubagents(currentParentId);
+                currentParentId = null;
+              }
+            } catch {
+              break;
+            }
+          }
+
+          setExpandedSubagents((prev) => {
+            const next = new Set(prev);
+            for (const id of idsToExpand) {
+              next.add(id);
+            }
+            return next;
+          });
+        };
+
+        expandAncestors(parentId);
       } else {
         loadSubagents(currentConversationId);
       }
@@ -131,12 +161,24 @@ function ConversationDrawer({
           };
         }
       });
-      // Auto-expand parent only if it's the currently selected conversation
+      // Auto-expand parent if it's the currently selected conversation
+      // or if the parent is already visible (its own parent is expanded)
       if (parentId === currentConversationId) {
         setExpandedSubagents((prev) => new Set([...prev, parentId]));
+      } else {
+        setExpandedSubagents((prev) => {
+          // Check if the parent is a subagent whose own parent is already expanded
+          // This ensures depth-2+ subagents auto-expand when their parent is visible
+          for (const [grandparentId, subs] of Object.entries(subagents)) {
+            if (prev.has(grandparentId) && subs.some((s) => s.conversation_id === parentId)) {
+              return new Set([...prev, parentId]);
+            }
+          }
+          return prev;
+        });
       }
     }
-  }, [subagentUpdate, currentConversationId]);
+  }, [subagentUpdate, currentConversationId, subagents]);
 
   // Handle subagent working state updates
   useEffect(() => {
@@ -163,11 +205,14 @@ function ConversationDrawer({
     if (subagents[conversationId]) return;
     try {
       const subs = await api.getSubagents(conversationId);
-      if (subs && subs.length > 0) {
-        // Add working: false to each subagent
-        const subsWithState = subs.map((s) => ({ ...s, working: false, subagent_count: 0 }));
-        setSubagents((prev) => ({ ...prev, [conversationId]: subsWithState }));
-      }
+      // The server now returns ConversationWithState including subagent_count and working state;
+      // always set state (even if empty) so we don't re-fetch.
+      const subsWithState: ConversationWithState[] = (subs || []).map((s) => ({
+        ...s,
+        working: (s as ConversationWithState).working ?? false,
+        subagent_count: (s as ConversationWithState).subagent_count ?? 0,
+      }));
+      setSubagents((prev) => ({ ...prev, [conversationId]: subsWithState }));
     } catch (err) {
       console.error("Failed to load subagents:", err);
     }
@@ -442,6 +487,79 @@ function ConversationDrawer({
     return sorted;
   }, [sortedConversations, groupBy, showArchived, sortComparator, t]);
 
+  const renderSubagentList = (subagentList: ConversationWithState[]): React.ReactNode => {
+    return (
+      <div className="subagent-list drawer-subagent-list">
+        {subagentList.map((sub) => {
+          const isSubActive = sub.conversation_id === currentConversationId;
+          const childSubagents = subagents[sub.conversation_id] || [];
+          const childSubagentsLoaded = sub.conversation_id in subagents;
+          const childCount = childSubagentsLoaded ? childSubagents.length : (sub.subagent_count || 0);
+          const hasChildren = childCount > 0;
+          const isChildExpanded = expandedSubagents.has(sub.conversation_id);
+          return (
+            <React.Fragment key={sub.conversation_id}>
+              <div
+                className={`conversation-item subagent-item drawer-subagent-item-style ${isSubActive ? "active" : ""}`}
+                onClick={() => onSelectConversation(sub)}
+              >
+                <div className="drawer-conversation-item-flex-container">
+                  <div className="drawer-conversation-header-row">
+                    <div className="drawer-conversation-item-flex-container">
+                      <div className="conversation-title">{sub.slug || sub.conversation_id}</div>
+                    </div>
+                    {sub.working && (
+                      <span
+                        className="working-indicator drawer-subagent-working-indicator"
+                        title={t("subagentIsWorking")}
+                      />
+                    )}
+                  </div>
+                  <div className="conversation-meta">
+                    <span className="conversation-date drawer-subagent-date">
+                      {formatDate(sub.updated_at)}
+                    </span>
+                    {hasChildren && (
+                      <button
+                        onClick={(e) => toggleSubagents(e, sub.conversation_id)}
+                        className="subagent-count-badge"
+                        title={isChildExpanded ? t("hideSubagents") : t("showSubagents")}
+                        aria-label={isChildExpanded ? t("collapseSubagents") : t("expandSubagents")}
+                      >
+                        <span className="drawer-subagent-count-badge-text">{childCount}</span>
+                        <svg
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          className={`drawer-subagent-chevron ${
+                            isChildExpanded
+                              ? "drawer-subagent-chevron-expanded"
+                              : "drawer-subagent-chevron-collapsed"
+                          }`}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* Recursively render nested subagents */}
+              {isChildExpanded && childSubagents.length > 0 && (
+                renderSubagentList(childSubagents)
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderConversationItem = (conversation: Conversation | ConversationWithState) => {
     const convState = conversation as ConversationWithState;
     const isActive = conversation.conversation_id === currentConversationId;
@@ -642,37 +760,7 @@ function ConversationDrawer({
         </div>
         {/* Render subagents if expanded */}
         {!showArchived && isExpanded && conversationSubagents.length > 0 && (
-          <div className="subagent-list drawer-subagent-list">
-            {conversationSubagents.map((sub) => {
-              const isSubActive = sub.conversation_id === currentConversationId;
-              return (
-                <div
-                  key={sub.conversation_id}
-                  className={`conversation-item subagent-item drawer-subagent-item-style ${isSubActive ? "active" : ""}`}
-                  onClick={() => onSelectConversation(sub)}
-                >
-                  <div className="drawer-conversation-item-flex-container">
-                    <div className="drawer-conversation-header-row">
-                      <div className="drawer-conversation-item-flex-container">
-                        <div className="conversation-title">{sub.slug || sub.conversation_id}</div>
-                      </div>
-                      {sub.working && (
-                        <span
-                          className="working-indicator drawer-subagent-working-indicator"
-                          title={t("subagentIsWorking")}
-                        />
-                      )}
-                    </div>
-                    <div className="conversation-meta">
-                      <span className="conversation-date drawer-subagent-date">
-                        {formatDate(sub.updated_at)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          renderSubagentList(conversationSubagents)
         )}
       </React.Fragment>
     );

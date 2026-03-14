@@ -375,6 +375,15 @@ class ApiService {
     return response.json();
   }
 
+  async getConversationInfo(conversationId: string): Promise<Conversation> {
+    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}`);
+    if (!response.ok) {
+      throw new Error(`Failed to get conversation info: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return data.conversation;
+  }
+
   async getSubagents(conversationId: string): Promise<Conversation[]> {
     const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/subagents`);
     if (!response.ok) {
