@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
+    </linearGradient>
+    <linearGradient id="shell1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff5ee"/>
+      <stop offset="30%" stop-color="#fdd0b5"/>
+      <stop offset="60%" stop-color="#f4977a"/>
+      <stop offset="100%" stop-color="#e07a8a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="45%" cy="45%" r="40%">
+      <stop offset="0%" stop-color="#fcb69f" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#fcb69f" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-10%" y="-5%" width="125%" height="125%">
+      <feDropShadow dx="2" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <circle cx="256" cy="256" r="256" fill="url(#bg)"/>
+  <circle cx="240" cy="240" r="170" fill="url(#glow)"/>
+
+  <!-- Nautilus shell - golden spiral style -->
+  <g transform="translate(248, 258) scale(1.2) rotate(-20)" filter="url(#shadow)">
+
+    <!-- Main shell body - asymmetric nautilus shape -->
+    <path d="
+      M -15,110
+      Q -70,105 -110,65
+      Q -150,20 -150,-40
+      Q -150,-100 -110,-135
+      Q -70,-170 -10,-170
+      Q 55,-170 100,-130
+      Q 145,-90 145,-30
+      Q 145,30 110,70
+      Q 80,100 40,110
+      Q 10,118 -15,110 Z
+    " fill="url(#shell1)" stroke="#c47a5a" stroke-width="1.5"/>
+
+    <!-- Chamber walls - the signature nautilus spiral -->
+    <!-- Wall 1 (outermost) -->
+    <path d="
+      M -15,110
+      Q -50,90 -80,50
+      Q -115,0 -115,-55
+      Q -115,-110 -75,-140
+      Q -35,-170 20,-160
+      Q 75,-150 110,-105
+      Q 140,-60 130,-10
+      Q 120,35 90,60
+      Q 65,80 35,85
+    " fill="none" stroke="#b56a4a" stroke-width="2.2" stroke-opacity="0.4"/>
+
+    <!-- Wall 2 -->
+    <path d="
+      M 35,85
+      Q 0,82 -30,55
+      Q -65,22 -72,-18
+      Q -80,-60 -58,-92
+      Q -36,-125 0,-130
+      Q 40,-135 72,-108
+      Q 100,-80 100,-42
+      Q 100,-5 78,20
+      Q 60,40 38,48
+    " fill="none" stroke="#b56a4a" stroke-width="2" stroke-opacity="0.38"/>
+
+    <!-- Wall 3 -->
+    <path d="
+      M 38,48
+      Q 15,48 -5,30
+      Q -28,10 -32,-15
+      Q -36,-42 -20,-62
+      Q -4,-82 22,-82
+      Q 48,-82 65,-62
+      Q 80,-42 75,-18
+      Q 70,5 52,18
+      Q 40,26 30,28
+    " fill="none" stroke="#b56a4a" stroke-width="1.8" stroke-opacity="0.35"/>
+
+    <!-- Wall 4 -->
+    <path d="
+      M 30,28
+      Q 18,26 8,16
+      Q -4,4 -5,-12
+      Q -6,-28 4,-40
+      Q 14,-52 30,-50
+      Q 46,-48 54,-35
+      Q 60,-22 55,-10
+      Q 50,0 42,6
+      Q 36,10 32,10
+    " fill="none" stroke="#b56a4a" stroke-width="1.5" stroke-opacity="0.3"/>
+
+    <!-- Wall 5 (innermost) -->
+    <path d="
+      M 32,10
+      Q 26,9 22,3
+      Q 18,-4 20,-12
+      Q 22,-20 28,-24
+      Q 35,-28 42,-24
+      Q 48,-20 48,-12
+      Q 48,-5 44,-1
+      Q 40,2 37,2
+    " fill="none" stroke="#b56a4a" stroke-width="1.2" stroke-opacity="0.28"/>
+
+    <!-- Center whorl -->
+    <circle cx="38" cy="-12" r="5" fill="#c47a5a" fill-opacity="0.35"/>
+    <circle cx="38" cy="-12" r="2.5" fill="#a86050" fill-opacity="0.4"/>
+
+    <!-- Lip/opening highlight -->
+    <path d="
+      M -15,110 Q -25,95 -18,82 Q -10,72 2,78 Q 12,84 8,98
+    " fill="#fdd0b5" fill-opacity="0.35" stroke="#c47a5a" stroke-width="1" stroke-opacity="0.3"/>
+
+    <!-- Surface sheen -->
+    <path d="M -60,-140 Q -20,-165 40,-158" fill="none" stroke="white" stroke-width="3" stroke-opacity="0.12" stroke-linecap="round"/>
+    <ellipse cx="-30" cy="-135" rx="14" ry="5" fill="white" fill-opacity="0.08" transform="rotate(-25 -30 -135)"/>
+  </g>
+
+  <!-- Sparkles -->
+  <circle cx="130" cy="120" r="2" fill="white" fill-opacity="0.5"/>
+  <circle cx="390" cy="155" r="1.5" fill="white" fill-opacity="0.35"/>
+  <circle cx="115" cy="400" r="1.5" fill="white" fill-opacity="0.4"/>
+  <circle cx="405" cy="380" r="1.5" fill="white" fill-opacity="0.3"/>
+</svg>
