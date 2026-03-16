@@ -104,15 +104,31 @@ func runSkill(args []string) {
 			fmt.Fprintf(os.Stderr, "Usage: shelley skill cat SKILL_NAME\n")
 			os.Exit(1)
 		}
-		content, err := skills.FindByName(args[1], wd)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		dirs := skills.DefaultDirs()
+		dirs = append(dirs, skills.ProjectSkillsDirs(wd, "")...)
+		all := skills.Discover(dirs)
+		var found bool
+		for _, s := range all {
+			if s.Name == args[1] {
+				content, err := os.ReadFile(s.Path)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+					os.Exit(1)
+				}
+				fmt.Print(string(content))
+				found = true
+				break
+			}
+		}
+		if !found {
+			fmt.Fprintf(os.Stderr, "Error: skill %q not found\n", args[1])
 			os.Exit(1)
 		}
-		fmt.Print(content)
 
 	case "ls":
-		all := skills.ListAll(wd, "")
+		dirs := skills.DefaultDirs()
+		dirs = append(dirs, skills.ProjectSkillsDirs(wd, "")...)
+		all := skills.Discover(dirs)
 		for _, s := range all {
 			fmt.Printf("%s\t%s\n", s.Name, s.Description)
 		}

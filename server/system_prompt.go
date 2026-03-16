@@ -352,10 +352,14 @@ func isExeDev() bool {
 	return err == nil
 }
 
-// collectSkills discovers skills from default directories, project .skills dirs,
-// the project tree, and built-in skills. See skills.ListAll for precedence rules.
+// collectSkills discovers skills from default directories and project skills dirs.
+// It does NOT walk the entire project tree, since that would pick up application
+// skills (e.g. in pkg/ or assets/) that are not meant for the coding agent.
 func collectSkills(workingDir, gitRoot string) string {
-	return skills.ToPromptXML(skills.ListAll(workingDir, gitRoot))
+	dirs := skills.DefaultDirs()
+	dirs = append(dirs, skills.ProjectSkillsDirs(workingDir, gitRoot)...)
+	foundSkills := skills.Discover(dirs)
+	return skills.ToPromptXML(foundSkills)
 }
 
 // resolveAndNormalize returns a canonical lowercase path for dedup.

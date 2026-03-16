@@ -3,13 +3,11 @@
 package skills
 
 import (
-	"context"
 	"fmt"
 	"html"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 	"unicode"
 )
 
@@ -385,8 +383,9 @@ func expandPath(path string) string {
 	return path
 }
 
-// ProjectSkillsDirs returns all .skills directories found by walking up from
-// the working directory to the git root (or filesystem root if no git root).
+// ProjectSkillsDirs returns all .skills and .claude/skills directories found
+// by walking up from the working directory to the git root (or filesystem root
+// if no git root).
 func ProjectSkillsDirs(workingDir, gitRoot string) []string {
 	var dirs []string
 	seen := make(map[string]bool)
@@ -400,11 +399,14 @@ func ProjectSkillsDirs(workingDir, gitRoot string) []string {
 	// Walk up from working directory
 	current := workingDir
 	for current != "" {
-		skillsDir := filepath.Join(current, ".skills")
-		if !seen[skillsDir] {
-			if info, err := os.Stat(skillsDir); err == nil && info.IsDir() {
-				dirs = append(dirs, skillsDir)
-				seen[skillsDir] = true
+		// Check for .skills/ and .claude/skills/ in each directory
+		for _, rel := range []string{".skills", filepath.Join(".claude", "skills")} {
+			candidate := filepath.Join(current, rel)
+			if !seen[candidate] {
+				if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+					dirs = append(dirs, candidate)
+					seen[candidate] = true
+				}
 			}
 		}
 
@@ -423,257 +425,3 @@ func ProjectSkillsDirs(workingDir, gitRoot string) []string {
 	return dirs
 }
 
-// DiscoverInTree finds all skills by walking the directory tree looking for SKILL.md files.
-// If gitRoot is provided, it searches from gitRoot. Otherwise, it searches from workingDir downward.
-func DiscoverInTree(workingDir, gitRoot string) []Skill {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var skills []Skill
-	seen := make(map[string]bool)
-
-	// Determine root to search from
-	searchRoot := gitRoot
-	if searchRoot == "" {
-		searchRoot = workingDir
-	}
-
-	filepath.Walk(searchRoot, func(path string, info os.FileInfo, err error) error {
-		if ctx.Err() != nil {
-			return filepath.SkipAll
-		}
-		if err != nil {
-			return nil // Continue on errors
-		}
-
-		if info.IsDir() {
-			// Skip hidden directories and common ignore patterns
-			name := info.Name()
-			if name != "." && (strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Check if this is a SKILL.md file
-		lowerName := strings.ToLower(info.Name())
-		if lowerName != "skill.md" {
-			return nil
-		}
-
-		// Avoid duplicates
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			return nil
-		}
-		if seen[absPath] {
-			return nil
-		}
-		seen[absPath] = true
-
-		skill, err := Parse(path)
-		if err != nil {
-			return nil // Skip invalid skills
-		}
-
-		// Validate name matches parent directory
-		parentDir := filepath.Base(filepath.Dir(path))
-		if skill.Name != parentDir {
-			return nil
-		}
-
-		skills = append(skills, skill)
-		return nil
-	})
-
-	return skills
-}
-
-// ListAll returns all available skills (built-in + filesystem), deduplicated by name.
-//
-// Filesystem skills take priority over built-in skills with the same name.
-// An empty SKILL.md on the filesystem suppresses the corresponding built-in
-// skill entirely — this is the mechanism for users to disable built-in skills.
-//
-// If gitRoot is empty, it is computed from workingDir.
-func ListAll(workingDir, gitRoot string) []Skill {
-	if gitRoot == "" {
-		gitRoot = findGitRoot(workingDir)
-	}
-
-	dirs := DefaultDirs()
-	dirs = append(dirs, ProjectSkillsDirs(workingDir, gitRoot)...)
-
-	all := Discover(dirs)
-
-	// Add tree-discovered skills, deduplicated by name (first-seen wins).
-	seen := make(map[string]bool)
-	for _, s := range all {
-		seen[s.Name] = true
-	}
-	for _, s := range DiscoverInTree(workingDir, gitRoot) {
-		if !seen[s.Name] {
-			all = append(all, s)
-			seen[s.Name] = true
-		}
-	}
-
-	// Collect all skill names claimed on the filesystem (including empty
-	// SKILL.md files that wouldn't survive Parse). A filesystem SKILL.md —
-	// even an empty one — takes precedence over a built-in skill of the
-	// same name. This lets users suppress a built-in skill by placing an
-	// empty SKILL.md in the matching directory.
-	fsNames := filesystemSkillNames(dirs, workingDir, gitRoot)
-	for _, s := range all {
-		fsNames[s.Name] = true
-	}
-
-	for _, s := range BuiltinSkills() {
-		if !fsNames[s.Name] {
-			all = append(all, s)
-		}
-	}
-
-	return all
-}
-
-// FindByName looks up a skill by name and returns its raw SKILL.md content.
-//
-// Filesystem skills take priority: if a SKILL.md exists on the filesystem
-// for the given name it is returned, even if a built-in skill with the
-// same name exists. An empty filesystem SKILL.md suppresses the built-in
-// skill — this lets users delete built-in skills they don't want.
-func FindByName(name, workingDir string) (string, error) {
-	gitRoot := findGitRoot(workingDir)
-	dirs := DefaultDirs()
-	dirs = append(dirs, ProjectSkillsDirs(workingDir, gitRoot)...)
-
-	// Filesystem first: check directory-based discovery, then tree discovery.
-	for _, s := range Discover(dirs) {
-		if s.Name == name {
-			content, err := os.ReadFile(s.Path)
-			if err != nil {
-				return "", fmt.Errorf("reading skill %q: %w", name, err)
-			}
-			return string(content), nil
-		}
-	}
-	for _, s := range DiscoverInTree(workingDir, gitRoot) {
-		if s.Name == name {
-			content, err := os.ReadFile(s.Path)
-			if err != nil {
-				return "", fmt.Errorf("reading skill %q: %w", name, err)
-			}
-			return string(content), nil
-		}
-	}
-
-	// If a SKILL.md exists on the filesystem for this name but didn't
-	// parse (e.g. it's empty), the user is deliberately suppressing
-	// the built-in skill. Don't fall through.
-	fsNames := filesystemSkillNames(dirs, workingDir, gitRoot)
-	if fsNames[name] {
-		// Distinguish intentional suppression (empty file) from parse errors.
-		for _, dir := range dirs {
-			dir = expandPath(dir)
-			if path := findSkillMD(filepath.Join(dir, name)); path != "" {
-				if data, err := os.ReadFile(path); err == nil && len(strings.TrimSpace(string(data))) > 0 {
-					if _, parseErr := Parse(path); parseErr != nil {
-						return "", fmt.Errorf("skill %q (%s): %w", name, path, parseErr)
-					}
-				}
-				break
-			}
-		}
-		return "", fmt.Errorf("skill %q is disabled", name)
-	}
-
-	// Fall back to built-in skills.
-	for _, s := range BuiltinSkills() {
-		if s.Name == name {
-			data, err := builtinFS.ReadFile("builtin/" + name + "/SKILL.md")
-			if err != nil {
-				return "", fmt.Errorf("reading built-in skill %q: %w", name, err)
-			}
-			return string(data), nil
-		}
-	}
-
-	return "", fmt.Errorf("skill %q not found", name)
-}
-
-// filesystemSkillNames returns the set of names that have a SKILL.md file on
-// the filesystem, regardless of whether the file is valid/non-empty. This is
-// used to determine which built-in skills are suppressed: an empty SKILL.md in
-// a directory like ~/.config/shelley/schedule/ prevents the built-in "schedule"
-// skill from appearing.
-func filesystemSkillNames(dirs []string, workingDir, gitRoot string) map[string]bool {
-	names := make(map[string]bool)
-
-	// Scan skill directories for subdirs containing any SKILL.md.
-	for _, dir := range dirs {
-		dir = expandPath(dir)
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, entry := range entries {
-			skillDir := filepath.Join(dir, entry.Name())
-			if info, err := os.Stat(skillDir); err != nil || !info.IsDir() {
-				continue
-			}
-			if findSkillMD(skillDir) != "" {
-				names[entry.Name()] = true
-			}
-		}
-	}
-
-	// Also scan the project tree for any SKILL.md files.
-	searchRoot := gitRoot
-	if searchRoot == "" {
-		searchRoot = workingDir
-	}
-	if searchRoot != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		filepath.Walk(searchRoot, func(path string, info os.FileInfo, err error) error {
-			if ctx.Err() != nil {
-				return filepath.SkipAll
-			}
-			if err != nil {
-				return nil
-			}
-			if info.IsDir() {
-				n := info.Name()
-				if n != "." && (strings.HasPrefix(n, ".") || n == "node_modules" || n == "vendor") {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if strings.ToLower(info.Name()) == "skill.md" {
-				names[filepath.Base(filepath.Dir(path))] = true
-			}
-			return nil
-		})
-	}
-
-	return names
-}
-
-// findGitRoot returns the git root for the given directory, or "" if not in a repo.
-func findGitRoot(dir string) string {
-	if dir == "" {
-		return ""
-	}
-	current := dir
-	for {
-		if _, err := os.Stat(filepath.Join(current, ".git")); err == nil {
-			return current
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return ""
-		}
-		current = parent
-	}
-}
