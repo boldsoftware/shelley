@@ -2063,6 +2063,27 @@ button {
   margin: 0 auto;
 }
 
+.message-input-identicon {
+  flex: 0 0 auto;
+  margin-bottom: 0.3rem;
+  line-height: 0;
+  cursor: default;
+}
+
+.message-input-identicon svg {
+  width: 36px;
+  height: 36px;
+}
+
+.host-identicon {
+  display: block;
+  border-radius: 4px;
+}
+
+.dark .host-identicon .identicon-bg {
+  fill: var(--gray-700);
+}
+
 .message-textarea {
   width: 100%;
   box-sizing: border-box;
@@ -4215,6 +4236,10 @@ svg {
     flex-direction: column-reverse;
     align-items: stretch;
     gap: 0.375rem;
+  }
+
+  .message-input-identicon {
+    display: none;
   }
 
   .message-controls-row {

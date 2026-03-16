@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useI18n } from "../i18n";
+import HostIdenticon from "./HostIdenticon";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -519,6 +520,7 @@ function MessageInput({
   const isDraggingOver = dragCounter > 0;
   // Check if user is typing a shell command (starts with !)
   const isShellMode = message.trimStart().startsWith("!");
+  const hostname = window.__SHELLEY_INIT__?.hostname;
   // Note: injectedText is auto-inserted via useEffect, no manual UI needed
 
   return (
@@ -544,6 +546,11 @@ function MessageInput({
           accept="image/*,video/*,audio/*,.pdf,.txt,.md,.json,.csv,.xml,.html,.css,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.c,.cpp,.h,.hpp,.sh,.yaml,.yml,.toml,.sql,.log,*"
           aria-hidden="true"
         />
+        {hostname && (
+          <div className="message-input-identicon">
+            <HostIdenticon hostname={hostname} size={36} />
+          </div>
+        )}
         <div className="textarea-wrapper">
           {isShellMode && (
             <div className="shell-mode-indicator" title="This will run as a shell command">
