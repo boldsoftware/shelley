@@ -172,6 +172,9 @@ func runServe(global GlobalConfig, args []string) {
 	// Load notification channels from DB
 	svr.ReloadNotificationChannels()
 
+	// Generate host icon in background (uses LLM, non-blocking)
+	go svr.EnsureHostIcon()
+
 	// Start Slack bot if configured
 	if llmConfig.SlackBotToken != "" && llmConfig.SlackAppToken != "" {
 		slackAPI := server.NewSlackConversationAPI(svr)
