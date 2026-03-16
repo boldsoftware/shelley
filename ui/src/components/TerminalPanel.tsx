@@ -219,11 +219,9 @@ export default function TerminalPanel({
 }: TerminalPanelProps) {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [height, setHeight] = useState(300);
-  const [heightLocked, setHeightLocked] = useState(false);
-  const isFirstTerminalRef = useRef(true);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [statusMap, setStatusMap] = useState<
-    Map<string, { status: TermStatus; exitCode: number | null; contentLines: number }>
+    Map<string, { status: TermStatus; exitCode: number | null }>
   >(new Map());
   const isResizingRef = useRef(false);
   const startYRef = useRef(0);
@@ -265,60 +263,23 @@ export default function TerminalPanel({
   }, [terminals, activeTabId]);
 
   const handleStatusChange = useCallback(
-    (id: string, status: TermStatus, exitCode: number | null, contentLines: number) => {
+    (id: string, status: TermStatus, exitCode: number | null) => {
       setStatusMap((prev) => {
         const next = new Map(prev);
         const existing = next.get(id);
         // Don't overwrite exit status with ws.onclose
-        if (
-          existing &&
-          existing.status === "exited" &&
-          status === "exited" &&
-          contentLines === -1
-        ) {
+        if (existing && existing.status === "exited" && status === "exited") {
           return prev;
         }
-        const lines = contentLines === -1 ? existing?.contentLines || 0 : contentLines;
         next.set(id, {
           status,
           exitCode: exitCode ?? existing?.exitCode ?? null,
-          contentLines: lines,
         });
         return next;
       });
     },
     [],
   );
-
-  // Auto-size only for the very first terminal. After that, keep whatever height we have.
-  useEffect(() => {
-    if (heightLocked || !activeTabId) return;
-    if (!isFirstTerminalRef.current) return;
-    const info = statusMap.get(activeTabId);
-    if (!info) return;
-
-    const cellHeight = 17; // approximate
-    const minHeight = 60;
-    const maxHeight = 500;
-    const tabBarHeight = 38;
-
-    if (info.status === "exited" || info.status === "error") {
-      const needed = Math.min(
-        maxHeight,
-        Math.max(minHeight, info.contentLines * cellHeight + tabBarHeight + 16),
-      );
-      setHeight(needed);
-      setHeightLocked(true);
-      isFirstTerminalRef.current = false;
-    } else if (info.status === "running") {
-      // While the first command is still running, grow if needed
-      const needed = Math.min(
-        maxHeight,
-        Math.max(minHeight, info.contentLines * cellHeight + tabBarHeight + 16),
-      );
-      setHeight((prev) => Math.max(prev, needed));
-    }
-  }, [statusMap, activeTabId, heightLocked]);
 
   // Resize drag
   const handleResizeMouseDown = useCallback(
@@ -333,8 +294,6 @@ export default function TerminalPanel({
         // Dragging up increases height
         const delta = startYRef.current - e.clientY;
         setHeight(Math.max(80, Math.min(800, startHeightRef.current + delta)));
-        setHeightLocked(true);
-        isFirstTerminalRef.current = false;
       };
 
       const handleMouseUp = () => {
@@ -597,12 +556,7 @@ function TerminalInstanceWithRegistry({
   term: EphemeralTerminal;
   isVisible: boolean;
   isDark: boolean;
-  onStatusChange: (
-    id: string,
-    status: TermStatus,
-    exitCode: number | null,
-    contentLines: number,
-  ) => void;
+  onStatusChange: (id: string, status: TermStatus, exitCode: number | null) => void;
   onRegister: (id: string, xterm: Terminal) => void;
   onUnregister: (id: string) => void;
 }) {
@@ -655,7 +609,7 @@ function TerminalInstanceWithRegistry({
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: "init", cols: xterm.cols, rows: xterm.rows }));
-      onStatusChange(term.id, "running", null, 0);
+      onStatusChange(term.id, "running", null);
     };
 
     ws.onmessage = (event) => {
@@ -663,31 +617,12 @@ function TerminalInstanceWithRegistry({
         const msg = JSON.parse(event.data);
         if (msg.type === "output" && msg.data) {
           xterm.write(base64ToUint8Array(msg.data));
-          const buf = xterm.buffer.active;
-          let lines = 0;
-          for (let i = buf.length - 1; i >= 0; i--) {
-            const line = buf.getLine(i);
-            if (line && line.translateToString(true).trim()) {
-              lines = i + 1;
-              break;
-            }
-          }
-          onStatusChange(term.id, "running", null, lines);
         } else if (msg.type === "exit") {
           const code = parseInt(msg.data, 10) || 0;
-          const buf = xterm.buffer.active;
-          let lines = 0;
-          for (let i = buf.length - 1; i >= 0; i--) {
-            const line = buf.getLine(i);
-            if (line && line.translateToString(true).trim()) {
-              lines = i + 1;
-              break;
-            }
-          }
-          onStatusChange(term.id, "exited", code, lines);
+          onStatusChange(term.id, "exited", code);
         } else if (msg.type === "error") {
           xterm.write(`\r\n\x1b[31mError: ${msg.data}\x1b[0m\r\n`);
-          onStatusChange(term.id, "error", null, 0);
+          onStatusChange(term.id, "error", null);
         }
       } catch (err) {
         console.error("Failed to parse terminal message:", err);
@@ -696,7 +631,7 @@ function TerminalInstanceWithRegistry({
 
     ws.onerror = (event) => console.error("WebSocket error:", event);
     ws.onclose = () => {
-      onStatusChange(term.id, "exited", null, -1);
+      onStatusChange(term.id, "exited", null);
     };
 
     xterm.onData((data) => {
