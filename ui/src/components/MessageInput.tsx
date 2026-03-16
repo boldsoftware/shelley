@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useI18n } from "../i18n";
-import HostIdenticon from "./HostIdenticon";
+import HostIcon from "./HostIcon";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -548,7 +548,7 @@ function MessageInput({
         />
         {hostname && (
           <div className="message-input-identicon">
-            <HostIdenticon hostname={hostname} size={36} />
+            <HostIcon hostname={hostname} size={36} />
           </div>
         )}
         <div className="textarea-wrapper">

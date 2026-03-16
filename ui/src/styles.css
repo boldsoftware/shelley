@@ -2084,6 +2084,18 @@ button {
   fill: var(--gray-700);
 }
 
+.host-icon {
+  border-radius: 4px;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.host-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .message-textarea {
   width: 100%;
   box-sizing: border-box;
