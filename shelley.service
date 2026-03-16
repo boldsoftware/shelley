@@ -1,0 +1,16 @@
+[Unit]
+Description=Shelley coding agent
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h
+ExecStart=%h/shelley/bin/shelley serve
+Restart=always
+RestartSec=5
+EnvironmentFile=%h/.config/shelley/env
+Environment=HOME=%h
+Environment=PATH=%h/.local/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target
