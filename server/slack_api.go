@@ -32,7 +32,7 @@ func (a *SlackConversationAPI) NewConversation(ctx context.Context, message, mod
 		return "", fmt.Errorf("get llm service: %w", err)
 	}
 
-	conversation, err := a.server.db.CreateConversation(ctx, nil, true, nil, &model)
+	conversation, err := a.server.db.CreateConversation(ctx, nil, true, nil, &model, db.ConversationOptions{})
 	if err != nil {
 		return "", fmt.Errorf("create conversation: %w", err)
 	}
