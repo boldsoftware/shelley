@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"shelley.exe.dev/db"
+	"shelley.exe.dev/mcp"
 )
 
 // Link represents a custom link to be displayed in the UI
@@ -40,6 +41,9 @@ type LLMConfig struct {
 	// Slack integration tokens (optional)
 	SlackBotToken string
 	SlackAppToken string
+
+	// MCPServers is the list of MCP server configurations (optional)
+	MCPServers []mcp.ServerConfig
 
 	// DB is the database for recording LLM requests (optional)
 	DB *db.DB

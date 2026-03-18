@@ -75,6 +75,9 @@ type ToolSetConfig struct {
 	AvailableModels []AvailableModel
 	// SlackAPI, if set, enables the Slack tool.
 	SlackAPI SlackAPI
+	// MCPTools are tools discovered from MCP servers.
+	// If set, these are appended to the tool set.
+	MCPTools []*llm.Tool
 }
 
 // ToolSet holds a set of tools for a single conversation.
@@ -326,6 +329,11 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 			tools = append(tools, browserTools...)
 		}
 		cleanup = browserCleanup
+	}
+
+	// Append any MCP tools.
+	if len(cfg.MCPTools) > 0 {
+		tools = append(tools, cfg.MCPTools...)
 	}
 
 	return &ToolSet{
