@@ -46,6 +46,7 @@ import DirectoryPickerModal from "./DirectoryPickerModal";
 import { useVersionChecker } from "./VersionChecker";
 import TerminalPanel, { EphemeralTerminal } from "./TerminalPanel";
 import ModelPicker from "./ModelPicker";
+import ModelBar from "./ModelBar";
 import SystemPromptView from "./SystemPromptView";
 
 interface ContextUsageBarProps {
@@ -1876,6 +1877,7 @@ function ChatInterface({
     const systemMessage = messages.find((m) => m.type === "system" && !isDistillStatusMessage(m));
 
     return [
+      <ModelBar key="model-bar" model={currentConversation?.model} models={models} />,
       systemMessage && <SystemPromptView key="system-prompt" message={systemMessage} />,
       ...rendered,
     ];
