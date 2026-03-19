@@ -400,6 +400,8 @@ type mcpServerJSONConfig struct {
 	Command string            `json:"command"`
 	Args    []string          `json:"args"`
 	Env     map[string]string `json:"env"`
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers"`
 }
 
 // buildLLMConfig constructs LLMConfig from environment variables and optional config file
@@ -491,8 +493,8 @@ func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel s
 
 		// Convert MCP server configs.
 		for _, mcpCfg := range cfg.MCPServers {
-			if mcpCfg.Command == "" {
-				logger.Warn("Skipping MCP server with empty command", "name", mcpCfg.Name)
+			if mcpCfg.Command == "" && mcpCfg.URL == "" {
+				logger.Warn("Skipping MCP server with neither command nor url", "name", mcpCfg.Name)
 				continue
 			}
 			llmCfg.MCPServers = append(llmCfg.MCPServers, mcp.ServerConfig{
@@ -500,6 +502,8 @@ func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel s
 				Command: mcpCfg.Command,
 				Args:    mcpCfg.Args,
 				Env:     mcpCfg.Env,
+				URL:     mcpCfg.URL,
+				Headers: mcpCfg.Headers,
 			})
 		}
 		if len(llmCfg.MCPServers) > 0 {

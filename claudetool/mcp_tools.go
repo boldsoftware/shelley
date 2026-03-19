@@ -14,40 +14,40 @@ import (
 // MCPManager manages connections to MCP servers and their tools.
 // It is safe for concurrent use.
 type MCPManager struct {
-	mu      sync.Mutex
-	clients []*mcp.Client
-	tools   []*llm.Tool
+	mu         sync.Mutex
+	transports []mcp.Transport
+	tools      []*llm.Tool
 }
 
-// NewMCPManager creates a new MCPManager, launches all configured MCP servers,
+// NewMCPManager creates a new MCPManager, connects to all configured MCP servers,
 // performs the initialization handshake, discovers their tools, and wraps them
 // as Shelley tools.
 func NewMCPManager(ctx context.Context, configs []mcp.ServerConfig) (*MCPManager, error) {
 	m := &MCPManager{}
 
 	for _, cfg := range configs {
-		client, err := mcp.NewClient(ctx, cfg)
+		transport, err := mcp.NewTransport(ctx, cfg)
 		if err != nil {
 			// Log and skip failed servers rather than failing entirely.
 			slog.Error("mcp: failed to start server", "name", cfg.Name, "error", err)
 			continue
 		}
 
-		tools, err := client.ListTools(ctx)
+		tools, err := transport.ListTools(ctx)
 		if err != nil {
 			slog.Error("mcp: failed to list tools", "name", cfg.Name, "error", err)
-			client.Close()
+			transport.Close()
 			continue
 		}
 
 		slog.Info("mcp: discovered tools", "name", cfg.Name, "count", len(tools))
 
 		for _, ti := range tools {
-			tool := wrapMCPTool(client, cfg.Name, ti)
+			tool := wrapMCPTool(transport, cfg.Name, ti)
 			m.tools = append(m.tools, tool)
 		}
 
-		m.clients = append(m.clients, client)
+		m.transports = append(m.transports, transport)
 	}
 
 	return m, nil
@@ -61,7 +61,7 @@ func (m *MCPManager) Tools() []*llm.Tool {
 	return m.tools
 }
 
-// Close shuts down all MCP server subprocesses.
+// Close shuts down all MCP server connections.
 func (m *MCPManager) Close() error {
 	if m == nil {
 		return nil
@@ -69,18 +69,18 @@ func (m *MCPManager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for _, c := range m.clients {
-		if err := c.Close(); err != nil {
+	for _, t := range m.transports {
+		if err := t.Close(); err != nil {
 			slog.Error("mcp: error closing client", "error", err)
 		}
 	}
-	m.clients = nil
+	m.transports = nil
 	return nil
 }
 
 // wrapMCPTool converts an MCP ToolInfo into a Shelley *llm.Tool that forwards
 // calls to the MCP server.
-func wrapMCPTool(client *mcp.Client, serverName string, ti mcp.ToolInfo) *llm.Tool {
+func wrapMCPTool(transport mcp.Transport, serverName string, ti mcp.ToolInfo) *llm.Tool {
 	// Build a description that includes the server name for disambiguation.
 	desc := ti.Description
 	if serverName != "" {
@@ -100,7 +100,7 @@ func wrapMCPTool(client *mcp.Client, serverName string, ti mcp.ToolInfo) *llm.To
 		Description: desc,
 		InputSchema: schema,
 		Run: func(ctx context.Context, input json.RawMessage) llm.ToolOut {
-			result, err := client.CallTool(ctx, ti.Name, input)
+			result, err := transport.CallTool(ctx, ti.Name, input)
 			if err != nil {
 				return llm.ToolOut{Error: err}
 			}

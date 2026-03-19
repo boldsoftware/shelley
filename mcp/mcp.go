@@ -1,8 +1,10 @@
 // Package mcp implements a client for the Model Context Protocol (MCP).
 //
-// MCP uses JSON-RPC 2.0 over stdin/stdout to communicate with tool servers.
-// The client spawns a server subprocess, performs the initialization handshake,
-// and provides methods to list and call tools.
+// MCP supports two transports:
+//   - stdio: spawns a server subprocess and communicates via JSON-RPC 2.0 over stdin/stdout
+//   - HTTP Streamable: POSTs JSON-RPC 2.0 requests to a server URL
+//
+// Both transports implement the Transport interface.
 package mcp
 
 import (
@@ -20,12 +22,36 @@ import (
 	"sync/atomic"
 )
 
-// ServerConfig describes how to launch an MCP server.
+// Transport is the interface for communicating with an MCP server.
+// Both the stdio Client and the HTTPClient implement this interface.
+type Transport interface {
+	ListTools(ctx context.Context) ([]ToolInfo, error)
+	CallTool(ctx context.Context, name string, arguments json.RawMessage) (string, error)
+	Close() error
+}
+
+// ServerConfig describes how to connect to an MCP server.
+// If URL is set, the HTTP Streamable transport is used.
+// If Command is set, the stdio transport is used.
 type ServerConfig struct {
 	Name    string            // human-readable name (e.g., "vestige")
-	Command string            // binary to execute
-	Args    []string          // command-line arguments
-	Env     map[string]string // extra environment variables (merged with os.Environ)
+	Command string            // binary to execute (stdio transport)
+	Args    []string          // command-line arguments (stdio transport)
+	Env     map[string]string // extra environment variables (stdio transport)
+	URL     string            // server URL (HTTP Streamable transport)
+	Headers map[string]string // extra HTTP headers, e.g. auth keys (HTTP transport)
+}
+
+// NewTransport creates a Transport for the given server config.
+// It picks the appropriate implementation based on whether URL or Command is set.
+func NewTransport(ctx context.Context, cfg ServerConfig) (Transport, error) {
+	if cfg.URL != "" {
+		return NewHTTPClient(ctx, cfg)
+	}
+	if cfg.Command != "" {
+		return NewClient(ctx, cfg)
+	}
+	return nil, fmt.Errorf("mcp: server %q has neither URL nor Command set", cfg.Name)
 }
 
 // ToolInfo describes a tool exposed by an MCP server.
