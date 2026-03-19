@@ -10,7 +10,7 @@ interface SubagentToolProps {
   toolResult?: LLMContent[];
   hasError?: boolean;
   executionTime?: string;
-  displayData?: { slug?: string; conversation_id?: string };
+  displayData?: { slug?: string; conversation_id?: string; cli_agent?: string; status?: string };
 }
 
 function SubagentTool({
@@ -33,6 +33,11 @@ function SubagentTool({
   const prompt = input.prompt || "";
   const wait = input.wait !== false;
   const timeout = input.timeout_seconds || 60;
+
+  // Detect CLI agent backend from display data
+  const cliAgent = displayData?.cli_agent; // "claude-cli" or "codex-cli"
+  const cliAgentLabel =
+    cliAgent === "claude-cli" ? "Claude CLI" : cliAgent === "codex-cli" ? "Codex CLI" : null;
 
   // Extract result text
   const resultText =
@@ -58,6 +63,7 @@ function SubagentTool({
         <div className="tool-summary">
           <span className={`tool-emoji ${isRunning ? "running" : ""}`}>⚡</span>
           <span className="tool-name">subagent</span>
+          {cliAgentLabel && <span className="tool-badge cli-agent-badge">{cliAgentLabel}</span>}
           {isComplete && hasError && <span className="tool-error">✗</span>}
           {isComplete && !hasError && <span className="tool-success">✓</span>}
           <span className="tool-command">

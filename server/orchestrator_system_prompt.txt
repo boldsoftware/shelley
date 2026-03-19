@@ -32,6 +32,14 @@ Initial pwd: {{.WorkingDirectory}}
 {{if .GitInfo}}
 Git root: {{.GitInfo.Root}}
 {{end}}
+{{if .ShelleyDBPath}}
+<conversation_history>
+To look up the user's messages in this conversation:
+sqlite3 "{{.ShelleyDBPath}}" "SELECT json_extract(llm_data, '$.Content[0].Text') FROM messages WHERE conversation_id='{{.ConversationID}}' AND type='user' AND json_extract(llm_data, '$.Content[0].Type') = 2 ORDER BY sequence_id;"
+
+Pass this query (with the conversation ID) to subagents so they can look up the user's original request.
+</conversation_history>
+{{end}}
 {{if .Codebase}}
 <customization>
 AGENTS.md/CLAUDE.md contain project conventions. Contents included below. Pass relevant conventions to subagents in their prompts.

@@ -122,10 +122,14 @@ type OrchestratorToolSetConfig struct {
 	OnWorkingDirChange func(newDir string)
 	// EnableBrowser enables browser tools (for read_image / screenshot viewing).
 	EnableBrowser bool
+	// CLIAgent, if non-empty, uses a CLI subagent tool instead of native subagent.
+	// Valid values: "claude-cli", "codex-cli".
+	CLIAgent string
 }
 
 // NewOrchestratorToolSet creates a reduced tool set for orchestrator mode.
-// It includes: subagent, read_context_file, output_iframe, and read_image (from browser tools).
+// It includes: subagent, read_context_file, output_iframe, change_dir, and read_image (from browser tools).
+// NOTE: keyword_search is intentionally excluded — the orchestrator delegates search to subagents.
 func NewOrchestratorToolSet(ctx context.Context, cfg OrchestratorToolSetConfig) *ToolSet {
 	workingDir := cfg.WorkingDir
 	if workingDir == "" {
@@ -153,12 +157,6 @@ func NewOrchestratorToolSet(ctx context.Context, cfg OrchestratorToolSetConfig) 
 	}
 	tools = append(tools, changeDirTool.Tool())
 
-	// Keyword search tool (read-only codebase exploration)
-	if cfg.LLMProvider != nil {
-		keywordTool := NewKeywordToolWithWorkingDir(cfg.LLMProvider, wd)
-		tools = append(tools, keywordTool.Tool())
-	}
-
 	// Read context file tool
 	if cfg.ContextDir != "" {
 		readCtxTool := &ReadContextFileTool{ContextDir: cfg.ContextDir}
@@ -177,8 +175,15 @@ func NewOrchestratorToolSet(ctx context.Context, cfg OrchestratorToolSetConfig) 
 		}
 	}
 
-	// Subagent tool
-	if cfg.SubagentRunner != nil && cfg.SubagentDB != nil && cfg.ParentConversationID != "" {
+	// Subagent tool: use CLI subagent if CLIAgent is a CLI agent, otherwise native subagent.
+	// CLIAgent of "" or "shelley" means use the native Shelley subagent.
+	if cfg.CLIAgent != "" && cfg.CLIAgent != "shelley" {
+		cliSubagentTool := &CLISubagentTool{
+			CLIAgent:   cfg.CLIAgent,
+			WorkingDir: wd,
+		}
+		tools = append(tools, cliSubagentTool.Tool())
+	} else if cfg.SubagentRunner != nil && cfg.SubagentDB != nil && cfg.ParentConversationID != "" {
 		subagentTool := &SubagentTool{
 			DB:                   cfg.SubagentDB,
 			ParentConversationID: cfg.ParentConversationID,

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -29,6 +30,19 @@ import (
 	"shelley.exe.dev/ui"
 	"shelley.exe.dev/version"
 )
+
+// detectCLIAgents checks which CLI agent binaries are available in PATH.
+// Returns a list of agent identifiers (e.g., "claude-cli", "codex-cli").
+func detectCLIAgents() []string {
+	var agents []string
+	if _, err := exec.LookPath("claude"); err == nil {
+		agents = append(agents, "claude-cli")
+	}
+	if _, err := exec.LookPath("codex"); err == nil {
+		agents = append(agents, "codex-cli")
+	}
+	return agents
+}
 
 // handleRead serves files from limited allowed locations via /api/read?path=
 func (s *Server) handleRead(w http.ResponseWriter, r *http.Request) {
@@ -444,6 +458,7 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 
 	// Inject notification channel type metadata for the settings modal
 	initData["notification_channel_types"] = s.getNotificationChannelTypes()
+	initData["cli_agents"] = detectCLIAgents()
 
 	initJSON, err := json.Marshal(initData)
 	if err != nil {
@@ -792,6 +807,10 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 		convOpts = *req.ConversationOptions
 		if convOpts.Type != "" && convOpts.Type != "normal" && convOpts.Type != "orchestrator" {
 			http.Error(w, fmt.Sprintf("Invalid conversation options type: %s", convOpts.Type), http.StatusBadRequest)
+			return
+		}
+		if convOpts.SubagentBackend != "" && convOpts.SubagentBackend != "shelley" && convOpts.SubagentBackend != "claude-cli" && convOpts.SubagentBackend != "codex-cli" {
+			http.Error(w, fmt.Sprintf("Invalid subagent_backend: %s; must be one of: shelley, claude-cli, codex-cli", convOpts.SubagentBackend), http.StatusBadRequest)
 			return
 		}
 	}

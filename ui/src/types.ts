@@ -60,7 +60,10 @@ export interface ChatRequest {
   message: string;
   model?: string;
   cwd?: string;
-  conversation_options?: { type?: "normal" | "orchestrator" };
+  conversation_options?: {
+    type?: "normal" | "orchestrator";
+    subagent_backend?: "shelley" | "claude-cli" | "codex-cli";
+  };
   queue?: boolean;
 }
 // Notification event types
@@ -98,6 +101,7 @@ export interface InitData {
   user_agents_md_path?: string;
   user_agents_md_content?: string;
   notification_channel_types?: import("./services/api").ChannelTypeInfo[];
+  cli_agents?: string[]; // Available CLI agents (e.g., "claude-cli", "codex-cli")
 }
 
 // Extend Window interface to include our init data

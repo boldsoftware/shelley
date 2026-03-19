@@ -39,6 +39,7 @@ import ChangeDirTool from "./ChangeDirTool";
 import SubagentTool from "./SubagentTool";
 import LLMOneShotTool from "./LLMOneShotTool";
 import OutputIframeTool from "./OutputIframeTool";
+import ReadContextFileTool from "./ReadContextFileTool";
 import BrowserEmulateTool from "./BrowserEmulateTool";
 import BrowserNetworkTool from "./BrowserNetworkTool";
 import BrowserAccessibilityTool from "./BrowserAccessibilityTool";
@@ -244,6 +245,7 @@ const TOOL_COMPONENTS: Record<string, React.ComponentType<any>> = {
   change_dir: ChangeDirTool,
   subagent: SubagentTool,
   output_iframe: OutputIframeTool,
+  read_context_file: ReadContextFileTool,
   llm_one_shot: LLMOneShotTool,
   browser_emulate: BrowserEmulateTool,
   browser_network: BrowserNetworkTool,
@@ -467,6 +469,7 @@ interface ChatInterfaceProps {
     model: string,
     cwd?: string,
     conversationType?: "normal" | "orchestrator",
+    subagentBackend?: "shelley" | "claude-cli" | "codex-cli",
   ) => Promise<void>;
   onDistillConversation?: (
     sourceConversationId: string,
@@ -677,6 +680,7 @@ function ChatInterface({
     if (conversationId === null) {
       setCwdInitialized(false);
       setOrchestratorMode(false);
+      setSubagentBackend("shelley");
       setShowAdvancedSettings(false);
     }
   }, [conversationId]);
@@ -770,8 +774,12 @@ function ChatInterface({
 
   const [contextWindowSize, setContextWindowSize] = useState(0);
   const [orchestratorMode, setOrchestratorMode] = useState(false);
+  const [subagentBackend, setSubagentBackend] = useState<"shelley" | "claude-cli" | "codex-cli">(
+    "shelley",
+  );
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const advancedSettingsRef = useRef<HTMLDivElement>(null);
+  const cliAgents = window.__SHELLEY_INIT__?.cli_agents || [];
 
   // Close advanced settings popover on click outside
   useEffect(() => {
@@ -1557,6 +1565,7 @@ function ChatInterface({
           selectedModel,
           selectedCwd || undefined,
           orchestratorMode ? "orchestrator" : undefined,
+          orchestratorMode ? subagentBackend : undefined,
         );
       } else if (conversationId) {
         await api.sendMessage(conversationId, {
@@ -1998,7 +2007,10 @@ function ChatInterface({
                   <input
                     type="checkbox"
                     checked={orchestratorMode}
-                    onChange={(e) => setOrchestratorMode(e.target.checked)}
+                    onChange={(e) => {
+                      setOrchestratorMode(e.target.checked);
+                      if (!e.target.checked) setSubagentBackend("shelley");
+                    }}
                     disabled={sending}
                   />
                   <span className="orchestrator-toggle-label">
@@ -2022,6 +2034,27 @@ function ChatInterface({
                     <span className="experimental-badge">experimental</span>
                   </span>
                 </label>
+                {orchestratorMode && (
+                  <div className="orchestrator-backend-select">
+                    <label className="orchestrator-backend-label">Subagent backend</label>
+                    <select
+                      className="orchestrator-backend-dropdown"
+                      value={subagentBackend}
+                      onChange={(e) =>
+                        setSubagentBackend(e.target.value as "shelley" | "claude-cli" | "codex-cli")
+                      }
+                      disabled={sending}
+                    >
+                      <option value="shelley">Shelley (native)</option>
+                      {cliAgents.includes("claude-cli") && (
+                        <option value="claude-cli">Claude CLI</option>
+                      )}
+                      {cliAgents.includes("codex-cli") && (
+                        <option value="codex-cli">Codex CLI</option>
+                      )}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
           </div>

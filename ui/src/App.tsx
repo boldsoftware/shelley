@@ -591,6 +591,7 @@ function App() {
     model: string,
     cwd?: string,
     conversationType?: "normal" | "orchestrator",
+    subagentBackend?: "shelley" | "claude-cli" | "codex-cli",
   ) => {
     try {
       const response = await api.sendMessageWithNewConversation({
@@ -598,7 +599,9 @@ function App() {
         model,
         cwd,
         conversation_options:
-          conversationType === "orchestrator" ? { type: "orchestrator" } : undefined,
+          conversationType === "orchestrator"
+            ? { type: "orchestrator", subagent_backend: subagentBackend || "shelley" }
+            : undefined,
       });
       const newConversationId = response.conversation_id;
 

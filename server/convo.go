@@ -180,19 +180,20 @@ func (cm *ConversationManager) Hydrate(ctx context.Context) error {
 		var systemMsg *generated.Message
 		var err error
 		if conversation.ParentConversationID != nil {
+			parentID := *conversation.ParentConversationID
 			// Check if the parent is an orchestrator to use the specialized subagent prompt
 			var parentOpts string
 			if qErr := cm.db.Queries(ctx, func(q *generated.Queries) error {
 				var e error
-				parentOpts, e = q.GetConversationOptions(ctx, *conversation.ParentConversationID)
+				parentOpts, e = q.GetConversationOptions(ctx, parentID)
 				return e
 			}); qErr != nil {
 				cm.logger.Warn("Failed to get parent conversation options", "error", qErr)
 			}
 			if db.ParseConversationOptions(parentOpts).IsOrchestrator() {
-				systemMsg, err = cm.createOrchestratorSubagentSystemPrompt(ctx)
+				systemMsg, err = cm.createOrchestratorSubagentSystemPrompt(ctx, parentID)
 			} else {
-				systemMsg, err = cm.createSubagentSystemPrompt(ctx)
+				systemMsg, err = cm.createSubagentSystemPrompt(ctx, parentID)
 			}
 		} else if cm.conversationOptions.IsOrchestrator() {
 			systemMsg, err = cm.createOrchestratorSystemPrompt(ctx)
@@ -515,8 +516,8 @@ func systemPromptDisplayData(cfg claudetool.ToolSetConfig) map[string]any {
 	return toolDisplayData(ts.Tools())
 }
 
-func (cm *ConversationManager) createSubagentSystemPrompt(ctx context.Context) (*generated.Message, error) {
-	systemPrompt, err := GenerateSubagentSystemPrompt(cm.cwd)
+func (cm *ConversationManager) createSubagentSystemPrompt(ctx context.Context, parentConversationID string) (*generated.Message, error) {
+	systemPrompt, err := GenerateSubagentSystemPrompt(cm.cwd, parentConversationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate subagent system prompt: %w", err)
 	}
@@ -557,7 +558,7 @@ func (cm *ConversationManager) orchestratorContextDir(cwd string) string {
 func (cm *ConversationManager) createOrchestratorSystemPrompt(ctx context.Context) (*generated.Message, error) {
 	cwd := cm.cwd
 	contextDir := cm.orchestratorContextDir(cwd)
-	systemPrompt, err := GenerateOrchestratorSystemPrompt(cwd, contextDir)
+	systemPrompt, err := GenerateOrchestratorSystemPrompt(cwd, contextDir, cm.conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate orchestrator system prompt: %w", err)
 	}
@@ -582,6 +583,7 @@ func (cm *ConversationManager) createOrchestratorSystemPrompt(ctx context.Contex
 		SubagentDB:           cm.toolSetConfig.SubagentDB,
 		ParentConversationID: cm.conversationID,
 		EnableBrowser:        cm.toolSetConfig.EnableBrowser,
+		CLIAgent:             cm.conversationOptions.SubagentBackend,
 	})
 	defer ts.Cleanup()
 
@@ -600,8 +602,8 @@ func (cm *ConversationManager) createOrchestratorSystemPrompt(ctx context.Contex
 	return created, nil
 }
 
-func (cm *ConversationManager) createOrchestratorSubagentSystemPrompt(ctx context.Context) (*generated.Message, error) {
-	systemPrompt, err := GenerateOrchestratorSubagentSystemPrompt(cm.cwd)
+func (cm *ConversationManager) createOrchestratorSubagentSystemPrompt(ctx context.Context, parentConversationID string) (*generated.Message, error) {
+	systemPrompt, err := GenerateOrchestratorSubagentSystemPrompt(cm.cwd, parentConversationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate orchestrator subagent system prompt: %w", err)
 	}
@@ -768,6 +770,7 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 			WorkingDir:           cwd,
 			OnWorkingDirChange:   toolSetConfig.OnWorkingDirChange,
 			EnableBrowser:        toolSetConfig.EnableBrowser,
+			CLIAgent:             conversationOpts.SubagentBackend,
 		})
 	} else {
 		toolSet = claudetool.NewToolSet(processCtx, toolSetConfig)

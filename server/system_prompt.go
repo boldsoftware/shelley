@@ -419,6 +419,8 @@ func isSudoAvailable() bool {
 type SubagentSystemPromptData struct {
 	WorkingDirectory string
 	GitInfo          *GitInfo
+	ShelleyDBPath    string
+	ConversationID   string // Parent conversation ID for querying user messages
 }
 
 // OrchestratorSystemPromptData contains data for orchestrator system prompts.
@@ -427,10 +429,12 @@ type OrchestratorSystemPromptData struct {
 	GitInfo          *GitInfo
 	ContextDir       string
 	Codebase         *CodebaseInfo
+	ShelleyDBPath    string
+	ConversationID   string // This conversation's ID for querying user messages
 }
 
 // GenerateSubagentSystemPrompt generates a minimal system prompt for subagent conversations.
-func GenerateSubagentSystemPrompt(workingDir string) (string, error) {
+func GenerateSubagentSystemPrompt(workingDir, parentConversationID string) (string, error) {
 	wd := workingDir
 	if wd == "" {
 		var err error
@@ -442,6 +446,8 @@ func GenerateSubagentSystemPrompt(workingDir string) (string, error) {
 
 	data := &SubagentSystemPromptData{
 		WorkingDirectory: wd,
+		ShelleyDBPath:    DBPath,
+		ConversationID:   parentConversationID,
 	}
 
 	// Try to collect git info
@@ -465,7 +471,7 @@ func GenerateSubagentSystemPrompt(workingDir string) (string, error) {
 }
 
 // GenerateOrchestratorSystemPrompt generates the system prompt for orchestrator conversations.
-func GenerateOrchestratorSystemPrompt(workingDir, contextDir string) (string, error) {
+func GenerateOrchestratorSystemPrompt(workingDir, contextDir, conversationID string) (string, error) {
 	wd := workingDir
 	if wd == "" {
 		var err error
@@ -478,6 +484,8 @@ func GenerateOrchestratorSystemPrompt(workingDir, contextDir string) (string, er
 	data := &OrchestratorSystemPromptData{
 		WorkingDirectory: wd,
 		ContextDir:       contextDir,
+		ShelleyDBPath:    DBPath,
+		ConversationID:   conversationID,
 	}
 
 	gitInfo, err := collectGitInfo(wd)
@@ -506,7 +514,7 @@ func GenerateOrchestratorSystemPrompt(workingDir, contextDir string) (string, er
 
 // GenerateOrchestratorSubagentSystemPrompt generates the system prompt for
 // subagents spawned by an orchestrator conversation.
-func GenerateOrchestratorSubagentSystemPrompt(workingDir string) (string, error) {
+func GenerateOrchestratorSubagentSystemPrompt(workingDir, parentConversationID string) (string, error) {
 	wd := workingDir
 	if wd == "" {
 		var err error
@@ -518,6 +526,8 @@ func GenerateOrchestratorSubagentSystemPrompt(workingDir string) (string, error)
 
 	data := &SubagentSystemPromptData{
 		WorkingDirectory: wd,
+		ShelleyDBPath:    DBPath,
+		ConversationID:   parentConversationID,
 	}
 
 	gitInfo, err := collectGitInfo(wd)
