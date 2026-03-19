@@ -50,7 +50,9 @@ function BrowserEvalTool({
       <div className="tool-header" onClick={() => setIsExpanded(!isExpanded)}>
         <div className="tool-summary">
           <span className={`tool-emoji ${isRunning ? "running" : ""}`}>⚡</span>
-          <span className="tool-command">{displayExpression}</span>
+          <span className="tool-command" title={expression}>
+            {displayExpression}
+          </span>
           {isComplete && hasError && <span className="tool-error">✗</span>}
           {isComplete && !hasError && <span className="tool-success">✓</span>}
         </div>

@@ -65,7 +65,9 @@ function ReadImageTool({
       <div className="screenshot-tool-header" onClick={() => setIsExpanded(!isExpanded)}>
         <div className="screenshot-tool-summary">
           <span className={`screenshot-tool-emoji ${isRunning ? "running" : ""}`}>🖼️</span>
-          <span className="screenshot-tool-filename">{filename}</span>
+          <span className="screenshot-tool-filename" title={filename}>
+            {filename}
+          </span>
           {isComplete && hasError && <span className="screenshot-tool-error">✗</span>}
           {isComplete && !hasError && <span className="screenshot-tool-success">✓</span>}
         </div>

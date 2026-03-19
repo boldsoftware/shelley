@@ -72,7 +72,9 @@ function BashTool({
       <div className="bash-tool-header" onClick={() => setIsExpanded(!isExpanded)}>
         <div className="bash-tool-summary">
           <span className={`bash-tool-emoji ${isRunning ? "running" : ""}`}>🛠️</span>
-          <span className="bash-tool-command">{displayCommand}</span>
+          <span className="bash-tool-command" title={command}>
+            {displayCommand}
+          </span>
           {displayData?.workingDir && (
             <span className="bash-tool-cwd" title={displayData.workingDir}>
               in {displayData.workingDir}

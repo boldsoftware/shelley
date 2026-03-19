@@ -66,7 +66,7 @@ function SubagentTool({
           {cliAgentLabel && <span className="tool-badge cli-agent-badge">{cliAgentLabel}</span>}
           {isComplete && hasError && <span className="tool-error">✗</span>}
           {isComplete && !hasError && <span className="tool-success">✓</span>}
-          <span className="tool-command">
+          <span className="tool-command" title={prompt}>
             Subagent '{slug}' {isRunning ? (wait ? "running..." : "started") : ""}
             {displayPrompt && !isRunning && ` ${displayPrompt}`}
           </span>

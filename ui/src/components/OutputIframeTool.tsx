@@ -278,7 +278,9 @@ function OutputIframeTool({
       <div className="output-iframe-tool-header" onClick={() => setIsExpanded(!isExpanded)}>
         <div className="output-iframe-tool-summary">
           <span className={`output-iframe-tool-emoji ${isRunning ? "running" : ""}`}>✨</span>
-          <span className="output-iframe-tool-title">{title}</span>
+          <span className="output-iframe-tool-title" title={title}>
+            {title}
+          </span>
           {isComplete && hasError && <span className="output-iframe-tool-error">✗</span>}
           {isComplete && !hasError && <span className="output-iframe-tool-success">✓</span>}
         </div>

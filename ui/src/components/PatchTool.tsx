@@ -378,7 +378,9 @@ function PatchTool({ toolInput, isRunning, toolResult, hasError, display }: Patc
       <div className="patch-tool-header" onClick={() => setIsExpanded(!isExpanded)}>
         <div className="patch-tool-summary">
           <span className={`patch-tool-emoji ${isRunning ? "running" : ""}`}>🖋️</span>
-          <span className="patch-tool-filename">{filename}</span>
+          <span className="patch-tool-filename" title={filename}>
+            {filename}
+          </span>
           {isComplete && hasError && <span className="patch-tool-error">✗</span>}
           {isComplete && !hasError && <span className="patch-tool-success">✓</span>}
         </div>

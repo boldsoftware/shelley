@@ -49,6 +49,7 @@ function KeywordSearchTool({
     return joined.substring(0, maxLen) + "...";
   };
 
+  const fullText = query || searchTerms.join(", ");
   const displayText = query || truncateSearchTerms(searchTerms);
   const isComplete = !isRunning && toolResult !== undefined;
 
@@ -57,7 +58,9 @@ function KeywordSearchTool({
       <div className="tool-header" onClick={() => setIsExpanded(!isExpanded)}>
         <div className="tool-summary">
           <span className={`tool-emoji ${isRunning ? "running" : ""}`}>🔍</span>
-          <span className="tool-command">{displayText}</span>
+          <span className="tool-command" title={fullText}>
+            {displayText}
+          </span>
           {isComplete && hasError && <span className="tool-error">✗</span>}
           {isComplete && !hasError && <span className="tool-success">✓</span>}
         </div>
