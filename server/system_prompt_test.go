@@ -168,3 +168,84 @@ func TestSystemPromptIncludesUserEmail(t *testing.T) {
 		t.Error("system prompt should contain the user email when provided")
 	}
 }
+
+// TestSystemPromptDeduplicatesIdenticalGuidanceFiles verifies that when multiple
+// user-level AGENTS.md files have identical content (or are symlinks to the same
+// file), only one copy appears in the system prompt.
+func TestSystemPromptDeduplicatesIdenticalGuidanceFiles(t *testing.T) {
+	// Create a fake home with two AGENTS.md locations containing the same content
+	tmpHome := t.TempDir()
+
+	configShelley := filepath.Join(tmpHome, ".config", "shelley")
+	dotShelley := filepath.Join(tmpHome, ".shelley")
+	if err := os.MkdirAll(configShelley, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dotShelley, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	agentsContent := "DEDUP_TEST_MARKER: identical content in both files"
+	if err := os.WriteFile(filepath.Join(configShelley, "AGENTS.md"), []byte(agentsContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dotShelley, "AGENTS.md"), []byte(agentsContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("HOME", tmpHome)
+
+	unrelatedDir := t.TempDir()
+	prompt, err := GenerateSystemPrompt(unrelatedDir)
+	if err != nil {
+		t.Fatalf("GenerateSystemPrompt failed: %v", err)
+	}
+
+	// The marker should appear exactly once
+	count := strings.Count(prompt, "DEDUP_TEST_MARKER")
+	if count != 1 {
+		t.Errorf("expected DEDUP_TEST_MARKER to appear exactly 1 time, got %d", count)
+	}
+}
+
+// TestSystemPromptDeduplicatesSymlinkedGuidanceFiles verifies that symlinked
+// AGENTS.md files are deduplicated by resolved path.
+func TestSystemPromptDeduplicatesSymlinkedGuidanceFiles(t *testing.T) {
+	tmpHome := t.TempDir()
+
+	configShelley := filepath.Join(tmpHome, ".config", "shelley")
+	dotShelley := filepath.Join(tmpHome, ".shelley")
+	if err := os.MkdirAll(configShelley, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dotShelley, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write the canonical file
+	agentsContent := "SYMLINK_DEDUP_MARKER: the one true agents file"
+	canonicalPath := filepath.Join(dotShelley, "AGENTS.md")
+	if err := os.WriteFile(canonicalPath, []byte(agentsContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Symlink the other location to the canonical file
+	symlinkPath := filepath.Join(configShelley, "AGENTS.md")
+	if err := os.Symlink(canonicalPath, symlinkPath); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("HOME", tmpHome)
+
+	unrelatedDir := t.TempDir()
+	prompt, err := GenerateSystemPrompt(unrelatedDir)
+	if err != nil {
+		t.Fatalf("GenerateSystemPrompt failed: %v", err)
+	}
+
+	// The marker should appear exactly once
+	count := strings.Count(prompt, "SYMLINK_DEDUP_MARKER")
+	if count != 1 {
+		t.Errorf("expected SYMLINK_DEDUP_MARKER to appear exactly 1 time, got %d", count)
+	}
+}

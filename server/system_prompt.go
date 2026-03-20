@@ -211,8 +211,10 @@ func collectCodebaseInfo(wd string, gitInfo *GitInfo) (*CodebaseInfo, error) {
 		InjectFileContents: make(map[string]string),
 	}
 
-	// Track seen files to avoid duplicates on case-insensitive file systems
+	// Track seen files to avoid duplicates: by resolved path (handles symlinks
+	// and case-insensitive filesystems) and by content (handles copies).
 	seenFiles := make(map[string]bool)
+	seenContents := make(map[string]bool)
 
 	// Check for user-level agent instructions in ~/.config/AGENTS.md, ~/.config/shelley/AGENTS.md, and ~/.shelley/AGENTS.md
 	if home, err := os.UserHomeDir(); err == nil {
@@ -222,14 +224,19 @@ func collectCodebaseInfo(wd string, gitInfo *GitInfo) (*CodebaseInfo, error) {
 			filepath.Join(home, ".shelley", "AGENTS.md"),
 		}
 		for _, f := range userAgentsFiles {
-			lowerPath := strings.ToLower(f)
-			if seenFiles[lowerPath] {
+			canonical := resolveAndNormalize(f)
+			if seenFiles[canonical] {
 				continue
 			}
 			if content, err := os.ReadFile(f); err == nil && len(content) > 0 {
+				contentKey := string(content)
+				if seenContents[contentKey] {
+					continue
+				}
 				info.InjectFiles = append(info.InjectFiles, f)
-				info.InjectFileContents[f] = string(content)
-				seenFiles[lowerPath] = true
+				info.InjectFileContents[f] = contentKey
+				seenFiles[canonical] = true
+				seenContents[contentKey] = true
 			}
 		}
 	}
@@ -243,16 +250,21 @@ func collectCodebaseInfo(wd string, gitInfo *GitInfo) (*CodebaseInfo, error) {
 	// Find root-level guidance files (case-insensitive)
 	rootGuidanceFiles := findGuidanceFilesInDir(searchRoot)
 	for _, file := range rootGuidanceFiles {
-		lowerPath := strings.ToLower(file)
-		if seenFiles[lowerPath] {
+		canonical := resolveAndNormalize(file)
+		if seenFiles[canonical] {
 			continue
 		}
-		seenFiles[lowerPath] = true
 
 		content, err := os.ReadFile(file)
 		if err == nil && len(content) > 0 {
+			contentKey := string(content)
+			if seenContents[contentKey] {
+				continue
+			}
+			seenFiles[canonical] = true
+			seenContents[contentKey] = true
 			info.InjectFiles = append(info.InjectFiles, file)
-			info.InjectFileContents[file] = string(content)
+			info.InjectFileContents[file] = contentKey
 		}
 	}
 
@@ -260,16 +272,21 @@ func collectCodebaseInfo(wd string, gitInfo *GitInfo) (*CodebaseInfo, error) {
 	if wd != searchRoot {
 		wdGuidanceFiles := findGuidanceFilesInDir(wd)
 		for _, file := range wdGuidanceFiles {
-			lowerPath := strings.ToLower(file)
-			if seenFiles[lowerPath] {
+			canonical := resolveAndNormalize(file)
+			if seenFiles[canonical] {
 				continue
 			}
-			seenFiles[lowerPath] = true
 
 			content, err := os.ReadFile(file)
 			if err == nil && len(content) > 0 {
+				contentKey := string(content)
+				if seenContents[contentKey] {
+					continue
+				}
+				seenFiles[canonical] = true
+				seenContents[contentKey] = true
 				info.InjectFiles = append(info.InjectFiles, file)
-				info.InjectFileContents[file] = string(content)
+				info.InjectFileContents[file] = contentKey
 			}
 		}
 	}
@@ -381,6 +398,15 @@ func collectSkills(workingDir, gitRoot string) string {
 
 	// Generate XML
 	return skills.ToPromptXML(foundSkills)
+}
+
+// resolveAndNormalize returns a canonical lowercase path for dedup.
+// It resolves symlinks and normalizes to lowercase for case-insensitive FS.
+func resolveAndNormalize(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	return strings.ToLower(path)
 }
 
 func isSudoAvailable() bool {
