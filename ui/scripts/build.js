@@ -71,7 +71,6 @@ async function build() {
 
     // Copy static files
     fs.copyFileSync('src/index.html', 'dist/index.html');
-    fs.copyFileSync('src/common.css', 'dist/common.css');
     fs.copyFileSync('src/styles.css', 'dist/styles.css');
 
     // Copy assets (icons, manifest, etc.)
@@ -117,7 +116,7 @@ async function build() {
     // Generate gzip versions of large files and remove originals to reduce binary size
     // The server will decompress on-the-fly for the rare clients that don't support gzip
     log('\nGenerating gzip compressed files...');
-    const filesToCompress = ['monaco-editor.js', 'editor.worker.js', 'diffs-worker.js', 'main.js', 'monaco-editor.css', 'common.css', 'styles.css', 'main.css'];
+    const filesToCompress = ['monaco-editor.js', 'editor.worker.js', 'diffs-worker.js', 'main.js', 'monaco-editor.css', 'styles.css', 'main.css'];
     const checksums = {};
     let totalOrigSize = 0;
     let totalGzSize = 0;
