@@ -192,7 +192,8 @@ func runServe(global GlobalConfig, args []string) {
 		}
 		defer mcpManager.Close()
 		toolSetConfig.MCPTools = mcpManager.Tools()
-		logger.Info("MCP tools registered", "count", len(mcpManager.Tools()))
+		toolSetConfig.MCPDeferredGroups = mcpManager.DeferredGroups()
+		logger.Info("MCP tools registered", "active", len(mcpManager.Tools()), "deferred_groups", len(mcpManager.DeferredGroups()))
 	}
 
 	// Create server
@@ -402,6 +403,7 @@ type mcpServerJSONConfig struct {
 	Env     map[string]string `json:"env"`
 	URL     string            `json:"url"`
 	Headers map[string]string `json:"headers"`
+	Defer   bool              `json:"defer"`
 }
 
 // buildLLMConfig constructs LLMConfig from environment variables and optional config file
@@ -504,6 +506,7 @@ func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel s
 				Env:     mcpCfg.Env,
 				URL:     mcpCfg.URL,
 				Headers: mcpCfg.Headers,
+				Defer:   mcpCfg.Defer,
 			})
 		}
 		if len(llmCfg.MCPServers) > 0 {

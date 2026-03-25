@@ -5,23 +5,32 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/mcp"
 )
 
+// MCPToolGroup is a named group of tools from a single MCP server.
+type MCPToolGroup struct {
+	Name  string      // server name (e.g., "datadog")
+	Tools []*llm.Tool // the tools in this group
+}
+
 // MCPManager manages connections to MCP servers and their tools.
 // It is safe for concurrent use.
 type MCPManager struct {
-	mu         sync.Mutex
-	transports []mcp.Transport
-	tools      []*llm.Tool
+	mu             sync.Mutex
+	transports     []mcp.Transport
+	activeTools    []*llm.Tool
+	deferredGroups []MCPToolGroup
 }
 
 // NewMCPManager creates a new MCPManager, connects to all configured MCP servers,
 // performs the initialization handshake, discovers their tools, and wraps them
-// as Shelley tools.
+// as Shelley tools. Servers with Defer=true have their tools held back for
+// lazy activation.
 func NewMCPManager(ctx context.Context, configs []mcp.ServerConfig) (*MCPManager, error) {
 	m := &MCPManager{}
 
@@ -40,11 +49,20 @@ func NewMCPManager(ctx context.Context, configs []mcp.ServerConfig) (*MCPManager
 			continue
 		}
 
-		slog.Info("mcp: discovered tools", "name", cfg.Name, "count", len(tools))
+		slog.Info("mcp: discovered tools", "name", cfg.Name, "count", len(tools), "defer", cfg.Defer)
 
+		var wrapped []*llm.Tool
 		for _, ti := range tools {
-			tool := wrapMCPTool(transport, cfg.Name, ti)
-			m.tools = append(m.tools, tool)
+			wrapped = append(wrapped, wrapMCPTool(transport, cfg.Name, ti))
+		}
+
+		if cfg.Defer {
+			m.deferredGroups = append(m.deferredGroups, MCPToolGroup{
+				Name:  cfg.Name,
+				Tools: wrapped,
+			})
+		} else {
+			m.activeTools = append(m.activeTools, wrapped...)
 		}
 
 		m.transports = append(m.transports, transport)
@@ -53,12 +71,20 @@ func NewMCPManager(ctx context.Context, configs []mcp.ServerConfig) (*MCPManager
 	return m, nil
 }
 
-// Tools returns all discovered MCP tools as Shelley tools.
+// Tools returns the immediately-active MCP tools.
 func (m *MCPManager) Tools() []*llm.Tool {
 	if m == nil {
 		return nil
 	}
-	return m.tools
+	return m.activeTools
+}
+
+// DeferredGroups returns the tool groups that are deferred for lazy activation.
+func (m *MCPManager) DeferredGroups() []MCPToolGroup {
+	if m == nil {
+		return nil
+	}
+	return m.deferredGroups
 }
 
 // Close shuts down all MCP server connections.
@@ -106,6 +132,52 @@ func wrapMCPTool(transport mcp.Transport, serverName string, ti mcp.ToolInfo) *l
 			}
 			return llm.ToolOut{
 				LLMContent: llm.TextContent(result),
+			}
+		},
+	}
+}
+
+// buildActivatorDescription creates the description for an activator tool
+// that lists all the tools in the deferred group.
+func buildActivatorDescription(group MCPToolGroup) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Load the %s tools into the conversation. ", group.Name))
+	sb.WriteString("Call this tool when you need to use any of these tools:\n")
+	for _, t := range group.Tools {
+		// Strip the [server] prefix from description for the listing
+		desc := t.Description
+		prefix := fmt.Sprintf("[%s] ", group.Name)
+		desc = strings.TrimPrefix(desc, prefix)
+		// Truncate long descriptions
+		if len(desc) > 120 {
+			desc = desc[:117] + "..."
+		}
+		sb.WriteString(fmt.Sprintf("- %s: %s\n", t.Name, desc))
+	}
+	return sb.String()
+}
+
+// makeActivatorTool creates a lightweight tool that, when called, activates
+// a deferred tool group. The tool's description lists all available tools
+// so the LLM knows when to call it.
+func makeActivatorTool(ts *ToolSet, group MCPToolGroup) *llm.Tool {
+	name := "activate_" + group.Name + "_tools"
+	desc := buildActivatorDescription(group)
+
+	return &llm.Tool{
+		Name:        name,
+		Description: desc,
+		InputSchema: json.RawMessage(`{"type":"object","properties":{}}`),
+		Run: func(ctx context.Context, input json.RawMessage) llm.ToolOut {
+			newTools := ts.ActivateGroup(group.Name)
+			var names []string
+			for _, t := range group.Tools {
+				names = append(names, t.Name)
+			}
+			msg := fmt.Sprintf("%s tools activated (%d tools). They are now available: %s. Total tools: %d.",
+				group.Name, len(group.Tools), strings.Join(names, ", "), len(newTools))
+			return llm.ToolOut{
+				LLMContent: llm.TextContent(msg),
 			}
 		},
 	}

@@ -40,6 +40,7 @@ type ServerConfig struct {
 	Env     map[string]string // extra environment variables (stdio transport)
 	URL     string            // server URL (HTTP Streamable transport)
 	Headers map[string]string // extra HTTP headers, e.g. auth keys (HTTP transport)
+	Defer   bool              // if true, tools are not loaded into context until explicitly activated
 }
 
 // NewTransport creates a Transport for the given server config.
