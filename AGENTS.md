@@ -24,8 +24,9 @@
 12. To test the Shelley UI in a separate instance, build with `make build`, then run on a
     different port with a separate database:
     ```
-    ./bin/shelley -config /exe.dev/shelley.json -db /tmp/shelley-test.db serve -port 8002
+    ./bin/shelley -config <path-to-config> -db /tmp/shelley-test.db serve -port 8002
     ```
+    The config path is wherever the user's `shelley.json` lives (check `~/.config/shelley/` or ask).
     Then use browser tools to navigate to http://localhost:8002/ and interact with the UI.
 13. NEVER use alert(), confirm(), or prompt(). Use proper UI components like tooltips, modals, or toasts instead.
 14. SQL migrations and frontend changes require rebuilding the binary (`make build` or `go generate ./... && cd ui && pnpm run build`).
