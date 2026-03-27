@@ -325,6 +325,31 @@ class ApiService {
     return response.json();
   }
 
+  async getGitCommitMessages(
+    cwd: string,
+    from: string,
+  ): Promise<{ hash: string; subject: string; body: string; author: string; isHead: boolean }[]> {
+    const response = await fetch(
+      `${this.baseUrl}/git/commit-messages?cwd=${encodeURIComponent(cwd)}&from=${encodeURIComponent(from)}`,
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to get commit messages: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  async amendGitMessage(cwd: string, message: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/git/amend-message`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify({ cwd, message }),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Failed to amend: ${response.statusText}`);
+    }
+  }
+
   async createGitWorktree(cwd: string): Promise<{ path?: string; error?: string }> {
     const response = await fetch(`${this.baseUrl}/git/create-worktree`, {
       method: "POST",

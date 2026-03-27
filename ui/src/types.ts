@@ -136,6 +136,14 @@ export interface GitFileDiff {
   newContent: string;
 }
 
+export interface GitCommitMessage {
+  hash: string;
+  subject: string;
+  body: string;
+  author: string;
+  isHead: boolean;
+}
+
 // Comment for diff viewer
 export interface DiffComment {
   id: string;

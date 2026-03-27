@@ -380,6 +380,147 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(fileDiff)
 }
 
+// CommitMessage represents a commit's full message for display in the diff viewer.
+type CommitMessage struct {
+	Hash    string `json:"hash"`
+	Subject string `json:"subject"`
+	Body    string `json:"body"`
+	Author  string `json:"author"`
+	IsHead  bool   `json:"isHead"`
+}
+
+// handleGitCommitMessages returns the full commit messages for commits in a range.
+// Query params: cwd, from (commit hash — the selected base commit, inclusive)
+// Returns commits from `from` to HEAD (inclusive), newest first.
+func (s *Server) handleGitCommitMessages(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cwd := r.URL.Query().Get("cwd")
+	if cwd == "" {
+		http.Error(w, "cwd parameter required", http.StatusBadRequest)
+		return
+	}
+
+	from := r.URL.Query().Get("from")
+	if from == "" {
+		http.Error(w, "from parameter required", http.StatusBadRequest)
+		return
+	}
+
+	gitRoot, err := getGitRoot(cwd)
+	if err != nil {
+		http.Error(w, "not a git repository", http.StatusBadRequest)
+		return
+	}
+
+	// Get HEAD hash
+	headCmd := exec.Command("git", "rev-parse", "HEAD")
+	headCmd.Dir = gitRoot
+	headOut, err := headCmd.Output()
+	if err != nil {
+		http.Error(w, "failed to get HEAD", http.StatusInternalServerError)
+		return
+	}
+	headHash := strings.TrimSpace(string(headOut))
+
+	// Get commits from `from` to HEAD (inclusive).
+	// Use %x00 as separator, %x01 to separate records.
+	// Format: hash\0subject\0body\0author
+	cmd := exec.Command("git", "log", "--format=%H%x00%s%x00%b%x00%an%x01", from+"..HEAD")
+	cmd.Dir = gitRoot
+	output, err := cmd.Output()
+	if err != nil {
+		// from..HEAD fails if from IS HEAD or is the only commit; that's fine,
+		// the from commit is fetched separately below.
+		output = nil
+	}
+
+	var messages []CommitMessage
+
+	// Parse the range output (does NOT include 'from' itself)
+	if len(output) > 0 {
+		records := strings.Split(strings.TrimSpace(string(output)), "\x01")
+		for _, rec := range records {
+			rec = strings.TrimSpace(rec)
+			if rec == "" {
+				continue
+			}
+			parts := strings.SplitN(rec, "\x00", 4)
+			if len(parts) < 4 {
+				continue
+			}
+			messages = append(messages, CommitMessage{
+				Hash:    parts[0],
+				Subject: parts[1],
+				Body:    strings.TrimSpace(parts[2]),
+				Author:  strings.TrimSpace(parts[3]),
+				IsHead:  parts[0] == headHash,
+			})
+		}
+	}
+
+	// Also include the 'from' commit itself
+	fromCmd := exec.Command("git", "log", "-1", "--format=%H%x00%s%x00%b%x00%an", from)
+	fromCmd.Dir = gitRoot
+	fromOut, err := fromCmd.Output()
+	if err == nil {
+		parts := strings.SplitN(strings.TrimSpace(string(fromOut)), "\x00", 4)
+		if len(parts) >= 4 {
+			messages = append(messages, CommitMessage{
+				Hash:    parts[0],
+				Subject: parts[1],
+				Body:    strings.TrimSpace(parts[2]),
+				Author:  strings.TrimSpace(parts[3]),
+				IsHead:  parts[0] == headHash,
+			})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(messages)
+}
+
+// handleGitAmendMessage amends the most recent commit's message.
+func (s *Server) handleGitAmendMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Cwd     string `json:"cwd"`
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Cwd == "" || req.Message == "" {
+		http.Error(w, "cwd and message are required", http.StatusBadRequest)
+		return
+	}
+
+	gitRoot, err := getGitRoot(req.Cwd)
+	if err != nil {
+		http.Error(w, "not a git repository", http.StatusBadRequest)
+		return
+	}
+
+	cmd := exec.Command("git", "commit", "--amend", "-m", req.Message)
+	cmd.Dir = gitRoot
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		http.Error(w, "failed to amend: "+string(output), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
 // handleGitCreateWorktree creates a new git worktree.
 // The worktree is created as a sibling of the repo directory with name repo-YYYY-MM-DD-N.
 func (s *Server) handleGitCreateWorktree(w http.ResponseWriter, r *http.Request) {
