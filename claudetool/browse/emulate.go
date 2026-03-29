@@ -144,7 +144,7 @@ func (b *BrowseTools) emulateHelp() llm.ToolOut {
 	sb.WriteString("Actions:\n")
 	sb.WriteString("  help      - Show this help message\n")
 	sb.WriteString("  device    - Emulate a preset device (param: device)\n")
-	sb.WriteString("  custom    - Custom viewport emulation (params: width, height, device_scale_factor, mobile, touch)\n")
+	sb.WriteString("  custom    - Custom viewport emulation (params: width, height, device_scale_factor, mobile, touch); clears any prior UA override\n")
 	sb.WriteString("  reset     - Reset to default viewport (1280x720)\n")
 	sb.WriteString("  dark_mode - Toggle automatic dark mode (param: enabled, default true)\n")
 	sb.WriteString("  media     - Emulate CSS media type (param: media, e.g. 'print', 'screen')\n")
@@ -207,6 +207,9 @@ func (b *BrowseTools) emulateCustom(m json.RawMessage) llm.ToolOut {
 		input.DeviceScaleFactor = 1.0
 	}
 
+	// Passing "" clears any prior UA override, which is correct: custom viewports
+	// have no user_agent parameter, so there is no supported way to carry a
+	// custom UA forward.
 	return b.applyEmulation(input.Width, input.Height, input.DeviceScaleFactor, input.Mobile, input.Touch, "")
 }
 
@@ -229,10 +232,8 @@ func (b *BrowseTools) applyEmulation(width, height int64, dpr float64, mobile, t
 				return fmt.Errorf("disable touch emulation: %w", err)
 			}
 		}
-		if userAgent != "" {
-			if err := emulation.SetUserAgentOverride(userAgent).Do(ctx); err != nil {
-				return fmt.Errorf("set user agent: %w", err)
-			}
+		if err := emulation.SetUserAgentOverride(userAgent).Do(ctx); err != nil {
+			return fmt.Errorf("set user agent: %w", err)
 		}
 		return nil
 	}))
