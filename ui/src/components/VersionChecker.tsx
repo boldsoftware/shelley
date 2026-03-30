@@ -190,46 +190,49 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
                   )}
                 </div>
               )}
-
-              {/* Auto-upgrade setting */}
-              {!loadingAutoUpgrade && (
-                <div className="version-auto-upgrade">
-                  <label className="version-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={autoUpgrade}
-                      onChange={(e) => handleAutoUpgradeChange(e.target.checked)}
-                    />
-                    <span>Auto-upgrade when idle (checks daily)</span>
-                  </label>
-                </div>
-              )}
-
-              {/* Upgrade & Restart button */}
-              {versionInfo.has_update && versionInfo.download_url && (
-                <div className="version-actions">
-                  {upgradeError && <div className="version-error">{upgradeError}</div>}
-
-                  <button
-                    onClick={handleUpgradeAndRestart}
-                    disabled={upgrading}
-                    className="version-btn version-btn-primary"
-                  >
-                    {upgrading
-                      ? versionInfo.running_under_systemd
-                        ? "Upgrading & Restarting..."
-                        : "Upgrading & Killing..."
-                      : versionInfo.running_under_systemd
-                        ? "Upgrade & Restart"
-                        : "Upgrade & Kill Shelley Server"}
-                  </button>
-                </div>
-              )}
             </>
           ) : (
             <div className="version-loading">Loading...</div>
           )}
         </div>
+
+        {/* Footer: auto-upgrade + upgrade button, outside scrolling area */}
+        {!isLoading && versionInfo && (
+          <div className="version-modal-footer">
+            {!loadingAutoUpgrade && (
+              <div className="version-auto-upgrade">
+                <label className="version-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={autoUpgrade}
+                    onChange={(e) => handleAutoUpgradeChange(e.target.checked)}
+                  />
+                  <span>Auto-upgrade when idle (checks daily)</span>
+                </label>
+              </div>
+            )}
+
+            {versionInfo.has_update && versionInfo.download_url && (
+              <div className="version-actions">
+                {upgradeError && <div className="version-error">{upgradeError}</div>}
+
+                <button
+                  onClick={handleUpgradeAndRestart}
+                  disabled={upgrading}
+                  className="version-btn version-btn-primary"
+                >
+                  {upgrading
+                    ? versionInfo.running_under_systemd
+                      ? "Upgrading & Restarting..."
+                      : "Upgrading & Killing..."
+                    : versionInfo.running_under_systemd
+                      ? "Upgrade & Restart"
+                      : "Upgrade & Kill Shelley Server"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

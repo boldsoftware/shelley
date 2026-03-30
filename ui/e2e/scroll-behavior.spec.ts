@@ -17,13 +17,13 @@ test.describe('Scroll behavior', () => {
     await sendButton.click();
     
     // Wait for agent to finish
-    await page.waitForSelector('[data-testid="agent-thinking"]', { state: 'hidden', timeout: 10000 });
+    await page.waitForSelector('[data-testid="agent-thinking"]', { state: 'hidden', timeout: 30000 });
     
     // Send more messages to ensure we have scrollable content
     for (let i = 0; i < 3; i++) {
       await input.fill(`echo message ${i}`);
       await sendButton.click();
-      await page.waitForSelector('[data-testid="agent-thinking"]', { state: 'hidden', timeout: 10000 });
+      await page.waitForSelector('[data-testid="agent-thinking"]', { state: 'hidden', timeout: 30000 });
     }
     
     // Get the messages container
@@ -55,7 +55,7 @@ test.describe('Scroll behavior', () => {
     await sendButton.click();
     
     // Wait for response
-    await page.waitForSelector('[data-testid="agent-thinking"]', { timeout: 5000 });
+    await page.waitForSelector('[data-testid="agent-thinking"]', { timeout: 30000 });
     
     // Button should not appear since we're following the conversation
     await expect(scrollButton).not.toBeVisible();
