@@ -506,10 +506,15 @@ function App() {
         conv.conversation_id === updatedConversation.conversation_id
           ? {
               ...updatedConversation,
+              // Preserve list-level state fields maintained elsewhere
               working: conv.working,
+              subagent_count: conv.subagent_count,
+              // Preserve git metadata from conversation list updates.
+              // Stream conversation updates don't include these fields.
+              git_repo_root: conv.git_repo_root,
+              git_worktree_root: conv.git_worktree_root,
               git_commit: conv.git_commit,
               git_subject: conv.git_subject,
-              subagent_count: conv.subagent_count,
             }
           : conv,
       ),
