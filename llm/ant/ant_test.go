@@ -43,9 +43,9 @@ func TestClaudeModelName(t *testing.T) {
 		userName string
 		want     string
 	}{
-		{"claude model", "claude", Claude45Sonnet},
-		{"sonnet model", "sonnet", Claude45Sonnet},
-		{"opus model", "opus", Claude45Opus},
+		{"claude model", "claude", Claude46Sonnet},
+		{"sonnet model", "sonnet", Claude46Sonnet},
+		{"opus model", "opus", Claude46Opus},
 		{"unknown model", "gpt-4", ""},
 		{"empty string", "", ""},
 		{"random string", "random", ""},
@@ -67,8 +67,7 @@ func TestTokenContextWindow(t *testing.T) {
 		want  int
 	}{
 		{"default model", "", 200000},
-		{"Claude4Sonnet", Claude4Sonnet, 200000},
-		{"Claude45Sonnet", Claude45Sonnet, 200000},
+		{"Claude46Sonnet", Claude46Sonnet, 200000},
 		{"Claude45Haiku", Claude45Haiku, 200000},
 		{"Claude45Opus", Claude45Opus, 200000},
 		{"unknown model", "unknown-model", 200000},
@@ -249,7 +248,7 @@ func TestToLLMResponse(t *testing.T) {
 		ID:         "msg_123",
 		Type:       "message",
 		Role:       "assistant",
-		Model:      Claude45Sonnet,
+		Model:      Claude46Sonnet,
 		Content:    []content{{Type: "text", Text: &text}},
 		StopReason: "end_turn",
 		Usage: usage{
@@ -269,8 +268,8 @@ func TestToLLMResponse(t *testing.T) {
 	if got.Role != llm.MessageRoleAssistant {
 		t.Errorf("toLLMResponse().Role = %v, want %v", got.Role, llm.MessageRoleAssistant)
 	}
-	if got.Model != Claude45Sonnet {
-		t.Errorf("toLLMResponse().Model = %v, want %v", got.Model, Claude45Sonnet)
+	if got.Model != Claude46Sonnet {
+		t.Errorf("toLLMResponse().Model = %v, want %v", got.Model, Claude46Sonnet)
 	}
 	if len(got.Content) != 1 {
 		t.Errorf("toLLMResponse().Content length = %v, want %v", len(got.Content), 1)
@@ -402,7 +401,7 @@ func TestFromLLMMessageSkipsCorruptThinking(t *testing.T) {
 }
 
 func TestFromLLMRequestSkipsEmptyMessages(t *testing.T) {
-	s := &Service{Model: "claude-sonnet-4-20250514"}
+	s := &Service{Model: "claude-sonnet-4-6"}
 	req := s.fromLLMRequest(&llm.Request{
 		Messages: []llm.Message{
 			{Role: llm.MessageRoleAssistant, Content: []llm.Content{
@@ -651,7 +650,7 @@ func TestFromLLMRequestStripsOldThinkingBlocks(t *testing.T) {
 
 func TestFromLLMRequest(t *testing.T) {
 	s := &Service{
-		Model:     Claude45Sonnet,
+		Model:     Claude46Sonnet,
 		MaxTokens: 1000,
 	}
 
@@ -686,8 +685,8 @@ func TestFromLLMRequest(t *testing.T) {
 
 	got := s.fromLLMRequest(req)
 
-	if got.Model != Claude45Sonnet {
-		t.Errorf("fromLLMRequest().Model = %v, want %v", got.Model, Claude45Sonnet)
+	if got.Model != Claude46Sonnet {
+		t.Errorf("fromLLMRequest().Model = %v, want %v", got.Model, Claude46Sonnet)
 	}
 	if got.MaxTokens != 1000 {
 		t.Errorf("fromLLMRequest().MaxTokens = %v, want %v", got.MaxTokens, 1000)
@@ -737,18 +736,18 @@ func TestMaxOutputTokensCapping(t *testing.T) {
 		t.Errorf("Opus 4.6: MaxTokens = %d, want 100000", got2.MaxTokens)
 	}
 
-	// Sonnet 4.5 has a 64k limit — 50000 should pass through
-	s3 := &Service{Model: Claude45Sonnet, MaxTokens: 50000}
+	// Sonnet 4.6 has a 64k limit — 50000 should pass through
+	s3 := &Service{Model: Claude46Sonnet, MaxTokens: 50000}
 	got3 := s3.fromLLMRequest(simpleReq)
 	if got3.MaxTokens != 50000 {
-		t.Errorf("Sonnet 4.5: MaxTokens = %d, want 50000", got3.MaxTokens)
+		t.Errorf("Sonnet 4.6: MaxTokens = %d, want 50000", got3.MaxTokens)
 	}
 
-	// Sonnet 4.5 with MaxTokens above 64k must be capped
-	s4 := &Service{Model: Claude45Sonnet, MaxTokens: 200000}
+	// Sonnet 4.6 with MaxTokens above 64k must be capped
+	s4 := &Service{Model: Claude46Sonnet, MaxTokens: 200000}
 	got4 := s4.fromLLMRequest(simpleReq)
 	if got4.MaxTokens != 64000 {
-		t.Errorf("Sonnet 4.5 capped: MaxTokens = %d, want 64000", got4.MaxTokens)
+		t.Errorf("Sonnet 4.6 capped: MaxTokens = %d, want 64000", got4.MaxTokens)
 	}
 }
 
@@ -785,8 +784,6 @@ func TestMaxOutputTokensMatchModelsDevAPI(t *testing.T) {
 	// Every model constant we define must match models.dev
 	for _, model := range []string{
 		Claude45Haiku,
-		Claude4Sonnet,
-		Claude45Sonnet,
 		Claude45Opus,
 		Claude46Opus,
 		Claude46Sonnet,
@@ -877,7 +874,7 @@ func mockSSEResponse(id, model, text string, inputTokens, outputTokens uint64) s
 
 func TestDo(t *testing.T) {
 	// Create a mock SSE streaming response
-	mockBody := mockSSEResponse("msg_123", Claude45Sonnet, "Hello, world!", 100, 50)
+	mockBody := mockSSEResponse("msg_123", Claude46Sonnet, "Hello, world!", 100, 50)
 
 	// Create a service with a mock HTTP client
 	client := &http.Client{
@@ -1292,7 +1289,7 @@ func TestToLLMContentWithNestedToolResults(t *testing.T) {
 }
 
 func TestParseSSEStreamText(t *testing.T) {
-	stream := mockSSEResponse("msg_abc", Claude45Sonnet, "Hello!", 10, 5)
+	stream := mockSSEResponse("msg_abc", Claude46Sonnet, "Hello!", 10, 5)
 	resp, err := parseSSEStream(strings.NewReader(stream), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
@@ -1716,7 +1713,7 @@ func TestServiceConfigDetails(t *testing.T) {
 
 func TestDoStartTimeEndTime(t *testing.T) {
 	// Create a mock SSE streaming response
-	mockBody := mockSSEResponse("msg_123", Claude45Sonnet, "Hello, world!", 100, 50)
+	mockBody := mockSSEResponse("msg_123", Claude46Sonnet, "Hello, world!", 100, 50)
 
 	// Create a service with a mock HTTP client
 	client := &http.Client{
@@ -1784,8 +1781,6 @@ func TestLiveAnthropicModels(t *testing.T) {
 		model string
 	}{
 		{"Haiku 4.5", Claude45Haiku},
-		{"Sonnet 4", Claude4Sonnet},
-		{"Sonnet 4.5", Claude45Sonnet},
 		{"Sonnet 4.6", Claude46Sonnet},
 		{"Opus 4.5", Claude45Opus},
 		{"Opus 4.6", Claude46Opus},
@@ -1838,7 +1833,7 @@ func TestParseSSEStreamRecordedResponse(t *testing.T) {
 	// This ensures our parser handles the exact format the API sends,
 	// including extra whitespace in data fields.
 	recorded := `event: message_start
-data: {"type":"message_start","message":{"model":"claude-sonnet-4-5-20250929","id":"msg_01PU4SWJR43AoiPx2RA7hfcf","type":"message","role":"assistant","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":16,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1,"service_tier":"standard","inference_geo":"not_available"}} }
+data: {"type":"message_start","message":{"model":"claude-sonnet-4-6","id":"msg_01PU4SWJR43AoiPx2RA7hfcf","type":"message","role":"assistant","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":16,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1,"service_tier":"standard","inference_geo":"not_available"}} }
 
 event: content_block_start
 data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}       }
@@ -1934,7 +1929,7 @@ func mockTruncatedSSEResponse(id, model, text string, inputTokens uint64) string
 
 func TestParseSSEStreamTruncated(t *testing.T) {
 	// A stream that cuts off before message_delta (no stop_reason) should be an error.
-	stream := mockTruncatedSSEResponse("msg_trunc", Claude45Sonnet, "partial response", 100)
+	stream := mockTruncatedSSEResponse("msg_trunc", Claude46Sonnet, "partial response", 100)
 	_, err := parseSSEStream(strings.NewReader(stream), nil)
 	if err == nil {
 		t.Fatal("expected error for truncated stream, got nil")
@@ -1984,8 +1979,8 @@ func (m *retryCountTransport) RoundTrip(req *http.Request) (*http.Response, erro
 }
 
 func TestDoRetriesOnTruncatedStream(t *testing.T) {
-	truncated := mockTruncatedSSEResponse("msg_trunc", Claude45Sonnet, "partial", 100)
-	complete := mockSSEResponse("msg_ok", Claude45Sonnet, "Hello, world!", 100, 50)
+	truncated := mockTruncatedSSEResponse("msg_trunc", Claude46Sonnet, "partial", 100)
+	complete := mockSSEResponse("msg_ok", Claude46Sonnet, "Hello, world!", 100, 50)
 
 	transport := &retryCountTransport{
 		truncatedCount: 2, // first 2 attempts return truncated stream
@@ -2021,7 +2016,7 @@ func TestDoRetriesOnTruncatedStream(t *testing.T) {
 func TestDoStopsRetryingOnContextCancel(t *testing.T) {
 	// If the context is cancelled during retries, Do should stop immediately
 	// instead of sleeping through all 11 attempts.
-	truncated := mockTruncatedSSEResponse("msg_trunc", Claude45Sonnet, "partial", 100)
+	truncated := mockTruncatedSSEResponse("msg_trunc", Claude46Sonnet, "partial", 100)
 
 	transport := &retryCountTransport{
 		truncatedCount: 999, // always truncated
@@ -2145,7 +2140,7 @@ func (t *contextDeadlineTransport) RoundTrip(req *http.Request) (*http.Response,
 
 func TestDoFailsAfterMaxRetriesOnTruncatedStream(t *testing.T) {
 	// All attempts return truncated stream — should fail after max retries
-	truncated := mockTruncatedSSEResponse("msg_trunc", Claude45Sonnet, "partial", 100)
+	truncated := mockTruncatedSSEResponse("msg_trunc", Claude46Sonnet, "partial", 100)
 
 	transport := &retryCountTransport{
 		truncatedCount: 999, // always truncated

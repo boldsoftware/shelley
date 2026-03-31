@@ -32,8 +32,8 @@ const PROVIDER_LABELS: Record<ProviderType, string> = {
 
 const DEFAULT_MODELS: Record<ProviderType, { name: string; model_name: string }[]> = {
   anthropic: [
-    { name: "Claude Sonnet 4.5", model_name: "claude-sonnet-4-5" },
-    { name: "Claude Opus 4.5", model_name: "claude-opus-4-5" },
+    { name: "Claude Sonnet 4.6", model_name: "claude-sonnet-4-6" },
+    { name: "Claude Opus 4.6", model_name: "claude-opus-4-6" },
     { name: "Claude Haiku 4.5", model_name: "claude-haiku-4-5" },
   ],
   openai: [{ name: "GPT-5.2", model_name: "gpt-5.2" }],
@@ -369,7 +369,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                 type="text"
                 value={form.model_name}
                 onChange={(e) => setForm((prev) => ({ ...prev, model_name: e.target.value }))}
-                placeholder="Model name (e.g., claude-sonnet-4-5)"
+                placeholder="Model name (e.g., claude-sonnet-4-6)"
                 className="form-input"
               />
             </div>

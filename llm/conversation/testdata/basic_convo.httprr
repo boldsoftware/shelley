@@ -1,166 +1,125 @@
 httprr trace v1
-394 3650
+387 2687
 POST https://api.anthropic.com/v1/messages HTTP/1.1
 Host: api.anthropic.com
 User-Agent: Go-http-client/1.1
-Content-Length: 198
+Content-Length: 191
 Anthropic-Version: 2023-06-01
 Content-Type: application/json
 
-{"model":"claude-sonnet-4-20250514","max_tokens":64000,"stream":true,"messages":[{"role":"user","content":[{"type":"text","text":"Hi, my name is Cornelius","cache_control":{"type":"ephemeral"}}]}]}
+{"model":"claude-sonnet-4-6","max_tokens":64000,"stream":true,"messages":[{"role":"user","content":[{"type":"text","text":"Hi, my name is Cornelius","cache_control":{"type":"ephemeral"}}]}]}
 HTTP/2.0 200 OK
-Connection: close
 Anthropic-Organization-Id: 3c473a21-7208-450a-a9f8-80aebda45c1b
 Anthropic-Ratelimit-Input-Tokens-Limit: 4000000
 Anthropic-Ratelimit-Input-Tokens-Remaining: 4000000
-Anthropic-Ratelimit-Input-Tokens-Reset: 2026-02-18T04:21:50Z
-Anthropic-Ratelimit-Output-Tokens-Limit: 400000
-Anthropic-Ratelimit-Output-Tokens-Remaining: 400000
-Anthropic-Ratelimit-Output-Tokens-Reset: 2026-02-18T04:21:50Z
+Anthropic-Ratelimit-Input-Tokens-Reset: 2026-03-30T01:32:50Z
+Anthropic-Ratelimit-Output-Tokens-Limit: 800000
+Anthropic-Ratelimit-Output-Tokens-Remaining: 800000
+Anthropic-Ratelimit-Output-Tokens-Reset: 2026-03-30T01:32:50Z
 Anthropic-Ratelimit-Requests-Limit: 20000
 Anthropic-Ratelimit-Requests-Remaining: 19999
-Anthropic-Ratelimit-Requests-Reset: 2026-02-18T04:21:50Z
-Anthropic-Ratelimit-Tokens-Limit: 4400000
-Anthropic-Ratelimit-Tokens-Remaining: 4400000
-Anthropic-Ratelimit-Tokens-Reset: 2026-02-18T04:21:50Z
+Anthropic-Ratelimit-Requests-Reset: 2026-03-30T01:32:50Z
+Anthropic-Ratelimit-Tokens-Limit: 4800000
+Anthropic-Ratelimit-Tokens-Remaining: 4800000
+Anthropic-Ratelimit-Tokens-Reset: 2026-03-30T01:32:50Z
 Cache-Control: no-cache
 Cf-Cache-Status: DYNAMIC
-Cf-Ray: 9cfabd6c5859f20b-LAX
+Cf-Ray: 9e435cdd5922c8bd-SJC
 Content-Security-Policy: default-src 'none'; frame-ancestors 'none'
 Content-Type: text/event-stream; charset=utf-8
-Date: Wed, 18 Feb 2026 04:21:51 GMT
-Request-Id: req_011CYEtrASDbVDKtCKakzFFy
+Date: Mon, 30 Mar 2026 01:32:51 GMT
+Request-Id: req_011CZYQKKutnjaXcuxrARFzj
 Server: cloudflare
+Server-Timing: x-originResponse;dur=1448
+Set-Cookie: _cfuvid=h3fLx4xG7LQGrTQ_VD4m8DPxMhKYf2pezdMLhUP0v2A-1774834370.1386771-1.0.1.1-vSKHgo8vEy5Uda0MzB5Ds5tw1FKfQi3q5IjTVZ1m69M; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.anthropic.com
 Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
-X-Envoy-Upstream-Service-Time: 1251
+Vary: Accept-Encoding
+X-Envoy-Upstream-Service-Time: 1447
 X-Robots-Tag: none
 
 event: message_start
-data: {"type":"message_start","message":{"model":"claude-sonnet-4-20250514","id":"msg_01HBY7z7BqF1teCo2GLNN7zo","type":"message","role":"assistant","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":15,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":6,"service_tier":"standard","inference_geo":"not_available"}}       }
+data: {"type":"message_start","message":{"model":"claude-sonnet-4-6","id":"msg_01Qs1FWvR15RkePmQUFsBnNc","type":"message","role":"assistant","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":15,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1,"service_tier":"standard","inference_geo":"us"}}          }
 
 event: content_block_start
-data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}      }
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}       }
 
 event: ping
 data: {"type": "ping"}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello Cornelius! It"}     }
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"} }
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"'s nice"}      }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" to meet you. That"}     }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"'s a distinguished"}         }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" name with"}         }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" quite"}    }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" a bit"}             }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" of history behind it. How"}  }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" are you doing today? Is"}        }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" there anything"}           }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" I can help you with?"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" Cornelius! It's nice to meet you. How can I help you today?"}    }
 
 event: content_block_stop
-data: {"type":"content_block_stop","index":0         }
+data: {"type":"content_block_stop","index":0    }
 
 event: message_delta
-data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":15,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":44}      }
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":15,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":22}               }
 
 event: message_stop
-data: {"type":"message_stop" }
+data: {"type":"message_stop"         }
 
-693 3223
+578 2706
 POST https://api.anthropic.com/v1/messages HTTP/1.1
 Host: api.anthropic.com
 User-Agent: Go-http-client/1.1
-Content-Length: 497
+Content-Length: 382
 Anthropic-Version: 2023-06-01
 Content-Type: application/json
 
-{"model":"claude-sonnet-4-20250514","max_tokens":64000,"stream":true,"messages":[{"role":"user","content":[{"type":"text","text":"Hi, my name is Cornelius"}]},{"role":"assistant","content":[{"type":"text","text":"Hello Cornelius! It's nice to meet you. That's a distinguished name with quite a bit of history behind it. How are you doing today? Is there anything I can help you with?"}]},{"role":"user","content":[{"type":"text","text":"What is my name?","cache_control":{"type":"ephemeral"}}]}]}
+{"model":"claude-sonnet-4-6","max_tokens":64000,"stream":true,"messages":[{"role":"user","content":[{"type":"text","text":"Hi, my name is Cornelius"}]},{"role":"assistant","content":[{"type":"text","text":"Hi Cornelius! It's nice to meet you. How can I help you today?"}]},{"role":"user","content":[{"type":"text","text":"What is my name?","cache_control":{"type":"ephemeral"}}]}]}
 HTTP/2.0 200 OK
-Connection: close
 Anthropic-Organization-Id: 3c473a21-7208-450a-a9f8-80aebda45c1b
 Anthropic-Ratelimit-Input-Tokens-Limit: 4000000
 Anthropic-Ratelimit-Input-Tokens-Remaining: 4000000
-Anthropic-Ratelimit-Input-Tokens-Reset: 2026-02-18T04:21:52Z
-Anthropic-Ratelimit-Output-Tokens-Limit: 400000
-Anthropic-Ratelimit-Output-Tokens-Remaining: 400000
-Anthropic-Ratelimit-Output-Tokens-Reset: 2026-02-18T04:21:52Z
+Anthropic-Ratelimit-Input-Tokens-Reset: 2026-03-30T01:32:52Z
+Anthropic-Ratelimit-Output-Tokens-Limit: 800000
+Anthropic-Ratelimit-Output-Tokens-Remaining: 800000
+Anthropic-Ratelimit-Output-Tokens-Reset: 2026-03-30T01:32:52Z
 Anthropic-Ratelimit-Requests-Limit: 20000
 Anthropic-Ratelimit-Requests-Remaining: 19999
-Anthropic-Ratelimit-Requests-Reset: 2026-02-18T04:21:52Z
-Anthropic-Ratelimit-Tokens-Limit: 4400000
-Anthropic-Ratelimit-Tokens-Remaining: 4400000
-Anthropic-Ratelimit-Tokens-Reset: 2026-02-18T04:21:52Z
+Anthropic-Ratelimit-Requests-Reset: 2026-03-30T01:32:52Z
+Anthropic-Ratelimit-Tokens-Limit: 4800000
+Anthropic-Ratelimit-Tokens-Remaining: 4800000
+Anthropic-Ratelimit-Tokens-Reset: 2026-03-30T01:32:52Z
 Cache-Control: no-cache
 Cf-Cache-Status: DYNAMIC
-Cf-Ray: 9cfabd78c9f2f20b-LAX
+Cf-Ray: 9e435ce8ba1ac8bd-SJC
 Content-Security-Policy: default-src 'none'; frame-ancestors 'none'
 Content-Type: text/event-stream; charset=utf-8
-Date: Wed, 18 Feb 2026 04:21:53 GMT
-Request-Id: req_011CYEtrJuwttSLxtQsbCJfv
+Date: Mon, 30 Mar 2026 01:32:53 GMT
+Request-Id: req_011CZYQKThx7FreBm9XxNaCo
 Server: cloudflare
+Server-Timing: x-originResponse;dur=1348
+Set-Cookie: _cfuvid=MDLrA93UYsxQ8lx5g4oJzOL4Hsw9uJ5rhnVDMlv37iQ-1774834371.9585822-1.0.1.1-wUjit2Opedg1NqJa3Vle5vZXIJnwvYq2DAfG3qX1jWE; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.anthropic.com
 Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
-X-Envoy-Upstream-Service-Time: 1131
+Vary: Accept-Encoding
+X-Envoy-Upstream-Service-Time: 1346
 X-Robots-Tag: none
 
 event: message_start
-data: {"type":"message_start","message":{"model":"claude-sonnet-4-20250514","id":"msg_01TUh8qTZrmj6TupH7KBSngQ","type":"message","role":"assistant","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":67,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1,"service_tier":"standard","inference_geo":"not_available"}}           }
+data: {"type":"message_start","message":{"model":"claude-sonnet-4-6","id":"msg_01D2fhFfSBrqgobwjTxXvFmA","type":"message","role":"assistant","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":45,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1,"service_tier":"standard","inference_geo":"us"}}  }
 
 event: content_block_start
-data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}               }
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}        }
 
 event: ping
 data: {"type": "ping"}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Your"}         }
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Your"}        }
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" name is Cornelius -"}              }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" you"}       }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" introduced"}     }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" yourself to"}    }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" me at"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" the start"}         }
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" of our conversation."}              }
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" name is Cornelius! You told me at the start of our conversation. 😊"}            }
 
 event: content_block_stop
-data: {"type":"content_block_stop","index":0 }
+data: {"type":"content_block_stop","index":0      }
 
 event: message_delta
-data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":67,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":22}      }
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":45,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":23}        }
 
 event: message_stop
-data: {"type":"message_stop"      }
+data: {"type":"message_stop"             }
 

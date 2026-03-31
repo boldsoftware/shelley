@@ -687,7 +687,7 @@ function ChatInterface({
       return defaultModel;
     }
     const firstReady = initModels.find((m) => m.ready);
-    return firstReady?.id || "claude-sonnet-4.5";
+    return firstReady?.id || "claude-sonnet-4.6";
   });
   // Wrapper to persist model selection to localStorage
   const setSelectedModel = (model: string) => {

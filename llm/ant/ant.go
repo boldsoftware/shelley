@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	DefaultModel = Claude45Sonnet
+	DefaultModel = Claude46Sonnet
 	APIKeyEnv    = "ANTHROPIC_API_KEY"
 	DefaultURL   = "https://api.anthropic.com/v1/messages"
 )
@@ -66,9 +66,9 @@ func IsClaudeModel(userName string) bool {
 func ClaudeModelName(userName string) string {
 	switch userName {
 	case "claude", "sonnet":
-		return Claude45Sonnet
+		return Claude46Sonnet
 	case "opus":
-		return Claude45Opus
+		return Claude46Opus
 	default:
 		return ""
 	}

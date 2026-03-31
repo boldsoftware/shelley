@@ -445,14 +445,14 @@ func TestLLMRequestRealisticConversation(t *testing.T) {
 
 	// Simulate Anthropic-style messages array growing over conversation
 	// Each request adds to the previous messages
-	baseRequest := `{"model":"claude-sonnet-4-5-20250929","system":[{"type":"text","text":"You are a helpful assistant."}],"messages":[`
+	baseRequest := `{"model":"claude-sonnet-4-6","system":[{"type":"text","text":"You are a helpful assistant."}],"messages":[`
 
 	message1 := `{"role":"user","content":[{"type":"text","text":"Hello, how are you?"}]}`
 	req1Body := baseRequest + message1 + `],"max_tokens":8192}`
 
 	req1, err := db.InsertLLMRequest(ctx, generated.InsertLLMRequestParams{
 		ConversationID: &conv.ConversationID,
-		Model:          "claude-sonnet-4-5-20250929",
+		Model:          "claude-sonnet-4-6",
 		Provider:       "anthropic",
 		Url:            "https://api.anthropic.com/v1/messages",
 		RequestBody:    &req1Body,
@@ -473,7 +473,7 @@ func TestLLMRequestRealisticConversation(t *testing.T) {
 
 	req2, err := db.InsertLLMRequest(ctx, generated.InsertLLMRequestParams{
 		ConversationID: &conv.ConversationID,
-		Model:          "claude-sonnet-4-5-20250929",
+		Model:          "claude-sonnet-4-6",
 		Provider:       "anthropic",
 		Url:            "https://api.anthropic.com/v1/messages",
 		RequestBody:    &req2Body,
@@ -512,7 +512,7 @@ func TestLLMRequestRealisticConversation(t *testing.T) {
 
 	req3, err := db.InsertLLMRequest(ctx, generated.InsertLLMRequestParams{
 		ConversationID: &conv.ConversationID,
-		Model:          "claude-sonnet-4-5-20250929",
+		Model:          "claude-sonnet-4-6",
 		Provider:       "anthropic",
 		Url:            "https://api.anthropic.com/v1/messages",
 		RequestBody:    &req3Body,

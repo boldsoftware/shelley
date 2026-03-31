@@ -33,7 +33,7 @@ func TestBasicConvo(t *testing.T) {
 	apiKey := cmp.Or(os.Getenv("OUTER_SKETCH_MODEL_API_KEY"), os.Getenv("ANTHROPIC_API_KEY"))
 	srv := &ant.Service{
 		APIKey: apiKey,
-		Model:  ant.Claude4Sonnet, // Use specific model to match cached responses
+		Model:  ant.Claude46Sonnet, // Use specific model to match cached responses
 		HTTPC:  rr.Client(),
 	}
 	convo := New(ctx, srv, nil)

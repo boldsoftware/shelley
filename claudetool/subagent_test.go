@@ -167,15 +167,15 @@ func TestSubagentTool_InheritsModel(t *testing.T) {
 		ParentConversationID: "parent-123",
 		WorkingDir:           wd,
 		Runner:               runner,
-		ModelID:              "claude-sonnet-4-20250514",
+		ModelID:              "claude-sonnet-4-6",
 	}
 
 	input := subagentInput{Slug: "test", Prompt: "do something"}
 	inputJSON, _ := json.Marshal(input)
 	tool.Run(context.Background(), inputJSON)
 
-	if runner.lastModelID != "claude-sonnet-4-20250514" {
-		t.Errorf("expected model 'claude-sonnet-4-20250514', got %q", runner.lastModelID)
+	if runner.lastModelID != "claude-sonnet-4-6" {
+		t.Errorf("expected model 'claude-sonnet-4-6', got %q", runner.lastModelID)
 	}
 }
 
@@ -189,9 +189,9 @@ func TestSubagentTool_ModelOverride(t *testing.T) {
 		ParentConversationID: "parent-123",
 		WorkingDir:           wd,
 		Runner:               runner,
-		ModelID:              "claude-sonnet-4-20250514",
+		ModelID:              "claude-sonnet-4-6",
 		AvailableModels: []AvailableModel{
-			{ID: "claude-sonnet-4-20250514"},
+			{ID: "claude-sonnet-4-6"},
 			{ID: "claude-haiku-4.5", DisplayName: "Claude Haiku 4.5"},
 		},
 	}
@@ -208,11 +208,11 @@ func TestSubagentTool_ModelOverride(t *testing.T) {
 	if !strings.Contains(llmTool.Description, "claude-haiku-4.5 (Claude Haiku 4.5)") {
 		t.Errorf("expected description to list model with display name, got %s", llmTool.Description)
 	}
-	if !strings.Contains(llmTool.Description, "claude-sonnet-4-20250514") {
+	if !strings.Contains(llmTool.Description, "claude-sonnet-4-6") {
 		t.Errorf("expected description to list model without display name suffix, got %s", llmTool.Description)
 	}
 	// sonnet has no display name, so it should NOT have parentheses
-	if strings.Contains(llmTool.Description, "claude-sonnet-4-20250514 (") {
+	if strings.Contains(llmTool.Description, "claude-sonnet-4-6 (") {
 		t.Errorf("expected no display name suffix for sonnet, got %s", llmTool.Description)
 	}
 
@@ -236,9 +236,9 @@ func TestSubagentTool_ModelOverride_InvalidModel(t *testing.T) {
 		ParentConversationID: "parent-123",
 		WorkingDir:           wd,
 		Runner:               runner,
-		ModelID:              "claude-sonnet-4-20250514",
+		ModelID:              "claude-sonnet-4-6",
 		AvailableModels: []AvailableModel{
-			{ID: "claude-sonnet-4-20250514"},
+			{ID: "claude-sonnet-4-6"},
 			{ID: "claude-haiku-4.5"},
 		},
 	}
@@ -252,7 +252,7 @@ func TestSubagentTool_ModelOverride_InvalidModel(t *testing.T) {
 	if !strings.Contains(result.Error.Error(), "nonexistent-model") {
 		t.Errorf("expected error to mention invalid model, got %v", result.Error)
 	}
-	if !strings.Contains(result.Error.Error(), "claude-sonnet-4-20250514") {
+	if !strings.Contains(result.Error.Error(), "claude-sonnet-4-6") {
 		t.Errorf("expected error to list available models, got %v", result.Error)
 	}
 }

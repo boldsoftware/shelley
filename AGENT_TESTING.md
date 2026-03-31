@@ -35,7 +35,7 @@ pnpm exec playwright install chromium
 
 For testing with Claude:
 ```bash
-./bin/shelley --model claude-sonnet-4.5 --db test.db serve --port 9001
+./bin/shelley --model claude-sonnet-4.6 --db test.db serve --port 9001
 ```
 
 For testing with predictable model (no API key needed):
@@ -223,7 +223,7 @@ curl http://localhost:9001/api/conversation/<id>
 # Create new conversation (POST)
 curl -X POST http://localhost:9001/api/conversations/new \
   -H "Content-Type: application/json" \
-  -d '{"model":"claude-sonnet-4.5","cwd":"/path/to/dir"}'
+  -d '{"model":"claude-sonnet-4.6","cwd":"/path/to/dir"}'
 
 # Send message (POST)
 curl -X POST http://localhost:9001/api/conversation/<id>/chat \

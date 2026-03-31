@@ -159,7 +159,7 @@ func TestModelRestorationAfterServerRestart(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a conversation with a specific model
-	modelID := "claude-sonnet-4-20250514"
+	modelID := "claude-sonnet-4.6"
 	conv, err := database.CreateConversation(ctx, nil, true, nil, &modelID, db.ConversationOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create conversation: %v", err)
