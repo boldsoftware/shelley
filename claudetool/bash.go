@@ -464,6 +464,19 @@ func humanizeBytes(bytes int) string {
 	return "more than 1GB"
 }
 
+// shellHasCommand checks whether a command is available inside the
+// same bash --login environment that the bash tool uses to run commands.
+// This accounts for version managers (uv, mise, direnv, …) that only
+// add entries to PATH after shell startup scripts are sourced.
+func shellHasCommand(ctx context.Context, name string) bool {
+	// name comes from bashkit.ExtractCommands, which guarantees simple
+	// identifiers (no slashes, no equals, no empty strings). Single-quoting
+	// is purely defensive.
+	cmd := exec.CommandContext(ctx, "bash", "--login", "-c", "command -v '"+strings.ReplaceAll(name, "'", "")+"'")
+	cmd.Stdin = nil
+	return cmd.Run() == nil
+}
+
 // checkAndInstallMissingTools analyzes a bash command and attempts to automatically install any missing tools.
 func (b *BashTool) checkAndInstallMissingTools(ctx context.Context, command string) error {
 	commands, err := bashkit.ExtractCommands(command)
@@ -479,9 +492,8 @@ func (b *BashTool) checkAndInstallMissingTools(ctx context.Context, command stri
 		if doNotAttemptToolInstall[cmd] {
 			continue
 		}
-		_, err := exec.LookPath(cmd)
-		if err == nil {
-			doNotAttemptToolInstall[cmd] = true // spare future LookPath calls
+		if shellHasCommand(ctx, cmd) {
+			doNotAttemptToolInstall[cmd] = true // spare future checks
 			continue
 		}
 		missing = append(missing, cmd)
@@ -508,7 +520,7 @@ var (
 )
 
 // autodetectPackageManager returns the first package‑manager binary
-// found in PATH, or an empty string if none are present.
+// found in the login shell environment, or an empty string if none are present.
 func autodetectPackageManager() string {
 	// TODO: cache this result with a sync.OnceValue
 
@@ -526,8 +538,10 @@ func autodetectPackageManager() string {
 		"slackpkg", // Slackware
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	for _, m := range managers {
-		if _, err := exec.LookPath(m); err == nil {
+		if shellHasCommand(ctx, m) {
 			return m
 		}
 	}
