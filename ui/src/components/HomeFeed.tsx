@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { ConversationWithState, Model } from "../types";
 import { api } from "../services/api";
 import { useMarkdown } from "../contexts/MarkdownContext";
-import { ThemeMode, getStoredTheme, setStoredTheme, applyTheme } from "../services/theme";
+import { ThemeMode, getStoredTheme } from "../services/theme";
 import { useI18n } from "../i18n";
 import { useVersionChecker } from "./VersionChecker";
 import MarkdownContent from "./MarkdownContent";
 import ModelPicker from "./ModelPicker";
 import MessageInput from "./MessageInput";
 import DirectoryPickerModal from "./DirectoryPickerModal";
+import AppOverflowMenu from "./AppOverflowMenu";
 
 interface HomeFeedProps {
   conversations: ConversationWithState[];
@@ -232,147 +233,17 @@ function HomeFeed({
             </button>
 
             {showOverflowMenu && (
-              <div className="overflow-menu">
-                {links.map((link, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      setShowOverflowMenu(false);
-                      window.open(link.url, "_blank");
-                    }}
-                    className="overflow-menu-item"
-                  >
-                    <svg
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      style={{ width: "1.25rem", height: "1.25rem", marginRight: "0.75rem" }}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d={
-                          link.icon_svg ||
-                          "M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                        }
-                      />
-                    </svg>
-                    {link.title}
-                  </button>
-                ))}
-
-                {/* Version check */}
-                {links.length > 0 && <div className="overflow-menu-divider" />}
-                <button
-                  onClick={() => {
-                    setShowOverflowMenu(false);
-                    openVersionModal();
-                  }}
-                  className="overflow-menu-item"
-                >
-                  <svg
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    style={{ width: "1.25rem", height: "1.25rem", marginRight: "0.75rem" }}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  {t("checkForNewVersion")}
-                  {hasUpdate && <span className="version-menu-dot" />}
-                </button>
-
-                {/* Theme toggle */}
-                <div className="overflow-menu-divider" />
-                <div className="theme-toggle-row">
-                  <button
-                    onClick={() => {
-                      setThemeMode("system");
-                      setStoredTheme("system");
-                      applyTheme("system");
-                    }}
-                    className={`theme-toggle-btn${themeMode === "system" ? " theme-toggle-btn-selected" : ""}`}
-                    title={t("system")}
-                  >
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setThemeMode("light");
-                      setStoredTheme("light");
-                      applyTheme("light");
-                    }}
-                    className={`theme-toggle-btn${themeMode === "light" ? " theme-toggle-btn-selected" : ""}`}
-                    title={t("light")}
-                  >
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setThemeMode("dark");
-                      setStoredTheme("dark");
-                      applyTheme("dark");
-                    }}
-                    className={`theme-toggle-btn${themeMode === "dark" ? " theme-toggle-btn-selected" : ""}`}
-                    title={t("dark")}
-                  >
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-                      />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* Markdown toggle */}
-                <div className="overflow-menu-divider" />
-                <div className="md-toggle-row">
-                  <div className="md-toggle-label">{t("markdown")}</div>
-                  <div className="md-toggle-buttons">
-                    <button
-                      onClick={() => setMarkdownMode("off")}
-                      className={`md-toggle-btn${markdownMode === "off" ? " md-toggle-btn-selected" : ""}`}
-                    >
-                      {t("off")}
-                    </button>
-                    <button
-                      onClick={() => setMarkdownMode("agent")}
-                      className={`md-toggle-btn${markdownMode === "agent" ? " md-toggle-btn-selected" : ""}`}
-                    >
-                      {t("agent")}
-                    </button>
-                    <button
-                      onClick={() => setMarkdownMode("all")}
-                      className={`md-toggle-btn${markdownMode === "all" ? " md-toggle-btn-selected" : ""}`}
-                    >
-                      {t("all")}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <AppOverflowMenu
+                t={t}
+                hasUpdate={hasUpdate}
+                links={links}
+                onClose={() => setShowOverflowMenu(false)}
+                onOpenVersionModal={openVersionModal}
+                themeMode={themeMode}
+                setThemeMode={setThemeMode}
+                markdownMode={markdownMode}
+                setMarkdownMode={setMarkdownMode}
+              />
             )}
           </div>
         </div>
