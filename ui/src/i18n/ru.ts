@@ -15,7 +15,7 @@ export const ru: TranslationKeys = {
   diffs: "Изменения",
   terminal: "Терминал",
   archiveConversation: "Архивировать диалог",
-  checkForNewVersion: "Проверить обновления",
+  settings: "Настройки",
   markdown: "Markdown",
   off: "Откл",
   agent: "Агент",

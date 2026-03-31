@@ -15,7 +15,7 @@ export const zhCN: TranslationKeys = {
   diffs: "差异对比",
   terminal: "终端",
   archiveConversation: "归档对话",
-  checkForNewVersion: "检查新版本",
+  settings: "设置",
   markdown: "Markdown",
   off: "关闭",
   agent: "代理",

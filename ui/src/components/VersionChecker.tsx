@@ -117,7 +117,7 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
     <div className="version-modal-overlay" onClick={onClose}>
       <div className="version-modal" onClick={(e) => e.stopPropagation()}>
         <div className="version-modal-header">
-          <h2>Version</h2>
+          <h2>Settings</h2>
           <button onClick={onClose} className="version-modal-close" aria-label="Close">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
