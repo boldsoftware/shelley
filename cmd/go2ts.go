@@ -15,6 +15,7 @@ import (
 	"go.skia.org/infra/go/go2ts"
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
+	"shelley.exe.dev/gitstate"
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/server/notifications"
 )
@@ -62,6 +63,7 @@ func TS() *go2ts.Go2TS {
 	generator.AddMultiple(
 		generated.Conversation{},
 		llm.Usage{},
+		gitstate.PRInfo{},
 	)
 
 	generator.AddMultiple(
@@ -111,8 +113,9 @@ type conversationWithStateForTS struct {
 	GitRepoRoot          string  `json:"git_repo_root,omitempty"`
 	GitWorktreeRoot      string  `json:"git_worktree_root,omitempty"`
 	GitCommit            string  `json:"git_commit,omitempty"`
-	GitSubject           string  `json:"git_subject,omitempty"`
-	SubagentCount        int64   `json:"subagent_count"`
+	GitSubject           string          `json:"git_subject,omitempty"`
+	SubagentCount        int64           `json:"subagent_count"`
+	PRInfo               *gitstate.PRInfo `json:"pr_info,omitempty"`
 }
 
 type streamResponseForTS struct {

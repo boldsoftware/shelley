@@ -2,10 +2,12 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMe
 import {
   Message,
   Conversation,
+  ConversationWithState,
   StreamResponse,
   LLMContent,
   ConversationListUpdate,
   ToolProgress,
+  PRInfo,
   isDistillStatusMessage,
   isQueuedMessage,
 } from "../types";
@@ -51,6 +53,52 @@ import TerminalPanel, { EphemeralTerminal } from "./TerminalPanel";
 import ModelPicker from "./ModelPicker";
 import ModelBar from "./ModelBar";
 import SystemPromptView from "./SystemPromptView";
+
+function formatCwdForDisplay(cwd: string | null | undefined): string | null {
+  if (!cwd) return null;
+  const homeDir = window.__SHELLEY_INIT__?.home_dir;
+  if (homeDir && cwd === homeDir) return "~";
+  if (homeDir && cwd.startsWith(homeDir + "/")) return "~" + cwd.slice(homeDir.length);
+  return cwd;
+}
+
+function prStateLabel(pr: PRInfo): string {
+  if (pr.state === "MERGED") return "merged";
+  if (pr.state === "CLOSED") return "closed";
+  if (pr.is_draft) return "draft";
+  if (pr.in_merge_queue) return "merge queue";
+  if (pr.review_decision === "APPROVED") return "approved";
+  if (pr.review_decision === "CHANGES_REQUESTED") return "changes requested";
+  return "open";
+}
+
+function prStateClass(pr: PRInfo): string {
+  if (pr.state === "MERGED") return "pr-merged";
+  if (pr.state === "CLOSED") return "pr-closed";
+  if (pr.is_draft) return "pr-draft";
+  if (pr.in_merge_queue) return "pr-queued";
+  if (pr.review_decision === "APPROVED") return "pr-approved";
+  if (pr.review_decision === "CHANGES_REQUESTED") return "pr-changes";
+  return "pr-open";
+}
+
+function PRBadge({ pr }: { pr: PRInfo }) {
+  return (
+    <a
+      href={pr.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`pr-badge ${prStateClass(pr)}`}
+      title={`#${pr.number}: ${pr.title} (${prStateLabel(pr)})`}
+    >
+      <svg className="pr-icon" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z" />
+      </svg>
+      <span className="pr-number">#{pr.number}</span>
+      <span className="pr-state">{prStateLabel(pr)}</span>
+    </a>
+  );
+}
 
 interface ContextUsageBarProps {
   contextWindowSize: number;
@@ -489,7 +537,7 @@ interface ChatInterfaceProps {
   onOpenDrawer: () => void;
   onNewConversation: () => void;
   onArchiveConversation?: (conversationId: string) => Promise<void>;
-  currentConversation?: Conversation;
+  currentConversation?: ConversationWithState;
   onConversationUpdate?: (conversation: Conversation) => void;
   onConversationListUpdate?: (update: ConversationListUpdate) => void;
   onConversationStateUpdate?: (state: ConversationStateUpdate) => void;
@@ -514,6 +562,7 @@ interface ChatInterfaceProps {
   isDrawerCollapsed?: boolean;
   onToggleDrawerCollapse?: () => void;
   openDiffViewerTrigger?: number; // increment to trigger opening diff viewer
+  openDirectoryPickerTrigger?: number; // increment to trigger opening directory picker
   modelsRefreshTrigger?: number; // increment to trigger models list refresh
   onOpenModelsModal?: () => void;
   onReconnect?: () => void;
@@ -643,6 +692,7 @@ function ChatInterface({
   isDrawerCollapsed,
   onToggleDrawerCollapse,
   openDiffViewerTrigger,
+  openDirectoryPickerTrigger,
   modelsRefreshTrigger,
   onOpenModelsModal,
   onReconnect,
@@ -1727,6 +1777,13 @@ function ChatInterface({
     }
   }, [openDiffViewerTrigger]);
 
+  // Handle external trigger to open directory picker
+  useEffect(() => {
+    if (openDirectoryPickerTrigger && openDirectoryPickerTrigger > 0) {
+      setShowDirectoryPicker(true);
+    }
+  }, [openDirectoryPickerTrigger]);
+
   const handleCancel = async () => {
     if (!conversationId || cancelling) return;
 
@@ -1953,39 +2010,15 @@ function ChatInterface({
 
   const renderMessages = () => {
     if (messages.length === 0) {
-      const proxyURL = `https://${hostname}/`;
       return (
         <div className="empty-state">
           <div className="empty-state-content">
             <p className="text-base chat-welcome-text">
               {t("welcomeMessage")
-                .split(/(\{hostname\}|\{docsLink\}|\{proxyLink\})/)
+                .split(/(\{hostname\})/)
                 .map((part, i) => {
                   if (part === "{hostname}") return <strong key={i}>{hostname}</strong>;
-                  if (part === "{docsLink}")
-                    return (
-                      <a
-                        key={i}
-                        href="https://exe.dev/docs/proxy"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="chat-welcome-link"
-                      >
-                        docs
-                      </a>
-                    );
-                  if (part === "{proxyLink}")
-                    return (
-                      <a
-                        key={i}
-                        href={proxyURL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="chat-welcome-link"
-                      >
-                        {proxyURL}
-                      </a>
-                    );
+
                   return part;
                 })}
             </p>
@@ -2116,19 +2149,27 @@ function ChatInterface({
             <span className="status-stop-label">{cancelling ? "Cancelling..." : "Stop"}</span>
           </button>
         </div>
-        <ContextUsageBar
-          contextWindowSize={contextWindowSize}
-          maxContextTokens={
-            models.find((m) => m.id === selectedModel)?.max_context_tokens || 200000
-          }
-          conversationId={conversationId}
-          modelName={selectedModelDisplayName}
-          onDistillConversation={onDistillConversation ? handleDistillConversation : undefined}
-          onDistillReplaceConversation={
-            onDistillReplaceConversation ? handleDistillReplaceConversation : undefined
-          }
-          agentWorking={agentWorking}
-        />
+        <div className="status-bar-right">
+          {currentConversation?.cwd && (
+            <span className="status-cwd" title={currentConversation.cwd}>
+              {formatCwdForDisplay(currentConversation.cwd)}
+            </span>
+          )}
+          {currentConversation?.pr_info && <PRBadge pr={currentConversation.pr_info} />}
+          <ContextUsageBar
+            contextWindowSize={contextWindowSize}
+            maxContextTokens={
+              models.find((m) => m.id === selectedModel)?.max_context_tokens || 200000
+            }
+            conversationId={conversationId}
+            modelName={selectedModelDisplayName}
+            onDistillConversation={onDistillConversation ? handleDistillConversation : undefined}
+            onDistillReplaceConversation={
+              onDistillReplaceConversation ? handleDistillReplaceConversation : undefined
+            }
+            agentWorking={agentWorking}
+          />
+        </div>
       </div>
     ) : !conversationId ? (
       // New conversation — show model picker and cwd selector
@@ -2246,19 +2287,27 @@ function ChatInterface({
           <span className="hide-on-mobile">Ready on </span>
           {hostname}
         </span>
-        <ContextUsageBar
-          contextWindowSize={contextWindowSize}
-          maxContextTokens={
-            models.find((m) => m.id === selectedModel)?.max_context_tokens || 200000
-          }
-          conversationId={conversationId}
-          modelName={selectedModelDisplayName}
-          onDistillConversation={onDistillConversation ? handleDistillConversation : undefined}
-          onDistillReplaceConversation={
-            onDistillReplaceConversation ? handleDistillReplaceConversation : undefined
-          }
-          agentWorking={agentWorking}
-        />
+        <div className="status-bar-right">
+          {currentConversation?.cwd && (
+            <span className="status-cwd" title={currentConversation.cwd}>
+              {formatCwdForDisplay(currentConversation.cwd)}
+            </span>
+          )}
+          {currentConversation?.pr_info && <PRBadge pr={currentConversation.pr_info} />}
+          <ContextUsageBar
+            contextWindowSize={contextWindowSize}
+            maxContextTokens={
+              models.find((m) => m.id === selectedModel)?.max_context_tokens || 200000
+            }
+            conversationId={conversationId}
+            modelName={selectedModelDisplayName}
+            onDistillConversation={onDistillConversation ? handleDistillConversation : undefined}
+            onDistillReplaceConversation={
+              onDistillReplaceConversation ? handleDistillReplaceConversation : undefined
+            }
+            agentWorking={agentWorking}
+          />
+        </div>
       </div>
     );
   }

@@ -358,6 +358,7 @@ function App() {
         const gitFields = {
           git_repo_root: update.git_repo_root,
           git_worktree_root: update.git_worktree_root,
+          pr_info: update.pr_info,
         };
         if (existingIndex >= 0) {
           // Update existing conversation in place, preserving working state and git info
@@ -515,6 +516,7 @@ function App() {
               git_worktree_root: conv.git_worktree_root,
               git_commit: conv.git_commit,
               git_subject: conv.git_subject,
+              pr_info: conv.pr_info,
             }
           : conv,
       ),
@@ -560,6 +562,7 @@ function App() {
               git_commit: c.git_commit,
               git_subject: c.git_subject,
               subagent_count: c.subagent_count,
+              pr_info: c.pr_info,
             }
           : c,
       ),

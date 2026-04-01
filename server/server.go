@@ -23,6 +23,7 @@ import (
 	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
+	"shelley.exe.dev/gitstate"
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/models"
 	"shelley.exe.dev/server/notifications"
@@ -55,12 +56,13 @@ type ConversationState struct {
 // ConversationWithState combines a conversation with its working state.
 type ConversationWithState struct {
 	generated.Conversation
-	Working         bool   `json:"working"`
-	GitRepoRoot     string `json:"git_repo_root,omitempty"`
-	GitWorktreeRoot string `json:"git_worktree_root,omitempty"`
-	GitCommit       string `json:"git_commit,omitempty"`
-	GitSubject      string `json:"git_subject,omitempty"`
-	SubagentCount   int64  `json:"subagent_count"`
+	Working         bool             `json:"working"`
+	GitRepoRoot     string           `json:"git_repo_root,omitempty"`
+	GitWorktreeRoot string           `json:"git_worktree_root,omitempty"`
+	GitCommit       string           `json:"git_commit,omitempty"`
+	GitSubject      string           `json:"git_subject,omitempty"`
+	SubagentCount   int64            `json:"subagent_count"`
+	PRInfo          *gitstate.PRInfo `json:"pr_info,omitempty"`
 }
 
 // StreamResponse represents the response format for conversation streaming
@@ -220,6 +222,7 @@ type ConversationListUpdate struct {
 	ConversationID  string                  `json:"conversation_id,omitempty"` // For deletes
 	GitRepoRoot     string                  `json:"git_repo_root,omitempty"`
 	GitWorktreeRoot string                  `json:"git_worktree_root,omitempty"`
+	PRInfo          *gitstate.PRInfo        `json:"pr_info,omitempty"`
 }
 
 // Server manages the HTTP API and active conversations
@@ -1033,7 +1036,14 @@ func (s *Server) broadcastMessageUpdate(ctx context.Context, conversationID stri
 func (s *Server) publishConversationListUpdate(update ConversationListUpdate) {
 	// Populate git info from conversation cwd
 	if update.Conversation != nil && update.Conversation.Cwd != nil {
-		update.GitRepoRoot, update.GitWorktreeRoot = gitInfoForCwd(*update.Conversation.Cwd)
+		gs := gitstate.GetGitState(*update.Conversation.Cwd)
+		if gs.IsRepo {
+			update.GitRepoRoot = gs.Worktree
+			update.GitWorktreeRoot = getGitWorktreeRoot(gs.Worktree)
+			if gs.Branch != "" {
+				update.PRInfo = gitstate.GetPRCache().GetPRInfo(gs.Worktree, gs.Branch)
+			}
+		}
 	}
 
 	s.mu.Lock()
@@ -1045,6 +1055,73 @@ func (s *Server) publishConversationListUpdate(update ConversationListUpdate) {
 			ConversationListUpdate: &update,
 		}
 		manager.subpub.Broadcast(streamData)
+	}
+}
+
+// prRefreshRoutine periodically refreshes PR status for all conversations
+// and broadcasts updates. Runs every 60 seconds.
+func (s *Server) prRefreshRoutine() {
+	// Do an immediate refresh on startup.
+	s.refreshAllPRs()
+
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		s.refreshAllPRs()
+	}
+}
+
+func (s *Server) refreshAllPRs() {
+	ctx := context.Background()
+	conversations, err := s.db.ListConversations(ctx, 200, 0)
+	if err != nil {
+		s.logger.Error("PR refresh: failed to list conversations", "error", err)
+		return
+	}
+
+	// Collect repo→branches, deduped by worktree path.
+	type convBranch struct {
+		conv generated.Conversation
+		worktree string
+		branch   string
+	}
+	repoBranches := make(map[string]map[string]bool)
+	var tracked []convBranch
+	for _, conv := range conversations {
+		if conv.Cwd == nil {
+			continue
+		}
+		gs := gitstate.GetGitState(*conv.Cwd)
+		if !gs.IsRepo || gs.Branch == "" {
+			continue
+		}
+		if repoBranches[gs.Worktree] == nil {
+			repoBranches[gs.Worktree] = make(map[string]bool)
+		}
+		repoBranches[gs.Worktree][gs.Branch] = true
+		tracked = append(tracked, convBranch{conv: conv, worktree: gs.Worktree, branch: gs.Branch})
+	}
+
+	if len(repoBranches) == 0 {
+		return
+	}
+
+	prCache := gitstate.GetPRCache()
+	prCache.InvalidateAll()
+	done := make(chan struct{})
+	prCache.RefreshRepos(repoBranches, func() { close(done) })
+	<-done
+
+	// Broadcast updates for every conversation that has PR info.
+	for _, cb := range tracked {
+		pr := gitstate.GetPRCache().GetPRInfo(cb.worktree, cb.branch)
+		if pr == nil {
+			continue
+		}
+		s.publishConversationListUpdate(ConversationListUpdate{
+			Type:         "update",
+			Conversation: &cb.conv,
+		})
 	}
 }
 
@@ -1242,6 +1319,9 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 
 	// Start auto-upgrade routine
 	go s.autoUpgradeRoutine()
+
+	// Start PR status refresh routine
+	go s.prRefreshRoutine()
 
 	// Get actual port from listener
 	actualPort := tcpListener.Addr().(*net.TCPAddr).Port

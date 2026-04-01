@@ -16,7 +16,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -574,6 +573,9 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 	// Cache git info by cwd to avoid redundant git subprocess calls
 	gitStates := make(map[string]*gitstate.GitState)
 	result := make([]ConversationWithState, len(conversations))
+
+	// First pass: collect git states and build repo->branches map for batch PR fetch.
+	repoBranches := make(map[string]map[string]bool)
 	for i, conv := range conversations {
 		cws := ConversationWithState{
 			Conversation:  conv,
@@ -591,9 +593,26 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 				cws.GitWorktreeRoot = getGitWorktreeRoot(gs.Worktree)
 				cws.GitCommit = gs.Commit
 				cws.GitSubject = gs.Subject
+				if gs.Branch != "" {
+					if repoBranches[gs.Worktree] == nil {
+						repoBranches[gs.Worktree] = make(map[string]bool)
+					}
+					repoBranches[gs.Worktree][gs.Branch] = true
+				}
 			}
 		}
 		result[i] = cws
+	}
+
+	// Populate PR info from cache (non-blocking, may be empty on cold start).
+	for i, cws := range result {
+		if cws.GitRepoRoot != "" {
+			if conv := conversations[i]; conv.Cwd != nil {
+				if gs, ok := gitStates[*conv.Cwd]; ok && gs.Branch != "" {
+					result[i].PRInfo = gitstate.GetPRCache().GetPRInfo(gs.Worktree, gs.Branch)
+				}
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1026,12 +1045,6 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Subscribe BEFORE sending initial data so we don't miss broadcasts that
-	// happen between the DB query and the start of the event loop. The subpub
-	// channel is buffered (10), so events arriving while we write the initial
-	// response are queued rather than lost.
-	next := manager.subpub.Subscribe(ctx, lastSeqID)
-
 	// Send initial response (all messages for fresh connections, missed messages for resumes)
 	if len(messages) > 0 {
 		apiMessages := toAPIMessages(messages)
@@ -1070,6 +1083,9 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 		fmt.Fprintf(w, "data: %s\n\n", data)
 		w.(http.Flusher).Flush()
 	}
+
+	// Subscribe to new messages after the last one we sent
+	next := manager.subpub.Subscribe(ctx, lastSeqID)
 
 	// Start heartbeat goroutine - sends state every 30 seconds if no other messages
 	heartbeatDone := make(chan struct{})
@@ -1493,145 +1509,6 @@ func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 	} else {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Upgrade complete. Restart to apply."})
 	}
-}
-
-// handleUpgradeHeadlessShell downloads and installs the latest headless-shell tarball.
-func (s *Server) handleUpgradeHeadlessShell(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	// Check that we have a local headless-shell to upgrade
-	if _, err := os.Stat(headlessShellPath); err != nil {
-		http.Error(w, "headless-shell not installed at "+headlessShellPath, http.StatusBadRequest)
-		return
-	}
-
-	if !isSudoAvailable() {
-		http.Error(w, "sudo is required to upgrade headless-shell", http.StatusInternalServerError)
-		return
-	}
-
-	// Get cached version info
-	info, err := s.versionChecker.Check(ctx, false)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Version check failed: %v", err), http.StatusInternalServerError)
-		return
-	}
-	if !info.HeadlessShellUpdate {
-		http.Error(w, "No headless-shell update available", http.StatusBadRequest)
-		return
-	}
-	if info.ReleaseInfo == nil {
-		http.Error(w, "No release info available", http.StatusInternalServerError)
-		return
-	}
-
-	downloadURL := findHeadlessShellURL(info.ReleaseInfo)
-	if downloadURL == "" {
-		http.Error(w, fmt.Sprintf("No headless-shell download for %s/%s", runtime.GOOS, runtime.GOARCH), http.StatusBadRequest)
-		return
-	}
-
-	s.logger.Info("Upgrading headless-shell", "url", downloadURL, "from", info.HeadlessShellCurrent, "to", info.HeadlessShellLatest)
-
-	// Download the tarball
-	req, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create request: %v", err), http.StatusInternalServerError)
-		return
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to download: %v", err), http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		http.Error(w, fmt.Sprintf("Download returned status %d", resp.StatusCode), http.StatusInternalServerError)
-		return
-	}
-
-	// Write tarball to a temp file
-	tmpTar, err := os.CreateTemp("", "headless-shell-*.tar.gz")
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create temp file: %v", err), http.StatusInternalServerError)
-		return
-	}
-	tmpTarPath := tmpTar.Name()
-	defer os.Remove(tmpTarPath)
-
-	if _, err := io.Copy(tmpTar, resp.Body); err != nil {
-		tmpTar.Close()
-		http.Error(w, fmt.Sprintf("Failed to save tarball: %v", err), http.StatusInternalServerError)
-		return
-	}
-	tmpTar.Close()
-
-	// Extract to a temp directory
-	tmpDir, err := os.MkdirTemp("", "headless-shell-extract-*")
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create temp dir: %v", err), http.StatusInternalServerError)
-		return
-	}
-	defer os.RemoveAll(tmpDir)
-
-	cmd := exec.CommandContext(ctx, "tar", "xzf", tmpTarPath, "-C", tmpDir)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		s.logger.Error("Failed to extract tarball", "error", err, "output", string(output))
-		http.Error(w, fmt.Sprintf("Failed to extract: %v\n%s", err, output), http.StatusInternalServerError)
-		return
-	}
-
-	// Verify the extracted binary works
-	extractedBin := filepath.Join(tmpDir, "headless-shell", "headless-shell")
-	cmd = exec.CommandContext(ctx, extractedBin, "--version")
-	versionOutput, err := cmd.Output()
-	if err != nil {
-		s.logger.Error("Extracted headless-shell --version failed", "error", err)
-		http.Error(w, fmt.Sprintf("Extracted binary failed --version: %v", err), http.StatusInternalServerError)
-		return
-	}
-	newVersion := strings.TrimSpace(string(versionOutput))
-	s.logger.Info("New headless-shell version verified", "version", newVersion)
-
-	// Replace the install dir using sudo: backup -> move new -> cleanup
-	installDir := filepath.Dir(headlessShellPath)
-	backupDir := installDir + ".old"
-
-	exec.CommandContext(ctx, "sudo", "rm", "-rf", backupDir).Run()
-
-	cmd = exec.CommandContext(ctx, "sudo", "mv", installDir, backupDir)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		s.logger.Error("Failed to backup old headless-shell", "error", err, "output", string(output))
-		http.Error(w, fmt.Sprintf("Failed to backup old installation: %v\n%s", err, output), http.StatusInternalServerError)
-		return
-	}
-
-	cmd = exec.CommandContext(ctx, "sudo", "mv", filepath.Join(tmpDir, "headless-shell"), installDir)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		// Rollback: restore backup (use background context since request ctx may be cancelled)
-		exec.CommandContext(context.Background(), "sudo", "mv", backupDir, installDir).Run()
-		s.logger.Error("Failed to install new headless-shell", "error", err, "output", string(output))
-		http.Error(w, fmt.Sprintf("Failed to install: %v\n%s", err, output), http.StatusInternalServerError)
-		return
-	}
-
-	exec.CommandContext(ctx, "sudo", "chmod", "-R", "a+rx", installDir).Run()
-	exec.CommandContext(ctx, "sudo", "rm", "-rf", backupDir).Run()
-
-	// Invalidate version cache
-	vc := s.versionChecker
-	vc.mu.Lock()
-	vc.cachedInfo = nil
-	vc.mu.Unlock()
-
-	s.logger.Info("headless-shell upgraded successfully", "version", newVersion)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"status":  "ok",
-		"message": "Upgraded to " + newVersion,
-		"version": newVersion,
-	})
 }
 
 // handleExit exits the process, expecting systemd or similar to restart it
