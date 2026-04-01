@@ -1805,6 +1805,7 @@ function ChatInterface({
         endTime: string | null;
       }
     > = {};
+
     const displayDataMap: Record<string, unknown> = {};
 
     // First pass: collect all tool results and their display data from llm_data
@@ -1921,7 +1922,6 @@ function ChatInterface({
                 toolError: resultData?.error || (wasTruncated && !resultData),
                 toolStartTime: resultData?.startTime,
                 toolEndTime: resultData?.endTime,
-                // Mark as complete if truncated (tool was lost, not running)
                 hasResult: !!resultData || wasTruncated,
                 display: displayData,
               });

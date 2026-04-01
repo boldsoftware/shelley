@@ -442,11 +442,19 @@ func (l *Loop) handleMaxTokensTruncation(ctx context.Context, resp *llm.Response
 // to l.history. It does NOT call processLLMRequest — the caller loops instead.
 func (l *Loop) executeToolCalls(ctx context.Context, content []llm.Content) error {
 	var toolResults []llm.Content
+	totalToolUses := 0
+	for _, c := range content {
+		if c.Type == llm.ContentTypeToolUse {
+			totalToolUses++
+		}
+	}
+	completedToolUses := 0
 
 	for _, c := range content {
 		if c.Type != llm.ContentTypeToolUse {
 			continue
 		}
+		completedToolUses++
 
 		l.logger.Debug("executing tool", "name", c.ToolName, "id", c.ID)
 
@@ -496,7 +504,7 @@ func (l *Loop) executeToolCalls(ctx context.Context, content []llm.Content) erro
 			l.logger.Debug("tool executed successfully", "name", c.ToolName, "duration", endTime.Sub(startTime))
 		}
 
-		toolResults = append(toolResults, llm.Content{
+		toolResult := llm.Content{
 			Type:             llm.ContentTypeToolResult,
 			ToolUseID:        c.ID,
 			ToolError:        result.Error != nil,
@@ -504,7 +512,21 @@ func (l *Loop) executeToolCalls(ctx context.Context, content []llm.Content) erro
 			ToolUseStartTime: &startTime,
 			ToolUseEndTime:   &endTime,
 			Display:          result.Display,
-		})
+		}
+		toolResults = append(toolResults, toolResult)
+
+		if completedToolUses < totalToolUses && l.recordMessage != nil {
+			// Record each finished tool in a batch immediately so the UI can mark it
+			// complete while later tools are still running. The final batched message is
+			// still recorded below after all tools finish.
+			partialToolMessage := llm.Message{
+				Role:    llm.MessageRoleUser,
+				Content: []llm.Content{toolResult},
+			}
+			if err := l.recordMessage(ctx, partialToolMessage, llm.Usage{}); err != nil {
+				l.logger.Error("failed to record partial tool result message", "error", err)
+			}
+		}
 	}
 
 	if len(toolResults) > 0 {

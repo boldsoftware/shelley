@@ -91,8 +91,9 @@ func TestStreamResumeWithLastSequenceID(t *testing.T) {
 			t.Fatalf("Failed to parse response: %v", err)
 		}
 
-		if len(response.Messages) != 2 {
-			t.Errorf("Expected 2 messages, got %d", len(response.Messages))
+		// Expect at least user + agent messages; hydration may add a system prompt.
+		if len(response.Messages) < 2 {
+			t.Errorf("Expected at least 2 messages, got %d", len(response.Messages))
 		}
 		if response.Heartbeat {
 			t.Error("Fresh connection should not be a heartbeat")

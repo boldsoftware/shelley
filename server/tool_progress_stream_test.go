@@ -213,3 +213,219 @@ func TestToolProgressStreamedBeforeToolResult(t *testing.T) {
 		t.Fatal("did not receive final tool result containing omega after unblocking FIFO")
 	}
 }
+
+func TestGetConversationDedupesSupersededPartialToolResults(t *testing.T) {
+	srv, database, _ := newTestServer(t)
+
+	conversation, err := database.CreateConversation(context.Background(), nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatalf("failed to create conversation: %v", err)
+	}
+
+	assistantToolUse := llm.Message{
+		Role: llm.MessageRoleAssistant,
+		Content: []llm.Content{
+			{Type: llm.ContentTypeText, Text: "running two tools"},
+			{ID: "tool_1", Type: llm.ContentTypeToolUse, ToolName: "bash", ToolInput: json.RawMessage(`{"command":"printf 'first'"}`)},
+			{ID: "tool_2", Type: llm.ContentTypeToolUse, ToolName: "bash", ToolInput: json.RawMessage(`{"command":"printf 'second'"}`)},
+		},
+	}
+	if _, err := database.CreateMessage(context.Background(), db.CreateMessageParams{
+		ConversationID: conversation.ConversationID,
+		Type:           db.MessageTypeAgent,
+		LLMData:        assistantToolUse,
+		UsageData:      llm.Usage{},
+	}); err != nil {
+		t.Fatalf("failed to create assistant tool_use message: %v", err)
+	}
+
+	now := time.Now()
+	partialResult := llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{{
+			Type:             llm.ContentTypeToolResult,
+			ToolUseID:        "tool_1",
+			ToolResult:       []llm.Content{{Type: llm.ContentTypeText, Text: "first done"}},
+			ToolUseStartTime: &now,
+			ToolUseEndTime:   &now,
+		}},
+	}
+	if _, err := database.CreateMessage(context.Background(), db.CreateMessageParams{
+		ConversationID: conversation.ConversationID,
+		Type:           db.MessageTypeUser,
+		LLMData:        partialResult,
+		UsageData:      llm.Usage{},
+	}); err != nil {
+		t.Fatalf("failed to create partial tool result message: %v", err)
+	}
+
+	finalResult := llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{
+			{
+				Type:             llm.ContentTypeToolResult,
+				ToolUseID:        "tool_1",
+				ToolResult:       []llm.Content{{Type: llm.ContentTypeText, Text: "first done"}},
+				ToolUseStartTime: &now,
+				ToolUseEndTime:   &now,
+			},
+			{
+				Type:             llm.ContentTypeToolResult,
+				ToolUseID:        "tool_2",
+				ToolResult:       []llm.Content{{Type: llm.ContentTypeText, Text: "second done"}},
+				ToolUseStartTime: &now,
+				ToolUseEndTime:   &now,
+			},
+		},
+	}
+	if _, err := database.CreateMessage(context.Background(), db.CreateMessageParams{
+		ConversationID: conversation.ConversationID,
+		Type:           db.MessageTypeUser,
+		LLMData:        finalResult,
+		UsageData:      llm.Usage{},
+	}); err != nil {
+		t.Fatalf("failed to create final tool result message: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/conversation/"+conversation.ConversationID, nil)
+	w := httptest.NewRecorder()
+	srv.handleGetConversation(w, req, conversation.ConversationID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp StreamResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	toolResultMessages := 0
+	for _, msg := range resp.Messages {
+		if msg.Type != string(db.MessageTypeUser) || msg.LlmData == nil {
+			continue
+		}
+		var llmMsg llm.Message
+		if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err != nil {
+			t.Fatalf("failed to decode llm_data: %v", err)
+		}
+		hasToolResult := false
+		for _, content := range llmMsg.Content {
+			if content.Type == llm.ContentTypeToolResult {
+				hasToolResult = true
+			}
+		}
+		if hasToolResult {
+			toolResultMessages++
+		}
+	}
+
+	if toolResultMessages != 1 {
+		t.Fatalf("expected 1 deduped tool result message, got %d", toolResultMessages)
+	}
+}
+
+func TestSSEStreamDeduplicatesCatchUpMessages(t *testing.T) {
+	// Verifies that the SSE event loop skips messages whose sequence IDs
+	// were already sent via the catch-up query (messages recorded between
+	// the initial DB query and the subscribe call).
+	srv, database, _ := newTestServer(t)
+
+	conversation, err := database.CreateConversation(context.Background(), nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatalf("failed to create conversation: %v", err)
+	}
+
+	// Seed a user message so the conversation has a known sequence ID.
+	userMsg := llm.Message{
+		Role:    llm.MessageRoleUser,
+		Content: []llm.Content{{Type: llm.ContentTypeText, Text: "hello"}},
+	}
+	msg1, err := database.CreateMessage(context.Background(), db.CreateMessageParams{
+		ConversationID: conversation.ConversationID,
+		Type:           db.MessageTypeUser,
+		LLMData:        userMsg,
+		UsageData:      llm.Usage{},
+	})
+	if err != nil {
+		t.Fatalf("failed to create user message: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	srv.RegisterRoutes(mux)
+	httpServer := httptest.NewServer(mux)
+	defer httpServer.Close()
+
+	// Connect to the SSE stream fresh (no last_sequence_id).
+	streamResp, err := http.Get(httpServer.URL + "/api/conversation/" + conversation.ConversationID + "/stream")
+	if err != nil {
+		t.Fatalf("failed to connect to stream: %v", err)
+	}
+	defer streamResp.Body.Close()
+
+	reader := bufio.NewReader(streamResp.Body)
+	initialEvent, err := readStreamResponseWithTimeout(reader, 2*time.Second)
+	if err != nil {
+		t.Fatalf("failed to read initial SSE event: %v", err)
+	}
+	if initialEvent == nil || len(initialEvent.Messages) == 0 {
+		t.Fatal("expected initial SSE event with at least one message")
+	}
+
+	// Record the sequence ID from the initial event.
+	lastSeq := int64(0)
+	for _, m := range initialEvent.Messages {
+		if m.SequenceID > lastSeq {
+			lastSeq = m.SequenceID
+		}
+	}
+	if lastSeq == 0 {
+		t.Fatal("expected positive sequence ID in initial event")
+	}
+
+	// Now add an agent message. This is recorded in the DB and published
+	// to the subscriber.
+	agentMsg := llm.Message{
+		Role:    llm.MessageRoleAssistant,
+		Content: []llm.Content{{Type: llm.ContentTypeText, Text: "I am the agent"}},
+	}
+	msg2, err := database.CreateMessage(context.Background(), db.CreateMessageParams{
+		ConversationID: conversation.ConversationID,
+		Type:           db.MessageTypeAgent,
+		LLMData:        agentMsg,
+		UsageData:      llm.Usage{},
+	})
+	if err != nil {
+		t.Fatalf("failed to create agent message: %v", err)
+	}
+
+	// Notify the subscriber about the new message.
+	srv.notifySubscribersNewMessage(context.Background(), conversation.ConversationID, msg2)
+
+	// Read the streamed event — it should contain the new message exactly once.
+	seenMessageIDs := make(map[string]int)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		event, err := readStreamResponseWithTimeout(reader, time.Until(deadline))
+		if err == context.DeadlineExceeded {
+			break
+		}
+		if err != nil {
+			t.Fatalf("failed reading SSE event: %v", err)
+		}
+		if event == nil {
+			continue
+		}
+		for _, m := range event.Messages {
+			seenMessageIDs[m.MessageID]++
+		}
+		if _, ok := seenMessageIDs[msg2.MessageID]; ok {
+			break
+		}
+	}
+
+	count := seenMessageIDs[msg2.MessageID]
+	if count != 1 {
+		t.Fatalf("expected agent message %q delivered exactly once, got %d", msg2.MessageID, count)
+	}
+	_ = msg1 // used to seed the conversation
+}

@@ -134,6 +134,7 @@ function BashTool({
               in {displayData.workingDir}
             </span>
           )}
+          {isRunning && <span className="bash-tool-running">running...</span>}
           {isComplete && isCancelled && <span className="bash-tool-cancelled">✗ cancelled</span>}
           {isComplete && hasError && !isCancelled && <span className="bash-tool-error">✗</span>}
           {isComplete && !hasError && <span className="bash-tool-success">✓</span>}

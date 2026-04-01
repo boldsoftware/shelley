@@ -1952,6 +1952,108 @@ func TestExecuteToolCallsWithErrorTool(t *testing.T) {
 	}
 }
 
+func TestExecuteToolCallsRecordsPartialResultsBeforeBatchCompletion(t *testing.T) {
+	var (
+		recordedMessages []llm.Message
+		recordedMu       sync.Mutex
+	)
+	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage) error {
+		recordedMu.Lock()
+		defer recordedMu.Unlock()
+		recordedMessages = append(recordedMessages, message)
+		return nil
+	}
+
+	getRecordedMessages := func() []llm.Message {
+		recordedMu.Lock()
+		defer recordedMu.Unlock()
+		msgs := make([]llm.Message, len(recordedMessages))
+		copy(msgs, recordedMessages)
+		return msgs
+	}
+
+	blockCh := make(chan struct{})
+	firstTool := &llm.Tool{
+		Name:        "first_tool",
+		Description: "Completes immediately",
+		InputSchema: llm.MustSchema(`{"type": "object", "properties": {}}`),
+		Run: func(ctx context.Context, input json.RawMessage) llm.ToolOut {
+			return llm.ToolOut{LLMContent: llm.TextContent("first done")}
+		},
+	}
+	secondTool := &llm.Tool{
+		Name:        "second_tool",
+		Description: "Blocks until released",
+		InputSchema: llm.MustSchema(`{"type": "object", "properties": {}}`),
+		Run: func(ctx context.Context, input json.RawMessage) llm.ToolOut {
+			<-blockCh
+			return llm.ToolOut{LLMContent: llm.TextContent("second done")}
+		},
+	}
+
+	loop := NewLoop(Config{
+		LLM:           NewPredictableService(),
+		History:       []llm.Message{},
+		Tools:         []*llm.Tool{firstTool, secondTool},
+		RecordMessage: recordFunc,
+	})
+
+	content := []llm.Content{
+		{ID: "tool_1", Type: llm.ContentTypeToolUse, ToolName: "first_tool", ToolInput: json.RawMessage(`{}`)},
+		{ID: "tool_2", Type: llm.ContentTypeToolUse, ToolName: "second_tool", ToolInput: json.RawMessage(`{}`)},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- loop.executeToolCalls(context.Background(), content)
+	}()
+
+	deadline := time.After(2 * time.Second)
+	for {
+		msgs := getRecordedMessages()
+		if len(msgs) > 0 {
+			break
+		}
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("executeToolCalls failed early: %v", err)
+			}
+			t.Fatal("executeToolCalls returned before blocking tool was released")
+		case <-deadline:
+			t.Fatal("timed out waiting for partial tool result message")
+		default:
+		}
+	}
+
+	msgs := getRecordedMessages()
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 partial recorded message before unblocking, got %d", len(msgs))
+	}
+	if len(msgs[0].Content) != 1 {
+		t.Fatalf("expected partial message to have 1 content item, got %d", len(msgs[0].Content))
+	}
+	if msgs[0].Content[0].ToolUseID != "tool_1" {
+		t.Fatalf("expected partial result for first tool, got %q", msgs[0].Content[0].ToolUseID)
+	}
+
+	close(blockCh)
+	if err := <-errCh; err != nil {
+		t.Fatalf("executeToolCalls failed: %v", err)
+	}
+
+	msgs = getRecordedMessages()
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 recorded messages total, got %d", len(msgs))
+	}
+	if len(msgs[1].Content) != 2 {
+		t.Fatalf("expected final batched message to have 2 content items, got %d", len(msgs[1].Content))
+	}
+	if msgs[1].Content[0].ToolUseID != "tool_1" || msgs[1].Content[1].ToolUseID != "tool_2" {
+		t.Fatalf("unexpected tool IDs in final batched message: %q, %q", msgs[1].Content[0].ToolUseID, msgs[1].Content[1].ToolUseID)
+	}
+}
+
 func TestMaxTokensTruncation(t *testing.T) {
 	var mu sync.Mutex
 	var recordedMessages []llm.Message
