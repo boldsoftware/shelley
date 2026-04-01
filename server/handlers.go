@@ -563,6 +563,7 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 				cws.GitWorktreeRoot = getGitWorktreeRoot(gs.Worktree)
 				cws.GitCommit = gs.Commit
 				cws.GitSubject = gs.Subject
+				cws.PRInfo = gitstate.GetPRCache().GetPRInfo(gs.Worktree, gs.Branch)
 			}
 		}
 		result[i] = cws

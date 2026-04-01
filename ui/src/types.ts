@@ -7,7 +7,10 @@ import {
   NotificationEventForTS,
   Usage as GeneratedUsage,
   MessageType as GeneratedMessageType,
+  PRInfo,
 } from "./generated-types";
+
+export type { PRInfo };
 
 // Re-export generated types
 export type Conversation = GeneratedConversation;
@@ -181,6 +184,7 @@ export interface ConversationListUpdate {
   conversation_id?: string; // For deletes
   git_repo_root?: string;
   git_worktree_root?: string;
+  pr_info?: PRInfo | null;
 }
 
 // Version check types

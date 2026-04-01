@@ -23,6 +23,7 @@ import (
 	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
+	"shelley.exe.dev/gitstate"
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/models"
 	"shelley.exe.dev/server/notifications"
@@ -55,12 +56,13 @@ type ConversationState struct {
 // ConversationWithState combines a conversation with its working state.
 type ConversationWithState struct {
 	generated.Conversation
-	Working         bool   `json:"working"`
-	GitRepoRoot     string `json:"git_repo_root,omitempty"`
-	GitWorktreeRoot string `json:"git_worktree_root,omitempty"`
-	GitCommit       string `json:"git_commit,omitempty"`
-	GitSubject      string `json:"git_subject,omitempty"`
-	SubagentCount   int64  `json:"subagent_count"`
+	Working         bool             `json:"working"`
+	GitRepoRoot     string           `json:"git_repo_root,omitempty"`
+	GitWorktreeRoot string           `json:"git_worktree_root,omitempty"`
+	GitCommit       string           `json:"git_commit,omitempty"`
+	GitSubject      string           `json:"git_subject,omitempty"`
+	SubagentCount   int64            `json:"subagent_count"`
+	PRInfo          *gitstate.PRInfo `json:"pr_info,omitempty"`
 }
 
 // StreamResponse represents the response format for conversation streaming
@@ -220,6 +222,7 @@ type ConversationListUpdate struct {
 	ConversationID  string                  `json:"conversation_id,omitempty"` // For deletes
 	GitRepoRoot     string                  `json:"git_repo_root,omitempty"`
 	GitWorktreeRoot string                  `json:"git_worktree_root,omitempty"`
+	PRInfo          *gitstate.PRInfo        `json:"pr_info,omitempty"`
 }
 
 // Server manages the HTTP API and active conversations
@@ -1023,7 +1026,14 @@ func (s *Server) broadcastMessageUpdate(ctx context.Context, conversationID stri
 func (s *Server) publishConversationListUpdate(update ConversationListUpdate) {
 	// Populate git info from conversation cwd
 	if update.Conversation != nil && update.Conversation.Cwd != nil {
-		update.GitRepoRoot, update.GitWorktreeRoot = gitInfoForCwd(*update.Conversation.Cwd)
+		gs := gitstate.GetGitState(*update.Conversation.Cwd)
+		if gs.IsRepo {
+			update.GitRepoRoot = gs.Worktree
+			update.GitWorktreeRoot = getGitWorktreeRoot(gs.Worktree)
+			if gs.Branch != "" {
+				update.PRInfo = gitstate.GetPRCache().GetPRInfo(gs.Worktree, gs.Branch)
+			}
+		}
 	}
 
 	s.mu.Lock()
