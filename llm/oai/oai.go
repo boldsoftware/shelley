@@ -48,7 +48,7 @@ type Model struct {
 }
 
 var (
-	DefaultModel = GPT41
+	DefaultModel = GPT54
 
 	GPT41 = Model{
 		UserName:  "gpt4.1",
@@ -311,42 +311,49 @@ type Service struct {
 var _ llm.Service = (*Service)(nil)
 
 // ModelsRegistry is a registry of all known models with their user-friendly names.
+// Declaration order is display order — keep current models at top, old models at bottom.
 var ModelsRegistry = []Model{
-	GPT41,
-	GPT41Mini,
-	GPT41Nano,
-	GPT4o,
-	GPT4oMini,
+	// Current OpenAI
+	GPT54,
 	GPT5,
 	GPT5Mini,
 	GPT5Nano,
+	O4Mini,
+	O3,
+	// Codex
 	GPT5Codex,
 	GPT52Codex,
 	GPT53Codex,
-	GPT54,
-	O3,
-	O4Mini,
+	// Gemini
 	Gemini25Flash,
 	Gemini25Pro,
+	// Together
 	TogetherDeepseekV3,
 	TogetherDeepseekR1,
 	TogetherLlama4Maverick,
-	TogetherLlama3_3_70B,
-	TogetherMistralSmall,
 	TogetherQwen3,
-	TogetherGemma2,
-	LlamaCPP,
+	TogetherMistralSmall,
+	// Fireworks / misc providers
 	FireworksDeepseekV3,
-	MoonshotKimiK2,
 	FireworksLlama4Maverick,
+	MoonshotKimiK2,
 	MistralMedium,
 	DevstralSmall,
 	GLM47Fireworks,
 	GPTOSS120B,
 	GPTOSS20B,
+	LlamaCPP,
 	// Skaband-supported models
 	Qwen,
 	GLM,
+	// Old models — still work, just not featured
+	GPT41,
+	GPT41Mini,
+	GPT41Nano,
+	GPT4o,
+	GPT4oMini,
+	TogetherLlama3_3_70B,
+	TogetherGemma2,
 }
 
 // ListModels returns a list of all available models with their user-friendly names.
