@@ -524,6 +524,7 @@ function App() {
               git_worktree_root: conv.git_worktree_root,
               git_commit: conv.git_commit,
               git_subject: conv.git_subject,
+              pr_info: conv.pr_info,
             }
           : conv,
       ),
@@ -569,6 +570,7 @@ function App() {
               git_commit: c.git_commit,
               git_subject: c.git_subject,
               subagent_count: c.subagent_count,
+              pr_info: c.pr_info,
             }
           : c,
       ),
