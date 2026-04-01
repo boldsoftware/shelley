@@ -57,6 +57,7 @@ func (b *Bot) GetThread(ctx context.Context, channel, threadTS string, limit int
 }
 
 // ListChannels returns channels the bot is a member of.
+// Results are cached in the channel name→ID cache for ResolveChannel.
 func (b *Bot) ListChannels(ctx context.Context) ([]claudetool.SlackChannel, error) {
 	var all []claudetool.SlackChannel
 	cursor := ""
@@ -80,26 +81,46 @@ func (b *Bot) ListChannels(ctx context.Context) ([]claudetool.SlackChannel, erro
 		}
 		cursor = nextCursor
 	}
+
+	// Populate channel name→ID cache.
+	b.mu.Lock()
+	for _, ch := range all {
+		b.channelCache[strings.ToLower(ch.Name)] = ch.ID
+	}
+	b.mu.Unlock()
+
 	return all, nil
 }
 
 // ResolveChannel resolves a channel name (e.g. "#general" or "general") to a channel ID.
 // If the input already looks like a channel ID (starts with C/G/D), it is returned as-is.
+// Results are cached to avoid repeated conversations.list API calls.
 func (b *Bot) ResolveChannel(ctx context.Context, nameOrID string) (string, error) {
 	nameOrID = strings.TrimPrefix(nameOrID, "#")
 	// Already a channel ID
 	if len(nameOrID) > 0 && (nameOrID[0] == 'C' || nameOrID[0] == 'G' || nameOrID[0] == 'D') && !strings.ContainsAny(nameOrID, " -") {
 		return nameOrID, nil
 	}
-	// Search for matching channel name
-	channels, err := b.ListChannels(ctx)
-	if err != nil {
+	key := strings.ToLower(nameOrID)
+
+	// Check cache first.
+	b.mu.RLock()
+	if id, ok := b.channelCache[key]; ok {
+		b.mu.RUnlock()
+		return id, nil
+	}
+	b.mu.RUnlock()
+
+	// Cache miss — fetch from API (ListChannels populates the cache).
+	if _, err := b.ListChannels(ctx); err != nil {
 		return "", fmt.Errorf("list channels: %w", err)
 	}
-	for _, ch := range channels {
-		if strings.EqualFold(ch.Name, nameOrID) {
-			return ch.ID, nil
-		}
+
+	b.mu.RLock()
+	id, ok := b.channelCache[key]
+	b.mu.RUnlock()
+	if ok {
+		return id, nil
 	}
 	return "", fmt.Errorf("channel %q not found (bot may not be a member)", nameOrID)
 }

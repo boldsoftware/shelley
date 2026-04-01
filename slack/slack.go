@@ -47,6 +47,9 @@ type Bot struct {
 
 	// dedup: last message ID we posted per conversation to avoid re-posting
 	lastPosted map[string]string // key: conversation_id -> message_id
+
+	// channel name -> ID cache to avoid repeated conversations.list calls
+	channelCache map[string]string
 }
 
 // Config holds configuration for the Slack bot.
@@ -82,9 +85,10 @@ func NewBot(cfg Config) (*Bot, error) {
 		convo:      cfg.Convo,
 		logger:     cfg.Logger.With("component", "slack"),
 		model:      cfg.Model,
-		threads:    make(map[string]string),
-		reverse:    make(map[string]string),
-		lastPosted: make(map[string]string),
+		threads:      make(map[string]string),
+		reverse:      make(map[string]string),
+		lastPosted:   make(map[string]string),
+		channelCache: make(map[string]string),
 	}, nil
 }
 
