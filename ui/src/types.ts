@@ -79,6 +79,7 @@ export interface ToolProgress {
   tool_use_id: string;
   tool_name: string;
   output: string;
+  line_count?: number;
 }
 
 // StreamDelta represents a partial text delta from the LLM.

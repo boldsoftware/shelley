@@ -266,14 +266,15 @@ const (
 
 // progressWriter wraps a bytes.Buffer and periodically reports the tail of output.
 type progressWriter struct {
-	buf      bytes.Buffer
-	mu       sync.Mutex
-	progress llm.ToolProgressFunc
-	toolID   string
-	toolName string
-	ctx      context.Context
-	cancel   context.CancelFunc
-	done     chan struct{}
+	buf       bytes.Buffer
+	mu        sync.Mutex
+	progress  llm.ToolProgressFunc
+	toolID    string
+	toolName  string
+	ctx       context.Context
+	cancel    context.CancelFunc
+	done      chan struct{}
+	lineCount int
 }
 
 func newProgressWriter(ctx context.Context, progress llm.ToolProgressFunc, toolID, toolName string) *progressWriter {
@@ -293,18 +294,30 @@ func newProgressWriter(ctx context.Context, progress llm.ToolProgressFunc, toolI
 func (pw *progressWriter) Write(p []byte) (int, error) {
 	pw.mu.Lock()
 	defer pw.mu.Unlock()
+	pw.lineCount += bytes.Count(p, []byte("\n"))
 	return pw.buf.Write(p)
 }
 
-// tail returns the last progressMaxBytes of accumulated output.
-func (pw *progressWriter) tail() string {
+// snapshot returns the last progressMaxBytes of accumulated output plus total logical line count.
+//
+// pw.lineCount tracks newlines (\n) seen across all Write calls — it is the
+// authoritative total and is independent of the tail window. We add 1 when the
+// (possibly truncated) tail does not end with \n, which accounts for an
+// unterminated trailing partial line. Because the tail is always a suffix of
+// the full buffer, a trailing-newline check on the tail is equivalent to
+// checking the full buffer.
+func (pw *progressWriter) snapshot() (string, int) {
 	pw.mu.Lock()
 	defer pw.mu.Unlock()
 	b := pw.buf.Bytes()
 	if len(b) > progressMaxBytes {
 		b = b[len(b)-progressMaxBytes:]
 	}
-	return string(b)
+	lineCount := pw.lineCount
+	if len(b) > 0 && b[len(b)-1] != '\n' {
+		lineCount++
+	}
+	return string(b), lineCount
 }
 
 func (pw *progressWriter) reportLoop() {
@@ -312,26 +325,30 @@ func (pw *progressWriter) reportLoop() {
 	ticker := time.NewTicker(progressInterval)
 	defer ticker.Stop()
 	lastReported := ""
+	lastLineCount := -1
 	for {
 		select {
 		case <-pw.ctx.Done():
 			// Final report
-			if t := pw.tail(); t != lastReported {
+			if t, lineCount := pw.snapshot(); t != lastReported || lineCount != lastLineCount {
 				pw.progress(llm.ToolProgress{
 					ToolUseID: pw.toolID,
 					ToolName:  pw.toolName,
 					Output:    t,
+					LineCount: lineCount,
 				})
 			}
 			return
 		case <-ticker.C:
-			t := pw.tail()
-			if t != lastReported {
+			t, lineCount := pw.snapshot()
+			if t != lastReported || lineCount != lastLineCount {
 				lastReported = t
+				lastLineCount = lineCount
 				pw.progress(llm.ToolProgress{
 					ToolUseID: pw.toolID,
 					ToolName:  pw.toolName,
 					Output:    t,
+					LineCount: lineCount,
 				})
 			}
 		}

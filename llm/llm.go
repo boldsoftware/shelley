@@ -150,8 +150,11 @@ type ToolProgress struct {
 	ToolUseID string `json:"tool_use_id"`
 	// ToolName is the name of the tool generating progress.
 	ToolName string `json:"tool_name"`
-	// Output is the last chunk of output (tail of output, max ~10KB).
+	// Output is a recent-output snapshot (tail of output, max ~10KB).
 	Output string `json:"output"`
+	// LineCount is the total number of visible lines emitted so far,
+	// including any unterminated trailing partial line.
+	LineCount int `json:"line_count,omitempty"`
 }
 
 // ToolProgressFunc is called by tools to report progress during execution.
