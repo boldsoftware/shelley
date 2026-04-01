@@ -1,11 +1,14 @@
+import { execSync } from "node:child_process";
 import { test, expect } from "@playwright/test";
+
+const testRepoRoot = execSync("git rev-parse --show-toplevel", { encoding: "utf8" }).trim();
 
 async function createConversation(
   request: import("@playwright/test").APIRequestContext,
   message: string,
 ): Promise<{ conversation_id: string; slug: string }> {
   const resp = await request.post("/api/conversations/new", {
-    data: { message, model: "predictable", cwd: "/home/exedev/shelley" },
+    data: { message, model: "predictable", cwd: testRepoRoot },
   });
   expect(resp.ok()).toBeTruthy();
   const { conversation_id } = await resp.json();
