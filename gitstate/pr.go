@@ -131,8 +131,11 @@ type ghPRResponse struct {
 }
 
 func fetchPRInfo(repoRoot, branch string) *PRInfo {
-	cmd := exec.Command("gh", "pr", "view", branch,
-		"--json", "number,title,state,url,isDraft,mergeStateStatus,autoMergeRequest,reviewDecision")
+	cmd := exec.Command("gh", "pr", "list",
+		"--head", branch,
+		"--state", "all",
+		"--json", "number,title,state,url,isDraft,mergeStateStatus,autoMergeRequest,reviewDecision",
+		"--limit", "1")
 	cmd.Dir = repoRoot
 
 	output, err := cmd.Output()
@@ -140,10 +143,11 @@ func fetchPRInfo(repoRoot, branch string) *PRInfo {
 		return nil
 	}
 
-	var resp ghPRResponse
-	if err := json.Unmarshal(output, &resp); err != nil {
+	var results []ghPRResponse
+	if err := json.Unmarshal(output, &results); err != nil || len(results) == 0 {
 		return nil
 	}
+	resp := results[0]
 
 	return &PRInfo{
 		Number:           resp.Number,
