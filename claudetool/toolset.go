@@ -304,9 +304,14 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 
 	outputIframeTool := &OutputIframeTool{WorkingDir: wd}
 
+	readTool := &ReadTool{WorkingDir: wd}
+	editTool := &EditTool{WorkingDir: wd}
+
 	tools := []*llm.Tool{
 		bashTool.Tool(),
 		patchTool.Tool(),
+		readTool.Tool(),
+		editTool.Tool(),
 		keywordTool.Tool(),
 		changeDirTool.Tool(),
 		outputIframeTool.Tool(),
