@@ -84,15 +84,32 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
-      - name: Extract headless-shell
-        run: python3 scripts/extract-headless-shell.py dist/headless-shell
+      - name: Resolve headless-shell stable version
+        id: headless
+        run: |
+          VERSION=$(python3 scripts/extract-headless-shell.py --resolve-version)
+          TAG="headless-shell/v${VERSION}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          # Check if this version is already released
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "headless-shell $VERSION already released"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "headless-shell $VERSION is new, will release"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload headless-shell assets
+      - name: Extract and release headless-shell
+        if: steps.headless.outputs.skip != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          for f in dist/headless-shell/headless-shell-linux-*.tar.gz dist/headless-shell/headless-shell-version.txt; do
-            echo "Uploading $(basename $f) to release $TAG..."
-            gh release upload "$TAG" "$f" --clobber
-          done
+          python3 scripts/extract-headless-shell.py dist/headless-shell
+          gh release create "${{ steps.headless.outputs.tag }}" \
+            --title "headless-shell ${{ steps.headless.outputs.version }}" \
+            --notes "Chromium headless-shell ${{ steps.headless.outputs.version }} extracted from chromedp/headless-shell:stable" \
+            dist/headless-shell/headless-shell-linux-*.tar.gz \
+            dist/headless-shell/headless-shell-version.txt

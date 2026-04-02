@@ -75,6 +75,11 @@ def extract_arch(arch: str, output_dir: Path) -> None:
 
 
 def main() -> None:
+    # --resolve-version: just print the version number and exit
+    if len(sys.argv) == 2 and sys.argv[1] == "--resolve-version":
+        print(resolve_stable_version())
+        return
+
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} <output_dir>", file=sys.stderr)
         sys.exit(1)

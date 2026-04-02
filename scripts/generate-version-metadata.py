@@ -10,23 +10,31 @@ import sys
 from pathlib import Path
 
 
-def get_headless_shell_version(latest_tag: str) -> str:
-    """Get the headless-shell version from the release assets.
+def get_headless_shell_release() -> tuple[str, str] | None:
+    """Find the latest headless-shell release from GitHub.
 
-    Downloads headless-shell-version.txt from the GitHub release.
-    Returns a string like 'Chromium 147.0.7727.24' or empty string on failure.
+    Returns (version_string, tag) like ('Chromium 147.0.7727.24', 'headless-shell/v147.0.7727.24')
+    or None if no release exists.
     """
-    url = (
-        f"https://github.com/boldsoftware/shelley/releases/download/{latest_tag}"
-        f"/headless-shell-version.txt"
-    )
+    import urllib.request
+
+    # List releases and find the latest headless-shell/* tag
+    url = "https://api.github.com/repos/boldsoftware/shelley/releases?per_page=20"
+    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
     try:
-        import urllib.request
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            return resp.read().decode().strip()
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            releases = json.load(resp)
     except Exception as e:
-        print(f"  Warning: could not fetch headless-shell version: {e}", file=sys.stderr)
-        return ""
+        print(f"  Warning: could not fetch releases: {e}", file=sys.stderr)
+        return None
+
+    for release in releases:
+        tag = release.get("tag_name", "")
+        if tag.startswith("headless-shell/v"):
+            version = tag.removeprefix("headless-shell/v")
+            return f"Chromium {version}", tag
+
+    return None
 
 
 def generate_release_json(output_dir: Path) -> None:
@@ -77,17 +85,19 @@ def generate_release_json(output_dir: Path) -> None:
         "checksums_url": f"{base_url}/checksums.txt",
     }
 
-    # Try to get headless-shell version from release assets
-    headless_version = get_headless_shell_version(latest_tag)
-    if headless_version:
-        release_info["headless_shell_version"] = headless_version
+    # Find latest headless-shell release (separate release tag namespace)
+    hs = get_headless_shell_release()
+    if hs:
+        hs_version, hs_tag = hs
+        hs_base = f"https://github.com/boldsoftware/shelley/releases/download/{hs_tag}"
+        release_info["headless_shell_version"] = hs_version
         release_info["headless_shell_urls"] = {
-            "linux_amd64": f"{base_url}/headless-shell-linux-amd64.tar.gz",
-            "linux_arm64": f"{base_url}/headless-shell-linux-arm64.tar.gz",
+            "linux_amd64": f"{hs_base}/headless-shell-linux-amd64.tar.gz",
+            "linux_arm64": f"{hs_base}/headless-shell-linux-arm64.tar.gz",
         }
-        print(f"  headless-shell: {headless_version}")
+        print(f"  headless-shell: {hs_version} ({hs_tag})")
     else:
-        print("  headless-shell: version not available in release assets")
+        print("  headless-shell: no release found")
 
     output_path = output_dir / "release.json"
     with open(output_path, "w") as f:
