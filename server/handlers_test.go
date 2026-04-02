@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"shelley.exe.dev/db"
@@ -418,5 +421,101 @@ func TestHandleWriteFile(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestHandleUploadToCwd(t *testing.T) {
+	h := NewTestHarness(t)
+	cwd := t.TempDir()
+
+	// Helper to build multipart request
+	buildRequest := func(cwdVal string, paths []string, files map[string]string) *http.Request {
+		var buf bytes.Buffer
+		w := multipart.NewWriter(&buf)
+		if cwdVal != "" {
+			w.WriteField("cwd", cwdVal)
+		}
+		if paths != nil {
+			pathsJSON, _ := json.Marshal(paths)
+			w.WriteField("paths", string(pathsJSON))
+		}
+		for name, content := range files {
+			fw, _ := w.CreateFormFile("file", name)
+			fw.Write([]byte(content))
+		}
+		w.Close()
+		req := httptest.NewRequest(http.MethodPost, "/api/upload-to-cwd", &buf)
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		return req
+	}
+
+	// Test method not allowed
+	req := httptest.NewRequest(http.MethodGet, "/api/upload-to-cwd", nil)
+	rec := httptest.NewRecorder()
+	h.server.handleUploadToCwd(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rec.Code)
+	}
+
+	// Test missing cwd
+	req = buildRequest("", []string{"a.txt"}, map[string]string{"a.txt": "hello"})
+	rec = httptest.NewRecorder()
+	h.server.handleUploadToCwd(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing cwd, got %d", rec.Code)
+	}
+
+	// Test relative cwd
+	req = buildRequest("relative/path", []string{"a.txt"}, map[string]string{"a.txt": "hello"})
+	rec = httptest.NewRecorder()
+	h.server.handleUploadToCwd(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for relative cwd, got %d", rec.Code)
+	}
+
+	// Test path traversal
+	req = buildRequest(cwd, []string{"../escape.txt"}, map[string]string{"escape.txt": "bad"})
+	rec = httptest.NewRecorder()
+	h.server.handleUploadToCwd(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for path traversal, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Test successful single file upload
+	req = buildRequest(cwd, []string{"hello.txt"}, map[string]string{"hello.txt": "world"})
+	rec = httptest.NewRecorder()
+	h.server.handleUploadToCwd(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	data, err := os.ReadFile(filepath.Join(cwd, "hello.txt"))
+	if err != nil {
+		t.Fatalf("file not written: %v", err)
+	}
+	if string(data) != "world" {
+		t.Fatalf("expected 'world', got %q", string(data))
+	}
+
+	// Test successful upload with subdirectory
+	req = buildRequest(cwd, []string{"sub/dir/file.txt"}, map[string]string{"file.txt": "nested"})
+	rec = httptest.NewRecorder()
+	h.server.handleUploadToCwd(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	data, err = os.ReadFile(filepath.Join(cwd, "sub", "dir", "file.txt"))
+	if err != nil {
+		t.Fatalf("nested file not written: %v", err)
+	}
+	if string(data) != "nested" {
+		t.Fatalf("expected 'nested', got %q", string(data))
+	}
+
+	// Test mismatched paths/files count
+	req = buildRequest(cwd, []string{"a.txt", "b.txt"}, map[string]string{"a.txt": "only one"})
+	rec = httptest.NewRecorder()
+	h.server.handleUploadToCwd(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for mismatch, got %d", rec.Code)
 	}
 }

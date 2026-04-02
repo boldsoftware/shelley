@@ -100,6 +100,110 @@ function PRBadge({ pr }: { pr: PRInfo }) {
   );
 }
 
+async function traverseFileTree(entry: FileSystemEntry): Promise<{ file: File; path: string }[]> {
+  if (entry.isFile) {
+    return new Promise((resolve, reject) => {
+      (entry as FileSystemFileEntry).file((f) => resolve([{ file: f, path: entry.fullPath.replace(/^\//, "") }]), reject);
+    });
+  }
+  const dirReader = (entry as FileSystemDirectoryEntry).createReader();
+  const entries: FileSystemEntry[] = await new Promise((resolve, reject) => {
+    dirReader.readEntries(resolve, reject);
+  });
+  const results: { file: File; path: string }[] = [];
+  for (const child of entries) {
+    results.push(...(await traverseFileTree(child)));
+  }
+  return results;
+}
+
+function CwdDropZone({ cwd }: { cwd: string }) {
+  const [dragOver, setDragOver] = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
+  const dragCounter = React.useRef(0);
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) setDragOver(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setDragOver(false);
+
+    // Collect files with relative paths (supports folders via webkitGetAsEntry)
+    const filePairs: { file: File; path: string }[] = [];
+    const items = e.dataTransfer.items;
+    if (items) {
+      const entries: FileSystemEntry[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const entry = items[i].webkitGetAsEntry?.();
+        if (entry) entries.push(entry);
+      }
+      for (const entry of entries) {
+        filePairs.push(...(await traverseFileTree(entry)));
+      }
+    }
+    // Fallback: plain file list (no folder support)
+    if (filePairs.length === 0 && e.dataTransfer.files.length > 0) {
+      for (let i = 0; i < e.dataTransfer.files.length; i++) {
+        const f = e.dataTransfer.files[i];
+        filePairs.push({ file: f, path: f.name });
+      }
+    }
+
+    if (filePairs.length === 0) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("cwd", cwd);
+      formData.append("paths", JSON.stringify(filePairs.map((fp) => fp.path)));
+      for (const fp of filePairs) {
+        formData.append("file", fp.file);
+      }
+      const resp = await fetch("/api/upload-to-cwd", { method: "POST", body: formData });
+      if (!resp.ok) {
+        const text = await resp.text();
+        console.error("Upload to cwd failed:", text);
+      }
+    } catch (err) {
+      console.error("Upload to cwd failed:", err);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <span
+      className={`status-cwd status-cwd-dropzone${dragOver ? " status-cwd-drag-over" : ""}${uploading ? " status-cwd-uploading" : ""}`}
+      title={`${cwd}\nDrop files here to upload`}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {uploading ? "Uploading…" : formatCwdForDisplay(cwd)}
+    </span>
+  );
+}
+
 interface ContextUsageBarProps {
   contextWindowSize: number;
   maxContextTokens: number;
@@ -2151,9 +2255,7 @@ function ChatInterface({
         </div>
         <div className="status-bar-right">
           {currentConversation?.cwd && (
-            <span className="status-cwd" title={currentConversation.cwd}>
-              {formatCwdForDisplay(currentConversation.cwd)}
-            </span>
+            <CwdDropZone cwd={currentConversation.cwd} />
           )}
           {currentConversation?.pr_info && <PRBadge pr={currentConversation.pr_info} />}
           <ContextUsageBar
@@ -2289,9 +2391,7 @@ function ChatInterface({
         </span>
         <div className="status-bar-right">
           {currentConversation?.cwd && (
-            <span className="status-cwd" title={currentConversation.cwd}>
-              {formatCwdForDisplay(currentConversation.cwd)}
-            </span>
+            <CwdDropZone cwd={currentConversation.cwd} />
           )}
           {currentConversation?.pr_info && <PRBadge pr={currentConversation.pr_info} />}
           <ContextUsageBar

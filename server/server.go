@@ -316,7 +316,8 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/git/commit-messages", gzipHandler(http.HandlerFunc(s.handleGitCommitMessages)))
 	mux.Handle("/api/git/amend-message", http.HandlerFunc(s.handleGitAmendMessage))
 	mux.Handle("/api/git/create-worktree", http.HandlerFunc(s.handleGitCreateWorktree))                            // Small response
-	mux.HandleFunc("/api/upload", s.handleUpload)                                                                  // Binary uploads
+	mux.HandleFunc("/api/upload", s.handleUpload)
+	mux.HandleFunc("/api/upload-to-cwd", s.handleUploadToCwd)                                                                  // Binary uploads
 	mux.HandleFunc("/api/read", s.handleRead)                                                                      // Serves images from disk
 	mux.HandleFunc("GET /api/message/{message_id}/image/{content_index}/{toolresult_index}", s.handleMessageImage) // Serves images from DB
 	mux.Handle("/api/write-file", http.HandlerFunc(s.handleWriteFile))                                             // Small response
