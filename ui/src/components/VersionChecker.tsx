@@ -20,28 +20,30 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
   const [upgrading, setUpgrading] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [autoUpgrade, setAutoUpgrade] = useState(false);
-  const [loadingAutoUpgrade, setLoadingAutoUpgrade] = useState(true);
+  const [jitToolInstall, setJitToolInstall] = useState(true);
+  const [loadingSettings, setLoadingSettings] = useState(true);
 
   useEffect(() => {
     if (isOpen) {
       if (versionInfo?.has_update && versionInfo.current_tag && versionInfo.latest_tag) {
         loadCommits(versionInfo.current_tag, versionInfo.latest_tag);
       }
-      loadAutoUpgradeSetting();
+      loadSettings();
     }
   }, [isOpen, versionInfo]);
 
   useEscapeClose(isOpen, onClose);
 
-  const loadAutoUpgradeSetting = async () => {
-    setLoadingAutoUpgrade(true);
+  const loadSettings = async () => {
+    setLoadingSettings(true);
     try {
       const settings = await api.getSettings();
       setAutoUpgrade(settings.auto_upgrade === "true");
+      setJitToolInstall(settings.jit_tool_install !== "false");
     } catch (err) {
-      console.error("Failed to load auto-upgrade setting:", err);
+      console.error("Failed to load settings:", err);
     } finally {
-      setLoadingAutoUpgrade(false);
+      setLoadingSettings(false);
     }
   };
 
@@ -51,8 +53,17 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
       setAutoUpgrade(enabled);
     } catch (err) {
       console.error("Failed to set auto-upgrade:", err);
-      // Revert the checkbox
       setAutoUpgrade(!enabled);
+    }
+  };
+
+  const handleJitToolInstallChange = async (enabled: boolean) => {
+    try {
+      await api.setSetting("jit_tool_install", enabled ? "true" : "false");
+      setJitToolInstall(enabled);
+    } catch (err) {
+      console.error("Failed to set jit_tool_install:", err);
+      setJitToolInstall(!enabled);
     }
   };
 
@@ -106,7 +117,7 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
     <div className="version-modal-overlay" onClick={onClose}>
       <div className="version-modal" onClick={(e) => e.stopPropagation()}>
         <div className="version-modal-header">
-          <h2>Version</h2>
+          <h2>Settings</h2>
           <button onClick={onClose} className="version-modal-close" aria-label="Close">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -199,8 +210,8 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
         {/* Footer: auto-upgrade + upgrade button, outside scrolling area */}
         {!isLoading && versionInfo && (
           <div className="version-modal-footer">
-            {!loadingAutoUpgrade && (
-              <div className="version-auto-upgrade">
+            {!loadingSettings && (
+              <div className="version-settings">
                 <label className="version-checkbox-label">
                   <input
                     type="checkbox"
@@ -208,6 +219,14 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
                     onChange={(e) => handleAutoUpgradeChange(e.target.checked)}
                   />
                   <span>Auto-upgrade when idle (checks daily)</span>
+                </label>
+                <label className="version-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={jitToolInstall}
+                    onChange={(e) => handleJitToolInstallChange(e.target.checked)}
+                  />
+                  <span>Attempt to auto-install missing tools</span>
                 </label>
               </div>
             )}

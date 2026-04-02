@@ -5466,7 +5466,10 @@ svg {
   padding: 0.5rem 0;
 }
 
-.version-auto-upgrade {
+.version-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   padding-bottom: 0.75rem;
 }
 

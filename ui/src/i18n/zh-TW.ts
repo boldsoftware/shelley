@@ -15,7 +15,7 @@ export const zhTW: TranslationKeys = {
   diffs: "差異比較",
   terminal: "終端機",
   archiveConversation: "封存對話",
-  checkForNewVersion: "檢查新版本",
+  settings: "設定",
   markdown: "Markdown",
   off: "關閉",
   agent: "代理",

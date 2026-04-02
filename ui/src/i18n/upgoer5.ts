@@ -15,7 +15,7 @@ export const upgoer5: TranslationKeys = {
   diffs: "Changes",
   terminal: "Computer Window",
   archiveConversation: "Put Away Talk",
-  checkForNewVersion: "Look for a newer one",
+  settings: "Settings",
   markdown: "Pretty Words",
   off: "Off",
   agent: "Helper",

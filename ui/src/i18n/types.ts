@@ -15,7 +15,7 @@ export interface TranslationKeys {
   diffs: string;
   terminal: string;
   archiveConversation: string;
-  checkForNewVersion: string;
+  settings: string;
   markdown: string;
   off: string;
   agent: string;

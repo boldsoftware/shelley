@@ -15,7 +15,7 @@ export const en: TranslationKeys = {
   diffs: "Diffs",
   terminal: "Terminal",
   archiveConversation: "Archive Conversation",
-  checkForNewVersion: "Check for New Version",
+  settings: "Settings",
   markdown: "Markdown",
   off: "Off",
   agent: "Agent",

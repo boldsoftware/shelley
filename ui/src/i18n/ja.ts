@@ -15,7 +15,7 @@ export const ja: TranslationKeys = {
   diffs: "差分",
   terminal: "ターミナル",
   archiveConversation: "会話をアーカイブ",
-  checkForNewVersion: "新しいバージョンを確認",
+  settings: "設定",
   markdown: "Markdown",
   off: "オフ",
   agent: "エージェント",

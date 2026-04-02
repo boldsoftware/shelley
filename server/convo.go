@@ -728,6 +728,21 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 	database := cm.db
 	cm.mu.Unlock()
 
+	jitToolInstall := toolSetConfig.EnableJITInstall
+	settingValue, settingErr := database.GetSetting(context.Background(), "jit_tool_install")
+	if settingErr != nil {
+		return fmt.Errorf("failed to load jit_tool_install setting: %w", settingErr)
+	}
+	if settingValue != "" {
+		if settingValue == "true" {
+			jitToolInstall = true
+		} else if settingValue == "false" {
+			jitToolInstall = false
+		} else {
+			return fmt.Errorf("invalid jit_tool_install setting value: %q", settingValue)
+		}
+	}
+
 	// Load conversation history fresh from the database. This is the canonical
 	// read — Hydrate only handles metadata and system prompt generation.
 	// Reading here ensures we always see messages added asynchronously
@@ -749,6 +764,7 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 	toolSetConfig.ModelID = modelID
 	toolSetConfig.ConversationID = conversationID
 	toolSetConfig.ParentConversationID = conversationID // For subagent tool
+	toolSetConfig.EnableJITInstall = jitToolInstall
 	toolSetConfig.OnWorkingDirChange = func(newDir string) {
 		// Persist working directory change to database
 		if err := database.UpdateConversationCwd(context.Background(), conversationID, newDir); err != nil {
