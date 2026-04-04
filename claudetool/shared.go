@@ -7,9 +7,26 @@ package claudetool
 
 import (
 	"context"
+	"fmt"
 
 	"shelley.exe.dev/llm"
 )
+
+// FlexBool is a bool that also accepts string values "true" and "false" in JSON.
+// LLMs sometimes send boolean values as strings.
+type FlexBool bool
+
+func (b *FlexBool) UnmarshalJSON(data []byte) error {
+	switch string(data) {
+	case "true", `"true"`:
+		*b = true
+	case "false", `"false"`:
+		*b = false
+	default:
+		return fmt.Errorf("invalid bool value: %s", data)
+	}
+	return nil
+}
 
 type workingDirCtxKeyType string
 
