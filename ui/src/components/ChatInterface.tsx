@@ -78,7 +78,7 @@ function ContextUsageBar({
 
   const percentage = maxContextTokens > 0 ? (contextWindowSize / maxContextTokens) * 100 : 0;
   const clampedPercentage = Math.min(percentage, 100);
-  const showLongConversationWarning = contextWindowSize >= 100000;
+  const showLongConversationWarning = maxContextTokens > 0 && contextWindowSize >= maxContextTokens * 0.5;
 
   const getBarColor = () => {
     if (percentage >= 90) return "var(--error-text)";

@@ -30,6 +30,7 @@ type GlobalConfig struct {
 	ConfigPath      string
 	TerminalURL     string
 	DefaultModel    string
+	LLMAPIKey       string
 }
 
 func main() {
@@ -42,6 +43,7 @@ func main() {
 	flag.BoolVar(&global.PredictableOnly, "predictable-only", false, "Use only the predictable service, ignoring all other models")
 	flag.StringVar(&global.ConfigPath, "config", "", "Path to shelley.json configuration file (optional)")
 	flag.StringVar(&global.DefaultModel, "default-model", defaultModelID, "Default model for web UI")
+	flag.StringVar(&global.LLMAPIKey, "llm-api-key", "", "Path to file containing API key, or the API key itself (overrides ANTHROPIC_API_KEY)")
 
 	// Custom usage function
 	flag.Usage = func() {
@@ -152,7 +154,7 @@ func runServe(global GlobalConfig, args []string) {
 	server.DBPath = global.DBPath
 
 	// Build LLM configuration
-	llmConfig := buildLLMConfig(logger, global.ConfigPath, global.TerminalURL, global.DefaultModel, database)
+	llmConfig := buildLLMConfig(logger, global.ConfigPath, global.TerminalURL, global.DefaultModel, global.LLMAPIKey, database)
 
 	// Initialize LLM service manager (includes custom model support via database)
 	llmManager := server.NewLLMServiceManager(llmConfig)
@@ -336,9 +338,14 @@ func setupToolSetConfig(llmProvider claudetool.LLMServiceProvider, llmManager se
 }
 
 // buildLLMConfig constructs LLMConfig from environment variables and optional config file
-func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel string, database *db.DB) *server.LLMConfig {
+func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel, llmAPIKey string, database *db.DB) *server.LLMConfig {
+	// Use --llm-api-key if provided, otherwise fall back to env var
+	anthropicKey := llmAPIKey
+	if anthropicKey == "" {
+		anthropicKey = os.Getenv("ANTHROPIC_API_KEY")
+	}
 	llmCfg := &server.LLMConfig{
-		AnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
+		AnthropicAPIKey: anthropicKey,
 		OpenAIAPIKey:    os.Getenv("OPENAI_API_KEY"),
 		GeminiAPIKey:    os.Getenv("GEMINI_API_KEY"),
 		FireworksAPIKey: os.Getenv("FIREWORKS_API_KEY"),

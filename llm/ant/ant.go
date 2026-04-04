@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ const (
 	DefaultModel = Claude46Sonnet
 	APIKeyEnv    = "ANTHROPIC_API_KEY"
 	DefaultURL   = "https://api.anthropic.com/v1/messages"
+	toolPrefix   = "sk_" // prefix for tool names when using Claude Max OAuth tokens
 )
 
 const (
@@ -74,8 +76,25 @@ func ClaudeModelName(userName string) string {
 	}
 }
 
+// supports1MContext reports whether the model supports 1M token context window.
+func supports1MContext(model string) bool {
+	switch model {
+	case Claude45Sonnet, Claude45Opus, Claude46Opus:
+		return true
+	default:
+		return false
+	}
+}
+
 // TokenContextWindow returns the maximum token context window size for this service
 func (s *Service) TokenContextWindow() int {
+	model := s.Model
+	if model == "" {
+		model = DefaultModel
+	}
+	if supports1MContext(model) {
+		return 1000000
+	}
 	return 200000
 }
 
@@ -108,11 +127,30 @@ func (s *Service) MaxImageDimension() int {
 type Service struct {
 	HTTPC         *http.Client      // defaults to http.DefaultClient if nil
 	URL           string            // defaults to DefaultURL if empty
-	APIKey        string            // must be non-empty
+	APIKey        string            // must be non-empty; can be a file path to read from
 	Model         string            // defaults to DefaultModel if empty
 	MaxTokens     int               // 0 means use model-specific limit from modelMaxOutputTokens
 	ThinkingLevel llm.ThinkingLevel // thinking level (ThinkingLevelOff disables, default is ThinkingLevelMedium)
 	Backoff       []time.Duration   // retry backoff durations; defaults to {15s, 30s, 60s} if nil
+}
+
+// isClaudeMaxToken reports whether apiKey is a Claude Pro/Max OAuth token.
+func isClaudeMaxToken(apiKey string) bool {
+	return strings.HasPrefix(apiKey, "sk-ant-oat")
+}
+
+// readAPIKey returns the API key, reading from file if APIKey is a file path.
+// This allows tokens to be refreshed without restarting the session.
+func (s *Service) readAPIKey() (string, error) {
+	apiKey := s.APIKey
+	if _, err := os.Stat(apiKey); err == nil {
+		keyBytes, err := os.ReadFile(apiKey)
+		if err != nil {
+			return "", fmt.Errorf("failed to read API key from file %s: %w", apiKey, err)
+		}
+		apiKey = strings.TrimSpace(string(keyBytes))
+	}
+	return apiKey, nil
 }
 
 var _ llm.Service = (*Service)(nil)
@@ -445,6 +483,36 @@ func fromLLMTool(t *llm.Tool) *tool {
 	}
 }
 
+// fromLLMToolWithPrefix converts an llm.Tool to an Anthropic tool, prefixing the name.
+// Used for Claude Max OAuth which requires sk_ prefixed tool names.
+func fromLLMToolWithPrefix(t *llm.Tool, prefix string) *tool {
+	name := t.Name
+	if prefix != "" {
+		name = prefix + name
+	}
+	return &tool{
+		Name:         name,
+		Type:         t.Type,
+		Description:  t.Description,
+		InputSchema:  t.InputSchema,
+		CacheControl: fromLLMCache(t.Cache),
+	}
+}
+
+// unprefixToolNames removes the tool prefix from tool names in response content.
+// Used to restore original tool names after Claude Max OAuth responses.
+func unprefixToolNames(contents []llm.Content, prefix string) []llm.Content {
+	if prefix == "" {
+		return contents
+	}
+	for i := range contents {
+		if contents[i].ToolName != "" && strings.HasPrefix(contents[i].ToolName, prefix) {
+			contents[i].ToolName = strings.TrimPrefix(contents[i].ToolName, prefix)
+		}
+	}
+	return contents
+}
+
 func fromLLMSystem(s llm.SystemContent) systemContent {
 	return systemContent{
 		Text:         s.Text,
@@ -453,7 +521,7 @@ func fromLLMSystem(s llm.SystemContent) systemContent {
 	}
 }
 
-func (s *Service) fromLLMRequest(r *llm.Request) *request {
+func (s *Service) fromLLMRequest(r *llm.Request, isClaudeMax bool) *request {
 	model := cmp.Or(s.Model, DefaultModel)
 	maxTokens := cmp.Or(s.MaxTokens, maxOutputTokens(model))
 
@@ -483,13 +551,35 @@ func (s *Service) fromLLMRequest(r *llm.Request) *request {
 			messages = append(messages, msg)
 		}
 	}
+
+	// Build system messages - prepend Claude Code prompt for Claude Max
+	var system []systemContent
+	if isClaudeMax {
+		system = append(system, systemContent{
+			Text: "You are Claude Code, Anthropic's official CLI for Claude.",
+			Type: "text",
+		})
+	}
+	system = append(system, mapped(r.System, fromLLMSystem)...)
+
+	// Build tools - prefix names for Claude Max
+	var tools []*tool
+	if isClaudeMax {
+		tools = make([]*tool, len(r.Tools))
+		for i, t := range r.Tools {
+			tools[i] = fromLLMToolWithPrefix(t, toolPrefix)
+		}
+	} else {
+		tools = mapped(r.Tools, fromLLMTool)
+	}
+
 	req := &request{
 		Model:      model,
 		Messages:   messages,
 		MaxTokens:  maxTokens,
 		ToolChoice: fromLLMToolChoice(r.ToolChoice),
-		Tools:      mapped(r.Tools, fromLLMTool),
-		System:     mapped(r.System, fromLLMSystem),
+		Tools:      tools,
+		System:     system,
 	}
 
 	// Enable extended thinking if a thinking level is set
@@ -516,7 +606,7 @@ func (s *Service) fromLLMRequest(r *llm.Request) *request {
 // fromLLMRequestStrippingAllThinking is like fromLLMRequest but strips thinking
 // blocks from ALL assistant messages (including the last one). Used as a fallback
 // when the API rejects thinking signatures — e.g. after model version rotation.
-func (s *Service) fromLLMRequestStrippingAllThinking(r *llm.Request) *request {
+func (s *Service) fromLLMRequestStrippingAllThinking(r *llm.Request, isClaudeMax bool) *request {
 	model := cmp.Or(s.Model, DefaultModel)
 	maxTokens := cmp.Or(s.MaxTokens, maxOutputTokens(model))
 
@@ -530,13 +620,35 @@ func (s *Service) fromLLMRequestStrippingAllThinking(r *llm.Request) *request {
 			messages = append(messages, msg)
 		}
 	}
+
+	// Build system messages - prepend Claude Code prompt for Claude Max
+	var system []systemContent
+	if isClaudeMax {
+		system = append(system, systemContent{
+			Text: "You are Claude Code, Anthropic's official CLI for Claude.",
+			Type: "text",
+		})
+	}
+	system = append(system, mapped(r.System, fromLLMSystem)...)
+
+	// Build tools - prefix names for Claude Max
+	var tools []*tool
+	if isClaudeMax {
+		tools = make([]*tool, len(r.Tools))
+		for i, t := range r.Tools {
+			tools[i] = fromLLMToolWithPrefix(t, toolPrefix)
+		}
+	} else {
+		tools = mapped(r.Tools, fromLLMTool)
+	}
+
 	req := &request{
 		Model:      model,
 		Messages:   messages,
 		MaxTokens:  maxTokens,
 		ToolChoice: fromLLMToolChoice(r.ToolChoice),
-		Tools:      mapped(r.Tools, fromLLMTool),
-		System:     mapped(r.System, fromLLMSystem),
+		Tools:      tools,
+		System:     system,
 	}
 
 	if s.ThinkingLevel != llm.ThinkingLevelOff {
@@ -881,7 +993,17 @@ func parseSSEStream(r io.Reader, onStream func(llm.StreamDelta)) (*response, err
 // Do sends a streaming request to Anthropic and collects the full response.
 func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error) {
 	startTime := time.Now()
-	request := s.fromLLMRequest(ir)
+
+	// Read API key from file if it's a file path (allows token refresh without restart)
+	apiKey, err := s.readAPIKey()
+	if err != nil {
+		return nil, err
+	}
+
+	// Detect Claude Max mode based on API key prefix
+	isClaudeMax := isClaudeMaxToken(apiKey)
+
+	request := s.fromLLMRequest(ir, isClaudeMax)
 	request.Stream = true
 	payload, err := json.Marshal(request)
 	if err != nil {
@@ -922,6 +1044,12 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			case <-ctx.Done():
 				return nil, fmt.Errorf("anthropic request failed after %d attempts (context cancelled during backoff): %w", attempts, errs)
 			}
+
+			// Re-read API key on retry in case it was refreshed
+			apiKey, err = s.readAPIKey()
+			if err != nil {
+				return nil, errors.Join(errs, err)
+			}
 		}
 		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payload))
 		if err != nil {
@@ -929,8 +1057,16 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 		}
 
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-API-Key", s.APIKey)
 		req.Header.Set("Anthropic-Version", "2023-06-01")
+
+		// Set authentication header based on mode
+		if isClaudeMax {
+			req.Header.Set("Authorization", "Bearer "+apiKey)
+			// Claude Max requires specific beta features
+			req.Header.Set("anthropic-beta", "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14")
+		} else {
+			req.Header.Set("X-API-Key", apiKey)
+		}
 
 		resp, err := httpc.Do(req)
 		if err != nil {
@@ -958,6 +1094,11 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			result := toLLMResponse(response)
 			result.StartTime = &startTime
 			result.EndTime = &endTime
+
+			// Unprefix tool names if in Claude Max mode
+			if isClaudeMax {
+				result.Content = unprefixToolNames(result.Content, toolPrefix)
+			}
 			return result, nil
 		default:
 			buf, _ := io.ReadAll(resp.Body)
@@ -981,7 +1122,7 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 				if strippedPayload == nil && strings.Contains(string(buf), "Invalid `signature`") {
 					slog.WarnContext(ctx, "anthropic_invalid_thinking_signature, retrying without thinking blocks",
 						"response", string(buf), "url", url, "model", s.Model)
-					strippedReq := s.fromLLMRequestStrippingAllThinking(ir)
+					strippedReq := s.fromLLMRequestStrippingAllThinking(ir, isClaudeMax)
 					strippedReq.Stream = true
 					strippedPayload, err = json.Marshal(strippedReq)
 					if err != nil {
