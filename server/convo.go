@@ -69,6 +69,10 @@ type ConversationManager struct {
 	// onStateChange is called when the conversation state changes.
 	// This allows the server to broadcast state changes to all subscribers.
 	onStateChange func(state ConversationState)
+
+	// onDone is called when the agent finishes working (transitions to not working).
+	// Used by subagents to notify their parent conversation.
+	onDone func()
 }
 
 // NewConversationManager constructs a manager with dependencies but defers hydration until needed.
@@ -100,6 +104,7 @@ func (cm *ConversationManager) SetAgentWorking(working bool) {
 	}
 	cm.agentWorking = working
 	onStateChange := cm.onStateChange
+	onDone := cm.onDone
 	convID := cm.conversationID
 	modelID := cm.modelID
 	cm.mu.Unlock()
@@ -111,6 +116,9 @@ func (cm *ConversationManager) SetAgentWorking(working bool) {
 			Working:        working,
 			Model:          modelID,
 		})
+	}
+	if !working && onDone != nil {
+		onDone()
 	}
 }
 
@@ -280,13 +288,14 @@ func (cm *ConversationManager) AcceptUserMessage(ctx context.Context, service ll
 	return isFirst, nil
 }
 
-// QueueMessage records a user message to the database as "queued" and holds it
-// for delivery after the current agent turn (or distillation) completes.
-// The message is visible in the UI immediately (with queued status).
+// QueueMessage records a user message to the database and, when the agent
+// is actively working, injects it into the loop's message queue so it gets
+// picked up between tool calls — not after the entire turn ends.
+// During distillation or when no loop exists, messages are held for later.
 func (cm *ConversationManager) QueueMessage(ctx context.Context, s *Server, modelID string, message llm.Message) error {
 	// Record to DB with queued user_data so it appears in the UI.
 	// Mark as excluded_from_context so ensureLoop won't load it into
-	// the loop's history — we'll feed it via QueueUserMessage when draining.
+	// the loop's history — we feed it via QueueUserMessage directly.
 	userData := map[string]interface{}{"queued": true}
 	createdMsg, err := s.db.CreateMessage(ctx, db.CreateMessageParams{
 		ConversationID:      cm.conversationID,
@@ -311,25 +320,59 @@ func (cm *ConversationManager) QueueMessage(ctx context.Context, s *Server, mode
 	go s.notifySubscribersNewMessage(context.WithoutCancel(ctx), cm.conversationID, createdMsg)
 
 	cm.mu.Lock()
-	cm.pendingMessages = append(cm.pendingMessages, pendingMessage{
-		Message:   message,
-		ModelID:   modelID,
-		MessageID: createdMsg.MessageID,
-	})
+	loopInstance := cm.loop
+	distilling := cm.distilling
 	cm.lastActivity = time.Now()
-	// If the agent is no longer working (and not distilling), drain immediately.
-	// This handles the race where drainPendingMessages ran (finding nothing)
-	// before this QueueMessage call appended the message.
-	// During distillation, messages must wait — the distill goroutine will drain.
-	needsDrain := !cm.agentWorking && !cm.distilling
 	cm.mu.Unlock()
 
-	cm.logger.Info("Queued user message", "message_id", createdMsg.MessageID)
+	msgID := createdMsg.MessageID
 
-	if needsDrain {
-		cm.logger.Info("Agent not working, draining immediately")
-		go cm.drainPendingMessages(s)
+	// If distilling or no loop, defer until later.
+	if distilling || loopInstance == nil {
+		cm.mu.Lock()
+		cm.pendingMessages = append(cm.pendingMessages, pendingMessage{
+			Message:   message,
+			ModelID:   modelID,
+			MessageID: msgID,
+		})
+		needsDrain := !cm.agentWorking && !cm.distilling
+		cm.mu.Unlock()
+
+		cm.logger.Info("Queued user message (deferred)", "message_id", msgID)
+
+		if needsDrain {
+			cm.logger.Info("Agent not working, draining immediately")
+			go cm.drainPendingMessages(s)
+		}
+		return nil
 	}
+
+	// Inject directly into the loop so it's picked up between tool calls.
+	loopInstance.QueueUserMessage(message)
+	cm.logger.Info("Injected user message into active loop", "message_id", msgID)
+
+	// Clear the queued/excluded flags so the message is visible in context.
+	go func() {
+		bgCtx := context.Background()
+		if err := s.db.QueriesTx(bgCtx, func(q *generated.Queries) error {
+			if err := q.UpdateMessageExcludedFromContext(bgCtx, generated.UpdateMessageExcludedFromContextParams{
+				ExcludedFromContext: false,
+				MessageID:           msgID,
+			}); err != nil {
+				return err
+			}
+			newData := `{}`
+			return q.UpdateMessageUserData(bgCtx, generated.UpdateMessageUserDataParams{
+				UserData:  &newData,
+				MessageID: msgID,
+			})
+		}); err != nil {
+			cm.logger.Error("Failed to clear queued flags", "message_id", msgID, "error", err)
+		}
+		if updatedMsg, err := s.db.GetMessageByID(bgCtx, msgID); err == nil {
+			s.broadcastMessageUpdate(bgCtx, cm.conversationID, updatedMsg)
+		}
+	}()
 
 	return nil
 }
