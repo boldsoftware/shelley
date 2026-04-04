@@ -8,7 +8,7 @@ import CommandPalette from "./components/CommandPalette";
 import ModelsModal from "./components/ModelsModal";
 import NotificationsModal from "./components/NotificationsModal";
 import HomeFeed from "./components/HomeFeed";
-import { Conversation, ConversationWithState, ConversationListUpdate } from "./types";
+import { Conversation, ConversationWithState, ConversationListUpdate, SubagentProgress } from "./types";
 import { api } from "./services/api";
 import { conversationCache } from "./services/conversationCache";
 import { useI18n } from "./i18n";
@@ -139,6 +139,7 @@ function App() {
     conversation_id: string;
     working: boolean;
   } | null>(null);
+  const [subagentProgressMap, setSubagentProgressMap] = useState<Record<string, SubagentProgress>>({});
   const initialSlugResolved = useRef(false);
 
   // Resolve initial slug from URL - uses the captured initialSlugFromUrl
@@ -693,6 +694,7 @@ function App() {
           onConversationRenamed={handleConversationRenamed}
           subagentUpdate={subagentUpdate}
           subagentStateUpdate={subagentStateUpdate}
+          subagentProgressMap={subagentProgressMap}
           showActiveTrigger={showActiveTrigger}
         />
 
@@ -736,6 +738,12 @@ function App() {
               onConversationUpdate={updateConversation}
               onConversationListUpdate={handleConversationListUpdate}
               onConversationStateUpdate={handleConversationStateUpdate}
+              onSubagentProgress={(progress) => {
+                setSubagentProgressMap((prev) => ({
+                  ...prev,
+                  [progress.conversation_id]: progress,
+                }));
+              }}
               onFirstMessage={handleFirstMessage}
               onDistillConversation={handleDistillConversation}
               onDistillReplaceConversation={handleDistillReplaceConversation}

@@ -69,6 +69,20 @@ with an appropriately ironic nod at
 "[Ozymandias](https://www.poetryfoundation.org/poems/46565/ozymandias)."
 Shelley is a computer program, and, it's an it.
 
+# Fork Changes (erikswedberg/shelley)
+
+Additions on top of upstream `boldsoftware/shelley`:
+
+- **Claude Max OAuth** — sk-ant-oat token detection, Bearer auth, sk_ tool prefix/unprefix, beta headers, 1M context window
+- **Mid-turn message injection** — send messages to the agent while it's working (between tool calls)
+- **Subagent done notifications** — parent conversation is notified with a summary when a subagent finishes
+- **Plan mode** — toggle that filters editing tools and signals the LLM via system prompt
+- **Long conversation warning** — triggers at 50% of context window instead of hardcoded 100k tokens
+- **FlexBool** — handles LLMs sending boolean values as strings in tool inputs
+- **Todo lists** — `todo_read`/`todo_write` tools with floating UI panel, per-conversation file storage, dismiss/minimize
+- **Subagent progress bars** — subagent todo progress broadcast to parent, rendered as progress bars in the sidebar
+- **Behavioral guidelines in system prompt** — always `wait: false` for subagents, parent and subagents use todo tools for multi-step work
+
 # Open source
 
 Shelley is Apache licensed. We require a CLA for contributions.

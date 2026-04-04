@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Conversation, ConversationWithState } from "../types";
+import { Conversation, ConversationWithState, SubagentProgress } from "../types";
 import { api } from "../services/api";
 import { useI18n } from "../i18n";
 
@@ -21,6 +21,7 @@ interface ConversationDrawerProps {
   subagentUpdate?: Conversation | null; // When a subagent is created/updated
   subagentStateUpdate?: { conversation_id: string; working: boolean } | null; // When a subagent's working state changes
   showActiveTrigger?: number; // Increment to switch back to active conversations view
+  subagentProgressMap?: Record<string, SubagentProgress>;
 }
 
 function ConversationDrawer({
@@ -39,6 +40,7 @@ function ConversationDrawer({
   subagentUpdate,
   subagentStateUpdate,
   showActiveTrigger,
+  subagentProgressMap,
 }: ConversationDrawerProps) {
   const { t } = useI18n();
   const [showArchived, setShowArchived] = useState(false);
@@ -637,6 +639,17 @@ function ConversationDrawer({
                       <span className="conversation-date drawer-subagent-date">
                         {formatDate(sub.updated_at)}
                       </span>
+                      {subagentProgressMap?.[sub.conversation_id] &&
+                        subagentProgressMap[sub.conversation_id].completed < subagentProgressMap[sub.conversation_id].total && (
+                        <div className="subagent-progress-bar">
+                          <div
+                            className="subagent-progress-fill"
+                            style={{
+                              width: `${(subagentProgressMap[sub.conversation_id].completed / subagentProgressMap[sub.conversation_id].total) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

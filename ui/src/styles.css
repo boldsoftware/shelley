@@ -3250,6 +3250,146 @@ svg {
   height: 100%;
 }
 
+/* Todo panel */
+.todo-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 280px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.todo-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.todo-panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.todo-panel-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-secondary);
+}
+
+.todo-panel-count {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: 0.125rem 0.375rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 400;
+}
+
+.todo-panel-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.todo-panel-minimize,
+.todo-panel-dismiss {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 1.125rem;
+  padding: 0;
+  line-height: 1;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.todo-panel-minimize:hover,
+.todo-panel-dismiss:hover {
+  color: var(--text-primary);
+}
+
+.todo-panel-items {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  margin-bottom: 0.25rem;
+  border-radius: 4px;
+  border-left: 3px solid var(--border-color);
+  font-size: 0.75rem;
+  color: var(--text-primary);
+}
+
+.todo-item-in-progress {
+  border-left-color: #3b82f6;
+}
+
+.todo-item-completed {
+  border-left-color: #22c55e;
+  opacity: 0.6;
+}
+
+.todo-item-icon {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  margin-top: 0.0625rem;
+}
+
+.todo-item-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.dark .todo-panel {
+  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
+}
+
+.subagent-progress-bar {
+  width: 60px;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.subagent-progress-fill {
+  height: 100%;
+  background: var(--primary, #3b82f6);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .todo-panel {
+    display: none;
+  }
+}
+
 /* Status bar configuration controls for empty conversations */
 .status-bar-config {
   display: flex;

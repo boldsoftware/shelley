@@ -51,10 +51,19 @@ type ConversationState struct {
 	Working        bool   `json:"working"`
 	Model          string `json:"model,omitempty"`
 	PlanMode       *bool  `json:"plan_mode,omitempty"`
+	TodoContent    string `json:"todo_content,omitempty"`
 }
 
 
 func boolPtr(b bool) *bool { return &b }
+
+// SubagentProgress reports a subagent's todo list progress to the parent.
+type SubagentProgress struct {
+	ConversationID string `json:"conversation_id"`
+	Slug           string `json:"slug"`
+	Completed      int    `json:"completed"`
+	Total          int    `json:"total"`
+}
 // ConversationWithState combines a conversation with its working state.
 type ConversationWithState struct {
 	generated.Conversation
@@ -80,6 +89,8 @@ type StreamResponse struct {
 	NotificationEvent *notifications.Event `json:"notification_event,omitempty"`
 	// ToolProgress is set when a running tool reports partial output.
 	ToolProgress *llm.ToolProgress `json:"tool_progress,omitempty"`
+	// SubagentProgress is set when a subagent's todo list changes.
+	SubagentProgress *SubagentProgress `json:"subagent_progress,omitempty"`
 	// StreamDelta is set when the LLM streams partial text content.
 	StreamDelta *llm.StreamDelta `json:"stream_delta,omitempty"`
 }
@@ -749,6 +760,9 @@ func (s *Server) getOrCreateSubagentConversationManager(ctx context.Context, con
 		manager.onDone = func() {
 			go s.notifyParentSubagentDone(conversationID)
 		}
+		manager.onTodoProgress = func(completed, total int) {
+			go s.notifyParentSubagentProgress(conversationID, completed, total)
+		}
 
 		s.activeConversations[conversationID] = manager
 		return manager, nil
@@ -817,6 +831,43 @@ func (s *Server) notifyParentSubagentDone(subagentConversationID string) {
 
 	loopInstance.QueueUserMessage(notification)
 	s.logger.Info("Notified parent of subagent completion", "subagent", slug, "parent", parentID)
+}
+
+// notifyParentSubagentProgress broadcasts a subagent's todo progress to the parent's SSE stream.
+func (s *Server) notifyParentSubagentProgress(subagentConversationID string, completed, total int) {
+	ctx := context.Background()
+
+	var conv generated.Conversation
+	err := s.db.Queries(ctx, func(q *generated.Queries) error {
+		var err error
+		conv, err = q.GetConversation(ctx, subagentConversationID)
+		return err
+	})
+	if err != nil || conv.ParentConversationID == nil {
+		return
+	}
+
+	parentID := *conv.ParentConversationID
+	slug := subagentConversationID
+	if conv.Slug != nil {
+		slug = *conv.Slug
+	}
+
+	s.mu.Lock()
+	parentManager, ok := s.activeConversations[parentID]
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+
+	parentManager.subpub.Broadcast(StreamResponse{
+		SubagentProgress: &SubagentProgress{
+			ConversationID: subagentConversationID,
+			Slug:           slug,
+			Completed:      completed,
+			Total:          total,
+		},
+	})
 }
 
 // ExtractDisplayData extracts display data from message content for storage

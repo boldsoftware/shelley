@@ -1032,6 +1032,8 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 				ConversationID: conversationID,
 				Working:        manager.IsAgentWorking(),
 				Model:          manager.GetModel(),
+				PlanMode:       boolPtr(manager.GetPlanMode()),
+				TodoContent:    manager.readTodoContent(),
 			},
 			ContextWindowSize: ctxSize,
 		}
@@ -1046,6 +1048,8 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 				ConversationID: conversationID,
 				Working:        manager.IsAgentWorking(),
 				Model:          manager.GetModel(),
+				PlanMode:       boolPtr(manager.GetPlanMode()),
+				TodoContent:    manager.readTodoContent(),
 			},
 			Heartbeat: true,
 		}
@@ -1083,6 +1087,8 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 						ConversationID: conversationID,
 						Working:        manager.IsAgentWorking(),
 						Model:          manager.GetModel(),
+						PlanMode:       boolPtr(manager.GetPlanMode()),
+						TodoContent:    manager.readTodoContent(),
 					},
 					Heartbeat: true,
 				}
@@ -1750,3 +1756,4 @@ func (s *Server) handleSetPlanMode(w http.ResponseWriter, r *http.Request, conve
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"plan_mode": body.Enabled})
 }
+

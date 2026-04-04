@@ -76,6 +76,9 @@ type ConversationManager struct {
 	// onDone is called when the agent finishes working (transitions to not working).
 	// Used by subagents to notify their parent conversation.
 	onDone func()
+	// onTodoProgress is called when the todo list changes.
+	// Used by subagents to broadcast progress to the parent.
+	onTodoProgress func(completed, total int)
 }
 
 // NewConversationManager constructs a manager with dependencies but defers hydration until needed.
@@ -119,6 +122,7 @@ func (cm *ConversationManager) SetAgentWorking(working bool) {
 			Working:        working,
 			Model:          modelID,
 			PlanMode:       boolPtr(cm.GetPlanMode()),
+			TodoContent:    cm.readTodoContent(),
 		})
 	}
 	if !working && onDone != nil {
@@ -161,6 +165,15 @@ func (cm *ConversationManager) SetPlanMode(enabled bool) {
 	}
 
 	cm.logger.Info("plan mode changed", "enabled", enabled)
+}
+
+// readTodoContent returns the current todo list JSON, or empty string if none exists.
+func (cm *ConversationManager) readTodoContent() string {
+	content, err := os.ReadFile(claudetool.TodoFilePath(cm.conversationID))
+	if err != nil {
+		return ""
+	}
+	return string(content)
 }
 
 // GetPlanMode returns whether plan mode is enabled.
@@ -893,6 +906,31 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 		},
 		OnStreamDelta: sf.Push,
 		OnStreamDone:  sf.Flush,
+		OnTodoChange: func() {
+			todoContent := cm.readTodoContent()
+			if cm.onStateChange != nil {
+				cm.onStateChange(ConversationState{
+					ConversationID: conversationID,
+					Working:        true,
+					Model:          modelID,
+					PlanMode:       boolPtr(cm.GetPlanMode()),
+					TodoContent:    todoContent,
+				})
+			}
+			if cm.onTodoProgress != nil && todoContent != "" {
+				var todoList claudetool.TodoList
+				if json.Unmarshal([]byte(todoContent), &todoList) == nil {
+					completed := 0
+					for _, item := range todoList.Items {
+						if item.Status == "completed" {
+							completed++
+						}
+					}
+					cm.onTodoProgress(completed, len(todoList.Items))
+				}
+			}
+		},
+		SessionID: conversationID,
 	})
 
 	cm.mu.Lock()

@@ -81,6 +81,14 @@ export interface ToolProgress {
   output: string;
 }
 
+// SubagentProgress represents a subagent's todo list progress.
+export interface SubagentProgress {
+  conversation_id: string;
+  slug: string;
+  completed: number;
+  total: number;
+}
+
 // StreamDelta represents a partial text delta from the LLM.
 export interface StreamDelta {
   type: string; // "text" or "thinking"
@@ -97,6 +105,7 @@ export interface StreamResponse extends Omit<StreamResponseForTS, "messages"> {
   notification_event?: NotificationEvent;
   tool_progress?: ToolProgress;
   stream_delta?: StreamDelta;
+  subagent_progress?: SubagentProgress;
 }
 
 // Link represents a custom link that can be added to the UI

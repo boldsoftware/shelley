@@ -269,6 +269,8 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		keywordTool.Tool(),
 		changeDirTool.Tool(),
 		outputIframeTool.Tool(),
+		TodoRead,
+		TodoWrite,
 	}
 
 	// Build the available models list (shared by subagent and llm_one_shot tools).
