@@ -139,6 +139,10 @@ function App() {
     conversation_id: string;
     working: boolean;
   } | null>(null);
+  // Track active distill-replace operations: sourceConvID -> newConvID
+  const [distillReplaceOperations, setDistillReplaceOperations] = useState<Record<string, string>>(
+    {},
+  );
   const initialSlugResolved = useRef(false);
 
   // Resolve initial slug from URL - uses the captured initialSlugFromUrl
@@ -342,7 +346,28 @@ function App() {
       }
 
       // If the conversation is archived, remove it from the active list
+      // If this was a distill-replace source, navigate to the new conversation
       if (update.conversation.archived) {
+        // Check if this is a distill-replace source conversation
+        const newConvId = distillReplaceOperations[update.conversation.conversation_id];
+        if (newConvId) {
+          // Clean up the tracking entry
+          setDistillReplaceOperations((prev) => {
+            const { [update.conversation!.conversation_id]: _, ...rest } = prev;
+            return rest;
+          });
+          // Navigate to the new conversation after state updates complete
+          setTimeout(() => {
+            setConversations((convs) => {
+              const newConv = convs.find((c) => c.conversation_id === newConvId);
+              if (newConv) {
+                setCurrentConversationId(newConvId);
+                setViewedConversation(newConv);
+              }
+              return convs;
+            });
+          }, 0);
+        }
         setConversations((prev) =>
           prev.filter((c) => c.conversation_id !== update.conversation!.conversation_id),
         );
@@ -384,7 +409,7 @@ function App() {
       setConversations((prev) => prev.filter((c) => c.conversation_id !== update.conversation_id));
       conversationCache.delete(update.conversation_id);
     }
-  }, []);
+  }, [distillReplaceOperations, conversationCache]);
 
   // Handle conversation state updates (working state changes)
   const handleConversationStateUpdate = useCallback(
@@ -661,9 +686,17 @@ function App() {
     try {
       const response = await api.distillReplaceConversation(sourceConversationId, model, cwd);
       const newConversationId = response.conversation_id;
+      
+      // Track this distill-replace operation so we can navigate when the source is archived
+      setDistillReplaceOperations((prev) => ({
+        ...prev,
+        [sourceConversationId]: newConversationId,
+      }));
+      
+      // Refresh conversations list but don't navigate yet - we'll navigate
+      // when we receive the SSE update showing the source was archived
       const updatedConvs = await api.getConversations();
       setConversations(updatedConvs);
-      setCurrentConversationId(newConversationId);
     } catch (err) {
       console.error("Failed to distill-replace conversation:", err);
       setError("Failed to distill-replace conversation");
