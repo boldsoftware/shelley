@@ -75,18 +75,57 @@ type ToolSetConfig struct {
 	AvailableModels []AvailableModel
 	// SlackAPI, if set, enables the Slack tool.
 	SlackAPI SlackAPI
+	// MCPTools are tools discovered from MCP servers (immediately active).
+	// If set, these are appended to the tool set.
+	MCPTools []*llm.Tool
+	// MCPDeferredGroups are MCP tool groups that are lazily loaded.
+	// An activator tool is generated for each group.
+	MCPDeferredGroups []MCPToolGroup
 }
 
 // ToolSet holds a set of tools for a single conversation.
 // Each conversation should have its own ToolSet.
 type ToolSet struct {
-	tools   []*llm.Tool
-	cleanup func()
-	wd      *MutableWorkingDir
+	mu             sync.RWMutex
+	tools          []*llm.Tool
+	deferredGroups map[string]MCPToolGroup // name -> group
+	cleanup        func()
+	wd             *MutableWorkingDir
 }
 
-// Tools returns the tools in this set.
+// Tools returns the current tools in this set. Thread-safe.
 func (ts *ToolSet) Tools() []*llm.Tool {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+	return ts.tools
+}
+
+// ActivateGroup activates a deferred tool group, replacing its activator tool
+// with the real tools. Returns the new full tool list.
+func (ts *ToolSet) ActivateGroup(name string) []*llm.Tool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	group, ok := ts.deferredGroups[name]
+	if !ok {
+		return ts.tools
+	}
+
+	// Remove the activator tool for this group
+	activatorName := "activate_" + name + "_tools"
+	var newTools []*llm.Tool
+	for _, t := range ts.tools {
+		if t.Name != activatorName {
+			newTools = append(newTools, t)
+		}
+	}
+
+	// Append the real tools
+	newTools = append(newTools, group.Tools...)
+	ts.tools = newTools
+	delete(ts.deferredGroups, name)
+
+	slog.Info("activated deferred tool group", "name", name, "tools_added", len(group.Tools))
 	return ts.tools
 }
 
@@ -328,9 +367,26 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		cleanup = browserCleanup
 	}
 
-	return &ToolSet{
+	// Append any MCP tools.
+	if len(cfg.MCPTools) > 0 {
+		tools = append(tools, cfg.MCPTools...)
+	}
+
+	ts := &ToolSet{
 		tools:   tools,
 		cleanup: cleanup,
 		wd:      wd,
 	}
+
+	// Set up deferred MCP tool groups with activator tools.
+	if len(cfg.MCPDeferredGroups) > 0 {
+		ts.deferredGroups = make(map[string]MCPToolGroup, len(cfg.MCPDeferredGroups))
+		for _, group := range cfg.MCPDeferredGroups {
+			ts.deferredGroups[group.Name] = group
+			activator := makeActivatorTool(ts, group)
+			ts.tools = append(ts.tools, activator)
+		}
+	}
+
+	return ts
 }

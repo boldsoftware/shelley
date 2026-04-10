@@ -14,6 +14,7 @@ import (
 	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/client"
 	"shelley.exe.dev/db"
+	"shelley.exe.dev/mcp"
 	"shelley.exe.dev/models"
 	"shelley.exe.dev/server"
 	_ "shelley.exe.dev/server/notifications/channels" // register channel types
@@ -186,6 +187,21 @@ func runServe(global GlobalConfig, args []string) {
 	logger.Info("Available models", "models", strings.Join(availableModels, ", "))
 
 	toolSetConfig := setupToolSetConfig(llmManager, llmManager)
+
+	// Start MCP servers and discover their tools.
+	var mcpManager *claudetool.MCPManager
+	if len(llmConfig.MCPServers) > 0 {
+		var err error
+		mcpManager, err = claudetool.NewMCPManager(context.Background(), llmConfig.MCPServers)
+		if err != nil {
+			logger.Error("Failed to initialize MCP servers", "error", err)
+			os.Exit(1)
+		}
+		defer mcpManager.Close()
+		toolSetConfig.MCPTools = mcpManager.Tools()
+		toolSetConfig.MCPDeferredGroups = mcpManager.DeferredGroups()
+		logger.Info("MCP tools registered", "active", len(mcpManager.Tools()), "deferred_groups", len(mcpManager.DeferredGroups()))
+	}
 
 	// Create server
 	svr := server.NewServer(database, llmManager, toolSetConfig, logger, global.PredictableOnly, llmConfig.TerminalURL, llmConfig.DefaultModel, *requireHeader, llmConfig.Links)
@@ -387,6 +403,17 @@ func setupToolSetConfig(llmProvider claudetool.LLMServiceProvider, llmManager se
 	}
 }
 
+// mcpServerJSONConfig is the JSON representation of an MCP server in shelley.json.
+type mcpServerJSONConfig struct {
+	Name    string            `json:"name"`
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Env     map[string]string `json:"env"`
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers"`
+	Defer   bool              `json:"defer"`
+}
+
 // buildLLMConfig constructs LLMConfig from environment variables and optional config file
 func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel string, database *db.DB) *server.LLMConfig {
 	llmCfg := &server.LLMConfig{
@@ -417,6 +444,7 @@ func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel s
 			NotificationChannels []map[string]any      `json:"notification_channels"`
 			SlackBotToken        string                `json:"slack_bot_token"`
 			SlackAppToken        string                `json:"slack_app_token"`
+			MCPServers           []mcpServerJSONConfig `json:"mcp_servers"`
 			AlwaysOnSkills       []string              `json:"always_on_skills"`
 		}
 		if err := json.Unmarshal(data, &cfg); err != nil {
@@ -472,6 +500,26 @@ func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel s
 		}
 		if cfg.SlackAppToken != "" {
 			llmCfg.SlackAppToken = cfg.SlackAppToken
+		}
+
+		// Convert MCP server configs.
+		for _, mcpCfg := range cfg.MCPServers {
+			if mcpCfg.Command == "" && mcpCfg.URL == "" {
+				logger.Warn("Skipping MCP server with neither command nor url", "name", mcpCfg.Name)
+				continue
+			}
+			llmCfg.MCPServers = append(llmCfg.MCPServers, mcp.ServerConfig{
+				Name:    mcpCfg.Name,
+				Command: mcpCfg.Command,
+				Args:    mcpCfg.Args,
+				Env:     mcpCfg.Env,
+				URL:     mcpCfg.URL,
+				Headers: mcpCfg.Headers,
+				Defer:   mcpCfg.Defer,
+			})
+		}
+		if len(llmCfg.MCPServers) > 0 {
+			logger.Info("MCP servers configured", "count", len(llmCfg.MCPServers))
 		}
 
 		if len(cfg.AlwaysOnSkills) > 0 {

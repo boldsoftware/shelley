@@ -814,6 +814,7 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 		LLM:           service,
 		History:       history,
 		Tools:         toolSet.Tools(),
+		GetTools:      toolSet.Tools,
 		RecordMessage: recordMessage,
 		Logger:        logger,
 		System:        system,

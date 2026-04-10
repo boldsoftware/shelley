@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"shelley.exe.dev/db"
+	"shelley.exe.dev/mcp"
 )
 
 // Link represents a custom link to be displayed in the UI
@@ -41,6 +42,9 @@ type LLMConfig struct {
 	SlackBotToken string
 	SlackAppToken string
 
+
+	// MCPServers is the list of MCP server configurations (optional)
+	MCPServers []mcp.ServerConfig
 
 	// AlwaysOnSkills is a list of skill names whose bodies are always
 	// included in the system prompt (pre-activated).
