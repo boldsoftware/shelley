@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.shelley.serve</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>HOME_DIR/.local/bin/shelley</string>
+		<string>serve</string>
+	</array>
+
+	<key>WorkingDirectory</key>
+	<string>HOME_DIR</string>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>ANTHROPIC_API_KEY</key>
+		<string>YOUR_API_KEY</string>
+		<key>HOME</key>
+		<string>HOME_DIR</string>
+		<key>PATH</key>
+		<string>HOME_DIR/go/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+
+	<key>RunAtLoad</key>
+	<true/>
+
+	<key>KeepAlive</key>
+	<true/>
+
+	<key>LimitLoadToSessionType</key>
+	<array>
+		<string>Aqua</string>
+		<string>Background</string>
+		<string>LoginWindow</string>
+	</array>
+
+	<key>StandardOutPath</key>
+	<string>HOME_DIR/Library/Logs/shelley.log</string>
+	<key>StandardErrorPath</key>
+	<string>HOME_DIR/Library/Logs/shelley.log</string>
+</dict>
+</plist>

@@ -1,3 +1,5 @@
+> **Fork notice:** This is a fork of [boldsoftware/shelley](https://github.com/boldsoftware/shelley). All development happens on the `molecula` branch of this repo (`molecula/shelley`).
+
 # Shelley: a coding agent for exe.dev
 
 Shelley is a mobile-friendly, web-based, multi-conversation, multi-modal,
@@ -72,6 +74,75 @@ Shelley is a computer program, and, it's an it.
 # Open source
 
 Shelley is Apache licensed. We require a CLA for contributions.
+
+# Running as a Service
+
+## macOS (launchd)
+
+This sets up Shelley as a user-level LaunchAgent that starts on login and
+restarts automatically if it crashes.
+
+### 1. Build
+
+```bash
+cd ~/shelley     # or wherever you cloned it
+make install     # builds and installs to ~/.local/bin/shelley
+```
+
+### 2. Install the plist
+
+Copy the template and fill in your paths:
+
+```bash
+sed -e "s|HOME_DIR|$HOME|g" \
+    -e "s|YOUR_API_KEY|$ANTHROPIC_API_KEY|g" \
+    com.shelley.serve.plist > ~/Library/LaunchAgents/com.shelley.serve.plist
+```
+
+### 3. Load the service
+
+```bash
+launchctl bootstrap user/$(id -u) ~/Library/LaunchAgents/com.shelley.serve.plist
+```
+
+Shelley is now running on http://localhost:9000.
+
+### 4. Rebuild and restart
+
+```bash
+make install && launchctl kickstart -k user/$(id -u)/com.shelley.serve
+```
+
+### 5. Logs
+
+```bash
+tail -f ~/Library/Logs/shelley.log
+```
+
+### Uninstall
+
+```bash
+launchctl bootout user/$(id -u)/com.shelley.serve
+rm ~/Library/LaunchAgents/com.shelley.serve.plist
+```
+
+## Linux (systemd)
+
+A `shelley.service` unit file is included in the repo. See the file for details.
+
+```bash
+mkdir -p ~/.config/shelley
+echo "ANTHROPIC_API_KEY=sk-ant-..." > ~/.config/shelley/env
+cp shelley.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now shelley
+```
+
+Rebuild and restart:
+
+```bash
+make install && systemctl --user restart shelley
+```
 
 # Building Shelley
 

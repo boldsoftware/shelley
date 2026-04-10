@@ -1,6 +1,6 @@
 # Shelley Makefile
 
-.PHONY: build build-linux-aarch64 build-linux-x86 test test-go test-e2e ui serve clean help templates demo
+.PHONY: build build-linux-aarch64 build-linux-x86 install test test-go test-e2e ui serve clean help templates demo
 
 # Default target
 all: build
@@ -16,6 +16,12 @@ templates:
 build: ui templates
 	@echo "Building Shelley..."
 	go build -o bin/shelley ./cmd/shelley
+
+# Install the binary to ~/.local/bin
+install: build
+	@mkdir -p $(HOME)/.local/bin
+	mv bin/shelley $(HOME)/.local/bin/shelley
+	@echo "Installed to $(HOME)/.local/bin/shelley"
 
 # Build for Linux (auto-detect architecture)
 build-linux: ui templates
@@ -95,6 +101,7 @@ help:
 	@echo "Shelley Build Commands:"
 	@echo ""
 	@echo "  build         Build UI, templates, and Go binary"
+	@echo "  install       Build and install to ~/.local/bin"
 	@echo "  build-linux-aarch64  Build for Linux ARM64"
 	@echo "  build-linux-x86      Build for Linux x86_64"
 	@echo "  ui            Build UI only"

@@ -1,3 +1,6 @@
+0. **STOP prefixing bash commands with `cd <dir> &&`.** The working directory persists
+   across bash calls. You are ALREADY THERE. Run `pwd` if unsure. Use `change_dir` only
+   when you genuinely need to switch. This is the #1 most frequent mistake.
 1. Never add sleeps to tests.
 2. Brevity, brevity, brevity! Do not do weird defaults; have only one way of doing things; refactor relentlessly as necessary.
 3. If something doesn't work, propagate the error or exit or crash. Do not have "fallbacks".
@@ -24,8 +27,9 @@
 12. To test the Shelley UI in a separate instance, build with `make build`, then run on a
     different port with a separate database:
     ```
-    ./bin/shelley -config /exe.dev/shelley.json -db /tmp/shelley-test.db serve -port 8002
+    ./bin/shelley -config <path-to-config> -db /tmp/shelley-test.db serve -port 8002
     ```
+    The config path is wherever the user's `shelley.json` lives (check `~/.config/shelley/` or ask).
     Then use browser tools to navigate to http://localhost:8002/ and interact with the UI.
 13. NEVER use alert(), confirm(), or prompt(). Use proper UI components like tooltips, modals, or toasts instead.
 14. SQL migrations and frontend changes require rebuilding the binary (`make build` or `go generate ./... && cd ui && pnpm run build`).
@@ -37,3 +41,10 @@
       reads the `action` field from the input and dispatches to the right sub-component)
     - `loop/predictable.go` (the "tool smorgasbord" demo response)
     - See `ui/src/components/AGENTS.md` for more detail.
+
+16. **Replacing the running Shelley binary.** You are running under Shelley. Be careful.
+    1. `make install` in the repo root (builds UI + Go binary, copies to `~/.local/bin/shelley`).
+       If the build fails, DO NOT proceed — a broken binary will crashloop.
+    2. `systemctl --user restart shelley` — this stops the old process and starts the
+       new one in a single operation. **NEVER use `systemctl --user stop`** — that kills
+       you with no restart, and the user has to manually intervene.
