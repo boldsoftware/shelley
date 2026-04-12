@@ -799,7 +799,8 @@ function ChatInterface({
   const [planMode, setPlanMode] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [todoContent, setTodoContent] = useState("");
-  const [todoDismissed, setTodoDismissed] = useState(false);
+  const [todoDismissedMap, setTodoDismissedMap] = useState<Record<string, boolean>>({});
+  const [todoMinimizedMap, setTodoMinimizedMap] = useState<Record<string, boolean>>({});
 
   // Detect if the conversation is currently distilling
   const isDistilling = useMemo(() => {
@@ -980,6 +981,7 @@ function ChatInterface({
       setAgentWorking(false);
       setToolProgress({});
       setStreamingText("");
+      setTodoContent("");
       loadMessages();
       setupMessageStream();
     } else {
@@ -987,7 +989,6 @@ function ChatInterface({
       setMessages([]);
       setContextWindowSize(0);
       setTodoContent("");
-      setTodoDismissed(false);
       setToolProgress({});
       setStreamingText("");
       if (loadingProgressDelayRef.current) {
@@ -1430,8 +1431,12 @@ function ChatInterface({
             }
             if (streamResponse.conversation_state.todo_content !== undefined) {
               setTodoContent((prev) => {
-                if (prev !== streamResponse.conversation_state!.todo_content) {
-                  setTodoDismissed(false);
+                if (prev && prev !== streamResponse.conversation_state!.todo_content) {
+                  setTodoDismissedMap((m) => {
+                    const next = { ...m };
+                    delete next[streamResponse.conversation_state!.conversation_id];
+                    return next;
+                  });
                 }
                 return streamResponse.conversation_state!.todo_content || "";
               });
@@ -2695,10 +2700,12 @@ function ChatInterface({
       {/* Messages area */}
       {/* Messages area with scroll-to-bottom button wrapper */}
       <div className="messages-area-wrapper">
-        {todoContent && !todoDismissed && (
+        {todoContent && conversationId && !todoDismissedMap[conversationId] && (
           <TodoPanel
             todoContent={todoContent}
-            onDismiss={() => setTodoDismissed(true)}
+            minimized={!!todoMinimizedMap[conversationId!]}
+            onToggleMinimize={() => conversationId && setTodoMinimizedMap((m) => ({ ...m, [conversationId!]: !m[conversationId!] }))}
+            onDismiss={() => conversationId && setTodoDismissedMap((m) => ({ ...m, [conversationId!]: true }))}
           />
         )}
         <div className="messages-container scrollable" ref={messagesContainerRef}>
