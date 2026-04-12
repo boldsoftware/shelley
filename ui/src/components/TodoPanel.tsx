@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 
 export interface TodoItem {
   id: string;
@@ -12,6 +12,8 @@ interface TodoList {
 
 interface TodoPanelProps {
   todoContent: string;
+  minimized: boolean;
+  onToggleMinimize: () => void;
   onDismiss: () => void;
 }
 
@@ -38,8 +40,7 @@ function StatusIcon({ status }: { status: string }) {
   );
 }
 
-export default function TodoPanel({ todoContent, onDismiss }: TodoPanelProps) {
-  const [minimized, setMinimized] = useState(false);
+export default function TodoPanel({ todoContent, minimized, onToggleMinimize, onDismiss }: TodoPanelProps) {
 
   let todoList: TodoList | null = null;
   try {
@@ -82,7 +83,7 @@ export default function TodoPanel({ todoContent, onDismiss }: TodoPanelProps) {
         <div className="todo-panel-header-right">
           <button
             className="todo-panel-minimize"
-            onClick={() => setMinimized(!minimized)}
+            onClick={onToggleMinimize}
             title={minimized ? "Expand" : "Minimize"}
           >
             {minimized ? "+" : "-"}
