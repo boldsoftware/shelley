@@ -980,6 +980,8 @@ function ChatInterface({
       setAgentWorking(false);
       setToolProgress({});
       setStreamingText("");
+      setTodoContent("");
+      setTodoDismissed(false);
       loadMessages();
       setupMessageStream();
     } else {
