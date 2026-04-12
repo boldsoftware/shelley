@@ -15,11 +15,28 @@ interface TodoPanelProps {
   onDismiss: () => void;
 }
 
-const STATUS_ICONS: Record<string, string> = {
-  queued: "⚪",
-  "in-progress": "🔵",
-  completed: "✅",
-};
+function StatusIcon({ status }: { status: string }) {
+  const size = 14;
+  if (status === "completed") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5 13l4 4L19 7" />
+      </svg>
+    );
+  }
+  if (status === "in-progress") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="5" fill="currentColor" />
+      </svg>
+    );
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <circle cx="12" cy="12" r="5" />
+    </svg>
+  );
+}
 
 export default function TodoPanel({ todoContent, onDismiss }: TodoPanelProps) {
   const [minimized, setMinimized] = useState(false);
@@ -81,7 +98,7 @@ export default function TodoPanel({ todoContent, onDismiss }: TodoPanelProps) {
         <div className="todo-panel-items">
           {todoList.items.map((item) => (
             <div key={item.id} className={`todo-item todo-item-${item.status}`}>
-              <span className="todo-item-icon">{STATUS_ICONS[item.status] || "?"}</span>
+              <span className="todo-item-icon"><StatusIcon status={item.status} /></span>
               <span className="todo-item-text">{item.task}</span>
             </div>
           ))}
