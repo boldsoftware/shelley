@@ -50,8 +50,11 @@ type ConversationState struct {
 	ConversationID string `json:"conversation_id"`
 	Working        bool   `json:"working"`
 	Model          string `json:"model,omitempty"`
+	PlanMode       *bool  `json:"plan_mode,omitempty"`
 }
 
+
+func boolPtr(b bool) *bool { return &b }
 // ConversationWithState combines a conversation with its working state.
 type ConversationWithState struct {
 	generated.Conversation
@@ -742,6 +745,11 @@ func (s *Server) getOrCreateSubagentConversationManager(ctx context.Context, con
 			return nil, err
 		}
 
+		// Wire up done notification: when this subagent finishes, notify the parent.
+		manager.onDone = func() {
+			go s.notifyParentSubagentDone(conversationID)
+		}
+
 		s.activeConversations[conversationID] = manager
 		return manager, nil
 	})
@@ -749,6 +757,66 @@ func (s *Server) getOrCreateSubagentConversationManager(ctx context.Context, con
 		return nil, err
 	}
 	return manager, nil
+}
+
+// notifyParentSubagentDone injects a message into the parent conversation's loop
+// when a subagent finishes, so the parent agent knows to check results.
+func (s *Server) notifyParentSubagentDone(subagentConversationID string) {
+	ctx := context.Background()
+
+	// Look up the subagent's parent conversation ID and slug
+	var conv generated.Conversation
+	err := s.db.Queries(ctx, func(q *generated.Queries) error {
+		var err error
+		conv, err = q.GetConversation(ctx, subagentConversationID)
+		return err
+	})
+	if err != nil || conv.ParentConversationID == nil {
+		return
+	}
+
+	parentID := *conv.ParentConversationID
+	slug := "unknown"
+	if conv.Slug != nil {
+		slug = *conv.Slug
+	}
+
+	// Find the parent's loop and inject a notification
+	s.mu.Lock()
+	parentManager, ok := s.activeConversations[parentID]
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+
+	parentManager.mu.Lock()
+	loopInstance := parentManager.loop
+	parentManager.mu.Unlock()
+	if loopInstance == nil {
+		return
+	}
+
+	// Get the subagent's last response for the notification
+	runner := NewSubagentRunner(s)
+	response, err := runner.getLastAssistantResponse(ctx, subagentConversationID)
+	if err != nil || response == "" {
+		response = "(completed, use subagent tool to read results)"
+	}
+	// Truncate long responses
+	if len(response) > 500 {
+		response = response[:500] + "..."
+	}
+
+	notification := llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{{
+			Type: llm.ContentTypeText,
+			Text: fmt.Sprintf("[Subagent '%s' finished]\n%s", slug, response),
+		}},
+	}
+
+	loopInstance.QueueUserMessage(notification)
+	s.logger.Info("Notified parent of subagent completion", "subagent", slug, "parent", parentID)
 }
 
 // ExtractDisplayData extracts display data from message content for storage
