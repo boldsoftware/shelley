@@ -41,7 +41,6 @@ func TestByID(t *testing.T) {
 	}{
 		{id: "gpt-oss-20b-fireworks", wantID: "gpt-oss-20b-fireworks", wantNil: false},
 		{id: "gpt-5.2-codex", wantID: "gpt-5.2-codex", wantNil: false},
-		{id: "claude-sonnet-4.5", wantID: "claude-sonnet-4.5", wantNil: false},
 		{id: "claude-haiku-4.5", wantID: "claude-haiku-4.5", wantNil: false},
 		{id: "claude-opus-4.5", wantID: "claude-opus-4.5", wantNil: false},
 		{id: "claude-opus-4.7", wantID: "claude-opus-4.7", wantNil: false},
@@ -449,7 +448,7 @@ func TestGetAvailableModelsUnion(t *testing.T) {
 	models := manager.GetAvailableModels()
 
 	// Should have anthropic models and fireworks models, plus predictable
-	expectedModels := []string{"claude-opus-4.7", "claude-opus-4.6", "claude-opus-4.5", "claude-sonnet-4.6", "gpt-oss-20b-fireworks", "claude-sonnet-4.5", "claude-haiku-4.5", "predictable"}
+	expectedModels := []string{"claude-opus-4.7", "claude-opus-4.6", "claude-opus-4.5", "claude-sonnet-4.6", "gpt-oss-20b-fireworks", "claude-haiku-4.5", "predictable"}
 	for _, expected := range expectedModels {
 		found := false
 		for _, m := range models {

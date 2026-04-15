@@ -226,23 +226,6 @@ func All() []Model {
 			},
 		},
 		{
-			ID:              "claude-sonnet-4.5",
-			Provider:        ProviderAnthropic,
-			Description:     "Claude Sonnet 4.5",
-			RequiredEnvVars: []string{"ANTHROPIC_API_KEY"},
-			GatewayEnabled:  true,
-			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
-				if config.AnthropicAPIKey == "" {
-					return nil, fmt.Errorf("claude-sonnet-4.5 requires ANTHROPIC_API_KEY")
-				}
-				svc := &ant.Service{APIKey: config.AnthropicAPIKey, Model: ant.Claude45Sonnet, HTTPC: httpc, ThinkingLevel: llm.ThinkingLevelMedium}
-				if url := config.getAnthropicURL(); url != "" {
-					svc.URL = url
-				}
-				return svc, nil
-			},
-		},
-		{
 			ID:              "claude-haiku-4.5",
 			Provider:        ProviderAnthropic,
 			Description:     "Claude Haiku 4.5",

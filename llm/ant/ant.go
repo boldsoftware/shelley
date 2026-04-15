@@ -27,7 +27,6 @@ const (
 const (
 	Claude45Haiku  = "claude-haiku-4-5-20251001"
 	Claude4Sonnet  = "claude-sonnet-4-20250514"
-	Claude45Sonnet = "claude-sonnet-4-5-20250929"
 	Claude45Opus   = "claude-opus-4-5-20251101"
 	Claude46Opus   = "claude-opus-4-6"
 	Claude46Sonnet = "claude-sonnet-4-6"
@@ -41,7 +40,6 @@ var modelMaxOutputTokens = map[string]int{
 	Claude46Opus:   128000,
 	Claude45Opus:   128000,
 	Claude46Sonnet: 64000,
-	Claude45Sonnet: 64000,
 	Claude4Sonnet:  64000,
 	Claude45Haiku:  64000,
 }
@@ -91,7 +89,7 @@ func (s *Service) maxOutputTokens() int {
 	switch model {
 	case Claude47Opus, Claude46Opus:
 		return 128000
-	case Claude4Sonnet, Claude45Sonnet, Claude46Sonnet,
+	case Claude4Sonnet, Claude46Sonnet,
 		Claude45Haiku, Claude45Opus:
 		return 64000
 	default:

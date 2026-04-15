@@ -29,7 +29,7 @@ type PermissionCallback func(command string) error
 // PreferredToolModels is the ordered list of model IDs preferred for
 // internal tool operations (validation, keyword search, etc.).
 // Every entry must be a model ID registered in models.All().
-var PreferredToolModels = []string{"gpt-oss-20b-fireworks", "claude-sonnet-4.6", "claude-sonnet-4.5", "predictable"}
+var PreferredToolModels = []string{"gpt-oss-20b-fireworks", "claude-sonnet-4.6", "predictable"}
 
 // BashTool specifies an llm.Tool for executing shell commands.
 type BashTool struct {
