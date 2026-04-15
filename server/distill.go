@@ -17,7 +17,7 @@ import (
 
 const distillSystemPrompt = `You are a conversation distillation engine for Shelley, an AI coding assistant.
 
-You will receive a full conversation transcript between a user and Shelley. The transcript includes user messages, agent responses, tool calls (bash, patch, browser, keyword_search, etc.), and tool results.
+You will receive a full conversation transcript between a user and Shelley. The transcript includes user messages, agent responses, tool calls (bash, edit, browser, keyword_search, etc.), and tool results.
 
 Your job is to produce an OPERATIONAL DISTILLATION — not a narrative summary. The output will become the opening user message in a brand-new continuation conversation. It must give the new Shelley instance everything it needs to pick up the work seamlessly.
 

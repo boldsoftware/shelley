@@ -120,7 +120,7 @@ headless eval 'document.querySelector("[role=\"alert\"]")?.innerText || "no erro
 - [ ] **Prompt caching** - Check server logs for `cache_read_input_tokens`
 - [ ] **Tool execution - bash** - Ask to run `echo hello`, verify tool output
 - [ ] **Tool execution - think** - Send `think: analyzing...`, verify think tool appears
-- [ ] **Tool execution - patch** - Send `patch: test.txt`, verify patch tool appears
+- [ ] **Tool execution - edit** - Send `edit: test.txt`, verify edit tool appears
 - [ ] **Conversation persistence** - Multiple messages in same conversation work
 - [ ] **Enter key sends** - Press Enter in textarea to send message
 - [ ] **Model selector** - Shows available models in UI
@@ -162,7 +162,7 @@ When testing, capture these screenshots for the report:
 2. `message-typed.png` - Message in input field
 3. `agent-thinking.png` - Thinking indicator visible
 4. `response-received.png` - After Claude responds
-5. `tool-execution.png` - After a tool (bash/think/patch) runs
+5. `tool-execution.png` - After a tool (bash/think/edit) runs
 6. `error-state.png` - If any errors occur
 7. `menu-open.png` - Sidebar/conversation list open
 

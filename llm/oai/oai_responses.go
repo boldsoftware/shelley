@@ -531,10 +531,6 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 	}
 }
 
-func (s *ResponsesService) UseSimplifiedPatch() bool {
-	return s.Model.UseSimplifiedPatch
-}
-
 // ConfigDetails returns configuration information for logging
 func (s *ResponsesService) ConfigDetails() map[string]string {
 	model := cmp.Or(s.Model, DefaultModel)

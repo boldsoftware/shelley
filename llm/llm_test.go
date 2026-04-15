@@ -9,11 +9,10 @@ import (
 )
 
 // mockService implements Service interface for testing
+// mockService implements Service interface for testing
 type mockService struct {
 	tokenContextWindow   int
 	maxImageDimension    int
-	useSimplifiedPatch   bool
-	implementsSimplified bool
 }
 
 func (m *mockService) Do(ctx context.Context, req *Request) (*Response, error) {
@@ -26,15 +25,6 @@ func (m *mockService) TokenContextWindow() int {
 
 func (m *mockService) MaxImageDimension() int {
 	return m.maxImageDimension
-}
-
-// mockSimplifiedService implements both Service and SimplifiedPatcher interfaces
-type mockSimplifiedService struct {
-	mockService
-}
-
-func (m *mockSimplifiedService) UseSimplifiedPatch() bool {
-	return m.useSimplifiedPatch
 }
 
 func TestMustSchema(t *testing.T) {
@@ -102,51 +92,6 @@ func TestEmptySchema(t *testing.T) {
 	}
 }
 
-func TestUseSimplifiedPatch(t *testing.T) {
-	tests := []struct {
-		name     string
-		service  Service
-		expected bool
-	}{
-		{
-			name: "service without SimplifiedPatcher",
-			service: &mockService{
-				implementsSimplified: false,
-				useSimplifiedPatch:   false,
-			},
-			expected: false,
-		},
-		{
-			name: "service with SimplifiedPatcher returning false",
-			service: &mockSimplifiedService{
-				mockService: mockService{
-					implementsSimplified: true,
-					useSimplifiedPatch:   false,
-				},
-			},
-			expected: false,
-		},
-		{
-			name: "service with SimplifiedPatcher returning true",
-			service: &mockSimplifiedService{
-				mockService: mockService{
-					implementsSimplified: true,
-					useSimplifiedPatch:   true,
-				},
-			},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := UseSimplifiedPatch(tt.service)
-			if result != tt.expected {
-				t.Errorf("UseSimplifiedPatch() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
-}
 
 func TestStringContent(t *testing.T) {
 	text := "test content"

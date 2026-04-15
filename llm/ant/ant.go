@@ -1032,12 +1032,6 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 		}
 	}
 }
-
-// For debugging only, Claude can definitely handle the full patch tool.
-// func (s *Service) UseSimplifiedPatch() bool {
-// 	return true
-// }
-
 // ConfigDetails returns configuration information for logging
 func (s *Service) ConfigDetails() map[string]string {
 	model := cmp.Or(s.Model, DefaultModel)

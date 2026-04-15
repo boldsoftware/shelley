@@ -34,7 +34,7 @@ The HTML will be rendered in a secure sandbox with scripts enabled but isolated 
 
 Do NOT use this tool for:
 - Regular text responses (use normal messages instead)
-- File operations (use patch or bash)
+- File operations (use edit or bash)
 - Simple data display (just describe it in text)
 
 Good uses:

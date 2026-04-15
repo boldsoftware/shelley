@@ -432,7 +432,7 @@ func (l *Loop) handleMaxTokensTruncation(ctx context.Context, resp *llm.Response
 				Type: llm.ContentTypeText,
 				Text: "[SYSTEM ERROR: Your previous response was truncated because it exceeded the maximum output token limit. " +
 					"Any tool calls in that response were lost. Please retry with smaller, incremental changes. " +
-					"For file operations, break large changes into multiple smaller patches. " +
+					"For file operations, break large changes into multiple smaller edits. " +
 					"The user can ask you to continue if needed.]",
 			},
 		},

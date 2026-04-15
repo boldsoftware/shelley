@@ -223,18 +223,12 @@ func TestLoggingService(t *testing.T) {
 		t.Errorf("MaxImageDimension returned %d, expected %d", dimension, mockService.MaxImageDimension())
 	}
 
-	// Test UseSimplifiedPatch
-	useSimplified := loggingSvc.UseSimplifiedPatch()
-	if useSimplified != mockService.UseSimplifiedPatch() {
-		t.Errorf("UseSimplifiedPatch returned %t, expected %t", useSimplified, mockService.UseSimplifiedPatch())
-	}
 }
 
 // mockLLMService implements llm.Service for testing
 type mockLLMService struct {
 	tokenContextWindow int
 	maxImageDimension  int
-	useSimplifiedPatch bool
 }
 
 func (m *mockLLMService) Do(ctx context.Context, request *llm.Request) (*llm.Response, error) {
@@ -260,10 +254,6 @@ func (m *mockLLMService) MaxImageDimension() int {
 		return 2048
 	}
 	return m.maxImageDimension
-}
-
-func (m *mockLLMService) UseSimplifiedPatch() bool {
-	return m.useSimplifiedPatch
 }
 
 func TestManagerGetService(t *testing.T) {
@@ -341,50 +331,6 @@ func TestConfigGetURLMethods(t *testing.T) {
 	if cfg.getFireworksURL() != "https://gateway.example.com/_/gateway/fireworks/inference/v1" {
 		t.Error("getFireworksURL did not return expected URL with gateway")
 	}
-}
-
-func TestUseSimplifiedPatch(t *testing.T) {
-	// Test with a service that doesn't implement SimplifiedPatcher
-	mockService := &mockLLMService{}
-	logger := slog.Default()
-
-	loggingSvc := &loggingService{
-		service:  mockService,
-		logger:   logger,
-		modelID:  "test-model",
-		provider: ProviderBuiltIn,
-	}
-
-	// Should return false since mockService doesn't implement SimplifiedPatcher
-	result := loggingSvc.UseSimplifiedPatch()
-	if result != false {
-		t.Errorf("UseSimplifiedPatch should return false for non-SimplifiedPatcher, got %t", result)
-	}
-
-	// Test with a service that implements SimplifiedPatcher
-	mockSimplifiedService := &mockSimplifiedLLMService{useSimplified: true}
-	loggingSvc2 := &loggingService{
-		service:  mockSimplifiedService,
-		logger:   logger,
-		modelID:  "test-model-2",
-		provider: ProviderBuiltIn,
-	}
-
-	// Should return true since mockSimplifiedService implements SimplifiedPatcher and returns true
-	result = loggingSvc2.UseSimplifiedPatch()
-	if result != true {
-		t.Errorf("UseSimplifiedPatch should return true for SimplifiedPatcher returning true, got %t", result)
-	}
-}
-
-// mockSimplifiedLLMService implements llm.Service and llm.SimplifiedPatcher for testing
-type mockSimplifiedLLMService struct {
-	mockLLMService
-	useSimplified bool
-}
-
-func (m *mockSimplifiedLLMService) UseSimplifiedPatch() bool {
-	return m.useSimplified
 }
 
 func TestHTTPClientPassedToFactory(t *testing.T) {

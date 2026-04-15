@@ -554,14 +554,6 @@ func (l *loggingService) MaxImageDimension() int {
 	return l.service.MaxImageDimension()
 }
 
-// UseSimplifiedPatch delegates to the underlying service if it supports it
-func (l *loggingService) UseSimplifiedPatch() bool {
-	if sp, ok := l.service.(llm.SimplifiedPatcher); ok {
-		return sp.UseSimplifiedPatch()
-	}
-	return false
-}
-
 // NewManager creates a new Manager with all models configured
 func NewManager(cfg *Config) (*Manager, error) {
 	manager := &Manager{

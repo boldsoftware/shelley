@@ -6,29 +6,6 @@ import (
 	"testing"
 )
 
-func TestIsStrongModel(t *testing.T) {
-	tests := []struct {
-		modelID  string
-		expected bool
-	}{
-		{"claude-3-sonnet-20240229", true},
-		{"claude-3-opus-20240229", true},
-		{"claude-3-haiku-20240307", false},
-		{"Sonnet Model", true},
-		{"OPUS Model", true},
-		{"haiku model", false},
-		{"other-model", false},
-		{"", false},
-	}
-
-	for _, test := range tests {
-		result := isStrongModel(test.modelID)
-		if result != test.expected {
-			t.Errorf("isStrongModel(%q) = %v, expected %v", test.modelID, result, test.expected)
-		}
-	}
-}
-
 func TestNewToolSet(t *testing.T) {
 	provider := &mockLLMProvider{}
 

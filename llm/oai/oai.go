@@ -44,7 +44,6 @@ type Model struct {
 	URL                string
 	APIKeyEnv          string // environment variable name for the API key
 	IsReasoningModel   bool   // whether this model is a reasoning model (e.g. O3, O4-mini)
-	UseSimplifiedPatch bool   // whether to use the simplified patch input schema; defaults to false
 }
 
 var (
@@ -302,7 +301,6 @@ var (
 	Qwen = Model{
 		UserName:           "qwen",
 		ModelName:          "qwen", // skaband will map this to the actual provider model
-		UseSimplifiedPatch: true,
 	}
 	GLM = Model{
 		UserName:  "glm",
@@ -910,10 +908,6 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			continue
 		}
 	}
-}
-
-func (s *Service) UseSimplifiedPatch() bool {
-	return s.Model.UseSimplifiedPatch
 }
 
 // ConfigDetails returns configuration information for logging

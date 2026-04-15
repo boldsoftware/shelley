@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"strings"
 	"sync"
 
 	"shelley.exe.dev/claudetool/browse"
@@ -47,7 +46,6 @@ type ToolSetConfig struct {
 	// EnableBrowser enables browser tools.
 	EnableBrowser bool
 	// ModelID is the model being used for this conversation.
-	// Used to determine tool configuration (e.g., simplified patch schema for weaker models).
 	ModelID string
 	// OnWorkingDirChange is called when the working directory changes.
 	// This can be used to persist the change to a database.
@@ -262,12 +260,6 @@ func NewOrchestratorToolSet(ctx context.Context, cfg OrchestratorToolSetConfig) 
 	}
 }
 
-// NewToolSet creates a new set of tools for a conversation.
-// isStrongModel returns true for models that can handle complex tool schemas.
-func isStrongModel(modelID string) bool {
-	lower := strings.ToLower(modelID)
-	return strings.Contains(lower, "sonnet") || strings.Contains(lower, "opus")
-}
 
 func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 	workingDir := cfg.WorkingDir
