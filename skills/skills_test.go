@@ -445,11 +445,11 @@ func TestSkillsFoundRegardlessOfWorkingDir(t *testing.T) {
 
 func TestBuiltinSkills(t *testing.T) {
 	builtins := BuiltinSkills()
-	if len(builtins) != 4 {
-		t.Fatalf("expected exactly 4 built-in skills, got %d: %v", len(builtins), skillNames(builtins))
+	if len(builtins) != 3 {
+		t.Fatalf("expected exactly 3 built-in skills, got %d: %v", len(builtins), skillNames(builtins))
 	}
 
-	wantSkills := []string{"caveman", "install-node", "previous-conversations", "schedule"}
+	wantSkills := []string{"install-node", "previous-conversations", "schedule"}
 	for _, wantName := range wantSkills {
 		var found *Skill
 		for i := range builtins {

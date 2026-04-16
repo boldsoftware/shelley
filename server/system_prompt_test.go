@@ -151,22 +151,22 @@ func TestSystemPromptIncludesSkillsFromAnyWorkingDir(t *testing.T) {
 func TestSystemPromptAlwaysOnSkills(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Built-in "caveman" skill should inject its body
-	prompt, err := GenerateSystemPrompt(tmpDir, WithAlwaysOnSkills([]string{"caveman"}))
+	// Built-in "install-node" skill should inject its body
+	prompt, err := GenerateSystemPrompt(tmpDir, WithAlwaysOnSkills([]string{"install-node"}))
 	if err != nil {
 		t.Fatalf("GenerateSystemPrompt with always-on skills failed: %v", err)
 	}
-	if !strings.Contains(prompt, "Respond terse like smart caveman") {
-		t.Error("system prompt should contain caveman skill body when always-on")
+	if !strings.Contains(prompt, "uvx nodeenv") {
+		t.Error("system prompt should contain install-node skill body when always-on")
 	}
 
-	// Without always-on skills, caveman body should not appear
+	// Without always-on skills, the body should not appear
 	prompt, err = GenerateSystemPrompt(tmpDir)
 	if err != nil {
 		t.Fatalf("GenerateSystemPrompt failed: %v", err)
 	}
-	if strings.Contains(prompt, "Respond terse like smart caveman") {
-		t.Error("system prompt should not contain caveman skill body without always-on")
+	if strings.Contains(prompt, "uvx nodeenv") {
+		t.Error("system prompt should not contain install-node skill body without always-on")
 	}
 }
 
