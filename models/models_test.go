@@ -44,6 +44,7 @@ func TestByID(t *testing.T) {
 		{id: "claude-sonnet-4.5", wantID: "claude-sonnet-4.5", wantNil: false},
 		{id: "claude-haiku-4.5", wantID: "claude-haiku-4.5", wantNil: false},
 		{id: "claude-opus-4.5", wantID: "claude-opus-4.5", wantNil: false},
+		{id: "claude-opus-4.7", wantID: "claude-opus-4.7", wantNil: false},
 		{id: "claude-opus-4.6", wantID: "claude-opus-4.6", wantNil: false},
 		{id: "nonexistent", wantNil: true},
 	}
@@ -69,8 +70,8 @@ func TestByID(t *testing.T) {
 
 func TestDefault(t *testing.T) {
 	d := Default()
-	if d.ID != "claude-opus-4.6" {
-		t.Errorf("Default().ID = %q, want %q", d.ID, "claude-opus-4.6")
+	if d.ID != "claude-opus-4.7" {
+		t.Errorf("Default().ID = %q, want %q", d.ID, "claude-opus-4.7")
 	}
 }
 
@@ -304,8 +305,8 @@ func TestManagerHasModel(t *testing.T) {
 	}
 
 	// Should not have models requiring API keys
-	if manager.HasModel("claude-opus-4.6") {
-		t.Error("HasModel('claude-opus-4.6') should return false without API key")
+	if manager.HasModel("claude-opus-4.7") {
+		t.Error("HasModel('claude-opus-4.7') should return false without API key")
 	}
 
 	// Should not have non-existent model
@@ -502,7 +503,7 @@ func TestGetAvailableModelsUnion(t *testing.T) {
 	models := manager.GetAvailableModels()
 
 	// Should have anthropic models and fireworks models, plus predictable
-	expectedModels := []string{"claude-opus-4.6", "claude-opus-4.5", "claude-sonnet-4.6", "gpt-oss-20b-fireworks", "claude-sonnet-4.5", "claude-haiku-4.5", "predictable"}
+	expectedModels := []string{"claude-opus-4.7", "claude-opus-4.6", "claude-opus-4.5", "claude-sonnet-4.6", "gpt-oss-20b-fireworks", "claude-sonnet-4.5", "claude-haiku-4.5", "predictable"}
 	for _, expected := range expectedModels {
 		found := false
 		for _, m := range models {

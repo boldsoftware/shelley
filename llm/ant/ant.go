@@ -33,11 +33,13 @@ const (
 	Claude45Opus   = "claude-opus-4-5-20251101"
 	Claude46Opus   = "claude-opus-4-6"
 	Claude46Sonnet = "claude-sonnet-4-6"
+	Claude47Opus   = "claude-opus-4-7"
 )
 
 // modelMaxOutputTokens maps model names to their maximum output token limits.
 // See https://docs.anthropic.com/en/docs/about-claude/models/all-models
 var modelMaxOutputTokens = map[string]int{
+	Claude47Opus:   128000,
 	Claude46Opus:   128000,
 	Claude45Opus:   128000,
 	Claude46Sonnet: 64000,
@@ -70,7 +72,7 @@ func ClaudeModelName(userName string) string {
 	case "claude", "sonnet":
 		return Claude46Sonnet
 	case "opus":
-		return Claude46Opus
+		return Claude47Opus
 	default:
 		return ""
 	}
@@ -106,7 +108,7 @@ func (s *Service) maxOutputTokens() int {
 		model = DefaultModel
 	}
 	switch model {
-	case Claude46Opus:
+	case Claude47Opus, Claude46Opus:
 		return 128000
 	case Claude4Sonnet, Claude45Sonnet, Claude46Sonnet,
 		Claude45Haiku, Claude45Opus:

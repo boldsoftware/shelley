@@ -45,7 +45,7 @@ func TestClaudeModelName(t *testing.T) {
 	}{
 		{"claude model", "claude", Claude46Sonnet},
 		{"sonnet model", "sonnet", Claude46Sonnet},
-		{"opus model", "opus", Claude46Opus},
+		{"opus model", "opus", Claude47Opus},
 		{"unknown model", "gpt-4", ""},
 		{"empty string", "", ""},
 		{"random string", "random", ""},
