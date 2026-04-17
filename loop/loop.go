@@ -217,6 +217,7 @@ func (l *Loop) ProcessOneTurn(ctx context.Context) error {
 // mutual recursion (processLLMRequest ↔ executeToolCalls) caused, because
 // each iteration's locals are freed before the next iteration starts.
 func (l *Loop) processLLMRequest(ctx context.Context) error {
+	emptyResponseRetries := 0
 	for {
 		l.mu.Lock()
 		messages := append([]llm.Message(nil), l.history...)
@@ -329,6 +330,19 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 		if resp.StopReason == llm.StopReasonMaxTokens {
 			l.logger.Warn("LLM response truncated due to max tokens")
 			return l.handleMaxTokensTruncation(ctx, resp)
+		}
+
+		// Claude sometimes returns only thinking blocks with no output. Retry.
+		if respHasNoVisibleContent(resp) {
+			emptyResponseRetries++
+			if emptyResponseRetries > 3 {
+				l.logger.Warn("LLM returned only thinking blocks after 3 retries, giving up")
+				return fmt.Errorf("LLM returned only thinking blocks after 3 retries")
+			}
+			l.logger.Warn("LLM returned only thinking blocks with no visible content, retrying",
+				"content_count", len(resp.Content),
+				"retry", emptyResponseRetries)
+			continue
 		}
 
 		// Convert response to message and add to history
@@ -732,4 +746,14 @@ func isRetryableError(err error) bool {
 		}
 	}
 	return false
+}
+
+func respHasNoVisibleContent(resp *llm.Response) bool {
+	for _, c := range resp.Content {
+		switch c.Type {
+		case llm.ContentTypeText, llm.ContentTypeToolUse:
+			return false
+		}
+	}
+	return len(resp.Content) > 0
 }

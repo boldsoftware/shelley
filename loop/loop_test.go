@@ -2136,3 +2136,217 @@ func TestMaxTokensTruncation(t *testing.T) {
 //		t.Error("expected to find tool2 result in message 3")
 //	}
 //}
+
+// thinkingOnlyService returns a response with only thinking blocks on the first call,
+// then a normal text response on the second call.
+type thinkingOnlyService struct {
+	callCount int
+	mu        sync.Mutex
+}
+
+func (s *thinkingOnlyService) Do(ctx context.Context, req *llm.Request) (*llm.Response, error) {
+	s.mu.Lock()
+	s.callCount++
+	count := s.callCount
+	s.mu.Unlock()
+
+	if count == 1 {
+		// First call: return only a thinking block (simulates Claude producing no output)
+		return &llm.Response{
+			Role: llm.MessageRoleAssistant,
+			Content: []llm.Content{
+				{Type: llm.ContentTypeThinking, Thinking: "Let me think about this..."},
+			},
+			StopReason: llm.StopReasonEndTurn,
+		}, nil
+	}
+	// Subsequent calls: return a proper text response
+	return &llm.Response{
+		Role: llm.MessageRoleAssistant,
+		Content: []llm.Content{
+			{Type: llm.ContentTypeText, Text: "Here is my response after retrying"},
+		},
+		StopReason: llm.StopReasonEndTurn,
+	}, nil
+}
+
+func (s *thinkingOnlyService) TokenContextWindow() int {
+	return 200000
+}
+
+func (s *thinkingOnlyService) MaxImageDimension() int {
+	return 2000
+}
+
+func TestRetryOnThinkingOnlyResponse(t *testing.T) {
+	// Test that when the LLM returns only thinking blocks (no text or tool_use),
+	// the loop automatically retries without recording the empty response.
+	service := &thinkingOnlyService{}
+
+	var recordedMessages []llm.Message
+	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage) error {
+		recordedMessages = append(recordedMessages, message)
+		return nil
+	}
+
+	loop := NewLoop(Config{
+		LLM:           service,
+		History:       []llm.Message{},
+		Tools:         []*llm.Tool{},
+		RecordMessage: recordFunc,
+	})
+
+	// Queue a user message
+	loop.QueueUserMessage(llm.Message{
+		Role:    llm.MessageRoleUser,
+		Content: []llm.Content{{Type: llm.ContentTypeText, Text: "Hello"}},
+	})
+
+	// Run with a short timeout — the loop will process both LLM calls and then wait
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	err := loop.Go(ctx)
+	if err != context.DeadlineExceeded {
+		t.Fatalf("expected context deadline exceeded, got %v", err)
+	}
+
+	// Should have recorded only the successful retry response, not the thinking-only one.
+	// The user message is NOT recorded via RecordMessage — that's done by ConversationManager.
+	if len(recordedMessages) != 1 {
+		t.Fatalf("expected 1 recorded message (the assistant response), got %d", len(recordedMessages))
+	}
+
+	// The recorded message should be the assistant text response
+	msg := recordedMessages[0]
+	if msg.Role != llm.MessageRoleAssistant {
+		t.Errorf("expected assistant role, got %s", msg.Role)
+	}
+	if msg.Content[0].Type != llm.ContentTypeText {
+		t.Errorf("expected text content, got %s", msg.Content[0].Type)
+	}
+	if msg.Content[0].Text != "Here is my response after retrying" {
+		t.Errorf("expected retry response text, got: %s", msg.Content[0].Text)
+	}
+
+	// Verify the service was called twice (first call returned thinking-only, second call succeeded)
+	if service.callCount != 2 {
+		t.Errorf("expected 2 LLM calls (1 thinking-only + 1 retry), got %d", service.callCount)
+	}
+}
+
+func TestRespHasNoVisibleContent(t *testing.T) {
+	tests := []struct {
+		name    string
+		content []llm.Content
+		want    bool
+	}{
+		{
+			name:    "empty content",
+			content: nil,
+			want:    false,
+		},
+		{
+			name:    "only thinking block",
+			content: []llm.Content{{Type: llm.ContentTypeThinking, Thinking: "thinking..."}},
+			want:    true,
+		},
+		{
+			name:    "only redacted thinking",
+			content: []llm.Content{{Type: llm.ContentTypeRedactedThinking, Data: "redacted"}},
+			want:    true,
+		},
+		{
+			name:    "text content",
+			content: []llm.Content{{Type: llm.ContentTypeText, Text: "hello"}},
+			want:    false,
+		},
+		{
+			name:    "thinking then text",
+			content: []llm.Content{{Type: llm.ContentTypeThinking, Thinking: "..."}, {Type: llm.ContentTypeText, Text: "hello"}},
+			want:    false,
+		},
+		{
+			name:    "tool use",
+			content: []llm.Content{{Type: llm.ContentTypeToolUse, ToolUseID: "tool1", ToolName: "bash"}},
+			want:    false,
+		},
+		{
+			name:    "thinking then tool use",
+			content: []llm.Content{{Type: llm.ContentTypeThinking, Thinking: "..."}, {Type: llm.ContentTypeToolUse, ToolUseID: "tool1", ToolName: "bash"}},
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &llm.Response{Content: tt.content}
+			got := respHasNoVisibleContent(resp)
+			if got != tt.want {
+				t.Errorf("respHasNoVisibleContent() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// alwaysThinkingService always returns only a thinking block.
+type alwaysThinkingService struct {
+	callCount int
+	mu        sync.Mutex
+}
+
+func (s *alwaysThinkingService) Do(ctx context.Context, req *llm.Request) (*llm.Response, error) {
+	s.mu.Lock()
+	s.callCount++
+	s.mu.Unlock()
+	return &llm.Response{
+		Role:    llm.MessageRoleAssistant,
+		Content: []llm.Content{{Type: llm.ContentTypeThinking, Thinking: "thinking..."}},
+		StopReason: llm.StopReasonEndTurn,
+	}, nil
+}
+
+func (s *alwaysThinkingService) TokenContextWindow() int   { return 200000 }
+func (s *alwaysThinkingService) MaxImageDimension() int    { return 2000 }
+
+func TestThinkingOnlyResponseRetryLimit(t *testing.T) {
+	// Verify ProcessOneTurn gives up after 3 retries instead of looping forever.
+	service := &alwaysThinkingService{}
+
+	var recordedMessages []llm.Message
+	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage) error {
+		recordedMessages = append(recordedMessages, message)
+		return nil
+	}
+
+	loop := NewLoop(Config{
+		LLM:           service,
+		History:       []llm.Message{},
+		Tools:         []*llm.Tool{},
+		RecordMessage: recordFunc,
+	})
+
+	loop.QueueUserMessage(llm.Message{
+		Role:    llm.MessageRoleUser,
+		Content: []llm.Content{{Type: llm.ContentTypeText, Text: "Hello"}},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := loop.ProcessOneTurn(ctx)
+	if err == nil {
+		t.Fatal("expected an error after hitting the retry limit")
+	}
+	if !strings.Contains(err.Error(), "only thinking blocks") {
+		t.Fatalf("expected 'only thinking blocks' error, got: %v", err)
+	}
+
+	// The service should have been called 4 times (1 initial + 3 retries)
+	if service.callCount != 4 {
+		t.Errorf("expected 4 LLM calls (1 initial + 3 retries), got %d", service.callCount)
+	}
+
+	// No messages should have been recorded
+	if len(recordedMessages) != 0 {
+		t.Errorf("expected 0 recorded messages, got %d", len(recordedMessages))
+	}
+}
