@@ -765,14 +765,23 @@ func TestDistillReplaceConversation(t *testing.T) {
 		t.Fatal("timed out waiting for distilled user message")
 	}
 
-	// Verify slug swap: new conversation should have the original slug
-	newConv, err := h.db.GetConversationByID(context.Background(), newConvID)
-	if err != nil {
-		t.Fatalf("failed to get new conversation: %v", err)
+	// Wait for the slug swap to complete (happens asynchronously after distillation)
+	var newConv *generated.Conversation
+	for i := 0; i < 100; i++ {
+		newConv, err = h.db.GetConversationByID(context.Background(), newConvID)
+		if err != nil {
+			t.Fatalf("failed to get new conversation: %v", err)
+		}
+		if newConv.Slug != nil && *newConv.Slug == originalSlug {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	if newConv.Slug == nil || *newConv.Slug != originalSlug {
 		t.Fatalf("expected new conv slug %q, got %v", originalSlug, newConv.Slug)
 	}
+
+	// Verify slug swap: new conversation should have the original slug
 
 	// Verify source conversation was renamed
 	sourceConv, err := h.db.GetConversationByID(context.Background(), sourceConvID)
@@ -897,20 +906,36 @@ func TestDistillReplaceConversationNoSlug(t *testing.T) {
 done:
 
 	// The new conversation should have gotten its own generated slug (not
-	// transferred from source, since source had none).
-	newConv, err := h.db.GetConversationByID(context.Background(), newConvID)
-	if err != nil {
-		t.Fatalf("failed to get new conversation: %v", err)
+	// transferred from source, since source had none). Wait for it to be generated.
+	var newConv *generated.Conversation
+	for i := 0; i < 100; i++ {
+		newConv, err = h.db.GetConversationByID(context.Background(), newConvID)
+		if err != nil {
+			t.Fatalf("failed to get new conversation: %v", err)
+		}
+		if newConv.Slug != nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	if newConv.Slug == nil {
 		t.Fatal("expected new conversation to have a generated slug")
 	}
 
-	// Verify source is archived and parented
-	sourceConvAfter, err := h.db.GetConversationByID(context.Background(), sourceConvID)
-	if err != nil {
-		t.Fatalf("failed to get source conversation: %v", err)
+	// Wait for source to be archived and parented (happens asynchronously)
+	var sourceConvAfter *generated.Conversation
+	for i := 0; i < 100; i++ {
+		sourceConvAfter, err = h.db.GetConversationByID(context.Background(), sourceConvID)
+		if err != nil {
+			t.Fatalf("failed to get source conversation: %v", err)
+		}
+		if sourceConvAfter.Archived && sourceConvAfter.ParentConversationID != nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
+
+	// Verify source is archived and parented
 	if !sourceConvAfter.Archived {
 		t.Fatal("expected source conversation to be archived")
 	}
@@ -955,6 +980,15 @@ func TestDistillReplaceMultiPass(t *testing.T) {
 	// Wait for first distillation to complete
 	waitForDistillComplete(t, h.db, conv1ID)
 
+	// Wait for first slug swap to complete
+	for i := 0; i < 100; i++ {
+		conv1Check, _ := h.db.GetConversationByID(context.Background(), conv1ID)
+		if conv1Check.Slug != nil && *conv1Check.Slug == originalSlug {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
 	// Verify first pass: conv1 has the original slug, source renamed to -prev
 	conv1, _ := h.db.GetConversationByID(context.Background(), conv1ID)
 	if conv1.Slug == nil || *conv1.Slug != originalSlug {
@@ -985,6 +1019,15 @@ func TestDistillReplaceMultiPass(t *testing.T) {
 
 	// Wait for second distillation to complete
 	waitForDistillComplete(t, h.db, conv2ID)
+
+	// Wait for second slug swap to complete
+	for i := 0; i < 100; i++ {
+		conv2Check, _ := h.db.GetConversationByID(context.Background(), conv2ID)
+		if conv2Check.Slug != nil && *conv2Check.Slug == originalSlug {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 
 	// Verify second pass:
 	// - conv2 has the original slug
@@ -1022,6 +1065,15 @@ func TestDistillReplaceMultiPass(t *testing.T) {
 	conv3ID := resp3["conversation_id"].(string)
 
 	waitForDistillComplete(t, h.db, conv3ID)
+
+	// Wait for third slug swap to complete
+	for i := 0; i < 100; i++ {
+		conv3Check, _ := h.db.GetConversationByID(context.Background(), conv3ID)
+		if conv3Check.Slug != nil && *conv3Check.Slug == originalSlug {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 
 	// Verify third pass:
 	// - conv3 has the original slug
