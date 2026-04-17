@@ -143,7 +143,7 @@ For complex scripts, write them to a file first and then execute the file.
 
 type bashInput struct {
 	Command string `json:"command"`
-	SlowOK  bool   `json:"slow_ok,omitempty"`
+	SlowOK  FlexBool `json:"slow_ok,omitempty"`
 }
 
 // BashDisplayData is the display data sent to the UI for bash tool results.

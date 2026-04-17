@@ -45,11 +45,19 @@ type Config struct {
 	OnStreamDone func()
 }
 
+// planModeBlockedTools are tools disabled in plan mode.
+var planModeBlockedTools = map[string]bool{
+	"patch":         true,
+	"output_iframe": true,
+}
+
 // Loop manages a conversation turn with an LLM including tool execution and message recording.
 // Notably, when the turn ends, the "Loop" is over. TODO: maybe rename to Turn?
 type Loop struct {
 	llm              llm.Service
 	tools            []*llm.Tool
+	allTools         []*llm.Tool // full tool list, stored when plan mode is enabled
+	planMode         bool
 	recordMessage    MessageRecordFunc
 	history          []llm.Message
 	messageQueue     []llm.Message
@@ -111,6 +119,36 @@ func (l *Loop) QueueUserMessage(message llm.Message) {
 	case l.notify <- struct{}{}:
 	default:
 	}
+}
+
+// SetPlanMode enables or disables plan mode, filtering tools accordingly.
+func (l *Loop) SetPlanMode(enabled bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.planMode = enabled
+
+	if l.allTools == nil {
+		l.allTools = l.tools
+	}
+
+	if enabled {
+		var filtered []*llm.Tool
+		for _, t := range l.allTools {
+			if !planModeBlockedTools[t.Name] {
+				filtered = append(filtered, t)
+			}
+		}
+		l.tools = filtered
+	} else {
+		l.tools = l.allTools
+	}
+}
+
+// GetPlanMode returns whether plan mode is enabled.
+func (l *Loop) GetPlanMode() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.planMode
 }
 
 // GetUsage returns the total usage accumulated by this loop
@@ -223,7 +261,13 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 		tools := l.tools
 		system := l.system
 		llmService := l.llm
+		inPlanMode := l.planMode
 		l.mu.Unlock()
+
+		// Append [PLAN MODE] to system prompt so the LLM knows
+		if inPlanMode {
+			system = append(append([]llm.SystemContent(nil), system...), llm.SystemContent{Type: "text", Text: "[PLAN MODE]"})
+		}
 
 		// Enable prompt caching: set cache flag on last tool and last user message content
 		// See https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching

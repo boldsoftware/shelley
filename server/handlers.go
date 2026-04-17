@@ -615,6 +615,12 @@ func (s *Server) conversationMux() *http.ServeMux {
 	mux.HandleFunc("POST /{id}/cancel-queued", func(w http.ResponseWriter, r *http.Request) {
 		s.handleCancelQueued(w, r, r.PathValue("id"))
 	})
+	mux.HandleFunc("GET /{id}/plan-mode", func(w http.ResponseWriter, r *http.Request) {
+		s.handleGetPlanMode(w, r, r.PathValue("id"))
+	})
+	mux.HandleFunc("POST /{id}/plan-mode", func(w http.ResponseWriter, r *http.Request) {
+		s.handleSetPlanMode(w, r, r.PathValue("id"))
+	})
 	return mux
 }
 
@@ -1695,4 +1701,52 @@ func (s *Server) handleCancelQueued(w http.ResponseWriter, r *http.Request, conv
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleGetPlanMode(w http.ResponseWriter, r *http.Request, conversationID string) {
+	s.mu.Lock()
+	manager, ok := s.activeConversations[conversationID]
+	s.mu.Unlock()
+
+	planMode := false
+	if ok {
+		planMode = manager.GetPlanMode()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"plan_mode": planMode})
+}
+
+func (s *Server) handleSetPlanMode(w http.ResponseWriter, r *http.Request, conversationID string) {
+	s.mu.Lock()
+	manager, ok := s.activeConversations[conversationID]
+	s.mu.Unlock()
+
+	if !ok {
+		http.Error(w, "Conversation not found", http.StatusNotFound)
+		return
+	}
+
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	manager.SetPlanMode(body.Enabled)
+
+	// Broadcast state change so UI updates
+	if manager.onStateChange != nil {
+		manager.onStateChange(ConversationState{
+			ConversationID: conversationID,
+			Working:        manager.IsAgentWorking(),
+			Model:          manager.GetModel(),
+			PlanMode:       boolPtr(body.Enabled),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"plan_mode": body.Enabled})
 }
