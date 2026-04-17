@@ -636,6 +636,7 @@ func (s *Server) handleGetConversation(w http.ResponseWriter, r *http.Request, c
 		if err != nil {
 			return err
 		}
+		messages = dedupeMessages(messages)
 		conversation, err = q.GetConversation(ctx, conversationID)
 		return err
 	})
@@ -657,6 +658,73 @@ func (s *Server) handleGetConversation(w http.ResponseWriter, r *http.Request, c
 		// ConversationState is sent via the streaming endpoint, not on initial load
 		ContextWindowSize: calculateContextWindowSize(apiMessages),
 	})
+}
+
+// dedupeMessages hides superseded partial tool_result-only messages once a later
+// message contains the final result for the same tool use. This preserves live
+// per-tool completion during execution without duplicating those results after reload.
+//
+// Correctness depends on messages being ordered chronologically: partial results
+// are recorded before the final batched result, so the last message for a given
+// tool use ID is always the authoritative one.
+//
+// Assumption: partial messages contain a single tool result, and the final batched
+// message contains all results for the batch. A message is dropped only when ALL
+// of its tool result IDs have a newer authoritative message. This is safe for the
+// current recording pattern in loop.executeToolCalls but would need revisiting if
+// partial messages ever contained results for multiple tools.
+func dedupeMessages(messages []generated.Message) []generated.Message {
+	if len(messages) == 0 {
+		return nil
+	}
+
+	toolResultByID := make(map[string]generated.Message)
+	for _, msg := range messages {
+		if msg.Type != string(db.MessageTypeUser) || msg.LlmData == nil {
+			continue
+		}
+		var llmMsg llm.Message
+		if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err != nil {
+			continue
+		}
+		for _, content := range llmMsg.Content {
+			if content.Type == llm.ContentTypeToolResult && content.ToolUseID != "" {
+				toolResultByID[content.ToolUseID] = msg
+			}
+		}
+	}
+
+	deduped := make([]generated.Message, 0, len(messages))
+	for _, msg := range messages {
+		if msg.Type == string(db.MessageTypeUser) && msg.LlmData != nil {
+			var llmMsg llm.Message
+			if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err == nil {
+				keep := false
+				var toolResultIDs []string
+				for _, content := range llmMsg.Content {
+					if content.Type != llm.ContentTypeToolResult || content.ToolUseID == "" {
+						keep = true
+						break
+					}
+					toolResultIDs = append(toolResultIDs, content.ToolUseID)
+				}
+				if !keep && len(toolResultIDs) > 0 {
+					keep = true
+					for _, toolUseID := range toolResultIDs {
+						if latest, ok := toolResultByID[toolUseID]; !ok || latest.MessageID != msg.MessageID {
+							keep = false
+							break
+						}
+					}
+				}
+				if !keep {
+					continue
+				}
+			}
+		}
+		deduped = append(deduped, msg)
+	}
+	return deduped
 }
 
 // ChatRequest represents a chat message from the user
@@ -958,6 +1026,7 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 			if err != nil {
 				return err
 			}
+			messages = dedupeMessages(messages)
 			conversation, err = q.GetConversation(ctx, conversationID)
 			return err
 		})
@@ -981,6 +1050,7 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 			if err != nil {
 				return err
 			}
+			messages = dedupeMessages(messages)
 			conversation, err = q.GetConversation(ctx, conversationID)
 			return err
 		})
@@ -1007,7 +1077,29 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 	// happen between the DB query and the start of the event loop. The subpub
 	// channel is buffered (10), so events arriving while we write the initial
 	// response are queued rather than lost.
-	next := manager.subpub.Subscribe(ctx, lastSeqID)
+	sub := manager.subpub.Subscribe(ctx, lastSeqID)
+
+	// Catch-up: messages recorded between the first DB query and the subscribe
+	// are in neither the initial messages nor the subscriber. Re-query to find
+	// them. Anything recorded after this point will arrive via the subscriber.
+	if lastSeqID > 0 {
+		var catchup []generated.Message
+		if err := s.db.Queries(ctx, func(q *generated.Queries) error {
+			var err error
+			catchup, err = q.ListMessagesSince(ctx, generated.ListMessagesSinceParams{
+				ConversationID: conversationID,
+				SequenceID:     lastSeqID,
+			})
+			return err
+		}); err == nil && len(catchup) > 0 {
+			messages = append(messages, catchup...)
+			messages = dedupeMessages(messages)
+			lastSeqID = messages[len(messages)-1].SequenceID
+			// Advance the subscriber's index so Publish won't re-deliver
+			// messages we already have from the catch-up query.
+			sub.AdvanceIndex(lastSeqID)
+		}
+	}
 
 	// Send initial response (all messages for fresh connections, missed messages for resumes)
 	if len(messages) > 0 {
@@ -1087,11 +1179,10 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 	defer close(heartbeatDone)
 
 	for {
-		streamData, cont := next()
+		streamData, cont := sub.Next()
 		if !cont {
 			break
 		}
-		// Always forward updates, even if only the conversation changed (e.g., slug added)
 		data, _ := json.Marshal(streamData)
 		fmt.Fprintf(w, "data: %s\n\n", data)
 		w.(http.Flusher).Flush()

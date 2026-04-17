@@ -23,11 +23,50 @@ func New[K any]() *SubPub[K] {
 	}
 }
 
+// Subscription is a handle to a registered subscriber, providing both the
+// blocking Next function and the ability to advance the internal index.
+type Subscription[K any] struct {
+	sub *subscriber[K]
+	sp  *SubPub[K]
+}
+
+// Next blocks until a new message is available or the subscription is cancelled.
+func (s *Subscription[K]) Next() (K, bool) {
+	select {
+	case msg, ok := <-s.sub.ch:
+		if !ok {
+			var zero K
+			return zero, false
+		}
+		return msg, true
+	case <-s.sub.ctx.Done():
+		// Context cancelled, but drain any buffered messages first
+		select {
+		case msg, ok := <-s.sub.ch:
+			if ok {
+				return msg, true
+			}
+		default:
+		}
+		var zero K
+		return zero, false
+	}
+}
+
+// AdvanceIndex updates this subscriber's index so that subsequent Publish calls
+// with idx <= newIdx are skipped. This is useful after a catch-up query fills
+// in messages the subscriber would otherwise deliver as duplicates.
+func (s *Subscription[K]) AdvanceIndex(newIdx int64) {
+	s.sp.mu.Lock()
+	defer s.sp.mu.Unlock()
+	if s.sub.idx < newIdx {
+		s.sub.idx = newIdx
+	}
+}
+
 // Subscribe registers an interest in messages after the given index, subject to the
-// expiration/cancellation of the provided context. The returned function blocks
-// until a new message, and can return false as the second arguent if the subscription
-// is done for.
-func (sp *SubPub[K]) Subscribe(ctx context.Context, idx int64) func() (K, bool) {
+// expiration/cancellation of the provided context.
+func (sp *SubPub[K]) Subscribe(ctx context.Context, idx int64) *Subscription[K] {
 	// Create a child context so we can cancel the subscription independently
 	subCtx, cancel := context.WithCancel(ctx)
 
@@ -44,28 +83,7 @@ func (sp *SubPub[K]) Subscribe(ctx context.Context, idx int64) func() (K, bool) 
 	sp.subscribers = append(sp.subscribers, sub)
 	sp.mu.Unlock()
 
-	// Return a function that blocks until the next message
-	return func() (K, bool) {
-		select {
-		case msg, ok := <-ch:
-			if !ok {
-				var zero K
-				return zero, false
-			}
-			return msg, true
-		case <-subCtx.Done():
-			// Context cancelled, but drain any buffered messages first
-			select {
-			case msg, ok := <-ch:
-				if ok {
-					return msg, true
-				}
-			default:
-			}
-			var zero K
-			return zero, false
-		}
-	}
+	return &Subscription[K]{sub: sub, sp: sp}
 }
 
 // Publish sends a message to all subscribers waiting for messages after the given index.

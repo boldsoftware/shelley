@@ -256,6 +256,7 @@ interface CoalescedToolCallProps {
   display?: unknown;
   onCommentTextChange?: (text: string) => void;
   streamingOutput?: string;
+  streamingLineCount?: number;
 }
 
 // Map tool names to their specialized components.
@@ -298,6 +299,7 @@ const CoalescedToolCall = React.memo(function CoalescedToolCall({
   display,
   onCommentTextChange,
   streamingOutput,
+  streamingLineCount,
 }: CoalescedToolCallProps) {
   // Calculate execution time if available
   let executionTime = "";
@@ -324,6 +326,7 @@ const CoalescedToolCall = React.memo(function CoalescedToolCall({
       display,
       ...(toolName === "patch" && onCommentTextChange ? { onCommentTextChange } : {}),
       ...(streamingOutput !== undefined ? { streamingOutput } : {}),
+      ...(streamingLineCount !== undefined ? { streamingLineCount } : {}),
     };
     return <ToolComponent {...props} />;
   }
@@ -1802,6 +1805,7 @@ function ChatInterface({
         endTime: string | null;
       }
     > = {};
+
     const displayDataMap: Record<string, unknown> = {};
 
     // First pass: collect all tool results and their display data from llm_data
@@ -1918,7 +1922,6 @@ function ChatInterface({
                 toolError: resultData?.error || (wasTruncated && !resultData),
                 toolStartTime: resultData?.startTime,
                 toolEndTime: resultData?.endTime,
-                // Mark as complete if truncated (tool was lost, not running)
                 hasResult: !!resultData || wasTruncated,
                 display: displayData,
               });
@@ -2012,6 +2015,9 @@ function ChatInterface({
             display={item.display}
             onCommentTextChange={setDiffCommentText}
             streamingOutput={item.toolUseId ? toolProgress[item.toolUseId]?.output : undefined}
+            streamingLineCount={
+              item.toolUseId ? toolProgress[item.toolUseId]?.line_count : undefined
+            }
           />
         );
       }

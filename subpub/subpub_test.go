@@ -14,7 +14,7 @@ func TestSubPubBasic(t *testing.T) {
 		ctx := context.Background()
 
 		// Subscribe waiting for messages after index 0
-		next := sp.Subscribe(ctx, 0)
+		sub := sp.Subscribe(ctx, 0)
 
 		// Publish a message at index 1
 		go func() {
@@ -22,7 +22,7 @@ func TestSubPubBasic(t *testing.T) {
 		}()
 
 		// Should receive the message
-		msg, ok := next()
+		msg, ok := sub.Next()
 		if !ok {
 			t.Fatal("Expected to receive message, got closed channel")
 		}
@@ -38,9 +38,9 @@ func TestSubPubMultipleSubscribers(t *testing.T) {
 		ctx := context.Background()
 
 		// Create multiple subscribers
-		next1 := sp.Subscribe(ctx, 0)
-		next2 := sp.Subscribe(ctx, 0)
-		next3 := sp.Subscribe(ctx, 0)
+		sub1 := sp.Subscribe(ctx, 0)
+		sub2 := sp.Subscribe(ctx, 0)
+		sub3 := sp.Subscribe(ctx, 0)
 
 		// Publish a message
 		go func() {
@@ -48,8 +48,8 @@ func TestSubPubMultipleSubscribers(t *testing.T) {
 		}()
 
 		// All subscribers should receive it
-		for i, next := range []func() (string, bool){next1, next2, next3} {
-			msg, ok := next()
+		for i, s := range []*Subscription[string]{sub1, sub2, sub3} {
+			msg, ok := s.Next()
 			if !ok {
 				t.Fatalf("Subscriber %d: expected to receive message, got closed channel", i+1)
 			}
@@ -66,7 +66,7 @@ func TestSubPubSubscriberAlreadyHasMessage(t *testing.T) {
 		ctx := context.Background()
 
 		// Subscriber already has index 5, waiting for index > 5
-		next := sp.Subscribe(ctx, 5)
+		sub := sp.Subscribe(ctx, 5)
 
 		// Publish at index 3 (subscriber already has this)
 		sp.Publish(3, 100)
@@ -76,7 +76,7 @@ func TestSubPubSubscriberAlreadyHasMessage(t *testing.T) {
 			sp.Publish(6, 200)
 		}()
 
-		msg, ok := next()
+		msg, ok := sub.Next()
 		if !ok {
 			t.Fatal("Expected to receive message, got closed channel")
 		}
@@ -91,13 +91,13 @@ func TestSubPubContextCancellation(t *testing.T) {
 		sp := New[string]()
 		ctx, cancel := context.WithCancel(context.Background())
 
-		next := sp.Subscribe(ctx, 0)
+		sub := sp.Subscribe(ctx, 0)
 
 		// Cancel the context
 		cancel()
 
 		// Should return false when context is cancelled
-		_, ok := next()
+		_, ok := sub.Next()
 		if ok {
 			t.Error("Expected closed channel after context cancellation")
 		}
@@ -110,7 +110,7 @@ func TestSubPubSubscriberBehind(t *testing.T) {
 	ctx := context.Background()
 
 	// Subscriber waiting for messages after index 0
-	next := sp.Subscribe(ctx, 0)
+	sub := sp.Subscribe(ctx, 0)
 
 	// Fill up the channel buffer (10 messages) quickly before subscriber reads
 	for i := 1; i <= 10; i++ {
@@ -124,7 +124,7 @@ func TestSubPubSubscriberBehind(t *testing.T) {
 	received := 0
 	var messages []string
 	for {
-		msg, ok := next()
+		msg, ok := sub.Next()
 		if !ok {
 			break
 		}
@@ -146,7 +146,7 @@ func TestSubPubSequentialMessages(t *testing.T) {
 	sp := New[int]()
 	ctx := context.Background()
 
-	next := sp.Subscribe(ctx, 0)
+	sub := sp.Subscribe(ctx, 0)
 
 	// Publish multiple messages in order
 	for i := 1; i <= 5; i++ {
@@ -156,7 +156,7 @@ func TestSubPubSequentialMessages(t *testing.T) {
 	// Receive all messages
 	received := []int{}
 	for i := 1; i <= 5; i++ {
-		msg, ok := next()
+		msg, ok := sub.Next()
 		if !ok {
 			t.Fatalf("Expected to receive 5 messages, got closed channel after %d messages", i-1)
 		}
@@ -182,7 +182,7 @@ func TestSubPubLateSubscriber(t *testing.T) {
 		sp.Publish(2, "early2")
 
 		// Late subscriber joins, interested in messages after index 2
-		next := sp.Subscribe(ctx, 2)
+		sub := sp.Subscribe(ctx, 2)
 
 		// Publish a new message
 		go func() {
@@ -190,7 +190,7 @@ func TestSubPubLateSubscriber(t *testing.T) {
 		}()
 
 		// Should only receive the new message
-		msg, ok := next()
+		msg, ok := sub.Next()
 		if !ok {
 			t.Fatal("Expected to receive message, got closed channel")
 		}
@@ -205,10 +205,10 @@ func TestSubPubWithTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	next := sp.Subscribe(ctx, 0)
+	sub := sp.Subscribe(ctx, 0)
 
 	// Don't publish anything, just wait for timeout
-	_, ok := next()
+	_, ok := sub.Next()
 	if ok {
 		t.Error("Expected timeout to close the subscription")
 	}
@@ -220,15 +220,15 @@ func TestSubPubMultiplePublishes(t *testing.T) {
 		ctx := context.Background()
 
 		// Start two subscribers at different positions
-		next1 := sp.Subscribe(ctx, 0)
-		next2 := sp.Subscribe(ctx, 1)
+		sub1 := sp.Subscribe(ctx, 0)
+		sub2 := sp.Subscribe(ctx, 1)
 
-		// Publish at index 2 - only next1 should receive (next2 already has idx 1)
+		// Publish at index 2 - both should receive (sub2 has idx 1 < 2)
 		go func() {
 			sp.Publish(2, "msg2")
 		}()
 
-		msg, ok := next1()
+		msg, ok := sub1.Next()
 		if !ok {
 			t.Fatal("Subscriber 1: expected to receive message, got closed channel")
 		}
@@ -236,7 +236,7 @@ func TestSubPubMultiplePublishes(t *testing.T) {
 			t.Errorf("Subscriber 1: expected 'msg2', got %q", msg)
 		}
 
-		msg, ok = next2()
+		msg, ok = sub2.Next()
 		if !ok {
 			t.Fatal("Subscriber 2: expected to receive message, got closed channel")
 		}
@@ -249,8 +249,8 @@ func TestSubPubMultiplePublishes(t *testing.T) {
 			sp.Publish(3, "msg3")
 		}()
 
-		for i, next := range []func() (string, bool){next1, next2} {
-			msg, ok := next()
+		for i, s := range []*Subscription[string]{sub1, sub2} {
+			msg, ok := s.Next()
 			if !ok {
 				t.Fatalf("Subscriber %d: expected to receive msg3, got closed channel", i+1)
 			}
@@ -267,7 +267,7 @@ func TestSubPubSubscriberContextCancelled(t *testing.T) {
 		sp := New[string]()
 		ctx, cancel := context.WithCancel(context.Background())
 
-		next := sp.Subscribe(ctx, 0)
+		sub := sp.Subscribe(ctx, 0)
 
 		// Cancel context before publishing
 		cancel()
@@ -276,7 +276,7 @@ func TestSubPubSubscriberContextCancelled(t *testing.T) {
 		sp.Publish(1, "test")
 
 		// Should return false when context is cancelled
-		_, ok := next()
+		_, ok := sub.Next()
 		if ok {
 			t.Error("Expected closed channel after context cancellation")
 		}
@@ -289,7 +289,7 @@ func TestSubPubSubscriberDisconnected(t *testing.T) {
 	ctx := context.Background()
 
 	// Create subscriber
-	next := sp.Subscribe(ctx, 0)
+	sub := sp.Subscribe(ctx, 0)
 
 	// Fill up the channel buffer (10 messages) + 1 more to trigger disconnection
 	for i := 1; i <= 11; i++ {
@@ -299,7 +299,7 @@ func TestSubPubSubscriberDisconnected(t *testing.T) {
 	// Try to receive all messages - should get exactly 10, then be disconnected
 	received := 0
 	for {
-		_, ok := next()
+		_, ok := sub.Next()
 		if !ok {
 			break
 		}
@@ -322,7 +322,7 @@ func TestSubPubSubscriberNotInterested(t *testing.T) {
 		ctx := context.Background()
 
 		// Subscriber already has index 5, waiting for messages after index 5
-		next := sp.Subscribe(ctx, 5)
+		sub := sp.Subscribe(ctx, 5)
 
 		// Publish at index 5 (subscriber already has this)
 		sp.Publish(5, 100)
@@ -335,7 +335,7 @@ func TestSubPubSubscriberNotInterested(t *testing.T) {
 			sp.Publish(6, 300)
 		}()
 
-		msg, ok := next()
+		msg, ok := sub.Next()
 		if !ok {
 			t.Fatal("Expected to receive message, got closed channel")
 		}
@@ -351,7 +351,7 @@ func TestSubPubSubscriberContextDoneDuringPublish(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create subscriber
-	next := sp.Subscribe(ctx, 0)
+	sub := sp.Subscribe(ctx, 0)
 
 	// Cancel context
 	cancel()
@@ -360,8 +360,40 @@ func TestSubPubSubscriberContextDoneDuringPublish(t *testing.T) {
 	sp.Publish(1, "test")
 
 	// Try to receive - should be closed
-	_, ok := next()
+	_, ok := sub.Next()
 	if ok {
 		t.Error("Expected closed channel after context cancellation")
 	}
+}
+
+func TestSubPubAdvanceIndex(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		sp := New[string]()
+		ctx := context.Background()
+
+		// Subscribe at index 0
+		sub := sp.Subscribe(ctx, 0)
+
+		// Advance to index 5 — Publishes at idx <= 5 should be skipped.
+		sub.AdvanceIndex(5)
+
+		// Publish at index 3 — should be skipped
+		sp.Publish(3, "old")
+
+		// Publish at index 5 — still skipped (subscriber idx == 5, needs idx < 5)
+		sp.Publish(5, "equal")
+
+		// Publish at index 6 — should arrive
+		go func() {
+			sp.Publish(6, "new")
+		}()
+
+		msg, ok := sub.Next()
+		if !ok {
+			t.Fatal("expected to receive message")
+		}
+		if msg != "new" {
+			t.Errorf("expected 'new', got %q", msg)
+		}
+	})
 }

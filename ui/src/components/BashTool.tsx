@@ -20,10 +20,19 @@ interface BashToolProps {
 
   // Streaming output from tool progress
   streamingOutput?: string;
+  streamingLineCount?: number;
 }
 
 /** Max lines shown in the streaming preview before "Show more" is needed. */
 const PREVIEW_LINES = 5;
+
+function logicalLines(text: string): string[] {
+  const lines = text.split("\n");
+  if (lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+  return lines;
+}
 
 function BashTool({
   toolInput,
@@ -33,6 +42,7 @@ function BashTool({
   executionTime,
   display,
   streamingOutput,
+  streamingLineCount,
 }: BashToolProps) {
   // Details panel (command, full output) — collapsed by default, stays collapsed after completion.
   const [isExpanded, setIsExpanded] = useState(false);
@@ -99,13 +109,14 @@ function BashTool({
   // Compute streaming preview: show last N lines by default.
   const { visibleStreaming, hasMoreLines, lineCount } = useMemo(() => {
     if (!streamingOutput) return { visibleStreaming: "", hasMoreLines: false, lineCount: 0 };
-    const lines = streamingOutput.split("\n");
+    const lines = logicalLines(streamingOutput);
+    const lineCount = streamingLineCount ?? lines.length;
     return {
       visibleStreaming: previewExpanded ? streamingOutput : lines.slice(-PREVIEW_LINES).join("\n"),
-      hasMoreLines: lines.length > PREVIEW_LINES,
-      lineCount: lines.length,
+      hasMoreLines: lineCount > PREVIEW_LINES,
+      lineCount,
     };
-  }, [streamingOutput, previewExpanded]);
+  }, [streamingOutput, streamingLineCount, previewExpanded]);
 
   return (
     <div
@@ -123,6 +134,7 @@ function BashTool({
               in {displayData.workingDir}
             </span>
           )}
+          {isRunning && <span className="bash-tool-running">running...</span>}
           {isComplete && isCancelled && <span className="bash-tool-cancelled">✗ cancelled</span>}
           {isComplete && hasError && !isCancelled && <span className="bash-tool-error">✗</span>}
           {isComplete && !hasError && <span className="bash-tool-success">✓</span>}

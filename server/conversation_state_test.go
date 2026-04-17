@@ -143,9 +143,9 @@ func TestConversationStateAfterServerRestart(t *testing.T) {
 		t.Error("Expected Working=false after server restart (no active loop)")
 	}
 
-	// Verify messages were loaded
-	if len(response.Messages) != 2 {
-		t.Errorf("Expected 2 messages, got %d", len(response.Messages))
+	// Verify messages were loaded (hydration may add a system prompt)
+	if len(response.Messages) < 2 {
+		t.Errorf("Expected at least 2 messages, got %d", len(response.Messages))
 	}
 }
 

@@ -325,13 +325,13 @@ func TestSSEUserMessageWithExistingConnection(t *testing.T) {
 	// Subscribe to updates
 	subCtx, subCancel := context.WithCancel(context.Background())
 	defer subCancel()
-	next := manager.subpub.Subscribe(subCtx, -1)
+	sub := manager.subpub.Subscribe(subCtx, -1)
 
 	// Channel to receive updates
 	updates := make(chan StreamResponse, 10)
 	go func() {
 		for {
-			data, ok := next()
+			data, ok := sub.Next()
 			if !ok {
 				return
 			}

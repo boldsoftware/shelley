@@ -477,3 +477,28 @@ func TestShellHasCommand(t *testing.T) {
 		t.Error("expected cancelled context to return false")
 	}
 }
+
+func TestProgressWriterSnapshotLineCount(t *testing.T) {
+	pw := &progressWriter{}
+
+	if _, err := pw.Write([]byte("line1\nline2\npartial")); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	tail, lineCount := pw.snapshot()
+	if tail != "line1\nline2\npartial" {
+		t.Fatalf("unexpected tail: %q", tail)
+	}
+	if lineCount != 3 {
+		t.Fatalf("expected 3 logical lines, got %d", lineCount)
+	}
+
+	if _, err := pw.Write([]byte("\nline4\n")); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	_, lineCount = pw.snapshot()
+	if lineCount != 4 {
+		t.Fatalf("expected 4 logical lines after newline-terminated write, got %d", lineCount)
+	}
+}

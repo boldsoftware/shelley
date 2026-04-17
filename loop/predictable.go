@@ -151,6 +151,18 @@ func (s *PredictableService) Do(ctx context.Context, req *llm.Request) (*llm.Res
 			return s.makeResponse(text, inputTokens), nil
 		}
 
+		// "multi_bash: <cmd1> ||| <cmd2>" — emit a response with two parallel bash
+		// tool_use blocks so tests can exercise batch tool-call handling. Append
+		// "# slow_ok" to individual commands to set slow_ok on that tool call.
+		if strings.HasPrefix(inputText, "multi_bash: ") {
+			payload := strings.TrimPrefix(inputText, "multi_bash: ")
+			parts := strings.SplitN(payload, " ||| ", 2)
+			if len(parts) == 2 {
+				return s.makeMultiBashToolResponse(parts[0], parts[1], inputTokens), nil
+			}
+			return s.makeResponse("multi_bash requires exactly two commands separated by ' ||| '", inputTokens), nil
+		}
+
 		if strings.HasPrefix(inputText, "bash: ") {
 			cmd := strings.TrimPrefix(inputText, "bash: ")
 			return s.makeBashToolResponse(cmd, inputTokens), nil
@@ -265,7 +277,10 @@ func (s *PredictableService) makeResponse(text string, inputTokens uint64) *llm.
 // makeBashToolResponse creates a response that calls the bash tool
 func (s *PredictableService) makeBashToolResponse(command string, inputTokens uint64) *llm.Response {
 	// Properly marshal the command to avoid JSON escaping issues
-	toolInputData := map[string]string{"command": command}
+	toolInputData := map[string]any{"command": command}
+	if strings.Contains(command, "# slow_ok") {
+		toolInputData["slow_ok"] = true
+	}
 	toolInputBytes, _ := json.Marshal(toolInputData)
 	toolInput := json.RawMessage(toolInputBytes)
 	responseText := fmt.Sprintf("I'll run the command: %s", command)
@@ -816,3 +831,51 @@ const wideTablesMarkdown = `Here are some wide tables to test rendering:
 | NPS Score | 42 | 45 | 48 | 52 | +23.8% | 📈 |
 
 That's a variety of table widths for testing!`
+
+func (s *PredictableService) makeMultiBashToolResponse(command1, command2 string, inputTokens uint64) *llm.Response {
+	toolInputs := make([]json.RawMessage, 0, 2)
+	commands := []string{command1, command2}
+	for _, command := range commands {
+		toolInputData := map[string]any{"command": command}
+		if strings.Contains(command, "# slow_ok") {
+			toolInputData["slow_ok"] = true
+		}
+		toolInputBytes, _ := json.Marshal(toolInputData)
+		toolInputs = append(toolInputs, json.RawMessage(toolInputBytes))
+	}
+
+	responseText := fmt.Sprintf("I'll run two commands: %s ; %s", command1, command2)
+	outputTokens := uint64(len(responseText) / 4)
+	if outputTokens == 0 {
+		outputTokens = 1
+	}
+
+	baseNano := time.Now().UnixNano()
+	return &llm.Response{
+		ID:    fmt.Sprintf("pred-bash-multi-%d", baseNano),
+		Type:  "message",
+		Role:  llm.MessageRoleAssistant,
+		Model: "predictable-v1",
+		Content: []llm.Content{
+			{Type: llm.ContentTypeText, Text: responseText},
+			{
+				ID:        fmt.Sprintf("tool_bash_a_%d", baseNano),
+				Type:      llm.ContentTypeToolUse,
+				ToolName:  "bash",
+				ToolInput: toolInputs[0],
+			},
+			{
+				ID:        fmt.Sprintf("tool_bash_b_%d", baseNano),
+				Type:      llm.ContentTypeToolUse,
+				ToolName:  "bash",
+				ToolInput: toolInputs[1],
+			},
+		},
+		StopReason: llm.StopReasonToolUse,
+		Usage: llm.Usage{
+			InputTokens:  inputTokens,
+			OutputTokens: outputTokens,
+			CostUSD:      0.002,
+		},
+	}
+}
