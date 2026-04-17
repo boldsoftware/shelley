@@ -85,7 +85,7 @@ function BashTool({
     toolResult && toolResult.length > 0 && toolResult[0].Text ? toolResult[0].Text : "";
 
   // Check if this was a cancelled operation
-  const isCancelled = hasError && output.toLowerCase().includes("cancel");
+  const isCancelled = hasError && output.includes("Tool execution cancelled by user");
 
   // Truncate command for display
   const truncateCommand = (cmd: string, maxLen: number = 300) => {
