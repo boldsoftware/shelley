@@ -129,9 +129,31 @@ var (
 		APIKeyEnv: TogetherAPIKeyEnv,
 	}
 
+	TogetherDeepseekV31 = Model{
+		UserName:  "together-deepseek-v3.1",
+		ModelName: "deepseek-ai/DeepSeek-V3.1",
+		URL:       TogetherURL,
+		APIKeyEnv: TogetherAPIKeyEnv,
+	}
+
 	TogetherDeepseekR1 = Model{
-		UserName:  "together-deepseek-r1",
-		ModelName: "deepseek-ai/DeepSeek-R1",
+		UserName:         "together-deepseek-r1",
+		ModelName:        "deepseek-ai/DeepSeek-R1",
+		URL:              TogetherURL,
+		APIKeyEnv:        TogetherAPIKeyEnv,
+		IsReasoningModel: true,
+	}
+
+	TogetherQwen3Coder = Model{
+		UserName:  "together-qwen3-coder",
+		ModelName: "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
+		URL:       TogetherURL,
+		APIKeyEnv: TogetherAPIKeyEnv,
+	}
+
+	TogetherMiniMaxM2 = Model{
+		UserName:  "together-minimax-m2",
+		ModelName: "MiniMaxAI/MiniMax-M2.7",
 		URL:       TogetherURL,
 		APIKeyEnv: TogetherAPIKeyEnv,
 	}
@@ -328,9 +350,12 @@ var ModelsRegistry = []Model{
 	Gemini25Flash,
 	Gemini25Pro,
 	// Together
-	TogetherDeepseekV3,
+	TogetherDeepseekV31,
 	TogetherDeepseekR1,
+	TogetherQwen3Coder,
+	TogetherMiniMaxM2,
 	TogetherLlama4Maverick,
+	TogetherDeepseekV3,
 	TogetherQwen3,
 	TogetherMistralSmall,
 	// Fireworks / misc providers

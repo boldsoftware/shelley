@@ -20,6 +20,7 @@ type LLMConfig struct {
 	OpenAIAPIKey    string
 	GeminiAPIKey    string
 	FireworksAPIKey string
+	TogetherAPIKey  string
 
 	// Gateway is the base URL of the LLM gateway (optional)
 	Gateway string

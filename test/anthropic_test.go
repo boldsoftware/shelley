@@ -48,6 +48,7 @@ func TestWithAnthropicAPI(t *testing.T) {
 		OpenAIAPIKey:    os.Getenv("OPENAI_API_KEY"),
 		GeminiAPIKey:    os.Getenv("GEMINI_API_KEY"),
 		FireworksAPIKey: os.Getenv("FIREWORKS_API_KEY"),
+		TogetherAPIKey:  os.Getenv("TOGETHER_API_KEY"),
 		Logger:          logger,
 	}
 	llmManager := server.NewLLMServiceManager(llmConfig)

@@ -40,6 +40,8 @@ func TestByID(t *testing.T) {
 		wantNil bool
 	}{
 		{id: "gpt-oss-20b-fireworks", wantID: "gpt-oss-20b-fireworks", wantNil: false},
+		{id: "together-deepseek-v3.1", wantID: "together-deepseek-v3.1", wantNil: false},
+		{id: "together-qwen3-coder", wantID: "together-qwen3-coder", wantNil: false},
 		{id: "gpt-5.2-codex", wantID: "gpt-5.2-codex", wantNil: false},
 		{id: "claude-sonnet-4.5", wantID: "claude-sonnet-4.5", wantNil: false},
 		{id: "claude-haiku-4.5", wantID: "claude-haiku-4.5", wantNil: false},
@@ -341,6 +343,16 @@ func TestConfigGetURLMethods(t *testing.T) {
 	if cfg.getFireworksURL() != "https://gateway.example.com/_/gateway/fireworks/inference/v1" {
 		t.Error("getFireworksURL did not return expected URL with gateway")
 	}
+
+	if cfg.getTogetherURL() != "https://gateway.example.com/_/gateway/together/v1" {
+		t.Error("getTogetherURL did not return expected URL with gateway")
+	}
+
+	// getTogetherURL with no gateway should return empty string
+	emptyCfg := &Config{}
+	if emptyCfg.getTogetherURL() != "" {
+		t.Errorf("getTogetherURL with no gateway should return empty string, got %q", emptyCfg.getTogetherURL())
+	}
 }
 
 func TestUseSimplifiedPatch(t *testing.T) {
@@ -446,6 +458,18 @@ func TestGetModelSource(t *testing.T) {
 			name:    "fireworks with gateway implicit key",
 			cfg:     &Config{Gateway: "https://gateway.example.com", FireworksAPIKey: "implicit"},
 			modelID: "gpt-oss-20b-fireworks",
+			want:    "exe.dev gateway",
+		},
+		{
+			name:    "together with env var only",
+			cfg:     &Config{TogetherAPIKey: "test-key"},
+			modelID: "together-deepseek-v3.1",
+			want:    "$TOGETHER_API_KEY",
+		},
+		{
+			name:    "together with gateway implicit key",
+			cfg:     &Config{Gateway: "https://gateway.example.com", TogetherAPIKey: "implicit"},
+			modelID: "together-deepseek-v3.1",
 			want:    "exe.dev gateway",
 		},
 		{

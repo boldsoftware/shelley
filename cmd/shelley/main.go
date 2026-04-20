@@ -342,6 +342,7 @@ func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel s
 		OpenAIAPIKey:    os.Getenv("OPENAI_API_KEY"),
 		GeminiAPIKey:    os.Getenv("GEMINI_API_KEY"),
 		FireworksAPIKey: os.Getenv("FIREWORKS_API_KEY"),
+		TogetherAPIKey:  os.Getenv("TOGETHER_API_KEY"),
 		TerminalURL:     terminalURL,
 		DefaultModel:    defaultModel,
 		DB:              database,
@@ -386,6 +387,9 @@ func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel s
 			}
 			if llmCfg.FireworksAPIKey == "" {
 				llmCfg.FireworksAPIKey = "implicit"
+			}
+			if llmCfg.TogetherAPIKey == "" {
+				llmCfg.TogetherAPIKey = "implicit"
 			}
 		}
 

@@ -25,6 +25,7 @@ const (
 	ProviderOpenAI    Provider = "openai"
 	ProviderAnthropic Provider = "anthropic"
 	ProviderFireworks Provider = "fireworks"
+	ProviderTogether  Provider = "together"
 	ProviderGemini    Provider = "gemini"
 	ProviderBuiltIn   Provider = "builtin"
 )
@@ -89,6 +90,11 @@ func (m Model) Source(cfg *Config) string {
 				return string(SourceGateway)
 			}
 			return "$FIREWORKS_API_KEY"
+		case ProviderTogether:
+			if cfg.TogetherAPIKey == "implicit" {
+				return string(SourceGateway)
+			}
+			return "$TOGETHER_API_KEY"
 		case ProviderGemini:
 			if cfg.GeminiAPIKey == "implicit" {
 				return string(SourceGateway)
@@ -111,6 +117,7 @@ type Config struct {
 	OpenAIAPIKey    string
 	GeminiAPIKey    string
 	FireworksAPIKey string
+	TogetherAPIKey  string
 
 	// Gateway is the base URL of the LLM gateway (optional)
 	// If set, model-specific suffixes will be appended
@@ -150,6 +157,14 @@ func (c *Config) getGeminiURL() string {
 func (c *Config) getFireworksURL() string {
 	if c.Gateway != "" {
 		return c.Gateway + "/_/gateway/fireworks/inference/v1"
+	}
+	return "" // use default from oai package
+}
+
+// getTogetherURL returns the Together API URL, with gateway suffix if gateway is set
+func (c *Config) getTogetherURL() string {
+	if c.Gateway != "" {
+		return c.Gateway + "/_/gateway/together/v1"
 	}
 	return "" // use default from oai package
 }
@@ -341,6 +356,95 @@ func All() []Model {
 				}
 				svc := &oai.Service{Model: oai.GPTOSS20B, APIKey: config.FireworksAPIKey, HTTPC: httpc}
 				if url := config.getFireworksURL(); url != "" {
+					svc.ModelURL = url
+				}
+				return svc, nil
+			},
+		},
+		// Together AI hosts 150+ models; we register a curated set of flagships here.
+		// To use any other Together model (e.g. a smaller Qwen variant, older DeepSeek,
+		// a specialized embedding/vision model), add it via the UI as a custom model
+		// with provider type "openai" and endpoint https://api.together.xyz/v1.
+		{
+			ID:              "together-deepseek-v3.1",
+			Provider:        ProviderTogether,
+			Description:     "DeepSeek V3.1 on Together",
+			RequiredEnvVars: []string{"TOGETHER_API_KEY"},
+			GatewayEnabled:  true,
+			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
+				if config.TogetherAPIKey == "" {
+					return nil, fmt.Errorf("together-deepseek-v3.1 requires TOGETHER_API_KEY")
+				}
+				svc := &oai.Service{Model: oai.TogetherDeepseekV31, APIKey: config.TogetherAPIKey, HTTPC: httpc}
+				if url := config.getTogetherURL(); url != "" {
+					svc.ModelURL = url
+				}
+				return svc, nil
+			},
+		},
+		{
+			ID:              "together-deepseek-r1",
+			Provider:        ProviderTogether,
+			Description:     "DeepSeek R1 reasoning on Together",
+			RequiredEnvVars: []string{"TOGETHER_API_KEY"},
+			GatewayEnabled:  true,
+			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
+				if config.TogetherAPIKey == "" {
+					return nil, fmt.Errorf("together-deepseek-r1 requires TOGETHER_API_KEY")
+				}
+				svc := &oai.Service{Model: oai.TogetherDeepseekR1, APIKey: config.TogetherAPIKey, HTTPC: httpc}
+				if url := config.getTogetherURL(); url != "" {
+					svc.ModelURL = url
+				}
+				return svc, nil
+			},
+		},
+		{
+			ID:              "together-qwen3-coder",
+			Provider:        ProviderTogether,
+			Description:     "Qwen3-Coder 480B on Together",
+			RequiredEnvVars: []string{"TOGETHER_API_KEY"},
+			GatewayEnabled:  true,
+			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
+				if config.TogetherAPIKey == "" {
+					return nil, fmt.Errorf("together-qwen3-coder requires TOGETHER_API_KEY")
+				}
+				svc := &oai.Service{Model: oai.TogetherQwen3Coder, APIKey: config.TogetherAPIKey, HTTPC: httpc}
+				if url := config.getTogetherURL(); url != "" {
+					svc.ModelURL = url
+				}
+				return svc, nil
+			},
+		},
+		{
+			ID:              "together-minimax-m2",
+			Provider:        ProviderTogether,
+			Description:     "MiniMax M2.7 on Together",
+			RequiredEnvVars: []string{"TOGETHER_API_KEY"},
+			GatewayEnabled:  true,
+			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
+				if config.TogetherAPIKey == "" {
+					return nil, fmt.Errorf("together-minimax-m2 requires TOGETHER_API_KEY")
+				}
+				svc := &oai.Service{Model: oai.TogetherMiniMaxM2, APIKey: config.TogetherAPIKey, HTTPC: httpc}
+				if url := config.getTogetherURL(); url != "" {
+					svc.ModelURL = url
+				}
+				return svc, nil
+			},
+		},
+		{
+			ID:              "together-llama4-maverick",
+			Provider:        ProviderTogether,
+			Description:     "Llama 4 Maverick on Together",
+			RequiredEnvVars: []string{"TOGETHER_API_KEY"},
+			GatewayEnabled:  true,
+			Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
+				if config.TogetherAPIKey == "" {
+					return nil, fmt.Errorf("together-llama4-maverick requires TOGETHER_API_KEY")
+				}
+				svc := &oai.Service{Model: oai.TogetherLlama4Maverick, APIKey: config.TogetherAPIKey, HTTPC: httpc}
+				if url := config.getTogetherURL(); url != "" {
 					svc.ModelURL = url
 				}
 				return svc, nil
