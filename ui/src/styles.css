@@ -2032,6 +2032,36 @@ button {
 }
 
 /* Message Input */
+.message-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  width: 100%;
+}
+
+.message-input-row .message-input-container {
+  flex: 1;
+  min-width: 0;
+}
+
+.plan-mode-toggle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-bottom: 14px;
+}
+
+.plan-mode-toggle:hover {
+  color: var(--text-primary);
+}
+
 .message-input-container {
   flex: 0 0 auto;
   background: var(--bg-base);
