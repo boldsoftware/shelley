@@ -2,6 +2,7 @@ package gitstate
 
 import (
 	"encoding/json"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"sync"
@@ -10,15 +11,14 @@ import (
 
 // PRInfo holds GitHub pull request information for a branch.
 type PRInfo struct {
-	Number           int    `json:"number"`
-	Title            string `json:"title"`
-	State            string `json:"state"` // OPEN, CLOSED, MERGED
-	URL              string `json:"url"`
-	IsDraft          bool   `json:"is_draft"`
-	MergeStateStatus string `json:"merge_state_status"` // BEHIND, BLOCKED, CLEAN, DIRTY, DRAFT, HAS_HOOKS, QUEUED, UNKNOWN, UNSTABLE
-	AutoMerge        bool   `json:"auto_merge"`
-	ReviewDecision   string `json:"review_decision"` // APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, ""
-	InMergeQueue     bool   `json:"in_merge_queue"`
+	Number         int    `json:"number"`
+	Title          string `json:"title"`
+	State          string `json:"state"` // OPEN, CLOSED, MERGED
+	URL            string `json:"url"`
+	IsDraft        bool   `json:"is_draft"`
+	AutoMerge      bool   `json:"auto_merge"`
+	ReviewDecision string `json:"review_decision"` // APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, ""
+	InMergeQueue   bool   `json:"in_merge_queue"`
 }
 
 type prCacheEntry struct {
@@ -168,7 +168,7 @@ func (c *PRCache) RefreshRepos(branches map[string]map[string]bool, done func())
 		// Fetch in parallel, one goroutine per unique remote.
 		type result struct {
 			group *remoteGroup
-			prs   map[string]*PRInfo // branch -> PRInfo
+			prs   map[string]*PRInfo // branch -> PRInfo; nil means fetch failed
 		}
 		ch := make(chan result, len(byRemote))
 		for _, g := range byRemote {
@@ -181,6 +181,13 @@ func (c *PRCache) RefreshRepos(branches map[string]map[string]bool, done func())
 		for range byRemote {
 			r := <-ch
 			c.mu.Lock()
+			// On fetch failure (prs == nil), leave existing cache entries intact
+			// so transient GitHub API errors don't wipe badges. Do not update
+			// repoFetchedAt either, so we retry on the next tick.
+			if r.prs == nil {
+				c.mu.Unlock()
+				continue
+			}
 			// Apply results to all worktrees sharing this remote.
 			for _, repo := range r.group.repos {
 				c.repoFetchedAt[repo] = now
@@ -204,7 +211,6 @@ type ghPRResponse struct {
 	State            string           `json:"state"`
 	URL              string           `json:"url"`
 	IsDraft          bool             `json:"isDraft"`
-	MergeStateStatus string           `json:"mergeStateStatus"`
 	AutoMergeRequest *json.RawMessage `json:"autoMergeRequest"`
 	ReviewDecision   string           `json:"reviewDecision"`
 	HeadRefName      string           `json:"headRefName"`
@@ -212,37 +218,53 @@ type ghPRResponse struct {
 
 func toPRInfo(resp ghPRResponse) *PRInfo {
 	return &PRInfo{
-		Number:           resp.Number,
-		Title:            resp.Title,
-		State:            resp.State,
-		URL:              resp.URL,
-		IsDraft:          resp.IsDraft,
-		MergeStateStatus: resp.MergeStateStatus,
-		AutoMerge:        resp.AutoMergeRequest != nil && string(*resp.AutoMergeRequest) != "null",
-		ReviewDecision:   resp.ReviewDecision,
+		Number:         resp.Number,
+		Title:          resp.Title,
+		State:          resp.State,
+		URL:            resp.URL,
+		IsDraft:        resp.IsDraft,
+		AutoMerge:      resp.AutoMergeRequest != nil && string(*resp.AutoMergeRequest) != "null",
+		ReviewDecision: resp.ReviewDecision,
 	}
 }
 
-const prListFields = "number,title,state,url,isDraft,mergeStateStatus,autoMergeRequest,reviewDecision,headRefName"
+// Note: mergeStateStatus is intentionally omitted. GitHub computes it
+// asynchronously and frequently returns HTTP 502 when asked for it, which
+// would fail the whole listing. We don't render it in the UI anyway.
+const prListFields = "number,title,state,url,isDraft,autoMergeRequest,reviewDecision,headRefName"
 
 // fetchRepoPRs fetches PR info for a repo: all open PRs plus recently
 // closed/merged (last 7 days). Returns a map of branch name -> PRInfo.
+// fetchRepoPRs fetches PR info for a repo: all open PRs plus recently
+// closed/merged (last 7 days). Returns a map of branch name -> PRInfo,
+// or nil if either of the two listing calls failed (so the caller can
+// preserve the previously cached entries).
 func fetchRepoPRs(repoRoot string) map[string]*PRInfo {
 	cutoff := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
 
 	// Fetch open and recently closed in parallel.
 	type batch struct {
 		results []ghPRResponse
+		ok      bool
 	}
 	ch := make(chan batch, 2)
-	go func() { ch <- batch{ghPRList(repoRoot, "--state", "open", "--limit", "500")} }()
 	go func() {
-		ch <- batch{ghPRList(repoRoot, "--state", "closed", "--search", "closed:>"+cutoff, "--limit", "500")}
+		r, ok := ghPRList(repoRoot, "--state", "open", "--limit", "500")
+		ch <- batch{r, ok}
+	}()
+	go func() {
+		r, ok := ghPRList(repoRoot, "--state", "closed", "--search", "closed:>"+cutoff, "--limit", "500")
+		ch <- batch{r, ok}
 	}()
 
 	prs := make(map[string]*PRInfo)
 	for range 2 {
 		b := <-ch
+		if !b.ok {
+			// Drain the remaining result to avoid goroutine leak, then fail.
+			<-ch
+			return nil
+		}
 		for _, resp := range b.results {
 			if _, exists := prs[resp.HeadRefName]; !exists {
 				prs[resp.HeadRefName] = toPRInfo(resp)
@@ -250,7 +272,7 @@ func fetchRepoPRs(repoRoot string) map[string]*PRInfo {
 		}
 	}
 
-	// Check merge queue.
+	// Check merge queue. Failure here is non-fatal — we just skip the flag.
 	queued := fetchMergeQueue(repoRoot)
 	for branch := range queued {
 		if pr, ok := prs[branch]; ok {
@@ -261,20 +283,29 @@ func fetchRepoPRs(repoRoot string) map[string]*PRInfo {
 	return prs
 }
 
-func ghPRList(repoRoot string, extra ...string) []ghPRResponse {
+// ghPRList runs `gh pr list` and returns the parsed results. The second
+// return value is false when the command failed (e.g. transient GitHub
+// 5xx); callers should treat this as "unknown" rather than "empty".
+func ghPRList(repoRoot string, extra ...string) ([]ghPRResponse, bool) {
 	args := []string{"pr", "list", "--json", prListFields}
 	args = append(args, extra...)
 	cmd := exec.Command("gh", args...)
 	cmd.Dir = repoRoot
 	output, err := cmd.Output()
 	if err != nil {
-		return nil
+		stderr := ""
+		if ee, ok := err.(*exec.ExitError); ok {
+			stderr = strings.TrimSpace(string(ee.Stderr))
+		}
+		slog.Warn("gh pr list failed", "repo", repoRoot, "err", err, "stderr", stderr)
+		return nil, false
 	}
 	var results []ghPRResponse
 	if err := json.Unmarshal(output, &results); err != nil {
-		return nil
+		slog.Warn("gh pr list: json unmarshal failed", "repo", repoRoot, "err", err)
+		return nil, false
 	}
-	return results
+	return results, true
 }
 
 // fetchMergeQueue returns the set of branch names currently in the repo's merge queue.

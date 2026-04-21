@@ -33,7 +33,6 @@ export interface PRInfo {
 	state: string;
 	url: string;
 	is_draft: boolean;
-	merge_state_status: string;
 	auto_merge: boolean;
 	review_decision: string;
 	in_merge_queue: boolean;
