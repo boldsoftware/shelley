@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -126,32 +127,174 @@ func collapseBlankLines(s string) string {
 	return s + "\n"
 }
 
-const hookSystemPrompt = "system-prompt"
+const (
+	hookSystemPrompt    = "system-prompt"
+	hookNewConversation = "new-conversation"
+)
+
+// NewConversationHookInput is the JSON data passed to the new-conversation hook on stdin.
+// The JSON has mutable fields at the top level and a "readonly" block for context.
+//
+// Example JSON:
+//
+//	{
+//	  "prompt": "the user's message",
+//	  "model": "claude-sonnet-4.5",
+//	  "cwd": "/home/user/project",
+//	  "readonly": {
+//	    "conversation_id": "abc-123",
+//	    "is_subagent": false,
+//	    "parent_id": "",
+//	    "is_distillation": true,
+//	    "source_id": "def-456",
+//	    "is_orchestrator": false
+//	  }
+//	}
+//
+// The hook should output the same top-level JSON shape (prompt, model, cwd).
+// Only the mutable fields are read from the output; "readonly" is ignored.
+// Empty output means no changes.
+type NewConversationHookInput struct {
+	// Mutable fields — the hook may change these.
+	Prompt string `json:"prompt"`
+	Model  string `json:"model"`
+	Cwd    string `json:"cwd"`
+
+	// Readonly context — visible to the hook but changes are ignored.
+	Readonly NewConversationReadonly `json:"readonly"`
+}
+
+// NewConversationReadonly contains context fields the hook can read but not change.
+type NewConversationReadonly struct {
+	ConversationID string `json:"conversation_id"`
+	IsSubagent     bool   `json:"is_subagent"`
+	ParentID       string `json:"parent_id,omitempty"`
+	IsDistillation bool   `json:"is_distillation"`
+	SourceID       string `json:"source_id,omitempty"`
+	IsOrchestrator bool   `json:"is_orchestrator"`
+}
+
+// NewConversationHookResult contains the (possibly modified) mutable fields
+// returned from the new-conversation hook.
+type NewConversationHookResult struct {
+	Prompt string
+	Model  string
+	Cwd    string
+}
+
+// RunNewConversationHook runs the new-conversation hook if it exists.
+// It returns the (possibly modified) mutable fields.
+// If the hook doesn't exist or fails, the original values are returned unchanged.
+func RunNewConversationHook(input NewConversationHookInput) NewConversationHookResult {
+	original := NewConversationHookResult{
+		Prompt: input.Prompt,
+		Model:  input.Model,
+		Cwd:    input.Cwd,
+	}
+
+	hookPath, err := findHook(hookNewConversation)
+	if err != nil {
+		slog.Error("new-conversation hook: findHook failed", "error", err)
+		return original
+	}
+	if hookPath == "" {
+		return original
+	}
+
+	inputJSON, err := json.Marshal(input)
+	if err != nil {
+		slog.Error("new-conversation hook: failed to marshal input", "error", err)
+		return original
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, hookPath)
+	cmd.Stdin = strings.NewReader(string(inputJSON))
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		slog.Error("new-conversation hook failed", "hook", hookPath, "error", err, "stderr", stderr.String())
+		return original
+	}
+
+	output := strings.TrimSpace(stdout.String())
+	if output == "" {
+		// Empty output is fine — hook ran but has no overrides.
+		return original
+	}
+
+	// Parse only the mutable fields from the output.
+	var hookOut struct {
+		Prompt string `json:"prompt"`
+		Model  string `json:"model"`
+		Cwd    string `json:"cwd"`
+	}
+	if err := json.Unmarshal([]byte(output), &hookOut); err != nil {
+		slog.Error("new-conversation hook: invalid JSON output", "error", err, "output", output)
+		return original
+	}
+
+	result := original
+	if hookOut.Cwd != "" {
+		result.Cwd = hookOut.Cwd
+	}
+	if hookOut.Prompt != "" {
+		result.Prompt = hookOut.Prompt
+	}
+	if hookOut.Model != "" {
+		result.Model = hookOut.Model
+	}
+
+	if result != original {
+		slog.Info("new-conversation hook applied overrides",
+			"cwdChanged", result.Cwd != original.Cwd,
+			"promptChanged", result.Prompt != original.Prompt,
+			"modelChanged", result.Model != original.Model,
+		)
+	}
+
+	return result
+}
+
+// findHook returns the path to the hook if it exists and is executable,
+// or empty string if not found.
+func findHook(name string) (string, error) {
+	if filepath.Base(name) != name {
+		return "", fmt.Errorf("invalid hook name: %q", name)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	hookPath := filepath.Join(home, ".config", "shelley", "hooks", name)
+	info, err := os.Stat(hookPath)
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() || info.Mode()&0o111 == 0 {
+		return "", nil
+	}
+	return hookPath, nil
+}
 
 // runHook checks for an executable hook at ~/.config/shelley/hooks/<name> and,
 // if found, runs it with the prompt on stdin. The hook's stdout replaces the
 // prompt. If the hook doesn't exist, the prompt is returned unchanged. If the
 // hook exists but fails, an error is returned.
 func runHook(name, prompt string) (string, error) {
-	if filepath.Base(name) != name {
-		return "", fmt.Errorf("invalid hook name: %q", name)
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("hook %s: cannot determine home directory: %w", name, err)
-	}
-	hookPath := filepath.Join(home, ".config", "shelley", "hooks", name)
-
-	info, err := os.Stat(hookPath)
-	if os.IsNotExist(err) {
-		return prompt, nil // no hook
-	}
+	hookPath, err := findHook(name)
 	if err != nil {
 		return "", fmt.Errorf("hook %s: %w", name, err)
 	}
-	if info.IsDir() || info.Mode()&0o111 == 0 {
-		return prompt, nil // not executable
+	if hookPath == "" {
+		return prompt, nil // no hook
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

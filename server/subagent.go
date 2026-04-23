@@ -31,6 +31,44 @@ func (r *SubagentRunner) RunSubagent(ctx context.Context, conversationID, prompt
 	// This ensures the sidebar shows the subagent even if it's a newly created conversation.
 	go r.notifySubagentConversation(ctx, conversationID)
 
+	// Run new-conversation hook for newly created subagent conversations.
+	// We detect "new" by checking if the manager already exists.
+	s.mu.Lock()
+	_, alreadyActive := s.activeConversations[conversationID]
+	s.mu.Unlock()
+	if !alreadyActive {
+		conv, convErr := s.db.GetConversationByID(ctx, conversationID)
+		if convErr != nil {
+			s.logger.Error("Failed to get conversation for new-conversation hook", "error", convErr, "conversationID", conversationID)
+		} else if conv.ParentConversationID != nil {
+			hookResult := RunNewConversationHook(NewConversationHookInput{
+				Prompt: prompt,
+				Model:  modelID,
+				Cwd:    derefString(conv.Cwd),
+				Readonly: NewConversationReadonly{
+					ConversationID: conversationID,
+					IsSubagent:     true,
+					ParentID:       *conv.ParentConversationID,
+				},
+			})
+			if hookResult.Cwd != derefString(conv.Cwd) {
+				if err := s.db.UpdateConversationCwd(ctx, conversationID, hookResult.Cwd); err != nil {
+					s.logger.Error("Failed to update subagent cwd from hook", "error", err)
+				}
+			}
+			if hookResult.Prompt != prompt {
+				prompt = hookResult.Prompt
+			}
+			if hookResult.Model != modelID {
+				if _, svcErr := s.llmManager.GetService(hookResult.Model); svcErr != nil {
+					s.logger.Error("Hook returned unsupported model, keeping original", "hookModel", hookResult.Model, "error", svcErr)
+				} else {
+					modelID = hookResult.Model
+				}
+			}
+		}
+	}
+
 	// Get or create conversation manager for the subagent, with incremented depth
 	manager, err := s.getOrCreateSubagentConversationManager(ctx, conversationID)
 	if err != nil {

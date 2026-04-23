@@ -125,6 +125,34 @@ func (s *Server) handleDistillConversation(w http.ResponseWriter, r *http.Reques
 	}
 	conversationID := conversation.ConversationID
 
+	// Run new-conversation hook (distillation)
+	hookResult := RunNewConversationHook(NewConversationHookInput{
+		Model: modelID,
+		Cwd:   derefString(cwdPtr),
+		Readonly: NewConversationReadonly{
+			ConversationID: conversationID,
+			IsDistillation: true,
+			SourceID:       req.SourceConversationID,
+		},
+	})
+	if hookResult.Cwd != derefString(cwdPtr) {
+		if err := s.db.UpdateConversationCwd(ctx, conversationID, hookResult.Cwd); err != nil {
+			s.logger.Error("Failed to update cwd from hook", "error", err)
+		} else {
+			conversation.Cwd = &hookResult.Cwd
+		}
+	}
+	if hookResult.Model != modelID {
+		if _, svcErr := s.llmManager.GetService(hookResult.Model); svcErr != nil {
+			s.logger.Error("Hook returned unsupported model, keeping original", "hookModel", hookResult.Model, "error", svcErr)
+		} else {
+			modelID = hookResult.Model
+			if err := s.db.ForceUpdateConversationModel(ctx, conversationID, modelID); err != nil {
+				s.logger.Error("Failed to update model from hook", "error", err)
+			}
+		}
+	}
+
 	// Notify conversation list subscribers
 	go s.publishConversationListUpdate(ConversationListUpdate{
 		Type:         "update",
@@ -414,6 +442,34 @@ func (s *Server) handleDistillReplace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conversationID := conversation.ConversationID
+
+	// Run new-conversation hook (distill-replace)
+	hookResult := RunNewConversationHook(NewConversationHookInput{
+		Model: modelID,
+		Cwd:   derefString(cwdPtr),
+		Readonly: NewConversationReadonly{
+			ConversationID: conversationID,
+			IsDistillation: true,
+			SourceID:       req.SourceConversationID,
+		},
+	})
+	if hookResult.Cwd != derefString(cwdPtr) {
+		if err := s.db.UpdateConversationCwd(ctx, conversationID, hookResult.Cwd); err != nil {
+			s.logger.Error("Failed to update cwd from hook", "error", err)
+		} else {
+			conversation.Cwd = &hookResult.Cwd
+		}
+	}
+	if hookResult.Model != modelID {
+		if _, svcErr := s.llmManager.GetService(hookResult.Model); svcErr != nil {
+			s.logger.Error("Hook returned unsupported model, keeping original", "hookModel", hookResult.Model, "error", svcErr)
+		} else {
+			modelID = hookResult.Model
+			if err := s.db.ForceUpdateConversationModel(ctx, conversationID, modelID); err != nil {
+				s.logger.Error("Failed to update model from hook", "error", err)
+			}
+		}
+	}
 
 	// Notify conversation list subscribers
 	go s.publishConversationListUpdate(ConversationListUpdate{

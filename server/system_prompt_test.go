@@ -392,3 +392,284 @@ func TestRunHookReceivesFullPrompt(t *testing.T) {
 		t.Errorf("cat hook should pass through input unchanged\ngot:  %q\nwant: %q", result, multiline)
 	}
 }
+
+func TestRunNewConversationHookNoHook(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	result := RunNewConversationHook(NewConversationHookInput{
+		Prompt: "hello",
+		Model:  "test-model",
+		Cwd:    "/original/dir",
+		Readonly: NewConversationReadonly{
+			ConversationID: "conv-123",
+		},
+	})
+	if result.Cwd != "/original/dir" {
+		t.Errorf("expected /original/dir, got %q", result.Cwd)
+	}
+	if result.Prompt != "hello" {
+		t.Errorf("expected hello, got %q", result.Prompt)
+	}
+	if result.Model != "test-model" {
+		t.Errorf("expected test-model, got %q", result.Model)
+	}
+}
+
+func TestRunNewConversationHookOverridesCwd(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hookDir := filepath.Join(home, ".config", "shelley", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write a hook that returns a new cwd
+	hookPath := filepath.Join(hookDir, "new-conversation")
+	script := `#!/bin/sh
+echo '{"cwd": "/new/worktree"}'`
+	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result := RunNewConversationHook(NewConversationHookInput{
+		Prompt: "hello",
+		Model:  "test-model",
+		Cwd:    "/original/dir",
+	})
+	if result.Cwd != "/new/worktree" {
+		t.Errorf("expected /new/worktree, got %q", result.Cwd)
+	}
+	if result.Prompt != "hello" {
+		t.Errorf("prompt should be unchanged, got %q", result.Prompt)
+	}
+}
+
+func TestRunNewConversationHookOverridesAllMutableFields(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hookDir := filepath.Join(home, ".config", "shelley", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	hookPath := filepath.Join(hookDir, "new-conversation")
+	script := `#!/bin/sh
+echo '{"prompt": "modified prompt", "model": "new-model", "cwd": "/new/dir"}'`
+	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result := RunNewConversationHook(NewConversationHookInput{
+		Prompt: "original prompt",
+		Model:  "original-model",
+		Cwd:    "/original/dir",
+	})
+	if result.Prompt != "modified prompt" {
+		t.Errorf("expected modified prompt, got %q", result.Prompt)
+	}
+	if result.Model != "new-model" {
+		t.Errorf("expected new-model, got %q", result.Model)
+	}
+	if result.Cwd != "/new/dir" {
+		t.Errorf("expected /new/dir, got %q", result.Cwd)
+	}
+}
+
+func TestRunNewConversationHookEmptyOutput(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hookDir := filepath.Join(home, ".config", "shelley", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write a hook that outputs nothing (no-op)
+	hookPath := filepath.Join(hookDir, "new-conversation")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result := RunNewConversationHook(NewConversationHookInput{
+		Prompt: "hello",
+		Model:  "test-model",
+		Cwd:    "/original/dir",
+	})
+	if result.Cwd != "/original/dir" {
+		t.Errorf("expected /original/dir, got %q", result.Cwd)
+	}
+}
+
+func TestRunNewConversationHookReceivesJSON(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hookDir := filepath.Join(home, ".config", "shelley", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write a hook that saves stdin to a file so we can inspect it
+	dumpFile := filepath.Join(home, "hook-input.json")
+	hookPath := filepath.Join(hookDir, "new-conversation")
+	script := "#!/bin/sh\ncat > " + dumpFile + "\n"
+	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	RunNewConversationHook(NewConversationHookInput{
+		Prompt: "build me a thing",
+		Model:  "claude-sonnet",
+		Cwd:    "/home/user/project",
+		Readonly: NewConversationReadonly{
+			ConversationID: "conv-456",
+			IsSubagent:     true,
+			ParentID:       "conv-parent",
+			IsOrchestrator: true,
+		},
+	})
+
+	// Read and verify the JSON that was passed to the hook
+	data, err := os.ReadFile(dumpFile)
+	if err != nil {
+		t.Fatalf("failed to read hook input: %v", err)
+	}
+
+	input := string(data)
+	// Mutable fields at top level
+	for _, expected := range []string{
+		`"prompt":"build me a thing"`,
+		`"model":"claude-sonnet"`,
+		`"cwd":"/home/user/project"`,
+	} {
+		if !strings.Contains(input, expected) {
+			t.Errorf("hook input missing %q\ngot: %s", expected, input)
+		}
+	}
+	// Readonly fields nested under "readonly"
+	for _, expected := range []string{
+		`"conversation_id":"conv-456"`,
+		`"is_subagent":true`,
+		`"parent_id":"conv-parent"`,
+		`"is_orchestrator":true`,
+	} {
+		if !strings.Contains(input, expected) {
+			t.Errorf("hook input missing %q\ngot: %s", expected, input)
+		}
+	}
+	// Verify the readonly block exists
+	if !strings.Contains(input, `"readonly":{`) {
+		t.Errorf("hook input should have a 'readonly' block\ngot: %s", input)
+	}
+}
+
+func TestRunNewConversationHookFailureReturnsOriginals(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hookDir := filepath.Join(home, ".config", "shelley", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write a hook that fails
+	hookPath := filepath.Join(hookDir, "new-conversation")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result := RunNewConversationHook(NewConversationHookInput{
+		Prompt: "hello",
+		Model:  "my-model",
+		Cwd:    "/original/dir",
+	})
+	if result.Cwd != "/original/dir" {
+		t.Errorf("expected /original/dir on failure, got %q", result.Cwd)
+	}
+	if result.Prompt != "hello" {
+		t.Errorf("expected hello on failure, got %q", result.Prompt)
+	}
+	if result.Model != "my-model" {
+		t.Errorf("expected my-model on failure, got %q", result.Model)
+	}
+}
+
+func TestRunNewConversationHookInvalidJSON(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hookDir := filepath.Join(home, ".config", "shelley", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write a hook that returns invalid JSON
+	hookPath := filepath.Join(hookDir, "new-conversation")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho 'not json'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result := RunNewConversationHook(NewConversationHookInput{
+		Cwd: "/original/dir",
+	})
+	if result.Cwd != "/original/dir" {
+		t.Errorf("expected /original/dir on invalid JSON, got %q", result.Cwd)
+	}
+}
+
+func TestRunNewConversationHookNonExecutable(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hookDir := filepath.Join(home, ".config", "shelley", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write a hook file but make it non-executable
+	hookPath := filepath.Join(hookDir, "new-conversation")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho modified"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := RunNewConversationHook(NewConversationHookInput{
+		Cwd: "/original/dir",
+	})
+	if result.Cwd != "/original/dir" {
+		t.Errorf("expected /original/dir for non-executable hook, got %q", result.Cwd)
+	}
+}
+
+func TestRunNewConversationHookPartialOverride(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hookDir := filepath.Join(home, ".config", "shelley", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Hook only overrides model, leaving prompt and cwd unchanged
+	hookPath := filepath.Join(hookDir, "new-conversation")
+	script := `#!/bin/sh
+echo '{"model": "better-model"}'`
+	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result := RunNewConversationHook(NewConversationHookInput{
+		Prompt: "keep this",
+		Model:  "original-model",
+		Cwd:    "/keep/this/too",
+	})
+	if result.Prompt != "keep this" {
+		t.Errorf("prompt should be unchanged, got %q", result.Prompt)
+	}
+	if result.Model != "better-model" {
+		t.Errorf("expected better-model, got %q", result.Model)
+	}
+	if result.Cwd != "/keep/this/too" {
+		t.Errorf("cwd should be unchanged, got %q", result.Cwd)
+	}
+}

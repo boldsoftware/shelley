@@ -682,6 +682,14 @@ func (s *Server) handleGetConversation(w http.ResponseWriter, r *http.Request, c
 	})
 }
 
+// derefString returns the value pointed to by p, or "" if p is nil.
+func derefString(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
 // ChatRequest represents a chat message from the user
 type ChatRequest struct {
 	Message             string                  `json:"message"`
@@ -848,6 +856,37 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conversationID := conversation.ConversationID
+
+	// Run new-conversation hook, which may override prompt, model, and cwd
+	hookResult := RunNewConversationHook(NewConversationHookInput{
+		Prompt: req.Message,
+		Model:  modelID,
+		Cwd:    derefString(cwdPtr),
+		Readonly: NewConversationReadonly{
+			ConversationID: conversationID,
+			IsOrchestrator: convOpts.IsOrchestrator(),
+		},
+	})
+	if hookResult.Cwd != derefString(cwdPtr) {
+		if err := s.db.UpdateConversationCwd(ctx, conversationID, hookResult.Cwd); err != nil {
+			s.logger.Error("Failed to update cwd from hook", "error", err)
+		} else {
+			conversation.Cwd = &hookResult.Cwd
+		}
+	}
+	if hookResult.Model != modelID {
+		newService, svcErr := s.llmManager.GetService(hookResult.Model)
+		if svcErr != nil {
+			s.logger.Error("Hook returned unsupported model, keeping original", "hookModel", hookResult.Model, "error", svcErr)
+		} else {
+			modelID = hookResult.Model
+			llmService = newService
+			if err := s.db.ForceUpdateConversationModel(ctx, conversationID, modelID); err != nil {
+				s.logger.Error("Failed to update model from hook", "error", err)
+			}
+		}
+	}
+	req.Message = hookResult.Prompt
 
 	// Notify conversation list subscribers about the new conversation
 	go s.publishConversationListUpdate(ConversationListUpdate{

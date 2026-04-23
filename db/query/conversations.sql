@@ -114,6 +114,11 @@ UPDATE conversations
 SET model = ?
 WHERE conversation_id = ? AND model IS NULL;
 
+-- name: ForceUpdateConversationModel :exec
+UPDATE conversations
+SET model = ?, updated_at = CURRENT_TIMESTAMP
+WHERE conversation_id = ?;
+
 -- name: GetConversationOptions :one
 SELECT conversation_options FROM conversations
 WHERE conversation_id = ?;

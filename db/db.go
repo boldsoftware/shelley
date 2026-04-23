@@ -416,6 +416,17 @@ func (db *DB) UpdateConversationModel(ctx context.Context, conversationID, model
 	})
 }
 
+// ForceUpdateConversationModel updates the model on a conversation, even if already set.
+func (db *DB) ForceUpdateConversationModel(ctx context.Context, conversationID, model string) error {
+	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		return q.ForceUpdateConversationModel(ctx, generated.ForceUpdateConversationModelParams{
+			Model:          &model,
+			ConversationID: conversationID,
+		})
+	})
+}
+
 // Message methods (moved from MessageService)
 
 // MessageType represents the type of message

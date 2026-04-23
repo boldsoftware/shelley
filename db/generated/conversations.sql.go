@@ -142,6 +142,22 @@ func (q *Queries) DeleteConversation(ctx context.Context, conversationID string)
 	return err
 }
 
+const forceUpdateConversationModel = `-- name: ForceUpdateConversationModel :exec
+UPDATE conversations
+SET model = ?, updated_at = CURRENT_TIMESTAMP
+WHERE conversation_id = ?
+`
+
+type ForceUpdateConversationModelParams struct {
+	Model          *string `json:"model"`
+	ConversationID string  `json:"conversation_id"`
+}
+
+func (q *Queries) ForceUpdateConversationModel(ctx context.Context, arg ForceUpdateConversationModelParams) error {
+	_, err := q.db.ExecContext(ctx, forceUpdateConversationModel, arg.Model, arg.ConversationID)
+	return err
+}
+
 const getConversation = `-- name: GetConversation :one
 SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options FROM conversations
 WHERE conversation_id = ?
