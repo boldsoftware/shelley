@@ -261,6 +261,7 @@ func fetchRepoPRs(repoRoot string) map[string]*PRInfo {
 	for range 2 {
 		b := <-ch
 		if !b.ok {
+			slog.Warn("fetchRepoPRs: batch failed", "repo", repoRoot)
 			// Drain the remaining result to avoid goroutine leak, then fail.
 			<-ch
 			return nil
@@ -271,6 +272,8 @@ func fetchRepoPRs(repoRoot string) map[string]*PRInfo {
 			}
 		}
 	}
+
+	slog.Info("fetchRepoPRs: success", "repo", repoRoot, "prs", len(prs))
 
 	// Check merge queue. Failure here is non-fatal — we just skip the flag.
 	queued := fetchMergeQueue(repoRoot)

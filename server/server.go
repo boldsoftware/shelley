@@ -1103,8 +1103,11 @@ func (s *Server) refreshAllPRs() {
 	}
 
 	if len(repoBranches) == 0 {
+		s.logger.Info("PR refresh: no repos to refresh")
 		return
 	}
+
+	s.logger.Info("PR refresh: starting", "repos", len(repoBranches), "tracked", len(tracked))
 
 	prCache := gitstate.GetPRCache()
 	prCache.InvalidateAll()
@@ -1112,17 +1115,22 @@ func (s *Server) refreshAllPRs() {
 	prCache.RefreshRepos(repoBranches, func() { close(done) })
 	<-done
 
+	s.logger.Info("PR refresh: fetch complete")
+
 	// Broadcast updates for every conversation that has PR info.
+	broadcastCount := 0
 	for _, cb := range tracked {
 		pr := gitstate.GetPRCache().GetPRInfo(cb.worktree, cb.branch)
 		if pr == nil {
 			continue
 		}
+		broadcastCount++
 		s.publishConversationListUpdate(ConversationListUpdate{
 			Type:         "update",
 			Conversation: &cb.conv,
 		})
 	}
+	s.logger.Info("PR refresh: done", "broadcasts", broadcastCount)
 }
 
 // publicHostname returns the server's public hostname.
