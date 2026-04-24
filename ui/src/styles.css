@@ -3493,21 +3493,14 @@ svg {
   border-right: none;
 }
 
-.tool-override-choice:hover:not(:disabled) {
+.tool-override-choice:not(.active):hover:not(:disabled) {
   background: var(--bg-hover, rgba(255, 255, 255, 0.05));
 }
 
-.tool-override-choice.active {
+.tool-override-choice.active,
+.tool-override-choice.active:hover:not(:disabled) {
   background: var(--blue-text, #3b82f6);
   color: white;
-}
-
-/* When no explicit override is set, the "active" choice is simply the default.
-   Show it with a less saturated blue so the user can tell it's implicit. */
-.tool-override-choices.is-default .tool-override-choice.active {
-  background: transparent;
-  color: var(--blue-text, #3b82f6);
-  box-shadow: inset 0 0 0 1.5px var(--blue-text, #3b82f6);
 }
 
 .tool-override-choice:disabled {
@@ -3540,18 +3533,6 @@ svg {
   margin-bottom: 0.5rem;
   padding-bottom: 0.375rem;
   border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.advanced-settings-hint {
-  font-size: 0.625rem;
-  font-weight: 400;
-  color: var(--text-tertiary);
-  text-transform: none;
-  letter-spacing: 0;
 }
 
 .orchestrator-toggle {
