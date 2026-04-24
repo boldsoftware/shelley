@@ -80,12 +80,11 @@ func TestStreamResumeWithLastSequenceID(t *testing.T) {
 			mux.ServeHTTP(w, req)
 		}()
 
-		time.Sleep(300 * time.Millisecond)
+		body := waitForSSEData(t, w, 5*time.Second)
 		w.Close()
 		cancel()
 		<-done
 
-		body := w.Body.String()
 		if !strings.HasPrefix(body, "data: ") {
 			t.Fatalf("Expected SSE data, got: %s", body)
 		}
@@ -123,12 +122,12 @@ func TestStreamResumeWithLastSequenceID(t *testing.T) {
 		w := newResponseRecorderWithClose()
 		done := make(chan struct{})
 		go func() { defer close(done); mux.ServeHTTP(w, req) }()
-		time.Sleep(300 * time.Millisecond)
+		body := waitForSSEData(t, w, 5*time.Second)
 		w.Close()
 		cancel()
 		<-done
 
-		jsonData := strings.TrimPrefix(strings.Split(w.Body.String(), "\n")[0], "data: ")
+		jsonData := strings.TrimPrefix(strings.Split(body, "\n")[0], "data: ")
 		var response StreamResponse
 		if err := json.Unmarshal([]byte(jsonData), &response); err != nil {
 			t.Fatalf("Failed to parse response: %v", err)
@@ -169,12 +168,12 @@ func TestStreamResumeWithLastSequenceID(t *testing.T) {
 		w := newResponseRecorderWithClose()
 		done := make(chan struct{})
 		go func() { defer close(done); mux.ServeHTTP(w, req) }()
-		time.Sleep(300 * time.Millisecond)
+		body := waitForSSEData(t, w, 5*time.Second)
 		w.Close()
 		cancel()
 		<-done
 
-		jsonData := strings.TrimPrefix(strings.Split(w.Body.String(), "\n")[0], "data: ")
+		jsonData := strings.TrimPrefix(strings.Split(body, "\n")[0], "data: ")
 		var response StreamResponse
 		if err := json.Unmarshal([]byte(jsonData), &response); err != nil {
 			t.Fatalf("Failed to parse response: %v", err)
