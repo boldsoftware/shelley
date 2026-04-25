@@ -54,7 +54,13 @@ func checkStaleness() {
 		return
 	}
 
-	buildTime := time.UnixMilli(buildInfo.Timestamp)
+	// Allow a small grace window: filesystem mtime granularity (NFS, older
+	// extN, build agents with coarser clocks) can land a freshly-built
+	// source file a tick after the in-process Date.now() captured by the
+	// UI build script, even though nothing actually edited it. Without
+	// this slack CI sporadically reports the build as stale.
+	const staleSlack = 30 * time.Second
+	buildTime := time.UnixMilli(buildInfo.Timestamp).Add(staleSlack)
 
 	// Check if source directory exists (we might be in a deployed binary without source)
 	srcDir := buildInfo.SrcDir
