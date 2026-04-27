@@ -16,6 +16,7 @@ type ToolInfo struct {
 // Keep in sync with NewToolSet / NewOrchestratorToolSet / browse.RegisterBrowserTools.
 var ToolRegistry = []ToolInfo{
 	{Name: "bash", Summary: "Run shell commands.", DefaultOn: true},
+	{Name: "shell", Summary: "Run shell commands.", DefaultOn: false},
 	{Name: "patch", Summary: "Precise edits to files.", DefaultOn: true},
 	{Name: "keyword_search", Summary: "Search the codebase by keyword.", DefaultOn: true},
 	{Name: "change_dir", Summary: "Change the working directory.", DefaultOn: true},

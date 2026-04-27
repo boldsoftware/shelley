@@ -420,11 +420,9 @@ func TestFormatForegroundBashOutput(t *testing.T) {
 }
 
 func TestIsNoTrailerSet(t *testing.T) {
-	bashTool := &BashTool{WorkingDir: NewMutableWorkingDir("/")}
-
 	// Test when config is not set (default)
 	t.Run("Default No Config", func(t *testing.T) {
-		if bashTool.isNoTrailerSet() {
+		if isNoTrailerSet() {
 			t.Error("Expected isNoTrailerSet() to be false when not configured")
 		}
 	})
@@ -438,7 +436,7 @@ func TestIsNoTrailerSet(t *testing.T) {
 		}
 		defer exec.Command("git", "config", "--global", "--unset", "shelley.no-trailer").Run()
 
-		if !bashTool.isNoTrailerSet() {
+		if !isNoTrailerSet() {
 			t.Error("Expected isNoTrailerSet() to be true when shelley.no-trailer=true")
 		}
 	})
@@ -451,7 +449,7 @@ func TestIsNoTrailerSet(t *testing.T) {
 		}
 		defer exec.Command("git", "config", "--global", "--unset", "shelley.no-trailer").Run()
 
-		if bashTool.isNoTrailerSet() {
+		if isNoTrailerSet() {
 			t.Error("Expected isNoTrailerSet() to be false when shelley.no-trailer=false")
 		}
 	})

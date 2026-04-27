@@ -507,7 +507,7 @@ const Message = React.memo(function Message({
         // See AGENTS.md in this directory.
 
         // Use specialized component for bash tool
-        if (content.ToolName === "bash") {
+        if (content.ToolName === "bash" || content.ToolName === "shell") {
           return (
             <BashTool
               toolInput={content.ToolInput}
@@ -644,7 +644,7 @@ const Message = React.memo(function Message({
         const toolName = rawToolName;
 
         // Use specialized component for bash tool
-        if (toolName === "bash") {
+        if (toolName === "bash" || toolName === "shell") {
           return (
             <BashTool
               toolInput={toolInput}

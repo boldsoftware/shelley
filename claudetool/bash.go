@@ -94,7 +94,7 @@ func (b *BashTool) getWorkingDir() string {
 }
 
 // isNoTrailerSet checks if user has disabled co-author trailer via git config.
-func (b *BashTool) isNoTrailerSet() bool {
+func isNoTrailerSet() bool {
 	out, err := exec.Command("git", "config", "--get", "shelley.no-trailer").Output()
 	if err != nil {
 		return false
@@ -195,7 +195,7 @@ func (b *BashTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
 	}
 
 	// Add co-author trailer to git commits unless user has disabled it
-	if !b.isNoTrailerSet() {
+	if !isNoTrailerSet() {
 		req.Command = bashkit.AddCoauthorTrailer(req.Command, "Co-authored-by: Shelley <shelley@exe.dev>")
 	}
 

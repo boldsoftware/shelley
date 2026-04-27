@@ -272,8 +272,17 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 
 	outputIframeTool := &OutputIframeTool{WorkingDir: wd}
 
+	shellTool := &ShellTool{
+		WorkingDir:       wd,
+		LLMProvider:      cfg.LLMProvider,
+		EnableJITInstall: cfg.EnableJITInstall,
+		ConversationID:   cfg.ConversationID,
+		BackgroundCtx:    ctx,
+	}
+
 	tools := []*llm.Tool{
 		bashTool.Tool(),
+		shellTool.Tool(),
 		patchTool.Tool(),
 		keywordTool.Tool(),
 		changeDirTool.Tool(),

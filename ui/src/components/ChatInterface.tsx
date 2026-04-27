@@ -267,6 +267,7 @@ interface CoalescedToolCallProps {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TOOL_COMPONENTS: Record<string, React.ComponentType<any>> = {
   bash: BashTool,
+  shell: BashTool,
   patch: PatchTool,
   browser: BrowserTool,
   screenshot: ScreenshotTool,
