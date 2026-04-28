@@ -14,20 +14,8 @@ import (
 func setupTestDB(t *testing.T) *DB {
 	t.Helper()
 
-	// Use a temporary file instead of :memory: because the pool requires multiple connections
-	tmpDir := t.TempDir()
-	db, err := New(Config{DSN: tmpDir + "/test.db"})
-	if err != nil {
-		t.Fatalf("Failed to create test database: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := db.Migrate(ctx); err != nil {
-		t.Fatalf("Failed to migrate test database: %v", err)
-	}
-
+	db, cleanup := NewTestDB(t)
+	t.Cleanup(cleanup)
 	return db
 }
 
@@ -216,6 +204,36 @@ func TestDB_WithTxRes(t *testing.T) {
 
 	if err == nil {
 		t.Error("Expected error from WithTxRes, got none")
+	}
+}
+
+func TestNewTestDB_IsolatedCopies(t *testing.T) {
+	db1, cleanup1 := NewTestDB(t)
+	defer cleanup1()
+
+	db2, cleanup2 := NewTestDB(t)
+	defer cleanup2()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := db1.CreateConversation(ctx, stringPtr("only-in-db1"), true, nil, nil, ConversationOptions{})
+	if err != nil {
+		t.Fatalf("Failed to create conversation in first test db: %v", err)
+	}
+
+	var count int64
+	err = db2.Queries(ctx, func(q *generated.Queries) error {
+		var qerr error
+		count, qerr = q.CountConversations(ctx)
+		return qerr
+	})
+	if err != nil {
+		t.Fatalf("Failed to count conversations in second test db: %v", err)
+	}
+
+	if count != 0 {
+		t.Fatalf("Expected second test db to start empty, got %d conversations", count)
 	}
 }
 

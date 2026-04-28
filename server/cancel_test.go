@@ -22,22 +22,7 @@ import (
 // setupTestDB creates a test database
 func setupTestDB(t *testing.T) (*db.DB, func()) {
 	t.Helper()
-	tmpDir := t.TempDir()
-	database, err := db.New(db.Config{DSN: tmpDir + "/test.db"})
-	if err != nil {
-		t.Fatalf("Failed to create test database: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := database.Migrate(ctx); err != nil {
-		t.Fatalf("Failed to migrate test database: %v", err)
-	}
-
-	return database, func() {
-		database.Close()
-	}
+	return db.NewTestDB(t)
 }
 
 // waitFor polls a condition until it returns true or the timeout is reached.

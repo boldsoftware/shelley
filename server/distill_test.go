@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"shelley.exe.dev/db"
@@ -706,121 +707,100 @@ func TestDistillStatusUpdateReachesSSESubscriber(t *testing.T) {
 
 func TestDistillReplaceConversation(t *testing.T) {
 	t.Parallel()
-	h := NewTestHarness(t)
+	synctest.Test(t, func(t *testing.T) {
+		h := NewTestHarness(t)
+		defer stopActiveConversationLoops(h.server)
 
-	// Create a source conversation with some messages
-	h.NewConversation("echo hello world", "")
-	h.WaitResponse()
-	sourceConvID := h.convID
+		// Create a source conversation with some messages
+		h.NewConversation("echo hello world", "")
+		h.WaitResponse()
+		synctest.Wait()
+		sourceConvID := h.convID
 
-	// Give the source conversation a slug
-	originalSlug := "test-original-slug"
-	_, err := h.db.UpdateConversationSlug(context.Background(), sourceConvID, originalSlug)
-	if err != nil {
-		t.Fatalf("failed to set source slug: %v", err)
-	}
+		// Give the source conversation a slug
+		originalSlug := "test-original-slug"
+		_, err := h.db.UpdateConversationSlug(context.Background(), sourceConvID, originalSlug)
+		if err != nil {
+			t.Fatalf("failed to set source slug: %v", err)
+		}
 
-	// Call the distill-replace endpoint
-	reqBody := DistillReplaceRequest{
-		SourceConversationID: sourceConvID,
-		Model:                "predictable",
-	}
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest("POST", "/api/conversations/distill-replace", strings.NewReader(string(body)))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
+		// Call the distill-replace endpoint
+		reqBody := DistillReplaceRequest{
+			SourceConversationID: sourceConvID,
+			Model:                "predictable",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/conversations/distill-replace", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
 
-	h.server.handleDistillReplace(w, req)
+		h.server.handleDistillReplace(w, req)
 
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d: %s", w.Code, w.Body.String())
-	}
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected status 201, got %d: %s", w.Code, w.Body.String())
+		}
 
-	var resp map[string]interface{}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to parse response: %v", err)
-	}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse response: %v", err)
+		}
 
-	newConvID, ok := resp["conversation_id"].(string)
-	if !ok || newConvID == "" {
-		t.Fatal("expected conversation_id in response")
-	}
+		newConvID, ok := resp["conversation_id"].(string)
+		if !ok || newConvID == "" {
+			t.Fatal("expected conversation_id in response")
+		}
 
-	// Wait for the distillation to complete (user message appears in new conversation)
-	var distilledText string
-	for i := 0; i < 100; i++ {
+		waitForConversationDistillingToClear(t, h.server, newConvID)
+		requireDistilledUserMessage(t, h.db, newConvID)
+
+		// Verify slug swap: new conversation should have the original slug
+		newConv, err := h.db.GetConversationByID(context.Background(), newConvID)
+		if err != nil {
+			t.Fatalf("failed to get new conversation: %v", err)
+		}
+		if newConv.Slug == nil || *newConv.Slug != originalSlug {
+			t.Fatalf("expected new conv slug %q, got %v", originalSlug, newConv.Slug)
+		}
+
+		// Verify source conversation was renamed
+		sourceConv, err := h.db.GetConversationByID(context.Background(), sourceConvID)
+		if err != nil {
+			t.Fatalf("failed to get source conversation: %v", err)
+		}
+		if sourceConv.Slug == nil || !strings.HasPrefix(*sourceConv.Slug, originalSlug+"-prev") {
+			t.Fatalf("expected source slug to start with %q, got %v", originalSlug+"-prev", sourceConv.Slug)
+		}
+
+		// Verify source is now a child of the new conversation
+		if sourceConv.ParentConversationID == nil || *sourceConv.ParentConversationID != newConvID {
+			t.Fatalf("expected source parent_conversation_id=%q, got %v", newConvID, sourceConv.ParentConversationID)
+		}
+
+		// Verify source is archived
+		if !sourceConv.Archived {
+			t.Fatal("expected source conversation to be archived")
+		}
+
+		// Verify status message has replace=true
 		msgs, err := h.db.ListMessages(context.Background(), newConvID)
 		if err != nil {
 			t.Fatalf("failed to list messages: %v", err)
 		}
+		var hasReplaceStatus bool
 		for _, msg := range msgs {
-			if msg.Type == string(db.MessageTypeUser) && msg.LlmData != nil {
-				var llmMsg llm.Message
-				if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err == nil {
-					for _, content := range llmMsg.Content {
-						if content.Type == llm.ContentTypeText && content.Text != "" {
-							distilledText = content.Text
-						}
+			if msg.Type == string(db.MessageTypeSystem) && msg.UserData != nil {
+				var userData map[string]string
+				if err := json.Unmarshal([]byte(*msg.UserData), &userData); err == nil {
+					if userData["replace"] == "true" && userData["distill_status"] == "complete" {
+						hasReplaceStatus = true
 					}
 				}
 			}
 		}
-		if distilledText != "" {
-			break
+		if !hasReplaceStatus {
+			t.Fatal("expected system message with replace=true and distill_status=complete")
 		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if distilledText == "" {
-		t.Fatal("timed out waiting for distilled user message")
-	}
-
-	// Verify slug swap: new conversation should have the original slug
-	newConv, err := h.db.GetConversationByID(context.Background(), newConvID)
-	if err != nil {
-		t.Fatalf("failed to get new conversation: %v", err)
-	}
-	if newConv.Slug == nil || *newConv.Slug != originalSlug {
-		t.Fatalf("expected new conv slug %q, got %v", originalSlug, newConv.Slug)
-	}
-
-	// Verify source conversation was renamed
-	sourceConv, err := h.db.GetConversationByID(context.Background(), sourceConvID)
-	if err != nil {
-		t.Fatalf("failed to get source conversation: %v", err)
-	}
-	if sourceConv.Slug == nil || !strings.HasPrefix(*sourceConv.Slug, originalSlug+"-prev") {
-		t.Fatalf("expected source slug to start with %q, got %v", originalSlug+"-prev", sourceConv.Slug)
-	}
-
-	// Verify source is now a child of the new conversation
-	if sourceConv.ParentConversationID == nil || *sourceConv.ParentConversationID != newConvID {
-		t.Fatalf("expected source parent_conversation_id=%q, got %v", newConvID, sourceConv.ParentConversationID)
-	}
-
-	// Verify source is archived
-	if !sourceConv.Archived {
-		t.Fatal("expected source conversation to be archived")
-	}
-
-	// Verify status message has replace=true
-	msgs, err := h.db.ListMessages(context.Background(), newConvID)
-	if err != nil {
-		t.Fatalf("failed to list messages: %v", err)
-	}
-	var hasReplaceStatus bool
-	for _, msg := range msgs {
-		if msg.Type == string(db.MessageTypeSystem) && msg.UserData != nil {
-			var userData map[string]string
-			if err := json.Unmarshal([]byte(*msg.UserData), &userData); err == nil {
-				if userData["replace"] == "true" && userData["distill_status"] == "complete" {
-					hasReplaceStatus = true
-				}
-			}
-		}
-	}
-	if !hasReplaceStatus {
-		t.Fatal("expected system message with replace=true and distill_status=complete")
-	}
+	})
 }
 
 func TestDistillReplaceConversationMissingSource(t *testing.T) {
@@ -845,325 +825,394 @@ func TestDistillReplaceConversationMissingSource(t *testing.T) {
 
 func TestDistillReplaceConversationNoSlug(t *testing.T) {
 	t.Parallel()
-	h := NewTestHarness(t)
+	synctest.Test(t, func(t *testing.T) {
+		h := NewTestHarness(t)
+		defer stopActiveConversationLoops(h.server)
 
-	// Create a source conversation and wait for the response to complete.
-	h.NewConversation("echo hello world", "")
-	h.WaitResponse()
-	sourceConvID := h.convID
+		// Create a source conversation and wait for the response to complete.
+		h.NewConversation("echo hello world", "")
+		h.WaitResponse()
+		synctest.Wait()
+		sourceConvID := h.convID
 
-	// The predictable model generates a slug asynchronously. Wait for it,
-	// then explicitly clear it so we deterministically test the no-slug path.
-	time.Sleep(200 * time.Millisecond)
-	_, err := h.db.ClearConversationSlug(context.Background(), sourceConvID)
-	if err != nil {
-		t.Fatalf("failed to clear source slug: %v", err)
-	}
-
-	// Confirm the source has no slug.
-	sourceConvBefore, err := h.db.GetConversationByID(context.Background(), sourceConvID)
-	if err != nil {
-		t.Fatalf("failed to get source conversation: %v", err)
-	}
-	if sourceConvBefore.Slug != nil {
-		t.Fatalf("expected source slug to be nil after clearing, got %q", *sourceConvBefore.Slug)
-	}
-
-	// Call the distill-replace endpoint
-	reqBody := DistillReplaceRequest{
-		SourceConversationID: sourceConvID,
-		Model:                "predictable",
-	}
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest("POST", "/api/conversations/distill-replace", strings.NewReader(string(body)))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	h.server.handleDistillReplace(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d: %s", w.Code, w.Body.String())
-	}
-
-	var resp map[string]interface{}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to parse response: %v", err)
-	}
-	newConvID := resp["conversation_id"].(string)
-
-	// Wait for distillation to complete
-	for i := 0; i < 100; i++ {
-		msgs, err := h.db.ListMessages(context.Background(), newConvID)
+		// Explicitly clear the source slug so we deterministically test the
+		// no-slug path.
+		_, err := h.db.ClearConversationSlug(context.Background(), sourceConvID)
 		if err != nil {
-			t.Fatalf("failed to list messages: %v", err)
+			t.Fatalf("failed to clear source slug: %v", err)
 		}
-		for _, msg := range msgs {
-			if msg.Type == string(db.MessageTypeUser) && msg.LlmData != nil {
-				goto done
-			}
+
+		// Confirm the source has no slug.
+		sourceConvBefore, err := h.db.GetConversationByID(context.Background(), sourceConvID)
+		if err != nil {
+			t.Fatalf("failed to get source conversation: %v", err)
 		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatal("timed out waiting for distilled user message")
-done:
+		if sourceConvBefore.Slug != nil {
+			t.Fatalf("expected source slug to be nil after clearing, got %q", *sourceConvBefore.Slug)
+		}
 
-	// The new conversation should have gotten its own generated slug (not
-	// transferred from source, since source had none).
-	newConv, err := h.db.GetConversationByID(context.Background(), newConvID)
-	if err != nil {
-		t.Fatalf("failed to get new conversation: %v", err)
-	}
-	if newConv.Slug == nil {
-		t.Fatal("expected new conversation to have a generated slug")
-	}
+		// Call the distill-replace endpoint
+		reqBody := DistillReplaceRequest{
+			SourceConversationID: sourceConvID,
+			Model:                "predictable",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/conversations/distill-replace", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
 
-	// Verify source is archived and parented
-	sourceConvAfter, err := h.db.GetConversationByID(context.Background(), sourceConvID)
-	if err != nil {
-		t.Fatalf("failed to get source conversation: %v", err)
-	}
-	if !sourceConvAfter.Archived {
-		t.Fatal("expected source conversation to be archived")
-	}
-	if sourceConvAfter.ParentConversationID == nil || *sourceConvAfter.ParentConversationID != newConvID {
-		t.Fatalf("expected source parent=%q, got %v", newConvID, sourceConvAfter.ParentConversationID)
-	}
+		h.server.handleDistillReplace(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected status 201, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse response: %v", err)
+		}
+		newConvID := resp["conversation_id"].(string)
+
+		waitForConversationDistillingToClear(t, h.server, newConvID)
+		requireDistilledUserMessage(t, h.db, newConvID)
+
+		// The new conversation should have gotten its own generated slug (not
+		// transferred from source, since source had none).
+		newConv, err := h.db.GetConversationByID(context.Background(), newConvID)
+		if err != nil {
+			t.Fatalf("failed to get new conversation: %v", err)
+		}
+		if newConv.Slug == nil {
+			t.Fatal("expected new conversation to have a generated slug")
+		}
+
+		// Verify source is archived and parented
+		sourceConvAfter, err := h.db.GetConversationByID(context.Background(), sourceConvID)
+		if err != nil {
+			t.Fatalf("failed to get source conversation: %v", err)
+		}
+		if !sourceConvAfter.Archived {
+			t.Fatal("expected source conversation to be archived")
+		}
+		if sourceConvAfter.ParentConversationID == nil || *sourceConvAfter.ParentConversationID != newConvID {
+			t.Fatalf("expected source parent=%q, got %v", newConvID, sourceConvAfter.ParentConversationID)
+		}
+	})
 }
 
 func TestDistillReplaceMultiPass(t *testing.T) {
 	t.Parallel()
-	h := NewTestHarness(t)
+	synctest.Test(t, func(t *testing.T) {
+		h := NewTestHarness(t)
+		defer stopActiveConversationLoops(h.server)
 
-	// Create a source conversation with messages
-	h.NewConversation("echo hello world", "")
-	h.WaitResponse()
-	sourceConvID := h.convID
+		// Create a source conversation with messages
+		h.NewConversation("echo hello world", "")
+		h.WaitResponse()
+		synctest.Wait()
+		sourceConvID := h.convID
 
-	// Give it a slug
-	originalSlug := "multi-pass-test"
-	_, err := h.db.UpdateConversationSlug(context.Background(), sourceConvID, originalSlug)
-	if err != nil {
-		t.Fatalf("failed to set source slug: %v", err)
-	}
+		// Give it a slug
+		originalSlug := "multi-pass-test"
+		_, err := h.db.UpdateConversationSlug(context.Background(), sourceConvID, originalSlug)
+		if err != nil {
+			t.Fatalf("failed to set source slug: %v", err)
+		}
 
-	// First distill-replace
-	reqBody := DistillReplaceRequest{
-		SourceConversationID: sourceConvID,
-		Model:                "predictable",
-	}
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest("POST", "/api/conversations/distill-replace", strings.NewReader(string(body)))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	h.server.handleDistillReplace(w, req)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("first distill: expected 201, got %d: %s", w.Code, w.Body.String())
-	}
+		// First distill-replace
+		reqBody := DistillReplaceRequest{
+			SourceConversationID: sourceConvID,
+			Model:                "predictable",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/conversations/distill-replace", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.server.handleDistillReplace(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("first distill: expected 201, got %d: %s", w.Code, w.Body.String())
+		}
 
-	var resp1 map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp1)
-	conv1ID := resp1["conversation_id"].(string)
+		var resp1 map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp1)
+		conv1ID := resp1["conversation_id"].(string)
 
-	// Wait for first distillation to complete
-	waitForDistillComplete(t, h.db, conv1ID)
+		waitForConversationDistillingToClear(t, h.server, conv1ID)
+		requireDistilledUserMessage(t, h.db, conv1ID)
 
-	// Verify first pass: conv1 has the original slug, source renamed to -prev
-	conv1, _ := h.db.GetConversationByID(context.Background(), conv1ID)
-	if conv1.Slug == nil || *conv1.Slug != originalSlug {
-		t.Fatalf("first pass: expected conv1 slug %q, got %v", originalSlug, conv1.Slug)
-	}
-	source, _ := h.db.GetConversationByID(context.Background(), sourceConvID)
-	if source.Slug == nil || *source.Slug != originalSlug+"-prev" {
-		t.Fatalf("first pass: expected source slug %q, got %v", originalSlug+"-prev", source.Slug)
-	}
+		// Verify first pass: conv1 has the original slug, source renamed to -prev
+		conv1, err := h.db.GetConversationByID(context.Background(), conv1ID)
+		if err != nil {
+			t.Fatalf("first pass: failed to get conv1: %v", err)
+		}
+		if conv1.Slug == nil || *conv1.Slug != originalSlug {
+			t.Fatalf("first pass: expected conv1 slug %q, got %v", originalSlug, conv1.Slug)
+		}
+		source, err := h.db.GetConversationByID(context.Background(), sourceConvID)
+		if err != nil {
+			t.Fatalf("first pass: failed to get source: %v", err)
+		}
+		if source.Slug == nil || *source.Slug != originalSlug+"-prev" {
+			t.Fatalf("first pass: expected source slug %q, got %v", originalSlug+"-prev", source.Slug)
+		}
 
-	// Second distill-replace on the NEW conversation (conv1)
-	reqBody2 := DistillReplaceRequest{
-		SourceConversationID: conv1ID,
-		Model:                "predictable",
-	}
-	body2, _ := json.Marshal(reqBody2)
-	req2 := httptest.NewRequest("POST", "/api/conversations/distill-replace", strings.NewReader(string(body2)))
-	req2.Header.Set("Content-Type", "application/json")
-	w2 := httptest.NewRecorder()
-	h.server.handleDistillReplace(w2, req2)
-	if w2.Code != http.StatusCreated {
-		t.Fatalf("second distill: expected 201, got %d: %s", w2.Code, w2.Body.String())
-	}
+		// Second distill-replace on the NEW conversation (conv1)
+		reqBody2 := DistillReplaceRequest{
+			SourceConversationID: conv1ID,
+			Model:                "predictable",
+		}
+		body2, _ := json.Marshal(reqBody2)
+		req2 := httptest.NewRequest("POST", "/api/conversations/distill-replace", strings.NewReader(string(body2)))
+		req2.Header.Set("Content-Type", "application/json")
+		w2 := httptest.NewRecorder()
+		h.server.handleDistillReplace(w2, req2)
+		if w2.Code != http.StatusCreated {
+			t.Fatalf("second distill: expected 201, got %d: %s", w2.Code, w2.Body.String())
+		}
 
-	var resp2 map[string]interface{}
-	json.Unmarshal(w2.Body.Bytes(), &resp2)
-	conv2ID := resp2["conversation_id"].(string)
+		var resp2 map[string]interface{}
+		json.Unmarshal(w2.Body.Bytes(), &resp2)
+		conv2ID := resp2["conversation_id"].(string)
 
-	// Wait for second distillation to complete
-	waitForDistillComplete(t, h.db, conv2ID)
+		waitForConversationDistillingToClear(t, h.server, conv2ID)
+		requireDistilledUserMessage(t, h.db, conv2ID)
 
-	// Verify second pass:
-	// - conv2 has the original slug
-	// - conv1 renamed to -prev-2 (since -prev is taken by the original source)
-	// - original source still has -prev
-	conv2, _ := h.db.GetConversationByID(context.Background(), conv2ID)
-	if conv2.Slug == nil || *conv2.Slug != originalSlug {
-		t.Fatalf("second pass: expected conv2 slug %q, got %v", originalSlug, conv2.Slug)
-	}
-	conv1After, _ := h.db.GetConversationByID(context.Background(), conv1ID)
-	if conv1After.Slug == nil || *conv1After.Slug != originalSlug+"-prev-2" {
-		t.Fatalf("second pass: expected conv1 slug %q, got %v", originalSlug+"-prev-2", conv1After.Slug)
-	}
-	sourceAfter, _ := h.db.GetConversationByID(context.Background(), sourceConvID)
-	if sourceAfter.Slug == nil || *sourceAfter.Slug != originalSlug+"-prev" {
-		t.Fatalf("second pass: source slug changed unexpectedly to %v", sourceAfter.Slug)
-	}
+		// Verify second pass:
+		// - conv2 has the original slug
+		// - conv1 renamed to -prev-2 (since -prev is taken by the original source)
+		// - original source still has -prev
+		conv2, err := h.db.GetConversationByID(context.Background(), conv2ID)
+		if err != nil {
+			t.Fatalf("second pass: failed to get conv2: %v", err)
+		}
+		if conv2.Slug == nil || *conv2.Slug != originalSlug {
+			t.Fatalf("second pass: expected conv2 slug %q, got %v", originalSlug, conv2.Slug)
+		}
+		conv1After, err := h.db.GetConversationByID(context.Background(), conv1ID)
+		if err != nil {
+			t.Fatalf("second pass: failed to get conv1: %v", err)
+		}
+		if conv1After.Slug == nil || *conv1After.Slug != originalSlug+"-prev-2" {
+			t.Fatalf("second pass: expected conv1 slug %q, got %v", originalSlug+"-prev-2", conv1After.Slug)
+		}
+		sourceAfter, err := h.db.GetConversationByID(context.Background(), sourceConvID)
+		if err != nil {
+			t.Fatalf("second pass: failed to get original source: %v", err)
+		}
+		if sourceAfter.Slug == nil || *sourceAfter.Slug != originalSlug+"-prev" {
+			t.Fatalf("second pass: source slug changed unexpectedly to %v", sourceAfter.Slug)
+		}
 
-	// Third distill-replace on conv2
-	reqBody3 := DistillReplaceRequest{
-		SourceConversationID: conv2ID,
-		Model:                "predictable",
-	}
-	body3, _ := json.Marshal(reqBody3)
-	req3 := httptest.NewRequest("POST", "/api/conversations/distill-replace", strings.NewReader(string(body3)))
-	req3.Header.Set("Content-Type", "application/json")
-	w3 := httptest.NewRecorder()
-	h.server.handleDistillReplace(w3, req3)
-	if w3.Code != http.StatusCreated {
-		t.Fatalf("third distill: expected 201, got %d: %s", w3.Code, w3.Body.String())
-	}
+		// Third distill-replace on conv2
+		reqBody3 := DistillReplaceRequest{
+			SourceConversationID: conv2ID,
+			Model:                "predictable",
+		}
+		body3, _ := json.Marshal(reqBody3)
+		req3 := httptest.NewRequest("POST", "/api/conversations/distill-replace", strings.NewReader(string(body3)))
+		req3.Header.Set("Content-Type", "application/json")
+		w3 := httptest.NewRecorder()
+		h.server.handleDistillReplace(w3, req3)
+		if w3.Code != http.StatusCreated {
+			t.Fatalf("third distill: expected 201, got %d: %s", w3.Code, w3.Body.String())
+		}
 
-	var resp3 map[string]interface{}
-	json.Unmarshal(w3.Body.Bytes(), &resp3)
-	conv3ID := resp3["conversation_id"].(string)
+		var resp3 map[string]interface{}
+		json.Unmarshal(w3.Body.Bytes(), &resp3)
+		conv3ID := resp3["conversation_id"].(string)
 
-	waitForDistillComplete(t, h.db, conv3ID)
+		waitForConversationDistillingToClear(t, h.server, conv3ID)
+		requireDistilledUserMessage(t, h.db, conv3ID)
 
-	// Verify third pass:
-	// - conv3 has the original slug
-	// - conv2 renamed to -prev-3
-	conv3, _ := h.db.GetConversationByID(context.Background(), conv3ID)
-	if conv3.Slug == nil || *conv3.Slug != originalSlug {
-		t.Fatalf("third pass: expected conv3 slug %q, got %v", originalSlug, conv3.Slug)
-	}
-	conv2After, _ := h.db.GetConversationByID(context.Background(), conv2ID)
-	if conv2After.Slug == nil || *conv2After.Slug != originalSlug+"-prev-3" {
-		t.Fatalf("third pass: expected conv2 slug %q, got %v", originalSlug+"-prev-3", conv2After.Slug)
-	}
+		// Verify third pass:
+		// - conv3 has the original slug
+		// - conv2 renamed to -prev-3
+		conv3, err := h.db.GetConversationByID(context.Background(), conv3ID)
+		if err != nil {
+			t.Fatalf("third pass: failed to get conv3: %v", err)
+		}
+		if conv3.Slug == nil || *conv3.Slug != originalSlug {
+			t.Fatalf("third pass: expected conv3 slug %q, got %v", originalSlug, conv3.Slug)
+		}
+		conv2After, err := h.db.GetConversationByID(context.Background(), conv2ID)
+		if err != nil {
+			t.Fatalf("third pass: failed to get conv2: %v", err)
+		}
+		if conv2After.Slug == nil || *conv2After.Slug != originalSlug+"-prev-3" {
+			t.Fatalf("third pass: expected conv2 slug %q, got %v", originalSlug+"-prev-3", conv2After.Slug)
+		}
 
-	t.Log("SUCCESS: three-pass distill-replace completed, all slugs correct")
+		t.Log("SUCCESS: three-pass distill-replace completed, all slugs correct")
+	})
 }
 
 func TestDistillReplaceQueuedMessagesDuringDistillation(t *testing.T) {
 	t.Parallel()
-	h := NewTestHarness(t)
+	synctest.Test(t, func(t *testing.T) {
+		h := NewTestHarness(t)
+		defer stopActiveConversationLoops(h.server)
 
-	// Create a source conversation
-	h.NewConversation("echo hello world", "")
-	h.WaitResponse()
-	sourceConvID := h.convID
+		// Create a source conversation
+		h.NewConversation("echo hello world", "")
+		h.WaitResponse()
+		synctest.Wait()
+		sourceConvID := h.convID
 
-	originalSlug := "queued-msg-test"
-	_, err := h.db.UpdateConversationSlug(context.Background(), sourceConvID, originalSlug)
-	if err != nil {
-		t.Fatalf("failed to set source slug: %v", err)
-	}
+		originalSlug := "queued-msg-test"
+		_, err := h.db.UpdateConversationSlug(context.Background(), sourceConvID, originalSlug)
+		if err != nil {
+			t.Fatalf("failed to set source slug: %v", err)
+		}
 
-	// Distill-replace
-	reqBody := DistillReplaceRequest{
-		SourceConversationID: sourceConvID,
-		Model:                "predictable",
-	}
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest("POST", "/api/conversations/distill-replace", strings.NewReader(string(body)))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	h.server.handleDistillReplace(w, req)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
-	}
+		// Distill-replace
+		reqBody := DistillReplaceRequest{
+			SourceConversationID: sourceConvID,
+			Model:                "predictable",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/conversations/distill-replace", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.server.handleDistillReplace(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+		}
 
-	var resp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	newConvID := resp["conversation_id"].(string)
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		newConvID := resp["conversation_id"].(string)
 
-	// Immediately queue a message to the new conversation while distillation is in progress.
-	// The ConversationManager should exist (created in handleDistillReplace) with distilling=true.
-	manager, err := h.server.getOrCreateConversationManager(context.Background(), newConvID, "")
-	if err != nil {
-		t.Fatalf("failed to get conversation manager: %v", err)
-	}
+		// Immediately queue a message to the new conversation while distillation is in progress.
+		// The ConversationManager should exist (created in handleDistillReplace) with distilling=true.
+		manager, err := h.server.getOrCreateConversationManager(context.Background(), newConvID, "")
+		if err != nil {
+			t.Fatalf("failed to get conversation manager: %v", err)
+		}
 
-	// Verify the manager is marked as distilling
-	manager.mu.Lock()
-	isDistilling := manager.distilling
-	manager.mu.Unlock()
-	if !isDistilling {
-		t.Fatal("expected conversation manager to be in distilling state")
-	}
+		// Verify the manager is marked as distilling
+		manager.mu.Lock()
+		isDistilling := manager.distilling
+		manager.mu.Unlock()
+		if !isDistilling {
+			t.Fatal("expected conversation manager to be in distilling state")
+		}
 
-	// Queue a message
-	userMsg := llm.Message{
-		Role:    llm.MessageRoleUser,
-		Content: []llm.Content{{Type: llm.ContentTypeText, Text: "echo queued during distill"}},
-	}
-	if err := manager.QueueMessage(context.Background(), h.server, "predictable", userMsg); err != nil {
-		t.Fatalf("failed to queue message: %v", err)
-	}
+		// Queue a message
+		userMsg := llm.Message{
+			Role:    llm.MessageRoleUser,
+			Content: []llm.Content{{Type: llm.ContentTypeText, Text: "echo queued during distill"}},
+		}
+		if err := manager.QueueMessage(context.Background(), h.server, "predictable", userMsg); err != nil {
+			t.Fatalf("failed to queue message: %v", err)
+		}
 
-	// Verify the message is pending (not drained yet)
-	manager.mu.Lock()
-	pendingCount := len(manager.pendingMessages)
-	manager.mu.Unlock()
-	if pendingCount != 1 {
-		t.Fatalf("expected 1 pending message, got %d", pendingCount)
-	}
+		// Verify the message is pending (not drained yet)
+		manager.mu.Lock()
+		pendingCount := len(manager.pendingMessages)
+		manager.mu.Unlock()
+		if pendingCount != 1 {
+			t.Fatalf("expected 1 pending message, got %d", pendingCount)
+		}
 
-	// Wait for distillation to complete
-	waitForDistillComplete(t, h.db, newConvID)
+		waitForConversationDistillingToClear(t, h.server, newConvID)
+		requireDistilledUserMessage(t, h.db, newConvID)
+		synctest.Wait()
 
-	// After distillation completes, the deferred cleanup should have cleared
-	// the distilling flag and drained the pending messages.
-	// Wait a bit for the drain to process.
-	var agentResponse bool
-	for i := 0; i < 100; i++ {
-		msgs, _ := h.db.ListMessages(context.Background(), newConvID)
+		// After distillation completes, the deferred cleanup should have cleared
+		// the distilling flag and drained the pending messages.
+		msgs, err := h.db.ListMessages(context.Background(), newConvID)
+		if err != nil {
+			t.Fatalf("failed to list messages after distillation: %v", err)
+		}
+		var agentResponse bool
 		for _, msg := range msgs {
 			if msg.Type == string(db.MessageTypeAgent) {
 				agentResponse = true
 				break
 			}
 		}
-		if agentResponse {
-			break
+		if !agentResponse {
+			t.Fatal("expected agent response after queued message was drained")
 		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if !agentResponse {
-		t.Fatal("expected agent response after queued message was drained")
-	}
 
-	// Verify distilling flag is cleared
-	manager.mu.Lock()
-	stillDistilling := manager.distilling
-	manager.mu.Unlock()
-	if stillDistilling {
-		t.Fatal("distilling flag should be cleared after distillation completes")
-	}
+		// Verify distilling flag is cleared
+		manager.mu.Lock()
+		stillDistilling := manager.distilling
+		manager.mu.Unlock()
+		if stillDistilling {
+			t.Fatal("distilling flag should be cleared after distillation completes")
+		}
 
-	t.Log("SUCCESS: queued message was properly held during distillation and drained after")
+		t.Log("SUCCESS: queued message was properly held during distillation and drained after")
+	})
 }
 
-// waitForDistillComplete waits for a distilled conversation to have a user message.
-func waitForDistillComplete(t *testing.T, database *db.DB, convID string) {
+func waitForConversationDistillingToClear(t *testing.T, server *Server, convID string) {
 	t.Helper()
-	for i := 0; i < 100; i++ {
-		msgs, err := database.ListMessages(context.Background(), convID)
-		if err != nil {
-			t.Fatalf("failed to list messages: %v", err)
+
+	server.mu.Lock()
+	manager, ok := server.activeConversations[convID]
+	server.mu.Unlock()
+	if !ok {
+		t.Fatalf("expected active conversation manager for %s", convID)
+	}
+
+	synctest.Wait()
+
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	if manager.distilling {
+		t.Fatalf("expected distilling=false for %s after synctest wait", convID)
+	}
+}
+
+func requireDistilledUserMessage(t *testing.T, database *db.DB, convID string) {
+	t.Helper()
+
+	msgs, err := database.ListMessages(context.Background(), convID)
+	if err != nil {
+		t.Fatalf("failed to list messages for %s: %v", convID, err)
+	}
+
+	for _, msg := range msgs {
+		if msg.Type != string(db.MessageTypeUser) || msg.LlmData == nil || msg.UserData == nil {
+			continue
 		}
-		for _, msg := range msgs {
-			if msg.Type == string(db.MessageTypeUser) && msg.LlmData != nil {
+
+		var userData map[string]string
+		if err := json.Unmarshal([]byte(*msg.UserData), &userData); err != nil {
+			continue
+		}
+		if userData["distilled"] != "true" {
+			continue
+		}
+
+		var llmMsg llm.Message
+		if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err != nil {
+			t.Fatalf("failed to parse distilled message llm_data in %s: %v", convID, err)
+		}
+
+		for _, content := range llmMsg.Content {
+			if content.Type == llm.ContentTypeText && content.Text != "" {
 				return
 			}
 		}
-		time.Sleep(50 * time.Millisecond)
+
+		t.Fatalf("expected distilled user message in %s to contain text", convID)
 	}
-	t.Fatalf("timed out waiting for distillation to complete in %s", convID)
+
+	t.Fatalf("expected distilled user message in %s", convID)
+}
+
+func stopActiveConversationLoops(server *Server) {
+	server.mu.Lock()
+	managers := make([]*ConversationManager, 0, len(server.activeConversations))
+	for _, manager := range server.activeConversations {
+		managers = append(managers, manager)
+	}
+	server.mu.Unlock()
+
+	for _, manager := range managers {
+		manager.stopLoop()
+	}
 }

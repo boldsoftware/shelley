@@ -999,7 +999,6 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 	}
 
 	ctx := r.Context()
-
 	// Parse last_sequence_id for resuming streams
 	lastSeqID := int64(-1)
 	if lastSeqStr := r.URL.Query().Get("last_sequence_id"); lastSeqStr != "" {

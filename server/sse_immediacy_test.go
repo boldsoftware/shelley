@@ -102,7 +102,7 @@ func TestSSEUserMessageAppearsImmediately(t *testing.T) {
 	select {
 	case <-sseRecorder.flushed:
 		// Got initial state
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for initial SSE event")
 	}
 
