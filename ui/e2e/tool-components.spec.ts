@@ -24,13 +24,19 @@ test.describe('Tool Component Verification', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // All tool results are already in the DB; wait for the UI to render them.
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid="tool-call-completed"]').length >= 14, undefined, { timeout: 30000 });
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="tool-call-completed"]').length >= 15, undefined, { timeout: 30000 });
 
     // Verify bash tool uses BashTool component (has bash-tool class)
-    const bashTool = page.locator('.bash-tool').first();
+    const bashTool = page.locator('.bash-tool').filter({ hasText: "echo 'hello from bash'" });
     await expect(bashTool).toBeVisible();
     await expect(bashTool.locator('.bash-tool-emoji')).toBeVisible();
     await expect(bashTool.locator('.bash-tool-command')).toBeVisible();
+
+    // Verify shell tool reuses BashTool component (has bash-tool class)
+    const shellTool = page.locator('.bash-tool').filter({ hasText: "echo 'hello from shell'" });
+    await expect(shellTool).toBeVisible();
+    await expect(shellTool.locator('.bash-tool-emoji')).toBeVisible();
+    await expect(shellTool.locator('.bash-tool-command')).toBeVisible();
 
     // Verify thinking content appears (has thinking-content class with 💭 emoji)
     const thinkingContent = page.locator('.thinking-content').filter({ hasText: "I'm thinking about the best approach" });
@@ -147,7 +153,7 @@ test.describe('Tool Component Verification', () => {
     await page.goto(`/c/${slug}`);
     await page.waitForLoadState('domcontentloaded');
 
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid="tool-call-completed"]').length >= 14, undefined, { timeout: 30000 });
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="tool-call-completed"]').length >= 15, undefined, { timeout: 30000 });
 
     // Verify browser_navigate tool shows URL in the header
     const navigateTool = page.locator('.tool').filter({ hasText: 'https://example.com' }).first();
@@ -201,7 +207,7 @@ test.describe('Tool Component Verification', () => {
     await page.goto(`/c/${slug}`);
     await page.waitForLoadState('domcontentloaded');
 
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid="tool-call-completed"]').length >= 14, undefined, { timeout: 30000 });
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="tool-call-completed"]').length >= 15, undefined, { timeout: 30000 });
 
     // Get all tool emojis and check their computed font-size
     const emojiSizes = await page.$$eval('.tool-emoji, .bash-tool-emoji, .patch-tool-emoji, .screenshot-tool-emoji', (elements) => elements.map((el) => window.getComputedStyle(el).fontSize));
