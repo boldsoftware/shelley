@@ -353,9 +353,10 @@ class ApiService {
     return response.json();
   }
 
-  async getGitDiffFiles(diffId: string, cwd: string): Promise<GitFileInfo[]> {
+  async getGitDiffFiles(diffId: string, cwd: string, to?: string): Promise<GitFileInfo[]> {
+    const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
     const response = await fetch(
-      `${this.baseUrl}/git/diffs/${diffId}/files?cwd=${encodeURIComponent(cwd)}`,
+      `${this.baseUrl}/git/diffs/${diffId}/files?cwd=${encodeURIComponent(cwd)}${toParam}`,
     );
     if (!response.ok) {
       throw new Error(`Failed to get diff files: ${response.statusText}`);
@@ -363,9 +364,15 @@ class ApiService {
     return response.json();
   }
 
-  async getGitFileDiff(diffId: string, filePath: string, cwd: string): Promise<GitFileDiff> {
+  async getGitFileDiff(
+    diffId: string,
+    filePath: string,
+    cwd: string,
+    to?: string,
+  ): Promise<GitFileDiff> {
+    const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
     const response = await fetch(
-      `${this.baseUrl}/git/file-diff/${diffId}/${filePath}?cwd=${encodeURIComponent(cwd)}`,
+      `${this.baseUrl}/git/file-diff/${diffId}/${filePath}?cwd=${encodeURIComponent(cwd)}${toParam}`,
     );
     if (!response.ok) {
       throw new Error(`Failed to get file diff: ${response.statusText}`);
@@ -376,9 +383,11 @@ class ApiService {
   async getGitCommitMessages(
     cwd: string,
     from: string,
+    to?: string,
   ): Promise<{ hash: string; subject: string; body: string; author: string; isHead: boolean }[]> {
+    const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
     const response = await fetch(
-      `${this.baseUrl}/git/commit-messages?cwd=${encodeURIComponent(cwd)}&from=${encodeURIComponent(from)}`,
+      `${this.baseUrl}/git/commit-messages?cwd=${encodeURIComponent(cwd)}&from=${encodeURIComponent(from)}${toParam}`,
     );
     if (!response.ok) {
       throw new Error(`Failed to get commit messages: ${response.statusText}`);

@@ -138,6 +138,10 @@ export interface GitDiffInfo {
   filesCount: number;
   additions: number;
   deletions: number;
+  // Decorating refs (branches, tags, HEAD), like git log --decorate.
+  refs?: string[];
+  // True if this commit is the merge-base with @{upstream}.
+  isMergeBase?: boolean;
 }
 
 export interface GitFileInfo {

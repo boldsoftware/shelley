@@ -4537,12 +4537,374 @@ svg {
   flex: 1;
   gap: 0.5rem;
   min-width: 0;
+  /* stretch so the two groups share a common height; labels pin to top
+   * and inputs to bottom via the column layout below. */
+  align-items: stretch;
 }
 
 .diff-viewer-selectors-row .diff-viewer-select {
   flex: 1;
   min-width: 0;
   max-width: none;
+}
+
+.diff-viewer-selector-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 0.125rem;
+  /* keep label at the top and the input at the bottom so the two columns
+   * line up regardless of the input's intrinsic height. */
+  justify-content: space-between;
+}
+
+.diff-viewer-selector-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Combined commit picker (replaces the prior pair of <select>s). */
+.commit-picker {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.commit-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.25rem;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.commit-picker-trigger:hover {
+  background: var(--bg-tertiary);
+}
+
+.commit-picker-trigger-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.commit-picker-trigger-primary {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commit-picker-trigger-secondary {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commit-picker-trigger-chevron {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* Desktop popover */
+.commit-picker-popover {
+  position: absolute;
+  z-index: 1500;
+  margin-top: 0.25rem;
+  width: min(560px, calc(100vw - 2rem));
+  max-height: 70vh;
+  background: var(--bg-base);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Mobile modal */
+.commit-picker-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1500;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.commit-picker-modal {
+  background: var(--bg-base);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.commit-picker-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+}
+
+.commit-picker-modal-close {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  background: transparent;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-radius: 0.25rem;
+}
+
+.commit-picker-modal-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.commit-picker-help {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  line-height: 1.4;
+}
+
+.commit-picker-status {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  line-height: 1.4;
+}
+
+.commit-picker-status code {
+  font-family: monospace;
+  color: var(--text-primary);
+  background: var(--bg-base);
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.2rem;
+  border: 1px solid var(--border-color);
+}
+
+.commit-picker-status-pending {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--text-primary);
+  border-bottom-color: rgba(99, 102, 241, 0.4);
+}
+
+.commit-picker-action-primary {
+  background: rgba(99, 102, 241, 0.15) !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  color: rgb(165, 180, 252) !important;
+  font-weight: 600;
+}
+
+.commit-picker-trigger-primary code {
+  font-family: monospace;
+}
+
+.commit-picker-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.commit-picker-empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.commit-picker-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border-color);
+  position: relative;
+}
+
+.commit-picker-row:last-child {
+  border-bottom: none;
+}
+
+.commit-picker-row-from {
+  background: var(--blue-bg, rgba(59, 130, 246, 0.12));
+}
+
+.commit-picker-row-to {
+  background: var(--green-bg, rgba(16, 185, 129, 0.12));
+}
+
+.commit-picker-row-in-range {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.commit-picker-row-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  min-width: 0;
+}
+
+.commit-picker-row-main:hover {
+  background: var(--bg-tertiary);
+}
+
+.commit-picker-row-marker {
+  width: 1rem;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.commit-picker-row-from .commit-picker-row-marker {
+  color: var(--blue-text, #2563eb);
+}
+
+.commit-picker-row-to .commit-picker-row-marker {
+  color: var(--green-text, #059669);
+}
+
+.commit-picker-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.commit-picker-row-subject {
+  font-size: 0.875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.commit-picker-row-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.commit-picker-refs {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.commit-picker-ref {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-family: monospace;
+  line-height: 1;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.commit-picker-ref-head {
+  background: rgba(99, 102, 241, 0.15);
+  color: rgb(129, 140, 248);
+  border-color: rgba(99, 102, 241, 0.4);
+  font-weight: 600;
+}
+
+.commit-picker-ref-remote {
+  background: rgba(244, 114, 182, 0.12);
+  color: rgb(244, 114, 182);
+  border-color: rgba(244, 114, 182, 0.35);
+}
+
+.commit-picker-ref-mergebase {
+  background: rgba(245, 158, 11, 0.15);
+  color: rgb(251, 191, 36);
+  border-color: rgba(245, 158, 11, 0.4);
+  font-style: italic;
+}
+
+.commit-picker-row-pending {
+  outline: 2px dashed rgba(99, 102, 241, 0.5);
+  outline-offset: -2px;
+  border-radius: 0.25rem;
+}
+
+.commit-picker-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.commit-picker-row-hash {
+  font-family: monospace;
+}
+
+.commit-picker-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-right: 0.5rem;
+  flex-shrink: 0;
+}
+
+.commit-picker-action {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.25rem;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.commit-picker-action:hover {
+  background: var(--bg-tertiary);
 }
 
 .diff-viewer-file-selector-wrapper {

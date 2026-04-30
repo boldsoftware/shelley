@@ -656,4 +656,258 @@ func TestRootCommitDiffs(t *testing.T) {
 	if fileDiff.NewContent != "hello world\n" {
 		t.Errorf("expected 'hello world\n' as new content, got %q", fileDiff.NewContent)
 	}
+
+	// to=self on a root commit: parent is the empty tree, head is the
+	// commit itself, so the diff is the full commit with no working-tree
+	// noise.
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/git/diffs/%s/files?cwd=%s&to=self", commitHash, gitDir), nil)
+	w = httptest.NewRecorder()
+	h.server.handleGitDiffFiles(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("handleGitDiffFiles to=self on root: %d: %s", w.Code, w.Body.String())
+	}
+	var selfFiles []GitFileInfo
+	if err := json.Unmarshal(w.Body.Bytes(), &selfFiles); err != nil {
+		t.Fatal(err)
+	}
+	if len(selfFiles) != 2 {
+		t.Errorf("expected 2 files for root commit to=self, got %d", len(selfFiles))
+	}
+
+	// Reject malicious `to` values that look like git flags.
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/git/diffs/%s/files?cwd=%s&to=--output=/tmp/x", commitHash, gitDir), nil)
+	w = httptest.NewRecorder()
+	h.server.handleGitDiffFiles(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for to=--output=, got %d", w.Code)
+	}
+}
+
+// TestHandleGitDiffFiles_ToParam exercises the optional `to` query param that
+// scopes the right-hand side of the diff (working tree / self / arbitrary hash).
+func TestHandleGitDiffFiles_ToParam(t *testing.T) {
+	t.Parallel()
+	h := NewTestHarness(t)
+
+	gitDir := t.TempDir()
+	run := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = gitDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, string(out))
+		}
+	}
+	run("init")
+	run("config", "user.name", "Test")
+	run("config", "user.email", "test@example.com")
+
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(gitDir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	commit := func(msg string) {
+		run("commit", "-m", msg+"\n\nPrompt: test")
+	}
+	write("a.txt", "a1\n")
+	run("add", ".")
+	commit("c1")
+	write("b.txt", "b1\n")
+	run("add", ".")
+	commit("c2")
+	write("c.txt", "c1\n")
+	run("add", ".")
+	commit("c3")
+	// Working-tree-only modification of a tracked file.
+	write("a.txt", "a1\nworking\n")
+
+	revList := func() []string {
+		cmd := exec.Command("git", "rev-list", "HEAD")
+		cmd.Dir = gitDir
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.Split(strings.TrimSpace(string(out)), "\n")
+	}
+	hashes := revList() // [c3, c2, c1] newest first
+	c1, c2, c3 := hashes[2], hashes[1], hashes[0]
+
+	getFiles := func(diffID, to string) []string {
+		url := fmt.Sprintf("/api/git/diffs/%s/files?cwd=%s", diffID, gitDir)
+		if to != "" {
+			url += "&to=" + to
+		}
+		req := httptest.NewRequest("GET", url, nil)
+		w := httptest.NewRecorder()
+		h.server.handleGitDiffFiles(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("diffs/%s/files to=%q: %d: %s", diffID, to, w.Code, w.Body.String())
+		}
+		var files []GitFileInfo
+		if err := json.Unmarshal(w.Body.Bytes(), &files); err != nil {
+			t.Fatal(err)
+		}
+		paths := make([]string, len(files))
+		for i, f := range files {
+			paths[i] = f.Path
+		}
+		return paths
+	}
+
+	// Default: from c2 through working tree (a.txt picks up the working
+	// modification because we compare c2's parent—c1—to the working tree).
+	got := getFiles(c2, "")
+	want := []string{"a.txt", "b.txt", "c.txt"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("default: got %v, want %v", got, want)
+	}
+
+	// Self: only c2 itself.
+	got = getFiles(c2, "self")
+	want = []string{"b.txt"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("self: got %v, want %v", got, want)
+	}
+
+	// Range starting at c1 through c3 (parent(c1)..c3 — includes a.txt).
+	got = getFiles(c1, c3)
+	want = []string{"a.txt", "b.txt", "c.txt"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("range: got %v, want %v", got, want)
+	}
+
+	// commit-messages with to=self returns just the from commit.
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/git/commit-messages?cwd=%s&from=%s&to=self", gitDir, c2), nil)
+	w := httptest.NewRecorder()
+	h.server.handleGitCommitMessages(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("commit-messages: %d: %s", w.Code, w.Body.String())
+	}
+	var msgs []CommitMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &msgs); err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 || msgs[0].Hash != c2 {
+		t.Errorf("commit-messages self: got %+v, want only %s", msgs, c2)
+	}
+
+	// commit-messages default: c1 from..HEAD includes c2, c3 + c1.
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/git/commit-messages?cwd=%s&from=%s", gitDir, c1), nil)
+	w = httptest.NewRecorder()
+	h.server.handleGitCommitMessages(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("commit-messages default: %d", w.Code)
+	}
+	msgs = nil
+	if err := json.Unmarshal(w.Body.Bytes(), &msgs); err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 3 {
+		t.Errorf("commit-messages default: expected 3 commits, got %d", len(msgs))
+	}
+
+	// file-diff for a.txt at c2 with to=self should yield the committed
+	// content at c2 ("a1\n"), not the working-tree modification.
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/git/file-diff/%s/a.txt?cwd=%s&to=self", c2, gitDir), nil)
+	w = httptest.NewRecorder()
+	h.server.handleGitFileDiff(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("file-diff: %d: %s", w.Code, w.Body.String())
+	}
+	var fd GitFileDiff
+	if err := json.Unmarshal(w.Body.Bytes(), &fd); err != nil {
+		t.Fatal(err)
+	}
+	if fd.NewContent != "a1\n" {
+		t.Errorf("file-diff to=self for a.txt at c2: got %q, want %q", fd.NewContent, "a1\n")
+	}
+	// And without `to`, it should reflect the working-tree change.
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/git/file-diff/%s/a.txt?cwd=%s", c2, gitDir), nil)
+	w = httptest.NewRecorder()
+	h.server.handleGitFileDiff(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("file-diff default: %d", w.Code)
+	}
+	fd = GitFileDiff{}
+	if err := json.Unmarshal(w.Body.Bytes(), &fd); err != nil {
+		t.Fatal(err)
+	}
+	if fd.NewContent != "a1\nworking\n" {
+		t.Errorf("file-diff default for a.txt: got %q, want working version", fd.NewContent)
+	}
+}
+
+func TestParseDecorations(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"", nil},
+		{"main", []string{"main"}},
+		{"HEAD -> main", []string{"HEAD", "main"}},
+		{"HEAD -> main, origin/main", []string{"HEAD", "main", "origin/main"}},
+		{"tag: v1.2.3, refs/stash", []string{"v1.2.3", "refs/stash"}},
+		{"  HEAD -> main ,  origin/main  ", []string{"HEAD", "main", "origin/main"}},
+	}
+	for _, tc := range cases {
+		got := parseDecorations(tc.in)
+		if len(got) != len(tc.want) {
+			t.Errorf("parseDecorations(%q) = %v, want %v", tc.in, got, tc.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("parseDecorations(%q)[%d] = %q, want %q", tc.in, i, got[i], tc.want[i])
+			}
+		}
+	}
+}
+
+// TestHandleGitDiffs_RefsAndMergeBase verifies the diff list includes
+// decorating refs (HEAD, branch) and the merge-base flag when an
+// upstream is configured.
+func TestHandleGitDiffs_RefsAndMergeBase(t *testing.T) {
+	t.Parallel()
+	h := NewTestHarness(t)
+	gitDir := setupTestGitRepo(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/git/diffs?cwd=%s", gitDir), nil)
+	w := httptest.NewRecorder()
+	h.server.handleGitDiffs(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var response struct {
+		Diffs []GitDiffInfo `json:"diffs"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	// Find the commit row (skipping the working-changes row).
+	var commit *GitDiffInfo
+	for i := range response.Diffs {
+		if response.Diffs[i].ID != "working" {
+			commit = &response.Diffs[i]
+			break
+		}
+	}
+	if commit == nil {
+		t.Fatal("no commit in diffs")
+	}
+	foundHead := false
+	for _, ref := range commit.Refs {
+		if ref == "HEAD" {
+			foundHead = true
+		}
+	}
+	if !foundHead {
+		t.Errorf("expected HEAD in refs, got %v", commit.Refs)
+	}
+	// IsMergeBase should be false because the test repo has no upstream.
+	if commit.IsMergeBase {
+		t.Errorf("expected IsMergeBase=false (no upstream), got true")
+	}
 }

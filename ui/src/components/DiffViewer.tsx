@@ -5,6 +5,7 @@ import { loadMonaco } from "../services/monaco";
 import { isDarkModeActive } from "../services/theme";
 import { GitDiffInfo, GitFileInfo, GitFileDiff, GitCommitMessage } from "../types";
 import DirectoryPickerModal from "./DirectoryPickerModal";
+import CommitPicker from "./CommitPicker";
 
 interface DiffViewerProps {
   cwd: string;
@@ -79,6 +80,12 @@ function DiffViewer({
   const [gitRoot, setGitRoot] = useState<string | null>(null);
   const [showDirPicker, setShowDirPicker] = useState(false);
   const [selectedDiff, setSelectedDiff] = useState<string | null>(null);
+  // Right-hand-side bound for the commit range:
+  //   "working": through working tree (default)
+  //   "self":    only the selected commit
+  //   <hash>:    arbitrary newer commit
+  // Only meaningful when selectedDiff is a commit (not "working").
+  const [selectedTo, setSelectedTo] = useState<string>("working");
   const [files, setFiles] = useState<GitFileInfo[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileDiff, setFileDiff] = useState<GitFileDiff | null>(null);
@@ -133,11 +140,12 @@ function DiffViewer({
     // Update editor readOnly state when mode changes
     // (but not for commit message files - those have their own editability logic)
     if (editorRef.current && selectedFile && !isCommitMessageFile(selectedFile)) {
-      const readOnly = mode === "comment";
+      const isWorkingView = selectedDiff === "working" || selectedTo === "working";
+      const readOnly = mode === "comment" || !isWorkingView;
       editorRef.current.updateOptions({ readOnly });
       editorRef.current.getModifiedEditor().updateOptions({ readOnly });
     }
-  }, [mode, selectedFile]);
+  }, [mode, selectedFile, selectedDiff, selectedTo]);
 
   // Track viewport size
   useEffect(() => {
@@ -214,12 +222,22 @@ function DiffViewer({
     }
   }, [isOpen, cwd, initialCommit]);
 
-  // Load files when diff is selected
+  // If `selectedTo` references a commit hash that's no longer in the loaded
+  // diffs (e.g. after refreshing the list), drop back to the working-tree
+  // default rather than silently sending a stale hash to the backend.
+  useEffect(() => {
+    if (selectedTo === "working" || selectedTo === "self") return;
+    if (!diffs.some((d) => d.id === selectedTo)) {
+      setSelectedTo("working");
+    }
+  }, [diffs, selectedTo]);
+
+  // Load files when diff (or its `to` bound) is selected
   useEffect(() => {
     if (selectedDiff && cwd) {
       loadFiles(selectedDiff);
     }
-  }, [selectedDiff, cwd]);
+  }, [selectedDiff, selectedTo, cwd]);
 
   // Load file diff when file is selected
   useEffect(() => {
@@ -227,7 +245,7 @@ function DiffViewer({
       loadFileDiff(selectedDiff, selectedFile);
       setCurrentChangeIndex(-1); // Reset change index for new file
     }
-  }, [selectedDiff, selectedFile, cwd]);
+  }, [selectedDiff, selectedFile, selectedTo, cwd]);
 
   // Track current file context for handlers that outlive model swaps.
   // These refs avoid the need to recreate the diff editor (and leak monaco
@@ -511,8 +529,10 @@ function DiffViewer({
     prev?.original.dispose();
     prev?.modified.dispose();
 
-    // Update readOnly based on file type and current mode.
-    const readOnly = isCommitMsg ? !isHeadCommit : modeRef.current === "comment";
+    // Update readOnly based on file type, current mode, and whether we're
+    // viewing the working tree (only working-tree views are editable).
+    const isWorkingView = selectedDiff === "working" || selectedTo === "working";
+    const readOnly = isCommitMsg ? !isHeadCommit : modeRef.current === "comment" || !isWorkingView;
     diffEditor.updateOptions({ readOnly });
     diffEditor.getModifiedEditor().updateOptions({ readOnly });
 
@@ -583,13 +603,14 @@ function DiffViewer({
     try {
       setLoading(true);
       setError(null);
-      const filesData = await api.getGitDiffFiles(diffId, cwd);
+      const toArg = diffId === "working" ? undefined : selectedTo;
+      const filesData = await api.getGitDiffFiles(diffId, cwd, toArg);
 
       // Load commit messages if this is a commit (not working changes)
       let msgs: GitCommitMessage[] = [];
       if (diffId !== "working") {
         try {
-          msgs = await api.getGitCommitMessages(cwd, diffId);
+          msgs = await api.getGitCommitMessages(cwd, diffId, toArg);
           setCommitMessages(msgs);
         } catch {
           // Non-fatal: just don't show commit messages
@@ -644,7 +665,8 @@ function DiffViewer({
         return;
       }
 
-      const diffData = await api.getGitFileDiff(diffId, filePath, cwd);
+      const toArg = diffId === "working" ? undefined : selectedTo;
+      const diffData = await api.getGitFileDiff(diffId, filePath, cwd, toArg);
       setFileDiff(diffData);
     } catch (err) {
       setError(`Failed to load file diff: ${err}`);
@@ -774,13 +796,15 @@ function DiffViewer({
 
   // Save the current file (in edit mode)
   const saveCurrentFile = useCallback(async () => {
+    const isWorkingView = selectedDiff === "working" || selectedTo === "working";
     if (
       !editorRef.current ||
       !selectedFile ||
       isCommitMessageFile(selectedFile) ||
       !fileDiff ||
       modeRef.current !== "edit" ||
-      !gitRoot
+      !gitRoot ||
+      !isWorkingView
     ) {
       return;
     }
@@ -812,7 +836,7 @@ function DiffViewer({
       setSaveStatus("error");
       setTimeout(() => setSaveStatus("idle"), 3000);
     }
-  }, [selectedFile, fileDiff, gitRoot]);
+  }, [selectedFile, fileDiff, gitRoot, selectedDiff, selectedTo]);
 
   // Debounced auto-save
   const scheduleSave = useCallback(() => {
@@ -876,6 +900,14 @@ function DiffViewer({
         const findWidget = editorContainerRef.current?.querySelector(".find-widget.visible");
         if (findWidget) {
           return; // Let Monaco close its find widget
+        }
+        // If a nested overlay (commit picker, dir picker) is open, let it
+        // handle Escape rather than closing the whole diff viewer.
+        if (
+          document.querySelector(".commit-picker-popover") ||
+          document.querySelector(".commit-picker-modal")
+        ) {
+          return;
         }
         if (showCommentDialog) {
           setShowCommentDialog(null);
@@ -990,25 +1022,18 @@ function DiffViewer({
   const hasNextFile = currentFileIndex < files.length - 1;
   const hasPrevFile = currentFileIndex > 0;
 
-  // Selectors shared between desktop and mobile
+  // Single combined commit picker (replaces the prior pair of <select>s).
   const commitSelector = (
-    <select
-      value={selectedDiff || ""}
-      onChange={(e) => setSelectedDiff(e.target.value || null)}
-      className="diff-viewer-select"
-    >
-      <option value="">Choose base...</option>
-      {diffs.map((diff) => {
-        const stats = `${diff.filesCount} files, +${diff.additions}/-${diff.deletions}`;
-        return (
-          <option key={diff.id} value={diff.id}>
-            {diff.id === "working"
-              ? `Working Changes (${stats})`
-              : `${truncateWithEllipsis(diff.message, 40)} (${stats})`}
-          </option>
-        );
-      })}
-    </select>
+    <CommitPicker
+      diffs={diffs}
+      selectedDiff={selectedDiff}
+      selectedTo={selectedTo}
+      onChange={(diff, to) => {
+        setSelectedDiff(diff);
+        setSelectedTo(to);
+      }}
+      isMobile={isMobile}
+    />
   );
 
   const fileIndexIndicator =
@@ -1170,8 +1195,16 @@ function DiffViewer({
           <div className="diff-viewer-header">
             <div className="diff-viewer-header-row">
               <div className="diff-viewer-selectors-row">
-                {commitSelector}
-                {fileSelector}
+                <div className="diff-viewer-selector-group">
+                  <label className="diff-viewer-selector-label">Commits</label>
+                  {commitSelector}
+                </div>
+                <div className="diff-viewer-selector-group">
+                  <label className="diff-viewer-selector-label">
+                    Commit messages and changed files
+                  </label>
+                  {fileSelector}
+                </div>
               </div>
               <div className="diff-viewer-controls-row">
                 {navButtons}
