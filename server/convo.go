@@ -168,6 +168,7 @@ func (cm *ConversationManager) Hydrate(ctx context.Context) error {
 	if conversation.Model != nil {
 		modelID = *conversation.Model
 	}
+	cm.toolSetConfig.ModelID = modelID
 
 	// Load conversation options
 	cm.conversationOptions = db.ParseConversationOptions(conversation.ConversationOptions)
@@ -494,7 +495,7 @@ func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generat
 		Type:           db.MessageTypeSystem,
 		LLMData:        systemMessage,
 		UsageData:      llm.Usage{},
-		DisplayData:    systemPromptDisplayData(cm.toolSetConfig),
+		DisplayData:    cm.systemPromptDisplayData(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to store system prompt: %w", err)
@@ -541,6 +542,13 @@ func systemPromptDisplayData(cfg claudetool.ToolSetConfig) map[string]any {
 	return toolDisplayData(ts.Tools())
 }
 
+func (cm *ConversationManager) systemPromptDisplayData() map[string]any {
+	cfg := cm.toolSetConfig
+	cfg.ToolOverrides = cm.conversationOptions.ToolOverrides
+	cfg.DisableAllTools = cm.conversationOptions.DisableAllTools
+	return systemPromptDisplayData(cfg)
+}
+
 func (cm *ConversationManager) createSubagentSystemPrompt(ctx context.Context, parentConversationID string) (*generated.Message, error) {
 	systemPrompt, err := GenerateSubagentSystemPrompt(cm.cwd, parentConversationID)
 	if err != nil {
@@ -562,7 +570,7 @@ func (cm *ConversationManager) createSubagentSystemPrompt(ctx context.Context, p
 		Type:           db.MessageTypeSystem,
 		LLMData:        systemMessage,
 		UsageData:      llm.Usage{},
-		DisplayData:    systemPromptDisplayData(cm.toolSetConfig),
+		DisplayData:    cm.systemPromptDisplayData(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to store subagent system prompt: %w", err)
@@ -650,7 +658,7 @@ func (cm *ConversationManager) createOrchestratorSubagentSystemPrompt(ctx contex
 		Type:           db.MessageTypeSystem,
 		LLMData:        systemMessage,
 		UsageData:      llm.Usage{},
-		DisplayData:    systemPromptDisplayData(cm.toolSetConfig),
+		DisplayData:    cm.systemPromptDisplayData(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to store orchestrator subagent system prompt: %w", err)
