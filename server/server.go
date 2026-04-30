@@ -334,6 +334,11 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/notification-channels/", http.HandlerFunc(s.handleNotificationChannel))
 	mux.Handle("/api/notification-channel-types", http.HandlerFunc(s.handleNotificationChannelTypes))
 
+	// Web push API
+	mux.Handle("GET /api/push/vapid-public-key", http.HandlerFunc(s.handlePushVapidKey))
+	mux.Handle("POST /api/push/subscribe", http.HandlerFunc(s.handlePushSubscribe))
+	mux.Handle("POST /api/push/unsubscribe", http.HandlerFunc(s.handlePushUnsubscribe))
+
 	// Models API (dynamic list refresh)
 	mux.Handle("/api/models", http.HandlerFunc(s.handleModels))
 	mux.Handle("/api/host-icon", http.HandlerFunc(s.handleHostIcon))
@@ -1311,6 +1316,11 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 
 	tcpServer := &http.Server{
 		Handler: tcpHandler,
+	}
+
+	// Initialize web push (generates VAPID keys if needed)
+	if err := s.initWebPush(); err != nil {
+		s.logger.Warn("Web push initialization failed", "error", err)
 	}
 
 	// Start cleanup routine

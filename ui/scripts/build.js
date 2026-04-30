@@ -20,6 +20,16 @@ async function build() {
       fs.mkdirSync('dist');
     }
 
+    // Build service worker (IIFE, NOT compressed — browsers fetch sw.js directly)
+    log('Building service worker...');
+    await esbuild.build({
+      entryPoints: ['src/sw.ts'],
+      bundle: true,
+      outfile: 'dist/sw.js',
+      format: 'iife',
+      minify: isProd,
+    });
+
     // Build Monaco editor worker separately (IIFE format for web worker)
     log('Building Monaco editor worker...');
     await esbuild.build({

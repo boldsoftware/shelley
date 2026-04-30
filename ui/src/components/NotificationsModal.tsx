@@ -8,6 +8,10 @@ import {
   requestBrowserNotificationPermission,
   isChannelEnabled,
   setChannelEnabled,
+  getWebPushState,
+  subscribeToWebPush,
+  unsubscribeFromWebPush,
+  type WebPushState,
 } from "../services/notifications";
 
 interface NotificationsModalProps {
@@ -41,6 +45,8 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
   const [browserEnabled, setBrowserEnabled] = useState(() => isChannelEnabled("browser"));
   const [faviconEnabled, setFaviconEnabled] = useState(() => isChannelEnabled("favicon"));
   const [browserPermission, setBrowserPermission] = useState(getBrowserNotificationState);
+  const [webPushState, setWebPushState] = useState<WebPushState>("unsubscribed");
+  const [webPushBusy, setWebPushBusy] = useState(false);
 
   // Form state
   const [showForm, setShowForm] = useState(false);
@@ -72,6 +78,7 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
       setBrowserPermission(getBrowserNotificationState());
       setBrowserEnabled(isChannelEnabled("browser"));
       setFaviconEnabled(isChannelEnabled("favicon"));
+      getWebPushState().then(setWebPushState);
     }
   }, [isOpen, loadChannels]);
 
@@ -359,6 +366,53 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
             {faviconEnabled ? t("on") : t("off")}
           </button>
         </div>
+
+        {/* Web Push */}
+        {webPushState !== "unsupported" && (
+          <div className="model-card notifications-card">
+            <div>
+              <div className="notifications-card-title">Web Push</div>
+              <div className="notifications-card-description">
+                {webPushState === "denied"
+                  ? "Notifications blocked by browser — check your browser settings"
+                  : webPushState === "subscribed"
+                    ? "Push notifications active for this device (works when app is closed)"
+                    : "Receive push notifications even when the app is in the background or closed"}
+              </div>
+            </div>
+            <div className="notifications-card-actions">
+              {webPushState === "subscribed" ? (
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={webPushBusy}
+                  onClick={async () => {
+                    setWebPushBusy(true);
+                    await unsubscribeFromWebPush();
+                    setWebPushState(await getWebPushState());
+                    setWebPushBusy(false);
+                  }}
+                >
+                  {webPushBusy ? "..." : t("on")}
+                </button>
+              ) : webPushState === "denied" ? (
+                <span className="notifications-denied-text">{t("denied")}</span>
+              ) : (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  disabled={webPushBusy}
+                  onClick={async () => {
+                    setWebPushBusy(true);
+                    await subscribeToWebPush();
+                    setWebPushState(await getWebPushState());
+                    setWebPushBusy(false);
+                  }}
+                >
+                  {webPushBusy ? "..." : "Enable"}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Backend channels section */}

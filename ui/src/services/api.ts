@@ -680,3 +680,48 @@ class NotificationChannelsApi {
 }
 
 export const notificationChannelsApi = new NotificationChannelsApi();
+
+class PushApi {
+  private baseUrl = "/api/push";
+  private headers = { "Content-Type": "application/json" };
+
+  async getVapidPublicKey(): Promise<string> {
+    const response = await fetch(`${this.baseUrl}/vapid-public-key`);
+    if (!response.ok) throw new Error("Failed to get VAPID public key");
+    const data: { public_key: string } = await response.json();
+    return data.public_key;
+  }
+
+  async subscribe(subscription: PushSubscriptionJSON): Promise<string> {
+    const keys = subscription.keys as { p256dh: string; auth: string } | undefined;
+    const response = await fetch(`${this.baseUrl}/subscribe`, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({
+        endpoint: subscription.endpoint,
+        p256dh: keys?.p256dh ?? "",
+        auth: keys?.auth ?? "",
+        user_agent: navigator.userAgent,
+      }),
+    });
+    if (!response.ok) {
+      const msg = await response.text().catch(() => "");
+      throw new Error(msg.trim() || "Failed to register push subscription");
+    }
+    const data: { id: string } = await response.json();
+    return data.id;
+  }
+
+  async unsubscribe(endpoint: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/unsubscribe`, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({ endpoint }),
+    });
+    if (!response.ok && response.status !== 404) {
+      throw new Error("Failed to unsubscribe from push notifications");
+    }
+  }
+}
+
+export const pushApi = new PushApi();
