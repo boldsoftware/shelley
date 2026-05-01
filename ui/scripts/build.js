@@ -1,8 +1,35 @@
 import * as esbuild from 'esbuild';
 import * as fs from 'fs';
+import * as path from 'path';
 import * as zlib from 'zlib';
 import * as crypto from 'crypto';
 import { execSync } from 'child_process';
+
+// Esbuild plugin: rewrite any "monaco-editor*" import (including deep paths
+// like monaco-editor/esm/vs/editor/editor.api) to the runtime URL
+// /monaco-editor.js, marked external. Our custom bundle entry re-exports
+// everything monaco-vim needs from that single file.
+//
+// We also bypass monaco-vim's package.json exports map: it routes the
+// "browser" condition to a UMD bundle that esbuild wraps with a CJS
+// require() shim, which then tries to require('/monaco-editor.js') at
+// runtime and fails. Resolve directly to the ESM index.mjs instead.
+function monacoExternalPlugin() {
+  return {
+    name: 'monaco-external',
+    setup(build) {
+      build.onResolve({ filter: /^monaco-editor(\/|$)/ }, () => ({
+        path: '/monaco-editor.js',
+        external: true,
+      }));
+      const monacoVimEsm = path.resolve(
+        process.cwd(),
+        'node_modules/monaco-vim/dist/index.mjs',
+      );
+      build.onResolve({ filter: /^monaco-vim$/ }, () => ({ path: monacoVimEsm }));
+    },
+  };
+}
 
 const isWatch = process.argv.includes('--watch');
 const isProd = !isWatch;
@@ -42,10 +69,14 @@ async function build() {
       sourcemap: true,
     });
 
-    // Build Monaco editor as a separate chunk (JS + CSS)
+    // Build Monaco editor as a separate chunk (JS + CSS).
+    // We bundle through src/monaco-bundle-entry.js so we can also surface
+    // the internal modules monaco-vim depends on (ShiftCommand) as named
+    // exports of /monaco-editor.js — that way monaco-vim runs against the
+    // *same* Monaco instance the rest of the app loads.
     log('Building Monaco editor bundle...');
     await esbuild.build({
-      entryPoints: ['node_modules/monaco-editor/esm/vs/editor/editor.main.js'],
+      entryPoints: ['src/monaco-bundle-entry.js'],
       bundle: true,
       outfile: 'dist/monaco-editor.js',
       format: 'esm',
@@ -67,6 +98,19 @@ async function build() {
       sourcemap: true,
       metafile: true,
       external: ['monaco-editor', '/monaco-editor.js'],
+      // Prefer ESM entry points so dynamic imports (e.g. monaco-vim) end
+      // up using `import` rather than CJS `require` (which esbuild can't
+      // emit at runtime in the browser).
+      // monaco-vim's package.json exports a UMD bundle under the "browser"
+      // condition; esbuild picks that by default and wraps it in a CJS
+      // shim that requires() the external /monaco-editor.js at runtime,
+      // which fails in the browser. Force resolution to its ESM build.
+
+      // monaco-vim imports specific submodules of monaco-editor. Rewrite
+      // those to the same runtime URL the rest of the app uses, so we end
+      // up with a single Monaco instance instead of two. The rewritten
+      // imports are marked external (above) so esbuild emits them as-is.
+      plugins: [monacoExternalPlugin()],
     });
 
     // Copy static files

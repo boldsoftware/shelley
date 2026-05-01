@@ -8716,3 +8716,63 @@ kbd {
     pointer-events: none;
   }
 }
+
+/* Vim mode toggle (Monaco editors) */
+.vim-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  letter-spacing: 0.04em;
+  background: var(--bg-secondary, #f0f0f0);
+  color: var(--text-secondary, #555);
+  border: 1px solid var(--border-color, #d0d0d0);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.vim-toggle:hover {
+  background: var(--bg-hover, #e5e5e5);
+}
+.vim-toggle.active {
+  background: #019833;
+  color: #fff;
+  border-color: #019833;
+}
+
+/* monaco-vim status bar (mode indicator + ex command line). Anchored to the
+   bottom of its positioned ancestor so we don't have to restructure the
+   Monaco editor's flex layout. */
+.monaco-vim-status {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  padding: 2px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  background: var(--bg-secondary, #f0f0f0);
+  color: var(--text-primary, #222);
+  border-top: 1px solid var(--border-color, #d0d0d0);
+  min-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.monaco-vim-status input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: inherit;
+  font: inherit;
+  width: 100%;
+}
+.dark .monaco-vim-status {
+  background: #1e1e1e;
+  color: #ccc;
+  border-top-color: #333;
+}

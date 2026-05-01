@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import type * as Monaco from "monaco-editor";
 import { loadMonaco } from "../services/monaco";
 import { isDarkModeActive } from "../services/theme";
+import { useVimEnabled, useMonacoVim } from "../hooks/useMonacoVim";
+import VimToggle from "./VimToggle";
 
 interface AgentsMdEditorModalProps {
   isOpen: boolean;
@@ -20,9 +22,20 @@ export default function AgentsMdEditorModal({ isOpen, onClose }: AgentsMdEditorM
   const [monacoLoaded, setMonacoLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
 
+  const [editor, setEditor] = useState<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [vimStatusNode, setVimStatusNode] = useState<HTMLDivElement | null>(null);
+  const [vimEnabled, setVimEnabled] = useVimEnabled();
+  // Vim mode is keyboard-driven; only expose it where there's a real keyboard.
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 768);
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth >= 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  useMonacoVim(editor, vimStatusNode, isDesktop && vimEnabled);
   const saveTimeoutRef = useRef<number | null>(null);
   const statusTimeoutRef = useRef<number | null>(null);
 
@@ -136,6 +149,7 @@ export default function AgentsMdEditorModal({ isOpen, onClose }: AgentsMdEditorM
     });
 
     editorRef.current = editor;
+    setEditor(editor);
 
     // Auto-save on content change
     editor.onDidChangeModelContent(() => {
@@ -158,6 +172,7 @@ export default function AgentsMdEditorModal({ isOpen, onClose }: AgentsMdEditorM
       }
       editor.dispose();
       editorRef.current = null;
+      setEditor(null);
     };
   }, [monacoLoaded, content, scheduleSave, saveContent]);
 
@@ -226,6 +241,7 @@ export default function AgentsMdEditorModal({ isOpen, onClose }: AgentsMdEditorM
                 {saveStatus === "error" && "Error saving"}
               </span>
             )}
+            {isDesktop && <VimToggle enabled={vimEnabled} onChange={setVimEnabled} />}
             <button className="diff-viewer-close" onClick={onClose} title="Close (Esc)">
               ×
             </button>
@@ -257,6 +273,9 @@ export default function AgentsMdEditorModal({ isOpen, onClose }: AgentsMdEditorM
                     monacoLoaded && content !== null && loadStatus === "loaded" ? "block" : "none",
                 }}
               />
+              {isDesktop && vimEnabled && (
+                <div ref={setVimStatusNode} className="monaco-vim-status" />
+              )}
             </>
           )}
         </div>

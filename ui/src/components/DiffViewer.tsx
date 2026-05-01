@@ -3,6 +3,8 @@ import type * as Monaco from "monaco-editor";
 import { api } from "../services/api";
 import { loadMonaco } from "../services/monaco";
 import { isDarkModeActive } from "../services/theme";
+import { useVimEnabled, useMonacoVim } from "../hooks/useMonacoVim";
+import VimToggle from "./VimToggle";
 import { GitDiffInfo, GitFileInfo, GitFileDiff, GitCommitMessage } from "../types";
 import DirectoryPickerModal from "./DirectoryPickerModal";
 import CommitPicker from "./CommitPicker";
@@ -120,6 +122,14 @@ function DiffViewer({
   const hasShownKeyboardHint = useRef(false);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [vimEnabled, setVimEnabled] = useVimEnabled();
+  // The vim adapter attaches to the modified (right-hand) code editor; we
+  // surface it via state because we have the diff editor in a ref.
+  const [modifiedEditor, setModifiedEditor] = useState<Monaco.editor.IStandaloneCodeEditor | null>(
+    null,
+  );
+  const [vimStatusNode, setVimStatusNode] = useState<HTMLDivElement | null>(null);
+  useMonacoVim(modifiedEditor, vimStatusNode, !isMobile && vimEnabled);
   // Mirror of isMobile for handlers attached once at editor-creation time
   // (those handlers must honor the *current* viewport, not the viewport at
   // creation time, because we intentionally don't recreate the editor on
@@ -302,6 +312,7 @@ function DiffViewer({
 
     editorRef.current = diffEditor;
     const modifiedEditor = diffEditor.getModifiedEditor();
+    setModifiedEditor(modifiedEditor);
 
     const openCommentDialog = (lineNumber: number) => {
       const model = modifiedEditor.getModel();
@@ -470,6 +481,7 @@ function DiffViewer({
       model?.original.dispose();
       model?.modified.dispose();
       editorRef.current = null;
+      setModifiedEditor(null);
     };
   }, [isOpen, monacoLoaded]);
 
@@ -1209,6 +1221,7 @@ function DiffViewer({
               <div className="diff-viewer-controls-row">
                 {navButtons}
                 {modeToggle}
+                <VimToggle enabled={vimEnabled} onChange={setVimEnabled} />
                 {dirButton}
                 <button className="diff-viewer-close" onClick={onClose} title="Close (Esc)">
                   ×
@@ -1250,6 +1263,9 @@ function DiffViewer({
             className="diff-viewer-editor"
             style={{ display: fileDiff && monacoLoaded ? "block" : "none" }}
           />
+          {!isMobile && vimEnabled && fileDiff && monacoLoaded && (
+            <div ref={setVimStatusNode} className="monaco-vim-status" />
+          )}
         </div>
 
         {/* Mobile floating nav buttons at bottom */}

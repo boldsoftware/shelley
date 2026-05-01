@@ -37,3 +37,31 @@ export function loadMonaco(): Promise<typeof Monaco> {
 
   return monacoLoadPromise;
 }
+
+// Vim mode adapter (lazy-loaded so users without vim enabled don't pay for it).
+let vimModulePromise: Promise<typeof import("monaco-vim")> | null = null;
+export function loadMonacoVim(): Promise<typeof import("monaco-vim")> {
+  if (!vimModulePromise) {
+    vimModulePromise = import("monaco-vim");
+  }
+  return vimModulePromise;
+}
+
+// localStorage helpers for the vim toggle. We persist a single global flag
+// that applies to every Monaco view (AGENTS.md editor + diff viewer).
+const VIM_STORAGE_KEY = "shelley.monacoVim";
+export function getVimModeEnabled(): boolean {
+  try {
+    return localStorage.getItem(VIM_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+export function setVimModeEnabled(enabled: boolean): void {
+  try {
+    if (enabled) localStorage.setItem(VIM_STORAGE_KEY, "1");
+    else localStorage.removeItem(VIM_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
