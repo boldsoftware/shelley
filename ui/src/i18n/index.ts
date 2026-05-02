@@ -3,3 +3,4 @@ export { I18nProvider, useI18n, I18nContext } from "./context";
 export { en } from "./en";
 export { zhCN } from "./zh-CN";
 export { zhTW } from "./zh-TW";
+export { vn } from "./vi";
