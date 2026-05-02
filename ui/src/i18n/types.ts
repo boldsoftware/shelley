@@ -1,4 +1,4 @@
-export type Locale = "en" | "ja" | "fr" | "ru" | "es" | "zh-CN" | "zh-TW" | "upgoer5";
+export type Locale = "en" | "ja" | "fr" | "ru" | "es" | "zh-CN" | "zh-TW" | "upgoer5" | "vi";
 
 export interface TranslationKeys {
   // App-level
@@ -217,4 +217,5 @@ export interface TranslationKeys {
   upgoerFive: string;
   simplifiedChinese: string;
   traditionalChinese: string;
+  vietnamese: string;
 }
