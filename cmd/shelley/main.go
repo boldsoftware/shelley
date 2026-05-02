@@ -316,22 +316,27 @@ func setupToolSetConfig(llmProvider claudetool.LLMServiceProvider, llmManager se
 		wd = "/"
 	}
 
-	// Build available models with display names for the subagent tool
-	var availableModels []claudetool.AvailableModel
-	for _, id := range llmManager.GetAvailableModels() {
-		am := claudetool.AvailableModel{ID: id}
-		if info := llmManager.GetModelInfo(id); info != nil && info.DisplayName != "" && info.DisplayName != id {
-			am.DisplayName = info.DisplayName
+	// Resolve the list of available models lazily, each time a ToolSet is
+	// built. This lets newly-added custom models become visible to subagents
+	// (and llm_one_shot) without restarting the server. See issue #195.
+	buildAvailableModels := func() []claudetool.AvailableModel {
+		var out []claudetool.AvailableModel
+		for _, id := range llmManager.GetAvailableModels() {
+			am := claudetool.AvailableModel{ID: id}
+			if info := llmManager.GetModelInfo(id); info != nil && info.DisplayName != "" && info.DisplayName != id {
+				am.DisplayName = info.DisplayName
+			}
+			out = append(out, am)
 		}
-		availableModels = append(availableModels, am)
+		return out
 	}
 
 	return claudetool.ToolSetConfig{
-		WorkingDir:       wd,
-		LLMProvider:      llmProvider,
-		EnableJITInstall: claudetool.EnableBashToolJITInstall,
-		EnableBrowser:    true,
-		AvailableModels:  availableModels,
+		WorkingDir:           wd,
+		LLMProvider:          llmProvider,
+		EnableJITInstall:     claudetool.EnableBashToolJITInstall,
+		EnableBrowser:        true,
+		BuildAvailableModels: buildAvailableModels,
 	}
 }
 

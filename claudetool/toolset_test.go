@@ -3,6 +3,7 @@ package claudetool
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -358,5 +359,80 @@ func TestToolDescriptions(t *testing.T) {
 		if tool.Name == "subagent" {
 			t.Error("subagent-disabled config should not include subagent tool")
 		}
+	}
+}
+
+// TestNewToolSet_BuildAvailableModelsFreshOnEachCall verifies that the
+// available-model list is resolved fresh each time a ToolSet is built. This
+// matters because subagents inherit the list, and users expect newly added
+// custom models to show up in new conversations without restarting the
+// server. Regression test for issue #195.
+func TestNewToolSet_BuildAvailableModelsFreshOnEachCall(t *testing.T) {
+	provider := &mockLLMProvider{}
+	db := newMockSubagentDB()
+	runner := &mockSubagentRunner{response: "ok"}
+
+	models := []AvailableModel{{ID: "model-a"}}
+	calls := 0
+	cfg := ToolSetConfig{
+		LLMProvider:          provider,
+		ModelID:              "test-model",
+		WorkingDir:           "/test",
+		SubagentRunner:       runner,
+		SubagentDB:           db,
+		ParentConversationID: "parent",
+		BuildAvailableModels: func() []AvailableModel {
+			calls++
+			out := make([]AvailableModel, len(models))
+			copy(out, models)
+			return out
+		},
+	}
+
+	findSubagent := func(ts *ToolSet) string {
+		for _, tool := range ts.Tools() {
+			if tool.Name == "subagent" {
+				return tool.Description
+			}
+		}
+		return ""
+	}
+
+	ts1 := NewToolSet(context.Background(), cfg)
+	desc1 := findSubagent(ts1)
+	if desc1 == "" {
+		t.Fatal("expected subagent tool in first ToolSet")
+	}
+	if !strings.Contains(desc1, "model-a") {
+		t.Errorf("expected first description to mention model-a, got: %s", desc1)
+	}
+
+	// Simulate a custom model being added at runtime.
+	models = append(models, AvailableModel{ID: "model-b", DisplayName: "Model B"})
+
+	ts2 := NewToolSet(context.Background(), cfg)
+	desc2 := findSubagent(ts2)
+	if desc2 == "" {
+		t.Fatal("expected subagent tool in second ToolSet")
+	}
+	if !strings.Contains(desc2, "model-b") {
+		t.Errorf("expected second description to pick up model-b, got: %s", desc2)
+	}
+	if calls != 2 {
+		t.Errorf("expected BuildAvailableModels to be invoked once per ToolSet, got %d calls", calls)
+	}
+
+	// When BuildAvailableModels is nil, fall back to LLMProvider.GetAvailableModels.
+	cfgNoBuilder := cfg
+	cfgNoBuilder.BuildAvailableModels = nil
+	ts3 := NewToolSet(context.Background(), cfgNoBuilder)
+	desc3 := findSubagent(ts3)
+	if desc3 == "" {
+		t.Fatal("expected subagent tool when falling back to LLMProvider")
+	}
+	// mockLLMProvider.GetAvailableModels returns nothing useful by default,
+	// but the description should at least be non-empty and not panic.
+	if !strings.Contains(desc3, "subagent") {
+		t.Errorf("expected fallback description to mention subagents, got: %s", desc3)
 	}
 }

@@ -70,9 +70,13 @@ type ToolSetConfig struct {
 	// A value of 0 means no limit (but SubagentRunner/SubagentDB must still be set).
 	// Set to 1 to allow only top-level conversations (depth 0) to spawn subagents.
 	MaxSubagentDepth int
-	// AvailableModels is the list of models the subagent can choose from.
-	// If nil, the list is built from LLMProvider.GetAvailableModels().
-	AvailableModels []AvailableModel
+	// BuildAvailableModels, if set, is called by NewToolSet to compute the
+	// list of models that subagent / llm_one_shot tools can choose from.
+	// It is invoked each time a ToolSet is built so new conversations pick
+	// up custom models added at runtime, instead of being stuck with a
+	// snapshot taken at server start. If nil, the list is built from
+	// LLMProvider.GetAvailableModels() (without display names).
+	BuildAvailableModels func() []AvailableModel
 	// ToolOverrides maps tool name to "on" or "off". Tools not listed use their default.
 	ToolOverrides map[string]string
 	// DisableAllTools disables every tool by default; ToolOverrides with "on" re-enable.
@@ -118,8 +122,10 @@ type OrchestratorToolSetConfig struct {
 	ModelID string
 	// LLMProvider provides access to LLM services.
 	LLMProvider LLMServiceProvider
-	// AvailableModels is the list of models the subagent can choose from.
-	AvailableModels []AvailableModel
+	// BuildAvailableModels is called to compute the list of models that
+	// the orchestrator's subagent tool can choose from, fresh each time an
+	// orchestrator ToolSet is built. See ToolSetConfig.BuildAvailableModels.
+	BuildAvailableModels func() []AvailableModel
 	// WorkingDir is the initial working directory.
 	WorkingDir string
 	// OnWorkingDirChange is called when change_dir changes the working directory.
@@ -176,8 +182,10 @@ func NewOrchestratorToolSet(ctx context.Context, cfg OrchestratorToolSetConfig) 
 	tools = append(tools, outputIframeTool.Tool())
 
 	// Build available models list
-	availableModels := cfg.AvailableModels
-	if availableModels == nil && cfg.LLMProvider != nil {
+	var availableModels []AvailableModel
+	if cfg.BuildAvailableModels != nil {
+		availableModels = cfg.BuildAvailableModels()
+	} else if cfg.LLMProvider != nil {
 		for _, id := range cfg.LLMProvider.GetAvailableModels() {
 			availableModels = append(availableModels, AvailableModel{ID: id})
 		}
@@ -290,8 +298,12 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 	}
 
 	// Build the available models list (shared by subagent and llm_one_shot tools).
-	availableModels := cfg.AvailableModels
-	if availableModels == nil && cfg.LLMProvider != nil {
+	// Resolved fresh on each ToolSet construction so new conversations see
+	// custom models added since server start.
+	var availableModels []AvailableModel
+	if cfg.BuildAvailableModels != nil {
+		availableModels = cfg.BuildAvailableModels()
+	} else if cfg.LLMProvider != nil {
 		for _, id := range cfg.LLMProvider.GetAvailableModels() {
 			availableModels = append(availableModels, AvailableModel{ID: id})
 		}
