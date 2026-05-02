@@ -242,8 +242,11 @@ func TestToLLMResponseFromResponses(t *testing.T) {
 				Model: "gpt-5.1-codex",
 				Output: []responsesOutputItem{
 					{
-						Type:    "reasoning",
-						Summary: []string{"Let me think", "about this"},
+						Type: "reasoning",
+						Summary: []responsesSummary{
+							{Type: "summary_text", Text: "Let me think"},
+							{Type: "summary_text", Text: "about this"},
+						},
 					},
 					{
 						Type: "message",
@@ -276,6 +279,63 @@ func TestToLLMResponseFromResponses(t *testing.T) {
 				t.Errorf("expected %d content items, got %d", tt.contentCount, len(llmResp.Content))
 			}
 		})
+	}
+}
+
+// TestResponsesReasoningSummaryUnmarshal verifies that a reasoning output item
+// with a structured summary array (objects, not bare strings) unmarshals
+// successfully. Regression test for issue #192.
+func TestResponsesReasoningSummaryUnmarshal(t *testing.T) {
+	raw := []byte(`{
+		"id": "resp_1",
+		"object": "response",
+		"status": "completed",
+		"model": "gpt-5.1-codex",
+		"output": [
+			{
+				"id": "rs_1",
+				"type": "reasoning",
+				"summary": [
+					{"type": "summary_text", "text": "First thought."},
+					{"type": "summary_text", "text": "Second thought."}
+				]
+			},
+			{
+				"id": "msg_1",
+				"type": "message",
+				"role": "assistant",
+				"content": [{"type": "output_text", "text": "Hello."}]
+			}
+		],
+		"usage": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}
+	}`)
+	var resp responsesResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Output) != 2 {
+		t.Fatalf("expected 2 output items, got %d", len(resp.Output))
+	}
+	rs := resp.Output[0]
+	if len(rs.Summary) != 2 || rs.Summary[0].Text != "First thought." || rs.Summary[1].Text != "Second thought." {
+		t.Fatalf("unexpected summary: %+v", rs.Summary)
+	}
+	svc := &ResponsesService{}
+	llmResp := svc.toLLMResponseFromResponses(&resp, nil)
+	var gotThinking, gotText string
+	for _, c := range llmResp.Content {
+		switch c.Type {
+		case llm.ContentTypeThinking:
+			gotThinking = c.Text
+		case llm.ContentTypeText:
+			gotText = c.Text
+		}
+	}
+	if gotThinking != "First thought.\nSecond thought." {
+		t.Errorf("thinking: got %q", gotThinking)
+	}
+	if gotText != "Hello." {
+		t.Errorf("text: got %q", gotText)
 	}
 }
 

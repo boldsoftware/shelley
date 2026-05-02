@@ -96,7 +96,14 @@ type responsesOutputItem struct {
 	CallID    string             `json:"call_id,omitempty"`   // for function_call
 	Name      string             `json:"name,omitempty"`      // for function_call
 	Arguments string             `json:"arguments,omitempty"` // for function_call
-	Summary   []string           `json:"summary,omitempty"`   // for reasoning
+	Summary   []responsesSummary `json:"summary,omitempty"`   // for reasoning
+}
+
+// responsesSummary is an item in a reasoning output's summary array.
+// See https://developers.openai.com/api/docs/guides/reasoning#reasoning-summaries
+type responsesSummary struct {
+	Type string `json:"type"` // "summary_text"
+	Text string `json:"text"`
 }
 
 type responsesUsage struct {
@@ -287,11 +294,18 @@ func (s *ResponsesService) toLLMResponseFromResponses(resp *responsesResponse, h
 		case "reasoning":
 			// Convert reasoning to thinking content
 			if len(item.Summary) > 0 {
-				summaryText := strings.Join(item.Summary, "\n")
-				contents = append(contents, llm.Content{
-					Type: llm.ContentTypeThinking,
-					Text: summaryText,
-				})
+				parts := make([]string, 0, len(item.Summary))
+				for _, s := range item.Summary {
+					if s.Text != "" {
+						parts = append(parts, s.Text)
+					}
+				}
+				if len(parts) > 0 {
+					contents = append(contents, llm.Content{
+						Type: llm.ContentTypeThinking,
+						Text: strings.Join(parts, "\n"),
+					})
+				}
 			}
 		case "function_call":
 			// Convert function call to tool use
