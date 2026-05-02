@@ -1176,6 +1176,46 @@ func (s *Server) IsAgentWorking(conversationID string) bool {
 	return manager.IsAgentWorking()
 }
 
+// stopAllConversations stops every active conversation loop and cleans up
+// their tool sets. Used on graceful shutdown to ensure browser subprocesses
+// (headless-shell and its descendants) are killed. Returns when every loop
+// has stopped or ctx is done. On timeout, lingering stopLoop goroutines keep
+// running in the background; if the process exits before they finish their
+// browser groups will be orphaned, but that's a strict improvement over the
+// previous unbounded behavior.
+func (s *Server) stopAllConversations(ctx context.Context) {
+	s.mu.Lock()
+	managers := make([]*ConversationManager, 0, len(s.activeConversations))
+	for id, manager := range s.activeConversations {
+		managers = append(managers, manager)
+		delete(s.activeConversations, id)
+	}
+	s.mu.Unlock()
+
+	// stopLoop can block briefly waiting for browser process exit. Run them
+	// in parallel so a slow browser doesn't serialize shutdown across many
+	// conversations.
+	done := make(chan struct{})
+	go func() {
+		var wg sync.WaitGroup
+		for _, manager := range managers {
+			wg.Add(1)
+			go func(m *ConversationManager) {
+				defer wg.Done()
+				m.stopLoop()
+			}(manager)
+		}
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		s.logger.Warn("Conversation cleanup timed out, leaving stopLoop in background", "count", len(managers))
+	}
+}
+
 // Cleanup removes inactive conversation managers
 func (s *Server) Cleanup() {
 	// Collect managers to clean up under the lock, but don't call stopLoop
@@ -1331,6 +1371,14 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	// Graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	// Stop active conversation loops so their tool sets (notably the browser,
+	// which spawns headless-shell + descendants) are cleaned up. Without this
+	// we'd rely on process exit + chromedp's Pdeathsig, which only kills the
+	// direct child and leaves zygote/renderer/GPU processes orphaned. Bound
+	// it by the shutdown context so a hung stopLoop can't starve HTTP
+	// shutdown's deadline.
+	s.stopAllConversations(ctx)
 
 	if err := tcpServer.Shutdown(ctx); err != nil {
 		s.logger.Error("TCP server forced to shutdown", "error", err)

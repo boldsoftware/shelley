@@ -90,6 +90,9 @@ type BrowseTools struct {
 	traceMutex      sync.Mutex
 	// Screencast state
 	screencast screencastState
+	// browserCmd is the headless-shell *exec.Cmd, captured via
+	// chromedp.ModifyCmdFunc so we can kill its process group on shutdown.
+	browserCmd *exec.Cmd
 }
 
 // NewBrowseTools creates a new set of browser automation tools.
@@ -147,6 +150,30 @@ func (b *BrowseTools) GetBrowserContext() (context.Context, error) {
 	opts = append(opts, chromedp.Flag("disable-features",
 		"site-per-process,Translate,BlinkGenPropertyTrees,WebAuthentication"))
 
+	// Capture the *exec.Cmd headless-shell is launched with so closeBrowserLocked
+	// can kill the whole process group. headless-shell forks zygote, renderers,
+	// GPU and utility processes; chromedp's default cancel only SIGKILLs the
+	// direct child, leaving descendants orphaned to PID 1. ModifyCmdFunc also
+	// replaces chromedp's default cmd setup, so configureBrowserCmd re-applies
+	// Pdeathsig and adds Setpgid for clean group kill.
+	// ModifyCmdFunc runs synchronously on the chromedp.Run goroutine before
+	// cmd.Start, so a plain pointer assignment is enough — Run returns after
+	// the browser is up, so by the time we read capturedCmd below the function
+	// has already finished.
+	var capturedCmd *exec.Cmd
+	opts = append(opts, chromedp.ModifyCmdFunc(func(cmd *exec.Cmd) {
+		configureBrowserCmd(cmd)
+		capturedCmd = cmd
+	}))
+
+	// killCapturedGroup is shared between error paths and the success path so
+	// every exit from this function reaps the headless-shell process group.
+	killCapturedGroup := func() {
+		if capturedCmd != nil && capturedCmd.Process != nil {
+			killBrowserProcessGroup(capturedCmd.Process.Pid)
+		}
+	}
+
 	allocCtx, allocCancel := chromedp.NewExecAllocator(b.ctx, opts...)
 	browserCtx, browserCancel := chromedp.NewContext(
 		allocCtx,
@@ -162,6 +189,7 @@ func (b *BrowseTools) GetBrowserContext() (context.Context, error) {
 	// Start the browser
 	if err := chromedp.Run(browserCtx); err != nil {
 		allocCancel()
+		killCapturedGroup()
 		return nil, fmt.Errorf("failed to start browser (please apt get chromium or equivalent): %w", err)
 	}
 
@@ -169,6 +197,7 @@ func (b *BrowseTools) GetBrowserContext() (context.Context, error) {
 	if err := chromedp.Run(browserCtx, chromedp.EmulateViewport(1280, 720)); err != nil {
 		browserCancel()
 		allocCancel()
+		killCapturedGroup()
 		return nil, fmt.Errorf("failed to set default viewport: %w", err)
 	}
 
@@ -180,6 +209,7 @@ func (b *BrowseTools) GetBrowserContext() (context.Context, error) {
 	); err != nil {
 		browserCancel()
 		allocCancel()
+		killCapturedGroup()
 		return nil, fmt.Errorf("failed to configure download behavior: %w", err)
 	}
 
@@ -187,6 +217,7 @@ func (b *BrowseTools) GetBrowserContext() (context.Context, error) {
 	b.allocCancel = allocCancel
 	b.browserCtx = browserCtx
 	b.browserCtxCancel = browserCancel
+	b.browserCmd = capturedCmd
 
 	b.resetIdleTimerLocked()
 
@@ -265,10 +296,12 @@ func (b *BrowseTools) closeBrowserLocked() {
 
 	browserCancel := b.browserCtxCancel
 	allocCancel := b.allocCancel
+	browserCmd := b.browserCmd
 	b.browserCtxCancel = nil
 	b.allocCancel = nil
 	b.browserCtx = nil
 	b.allocCtx = nil
+	b.browserCmd = nil
 
 	// Release the lock before calling cancel functions. allocCancel in
 	// particular can block waiting for the chrome process to exit, and
@@ -282,6 +315,14 @@ func (b *BrowseTools) closeBrowserLocked() {
 	}
 	if allocCancel != nil {
 		allocCancel()
+	}
+	// chromedp's allocCancel relies on context cancellation propagating SIGKILL
+	// only to headless-shell's direct process. Renderers, GPU, utility, and
+	// zygote children get reparented to PID 1 and continue running. Since we
+	// launched headless-shell in its own process group (Setpgid), we can
+	// SIGKILL the entire group to guarantee no leaks.
+	if browserCmd != nil && browserCmd.Process != nil {
+		killBrowserProcessGroup(browserCmd.Process.Pid)
 	}
 }
 
