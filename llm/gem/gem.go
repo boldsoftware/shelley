@@ -23,10 +23,18 @@ const (
 // Service provides Gemini completions.
 // Fields should not be altered concurrently with calling any method on Service.
 type Service struct {
-	HTTPC  *http.Client // defaults to http.DefaultClient if nil
-	URL    string       // Gemini API URL, uses the gemini package default if empty
-	APIKey string       // must be non-empty
-	Model  string       // defaults to DefaultModel if empty
+	HTTPC         *http.Client      // defaults to http.DefaultClient if nil
+	URL           string            // Gemini API URL, uses the gemini package default if empty
+	APIKey        string            // must be non-empty
+	Model         string            // defaults to DefaultModel if empty
+	ThinkingLevel llm.ThinkingLevel // thinking level (ThinkingLevelOff disables thinkingConfig)
+
+	// ReasoningEffort, if non-empty, is used as the thinkingConfig.thinkingLevel
+	// value sent to Gemini 3.x verbatim, overriding ThinkingLevel. Ignored for
+	// Gemini 2.5 (which uses thinkingBudget). This mirrors oai.ResponsesService
+	// so custom-model configurations can pass provider-specific values through
+	// without Shelley needing to know them.
+	ReasoningEffort string
 }
 
 var _ llm.Service = (*Service)(nil)
@@ -308,7 +316,45 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 		}
 	}
 
+	if tc := s.thinkingConfig(); tc != nil {
+		if gemReq.GenerationConfig == nil {
+			gemReq.GenerationConfig = &gemini.GenerationConfig{}
+		}
+		gemReq.GenerationConfig.ThinkingConfig = tc
+	}
+
 	return gemReq, nil
+}
+
+// thinkingConfig builds the Gemini ThinkingConfig from the service settings.
+// Returns nil when no thinking config should be sent (use the model default).
+func (s *Service) thinkingConfig() *gemini.ThinkingConfig {
+	if s.ReasoningEffort == "" && s.ThinkingLevel == llm.ThinkingLevelOff {
+		return nil
+	}
+	model := cmp.Or(s.Model, DefaultModel)
+	if strings.HasPrefix(model, "gemini-3") {
+		level := s.ReasoningEffort
+		if level == "" {
+			level = s.ThinkingLevel.ThinkingEffort()
+		}
+		if level == "" {
+			return nil
+		}
+		// gemini-3-pro-preview accepts only "low" and "high".
+		if model == "gemini-3-pro-preview" {
+			switch level {
+			case "minimal", "low":
+				level = "low"
+			case "medium", "high":
+				level = "high"
+			}
+		}
+		return &gemini.ThinkingConfig{ThinkingLevel: level}
+	}
+	// Gemini 2.5 (and earlier) uses an integer thinkingBudget.
+	budget := s.ThinkingLevel.ThinkingBudgetTokens()
+	return &gemini.ThinkingConfig{ThinkingBudget: &budget}
 }
 
 // convertGeminiResponsesToContent converts a Gemini response to llm.Content
@@ -476,8 +522,9 @@ func (s *Service) TokenContextWindow() int {
 
 	// Gemini models generally have large context windows
 	switch model {
-	case "gemini-3-pro-preview", "gemini-3-flash-preview":
-		return 1000000 // 1M tokens for Gemini 3
+	case "gemini-3-pro-preview", "gemini-3-flash-preview",
+		"gemini-3.1-pro-preview", "gemini-3.1-flash-lite-preview":
+		return 1000000 // 1M tokens for Gemini 3 / 3.1
 	case "gemini-2.5-pro", "gemini-2.5-flash":
 		return 1000000 // 1M tokens for Gemini 2.5
 	case "gemini-2.0-flash-exp", "gemini-2.0-flash":

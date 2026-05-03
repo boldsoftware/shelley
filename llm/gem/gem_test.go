@@ -1132,3 +1132,87 @@ func TestRoundTripThinking(t *testing.T) {
 		t.Fatalf("Expected no signature for text, got '%s'", textPart.ThoughtSignature)
 	}
 }
+
+func TestThinkingConfig(t *testing.T) {
+	userMsg := llm.Request{
+		Messages: []llm.Message{{
+			Role:    llm.MessageRoleUser,
+			Content: []llm.Content{{Type: llm.ContentTypeText, Text: "hi"}},
+		}},
+	}
+
+	tests := []struct {
+		name        string
+		svc         *Service
+		wantLevel   string
+		wantBudget  *int
+		wantOmitted bool
+	}{
+		{
+			name:        "off by default",
+			svc:         &Service{Model: "gemini-3-flash-preview", APIKey: "x"},
+			wantOmitted: true,
+		},
+		{
+			name:      "gemini-3-flash maps medium to thinkingLevel",
+			svc:       &Service{Model: "gemini-3-flash-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium},
+			wantLevel: "medium",
+		},
+		{
+			name:      "gemini-3-pro clamps medium to high",
+			svc:       &Service{Model: "gemini-3-pro-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium},
+			wantLevel: "high",
+		},
+		{
+			name:      "gemini-3-pro clamps minimal to low",
+			svc:       &Service{Model: "gemini-3-pro-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMinimal},
+			wantLevel: "low",
+		},
+		{
+			name:      "gemini-3.1-pro accepts medium",
+			svc:       &Service{Model: "gemini-3.1-pro-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium},
+			wantLevel: "medium",
+		},
+		{
+			name:      "ReasoningEffort overrides ThinkingLevel for 3.x",
+			svc:       &Service{Model: "gemini-3-flash-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium, ReasoningEffort: "high"},
+			wantLevel: "high",
+		},
+		{
+			name:       "gemini-2.5 uses thinkingBudget",
+			svc:        &Service{Model: "gemini-2.5-pro", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium},
+			wantBudget: ptr(8192),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gemReq, err := tt.svc.buildGeminiRequest(&userMsg)
+			if err != nil {
+				t.Fatalf("buildGeminiRequest: %v", err)
+			}
+			if tt.wantOmitted {
+				if gemReq.GenerationConfig != nil && gemReq.GenerationConfig.ThinkingConfig != nil {
+					t.Fatalf("expected no thinkingConfig, got %+v", gemReq.GenerationConfig.ThinkingConfig)
+				}
+				return
+			}
+			if gemReq.GenerationConfig == nil || gemReq.GenerationConfig.ThinkingConfig == nil {
+				t.Fatalf("expected thinkingConfig to be set")
+			}
+			tc := gemReq.GenerationConfig.ThinkingConfig
+			if tc.ThinkingLevel != tt.wantLevel {
+				t.Errorf("thinkingLevel = %q, want %q", tc.ThinkingLevel, tt.wantLevel)
+			}
+			if tt.wantBudget != nil {
+				if tc.ThinkingBudget == nil || *tc.ThinkingBudget != *tt.wantBudget {
+					t.Errorf("thinkingBudget = %v, want %d", tc.ThinkingBudget, *tt.wantBudget)
+				}
+			} else if tc.ThinkingBudget != nil {
+				t.Errorf("unexpected thinkingBudget = %d", *tc.ThinkingBudget)
+			}
+		})
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
