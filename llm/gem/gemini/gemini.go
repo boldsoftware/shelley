@@ -52,7 +52,14 @@ type Part struct {
 	CodeExecutionResult *CodeExecutionResult `json:"codeExecutionResult,omitempty"`
 	// ThoughtSignature is required for Gemini 3 models when using function calling.
 	// It must be passed back exactly as received when sending the conversation history.
+	// Note: presence of ThoughtSignature does NOT mean the part is a thought summary —
+	// Gemini 3 attaches it to ordinary final-answer text and tool calls so that
+	// internal reasoning state can be rehydrated on the next turn. Use Thought to
+	// detect a thought summary.
 	ThoughtSignature string `json:"thoughtSignature,omitempty"`
+	// Thought is true when the part is a thought summary (only emitted when
+	// thinkingConfig.includeThoughts is true). https://ai.google.dev/gemini-api/docs/thinking
+	Thought bool `json:"thought,omitempty"`
 	// TODO inlineData
 	// TODO fileData
 }

@@ -202,13 +202,17 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 					// For thinking content, use the Thinking field and preserve the signature
 					part.Text = c.Thinking
 					part.ThoughtSignature = c.Signature
+					part.Thought = true
 				} else if c.Type == llm.ContentTypeRedactedThinking {
 					// For redacted thinking, use the Data field (consistent with Anthropic pattern)
 					part.Text = c.Data
 					part.ThoughtSignature = c.Signature
+					part.Thought = true
 				} else {
-					// For regular text, use the Text field
+					// Regular text. Gemini 3 may have attached a thoughtSignature to
+					// the final-answer text — pass it back so reasoning state survives.
 					part.Text = c.Text
+					part.ThoughtSignature = c.Signature
 				}
 				content.Parts = append(content.Parts, part)
 			case llm.ContentTypeToolUse:
@@ -378,9 +382,10 @@ func convertGeminiResponseToContent(res *gemini.Response) []llm.Content {
 			"has_function_response", part.FunctionResponse != nil)
 
 		if part.Text != "" {
-			// Check if this is thinking content (has a thought signature)
-			if part.ThoughtSignature != "" {
-				// This is thinking content - use ContentTypeThinking
+			// A part is a thought summary only when thought=true. Gemini 3 attaches
+			// thoughtSignature to ordinary final-answer text too, for round-tripping
+			// reasoning state — that signature alone does not make the text a thought.
+			if part.Thought {
 				contents = append(contents, llm.Content{
 					Type:      llm.ContentTypeThinking,
 					Thinking:  part.Text,
@@ -390,10 +395,10 @@ func convertGeminiResponseToContent(res *gemini.Response) []llm.Content {
 					"signature", part.ThoughtSignature,
 					"thinking_length", len(part.Text))
 			} else {
-				// Regular text response
 				contents = append(contents, llm.Content{
-					Type: llm.ContentTypeText,
-					Text: part.Text,
+					Type:      llm.ContentTypeText,
+					Text:      part.Text,
+					Signature: part.ThoughtSignature,
 				})
 			}
 		} else if part.FunctionCall != nil {
