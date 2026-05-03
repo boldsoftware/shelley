@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { linkifyText } from "../utils/linkify";
+import { renderInlineText } from "../utils/inlineText";
 import { useMarkdown } from "../contexts/MarkdownContext";
 import MarkdownContent from "./MarkdownContent";
 import {
@@ -498,7 +498,9 @@ const Message = React.memo(function Message({
           return <MarkdownContent text={content.Text || ""} />;
         }
         return (
-          <div className="whitespace-pre-wrap break-words">{linkifyText(content.Text || "")}</div>
+          <div className="whitespace-pre-wrap break-words">
+            {renderInlineText(content.Text || "")}
+          </div>
         );
       case "tool_use":
         // IMPORTANT: When adding a new tool component here, also add it to:

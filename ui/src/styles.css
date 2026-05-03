@@ -13,8 +13,7 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  font-family:
-    "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  font-family: var(--font-sans);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.01em;
@@ -24,6 +23,9 @@ body {
 
 /* CSS Variables */
 :root {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   --font-mono:
     "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
   --primary: #2563eb;
@@ -33,6 +35,8 @@ body {
   --bg-tertiary: #f3f4f6;
   --bg-hover: #f3f4f6;
   --border: #e5e7eb;
+  --code-bg: #eceef2;
+  --user-bubble-bg: #ffffff;
   --text-primary: #111827;
   --text-secondary: #6b7280;
   --text-tertiary: #9ca3af;
@@ -48,7 +52,6 @@ body {
   --blue-bg: #eff6ff;
   --blue-border: #bfdbfe;
   --blue-text: #1e40af;
-  --user-message-text: #2563eb;
   --link-color: #2563eb;
   --green-600: #16a34a;
   --green-700: #15803d;
@@ -70,6 +73,8 @@ body {
   --bg-tertiary: #374151;
   --bg-hover: #374151;
   --border: #374151;
+  --code-bg: #414a59;
+  --user-bubble-bg: #1f2937;
   --text-primary: #f9fafb;
   --text-secondary: #9ca3af;
   --text-tertiary: #6b7280;
@@ -85,7 +90,6 @@ body {
   --blue-bg: rgba(59, 130, 246, 0.1);
   --blue-border: rgba(59, 130, 246, 0.3);
   --blue-text: #93c5fd;
-  --user-message-text: #60a5fa;
   --link-color: #60a5fa;
 }
 
@@ -416,13 +420,14 @@ button {
 }
 
 .header-title {
+  font-family: var(--font-mono);
   font-size: 1rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   letter-spacing: -0.02em;
-  min-width: 0; /* Allow shrinking */
+  min-width: 0;
 }
 
 .header-actions {
@@ -582,7 +587,6 @@ button {
 }
 
 .conversation-group-label {
-  font-family: var(--font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -726,12 +730,17 @@ button {
   overflow-wrap: break-word;
   word-wrap: break-word;
   min-width: 0;
+  font-size: 0.9375rem;
 }
 
 .message-user .message-content {
   margin-left: auto;
   max-width: 80%;
-  color: var(--user-message-text);
+  background: var(--user-bubble-bg);
+  color: var(--text-primary);
+  font-weight: 500;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .message-agent .message-content,
@@ -1051,7 +1060,7 @@ button {
 .subagent-model-badge {
   background: var(--bg-tertiary);
   color: var(--text-tertiary);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: 0.65rem;
 }
 
@@ -2696,10 +2705,11 @@ select:disabled {
 
 .animated-working {
   display: inline;
+  font-family: var(--font-mono);
 }
 
 .animated-working .bold-letter {
-  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .status-button {
@@ -3295,7 +3305,6 @@ svg {
   background: var(--bg-tertiary);
   color: var(--text-primary);
   font-size: 0.75rem;
-  font-family: var(--font-mono);
   cursor: pointer;
   transition: all 0.2s;
   white-space: normal; /* Allow text to wrap */
@@ -3612,7 +3621,6 @@ svg {
   background: var(--bg-base);
   color: var(--text-primary);
   font-size: 0.75rem;
-  font-family: var(--font-mono);
   cursor: pointer;
   appearance: auto;
 }
@@ -3633,7 +3641,6 @@ svg {
   background: var(--bg-base);
   color: var(--text-primary);
   font-size: 0.75rem;
-  font-family: var(--font-mono);
   cursor: pointer;
   transition: border-color 0.2s;
   width: 100%;
@@ -3673,7 +3680,6 @@ svg {
   background: var(--bg-tertiary);
   color: var(--text-primary);
   font-size: 0.75rem;
-  font-family: var(--font-mono);
   cursor: pointer;
   transition: all 0.2s;
   width: 100%;
@@ -3748,7 +3754,6 @@ svg {
   background: transparent;
   color: var(--text-primary);
   font-size: 0.875rem;
-  font-family: var(--font-mono);
   cursor: pointer;
   text-align: left;
   transition: background 0.15s;
@@ -3827,7 +3832,6 @@ svg {
   background: var(--bg-base);
   color: var(--text-primary);
   font-size: 0.75rem;
-  font-family: var(--font-mono);
   transition: border-color 0.2s;
   width: 100%;
   box-sizing: border-box;
@@ -6653,7 +6657,7 @@ kbd {
 .markdown-content code {
   font-family: var(--font-mono);
   font-size: 0.875rem;
-  background: var(--bg-tertiary);
+  background: var(--code-bg);
   padding: 0.15em 0.35em;
   border-radius: 4px;
 }
@@ -6661,7 +6665,7 @@ kbd {
 .markdown-content pre {
   margin: 0.75em 0;
   padding: 0.75em 1em;
-  background: var(--bg-tertiary);
+  background: var(--code-bg);
   border-radius: 6px;
   overflow-x: auto;
 }
@@ -6670,6 +6674,30 @@ kbd {
   background: none;
   padding: 0;
   font-size: 0.875rem;
+}
+
+.inline-code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--code-bg);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+}
+
+.inline-code-block {
+  margin: 0.5em 0;
+  padding: 0.75em 1em;
+  background: var(--code-bg);
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.inline-code-block code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: none;
+  padding: 0;
 }
 
 .markdown-content blockquote {
@@ -7157,7 +7185,7 @@ kbd {
 }
 
 .msg-worktree {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
   margin-right: 0.5em;
 }
@@ -7168,7 +7196,7 @@ kbd {
 }
 
 .msg-commit-hash {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
   background: var(--bg-tertiary);
   padding: 0.1em 0.3em;
@@ -7230,7 +7258,6 @@ kbd {
 
 .msg-unexpected-role-text {
   color: var(--warning-text);
-  font-family: var(--font-mono);
 }
 
 .msg-unexpected-content {
@@ -7246,7 +7273,6 @@ kbd {
 
 .msg-unknown-content-label {
   margin-bottom: 0.5rem;
-  font-family: monospace;
 }
 
 .msg-media-section {
@@ -7614,7 +7640,7 @@ kbd {
 }
 
 .drawer-git-hash {
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   cursor: pointer;
 }
 
@@ -7868,7 +7894,7 @@ kbd {
 }
 
 .hf-row-git-hash {
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   flex-shrink: 0;
 }
 
@@ -8131,7 +8157,7 @@ kbd {
 .model-bar-name {
   color: var(--text-secondary);
   font-size: 0.875rem;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 /* Floating toolbar shown above/below a text selection inside a commentable
