@@ -28,7 +28,6 @@ type GlobalConfig struct {
 	Model           string
 	PredictableOnly bool
 	ConfigPath      string
-	TerminalURL     string
 	DefaultModel    string
 }
 
@@ -152,7 +151,7 @@ func runServe(global GlobalConfig, args []string) {
 	server.DBPath = global.DBPath
 
 	// Build LLM configuration
-	llmConfig := buildLLMConfig(logger, global.ConfigPath, global.TerminalURL, global.DefaultModel, database)
+	llmConfig := buildLLMConfig(logger, global.ConfigPath, global.DefaultModel, database)
 
 	// Initialize LLM service manager (includes custom model support via database)
 	llmManager := server.NewLLMServiceManager(llmConfig)
@@ -164,7 +163,7 @@ func runServe(global GlobalConfig, args []string) {
 	toolSetConfig := setupToolSetConfig(llmManager, llmManager)
 
 	// Create server
-	svr := server.NewServer(database, llmManager, toolSetConfig, logger, global.PredictableOnly, llmConfig.TerminalURL, llmConfig.DefaultModel, *requireHeader, llmConfig.Links)
+	svr := server.NewServer(database, llmManager, toolSetConfig, logger, global.PredictableOnly, llmConfig.DefaultModel, *requireHeader)
 
 	// Seed notification channels from config file if DB is empty (one-time migration)
 	svr.SeedNotificationChannelsFromConfig(llmConfig.NotificationChannels)
@@ -341,13 +340,12 @@ func setupToolSetConfig(llmProvider claudetool.LLMServiceProvider, llmManager se
 }
 
 // buildLLMConfig constructs LLMConfig from environment variables and optional config file
-func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel string, database *db.DB) *server.LLMConfig {
+func buildLLMConfig(logger *slog.Logger, configPath, defaultModel string, database *db.DB) *server.LLMConfig {
 	llmCfg := &server.LLMConfig{
 		AnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
 		OpenAIAPIKey:    os.Getenv("OPENAI_API_KEY"),
 		GeminiAPIKey:    os.Getenv("GEMINI_API_KEY"),
 		FireworksAPIKey: os.Getenv("FIREWORKS_API_KEY"),
-		TerminalURL:     terminalURL,
 		DefaultModel:    defaultModel,
 		DB:              database,
 		Logger:          logger,
@@ -364,9 +362,7 @@ func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel s
 
 		var cfg struct {
 			LLMGateway           string           `json:"llm_gateway"`
-			TerminalURL          string           `json:"terminal_url"`
 			DefaultModel         string           `json:"default_model"`
-			Links                []server.Link    `json:"links"`
 			NotificationChannels []map[string]any `json:"notification_channels"`
 		}
 		if err := json.Unmarshal(data, &cfg); err != nil {
@@ -394,22 +390,10 @@ func buildLLMConfig(logger *slog.Logger, configPath, terminalURL, defaultModel s
 			}
 		}
 
-		// Override terminal URL from config file if present and not already set via flag
-		if cfg.TerminalURL != "" && llmCfg.TerminalURL == "" {
-			llmCfg.TerminalURL = cfg.TerminalURL
-			logger.Info("Using terminal URL from config", "url", cfg.TerminalURL)
-		}
-
 		// Override default model from config file if present and not already set via flag
 		if cfg.DefaultModel != "" && llmCfg.DefaultModel == "" {
 			llmCfg.DefaultModel = cfg.DefaultModel
 			logger.Info("Using default model from config", "model", cfg.DefaultModel)
-		}
-
-		// Load links from config file if present
-		if len(cfg.Links) > 0 {
-			llmCfg.Links = cfg.Links
-			logger.Info("Loaded links from config", "count", len(cfg.Links))
 		}
 
 		if len(cfg.NotificationChannels) > 0 {

@@ -476,11 +476,20 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		"home_dir":            homeDir,
 		"user_agents_md_path": userAgentsMdPath,
 	}
-	if s.terminalURL != "" {
-		initData["terminal_url"] = s.terminalURL
-	}
-	if len(s.links) > 0 {
-		initData["links"] = s.links
+	// On exe.dev VMs (where /exe.dev exists), auto-derive the terminal URL and
+	// default links from the current hostname so they pick up hostname changes
+	// on reload.
+	if _, err := os.Stat("/exe.dev"); err == nil {
+		short := strings.SplitN(hostname, ".", 2)[0]
+		initData["terminal_url"] = "https://" + short + ".xterm.exe.xyz"
+		// Home icon — used historically by the "Back to exe.dev" link.
+		const homeIcon = "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+		// External-link icon for the box's own web page.
+		const extIcon = "M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+		initData["links"] = []Link{
+			{Title: hostname, URL: "https://" + hostname, IconSVG: extIcon},
+			{Title: "Back to exe.dev", URL: "https://exe.dev", IconSVG: homeIcon},
+		}
 	}
 
 	// Inject notification channel type metadata for the settings modal
