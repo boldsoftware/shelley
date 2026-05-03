@@ -95,8 +95,20 @@ const (
 
 // https://ai.google.dev/api/generate-content#v1beta.GenerationConfig
 type GenerationConfig struct {
-	ResponseMimeType string  `json:"responseMimeType,omitempty"` // text/plain, application/json, or text/x.enum
-	ResponseSchema   *Schema `json:"responseSchema,omitempty"`   // for JSON
+	ResponseMimeType string          `json:"responseMimeType,omitempty"` // text/plain, application/json, or text/x.enum
+	ResponseSchema   *Schema         `json:"responseSchema,omitempty"`   // for JSON
+	ThinkingConfig   *ThinkingConfig `json:"thinkingConfig,omitempty"`
+}
+
+// ThinkingConfig controls extended thinking for Gemini models.
+// ThinkingLevel and ThinkingBudget are mutually exclusive: setting both
+// returns a 400 from the API. Use ThinkingLevel for Gemini 3.x and
+// ThinkingBudget for Gemini 2.5.
+// https://ai.google.dev/gemini-api/docs/thinking
+type ThinkingConfig struct {
+	ThinkingLevel   string `json:"thinkingLevel,omitempty"`   // Gemini 3.x: "minimal", "low", "medium", "high"
+	ThinkingBudget  *int   `json:"thinkingBudget,omitempty"`  // Gemini 2.5: token count, -1 dynamic, 0 disable
+	IncludeThoughts bool   `json:"includeThoughts,omitempty"` // include thought summaries in response
 }
 
 // https://ai.google.dev/api/caching#Tool
