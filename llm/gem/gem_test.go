@@ -783,7 +783,7 @@ func TestCalculateUsageWithComplexFunctionCall(t *testing.T) {
 }
 
 func TestConvertResponseWithThinking(t *testing.T) {
-	// Test that Gemini responses with ThoughtSignature are converted to ContentTypeThinking
+	// A thought-summary part (thought:true) is classified as ContentTypeThinking.
 	gemRes := &gemini.Response{
 		Candidates: []gemini.Candidate{
 			{
@@ -792,6 +792,7 @@ func TestConvertResponseWithThinking(t *testing.T) {
 						{
 							Text:             "Let me think about this problem step by step...",
 							ThoughtSignature: "signature-abc123",
+							Thought:          true,
 						},
 					},
 				},
@@ -879,6 +880,7 @@ func TestConvertResponseWithMixedContent(t *testing.T) {
 						{
 							Text:             "Thinking about the problem...",
 							ThoughtSignature: "sig-1",
+							Thought:          true,
 						},
 						{
 							Text: "Here is my answer.",
@@ -918,6 +920,40 @@ func TestConvertResponseWithMixedContent(t *testing.T) {
 
 	if content[1].Text != "Here is my answer." {
 		t.Fatalf("Expected text, got '%s'", content[1].Text)
+	}
+}
+
+// TestConvertResponseGemini3FinalAnswerWithSignature is a regression test for
+// the gemini-3.x "Test failed: empty response from model" bug. Gemini 3 attaches
+// a thoughtSignature to ordinary final-answer text parts (not just thoughts) so
+// internal reasoning state can be rehydrated next turn. The presence of a signature
+// alone must not classify the part as thinking — otherwise the model's actual
+// answer disappears from llm.Response.Content.
+func TestConvertResponseGemini3FinalAnswerWithSignature(t *testing.T) {
+	gemRes := &gemini.Response{
+		Candidates: []gemini.Candidate{{
+			Content: gemini.Content{
+				Parts: []gemini.Part{{
+					Text:             "Test successful.",
+					ThoughtSignature: "Eq0FCqoFAQw51sdx7TPrSqmb0Ts...",
+					// Thought is intentionally false — this is the final answer.
+				}},
+			},
+		}},
+	}
+
+	contents := convertGeminiResponseToContent(gemRes)
+	if len(contents) != 1 {
+		t.Fatalf("got %d contents, want 1", len(contents))
+	}
+	if contents[0].Type != llm.ContentTypeText {
+		t.Fatalf("got type %s, want ContentTypeText", contents[0].Type)
+	}
+	if contents[0].Text != "Test successful." {
+		t.Fatalf("got text %q, want %q", contents[0].Text, "Test successful.")
+	}
+	if contents[0].Signature == "" {
+		t.Fatalf("expected Signature to be preserved on final-answer text for round-tripping")
 	}
 }
 
@@ -986,6 +1022,9 @@ func TestBuildGeminiRequestWithThinking(t *testing.T) {
 	if thinkingPart.ThoughtSignature != "sig-123" {
 		t.Fatalf("Expected signature 'sig-123', got '%s'", thinkingPart.ThoughtSignature)
 	}
+	if !thinkingPart.Thought {
+		t.Fatal("Expected thinking part to be marked as thought")
+	}
 
 	// Verify the second part is regular text
 	textPart := assistantContent.Parts[1]
@@ -1046,6 +1085,9 @@ func TestBuildGeminiRequestWithRedactedThinking(t *testing.T) {
 	if redactedPart.ThoughtSignature != "sig-redacted" {
 		t.Fatalf("Expected signature 'sig-redacted', got '%s'", redactedPart.ThoughtSignature)
 	}
+	if !redactedPart.Thought {
+		t.Fatal("Expected redacted thinking part to be marked as thought")
+	}
 }
 
 func TestRoundTripThinking(t *testing.T) {
@@ -1060,6 +1102,7 @@ func TestRoundTripThinking(t *testing.T) {
 						{
 							Text:             "Analyzing the problem...",
 							ThoughtSignature: "sig-abc",
+							Thought:          true,
 						},
 						{
 							Text: "The answer is 42.",
@@ -1121,6 +1164,9 @@ func TestRoundTripThinking(t *testing.T) {
 	}
 	if thinkingPart.ThoughtSignature != "sig-abc" {
 		t.Fatalf("Expected signature to be preserved, got '%s'", thinkingPart.ThoughtSignature)
+	}
+	if !thinkingPart.Thought {
+		t.Fatal("Expected thinking part to stay marked as thought")
 	}
 
 	// Verify text part preserved
