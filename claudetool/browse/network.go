@@ -98,7 +98,7 @@ type networkInput struct {
 
 // NetworkTool returns the browser_network tool for monitoring network requests.
 func (b *BrowseTools) NetworkTool() *llm.Tool {
-	description := `Network monitoring and inspection. Actions: help, enable, disable, get_log, clear, cookies.`
+	description := `Network monitoring and inspection. Actions: help, enable, disable, get_log, clear, cookies, clear_cache.`
 
 	schema := `{
 		"type": "object",
@@ -106,7 +106,7 @@ func (b *BrowseTools) NetworkTool() *llm.Tool {
 			"action": {
 				"type": "string",
 				"description": "The network action to perform",
-				"enum": ["help", "enable", "disable", "get_log", "clear", "cookies"]
+				"enum": ["help", "enable", "disable", "get_log", "clear", "cookies", "clear_cache"]
 			},
 			"limit": {
 				"type": "integer",
@@ -147,6 +147,8 @@ func (b *BrowseTools) networkRun(ctx context.Context, m json.RawMessage) llm.Too
 		return b.networkClearRun()
 	case "cookies":
 		return b.networkCookiesRun()
+	case "clear_cache":
+		return b.networkClearCacheRun()
 	default:
 		return llm.ErrorfToolOut("unknown action: %q — use \"help\" to see available actions", input.Action)
 	}
@@ -173,6 +175,10 @@ Actions:
   clear     — Delete all captured network requests.
 
   cookies   — Return all browser cookies as JSON.
+
+  clear_cache — Clear the browser HTTP cache. Useful when testing fresh
+              loads of pages or assets without restarting the browser.
+              Does not affect cookies (cached content only).
 
 Typical workflow:
   1. enable
@@ -351,4 +357,17 @@ func (b *BrowseTools) networkCookiesRun() llm.ToolOut {
 	}
 
 	return llm.ToolOut{LLMContent: llm.TextContent(sb.String())}
+}
+
+func (b *BrowseTools) networkClearCacheRun() llm.ToolOut {
+	browserCtx, err := b.GetBrowserContext()
+	if err != nil {
+		return llm.ErrorToolOut(err)
+	}
+
+	if err := chromedp.Run(browserCtx, network.ClearBrowserCache()); err != nil {
+		return llm.ErrorfToolOut("failed to clear browser cache: %w", err)
+	}
+
+	return llm.ToolOut{LLMContent: llm.TextContent("Browser cache cleared.")}
 }
