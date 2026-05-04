@@ -587,6 +587,7 @@ type SubagentSystemPromptData struct {
 	ShelleyDBPath      string
 	ConversationID     string // Parent conversation ID for querying user messages
 	OperationalContext string // Rendered operational context (orchestrator subagents only)
+	SkillsXML          string // XML block for available skills
 }
 
 // OrchestratorSystemPromptData contains data for orchestrator system prompts.
@@ -622,6 +623,13 @@ func GenerateSubagentSystemPrompt(workingDir, parentConversationID string) (stri
 	if err == nil {
 		data.GitInfo = gitInfo
 	}
+
+	// Collect skills
+	gitRoot := ""
+	if gitInfo != nil {
+		gitRoot = gitInfo.Root
+	}
+	data.SkillsXML = collectSkills(wd, gitRoot, skills.Env{ExeDev: isExeDev()})
 
 	tmpl, err := template.New("subagent_system_prompt").Parse(subagentSystemPromptTemplate)
 	if err != nil {
@@ -719,13 +727,30 @@ func GenerateOrchestratorSystemPrompt(workingDir, contextDir, conversationID str
 // GenerateOrchestratorSubagentSystemPrompt generates the system prompt for
 // subagents spawned by an orchestrator conversation.
 func GenerateOrchestratorSubagentSystemPrompt(workingDir, parentConversationID string) (string, error) {
-	operationalCtx, err := renderOperationalContext(workingDir, parentConversationID, true)
+	wd := workingDir
+	if wd == "" {
+		var err error
+		wd, err = os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to get working directory: %w", err)
+		}
+	}
+
+	operationalCtx, err := renderOperationalContext(wd, parentConversationID, true)
 	if err != nil {
 		return "", err
 	}
 
+	// Collect git info for skills
+	gitInfo, _ := collectGitInfo(wd)
+	gitRoot := ""
+	if gitInfo != nil {
+		gitRoot = gitInfo.Root
+	}
+
 	data := &SubagentSystemPromptData{
 		OperationalContext: operationalCtx,
+		SkillsXML:          collectSkills(wd, gitRoot, skills.Env{ExeDev: isExeDev()}),
 	}
 
 	tmpl, err := template.New("orchestrator_subagent_system_prompt").Parse(orchestratorSubagentSystemPromptTemplate)
