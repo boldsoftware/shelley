@@ -25,6 +25,7 @@ const (
 	ProviderOpenAI    Provider = "openai"
 	ProviderAnthropic Provider = "anthropic"
 	ProviderFireworks Provider = "fireworks"
+	ProviderTogether  Provider = "together"
 	ProviderGemini    Provider = "gemini"
 	ProviderBuiltIn   Provider = "builtin"
 )
@@ -89,6 +90,11 @@ func (m Model) Source(cfg *Config) string {
 				return string(SourceGateway)
 			}
 			return "$FIREWORKS_API_KEY"
+		case ProviderTogether:
+			if cfg.TogetherAPIKey == "implicit" {
+				return string(SourceGateway)
+			}
+			return "$TOGETHER_API_KEY"
 		case ProviderGemini:
 			if cfg.GeminiAPIKey == "implicit" {
 				return string(SourceGateway)
@@ -111,6 +117,7 @@ type Config struct {
 	OpenAIAPIKey    string
 	GeminiAPIKey    string
 	FireworksAPIKey string
+	TogetherAPIKey  string
 
 	// Gateway is the base URL of the LLM gateway (optional)
 	// If set, model-specific suffixes will be appended
@@ -152,6 +159,34 @@ func (c *Config) getFireworksURL() string {
 		return c.Gateway + "/_/gateway/fireworks/inference/v1"
 	}
 	return "" // use default from oai package
+}
+
+// getTogetherURL returns the Together API URL, with gateway suffix if gateway is set
+func (c *Config) getTogetherURL() string {
+	if c.Gateway != "" {
+		return c.Gateway + "/_/gateway/together/v1"
+	}
+	return "" // use default from oai package
+}
+
+func togetherModel(id, description string, model oai.Model) Model {
+	return Model{
+		ID:              id,
+		Provider:        ProviderTogether,
+		Description:     description,
+		RequiredEnvVars: []string{"TOGETHER_API_KEY"},
+		GatewayEnabled:  true,
+		Factory: func(config *Config, httpc *http.Client) (llm.Service, error) {
+			if config.TogetherAPIKey == "" {
+				return nil, fmt.Errorf("%s requires TOGETHER_API_KEY", id)
+			}
+			svc := &oai.Service{Model: model, APIKey: config.TogetherAPIKey, HTTPC: httpc}
+			if url := config.getTogetherURL(); url != "" {
+				svc.ModelURL = url
+			}
+			return svc, nil
+		},
+	}
 }
 
 // All returns all available models in Shelley
@@ -260,6 +295,11 @@ func All() []Model {
 				return svc, nil
 			},
 		},
+		togetherModel("together-deepseek-v4-pro", "DeepSeek V4 Pro on Together", oai.TogetherDeepseekV4Pro),
+		togetherModel("together-glm-5.1", "GLM-5.1 on Together", oai.TogetherGLM51),
+		togetherModel("together-kimi-k2.6", "Kimi K2.6 on Together", oai.TogetherKimiK26),
+		togetherModel("together-minimax-m2.7", "MiniMax M2.7 on Together", oai.TogetherMiniMaxM27),
+		togetherModel("together-gemma-4-31b", "Gemma 4 31B on Together", oai.TogetherGemma4_31B),
 		{
 			ID:              "glm-4.7-fireworks",
 			Provider:        ProviderFireworks,

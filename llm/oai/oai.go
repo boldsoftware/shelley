@@ -122,44 +122,44 @@ var (
 		APIKeyEnv: GeminiAPIKeyEnv,
 	}
 
+	TogetherDeepseekV4Pro = Model{
+		UserName:  "together-deepseek-v4-pro",
+		ModelName: "deepseek-ai/DeepSeek-V4-Pro",
+		URL:       TogetherURL,
+		APIKeyEnv: TogetherAPIKeyEnv,
+	}
+
+	TogetherGLM51 = Model{
+		UserName:  "together-glm-5.1",
+		ModelName: "zai-org/GLM-5.1",
+		URL:       TogetherURL,
+		APIKeyEnv: TogetherAPIKeyEnv,
+	}
+
+	TogetherKimiK26 = Model{
+		UserName:  "together-kimi-k2.6",
+		ModelName: "moonshotai/Kimi-K2.6",
+		URL:       TogetherURL,
+		APIKeyEnv: TogetherAPIKeyEnv,
+	}
+
+	TogetherMiniMaxM27 = Model{
+		UserName:  "together-minimax-m2.7",
+		ModelName: "MiniMaxAI/MiniMax-M2.7",
+		URL:       TogetherURL,
+		APIKeyEnv: TogetherAPIKeyEnv,
+	}
+
+	TogetherGemma4_31B = Model{
+		UserName:  "together-gemma-4-31b",
+		ModelName: "google/gemma-4-31B-it",
+		URL:       TogetherURL,
+		APIKeyEnv: TogetherAPIKeyEnv,
+	}
+
 	TogetherDeepseekV3 = Model{
 		UserName:  "together-deepseek-v3",
 		ModelName: "deepseek-ai/DeepSeek-V3",
-		URL:       TogetherURL,
-		APIKeyEnv: TogetherAPIKeyEnv,
-	}
-
-	TogetherDeepseekR1 = Model{
-		UserName:  "together-deepseek-r1",
-		ModelName: "deepseek-ai/DeepSeek-R1",
-		URL:       TogetherURL,
-		APIKeyEnv: TogetherAPIKeyEnv,
-	}
-
-	TogetherLlama4Maverick = Model{
-		UserName:  "together-llama4-maverick",
-		ModelName: "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
-		URL:       TogetherURL,
-		APIKeyEnv: TogetherAPIKeyEnv,
-	}
-
-	FireworksLlama4Maverick = Model{
-		UserName:  "fireworks-llama4-maverick",
-		ModelName: "accounts/fireworks/models/llama4-maverick-instruct-basic",
-		URL:       FireworksURL,
-		APIKeyEnv: FireworksAPIKeyEnv,
-	}
-
-	TogetherLlama3_3_70B = Model{
-		UserName:  "together-llama3-70b",
-		ModelName: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-		URL:       TogetherURL,
-		APIKeyEnv: TogetherAPIKeyEnv,
-	}
-
-	TogetherMistralSmall = Model{
-		UserName:  "together-mistral-small",
-		ModelName: "mistralai/Mistral-Small-24B-Instruct-2501",
 		URL:       TogetherURL,
 		APIKeyEnv: TogetherAPIKeyEnv,
 	}
@@ -171,11 +171,11 @@ var (
 		APIKeyEnv: TogetherAPIKeyEnv,
 	}
 
-	TogetherGemma2 = Model{
-		UserName:  "together-gemma2",
-		ModelName: "google/gemma-2-27b-it",
-		URL:       TogetherURL,
-		APIKeyEnv: TogetherAPIKeyEnv,
+	FireworksLlama4Maverick = Model{
+		UserName:  "fireworks-llama4-maverick",
+		ModelName: "accounts/fireworks/models/llama4-maverick-instruct-basic",
+		URL:       FireworksURL,
+		APIKeyEnv: FireworksAPIKeyEnv,
 	}
 
 	LlamaCPP = Model{
@@ -365,11 +365,11 @@ var ModelsRegistry = []Model{
 	Gemini25Flash,
 	Gemini25Pro,
 	// Together
-	TogetherDeepseekV3,
-	TogetherDeepseekR1,
-	TogetherLlama4Maverick,
-	TogetherQwen3,
-	TogetherMistralSmall,
+	TogetherDeepseekV4Pro,
+	TogetherGLM51,
+	TogetherKimiK26,
+	TogetherMiniMaxM27,
+	TogetherGemma4_31B,
 	// Fireworks / misc providers
 	FireworksDeepseekV3,
 	DeepseekV4ProFireworks,
@@ -392,8 +392,6 @@ var ModelsRegistry = []Model{
 	GPT41Nano,
 	GPT4o,
 	GPT4oMini,
-	TogetherLlama3_3_70B,
-	TogetherGemma2,
 }
 
 // ListModels returns a list of all available models with their user-friendly names.
@@ -784,6 +782,14 @@ func (s *Service) TokenContextWindow() int {
 		return 128000
 	case "accounts/fireworks/models/deepseek-v4-pro":
 		return 1048576
+	case "deepseek-ai/DeepSeek-V4-Pro":
+		return 512000
+	case "zai-org/GLM-5.1":
+		return 200000
+	case "moonshotai/Kimi-K2.6", "google/gemma-4-31B-it":
+		return 262144
+	case "MiniMaxAI/MiniMax-M2.7":
+		return 202752
 	case "gpt-5.1", "gpt-5.1-mini", "gpt-5.1-nano":
 		return 256000
 	default:

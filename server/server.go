@@ -98,6 +98,7 @@ func NewLLMServiceManager(cfg *LLMConfig) LLMProvider {
 		OpenAIAPIKey:    cfg.OpenAIAPIKey,
 		GeminiAPIKey:    cfg.GeminiAPIKey,
 		FireworksAPIKey: cfg.FireworksAPIKey,
+		TogetherAPIKey:  cfg.TogetherAPIKey,
 		Gateway:         cfg.Gateway,
 		Logger:          cfg.Logger,
 		DB:              cfg.DB,
