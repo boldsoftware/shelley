@@ -23,10 +23,11 @@ const (
 // Service provides Gemini completions.
 // Fields should not be altered concurrently with calling any method on Service.
 type Service struct {
-	HTTPC  *http.Client // defaults to http.DefaultClient if nil
-	URL    string       // Gemini API URL, uses the gemini package default if empty
-	APIKey string       // must be non-empty
-	Model  string       // defaults to DefaultModel if empty
+	HTTPC                *http.Client // defaults to http.DefaultClient if nil
+	URL                  string       // Gemini API URL, uses the gemini package default if empty
+	APIKey               string       // must be non-empty
+	Model                string       // defaults to DefaultModel if empty
+	DisableGoogleSearch  bool         // if false (default), googleSearchRetrieval is added to every request
 }
 
 var _ llm.Service = (*Service)(nil)
@@ -198,6 +199,12 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 					// For redacted thinking, use the Data field (consistent with Anthropic pattern)
 					part.Text = c.Data
 					part.ThoughtSignature = c.Signature
+				} else if c.MediaType != "" {
+					// Image content: send as inlineData
+					part.InlineData = &gemini.Blob{
+						MimeType: c.MediaType,
+						Data:     c.Data,
+					}
 				} else {
 					// For regular text, use the Text field
 					part.Text = c.Text
@@ -239,15 +246,19 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 					"error": c.ToolError,
 				}
 
-				// Handle tool results: Gemini only supports string results
-				// Combine all text content into a single string
+				// Collect text and image content from tool results separately.
+				// Gemini function responses only accept string values, so images
+				// are appended as separate InlineData parts after the FunctionResponse.
 				var resultText string
+				var resultImages []llm.Content
 				if len(c.ToolResult) > 0 {
-					// Collect all text from content objects
 					texts := make([]string, 0, len(c.ToolResult))
 					for _, result := range c.ToolResult {
 						if result.Text != "" {
 							texts = append(texts, result.Text)
+						}
+						if result.MediaType != "" && result.Data != "" {
+							resultImages = append(resultImages, result)
 						}
 					}
 					resultText = strings.Join(texts, "\n")
@@ -290,6 +301,15 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 						Response: response,
 					},
 				})
+				// Append images returned by the tool as InlineData parts.
+				for _, img := range resultImages {
+					content.Parts = append(content.Parts, gemini.Part{
+						InlineData: &gemini.Blob{
+							MimeType: img.MediaType,
+							Data:     img.Data,
+						},
+					})
+				}
 			}
 		}
 
@@ -304,8 +324,13 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 			return nil, fmt.Errorf("failed to convert tool schemas: %w", err)
 		}
 		if len(decls) > 0 {
-			gemReq.Tools = []gemini.Tool{{FunctionDeclarations: decls}}
+			gemReq.Tools = append(gemReq.Tools, gemini.Tool{FunctionDeclarations: decls})
 		}
+	}
+
+	if !s.DisableGoogleSearch {
+		gemReq.Tools = append(gemReq.Tools, gemini.Tool{GoogleSearch: &struct{}{}})
+		gemReq.ToolConfig = &gemini.ToolConfig{IncludeServerSideToolInvocations: true}
 	}
 
 	return gemReq, nil
@@ -332,24 +357,32 @@ func convertGeminiResponseToContent(res *gemini.Response) []llm.Content {
 			"has_function_response", part.FunctionResponse != nil)
 
 		if part.Text != "" {
-			// Check if this is thinking content (has a thought signature)
-			if part.ThoughtSignature != "" {
-				// This is thinking content - use ContentTypeThinking
+			// Use part.Thought to identify actual thinking content.
+			// ThoughtSignature is attached to all parts in Gemini 3 when function
+			// calling is enabled (it's a proof to pass back, not a thinking marker).
+			if part.Thought {
 				contents = append(contents, llm.Content{
 					Type:      llm.ContentTypeThinking,
 					Thinking:  part.Text,
 					Signature: part.ThoughtSignature,
 				})
 				slog.DebugContext(context.Background(), "gemini_thinking_detected",
-					"signature", part.ThoughtSignature,
 					"thinking_length", len(part.Text))
 			} else {
-				// Regular text response
+				// Regular text response — preserve ThoughtSignature so it can be
+				// passed back to Gemini 3 in subsequent function-calling turns.
 				contents = append(contents, llm.Content{
-					Type: llm.ContentTypeText,
-					Text: part.Text,
+					Type:      llm.ContentTypeText,
+					Text:      part.Text,
+					Signature: part.ThoughtSignature,
 				})
 			}
+		} else if part.InlineData != nil {
+			contents = append(contents, llm.Content{
+				Type:      llm.ContentTypeText,
+				MediaType: part.InlineData.MimeType,
+				Data:      part.InlineData.Data,
+			})
 		} else if part.FunctionCall != nil {
 			// Function call (tool use)
 			args, err := json.Marshal(part.FunctionCall.Args)

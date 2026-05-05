@@ -17,9 +17,15 @@ type Request struct {
 	GenerationConfig  *GenerationConfig `json:"generationConfig,omitempty"`
 	SystemInstruction *Content          `json:"systemInstruction,omitempty"`
 	Tools             []Tool            `json:"tools,omitempty"`
-	// ToolConfig has been left out because it does not appear to be useful.
+	ToolConfig        *ToolConfig       `json:"toolConfig,omitempty"`
 	// Contents comes last since it grows with each request in a conversation
 	Contents []Content `json:"contents"`
+}
+
+// ToolConfig controls tool invocation behaviour for the request.
+type ToolConfig struct {
+	// Required when mixing built-in tools (e.g. GoogleSearch) with function calling.
+	IncludeServerSideToolInvocations bool `json:"includeServerSideToolInvocations"`
 }
 
 // https://ai.google.dev/api/generate-content#response-body
@@ -42,10 +48,17 @@ type Content struct {
 	Role  string `json:"role,omitempty"`
 }
 
+// Blob holds raw bytes for inline data.
+type Blob struct {
+	MimeType string `json:"mimeType"`
+	Data     string `json:"data"` // base64-encoded
+}
+
 // Part is a part of the content.
 // This is a union data structure, only one-of the fields can be set.
 type Part struct {
 	Text                string               `json:"text,omitempty"`
+	InlineData          *Blob                `json:"inlineData,omitempty"`
 	FunctionCall        *FunctionCall        `json:"functionCall,omitempty"`
 	FunctionResponse    *FunctionResponse    `json:"functionResponse,omitempty"`
 	ExecutableCode      *ExecutableCode      `json:"executableCode,omitempty"`
@@ -53,7 +66,10 @@ type Part struct {
 	// ThoughtSignature is required for Gemini 3 models when using function calling.
 	// It must be passed back exactly as received when sending the conversation history.
 	ThoughtSignature string `json:"thoughtSignature,omitempty"`
-	// TODO inlineData
+	// Thought indicates this part contains internal reasoning/thinking content.
+	// Gemini 3 attaches ThoughtSignature to all parts (not just thinking parts),
+	// so Thought is the correct field to use to identify actual thinking content.
+	Thought bool `json:"thought,omitempty"`
 	// TODO fileData
 }
 
@@ -101,9 +117,9 @@ type GenerationConfig struct {
 
 // https://ai.google.dev/api/caching#Tool
 type Tool struct {
-	FunctionDeclarations []FunctionDeclaration `json:"functionDeclarations"`
-	CodeExecution        *struct{}             `json:"codeExecution,omitempty"` // if present, enables the model to execute code
-	// TODO googleSearchRetrieval https://ai.google.dev/api/caching#GoogleSearchRetrieval
+	FunctionDeclarations []FunctionDeclaration `json:"functionDeclarations,omitempty"`
+	CodeExecution        *struct{}             `json:"codeExecution,omitempty"`  // if present, enables the model to execute code
+	GoogleSearch         *struct{}             `json:"google_search,omitempty"`  // enables grounding via Google Search (Gemini 2.0+)
 }
 
 // https://ai.google.dev/api/caching#FunctionDeclaration

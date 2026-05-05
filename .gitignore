@@ -28,6 +28,9 @@ ui/playwright-report/
 ui/e2e/screenshots/*
 !ui/e2e/screenshots/.gitkeep
 
+# API keys
+gemini-api-key.env
+
 # Logs
 npm-debug.log*
 yarn-debug.log*

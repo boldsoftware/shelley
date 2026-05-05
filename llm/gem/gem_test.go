@@ -3,14 +3,42 @@ package gem
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"testing"
 
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/gem/gemini"
 )
+
+// geminiService returns a real gem.Service using the GEMINI_API_KEY env var,
+// or skips the test if the key is not set.
+func geminiService(t *testing.T) *Service {
+	t.Helper()
+	key := os.Getenv(GeminiAPIKeyEnv)
+	if key == "" {
+		t.Skipf("skipping: %s not set", GeminiAPIKeyEnv)
+	}
+	return &Service{
+		APIKey:              key,
+		Model:               DefaultModel,
+		DisableGoogleSearch: true,
+	}
+}
+
+// loadKitten reads testdata/kitten.png and returns (base64Data, mediaType).
+func loadKitten(t *testing.T) (string, string) {
+	t.Helper()
+	data, err := os.ReadFile("testdata/kitten.png")
+	if err != nil {
+		t.Fatalf("failed to read testdata/kitten.png: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(data), "image/png"
+}
 
 func TestBuildGeminiRequest(t *testing.T) {
 	// Create a service
@@ -783,7 +811,9 @@ func TestCalculateUsageWithComplexFunctionCall(t *testing.T) {
 }
 
 func TestConvertResponseWithThinking(t *testing.T) {
-	// Test that Gemini responses with ThoughtSignature are converted to ContentTypeThinking
+	// Test that Gemini responses with Thought=true are converted to ContentTypeThinking.
+	// ThoughtSignature alone does not indicate thinking — Gemini 3 attaches it to all
+	// parts (including regular text) when function calling is enabled.
 	gemRes := &gemini.Response{
 		Candidates: []gemini.Candidate{
 			{
@@ -792,6 +822,7 @@ func TestConvertResponseWithThinking(t *testing.T) {
 						{
 							Text:             "Let me think about this problem step by step...",
 							ThoughtSignature: "signature-abc123",
+							Thought:          true,
 						},
 					},
 				},
@@ -870,7 +901,8 @@ func TestConvertResponseWithRegularText(t *testing.T) {
 }
 
 func TestConvertResponseWithMixedContent(t *testing.T) {
-	// Test that Gemini responses with both thinking and regular text are handled correctly
+	// Test that Gemini responses with both thinking and regular text are handled correctly.
+	// Only parts with Thought=true should be classified as thinking.
 	gemRes := &gemini.Response{
 		Candidates: []gemini.Candidate{
 			{
@@ -879,10 +911,11 @@ func TestConvertResponseWithMixedContent(t *testing.T) {
 						{
 							Text:             "Thinking about the problem...",
 							ThoughtSignature: "sig-1",
+							Thought:          true,
 						},
 						{
-							Text: "Here is my answer.",
-							// No ThoughtSignature
+							Text:             "Here is my answer.",
+							ThoughtSignature: "sig-2", // Gemini 3 attaches signatures to all parts
 						},
 					},
 				},
@@ -1060,6 +1093,7 @@ func TestRoundTripThinking(t *testing.T) {
 						{
 							Text:             "Analyzing the problem...",
 							ThoughtSignature: "sig-abc",
+							Thought:          true,
 						},
 						{
 							Text: "The answer is 42.",
@@ -1130,5 +1164,220 @@ func TestRoundTripThinking(t *testing.T) {
 	}
 	if textPart.ThoughtSignature != "" {
 		t.Fatalf("Expected no signature for text, got '%s'", textPart.ThoughtSignature)
+	}
+}
+
+func TestBuildGeminiRequestWithImage(t *testing.T) {
+	service := &Service{Model: DefaultModel, APIKey: "test-api-key"}
+
+	req := &llm.Request{
+		Messages: []llm.Message{
+			{
+				Role: llm.MessageRoleUser,
+				Content: []llm.Content{
+					{
+						Type:      llm.ContentTypeText,
+						MediaType: "image/png",
+						Data:      "iVBORw0KGgo=", // minimal base64
+					},
+					{
+						Type: llm.ContentTypeText,
+						Text: "What is in this image?",
+					},
+				},
+			},
+		},
+	}
+
+	gemReq, err := service.buildGeminiRequest(req)
+	if err != nil {
+		t.Fatalf("Failed to build Gemini request: %v", err)
+	}
+
+	if len(gemReq.Contents) != 1 {
+		t.Fatalf("Expected 1 content, got %d", len(gemReq.Contents))
+	}
+	parts := gemReq.Contents[0].Parts
+	if len(parts) != 2 {
+		t.Fatalf("Expected 2 parts, got %d", len(parts))
+	}
+
+	// First part should be inlineData
+	if parts[0].InlineData == nil {
+		t.Fatalf("Expected InlineData for image part, got nil")
+	}
+	if parts[0].InlineData.MimeType != "image/png" {
+		t.Fatalf("Expected MimeType 'image/png', got '%s'", parts[0].InlineData.MimeType)
+	}
+	if parts[0].InlineData.Data != "iVBORw0KGgo=" {
+		t.Fatalf("Expected base64 data to be preserved, got '%s'", parts[0].InlineData.Data)
+	}
+	if parts[0].Text != "" {
+		t.Fatalf("Expected Text to be empty for image part, got '%s'", parts[0].Text)
+	}
+
+	// Second part should be regular text
+	if parts[1].Text != "What is in this image?" {
+		t.Fatalf("Expected text 'What is in this image?', got '%s'", parts[1].Text)
+	}
+	if parts[1].InlineData != nil {
+		t.Fatalf("Expected InlineData to be nil for text part")
+	}
+}
+
+func TestConvertResponseWithInlineData(t *testing.T) {
+	gemRes := &gemini.Response{
+		Candidates: []gemini.Candidate{
+			{
+				Content: gemini.Content{
+					Parts: []gemini.Part{
+						{
+							InlineData: &gemini.Blob{
+								MimeType: "image/jpeg",
+								Data:     "/9j/base64==",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	content := convertGeminiResponseToContent(gemRes)
+
+	if len(content) != 1 {
+		t.Fatalf("Expected 1 content item, got %d", len(content))
+	}
+	if content[0].Type != llm.ContentTypeText {
+		t.Fatalf("Expected ContentTypeText for inline data, got %s", content[0].Type)
+	}
+	if content[0].MediaType != "image/jpeg" {
+		t.Fatalf("Expected MediaType 'image/jpeg', got '%s'", content[0].MediaType)
+	}
+	if content[0].Data != "/9j/base64==" {
+		t.Fatalf("Expected base64 data preserved, got '%s'", content[0].Data)
+	}
+	if content[0].Text != "" {
+		t.Fatalf("Expected Text to be empty for inline data content, got '%s'", content[0].Text)
+	}
+}
+
+// TestGeminiInlineImage sends kitten.png as inlineData in a user message and
+// verifies the model identifies it as a cat or kitten.
+func TestGeminiInlineImage(t *testing.T) {
+	svc := geminiService(t)
+	b64, mediaType := loadKitten(t)
+
+	req := &llm.Request{
+		Messages: []llm.Message{
+			{
+				Role: llm.MessageRoleUser,
+				Content: []llm.Content{
+					{
+						Type:      llm.ContentTypeText,
+						MediaType: mediaType,
+						Data:      b64,
+					},
+					{
+						Type: llm.ContentTypeText,
+						Text: "What animal is in this image? Reply in one sentence.",
+					},
+				},
+			},
+		},
+	}
+
+	ctx := context.Background()
+	resp, err := svc.Do(ctx, req)
+	if err != nil {
+		t.Fatalf("Do failed: %v", err)
+	}
+
+	var text string
+	for _, c := range resp.Content {
+		if c.Type == llm.ContentTypeText {
+			text += c.Text
+		}
+	}
+	t.Logf("model response: %s", text)
+
+	lower := strings.ToLower(text)
+	if !strings.Contains(lower, "cat") && !strings.Contains(lower, "kitten") {
+		t.Errorf("expected response to mention cat or kitten, got: %s", text)
+	}
+}
+
+// TestGeminiToolResultImage simulates the read_image tool flow: the model calls
+// read_image, Shelley returns the image bytes in the tool result, and the model
+// should then identify it as a cat or kitten.
+func TestGeminiToolResultImage(t *testing.T) {
+	svc := geminiService(t)
+	b64, mediaType := loadKitten(t)
+
+	req := &llm.Request{
+		Messages: []llm.Message{
+			{
+				Role: llm.MessageRoleUser,
+				Content: []llm.Content{
+					{Type: llm.ContentTypeText, Text: "What animal is in [/tmp/kitten.png]? Reply in one sentence."},
+				},
+			},
+			{
+				Role: llm.MessageRoleAssistant,
+				Content: []llm.Content{
+					{
+						ID:        "tool-1",
+						Type:      llm.ContentTypeToolUse,
+						ToolName:  "read_image",
+						ToolInput: json.RawMessage(`{"path":"/tmp/kitten.png"}`),
+					},
+				},
+			},
+			{
+				Role: llm.MessageRoleUser,
+				Content: []llm.Content{
+					{
+						Type:      llm.ContentTypeToolResult,
+						ToolUseID: "tool-1",
+						ToolName:  "read_image",
+						ToolResult: []llm.Content{
+							{
+								Type: llm.ContentTypeText,
+								Text: "Image from /tmp/kitten.png (type: image/png)",
+							},
+							{
+								Type:      llm.ContentTypeText,
+								MediaType: mediaType,
+								Data:      b64,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctx := context.Background()
+	resp, err := svc.Do(ctx, req)
+	if err != nil {
+		t.Fatalf("Do failed: %v", err)
+	}
+
+	for _, c := range resp.Content {
+		t.Logf("content: type=%s toolName=%s text=%q", c.Type, c.ToolName, c.Text)
+	}
+	t.Logf("stop_reason=%s", resp.StopReason)
+
+	var text string
+	for _, c := range resp.Content {
+		if c.Type == llm.ContentTypeText {
+			text += c.Text
+		}
+	}
+	t.Logf("model response: %s", text)
+
+	lower := strings.ToLower(text)
+	if !strings.Contains(lower, "cat") && !strings.Contains(lower, "kitten") {
+		t.Errorf("expected response to mention cat or kitten, got: %s", text)
 	}
 }
