@@ -111,8 +111,17 @@ const (
 
 // https://ai.google.dev/api/generate-content#v1beta.GenerationConfig
 type GenerationConfig struct {
-	ResponseMimeType string  `json:"responseMimeType,omitempty"` // text/plain, application/json, or text/x.enum
-	ResponseSchema   *Schema `json:"responseSchema,omitempty"`   // for JSON
+	ResponseMimeType string          `json:"responseMimeType,omitempty"` // text/plain, application/json, or text/x.enum
+	ResponseSchema   *Schema         `json:"responseSchema,omitempty"`   // for JSON
+	ThinkingConfig   *ThinkingConfig `json:"thinkingConfig,omitempty"`
+}
+
+// ThinkingConfig controls the thinking/reasoning budget for the model.
+// ThinkingBudget: -1 = dynamic (model decides), 0 = disabled, N = max tokens.
+// IncludeThoughts: must be true to receive thinking content in the response.
+type ThinkingConfig struct {
+	ThinkingBudget  int  `json:"thinkingBudget"`
+	IncludeThoughts bool `json:"includeThoughts"`
 }
 
 // https://ai.google.dev/api/caching#Tool

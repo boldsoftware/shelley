@@ -23,11 +23,12 @@ const (
 // Service provides Gemini completions.
 // Fields should not be altered concurrently with calling any method on Service.
 type Service struct {
-	HTTPC                *http.Client // defaults to http.DefaultClient if nil
-	URL                  string       // Gemini API URL, uses the gemini package default if empty
-	APIKey               string       // must be non-empty
-	Model                string       // defaults to DefaultModel if empty
-	DisableGoogleSearch  bool         // if false (default), googleSearchRetrieval is added to every request
+	HTTPC               *http.Client    // defaults to http.DefaultClient if nil
+	URL                 string          // Gemini API URL, uses the gemini package default if empty
+	APIKey              string          // must be non-empty
+	Model               string          // defaults to DefaultModel if empty
+	DisableGoogleSearch bool            // if false (default), googleSearchRetrieval is added to every request
+	ThinkingLevel       llm.ThinkingLevel // controls thinking budget; Off disables thinking
 }
 
 var _ llm.Service = (*Service)(nil)
@@ -209,6 +210,10 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 					// For regular text, use the Text field
 					part.Text = c.Text
 				}
+				// Skip empty Parts — Gemini rejects Parts with no data field set.
+				if part.Text == "" && part.InlineData == nil && part.FunctionCall == nil && part.FunctionResponse == nil && part.ExecutableCode == nil && part.CodeExecutionResult == nil {
+					continue
+				}
 				content.Parts = append(content.Parts, part)
 			case llm.ContentTypeToolUse:
 				// Tool use becomes a function call
@@ -331,6 +336,16 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 	if !s.DisableGoogleSearch {
 		gemReq.Tools = append(gemReq.Tools, gemini.Tool{GoogleSearch: &struct{}{}})
 		gemReq.ToolConfig = &gemini.ToolConfig{IncludeServerSideToolInvocations: true}
+	}
+
+	if s.ThinkingLevel != llm.ThinkingLevelOff {
+		if gemReq.GenerationConfig == nil {
+			gemReq.GenerationConfig = &gemini.GenerationConfig{}
+		}
+		gemReq.GenerationConfig.ThinkingConfig = &gemini.ThinkingConfig{
+			ThinkingBudget:  s.ThinkingLevel.ThinkingBudgetTokens(),
+			IncludeThoughts: true,
+		}
 	}
 
 	return gemReq, nil

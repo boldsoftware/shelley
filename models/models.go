@@ -423,7 +423,7 @@ func All() []Model {
 				if config.GeminiAPIKey == "" {
 					return nil, fmt.Errorf("gemini-3-pro requires GEMINI_API_KEY")
 				}
-				svc := &gem.Service{APIKey: config.GeminiAPIKey, Model: "gemini-3-pro-preview", HTTPC: httpc}
+				svc := &gem.Service{APIKey: config.GeminiAPIKey, Model: "gemini-3-pro-preview", HTTPC: httpc, ThinkingLevel: llm.ThinkingLevelDynamic}
 				if url := config.getGeminiURL(); url != "" {
 					svc.URL = url
 				}
@@ -439,7 +439,7 @@ func All() []Model {
 				if config.GeminiAPIKey == "" {
 					return nil, fmt.Errorf("gemini-3-flash requires GEMINI_API_KEY")
 				}
-				svc := &gem.Service{APIKey: config.GeminiAPIKey, Model: "gemini-3-flash-preview", HTTPC: httpc}
+				svc := &gem.Service{APIKey: config.GeminiAPIKey, Model: "gemini-3-flash-preview", HTTPC: httpc, ThinkingLevel: llm.ThinkingLevelDynamic}
 				if url := config.getGeminiURL(); url != "" {
 					svc.URL = url
 				}
@@ -868,10 +868,11 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 		}
 	case "gemini":
 		return &gem.Service{
-			APIKey: model.ApiKey,
-			URL:    model.Endpoint,
-			Model:  model.ModelName,
-			HTTPC:  m.httpc,
+			APIKey:        model.ApiKey,
+			URL:           model.Endpoint,
+			Model:         model.ModelName,
+			HTTPC:         m.httpc,
+			ThinkingLevel: llm.ThinkingLevelDynamic,
 		}
 	default:
 		if m.logger != nil {

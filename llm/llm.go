@@ -278,9 +278,11 @@ const (
 	ThinkingLevelLow                          // Low thinking (2048 tokens / "low")
 	ThinkingLevelMedium                       // Medium thinking (8192 tokens / "medium")
 	ThinkingLevelHigh                         // High thinking (16384 tokens / "high")
+	ThinkingLevelDynamic                      // Dynamic thinking: model decides budget (Gemini: -1)
 )
 
 // ThinkingBudgetTokens returns the recommended budget_tokens for Anthropic's extended thinking.
+// For ThinkingLevelDynamic, returns -1 (Gemini dynamic budget — model decides how much to think).
 func (t ThinkingLevel) ThinkingBudgetTokens() int {
 	switch t {
 	case ThinkingLevelMinimal:
@@ -291,6 +293,8 @@ func (t ThinkingLevel) ThinkingBudgetTokens() int {
 		return 8192
 	case ThinkingLevelHigh:
 		return 16384
+	case ThinkingLevelDynamic:
+		return -1
 	default:
 		return 0
 	}
