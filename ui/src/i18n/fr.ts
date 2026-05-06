@@ -222,4 +222,5 @@ export const fr: TranslationKeys = {
   upgoerFive: "Up-Goer Five",
   simplifiedChinese: "简体中文",
   traditionalChinese: "繁體中文",
+  vietnamese: "Tiếng Việt",
 };
