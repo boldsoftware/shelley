@@ -551,6 +551,7 @@ const LANGUAGE_OPTIONS: { locale: Locale; flag: string; label: string }[] = [
   { locale: "zh-CN", flag: "🇨🇳", label: "简体中文" },
   { locale: "zh-TW", flag: "🇹🇼", label: "繁體中文" },
   { locale: "upgoer5", flag: "🚀", label: "Up-Goer Five" },
+  { locale: "vi", flag: "🇻🇳", label: "Tiếng Việt" },
 ];
 
 function LanguageDropdown({
