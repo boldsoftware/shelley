@@ -586,11 +586,11 @@ func TestSkillsFoundRegardlessOfWorkingDir(t *testing.T) {
 
 func TestBuiltinSkills(t *testing.T) {
 	builtins := BuiltinSkills()
-	if len(builtins) != 4 {
-		t.Fatalf("expected exactly 4 built-in skills, got %d: %v", len(builtins), skillNames(builtins))
+	if len(builtins) != 5 {
+		t.Fatalf("expected exactly 5 built-in skills, got %d: %v", len(builtins), skillNames(builtins))
 	}
 
-	wantSkills := []string{"install-node", "previous-conversations", "schedule", "shelley-hooks"}
+	wantSkills := []string{"install-node", "previous-conversations", "reflection-integration", "schedule", "shelley-hooks"}
 	for _, wantName := range wantSkills {
 		var found *Skill
 		for i := range builtins {
@@ -837,5 +837,39 @@ Test instructions.
 	}
 	if skills[0].Name != "my-skill" {
 		t.Errorf("skill name = %q, want %q", skills[0].Name, "my-skill")
+	}
+}
+
+func TestParseWhen(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "SKILL.md")
+	content := "---\nname: foo\ndescription: Foo skill.\nwhen: exe.dev\n---\n\nbody\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Parse(path)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if s.When != "exe.dev" {
+		t.Errorf("When = %q, want %q", s.When, "exe.dev")
+	}
+}
+
+func TestFilterWhen(t *testing.T) {
+	in := []Skill{
+		{Name: "always", Description: "x"},
+		{Name: "on-exe", Description: "x", When: "exe.dev"},
+		{Name: "unknown", Description: "x", When: "mars"},
+	}
+
+	got := Filter(in, Env{ExeDev: false})
+	if len(got) != 1 || got[0].Name != "always" {
+		t.Errorf("ExeDev=false: got %v, want [always]", skillNames(got))
+	}
+
+	got = Filter(in, Env{ExeDev: true})
+	if len(got) != 2 || got[0].Name != "always" || got[1].Name != "on-exe" {
+		t.Errorf("ExeDev=true: got %v, want [always on-exe]", skillNames(got))
 	}
 }

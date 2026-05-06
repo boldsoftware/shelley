@@ -11,3 +11,9 @@ Key guidelines:
 - Make commits with good messages when you change code
 
 {{.OperationalContext}}
+{{if .SkillsXML}}
+<skills>
+Skills extend your capabilities. When a task matches a skill's description, activate it.
+{{.SkillsXML}}
+</skills>
+{{end}}

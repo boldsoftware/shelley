@@ -46,12 +46,18 @@ func BuiltinSkills() []Skill {
 			panic(fmt.Sprintf("embedded skill %s: name %q does not match directory %q", path, name, parentDir))
 		}
 
+		var when string
+		if w, ok := frontmatter["when"].(string); ok {
+			when = w
+		}
+
 		// Extract the body (everything after the second ---)
 		body := extractBody(string(data))
 
 		out = append(out, Skill{
 			Name:        name,
 			Description: description,
+			When:        when,
 			Body:        body,
 		})
 		return nil

@@ -868,10 +868,11 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 		}
 	case "gemini":
 		return &gem.Service{
-			APIKey: model.ApiKey,
-			URL:    model.Endpoint,
-			Model:  model.ModelName,
-			HTTPC:  m.httpc,
+			APIKey:          model.ApiKey,
+			URL:             model.Endpoint,
+			Model:           model.ModelName,
+			HTTPC:           m.httpc,
+			ReasoningEffort: model.ReasoningEffort,
 		}
 	default:
 		if m.logger != nil {

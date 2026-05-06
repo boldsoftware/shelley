@@ -47,7 +47,7 @@ func TestChangeDirAffectsBash(t *testing.T) {
 	toolSetConfig := claudetool.ToolSetConfig{
 		WorkingDir: tmpDir,
 	}
-	server := NewServer(database, llmManager, toolSetConfig, logger, true, "", "predictable", "", nil)
+	server := NewServer(database, llmManager, toolSetConfig, logger, true, "predictable", "")
 
 	// Create conversation
 	conversation, err := database.CreateConversation(context.Background(), nil, true, nil, nil, db.ConversationOptions{})
@@ -188,7 +188,7 @@ func TestChangeDirBroadcastsCwdUpdate(t *testing.T) {
 	toolSetConfig := claudetool.ToolSetConfig{
 		WorkingDir: tmpDir,
 	}
-	server := NewServer(database, llmManager, toolSetConfig, logger, true, "", "predictable", "", nil)
+	server := NewServer(database, llmManager, toolSetConfig, logger, true, "predictable", "")
 
 	// Create test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

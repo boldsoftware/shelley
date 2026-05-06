@@ -61,7 +61,7 @@ func TestServerEndToEnd(t *testing.T) {
 	}
 
 	// Create server
-	svr := server.NewServer(database, llmManager, toolSetConfig, logger, false, "", "", "", nil)
+	svr := server.NewServer(database, llmManager, toolSetConfig, logger, false, "", "")
 
 	// Set up HTTP server
 	mux := http.NewServeMux()
@@ -386,7 +386,7 @@ func TestConversationCleanup(t *testing.T) {
 	// Create server with predictable service
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	llmManager := server.NewLLMServiceManager(&server.LLMConfig{Logger: logger})
-	svr := server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, false, "", "", "", nil)
+	svr := server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, false, "", "")
 
 	// Create a conversation
 	// Using database directly instead of service
@@ -422,7 +422,7 @@ func TestSlugGeneration(t *testing.T) {
 	// Create server
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	llmManager := server.NewLLMServiceManager(&server.LLMConfig{Logger: logger})
-	_ = server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, false, "", "", "", nil)
+	_ = server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, false, "", "")
 
 	// Test slug generation directly to avoid timing issues
 	// ctx := context.Background()
@@ -516,7 +516,7 @@ func TestSlugGenerationWithPredictableService(t *testing.T) {
 		t.Fatalf("Failed to migrate database: %v", err)
 	}
 
-	_ = server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, false, "", "", "", nil)
+	_ = server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, false, "", "")
 
 	// Test slug generation directly
 	// ctx := context.Background()
@@ -612,7 +612,7 @@ func TestSSEIncrementalUpdates(t *testing.T) {
 	llmManager := server.NewLLMServiceManager(&server.LLMConfig{Logger: logger})
 
 	// Create server
-	serviceInstance := server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, false, "", "", "", nil)
+	serviceInstance := server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, false, "", "")
 	mux := http.NewServeMux()
 	serviceInstance.RegisterRoutes(mux)
 	testServer := httptest.NewServer(mux)
@@ -730,7 +730,7 @@ func TestSystemPromptSentToLLM(t *testing.T) {
 	}
 
 	tools := claudetool.ToolSetConfig{}
-	svr := server.NewServer(database, customLLMManager, tools, logger, false, "", "", "", nil)
+	svr := server.NewServer(database, customLLMManager, tools, logger, false, "", "")
 
 	// Start server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -935,7 +935,7 @@ func TestVersionEndpoint(t *testing.T) {
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	llmManager := server.NewLLMServiceManager(&server.LLMConfig{Logger: logger})
-	svr := server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, true, "", "", "", nil)
+	svr := server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, true, "", "")
 
 	mux := http.NewServeMux()
 	svr.RegisterRoutes(mux)
@@ -986,7 +986,7 @@ func TestScreenshotRouteServesImage(t *testing.T) {
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	llmManager := server.NewLLMServiceManager(&server.LLMConfig{Logger: logger})
-	svr := server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, true, "", "", "", nil)
+	svr := server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, true, "", "")
 
 	mux := http.NewServeMux()
 	svr.RegisterRoutes(mux)
@@ -1085,7 +1085,7 @@ func TestGitStateChangeCreatesGitInfoMessage(t *testing.T) {
 		WorkingDir:    workDir,
 		EnableBrowser: false,
 	}
-	svr := server.NewServer(database, customLLMManager, toolConfig, logger, false, "", "", "", nil)
+	svr := server.NewServer(database, customLLMManager, toolConfig, logger, false, "", "")
 
 	mux := http.NewServeMux()
 	svr.RegisterRoutes(mux)
@@ -1175,7 +1175,7 @@ func TestSubagentEndToEnd(t *testing.T) {
 	}
 
 	// Create server (predictable-only mode)
-	svr := server.NewServer(database, llmManager, toolSetConfig, logger, true, "", "", "", nil)
+	svr := server.NewServer(database, llmManager, toolSetConfig, logger, true, "", "")
 
 	// Set up HTTP server
 	mux := http.NewServeMux()

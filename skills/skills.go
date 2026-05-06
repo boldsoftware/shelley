@@ -25,6 +25,7 @@ type Skill struct {
 	Description   string            `json:"description"`
 	License       string            `json:"license,omitempty"`
 	Compatibility string            `json:"compatibility,omitempty"`
+	When          string            `json:"when,omitempty"`
 	AllowedTools  string            `json:"allowed_tools,omitempty"`
 	Metadata      map[string]string `json:"metadata,omitempty"`
 	Path          string            `json:"path"`           // Path to SKILL.md file (empty for built-in skills)
@@ -179,6 +180,10 @@ func Parse(path string) (Skill, error) {
 
 	if tools, ok := frontmatter["allowed-tools"].(string); ok {
 		skill.AllowedTools = tools
+	}
+
+	if when, ok := frontmatter["when"].(string); ok {
+		skill.When = when
 	}
 
 	if metadata, ok := frontmatter["metadata"].(map[string]any); ok {
@@ -548,6 +553,36 @@ func ListAll(workingDir, gitRoot string) []Skill {
 	}
 
 	return all
+}
+
+// Env describes the runtime environment used to gate skills with a `when:`
+// condition. Currently only ExeDev is checked; extend as new conditions are
+// added. The zero value satisfies no conditions, so skills with a `when:`
+// clause are filtered out by default.
+type Env struct {
+	ExeDev bool
+}
+
+// Filter returns the subset of skills whose `when:` condition is satisfied by
+// env. Skills without a `when:` clause are always included. Unknown condition
+// values cause the skill to be filtered out (fail-closed).
+func Filter(in []Skill, env Env) []Skill {
+	out := make([]Skill, 0, len(in))
+	for _, s := range in {
+		if s.When == "" || matchWhen(s.When, env) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func matchWhen(when string, env Env) bool {
+	switch strings.TrimSpace(when) {
+	case "exe.dev":
+		return env.ExeDev
+	default:
+		return false
+	}
 }
 
 // FindByName looks up a skill by name and returns its raw SKILL.md content.

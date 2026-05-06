@@ -373,9 +373,10 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 		}
 	case "gemini":
 		service = &gem.Service{
-			APIKey: req.APIKey,
-			URL:    req.Endpoint,
-			Model:  req.ModelName,
+			APIKey:          req.APIKey,
+			URL:             req.Endpoint,
+			Model:           req.ModelName,
+			ReasoningEffort: req.ReasoningEffort,
 		}
 	case "openai-responses":
 		service = &oai.ResponsesService{
