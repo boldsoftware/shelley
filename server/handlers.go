@@ -182,11 +182,15 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Limit to 10MB file size
-	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
+	// Cap uploads at 1 GiB so a runaway client can't fill the disk, but allow
+	// videos and other large attachments through. Anything bigger than
+	// maxInMemoryUpload bytes is buffered to a temp file by ParseMultipartForm.
+	const maxUploadBytes = 1 << 30     // 1 GiB
+	const maxInMemoryUpload = 32 << 20 // 32 MiB
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
 
 	// Parse the multipart form
-	if err := r.ParseMultipartForm(10 * 1024 * 1024); err != nil {
+	if err := r.ParseMultipartForm(maxInMemoryUpload); err != nil {
 		http.Error(w, "failed to parse form: "+err.Error(), http.StatusBadRequest)
 		return
 	}

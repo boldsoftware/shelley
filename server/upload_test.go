@@ -234,3 +234,40 @@ func TestUploadPreservesFileExtension(t *testing.T) {
 		})
 	}
 }
+
+func TestUploadLargeFile(t *testing.T) {
+	t.Parallel()
+	server, _, _ := newTestServer(t)
+
+	// 64 MiB — larger than the old 10 MiB cap, well under the 1 GiB cap.
+	// This used to spill to a temp file via ParseMultipartForm and would have
+	// been rejected with 400 "http: request body too large".
+	const size = 64 * 1024 * 1024
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", "clip.mp4")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	chunk := make([]byte, 64*1024)
+	for written := 0; written < size; written += len(chunk) {
+		if _, err := part.Write(chunk); err != nil {
+			t.Fatalf("write chunk: %v", err)
+		}
+	}
+	writer.Close()
+
+	req := httptest.NewRequest("POST", "/api/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	server.handleUpload(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var response map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("parse response: %v", err)
+	}
+	os.Remove(response["path"])
+}
