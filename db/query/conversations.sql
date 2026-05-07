@@ -123,6 +123,11 @@ WHERE conversation_id = ?;
 SELECT conversation_options FROM conversations
 WHERE conversation_id = ?;
 
+-- name: UpdateConversationOptions :exec
+UPDATE conversations
+SET conversation_options = ?
+WHERE conversation_id = ?;
+
 -- name: UpdateConversationParent :one
 UPDATE conversations
 SET parent_conversation_id = ?, updated_at = CURRENT_TIMESTAMP

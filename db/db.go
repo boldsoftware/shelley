@@ -235,6 +235,10 @@ func WithTxRes[T any](db *DB, ctx context.Context, fn func(*generated.Queries) (
 // Conversation methods (moved from ConversationService)
 
 // ConversationOptions holds extensible conversation settings stored as JSON.
+type ConversationHook struct {
+	URL string `json:"url"`
+}
+
 type ConversationOptions struct {
 	Type            string `json:"type,omitempty"`             // "normal" (default) or "orchestrator"
 	SubagentBackend string `json:"subagent_backend,omitempty"` // "shelley" (default), "claude-cli", "codex-cli"
@@ -243,6 +247,8 @@ type ConversationOptions struct {
 	// DisableAllTools disables every tool by default; ToolOverrides with "on" re-enable individual tools.
 	// Useful for API clients that can't enumerate the tool registry.
 	DisableAllTools bool `json:"disable_all_tools,omitempty"`
+	// EndOfTurnHooks are posted to whenever a top-level agent turn ends.
+	EndOfTurnHooks []ConversationHook `json:"end_of_turn_hooks,omitempty"`
 }
 
 // IsOrchestrator returns true if the conversation is in orchestrator mode.
@@ -258,6 +264,49 @@ func ParseConversationOptions(s string) ConversationOptions {
 		_ = json.Unmarshal([]byte(s), &opts)
 	}
 	return opts
+}
+
+// UpdateConversationOptions replaces a conversation's stored options JSON.
+func (db *DB) UpdateConversationOptions(ctx context.Context, conversationID string, opts ConversationOptions) error {
+	optsJSON, err := json.Marshal(opts)
+	if err != nil {
+		return fmt.Errorf("failed to marshal conversation options: %w", err)
+	}
+	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		return q.UpdateConversationOptions(ctx, generated.UpdateConversationOptionsParams{
+			ConversationID:      conversationID,
+			ConversationOptions: string(optsJSON),
+		})
+	})
+}
+
+// RegisterConversationHook atomically adds hook to conversation options if absent.
+func (db *DB) RegisterConversationHook(ctx context.Context, conversationID string, hook ConversationHook) (ConversationOptions, error) {
+	var opts ConversationOptions
+	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		raw, err := q.GetConversationOptions(ctx, conversationID)
+		if err != nil {
+			return err
+		}
+		opts = ParseConversationOptions(raw)
+		for _, existing := range opts.EndOfTurnHooks {
+			if existing.URL == hook.URL {
+				return nil
+			}
+		}
+		opts.EndOfTurnHooks = append(append([]ConversationHook(nil), opts.EndOfTurnHooks...), hook)
+		optsJSON, err := json.Marshal(opts)
+		if err != nil {
+			return fmt.Errorf("failed to marshal conversation options: %w", err)
+		}
+		return q.UpdateConversationOptions(ctx, generated.UpdateConversationOptionsParams{
+			ConversationID:      conversationID,
+			ConversationOptions: string(optsJSON),
+		})
+	})
+	return opts, err
 }
 
 // CreateConversation creates a new conversation with an optional slug

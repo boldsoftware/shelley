@@ -639,6 +639,22 @@ func (q *Queries) UpdateConversationModel(ctx context.Context, arg UpdateConvers
 	return err
 }
 
+const updateConversationOptions = `-- name: UpdateConversationOptions :exec
+UPDATE conversations
+SET conversation_options = ?
+WHERE conversation_id = ?
+`
+
+type UpdateConversationOptionsParams struct {
+	ConversationOptions string `json:"conversation_options"`
+	ConversationID      string `json:"conversation_id"`
+}
+
+func (q *Queries) UpdateConversationOptions(ctx context.Context, arg UpdateConversationOptionsParams) error {
+	_, err := q.db.ExecContext(ctx, updateConversationOptions, arg.ConversationOptions, arg.ConversationID)
+	return err
+}
+
 const updateConversationParent = `-- name: UpdateConversationParent :one
 UPDATE conversations
 SET parent_conversation_id = ?, updated_at = CURRENT_TIMESTAMP

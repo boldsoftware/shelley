@@ -41,6 +41,7 @@ type AgentDonePayload struct {
 	Model             string `json:"model,omitempty"`
 	ConversationTitle string `json:"conversation_title,omitempty"`
 	ConversationURL   string `json:"conversation_url,omitempty"`
+	VMName            string `json:"vm_name,omitempty"`
 	FinalResponse     string `json:"final_response,omitempty"`
 }
 

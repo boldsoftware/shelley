@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -1060,16 +1062,31 @@ func (s *Server) publishConversationState(state ConversationState) {
 	if !state.Working {
 		conv, convErr := s.db.GetConversationByID(context.Background(), state.ConversationID)
 		isSubagent := convErr == nil && conv.ParentConversationID != nil
+		var hooks []db.ConversationHook
+		if !isSubagent {
+			s.mu.Lock()
+			manager := s.activeConversations[state.ConversationID]
+			s.mu.Unlock()
+			if manager != nil {
+				var err error
+				hooks, err = manager.EndOfTurnHooks(context.Background())
+				if err != nil {
+					s.logger.Warn("failed to load end-of-turn hooks", "conversationID", state.ConversationID, "error", err)
+				}
+			}
+		}
 
 		var slug string
 		if convErr == nil && conv.Slug != nil {
 			slug = *conv.Slug
 		}
+		hostname := publicHostname()
 		payload := notifications.AgentDonePayload{
-			Hostname:          publicHostname(),
+			Hostname:          hostname,
 			Model:             state.Model,
 			ConversationTitle: slug,
 			ConversationURL:   s.conversationURL(slug),
+			VMName:            strings.TrimSuffix(hostname, ".exe.xyz"),
 		}
 		if msg, err := s.db.GetLatestMessage(context.Background(), state.ConversationID); err == nil && msg.Type == string(db.MessageTypeAgent) && msg.LlmData != nil {
 			var llmMsg llm.Message
@@ -1094,6 +1111,9 @@ func (s *Server) publishConversationState(state ConversationState) {
 		}
 		if !isSubagent {
 			s.notifDispatcher.Dispatch(context.Background(), event)
+			for _, hook := range hooks {
+				go s.sendEndOfTurnHook(context.Background(), hook, event)
+			}
 		}
 		// Still set notifEvent so the SSE stream broadcasts it to the UI.
 		notifEvent = &event
@@ -1492,4 +1512,80 @@ func getPortOwnerInfo(port string) string {
 	}
 
 	return "(could not parse lsof output)"
+}
+
+func (s *Server) sendEndOfTurnHook(ctx context.Context, hook db.ConversationHook, event notifications.Event) {
+	payload, ok := event.Payload.(notifications.AgentDonePayload)
+	if !ok {
+		return
+	}
+
+	title := notifications.Title(payload.Hostname, payload.ConversationTitle)
+	body := payload.FinalResponse
+	if body == "" {
+		body = "Agent finished"
+	}
+	if len(body) > 4096 {
+		body = body[:4093] + "..."
+	}
+
+	data := map[string]string{
+		"type":            "shelley_conversation",
+		"conversation_id": event.ConversationID,
+	}
+	if payload.VMName != "" {
+		data["vm_name"] = payload.VMName
+	}
+	if payload.ConversationURL != "" {
+		data["conversation_url"] = payload.ConversationURL
+	}
+	if payload.ConversationTitle != "" {
+		data["conversation_title"] = payload.ConversationTitle
+	}
+
+	bodyBytes, err := json.Marshal(map[string]any{
+		"title": title,
+		"body":  body,
+		"data":  data,
+	})
+	if err != nil {
+		s.logger.Warn("failed to marshal end-of-turn hook", "conversationID", event.ConversationID, "error", err)
+		return
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, hook.URL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		s.logger.Warn("failed to create end-of-turn hook request", "conversationID", event.ConversationID, "error", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		s.logger.Warn("failed to send end-of-turn hook", "conversationID", event.ConversationID, "error", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		s.logger.Warn("end-of-turn hook failed", "conversationID", event.ConversationID, "status", resp.Status)
+	}
+}
+
+func validateConversationHookURL(rawURL string) error {
+	if rawURL == "" {
+		return fmt.Errorf("url is required")
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("invalid url")
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("url scheme must be http or https")
+	}
+	if _, err := os.Stat("/exe.dev"); err == nil && !strings.HasSuffix(u.Hostname(), ".int.exe.xyz") {
+		return fmt.Errorf("hook url host must end in .int.exe.xyz")
+	}
+	return nil
 }

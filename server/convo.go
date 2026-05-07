@@ -91,6 +91,33 @@ func NewConversationManager(conversationID string, database *db.DB, baseLogger *
 	}
 }
 
+// RegisterEndOfTurnHook records a webhook URL to post whenever a top-level turn ends.
+func (cm *ConversationManager) RegisterEndOfTurnHook(ctx context.Context, hook db.ConversationHook) error {
+	if err := cm.Hydrate(ctx); err != nil {
+		return err
+	}
+	opts, err := cm.db.RegisterConversationHook(ctx, cm.conversationID, hook)
+	if err != nil {
+		return err
+	}
+	cm.mu.Lock()
+	cm.conversationOptions = opts
+	cm.mu.Unlock()
+	return nil
+}
+
+// EndOfTurnHooks returns the registered top-level end-of-turn hooks.
+func (cm *ConversationManager) EndOfTurnHooks(ctx context.Context) ([]db.ConversationHook, error) {
+	if err := cm.Hydrate(ctx); err != nil {
+		return nil, err
+	}
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	hooks := make([]db.ConversationHook, len(cm.conversationOptions.EndOfTurnHooks))
+	copy(hooks, cm.conversationOptions.EndOfTurnHooks)
+	return hooks, nil
+}
+
 // SetAgentWorking updates the agent working state and notifies the server to broadcast.
 func (cm *ConversationManager) SetAgentWorking(working bool) {
 	cm.mu.Lock()
