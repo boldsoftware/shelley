@@ -783,7 +783,7 @@ func TestCalculateUsageWithComplexFunctionCall(t *testing.T) {
 }
 
 func TestConvertResponseWithThinking(t *testing.T) {
-	// Test that Gemini responses with ThoughtSignature are converted to ContentTypeThinking
+	// A thought-summary part (thought:true) is classified as ContentTypeThinking.
 	gemRes := &gemini.Response{
 		Candidates: []gemini.Candidate{
 			{
@@ -792,6 +792,7 @@ func TestConvertResponseWithThinking(t *testing.T) {
 						{
 							Text:             "Let me think about this problem step by step...",
 							ThoughtSignature: "signature-abc123",
+							Thought:          true,
 						},
 					},
 				},
@@ -879,6 +880,7 @@ func TestConvertResponseWithMixedContent(t *testing.T) {
 						{
 							Text:             "Thinking about the problem...",
 							ThoughtSignature: "sig-1",
+							Thought:          true,
 						},
 						{
 							Text: "Here is my answer.",
@@ -918,6 +920,40 @@ func TestConvertResponseWithMixedContent(t *testing.T) {
 
 	if content[1].Text != "Here is my answer." {
 		t.Fatalf("Expected text, got '%s'", content[1].Text)
+	}
+}
+
+// TestConvertResponseGemini3FinalAnswerWithSignature is a regression test for
+// the gemini-3.x "Test failed: empty response from model" bug. Gemini 3 attaches
+// a thoughtSignature to ordinary final-answer text parts (not just thoughts) so
+// internal reasoning state can be rehydrated next turn. The presence of a signature
+// alone must not classify the part as thinking — otherwise the model's actual
+// answer disappears from llm.Response.Content.
+func TestConvertResponseGemini3FinalAnswerWithSignature(t *testing.T) {
+	gemRes := &gemini.Response{
+		Candidates: []gemini.Candidate{{
+			Content: gemini.Content{
+				Parts: []gemini.Part{{
+					Text:             "Test successful.",
+					ThoughtSignature: "Eq0FCqoFAQw51sdx7TPrSqmb0Ts...",
+					// Thought is intentionally false — this is the final answer.
+				}},
+			},
+		}},
+	}
+
+	contents := convertGeminiResponseToContent(gemRes)
+	if len(contents) != 1 {
+		t.Fatalf("got %d contents, want 1", len(contents))
+	}
+	if contents[0].Type != llm.ContentTypeText {
+		t.Fatalf("got type %s, want ContentTypeText", contents[0].Type)
+	}
+	if contents[0].Text != "Test successful." {
+		t.Fatalf("got text %q, want %q", contents[0].Text, "Test successful.")
+	}
+	if contents[0].Signature == "" {
+		t.Fatalf("expected Signature to be preserved on final-answer text for round-tripping")
 	}
 }
 
@@ -986,6 +1022,9 @@ func TestBuildGeminiRequestWithThinking(t *testing.T) {
 	if thinkingPart.ThoughtSignature != "sig-123" {
 		t.Fatalf("Expected signature 'sig-123', got '%s'", thinkingPart.ThoughtSignature)
 	}
+	if !thinkingPart.Thought {
+		t.Fatal("Expected thinking part to be marked as thought")
+	}
 
 	// Verify the second part is regular text
 	textPart := assistantContent.Parts[1]
@@ -1046,6 +1085,9 @@ func TestBuildGeminiRequestWithRedactedThinking(t *testing.T) {
 	if redactedPart.ThoughtSignature != "sig-redacted" {
 		t.Fatalf("Expected signature 'sig-redacted', got '%s'", redactedPart.ThoughtSignature)
 	}
+	if !redactedPart.Thought {
+		t.Fatal("Expected redacted thinking part to be marked as thought")
+	}
 }
 
 func TestRoundTripThinking(t *testing.T) {
@@ -1060,6 +1102,7 @@ func TestRoundTripThinking(t *testing.T) {
 						{
 							Text:             "Analyzing the problem...",
 							ThoughtSignature: "sig-abc",
+							Thought:          true,
 						},
 						{
 							Text: "The answer is 42.",
@@ -1122,6 +1165,9 @@ func TestRoundTripThinking(t *testing.T) {
 	if thinkingPart.ThoughtSignature != "sig-abc" {
 		t.Fatalf("Expected signature to be preserved, got '%s'", thinkingPart.ThoughtSignature)
 	}
+	if !thinkingPart.Thought {
+		t.Fatal("Expected thinking part to stay marked as thought")
+	}
 
 	// Verify text part preserved
 	textPart := gemReq.Contents[0].Parts[1]
@@ -1132,3 +1178,87 @@ func TestRoundTripThinking(t *testing.T) {
 		t.Fatalf("Expected no signature for text, got '%s'", textPart.ThoughtSignature)
 	}
 }
+
+func TestThinkingConfig(t *testing.T) {
+	userMsg := llm.Request{
+		Messages: []llm.Message{{
+			Role:    llm.MessageRoleUser,
+			Content: []llm.Content{{Type: llm.ContentTypeText, Text: "hi"}},
+		}},
+	}
+
+	tests := []struct {
+		name        string
+		svc         *Service
+		wantLevel   string
+		wantBudget  *int
+		wantOmitted bool
+	}{
+		{
+			name:        "off by default",
+			svc:         &Service{Model: "gemini-3-flash-preview", APIKey: "x"},
+			wantOmitted: true,
+		},
+		{
+			name:      "gemini-3-flash maps medium to thinkingLevel",
+			svc:       &Service{Model: "gemini-3-flash-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium},
+			wantLevel: "medium",
+		},
+		{
+			name:      "gemini-3-pro clamps medium to high",
+			svc:       &Service{Model: "gemini-3-pro-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium},
+			wantLevel: "high",
+		},
+		{
+			name:      "gemini-3-pro clamps minimal to low",
+			svc:       &Service{Model: "gemini-3-pro-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMinimal},
+			wantLevel: "low",
+		},
+		{
+			name:      "gemini-3.1-pro accepts medium",
+			svc:       &Service{Model: "gemini-3.1-pro-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium},
+			wantLevel: "medium",
+		},
+		{
+			name:      "ReasoningEffort overrides ThinkingLevel for 3.x",
+			svc:       &Service{Model: "gemini-3-flash-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium, ReasoningEffort: "high"},
+			wantLevel: "high",
+		},
+		{
+			name:       "gemini-2.5 uses thinkingBudget",
+			svc:        &Service{Model: "gemini-2.5-pro", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium},
+			wantBudget: ptr(8192),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gemReq, err := tt.svc.buildGeminiRequest(&userMsg)
+			if err != nil {
+				t.Fatalf("buildGeminiRequest: %v", err)
+			}
+			if tt.wantOmitted {
+				if gemReq.GenerationConfig != nil && gemReq.GenerationConfig.ThinkingConfig != nil {
+					t.Fatalf("expected no thinkingConfig, got %+v", gemReq.GenerationConfig.ThinkingConfig)
+				}
+				return
+			}
+			if gemReq.GenerationConfig == nil || gemReq.GenerationConfig.ThinkingConfig == nil {
+				t.Fatalf("expected thinkingConfig to be set")
+			}
+			tc := gemReq.GenerationConfig.ThinkingConfig
+			if tc.ThinkingLevel != tt.wantLevel {
+				t.Errorf("thinkingLevel = %q, want %q", tc.ThinkingLevel, tt.wantLevel)
+			}
+			if tt.wantBudget != nil {
+				if tc.ThinkingBudget == nil || *tc.ThinkingBudget != *tt.wantBudget {
+					t.Errorf("thinkingBudget = %v, want %d", tc.ThinkingBudget, *tt.wantBudget)
+				}
+			} else if tc.ThinkingBudget != nil {
+				t.Errorf("unexpected thinkingBudget = %d", *tc.ThinkingBudget)
+			}
+		})
+	}
+}
+
+func ptr[T any](v T) *T { return &v }

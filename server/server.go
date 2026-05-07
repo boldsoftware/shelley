@@ -231,9 +231,7 @@ type Server struct {
 	mu                  sync.Mutex
 	logger              *slog.Logger
 	predictableOnly     bool
-	terminalURL         string
 	defaultModel        string
-	links               []Link
 	requireHeader       string
 	conversationGroup   singleflight.Group[string, *ConversationManager]
 	versionChecker      *VersionChecker
@@ -243,7 +241,7 @@ type Server struct {
 }
 
 // NewServer creates a new server instance
-func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool.ToolSetConfig, logger *slog.Logger, predictableOnly bool, terminalURL, defaultModel, requireHeader string, links []Link) *Server {
+func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool.ToolSetConfig, logger *slog.Logger, predictableOnly bool, defaultModel, requireHeader string) *Server {
 	s := &Server{
 		db:                  database,
 		llmManager:          llmManager,
@@ -251,10 +249,8 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		activeConversations: make(map[string]*ConversationManager),
 		logger:              logger,
 		predictableOnly:     predictableOnly,
-		terminalURL:         terminalURL,
 		defaultModel:        defaultModel,
 		requireHeader:       requireHeader,
-		links:               links,
 		versionChecker:      NewVersionChecker(),
 		notifDispatcher:     notifications.NewDispatcher(logger),
 		shutdownCh:          make(chan struct{}),

@@ -550,8 +550,8 @@ const LANGUAGE_OPTIONS: { locale: Locale; flag: string; label: string }[] = [
   { locale: "es", flag: "🇪🇸", label: "Español" },
   { locale: "zh-CN", flag: "🇨🇳", label: "简体中文" },
   { locale: "zh-TW", flag: "🇹🇼", label: "繁體中文" },
-  { locale: "upgoer5", flag: "🚀", label: "Up-Goer Five" },
   { locale: "vi", flag: "🇻🇳", label: "Tiếng Việt" },
+  { locale: "upgoer5", flag: "🚀", label: "Up-Goer Five" },
 ];
 
 function LanguageDropdown({

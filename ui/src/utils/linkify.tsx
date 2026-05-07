@@ -1,5 +1,3 @@
-import React from "react";
-
 // Regex for matching URLs. Only matches http:// and https:// URLs.
 // Avoids matching trailing punctuation that's likely not part of the URL.
 // eslint-disable-next-line no-useless-escape
@@ -52,39 +50,4 @@ export function parseLinks(text: string): LinkifyResult[] {
   }
 
   return results;
-}
-
-/**
- * Convert text containing URLs into React elements with clickable links.
- * URLs are rendered as <a> tags that open in new tabs.
- * Text is HTML-escaped by React's default behavior.
- */
-export function linkifyText(text: string): React.ReactNode {
-  const segments = parseLinks(text);
-
-  if (segments.length === 0) {
-    return text;
-  }
-
-  // If there's only one text segment with no links, return plain text
-  if (segments.length === 1 && segments[0].type === "text") {
-    return text;
-  }
-
-  return segments.map((segment, index) => {
-    if (segment.type === "link") {
-      return (
-        <a
-          key={index}
-          href={segment.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-link"
-        >
-          {segment.content}
-        </a>
-      );
-    }
-    return <React.Fragment key={index}>{segment.content}</React.Fragment>;
-  });
 }

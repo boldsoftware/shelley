@@ -474,6 +474,7 @@ function CommandPalette({
         | "spanish"
         | "simplifiedChinese"
         | "traditionalChinese"
+        | "vietnamese"
         | "upgoerFive";
       nativeName: string;
       keywords: string[];
@@ -526,6 +527,13 @@ function CommandPalette({
         name: "traditionalChinese",
         nativeName: "\u7e41\u9ad4\u4e2d\u6587",
         keywords: ["chinese", "traditional", "zh", "zh-tw", "\u4e2d\u6587", "\u7e41\u9ad4"],
+      },
+      {
+        loc: "vi",
+        flag: "\ud83c\uddfb\ud83c\uddf3",
+        name: "vietnamese",
+        nativeName: "Tiếng Việt",
+        keywords: ["vietnamese", "vi", "tiếng việt", "tieng viet"],
       },
       {
         loc: "upgoer5",

@@ -1,6 +1,6 @@
 import type { TranslationKeys } from "./types";
 
-export const vn: TranslationKeys = {
+export const vi: TranslationKeys = {
   // App-level
   loading: "Đang tải ...",
   retry: "Thử lại",
@@ -65,7 +65,7 @@ export const vn: TranslationKeys = {
   renderMarkdownAgent: "Render markdown chỉ cho tin nhắn gửi từ agent",
   enableMarkdownAll: "Kích hoạt markdown toàn bộ",
   renderMarkdownAll: "Render markdown cho tất cả tin nhắn",
-  disableMarkdown: "Disable Markdown",
+  disableMarkdown: "Tắt Markdown",
   showPlainText: "Chỉ văn bản thuần, không hơn không kém",
   archiveConversationAction: "Lưu trữ",
   archiveCurrentConversation: "Lưu trữ cuộc hội thoại hiện tại",
@@ -131,7 +131,7 @@ export const vn: TranslationKeys = {
   tags: "Tags",
   tagsPlaceholder: "phân cách bằng dấu phẩy, ví dụ slug, rẻ",
   tagsTooltip:
-    'Sử dung tag phân cách bằng dấu phẩy cho model. Dùng "slug" để setup model này làm model tạo tiêu đề. Nếu không có model nào có tag này thì model mặc định (gpt-oss-20b) sẽ được sử dung.',
+    'Sử dụng tag phân cách bằng dấu phẩy cho model. Dùng "slug" để đánh dấu model này làm model tạo tiêu đề hội thoại. Nếu không có model nào có tag "slug", model của hội thoại sẽ được sử dụng.',
   reasoningEffort: "Mức độ suy nghĩ",
   reasoningEffortPlaceholder: "ví dụ: medium, high, xhigh, none — để trống là mức mặc định",
   reasoningEffortHint:
@@ -146,7 +146,7 @@ export const vn: TranslationKeys = {
   apiKeyRequired: "Cần có API key",
   noModelsConfigured: "Chưa có model nào",
   noModelsHint:
-    "Đặt biến môi trường ANTHROPIC_API_KEY, hoặc dung flag -gateway, hoặc thêm model bên dưới.",
+    "Đặt biến môi trường ANTHROPIC_API_KEY, hoặc dùng flag -gateway, hoặc thêm model bên dưới.",
 
   // Notifications Modal
   notifications: "Thông báo",

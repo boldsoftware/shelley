@@ -8,7 +8,7 @@ import { es } from "./es";
 import { upgoer5 } from "./upgoer5";
 import { zhCN } from "./zh-CN";
 import { zhTW } from "./zh-TW";
-import { vn } from "./vi";
+import { vi } from "./vi";
 
 const LOCALE_STORAGE_KEY = "shelley-locale";
 
@@ -21,7 +21,7 @@ const translations: Record<Locale, TranslationKeys> = {
   "zh-CN": zhCN,
   "zh-TW": zhTW,
   upgoer5,
-  vi: vn,
+  vi,
 };
 
 function getStoredLocale(): Locale {
