@@ -528,12 +528,8 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	ctx := r.Context()
 	limit := 5000
 	offset := 0
-	var query string
-
-	// Parse query parameters
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
@@ -544,45 +540,42 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 			offset = o
 		}
 	}
-	query = r.URL.Query().Get("q")
-	searchContent := r.URL.Query().Get("search_content") == "true"
 
-	// Get conversations from database
-	var conversations []generated.Conversation
-	var err error
-
-	if query != "" {
-		if searchContent {
-			// Search in both slug and message content
-			conversations, err = s.db.SearchConversationsWithMessages(ctx, query, int64(limit), int64(offset))
-		} else {
-			// Search only in slug
-			conversations, err = s.db.SearchConversations(ctx, query, int64(limit), int64(offset))
-		}
-	} else {
-		conversations, err = s.db.ListConversations(ctx, int64(limit), int64(offset))
-	}
-
+	conversations, err := s.conversationListWithState(r.Context(), limit, offset, r.URL.Query().Get("q"), r.URL.Query().Get("search_content") == "true")
 	if err != nil {
 		s.logger.Error("Failed to get conversations", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	// Get working states for all active conversations
-	workingStates := s.getWorkingConversations()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(conversations)
+}
 
-	// Get subagent counts
+func (s *Server) conversationListWithState(ctx context.Context, limit, offset int, query string, searchContent bool) ([]ConversationWithState, error) {
+	var conversations []generated.Conversation
+	var err error
+	if query != "" {
+		if searchContent {
+			conversations, err = s.db.SearchConversationsWithMessages(ctx, query, int64(limit), int64(offset))
+		} else {
+			conversations, err = s.db.SearchConversations(ctx, query, int64(limit), int64(offset))
+		}
+	} else {
+		conversations, err = s.db.ListConversations(ctx, int64(limit), int64(offset))
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	workingStates := s.getWorkingConversations()
 	subagentCounts, err := s.db.GetSubagentCounts(ctx)
 	if err != nil {
 		s.logger.Error("Failed to get subagent counts", "error", err)
-		// Non-fatal, continue with zero counts
 		subagentCounts = make(map[string]int64)
 	}
 
-	// Build response with working state included
-	// Cache git info by cwd to avoid redundant git subprocess calls
-	gitStates := make(map[string]*gitstate.GitState)
+	now := time.Now()
 	result := make([]ConversationWithState, len(conversations))
 	for i, conv := range conversations {
 		cws := ConversationWithState{
@@ -591,23 +584,28 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 			SubagentCount: subagentCounts[conv.ConversationID],
 		}
 		if conv.Cwd != nil {
-			gs, ok := gitStates[*conv.Cwd]
+			entry, ok := s.conversationListGitCache.get(*conv.Cwd, now)
 			if !ok {
-				gs = gitstate.GetGitState(*conv.Cwd)
-				gitStates[*conv.Cwd] = gs
+				gs := gitstate.GetGitState(*conv.Cwd)
+				entry = conversationListGitCacheEntry{
+					state:     gs,
+					expiresAt: now.Add(conversationListGitCacheTTL),
+				}
+				if gs.IsRepo {
+					entry.worktree = getGitWorktreeRoot(gs.Worktree)
+				}
+				s.conversationListGitCache.set(*conv.Cwd, entry)
 			}
-			if gs.IsRepo {
-				cws.GitRepoRoot = gs.Worktree
-				cws.GitWorktreeRoot = getGitWorktreeRoot(gs.Worktree)
-				cws.GitCommit = gs.Commit
-				cws.GitSubject = gs.Subject
+			if entry.state.IsRepo {
+				cws.GitRepoRoot = entry.state.Worktree
+				cws.GitWorktreeRoot = entry.worktree
+				cws.GitCommit = entry.state.Commit
+				cws.GitSubject = entry.state.Subject
 			}
 		}
 		result[i] = cws
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	return result, nil
 }
 
 // conversationMux returns a mux for /api/conversation/<id>/* routes

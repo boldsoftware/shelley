@@ -226,20 +226,22 @@ type ConversationListUpdate struct {
 
 // Server manages the HTTP API and active conversations
 type Server struct {
-	db                  *db.DB
-	llmManager          LLMProvider
-	toolSetConfig       claudetool.ToolSetConfig
-	activeConversations map[string]*ConversationManager
-	mu                  sync.Mutex
-	logger              *slog.Logger
-	predictableOnly     bool
-	defaultModel        string
-	requireHeader       string
-	conversationGroup   singleflight.Group[string, *ConversationManager]
-	versionChecker      *VersionChecker
-	notifDispatcher     *notifications.Dispatcher
-	shutdownCh          chan struct{} // Signals background routines to stop
-	listenPort          int           // TCP port the server is listening on
+	db                       *db.DB
+	llmManager               LLMProvider
+	toolSetConfig            claudetool.ToolSetConfig
+	activeConversations      map[string]*ConversationManager
+	mu                       sync.Mutex
+	logger                   *slog.Logger
+	predictableOnly          bool
+	defaultModel             string
+	requireHeader            string
+	conversationGroup        singleflight.Group[string, *ConversationManager]
+	versionChecker           *VersionChecker
+	notifDispatcher          *notifications.Dispatcher
+	conversationListStream   *conversationListStream
+	conversationListGitCache *conversationListGitCache
+	shutdownCh               chan struct{} // Signals background routines to stop
+	listenPort               int           // TCP port the server is listening on
 }
 
 // NewServer creates a new server instance
@@ -257,6 +259,9 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		notifDispatcher:     notifications.NewDispatcher(logger),
 		shutdownCh:          make(chan struct{}),
 	}
+
+	s.conversationListStream = newConversationListStream(s)
+	s.conversationListGitCache = newConversationListGitCache()
 
 	// Set up subagent support
 	s.toolSetConfig.SubagentRunner = NewSubagentRunner(s)
@@ -276,6 +281,7 @@ func (s *Server) RegisterNotificationChannel(ch notifications.Channel) {
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	// API routes - wrap with gzip where beneficial
 	mux.Handle("/api/conversations", gzipHandler(http.HandlerFunc(s.handleConversations)))
+	mux.Handle("GET /api/conversations/stream", http.HandlerFunc(s.handleConversationListStream))
 	mux.Handle("/api/conversations/archived", gzipHandler(http.HandlerFunc(s.handleArchivedConversations)))
 	mux.Handle("/api/conversations/previews", gzipHandler(http.HandlerFunc(s.handleConversationPreviews)))
 	mux.Handle("/api/conversations/new", http.HandlerFunc(s.handleNewConversation))            // Small response
@@ -327,6 +333,8 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 
 	// Debug endpoints
 	mux.Handle("GET /debug/conversations", http.HandlerFunc(s.handleDebugConversationsPage))
+	mux.Handle("GET /debug/conversation-stream", http.HandlerFunc(s.handleDebugConversationStreamPage))
+	mux.Handle("GET /debug/conversation-stream/history", http.HandlerFunc(s.handleDebugConversationStreamHistory))
 	mux.Handle("GET /debug/stylebook", http.HandlerFunc(s.handleDebugStylebook))
 	mux.Handle("GET /debug/llm_requests", http.HandlerFunc(s.handleDebugLLMRequests))
 	mux.Handle("GET /debug/llm_requests/api", http.HandlerFunc(s.handleDebugLLMRequestsAPI))
@@ -1011,6 +1019,11 @@ func (s *Server) broadcastMessageUpdate(ctx context.Context, conversationID stri
 // conversation streams. This allows clients to receive updates about other conversations
 // while they're subscribed to their current conversation's stream.
 func (s *Server) publishConversationListUpdate(update ConversationListUpdate) {
+	s.conversationListGitCache.clear()
+	if err := s.conversationListStream.notify(context.Background()); err != nil {
+		s.logger.Error("failed to publish conversation list patch", "error", err)
+	}
+
 	// Populate git info from conversation cwd
 	if update.Conversation != nil && update.Conversation.Cwd != nil {
 		update.GitRepoRoot, update.GitWorktreeRoot = gitInfoForCwd(*update.Conversation.Cwd)
@@ -1055,6 +1068,11 @@ func (s *Server) conversationURL(slug string) string {
 // publishConversationState broadcasts a conversation state update to ALL active
 // conversation streams. This allows clients to see the working state of other conversations.
 func (s *Server) publishConversationState(state ConversationState) {
+	s.conversationListGitCache.clear()
+	if err := s.conversationListStream.notify(context.Background()); err != nil {
+		s.logger.Error("failed to publish conversation list state patch", "error", err)
+	}
+
 	// When the agent finishes working, emit a notification event.
 	// Skip notifications for subagent conversations — they're internal
 	// and would just be noise for the user.
