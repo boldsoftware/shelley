@@ -598,6 +598,67 @@ func TestResponsesServiceDo(t *testing.T) {
 	}
 }
 
+func TestResponsesServiceRetriesEmptyJSONResponse(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Content-Type", "application/json")
+		if attempts == 1 {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		json.NewEncoder(w).Encode(responsesResponse{
+			ID:     "retry-ok",
+			Status: "completed",
+			Output: []responsesOutputItem{{Type: "message", Role: "assistant", Content: []responsesContent{{Type: "output_text", Text: "ok"}}}},
+			Usage:  responsesUsage{InputTokens: 1, OutputTokens: 1},
+		})
+	}))
+	defer server.Close()
+
+	svc := &ResponsesService{APIKey: "test-api-key", Model: GPT41, ModelURL: server.URL}
+	resp, err := svc.Do(context.Background(), &llm.Request{
+		Messages: []llm.Message{{Role: llm.MessageRoleUser, Content: []llm.Content{{Type: llm.ContentTypeText, Text: "hi"}}}},
+	})
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+	if got := resp.Content[0].Text; got != "ok" {
+		t.Fatalf("response text = %q, want ok", got)
+	}
+}
+
+func TestShouldRetryResponsesDecodeError(t *testing.T) {
+	tests := []struct {
+		name string
+		body []byte
+		want bool
+	}{
+		{name: "empty", body: nil, want: true},
+		{name: "whitespace", body: []byte(" \n\t"), want: true},
+		{name: "truncated object", body: []byte(`{"id":"r"`), want: true},
+		{name: "truncated string", body: []byte(`{"id":"r`), want: true},
+		{name: "bad complete json", body: []byte(`{"id":}`), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var resp responsesResponse
+			err := json.Unmarshal(tt.body, &resp)
+			if err == nil {
+				t.Fatal("json.Unmarshal succeeded, want error")
+			}
+			if got := shouldRetryResponsesDecodeError(err, tt.body); got != tt.want {
+				t.Fatalf("shouldRetryResponsesDecodeError() = %v, want %v (err=%v)", got, tt.want, err)
+			}
+		})
+	}
+}
+
 func TestResponsesServiceDoWithCaching(t *testing.T) {
 	// Test that cached tokens are correctly mapped to Usage fields
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -496,7 +496,13 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 		// Read response body
 		body, err := io.ReadAll(httpResp.Body)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read response body: %w", err)
+			if shouldRetryResponsesReadError(err) {
+				now := time.Now().Format(time.DateTime)
+				slog.WarnContext(ctx, "responses_request_read_failed", "error", err, "url", fullURL, "model", model.ModelName)
+				errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: read response body (url=%s, model=%s): %w", attempts+1, now, fullURL, model.ModelName, err))
+				continue
+			}
+			return nil, errors.Join(errs, fmt.Errorf("attempt %d at %s: failed to read response body (url=%s, model=%s): %w", attempts+1, time.Now().Format(time.DateTime), fullURL, model.ModelName, err))
 		}
 
 		// Handle non-200 responses
@@ -535,7 +541,13 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 		// Parse successful response
 		var resp responsesResponse
 		if err := json.Unmarshal(body, &resp); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+			if shouldRetryResponsesDecodeError(err, body) {
+				now := time.Now().Format(time.DateTime)
+				slog.WarnContext(ctx, "responses_request_decode_failed", "error", err, "url", fullURL, "model", model.ModelName, "body_length", len(body))
+				errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: decode response body (url=%s, model=%s, bytes=%d): %w", attempts+1, now, fullURL, model.ModelName, len(body), err))
+				continue
+			}
+			return nil, errors.Join(errs, fmt.Errorf("attempt %d at %s: failed to unmarshal response (url=%s, model=%s, bytes=%d): %w", attempts+1, time.Now().Format(time.DateTime), fullURL, model.ModelName, len(body), err))
 		}
 
 		// Check for errors in the response
@@ -554,6 +566,26 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 
 		return s.toLLMResponseFromResponses(&resp, httpResp.Header), nil
 	}
+}
+
+func shouldRetryResponsesReadError(err error) bool {
+	return errors.Is(err, io.ErrUnexpectedEOF)
+}
+
+func shouldRetryResponsesDecodeError(err error, body []byte) bool {
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	if len(bytes.TrimSpace(body)) == 0 && errors.Is(err, io.EOF) {
+		return true
+	}
+
+	var syntaxErr *json.SyntaxError
+	if errors.As(err, &syntaxErr) && strings.Contains(err.Error(), "unexpected end of JSON") {
+		return true
+	}
+
+	return false
 }
 
 func (s *ResponsesService) UseSimplifiedPatch() bool {

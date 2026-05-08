@@ -2,6 +2,7 @@ package llmhttp
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -266,4 +267,65 @@ func TestTransportRecordsStreamingResponseOnClose(t *testing.T) {
 	if string(recordedRespBody) != want {
 		t.Errorf("Recorded body = %q, want %q", string(recordedRespBody), want)
 	}
+}
+
+func TestTransportRecordsNonStreamingReadError(t *testing.T) {
+	recorderCalled := false
+	var recordedErr error
+	var recordedRespBody []byte
+
+	client := &http.Client{Transport: &Transport{
+		Base: erringRoundTripper{},
+		Recorder: func(ctx context.Context, url string, requestBody, responseBody []byte, statusCode int, err error, duration time.Duration) {
+			recorderCalled = true
+			recordedRespBody = responseBody
+			recordedErr = err
+		},
+	}}
+
+	resp, err := client.Get("http://example.test")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("ReadAll err = %v, want ErrUnexpectedEOF", err)
+	}
+	if string(body) != "partial" {
+		t.Fatalf("body = %q, want partial", string(body))
+	}
+	if !recorderCalled {
+		t.Fatal("recorder was not called")
+	}
+	if !errors.Is(recordedErr, io.ErrUnexpectedEOF) {
+		t.Fatalf("recorded err = %v, want ErrUnexpectedEOF", recordedErr)
+	}
+	if string(recordedRespBody) != "partial" {
+		t.Fatalf("recorded response = %q, want partial", string(recordedRespBody))
+	}
+}
+
+type erringRoundTripper struct{}
+
+func (erringRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       erringBody{Reader: strings.NewReader("partial")},
+	}, nil
+}
+
+type erringBody struct {
+	*strings.Reader
+}
+
+func (b erringBody) Close() error { return nil }
+
+func (b erringBody) Read(p []byte) (int, error) {
+	n, err := b.Reader.Read(p)
+	if err == io.EOF {
+		return n, io.ErrUnexpectedEOF
+	}
+	return n, err
 }

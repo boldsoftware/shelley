@@ -140,11 +140,19 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 			resp.Body = rb
 		} else {
-			// For non-streaming responses, read the entire body and record immediately.
-			responseBody, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			resp.Body = io.NopCloser(bytes.NewReader(responseBody))
-			t.Recorder(req.Context(), req.URL.String(), requestBody, responseBody, resp.StatusCode, err, time.Since(start))
+			// For non-streaming responses, tee the body so callers see any read
+			// errors. Recording after Close preserves truncated/empty-response
+			// failures for retry logic instead of converting them to EOF here.
+			rb := &recordingBody{
+				ReadCloser: resp.Body,
+				ctx:        req.Context(),
+				url:        req.URL.String(),
+				reqBody:    requestBody,
+				statusCode: resp.StatusCode,
+				start:      start,
+				recorder:   t.Recorder,
+			}
+			resp.Body = rb
 		}
 	}
 
@@ -161,6 +169,7 @@ type recordingBody struct {
 	url        string
 	reqBody    []byte
 	buf        bytes.Buffer
+	readErr    error
 	statusCode int
 	start      time.Time
 	recorder   Recorder
@@ -172,13 +181,20 @@ func (rb *recordingBody) Read(p []byte) (int, error) {
 	if n > 0 {
 		rb.buf.Write(p[:n])
 	}
+	if rb.readErr == nil && err != nil && err != io.EOF {
+		rb.readErr = err
+	}
 	return n, err
 }
 
 func (rb *recordingBody) Close() error {
 	err := rb.ReadCloser.Close()
 	rb.once.Do(func() {
-		rb.recorder(rb.ctx, rb.url, rb.reqBody, rb.buf.Bytes(), rb.statusCode, nil, time.Since(rb.start))
+		recordErr := rb.readErr
+		if recordErr == nil {
+			recordErr = err
+		}
+		rb.recorder(rb.ctx, rb.url, rb.reqBody, rb.buf.Bytes(), rb.statusCode, recordErr, time.Since(rb.start))
 	})
 	return err
 }
