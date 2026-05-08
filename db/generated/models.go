@@ -19,6 +19,7 @@ type Conversation struct {
 	ParentConversationID *string   `json:"parent_conversation_id"`
 	Model                *string   `json:"model"`
 	ConversationOptions  string    `json:"conversation_options"`
+	CurrentGeneration    int64     `json:"current_generation"`
 }
 
 type LlmRequest struct {
@@ -48,6 +49,7 @@ type Message struct {
 	CreatedAt           time.Time `json:"created_at"`
 	DisplayData         *string   `json:"display_data"`
 	ExcludedFromContext bool      `json:"excluded_from_context"`
+	Generation          int64     `json:"generation"`
 }
 
 type Migration struct {

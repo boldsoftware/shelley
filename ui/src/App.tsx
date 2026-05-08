@@ -679,6 +679,23 @@ function App() {
     }
   };
 
+  const handleDistillNewGeneration = async (
+    sourceConversationId: string,
+    model: string,
+    cwd?: string,
+  ) => {
+    try {
+      await api.distillNewGeneration(sourceConversationId, model, cwd);
+      const updatedConvs = await api.getConversations();
+      setConversations(updatedConvs);
+      setCurrentConversationId(sourceConversationId);
+    } catch (err) {
+      console.error("Failed to distill into new generation:", err);
+      setError("Failed to distill into new generation");
+      throw err;
+    }
+  };
+
   return (
     <WorkerPoolContextProvider
       poolOptions={diffsPoolOptions}
@@ -747,6 +764,7 @@ function App() {
               onFirstMessage={handleFirstMessage}
               onDistillConversation={handleDistillConversation}
               onDistillReplaceConversation={handleDistillReplaceConversation}
+              onDistillNewGeneration={handleDistillNewGeneration}
               mostRecentCwd={mostRecentCwd}
               isDrawerCollapsed={drawerCollapsed}
               onToggleDrawerCollapse={toggleDrawerCollapsed}

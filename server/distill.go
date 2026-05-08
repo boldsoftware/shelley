@@ -331,14 +331,16 @@ func (s *Server) insertDistillError(ctx context.Context, conversationID, errMsg 
 
 // updateDistillStatus updates the system status message in a conversation.
 func (s *Server) updateDistillStatus(ctx context.Context, conversationID, status string) {
-	// Find the system message with distill_status
-	messages, err := s.db.ListMessagesByType(ctx, conversationID, db.MessageTypeSystem)
+	// Find the message with distill_status. Older distill flows used system
+	// messages; new-generation distill uses an agent-side status message.
+	messages, err := s.db.ListMessages(ctx, conversationID)
 	if err != nil {
-		s.logger.Error("Failed to list system messages", "conversationID", conversationID, "error", err)
+		s.logger.Error("Failed to list messages", "conversationID", conversationID, "error", err)
 		return
 	}
 
-	for _, msg := range messages {
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
 		if msg.UserData == nil {
 			continue
 		}
@@ -380,6 +382,9 @@ type DistillReplaceRequest struct {
 	Model                string `json:"model,omitempty"`
 	Cwd                  string `json:"cwd,omitempty"`
 }
+
+// DistillNewGenerationRequest represents the request to distill into the same conversation's next generation.
+type DistillNewGenerationRequest = DistillReplaceRequest
 
 // handleDistillReplace handles POST /api/conversations/distill-replace
 // Creates a new conversation that takes over the source's slug. The source
@@ -704,4 +709,159 @@ func buildDistillTranscript(sourceSlug string, messages []generated.Message) str
 	}
 
 	return sb.String()
+}
+
+func (s *Server) runDistillNewGeneration(ctx context.Context, conversationID, sourceSlug, modelID string, messages []generated.Message) {
+	defer func() {
+		s.mu.Lock()
+		manager, ok := s.activeConversations[conversationID]
+		s.mu.Unlock()
+		if ok {
+			manager.SetDistilling(false)
+			manager.drainPendingMessages(s)
+		}
+	}()
+
+	s.performDistillation(ctx, conversationID, sourceSlug, modelID, messages)
+	go s.notifySubscribers(ctx, conversationID)
+}
+
+// handleDistillNewGeneration handles POST /api/conversations/distill-new-generation.
+// It keeps the visible conversation, marks old messages as previous generation,
+// and inserts the distillation into the next generation.
+func (s *Server) handleDistillNewGeneration(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := r.Context()
+
+	var req DistillNewGenerationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.SourceConversationID == "" {
+		http.Error(w, "source_conversation_id is required", http.StatusBadRequest)
+		return
+	}
+
+	sourceConv, err := s.db.GetConversationByID(ctx, req.SourceConversationID)
+	if err != nil {
+		s.logger.Error("Failed to get source conversation", "conversationID", req.SourceConversationID, "error", err)
+		http.Error(w, "Source conversation not found", http.StatusNotFound)
+		return
+	}
+	messages, err := s.db.ListMessages(ctx, req.SourceConversationID)
+	if err != nil {
+		s.logger.Error("Failed to get messages", "conversationID", req.SourceConversationID, "error", err)
+		http.Error(w, "Failed to get messages", http.StatusInternalServerError)
+		return
+	}
+
+	modelID := req.Model
+	if modelID == "" && sourceConv.Model != nil {
+		modelID = *sourceConv.Model
+	}
+	if modelID == "" {
+		modelID = s.defaultModel
+	}
+
+	if req.Cwd != "" && (sourceConv.Cwd == nil || *sourceConv.Cwd != req.Cwd) {
+		if err := s.db.UpdateConversationCwd(ctx, req.SourceConversationID, req.Cwd); err != nil {
+			s.logger.Error("Failed to update cwd for new generation", "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+	if sourceConv.Model == nil || *sourceConv.Model != modelID {
+		if err := s.db.ForceUpdateConversationModel(ctx, req.SourceConversationID, modelID); err != nil {
+			s.logger.Error("Failed to update model for new generation", "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	manager, err := s.getOrCreateConversationManager(ctx, req.SourceConversationID, "")
+	if err != nil {
+		s.logger.Error("Failed to create conversation manager for distill-new-generation", "conversationID", req.SourceConversationID, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	manager.BeginDistillingSetup()
+	setupComplete := false
+	defer func() {
+		if !setupComplete {
+			manager.SetDistilling(false)
+		}
+	}()
+
+	conversation, err := db.WithTxRes(s.db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.IncrementConversationGeneration(ctx, req.SourceConversationID)
+	})
+	if err != nil {
+		s.logger.Error("Failed to increment generation", "conversationID", req.SourceConversationID, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	manager.ResetLoop()
+
+	sourceSlug := "unknown"
+	if sourceConv.Slug != nil {
+		sourceSlug = *sourceConv.Slug
+	}
+	statusMsg, err := s.db.CreateMessage(ctx, db.CreateMessageParams{
+		ConversationID: req.SourceConversationID,
+		Type:           db.MessageTypeAgent,
+		LLMData: llm.Message{
+			Role:    llm.MessageRoleAssistant,
+			Content: []llm.Content{{Type: llm.ContentTypeText, Text: "Distilling conversation…"}},
+		},
+		UserData: map[string]string{
+			"distill_status": "in_progress",
+			"source_slug":    sourceSlug,
+			"new_generation": "true",
+		},
+		ExcludedFromContext: true,
+	})
+	if err != nil {
+		s.logger.Error("Failed to create status message", "conversationID", req.SourceConversationID, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	go s.notifySubscribersNewMessage(context.WithoutCancel(ctx), req.SourceConversationID, statusMsg)
+
+	if err := manager.Hydrate(ctx); err != nil {
+		s.logger.Error("Failed to hydrate new generation", "conversationID", req.SourceConversationID, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if fresh, ferr := s.db.GetConversationByID(ctx, req.SourceConversationID); ferr == nil {
+		conversation = *fresh
+	}
+	if currentMessages, merr := s.db.ListMessages(ctx, req.SourceConversationID); merr == nil {
+		for i := range currentMessages {
+			msg := &currentMessages[i]
+			if msg.Generation == conversation.CurrentGeneration && msg.Type == string(db.MessageTypeSystem) && msg.UserData == nil {
+				go s.notifySubscribersNewMessage(context.WithoutCancel(ctx), req.SourceConversationID, msg)
+			}
+		}
+	}
+	go s.notifySubscribers(context.WithoutCancel(ctx), req.SourceConversationID)
+	setupComplete = true
+	manager.FinishDistillingSetup()
+
+	ctxNoCancel := context.WithoutCancel(ctx)
+	go func() {
+		s.runDistillNewGeneration(ctxNoCancel, req.SourceConversationID, sourceSlug, modelID, messages)
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":             "created",
+		"conversation_id":    req.SourceConversationID,
+		"current_generation": conversation.CurrentGeneration,
+	})
 }

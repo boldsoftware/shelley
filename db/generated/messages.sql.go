@@ -39,15 +39,16 @@ func (q *Queries) CountMessagesInConversation(ctx context.Context, conversationI
 }
 
 const createMessage = `-- name: CreateMessage :one
-INSERT INTO messages (message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, display_data, excluded_from_context)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context
+INSERT INTO messages (message_id, conversation_id, sequence_id, generation, type, llm_data, user_data, usage_data, display_data, excluded_from_context)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation
 `
 
 type CreateMessageParams struct {
 	MessageID           string  `json:"message_id"`
 	ConversationID      string  `json:"conversation_id"`
 	SequenceID          int64   `json:"sequence_id"`
+	Generation          int64   `json:"generation"`
 	Type                string  `json:"type"`
 	LlmData             *string `json:"llm_data"`
 	UserData            *string `json:"user_data"`
@@ -61,6 +62,7 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		arg.MessageID,
 		arg.ConversationID,
 		arg.SequenceID,
+		arg.Generation,
 		arg.Type,
 		arg.LlmData,
 		arg.UserData,
@@ -80,6 +82,7 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		&i.CreatedAt,
 		&i.DisplayData,
 		&i.ExcludedFromContext,
+		&i.Generation,
 	)
 	return i, err
 }
@@ -105,7 +108,7 @@ func (q *Queries) DeleteMessage(ctx context.Context, messageID string) error {
 }
 
 const getLatestAgentMessagesForConversations = `-- name: GetLatestAgentMessagesForConversations :many
-SELECT m.message_id, m.conversation_id, m.sequence_id, m.type, m.llm_data, m.user_data, m.usage_data, m.created_at, m.display_data, m.excluded_from_context FROM messages m
+SELECT m.message_id, m.conversation_id, m.sequence_id, m.type, m.llm_data, m.user_data, m.usage_data, m.created_at, m.display_data, m.excluded_from_context, m.generation FROM messages m
 INNER JOIN (
   SELECT msg.conversation_id, MAX(msg.sequence_id) AS max_seq
   FROM messages msg
@@ -137,6 +140,7 @@ func (q *Queries) GetLatestAgentMessagesForConversations(ctx context.Context) ([
 			&i.CreatedAt,
 			&i.DisplayData,
 			&i.ExcludedFromContext,
+			&i.Generation,
 		); err != nil {
 			return nil, err
 		}
@@ -152,7 +156,7 @@ func (q *Queries) GetLatestAgentMessagesForConversations(ctx context.Context) ([
 }
 
 const getLatestMessage = `-- name: GetLatestMessage :one
-SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context FROM messages
+SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation FROM messages
 WHERE conversation_id = ?
 ORDER BY sequence_id DESC
 LIMIT 1
@@ -172,12 +176,13 @@ func (q *Queries) GetLatestMessage(ctx context.Context, conversationID string) (
 		&i.CreatedAt,
 		&i.DisplayData,
 		&i.ExcludedFromContext,
+		&i.Generation,
 	)
 	return i, err
 }
 
 const getMessage = `-- name: GetMessage :one
-SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context FROM messages
+SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation FROM messages
 WHERE message_id = ?
 `
 
@@ -195,6 +200,7 @@ func (q *Queries) GetMessage(ctx context.Context, messageID string) (Message, er
 		&i.CreatedAt,
 		&i.DisplayData,
 		&i.ExcludedFromContext,
+		&i.Generation,
 	)
 	return i, err
 }
@@ -213,7 +219,7 @@ func (q *Queries) GetNextSequenceID(ctx context.Context, conversationID string) 
 }
 
 const listMessages = `-- name: ListMessages :many
-SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context FROM messages
+SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation FROM messages
 WHERE conversation_id = ?
 ORDER BY sequence_id ASC
 `
@@ -238,6 +244,7 @@ func (q *Queries) ListMessages(ctx context.Context, conversationID string) ([]Me
 			&i.CreatedAt,
 			&i.DisplayData,
 			&i.ExcludedFromContext,
+			&i.Generation,
 		); err != nil {
 			return nil, err
 		}
@@ -253,7 +260,7 @@ func (q *Queries) ListMessages(ctx context.Context, conversationID string) ([]Me
 }
 
 const listMessagesByType = `-- name: ListMessagesByType :many
-SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context FROM messages
+SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation FROM messages
 WHERE conversation_id = ? AND type = ?
 ORDER BY sequence_id ASC
 `
@@ -283,6 +290,7 @@ func (q *Queries) ListMessagesByType(ctx context.Context, arg ListMessagesByType
 			&i.CreatedAt,
 			&i.DisplayData,
 			&i.ExcludedFromContext,
+			&i.Generation,
 		); err != nil {
 			return nil, err
 		}
@@ -298,9 +306,12 @@ func (q *Queries) ListMessagesByType(ctx context.Context, arg ListMessagesByType
 }
 
 const listMessagesForContext = `-- name: ListMessagesForContext :many
-SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context FROM messages
-WHERE conversation_id = ? AND excluded_from_context = FALSE
-ORDER BY sequence_id ASC
+SELECT m.message_id, m.conversation_id, m.sequence_id, m.type, m.llm_data, m.user_data, m.usage_data, m.created_at, m.display_data, m.excluded_from_context, m.generation FROM messages m
+INNER JOIN conversations c ON m.conversation_id = c.conversation_id
+WHERE m.conversation_id = ?
+  AND m.excluded_from_context = FALSE
+  AND m.generation = c.current_generation
+ORDER BY m.sequence_id ASC
 `
 
 func (q *Queries) ListMessagesForContext(ctx context.Context, conversationID string) ([]Message, error) {
@@ -323,6 +334,7 @@ func (q *Queries) ListMessagesForContext(ctx context.Context, conversationID str
 			&i.CreatedAt,
 			&i.DisplayData,
 			&i.ExcludedFromContext,
+			&i.Generation,
 		); err != nil {
 			return nil, err
 		}
@@ -338,7 +350,7 @@ func (q *Queries) ListMessagesForContext(ctx context.Context, conversationID str
 }
 
 const listMessagesPaginated = `-- name: ListMessagesPaginated :many
-SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context FROM messages
+SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation FROM messages
 WHERE conversation_id = ?
 ORDER BY sequence_id ASC
 LIMIT ? OFFSET ?
@@ -370,6 +382,7 @@ func (q *Queries) ListMessagesPaginated(ctx context.Context, arg ListMessagesPag
 			&i.CreatedAt,
 			&i.DisplayData,
 			&i.ExcludedFromContext,
+			&i.Generation,
 		); err != nil {
 			return nil, err
 		}
@@ -385,7 +398,7 @@ func (q *Queries) ListMessagesPaginated(ctx context.Context, arg ListMessagesPag
 }
 
 const listMessagesSince = `-- name: ListMessagesSince :many
-SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context FROM messages
+SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation FROM messages
 WHERE conversation_id = ? AND sequence_id > ?
 ORDER BY sequence_id ASC
 `
@@ -415,6 +428,7 @@ func (q *Queries) ListMessagesSince(ctx context.Context, arg ListMessagesSincePa
 			&i.CreatedAt,
 			&i.DisplayData,
 			&i.ExcludedFromContext,
+			&i.Generation,
 		); err != nil {
 			return nil, err
 		}

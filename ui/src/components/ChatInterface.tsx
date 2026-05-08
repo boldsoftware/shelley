@@ -62,6 +62,8 @@ interface ContextUsageBarProps {
   modelName?: string;
   onDistillConversation?: () => void;
   onDistillReplaceConversation?: () => void;
+  onDistillNewGeneration?: () => void;
+  onStartNewGeneration?: () => void;
   agentWorking?: boolean;
 }
 
@@ -72,6 +74,8 @@ function ContextUsageBar({
   modelName,
   onDistillConversation,
   onDistillReplaceConversation,
+  onDistillNewGeneration,
+  onStartNewGeneration,
   agentWorking,
 }: ContextUsageBarProps) {
   const [showPopup, setShowPopup] = useState(false);
@@ -168,6 +172,28 @@ function ContextUsageBar({
     }
   };
 
+  const handleDistillNewGeneration = async () => {
+    if (distilling || !onDistillNewGeneration) return;
+    setDistilling(true);
+    try {
+      await onDistillNewGeneration();
+      setShowPopup(false);
+    } finally {
+      setDistilling(false);
+    }
+  };
+
+  const handleStartNewGeneration = async () => {
+    if (distilling || !onStartNewGeneration) return;
+    setDistilling(true);
+    try {
+      await onStartNewGeneration();
+      setShowPopup(false);
+    } finally {
+      setDistilling(false);
+    }
+  };
+
   return (
     <div ref={barRef}>
       {showPopup && popupPosition && (
@@ -203,6 +229,30 @@ function ContextUsageBar({
                   {distilling ? "Distilling..." : "Distill & Replace in Place"}
                 </button>
               )}
+              {onDistillNewGeneration && (
+                <button
+                  onClick={handleDistillNewGeneration}
+                  disabled={distilling}
+                  className="chat-distill-button chat-distill-generation-button"
+                >
+                  {distilling ? "Distilling..." : "Distill in New Generation"}
+                </button>
+              )}
+              {onStartNewGeneration && (
+                <button
+                  onClick={handleStartNewGeneration}
+                  disabled={distilling}
+                  className="chat-distill-button chat-distill-generation-button"
+                >
+                  Start New Generation
+                </button>
+              )}
+              <div
+                className="chat-distill-info"
+                title="Yeah, we're trying some stuff. Come to discord and talk about it with us!"
+              >
+                ⓘ Yeah, we're trying some stuff. Come to discord and talk about it with us!
+              </div>
             </div>
           )}
         </div>
@@ -236,6 +286,7 @@ function ContextUsageBar({
 
 interface CoalescedItem {
   type: "message" | "tool";
+  generation: number;
   message?: Message;
   toolUseId?: string;
   toolName?: string;
@@ -529,6 +580,11 @@ interface ChatInterfaceProps {
     model: string,
     cwd?: string,
   ) => Promise<void>;
+  onDistillNewGeneration?: (
+    sourceConversationId: string,
+    model: string,
+    cwd?: string,
+  ) => Promise<void>;
   mostRecentCwd?: string | null;
   isDrawerCollapsed?: boolean;
   onToggleDrawerCollapse?: () => void;
@@ -659,6 +715,7 @@ function ChatInterface({
   onFirstMessage,
   onDistillConversation,
   onDistillReplaceConversation,
+  onDistillNewGeneration,
   mostRecentCwd,
   isDrawerCollapsed,
   onToggleDrawerCollapse,
@@ -1845,6 +1902,21 @@ function ChatInterface({
     );
   };
 
+  const handleDistillNewGeneration = async () => {
+    if (!conversationId || !onDistillNewGeneration) return;
+    await onDistillNewGeneration(
+      conversationId,
+      selectedModel,
+      currentConversation?.cwd || selectedCwd || undefined,
+    );
+  };
+
+  const handleStartNewGeneration = async () => {
+    if (!conversationId) return;
+    const conversation = await api.startNewGeneration(conversationId);
+    onConversationUpdate?.(conversation);
+  };
+
   // Get the display name for the selected model
   const selectedModelDisplayName = (() => {
     const modelObj = models.find((m) => m.id === selectedModel);
@@ -1922,12 +1994,12 @@ function ChatInterface({
         if (!isDistillStatusMessage(message)) {
           return;
         }
-        items.push({ type: "message", message });
+        items.push({ type: "message", generation: message.generation, message });
         return;
       }
 
       if (message.type === "error") {
-        items.push({ type: "message", message });
+        items.push({ type: "message", generation: message.generation, message });
         return;
       }
 
@@ -1947,7 +2019,7 @@ function ChatInterface({
 
       // If it's a user message without tool results, show it
       if (message.type === "user" && !hasToolResult) {
-        items.push({ type: "message", message });
+        items.push({ type: "message", generation: message.generation, message });
         return;
       }
 
@@ -1981,7 +2053,7 @@ function ChatInterface({
               .join("")
               .trim();
             if (textString) {
-              items.push({ type: "message", message });
+              items.push({ type: "message", generation: message.generation, message });
             }
 
             // Check if this message was truncated (tool calls lost)
@@ -1993,6 +2065,7 @@ function ChatInterface({
               const displayData = toolUse.ID ? displayDataMap[toolUse.ID] : undefined;
               items.push({
                 type: "tool",
+                generation: message.generation,
                 toolUseId: toolUse.ID,
                 toolName: toolUse.ToolName,
                 toolInput: toolUse.ToolInput,
@@ -2009,15 +2082,23 @@ function ChatInterface({
           }
         } catch (err) {
           console.error("Failed to parse message LLM data:", err);
-          items.push({ type: "message", message });
+          items.push({ type: "message", generation: message.generation, message });
         }
       } else {
-        items.push({ type: "message", message });
+        items.push({ type: "message", generation: message.generation, message });
       }
     });
 
     return items;
   }, [messages]);
+
+  const generationDivider = (from: number, to: number) => (
+    <div key={`generation-divider-${from}-${to}`} className="generation-divider">
+      <span>
+        New generation started — older messages are retained here but no longer sent to the LLM.
+      </span>
+    </div>
+  );
 
   const renderMessages = () => {
     if (messages.length === 0) {
@@ -2069,40 +2150,112 @@ function ChatInterface({
       );
     }
 
-    const rendered = coalescedItems.map((item, index) => {
-      if (item.type === "message" && item.message) {
-        return (
-          <MessageComponent
-            key={item.message.message_id}
-            message={item.message}
-            onOpenDiffViewer={handleOpenDiffViewer}
-            onCommentTextChange={setDiffCommentText}
-            onCancelQueued={isQueuedMessage(item.message) ? cancelQueuedMessages : undefined}
-            toolProgress={toolProgress}
-          />
-        );
-      } else if (item.type === "tool") {
-        return (
-          <CoalescedToolCall
-            key={item.toolUseId || `tool-${index}`}
-            toolName={item.toolName || "Unknown Tool"}
-            toolInput={item.toolInput}
-            toolResult={item.toolResult}
-            toolError={item.toolError}
-            toolStartTime={item.toolStartTime}
-            toolEndTime={item.toolEndTime}
-            hasResult={item.hasResult}
-            display={item.display}
-            onCommentTextChange={setDiffCommentText}
-            streamingOutput={item.toolUseId ? toolProgress[item.toolUseId]?.output : undefined}
-          />
-        );
+    const currentGeneration = currentConversation?.current_generation || 1;
+    const systemMessagesByGeneration = new Map<number, Message[]>();
+    const modelsByGeneration = new Map<number, string>();
+    const itemsByGeneration = new Map<number, CoalescedItem[]>();
+    const generationSet = new Set<number>();
+
+    messages.forEach((message) => {
+      generationSet.add(message.generation);
+      if (message.type === "system" && !isDistillStatusMessage(message)) {
+        const existing = systemMessagesByGeneration.get(message.generation) || [];
+        existing.push(message);
+        systemMessagesByGeneration.set(message.generation, existing);
       }
-      return null;
+      if (!modelsByGeneration.has(message.generation) && message.usage_data) {
+        try {
+          const usage =
+            typeof message.usage_data === "string"
+              ? JSON.parse(message.usage_data)
+              : message.usage_data;
+          if (usage?.model) {
+            modelsByGeneration.set(message.generation, usage.model);
+          }
+        } catch {
+          // ignore malformed usage data
+        }
+      }
     });
 
-    // Find system prompt message to render at the top (exclude distill status messages)
-    const systemMessage = messages.find((m) => m.type === "system" && !isDistillStatusMessage(m));
+    coalescedItems.forEach((item) => {
+      generationSet.add(item.generation);
+      const existing = itemsByGeneration.get(item.generation) || [];
+      existing.push(item);
+      itemsByGeneration.set(item.generation, existing);
+    });
+
+    // Always include the current generation so the divider/section appears
+    // immediately when a new generation is started, even before any new
+    // messages exist for it.
+    generationSet.add(currentGeneration);
+
+    const generations = Array.from(generationSet).sort((a, b) => a - b);
+
+    const rendered = generations.flatMap((generation, generationIndex) => {
+      const items = itemsByGeneration.get(generation) || [];
+      const sectionItems: React.ReactNode[] = [
+        <ModelBar
+          key={`model-bar-${generation}`}
+          model={modelsByGeneration.get(generation) || currentConversation?.model}
+          models={models}
+        />,
+      ];
+      const systemMessages = systemMessagesByGeneration.get(generation) || [];
+      systemMessages.forEach((systemMessage) => {
+        sectionItems.push(
+          <SystemPromptView
+            key={`system-prompt-${systemMessage.message_id}`}
+            message={systemMessage}
+          />,
+        );
+      });
+
+      items.forEach((item, index) => {
+        if (item.type === "message" && item.message) {
+          sectionItems.push(
+            <MessageComponent
+              key={item.message.message_id}
+              message={item.message}
+              onOpenDiffViewer={handleOpenDiffViewer}
+              onCommentTextChange={setDiffCommentText}
+              onCancelQueued={isQueuedMessage(item.message) ? cancelQueuedMessages : undefined}
+              toolProgress={toolProgress}
+            />,
+          );
+        } else if (item.type === "tool") {
+          sectionItems.push(
+            <CoalescedToolCall
+              key={item.toolUseId || `tool-${generation}-${item.toolName || "unknown"}-${index}`}
+              toolName={item.toolName || "Unknown Tool"}
+              toolInput={item.toolInput}
+              toolResult={item.toolResult}
+              toolError={item.toolError}
+              toolStartTime={item.toolStartTime}
+              toolEndTime={item.toolEndTime}
+              hasResult={item.hasResult}
+              display={item.display}
+              onCommentTextChange={setDiffCommentText}
+              streamingOutput={item.toolUseId ? toolProgress[item.toolUseId]?.output : undefined}
+            />,
+          );
+        }
+      });
+
+      const nodes: React.ReactNode[] = [];
+      if (generationIndex > 0) {
+        nodes.push(generationDivider(generations[generationIndex - 1], generation));
+      }
+      nodes.push(
+        <div
+          key={`generation-section-${generation}`}
+          className={`generation-section${generation < currentGeneration ? " generation-section-previous" : ""}`}
+        >
+          {sectionItems}
+        </div>,
+      );
+      return nodes;
+    });
 
     // Streaming text preview: show when agent is generating text
     const streamingPreview =
@@ -2117,12 +2270,7 @@ function ChatInterface({
         </div>
       ) : null;
 
-    return [
-      <ModelBar key="model-bar" model={currentConversation?.model} models={models} />,
-      systemMessage && <SystemPromptView key="system-prompt" message={systemMessage} />,
-      ...rendered,
-      streamingPreview,
-    ];
+    return [...rendered, streamingPreview];
   };
 
   // Status bar content — rendered in the standalone status bar (desktop) and
@@ -2195,6 +2343,8 @@ function ChatInterface({
           onDistillReplaceConversation={
             onDistillReplaceConversation ? handleDistillReplaceConversation : undefined
           }
+          onDistillNewGeneration={onDistillNewGeneration ? handleDistillNewGeneration : undefined}
+          onStartNewGeneration={handleStartNewGeneration}
           agentWorking={agentWorking}
         />
       </div>
@@ -2369,6 +2519,8 @@ function ChatInterface({
           onDistillReplaceConversation={
             onDistillReplaceConversation ? handleDistillReplaceConversation : undefined
           }
+          onDistillNewGeneration={onDistillNewGeneration ? handleDistillNewGeneration : undefined}
+          onStartNewGeneration={handleStartNewGeneration}
           agentWorking={agentWorking}
         />
       </div>

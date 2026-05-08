@@ -705,6 +705,125 @@ func TestDistillStatusUpdateReachesSSESubscriber(t *testing.T) {
 	}
 }
 
+func TestStartNewGenerationFiltersContext(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := NewTestHarness(t)
+		h.NewConversation("old context", "")
+		h.WaitResponse()
+		ctx := context.Background()
+		convID := h.convID
+
+		oldMsgs, err := h.db.ListMessagesForContext(ctx, convID)
+		if err != nil {
+			t.Fatalf("failed to list old context: %v", err)
+		}
+		if len(oldMsgs) == 0 {
+			t.Fatal("expected old generation messages in context before generation bump")
+		}
+
+		conversation, err := h.server.startNewGeneration(ctx, convID)
+		if err != nil {
+			t.Fatalf("failed to start new generation: %v", err)
+		}
+		if conversation.CurrentGeneration != 2 {
+			t.Fatalf("expected current_generation=2, got %d", conversation.CurrentGeneration)
+		}
+
+		afterBump, err := h.db.ListMessagesForContext(ctx, convID)
+		if err != nil {
+			t.Fatalf("failed to list context after bump: %v", err)
+		}
+		if len(afterBump) != 1 {
+			t.Fatalf("expected 1 generation 2 message (system prompt), got %d", len(afterBump))
+		}
+		if afterBump[0].Type != string(db.MessageTypeSystem) {
+			t.Fatalf("expected new generation context to start with a system prompt, got type %q", afterBump[0].Type)
+		}
+		if afterBump[0].Generation != 2 {
+			t.Fatalf("expected new system prompt at generation 2, got %d", afterBump[0].Generation)
+		}
+
+		_, err = h.db.CreateMessage(ctx, db.CreateMessageParams{
+			ConversationID: convID,
+			Type:           db.MessageTypeUser,
+			LLMData: llm.Message{
+				Role:    llm.MessageRoleUser,
+				Content: []llm.Content{{Type: llm.ContentTypeText, Text: "new context"}},
+			},
+		})
+		if err != nil {
+			t.Fatalf("failed to create new generation message: %v", err)
+		}
+
+		newMsgs, err := h.db.ListMessagesForContext(ctx, convID)
+		if err != nil {
+			t.Fatalf("failed to list new context: %v", err)
+		}
+		if len(newMsgs) != 2 {
+			t.Fatalf("expected system prompt + new user message in context, got %d messages", len(newMsgs))
+		}
+		for _, msg := range newMsgs {
+			if msg.Generation != 2 {
+				t.Fatalf("expected only generation 2 messages, got %+v", msg)
+			}
+		}
+	})
+}
+
+func TestChatDuringDistillationQueuesEvenWithoutClientQueueFlag(t *testing.T) {
+	h := NewTestHarness(t)
+	h.NewConversation("before distill", "")
+	h.WaitResponse()
+	ctx := context.Background()
+
+	manager, err := h.server.getOrCreateConversationManager(ctx, h.convID, "")
+	if err != nil {
+		t.Fatalf("failed to get manager: %v", err)
+	}
+	manager.SetDistilling(true)
+	defer manager.SetDistilling(false)
+
+	body, err := json.Marshal(ChatRequest{Message: "first message after distill click", Model: "predictable"})
+	if err != nil {
+		t.Fatalf("marshal chat request: %v", err)
+	}
+	req := httptest.NewRequest("POST", "/api/conversation/"+h.convID+"/chat", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.server.handleChatConversation(w, req, h.convID)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "queued") {
+		t.Fatalf("expected queued response, got %s", w.Body.String())
+	}
+
+	messages, err := h.db.ListMessages(ctx, h.convID)
+	if err != nil {
+		t.Fatalf("failed to list messages: %v", err)
+	}
+	var queued *generated.Message
+	for i := range messages {
+		msg := messages[i]
+		if msg.Type != string(db.MessageTypeUser) || msg.UserData == nil {
+			continue
+		}
+		var userData map[string]bool
+		if err := json.Unmarshal([]byte(*msg.UserData), &userData); err != nil {
+			continue
+		}
+		if userData["queued"] {
+			queued = &msg
+		}
+	}
+	if queued == nil {
+		t.Fatal("expected non-queue chat during distillation to be recorded as queued")
+	}
+	if !queued.ExcludedFromContext {
+		t.Fatal("expected queued message excluded from context until distillation finishes")
+	}
+}
+
 func TestDistillReplaceConversation(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {

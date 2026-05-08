@@ -260,11 +260,12 @@ const Message = React.memo(function Message({
 }: MessageProps) {
   const { markdownMode } = useMarkdown();
 
-  // Render system messages with distill_status as status indicators
+  // Render distillation status messages as compact agent-side indicators.
+  if (isDistillStatusMessage(message)) {
+    return <DistillStatusMessage message={message} />;
+  }
+
   if (message.type === "system") {
-    if (isDistillStatusMessage(message)) {
-      return <DistillStatusMessage message={message} />;
-    }
     return null;
   }
 
@@ -1041,7 +1042,7 @@ const Message = React.memo(function Message({
   };
 
   const getMessageClasses = () => {
-    if (isUser) {
+    if (isUser && !isDistilledUser) {
       return `message message-user${isQueued ? " message-queued" : ""}`;
     }
     if (isError) {

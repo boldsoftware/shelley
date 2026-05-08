@@ -60,6 +60,12 @@ UPDATE conversations
 SET updated_at = CURRENT_TIMESTAMP
 WHERE conversation_id = ?;
 
+-- name: IncrementConversationGeneration :one
+UPDATE conversations
+SET current_generation = current_generation + 1, updated_at = CURRENT_TIMESTAMP
+WHERE conversation_id = ?
+RETURNING *;
+
 -- name: DeleteConversation :exec
 DELETE FROM conversations
 WHERE conversation_id = ?;

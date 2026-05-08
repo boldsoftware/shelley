@@ -87,6 +87,7 @@ type apiMessageForTS struct {
 	UsageData      *string   `json:"usage_data,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 	DisplayData    *string   `json:"display_data,omitempty"`
+	Generation     int64     `json:"generation"`
 	EndOfTurn      *bool     `json:"end_of_turn,omitempty"`
 }
 
@@ -107,6 +108,7 @@ type conversationWithStateForTS struct {
 	ParentConversationID *string `json:"parent_conversation_id"`
 	Model                *string `json:"model"`
 	ConversationOptions  string  `json:"conversation_options"`
+	CurrentGeneration    int64   `json:"current_generation"`
 	Working              bool    `json:"working"`
 	GitRepoRoot          string  `json:"git_repo_root,omitempty"`
 	GitWorktreeRoot      string  `json:"git_worktree_root,omitempty"`

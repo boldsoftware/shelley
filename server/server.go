@@ -43,6 +43,7 @@ type APIMessage struct {
 	UsageData      *string   `json:"usage_data,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 	DisplayData    *string   `json:"display_data,omitempty"`
+	Generation     int64     `json:"generation"`
 	EndOfTurn      *bool     `json:"end_of_turn,omitempty"`
 }
 
@@ -139,6 +140,7 @@ func toAPIMessages(messages []generated.Message) []APIMessage {
 			UsageData:      msg.UsageData,
 			CreatedAt:      msg.CreatedAt,
 			DisplayData:    msg.DisplayData,
+			Generation:     msg.Generation,
 			EndOfTurn:      endOfTurnPtr,
 		}
 		apiMessages[i] = apiMsg
@@ -284,9 +286,10 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/conversations/stream", http.HandlerFunc(s.handleConversationListStream))
 	mux.Handle("/api/conversations/archived", gzipHandler(http.HandlerFunc(s.handleArchivedConversations)))
 	mux.Handle("/api/conversations/previews", gzipHandler(http.HandlerFunc(s.handleConversationPreviews)))
-	mux.Handle("/api/conversations/new", http.HandlerFunc(s.handleNewConversation))            // Small response
-	mux.Handle("/api/conversations/distill", http.HandlerFunc(s.handleDistillConversation))    // Small response
-	mux.Handle("/api/conversations/distill-replace", http.HandlerFunc(s.handleDistillReplace)) // Small response
+	mux.Handle("/api/conversations/new", http.HandlerFunc(s.handleNewConversation))                         // Small response
+	mux.Handle("/api/conversations/distill", http.HandlerFunc(s.handleDistillConversation))                 // Small response
+	mux.Handle("/api/conversations/distill-replace", http.HandlerFunc(s.handleDistillReplace))              // Small response
+	mux.Handle("/api/conversations/distill-new-generation", http.HandlerFunc(s.handleDistillNewGeneration)) // Small response
 	mux.Handle("/api/conversation/", http.StripPrefix("/api/conversation", s.conversationMux()))
 	mux.Handle("/api/conversation-by-slug/", gzipHandler(http.HandlerFunc(s.handleConversationBySlug)))
 	mux.Handle("/api/validate-cwd", http.HandlerFunc(s.handleValidateCwd)) // Small response

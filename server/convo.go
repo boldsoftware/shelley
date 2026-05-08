@@ -62,6 +62,10 @@ type ConversationManager struct {
 	// into this conversation. When true, queued messages should NOT be drained
 	// immediately — they must wait until distillation finishes.
 	distilling bool
+	// distillSetupDone is non-nil while generation setup is creating the first
+	// status/system messages. QueueMessage waits on it so user messages cannot
+	// appear before the distillation status.
+	distillSetupDone chan struct{}
 
 	// pendingMessages holds messages queued to be sent after the current turn ends.
 	pendingMessages []pendingMessage
@@ -154,7 +158,50 @@ func (cm *ConversationManager) IsAgentWorking() bool {
 func (cm *ConversationManager) SetDistilling(distilling bool) {
 	cm.mu.Lock()
 	cm.distilling = distilling
+	setupDone := cm.distillSetupDone
+	if !distilling {
+		cm.distillSetupDone = nil
+	}
 	cm.mu.Unlock()
+	if !distilling && setupDone != nil {
+		close(setupDone)
+	}
+}
+
+func (cm *ConversationManager) BeginDistillingSetup() {
+	cm.mu.Lock()
+	if !cm.distilling {
+		cm.distilling = true
+	}
+	if cm.distillSetupDone == nil {
+		cm.distillSetupDone = make(chan struct{})
+	}
+	cm.mu.Unlock()
+}
+
+func (cm *ConversationManager) FinishDistillingSetup() {
+	cm.mu.Lock()
+	setupDone := cm.distillSetupDone
+	cm.distillSetupDone = nil
+	cm.mu.Unlock()
+	if setupDone != nil {
+		close(setupDone)
+	}
+}
+
+func (cm *ConversationManager) IsDistilling() bool {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	return cm.distilling
+}
+
+func (cm *ConversationManager) waitDistillingSetup() {
+	cm.mu.Lock()
+	setupDone := cm.distillSetupDone
+	cm.mu.Unlock()
+	if setupDone != nil {
+		<-setupDone
+	}
 }
 
 // GetModel returns the model ID used by this conversation.
@@ -312,6 +359,8 @@ func (cm *ConversationManager) AcceptUserMessage(ctx context.Context, service ll
 // for delivery after the current agent turn (or distillation) completes.
 // The message is visible in the UI immediately (with queued status).
 func (cm *ConversationManager) QueueMessage(ctx context.Context, s *Server, modelID string, message llm.Message) error {
+	cm.waitDistillingSetup()
+
 	// Record to DB with queued user_data so it appears in the UI.
 	// Mark as excluded_from_context so ensureLoop won't load it into
 	// the loop's history — we'll feed it via QueueUserMessage when draining.
@@ -910,6 +959,15 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 }
 
 func (cm *ConversationManager) stopLoop() {
+	cm.resetLoop(false)
+}
+
+// ResetLoop drops the in-memory LLM loop so the next turn hydrates from the DB.
+func (cm *ConversationManager) ResetLoop() {
+	cm.resetLoop(true)
+}
+
+func (cm *ConversationManager) resetLoop(markUnhydrated bool) {
 	cm.mu.Lock()
 	cancel := cm.loopCancel
 	toolSet := cm.toolSet
@@ -918,6 +976,10 @@ func (cm *ConversationManager) stopLoop() {
 	cm.loop = nil
 	cm.modelID = ""
 	cm.toolSet = nil
+	if markUnhydrated {
+		cm.hydrated = false
+		cm.hasConversationEvents = false
+	}
 	cm.mu.Unlock()
 
 	if cancel != nil {

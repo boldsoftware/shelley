@@ -14,6 +14,7 @@ export interface Conversation {
   parent_conversation_id: string | null;
   model: string | null;
   conversation_options: string;
+  current_generation: number;
 }
 
 export interface Usage {
@@ -37,6 +38,7 @@ export interface ApiMessageForTS {
   usage_data?: string | null;
   created_at: string;
   display_data?: string | null;
+  generation: number;
   end_of_turn?: boolean | null;
 }
 
@@ -72,6 +74,7 @@ export interface ConversationWithStateForTS {
   parent_conversation_id: string | null;
   model: string | null;
   conversation_options: string;
+  current_generation: number;
   working: boolean;
   git_repo_root?: string;
   git_worktree_root?: string;

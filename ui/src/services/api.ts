@@ -131,6 +131,36 @@ class ApiService {
     return response.json();
   }
 
+  async distillNewGeneration(
+    sourceConversationId: string,
+    model?: string,
+    cwd?: string,
+  ): Promise<{ conversation_id: string; current_generation: number }> {
+    const response = await fetch(`${this.baseUrl}/conversations/distill-new-generation`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify({
+        source_conversation_id: sourceConversationId,
+        model: model || "",
+        cwd: cwd || "",
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to distill into new generation: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  async startNewGeneration(conversationId: string): Promise<Conversation> {
+    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/new-generation`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to start new generation: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
   async getConversationWithProgress(
     conversationId: string,
     onProgress?: (progress: {

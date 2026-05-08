@@ -649,6 +649,9 @@ func (s *Server) conversationMux() *http.ServeMux {
 	mux.HandleFunc("POST /{id}/cancel-queued", func(w http.ResponseWriter, r *http.Request) {
 		s.handleCancelQueued(w, r, r.PathValue("id"))
 	})
+	mux.HandleFunc("POST /{id}/new-generation", func(w http.ResponseWriter, r *http.Request) {
+		s.handleStartNewGeneration(w, r, r.PathValue("id"))
+	})
 	return mux
 }
 
@@ -767,8 +770,10 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// Queue mode: record the message to DB but don't interrupt the agent.
-	// The message will be sent when the agent finishes its current turn.
-	if req.Queue {
+	// The message will be sent when the agent finishes its current turn or
+	// current distillation. Force queueing during distillation even if the
+	// client has not seen the distill status update yet.
+	if req.Queue || manager.IsDistilling() {
 		if err := manager.QueueMessage(ctx, s, modelID, userMessage); err != nil {
 			s.logger.Error("Failed to queue user message", "conversationID", conversationID, "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -1831,4 +1836,77 @@ func (s *Server) handleRegisterConversationHook(w http.ResponseWriter, r *http.R
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "registered"})
+}
+
+// handleStartNewGeneration handles POST /conversation/<id>/new-generation.
+func (s *Server) handleStartNewGeneration(w http.ResponseWriter, r *http.Request, conversationID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := r.Context()
+	conversation, err := s.startNewGeneration(ctx, conversationID)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "Conversation not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		s.logger.Error("Failed to start new generation", "conversationID", conversationID, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(conversation)
+}
+
+func (s *Server) startNewGeneration(ctx context.Context, conversationID string) (generated.Conversation, error) {
+	conversation, err := db.WithTxRes(s.db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.IncrementConversationGeneration(ctx, conversationID)
+	})
+	if err != nil {
+		return generated.Conversation{}, err
+	}
+
+	s.mu.Lock()
+	manager, ok := s.activeConversations[conversationID]
+	s.mu.Unlock()
+	if !ok {
+		manager, err = s.getOrCreateConversationManager(ctx, conversationID, "")
+		if err != nil {
+			return generated.Conversation{}, fmt.Errorf("hydrate after generation bump: %w", err)
+		}
+	} else {
+		manager.ResetLoop()
+	}
+
+	// (Re-)hydrate so the new generation gets its system prompt created
+	// before we tell anyone about the bump. ResetLoop above cleared the
+	// hydrated flag so this re-runs system prompt creation.
+	if err := manager.Hydrate(ctx); err != nil {
+		return generated.Conversation{}, fmt.Errorf("hydrate after generation bump: %w", err)
+	}
+
+	// Re-fetch the conversation to pick up any timestamp changes from creating
+	// the system prompt.
+	if fresh, ferr := s.db.GetConversationByID(ctx, conversationID); ferr == nil {
+		conversation = *fresh
+	}
+
+	// Broadcast any messages created for the new generation (typically just
+	// the new system prompt) so subscribers see them right away.
+	messages, err := s.db.ListMessages(ctx, conversationID)
+	if err == nil {
+		for i := range messages {
+			if messages[i].Generation == conversation.CurrentGeneration {
+				s.notifySubscribersNewMessage(ctx, conversationID, &messages[i])
+			}
+		}
+	}
+
+	manager.subpub.Broadcast(StreamResponse{Conversation: conversation})
+	s.publishConversationListUpdate(ConversationListUpdate{Type: "update", Conversation: &conversation})
+
+	return conversation, nil
 }

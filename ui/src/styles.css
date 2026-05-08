@@ -7353,10 +7353,56 @@ kbd {
   opacity: 0.7;
 }
 
-.chat-distill-replace-button {
+.chat-distill-replace-button,
+.chat-distill-generation-button {
   background-color: var(--bg-secondary, #2a2a2a);
   border: 1px solid var(--blue-text);
   color: var(--blue-text);
+}
+
+.chat-distill-info {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.25;
+  margin-top: 2px;
+}
+
+.generation-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.generation-section-previous {
+  background: color-mix(in srgb, var(--bg-tertiary) 72%, transparent);
+  border-radius: 0.75rem;
+  margin: 0 -0.5rem;
+  padding: 0.5rem;
+  opacity: 0.9;
+}
+
+.generation-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  margin: 0.75rem 0;
+  text-align: center;
+}
+
+.generation-divider::before,
+.generation-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+
+.generation-divider span {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
 }
 
 .chat-tool-icon {

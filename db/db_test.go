@@ -151,6 +151,8 @@ func TestDB_ForeignKeyConstraints(t *testing.T) {
 		_, err := q.CreateMessage(ctx, generated.CreateMessageParams{
 			MessageID:      "test-msg-1",
 			ConversationID: "non-existent-conversation",
+			SequenceID:     1,
+			Generation:     1,
 			Type:           "user",
 		})
 		return err

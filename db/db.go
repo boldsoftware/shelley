@@ -559,10 +559,16 @@ func (db *DB) CreateMessage(ctx context.Context, params CreateMessageParams) (*g
 			return fmt.Errorf("failed to get next sequence ID: %w", err)
 		}
 
+		conversation, err := q.GetConversation(ctx, params.ConversationID)
+		if err != nil {
+			return fmt.Errorf("failed to get conversation generation: %w", err)
+		}
+
 		message, err = q.CreateMessage(ctx, generated.CreateMessageParams{
 			MessageID:           messageID,
 			ConversationID:      params.ConversationID,
 			SequenceID:          sequenceID,
+			Generation:          conversation.CurrentGeneration,
 			Type:                string(params.Type),
 			LlmData:             llmDataJSON,
 			UserData:            userDataJSON,
