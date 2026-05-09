@@ -65,9 +65,15 @@ type responsesInputItem struct {
 }
 
 type responsesContent struct {
-	Type string `json:"type"` // "input_text", "output_text"
-	Text string `json:"text"`
+	Type     string               `json:"type"` // "input_text", "output_text", "input_image"
+	Text     string               `json:"text,omitempty"`
+	ImageURL string               `json:"image_url,omitempty"`
+	Detail   responsesImageDetail `json:"detail,omitempty"`
 }
+
+type responsesImageDetail string
+
+const responsesImageDetailAuto responsesImageDetail = "auto"
 
 type responsesTool struct {
 	Type        string          `json:"type"` // "function"
@@ -147,11 +153,16 @@ func fromLLMMessageResponses(msg llm.Message) []responsesInputItem {
 
 	// Process tool results first - they need to come before the assistant message
 	for _, tr := range toolResults {
-		// Collect all text from content objects
+		// function_call_output is text-only. Preserve images as a following user
+		// message so vision-capable Responses models actually receive them.
 		var texts []string
+		var imageContent []responsesContent
 		for _, result := range tr.ToolResult {
 			if strings.TrimSpace(result.Text) != "" {
 				texts = append(texts, result.Text)
+			}
+			if isImageContent(result) {
+				imageContent = append(imageContent, responsesImageContent(result))
 			}
 		}
 		toolResultContent := strings.Join(texts, "\n")
@@ -170,6 +181,16 @@ func fromLLMMessageResponses(msg llm.Message) []responsesInputItem {
 			CallID: tr.ToolUseID,
 			Output: cmp.Or(toolResultContent, " "),
 		})
+
+		if len(imageContent) > 0 {
+			content := []responsesContent{{Type: "input_text", Text: "Images returned by tool " + tr.ToolUseID + ":"}}
+			content = append(content, imageContent...)
+			items = append(items, responsesInputItem{
+				Type:    "message",
+				Role:    "user",
+				Content: content,
+			})
+		}
 	}
 
 	// Process regular content
@@ -180,7 +201,9 @@ func fromLLMMessageResponses(msg llm.Message) []responsesInputItem {
 		for _, c := range regularContent {
 			switch c.Type {
 			case llm.ContentTypeText:
-				if c.Text != "" {
+				if isImageContent(c) {
+					messageContent = append(messageContent, responsesImageContent(c))
+				} else if c.Text != "" {
 					contentType := "input_text"
 					if msg.Role == llm.MessageRoleAssistant {
 						contentType = "output_text"
@@ -219,6 +242,14 @@ func fromLLMMessageResponses(msg llm.Message) []responsesInputItem {
 	}
 
 	return items
+}
+
+func responsesImageContent(c llm.Content) responsesContent {
+	return responsesContent{
+		Type:     "input_image",
+		ImageURL: openAIImageDataURL(c),
+		Detail:   responsesImageDetailAuto,
+	}
 }
 
 // fromLLMToolResponses converts llm.Tool to Responses API tool format

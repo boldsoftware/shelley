@@ -592,6 +592,67 @@ func TestFromLLMMessage(t *testing.T) {
 		}
 	}
 
+	// Test user message with text and image content
+	imageMsg := llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{
+			{Type: llm.ContentTypeText, Text: "What is in this image?"},
+			{Type: llm.ContentTypeText, MediaType: "image/png", Data: "abc123"},
+		},
+	}
+	messages = fromLLMMessage(imageMsg)
+	if len(messages) != 1 {
+		t.Errorf("fromLLMMessage(imageMsg) length = %d, expected 1", len(messages))
+	} else {
+		msg := messages[0]
+		if msg.Content != "" {
+			t.Errorf("image message Content = %q, expected empty string", msg.Content)
+		}
+		if len(msg.MultiContent) != 2 {
+			t.Fatalf("image message MultiContent length = %d, expected 2", len(msg.MultiContent))
+		}
+		if msg.MultiContent[0].Type != openai.ChatMessagePartTypeText || msg.MultiContent[0].Text != "What is in this image?" {
+			t.Errorf("unexpected text part: %+v", msg.MultiContent[0])
+		}
+		if msg.MultiContent[1].Type != openai.ChatMessagePartTypeImageURL {
+			t.Errorf("second part type = %q, expected image_url", msg.MultiContent[1].Type)
+		}
+		if msg.MultiContent[1].ImageURL == nil || msg.MultiContent[1].ImageURL.URL != "data:image/png;base64,abc123" {
+			t.Errorf("unexpected image URL: %+v", msg.MultiContent[1].ImageURL)
+		}
+	}
+
+	// Test user message with image only
+	imageOnlyMsg := llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{
+			{Type: llm.ContentTypeText, MediaType: "image/png", Data: "imageonly"},
+		},
+	}
+	messages = fromLLMMessage(imageOnlyMsg)
+	if len(messages) != 1 {
+		t.Errorf("fromLLMMessage(imageOnlyMsg) length = %d, expected 1", len(messages))
+	} else if len(messages[0].MultiContent) != 1 || messages[0].MultiContent[0].ImageURL == nil || messages[0].MultiContent[0].ImageURL.URL != "data:image/png;base64,imageonly" {
+		t.Errorf("unexpected image-only message: %+v", messages[0])
+	}
+
+	// Test user message with multiple images preserves order
+	multiImageMsg := llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{
+			{Type: llm.ContentTypeText, MediaType: "image/png", Data: "first"},
+			{Type: llm.ContentTypeText, Text: "between"},
+			{Type: llm.ContentTypeText, MediaType: "image/jpeg", Data: "second"},
+		},
+	}
+	messages = fromLLMMessage(multiImageMsg)
+	if len(messages) != 1 || len(messages[0].MultiContent) != 3 {
+		t.Fatalf("unexpected multi-image message: %+v", messages)
+	}
+	if messages[0].MultiContent[0].ImageURL.URL != "data:image/png;base64,first" || messages[0].MultiContent[1].Text != "between" || messages[0].MultiContent[2].ImageURL.URL != "data:image/jpeg;base64,second" {
+		t.Errorf("multi-image order not preserved: %+v", messages[0].MultiContent)
+	}
+
 	// Test assistant message with tool use
 	toolMsg := llm.Message{
 		Role: llm.MessageRoleAssistant,
@@ -657,6 +718,86 @@ func TestFromLLMMessage(t *testing.T) {
 		if msg.ToolCallID != "tool-call-1" {
 			t.Errorf("message.ToolCallID = %q, expected %q", msg.ToolCallID, "tool-call-1")
 		}
+	}
+
+	// Test message with tool result containing image
+	toolResultImageMsg := llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{
+			{
+				Type:      llm.ContentTypeToolResult,
+				ToolUseID: "tool-call-image",
+				ToolResult: []llm.Content{
+					{Type: llm.ContentTypeText, Text: "Screenshot captured"},
+					{Type: llm.ContentTypeText, MediaType: "image/jpeg", Data: "xyz789"},
+				},
+			},
+		},
+	}
+	messages = fromLLMMessage(toolResultImageMsg)
+	if len(messages) != 2 {
+		t.Errorf("fromLLMMessage(toolResultImageMsg) length = %d, expected 2", len(messages))
+	} else {
+		if messages[0].Role != "tool" || messages[0].Content != "Screenshot captured" || messages[0].ToolCallID != "tool-call-image" {
+			t.Errorf("unexpected tool result message: %+v", messages[0])
+		}
+		if messages[1].Role != "user" {
+			t.Errorf("image follow-up role = %q, expected user", messages[1].Role)
+		}
+		if len(messages[1].MultiContent) != 2 {
+			t.Fatalf("image follow-up MultiContent length = %d, expected 2", len(messages[1].MultiContent))
+		}
+		if messages[1].MultiContent[1].ImageURL == nil || messages[1].MultiContent[1].ImageURL.URL != "data:image/jpeg;base64,xyz789" {
+			t.Errorf("unexpected tool image URL: %+v", messages[1].MultiContent[1].ImageURL)
+		}
+	}
+
+	// Test message with image-only tool result
+	toolResultImageOnlyMsg := llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{
+			{
+				Type:      llm.ContentTypeToolResult,
+				ToolUseID: "tool-call-image-only",
+				ToolResult: []llm.Content{
+					{Type: llm.ContentTypeText, MediaType: "image/png", Data: "onlyimage"},
+				},
+			},
+		},
+	}
+	messages = fromLLMMessage(toolResultImageOnlyMsg)
+	if len(messages) != 2 {
+		t.Errorf("fromLLMMessage(toolResultImageOnlyMsg) length = %d, expected 2", len(messages))
+	} else {
+		if messages[0].Role != "tool" || messages[0].Content != " " || messages[0].ToolCallID != "tool-call-image-only" {
+			t.Errorf("unexpected image-only tool message: %+v", messages[0])
+		}
+		if messages[1].Role != "user" || len(messages[1].MultiContent) != 2 || messages[1].MultiContent[1].ImageURL.URL != "data:image/png;base64,onlyimage" {
+			t.Errorf("unexpected image-only follow-up: %+v", messages[1])
+		}
+	}
+
+	// Test tool-result image stays adjacent to its originating tool result before regular content
+	toolResultWithRegularMsg := llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{
+			{
+				Type:      llm.ContentTypeToolResult,
+				ToolUseID: "tool-call-adjacent",
+				ToolResult: []llm.Content{
+					{Type: llm.ContentTypeText, Text: "Screenshot captured"},
+					{Type: llm.ContentTypeText, MediaType: "image/png", Data: "adjacent"},
+				},
+			},
+			{Type: llm.ContentTypeText, Text: "regular text"},
+		},
+	}
+	messages = fromLLMMessage(toolResultWithRegularMsg)
+	if len(messages) != 3 {
+		t.Fatalf("fromLLMMessage(toolResultWithRegularMsg) length = %d, expected 3", len(messages))
+	}
+	if messages[0].Role != "tool" || messages[1].Role != "user" || len(messages[1].MultiContent) != 2 || messages[2].Content != "regular text" {
+		t.Errorf("tool image is not adjacent before regular content: %+v", messages)
 	}
 
 	// Test message with tool result and error

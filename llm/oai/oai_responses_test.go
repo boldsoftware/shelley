@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"shelley.exe.dev/llm"
@@ -122,6 +123,123 @@ func TestFromLLMMessageResponses(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestFromLLMMessageResponsesWithImage(t *testing.T) {
+	items := fromLLMMessageResponses(llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{
+			{Type: llm.ContentTypeText, Text: "What is in this image?"},
+			{Type: llm.ContentTypeText, MediaType: "image/png", Data: "abc123"},
+		},
+	})
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	if len(items[0].Content) != 2 {
+		t.Fatalf("expected 2 content parts, got %d", len(items[0].Content))
+	}
+	if items[0].Content[0].Type != "input_text" || items[0].Content[0].Text != "What is in this image?" {
+		t.Errorf("unexpected text content: %+v", items[0].Content[0])
+	}
+	if items[0].Content[1].Type != "input_image" || items[0].Content[1].ImageURL != "data:image/png;base64,abc123" {
+		t.Errorf("unexpected image content: %+v", items[0].Content[1])
+	}
+}
+
+func TestFromLLMMessageResponsesWithImageOnlyAndMultipleImages(t *testing.T) {
+	items := fromLLMMessageResponses(llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{
+			{Type: llm.ContentTypeText, MediaType: "image/png", Data: "first"},
+			{Type: llm.ContentTypeText, Text: "between"},
+			{Type: llm.ContentTypeText, MediaType: "image/jpeg", Data: "second"},
+		},
+	})
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	if len(items[0].Content) != 3 {
+		t.Fatalf("expected 3 content parts, got %d", len(items[0].Content))
+	}
+	if items[0].Content[0].ImageURL != "data:image/png;base64,first" || items[0].Content[1].Text != "between" || items[0].Content[2].ImageURL != "data:image/jpeg;base64,second" {
+		t.Errorf("content order not preserved: %+v", items[0].Content)
+	}
+}
+
+func TestResponsesImageContentJSON(t *testing.T) {
+	got, err := json.Marshal(responsesImageContent(llm.Content{Type: llm.ContentTypeText, MediaType: "image/png", Data: "abc123"}))
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	want := `{"type":"input_image","image_url":"data:image/png;base64,abc123","detail":"auto"}`
+	if string(got) != want {
+		t.Fatalf("image content JSON = %s, want %s", got, want)
+	}
+}
+
+func TestFromLLMMessageResponsesWithToolResultImage(t *testing.T) {
+	items := fromLLMMessageResponses(llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{{
+			Type:      llm.ContentTypeToolResult,
+			ToolUseID: "call_img",
+			ToolResult: []llm.Content{
+				{Type: llm.ContentTypeText, Text: "Screenshot captured"},
+				{Type: llm.ContentTypeText, MediaType: "image/jpeg", Data: "xyz789"},
+			},
+		}},
+	})
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+	if items[0].Type != "function_call_output" || items[0].Output != "Screenshot captured" {
+		t.Errorf("unexpected function output: %+v", items[0])
+	}
+	if items[1].Type != "message" || items[1].Role != "user" || len(items[1].Content) != 2 {
+		t.Fatalf("unexpected image message: %+v", items[1])
+	}
+	if items[1].Content[1].Type != "input_image" || items[1].Content[1].ImageURL != "data:image/jpeg;base64,xyz789" {
+		t.Errorf("unexpected tool image content: %+v", items[1].Content[1])
+	}
+}
+
+func TestFromLLMMessageResponsesWithImageOnlyToolResultAndRegularContent(t *testing.T) {
+	items := fromLLMMessageResponses(llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{
+			{
+				Type:      llm.ContentTypeToolResult,
+				ToolUseID: "call_img_only",
+				ToolResult: []llm.Content{
+					{Type: llm.ContentTypeText, MediaType: "image/png", Data: "onlyimage"},
+				},
+			},
+			{Type: llm.ContentTypeText, Text: "regular text"},
+		},
+	})
+	if len(items) != 3 {
+		t.Fatalf("expected 3 items, got %d: %+v", len(items), items)
+	}
+	if items[0].Type != "function_call_output" || items[0].Output != " " {
+		t.Errorf("unexpected image-only function output: %+v", items[0])
+	}
+	if items[1].Type != "message" || items[1].Role != "user" || len(items[1].Content) != 2 || items[1].Content[1].ImageURL != "data:image/png;base64,onlyimage" {
+		t.Errorf("unexpected adjacent image message: %+v", items[1])
+	}
+	if items[2].Type != "message" || items[2].Content[0].Text != "regular text" {
+		t.Errorf("regular content should follow tool image message: %+v", items[2])
+	}
+}
+
+func TestResponsesContentOmitsEmptyTextForImages(t *testing.T) {
+	got, err := json.Marshal(responsesImageContent(llm.Content{Type: llm.ContentTypeText, MediaType: "image/png", Data: "abc123"}))
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if strings.Contains(string(got), `"text"`) {
+		t.Fatalf("image content should not include empty text field: %s", got)
 	}
 }
 

@@ -446,10 +446,37 @@ var (
 	}
 )
 
+func isImageContent(c llm.Content) bool {
+	return c.MediaType != "" && c.Data != ""
+}
+
+func openAIImageDataURL(c llm.Content) string {
+	return "data:" + c.MediaType + ";base64," + c.Data
+}
+
+func openAIImagePart(c llm.Content) openai.ChatMessagePart {
+	return openai.ChatMessagePart{
+		Type: openai.ChatMessagePartTypeImageURL,
+		ImageURL: &openai.ChatMessageImageURL{
+			URL: openAIImageDataURL(c),
+		},
+	}
+}
+
+func openAITextPart(text string) openai.ChatMessagePart {
+	return openai.ChatMessagePart{
+		Type: openai.ChatMessagePartTypeText,
+		Text: text,
+	}
+}
+
 // fromLLMContent converts llm.Content to the format expected by OpenAI.
 func fromLLMContent(c llm.Content) (string, []openai.ToolCall) {
 	switch c.Type {
 	case llm.ContentTypeText:
+		if isImageContent(c) {
+			return "", nil
+		}
 		return c.Text, nil
 	case llm.ContentTypeToolUse:
 		// For OpenAI, tool use is sent as a null content with tool_calls in the message
@@ -506,12 +533,16 @@ func fromLLMMessage(msg llm.Message) []openai.ChatCompletionMessage {
 
 	// Process tool results as separate messages, but first
 	for _, tr := range toolResults {
-		// Convert toolresult array to a string for OpenAI
-		// Collect all text from content objects
+		// Tool-role messages cannot carry image parts. Preserve images as a following user
+		// message so vision-capable OpenAI models actually receive them.
 		var texts []string
+		var imageParts []openai.ChatMessagePart
 		for _, result := range tr.ToolResult {
 			if strings.TrimSpace(result.Text) != "" {
 				texts = append(texts, result.Text)
+			}
+			if isImageContent(result) {
+				imageParts = append(imageParts, openAIImagePart(result))
 			}
 		}
 		toolResultContent := strings.Join(texts, "\n")
@@ -531,6 +562,15 @@ func fromLLMMessage(msg llm.Message) []openai.ChatCompletionMessage {
 			ToolCallID: tr.ToolUseID,
 		}
 		messages = append(messages, m)
+
+		if len(imageParts) > 0 {
+			parts := []openai.ChatMessagePart{openAITextPart("Images returned by tool " + tr.ToolUseID + ":")}
+			parts = append(parts, imageParts...)
+			messages = append(messages, openai.ChatCompletionMessage{
+				Role:         "user",
+				MultiContent: parts,
+			})
+		}
 	}
 	// Process regular content second
 	if len(regularContent) > 0 {
@@ -541,8 +581,15 @@ func fromLLMMessage(msg llm.Message) []openai.ChatCompletionMessage {
 		// For assistant messages that contain tool calls
 		var toolCalls []openai.ToolCall
 		var textContent string
+		var multiContent []openai.ChatMessagePart
+		hasImage := false
 
 		for _, c := range regularContent {
+			if isImageContent(c) {
+				multiContent = append(multiContent, openAIImagePart(c))
+				hasImage = true
+				continue
+			}
 			content, tools := fromLLMContent(c)
 			if len(tools) > 0 {
 				toolCalls = append(toolCalls, tools...)
@@ -551,10 +598,15 @@ func fromLLMMessage(msg llm.Message) []openai.ChatCompletionMessage {
 					textContent += "\n"
 				}
 				textContent += content
+				multiContent = append(multiContent, openAITextPart(content))
 			}
 		}
 
-		m.Content = textContent
+		if hasImage {
+			m.MultiContent = multiContent
+		} else {
+			m.Content = textContent
+		}
 		m.ToolCalls = toolCalls
 
 		messages = append(messages, m)
