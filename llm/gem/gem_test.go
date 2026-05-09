@@ -1262,3 +1262,82 @@ func TestThinkingConfig(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+func TestBuildGeminiRequestImage(t *testing.T) {
+	service := &Service{Model: DefaultModel, APIKey: "test"}
+	req := &llm.Request{
+		Messages: []llm.Message{{
+			Role: llm.MessageRoleUser,
+			Content: []llm.Content{
+				{Type: llm.ContentTypeText, Text: "What color is this?"},
+				{Type: llm.ContentTypeText, MediaType: "image/png", Data: "AAAA"},
+			},
+		}},
+	}
+	gemReq, err := service.buildGeminiRequest(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gemReq.Contents) != 1 || len(gemReq.Contents[0].Parts) != 2 {
+		t.Fatalf("expected 1 content with 2 parts, got %+v", gemReq.Contents)
+	}
+	parts := gemReq.Contents[0].Parts
+	if parts[0].Text != "What color is this?" {
+		t.Errorf("part 0 text = %q", parts[0].Text)
+	}
+	if parts[1].InlineData == nil {
+		t.Fatalf("part 1 inlineData = nil")
+	}
+	if parts[1].InlineData.MimeType != "image/png" || parts[1].InlineData.Data != "AAAA" {
+		t.Errorf("inlineData = %+v", parts[1].InlineData)
+	}
+	if parts[1].Text != "" {
+		t.Errorf("part 1 should not have text, got %q", parts[1].Text)
+	}
+}
+
+func TestBuildGeminiRequestImageInToolResult(t *testing.T) {
+	service := &Service{Model: DefaultModel, APIKey: "test"}
+	req := &llm.Request{
+		Messages: []llm.Message{
+			{
+				Role: llm.MessageRoleAssistant,
+				Content: []llm.Content{{
+					ID:        "tool_1",
+					Type:      llm.ContentTypeToolUse,
+					ToolName:  "screenshot",
+					ToolInput: json.RawMessage(`{}`),
+				}},
+			},
+			{
+				Role: llm.MessageRoleUser,
+				Content: []llm.Content{{
+					Type:      llm.ContentTypeToolResult,
+					ToolUseID: "tool_1",
+					ToolName:  "screenshot",
+					ToolResult: []llm.Content{
+						{Type: llm.ContentTypeText, Text: "screenshot taken"},
+						{Type: llm.ContentTypeText, MediaType: "image/png", Data: "BBBB"},
+					},
+				}},
+			},
+		},
+	}
+	gemReq, err := service.buildGeminiRequest(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gemReq.Contents) != 2 {
+		t.Fatalf("expected 2 contents, got %d", len(gemReq.Contents))
+	}
+	parts := gemReq.Contents[1].Parts
+	if len(parts) != 2 {
+		t.Fatalf("expected tool-result content with 2 parts (functionResponse + inlineData), got %d: %+v", len(parts), parts)
+	}
+	if parts[0].FunctionResponse == nil || parts[0].FunctionResponse.Name != "screenshot" {
+		t.Errorf("part 0 functionResponse = %+v", parts[0].FunctionResponse)
+	}
+	if parts[1].InlineData == nil || parts[1].InlineData.MimeType != "image/png" || parts[1].InlineData.Data != "BBBB" {
+		t.Errorf("part 1 inlineData = %+v", parts[1].InlineData)
+	}
+}

@@ -59,9 +59,17 @@ type Part struct {
 	ThoughtSignature string `json:"thoughtSignature,omitempty"`
 	// Thought is true when the part is a thought summary (only emitted when
 	// thinkingConfig.includeThoughts is true). https://ai.google.dev/gemini-api/docs/thinking
-	Thought bool `json:"thought,omitempty"`
-	// TODO inlineData
+	Thought    bool  `json:"thought,omitempty"`
+	InlineData *Blob `json:"inlineData,omitempty"`
 	// TODO fileData
+}
+
+// Blob is inline binary data (e.g. an image).
+// https://ai.google.dev/api/caching#Blob
+type Blob struct {
+	MimeType string `json:"mimeType"`
+	// Data is base64-encoded binary content.
+	Data string `json:"data"`
 }
 
 type FunctionCall struct {

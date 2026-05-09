@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -301,4 +302,46 @@ func truncateForLog(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// TestGeminiImageIntegration verifies that image content is sent to Gemini
+// via inlineData parts. Skipped if GEMINI_API_KEY is not set.
+func TestGeminiImageIntegration(t *testing.T) {
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		t.Skip("GEMINI_API_KEY not set, skipping integration test")
+	}
+
+	// A 64x64 solid red PNG, base64-encoded.
+	const redPNG = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAb0lEQVR4nO3PAQkAAAyEwO9feoshgnABdLep8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3IPanc8OLDQitxAAAAAElFTkSuQmCC"
+
+	service := &Service{APIKey: apiKey, Model: "gemini-2.5-flash"}
+	req := &llm.Request{
+		Messages: []llm.Message{{
+			Role: llm.MessageRoleUser,
+			Content: []llm.Content{
+				{Type: llm.ContentTypeText, Text: "What single color fills this image? Reply with one word."},
+				{Type: llm.ContentTypeText, MediaType: "image/png", Data: redPNG},
+			},
+		}},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	resp, err := service.Do(ctx, req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+
+	var text string
+	for _, c := range resp.Content {
+		if c.Type == llm.ContentTypeText {
+			text += c.Text
+		}
+	}
+	t.Logf("Gemini reply: %q", text)
+	if !strings.Contains(strings.ToLower(text), "red") {
+		t.Errorf("expected reply to mention 'red'; got %q", text)
+	}
 }

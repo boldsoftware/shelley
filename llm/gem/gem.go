@@ -196,6 +196,16 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 		for _, c := range msg.Content {
 			switch c.Type {
 			case llm.ContentTypeText, llm.ContentTypeThinking, llm.ContentTypeRedactedThinking:
+				// Image content is represented as ContentTypeText with MediaType + Data set.
+				if c.Type == llm.ContentTypeText && c.MediaType != "" && c.Data != "" {
+					content.Parts = append(content.Parts, gemini.Part{
+						InlineData: &gemini.Blob{
+							MimeType: c.MediaType,
+							Data:     c.Data,
+						},
+					})
+					continue
+				}
 				// Text or thinking content
 				part := gemini.Part{}
 				if c.Type == llm.ContentTypeThinking {
@@ -302,6 +312,19 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 						Response: response,
 					},
 				})
+
+				// Images inside tool results aren't supported in FunctionResponse,
+				// so we attach them as additional inlineData parts on the same content.
+				for _, result := range c.ToolResult {
+					if result.MediaType != "" && result.Data != "" {
+						content.Parts = append(content.Parts, gemini.Part{
+							InlineData: &gemini.Blob{
+								MimeType: result.MediaType,
+								Data:     result.Data,
+							},
+						})
+					}
+				}
 			}
 		}
 
