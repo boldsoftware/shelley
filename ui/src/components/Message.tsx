@@ -33,6 +33,7 @@ import BrowserProfileTool from "./BrowserProfileTool";
 import ThinkingContent from "./ThinkingContent";
 import UsageDetailModal from "./UsageDetailModal";
 import MessageActionBar from "./MessageActionBar";
+import EditableFileModal from "./EditableFileModal";
 import { type MarkdownMode } from "../services/settings";
 
 /** Should we render markdown for this content block? */
@@ -442,6 +443,9 @@ const Message = React.memo(function Message({
   const isTool = message.type === "tool" || hasToolContent(llmMessage);
   const isError = message.type === "error";
 
+  let distillationFile = "";
+  let distillationContent = "";
+
   // Check if this is a distilled user message (LLM-generated, treat as agent for markdown)
   const isDistilledUser =
     isUser &&
@@ -450,11 +454,21 @@ const Message = React.memo(function Message({
       try {
         const ud =
           typeof message.user_data === "string" ? JSON.parse(message.user_data) : message.user_data;
-        return ud?.distilled === "true";
+        if (ud?.distilled === "true") {
+          distillationFile = ud.distillation_file || "";
+          distillationContent = ud.distillation_content || "";
+          return true;
+        }
+        return false;
       } catch {
         return false;
       }
     })();
+  const [showDistillationEditor, setShowDistillationEditor] = useState(false);
+  const [distillationContentOverride, setDistillationContentOverride] = useState<string | null>(
+    null,
+  );
+  const displayedDistillationContent = distillationContentOverride ?? distillationContent;
 
   // Check if this is a queued message (waiting for agent to finish)
   const isQueued = isUser && isQueuedMessage(message);
@@ -1096,6 +1110,49 @@ const Message = React.memo(function Message({
     );
   }
 
+  const renderDistillationEditor = () =>
+    distillationFile ? (
+      <EditableFileModal
+        isOpen={showDistillationEditor}
+        path={distillationFile}
+        title="Edit distillation"
+        onClose={() => setShowDistillationEditor(false)}
+        onSaved={setDistillationContentOverride}
+      />
+    ) : null;
+
+  const openDistillationEditor = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDistillationEditor(true);
+  };
+
+  const renderDistillationBox = () =>
+    isDistilledUser && distillationFile ? (
+      <div className="distillation-file-box" data-testid="distillation-file-box">
+        <div className="distillation-file-box-header">
+          <div className="distillation-file-box-title">Editable distillation</div>
+          <button
+            type="button"
+            className="distillation-edit-button"
+            onClick={openDistillationEditor}
+            title="Edit distillation in modal"
+          >
+            Edit
+          </button>
+        </div>
+        <div className="distillation-file-box-meta">
+          Shown from editable file <code>{distillationFile}</code>.
+        </div>
+        <div className="distillation-file-box-content">
+          {displayedDistillationContent ? (
+            <MarkdownContent text={displayedDistillationContent} />
+          ) : (
+            <span className="distillation-empty">Empty distillation</span>
+          )}
+        </div>
+      </div>
+    ) : null;
+
   // If we have display_data, use that for rendering (more compact, tool-specific)
   if (displayData && displayData.length > 0) {
     return (
@@ -1191,9 +1248,10 @@ const Message = React.memo(function Message({
         )}
         {/* Message content */}
         <div className="message-content" data-testid="message-content">
-          {contentToRender.map((content, index) => (
-            <div key={index}>{renderContent(content)}</div>
-          ))}
+          {renderDistillationBox() ||
+            contentToRender.map((content, index) => (
+              <div key={index}>{renderContent(content)}</div>
+            ))}
           {isQueued && (
             <div className="queued-message-badge" data-testid="queued-badge">
               <span className="queued-message-badge-label">
@@ -1232,6 +1290,7 @@ const Message = React.memo(function Message({
           onClose={() => setShowUsageModal(false)}
         />
       )}
+      {renderDistillationEditor()}
     </>
   );
 });

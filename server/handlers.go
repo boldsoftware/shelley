@@ -59,7 +59,7 @@ func (s *Server) handleRead(w http.ResponseWriter, r *http.Request) {
 	}
 	// Clean and enforce prefix restriction
 	clean := filepath.Clean(p)
-	if !(strings.HasPrefix(clean, browse.ScreenshotDir+"/") || strings.HasPrefix(clean, browse.ConsoleLogsDir+"/") || strings.HasPrefix(clean, browse.ScreencastDir+"/")) {
+	if !isReadableUIFile(clean) {
 		http.Error(w, "path not allowed", http.StatusForbidden)
 		return
 	}
@@ -99,6 +99,26 @@ func (s *Server) handleRead(w http.ResponseWriter, r *http.Request) {
 	// Reasonable short-term caching for assets, allow quick refresh during sessions
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	io.Copy(w, f)
+}
+
+func isReadableUIFile(path string) bool {
+	return strings.HasPrefix(path, browse.ScreenshotDir+"/") ||
+		strings.HasPrefix(path, browse.ConsoleLogsDir+"/") ||
+		strings.HasPrefix(path, browse.ScreencastDir+"/") ||
+		isDistillationTempFile(path)
+}
+
+func isDistillationTempFile(path string) bool {
+	dir := filepath.Join(os.TempDir(), "shelley-distillations")
+	resolvedDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return false
+	}
+	resolvedPath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return false
+	}
+	return strings.HasPrefix(resolvedPath, resolvedDir+string(os.PathSeparator))
 }
 
 // handleUserAgentsMd returns the current content of the user's AGENTS.md.

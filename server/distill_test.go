@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -131,6 +132,135 @@ func TestDistillConversation(t *testing.T) {
 	}
 	if !statusComplete {
 		t.Fatal("expected distill status to be 'complete'")
+	}
+}
+
+func TestDistillWritesEditableTempFileAndUsesEditedContent(t *testing.T) {
+	t.Parallel()
+	h := NewTestHarness(t)
+
+	h.NewConversation("echo hello world", "")
+	h.WaitResponse()
+	sourceConvID := h.convID
+
+	reqBody := DistillConversationRequest{
+		SourceConversationID: sourceConvID,
+		Model:                "predictable",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/api/conversations/distill", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.server.handleDistillConversation(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var distillResp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &distillResp); err != nil {
+		t.Fatalf("failed to parse distill response: %v", err)
+	}
+	newConvID := distillResp["conversation_id"].(string)
+
+	var distillFile string
+	var storedContent string
+	var messageText string
+	for i := 0; i < 100; i++ {
+		msgs, err := h.db.ListMessages(context.Background(), newConvID)
+		if err != nil {
+			t.Fatalf("failed to list messages: %v", err)
+		}
+		for _, msg := range msgs {
+			if msg.Type != string(db.MessageTypeUser) || msg.UserData == nil || msg.LlmData == nil {
+				continue
+			}
+			var userData map[string]string
+			if err := json.Unmarshal([]byte(*msg.UserData), &userData); err != nil {
+				continue
+			}
+			if userData["distilled"] != "true" {
+				continue
+			}
+			distillFile = userData["distillation_file"]
+			storedContent = userData["distillation_content"]
+			var llmMsg llm.Message
+			if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err == nil {
+				for _, content := range llmMsg.Content {
+					if content.Type == llm.ContentTypeText {
+						messageText = content.Text
+					}
+				}
+			}
+		}
+		if distillFile != "" {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if distillFile == "" {
+		t.Fatal("timed out waiting for distilled message with file metadata")
+	}
+	if storedContent == "" {
+		t.Fatal("expected distillation_content in user_data")
+	}
+	if !strings.HasPrefix(messageText, "Distillation written to ") || !strings.Contains(messageText, distillFile) {
+		t.Fatalf("message should refer to temp file, got %q for %q", messageText, distillFile)
+	}
+	fileBytes, err := os.ReadFile(distillFile)
+	if err != nil {
+		t.Fatalf("failed to read distillation file %q: %v", distillFile, err)
+	}
+	if string(fileBytes) != storedContent {
+		t.Fatalf("file content differs from stored content")
+	}
+
+	editedContent := "edited distillation content from test"
+	if err := os.WriteFile(distillFile, []byte(editedContent), 0o644); err != nil {
+		t.Fatalf("failed to edit distillation file: %v", err)
+	}
+
+	h.llm.ClearRequests()
+	h.convID = newConvID
+	h.responsesCount = 0
+	for i := 0; i < 100; i++ {
+		h.server.mu.Lock()
+		m, ok := h.server.activeConversations[newConvID]
+		h.server.mu.Unlock()
+		if ok {
+			m.mu.Lock()
+			distilling := m.distilling
+			m.mu.Unlock()
+			if !distilling {
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	h.Chat("echo followup message")
+	h.WaitResponse()
+
+	foundEdited := false
+	foundReference := false
+	for _, req := range h.llm.GetRecentRequests() {
+		for _, msg := range req.Messages {
+			for _, content := range msg.Content {
+				if content.Type != llm.ContentTypeText {
+					continue
+				}
+				if content.Text == editedContent {
+					foundEdited = true
+				}
+				if strings.Contains(content.Text, "Distillation written to ") {
+					foundReference = true
+				}
+			}
+		}
+	}
+	if !foundEdited {
+		t.Fatal("expected edited distillation file content in follow-up LLM request")
+	}
+	if foundReference {
+		t.Fatal("follow-up LLM request should receive distillation contents, not file-reference message")
 	}
 }
 
@@ -356,14 +486,10 @@ func TestDistillContentSentToLLM(t *testing.T) {
 			t.Fatalf("failed to list messages: %v", err)
 		}
 		for _, msg := range msgs {
-			if msg.Type == string(db.MessageTypeUser) && msg.LlmData != nil {
-				var llmMsg llm.Message
-				if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err == nil {
-					for _, content := range llmMsg.Content {
-						if content.Type == llm.ContentTypeText && content.Text != "" {
-							distilledText = content.Text
-						}
-					}
+			if msg.Type == string(db.MessageTypeUser) && msg.UserData != nil {
+				var userData map[string]string
+				if err := json.Unmarshal([]byte(*msg.UserData), &userData); err == nil {
+					distilledText = userData["distillation_content"]
 				}
 			}
 		}
@@ -518,14 +644,10 @@ func TestDistillContentSentToLLM_WithEarlySSE(t *testing.T) {
 			t.Fatalf("failed to list messages: %v", err)
 		}
 		for _, msg := range msgs {
-			if msg.Type == string(db.MessageTypeUser) && msg.LlmData != nil {
-				var llmMsg llm.Message
-				if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err == nil {
-					for _, content := range llmMsg.Content {
-						if content.Type == llm.ContentTypeText && content.Text != "" {
-							distilledText = content.Text
-						}
-					}
+			if msg.Type == string(db.MessageTypeUser) && msg.UserData != nil {
+				var userData map[string]string
+				if err := json.Unmarshal([]byte(*msg.UserData), &userData); err == nil {
+					distilledText = userData["distillation_content"]
 				}
 			}
 		}

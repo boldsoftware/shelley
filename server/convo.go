@@ -776,10 +776,47 @@ func (cm *ConversationManager) partitionMessages(messages []generated.Message) (
 			continue
 		}
 
+		if msg.Type == string(db.MessageTypeUser) {
+			cm.applyDistillationContentOverride(&llmMsg, msg)
+		}
+
 		history = append(history, llmMsg)
 	}
 
 	return history, system
+}
+
+func (cm *ConversationManager) applyDistillationContentOverride(llmMsg *llm.Message, msg generated.Message) {
+	if msg.UserData == nil {
+		return
+	}
+
+	var userData map[string]string
+	if err := json.Unmarshal([]byte(*msg.UserData), &userData); err != nil {
+		cm.logger.Warn("Failed to parse message user_data", "messageID", msg.MessageID, "error", err)
+		return
+	}
+	if userData["distilled"] != "true" {
+		return
+	}
+
+	content := userData["distillation_content"]
+	if filePath := userData["distillation_file"]; filePath != "" {
+		if !isDistillationTempFile(filePath) {
+			cm.logger.Warn("Distillation file path validation failed", "messageID", msg.MessageID, "path", filePath)
+		} else if fileContent, err := os.ReadFile(filePath); err == nil {
+			content = string(fileContent)
+		} else {
+			cm.logger.Warn("Failed to read editable distillation file; using stored content", "messageID", msg.MessageID, "path", filePath, "error", err)
+		}
+	}
+	for i := range llmMsg.Content {
+		if llmMsg.Content[i].Type == llm.ContentTypeText {
+			llmMsg.Content[i].Text = content
+			return
+		}
+	}
+	llmMsg.Content = append(llmMsg.Content, llm.Content{Type: llm.ContentTypeText, Text: content})
 }
 
 func (cm *ConversationManager) logSystemPromptState(system []llm.SystemContent, messageCount int) {

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -265,22 +267,73 @@ func (s *Server) performDistillation(ctx context.Context, conversationID, source
 
 	logger.Info("Distillation complete", "output_length", len(distilledText))
 
+	distillFilePath, err := writeDistillationTempFile(conversationID, distilledText)
+	if err != nil {
+		logger.Error("Failed to write distillation temp file", "error", err)
+		s.insertDistillError(ctx, conversationID, fmt.Sprintf("Failed to write distillation temp file: %v", err))
+		return ""
+	}
+
 	// Update the status message to "complete"
 	s.updateDistillStatus(ctx, conversationID, "complete")
 
-	// Insert the distilled content as a user message
+	// Insert a user-visible message that refers to the editable temp file while
+	// retaining the distillation text in user_data for UI display and context.
 	userMessage := llm.Message{
 		Role: llm.MessageRoleUser,
 		Content: []llm.Content{
-			{Type: llm.ContentTypeText, Text: distilledText},
+			{Type: llm.ContentTypeText, Text: distillationMessageText(distillFilePath)},
 		},
 	}
-	if err := s.recordMessage(ctx, conversationID, userMessage, llm.Usage{}, map[string]string{"distilled": "true"}); err != nil {
+	userData := map[string]string{
+		"distilled":             "true",
+		"distillation_file":     distillFilePath,
+		"distillation_content":  distilledText,
+		"distillation_editable": "true",
+	}
+	if err := s.recordMessage(ctx, conversationID, userMessage, llm.Usage{}, userData); err != nil {
 		logger.Error("Failed to record distilled message", "error", err)
 		return ""
 	}
 
 	return distilledText
+}
+
+func distillationMessageText(path string) string {
+	return fmt.Sprintf("Distillation written to %s", path)
+}
+
+func writeDistillationTempFile(conversationID, content string) (string, error) {
+	dir := filepath.Join(os.TempDir(), "shelley-distillations")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	cleanupOldDistillationTempFiles(dir, 7*24*time.Hour)
+	file, err := os.CreateTemp(dir, conversationID+"-*.md")
+	if err != nil {
+		return "", err
+	}
+	path := file.Name()
+	defer file.Close()
+	if _, err := file.WriteString(content); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func cleanupOldDistillationTempFiles(dir string, maxAge time.Duration) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-maxAge)
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil || info.IsDir() || !info.ModTime().Before(cutoff) {
+			continue
+		}
+		_ = os.Remove(filepath.Join(dir, entry.Name()))
+	}
 }
 
 // runDistillation performs the LLM-based distillation and inserts the result.
