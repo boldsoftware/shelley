@@ -1167,6 +1167,28 @@ func (s *Server) getWorkingConversations() map[string]bool {
 	return working
 }
 
+// cancelSubagents cancels all active subagent conversations for the given parent.
+func (s *Server) cancelSubagents(ctx context.Context, parentID string) {
+	subagents, err := s.db.GetSubagents(ctx, parentID)
+	if err != nil {
+		s.logger.Error("Failed to get subagents for cancellation", "parentID", parentID, "error", err)
+		return
+	}
+
+	for _, sub := range subagents {
+		s.mu.Lock()
+		mgr, ok := s.activeConversations[sub.ConversationID]
+		s.mu.Unlock()
+		if !ok || !mgr.IsAgentWorking() {
+			continue
+		}
+		s.logger.Info("Cancelling subagent", "subagentID", sub.ConversationID, "parentID", parentID)
+		if err := mgr.CancelConversation(ctx); err != nil {
+			s.logger.Error("Failed to cancel subagent", "subagentID", sub.ConversationID, "error", err)
+		}
+	}
+}
+
 // IsAgentWorking returns whether the agent is currently working on the given conversation.
 // Returns false if the conversation doesn't have an active manager.
 func (s *Server) IsAgentWorking(conversationID string) bool {

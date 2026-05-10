@@ -1022,6 +1022,9 @@ func (s *Server) handleCancelConversation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Cancel active subagent conversations first
+	s.cancelSubagents(ctx, conversationID)
+
 	// Cancel the conversation
 	if err := manager.CancelConversation(ctx); err != nil {
 		s.logger.Error("Failed to cancel conversation", "conversationID", conversationID, "error", err)
