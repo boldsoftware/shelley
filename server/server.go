@@ -161,10 +161,24 @@ func extractEndOfTurn(raw string) (bool, bool) {
 // so we only need the last message's tokens (not accumulated across all messages).
 // The total input includes regular input tokens plus cached tokens (both read and created).
 // Messages without usage data (user messages, tool messages, etc.) are skipped.
+//
+// Only messages from the latest generation are considered: when a conversation
+// starts a new generation (e.g. via distill-new-generation), older generations'
+// usage no longer reflects what will be sent to the LLM.
 func calculateContextWindowSize(messages []APIMessage) uint64 {
-	// Find the last message with non-zero usage data
+	// Determine the latest generation present in the messages.
+	var latestGen int64
+	for i := range messages {
+		if messages[i].Generation > latestGen {
+			latestGen = messages[i].Generation
+		}
+	}
+	// Find the last message with non-zero usage data within the latest generation.
 	for i := len(messages) - 1; i >= 0; i-- {
 		msg := messages[i]
+		if msg.Generation != latestGen {
+			continue
+		}
 		if msg.UsageData == nil {
 			continue
 		}

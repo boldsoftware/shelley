@@ -787,6 +787,12 @@ function ChatInterface({
     }
   }, [currentConversation?.conversation_id]);
 
+  // Track the most recently observed generation per conversation so we can
+  // detect generation bumps (e.g. distill-into-new-generation) and reset the
+  // token-bar state immediately. The reset effect lives next to the
+  // contextWindowSize state, below.
+  const lastGenerationRef = useRef<{ id: string | null; gen: number } | null>(null);
+
   // Reset cwdInitialized and subagent backend when switching to a new conversation.
   // Tool overrides are intentionally NOT reset — they persist across conversations
   // via localStorage so the user's choices stick.
@@ -893,6 +899,34 @@ function ChatInterface({
   }, [messages]);
 
   const [contextWindowSize, setContextWindowSize] = useState(0);
+
+  // When a new generation starts (e.g. distill-into-new-generation), the
+  // previous generation's token usage no longer reflects what will be sent to
+  // the LLM. Reset the local context window state so the token bar shrinks
+  // immediately; the next agent message will populate it with the new
+  // generation's actual usage.
+  useEffect(() => {
+    const gen = currentConversation?.current_generation;
+    const id = currentConversation?.conversation_id ?? null;
+    if (gen === undefined || id === null) {
+      lastGenerationRef.current = null;
+      return;
+    }
+    const prev = lastGenerationRef.current;
+    lastGenerationRef.current = { id, gen };
+    // Only reset on a generation bump within the same conversation.
+    if (prev && prev.id === id && gen > prev.gen) {
+      setContextWindowSize(0);
+      if (conversationId) {
+        conversationCache.updateContextWindowSize(conversationId, 0);
+      }
+    }
+  }, [
+    currentConversation?.current_generation,
+    currentConversation?.conversation_id,
+    conversationId,
+  ]);
+
   // Tool progress: maps tool_use_id -> partial output
   const [toolProgress, setToolProgress] = useState<Record<string, ToolProgress>>({});
   // Streaming LLM text: accumulated text from stream deltas

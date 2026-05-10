@@ -157,6 +157,52 @@ func TestContextWindowSizeCalculation(t *testing.T) {
 			t.Errorf("calculateContextWindowSize() = %d, want %d", got, want)
 		}
 	})
+
+	t.Run("only_counts_latest_generation", func(t *testing.T) {
+		// After a distill-into-new-generation, prior generation usage should
+		// not contribute to the reported context window: the next LLM call
+		// will only send the current generation's messages.
+		oldUsage := llm.Usage{InputTokens: 100000, OutputTokens: 5000}
+		oldUsageJSON, _ := json.Marshal(oldUsage)
+		oldUsageStr := string(oldUsageJSON)
+
+		newUsage := llm.Usage{InputTokens: 200, OutputTokens: 50}
+		newUsageJSON, _ := json.Marshal(newUsage)
+		newUsageStr := string(newUsageJSON)
+
+		messages := []APIMessage{
+			{Type: string(db.MessageTypeAgent), UsageData: &oldUsageStr, Generation: 1},
+			{Type: string(db.MessageTypeSystem), UsageData: nil, Generation: 2},
+			{Type: string(db.MessageTypeAgent), UsageData: &newUsageStr, Generation: 2},
+		}
+
+		got := calculateContextWindowSize(messages)
+		want := uint64(250)
+		if got != want {
+			t.Errorf("calculateContextWindowSize() = %d, want %d (should ignore prior generation)", got, want)
+		}
+	})
+
+	t.Run("latest_generation_no_usage_returns_zero", func(t *testing.T) {
+		// Right after a generation bump, the new generation may have no
+		// usage-bearing messages yet. We should return 0 rather than
+		// reaching back into the previous generation.
+		oldUsage := llm.Usage{InputTokens: 100000, OutputTokens: 5000}
+		oldUsageJSON, _ := json.Marshal(oldUsage)
+		oldUsageStr := string(oldUsageJSON)
+
+		messages := []APIMessage{
+			{Type: string(db.MessageTypeAgent), UsageData: &oldUsageStr, Generation: 1},
+			{Type: string(db.MessageTypeSystem), UsageData: nil, Generation: 2},
+			{Type: string(db.MessageTypeUser), UsageData: nil, Generation: 2},
+		}
+
+		got := calculateContextWindowSize(messages)
+		want := uint64(0)
+		if got != want {
+			t.Errorf("calculateContextWindowSize() = %d, want %d (no usage in latest generation)", got, want)
+		}
+	})
 }
 
 // TestContextWindowGrowsWithConversation tests that the context window size grows

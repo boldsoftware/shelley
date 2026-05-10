@@ -1514,3 +1514,54 @@ func stopActiveConversationLoops(server *Server) {
 		manager.stopLoop()
 	}
 }
+
+// TestDistillNewGenerationResetsContextWindow verifies that after a
+// distill-into-new-generation, the reported context window size is calculated
+// only from the new generation. Otherwise the token bar would continue to
+// display the previous generation's (much larger) usage until the next
+// message round-trip.
+func TestDistillNewGenerationResetsContextWindow(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		h := NewTestHarness(t)
+		defer stopActiveConversationLoops(h.server)
+
+		// Build up some context in the source conversation.
+		h.NewConversation("echo hello world", "")
+		h.WaitResponse()
+		synctest.Wait()
+		h.Chat("echo another message")
+		h.WaitResponse()
+		synctest.Wait()
+		sourceConvID := h.convID
+
+		beforeSize := h.GetContextWindowSize()
+		if beforeSize == 0 {
+			t.Fatal("expected non-zero context window before distill")
+		}
+
+		// Distill into a new generation of the same conversation.
+		reqBody := DistillNewGenerationRequest{
+			SourceConversationID: sourceConvID,
+			Model:                "predictable",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/conversations/distill-new-generation", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.server.handleDistillNewGeneration(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected status 201, got %d: %s", w.Code, w.Body.String())
+		}
+
+		waitForConversationDistillingToClear(t, h.server, sourceConvID)
+
+		// The distilled message itself is recorded with empty usage, so the
+		// context window for the new generation should be 0 — not the prior
+		// generation's value.
+		afterSize := h.GetContextWindowSize()
+		if afterSize != 0 {
+			t.Errorf("context window after distill-new-generation = %d, want 0 (prior gen=%d)", afterSize, beforeSize)
+		}
+	})
+}
