@@ -8,6 +8,9 @@ interface GitGraphViewerProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenDiff?: (commit: string, cwd: string) => void;
+  // True when a modal (e.g. DiffViewer) is stacked on top of this one.
+  // Suppresses Esc handling so the top-most modal closes first.
+  covered?: boolean;
 }
 
 // Lane colors cycle by lane index (stable per lane, GitX-style).
@@ -513,6 +516,7 @@ export default function GitGraphViewer({
   isOpen,
   onClose,
   onOpenDiff,
+  covered = false,
 }: GitGraphViewerProps) {
   // Internal override so the user can switch directories without re-opening.
   const [cwdOverride, setCwdOverride] = useState<string | null>(null);
@@ -618,7 +622,7 @@ export default function GitGraphViewer({
   }, [isOpen, cwd, selected]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || covered) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         // If the mobile bottom sheet is open, close it first instead of
@@ -632,7 +636,7 @@ export default function GitGraphViewer({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, onClose, sheetOpen]);
+  }, [isOpen, covered, onClose, sheetOpen]);
 
   const commits = data?.commits ?? [];
   const layout = useMemo(() => computeLayout(commits), [commits]);

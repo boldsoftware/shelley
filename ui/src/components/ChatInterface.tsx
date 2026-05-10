@@ -3128,9 +3128,12 @@ function ChatInterface({
       <GitGraphViewer
         cwd={(diffViewerCwd || currentConversation?.cwd || selectedCwd) as string}
         isOpen={showGitGraph}
+        covered={showDiffViewer}
         onClose={() => setShowGitGraph(false)}
         onOpenDiff={(commit, cwd) => {
-          setShowGitGraph(false);
+          // Leave the graph mounted underneath so closing the diff returns
+          // here. ChatInterface keeps both `showGitGraph` and `showDiffViewer`
+          // true; DiffViewer renders last so it stacks on top.
           setDiffViewerInitialCommit(commit);
           setDiffViewerCwd(cwd);
           setShowDiffViewer(true);
