@@ -217,6 +217,7 @@ function DiffViewer({
       setSelectedFile(null);
       setFiles([]);
       setSelectedDiff(null);
+      setSelectedTo("working");
       setDiffs([]);
       setError(null);
       setShowCommentDialog(null);
@@ -579,13 +580,18 @@ function DiffViewer({
       setDiffs(response.diffs);
       setGitRoot(response.gitRoot);
 
-      // If initialCommit is set, try to select that commit
+      // If initialCommit is set, select that commit and scope the diff to
+      // just that commit (parent..commit). Without this we'd inherit the
+      // default `selectedTo="working"`, which would show every change
+      // between the commit's parent and the working tree — not what the
+      // user asked for when they clicked "Open diff" on a specific commit.
       if (initialCommit) {
         const matchingDiff = response.diffs.find(
           (d) => d.id === initialCommit || d.id.startsWith(initialCommit),
         );
         if (matchingDiff) {
           setSelectedDiff(matchingDiff.id);
+          setSelectedTo("self");
           return;
         }
       }
