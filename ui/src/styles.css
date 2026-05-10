@@ -9257,6 +9257,7 @@ kbd {
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  margin-left: auto;
 }
 .grp-empty {
   padding: 1rem;
