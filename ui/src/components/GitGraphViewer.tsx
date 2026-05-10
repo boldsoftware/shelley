@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { api } from "../services/api";
 import type { GitGraphCommit, GitGraphResponse, GitCommitDetail } from "../types";
+import GitRepoPicker from "./GitRepoPicker";
 
 interface GitGraphViewerProps {
   cwd: string;
@@ -507,7 +508,16 @@ const INITIAL_LIMIT = 100;
 const LOAD_STEPS = [100, 1000];
 const ALL_LIMIT = 100000;
 
-export default function GitGraphViewer({ cwd, isOpen, onClose, onOpenDiff }: GitGraphViewerProps) {
+export default function GitGraphViewer({
+  cwd: cwdProp,
+  isOpen,
+  onClose,
+  onOpenDiff,
+}: GitGraphViewerProps) {
+  // Internal override so the user can switch directories without re-opening.
+  const [cwdOverride, setCwdOverride] = useState<string | null>(null);
+  const cwd = cwdOverride ?? cwdProp;
+  const [showCwdPicker, setShowCwdPicker] = useState(false);
   const [data, setData] = useState<GitGraphResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -559,9 +569,20 @@ export default function GitGraphViewer({ cwd, isOpen, onClose, onOpenDiff }: Git
       setLimit(INITIAL_LIMIT);
       setDetail(null);
       setSheetOpen(false);
+      setCwdOverride(null);
+      setShowCwdPicker(false);
       detailCacheRef.current.clear();
     }
   }, [isOpen]);
+
+  // Reset transient state when cwd changes so we don't show stale selection/detail.
+  useEffect(() => {
+    setSelected(null);
+    setData(null);
+    setDetail(null);
+    setLimit(INITIAL_LIMIT);
+    detailCacheRef.current.clear();
+  }, [cwd]);
 
   // Load commit body + numstat on selection.
   useEffect(() => {
@@ -677,14 +698,37 @@ export default function GitGraphViewer({ cwd, isOpen, onClose, onOpenDiff }: Git
         className="diff-viewer-container git-graph-container"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          className="git-graph-close"
-          onClick={onClose}
-          title="Close (Esc)"
-          aria-label="Close"
-        >
-          ×
-        </button>
+        <div className="git-graph-toolbar">
+          <button
+            className="git-graph-tool"
+            onClick={() => setShowCwdPicker(true)}
+            title={`Pick repository (current: ${cwd})`}
+            aria-label="Pick repository"
+          >
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+              />
+            </svg>
+          </button>
+          <button
+            className="git-graph-tool"
+            onClick={onClose}
+            title="Close (Esc)"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        <GitRepoPicker
+          isOpen={showCwdPicker}
+          currentPath={cwd}
+          onClose={() => setShowCwdPicker(false)}
+          onSelect={(p) => setCwdOverride(p)}
+        />
 
         <div className="git-graph-body">
           <div className="git-graph-list">

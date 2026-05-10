@@ -8953,3 +8953,369 @@ kbd {
     font-size: 0.8125rem;
   }
 }
+
+/* Tree Directory Picker */
+.tdp-modal {
+  max-width: 36rem;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+}
+.tdp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+  flex: 1;
+}
+.tdp-selection {
+  width: 100%;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.875rem;
+  padding: 0.4rem 0.55rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+}
+.tdp-shortcuts {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.tdp-shortcut {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.95rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-color);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.tdp-shortcut:hover:not(:disabled) {
+  background: var(--bg-secondary);
+}
+.tdp-shortcut-active {
+  background: var(--bg-tertiary);
+  border-color: var(--text-secondary);
+}
+.tdp-shortcut:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.tdp-filter {
+  flex: 1;
+  font-size: 0.875rem;
+  padding: 0.4rem 0.55rem;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+}
+.tdp-tree {
+  flex: 1;
+  min-height: 12rem;
+  max-height: 50vh;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  background: var(--bg-base);
+  padding: 0.25rem 0;
+  font-size: 0.875rem;
+}
+.tdp-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem 0.2rem 0.25rem;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.tdp-row:hover {
+  background: var(--bg-secondary);
+}
+.tdp-row-selected,
+.tdp-row-selected:hover {
+  background: var(--accent, #3b82f6);
+  color: white;
+}
+.tdp-row-empty {
+  color: var(--text-secondary);
+  font-style: italic;
+  cursor: default;
+}
+.tdp-row-empty:hover {
+  background: transparent;
+}
+.tdp-twisty {
+  width: 1rem;
+  height: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: transform 0.1s ease;
+}
+.tdp-row-selected .tdp-twisty {
+  color: white;
+}
+.tdp-twisty-open {
+  transform: rotate(90deg);
+}
+.tdp-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+.tdp-row-selected .tdp-icon {
+  color: white;
+}
+.tdp-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.tdp-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-left: 0.25rem;
+}
+.tdp-error {
+  color: #ef4444;
+}
+
+/* Git graph mini-toolbar (top-right) */
+.git-graph-toolbar {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  background: var(--bg-base);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+.git-graph-tool {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 999px;
+}
+.git-graph-tool svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  color: var(--text-secondary);
+}
+.git-graph-tool:hover {
+  background: var(--bg-secondary);
+}
+.git-graph-tool:hover svg {
+  color: var(--text-primary);
+}
+.git-graph-tool:focus-visible {
+  outline: 2px solid var(--accent, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* Git repo picker. Height is locked so the modal doesn't bounce around
+   as the filter shrinks the list. */
+.grp-modal {
+  max-width: 36rem;
+  width: 100%;
+  height: 80vh;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.grp-modal .modal-header {
+  padding: 0.5rem 0.75rem;
+  flex-shrink: 0;
+}
+.grp-modal .modal-title {
+  font-size: 1rem;
+}
+.grp-modal .modal-body {
+  /* Override the default 80vh cap; we already cap the modal itself. */
+  max-height: none;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+.grp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+  flex: 1;
+  height: 100%;
+}
+.grp-filter {
+  width: 100%;
+  font-size: 0.95rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  flex-shrink: 0;
+}
+.grp-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  background: var(--bg-base);
+  padding: 0.25rem 0;
+}
+.grp-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+.grp-row-active {
+  background: var(--bg-secondary);
+}
+.grp-row-current .grp-path {
+  font-weight: 600;
+}
+.grp-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+.grp-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.grp-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.grp-hit {
+  background: transparent;
+  color: var(--accent, #3b82f6);
+  font-weight: 700;
+  padding: 0;
+}
+.grp-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.grp-branch {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.25rem;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.grp-when {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.grp-empty {
+  padding: 1rem;
+  color: var(--text-secondary);
+  text-align: center;
+  font-style: italic;
+}
+.grp-error {
+  color: #ef4444;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #ef4444;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+.grp-truncated {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Mobile: use the full screen, slim header, and stack branch/worktree
+   onto a second line so the repo path always gets full width. */
+@media (max-width: 768px) {
+  .grp-modal {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    max-width: 100vw;
+    border-radius: 0;
+  }
+  .grp-modal .modal-header {
+    padding: 0.4rem 0.6rem;
+  }
+  .grp-modal .modal-title {
+    font-size: 0.95rem;
+  }
+  .grp-modal .modal-body {
+    padding: 0.5rem 0.6rem 0.6rem;
+  }
+  .grp-main {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.1rem;
+  }
+  .grp-row {
+    align-items: flex-start;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+  }
+  .grp-icon {
+    margin-top: 0.15rem;
+  }
+  .grp-meta {
+    flex-wrap: wrap;
+    font-size: 0.75rem;
+  }
+  .grp-branch {
+    max-width: none;
+  }
+}
