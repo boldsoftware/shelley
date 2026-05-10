@@ -8720,30 +8720,29 @@ kbd {
     transform: translateY(0);
   }
 
-  /* Top bar with drag grip + close button; gives the user a clear way
-     to dismiss the sheet. */
+  /* Sticky zero-height topbar so the close button floats at the
+     top-right of the visible sheet area instead of pushing the
+     commit subject down onto a second row. */
   .git-graph-sheet-topbar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    height: 1.5rem;
-    margin-bottom: 0.25rem;
+    display: block;
+    position: sticky;
+    top: 0;
+    height: 0;
+    margin: 0;
+    z-index: 2;
+    pointer-events: none;
     flex-shrink: 0;
   }
 
   .git-graph-sheet-grip {
-    display: block;
-    width: 2.5rem;
-    height: 0.25rem;
-    border-radius: 999px;
-    background: var(--border-color);
+    display: none;
   }
 
   .git-graph-sheet-close {
+    pointer-events: auto;
     position: absolute;
-    top: -0.1rem;
-    right: 0.25rem;
+    top: 0.5rem;
+    right: 0.5rem;
     width: 1.75rem;
     height: 1.75rem;
     display: inline-flex;
