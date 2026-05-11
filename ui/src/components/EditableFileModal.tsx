@@ -178,11 +178,31 @@ export default function EditableFileModal({
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      // If vim mode is in a non-normal mode (insert/visual/...), let
+      // monaco-vim handle Escape (to drop back to normal) instead of
+      // closing the modal. Normal mode leaves the status node empty, so a
+      // second Esc still closes the modal as users expect. Vim only
+      // attaches on desktop, so skip the guard on mobile.
+      const vimFocused =
+        containerRef.current?.contains(document.activeElement) ||
+        vimStatusNode?.contains(document.activeElement);
+      if (
+        isDesktop &&
+        vimEnabled &&
+        vimFocused &&
+        (vimStatusNode?.textContent ?? "").trim() !== ""
+      ) {
+        return;
+      }
+      onClose();
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+    // Capture phase so we read the vim status *before* monaco-vim handles
+    // the Escape and clears it (insert -> normal flips status to empty
+    // synchronously, which would otherwise defeat our guard).
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [isOpen, onClose, vimEnabled, isDesktop, vimStatusNode]);
 
   useEffect(() => {
     if (isOpen) return;

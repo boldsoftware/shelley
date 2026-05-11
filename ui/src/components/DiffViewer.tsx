@@ -927,6 +927,23 @@ function DiffViewer({
         ) {
           return;
         }
+        // If vim mode is active in a non-normal mode (insert/visual/...),
+        // let monaco-vim handle Escape (to drop back to normal) instead of
+        // closing the modal. We detect non-normal mode via the vim status
+        // node, which monaco-vim populates with e.g. "-- INSERT --". Normal
+        // mode renders an empty status, so a second Esc still closes the
+        // modal as users expect. Mobile doesn't attach vim, so skip it.
+        const vimFocused =
+          editorContainerRef.current?.contains(document.activeElement) ||
+          vimStatusNode?.contains(document.activeElement);
+        if (
+          !isMobile &&
+          vimEnabled &&
+          vimFocused &&
+          (vimStatusNode?.textContent ?? "").trim() !== ""
+        ) {
+          return;
+        }
         if (showCommentDialog) {
           setShowCommentDialog(null);
         } else {
@@ -1006,7 +1023,10 @@ function DiffViewer({
       }
     };
 
-    // Use capture phase to intercept events before Monaco editor handles them
+    // Use capture phase to intercept events before Monaco editor handles
+    // them. Important for the vim-mode Esc guard: monaco-vim clears the
+    // status bar synchronously when leaving insert/visual mode, so we have
+    // to read it before monaco-vim's own keydown handler runs.
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [
@@ -1019,6 +1039,9 @@ function DiffViewer({
     onClose,
     saveImmediately,
     mode,
+    vimEnabled,
+    vimStatusNode,
+    isMobile,
   ]);
 
   if (!isOpen) return null;
