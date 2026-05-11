@@ -73,6 +73,34 @@ Shelley is a computer program, and, it's an it.
 
 Shelley is Apache licensed. We require a CLA for contributions.
 
+# Using Shelley
+
+## Searching conversation history
+
+You can search your conversation history directly using the `!` command to run SQLite queries against Shelley's database.
+
+### List recent conversations
+
+```bash
+!sqlite3 "$SHELLEY_DB" "SELECT conversation_id, slug, datetime(created_at, 'localtime') as created, datetime(updated_at, 'localtime') as updated FROM conversations ORDER BY updated_at DESC LIMIT 20;"
+```
+
+### Get messages from a specific conversation
+
+Replace `CONVERSATION_ID` with the actual conversation ID from the list above:
+
+```bash
+!sqlite3 "$SHELLEY_DB" "SELECT CASE type WHEN 'user' THEN 'User' ELSE 'Agent' END, substr(json_extract(llm_data, '$.Content[0].Text'), 1, 500) FROM messages WHERE conversation_id='CONVERSATION_ID' AND type IN ('user', 'agent') AND json_extract(llm_data, '$.Content[0].Type') = 2 AND json_extract(llm_data, '$.Content[0].Text') != '' ORDER BY sequence_id;"
+```
+
+### Search conversations by keyword
+
+```bash
+!sqlite3 "$SHELLEY_DB" "SELECT conversation_id, slug FROM conversations WHERE slug LIKE '%SEARCH_TERM%';"
+```
+
+The database location is `$SHELLEY_DB` if set, or `$HOME/.config/shelley/shelley.db` by default.
+
 # Building Shelley
 
 Run `make`. Run `make serve` to start Shelley locally.
