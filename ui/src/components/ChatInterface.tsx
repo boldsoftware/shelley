@@ -23,6 +23,7 @@ import {
   requestBrowserNotificationPermission,
 } from "../services/notifications";
 import MessageComponent from "./Message";
+import ConversationTOC from "./ConversationTOC";
 import MessageTimestamp, { formatDay } from "./MessageTimestamp";
 import MessageInput from "./MessageInput";
 import DiffViewer from "./DiffViewer";
@@ -1868,11 +1869,30 @@ function ChatInterface({
 
   const scrollToBottom = () => {
     const container = messagesContainerRef.current;
-    if (container) {
-      container.scrollTop = container.scrollHeight;
-    }
+    if (!container) return;
     userScrolledRef.current = false;
     setShowScrollToBottom(false);
+    // Content below the viewport often lays out lazily (markdown, code
+    // highlighting, images, tool outputs). A single scrollTop assignment
+    // can land short of the real bottom because scrollHeight grows
+    // after layout settles. Re-pin to the bottom across a few frames
+    // and stop early once it's stable.
+    let lastHeight = -1;
+    let stableCount = 0;
+    let frames = 0;
+    const step = () => {
+      if (!messagesContainerRef.current) return;
+      const el = messagesContainerRef.current;
+      el.scrollTop = el.scrollHeight;
+      if (el.scrollHeight === lastHeight) {
+        if (++stableCount >= 3) return; // height stable for 3 frames -> done
+      } else {
+        stableCount = 0;
+        lastHeight = el.scrollHeight;
+      }
+      if (++frames < 60) requestAnimationFrame(step); // ~1s budget
+    };
+    requestAnimationFrame(step);
   };
 
   // Callback for terminals to insert text into the message input
@@ -3072,22 +3092,37 @@ function ChatInterface({
           )}
         </div>
 
-        {/* Scroll to bottom button - outside scrollable area */}
-        {showScrollToBottom && (
-          <button
-            className="scroll-to-bottom-button"
-            onClick={scrollToBottom}
-            aria-label="Scroll to bottom"
-          >
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="chat-scroll-icon">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 14l-7 7m0 0l-7-7m7 7V3"
-              />
-            </svg>
-          </button>
+        {/* Floating nav cluster: TOC + scroll-to-bottom */}
+        {conversationId && messages.length > 0 && (
+          <div className="chat-nav-cluster">
+            <ConversationTOC
+              messages={messages}
+              containerRef={messagesContainerRef}
+              conversationSlug={currentConversation?.slug}
+            />
+            {showScrollToBottom && (
+              <button
+                className="scroll-to-bottom-button"
+                onClick={scrollToBottom}
+                aria-label="Scroll to bottom"
+                title="Scroll to bottom"
+              >
+                <svg
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  className="chat-scroll-icon"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
