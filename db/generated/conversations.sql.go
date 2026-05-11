@@ -7,6 +7,7 @@ package generated
 
 import (
 	"context"
+	"strings"
 )
 
 const archiveConversation = `-- name: ArchiveConversation :one
@@ -605,6 +606,136 @@ func (q *Queries) SearchConversations(ctx context.Context, arg SearchConversatio
 			&i.CurrentGeneration,
 			&i.AgentWorking,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchConversationsFTSList = `-- name: SearchConversationsFTSList :many
+WITH fts_hits AS (
+  SELECT DISTINCT m.conversation_id
+  FROM messages m
+  JOIN messages_fts ON messages_fts.rowid = m.rowid
+  WHERE messages_fts MATCH ?4
+)
+SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working FROM conversations c
+WHERE c.parent_conversation_id IS NULL
+  AND (
+    c.slug LIKE ?1 ESCAPE '\'
+    OR c.conversation_id IN (SELECT conversation_id FROM fts_hits)
+  )
+ORDER BY c.archived ASC, c.updated_at DESC
+LIMIT ?3 OFFSET ?2
+`
+
+type SearchConversationsFTSListParams struct {
+	SlugLike *string `json:"slug_like"`
+	Offset   int64   `json:"offset"`
+	Limit    int64   `json:"limit"`
+	FtsMatch *string `json:"fts_match"`
+}
+
+// Top-level conversations (active first, then archived) matching either a
+// slug substring or an FTS5 MATCH against messages_fts. The caller builds
+// both the LIKE pattern (with %, _, \ pre-escaped) and the MATCH
+// expression from user input.
+func (q *Queries) SearchConversationsFTSList(ctx context.Context, arg SearchConversationsFTSListParams) ([]Conversation, error) {
+	rows, err := q.db.QueryContext(ctx, searchConversationsFTSList,
+		arg.SlugLike,
+		arg.Offset,
+		arg.Limit,
+		arg.FtsMatch,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Conversation{}
+	for rows.Next() {
+		var i Conversation
+		if err := rows.Scan(
+			&i.ConversationID,
+			&i.Slug,
+			&i.UserInitiated,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Cwd,
+			&i.Archived,
+			&i.ParentConversationID,
+			&i.Model,
+			&i.ConversationOptions,
+			&i.CurrentGeneration,
+			&i.AgentWorking,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchConversationsFTSSnippets = `-- name: SearchConversationsFTSSnippets :many
+SELECT m.conversation_id,
+       snippet(messages_fts, 0, ?1, ?2, '...', 16) AS snippet
+FROM messages m
+JOIN messages_fts ON messages_fts.rowid = m.rowid
+WHERE messages_fts MATCH ?3
+  AND m.conversation_id IN (/*SLICE:conv_ids*/?)
+ORDER BY messages_fts.rank
+`
+
+type SearchConversationsFTSSnippetsParams struct {
+	MarkStart string   `json:"mark_start"`
+	MarkEnd   string   `json:"mark_end"`
+	FtsMatch  *string  `json:"fts_match"`
+	ConvIds   []string `json:"conv_ids"`
+}
+
+type SearchConversationsFTSSnippetsRow struct {
+	ConversationID string `json:"conversation_id"`
+	Snippet        string `json:"snippet"`
+}
+
+// Best snippet per message for the given conversation IDs, ordered by
+// FTS rank so the caller can keep the first row seen per conversation.
+// snippet(table, columnIndex=-1 (any), start, end, ellipsis, tokenCount).
+func (q *Queries) SearchConversationsFTSSnippets(ctx context.Context, arg SearchConversationsFTSSnippetsParams) ([]SearchConversationsFTSSnippetsRow, error) {
+	query := searchConversationsFTSSnippets
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.MarkStart)
+	queryParams = append(queryParams, arg.MarkEnd)
+	queryParams = append(queryParams, arg.FtsMatch)
+	if len(arg.ConvIds) > 0 {
+		for _, v := range arg.ConvIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:conv_ids*/?", strings.Repeat(",?", len(arg.ConvIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:conv_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchConversationsFTSSnippetsRow{}
+	for rows.Next() {
+		var i SearchConversationsFTSSnippetsRow
+		if err := rows.Scan(&i.ConversationID, &i.Snippet); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

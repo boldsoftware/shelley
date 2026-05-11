@@ -486,6 +486,81 @@ button {
   min-height: 0;
 }
 
+/* Drawer search bar (FTS over slug + message content). */
+.drawer-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0 1rem 0.5rem;
+}
+
+.drawer-search-icon {
+  position: absolute;
+  left: 1.625rem;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.drawer-search-input {
+  flex: 1;
+  padding: 0.4rem 1.75rem 0.4rem 2.1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.drawer-search-input:focus {
+  border-color: var(--accent, #4a90e2);
+}
+
+.drawer-search-clear {
+  position: absolute;
+  right: 1.4rem;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0.15rem 0.35rem;
+  line-height: 1;
+}
+
+.drawer-search-clear:hover {
+  color: var(--text);
+}
+
+/* Snippet shown in place of the preview for FTS search results.
+   Wraps to two lines (instead of the single-line preview) so the
+   highlighted match has a real chance of staying on screen. */
+.conversation-snippet {
+  font-style: italic;
+  opacity: 0.85;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.conversation-snippet-mark {
+  background: #fff4a3;
+  color: #000;
+  padding: 0 1px;
+  border-radius: 2px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.dark .conversation-snippet-mark {
+  background: #b08400;
+  color: #fff;
+}
+
 .drawer-section {
   padding: 1rem;
   border-bottom: 1px solid var(--border);

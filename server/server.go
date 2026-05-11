@@ -69,6 +69,10 @@ type ConversationWithState struct {
 	SubagentCount    int64  `json:"subagent_count"`
 	Preview          string `json:"preview,omitempty"`
 	PreviewUpdatedAt string `json:"preview_updated_at,omitempty"`
+	// SearchSnippet is set on hits from /api/conversations/search. Matched
+	// terms are wrapped in \x02..\x03 sentinels (see db.SnippetMarkStart /
+	// SnippetMarkEnd) so the UI can substitute spans without HTML injection.
+	SearchSnippet string `json:"search_snippet,omitempty"`
 }
 
 // StreamResponse represents the response format for conversation streaming
@@ -311,6 +315,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	// API routes - wrap with gzip where beneficial
 	mux.Handle("/api/conversations", gzipHandler(http.HandlerFunc(s.handleConversations)))
 	mux.Handle("GET /api/conversations/snapshot", gzipHandler(http.HandlerFunc(s.handleConversationsSnapshot)))
+	mux.Handle("GET /api/conversations/search", gzipHandler(http.HandlerFunc(s.handleSearchConversations)))
 	mux.Handle("GET /api/stream", http.HandlerFunc(s.handleStream))
 	mux.Handle("/api/conversations/archived", gzipHandler(http.HandlerFunc(s.handleArchivedConversations)))
 	mux.Handle("/api/conversations/new", http.HandlerFunc(s.handleNewConversation))                         // Small response

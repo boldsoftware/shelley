@@ -431,6 +431,122 @@ func (db *DB) SearchConversationsWithMessages(ctx context.Context, query string,
 	return conversations, err
 }
 
+// ConversationSearchResult is a conversation with an optional snippet showing
+// the matched text. Snippets use the sentinel markers "\x02" and "\x03"
+// around hit terms so callers can safely substitute spans without worrying
+// about HTML in message bodies.
+type ConversationSearchResult struct {
+	Conversation generated.Conversation
+	Snippet      string // empty if matched only by slug
+}
+
+// SnippetMarkStart and SnippetMarkEnd surround matched terms inside
+// Snippet strings produced by SearchConversationsFTS.
+const (
+	SnippetMarkStart = "\x02"
+	SnippetMarkEnd   = "\x03"
+)
+
+// SearchConversationsFTS performs a full-text search over user/agent message
+// content (via the messages_fts FTS5 virtual table) and slug substring across
+// ALL top-level conversations (active and archived). Active conversations are
+// returned first, then archived; both buckets are ordered by updated_at DESC.
+// Each FTS hit comes with a Snippet drawn from the best-ranking message;
+// slug-only matches have an empty snippet.
+// The query is the raw user input; this function handles tokenisation and
+// escaping for both the FTS5 MATCH branch and the LIKE branch.
+func (db *DB) SearchConversationsFTS(ctx context.Context, query string, limit, offset int64) ([]ConversationSearchResult, error) {
+	fields := strings.Fields(query)
+	if len(fields) == 0 {
+		return nil, nil
+	}
+
+	// Build an FTS5 MATCH expression: each token becomes a quoted prefix
+	// term, all AND'd together. Escape embedded double quotes by doubling.
+	ftsParts := make([]string, 0, len(fields))
+	for _, f := range fields {
+		ftsParts = append(ftsParts, `"`+strings.ReplaceAll(f, `"`, `""`)+`"*`)
+	}
+	ftsMatch := strings.Join(ftsParts, " AND ")
+
+	// Escape LIKE wildcards (%, _) and the escape char itself in the slug
+	// pattern so typing a literal % doesn't match every conversation.
+	slugEscaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(query)
+	slugLike := "%" + slugEscaped + "%"
+
+	var results []ConversationSearchResult
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		q := generated.New(rx.Conn())
+		convs, err := q.SearchConversationsFTSList(ctx, generated.SearchConversationsFTSListParams{
+			SlugLike: &slugLike,
+			FtsMatch: &ftsMatch,
+			Limit:    limit,
+			Offset:   offset,
+		})
+		if err != nil {
+			return err
+		}
+		results = make([]ConversationSearchResult, len(convs))
+		convIDs := make([]string, len(convs))
+		for i, c := range convs {
+			results[i] = ConversationSearchResult{Conversation: c}
+			convIDs[i] = c.ConversationID
+		}
+		if len(convIDs) == 0 {
+			return nil
+		}
+		snipRows, err := q.SearchConversationsFTSSnippets(ctx, generated.SearchConversationsFTSSnippetsParams{
+			MarkStart: SnippetMarkStart,
+			MarkEnd:   SnippetMarkEnd,
+			FtsMatch:  &ftsMatch,
+			ConvIds:   convIDs,
+		})
+		if err != nil {
+			return err
+		}
+		snippets := make(map[string]string, len(convIDs))
+		for _, r := range snipRows {
+			if _, ok := snippets[r.ConversationID]; ok {
+				continue // first row per conv = best rank
+			}
+			snippets[r.ConversationID] = centerOnMark(r.Snippet, 120)
+		}
+		for i := range results {
+			results[i].Snippet = snippets[results[i].Conversation.ConversationID]
+		}
+		return nil
+	})
+	return results, err
+}
+
+// centerOnMark trims a snippet so the first SnippetMarkStart lands roughly
+// in the middle, keeping at most budget bytes total. FTS5's snippet() uses
+// a token budget, which collapses on long opaque runs (e.g. base64) and can
+// push the actual match off the visible end of the truncated UI line.
+// Centering on the mark guarantees the matched term is in the leading window
+// the UI displays. An ellipsis prefix marks a trimmed-left snippet.
+func centerOnMark(s string, budget int) string {
+	if len(s) <= budget {
+		return s
+	}
+	mark := strings.Index(s, SnippetMarkStart)
+	if mark < 0 {
+		return s
+	}
+	left := budget / 4
+	start := mark - left
+	if start <= 0 {
+		return s
+	}
+	// Snap to the next space so we don't slice through a word, but only if
+	// one is close by; long opaque runs (e.g. base64) have no spaces and we
+	// must just cut.
+	if sp := strings.IndexByte(s[start:], ' '); sp >= 0 && sp < 16 {
+		start += sp + 1
+	}
+	return "..." + s[start:]
+}
+
 // UpdateConversationSlug updates the slug of a conversation
 func (db *DB) UpdateConversationSlug(ctx context.Context, conversationID, slug string) (*generated.Conversation, error) {
 	var conversation generated.Conversation

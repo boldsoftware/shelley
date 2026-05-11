@@ -611,6 +611,28 @@ func (s *Server) conversationListWithState(ctx context.Context, limit, offset in
 	return s.conversationListWithStateInternal(ctx, limit, offset, query, searchContent, false)
 }
 
+// searchConversationsFTSWithState performs a full-text search across active
+// AND archived top-level conversations and decorates the results with the
+// same working/subagent/preview metadata as the regular list.
+func (s *Server) searchConversationsFTSWithState(ctx context.Context, query string, limit, offset int) ([]ConversationWithState, error) {
+	hits, err := s.db.SearchConversationsFTS(ctx, query, int64(limit), int64(offset))
+	if err != nil {
+		return nil, err
+	}
+	conversations := make([]generated.Conversation, len(hits))
+	for i, h := range hits {
+		conversations[i] = h.Conversation
+	}
+	decorated, err := s.decorateConversations(ctx, conversations)
+	if err != nil {
+		return nil, err
+	}
+	for i := range decorated {
+		decorated[i].SearchSnippet = hits[i].Snippet
+	}
+	return decorated, nil
+}
+
 // conversationListWithStateInternal backs both the public list endpoint and the
 // patch stream. When includeSubagents is true the result also contains
 // subagent conversations so the UI can render and diff their working state.
@@ -631,7 +653,12 @@ func (s *Server) conversationListWithStateInternal(ctx context.Context, limit, o
 	if err != nil {
 		return nil, err
 	}
+	return s.decorateConversations(ctx, conversations)
+}
 
+// decorateConversations wraps a list of raw conversation rows with the
+// preview/working/subagent/git metadata used by the conversation list UI.
+func (s *Server) decorateConversations(ctx context.Context, conversations []generated.Conversation) ([]ConversationWithState, error) {
 	// Working state lives on the conversation row itself (see
 	// ResetAllAgentWorking on startup + SetConversationAgentWorking on every
 	// transition), so we don't have to consult the in-memory manager map.
@@ -1544,6 +1571,46 @@ func (s *Server) loadConversationPreviews(ctx context.Context) (map[string]conve
 		}
 	}
 	return result, nil
+}
+
+// handleSearchConversations handles GET /api/conversations/search?q=...
+// Performs an FTS5 full-text search across active AND archived top-level
+// conversations, returning the same shape as /api/conversations so the UI
+// can render results directly.
+func (s *Server) handleSearchConversations(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	limit := 200
+	offset := 0
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if query == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("[]"))
+		return
+	}
+	results, err := s.searchConversationsFTSWithState(r.Context(), query, limit, offset)
+	if err != nil {
+		s.logger.Error("Failed to search conversations", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if results == nil {
+		results = []ConversationWithState{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
 }
 
 // handleArchivedConversations handles GET /api/conversations/archived

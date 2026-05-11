@@ -118,6 +118,7 @@ type conversationWithStateForTS struct {
 	SubagentCount        int64   `json:"subagent_count"`
 	Preview              string  `json:"preview,omitempty"`
 	PreviewUpdatedAt     string  `json:"preview_updated_at,omitempty"`
+	SearchSnippet        string  `json:"search_snippet,omitempty"`
 }
 
 type streamResponseForTS struct {

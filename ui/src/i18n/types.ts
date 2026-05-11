@@ -39,6 +39,9 @@ export interface TranslationKeys {
   searchPlaceholder: string;
   searching: string;
   noResults: string;
+  searchConversations: string;
+  noSearchResults: string;
+  clearSearch: string;
   toNavigate: string;
   toSelect: string;
   toClose: string;

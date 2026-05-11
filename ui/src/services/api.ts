@@ -90,6 +90,17 @@ class ApiService {
     return response.json();
   }
 
+  // searchConversationsFTS performs a full-text search across both active AND
+  // archived top-level conversations, using SQLite FTS5 over message bodies.
+  async searchConversationsFTS(query: string): Promise<ConversationWithState[]> {
+    const params = new URLSearchParams({ q: query });
+    const response = await fetch(`${this.baseUrl}/conversations/search?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to search conversations: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
   async sendMessageWithNewConversation(request: ChatRequest): Promise<{ conversation_id: string }> {
     const response = await fetch(`${this.baseUrl}/conversations/new`, {
       method: "POST",

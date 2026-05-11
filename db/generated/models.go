@@ -53,12 +53,6 @@ type Message struct {
 	Generation          int64     `json:"generation"`
 }
 
-type Migration struct {
-	MigrationNumber int64      `json:"migration_number"`
-	MigrationName   string     `json:"migration_name"`
-	ExecutedAt      *time.Time `json:"executed_at"`
-}
-
 type Model struct {
 	ModelID         string    `json:"model_id"`
 	DisplayName     string    `json:"display_name"`
@@ -81,10 +75,4 @@ type NotificationChannel struct {
 	Config      string    `json:"config"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-type Setting struct {
-	Key       string    `json:"key"`
-	Value     string    `json:"value"`
-	UpdatedAt time.Time `json:"updated_at"`
 }

@@ -2,7 +2,12 @@ version: "2"
 sql:
   - engine: "sqlite"
     queries: "db/query/"
-    schema: "db/schema/"
+    schema:
+      - "db/schema/"
+      # Stubs for things sqlc's parser doesn't understand (e.g. FTS5
+      # virtual tables and their hidden rank / MATCH columns). Loaded
+      # after db/schema/ so the real migrations win at runtime.
+      - "db/sqlc-stubs/"
     gen:
       go:
         package: "generated"
@@ -11,3 +16,4 @@ sql:
         emit_empty_slices: true
         emit_pointers_for_null_types: true
         json_tags_case_style: "snake"
+        omit_unused_structs: true

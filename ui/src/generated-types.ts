@@ -85,6 +85,7 @@ export interface ConversationWithStateForTS {
   subagent_count: number;
   preview?: string;
   preview_updated_at?: string;
+  search_snippet?: string;
 }
 
 export type MessageType = "user" | "agent" | "tool" | "error" | "system" | "gitinfo";

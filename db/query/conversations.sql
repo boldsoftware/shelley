@@ -52,6 +52,26 @@ WHERE c.archived = FALSE
 ORDER BY c.updated_at DESC
 LIMIT ? OFFSET ?;
 
+-- name: SearchConversationsFTSList :many
+-- Top-level conversations (active first, then archived) matching either a
+-- slug substring or an FTS5 MATCH against messages_fts. The caller builds
+-- both the LIKE pattern (with %, _, \ pre-escaped) and the MATCH
+-- expression from user input.
+WITH fts_hits AS (
+  SELECT DISTINCT m.conversation_id
+  FROM messages m
+  JOIN messages_fts ON messages_fts.rowid = m.rowid
+  WHERE messages_fts MATCH @fts_match
+)
+SELECT c.* FROM conversations c
+WHERE c.parent_conversation_id IS NULL
+  AND (
+    c.slug LIKE @slug_like ESCAPE '\'
+    OR c.conversation_id IN (SELECT conversation_id FROM fts_hits)
+  )
+ORDER BY c.archived ASC, c.updated_at DESC
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+
 -- name: SearchArchivedConversations :many
 SELECT * FROM conversations
 WHERE slug LIKE '%' || ? || '%' AND archived = TRUE
@@ -164,3 +184,15 @@ WHERE conversation_id = ?;
 UPDATE conversations
 SET agent_working = FALSE
 WHERE agent_working = TRUE;
+
+-- name: SearchConversationsFTSSnippets :many
+-- Best snippet per message for the given conversation IDs, ordered by
+-- FTS rank so the caller can keep the first row seen per conversation.
+-- snippet(table, columnIndex=-1 (any), start, end, ellipsis, tokenCount).
+SELECT m.conversation_id,
+       snippet(messages_fts, 0, sqlc.arg(mark_start), sqlc.arg(mark_end), '...', 16) AS snippet
+FROM messages m
+JOIN messages_fts ON messages_fts.rowid = m.rowid
+WHERE messages_fts MATCH @fts_match
+  AND m.conversation_id IN (sqlc.slice('conv_ids'))
+ORDER BY messages_fts.rank;

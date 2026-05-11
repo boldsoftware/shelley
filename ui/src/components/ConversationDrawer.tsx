@@ -6,6 +6,43 @@ import { sortConversationsByBucket, maxBucket } from "../utils/conversationSort"
 
 type GroupBy = "none" | "cwd" | "git_repo";
 
+// SNIPPET_MARK_START / END match db.SnippetMarkStart / SnippetMarkEnd on the
+// server. The server wraps every matched FTS term in these sentinel bytes;
+// we split on them here and render the highlighted runs with <mark>.
+const SNIPPET_MARK_START = "\x02";
+const SNIPPET_MARK_END = "\x03";
+
+function stripSnippetMarks(snippet: string): string {
+  return snippet.split(SNIPPET_MARK_START).join("").split(SNIPPET_MARK_END).join("");
+}
+
+function renderSnippet(snippet: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+  while (i < snippet.length) {
+    const start = snippet.indexOf(SNIPPET_MARK_START, i);
+    if (start === -1) {
+      out.push(snippet.slice(i));
+      break;
+    }
+    if (start > i) out.push(snippet.slice(i, start));
+    const end = snippet.indexOf(SNIPPET_MARK_END, start + 1);
+    if (end === -1) {
+      // Malformed; surface remainder as plain text so we don't drop content.
+      out.push(snippet.slice(start + 1));
+      break;
+    }
+    out.push(
+      <mark key={key++} className="conversation-snippet-mark">
+        {snippet.slice(start + 1, end)}
+      </mark>,
+    );
+    i = end + 1;
+  }
+  return out;
+}
+
 interface ConversationDrawerProps {
   isOpen: boolean;
   isCollapsed: boolean;
@@ -69,6 +106,15 @@ function ConversationDrawer({
   const [showArchived, setShowArchived] = useState(false);
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [loadingArchived, setLoadingArchived] = useState(false);
+  // Free-text search across active AND archived conversations. Backed by
+  // SQLite FTS5 on the server; matches slug or message content.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<ConversationWithState[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic counter so out-of-order fetch responses can't overwrite newer
+  // results when the user is typing fast.
+  const searchSeqRef = React.useRef(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingSlug, setEditingSlug] = useState("");
   const [expandedSubagents, setExpandedSubagents] = useState<Set<string>>(new Set());
@@ -100,6 +146,44 @@ function ConversationDrawer({
       loadArchivedConversations();
     }
   }, [showArchived]);
+
+  // Debounced FTS search across active + archived conversations.
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+    // Bump on every input change so any in-flight fetch from a prior query
+    // (including ones whose debounce already fired) can't write stale
+    // results into the UI.
+    const seq = ++searchSeqRef.current;
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = await api.searchConversationsFTS(q);
+        if (seq !== searchSeqRef.current) return; // superseded
+        setSearchResults(results);
+      } catch (err) {
+        if (seq !== searchSeqRef.current) return;
+        console.error("Conversation search failed:", err);
+        setSearchResults([]);
+      } finally {
+        if (seq === searchSeqRef.current) setSearching(false);
+      }
+    }, 150);
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+    };
+  }, [searchQuery]);
 
   // Switch back to active conversations when triggered externally (e.g., after unarchive)
   useEffect(() => {
@@ -331,13 +415,19 @@ function ConversationDrawer({
     () => sortConversationsByBucket(conversations.filter((c) => !c.parent_conversation_id)),
     [conversations],
   );
-  const displayedConversations = showArchived
-    ? sortConversationsByBucket(archivedConversations)
-    : topLevelConversations;
+  // When a search query is active, the FTS results replace the normal list
+  // entirely (they already include both active and archived hits, ordered
+  // active-first by updated_at).
+  const isSearching = searchQuery.trim().length > 0;
+  const displayedConversations = isSearching
+    ? (searchResults ?? [])
+    : showArchived
+      ? sortConversationsByBucket(archivedConversations)
+      : topLevelConversations;
 
   // Compute grouped conversations
   const groupedConversations = useMemo(() => {
-    if (groupBy === "none" || showArchived) return null;
+    if (groupBy === "none" || showArchived || isSearching) return null;
 
     const groups = new Map<string, { label: string; conversations: ConversationWithState[] }>();
     const ungrouped: ConversationWithState[] = [];
@@ -393,20 +483,19 @@ function ConversationDrawer({
     const subagentCount = conversationSubagents.length || convState.subagent_count || 0;
     const hasSubagents = subagentCount > 0;
     const isExpanded = expandedSubagents.has(conversation.conversation_id);
+    // Use the per-row archived flag so search results (which mix active and
+    // archived hits) render the correct action buttons.
+    const itemArchived = conversation.archived;
     return (
       <React.Fragment key={conversation.conversation_id}>
         <div
           className={`conversation-item ${isActive ? "active" : ""}`}
           onClick={(e) => {
-            if (showArchived) return;
             if (handleModifiedClick(e, conversation)) return;
             onSelectConversation(conversation);
           }}
-          onAuxClick={(e) => {
-            if (showArchived) return;
-            handleAuxClick(e, conversation);
-          }}
-          style={{ cursor: showArchived ? "default" : "pointer" }} // Dynamic: cursor depends on showArchived state
+          onAuxClick={(e) => handleAuxClick(e, conversation)}
+          style={{ cursor: "pointer" }}
         >
           <div className="drawer-conversation-item-flex-container">
             <div className="drawer-conversation-header-row">
@@ -434,12 +523,18 @@ function ConversationDrawer({
                 />
               )}
             </div>
-            <div
-              className="conversation-preview"
-              title={(conversation as ConversationWithState).preview || undefined}
-            >
-              {(conversation as ConversationWithState).preview || "\u00a0"}
-            </div>
+            {convState.search_snippet ? (
+              <div
+                className="conversation-preview conversation-snippet"
+                title={stripSnippetMarks(convState.search_snippet)}
+              >
+                {renderSnippet(convState.search_snippet)}
+              </div>
+            ) : (
+              <div className="conversation-preview" title={convState.preview || undefined}>
+                {convState.preview || "\u00a0"}
+              </div>
+            )}
             <div className="conversation-meta">
               <span className="conversation-date">{formatDate(conversation.updated_at)}</span>
               {conversation.cwd && groupBy !== "cwd" && (
@@ -447,7 +542,7 @@ function ConversationDrawer({
                   {formatCwdForDisplay(conversation.cwd)}
                 </span>
               )}
-              {!showArchived && hasSubagents && (
+              {!itemArchived && hasSubagents && (
                 <button
                   onClick={(e) => toggleSubagents(e, conversation.conversation_id)}
                   className="subagent-count-badge"
@@ -474,7 +569,7 @@ function ConversationDrawer({
                   </svg>
                 </button>
               )}
-              {!showArchived && (
+              {!itemArchived && (
                 <div className="conversation-actions drawer-actions-row">
                   <button
                     onClick={(e) => handleStartRename(e, conversation)}
@@ -546,7 +641,7 @@ function ConversationDrawer({
               </div>
             )}
           </div>
-          {showArchived && (
+          {itemArchived && (
             <div className="conversation-actions drawer-actions-row-offset">
               <button
                 onClick={(e) => handleUnarchive(e, conversation.conversation_id)}
@@ -592,7 +687,7 @@ function ConversationDrawer({
           )}
         </div>
         {/* Render subagents if expanded */}
-        {!showArchived && isExpanded && conversationSubagents.length > 0 && (
+        {!itemArchived && isExpanded && conversationSubagents.length > 0 && (
           <div className="subagent-list drawer-subagent-list">
             {conversationSubagents.map((sub) => {
               const isSubActive = sub.conversation_id === currentConversationId;
@@ -737,16 +832,70 @@ function ConversationDrawer({
           </div>
         </div>
 
+        {/* Search bar — FTS over slug + message content, includes archived */}
+        <div className="drawer-search">
+          <svg
+            className="drawer-search-icon"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          <input
+            type="text"
+            className="drawer-search-input"
+            placeholder={t("searchConversations")}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && searchQuery) {
+                e.preventDefault();
+                setSearchQuery("");
+              }
+            }}
+            aria-label={t("searchConversations")}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="drawer-search-clear"
+              onClick={() => setSearchQuery("")}
+              aria-label={t("clearSearch")}
+              title={t("clearSearch")}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
         {/* Conversations list */}
         <div className="drawer-body scrollable">
-          {loadingArchived && showArchived ? (
+          {isSearching && searching && searchResults === null ? (
+            <div className="text-secondary drawer-empty-state">
+              <p>{t("searching")}</p>
+            </div>
+          ) : loadingArchived && showArchived && !isSearching ? (
             <div className="text-secondary drawer-empty-state">
               <p>{t("loading")}</p>
             </div>
           ) : displayedConversations.length === 0 ? (
             <div className="text-secondary drawer-empty-state">
-              <p>{showArchived ? t("noArchivedConversations") : t("noConversationsYet")}</p>
-              {!showArchived && (
+              <p>
+                {isSearching
+                  ? t("noSearchResults")
+                  : showArchived
+                    ? t("noArchivedConversations")
+                    : t("noConversationsYet")}
+              </p>
+              {!showArchived && !isSearching && (
                 <p className="text-sm drawer-empty-state-hint">{t("startNewToGetStarted")}</p>
               )}
             </div>
