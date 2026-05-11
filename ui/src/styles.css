@@ -798,6 +798,52 @@ button {
   color: var(--error-text);
 }
 
+.message-timestamp-row {
+  display: flex;
+  justify-content: center;
+  padding: 0.375rem 0 0.125rem;
+  pointer-events: none;
+}
+
+.message-timestamp {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  line-height: 1.2;
+  user-select: none;
+  pointer-events: auto;
+  transition: opacity 0.15s ease;
+  letter-spacing: 0.02em;
+}
+
+.message-timestamp:hover {
+  opacity: 0.95;
+}
+
+.message-day-separator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  opacity: 0.6;
+  user-select: none;
+}
+
+.message-day-separator::before,
+.message-day-separator::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-color, var(--text-secondary));
+  opacity: 0.25;
+}
+
+.message-day-separator span {
+  white-space: nowrap;
+}
+
 /* Tool Display */
 .tool-use {
   background: var(--blue-bg);

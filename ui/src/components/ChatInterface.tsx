@@ -23,6 +23,7 @@ import {
   requestBrowserNotificationPermission,
 } from "../services/notifications";
 import MessageComponent from "./Message";
+import MessageTimestamp, { formatDay } from "./MessageTimestamp";
 import MessageInput from "./MessageInput";
 import DiffViewer from "./DiffViewer";
 import MessageSelectionToolbar from "./MessageSelectionToolbar";
@@ -2226,6 +2227,42 @@ function ChatInterface({
 
     const generations = Array.from(generationSet).sort((a, b) => a - b);
 
+    // Track the most recent timestamp we've shown so we only emit a new one
+    // when the wall-clock minute (or day) advances. State is mutated as we
+    // walk through items in order.
+    const tsState: { lastMin: number | null; lastDay: string | null; now: Date } = {
+      lastMin: null,
+      lastDay: null,
+      now: new Date(),
+    };
+
+    const itemTime = (item: CoalescedItem): string | null => {
+      if (item.type === "tool") return item.toolStartTime || null;
+      return item.message?.created_at || null;
+    };
+
+    const maybeTimestamp = (iso: string | null, keyPrefix: string): React.ReactNode | null => {
+      if (!iso) return null;
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return null;
+      const minBucket = Math.floor(d.getTime() / 60_000);
+      const dayKey = d.toDateString();
+      if (tsState.lastMin === minBucket && tsState.lastDay === dayKey) return null;
+      const showDay = tsState.lastDay !== dayKey;
+      tsState.lastMin = minBucket;
+      tsState.lastDay = dayKey;
+      return (
+        <React.Fragment key={`ts-${keyPrefix}`}>
+          {showDay && (
+            <div className="message-day-separator" data-testid="message-day-separator">
+              <span>{formatDay(d, tsState.now)}</span>
+            </div>
+          )}
+          <MessageTimestamp createdAt={iso} />
+        </React.Fragment>
+      );
+    };
+
     const rendered = generations.flatMap((generation, generationIndex) => {
       const items = itemsByGeneration.get(generation) || [];
       const sectionItems: React.ReactNode[] = [
@@ -2246,6 +2283,11 @@ function ChatInterface({
       });
 
       items.forEach((item, index) => {
+        const tsNode = maybeTimestamp(
+          itemTime(item),
+          item.message?.message_id || item.toolUseId || `g${generation}-i${index}`,
+        );
+        if (tsNode) sectionItems.push(tsNode);
         if (item.type === "message" && item.message) {
           sectionItems.push(
             <MessageComponent
