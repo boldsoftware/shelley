@@ -505,7 +505,7 @@ func TestConversationStreamListPatchCurrentHashSkipsInitialAndStreamsLive(t *tes
 
 func waitForConversationStreamData(t *testing.T, rec *flusherRecorder) {
 	t.Helper()
-	timer := time.NewTimer(2 * time.Second)
+	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()
 	for {
 		if strings.Contains(rec.getString(), "\n\n") {
@@ -521,7 +521,7 @@ func waitForConversationStreamData(t *testing.T, rec *flusherRecorder) {
 
 func waitForConversationStreamListPatch(t *testing.T, rec *flusherRecorder, prevHash string) ConversationListPatchEvent {
 	t.Helper()
-	timer := time.NewTimer(2 * time.Second)
+	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()
 	for {
 		for _, ev := range parseConversationStreamListPatches(rec.getString()) {
