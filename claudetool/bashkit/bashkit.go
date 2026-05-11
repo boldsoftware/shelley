@@ -385,6 +385,26 @@ func addTrailerToGitCommit(cmd *syntax.CallExpr, trailer string) bool {
 		return false
 	}
 
+	// Override git's default --trailer policy. The default is
+	// addIfDifferentNeighbor, which only compares against the trailer
+	// immediately preceding ours; if a user-authored commit message already
+	// has this trailer but another trailer (e.g. `CC: ...`) sits between it
+	// and the end, git re-appends and we get a duplicate. addIfDifferent
+	// compares against all trailers in the message. This is inserted before
+	// `commit`, so it appears in cmd.Args at insertIdx-1's position.
+	configArg := &syntax.Word{
+		Parts: []syntax.WordPart{&syntax.Lit{Value: "-c"}},
+	}
+	configVal := &syntax.Word{
+		Parts: []syntax.WordPart{
+			&syntax.DblQuoted{
+				Parts: []syntax.WordPart{
+					&syntax.Lit{Value: "trailer.ifexists=addIfDifferent"},
+				},
+			},
+		},
+	}
+
 	// Create --trailer argument
 	trailerArg := &syntax.Word{
 		Parts: []syntax.WordPart{
@@ -402,11 +422,13 @@ func addTrailerToGitCommit(cmd *syntax.CallExpr, trailer string) bool {
 		},
 	}
 
-	// Insert the two new arguments
-	newArgs := make([]*syntax.Word, 0, len(cmd.Args)+2)
-	newArgs = append(newArgs, cmd.Args[:insertIdx]...)
-	newArgs = append(newArgs, trailerArg, trailerVal)
-	newArgs = append(newArgs, cmd.Args[insertIdx:]...)
+	// Insert -c <config> before 'commit' (at insertIdx-1) and --trailer
+	// <value> after 'commit' (at insertIdx).
+	commitIdx := insertIdx - 1
+	newArgs := make([]*syntax.Word, 0, len(cmd.Args)+4)
+	newArgs = append(newArgs, cmd.Args[:commitIdx]...)
+	newArgs = append(newArgs, configArg, configVal, cmd.Args[commitIdx], trailerArg, trailerVal)
+	newArgs = append(newArgs, cmd.Args[commitIdx+1:]...)
 	cmd.Args = newArgs
 
 	return true

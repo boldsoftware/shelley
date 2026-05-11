@@ -1,6 +1,9 @@
 package bashkit
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -809,5 +812,124 @@ func TestChainsCdWithCommand(t *testing.T) {
 				t.Errorf("ChainsCdWithCommand(%q) = %v, want %v", tc.script, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestAddCoauthorTrailer(t *testing.T) {
+	const trailer = "Co-authored-by: Shelley <shelley@exe.dev>"
+	tests := []struct {
+		name     string
+		in       string
+		wantSubs []string // substrings that must appear in the output
+		wantSame bool     // expect output unchanged
+	}{
+		{
+			name:     "non-commit unchanged",
+			in:       "echo hello",
+			wantSame: true,
+		},
+		{
+			name: "git commit gets -c and --trailer",
+			in:   `git commit -m "hi"`,
+			wantSubs: []string{
+				`-c "trailer.ifexists=addIfDifferent"`,
+				`--trailer "Co-authored-by: Shelley <shelley@exe.dev>"`,
+			},
+		},
+		{
+			name: "git commit --amend",
+			in:   `git commit --amend -F msg.txt`,
+			wantSubs: []string{
+				`-c "trailer.ifexists=addIfDifferent"`,
+				`--trailer "Co-authored-by: Shelley <shelley@exe.dev>"`,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := AddCoauthorTrailer(tc.in, trailer)
+			if tc.wantSame {
+				if got != tc.in {
+					t.Fatalf("expected unchanged, got: %q", got)
+				}
+				return
+			}
+			for _, sub := range tc.wantSubs {
+				if !strings.Contains(got, sub) {
+					t.Errorf("output missing %q\noutput: %s", sub, got)
+				}
+			}
+			// -c must come before commit.
+			dashC := strings.Index(got, "-c ")
+			commit := strings.Index(got, "commit")
+			if dashC < 0 || commit < 0 || dashC > commit {
+				t.Errorf("expected -c before commit; got: %s", got)
+			}
+		})
+	}
+}
+
+// TestAddCoauthorTrailer_NoDuplicates is the end-to-end check: run the
+// rewritten command through real git and confirm we don't end up with two
+// identical Co-authored-by lines when the message already has one (with
+// another trailer following it).
+func TestAddCoauthorTrailer_NoDuplicates(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	const trailer = "Co-authored-by: Shelley <shelley@exe.dev>"
+
+	dir := t.TempDir()
+	runGit := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e",
+		)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return string(out)
+	}
+	runGit("init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, "f"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit("add", "f")
+
+	// Write a commit message that already contains the trailer, plus an
+	// additional trailer (CC: ...) after it. With git's default policy of
+	// addIfDifferentNeighbor, naively passing --trailer would duplicate.
+	msgPath := filepath.Join(dir, "MSG")
+	msg := "subj\n\nbody\n\n" + trailer + "\nCC: philip\n"
+	if err := os.WriteFile(msgPath, []byte(msg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rewritten := AddCoauthorTrailer("git commit -F MSG", trailer)
+	if rewritten == "git commit -F MSG" {
+		t.Fatalf("AddCoauthorTrailer did not rewrite the command")
+	}
+
+	cmd := exec.Command("bash", "-c", rewritten)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e",
+		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e",
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("running %q failed: %v\n%s", rewritten, err, out)
+	}
+
+	log := runGit("log", "-1", "--format=%B")
+	if n := strings.Count(log, trailer); n != 1 {
+		t.Fatalf("expected exactly 1 occurrence of trailer, got %d\nlog:\n%s", n, log)
+	}
+	if !strings.Contains(log, "CC: philip") {
+		t.Errorf("expected CC: philip preserved\nlog:\n%s", log)
 	}
 }
