@@ -151,9 +151,14 @@ const (
 //	  }
 //	}
 //
-// The hook should output the same top-level JSON shape (prompt, model, cwd).
+// The hook should output the same top-level JSON shape (prompt, model, cwd, slug).
 // Only the mutable fields are read from the output; "readonly" is ignored.
-// Empty output means no changes.
+// Empty output means no changes. Unknown fields are ignored.
+//
+// If "slug" is set, it replaces Shelley's async LLM-generated slug for the new
+// conversation. The slug is sanitized via slug.Sanitize before use; if the
+// sanitized form is empty, or the slug collides with an existing one, Shelley
+// falls back to its normal async slug generation.
 type NewConversationHookInput struct {
 	// Mutable fields — the hook may change these.
 	Prompt string `json:"prompt"`
@@ -180,6 +185,7 @@ type NewConversationHookResult struct {
 	Prompt string
 	Model  string
 	Cwd    string
+	Slug   string
 }
 
 // RunNewConversationHook runs the new-conversation hook if it exists.
@@ -232,6 +238,7 @@ func RunNewConversationHook(input NewConversationHookInput) NewConversationHookR
 		Prompt string `json:"prompt"`
 		Model  string `json:"model"`
 		Cwd    string `json:"cwd"`
+		Slug   string `json:"slug"`
 	}
 	if err := json.Unmarshal([]byte(output), &hookOut); err != nil {
 		slog.Error("new-conversation hook: invalid JSON output", "error", err, "output", output)
@@ -248,12 +255,16 @@ func RunNewConversationHook(input NewConversationHookInput) NewConversationHookR
 	if hookOut.Model != "" {
 		result.Model = hookOut.Model
 	}
+	if hookOut.Slug != "" {
+		result.Slug = hookOut.Slug
+	}
 
 	if result != original {
 		slog.Info("new-conversation hook applied overrides",
 			"cwdChanged", result.Cwd != original.Cwd,
 			"promptChanged", result.Prompt != original.Prompt,
 			"modelChanged", result.Model != original.Model,
+			"slugChanged", result.Slug != original.Slug,
 		)
 	}
 

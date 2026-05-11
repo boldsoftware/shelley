@@ -940,6 +940,20 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Message = hookResult.Prompt
 
+	// If the hook supplied a slug, apply it now (synchronously) so that the
+	// first-message goroutine below can skip its async LLM slug generation.
+	// On failure (sanitize-to-empty, unique collision, DB error) we silently
+	// fall back to the async slug; that path also handles uniqueness via
+	// numeric suffixes.
+	hookSlugApplied := false
+	if sanitized := slug.Sanitize(hookResult.Slug); sanitized != "" {
+		if _, err := s.db.UpdateConversationSlug(ctx, conversationID, sanitized); err != nil {
+			s.logger.Warn("Failed to apply slug from new-conversation hook; falling back to async slug", "conversationID", conversationID, "slug", sanitized, "error", err)
+		} else {
+			hookSlugApplied = true
+		}
+	}
+
 	// Notify conversation list subscribers about the new conversation
 	go s.publishConversationListUpdate(ConversationListUpdate{
 		Type:         "update",
@@ -979,7 +993,7 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if firstMessage {
+	if firstMessage && !hookSlugApplied {
 		ctxNoCancel := context.WithoutCancel(ctx)
 		go func() {
 			slugCtx, cancel := context.WithTimeout(ctxNoCancel, 15*time.Second)

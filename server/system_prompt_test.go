@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -455,7 +456,7 @@ func TestRunNewConversationHookOverridesAllMutableFields(t *testing.T) {
 
 	hookPath := filepath.Join(hookDir, "new-conversation")
 	script := `#!/bin/sh
-echo '{"prompt": "modified prompt", "model": "new-model", "cwd": "/new/dir"}'`
+echo '{"prompt": "modified prompt", "model": "new-model", "cwd": "/new/dir", "slug": "hook-slug"}'`
 	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -473,6 +474,45 @@ echo '{"prompt": "modified prompt", "model": "new-model", "cwd": "/new/dir"}'`
 	}
 	if result.Cwd != "/new/dir" {
 		t.Errorf("expected /new/dir, got %q", result.Cwd)
+	}
+	if result.Slug != "hook-slug" {
+		t.Errorf("expected hook-slug, got %q", result.Slug)
+	}
+}
+
+func TestRunNewConversationHookSlugOnly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hookDir := filepath.Join(home, ".config", "shelley", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	hookPath := filepath.Join(hookDir, "new-conversation")
+	script := `#!/bin/sh
+echo '{"slug": "my-slug"}'`
+	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result := RunNewConversationHook(NewConversationHookInput{
+		Prompt: "original prompt",
+		Model:  "original-model",
+		Cwd:    "/original/dir",
+	})
+	if result.Slug != "my-slug" {
+		t.Errorf("expected my-slug, got %q", result.Slug)
+	}
+	// Other fields should be unchanged.
+	if result.Prompt != "original prompt" {
+		t.Errorf("expected original prompt, got %q", result.Prompt)
+	}
+	if result.Model != "original-model" {
+		t.Errorf("expected original-model, got %q", result.Model)
+	}
+	if result.Cwd != "/original/dir" {
+		t.Errorf("expected /original/dir, got %q", result.Cwd)
 	}
 }
 
@@ -794,5 +834,36 @@ This is a test skill for orchestrators.
 	}
 	if !strings.Contains(prompt, "An orchestrator test skill") {
 		t.Errorf("orchestrator subagent prompt should contain the test skill description")
+	}
+}
+
+func TestNewConversationHookAppliesSlug(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hookDir := filepath.Join(home, ".config", "shelley", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(hookDir, "new-conversation")
+	script := `#!/bin/sh
+echo '{"slug": "Hello World!"}'`
+	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	h := NewTestHarness(t)
+	h.NewConversation("first message", "")
+
+	// Read back the conversation; slug should have been applied + sanitized.
+	conv, err := h.db.GetConversationByID(context.Background(), h.convID)
+	if err != nil {
+		t.Fatalf("GetConversation: %v", err)
+	}
+	if conv.Slug == nil {
+		t.Fatalf("slug not set on conversation")
+	}
+	if *conv.Slug != "hello-world" {
+		t.Errorf("slug = %q, want %q", *conv.Slug, "hello-world")
 	}
 }
