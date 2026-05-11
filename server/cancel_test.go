@@ -48,6 +48,9 @@ func newTestServer(t *testing.T) (*Server, *db.DB, *loop.PredictableService) {
 		claudetool.ToolSetConfig{EnableBrowser: false},
 		slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelWarn})),
 		true, "predictable", "")
+	if svr.terminals != nil {
+		svr.terminals.SetSpawner(InProcessSpawner)
+	}
 	return svr, database, ps
 }
 

@@ -51,6 +51,7 @@ func main() {
 		fmt.Fprintf(flag.CommandLine.Output(), "  serve [flags]                 Start the web server\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  client [flags] <subcommand>   CLI client (chat, read, list, archive) (experimental)\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  skill <cat|ls|new> [name]     Read, list, or create skills\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  dtach <new|attach> ...        Persistent PTY sessions over a Unix socket\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  unpack-template <name> <dir>  Unpack a project template to a directory\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  version                       Print version information as JSON\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "\nUse '%s <command> -h' for command-specific help\n", os.Args[0])
@@ -73,6 +74,8 @@ func main() {
 		client.Run(args[1:])
 	case "skill":
 		runSkill(args[1:])
+	case "dtach":
+		runDtach(args[1:])
 	case "unpack-template":
 		runUnpackTemplate(args[1:])
 	case "version":

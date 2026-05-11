@@ -269,6 +269,7 @@ type Server struct {
 	conversationListGitCache *conversationListGitCache
 	shutdownCh               chan struct{} // Signals background routines to stop
 	listenPort               int           // TCP port the server is listening on
+	terminals                *TerminalSessions
 }
 
 // NewServer creates a new server instance
@@ -289,6 +290,25 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 
 	s.conversationListStream = newConversationListStream(s)
 	s.conversationListGitCache = newConversationListGitCache()
+
+	// Persistent terminal sessions live alongside the database so that they
+	// survive shelley restarts. In tests DBPath is empty; use a unique
+	// per-process dir so concurrent tests don't see each other.
+	var termDir string
+	if DBPath != "" {
+		termDir = filepath.Join(filepath.Dir(DBPath), "terminals")
+	} else {
+		td, err := os.MkdirTemp("", "shelley-terminals-")
+		if err != nil {
+			panic(fmt.Errorf("terminal sessions tempdir: %w", err))
+		}
+		termDir = td
+	}
+	ts, terr := NewTerminalSessions(termDir, logger)
+	if terr != nil {
+		panic(fmt.Errorf("init terminal sessions in %s: %w", termDir, terr))
+	}
+	s.terminals = ts
 
 	// Any committed write may change the conversation list. Refresh after
 	// every Tx commit so SSE clients always see the current state. This is
@@ -342,6 +362,9 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/write-file", http.HandlerFunc(s.handleWriteFile))                                             // Small response
 	mux.Handle("/api/user-agents-md", http.HandlerFunc(s.handleUserAgentsMd))                                      // Small response
 	mux.HandleFunc("/api/exec-ws", s.handleExecWS)                                                                 // Websocket for shell commands
+	mux.HandleFunc("GET /api/terminals", s.handleTerminalsList)                                                    // List persistent dtach sessions
+	mux.HandleFunc("DELETE /api/terminals/{id}", s.handleTerminalDelete)
+	mux.HandleFunc("POST /api/terminals/{id}/kill", s.handleTerminalDelete)
 
 	// Custom models API
 	mux.Handle("/api/custom-models", http.HandlerFunc(s.handleCustomModels))

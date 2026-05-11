@@ -135,8 +135,55 @@ function App() {
   const [navigateUserMessageTrigger, setNavigateUserMessageTrigger] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Global ephemeral terminals - persist across conversation switches
+  // Global ephemeral terminals - persist across conversation switches and
+  // (via dtach sessions on the server) page reloads. We hydrate from the
+  // server's terminal list on mount.
   const [ephemeralTerminals, setEphemeralTerminals] = useState<EphemeralTerminal[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/terminals")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: Array<{ id: string; command: string; cwd: string; created_at: string }>) => {
+        if (cancelled || !Array.isArray(rows) || rows.length === 0) return;
+        setEphemeralTerminals((prev) => {
+          const have = new Set(prev.map((t) => t.termId).filter(Boolean));
+          const restored: EphemeralTerminal[] = rows
+            .filter((r) => !have.has(r.id))
+            .map((r) => ({
+              id: r.id,
+              termId: r.id,
+              command: r.command,
+              cwd: r.cwd,
+              createdAt: new Date(r.created_at || Date.now()),
+            }));
+          return [...restored, ...prev];
+        });
+      })
+      .catch((err) => {
+        console.warn("failed to fetch persistent terminals:", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleTerminalAttached = useCallback((id: string, termId: string) => {
+    setEphemeralTerminals((prev) => prev.map((t) => (t.id === id ? { ...t, termId } : t)));
+  }, []);
+
+  const handleTerminalClose = useCallback((id: string) => {
+    setEphemeralTerminals((prev) => {
+      const t = prev.find((x) => x.id === id);
+      if (t && t.termId) {
+        // Best-effort: tell the server to kill the persistent session.
+        fetch(`/api/terminals/${encodeURIComponent(t.termId)}`, { method: "DELETE" }).catch((err) =>
+          console.warn("failed to delete terminal:", err),
+        );
+      }
+      return prev.filter((x) => x.id !== id);
+    });
+  }, []);
   const [showActiveTrigger, setShowActiveTrigger] = useState(0);
   const initialSlugResolved = useRef(false);
   const conversationListHashRef = useRef<string | null>(null);
@@ -719,6 +766,8 @@ function App() {
               onOpenModelsModal={() => setModelsModalOpen(true)}
               ephemeralTerminals={ephemeralTerminals}
               setEphemeralTerminals={setEphemeralTerminals}
+              onTerminalAttached={handleTerminalAttached}
+              onTerminalClose={handleTerminalClose}
               navigateUserMessageTrigger={navigateUserMessageTrigger}
               onConversationUnarchived={handleConversationUnarchived}
             />

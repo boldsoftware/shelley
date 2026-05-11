@@ -589,6 +589,8 @@ interface ChatInterfaceProps {
   onOpenModelsModal?: () => void;
   ephemeralTerminals: EphemeralTerminal[];
   setEphemeralTerminals: React.Dispatch<React.SetStateAction<EphemeralTerminal[]>>;
+  onTerminalAttached?: (id: string, termId: string) => void;
+  onTerminalClose?: (id: string) => void;
   navigateUserMessageTrigger?: number; // positive = next, negative = previous
   onConversationUnarchived?: (conversation: Conversation) => void;
 }
@@ -719,6 +721,8 @@ function ChatInterface({
   onOpenModelsModal,
   ephemeralTerminals,
   setEphemeralTerminals,
+  onTerminalAttached,
+  onTerminalClose,
   navigateUserMessageTrigger,
   onConversationUnarchived,
 }: ChatInterfaceProps) {
@@ -3129,7 +3133,14 @@ function ChatInterface({
       {/* Terminal Panel - between messages and status bar */}
       <TerminalPanel
         terminals={ephemeralTerminals}
-        onClose={(id) => setEphemeralTerminals((prev) => prev.filter((t) => t.id !== id))}
+        onAttached={onTerminalAttached}
+        onClose={(id) => {
+          if (onTerminalClose) {
+            onTerminalClose(id);
+          } else {
+            setEphemeralTerminals((prev) => prev.filter((t) => t.id !== id));
+          }
+        }}
         onInsertIntoInput={handleInsertFromTerminal}
         autoFocusId={terminalAutoFocusId}
         onAutoFocusConsumed={() => setTerminalAutoFocusId(null)}
