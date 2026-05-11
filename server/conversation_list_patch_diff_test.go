@@ -78,6 +78,25 @@ func TestComputeListPatchReorder(t *testing.T) {
 	roundTrip(t, old, new, ops)
 }
 
+// TestComputeListPatchAddOmitemptyField makes sure that when a field is
+// absent from the old item (e.g. an `omitempty` JSON field) and present in
+// the new item, the resulting op is `add` rather than `replace`. RFC 6902
+// `replace` requires the target to exist; emitting `replace` here would
+// cause clients to reject the patch with "missing object key".
+func TestComputeListPatchAddOmitemptyField(t *testing.T) {
+	old := []ConversationWithState{mkConv("a", "alpha", false)}
+	new := []ConversationWithState{mkConv("a", "alpha", false)}
+	new[0].GitWorktreeRoot = "/tmp/worktree"
+	ops, err := computeListPatch(old, new)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ops) != 1 || ops[0].Op != "add" || ops[0].Path != "/0/git_worktree_root" {
+		t.Fatalf("expected single add of /0/git_worktree_root, got %+v", ops)
+	}
+	roundTrip(t, old, new, ops)
+}
+
 func TestComputeListPatchIdentity(t *testing.T) {
 	old := []ConversationWithState{mkConv("a", "alpha", false)}
 	ops, err := computeListPatch(old, old)

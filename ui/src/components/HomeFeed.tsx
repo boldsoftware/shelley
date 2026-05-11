@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { ConversationWithState, Model } from "../types";
-import { api } from "../services/api";
 import { useMarkdown } from "../contexts/MarkdownContext";
 import { ThemeMode, getStoredTheme, setStoredTheme, applyTheme } from "../services/theme";
 import { useI18n } from "../i18n";
@@ -62,10 +61,6 @@ function HomeFeed({
   hostname,
 }: HomeFeedProps) {
   const { t } = useI18n();
-  const [previews, setPreviews] = useState<Record<string, { text: string; updated_at: string }>>(
-    {},
-  );
-  const [loadingPreviews, setLoadingPreviews] = useState(true);
   const [sending, setSending] = useState(false);
   const [selectedModel, setSelectedModel] = useState(defaultModel);
   const [selectedCwd, setSelectedCwd] = useState(
@@ -100,19 +95,6 @@ function HomeFeed({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showOverflowMenu]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await api.getConversationPreviews();
-        setPreviews(data);
-      } catch {
-        // Previews are best-effort
-      } finally {
-        setLoadingPreviews(false);
-      }
-    })();
-  }, []);
 
   // Update selectedCwd when mostRecentCwd changes (only if no cwd set yet)
   const selectedCwdRef = useRef(selectedCwd);
@@ -423,7 +405,7 @@ function HomeFeed({
             </div>
           ) : (
             conversations.map((conv, idx) => {
-              const preview = previews[conv.conversation_id];
+              const previewText = conv.preview ?? "";
               const slug = conv.slug || conv.conversation_id.slice(0, 8);
               const updatedAt = new Date(conv.updated_at);
               const isReplying = replyingTo === conv.conversation_id;
@@ -473,15 +455,13 @@ function HomeFeed({
                       className="hf-row-preview"
                       onClick={() => setReplyingTo(isReplying ? null : conv.conversation_id)}
                     >
-                      {loadingPreviews ? (
-                        <div className="hf-skeleton" />
-                      ) : preview?.text ? (
+                      {previewText ? (
                         markdownMode !== "off" ? (
                           <div className="hf-prose">
-                            <MarkdownContent text={preview.text} />
+                            <MarkdownContent text={previewText} />
                           </div>
                         ) : (
-                          <p className="hf-preview-text">{preview.text}</p>
+                          <p className="hf-preview-text">{previewText}</p>
                         )
                       ) : (
                         <p className="hf-preview-text hf-preview-empty">

@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -35,6 +34,12 @@ type ConversationListPatchEvent struct {
 type conversationListStream struct {
 	server *Server
 
+	// recomputeMu serializes recompute() invocations so concurrent commit
+	// hooks produce events in a consistent oldHash->newHash chain. Without
+	// this, two concurrent recomputes can race after their DB reads and
+	// publish events out of order, leaving subscribers with a stale view.
+	recomputeMu sync.Mutex
+
 	mu          sync.Mutex
 	cond        *sync.Cond
 	listeners   int
@@ -63,7 +68,14 @@ func (cls *conversationListStream) notify(ctx context.Context) error {
 }
 
 func (cls *conversationListStream) recompute(ctx context.Context) error {
-	nextList, err := cls.server.conversationListWithState(ctx, 5000, 0, "", false)
+	// Serialize: the DB read below and the subsequent currentHash/currentList
+	// update must be atomic relative to other recomputes, otherwise a slower
+	// reader can overwrite a fresher snapshot and emit a patch that walks
+	// state backwards.
+	cls.recomputeMu.Lock()
+	defer cls.recomputeMu.Unlock()
+
+	nextList, err := cls.server.conversationListWithStateInternal(ctx, 5000, 0, "", false, true)
 	if err != nil {
 		return err
 	}
@@ -219,67 +231,23 @@ func (cls *conversationListStream) initialEventsLocked(oldHash string) ([]Conver
 	return []ConversationListPatchEvent{reset}, len(cls.history), nil
 }
 
+// snapshot returns the current list and its hash, recomputing first to make
+// sure the value reflects the latest committed state. Callers use this to
+// seed clients before they subscribe.
+func (cls *conversationListStream) snapshot(ctx context.Context) ([]ConversationWithState, string, error) {
+	if err := cls.recompute(ctx); err != nil {
+		return nil, "", err
+	}
+	cls.mu.Lock()
+	defer cls.mu.Unlock()
+	list := append([]ConversationWithState(nil), cls.currentList...)
+	return list, cls.currentHash, nil
+}
+
 func (cls *conversationListStream) debugHistory() []ConversationListPatchEvent {
 	cls.mu.Lock()
 	defer cls.mu.Unlock()
 	return append([]ConversationListPatchEvent(nil), cls.history...)
-}
-
-func (s *Server) handleConversationListStream(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
-		return
-	}
-
-	initial, next, release, err := s.conversationListStream.connect(r.Context(), r.URL.Query().Get("old_hash"))
-	if err != nil {
-		s.logger.Error("failed to initialize conversation list stream", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-	defer release()
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-
-	writeEvent := func(event ConversationListPatchEvent) bool {
-		if err := writeSSEJSON(w, "patch", event); err != nil {
-			s.logger.Debug("conversation list stream write failed", "error", err)
-			return false
-		}
-		flusher.Flush()
-		return true
-	}
-	for _, event := range initial {
-		if !writeEvent(event) {
-			return
-		}
-	}
-	for {
-		event, ok := next()
-		if !ok {
-			return
-		}
-		if !writeEvent(event) {
-			return
-		}
-	}
-}
-
-func writeSSEJSON(w http.ResponseWriter, event string, value any) error {
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, raw)
-	return err
 }
 
 func (s *Server) handleDebugConversationStreamHistory(w http.ResponseWriter, r *http.Request) {

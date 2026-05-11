@@ -2,9 +2,9 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMe
 import {
   Message,
   Conversation,
+  ConversationListPatchEvent,
   StreamResponse,
   LLMContent,
-  ConversationListUpdate,
   ToolProgress,
   isDistillStatusMessage,
   isQueuedMessage,
@@ -548,12 +548,6 @@ function AnimatedWorkingStatus() {
   );
 }
 
-interface ConversationStateUpdate {
-  conversation_id: string;
-  working: boolean;
-  model?: string;
-}
-
 interface ChatInterfaceProps {
   conversationId: string | null;
   onOpenDrawer: () => void;
@@ -561,8 +555,8 @@ interface ChatInterfaceProps {
   onArchiveConversation?: (conversationId: string) => Promise<void>;
   currentConversation?: Conversation;
   onConversationUpdate?: (conversation: Conversation) => void;
-  onConversationListUpdate?: (update: ConversationListUpdate) => void;
-  onConversationStateUpdate?: (state: ConversationStateUpdate) => void;
+  conversationListHash?: string | null;
+  onConversationListPatch?: (event: ConversationListPatchEvent) => void;
   onFirstMessage?: (
     message: string,
     model: string,
@@ -592,7 +586,6 @@ interface ChatInterfaceProps {
   openDiffViewerTrigger?: number; // increment to trigger opening diff viewer
   modelsRefreshTrigger?: number; // increment to trigger models list refresh
   onOpenModelsModal?: () => void;
-  onReconnect?: () => void;
   ephemeralTerminals: EphemeralTerminal[];
   setEphemeralTerminals: React.Dispatch<React.SetStateAction<EphemeralTerminal[]>>;
   navigateUserMessageTrigger?: number; // positive = next, negative = previous
@@ -711,8 +704,8 @@ function ChatInterface({
   onArchiveConversation,
   currentConversation,
   onConversationUpdate,
-  onConversationListUpdate,
-  onConversationStateUpdate,
+  conversationListHash,
+  onConversationListPatch,
   onFirstMessage,
   onDistillConversation,
   onDistillReplaceConversation,
@@ -723,7 +716,6 @@ function ChatInterface({
   openDiffViewerTrigger,
   modelsRefreshTrigger,
   onOpenModelsModal,
-  onReconnect,
   ephemeralTerminals,
   setEphemeralTerminals,
   navigateUserMessageTrigger,
@@ -1473,10 +1465,11 @@ function ChatInterface({
 
     // Use last_sequence_id to resume from where we left off (avoids resending all messages)
     const lastSeqId = lastSequenceIdRef.current;
-    const eventSource = api.createMessageStream(
+    const eventSource = api.createStream({
       conversationId,
-      lastSeqId >= 0 ? lastSeqId : undefined,
-    );
+      lastSequenceId: lastSeqId >= 0 ? lastSeqId : undefined,
+      conversationListHash: conversationListHash ?? undefined,
+    });
     eventSourceRef.current = eventSource;
 
     eventSource.onmessage = (event) => {
@@ -1569,24 +1562,20 @@ function ChatInterface({
           conversationCache.updateConversation(conversationId, streamResponse.conversation);
         }
 
-        // Handle conversation list updates (for other conversations)
-        if (onConversationListUpdate && streamResponse.conversation_list_update) {
-          onConversationListUpdate(streamResponse.conversation_list_update);
+        if (onConversationListPatch && streamResponse.conversation_list_patch) {
+          onConversationListPatch(streamResponse.conversation_list_patch);
         }
 
-        // Handle conversation state updates (explicit from server)
-        if (streamResponse.conversation_state) {
-          // Update the conversations list with new working state
-          if (onConversationStateUpdate) {
-            onConversationStateUpdate(streamResponse.conversation_state);
-          }
-          // Update local state if this is for our conversation
-          if (streamResponse.conversation_state.conversation_id === conversationId) {
-            setAgentWorking(streamResponse.conversation_state.working);
-            // Update selected model from conversation (ensures consistency across sessions)
-            if (streamResponse.conversation_state.model) {
-              setSelectedModel(streamResponse.conversation_state.model);
-            }
+        // Handle conversation state updates for the focused conversation. The
+        // working state of other conversations (and subagents) is delivered via
+        // the conversation list patch stream and applied by App.
+        if (
+          streamResponse.conversation_state &&
+          streamResponse.conversation_state.conversation_id === conversationId
+        ) {
+          setAgentWorking(streamResponse.conversation_state.working);
+          if (streamResponse.conversation_state.model) {
+            setSelectedModel(streamResponse.conversation_state.model);
           }
         }
 
@@ -1679,10 +1668,6 @@ function ChatInterface({
 
     eventSource.onopen = () => {
       console.log("Message stream connected");
-      // Refresh conversations list on reconnect (may have missed updates while disconnected)
-      if (hasConnectedRef.current) {
-        onReconnect?.();
-      }
       hasConnectedRef.current = true;
       // Reset reconnect attempts and clear periodic retry on successful connection
       setReconnectAttempts(0);
@@ -1695,7 +1680,7 @@ function ChatInterface({
       // Start heartbeat timeout monitoring
       resetHeartbeatTimeout();
     };
-  }, [conversationId, onConversationUpdate, onConversationListUpdate, onConversationStateUpdate]);
+  }, [conversationId, conversationListHash, onConversationUpdate, onConversationListPatch]);
 
   // Force-reconnect: close existing connection and reconnect to get missed messages
   const forceReconnect = useCallback(() => {

@@ -576,7 +576,45 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(conversations)
 }
 
+// ConversationListSnapshot is the seed payload returned by
+// GET /api/conversations/snapshot. Clients use Hash to resume the unified
+// stream patch stream from this exact state.
+type ConversationListSnapshot struct {
+	Conversations []ConversationWithState `json:"conversations"`
+	Hash          string                  `json:"hash"`
+}
+
+// handleConversationsSnapshot returns the current unarchived conversation
+// list (parents + subagents) together with the patch-stream hash that
+// anchors it. Each row includes working state, git info, subagent count,
+// and a trailing agent-message preview. Archived conversations are
+// served separately by /api/conversations/archived.
+//
+// The hash exists so a client can fetch the current state once and then
+// resume incremental updates over /api/stream without racing concurrent
+// Tx commits.
+func (s *Server) handleConversationsSnapshot(w http.ResponseWriter, r *http.Request) {
+	list, hash, err := s.conversationListStream.snapshot(r.Context())
+	if err != nil {
+		s.logger.Error("Failed to compute conversation list snapshot", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if list == nil {
+		list = []ConversationWithState{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ConversationListSnapshot{Conversations: list, Hash: hash})
+}
+
 func (s *Server) conversationListWithState(ctx context.Context, limit, offset int, query string, searchContent bool) ([]ConversationWithState, error) {
+	return s.conversationListWithStateInternal(ctx, limit, offset, query, searchContent, false)
+}
+
+// conversationListWithStateInternal backs both the public list endpoint and the
+// patch stream. When includeSubagents is true the result also contains
+// subagent conversations so the UI can render and diff their working state.
+func (s *Server) conversationListWithStateInternal(ctx context.Context, limit, offset int, query string, searchContent, includeSubagents bool) ([]ConversationWithState, error) {
 	var conversations []generated.Conversation
 	var err error
 	if query != "" {
@@ -585,6 +623,8 @@ func (s *Server) conversationListWithState(ctx context.Context, limit, offset in
 		} else {
 			conversations, err = s.db.SearchConversations(ctx, query, int64(limit), int64(offset))
 		}
+	} else if includeSubagents {
+		conversations, err = s.db.ListAllConversations(ctx, int64(limit), int64(offset))
 	} else {
 		conversations, err = s.db.ListConversations(ctx, int64(limit), int64(offset))
 	}
@@ -592,20 +632,31 @@ func (s *Server) conversationListWithState(ctx context.Context, limit, offset in
 		return nil, err
 	}
 
-	workingStates := s.getWorkingConversations()
+	// Working state lives on the conversation row itself (see
+	// ResetAllAgentWorking on startup + SetConversationAgentWorking on every
+	// transition), so we don't have to consult the in-memory manager map.
 	subagentCounts, err := s.db.GetSubagentCounts(ctx)
 	if err != nil {
 		s.logger.Error("Failed to get subagent counts", "error", err)
 		subagentCounts = make(map[string]int64)
 	}
 
+	previews, err := s.loadConversationPreviews(ctx)
+	if err != nil {
+		s.logger.Error("Failed to load conversation previews", "error", err)
+		previews = nil
+	}
+
 	now := time.Now()
 	result := make([]ConversationWithState, len(conversations))
 	for i, conv := range conversations {
+		pv := previews[conv.ConversationID]
 		cws := ConversationWithState{
-			Conversation:  conv,
-			Working:       workingStates[conv.ConversationID],
-			SubagentCount: subagentCounts[conv.ConversationID],
+			Conversation:     conv,
+			Working:          conv.AgentWorking,
+			SubagentCount:    subagentCounts[conv.ConversationID],
+			Preview:          pv.text,
+			PreviewUpdatedAt: pv.updatedAt,
 		}
 		if conv.Cwd != nil {
 			entry, ok := s.conversationListGitCache.get(*conv.Cwd, now)
@@ -617,6 +668,10 @@ func (s *Server) conversationListWithState(ctx context.Context, limit, offset in
 				}
 				if gs.IsRepo {
 					entry.worktree = getGitWorktreeRoot(gs.Worktree)
+					if gitDir, err := resolveGitDir(gs.Worktree); err == nil {
+						entry.gitDir = gitDir
+						entry.fingerprint = gitFingerprint(gitDir)
+					}
 				}
 				s.conversationListGitCache.set(*conv.Cwd, entry)
 			}
@@ -639,7 +694,7 @@ func (s *Server) conversationMux() *http.ServeMux {
 	mux.Handle("GET /{id}", gzipHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.handleGetConversation(w, r, r.PathValue("id"))
 	})))
-	// GET /api/conversation/<id>/stream - SSE stream (do NOT compress)
+	// GET /api/conversation/<id>/stream - legacy SSE stream (do NOT compress)
 	// TODO: Consider gzip for SSE in the future. Would reduce bandwidth
 	// for large tool outputs, but needs flush after each event.
 	mux.HandleFunc("GET /{id}/stream", func(w http.ResponseWriter, r *http.Request) {
@@ -1048,19 +1103,56 @@ func (s *Server) handleCancelConversation(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(map[string]string{"status": "cancelled"})
 }
 
-// handleStreamConversation handles GET /conversation/<id>/stream
+// handleStreamConversation handles GET /conversation/<id>/stream (legacy single-stream).
+// See handleStream for the unified message+list patch stream.
 // Query parameters:
 //   - last_sequence_id: Resume from this sequence ID (skip messages up to and including this ID)
 func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
+	s.runStream(w, r, conversationID, false)
+}
+
+// handleStream handles GET /api/stream — the unified SSE stream that combines
+// per-conversation messages with conversation-list patch events. Query parameters:
+//   - conversation: optional conversation id; if empty, only list patches are sent
+//   - last_sequence_id: resume the message stream from after this sequence id
+//   - conversation_list_hash: resume the list patch stream from this hash
+func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
+	s.runStream(w, r, r.URL.Query().Get("conversation"), true)
+}
+
+func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationID string, includeConversationListPatches bool) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	ctx := r.Context()
+	ctx, cancelStream := context.WithCancel(r.Context())
+	defer cancelStream()
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	query := r.URL.Query()
+	var listInitial []ConversationListPatchEvent
+	var listNext func() (ConversationListPatchEvent, bool)
+	var listRelease func()
+	if includeConversationListPatches {
+		var err error
+		listInitial, listNext, listRelease, err = s.conversationListStream.connect(ctx, query.Get("conversation_list_hash"))
+		if err != nil {
+			s.logger.Error("failed to initialize conversation list patches", "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		defer listRelease()
+	}
+
 	// Parse last_sequence_id for resuming streams
 	lastSeqID := int64(-1)
-	if lastSeqStr := r.URL.Query().Get("last_sequence_id"); lastSeqStr != "" {
+	if lastSeqStr := query.Get("last_sequence_id"); lastSeqStr != "" {
 		if parsed, err := strconv.ParseInt(lastSeqStr, 10, 64); err == nil {
 			lastSeqID = parsed
 		}
@@ -1071,6 +1163,67 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	writeStreamData := func(streamData StreamResponse) bool {
+		data, err := json.Marshal(streamData)
+		if err != nil {
+			s.logger.Debug("failed to marshal stream response", "error", err)
+			return false
+		}
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+			s.logger.Debug("conversation stream write failed", "error", err)
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+
+	for _, event := range listInitial {
+		patch := event
+		if !writeStreamData(StreamResponse{ConversationListPatch: &patch}) {
+			return
+		}
+	}
+
+	updates := make(chan StreamResponse, 10)
+
+	if listNext != nil {
+		go func() {
+			for {
+				event, ok := listNext()
+				if !ok {
+					return
+				}
+				patch := event
+				select {
+				case updates <- StreamResponse{ConversationListPatch: &patch}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+	if conversationID == "" {
+		// List-only stream: keep alive with a periodic heartbeat so intermediaries
+		// don't time the connection out, and forward list patches as they arrive.
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if !writeStreamData(StreamResponse{Heartbeat: true}) {
+					return
+				}
+			case streamData := <-updates:
+				if !writeStreamData(streamData) {
+					return
+				}
+			}
+		}
+	}
 
 	// For fresh connections, get messages BEFORE calling getOrCreateConversationManager.
 	// This is important because getOrCreateConversationManager may create a system prompt
@@ -1093,12 +1246,10 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		// Update lastSeqID based on messages we're sending
 		if len(messages) > 0 {
 			lastSeqID = messages[len(messages)-1].SequenceID
 		}
 	} else {
-		// Resuming - fetch any messages we missed while disconnected
 		err := s.db.Queries(ctx, func(q *generated.Queries) error {
 			var err error
 			messages, err = q.ListMessagesSince(ctx, generated.ListMessagesSinceParams{
@@ -1116,13 +1267,11 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		// Update lastSeqID so the subscription starts after these messages
 		if len(messages) > 0 {
 			lastSeqID = messages[len(messages)-1].SequenceID
 		}
 	}
 
-	// Get or create conversation manager to access working state
 	manager, err := s.getOrCreateConversationManager(ctx, conversationID, "")
 	if err != nil {
 		s.logger.Error("Failed to get conversation manager", "conversationID", conversationID, "error", err)
@@ -1136,7 +1285,6 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 	// response are queued rather than lost.
 	next := manager.subpub.Subscribe(ctx, lastSeqID)
 
-	// Send initial response (all messages for fresh connections, missed messages for resumes)
 	if len(messages) > 0 {
 		apiMessages := toAPIMessages(messages)
 		// Only send context_window_size for fresh connections where we have all messages.
@@ -1156,9 +1304,9 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 			},
 			ContextWindowSize: ctxSize,
 		}
-		data, _ := json.Marshal(streamData)
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		w.(http.Flusher).Flush()
+		if !writeStreamData(streamData) {
+			return
+		}
 	} else {
 		// Either resuming or no messages yet - send current state as heartbeat
 		streamData := StreamResponse{
@@ -1170,9 +1318,9 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 			},
 			Heartbeat: true,
 		}
-		data, _ := json.Marshal(streamData)
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		w.(http.Flusher).Flush()
+		if !writeStreamData(streamData) {
+			return
+		}
 	}
 
 	// Start heartbeat goroutine - sends state every 30 seconds if no other messages
@@ -1213,27 +1361,54 @@ func (s *Server) handleStreamConversation(w http.ResponseWriter, r *http.Request
 	}()
 	defer close(heartbeatDone)
 
-	for {
-		streamData, cont := next()
-		if !cont {
-			break
+	go func() {
+		for {
+			streamData, cont := next()
+			if !cont {
+				return
+			}
+			select {
+			case updates <- streamData:
+			case <-ctx.Done():
+				return
+			}
 		}
-		// Always forward updates, even if only the conversation changed (e.g., slug added)
-		data, _ := json.Marshal(streamData)
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		w.(http.Flusher).Flush()
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case streamData := <-updates:
+			// Always forward updates, even if only the conversation changed (e.g., slug added).
+			if !writeStreamData(streamData) {
+				return
+			}
+		}
 	}
 }
 
-// handleVersion returns version information as JSON
+// handleVersion returns build information as JSON, including the API
+// protocol_version. The protocol version lives on the API response (not on
+// version.Info) so the `shelley version` CLI output isn't coupled to the
+// HTTP/SSE contract.
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	resp := struct {
+		version.Info
+		ProtocolVersion int `json:"protocol_version"`
+	}{
+		Info:            version.GetInfo(),
+		ProtocolVersion: version.ProtocolVersion,
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(version.GetInfo())
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		s.logger.Error("Failed to encode version response", "error", err)
+	}
 }
 
 // ModelInfo represents a model in the API response
@@ -1296,34 +1471,36 @@ func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleConversationPreviews handles GET /api/conversations/previews
-// Returns a map of conversation_id -> last agent message text preview
-func (s *Server) handleConversationPreviews(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	ctx := r.Context()
+// conversationPreview is the trailing agent message text plus its
+// timestamp, embedded per-row in the conversation list snapshot/stream.
+type conversationPreview struct {
+	text      string
+	updatedAt string
+}
 
-	var messages []generated.Message
+// loadConversationPreviews returns the most recent non-empty agent
+// message text for each unarchived conversation (parents and subagents
+// alike). The query returns the 5 most recent agent messages per
+// conversation (DESC) for the 500 most recently updated conversations;
+// we walk that list and take the first one with a non-empty text block
+// so a tail of tool-only responses doesn't leave the conversation
+// without a preview. Conversations outside that window render with
+// empty preview fields.
+func (s *Server) loadConversationPreviews(ctx context.Context) (map[string]conversationPreview, error) {
+	var messages []generated.GetLatestAgentMessagesForConversationsRow
 	err := s.db.Queries(ctx, func(q *generated.Queries) error {
 		var err error
 		messages, err = q.GetLatestAgentMessagesForConversations(ctx)
 		return err
 	})
 	if err != nil {
-		s.logger.Error("Failed to get conversation previews", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
-
-	// Extract text content from each agent message
-	type Preview struct {
-		Text      string `json:"text"`
-		UpdatedAt string `json:"updated_at"`
-	}
-	result := make(map[string]Preview, len(messages))
+	result := make(map[string]conversationPreview)
 	for _, msg := range messages {
+		if _, done := result[msg.ConversationID]; done {
+			continue // we already have the most recent non-empty preview for this conv
+		}
 		if msg.LlmData == nil {
 			continue
 		}
@@ -1331,8 +1508,9 @@ func (s *Server) handleConversationPreviews(w http.ResponseWriter, r *http.Reque
 		if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err != nil {
 			continue
 		}
-		// Use the last text block — in agent messages with tool calls,
-		// the final text block is typically the summary/conclusion.
+		// Use the last text block in this message — in agent messages
+		// with tool calls, the final text block is typically the
+		// summary/conclusion.
 		var text string
 		for _, c := range llmMsg.Content {
 			if c.Type == llm.ContentTypeText && c.Text != "" {
@@ -1340,15 +1518,13 @@ func (s *Server) handleConversationPreviews(w http.ResponseWriter, r *http.Reque
 			}
 		}
 		if text != "" {
-			result[msg.ConversationID] = Preview{
-				Text:      text,
-				UpdatedAt: msg.CreatedAt.UTC().Format(time.RFC3339),
+			result[msg.ConversationID] = conversationPreview{
+				text:      text,
+				updatedAt: msg.CreatedAt.UTC().Format(time.RFC3339),
 			}
 		}
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	return result, nil
 }
 
 // handleArchivedConversations handles GET /api/conversations/archived

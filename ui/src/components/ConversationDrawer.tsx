@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Conversation, ConversationWithState } from "../types";
 import { api } from "../services/api";
 import { useI18n } from "../i18n";
+import { sortConversationsByBucket, maxBucket } from "../utils/conversationSort";
 
 type GroupBy = "none" | "cwd" | "git_repo";
 
@@ -18,8 +19,6 @@ interface ConversationDrawerProps {
   onConversationArchived?: (id: string) => void;
   onConversationUnarchived?: (conversation: Conversation) => void;
   onConversationRenamed?: (conversation: Conversation) => void;
-  subagentUpdate?: Conversation | null; // When a subagent is created/updated
-  subagentStateUpdate?: { conversation_id: string; working: boolean } | null; // When a subagent's working state changes
   showActiveTrigger?: number; // Increment to switch back to active conversations view
 }
 
@@ -36,8 +35,6 @@ function ConversationDrawer({
   onConversationArchived,
   onConversationUnarchived,
   onConversationRenamed,
-  subagentUpdate,
-  subagentStateUpdate,
   showActiveTrigger,
 }: ConversationDrawerProps) {
   const { t } = useI18n();
@@ -74,7 +71,6 @@ function ConversationDrawer({
   const [loadingArchived, setLoadingArchived] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingSlug, setEditingSlug] = useState("");
-  const [subagents, setSubagents] = useState<Record<string, ConversationWithState[]>>({});
   const [expandedSubagents, setExpandedSubagents] = useState<Set<string>>(new Set());
   const [groupBy, setGroupBy] = useState<GroupBy>(() => {
     const stored = localStorage.getItem("shelley-group-by");
@@ -112,89 +108,29 @@ function ConversationDrawer({
     }
   }, [showActiveTrigger]);
 
-  // Load subagents for the current conversation (or parent if viewing a subagent)
-  // but don't auto-expand — expansion is explicit or triggered by real-time subagent creation.
-  useEffect(() => {
-    if (!showArchived && currentConversationId) {
-      const parentId = viewedConversation?.parent_conversation_id;
-      if (parentId) {
-        loadSubagents(parentId);
-        // Auto-expand parent when viewing one of its subagents
-        setExpandedSubagents((prev) => new Set([...prev, parentId]));
-      } else {
-        loadSubagents(currentConversationId);
+  // The conversations prop now contains both top-level conversations and
+  // subagents (the patch stream emits one diff for the whole tree). Bucket
+  // subagents under their parent so the drawer can render them inline.
+  const subagentsByParent = useMemo(() => {
+    const out: Record<string, ConversationWithState[]> = {};
+    for (const conv of conversations) {
+      if (conv.parent_conversation_id) {
+        (out[conv.parent_conversation_id] ||= []).push(conv);
       }
     }
-  }, [currentConversationId, viewedConversation, showArchived]);
+    for (const key of Object.keys(out)) {
+      out[key] = sortConversationsByBucket(out[key]);
+    }
+    return out;
+  }, [conversations]);
 
-  // Handle real-time subagent updates
+  // Auto-expand the parent when viewing one of its subagents.
   useEffect(() => {
-    if (subagentUpdate && subagentUpdate.parent_conversation_id) {
-      const parentId = subagentUpdate.parent_conversation_id;
-      setSubagents((prev) => {
-        const existing = prev[parentId] || [];
-        // Check if this subagent already exists
-        const existingIndex = existing.findIndex(
-          (s) => s.conversation_id === subagentUpdate.conversation_id,
-        );
-        if (existingIndex >= 0) {
-          // Update existing, preserving working state
-          const updated = [...existing];
-          updated[existingIndex] = {
-            ...subagentUpdate,
-            working: existing[existingIndex].working,
-            subagent_count: 0,
-          };
-          return { ...prev, [parentId]: updated };
-        } else {
-          // Add new subagent (not working by default)
-          return {
-            ...prev,
-            [parentId]: [...existing, { ...subagentUpdate, working: false, subagent_count: 0 }],
-          };
-        }
-      });
-      // Auto-expand parent only if it's the currently selected conversation
-      if (parentId === currentConversationId) {
-        setExpandedSubagents((prev) => new Set([...prev, parentId]));
-      }
+    const parentId = viewedConversation?.parent_conversation_id;
+    if (!showArchived && parentId) {
+      setExpandedSubagents((prev) => (prev.has(parentId) ? prev : new Set([...prev, parentId])));
     }
-  }, [subagentUpdate, currentConversationId]);
-
-  // Handle subagent working state updates
-  useEffect(() => {
-    if (subagentStateUpdate) {
-      setSubagents((prev) => {
-        // Find which parent contains this subagent
-        for (const [parentId, subs] of Object.entries(prev)) {
-          const subIndex = subs.findIndex(
-            (s) => s.conversation_id === subagentStateUpdate.conversation_id,
-          );
-          if (subIndex >= 0) {
-            const updated = [...subs];
-            updated[subIndex] = { ...updated[subIndex], working: subagentStateUpdate.working };
-            return { ...prev, [parentId]: updated };
-          }
-        }
-        return prev;
-      });
-    }
-  }, [subagentStateUpdate]);
-
-  const loadSubagents = async (conversationId: string) => {
-    // Skip if already loaded
-    if (subagents[conversationId]) return;
-    try {
-      const subs = await api.getSubagents(conversationId);
-      if (subs && subs.length > 0) {
-        // Add working: false to each subagent
-        const subsWithState = subs.map((s) => ({ ...s, working: false, subagent_count: 0 }));
-        setSubagents((prev) => ({ ...prev, [conversationId]: subsWithState }));
-      }
-    } catch (err) {
-      console.error("Failed to load subagents:", err);
-    }
-  };
+  }, [viewedConversation, showArchived]);
 
   const toggleSubagents = (e: React.MouseEvent, conversationId: string) => {
     e.stopPropagation();
@@ -204,8 +140,6 @@ function ConversationDrawer({
         next.delete(conversationId);
       } else {
         next.add(conversationId);
-        // Load subagents if not already loaded
-        loadSubagents(conversationId);
       }
       return next;
     });
@@ -393,7 +327,13 @@ function ConversationDrawer({
     });
   };
 
-  const displayedConversations = showArchived ? archivedConversations : conversations;
+  const topLevelConversations = useMemo(
+    () => sortConversationsByBucket(conversations.filter((c) => !c.parent_conversation_id)),
+    [conversations],
+  );
+  const displayedConversations = showArchived
+    ? sortConversationsByBucket(archivedConversations)
+    : topLevelConversations;
 
   // Compute grouped conversations
   const groupedConversations = useMemo(() => {
@@ -402,7 +342,7 @@ function ConversationDrawer({
     const groups = new Map<string, { label: string; conversations: ConversationWithState[] }>();
     const ungrouped: ConversationWithState[] = [];
 
-    for (const conv of conversations) {
+    for (const conv of topLevelConversations) {
       let key: string | null = null;
 
       if (groupBy === "cwd") {
@@ -425,29 +365,32 @@ function ConversationDrawer({
       group.conversations.push(conv);
     }
 
-    const maxTime = (convs: ConversationWithState[]) =>
-      Math.max(...convs.map((c) => new Date(c.updated_at).getTime()));
+    // Sort items within each group by 5-minute bucket of updated_at, then
+    // by conversation_id, so groups are stable while conversations refresh.
+    for (const [, group] of groups) {
+      group.conversations = sortConversationsByBucket(group.conversations);
+    }
 
-    // Sort groups by most recent conversation
+    // Sort groups by the bucketed timestamp of their newest conversation.
     const sorted = [...groups.entries()].sort(
-      (a, b) => maxTime(b[1].conversations) - maxTime(a[1].conversations),
+      (a, b) => maxBucket(b[1].conversations) - maxBucket(a[1].conversations),
     );
 
     if (ungrouped.length > 0) {
-      sorted.push(["__ungrouped__", { label: t("other"), conversations: ungrouped }]);
+      sorted.push([
+        "__ungrouped__",
+        { label: t("other"), conversations: sortConversationsByBucket(ungrouped) },
+      ]);
     }
 
     return sorted;
-  }, [conversations, groupBy, showArchived, t]);
+  }, [topLevelConversations, groupBy, showArchived, t]);
 
   const renderConversationItem = (conversation: Conversation | ConversationWithState) => {
     const convState = conversation as ConversationWithState;
     const isActive = conversation.conversation_id === currentConversationId;
-    const conversationSubagents = subagents[conversation.conversation_id] || [];
-    const subagentsLoaded = conversation.conversation_id in subagents;
-    const subagentCount = subagentsLoaded
-      ? conversationSubagents.length
-      : convState.subagent_count || 0;
+    const conversationSubagents = subagentsByParent[conversation.conversation_id] || [];
+    const subagentCount = conversationSubagents.length || convState.subagent_count || 0;
     const hasSubagents = subagentCount > 0;
     const isExpanded = expandedSubagents.has(conversation.conversation_id);
     return (
@@ -490,6 +433,12 @@ function ConversationDrawer({
                   title={t("agentIsWorking")}
                 />
               )}
+            </div>
+            <div
+              className="conversation-preview"
+              title={(conversation as ConversationWithState).preview || undefined}
+            >
+              {(conversation as ConversationWithState).preview || "\u00a0"}
             </div>
             <div className="conversation-meta">
               <span className="conversation-date">{formatDate(conversation.updated_at)}</span>
@@ -668,6 +617,9 @@ function ConversationDrawer({
                           title={t("subagentIsWorking")}
                         />
                       )}
+                    </div>
+                    <div className="conversation-preview" title={sub.preview || undefined}>
+                      {sub.preview || "\u00a0"}
                     </div>
                     <div className="conversation-meta">
                       <span className="conversation-date drawer-subagent-date">

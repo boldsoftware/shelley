@@ -96,11 +96,19 @@ func fieldDiffOps(idx int, oldItem, newItem ConversationWithState) ([]conversati
 
 	var ops []conversationListPatchOp
 	for key, newVal := range newFields {
-		if oldVal, ok := oldFields[key]; ok && bytes.Equal(oldVal, newVal) {
+		oldVal, ok := oldFields[key]
+		if ok && bytes.Equal(oldVal, newVal) {
 			continue
 		}
+		op := "replace"
+		if !ok {
+			// `omitempty` fields are absent from oldFields when the prior
+			// value was zero. RFC 6902 `replace` requires the target to
+			// exist, so use `add` to materialize the key.
+			op = "add"
+		}
 		ops = append(ops, conversationListPatchOp{
-			Op:    "replace",
+			Op:    op,
 			Path:  fmt.Sprintf("/%d/%s", idx, jsonPointerEscape(key)),
 			Value: append(json.RawMessage(nil), newVal...),
 		})

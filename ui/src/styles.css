@@ -632,6 +632,19 @@ button {
   word-break: break-all;
 }
 
+.conversation-item .conversation-preview {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 0.125rem;
+}
+
+.conversation-item.active .conversation-preview {
+  color: rgba(255, 255, 255, 0.8);
+}
+
 .conversation-item .conversation-meta {
   display: flex;
   align-items: center;

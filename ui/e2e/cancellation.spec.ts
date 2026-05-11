@@ -53,8 +53,11 @@ test.describe('Conversation Cancellation', () => {
     const cancelledTool = page.locator('.bash-tool[data-testid="tool-call-completed"]').filter({ hasText: 'sleep 100' });
     await expect(cancelledTool.locator('.bash-tool-cancelled')).toBeVisible({ timeout: 5000 });
 
-    // Verify we see the [Operation cancelled] message
-    await expect(page.locator('text=/\\[Operation cancelled\\]/i')).toBeVisible({ timeout: 5000 });
+    // Verify we see the [Operation cancelled] message in the chat messages
+    // (scoped to .messages-container so the conversation drawer preview row,
+    // which now also shows the latest agent text, doesn't cause a strict-mode
+    // multiple-match violation).
+    await expect(page.locator('.messages-container').locator('text=/\\[Operation cancelled\\]/i')).toBeVisible({ timeout: 5000 });
 
     // Now reload the page to verify state is preserved
     await page.reload();
@@ -70,7 +73,7 @@ test.describe('Conversation Cancellation', () => {
 
     // The cancelled messages should still be visible
     await expect(page.locator('.bash-tool[data-testid="tool-call-completed"]').filter({ hasText: 'sleep 100' }).locator('.bash-tool-cancelled')).toBeVisible();
-    await expect(page.locator('text=/\\[Operation cancelled\\]/i')).toBeVisible();
+    await expect(page.locator('.messages-container').locator('text=/\\[Operation cancelled\\]/i')).toBeVisible();
 
     // Verify we can continue the conversation after cancellation
     await reloadedInput.fill('echo: test after cancel');

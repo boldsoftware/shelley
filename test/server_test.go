@@ -962,7 +962,6 @@ func TestVersionEndpoint(t *testing.T) {
 	var versionInfo struct {
 		Commit     string `json:"commit"`
 		CommitTime string `json:"commit_time"`
-		Modified   bool   `json:"modified"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&versionInfo); err != nil {
 		t.Fatalf("Failed to decode version info: %v", err)

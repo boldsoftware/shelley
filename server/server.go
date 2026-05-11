@@ -56,14 +56,19 @@ type ConversationState struct {
 }
 
 // ConversationWithState combines a conversation with its working state.
+// Preview is the trailing text of the most recent agent message, used to
+// render a one-line summary in the conversation list without a separate
+// fetch. PreviewUpdatedAt is the agent message's CreatedAt (RFC 3339).
 type ConversationWithState struct {
 	generated.Conversation
-	Working         bool   `json:"working"`
-	GitRepoRoot     string `json:"git_repo_root,omitempty"`
-	GitWorktreeRoot string `json:"git_worktree_root,omitempty"`
-	GitCommit       string `json:"git_commit,omitempty"`
-	GitSubject      string `json:"git_subject,omitempty"`
-	SubagentCount   int64  `json:"subagent_count"`
+	Working          bool   `json:"working"`
+	GitRepoRoot      string `json:"git_repo_root,omitempty"`
+	GitWorktreeRoot  string `json:"git_worktree_root,omitempty"`
+	GitCommit        string `json:"git_commit,omitempty"`
+	GitSubject       string `json:"git_subject,omitempty"`
+	SubagentCount    int64  `json:"subagent_count"`
+	Preview          string `json:"preview,omitempty"`
+	PreviewUpdatedAt string `json:"preview_updated_at,omitempty"`
 }
 
 // StreamResponse represents the response format for conversation streaming
@@ -74,6 +79,8 @@ type StreamResponse struct {
 	ContextWindowSize uint64                 `json:"context_window_size,omitempty"`
 	// ConversationListUpdate is set when another conversation in the list changed
 	ConversationListUpdate *ConversationListUpdate `json:"conversation_list_update,omitempty"`
+	// ConversationListPatch is set when requested conversation-list JSON Patch diffs are available.
+	ConversationListPatch *ConversationListPatchEvent `json:"conversation_list_patch,omitempty"`
 	// Heartbeat indicates this is a heartbeat message (no new data, just keeping connection alive)
 	Heartbeat bool `json:"heartbeat,omitempty"`
 	// NotificationEvent is set when a notification-worthy event occurs (e.g. agent finished).
@@ -279,6 +286,12 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	s.conversationListStream = newConversationListStream(s)
 	s.conversationListGitCache = newConversationListGitCache()
 
+	// Any committed write may change the conversation list. Refresh after
+	// every Tx commit so SSE clients always see the current state. This is
+	// the single source of truth for the patch stream — no caller needs to
+	// invoke notifyConversationListChanged for ordinary database writes.
+	database.Pool().OnCommit(s.notifyConversationListChanged)
+
 	// Set up subagent support
 	s.toolSetConfig.SubagentRunner = NewSubagentRunner(s)
 	s.toolSetConfig.SubagentDB = &db.SubagentDBAdapter{DB: database}
@@ -297,9 +310,9 @@ func (s *Server) RegisterNotificationChannel(ch notifications.Channel) {
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	// API routes - wrap with gzip where beneficial
 	mux.Handle("/api/conversations", gzipHandler(http.HandlerFunc(s.handleConversations)))
-	mux.Handle("GET /api/conversations/stream", http.HandlerFunc(s.handleConversationListStream))
+	mux.Handle("GET /api/conversations/snapshot", gzipHandler(http.HandlerFunc(s.handleConversationsSnapshot)))
+	mux.Handle("GET /api/stream", http.HandlerFunc(s.handleStream))
 	mux.Handle("/api/conversations/archived", gzipHandler(http.HandlerFunc(s.handleArchivedConversations)))
-	mux.Handle("/api/conversations/previews", gzipHandler(http.HandlerFunc(s.handleConversationPreviews)))
 	mux.Handle("/api/conversations/new", http.HandlerFunc(s.handleNewConversation))                         // Small response
 	mux.Handle("/api/conversations/distill", http.HandlerFunc(s.handleDistillConversation))                 // Small response
 	mux.Handle("/api/conversations/distill-replace", http.HandlerFunc(s.handleDistillReplace))              // Small response
@@ -712,11 +725,12 @@ func (s *Server) handleCreateDirectory(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getOrCreateConversationManager(ctx context.Context, conversationID, userEmail string) (*ConversationManager, error) {
 	manager, err, _ := s.conversationGroup.Do(conversationID, func() (*ConversationManager, error) {
 		s.mu.Lock()
-		defer s.mu.Unlock()
 		if manager, exists := s.activeConversations[conversationID]; exists {
+			s.mu.Unlock()
 			manager.Touch()
 			return manager, nil
 		}
+		s.mu.Unlock()
 
 		recordMessage := func(ctx context.Context, message llm.Message, usage llm.Usage) error {
 			return s.recordMessage(ctx, conversationID, message, usage)
@@ -728,11 +742,21 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 
 		manager := NewConversationManager(conversationID, s.db, s.logger, s.toolSetConfig, recordMessage, onStateChange)
 		manager.userEmail = userEmail
+		// Hydrate runs DB transactions, which fire OnCommit hooks. Those hooks
+		// (e.g. notify on the conversation list patch stream) acquire s.mu, so
+		// we must not hold it here.
 		if err := manager.Hydrate(ctx); err != nil {
 			return nil, err
 		}
 
+		s.mu.Lock()
+		if existing, ok := s.activeConversations[conversationID]; ok {
+			s.mu.Unlock()
+			existing.Touch()
+			return existing, nil
+		}
 		s.activeConversations[conversationID] = manager
+		s.mu.Unlock()
 		return manager, nil
 	})
 	if err != nil {
@@ -747,11 +771,12 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 func (s *Server) getOrCreateSubagentConversationManager(ctx context.Context, conversationID string) (*ConversationManager, error) {
 	manager, err, _ := s.conversationGroup.Do(conversationID, func() (*ConversationManager, error) {
 		s.mu.Lock()
-		defer s.mu.Unlock()
 		if manager, exists := s.activeConversations[conversationID]; exists {
+			s.mu.Unlock()
 			manager.Touch()
 			return manager, nil
 		}
+		s.mu.Unlock()
 
 		recordMessage := func(ctx context.Context, message llm.Message, usage llm.Usage) error {
 			return s.recordMessage(ctx, conversationID, message, usage)
@@ -766,11 +791,19 @@ func (s *Server) getOrCreateSubagentConversationManager(ctx context.Context, con
 		subagentConfig.SubagentDepth = s.toolSetConfig.SubagentDepth + 1
 
 		manager := NewConversationManager(conversationID, s.db, s.logger, subagentConfig, recordMessage, onStateChange)
+		// See getOrCreateConversationManager for why we don't hold s.mu here.
 		if err := manager.Hydrate(ctx); err != nil {
 			return nil, err
 		}
 
+		s.mu.Lock()
+		if existing, ok := s.activeConversations[conversationID]; ok {
+			s.mu.Unlock()
+			existing.Touch()
+			return existing, nil
+		}
 		s.activeConversations[conversationID] = manager
+		s.mu.Unlock()
 		return manager, nil
 	})
 	if err != nil {
@@ -1036,12 +1069,35 @@ func (s *Server) broadcastMessageUpdate(ctx context.Context, conversationID stri
 // publishConversationListUpdate broadcasts a conversation list update to ALL active
 // conversation streams. This allows clients to receive updates about other conversations
 // while they're subscribed to their current conversation's stream.
-func (s *Server) publishConversationListUpdate(update ConversationListUpdate) {
-	s.conversationListGitCache.clear()
+//
+// The conversation list patch stream is refreshed automatically by Pool.OnCommit
+// after every committed write Tx (see NewServer). Callers do NOT need to invoke
+// this function for that purpose. It is retained only to fan the legacy
+// `conversation_list_update` SSE field out to active conversation managers,
+// which older clients (notably iOS) still rely on.
+
+// notifyConversationListChanged recomputes the conversation list patch
+// stream so subscribers receive a patch event that reflects the latest
+// state. It is registered as a Pool.OnCommit hook so every successful
+// write Tx triggers a refresh; this is the single source of truth for the
+// patch stream.
+//
+// Note: this method runs synchronously on whatever goroutine fired the
+// commit. The patch stream's recompute is itself serialized internally,
+// so concurrent commits queue up cleanly.
+func (s *Server) notifyConversationListChanged() {
+	// Deliberately do NOT clear conversationListGitCache here. The cache
+	// exists precisely so that the patch recompute (which runs on every DB
+	// commit) doesn't shell out to git for every conversation in the list.
+	// Git state only changes through user/agent git operations, not through
+	// Shelley's own DB writes; the cache's per-read HEAD fingerprint catches
+	// real changes (commits, checkouts, resets) on the next list refresh.
 	if err := s.conversationListStream.notify(context.Background()); err != nil {
 		s.logger.Error("failed to publish conversation list patch", "error", err)
 	}
+}
 
+func (s *Server) publishConversationListUpdate(update ConversationListUpdate) {
 	// Populate git info from conversation cwd
 	if update.Conversation != nil && update.Conversation.Cwd != nil {
 		update.GitRepoRoot, update.GitWorktreeRoot = gitInfoForCwd(*update.Conversation.Cwd)
@@ -1086,10 +1142,10 @@ func (s *Server) conversationURL(slug string) string {
 // publishConversationState broadcasts a conversation state update to ALL active
 // conversation streams. This allows clients to see the working state of other conversations.
 func (s *Server) publishConversationState(state ConversationState) {
-	s.conversationListGitCache.clear()
-	if err := s.conversationListStream.notify(context.Background()); err != nil {
-		s.logger.Error("failed to publish conversation list state patch", "error", err)
-	}
+	// The conversation list patch stream picks up the working-state change
+	// from the SetConversationAgentWorking Tx commit hook — no explicit
+	// notify needed here. This function is now responsible only for the
+	// per-conversation SSE broadcast and end-of-turn notifications.
 
 	// When the agent finishes working, emit a notification event.
 	// Skip notifications for subagent conversations — they're internal
@@ -1166,20 +1222,6 @@ func (s *Server) publishConversationState(state ConversationState) {
 		}
 		manager.subpub.Broadcast(streamData)
 	}
-}
-
-// getWorkingConversations returns a map of conversation IDs that are currently working.
-func (s *Server) getWorkingConversations() map[string]bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	working := make(map[string]bool)
-	for id, manager := range s.activeConversations {
-		if manager.IsAgentWorking() {
-			working[id] = true
-		}
-	}
-	return working
 }
 
 // IsAgentWorking returns whether the agent is currently working on the given conversation.

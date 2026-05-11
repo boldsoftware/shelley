@@ -15,13 +15,18 @@ var (
 	Tag     = ""
 )
 
+// ProtocolVersion is the version of the Shelley HTTP/SSE API contract.
+// Bump it when making a breaking change to the API surface (request or
+// response shapes, stream event semantics, etc.) so clients can detect
+// incompatibility before they try to talk to the server.
+const ProtocolVersion = 2
+
 // Info holds build information from runtime/debug.ReadBuildInfo
 type Info struct {
 	Version    string `json:"version,omitempty"`
 	Tag        string `json:"tag,omitempty"`
 	Commit     string `json:"commit,omitempty"`
 	CommitTime string `json:"commit_time,omitempty"`
-	Modified   bool   `json:"modified,omitempty"`
 }
 
 // GetInfo returns build information using runtime/debug.ReadBuildInfo,
@@ -46,8 +51,6 @@ func GetInfo() Info {
 				info.Commit = setting.Value
 			case "vcs.time":
 				info.CommitTime = setting.Value
-			case "vcs.modified":
-				info.Modified = setting.Value == "true"
 			}
 		}
 	}
@@ -58,12 +61,10 @@ func GetInfo() Info {
 			var buildJSON struct {
 				Commit     string `json:"commit"`
 				CommitTime string `json:"commitTime"`
-				Modified   bool   `json:"modified"`
 			}
 			if json.Unmarshal(data, &buildJSON) == nil {
 				info.Commit = buildJSON.Commit
 				info.CommitTime = buildJSON.CommitTime
-				info.Modified = buildJSON.Modified
 			}
 		}
 	}

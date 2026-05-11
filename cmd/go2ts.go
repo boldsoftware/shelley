@@ -109,12 +109,15 @@ type conversationWithStateForTS struct {
 	Model                *string `json:"model"`
 	ConversationOptions  string  `json:"conversation_options"`
 	CurrentGeneration    int64   `json:"current_generation"`
+	AgentWorking         bool    `json:"agent_working"`
 	Working              bool    `json:"working"`
 	GitRepoRoot          string  `json:"git_repo_root,omitempty"`
 	GitWorktreeRoot      string  `json:"git_worktree_root,omitempty"`
 	GitCommit            string  `json:"git_commit,omitempty"`
 	GitSubject           string  `json:"git_subject,omitempty"`
 	SubagentCount        int64   `json:"subagent_count"`
+	Preview              string  `json:"preview,omitempty"`
+	PreviewUpdatedAt     string  `json:"preview_updated_at,omitempty"`
 }
 
 type streamResponseForTS struct {

@@ -15,6 +15,7 @@ export interface Conversation {
   model: string | null;
   conversation_options: string;
   current_generation: number;
+  agent_working: boolean;
 }
 
 export interface Usage {
@@ -75,12 +76,15 @@ export interface ConversationWithStateForTS {
   model: string | null;
   conversation_options: string;
   current_generation: number;
+  agent_working: boolean;
   working: boolean;
   git_repo_root?: string;
   git_worktree_root?: string;
   git_commit?: string;
   git_subject?: string;
   subagent_count: number;
+  preview?: string;
+  preview_updated_at?: string;
 }
 
 export type MessageType = "user" | "agent" | "tool" | "error" | "system" | "gitinfo";

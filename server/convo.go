@@ -123,6 +123,9 @@ func (cm *ConversationManager) EndOfTurnHooks(ctx context.Context) ([]db.Convers
 }
 
 // SetAgentWorking updates the agent working state and notifies the server to broadcast.
+// The new value is also persisted to the conversations table so the
+// conversation list patch stream picks it up via the standard Pool.OnCommit
+// hook (no explicit notify required).
 func (cm *ConversationManager) SetAgentWorking(working bool) {
 	cm.mu.Lock()
 	if cm.agentWorking == working {
@@ -136,6 +139,9 @@ func (cm *ConversationManager) SetAgentWorking(working bool) {
 	cm.mu.Unlock()
 
 	cm.logger.Debug("agent working state changed", "working", working)
+	if err := cm.db.SetConversationAgentWorking(context.Background(), convID, working); err != nil {
+		cm.logger.Error("failed to persist agent working state", "error", err, "working", working)
+	}
 	if onStateChange != nil {
 		onStateChange(ConversationState{
 			ConversationID: convID,
@@ -301,6 +307,10 @@ func (cm *ConversationManager) Hydrate(ctx context.Context) error {
 	cm.lastActivity = time.Now()
 	cm.hydrated = true
 	cm.modelID = modelID
+	// Seed agentWorking from the persisted column so a fresh manager (e.g.
+	// after switching back to a conversation whose loop is still running) sees
+	// the real state instead of the zero value.
+	cm.agentWorking = conversation.AgentWorking
 	cm.mu.Unlock()
 
 	if modelID != "" {
@@ -577,11 +587,10 @@ func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generat
 		return nil, fmt.Errorf("failed to store system prompt: %w", err)
 	}
 
-	if err := cm.db.QueriesTx(ctx, func(q *generated.Queries) error {
-		return q.UpdateConversationTimestamp(ctx, cm.conversationID)
-	}); err != nil {
-		cm.logger.Warn("Failed to update conversation timestamp after system prompt", "error", err)
-	}
+	// Intentionally do NOT bump conversation updated_at here: system prompt
+	// generation is internal metadata triggered lazily by Hydrate, and bumping
+	// the timestamp would reorder the conversation list every time a stream
+	// connects to a brand-new conversation.
 
 	cm.logger.Info("Stored system prompt", "length", len(systemPrompt))
 	return created, nil
@@ -899,6 +908,7 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 		cm.subpub.Broadcast(StreamResponse{
 			Conversation: conv,
 		})
+		// The list patch stream refreshes from the Pool commit hook.
 	}
 
 	// Create a context with the conversation ID for LLM request recording/prefix dedup

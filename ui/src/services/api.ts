@@ -41,6 +41,17 @@ class ApiService {
     return response.json();
   }
 
+  async getConversationsSnapshot(): Promise<{
+    conversations: ConversationWithState[];
+    hash: string;
+  }> {
+    const response = await fetch(`${this.baseUrl}/conversations/snapshot`);
+    if (!response.ok) {
+      throw new Error(`Failed to get conversations snapshot: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
   async getModels(): Promise<
     Array<{
       id: string;
@@ -229,12 +240,26 @@ class ApiService {
     }
   }
 
-  createMessageStream(conversationId: string, lastSequenceId?: number): EventSource {
-    let url = `${this.baseUrl}/conversation/${conversationId}/stream`;
-    if (lastSequenceId !== undefined && lastSequenceId >= 0) {
-      url += `?last_sequence_id=${lastSequenceId}`;
+  // createStream opens the unified message + conversation-list-patch SSE stream.
+  // Pass conversationId to receive that conversation's messages and state in
+  // addition to list patches; omit it for a list-only subscription.
+  createStream(opts: {
+    conversationId?: string;
+    lastSequenceId?: number;
+    conversationListHash?: string;
+  }): EventSource {
+    const params = new URLSearchParams();
+    if (opts.conversationId) {
+      params.set("conversation", opts.conversationId);
     }
-    return new EventSource(url);
+    if (opts.lastSequenceId !== undefined && opts.lastSequenceId >= 0) {
+      params.set("last_sequence_id", String(opts.lastSequenceId));
+    }
+    if (opts.conversationListHash) {
+      params.set("conversation_list_hash", opts.conversationListHash);
+    }
+    const query = params.toString();
+    return new EventSource(`${this.baseUrl}/stream${query ? `?${query}` : ""}`);
   }
 
   async cancelConversation(conversationId: string): Promise<void> {
@@ -289,14 +314,6 @@ class ApiService {
     });
     if (!response.ok) {
       throw new Error(`Failed to create directory: ${response.statusText}`);
-    }
-    return response.json();
-  }
-
-  async getConversationPreviews(): Promise<Record<string, { text: string; updated_at: string }>> {
-    const response = await fetch(`${this.baseUrl}/conversations/previews`);
-    if (!response.ok) {
-      throw new Error(`Failed to get conversation previews: ${response.statusText}`);
     }
     return response.json();
   }

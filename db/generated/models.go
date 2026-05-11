@@ -20,6 +20,7 @@ type Conversation struct {
 	Model                *string   `json:"model"`
 	ConversationOptions  string    `json:"conversation_options"`
 	CurrentGeneration    int64     `json:"current_generation"`
+	AgentWorking         bool      `json:"agent_working"`
 }
 
 type LlmRequest struct {

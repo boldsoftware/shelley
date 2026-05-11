@@ -17,6 +17,15 @@ WHERE archived = FALSE AND parent_conversation_id IS NULL
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?;
 
+-- name: ListAllConversations :many
+-- Like ListConversations but includes subagents. Used by the conversation
+-- list patch stream so the UI can render subagents inline and pick up their
+-- working state from diffs alone.
+SELECT * FROM conversations
+WHERE archived = FALSE
+ORDER BY updated_at DESC
+LIMIT ? OFFSET ?;
+
 -- name: ListArchivedConversations :many
 SELECT * FROM conversations
 WHERE archived = TRUE
@@ -139,3 +148,19 @@ UPDATE conversations
 SET parent_conversation_id = ?, updated_at = CURRENT_TIMESTAMP
 WHERE conversation_id = ?
 RETURNING *;
+
+-- name: SetConversationAgentWorking :exec
+-- Sets the agent_working flag. Deliberately does NOT bump updated_at:
+-- working transitions happen at every loop start/finish and we don't want
+-- them to reorder the conversation list. The patch stream picks the change
+-- up via the standard Pool.OnCommit hook.
+UPDATE conversations
+SET agent_working = ?
+WHERE conversation_id = ?;
+
+-- name: ResetAllAgentWorking :exec
+-- Called on server startup to clear any stale TRUE values left over from a
+-- previous process that exited mid-turn. Does not bump updated_at.
+UPDATE conversations
+SET agent_working = FALSE
+WHERE agent_working = TRUE;

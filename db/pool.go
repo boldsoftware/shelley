@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -21,6 +22,27 @@ type Pool struct {
 	db      *sql.DB
 	writer  chan *sql.Conn
 	readers chan *sql.Conn
+
+	hooksMu     sync.RWMutex
+	commitHooks []func()
+}
+
+// OnCommit registers a callback fired synchronously after each successful Tx
+// commit on the goroutine that committed the Tx. Callbacks must not call
+// back into pool.Tx and should be quick or hand work off elsewhere.
+func (p *Pool) OnCommit(fn func()) {
+	p.hooksMu.Lock()
+	defer p.hooksMu.Unlock()
+	p.commitHooks = append(p.commitHooks, fn)
+}
+
+func (p *Pool) fireCommitHooks() {
+	p.hooksMu.RLock()
+	hooks := p.commitHooks
+	p.hooksMu.RUnlock()
+	for _, fn := range hooks {
+		fn()
+	}
 }
 
 func NewPool(dataSourceName string, readerCount int) (*Pool, error) {
@@ -174,11 +196,14 @@ func (p *Pool) Tx(ctx context.Context, fn func(ctx context.Context, tx *Tx) erro
 	tx.ctx = context.WithValue(ctx, CtxKey, tx)
 
 	var err error
+	committed := false
 	defer func() {
 		if err == nil {
 			_, err = tx.conn.ExecContext(tx.ctx, "COMMIT;")
 			if err != nil {
 				err = fmt.Errorf("Tx: commit: %w", err)
+			} else {
+				committed = true
 			}
 		}
 		if err != nil {
@@ -187,6 +212,9 @@ func (p *Pool) Tx(ctx context.Context, fn func(ctx context.Context, tx *Tx) erro
 			// either the entire database is closed or the conn is fine.
 		}
 		tx.p.writer <- conn
+		if committed {
+			p.fireCommitHooks()
+		}
 	}()
 	if ctxErr := tx.ctx.Err(); ctxErr != nil {
 		return ctxErr // fast path for canceled context

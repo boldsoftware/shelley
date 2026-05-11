@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -19,10 +18,10 @@ func TestConversationListPatchStreamInitialResetAndNewConversation(t *testing.T)
 	defer cancel()
 
 	rec := newFlusherRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/conversations/stream", nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/api/stream", nil).WithContext(ctx)
 	done := make(chan struct{})
 	go func() {
-		server.handleConversationListStream(rec, req)
+		server.handleStream(rec, req)
 		close(done)
 	}()
 
@@ -68,10 +67,10 @@ func TestConversationListPatchStreamReplaysHistoryFromOldHash(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	rec := newFlusherRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/conversations/stream", nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/api/stream", nil).WithContext(ctx)
 	done := make(chan struct{})
 	go func() {
-		server.handleConversationListStream(rec, req)
+		server.handleStream(rec, req)
 		close(done)
 	}()
 	initial := waitForPatchEventAfter(t, rec, "")
@@ -89,10 +88,10 @@ func TestConversationListPatchStreamReplaysHistoryFromOldHash(t *testing.T) {
 	replayCtx, replayCancel := context.WithCancel(context.Background())
 	defer replayCancel()
 	replayRec := newFlusherRecorder()
-	replayReq := httptest.NewRequest(http.MethodGet, "/api/conversations/stream?old_hash="+initial.NewHash, nil).WithContext(replayCtx)
+	replayReq := httptest.NewRequest(http.MethodGet, "/api/stream?conversation_list_hash="+initial.NewHash, nil).WithContext(replayCtx)
 	replayDone := make(chan struct{})
 	go func() {
-		server.handleConversationListStream(replayRec, replayReq)
+		server.handleStream(replayRec, replayReq)
 		close(replayDone)
 	}()
 	first := waitForPatchEventAfter(t, replayRec, initial.NewHash)
@@ -128,10 +127,10 @@ func TestConversationListPatchStreamUnknownHashStartsOver(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	rec := newFlusherRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/conversations/stream?old_hash=bogus", nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/api/stream?conversation_list_hash=bogus", nil).WithContext(ctx)
 	done := make(chan struct{})
 	go func() {
-		server.handleConversationListStream(rec, req)
+		server.handleStream(rec, req)
 		close(done)
 	}()
 	event := waitForPatchEventAfter(t, rec, "")
@@ -162,10 +161,10 @@ func TestConversationListPatchStreamWorkingState(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	rec := newFlusherRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/conversations/stream", nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/api/stream", nil).WithContext(ctx)
 	done := make(chan struct{})
 	go func() {
-		server.handleConversationListStream(rec, req)
+		server.handleStream(rec, req)
 		close(done)
 	}()
 	state := []ConversationWithState{}
@@ -180,8 +179,19 @@ func TestConversationListPatchStreamWorkingState(t *testing.T) {
 	if change.Reset {
 		t.Fatalf("expected granular working-state patch, got reset")
 	}
-	if len(change.Patch) != 1 || change.Patch[0].Op != "replace" || change.Patch[0].Path != "/0/working" {
-		t.Fatalf("expected single replace of /0/working, got %+v", change.Patch)
+	// agent_working is the persisted source of truth and `working` is the
+	// derived view of it on ConversationWithState. Both flip together.
+	if len(change.Patch) != 2 {
+		t.Fatalf("expected agent_working+working replaces, got %+v", change.Patch)
+	}
+	paths := map[string]bool{change.Patch[0].Path: true, change.Patch[1].Path: true}
+	if !paths["/0/agent_working"] || !paths["/0/working"] {
+		t.Fatalf("expected replaces of /0/agent_working and /0/working, got %+v", change.Patch)
+	}
+	for _, op := range change.Patch {
+		if op.Op != "replace" {
+			t.Fatalf("expected replace op, got %+v", op)
+		}
 	}
 	state = mustApplyPatch(t, state, change.Patch)
 	if !state[0].Working {
@@ -206,9 +216,9 @@ func TestConversationListPatchStreamRemovesAndReorders(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	rec := newFlusherRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/conversations/stream", nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/api/stream", nil).WithContext(ctx)
 	done := make(chan struct{})
-	go func() { server.handleConversationListStream(rec, req); close(done) }()
+	go func() { server.handleStream(rec, req); close(done) }()
 
 	state := []ConversationWithState{}
 	initial := waitForPatchEventAfter(t, rec, "")
@@ -243,6 +253,54 @@ func TestConversationListPatchStreamRemovesAndReorders(t *testing.T) {
 	<-done
 }
 
+func TestConversationListPatchStreamRapidReordersApplyCleanly(t *testing.T) {
+	t.Parallel()
+	server, database, _ := newTestServer(t)
+	ctx := context.Background()
+
+	convA, err := database.CreateConversation(ctx, strPtr("a"), true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	convB, err := database.CreateConversation(ctx, strPtr("b"), true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	streamCtx, cancel := context.WithCancel(context.Background())
+	rec := newFlusherRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/stream", nil).WithContext(streamCtx)
+	done := make(chan struct{})
+	go func() {
+		server.handleStream(rec, req)
+		close(done)
+	}()
+
+	state := []ConversationWithState{}
+	initial := waitForPatchEventAfter(t, rec, "")
+	state = mustApplyPatch(t, state, initial.Patch)
+	verifyHash(t, state, initial.NewHash)
+
+	if err := database.UpdateConversationCwd(ctx, convA.ConversationID, "/tmp/a"); err != nil {
+		t.Fatal(err)
+	}
+	server.publishConversationListUpdate(ConversationListUpdate{Type: "update"})
+	first := waitForPatchEventAfter(t, rec, initial.NewHash)
+	state = mustApplyPatch(t, state, first.Patch)
+	verifyHash(t, state, first.NewHash)
+
+	if err := database.UpdateConversationCwd(ctx, convB.ConversationID, "/tmp/b"); err != nil {
+		t.Fatal(err)
+	}
+	server.publishConversationListUpdate(ConversationListUpdate{Type: "update"})
+	second := waitForPatchEventAfter(t, rec, first.NewHash)
+	state = mustApplyPatch(t, state, second.Patch)
+	verifyHash(t, state, second.NewHash)
+
+	cancel()
+	<-done
+}
+
 func TestConversationListPatchStreamCurrentHashSkipsInitial(t *testing.T) {
 	t.Parallel()
 	server, _, _ := newTestServer(t)
@@ -255,9 +313,9 @@ func TestConversationListPatchStreamCurrentHashSkipsInitial(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	rec := newFlusherRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/conversations/stream?old_hash="+currentHash, nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/api/stream?conversation_list_hash="+currentHash, nil).WithContext(ctx)
 	done := make(chan struct{})
-	go func() { server.handleConversationListStream(rec, req); close(done) }()
+	go func() { server.handleStream(rec, req); close(done) }()
 
 	select {
 	case <-rec.flushed:
@@ -302,7 +360,7 @@ func waitForPatchEventAfter(t *testing.T, rec *flusherRecorder, prevHash string)
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		for _, ev := range parsePatchEvents(rec.getString()) {
+		for _, ev := range parseConversationStreamListPatches(rec.getString()) {
 			if (prevHash == "" && (ev.OldHash == nil || *ev.OldHash == "" || ev.Reset)) ||
 				(prevHash != "" && ev.OldHash != nil && *ev.OldHash == prevHash) {
 				return ev
@@ -315,24 +373,6 @@ func waitForPatchEventAfter(t *testing.T, rec *flusherRecorder, prevHash string)
 	}
 	t.Fatalf("timed out waiting for patch event after %q; body=%s", prevHash, rec.getString())
 	return ConversationListPatchEvent{}
-}
-
-func parsePatchEvents(body string) []ConversationListPatchEvent {
-	var events []ConversationListPatchEvent
-	for _, part := range strings.Split(body, "\n\n") {
-		if !strings.HasPrefix(part, "event: patch\n") {
-			continue
-		}
-		for _, line := range strings.Split(part, "\n") {
-			if strings.HasPrefix(line, "data: ") {
-				var ev ConversationListPatchEvent
-				if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ev); err == nil {
-					events = append(events, ev)
-				}
-			}
-		}
-	}
-	return events
 }
 
 func mustApplyPatch(t *testing.T, state []ConversationWithState, patch []conversationListPatchOp) []ConversationWithState {

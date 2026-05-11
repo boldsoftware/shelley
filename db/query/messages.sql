@@ -70,13 +70,31 @@ UPDATE messages SET user_data = ? WHERE message_id = ?;
 UPDATE messages SET excluded_from_context = ? WHERE message_id = ?;
 
 -- name: GetLatestAgentMessagesForConversations :many
-SELECT m.* FROM messages m
-INNER JOIN (
-  SELECT msg.conversation_id, MAX(msg.sequence_id) AS max_seq
-  FROM messages msg
-  INNER JOIN conversations c ON msg.conversation_id = c.conversation_id
-  WHERE msg.type = 'agent' AND c.archived = FALSE AND c.parent_conversation_id IS NULL
-  GROUP BY msg.conversation_id
-  ORDER BY max_seq DESC
-  LIMIT 50
-) latest ON m.conversation_id = latest.conversation_id AND m.sequence_id = latest.max_seq;
+-- Returns the 5 most recent agent messages per unarchived conversation
+-- (parents and subagents). The caller scans these to find the most recent
+-- one with a non-empty text block - a tail of tool-only messages doesn't
+-- leave the conversation with an empty preview. Bounded to the 500 most
+-- recently updated conversations so the patch-stream recompute stays
+-- cheap; anything outside the window renders with empty preview fields.
+WITH recent_convs AS (
+  SELECT conversation_id
+  FROM conversations
+  WHERE archived = FALSE
+  ORDER BY updated_at DESC
+  LIMIT 500
+),
+ranked AS (
+  SELECT m.message_id, m.conversation_id, m.sequence_id, m.type,
+         m.llm_data, m.user_data, m.usage_data, m.created_at,
+         m.display_data, m.excluded_from_context, m.generation,
+         ROW_NUMBER() OVER (PARTITION BY m.conversation_id ORDER BY m.sequence_id DESC) AS rn
+  FROM messages m
+  INNER JOIN recent_convs c ON m.conversation_id = c.conversation_id
+  WHERE m.type = 'agent'
+)
+SELECT message_id, conversation_id, sequence_id, type,
+       llm_data, user_data, usage_data, created_at,
+       display_data, excluded_from_context, generation
+FROM ranked
+WHERE rn <= 5
+ORDER BY conversation_id, sequence_id DESC;

@@ -35,7 +35,11 @@ test.describe('Distill conversation', () => {
     // 5. Verify the spinner is gone
     await expect(page.getByTestId('distill-in-progress')).toHaveCount(0);
 
-    // 6. Verify the distilled user message appeared
-    await expect(page.locator('text=edit predictable.go to add a response for that one...')).toBeVisible({ timeout: 10000 });
+    // 6. Verify the distilled user message appeared (scoped to the chat
+    // messages area so the conversation drawer preview, which surfaces the
+    // latest agent text, doesn't trigger a strict-mode multiple-match.)
+    await expect(
+      page.locator('.messages-container').locator('text=edit predictable.go to add a response for that one...'),
+    ).toBeVisible({ timeout: 10000 });
   });
 });

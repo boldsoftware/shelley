@@ -1,0 +1,12 @@
+-- Add agent_working column to conversations.
+--
+-- Tracks whether an agent loop is currently processing this conversation.
+-- Persisted in the database so the conversation list patch stream picks up
+-- working-state changes via the standard Pool.OnCommit hook, without any
+-- explicit notify calls.
+--
+-- The flag is purely runtime state: if the process exits while a loop is
+-- running, the row is left with agent_working=TRUE. Server startup clears
+-- the column for every conversation (see ResetAllAgentWorking) before
+-- accepting traffic, so no stale TRUE survives a restart.
+ALTER TABLE conversations ADD COLUMN agent_working BOOLEAN NOT NULL DEFAULT FALSE;

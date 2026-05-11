@@ -138,10 +138,15 @@ async function loadInitialHistory() {
 function connect() {
   statusEl.textContent = 'connecting';
   statusEl.className = 'badge';
-  const url = '/api/conversations/stream' + (hash ? '?old_hash=' + encodeURIComponent(hash) : '');
+  const url = '/api/stream' + (hash ? '?conversation_list_hash=' + encodeURIComponent(hash) : '');
   const es = new EventSource(url);
   es.addEventListener('open', () => { statusEl.textContent = 'connected'; });
-  es.addEventListener('patch', e => { onPatch(JSON.parse(e.data)); });
+  es.onmessage = e => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.conversation_list_patch) onPatch(data.conversation_list_patch);
+    } catch (err) { console.error(err); }
+  };
   es.addEventListener('error', () => { statusEl.textContent = 'disconnected'; statusEl.className = 'badge error'; });
 }
 loadInitialHistory();

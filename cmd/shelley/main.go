@@ -236,6 +236,14 @@ func setupDatabase(dbPath string, logger *slog.Logger) *db.DB {
 		os.Exit(1)
 	}
 	logger.Debug("Database migrations completed successfully")
+
+	// agent_working is runtime-only state. If the previous process exited
+	// while a loop was running, the column can be left TRUE for one or more
+	// conversations. Clear them so the conversation list reflects reality.
+	if err := database.ResetAllAgentWorking(context.Background()); err != nil {
+		logger.Error("Failed to reset agent_working state", "error", err)
+		os.Exit(1)
+	}
 	return database
 }
 

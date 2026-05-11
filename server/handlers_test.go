@@ -11,30 +11,52 @@ import (
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
+	"shelley.exe.dev/version"
 )
 
 func TestHandleVersion(t *testing.T) {
 	t.Parallel()
 	h := NewTestHarness(t)
 
-	// Test successful GET request
-	req := httptest.NewRequest(http.MethodGet, "/api/version", nil)
+	mux := http.NewServeMux()
+	h.server.RegisterRoutes(mux)
+
+	// /version serves the build info plus the API protocol_version. The
+	// protocol version is hard-coded here so a regression that flips both
+	// the constant and the test would still fail.
+	req := httptest.NewRequest(http.MethodGet, "/version", nil)
 	w := httptest.NewRecorder()
-	h.server.handleVersion(w, req)
+	mux.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", ct)
 	}
 
-	if w.Header().Get("Content-Type") != "application/json" {
-		t.Errorf("Expected Content-Type application/json, got %s", w.Header().Get("Content-Type"))
+	var body struct {
+		ProtocolVersion int   `json:"protocol_version"`
+		Modified        *bool `json:"modified"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+	if body.ProtocolVersion != 2 {
+		t.Errorf("expected protocol_version 2, got %d", body.ProtocolVersion)
+	}
+	if body.ProtocolVersion != version.ProtocolVersion {
+		t.Errorf("protocol_version constant drifted from response: const=%d resp=%d",
+			version.ProtocolVersion, body.ProtocolVersion)
+	}
+	if body.Modified != nil {
+		t.Errorf("unexpected modified field in response: %v", *body.Modified)
 	}
 
-	// Test method not allowed
-	req = httptest.NewRequest(http.MethodPost, "/api/version", nil)
+	// Non-GET requests should be rejected by the handler itself.
+	req = httptest.NewRequest(http.MethodPost, "/version", nil)
 	w = httptest.NewRecorder()
 	h.server.handleVersion(w, req)
-
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
 	}

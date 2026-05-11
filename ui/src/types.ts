@@ -94,7 +94,7 @@ export interface StreamDelta {
 export interface StreamResponse extends Omit<StreamResponseForTS, "messages"> {
   messages: Message[];
   context_window_size?: number;
-  conversation_list_update?: ConversationListUpdate;
+  conversation_list_patch?: ConversationListPatchEvent;
   heartbeat?: boolean;
   notification_event?: NotificationEvent;
   tool_progress?: ToolProgress;
@@ -214,13 +214,22 @@ export interface DiffComment {
   diffId: string;
 }
 
-// Conversation list streaming update
-export interface ConversationListUpdate {
-  type: "update" | "delete";
-  conversation?: Conversation;
-  conversation_id?: string; // For deletes
-  git_repo_root?: string;
-  git_worktree_root?: string;
+// Conversation list patch stream payload.
+export interface ConversationListPatchOp {
+  op: "add" | "remove" | "replace" | "move";
+  path: string;
+  from?: string;
+  value?: unknown;
+}
+
+export interface ConversationListPatchEvent {
+  old_hash?: string | null;
+  new_hash: string;
+  patch: ConversationListPatchOp[];
+  at: string;
+  // True when the patch replaces the whole list because the client has no
+  // resumable hash. The generic patch applier handles this as a root replace.
+  reset?: boolean;
 }
 
 // Version check types

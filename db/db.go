@@ -380,6 +380,21 @@ func (db *DB) ListConversations(ctx context.Context, limit, offset int64) ([]gen
 	return conversations, err
 }
 
+// ListAllConversations retrieves all conversations (including subagents) with pagination.
+func (db *DB) ListAllConversations(ctx context.Context, limit, offset int64) ([]generated.Conversation, error) {
+	var conversations []generated.Conversation
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		q := generated.New(rx.Conn())
+		var err error
+		conversations, err = q.ListAllConversations(ctx, generated.ListAllConversationsParams{
+			Limit:  limit,
+			Offset: offset,
+		})
+		return err
+	})
+	return conversations, err
+}
+
 // SearchConversations searches for conversations containing the given query in their slug
 func (db *DB) SearchConversations(ctx context.Context, query string, limit, offset int64) ([]generated.Conversation, error) {
 	queryPtr := &query
@@ -444,6 +459,31 @@ func (db *DB) ClearConversationSlug(ctx context.Context, conversationID string) 
 		return err
 	})
 	return &conversation, err
+}
+
+// SetConversationAgentWorking persists the in-memory agent_working flag for
+// a conversation. Writes are wrapped in a Tx so the conversation list patch
+// stream's Pool.OnCommit hook fires and SSE clients see the change. The
+// query intentionally does not bump updated_at — working state changes are
+// frequent and must not reorder the conversation list.
+func (db *DB) SetConversationAgentWorking(ctx context.Context, conversationID string, working bool) error {
+	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		return q.SetConversationAgentWorking(ctx, generated.SetConversationAgentWorkingParams{
+			AgentWorking:   working,
+			ConversationID: conversationID,
+		})
+	})
+}
+
+// ResetAllAgentWorking clears agent_working = TRUE for every conversation.
+// Called once during server startup to recover from a previous process that
+// exited mid-loop and left stale TRUE values in the table.
+func (db *DB) ResetAllAgentWorking(ctx context.Context) error {
+	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		return q.ResetAllAgentWorking(ctx)
+	})
 }
 
 // UpdateConversationCwd updates the working directory for a conversation
