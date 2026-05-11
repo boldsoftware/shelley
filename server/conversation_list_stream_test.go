@@ -503,9 +503,16 @@ func TestConversationStreamListPatchCurrentHashSkipsInitialAndStreamsLive(t *tes
 	<-done
 }
 
+// streamWaitTimeout is generous on purpose: the per-conversation stream
+// handler runs Hydrate before its first flush, which on a cold cache shells
+// out to git and walks the working tree for guidance files. Under -race on
+// a loaded CI worker that has been observed to take several seconds, so a
+// 2s ceiling produced flakes (e.g. Buildkite #2891).
+const streamWaitTimeout = 30 * time.Second
+
 func waitForConversationStreamData(t *testing.T, rec *flusherRecorder) {
 	t.Helper()
-	timer := time.NewTimer(10 * time.Second)
+	timer := time.NewTimer(streamWaitTimeout)
 	defer timer.Stop()
 	for {
 		if strings.Contains(rec.getString(), "\n\n") {
@@ -521,7 +528,7 @@ func waitForConversationStreamData(t *testing.T, rec *flusherRecorder) {
 
 func waitForConversationStreamListPatch(t *testing.T, rec *flusherRecorder, prevHash string) ConversationListPatchEvent {
 	t.Helper()
-	timer := time.NewTimer(10 * time.Second)
+	timer := time.NewTimer(streamWaitTimeout)
 	defer timer.Stop()
 	for {
 		for _, ev := range parseConversationStreamListPatches(rec.getString()) {
