@@ -20,9 +20,17 @@ type LLMServiceProvider interface {
 	GetModelInfo(modelID string) *models.ModelInfo
 }
 
-// GenerateSlug generates a slug for a conversation and updates the database
-// If conversationModelID is provided, it will be used as a fallback if no model is tagged with "slug"
+// GenerateSlug generates a slug for a conversation and updates the database.
+// If the conversation already has a slug, it is returned unchanged (no LLM call).
+// If conversationModelID is provided, it will be used as a fallback if no model is tagged with "slug".
 func GenerateSlug(ctx context.Context, llmProvider LLMServiceProvider, database *db.DB, logger *slog.Logger, conversationID, userMessage, conversationModelID string) (string, error) {
+	// Don't regenerate if the conversation already has a slug. This matters
+	// for flows that look like "first message" but are actually continuations,
+	// e.g. starting a new generation after compaction.
+	if conv, err := database.GetConversationByID(ctx, conversationID); err == nil && conv != nil && conv.Slug != nil && *conv.Slug != "" {
+		return *conv.Slug, nil
+	}
+
 	baseSlug, err := generateSlugText(ctx, llmProvider, logger, userMessage, conversationModelID)
 	if err != nil {
 		return "", err

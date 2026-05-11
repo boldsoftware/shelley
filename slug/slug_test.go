@@ -190,6 +190,58 @@ func TestGenerateSlug_DatabaseIntegration(t *testing.T) {
 	t.Logf("Successfully generated unique slugs: %q, %q, %q", slug1, slug2, slug3)
 }
 
+// TestGenerateSlug_PreservesExisting tests that GenerateSlug does not overwrite
+// an existing slug. This matters for flows that look like "first message" but
+// are actually continuations (e.g. starting a new generation after compaction).
+func TestGenerateSlug_PreservesExisting(t *testing.T) {
+	tempDB := t.TempDir() + "/slug_preserve_test.db"
+	database, err := db.New(db.Config{DSN: tempDB})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer database.Close()
+
+	ctx := context.Background()
+	if err := database.Migrate(ctx); err != nil {
+		t.Fatalf("Failed to migrate database: %v", err)
+	}
+
+	mockLLM := &MockLLMProvider{Service: &MockLLMService{ResponseText: "new-llm-slug"}}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	conv, err := database.CreateConversation(ctx, nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatalf("Failed to create conversation: %v", err)
+	}
+
+	// Pre-set the slug to simulate an already-named conversation.
+	original := "original-slug"
+	if _, err := database.UpdateConversationSlug(ctx, conv.ConversationID, original); err != nil {
+		t.Fatalf("Failed to set initial slug: %v", err)
+	}
+
+	result, err := GenerateSlug(ctx, mockLLM, database, logger, conv.ConversationID, "Some new first-looking message", "test-model")
+	if err != nil {
+		t.Fatalf("GenerateSlug returned error: %v", err)
+	}
+	if result != original {
+		t.Errorf("GenerateSlug returned %q, want %q (existing slug should be preserved)", result, original)
+	}
+
+	// Confirm the DB row is unchanged.
+	fresh, err := database.GetConversationByID(ctx, conv.ConversationID)
+	if err != nil {
+		t.Fatalf("Failed to re-fetch conversation: %v", err)
+	}
+	if fresh.Slug == nil || *fresh.Slug != original {
+		got := "<nil>"
+		if fresh.Slug != nil {
+			got = *fresh.Slug
+		}
+		t.Errorf("DB slug = %q, want %q", got, original)
+	}
+}
+
 // MockLLMServiceWithError provides a mock LLM service that returns an error
 type MockLLMServiceWithError struct{}
 
