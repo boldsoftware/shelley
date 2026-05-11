@@ -590,7 +590,7 @@ func TestBuiltinSkills(t *testing.T) {
 		t.Fatalf("expected exactly 5 built-in skills, got %d: %v", len(builtins), skillNames(builtins))
 	}
 
-	wantSkills := []string{"install-node", "previous-conversations", "reflection-integration", "schedule", "shelley-hooks"}
+	wantSkills := []string{"node-and-js-frameworks", "previous-conversations", "reflection-integration", "schedule", "shelley-hooks"}
 	for _, wantName := range wantSkills {
 		var found *Skill
 		for i := range builtins {
