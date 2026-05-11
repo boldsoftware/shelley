@@ -1185,6 +1185,25 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 		}
 	}
 
+	// For per-conversation streams on the unified /api/stream endpoint that
+	// have no list replay to emit, send a bare heartbeat *before* the blocking
+	// per-conversation work (Hydrate, message read) so the client always sees
+	// a first flush within milliseconds. Hydrate walks the working tree for
+	// guidance and skill files, which under load on CI has taken several
+	// seconds — long enough to time out client waits and to look like a hung
+	// connection. We restrict this to the unified endpoint to avoid changing
+	// the first-frame contract of the legacy /api/conversation/<id>/stream
+	// endpoint, where the first frame is expected to carry messages.
+	//
+	// List-only streams (conversationID == "") keep their contract: when a
+	// matching conversation_list_hash means there's nothing to replay, the
+	// stream stays silent until the next real event.
+	if conversationID != "" && includeConversationListPatches && len(listInitial) == 0 {
+		if !writeStreamData(StreamResponse{Heartbeat: true}) {
+			return
+		}
+	}
+
 	updates := make(chan StreamResponse, 10)
 
 	if listNext != nil {

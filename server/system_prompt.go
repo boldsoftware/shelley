@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -344,25 +345,44 @@ func collectSystemData(workingDir string) (*SystemPromptData, error) {
 		WorkingDirectory: wd,
 	}
 
-	// Try to collect git info
+	// collectGitInfo shells out to `git rev-parse`; resolve it first so the
+	// codebase and skill walks below can scope to the git root.
 	gitInfo, err := collectGitInfo(wd)
 	if err == nil {
 		data.GitInfo = gitInfo
 	}
-
-	// Collect codebase info
-	codebaseInfo, err := collectCodebaseInfo(wd, gitInfo)
-	if err == nil {
-		data.Codebase = codebaseInfo
+	var gitRoot string
+	if gitInfo != nil {
+		gitRoot = gitInfo.Root
 	}
 
-	// Check if running on exe.dev
+	// Check if running on exe.dev (cheap stat).
 	data.IsExeDev = isExeDev()
 
-	// Check sudo availability
-	data.IsSudoAvailable = isSudoAvailable()
+	// The codebase-info and skill walks each traverse the project tree,
+	// stat'ing every directory and (for codebase info) reading guidance files.
+	// They are independent and dominate Hydrate's wall time — measured ~50ms
+	// each under -race on a moderately sized repo, more on loaded CI workers.
+	// Run them concurrently; the slowest of the two becomes the floor instead
+	// of their sum.
+	var (
+		codebaseInfo *CodebaseInfo
+		codebaseErr  error
+		skillsXML    string
+		wg           sync.WaitGroup
+	)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		codebaseInfo, codebaseErr = collectCodebaseInfo(wd, gitInfo)
+	}()
+	go func() {
+		defer wg.Done()
+		skillsXML = collectSkills(wd, gitRoot, skills.Env{ExeDev: data.IsExeDev})
+	}()
 
-	// Get hostname for exe.dev
+	// Run the remaining cheap synchronous probes while the walks are in flight.
+	data.IsSudoAvailable = isSudoAvailable()
 	if data.IsExeDev {
 		if hostname, err := os.Hostname(); err == nil {
 			// If hostname doesn't contain dots, add .exe.xyz suffix
@@ -373,12 +393,11 @@ func collectSystemData(workingDir string) (*SystemPromptData, error) {
 		}
 	}
 
-	// Discover and load skills
-	var gitRoot string
-	if gitInfo != nil {
-		gitRoot = gitInfo.Root
+	wg.Wait()
+	if codebaseErr == nil {
+		data.Codebase = codebaseInfo
 	}
-	data.SkillsXML = collectSkills(wd, gitRoot, skills.Env{ExeDev: data.IsExeDev})
+	data.SkillsXML = skillsXML
 
 	return data, nil
 }
