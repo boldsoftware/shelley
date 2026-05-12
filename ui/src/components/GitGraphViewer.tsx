@@ -511,6 +511,18 @@ const INITIAL_LIMIT = 100;
 const LOAD_STEPS = [100, 1000];
 const ALL_LIMIT = 100000;
 
+type Scope = "all" | "current";
+const SCOPE_KEY = "shelley_git_graph_scope";
+function loadScope(): Scope {
+  try {
+    const v = localStorage.getItem(SCOPE_KEY);
+    if (v === "current" || v === "all") return v;
+  } catch {
+    // ignore (private mode, etc.)
+  }
+  return "all";
+}
+
 export default function GitGraphViewer({
   cwd: cwdProp,
   isOpen,
@@ -527,6 +539,15 @@ export default function GitGraphViewer({
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [limit, setLimit] = useState(INITIAL_LIMIT);
+  const [scope, setScopeState] = useState<Scope>(loadScope);
+  const setScope = useCallback((s: Scope) => {
+    setScopeState(s);
+    try {
+      localStorage.setItem(SCOPE_KEY, s);
+    } catch {
+      // ignore
+    }
+  }, []);
   // Full body + numstat for the selected commit. Lazily loaded when the
   // selection changes, with a small cache so re-selecting is instant.
   const [detail, setDetail] = useState<GitCommitDetail | null>(null);
@@ -543,7 +564,7 @@ export default function GitGraphViewer({
     setLoading(true);
     setError(null);
     api
-      .getGitGraph(cwd, limit)
+      .getGitGraph(cwd, limit, scope)
       .then((d) => {
         if (cancelled) return;
         d.commits = normalizeCommits(d.commits || []);
@@ -565,7 +586,7 @@ export default function GitGraphViewer({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, cwd, limit]);
+  }, [isOpen, cwd, limit, scope]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -703,6 +724,31 @@ export default function GitGraphViewer({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="git-graph-toolbar">
+          <div
+            className="git-graph-scope"
+            role="group"
+            aria-label="Branch scope"
+            title="Which refs to walk"
+          >
+            <button
+              type="button"
+              className={`git-graph-scope-btn${scope === "all" ? " git-graph-scope-btn-active" : ""}`}
+              onClick={() => setScope("all")}
+              aria-pressed={scope === "all"}
+              title="Show commits from all branches"
+            >
+              All branches
+            </button>
+            <button
+              type="button"
+              className={`git-graph-scope-btn${scope === "current" ? " git-graph-scope-btn-active" : ""}`}
+              onClick={() => setScope("current")}
+              aria-pressed={scope === "current"}
+              title="Show commits reachable from HEAD only"
+            >
+              Current branch
+            </button>
+          </div>
           <button
             className="git-graph-tool"
             onClick={() => setShowCwdPicker(true)}

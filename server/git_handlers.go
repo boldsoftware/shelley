@@ -797,14 +797,20 @@ func (s *Server) handleGitGraph(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get all branches/tags/HEAD as starting points so multiple tips are
-	// visible in the graph. Include HEAD last so it's emphasized.
+	// Scope: "all" (default) walks every ref so multiple tips are visible;
+	// "current" walks only HEAD's history.
+	scope := r.URL.Query().Get("scope")
+	if scope != "current" {
+		scope = "all"
+	}
 	logArgs := []string{
 		"log",
-		"--all",
 		"--date-order",
 		"--pretty=format:%H%x00%P%x00%s%x00%an%x00%ae%x00%at%x00%D",
 		"-n", strconv.Itoa(limit),
+	}
+	if scope == "all" {
+		logArgs = append(logArgs, "--all")
 	}
 	cmd := exec.Command("git", logArgs...)
 	cmd.Dir = gitRoot

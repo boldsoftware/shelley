@@ -389,9 +389,13 @@ class ApiService {
     return response.json();
   }
 
-  async getGitGraph(cwd: string, limit = 500): Promise<import("../types").GitGraphResponse> {
+  async getGitGraph(
+    cwd: string,
+    limit = 500,
+    scope: "all" | "current" = "all",
+  ): Promise<import("../types").GitGraphResponse> {
     const response = await fetch(
-      `${this.baseUrl}/git/graph?cwd=${encodeURIComponent(cwd)}&limit=${limit}`,
+      `${this.baseUrl}/git/graph?cwd=${encodeURIComponent(cwd)}&limit=${limit}&scope=${scope}`,
     );
     if (!response.ok) {
       const text = await response.text();

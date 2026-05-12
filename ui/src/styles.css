@@ -8738,7 +8738,9 @@ kbd {
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
-  /* leave room for the floating close button (~2rem) */
+  /* Leave room for the floating top-right toolbar (scope toggle + buttons),
+     which sits above the title at small widths. */
+  padding-top: 2.25rem;
   padding-right: 2.25rem;
 }
 
@@ -9430,6 +9432,42 @@ kbd {
 .git-graph-tool:focus-visible {
   outline: 2px solid var(--accent, #3b82f6);
   outline-offset: 2px;
+}
+
+/* Branch-scope segmented toggle (All branches / Current branch). */
+.git-graph-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  background: var(--bg-secondary);
+  border-radius: 999px;
+  padding: 0.1rem;
+  margin-right: 0.15rem;
+}
+.git-graph-scope-btn {
+  appearance: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 0;
+  padding: 0.15rem 0.55rem;
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1.1;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.git-graph-scope-btn:hover {
+  color: var(--text-primary);
+}
+.git-graph-scope-btn-active {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+.git-graph-scope-btn:focus-visible {
+  outline: 2px solid var(--accent, #3b82f6);
+  outline-offset: 1px;
 }
 
 /* Git repo picker. Height is locked so the modal doesn't bounce around
