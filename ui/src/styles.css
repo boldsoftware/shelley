@@ -1484,6 +1484,11 @@ button {
   min-height: 1.5em;
 }
 
+/* Streamed markdown: blinking cursor follows the rendered content. */
+.streaming-markdown .streaming-cursor {
+  margin-left: 0.15em;
+}
+
 /* Patch Tool */
 .patch-tool {
   background: var(--gray-100);

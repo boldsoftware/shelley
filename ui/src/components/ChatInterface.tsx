@@ -13,6 +13,7 @@ import { api } from "../services/api";
 import { conversationCache } from "../services/conversationCache";
 import { ThemeMode, getStoredTheme, setStoredTheme, applyTheme } from "../services/theme";
 import { useMarkdown } from "../contexts/MarkdownContext";
+import MarkdownContent from "./MarkdownContent";
 import { useI18n, type Locale, type TranslationKeys } from "../i18n";
 import { setFaviconStatus } from "../services/favicon";
 import {
@@ -2351,15 +2352,24 @@ function ChatInterface({
       return nodes;
     });
 
-    // Streaming text preview: show when agent is generating text
+    // Streaming text preview: show when agent is generating text.
+    // Render markdown the same way as completed agent messages so the
+    // transition from streaming to final isn't visually jarring.
     const streamingPreview =
       streamingText && agentWorking ? (
         <div key="streaming-preview" className="message message-agent streaming-message">
           <div className="message-content" data-testid="message-content">
-            <div className="whitespace-pre-wrap break-words">
-              {streamingText}
-              <span className="streaming-cursor">▊</span>
-            </div>
+            {markdownMode === "off" ? (
+              <div className="whitespace-pre-wrap break-words">
+                {streamingText}
+                <span className="streaming-cursor">▊</span>
+              </div>
+            ) : (
+              <div className="streaming-markdown">
+                <MarkdownContent text={streamingText} />
+                <span className="streaming-cursor">▊</span>
+              </div>
+            )}
           </div>
         </div>
       ) : null;
