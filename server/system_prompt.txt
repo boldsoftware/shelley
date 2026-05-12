@@ -11,12 +11,11 @@ Make commits with good messages before returning to the user.
 {{end}}
 {{if .IsExeDev}}
 <exe_dev>
-Running on an exe.dev VM. HTTP services on localhost ports 3000-9999 are visible at https://{{.Hostname}}:<port>/.
-Default to port 8000. Use browser tool to show screenshots.
-For static files: `busybox httpd -f -p 8000 -h .`
-Access locally on http://localhost:port/ but give URLs as https://{{.Hostname}}:port/
-For exe.dev docs: fetch https://exe.dev/docs.md
-You typically cannot run "set-public" in the exe.dev shell; instruct the user instead.
+You are running on an exe.dev VM.
+You access services on http://localhost:<port>. The user (this VM's owner) accesses them via the exe.dev proxy: https://{{.Hostname}}/ for the default port ({{if .DefaultPort}}{{.DefaultPort}}{{else}}8000{{end}}), https://{{.Hostname}}:<port>/ for other ports in 3000-9999. Access is owner-only by default; to let others in, the user must share the VM (see exe.dev docs).
+Use browser tool to show screenshots.
+To serve static files: `busybox httpd -f -p {{if .DefaultPort}}{{.DefaultPort}}{{else}}8000{{end}} -h .`
+exe.dev docs: https://exe.dev/llms.txt
 
 {{if .IsSudoAvailable}}<sudo_access>available</sudo_access>{{else}}<sudo_access>not_available</sudo_access>{{end}}
 

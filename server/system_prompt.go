@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,6 +43,7 @@ type SystemPromptData struct {
 	IsExeDev         bool
 	IsSudoAvailable  bool
 	Hostname         string // For exe.dev, the public hostname (e.g., "vmname.exe.xyz")
+	DefaultPort      int    // For exe.dev, the auto-routed HTTP port, 0 if unknown
 	SkillsXML        string // XML block for available skills
 	UserEmail        string // The exe.dev auth email of the user, if known
 }
@@ -391,6 +393,7 @@ func collectSystemData(workingDir string) (*SystemPromptData, error) {
 			}
 			data.Hostname = hostname
 		}
+		data.DefaultPort = exeDevDefaultPort()
 	}
 
 	wg.Wait()
@@ -581,6 +584,33 @@ func findSubdirGuidanceFiles(root string) []string {
 func isExeDev() bool {
 	_, err := os.Stat("/exe.dev")
 	return err == nil
+}
+
+// exeDevDefaultPort returns the live HTTP proxy port for this VM, fetched
+// via the default "reflection" integration. Returns 0 if unavailable
+// (integration disabled/detached, network error, etc.).
+func exeDevDefaultPort() int {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://reflection.int.exe.xyz/default_port", nil)
+	if err != nil {
+		return 0
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0
+	}
+	var body struct {
+		DefaultPort int `json:"default_port"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return 0
+	}
+	return body.DefaultPort
 }
 
 // collectSkills discovers skills from default directories, project .skills dirs,
