@@ -60,6 +60,7 @@ export const ru: TranslationKeys = {
   jumpToPreviousMessage: "Перейти к предыдущему сообщению пользователя",
   viewDiffs: "Просмотр изменений",
   openGitDiffViewer: "Открыть просмотр изменений Git",
+  openGitGraphViewer: "Открыть просмотр графа Git",
   addRemoveModelsKeys: "Добавить/Удалить модели и ключи",
   configureModels: "Настроить модели ИИ и API-ключи",
   notificationSettings: "Настройки уведомлений",

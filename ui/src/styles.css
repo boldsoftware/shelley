@@ -3365,12 +3365,15 @@ svg {
 .chat-nav-cluster > * {
   pointer-events: auto;
 }
-/* Override centered positioning when inside the cluster */
+/* Override centered positioning when inside the cluster; match TOC button size */
 .chat-nav-cluster .scroll-to-bottom-button {
   position: static;
   transform: none;
-  padding: 0.5rem;
+  padding: 0;
+  width: 2.5rem;
+  height: 2.5rem;
   border-radius: 999px;
+  justify-content: center;
 }
 .chat-nav-cluster .scroll-to-bottom-button:active {
   transform: scale(0.95);

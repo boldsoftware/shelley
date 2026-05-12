@@ -60,6 +60,7 @@ export interface TranslationKeys {
   jumpToPreviousMessage: string;
   viewDiffs: string;
   openGitDiffViewer: string;
+  openGitGraphViewer: string;
   addRemoveModelsKeys: string;
   configureModels: string;
   notificationSettings: string;

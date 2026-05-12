@@ -25,6 +25,7 @@ interface CommandPaletteProps {
   onSelectConversation: (conversation: ConversationWithState) => void;
   onArchiveConversation: (conversationId: string) => void;
   onOpenDiffViewer: () => void;
+  onOpenGitGraph: () => void;
   onOpenModelsModal: () => void;
   onOpenNotificationsModal: () => void;
   onNextConversation: () => void;
@@ -79,6 +80,7 @@ function CommandPalette({
   onSelectConversation,
   onArchiveConversation,
   onOpenDiffViewer,
+  onOpenGitGraph,
   onOpenModelsModal,
   onOpenNotificationsModal,
   onNextConversation,
@@ -274,6 +276,28 @@ function CommandPalette({
           onClose();
         },
         keywords: ["diff", "git", "changes", "view", "compare"],
+      });
+
+      items.push({
+        id: "open-git-graph",
+        type: "action",
+        title: t("gitGraph"),
+        subtitle: t("openGitGraphViewer"),
+        icon: (
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 3v12m0 0a3 3 0 103 3 3 3 0 00-3-3zm0-12a3 3 0 100 6 3 3 0 000-6zm12 0a3 3 0 100 6 3 3 0 000-6zm0 6c0 4-6 4-6 9"
+            />
+          </svg>
+        ),
+        action: () => {
+          onOpenGitGraph();
+          onClose();
+        },
+        keywords: ["git", "graph", "log", "commits", "history", "branch", "tree"],
       });
     }
 
@@ -580,6 +604,7 @@ function CommandPalette({
     onNextUserMessage,
     onPreviousUserMessage,
     onOpenDiffViewer,
+    onOpenGitGraph,
     onOpenModelsModal,
     onOpenNotificationsModal,
     onArchiveConversation,

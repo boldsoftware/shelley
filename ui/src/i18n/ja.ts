@@ -60,6 +60,7 @@ export const ja: TranslationKeys = {
   jumpToPreviousMessage: "前のユーザーメッセージに移動",
   viewDiffs: "差分を表示",
   openGitDiffViewer: "Git差分ビューアを開く",
+  openGitGraphViewer: "Git グラフビューアを開く",
   addRemoveModelsKeys: "モデルとキーの追加・削除",
   configureModels: "AIモデルとAPIキーを設定",
   notificationSettings: "通知設定",

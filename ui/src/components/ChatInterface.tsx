@@ -585,6 +585,7 @@ interface ChatInterfaceProps {
   isDrawerCollapsed?: boolean;
   onToggleDrawerCollapse?: () => void;
   openDiffViewerTrigger?: number; // increment to trigger opening diff viewer
+  openGitGraphTrigger?: number; // increment to trigger opening git graph viewer
   modelsRefreshTrigger?: number; // increment to trigger models list refresh
   onOpenModelsModal?: () => void;
   ephemeralTerminals: EphemeralTerminal[];
@@ -717,6 +718,7 @@ function ChatInterface({
   isDrawerCollapsed,
   onToggleDrawerCollapse,
   openDiffViewerTrigger,
+  openGitGraphTrigger,
   modelsRefreshTrigger,
   onOpenModelsModal,
   ephemeralTerminals,
@@ -1910,6 +1912,13 @@ function ChatInterface({
       setShowDiffViewer(true);
     }
   }, [openDiffViewerTrigger]);
+
+  // Handle external trigger to open git graph viewer
+  useEffect(() => {
+    if (openGitGraphTrigger && openGitGraphTrigger > 0) {
+      setShowGitGraph(true);
+    }
+  }, [openGitGraphTrigger]);
 
   const handleCancel = async () => {
     if (!conversationId || cancelling) return;

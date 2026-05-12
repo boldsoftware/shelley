@@ -60,6 +60,7 @@ export const zhCN: TranslationKeys = {
   jumpToPreviousMessage: "跳转到上一条用户消息",
   viewDiffs: "查看差异",
   openGitDiffViewer: "打开 Git 差异查看器",
+  openGitGraphViewer: "打开 Git 图查看器",
   addRemoveModelsKeys: "添加/移除模型和密钥",
   configureModels: "配置 AI 模型和 API 密钥",
   notificationSettings: "通知设置",

@@ -60,6 +60,7 @@ export const upgoer5: TranslationKeys = {
   jumpToPreviousMessage: "Jump to the thing you said before",
   viewDiffs: "See Changes",
   openGitDiffViewer: "Open the thing that shows what changed",
+  openGitGraphViewer: "Open the picture of branches in time",
   addRemoveModelsKeys: "Set Up Brains and Keys",
   configureModels: "Pick which brains to use and give them keys",
   notificationSettings: "How to Tell You Things",

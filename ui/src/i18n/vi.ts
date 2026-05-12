@@ -60,6 +60,7 @@ export const vi: TranslationKeys = {
   jumpToPreviousMessage: "Nhảy đến tin nhắn người dùng trước đó",
   viewDiffs: "Xem các thay đổi",
   openGitDiffViewer: "Mở trình duyệt thay đổi Git",
+  openGitGraphViewer: "Mở trình xem đồ thị Git",
   addRemoveModelsKeys: "Thêm/xóa models và keys",
   configureModels: "Quản lý models và API keys",
   notificationSettings: "Cài đặt thông báo",

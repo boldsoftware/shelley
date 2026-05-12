@@ -129,6 +129,7 @@ function App() {
   const [drawerCollapsed, setDrawerCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [diffViewerTrigger, setDiffViewerTrigger] = useState(0);
+  const [gitGraphTrigger, setGitGraphTrigger] = useState(0);
   const [modelsModalOpen, setModelsModalOpen] = useState(false);
   const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
   const [modelsRefreshTrigger, setModelsRefreshTrigger] = useState(0);
@@ -762,6 +763,7 @@ function App() {
               isDrawerCollapsed={drawerCollapsed}
               onToggleDrawerCollapse={toggleDrawerCollapsed}
               openDiffViewerTrigger={diffViewerTrigger}
+              openGitGraphTrigger={gitGraphTrigger}
               modelsRefreshTrigger={modelsRefreshTrigger}
               onOpenModelsModal={() => setModelsModalOpen(true)}
               ephemeralTerminals={ephemeralTerminals}
@@ -802,6 +804,10 @@ function App() {
           }}
           onOpenDiffViewer={() => {
             setDiffViewerTrigger((prev) => prev + 1);
+            setCommandPaletteOpen(false);
+          }}
+          onOpenGitGraph={() => {
+            setGitGraphTrigger((prev) => prev + 1);
             setCommandPaletteOpen(false);
           }}
           onOpenModelsModal={() => {

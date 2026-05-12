@@ -60,6 +60,7 @@ export const es: TranslationKeys = {
   jumpToPreviousMessage: "Ir al mensaje anterior del usuario",
   viewDiffs: "Ver diferencias",
   openGitDiffViewer: "Abrir el visor de diferencias de Git",
+  openGitGraphViewer: "Abrir el visor de grafo de Git",
   addRemoveModelsKeys: "Agregar/Eliminar modelos y claves",
   configureModels: "Configurar modelos de IA y claves de API",
   notificationSettings: "Configuración de notificaciones",

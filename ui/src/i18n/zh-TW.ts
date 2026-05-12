@@ -60,6 +60,7 @@ export const zhTW: TranslationKeys = {
   jumpToPreviousMessage: "跳至上一則使用者訊息",
   viewDiffs: "檢視差異",
   openGitDiffViewer: "開啟 Git 差異檢視器",
+  openGitGraphViewer: "開啟 Git 圖檢視器",
   addRemoveModelsKeys: "新增/移除模型與金鑰",
   configureModels: "設定 AI 模型與 API 金鑰",
   notificationSettings: "通知設定",
