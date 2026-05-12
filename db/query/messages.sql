@@ -98,3 +98,21 @@ SELECT message_id, conversation_id, sequence_id, type,
 FROM ranked
 WHERE rn <= 5
 ORDER BY conversation_id, sequence_id DESC;
+
+-- name: ListAgentMessagesSinceLastUser :many
+-- Returns the agent messages produced during the most recent user turn,
+-- ordered newest-first. "Most recent user turn" = all agent messages
+-- whose sequence_id is greater than the sequence_id of the most recent
+-- user message (or all agent messages if there is no user message yet,
+-- e.g. orchestrator-spawned conversations). Used by the end-of-turn
+-- notification builder to pick a useful body line.
+SELECT m.message_id, m.conversation_id, m.sequence_id, m.type,
+       m.llm_data, m.user_data, m.usage_data, m.created_at,
+       m.display_data, m.excluded_from_context, m.generation
+FROM messages m
+WHERE m.conversation_id = ? AND m.type = 'agent'
+  AND m.sequence_id > COALESCE(
+    (SELECT MAX(u.sequence_id) FROM messages u
+     WHERE u.conversation_id = ? AND u.type = 'user'),
+    0)
+ORDER BY m.sequence_id DESC;

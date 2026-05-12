@@ -251,6 +251,65 @@ func (q *Queries) GetNextSequenceID(ctx context.Context, conversationID string) 
 	return column_1, err
 }
 
+const listAgentMessagesSinceLastUser = `-- name: ListAgentMessagesSinceLastUser :many
+SELECT m.message_id, m.conversation_id, m.sequence_id, m.type,
+       m.llm_data, m.user_data, m.usage_data, m.created_at,
+       m.display_data, m.excluded_from_context, m.generation
+FROM messages m
+WHERE m.conversation_id = ? AND m.type = 'agent'
+  AND m.sequence_id > COALESCE(
+    (SELECT MAX(u.sequence_id) FROM messages u
+     WHERE u.conversation_id = ? AND u.type = 'user'),
+    0)
+ORDER BY m.sequence_id DESC
+`
+
+type ListAgentMessagesSinceLastUserParams struct {
+	ConversationID   string `json:"conversation_id"`
+	ConversationID_2 string `json:"conversation_id_2"`
+}
+
+// Returns the agent messages produced during the most recent user turn,
+// ordered newest-first. "Most recent user turn" = all agent messages
+// whose sequence_id is greater than the sequence_id of the most recent
+// user message (or all agent messages if there is no user message yet,
+// e.g. orchestrator-spawned conversations). Used by the end-of-turn
+// notification builder to pick a useful body line.
+func (q *Queries) ListAgentMessagesSinceLastUser(ctx context.Context, arg ListAgentMessagesSinceLastUserParams) ([]Message, error) {
+	rows, err := q.db.QueryContext(ctx, listAgentMessagesSinceLastUser, arg.ConversationID, arg.ConversationID_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.ConversationID,
+			&i.SequenceID,
+			&i.Type,
+			&i.LlmData,
+			&i.UserData,
+			&i.UsageData,
+			&i.CreatedAt,
+			&i.DisplayData,
+			&i.ExcludedFromContext,
+			&i.Generation,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMessages = `-- name: ListMessages :many
 SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation FROM messages
 WHERE conversation_id = ?

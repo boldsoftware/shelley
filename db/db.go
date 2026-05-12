@@ -691,6 +691,25 @@ func (db *DB) ListMessagesByType(ctx context.Context, conversationID string, mes
 	return messages, err
 }
 
+// ListAgentMessagesSinceLastUser returns the agent messages produced since
+// the most recent user message in a conversation, newest first (or all
+// agent messages if there is no user message). Useful for picking a
+// notification body that walks back through a tail of tool-only turns up
+// to the previous user turn boundary.
+func (db *DB) ListAgentMessagesSinceLastUser(ctx context.Context, conversationID string) ([]generated.Message, error) {
+	var messages []generated.Message
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		q := generated.New(rx.Conn())
+		var err error
+		messages, err = q.ListAgentMessagesSinceLastUser(ctx, generated.ListAgentMessagesSinceLastUserParams{
+			ConversationID:   conversationID,
+			ConversationID_2: conversationID,
+		})
+		return err
+	})
+	return messages, err
+}
+
 // GetLatestMessage retrieves the latest message in a conversation
 func (db *DB) GetLatestMessage(ctx context.Context, conversationID string) (*generated.Message, error) {
 	var message generated.Message

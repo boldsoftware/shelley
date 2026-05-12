@@ -1180,20 +1180,13 @@ func (s *Server) publishConversationState(state ConversationState) {
 			ConversationURL:   s.conversationURL(slug),
 			VMName:            strings.TrimSuffix(hostname, ".exe.xyz"),
 		}
-		if msg, err := s.db.GetLatestMessage(context.Background(), state.ConversationID); err == nil && msg.Type == string(db.MessageTypeAgent) && msg.LlmData != nil {
-			var llmMsg llm.Message
-			if json.Unmarshal([]byte(*msg.LlmData), &llmMsg) == nil {
-				var text string
-				for _, c := range llmMsg.Content {
-					if c.Type == llm.ContentTypeText && c.Text != "" {
-						text = c.Text
-					}
-				}
-				if len(text) > 10000 {
-					text = text[:10000] + "..."
-				}
-				payload.FinalResponse = text
-			}
+		// The literal latest agent message is often a tool-only turn (e.g.
+		// agent ended on `git status`), which produces a useless "Agent
+		// finished" notification. Walk back through every agent message
+		// since the most recent user message and pick the newest one with
+		// real text content; if none, summarize the last tool call.
+		if msgs, err := s.db.ListAgentMessagesSinceLastUser(context.Background(), state.ConversationID); err == nil {
+			payload.FinalResponse = finalResponseBody(msgs)
 		}
 		event := notifications.Event{
 			Type:           notifications.EventAgentDone,
@@ -1646,7 +1639,11 @@ func (s *Server) sendEndOfTurnHook(ctx context.Context, hook db.ConversationHook
 		return
 	}
 
-	title := notifications.Title(payload.Hostname, payload.ConversationTitle)
+	// Push notifications: prefer slug as the title and hostname as the
+	// subtitle, so iOS renders the (more useful) slug in the bold first
+	// line and the host in a smaller line below. Falls back gracefully
+	// when either is missing.
+	title, subtitle := pushTitleAndSubtitle(payload.Hostname, payload.ConversationTitle)
 	body := payload.FinalResponse
 	if body == "" {
 		body = "Agent finished"
@@ -1669,11 +1666,15 @@ func (s *Server) sendEndOfTurnHook(ctx context.Context, hook db.ConversationHook
 		data["conversation_title"] = payload.ConversationTitle
 	}
 
-	bodyBytes, err := json.Marshal(map[string]any{
+	hookPayload := map[string]any{
 		"title": title,
 		"body":  body,
 		"data":  data,
-	})
+	}
+	if subtitle != "" {
+		hookPayload["subtitle"] = subtitle
+	}
+	bodyBytes, err := json.Marshal(hookPayload)
 	if err != nil {
 		s.logger.Warn("failed to marshal end-of-turn hook", "conversationID", event.ConversationID, "error", err)
 		return
