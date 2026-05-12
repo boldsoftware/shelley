@@ -304,6 +304,11 @@ class ApiService {
     parent: string;
     entries: Array<{ name: string; is_dir: boolean; git_head_subject?: string }>;
     git_head_subject?: string;
+    /** Toplevel of the worktree containing `path` (if any). For a linked
+     *  worktree, this is the worktree's own root, not the main repo. */
+    git_repo_root?: string;
+    /** Main repository root, set only when `git_repo_root` is a linked
+     *  worktree (i.e. different from the main repo). */
     git_worktree_root?: string;
     error?: string;
   }> {

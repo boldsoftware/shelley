@@ -2183,6 +2183,7 @@ button {
 
 .message-input-form {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 0.5rem;
   max-width: 800px;
@@ -4244,13 +4245,19 @@ svg {
   font-weight: 500;
 }
 
+.directory-picker-git-root-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
 .directory-picker-git-root-btn {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   width: 100%;
   padding: 0.375rem 0.75rem;
-  margin-bottom: 0.5rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 0.375rem;
@@ -9653,4 +9660,104 @@ kbd {
   .grp-branch {
     max-width: none;
   }
+}
+
+/* Attachment thumbnails strip above the textarea. Mirrors the iOS app: when
+   a user pastes/drops an image we show a thumbnail; the [path] token is only
+   injected into the message at send time. */
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.25rem 0 0.5rem;
+  flex: 0 0 100%;
+  order: -1;
+}
+
+.message-attachment {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 0.375rem;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.message-attachment-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.message-attachment-file {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  text-align: center;
+}
+
+.message-attachment-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-attachment-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-attachment-error-badge {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(220, 38, 38, 0.7);
+  color: white;
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.message-attachment-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 2px;
+  opacity: 0.85;
+}
+
+.message-attachment-remove:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.message-attachment-remove svg {
+  width: 100%;
+  height: 100%;
 }

@@ -94,6 +94,11 @@ function CommandPalette({
   const [searchResults, setSearchResults] = useState<ConversationWithState[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isCreatingWorktree, setIsCreatingWorktree] = useState(false);
+  // Git roots for the current cwd in the new-conversation view (no
+  // currentConversation). Fetched on open from the directory picker API so we
+  // can offer "change dir to git root / worktree root" actions.
+  const [newConvGitRepoRoot, setNewConvGitRepoRoot] = useState<string | null>(null);
+  const [newConvGitWorktreeRoot, setNewConvGitWorktreeRoot] = useState<string | null>(null);
   const { markdownMode, setMarkdownMode } = useMarkdown();
   const { t, locale, setLocale } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -141,6 +146,31 @@ function CommandPalette({
       }
     };
   }, [query, searchConversations]);
+
+  // When the palette opens with no current conversation (new-conversation
+  // view), look up git roots for the locally-selected cwd so we can offer
+  // quick "change dir to git root" actions.
+  useEffect(() => {
+    if (!isOpen || currentConversation) {
+      setNewConvGitRepoRoot(null);
+      setNewConvGitWorktreeRoot(null);
+      return;
+    }
+    const cwd = localStorage.getItem("shelley_selected_cwd");
+    if (!cwd) return;
+    let cancelled = false;
+    api
+      .listDirectory(cwd)
+      .then((res) => {
+        if (cancelled) return;
+        setNewConvGitRepoRoot(res.git_repo_root ?? null);
+        setNewConvGitWorktreeRoot(res.git_worktree_root ?? null);
+      })
+      .catch((err) => console.error("Failed to list dir for git roots:", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, currentConversation]);
 
   // Build action items (these are always available)
   const actionItems: CommandItem[] = useMemo(() => {
@@ -425,6 +455,51 @@ function CommandPalette({
       });
     }
 
+    // "Change dir to git worktree/main root" — only meaningful in the
+    // new-conversation view (where there's no currentConversation and the
+    // user is picking a cwd). Sets the cwd for the next conversation.
+    const cwdRepoRoot = !currentConversation ? newConvGitRepoRoot : null;
+    const cwdWorktreeRoot = !currentConversation ? newConvGitWorktreeRoot : null;
+    const cwdNow = localStorage.getItem("shelley_selected_cwd");
+    const folderIcon = (
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+        />
+      </svg>
+    );
+    if (cwdRepoRoot && cwdRepoRoot !== cwdNow) {
+      items.push({
+        id: "cd-git-worktree-root",
+        type: "action",
+        title: "Change dir to git worktree root",
+        subtitle: cwdRepoRoot,
+        icon: folderIcon,
+        action: () => {
+          onNewConversationWithCwd(cwdRepoRoot);
+          onClose();
+        },
+        keywords: ["cd", "change", "dir", "directory", "git", "worktree", "root", "toplevel"],
+      });
+    }
+    if (cwdWorktreeRoot && cwdWorktreeRoot !== cwdNow && cwdWorktreeRoot !== cwdRepoRoot) {
+      items.push({
+        id: "cd-git-root",
+        type: "action",
+        title: "Change dir to git root",
+        subtitle: cwdWorktreeRoot,
+        icon: folderIcon,
+        action: () => {
+          onNewConversationWithCwd(cwdWorktreeRoot);
+          onClose();
+        },
+        keywords: ["cd", "change", "dir", "directory", "git", "root", "main", "repo"],
+      });
+    }
+
     // New conversation in repo root (only when current cwd is a worktree)
     if (currentConversation?.git_worktree_root) {
       items.push({
@@ -615,6 +690,8 @@ function CommandPalette({
     isCreatingWorktree,
     markdownMode,
     setMarkdownMode,
+    newConvGitRepoRoot,
+    newConvGitWorktreeRoot,
   ]);
 
   // Convert conversations to command items

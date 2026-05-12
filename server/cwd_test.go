@@ -430,6 +430,29 @@ func TestListDirectory(t *testing.T) {
 		if resp2.GitWorktreeRoot != "" {
 			t.Errorf("main repo should not have git_worktree_root, got %q", resp2.GitWorktreeRoot)
 		}
+		if resp2.GitRepoRoot != mainRepo {
+			t.Errorf("expected git_repo_root=%q, got %q", mainRepo, resp2.GitRepoRoot)
+		}
+
+		// Listing a subdirectory inside the worktree should still surface both
+		// roots so the directory picker's quick-jump buttons work from any path.
+		subDir := filepath.Join(worktreePath, "sub")
+		if err := os.Mkdir(subDir, 0o755); err != nil {
+			t.Fatalf("failed to create subdir: %v", err)
+		}
+		req = httptest.NewRequest("GET", "/api/list-directory?path="+subDir, nil)
+		w = httptest.NewRecorder()
+		h.server.handleListDirectory(w, req)
+		var resp3 ListDirectoryResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &resp3); err != nil {
+			t.Fatalf("failed to parse response: %v", err)
+		}
+		if resp3.GitRepoRoot != worktreePath {
+			t.Errorf("subdir: expected git_repo_root=%q, got %q", worktreePath, resp3.GitRepoRoot)
+		}
+		if resp3.GitWorktreeRoot != mainRepo {
+			t.Errorf("subdir: expected git_worktree_root=%q, got %q", mainRepo, resp3.GitWorktreeRoot)
+		}
 	})
 
 	t.Run("git_worktree_head_subject", func(t *testing.T) {

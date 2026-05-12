@@ -13,6 +13,7 @@ interface CachedDirectory {
   parent: string;
   entries: DirectoryEntry[];
   git_head_subject?: string;
+  git_repo_root?: string;
   git_worktree_root?: string;
 }
 
@@ -107,6 +108,7 @@ function DirectoryPickerModal({
         parent: result.parent,
         entries: result.entries || [],
         git_head_subject: result.git_head_subject,
+        git_repo_root: result.git_repo_root,
         git_worktree_root: result.git_worktree_root,
       };
 
@@ -350,28 +352,58 @@ function DirectoryPickerModal({
             </div>
           )}
 
-          {/* Go to git root button for worktrees */}
-          {displayDir?.git_worktree_root && (
-            <button
-              className="directory-picker-git-root-btn"
-              onClick={() => setInputPath(displayDir.git_worktree_root + "/")}
-            >
-              <svg
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                className="directory-picker-icon"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
-                />
-              </svg>
-              <span>Go to git root</span>
-              <span className="directory-picker-git-root-path">{displayDir.git_worktree_root}</span>
-            </button>
+          {/* Quick-jump buttons to git worktree root / main repo root */}
+          {(displayDir?.git_repo_root || displayDir?.git_worktree_root) && (
+            <div className="directory-picker-git-root-row">
+              {displayDir.git_repo_root && displayDir.git_repo_root !== displayDir.path && (
+                <button
+                  className="directory-picker-git-root-btn"
+                  onClick={() => setInputPath(displayDir.git_repo_root + "/")}
+                  title={displayDir.git_repo_root}
+                >
+                  <svg
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    className="directory-picker-icon"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+                    />
+                  </svg>
+                  <span>Go to git worktree root</span>
+                  <span className="directory-picker-git-root-path">{displayDir.git_repo_root}</span>
+                </button>
+              )}
+              {displayDir.git_worktree_root && displayDir.git_worktree_root !== displayDir.path && (
+                <button
+                  className="directory-picker-git-root-btn"
+                  onClick={() => setInputPath(displayDir.git_worktree_root + "/")}
+                  title={displayDir.git_worktree_root}
+                >
+                  <svg
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    className="directory-picker-icon"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+                    />
+                  </svg>
+                  <span>Go to git root</span>
+                  <span className="directory-picker-git-root-path">
+                    {displayDir.git_worktree_root}
+                  </span>
+                </button>
+              )}
+            </div>
           )}
 
           {/* Error message */}

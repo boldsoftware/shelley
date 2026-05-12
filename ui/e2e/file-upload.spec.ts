@@ -151,7 +151,7 @@ test.describe('File Upload via Paste and Drag', () => {
     await expect(messageInput).toHaveValue('Hello, this is a test message');
   });
 
-  test('simulated file drop shows loading placeholder then file path', async ({ page }) => {
+  test('simulated file drop shows attachment chip', async ({ page }) => {
     await page.goto('/new');
     await page.waitForLoadState('domcontentloaded');
 
@@ -185,15 +185,15 @@ test.describe('File Upload via Paste and Drag', () => {
       }
     });
 
-    // Wait for the upload to complete (should show loading then path)
+    // Wait for the upload to complete. Files now render as attachment chips
+    // above the textarea; the [path] token is only appended at send time.
     await page.waitForTimeout(500);
 
-    // After upload, the input should contain a file path reference
-    const inputValue = await messageInput.inputValue();
+    const attachment = page.locator('.message-attachment');
+    await expect(attachment).toHaveCount(1);
 
-    // Either the file was uploaded successfully (contains path) or there was an error
-    // Both are acceptable as we're testing the UI flow
-    expect(inputValue).toBeTruthy();
+    // The textarea itself should still be empty.
+    await expect(messageInput).toHaveValue('');
   });
 
   test('focus is retained in input after pasting image', async ({ page }) => {
@@ -241,8 +241,9 @@ test.describe('File Upload via Paste and Drag', () => {
 
     expect(isFocused).toBe(true);
 
-    // Verify the input has the uploaded file path
-    const inputValue = await messageInput.inputValue();
-    expect(inputValue).toContain('Testing paste focus:');
+    // The pre-existing text should remain; the pasted image is tracked as an
+    // attachment chip and is only inlined into the message at send time.
+    await expect(messageInput).toHaveValue('Testing paste focus: ');
+    await expect(page.locator('.message-attachment')).toHaveCount(1);
   });
 });

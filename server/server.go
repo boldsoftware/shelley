@@ -470,11 +470,16 @@ type DirectoryEntry struct {
 
 // ListDirectoryResponse is the response from the list-directory endpoint
 type ListDirectoryResponse struct {
-	Path            string           `json:"path"`
-	Parent          string           `json:"parent"`
-	Entries         []DirectoryEntry `json:"entries"`
-	GitHeadSubject  string           `json:"git_head_subject,omitempty"`
-	GitWorktreeRoot string           `json:"git_worktree_root,omitempty"`
+	Path           string           `json:"path"`
+	Parent         string           `json:"parent"`
+	Entries        []DirectoryEntry `json:"entries"`
+	GitHeadSubject string           `json:"git_head_subject,omitempty"`
+	// GitRepoRoot is the toplevel of the worktree containing Path (if any).
+	// For a path inside a worktree, this is the worktree's root directory.
+	GitRepoRoot string `json:"git_repo_root,omitempty"`
+	// GitWorktreeRoot is the main repository root, set only when GitRepoRoot
+	// is a linked worktree (different from the main repo).
+	GitWorktreeRoot string `json:"git_worktree_root,omitempty"`
 }
 
 // handleListDirectory lists the contents of a directory for the directory picker
@@ -587,11 +592,13 @@ func (s *Server) handleListDirectory(w http.ResponseWriter, r *http.Request) {
 		Entries: entries,
 	}
 
-	// Check if the current directory itself is a git repo
-	if isGitRepo(path) {
-		response.GitHeadSubject = getGitHeadSubject(path)
-		if root := getGitWorktreeRoot(path); root != "" {
-			response.GitWorktreeRoot = root
+	// Discover git info for the displayed path. Works for any path inside a
+	// repo, not just the repo root itself.
+	if repoRoot, err := getGitRoot(path); err == nil && repoRoot != "" {
+		response.GitRepoRoot = repoRoot
+		response.GitHeadSubject = getGitHeadSubject(repoRoot)
+		if main := getGitWorktreeRoot(repoRoot); main != "" {
+			response.GitWorktreeRoot = main
 		}
 	}
 
