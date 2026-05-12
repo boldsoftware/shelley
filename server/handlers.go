@@ -268,7 +268,7 @@ func isConversationSlugPath(path string) bool {
 }
 
 func isSPARoute(path string) bool {
-	return path == "/inbox" || path == "/new"
+	return path == "/new"
 }
 
 // acceptsGzip reports whether r accepts gzip encoding.
