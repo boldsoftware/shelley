@@ -390,11 +390,8 @@ func readAndFormatShellOutput(path string) (string, error) {
 
 func buildYieldPayload(command string, pid, pgid int, logPath, tail string, yield time.Duration) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "[shell yielded after %s; command still running in the background]\n", yield)
-	fmt.Fprintf(&b, "PID: %d\n", pid)
-	fmt.Fprintf(&b, "Process group: %d\n", pgid)
-	fmt.Fprintf(&b, "Output log:    %s\n", logPath)
-	b.WriteString("\n--- last output ---\n")
+	fmt.Fprintf(&b, "[yielded after %s; still running] PID=%d PGID=%d log=%s\n", yield, pid, pgid, logPath)
+	b.WriteString("--- last output ---\n")
 	if tail == "" {
 		b.WriteString("(no output yet)\n")
 	} else {
@@ -403,16 +400,12 @@ func buildYieldPayload(command string, pid, pgid int, logPath, tail string, yiel
 			b.WriteByte('\n')
 		}
 	}
-	b.WriteString("--- end output ---\n\n")
-	b.WriteString("To wait for completion and read latest output, use bash (adjust seconds=… as needed):\n")
-	fmt.Fprintf(&b, "  seconds=60; for i in $(seq 1 $seconds); do kill -0 %d 2>/dev/null || break; sleep 1; done; "+
-		"kill -0 %d 2>/dev/null && echo STILL_RUNNING || echo EXITED; tail -c 16384 %s\n\n",
-		pid, pid, logPath)
+	b.WriteString("--- end ---\n\n")
 	b.WriteString("To check status without waiting:\n")
 	fmt.Fprintf(&b, "  kill -0 %d 2>/dev/null && echo running || echo exited; tail -c 8192 %s\n\n", pid, logPath)
 	b.WriteString("To kill the process and its children:\n")
 	fmt.Fprintf(&b, "  kill -TERM -- -%d; sleep 1; kill -KILL -- -%d 2>/dev/null; true\n\n", pgid, pgid)
-	b.WriteString("For long-lived processes (servers, watchers), prefer tmux over yielding shell calls.\n")
+	b.WriteString("Prefer tmux for long-lived processes (servers, watchers).\n")
 	return b.String()
 }
 
