@@ -4,9 +4,28 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"shelley.exe.dev/dtach"
 )
+
+// ptyEnv returns the parent environment with TERM/COLORTERM forced to values
+// suitable for the xterm.js-backed web terminal (and any real TTY attacher).
+// Without this, `shelley dtach new` inherits whatever TERM shelley itself was
+// started with — often "dumb" or unset — which makes less, git pagers, vim,
+// etc. complain that the terminal is not fully functional.
+func ptyEnv() []string {
+	env := os.Environ()
+	out := env[:0]
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "TERM=") || strings.HasPrefix(kv, "COLORTERM=") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	out = append(out, "TERM=xterm-256color", "COLORTERM=truecolor")
+	return out
+}
 
 func runDtach(args []string) {
 	if len(args) == 0 {
@@ -51,6 +70,7 @@ func runDtachNew(args []string) {
 		Dir:        *cwd,
 		Cols:       uint16(*cols),
 		Rows:       uint16(*rows),
+		Env:        ptyEnv(),
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
