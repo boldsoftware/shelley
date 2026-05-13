@@ -616,39 +616,6 @@ function App() {
     }
   };
 
-  const handleDistillConversation = async (
-    sourceConversationId: string,
-    model: string,
-    cwd?: string,
-  ) => {
-    try {
-      const response = await api.distillConversation(sourceConversationId, model, cwd);
-      const newConversationId = response.conversation_id;
-
-      setCurrentConversationId(newConversationId);
-    } catch (err) {
-      console.error("Failed to distill conversation:", err);
-      setError("Failed to distill conversation");
-      throw err;
-    }
-  };
-
-  const handleDistillReplaceConversation = async (
-    sourceConversationId: string,
-    model: string,
-    cwd?: string,
-  ) => {
-    try {
-      const response = await api.distillReplaceConversation(sourceConversationId, model, cwd);
-      const newConversationId = response.conversation_id;
-      setCurrentConversationId(newConversationId);
-    } catch (err) {
-      console.error("Failed to distill-replace conversation:", err);
-      setError("Failed to distill-replace conversation");
-      throw err;
-    }
-  };
-
   const handleDistillNewGeneration = async (
     sourceConversationId: string,
     model: string,
@@ -703,8 +670,6 @@ function App() {
             conversationListHash={conversationListHashRef.current}
             onConversationListPatch={handleConversationListPatch}
             onFirstMessage={handleFirstMessage}
-            onDistillConversation={handleDistillConversation}
-            onDistillReplaceConversation={handleDistillReplaceConversation}
             onDistillNewGeneration={handleDistillNewGeneration}
             mostRecentCwd={mostRecentCwd}
             isDrawerCollapsed={drawerCollapsed}

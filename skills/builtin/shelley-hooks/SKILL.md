@@ -17,7 +17,7 @@ Runs on every system prompt (main, subagent, orchestrator, orchestrator-subagent
 
 ## `new-conversation`
 
-Runs once when a conversation is created: user-initiated, distillation (`handleDistillConversation`, `handleDistillReplace`), or the first run of a new subagent.
+Runs once when a conversation is created: user-initiated or the first run of a new subagent.
 
 stdin JSON:
 ```json
@@ -26,12 +26,11 @@ stdin JSON:
   "readonly": {
     "conversation_id": "cXXXXXX",
     "is_subagent": false, "parent_id": "...",
-    "is_distillation": false, "source_id": "...",
     "is_orchestrator": false
   }
 }
 ```
-`parent_id` and `source_id` are `omitempty`. Distillation leaves `prompt` unset.
+`parent_id` is `omitempty`.
 
 stdout: same top-level shape. Only `prompt`/`model`/`cwd` are read; empty fields mean no change; `readonly` is ignored. Empty stdout = no-op.
 

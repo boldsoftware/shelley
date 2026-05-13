@@ -87,8 +87,8 @@ Unless noted, results exclude **archived** conversations.
 - `GET /api/conversations/archived` — archived list.
 - `POST /api/conversations/new` — create a conversation and post the
   first user message.
-- `POST /api/conversations/distill`, `.../distill-replace`,
-  `.../distill-new-generation` — distillation operations.
+- `POST /api/conversations/distill-new-generation` — distill the current
+  conversation into the next generation of the same conversation.
 
 `ConversationWithState` row shape:
 

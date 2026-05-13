@@ -63,8 +63,6 @@ interface ContextUsageBarProps {
   maxContextTokens: number;
   conversationId?: string | null;
   modelName?: string;
-  onDistillConversation?: () => void;
-  onDistillReplaceConversation?: () => void;
   onDistillNewGeneration?: () => void;
   onStartNewGeneration?: () => void;
   agentWorking?: boolean;
@@ -75,8 +73,6 @@ function ContextUsageBar({
   maxContextTokens,
   conversationId,
   modelName,
-  onDistillConversation,
-  onDistillReplaceConversation,
   onDistillNewGeneration,
   onStartNewGeneration,
   agentWorking,
@@ -157,28 +153,6 @@ function ContextUsageBar({
     }
   }, [showPopup]);
 
-  const handleDistill = async () => {
-    if (distilling || !onDistillConversation) return;
-    setDistilling(true);
-    try {
-      await onDistillConversation();
-      setShowPopup(false);
-    } finally {
-      setDistilling(false);
-    }
-  };
-
-  const handleDistillReplace = async () => {
-    if (distilling || !onDistillReplaceConversation) return;
-    setDistilling(true);
-    try {
-      await onDistillReplaceConversation();
-      setShowPopup(false);
-    } finally {
-      setDistilling(false);
-    }
-  };
-
   const handleDistillNewGeneration = async () => {
     if (distilling || !onDistillNewGeneration) return;
     setDistilling(true);
@@ -222,20 +196,8 @@ function ContextUsageBar({
               For best results, start a new conversation.
             </div>
           )}
-          {onDistillConversation && conversationId && (
+          {conversationId && (onDistillNewGeneration || onStartNewGeneration) && (
             <div className="chat-distill-container">
-              <button onClick={handleDistill} disabled={distilling} className="chat-distill-button">
-                {distilling ? "Distilling..." : "Distill & Continue in New Conversation"}
-              </button>
-              {onDistillReplaceConversation && (
-                <button
-                  onClick={handleDistillReplace}
-                  disabled={distilling}
-                  className="chat-distill-button chat-distill-replace-button"
-                >
-                  {distilling ? "Distilling..." : "Distill & Replace in Place"}
-                </button>
-              )}
               {onDistillNewGeneration && (
                 <button
                   onClick={handleDistillNewGeneration}
@@ -571,16 +533,6 @@ interface ChatInterfaceProps {
     subagentBackend?: "shelley" | "claude-cli" | "codex-cli",
     toolOverrides?: Record<string, "on" | "off">,
   ) => Promise<void>;
-  onDistillConversation?: (
-    sourceConversationId: string,
-    model: string,
-    cwd?: string,
-  ) => Promise<void>;
-  onDistillReplaceConversation?: (
-    sourceConversationId: string,
-    model: string,
-    cwd?: string,
-  ) => Promise<void>;
   onDistillNewGeneration?: (
     sourceConversationId: string,
     model: string,
@@ -716,8 +668,6 @@ function ChatInterface({
   conversationListHash,
   onConversationListPatch,
   onFirstMessage,
-  onDistillConversation,
-  onDistillReplaceConversation,
   onDistillNewGeneration,
   mostRecentCwd,
   isDrawerCollapsed,
@@ -1940,26 +1890,6 @@ function ChatInterface({
     }
   };
 
-  // Handler to distill and continue conversation
-  const handleDistillConversation = async () => {
-    if (!conversationId || !onDistillConversation) return;
-    await onDistillConversation(
-      conversationId,
-      selectedModel,
-      currentConversation?.cwd || selectedCwd || undefined,
-    );
-  };
-
-  // Handler to distill and replace conversation in place
-  const handleDistillReplaceConversation = async () => {
-    if (!conversationId || !onDistillReplaceConversation) return;
-    await onDistillReplaceConversation(
-      conversationId,
-      selectedModel,
-      currentConversation?.cwd || selectedCwd || undefined,
-    );
-  };
-
   const handleDistillNewGeneration = async () => {
     if (!conversationId || !onDistillNewGeneration) return;
     await onDistillNewGeneration(
@@ -2447,10 +2377,6 @@ function ChatInterface({
           }
           conversationId={conversationId}
           modelName={selectedModelDisplayName}
-          onDistillConversation={onDistillConversation ? handleDistillConversation : undefined}
-          onDistillReplaceConversation={
-            onDistillReplaceConversation ? handleDistillReplaceConversation : undefined
-          }
           onDistillNewGeneration={onDistillNewGeneration ? handleDistillNewGeneration : undefined}
           onStartNewGeneration={handleStartNewGeneration}
           agentWorking={agentWorking}
@@ -2623,10 +2549,6 @@ function ChatInterface({
           }
           conversationId={conversationId}
           modelName={selectedModelDisplayName}
-          onDistillConversation={onDistillConversation ? handleDistillConversation : undefined}
-          onDistillReplaceConversation={
-            onDistillReplaceConversation ? handleDistillReplaceConversation : undefined
-          }
           onDistillNewGeneration={onDistillNewGeneration ? handleDistillNewGeneration : undefined}
           onStartNewGeneration={handleStartNewGeneration}
           agentWorking={agentWorking}

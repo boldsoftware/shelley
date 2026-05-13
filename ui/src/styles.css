@@ -7667,7 +7667,6 @@ kbd {
   opacity: 0.7;
 }
 
-.chat-distill-replace-button,
 .chat-distill-generation-button {
   background-color: var(--bg-secondary, #2a2a2a);
   border: 1px solid var(--blue-text);

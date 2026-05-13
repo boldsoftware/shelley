@@ -149,8 +149,6 @@ const (
 //	    "conversation_id": "abc-123",
 //	    "is_subagent": false,
 //	    "parent_id": "",
-//	    "is_distillation": true,
-//	    "source_id": "def-456",
 //	    "is_orchestrator": false
 //	  }
 //	}
@@ -178,8 +176,6 @@ type NewConversationReadonly struct {
 	ConversationID string `json:"conversation_id"`
 	IsSubagent     bool   `json:"is_subagent"`
 	ParentID       string `json:"parent_id,omitempty"`
-	IsDistillation bool   `json:"is_distillation"`
-	SourceID       string `json:"source_id,omitempty"`
 	IsOrchestrator bool   `json:"is_orchestrator"`
 }
 
