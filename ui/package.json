@@ -12,7 +12,7 @@
     "type-check": "tsc --noEmit",
     "format": "prettier --write 'src/**/*.{ts,tsx,js,jsx,json,css,html}'",
     "format:check": "prettier --check 'src/**/*.{ts,tsx,js,jsx,json,css,html}'",
-    "test": "tsx src/utils/linkify.test.runner.ts && tsx src/utils/inlineText.test.runner.ts && tsx src/components/MarkdownContent.test.ts && tsx src/services/conversationCache.test.runner.ts && tsx src/services/conversationListStream.test.ts && tsx src/utils/ansi.test.ts && tsx src/utils/conversationSort.test.ts && tsx src/components/MessageTimestamp.test.ts",
+    "test": "tsx src/utils/linkify.test.runner.ts && tsx src/utils/inlineText.test.runner.ts && tsx src/components/MarkdownContent.test.ts && tsx src/services/conversationCache.test.runner.ts && tsx src/services/conversationListStream.test.ts && tsx src/utils/ansi.test.ts && tsx src/utils/conversationSort.test.ts && tsx src/components/MessageTimestamp.test.ts && tsx src/utils/placeholderHints.test.ts",
     "generate-types": "cd .. && go run ./cmd/go2ts.go -o ui/src/generated-types.ts",
     "test:e2e": "pnpm run build && playwright test",
     "test:e2e:headed": "pnpm run build && playwright test --headed",

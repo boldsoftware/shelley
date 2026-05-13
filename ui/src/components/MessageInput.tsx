@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useI18n } from "../i18n";
+import { pickPlaceholderHint } from "../utils/placeholderHints";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -125,11 +126,21 @@ function MessageInput({
   const speechRecognitionAvailable =
     typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
-  // Responsive placeholder text
-  const placeholderText = useMemo(
-    () => (isSmallScreen ? t("messagePlaceholderShort") : t("messagePlaceholder")),
-    [isSmallScreen, t],
-  );
+  // Pick a placeholder hint per mount; re-pick when the platform (mobile/desktop) flips.
+  const [hint, setHint] = useState(() => pickPlaceholderHint(isSmallScreen));
+  const initialPlatformRef = useRef(isSmallScreen);
+  useEffect(() => {
+    if (isSmallScreen === initialPlatformRef.current) return; // skip initial mount; useState already rolled
+    initialPlatformRef.current = isSmallScreen;
+    setHint(pickPlaceholderHint(isSmallScreen));
+  }, [isSmallScreen]);
+
+  // Responsive placeholder text. The "default" hint defers to the i18n string;
+  // other hints carry literal text and are not translated.
+  const placeholderText = useMemo(() => {
+    if (hint.id !== "default" && hint.text) return hint.text;
+    return isSmallScreen ? t("messagePlaceholderShort") : t("messagePlaceholder");
+  }, [hint, isSmallScreen, t]);
 
   // Track screen size for responsive placeholder
   useEffect(() => {
