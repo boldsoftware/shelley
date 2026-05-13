@@ -1234,6 +1234,17 @@ func (s *Server) publishConversationState(state ConversationState) {
 			for _, hook := range hooks {
 				go s.sendEndOfTurnHook(context.Background(), hook, event)
 			}
+			go RunEndOfTurnHook(EndOfTurnHookInput{
+				Type:            "end_of_turn",
+				ConversationID:  event.ConversationID,
+				Timestamp:       event.Timestamp,
+				Hostname:        payload.Hostname,
+				Model:           payload.Model,
+				Slug:            payload.ConversationTitle,
+				ConversationURL: payload.ConversationURL,
+				VMName:          payload.VMName,
+				FinalResponse:   payload.FinalResponse,
+			})
 		}
 		// Still set notifEvent so the SSE stream broadcasts it to the UI.
 		notifEvent = &event

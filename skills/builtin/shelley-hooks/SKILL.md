@@ -41,3 +41,28 @@ Applied when non-empty and changed:
 - `prompt` → first user message (ignored on distillation paths)
 
 Failure (non-zero exit, invalid JSON, etc.) is logged and non-fatal; original values are used, so a broken hook doesn't permanently block conversation creation.
+
+## `end-of-turn`
+
+Fires when an agent finishes a turn — the same signal that drives end-of-turn
+notifications (notification channels, push notifications, conversation-hook
+webhooks). Suppressed for subagent conversations. Runs asynchronously in a
+background goroutine; stdout is ignored.
+
+stdin JSON:
+```json
+{
+  "type": "end_of_turn",
+  "conversation_id": "cXXXXXX",
+  "timestamp": "2024-01-02T03:04:05Z",
+  "hostname": "host.exe.xyz",
+  "model": "claude-sonnet-4.5",
+  "slug": "my-slug",
+  "conversation_url": "https://host.exe.xyz/c/my-slug",
+  "vm_name": "host",
+  "final_response": "agent's last text or tool-call summary"
+}
+```
+
+Failure (non-zero exit, etc.) is logged and non-fatal. Typical uses: play a
+sound, post a desktop notification, ping a local script.

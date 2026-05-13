@@ -133,6 +133,7 @@ func collapseBlankLines(s string) string {
 const (
 	hookSystemPrompt    = "system-prompt"
 	hookNewConversation = "new-conversation"
+	hookEndOfTurn       = "end-of-turn"
 )
 
 // NewConversationHookInput is the JSON data passed to the new-conversation hook on stdin.
@@ -272,6 +273,60 @@ func RunNewConversationHook(input NewConversationHookInput) NewConversationHookR
 	}
 
 	return result
+}
+
+// EndOfTurnHookInput is the JSON data passed to the end-of-turn hook on stdin.
+// It mirrors the notifications.Event shape that drives end-of-turn notifications
+// (notification channels, push notifications, conversation-hook webhooks), so a
+// local hook can react to the same signal.
+type EndOfTurnHookInput struct {
+	Type           string    `json:"type"`
+	ConversationID string    `json:"conversation_id"`
+	Timestamp      time.Time `json:"timestamp"`
+
+	// Payload fields, flattened from notifications.AgentDonePayload.
+	Hostname        string `json:"hostname,omitempty"`
+	Model           string `json:"model,omitempty"`
+	Slug            string `json:"slug,omitempty"`
+	ConversationURL string `json:"conversation_url,omitempty"`
+	VMName          string `json:"vm_name,omitempty"`
+	FinalResponse   string `json:"final_response,omitempty"`
+}
+
+// RunEndOfTurnHook fires the end-of-turn hook if it exists. It runs the hook
+// with the event JSON on stdin and ignores stdout. Failures are logged and
+// non-fatal: the hook is purely a side-channel for local automation (like
+// playing a sound or sending a desktop notification).
+func RunEndOfTurnHook(input EndOfTurnHookInput) {
+	hookPath, err := findHook(hookEndOfTurn)
+	if err != nil {
+		slog.Error("end-of-turn hook: findHook failed", "error", err)
+		return
+	}
+	if hookPath == "" {
+		return
+	}
+
+	inputJSON, err := json.Marshal(input)
+	if err != nil {
+		slog.Error("end-of-turn hook: failed to marshal input", "error", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, hookPath)
+	cmd.Stdin = strings.NewReader(string(inputJSON))
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		slog.Error("end-of-turn hook failed", "hook", hookPath, "error", err, "stderr", stderr.String())
+		return
+	}
+	slog.Info("end-of-turn hook applied", "hook", hookPath, "conversationID", input.ConversationID)
 }
 
 // findHook returns the path to the hook if it exists and is executable,

@@ -867,3 +867,74 @@ echo '{"slug": "Hello World!"}'`
 		t.Errorf("slug = %q, want %q", *conv.Slug, "hello-world")
 	}
 }
+
+func TestRunEndOfTurnHookNoHook(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	// Should be a no-op and not panic.
+	RunEndOfTurnHook(EndOfTurnHookInput{ConversationID: "abc"})
+}
+
+func TestRunEndOfTurnHookReceivesJSON(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hookDir := filepath.Join(home, ".config", "shelley", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	dumpFile := filepath.Join(home, "end-of-turn.json")
+	hookPath := filepath.Join(hookDir, "end-of-turn")
+	script := "#!/bin/sh\ncat > " + dumpFile + "\n"
+	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	RunEndOfTurnHook(EndOfTurnHookInput{
+		Type:            "end_of_turn",
+		ConversationID:  "conv-789",
+		Hostname:        "phil-dev",
+		Model:           "claude-sonnet",
+		Slug:            "my-slug",
+		ConversationURL: "https://phil-dev.exe.xyz/c/my-slug",
+		VMName:          "phil-dev",
+		FinalResponse:   "all done",
+	})
+
+	// RunEndOfTurnHook is synchronous, so the file is already on disk.
+	data, err := os.ReadFile(dumpFile)
+	if err != nil {
+		t.Fatalf("failed to read hook input: %v", err)
+	}
+	input := string(data)
+	for _, expected := range []string{
+		`"type":"end_of_turn"`,
+		`"conversation_id":"conv-789"`,
+		`"hostname":"phil-dev"`,
+		`"model":"claude-sonnet"`,
+		`"slug":"my-slug"`,
+		`"conversation_url":"https://phil-dev.exe.xyz/c/my-slug"`,
+		`"vm_name":"phil-dev"`,
+		`"final_response":"all done"`,
+	} {
+		if !strings.Contains(input, expected) {
+			t.Errorf("hook input missing %q\ngot: %s", expected, input)
+		}
+	}
+}
+
+func TestRunEndOfTurnHookFailureIsNonFatal(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	hookDir := filepath.Join(home, ".config", "shelley", "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(hookDir, "end-of-turn")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Just make sure it doesn't panic.
+	RunEndOfTurnHook(EndOfTurnHookInput{ConversationID: "abc"})
+}
