@@ -84,7 +84,7 @@ function ContextUsageBar({
   const [showPopup, setShowPopup] = useState(false);
   const [distilling, setDistilling] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
-  const hasAutoOpenedRef = useRef<string | null>(null);
+  const hasAutoOpenedRef = useRef<boolean>(false);
 
   const percentage = maxContextTokens > 0 ? (contextWindowSize / maxContextTokens) * 100 : 0;
   const clampedPercentage = Math.min(percentage, 100);
@@ -106,7 +106,9 @@ function ContextUsageBar({
     setShowPopup(!showPopup);
   };
 
-  // Auto-open popup when hitting 100k tokens (once per conversation).
+  // Auto-open popup when hitting the long-conversation threshold, but only
+  // ever once per browser (tracked via localStorage). After that, the user
+  // can still open the popup manually by clicking the warning indicator.
   // Only auto-open at end of turn (when agent is not working) so we don't
   // interrupt the user while the agent is plugging away.
   // Skip auto-open on mobile where the popup is too intrusive.
@@ -117,9 +119,11 @@ function ContextUsageBar({
       !agentWorking &&
       !isMobile &&
       conversationId &&
-      hasAutoOpenedRef.current !== conversationId
+      !hasAutoOpenedRef.current &&
+      localStorage.getItem("shelley_long_convo_popup_shown") !== "1"
     ) {
-      hasAutoOpenedRef.current = conversationId;
+      hasAutoOpenedRef.current = true;
+      localStorage.setItem("shelley_long_convo_popup_shown", "1");
       setShowPopup(true);
     }
   }, [showLongConversationWarning, agentWorking, conversationId]);
