@@ -768,7 +768,14 @@ function App() {
           onPreviousConversation={navigateToPreviousConversation}
           onNextUserMessage={navigateToNextUserMessage}
           onPreviousUserMessage={navigateToPreviousUserMessage}
-          hasCwd={!!(currentConversation?.cwd || mostRecentCwd)}
+          hasCwd={
+            !!(
+              currentConversation?.cwd ||
+              mostRecentCwd ||
+              localStorage.getItem("shelley_selected_cwd") ||
+              window.__SHELLEY_INIT__?.default_cwd
+            )
+          }
         />
 
         <ModelsModal
