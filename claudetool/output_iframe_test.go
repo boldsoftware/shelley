@@ -156,7 +156,7 @@ func TestOutputIframeRun(t *testing.T) {
 				t.Fatalf("failed to marshal input: %v", err)
 			}
 
-			result := tool.Run(context.Background(), inputJSON)
+			result := tool.Tool().Run(context.Background(), inputJSON)
 
 			if tt.wantErr {
 				if result.Error == nil {

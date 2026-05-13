@@ -61,29 +61,22 @@ func (b *BrowseTools) AccessibilityTool() *llm.Tool {
 		Name:        "browser_accessibility",
 		Description: description,
 		InputSchema: json.RawMessage(schema),
-		Run:         b.accessibilityRun(),
+		Run:         llm.RunJSON(b.accessibilityRun),
 	}
 }
 
-func (b *BrowseTools) accessibilityRun() func(context.Context, json.RawMessage) llm.ToolOut {
-	return func(ctx context.Context, m json.RawMessage) llm.ToolOut {
-		var input accessibilityInput
-		if err := json.Unmarshal(m, &input); err != nil {
-			return llm.ErrorfToolOut("invalid input: %w", err)
-		}
-
-		switch input.Action {
-		case "help":
-			return b.accessibilityHelp()
-		case "tree":
-			return b.accessibilityTree(input.Depth)
-		case "query":
-			return b.accessibilityQuery(input.Name, input.Role)
-		case "node":
-			return b.accessibilityNode(input.Selector)
-		default:
-			return llm.ErrorfToolOut("unknown action: %q (use help, tree, query, or node)", input.Action)
-		}
+func (b *BrowseTools) accessibilityRun(ctx context.Context, input accessibilityInput) llm.ToolOut {
+	switch input.Action {
+	case "help":
+		return b.accessibilityHelp()
+	case "tree":
+		return b.accessibilityTree(input.Depth)
+	case "query":
+		return b.accessibilityQuery(input.Name, input.Role)
+	case "node":
+		return b.accessibilityNode(input.Selector)
+	default:
+		return llm.ErrorfToolOut("unknown action: %q (use help, tree, query, or node)", input.Action)
 	}
 }
 
@@ -302,7 +295,8 @@ func (b *BrowseTools) accessibilityNode(selector string) llm.ToolOut {
 
 	// Find the DOM node and get its AX tree in a single Run call
 	var axNodes []*accessibility.Node
-	err = chromedp.Run(browserCtx,
+	err = chromedp.Run(
+		browserCtx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var domNodes []*cdp.Node
 			if err := chromedp.Nodes(selector, &domNodes, chromedp.ByQuery).Do(ctx); err != nil {

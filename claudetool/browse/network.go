@@ -124,16 +124,11 @@ func (b *BrowseTools) NetworkTool() *llm.Tool {
 		Name:        "browser_network",
 		Description: description,
 		InputSchema: json.RawMessage(schema),
-		Run:         b.networkRun,
+		Run:         llm.RunJSON(b.networkRun),
 	}
 }
 
-func (b *BrowseTools) networkRun(ctx context.Context, m json.RawMessage) llm.ToolOut {
-	var input networkInput
-	if err := json.Unmarshal(m, &input); err != nil {
-		return llm.ErrorfToolOut("invalid input: %w", err)
-	}
-
+func (b *BrowseTools) networkRun(ctx context.Context, input networkInput) llm.ToolOut {
 	switch input.Action {
 	case "help":
 		return b.networkHelpRun()
@@ -280,7 +275,8 @@ func (b *BrowseTools) networkGetLogRun(limit int, filter string) llm.ToolOut {
 		}
 		return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf(
 			"Retrieved %d network requests (%d bytes).\nOutput written to: %s\nUse `cat %s` to view the full content.",
-			len(filtered), len(logData), filePath, filePath))}
+			len(filtered), len(logData), filePath, filePath,
+		))}
 	}
 
 	var sb strings.Builder
@@ -345,7 +341,8 @@ func (b *BrowseTools) networkCookiesRun() llm.ToolOut {
 		}
 		return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf(
 			"Retrieved %d cookies (%d bytes).\nOutput written to: %s\nUse `cat %s` to view the full content.",
-			len(cookies), len(cookieData), filePath, filePath))}
+			len(cookies), len(cookieData), filePath, filePath,
+		))}
 	}
 
 	var sb strings.Builder

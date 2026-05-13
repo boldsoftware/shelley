@@ -2,7 +2,6 @@ package claudetool
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -131,12 +130,7 @@ func TestKeywordRun(t *testing.T) {
 		Query:       "what files exist in this project",
 		SearchTerms: []string{"test", "file"},
 	}
-	inputBytes, err := json.Marshal(input)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	result := keywordTool.keywordRun(context.Background(), inputBytes)
+	result := keywordTool.keywordRun(context.Background(), input)
 
 	if result.Error != nil {
 		t.Errorf("unexpected error: %v", result.Error)

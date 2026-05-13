@@ -2,7 +2,6 @@ package claudetool
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -99,16 +98,11 @@ func (t *LLMOneShotTool) Tool() *llm.Tool {
 		Name:        llmOneShotName,
 		Description: t.llmOneShotDescription(),
 		InputSchema: llm.MustSchema(t.llmOneShotInputSchema()),
-		Run:         t.Run,
+		Run:         llm.RunJSON(t.run),
 	}
 }
 
-func (t *LLMOneShotTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
-	var req llmOneShotInput
-	if err := json.Unmarshal(m, &req); err != nil {
-		return llm.ErrorfToolOut("failed to parse input: %w", err)
-	}
-
+func (t *LLMOneShotTool) run(ctx context.Context, req llmOneShotInput) llm.ToolOut {
 	if req.PromptFile == "" {
 		return llm.ErrorfToolOut("prompt_file is required")
 	}

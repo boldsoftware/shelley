@@ -2,7 +2,6 @@ package claudetool
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -135,16 +134,11 @@ func (s *SubagentTool) Tool() *llm.Tool {
 		Name:        subagentName,
 		Description: s.subagentDescription(),
 		InputSchema: llm.MustSchema(s.subagentInputSchema()),
-		Run:         s.Run,
+		Run:         llm.RunJSON(s.run),
 	}
 }
 
-func (s *SubagentTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
-	var req subagentInput
-	if err := json.Unmarshal(m, &req); err != nil {
-		return llm.ErrorfToolOut("failed to parse subagent input: %w", err)
-	}
-
+func (s *SubagentTool) run(ctx context.Context, req subagentInput) llm.ToolOut {
 	// Validate slug
 	if req.Slug == "" {
 		return llm.ErrorfToolOut("slug is required")

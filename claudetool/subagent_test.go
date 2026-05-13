@@ -88,7 +88,7 @@ func TestSubagentTool_Run(t *testing.T) {
 	}
 	inputJSON, _ := json.Marshal(input)
 
-	result := tool.Run(context.Background(), inputJSON)
+	result := tool.Tool().Run(context.Background(), inputJSON)
 	if result.Error != nil {
 		t.Fatalf("unexpected error: %v", result.Error)
 	}
@@ -130,7 +130,7 @@ func TestSubagentTool_Validation(t *testing.T) {
 	t.Run("empty slug", func(t *testing.T) {
 		input := subagentInput{Slug: "", Prompt: "test"}
 		inputJSON, _ := json.Marshal(input)
-		result := tool.Run(context.Background(), inputJSON)
+		result := tool.Tool().Run(context.Background(), inputJSON)
 		if result.Error == nil {
 			t.Error("expected error for empty slug")
 		}
@@ -140,7 +140,7 @@ func TestSubagentTool_Validation(t *testing.T) {
 	t.Run("empty prompt", func(t *testing.T) {
 		input := subagentInput{Slug: "test", Prompt: ""}
 		inputJSON, _ := json.Marshal(input)
-		result := tool.Run(context.Background(), inputJSON)
+		result := tool.Tool().Run(context.Background(), inputJSON)
 		if result.Error == nil {
 			t.Error("expected error for empty prompt")
 		}
@@ -150,7 +150,7 @@ func TestSubagentTool_Validation(t *testing.T) {
 	t.Run("invalid slug", func(t *testing.T) {
 		input := subagentInput{Slug: "@#$%", Prompt: "test"}
 		inputJSON, _ := json.Marshal(input)
-		result := tool.Run(context.Background(), inputJSON)
+		result := tool.Tool().Run(context.Background(), inputJSON)
 		if result.Error == nil {
 			t.Error("expected error for invalid slug")
 		}
@@ -172,7 +172,7 @@ func TestSubagentTool_InheritsModel(t *testing.T) {
 
 	input := subagentInput{Slug: "test", Prompt: "do something"}
 	inputJSON, _ := json.Marshal(input)
-	tool.Run(context.Background(), inputJSON)
+	tool.Tool().Run(context.Background(), inputJSON)
 
 	if runner.lastModelID != "claude-sonnet-4-6" {
 		t.Errorf("expected model 'claude-sonnet-4-6', got %q", runner.lastModelID)
@@ -219,7 +219,7 @@ func TestSubagentTool_ModelOverride(t *testing.T) {
 	// Override model
 	input := subagentInput{Slug: "test", Prompt: "do something", Model: "claude-haiku-4.5"}
 	inputJSON, _ := json.Marshal(input)
-	tool.Run(context.Background(), inputJSON)
+	tool.Tool().Run(context.Background(), inputJSON)
 
 	if runner.lastModelID != "claude-haiku-4.5" {
 		t.Errorf("expected model 'claude-haiku-4.5', got %q", runner.lastModelID)
@@ -245,7 +245,7 @@ func TestSubagentTool_ModelOverride_InvalidModel(t *testing.T) {
 
 	input := subagentInput{Slug: "test", Prompt: "do something", Model: "nonexistent-model"}
 	inputJSON, _ := json.Marshal(input)
-	result := tool.Run(context.Background(), inputJSON)
+	result := tool.Tool().Run(context.Background(), inputJSON)
 	if result.Error == nil {
 		t.Fatal("expected error for invalid model")
 	}

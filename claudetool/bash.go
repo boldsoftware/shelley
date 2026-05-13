@@ -3,7 +3,6 @@ package claudetool
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -84,7 +83,7 @@ func (b *BashTool) Tool() *llm.Tool {
 		Name:        bashName,
 		Description: strings.TrimSpace(bashDescription),
 		InputSchema: llm.MustSchema(bashInputSchema),
-		Run:         b.Run,
+		Run:         llm.RunJSON(b.run),
 	}
 }
 
@@ -158,12 +157,7 @@ func (i *bashInput) timeout(t *Timeouts) time.Duration {
 	return t.fast()
 }
 
-func (b *BashTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
-	var req bashInput
-	if err := json.Unmarshal(m, &req); err != nil {
-		return llm.ErrorfToolOut("failed to unmarshal bash command input: %w", err)
-	}
-
+func (b *BashTool) run(ctx context.Context, req bashInput) llm.ToolOut {
 	// Check that the working directory exists
 	wd := b.getWorkingDir()
 	if _, err := os.Stat(wd); err != nil {

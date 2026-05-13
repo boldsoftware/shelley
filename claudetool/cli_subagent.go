@@ -3,7 +3,6 @@ package claudetool
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os/exec"
@@ -86,16 +85,11 @@ func (t *CLISubagentTool) Tool() *llm.Tool {
 		Name:        subagentName, // same name as native subagent — replaces it
 		Description: t.description(),
 		InputSchema: llm.MustSchema(t.inputSchema()),
-		Run:         t.Run,
+		Run:         llm.RunJSON(t.run),
 	}
 }
 
-func (t *CLISubagentTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
-	var req cliSubagentInput
-	if err := json.Unmarshal(m, &req); err != nil {
-		return llm.ErrorfToolOut("failed to parse CLI subagent input: %w", err)
-	}
-
+func (t *CLISubagentTool) run(ctx context.Context, req cliSubagentInput) llm.ToolOut {
 	// Validate inputs
 	if req.Slug == "" {
 		return llm.ErrorfToolOut("slug is required")
@@ -143,7 +137,8 @@ func (t *CLISubagentTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOu
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	slog.Info("Running CLI subagent",
+	slog.Info(
+		"Running CLI subagent",
 		"agent", t.CLIAgent,
 		"slug", req.Slug,
 		"command", cmdName,
@@ -156,7 +151,8 @@ func (t *CLISubagentTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOu
 
 	// Log stderr if any
 	if stderr.Len() > 0 {
-		slog.Warn("CLI subagent stderr",
+		slog.Warn(
+			"CLI subagent stderr",
 			"agent", t.CLIAgent,
 			"slug", req.Slug,
 			"stderr", stderr.String(),

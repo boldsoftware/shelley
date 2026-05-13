@@ -2,7 +2,6 @@ package claudetool
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -172,16 +171,11 @@ func (s *ShellTool) Tool() *llm.Tool {
 		Name:        shellName,
 		Description: strings.TrimSpace(shellDescription),
 		InputSchema: llm.MustSchema(s.inputSchema()),
-		Run:         s.Run,
+		Run:         llm.RunJSON(s.run),
 	}
 }
 
-func (s *ShellTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
-	var req shellInput
-	if err := json.Unmarshal(m, &req); err != nil {
-		return llm.ErrorfToolOut("failed to unmarshal shell command input: %w", err)
-	}
-
+func (s *ShellTool) run(ctx context.Context, req shellInput) llm.ToolOut {
 	wd := s.WorkingDir.Get()
 	if _, err := os.Stat(wd); err != nil {
 		if os.IsNotExist(err) {
@@ -240,7 +234,8 @@ func (s *ShellTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
 	env := slices.DeleteFunc(os.Environ(), func(s string) bool {
 		return strings.HasPrefix(s, "SHELLEY_CONVERSATION_ID=")
 	})
-	env = append(env,
+	env = append(
+		env,
 		"SKETCH=1",
 		"EDITOR=/bin/false",
 		`GIT_SEQUENCE_EDITOR=echo "To do an interactive rebase, run it in a tmux session." && exit 1`,

@@ -231,6 +231,55 @@ func TestErrorfToolOut(t *testing.T) {
 	}
 }
 
+func TestRunJSON(t *testing.T) {
+	type request struct {
+		Name string `json:"name"`
+	}
+
+	var gotCtx context.Context
+	var gotReq request
+	run := RunJSON(func(ctx context.Context, req request) ToolOut {
+		gotCtx = ctx
+		gotReq = req
+		return ToolOut{LLMContent: TextContent("hello " + req.Name)}
+	})
+
+	ctx := context.WithValue(context.Background(), struct{}{}, "ctx-value")
+	out := run(ctx, json.RawMessage(`{"name":"Ada"}`))
+	if out.Error != nil {
+		t.Fatalf("RunJSON returned error: %v", out.Error)
+	}
+	if gotCtx != ctx {
+		t.Fatal("RunJSON did not pass through context")
+	}
+	if gotReq.Name != "Ada" {
+		t.Fatalf("RunJSON decoded request %+v, want name Ada", gotReq)
+	}
+	if len(out.LLMContent) != 1 || out.LLMContent[0].Text != "hello Ada" {
+		t.Fatalf("RunJSON output = %+v", out.LLMContent)
+	}
+}
+
+func TestRunJSONInvalidJSON(t *testing.T) {
+	type request struct {
+		Name string `json:"name"`
+	}
+
+	called := false
+	run := RunJSON(func(ctx context.Context, req request) ToolOut {
+		called = true
+		return ToolOut{}
+	})
+
+	out := run(context.Background(), json.RawMessage(`{"name":123}`))
+	if out.Error == nil {
+		t.Fatal("RunJSON returned nil error for invalid input")
+	}
+	if called {
+		t.Fatal("RunJSON called handler after invalid input")
+	}
+}
+
 func TestUsageAdd(t *testing.T) {
 	u1 := Usage{
 		InputTokens:              100,

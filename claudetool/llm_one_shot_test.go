@@ -73,7 +73,7 @@ func TestLLMOneShotShortResult(t *testing.T) {
 	}
 
 	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt"})
-	result := tool.Run(context.Background(), input)
+	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error != nil {
 		t.Fatalf("unexpected error: %v", result.Error)
@@ -107,7 +107,7 @@ func TestLLMOneShotLongResult(t *testing.T) {
 	}
 
 	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt"})
-	result := tool.Run(context.Background(), input)
+	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error != nil {
 		t.Fatalf("unexpected error: %v", result.Error)
@@ -145,7 +145,7 @@ func TestLLMOneShotExplicitOutputFile(t *testing.T) {
 	}
 
 	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt", OutputFile: "output.txt"})
-	result := tool.Run(context.Background(), input)
+	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error != nil {
 		t.Fatalf("unexpected error: %v", result.Error)
@@ -188,7 +188,7 @@ func TestLLMOneShotAlternateModel(t *testing.T) {
 	}
 
 	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt", Model: "other-model"})
-	result := tool.Run(context.Background(), input)
+	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error != nil {
 		t.Fatalf("unexpected error: %v", result.Error)
@@ -220,7 +220,7 @@ func TestLLMOneShotUnknownModel(t *testing.T) {
 	}
 
 	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt", Model: "bogus-model"})
-	result := tool.Run(context.Background(), input)
+	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error == nil {
 		t.Fatal("expected error for unknown model")
@@ -247,7 +247,7 @@ func TestLLMOneShotMissingFile(t *testing.T) {
 	}
 
 	input, _ := json.Marshal(llmOneShotInput{PromptFile: "nonexistent.txt"})
-	result := tool.Run(context.Background(), input)
+	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error == nil {
 		t.Fatal("expected error for missing file")
@@ -275,7 +275,7 @@ func TestLLMOneShotEmptyPrompt(t *testing.T) {
 	}
 
 	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt"})
-	result := tool.Run(context.Background(), input)
+	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error == nil {
 		t.Fatal("expected error for empty prompt")
@@ -367,7 +367,7 @@ func TestLLMOneShotSystemPrompt(t *testing.T) {
 	}
 
 	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt", SystemPrompt: "You are a pirate."})
-	result := tool.Run(context.Background(), input)
+	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error != nil {
 		t.Fatalf("unexpected error: %v", result.Error)

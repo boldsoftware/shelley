@@ -144,6 +144,18 @@ type Tool struct {
 	Run func(ctx context.Context, input json.RawMessage) ToolOut `json:"-"`
 }
 
+// RunJSON adapts a typed tool handler to Tool.Run by unmarshalling the raw
+// JSON tool input before calling run.
+func RunJSON[T any](run func(context.Context, T) ToolOut) func(context.Context, json.RawMessage) ToolOut {
+	return func(ctx context.Context, raw json.RawMessage) ToolOut {
+		var input T
+		if err := json.Unmarshal(raw, &input); err != nil {
+			return ErrorfToolOut("invalid tool input: %w", err)
+		}
+		return run(ctx, input)
+	}
+}
+
 // ToolProgress represents a progress update from a running tool.
 type ToolProgress struct {
 	// ToolUseID is the tool_use block ID this progress belongs to.
@@ -394,7 +406,8 @@ func (u *Usage) IsZero() bool {
 }
 
 func (u *Usage) Attr() slog.Attr {
-	return slog.Group("usage",
+	return slog.Group(
+		"usage",
 		slog.Uint64("input_tokens", u.InputTokens),
 		slog.Uint64("output_tokens", u.OutputTokens),
 		slog.Uint64("cache_creation_input_tokens", u.CacheCreationInputTokens),

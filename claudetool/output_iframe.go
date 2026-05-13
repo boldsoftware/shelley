@@ -2,7 +2,6 @@ package claudetool
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +20,7 @@ func (t *OutputIframeTool) Tool() *llm.Tool {
 		Name:        outputIframeName,
 		Description: outputIframeDescription,
 		InputSchema: llm.MustSchema(outputIframeInputSchema),
-		Run:         t.Run,
+		Run:         llm.RunJSON(t.run),
 	}
 }
 
@@ -201,16 +200,13 @@ func escapeJSString(s string) string {
 	return b.String()
 }
 
-func (t *OutputIframeTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
-	var input struct {
-		Path  string            `json:"path"`
-		Title string            `json:"title"`
-		Files map[string]string `json:"files"`
-	}
-	if err := json.Unmarshal(m, &input); err != nil {
-		return llm.ErrorToolOut(err)
-	}
+type outputIframeInput struct {
+	Path  string            `json:"path"`
+	Title string            `json:"title"`
+	Files map[string]string `json:"files"`
+}
 
+func (t *OutputIframeTool) run(ctx context.Context, input outputIframeInput) llm.ToolOut {
 	if input.Path == "" {
 		return llm.ErrorfToolOut("path is required")
 	}

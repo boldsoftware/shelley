@@ -24,7 +24,7 @@ func TestChangeDirTool(t *testing.T) {
 		wd.Set(tmpDir)
 
 		input, _ := json.Marshal(changeDirInput{Path: subDir})
-		result := tool.Run(context.Background(), input)
+		result := tool.Tool().Run(context.Background(), input)
 
 		if result.Error != nil {
 			t.Fatalf("unexpected error: %v", result.Error)
@@ -40,7 +40,7 @@ func TestChangeDirTool(t *testing.T) {
 		wd.Set(tmpDir)
 
 		input, _ := json.Marshal(changeDirInput{Path: "subdir"})
-		result := tool.Run(context.Background(), input)
+		result := tool.Tool().Run(context.Background(), input)
 
 		if result.Error != nil {
 			t.Fatalf("unexpected error: %v", result.Error)
@@ -55,7 +55,7 @@ func TestChangeDirTool(t *testing.T) {
 		wd.Set(subDir)
 
 		input, _ := json.Marshal(changeDirInput{Path: ".."})
-		result := tool.Run(context.Background(), input)
+		result := tool.Tool().Run(context.Background(), input)
 
 		if result.Error != nil {
 			t.Fatalf("unexpected error: %v", result.Error)
@@ -70,7 +70,7 @@ func TestChangeDirTool(t *testing.T) {
 		wd.Set(tmpDir)
 
 		input, _ := json.Marshal(changeDirInput{Path: "/nonexistent/path"})
-		result := tool.Run(context.Background(), input)
+		result := tool.Tool().Run(context.Background(), input)
 
 		if result.Error == nil {
 			t.Fatal("expected error for non-existent path")
@@ -87,7 +87,7 @@ func TestChangeDirTool(t *testing.T) {
 		wd.Set(tmpDir)
 
 		input, _ := json.Marshal(changeDirInput{Path: filePath})
-		result := tool.Run(context.Background(), input)
+		result := tool.Tool().Run(context.Background(), input)
 
 		if result.Error == nil {
 			t.Fatal("expected error for file path")
@@ -106,7 +106,7 @@ func TestChangeDirTool(t *testing.T) {
 		}
 
 		input, _ := json.Marshal(changeDirInput{Path: subDir})
-		result := toolWithCallback.Run(context.Background(), input)
+		result := toolWithCallback.Tool().Run(context.Background(), input)
 
 		if result.Error != nil {
 			t.Fatalf("unexpected error: %v", result.Error)
@@ -140,20 +140,20 @@ func TestChangeDirWithBash(t *testing.T) {
 
 	// Run pwd to verify starting directory
 	input, _ := json.Marshal(bashInput{Command: "pwd"})
-	result := bashTool.Run(ctx, input)
+	result := bashTool.Tool().Run(ctx, input)
 	if result.Error != nil {
 		t.Fatalf("bash pwd failed: %v", result.Error)
 	}
 
 	// Change directory
 	cdInput, _ := json.Marshal(changeDirInput{Path: subDir})
-	result = changeDirTool.Run(ctx, cdInput)
+	result = changeDirTool.Tool().Run(ctx, cdInput)
 	if result.Error != nil {
 		t.Fatalf("change_dir failed: %v", result.Error)
 	}
 
 	// Run ls - should now see test.txt
-	result = bashTool.Run(ctx, json.RawMessage(`{"command": "ls"}`))
+	result = bashTool.Tool().Run(ctx, json.RawMessage(`{"command": "ls"}`))
 	if result.Error != nil {
 		t.Fatalf("bash ls failed: %v", result.Error)
 	}
@@ -199,7 +199,7 @@ func TestBashToolMissingWorkingDir(t *testing.T) {
 
 	// Try to run a command - should get a clear error
 	input, _ := json.Marshal(bashInput{Command: "ls"})
-	result := bashTool.Run(context.Background(), input)
+	result := bashTool.Tool().Run(context.Background(), input)
 
 	if result.Error == nil {
 		t.Fatal("expected error when working directory doesn't exist")

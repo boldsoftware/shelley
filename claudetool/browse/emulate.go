@@ -57,6 +57,18 @@ var devicePresets = map[string]devicePreset{
 	},
 }
 
+type emulateInput struct {
+	Action            string  `json:"action"`
+	Device            string  `json:"device"`
+	Width             int64   `json:"width"`
+	Height            int64   `json:"height"`
+	DeviceScaleFactor float64 `json:"device_scale_factor"`
+	Mobile            bool    `json:"mobile"`
+	Touch             bool    `json:"touch"`
+	Enabled           *bool   `json:"enabled"`
+	Media             string  `json:"media"`
+}
+
 // EmulateTool returns a tool for device and display emulation.
 func (b *BrowseTools) EmulateTool() *llm.Tool {
 	description := "Device and display emulation. Actions: help, device, custom, reset, dark_mode, media."
@@ -109,31 +121,26 @@ func (b *BrowseTools) EmulateTool() *llm.Tool {
 		Name:        "browser_emulate",
 		Description: description,
 		InputSchema: json.RawMessage(schema),
-		Run: func(ctx context.Context, m json.RawMessage) llm.ToolOut {
-			var input struct {
-				Action string `json:"action"`
-			}
-			if err := json.Unmarshal(m, &input); err != nil {
-				return llm.ErrorfToolOut("invalid input: %w", err)
-			}
+		Run:         llm.RunJSON(b.emulateRun),
+	}
+}
 
-			switch input.Action {
-			case "help":
-				return b.emulateHelp()
-			case "device":
-				return b.emulateDevice(m)
-			case "custom":
-				return b.emulateCustom(m)
-			case "reset":
-				return b.emulateReset()
-			case "dark_mode":
-				return b.emulateDarkMode(m)
-			case "media":
-				return b.emulateMedia(m)
-			default:
-				return llm.ErrorfToolOut("unknown action: %q", input.Action)
-			}
-		},
+func (b *BrowseTools) emulateRun(ctx context.Context, input emulateInput) llm.ToolOut {
+	switch input.Action {
+	case "help":
+		return b.emulateHelp()
+	case "device":
+		return b.emulateDevice(input)
+	case "custom":
+		return b.emulateCustom(input)
+	case "reset":
+		return b.emulateReset()
+	case "dark_mode":
+		return b.emulateDarkMode(input)
+	case "media":
+		return b.emulateMedia(input)
+	default:
+		return llm.ErrorfToolOut("unknown action: %q", input.Action)
 	}
 }
 
@@ -165,13 +172,7 @@ func (b *BrowseTools) emulateHelp() llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent(sb.String())}
 }
 
-func (b *BrowseTools) emulateDevice(m json.RawMessage) llm.ToolOut {
-	var input struct {
-		Device string `json:"device"`
-	}
-	if err := json.Unmarshal(m, &input); err != nil {
-		return llm.ErrorfToolOut("invalid input: %w", err)
-	}
+func (b *BrowseTools) emulateDevice(input emulateInput) llm.ToolOut {
 	if input.Device == "" {
 		return llm.ErrorfToolOut("device parameter is required")
 	}
@@ -189,17 +190,7 @@ func (b *BrowseTools) emulateDevice(m json.RawMessage) llm.ToolOut {
 	return b.applyEmulation(preset.Width, preset.Height, preset.DPR, preset.Mobile, preset.Touch, preset.UserAgent)
 }
 
-func (b *BrowseTools) emulateCustom(m json.RawMessage) llm.ToolOut {
-	var input struct {
-		Width             int64   `json:"width"`
-		Height            int64   `json:"height"`
-		DeviceScaleFactor float64 `json:"device_scale_factor"`
-		Mobile            bool    `json:"mobile"`
-		Touch             bool    `json:"touch"`
-	}
-	if err := json.Unmarshal(m, &input); err != nil {
-		return llm.ErrorfToolOut("invalid input: %w", err)
-	}
+func (b *BrowseTools) emulateCustom(input emulateInput) llm.ToolOut {
 	if input.Width <= 0 || input.Height <= 0 {
 		return llm.ErrorfToolOut("width and height are required and must be positive")
 	}
@@ -258,12 +249,13 @@ func (b *BrowseTools) emulateReset() llm.ToolOut {
 		return llm.ErrorToolOut(err)
 	}
 
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-		if err := emulation.ClearDeviceMetricsOverride().Do(ctx); err != nil {
-			return fmt.Errorf("clear device metrics: %w", err)
-		}
-		return nil
-	}),
+	err = chromedp.Run(
+		browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+			if err := emulation.ClearDeviceMetricsOverride().Do(ctx); err != nil {
+				return fmt.Errorf("clear device metrics: %w", err)
+			}
+			return nil
+		}),
 		chromedp.EmulateViewport(1280, 720),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			if err := emulation.SetTouchEmulationEnabled(false).Do(ctx); err != nil {
@@ -282,14 +274,7 @@ func (b *BrowseTools) emulateReset() llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent("Emulation reset to default (1280x720)")}
 }
 
-func (b *BrowseTools) emulateDarkMode(m json.RawMessage) llm.ToolOut {
-	var input struct {
-		Enabled *bool `json:"enabled"`
-	}
-	if err := json.Unmarshal(m, &input); err != nil {
-		return llm.ErrorfToolOut("invalid input: %w", err)
-	}
-
+func (b *BrowseTools) emulateDarkMode(input emulateInput) llm.ToolOut {
 	enabled := true
 	if input.Enabled != nil {
 		enabled = *input.Enabled
@@ -314,14 +299,7 @@ func (b *BrowseTools) emulateDarkMode(m json.RawMessage) llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf("Automatic dark mode %s", state))}
 }
 
-func (b *BrowseTools) emulateMedia(m json.RawMessage) llm.ToolOut {
-	var input struct {
-		Media string `json:"media"`
-	}
-	if err := json.Unmarshal(m, &input); err != nil {
-		return llm.ErrorfToolOut("invalid input: %w", err)
-	}
-
+func (b *BrowseTools) emulateMedia(input emulateInput) llm.ToolOut {
 	browserCtx, err := b.GetBrowserContext()
 	if err != nil {
 		return llm.ErrorToolOut(err)

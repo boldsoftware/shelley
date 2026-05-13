@@ -2,7 +2,6 @@ package loop_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -11,22 +10,20 @@ import (
 )
 
 func ExampleLoop() {
+	type greetInput struct {
+		Name string `json:"name"`
+	}
+
 	// Create a simple tool
 	testTool := &llm.Tool{
 		Name:        "greet",
 		Description: "Greets the user with a friendly message",
 		InputSchema: llm.MustSchema(`{"type": "object", "properties": {"name": {"type": "string"}}}`),
-		Run: func(ctx context.Context, input json.RawMessage) llm.ToolOut {
-			var req struct {
-				Name string `json:"name"`
-			}
-			if err := json.Unmarshal(input, &req); err != nil {
-				return llm.ErrorToolOut(err)
-			}
+		Run: llm.RunJSON(func(ctx context.Context, req greetInput) llm.ToolOut {
 			return llm.ToolOut{
 				LLMContent: llm.TextContent(fmt.Sprintf("Hello, %s! Nice to meet you.", req.Name)),
 			}
-		},
+		}),
 	}
 
 	// Message recording function (in real usage, this would save to database)

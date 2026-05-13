@@ -2,7 +2,6 @@ package claudetool
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -62,17 +61,12 @@ func (c *ChangeDirTool) Tool() *llm.Tool {
 		Name:        changeDirName,
 		Description: changeDirDescription,
 		InputSchema: llm.MustSchema(changeDirInputSchema),
-		Run:         c.Run,
+		Run:         llm.RunJSON(c.run),
 	}
 }
 
-// Run executes the change_dir tool.
-func (c *ChangeDirTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
-	var req changeDirInput
-	if err := json.Unmarshal(m, &req); err != nil {
-		return llm.ErrorfToolOut("failed to parse change_dir input: %w", err)
-	}
-
+// run executes the change_dir tool.
+func (c *ChangeDirTool) run(ctx context.Context, req changeDirInput) llm.ToolOut {
 	if req.Path == "" {
 		return llm.ErrorfToolOut("path is required")
 	}

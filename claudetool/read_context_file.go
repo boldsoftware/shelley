@@ -2,7 +2,6 @@ package claudetool
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,7 +20,7 @@ func (t *ReadContextFileTool) Tool() *llm.Tool {
 		Name:        "read_context_file",
 		Description: readContextFileDescription,
 		InputSchema: llm.MustSchema(readContextFileInputSchema),
-		Run:         t.Run,
+		Run:         llm.RunJSON(t.run),
 	}
 }
 
@@ -44,14 +43,11 @@ const readContextFileInputSchema = `{
   }
 }`
 
-func (t *ReadContextFileTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
-	var input struct {
-		Path string `json:"path"`
-	}
-	if err := json.Unmarshal(m, &input); err != nil {
-		return llm.ErrorToolOut(err)
-	}
+type readContextFileInput struct {
+	Path string `json:"path"`
+}
 
+func (t *ReadContextFileTool) run(ctx context.Context, input readContextFileInput) llm.ToolOut {
 	if input.Path == "" {
 		return llm.ErrorfToolOut("path is required")
 	}

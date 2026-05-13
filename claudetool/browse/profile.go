@@ -47,16 +47,11 @@ func (b *BrowseTools) ProfileTool() *llm.Tool {
 		Name:        "browser_profile",
 		Description: description,
 		InputSchema: json.RawMessage(schema),
-		Run:         b.profileRun,
+		Run:         llm.RunJSON(b.profileRun),
 	}
 }
 
-func (b *BrowseTools) profileRun(ctx context.Context, m json.RawMessage) llm.ToolOut {
-	var input profileInput
-	if err := json.Unmarshal(m, &input); err != nil {
-		return llm.ErrorfToolOut("invalid input: %w", err)
-	}
-
+func (b *BrowseTools) profileRun(ctx context.Context, input profileInput) llm.ToolOut {
 	switch input.Action {
 	case "help":
 		return b.profileHelp()
@@ -333,7 +328,8 @@ func (b *BrowseTools) profileTraceStop() llm.ToolOut {
 	}
 
 	return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf(
-		"Trace saved to: %s (%d events)", filePath, len(events)))}
+		"Trace saved to: %s (%d events)", filePath, len(events),
+	))}
 }
 
 func (b *BrowseTools) profileCoverageStart() llm.ToolOut {
@@ -390,5 +386,6 @@ func (b *BrowseTools) profileCoverageStop() llm.ToolOut {
 	}
 
 	return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf(
-		"Coverage data saved to: %s (%d scripts)", filePath, len(coverage)))}
+		"Coverage data saved to: %s (%d scripts)", filePath, len(coverage),
+	))}
 }

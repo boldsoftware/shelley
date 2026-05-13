@@ -3,7 +3,6 @@ package claudetool
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os/exec"
@@ -41,7 +40,7 @@ func (k *KeywordTool) Tool() *llm.Tool {
 		Name:        keywordName,
 		Description: keywordDescription,
 		InputSchema: llm.MustSchema(keywordInputSchema),
-		Run:         k.keywordRun,
+		Run:         llm.RunJSON(k.keywordRun),
 	}
 }
 
@@ -106,11 +105,7 @@ func FindRepoRoot(wd string) (string, error) {
 }
 
 // keywordRun is the main implementation using the LLM provider
-func (k *KeywordTool) keywordRun(ctx context.Context, m json.RawMessage) llm.ToolOut {
-	var input keywordInput
-	if err := json.Unmarshal(m, &input); err != nil {
-		return llm.ErrorToolOut(err)
-	}
+func (k *KeywordTool) keywordRun(ctx context.Context, input keywordInput) llm.ToolOut {
 	wd := k.workingDir.Get()
 	root, err := FindRepoRoot(wd)
 	if err == nil {
@@ -185,7 +180,8 @@ func (k *KeywordTool) keywordRun(ctx context.Context, m json.RawMessage) llm.Too
 
 	filtered := resp.Content[0].Text
 
-	slog.InfoContext(ctx, "keyword search results processed",
+	slog.InfoContext(
+		ctx, "keyword search results processed",
 		"bytes", len(out),
 		"lines", strings.Count(out, "\n"),
 		"files", strings.Count(out, "\n\n"),

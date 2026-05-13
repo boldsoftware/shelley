@@ -61,7 +61,7 @@ func TestCLISubagentTool_Validation(t *testing.T) {
 	t.Run("empty slug", func(t *testing.T) {
 		input := cliSubagentInput{Slug: "", Prompt: "test"}
 		inputJSON, _ := json.Marshal(input)
-		result := tool.Run(context.Background(), inputJSON)
+		result := tool.Tool().Run(context.Background(), inputJSON)
 		if result.Error == nil {
 			t.Error("expected error for empty slug")
 		}
@@ -71,7 +71,7 @@ func TestCLISubagentTool_Validation(t *testing.T) {
 	t.Run("empty prompt", func(t *testing.T) {
 		input := cliSubagentInput{Slug: "test", Prompt: ""}
 		inputJSON, _ := json.Marshal(input)
-		result := tool.Run(context.Background(), inputJSON)
+		result := tool.Tool().Run(context.Background(), inputJSON)
 		if result.Error == nil {
 			t.Error("expected error for empty prompt")
 		}
@@ -81,7 +81,7 @@ func TestCLISubagentTool_Validation(t *testing.T) {
 	t.Run("invalid slug", func(t *testing.T) {
 		input := cliSubagentInput{Slug: "@#$%", Prompt: "test"}
 		inputJSON, _ := json.Marshal(input)
-		result := tool.Run(context.Background(), inputJSON)
+		result := tool.Tool().Run(context.Background(), inputJSON)
 		if result.Error == nil {
 			t.Error("expected error for invalid slug")
 		}
@@ -96,7 +96,7 @@ func TestCLISubagentTool_UnsupportedAgent(t *testing.T) {
 
 	input := cliSubagentInput{Slug: "test", Prompt: "do something"}
 	inputJSON, _ := json.Marshal(input)
-	result := tool.Run(context.Background(), inputJSON)
+	result := tool.Tool().Run(context.Background(), inputJSON)
 	if result.Error == nil {
 		t.Error("expected error for unsupported agent")
 	}
@@ -116,7 +116,7 @@ func TestCLISubagentTool_RunEcho(t *testing.T) {
 
 	input := cliSubagentInput{Slug: "test-echo", Prompt: "hello world", TimeoutSeconds: 5}
 	inputJSON, _ := json.Marshal(input)
-	result := tool.Run(context.Background(), inputJSON)
+	result := tool.Tool().Run(context.Background(), inputJSON)
 
 	// If claude is not installed, we should get an error result (not a tool failure)
 	// because we handle non-zero exit codes gracefully
