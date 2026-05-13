@@ -196,6 +196,31 @@ test.describe('File Upload via Paste and Drag', () => {
     await expect(messageInput).toHaveValue('');
   });
 
+  test('dropping multiple files creates multiple attachments', async ({ page }) => {
+    await page.goto('/new');
+    await page.waitForLoadState('domcontentloaded');
+
+    const messageInput = page.getByTestId('message-input');
+    await expect(messageInput).toBeVisible();
+
+    await page.evaluate(async () => {
+      const dataTransfer = new DataTransfer();
+      for (let i = 0; i < 3; i++) {
+        const blob = new Blob([`content ${i}`], { type: 'text/plain' });
+        dataTransfer.items.add(new File([blob], `drop-${i}.txt`, { type: 'text/plain' }));
+      }
+      const dropEvent = new DragEvent('drop', {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer,
+      });
+      document.querySelector('.message-input-container')?.dispatchEvent(dropEvent);
+    });
+
+    // All three files should produce attachment chips.
+    await expect(page.locator('.message-attachment')).toHaveCount(3);
+  });
+
   test('focus is retained in input after pasting image', async ({ page }) => {
     await page.goto('/new');
     await page.waitForLoadState('domcontentloaded');

@@ -360,10 +360,13 @@ function MessageInput({
     event.stopPropagation();
     setDragCounter(0);
 
+    // Snapshot the file list synchronously. After the first `await`, the
+    // DataTransfer enters "protected mode" and `event.dataTransfer.files`
+    // becomes empty, so iterating over it across awaits would only ever
+    // upload the first file.
     if (event.dataTransfer && event.dataTransfer.files.length > 0) {
-      // Process all dropped files
-      for (let i = 0; i < event.dataTransfer.files.length; i++) {
-        const file = event.dataTransfer.files[i];
+      const files = Array.from(event.dataTransfer.files);
+      for (const file of files) {
         await uploadFile(file);
       }
     }
