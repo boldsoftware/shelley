@@ -354,7 +354,7 @@ func (b *BashTool) executeBash(ctx context.Context, req bashInput, timeout time.
 
 	// Check if there's a progress callback for streaming output
 	progressFn := GetToolProgress(ctx)
-	toolID, _ := ctx.Value(toolUseIDCtxKey).(string)
+	toolID := ToolUseID(ctx)
 
 	var output io.Writer
 	var getOutput func() string

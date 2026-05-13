@@ -11,54 +11,37 @@ import (
 	"shelley.exe.dev/llm"
 )
 
-type workingDirCtxKeyType string
-
-const workingDirCtxKey workingDirCtxKeyType = "workingDir"
-
 func WithWorkingDir(ctx context.Context, wd string) context.Context {
-	return context.WithValue(ctx, workingDirCtxKey, wd)
+	return llm.WithWorkingDir(ctx, wd)
 }
 
 func WorkingDir(ctx context.Context) string {
-	// If cmd.Dir is empty, it uses the current working directory,
-	// so we can use that as a fallback.
-	wd, _ := ctx.Value(workingDirCtxKey).(string)
-	return wd
+	return llm.WorkingDir(ctx)
 }
 
-type sessionIDCtxKeyType string
-
-const sessionIDCtxKey sessionIDCtxKeyType = "sessionID"
-
 func WithSessionID(ctx context.Context, sessionID string) context.Context {
-	return context.WithValue(ctx, sessionIDCtxKey, sessionID)
+	return llm.WithSessionID(ctx, sessionID)
 }
 
 func SessionID(ctx context.Context) string {
-	sessionID, _ := ctx.Value(sessionIDCtxKey).(string)
-	return sessionID
+	return llm.SessionID(ctx)
 }
-
-type toolProgressCtxKeyType string
-
-const toolProgressCtxKey toolProgressCtxKeyType = "toolProgress"
-
-type toolUseIDCtxKeyType string
-
-const toolUseIDCtxKey toolUseIDCtxKeyType = "toolUseID"
 
 // WithToolProgress returns a context with the given ToolProgressFunc.
 func WithToolProgress(ctx context.Context, fn llm.ToolProgressFunc) context.Context {
-	return context.WithValue(ctx, toolProgressCtxKey, fn)
+	return llm.WithToolProgress(ctx, fn)
 }
 
 // GetToolProgress retrieves the ToolProgressFunc from the context, or nil.
 func GetToolProgress(ctx context.Context) llm.ToolProgressFunc {
-	fn, _ := ctx.Value(toolProgressCtxKey).(llm.ToolProgressFunc)
-	return fn
+	return llm.GetToolProgress(ctx)
 }
 
 // WithToolUseID returns a context with the given tool use ID.
 func WithToolUseID(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, toolUseIDCtxKey, id)
+	return llm.WithToolUseID(ctx, id)
+}
+
+func ToolUseID(ctx context.Context) string {
+	return llm.ToolUseID(ctx)
 }

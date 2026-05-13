@@ -264,7 +264,7 @@ func (s *ShellTool) run(ctx context.Context, req shellInput) llm.ToolOut {
 
 	// Live tail to UI while we wait.
 	progressFn := GetToolProgress(ctx)
-	toolID, _ := ctx.Value(toolUseIDCtxKey).(string)
+	toolID := ToolUseID(ctx)
 	progressDone := make(chan struct{})
 	progressStop := make(chan struct{})
 	if progressFn != nil && toolID != "" {

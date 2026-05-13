@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/gitstate"
 	"shelley.exe.dev/llm"
 )
@@ -482,12 +481,12 @@ func (l *Loop) executeToolCalls(ctx context.Context, content []llm.Content) erro
 		// Execute the tool with working directory and progress callback set in context
 		toolCtx := ctx
 		if l.workingDir != "" {
-			toolCtx = claudetool.WithWorkingDir(ctx, l.workingDir)
+			toolCtx = llm.WithWorkingDir(ctx, l.workingDir)
 		}
 		if l.onToolProgress != nil {
-			toolCtx = claudetool.WithToolProgress(toolCtx, l.onToolProgress)
+			toolCtx = llm.WithToolProgress(toolCtx, l.onToolProgress)
 		}
-		toolCtx = claudetool.WithToolUseID(toolCtx, c.ID)
+		toolCtx = llm.WithToolUseID(toolCtx, c.ID)
 		startTime := time.Now()
 		result := tool.Run(toolCtx, c.ToolInput)
 		endTime := time.Now()

@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/gitstate"
 	"shelley.exe.dev/llm"
 )
@@ -482,66 +481,6 @@ func TestLoopWithActualKeywordTool(t *testing.T) {
 	}
 
 	t.Log("Keyword tool test passed - no nil pointer dereference occurred")
-}
-
-func TestKeywordToolWithLLMProvider(t *testing.T) {
-	// Create a temp directory with a test file to search
-	tempDir := t.TempDir()
-	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("this is a test file\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a predictable service for testing
-	predictableService := NewPredictableService()
-
-	// Create a simple LLM provider for testing
-	llmProvider := &testLLMProvider{
-		service: predictableService,
-		models:  []string{"predictable"},
-	}
-
-	// Create keyword tool with provider - use temp dir instead of /
-	keywordTool := claudetool.NewKeywordToolWithWorkingDir(llmProvider, claudetool.NewMutableWorkingDir(tempDir))
-	tool := keywordTool.Tool()
-
-	// Test input
-	input := `{"query": "test search", "search_terms": ["test"]}`
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	result := tool.Run(ctx, json.RawMessage(input))
-
-	// Should get a result without error (even though ripgrep will fail in test environment)
-	// The important thing is that it doesn't crash with nil pointer dereference
-	if result.Error != nil {
-		t.Logf("Expected error in test environment (no ripgrep): %v", result.Error)
-		// This is expected in test environment
-	} else {
-		t.Log("Keyword tool executed successfully")
-		if len(result.LLMContent) == 0 {
-			t.Error("Expected some content in result")
-		}
-	}
-}
-
-// testLLMProvider implements LLMServiceProvider for testing
-type testLLMProvider struct {
-	service llm.Service
-	models  []string
-}
-
-func (t *testLLMProvider) GetService(modelID string) (llm.Service, error) {
-	for _, model := range t.models {
-		if model == modelID {
-			return t.service, nil
-		}
-	}
-	return nil, fmt.Errorf("model %s not available", modelID)
-}
-
-func (t *testLLMProvider) GetAvailableModels() []string {
-	return t.models
 }
 
 func TestInsertMissingToolResults(t *testing.T) {
