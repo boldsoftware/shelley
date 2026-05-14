@@ -30,6 +30,7 @@ import MessageInput from "./MessageInput";
 import DiffViewer from "./DiffViewer";
 import MessageSelectionToolbar from "./MessageSelectionToolbar";
 import { buildMessageQuote } from "../utils/messageQuote";
+import { tildifyPath } from "../utils/tildify";
 import GitGraphViewer from "./GitGraphViewer";
 import AgentsMdEditorModal from "./AgentsMdEditorModal";
 import BashTool from "./BashTool";
@@ -2391,7 +2392,7 @@ function ChatInterface({
             className="status-cwd-readonly hide-on-mobile"
             title={currentConversation?.cwd || selectedCwd}
           >
-            {currentConversation?.cwd || selectedCwd}
+            {tildifyPath(currentConversation?.cwd || selectedCwd)}
           </span>
         )}
         <ContextUsageBar
@@ -2571,7 +2572,7 @@ function ChatInterface({
             className="status-cwd-readonly hide-on-mobile"
             title={currentConversation?.cwd || selectedCwd}
           >
-            {currentConversation?.cwd || selectedCwd}
+            {tildifyPath(currentConversation?.cwd || selectedCwd)}
           </span>
         )}
         <ContextUsageBar

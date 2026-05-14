@@ -3,6 +3,7 @@ import { Conversation, ConversationWithState } from "../types";
 import { api } from "../services/api";
 import { useI18n } from "../i18n";
 import { sortConversationsByBucket, maxBucket } from "../utils/conversationSort";
+import { tildifyPath } from "../utils/tildify";
 
 type GroupBy = "none" | "cwd" | "git_repo";
 
@@ -259,17 +260,7 @@ function ConversationDrawer({
   };
 
   // Format cwd with ~ for home directory (display only)
-  const formatCwdForDisplay = (cwd: string | null | undefined): string | null => {
-    if (!cwd) return null;
-    const homeDir = window.__SHELLEY_INIT__?.home_dir;
-    if (homeDir && cwd === homeDir) {
-      return "~";
-    }
-    if (homeDir && cwd.startsWith(homeDir + "/")) {
-      return "~" + cwd.slice(homeDir.length);
-    }
-    return cwd;
-  };
+  const formatCwdForDisplay = tildifyPath;
 
   const getConversationPreview = (conversation: Conversation) => {
     if (conversation.slug) {
