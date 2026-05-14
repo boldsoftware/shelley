@@ -544,6 +544,10 @@ interface ChatInterfaceProps {
   openDiffViewerTrigger?: number; // increment to trigger opening diff viewer
   openGitGraphTrigger?: number; // increment to trigger opening git graph viewer
   modelsRefreshTrigger?: number; // increment to trigger models list refresh
+  /** Increment to force re-reading the cwd from localStorage. Used when a
+   *  quick action (command palette) changes the cwd while we're already on
+   *  the new-conversation view. */
+  cwdSyncTrigger?: number;
   onOpenModelsModal?: () => void;
   ephemeralTerminals: EphemeralTerminal[];
   setEphemeralTerminals: React.Dispatch<React.SetStateAction<EphemeralTerminal[]>>;
@@ -675,6 +679,7 @@ function ChatInterface({
   openDiffViewerTrigger,
   openGitGraphTrigger,
   modelsRefreshTrigger,
+  cwdSyncTrigger,
   onOpenModelsModal,
   ephemeralTerminals,
   setEphemeralTerminals,
@@ -758,6 +763,17 @@ function ChatInterface({
       setShowAdvancedSettings(false);
     }
   }, [conversationId]);
+
+  // Re-read cwd from localStorage when a quick action bumps the sync trigger
+  // (e.g. command palette "change dir to git root" while we're already on /new).
+  useEffect(() => {
+    if (!cwdSyncTrigger) return;
+    const stored = localStorage.getItem("shelley_selected_cwd");
+    if (stored) {
+      setSelectedCwdState(stored);
+      setCwdInitialized(true);
+    }
+  }, [cwdSyncTrigger]);
 
   // Initialize CWD with priority: localStorage > mostRecentCwd > server default
   useEffect(() => {

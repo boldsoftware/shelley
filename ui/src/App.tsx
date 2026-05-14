@@ -126,6 +126,10 @@ function App() {
   const [modelsModalOpen, setModelsModalOpen] = useState(false);
   const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
   const [modelsRefreshTrigger, setModelsRefreshTrigger] = useState(0);
+  // Bumped whenever the user picks a cwd via a quick action (e.g. command
+  // palette). ChatInterface re-reads localStorage when this changes so the
+  // selected cwd updates even if we're already on /new.
+  const [cwdSyncTrigger, setCwdSyncTrigger] = useState(0);
   const [navigateUserMessageTrigger, setNavigateUserMessageTrigger] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -495,6 +499,9 @@ function App() {
     setViewedConversation(null);
     window.history.replaceState({}, "", "/");
     setDrawerOpen(false);
+    // Force ChatInterface to re-read the cwd from localStorage even if it's
+    // already mounted in the new-conversation view.
+    setCwdSyncTrigger((n) => n + 1);
   };
 
   const selectConversation = (conversation: Conversation) => {
@@ -677,6 +684,7 @@ function App() {
             openDiffViewerTrigger={diffViewerTrigger}
             openGitGraphTrigger={gitGraphTrigger}
             modelsRefreshTrigger={modelsRefreshTrigger}
+            cwdSyncTrigger={cwdSyncTrigger}
             onOpenModelsModal={() => setModelsModalOpen(true)}
             ephemeralTerminals={ephemeralTerminals}
             setEphemeralTerminals={setEphemeralTerminals}
