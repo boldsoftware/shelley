@@ -2,7 +2,12 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Conversation, ConversationWithState } from "../types";
 import { api } from "../services/api";
 import { useI18n } from "../i18n";
-import { sortConversationsByBucket, maxBucket } from "../utils/conversationSort";
+import {
+  sortConversationsByBucket,
+  maxBucket,
+  applyStableOrder,
+  applyStableKeyOrder,
+} from "../utils/conversationSort";
 import { tildifyPath } from "../utils/tildify";
 
 type GroupBy = "none" | "cwd" | "git_repo";
@@ -125,6 +130,34 @@ function ConversationDrawer({
   });
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  // Bumping resortKey resets all the stable-order refs so the drawer
+  // re-sorts strictly by updated_at bucket again. The user triggers this
+  // from the grouping menu when they want to refresh the order.
+  const [resortKey, setResortKey] = useState(0);
+  // Refs holding the current display order so updates to existing items
+  // don't shuffle the list. Brand-new items prepend at the top.
+  const topOrderRef = React.useRef<string[]>([]);
+  const archivedOrderRef = React.useRef<string[]>([]);
+  const subagentOrderRef = React.useRef<Record<string, string[]>>({});
+  const groupOrderRef = React.useRef<Record<string, string[]>>({});
+  const groupKeysOrderRef = React.useRef<string[]>([]);
+  // Tracks the resortKey the order refs were last computed against. When
+  // it changes, the next useMemo for each list passes an empty prev-order
+  // so the user-visible sort is refreshed in the same render cycle.
+  const lastResortKeyRef = React.useRef(0);
+  if (lastResortKeyRef.current !== resortKey) {
+    topOrderRef.current = [];
+    archivedOrderRef.current = [];
+    subagentOrderRef.current = {};
+    groupOrderRef.current = {};
+    groupKeysOrderRef.current = [];
+    lastResortKeyRef.current = resortKey;
+  }
+  // Track conversation ids we've seen in the current view so we can animate
+  // newly-added rows. Updated in an effect to avoid render-time side effects.
+  // Initialized lazily after first commit so the drawer doesn't animate the
+  // entire list when it first mounts.
+  const [seenIds, setSeenIds] = useState<Set<string> | null>(null);
   const [copiedConvId, setCopiedConvId] = useState<string | null>(null);
   const groupMenuRef = React.useRef<HTMLDivElement>(null);
   const renameInputRef = React.useRef<HTMLInputElement>(null);
@@ -203,11 +236,40 @@ function ConversationDrawer({
         (out[conv.parent_conversation_id] ||= []).push(conv);
       }
     }
+    const nextOrder: Record<string, string[]> = {};
     for (const key of Object.keys(out)) {
-      out[key] = sortConversationsByBucket(out[key]);
+      const sorted = sortConversationsByBucket(out[key]);
+      const { items, order } = applyStableOrder(sorted, subagentOrderRef.current[key] || []);
+      out[key] = items;
+      nextOrder[key] = order;
     }
+    subagentOrderRef.current = nextOrder;
     return out;
-  }, [conversations]);
+  }, [conversations, resortKey]);
+
+  // Track which conversation ids are currently in the list so newly-added
+  // rows can animate in. We snapshot the current set after each render. On
+  // the first run, we record the existing ids without setting them as
+  // "seen" until *next* render, so initial mount doesn't animate the whole
+  // list — only ids that arrive after mount are treated as new.
+  useEffect(() => {
+    const ids = new Set<string>();
+    for (const c of conversations) ids.add(c.conversation_id);
+    for (const c of archivedConversations) ids.add(c.conversation_id);
+    setSeenIds((prev) => {
+      if (prev && prev.size === ids.size) {
+        let same = true;
+        for (const id of ids) {
+          if (!prev.has(id)) {
+            same = false;
+            break;
+          }
+        }
+        if (same) return prev;
+      }
+      return ids;
+    });
+  }, [conversations, archivedConversations]);
 
   // Auto-expand the parent when viewing one of its subagents.
   useEffect(() => {
@@ -402,18 +464,29 @@ function ConversationDrawer({
     });
   };
 
-  const topLevelConversations = useMemo(
-    () => sortConversationsByBucket(conversations.filter((c) => !c.parent_conversation_id)),
-    [conversations],
-  );
+  const topLevelConversations = useMemo(() => {
+    const sorted = sortConversationsByBucket(
+      conversations.filter((c) => !c.parent_conversation_id),
+    );
+    const { items, order } = applyStableOrder(sorted, topOrderRef.current);
+    topOrderRef.current = order;
+    return items;
+  }, [conversations, resortKey]);
+  const stableArchivedConversations = useMemo(() => {
+    const sorted = sortConversationsByBucket(archivedConversations);
+    const { items, order } = applyStableOrder(sorted, archivedOrderRef.current);
+    archivedOrderRef.current = order;
+    return items;
+  }, [archivedConversations, resortKey]);
   // When a search query is active, the FTS results replace the normal list
   // entirely (they already include both active and archived hits, ordered
-  // active-first by updated_at).
+  // active-first by updated_at). Search results are NOT held by the stable
+  // order — they're ranked by the server and should appear ranked.
   const isSearching = searchQuery.trim().length > 0;
   const displayedConversations = isSearching
     ? (searchResults ?? [])
     : showArchived
-      ? sortConversationsByBucket(archivedConversations)
+      ? stableArchivedConversations
       : topLevelConversations;
 
   // Compute grouped conversations
@@ -446,26 +519,41 @@ function ConversationDrawer({
       group.conversations.push(conv);
     }
 
-    // Sort items within each group by 5-minute bucket of updated_at, then
-    // by conversation_id, so groups are stable while conversations refresh.
-    for (const [, group] of groups) {
-      group.conversations = sortConversationsByBucket(group.conversations);
+    // Within each group, apply stable order so individual conversations don't
+    // shuffle as they update; new ones still surface at the top of the group.
+    const nextGroupOrder: Record<string, string[]> = {};
+    for (const [key, group] of groups) {
+      const sorted = sortConversationsByBucket(group.conversations);
+      const { items, order } = applyStableOrder(sorted, groupOrderRef.current[key] || []);
+      group.conversations = items;
+      nextGroupOrder[key] = order;
     }
 
-    // Sort groups by the bucketed timestamp of their newest conversation.
-    const sorted = [...groups.entries()].sort(
-      (a, b) => maxBucket(b[1].conversations) - maxBucket(a[1].conversations),
-    );
+    // Initial sort: groups newest-first by bucketed timestamp.
+    const desiredKeys = [...groups.entries()]
+      .sort((a, b) => maxBucket(b[1].conversations) - maxBucket(a[1].conversations))
+      .map(([k]) => k);
+    // Hold the group ordering stable across updates the same way we do for
+    // individual conversations: existing groups keep their position; new
+    // groups appear at the top.
+    const stableKeys = applyStableKeyOrder(desiredKeys, groupKeysOrderRef.current);
+    groupKeysOrderRef.current = stableKeys;
+    const sorted: [string, { label: string; conversations: ConversationWithState[] }][] =
+      stableKeys.map((k) => [k, groups.get(k)!]);
 
     if (ungrouped.length > 0) {
-      sorted.push([
-        "__ungrouped__",
-        { label: t("other"), conversations: sortConversationsByBucket(ungrouped) },
-      ]);
+      const ungroupedSorted = sortConversationsByBucket(ungrouped);
+      const { items, order } = applyStableOrder(
+        ungroupedSorted,
+        groupOrderRef.current["__ungrouped__"] || [],
+      );
+      nextGroupOrder["__ungrouped__"] = order;
+      sorted.push(["__ungrouped__", { label: t("other"), conversations: items }]);
     }
 
+    groupOrderRef.current = nextGroupOrder;
     return sorted;
-  }, [topLevelConversations, groupBy, showArchived, t]);
+  }, [topLevelConversations, groupBy, showArchived, t, resortKey]);
 
   const renderConversationItem = (conversation: Conversation | ConversationWithState) => {
     const convState = conversation as ConversationWithState;
@@ -477,10 +565,13 @@ function ConversationDrawer({
     // Use the per-row archived flag so search results (which mix active and
     // archived hits) render the correct action buttons.
     const itemArchived = conversation.archived;
+    // Treat the first render (seenIds === null) as "everything already
+    // seen" so we don't animate the entire list on initial mount.
+    const isNew = seenIds !== null && !seenIds.has(conversation.conversation_id);
     return (
       <React.Fragment key={conversation.conversation_id}>
         <div
-          className={`conversation-item ${isActive ? "active" : ""}`}
+          className={`conversation-item ${isActive ? "active" : ""}${isNew ? " conversation-item-enter" : ""}`}
           onClick={(e) => {
             if (handleModifiedClick(e, conversation)) return;
             onSelectConversation(conversation);
@@ -685,7 +776,7 @@ function ConversationDrawer({
               return (
                 <div
                   key={sub.conversation_id}
-                  className={`conversation-item subagent-item drawer-subagent-item-style ${isSubActive ? "active" : ""}`}
+                  className={`conversation-item subagent-item drawer-subagent-item-style ${isSubActive ? "active" : ""}${seenIds !== null && !seenIds.has(sub.conversation_id) ? " conversation-item-enter" : ""}`}
                   onClick={(e) => {
                     if (handleModifiedClick(e, sub)) return;
                     onSelectConversation(sub);
@@ -769,6 +860,31 @@ function ConversationDrawer({
                         </button>
                       );
                     })}
+                    <div className="group-by-menu-separator" />
+                    <button
+                      className="group-by-menu-item"
+                      onClick={() => {
+                        setResortKey((n) => n + 1);
+                        setGroupMenuOpen(false);
+                      }}
+                      title={t("resortNow")}
+                    >
+                      <svg
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        className="group-by-menu-icon"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                      </svg>
+                      {t("resortNow")}
+                    </button>
                   </div>
                 )}
               </div>

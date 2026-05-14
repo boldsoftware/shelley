@@ -95,6 +95,7 @@ export const zhTW: TranslationKeys = {
   hideSubagents: "隱藏子代理",
   showSubagents: "顯示子代理",
   groupConversations: "對話分組",
+  resortNow: "立即重新排序",
   noGrouping: "不分組",
   directory: "目錄",
   gitRepo: "Git 倉庫",

@@ -1,4 +1,10 @@
-import { BUCKET_MS, sortConversationsByBucket, updatedBucket } from "./conversationSort";
+import {
+  BUCKET_MS,
+  applyStableKeyOrder,
+  applyStableOrder,
+  sortConversationsByBucket,
+  updatedBucket,
+} from "./conversationSort";
 import type { ConversationWithState } from "../types";
 
 function conv(id: string, updatedAt: string): ConversationWithState {
@@ -72,6 +78,38 @@ run("does not mutate input", () => {
   const before = input.map((c) => c.conversation_id).join(",");
   sortConversationsByBucket(input);
   assert(input.map((c) => c.conversation_id).join(",") === before, "input mutated");
+});
+
+run("applyStableOrder keeps existing items in place and prepends new ones", () => {
+  const a = conv("A", "2026-05-10T12:00:00Z");
+  const b = conv("B", "2026-05-10T12:01:00Z");
+  const c = conv("C", "2026-05-10T12:02:00Z");
+  // Initial: empty prev order, items appear in sorted order (newest first).
+  const first = applyStableOrder([c, b, a], []);
+  assert(first.order.join(",") === "C,B,A", `initial: ${first.order}`);
+  // Now A bumps to be newest; sortConversationsByBucket would put A first,
+  // but stable order keeps the previous arrangement.
+  const sortedAfterBump = [a, c, b]; // pretend sort flipped A to top
+  const second = applyStableOrder(sortedAfterBump, first.order);
+  assert(second.order.join(",") === "C,B,A", `bumped held: ${second.order}`);
+  // A brand-new conversation D appears at the top.
+  const d = conv("D", "2026-05-10T12:03:00Z");
+  const third = applyStableOrder([d, a, c, b], second.order);
+  assert(third.order.join(",") === "D,C,B,A", `new prepended: ${third.order}`);
+  // C is removed: ordering of remaining items unchanged.
+  const fourth = applyStableOrder([d, b, a], third.order);
+  assert(fourth.order.join(",") === "D,B,A", `removed drops out: ${fourth.order}`);
+});
+
+run("applyStableKeyOrder behaves the same on string keys", () => {
+  let order = applyStableKeyOrder(["repo-c", "repo-b", "repo-a"], []);
+  assert(order.join(",") === "repo-c,repo-b,repo-a", `initial: ${order}`);
+  // repo-a bumps to top in the desired sort; stable order ignores that.
+  order = applyStableKeyOrder(["repo-a", "repo-c", "repo-b"], order);
+  assert(order.join(",") === "repo-c,repo-b,repo-a", `held: ${order}`);
+  // new repo arrives.
+  order = applyStableKeyOrder(["repo-d", "repo-c", "repo-b", "repo-a"], order);
+  assert(order.join(",") === "repo-d,repo-c,repo-b,repo-a", `new: ${order}`);
 });
 
 console.log("\nconversationSort tests passed");

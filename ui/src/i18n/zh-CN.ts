@@ -95,6 +95,7 @@ export const zhCN: TranslationKeys = {
   hideSubagents: "隐藏子代理",
   showSubagents: "显示子代理",
   groupConversations: "对话分组",
+  resortNow: "立即重新排序",
   noGrouping: "不分组",
   directory: "目录",
   gitRepo: "Git 仓库",

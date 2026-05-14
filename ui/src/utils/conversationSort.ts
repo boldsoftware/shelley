@@ -36,3 +36,53 @@ export function maxBucket(convs: readonly ConversationWithState[]): number {
   }
   return best;
 }
+
+// applyStableOrder returns `sortedItems` reordered so that items present in
+// `prevOrder` retain their relative position, and any items not seen before
+// are prepended at the top in the order they appear in `sortedItems`. The
+// returned id list should be stored and passed back as `prevOrder` on the
+// next call. This lets the drawer keep its layout stable as conversations
+// update, while still surfacing brand-new conversations at the top.
+export function applyStableOrder<T extends { conversation_id: string }>(
+  sortedItems: readonly T[],
+  prevOrder: readonly string[],
+): { items: T[]; order: string[] } {
+  const byId = new Map<string, T>();
+  for (const c of sortedItems) byId.set(c.conversation_id, c);
+  const kept: string[] = [];
+  const keptSet = new Set<string>();
+  for (const id of prevOrder) {
+    if (byId.has(id) && !keptSet.has(id)) {
+      kept.push(id);
+      keptSet.add(id);
+    }
+  }
+  const newIds: string[] = [];
+  for (const c of sortedItems) {
+    if (!keptSet.has(c.conversation_id)) newIds.push(c.conversation_id);
+  }
+  const order = [...newIds, ...kept];
+  return { items: order.map((id) => byId.get(id)!), order };
+}
+
+// applyStableKeyOrder is the string-key analogue of applyStableOrder, used
+// to hold a stable order for group keys (cwd / git_repo).
+export function applyStableKeyOrder(
+  sortedKeys: readonly string[],
+  prevOrder: readonly string[],
+): string[] {
+  const present = new Set(sortedKeys);
+  const kept: string[] = [];
+  const keptSet = new Set<string>();
+  for (const k of prevOrder) {
+    if (present.has(k) && !keptSet.has(k)) {
+      kept.push(k);
+      keptSet.add(k);
+    }
+  }
+  const newKeys: string[] = [];
+  for (const k of sortedKeys) {
+    if (!keptSet.has(k)) newKeys.push(k);
+  }
+  return [...newKeys, ...kept];
+}

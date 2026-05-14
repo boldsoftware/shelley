@@ -95,6 +95,7 @@ export interface TranslationKeys {
   hideSubagents: string;
   showSubagents: string;
   groupConversations: string;
+  resortNow: string;
   noGrouping: string;
   directory: string;
   gitRepo: string;

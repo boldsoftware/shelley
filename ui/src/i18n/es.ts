@@ -95,6 +95,7 @@ export const es: TranslationKeys = {
   hideSubagents: "Ocultar subagentes",
   showSubagents: "Mostrar subagentes",
   groupConversations: "Agrupar conversaciones",
+  resortNow: "Reordenar ahora",
   noGrouping: "Sin agrupación",
   directory: "Directorio",
   gitRepo: "Repositorio Git",

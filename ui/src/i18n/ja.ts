@@ -95,6 +95,7 @@ export const ja: TranslationKeys = {
   hideSubagents: "サブエージェントを非表示",
   showSubagents: "サブエージェントを表示",
   groupConversations: "会話をグループ化",
+  resortNow: "今すぐ並べ替え",
   noGrouping: "グループなし",
   directory: "ディレクトリ",
   gitRepo: "Gitリポジトリ",

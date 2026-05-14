@@ -95,6 +95,7 @@ export const vi: TranslationKeys = {
   hideSubagents: "Ẩn subagent",
   showSubagents: "Hiện subagent",
   groupConversations: "Gộp nhóm các hội thoại",
+  resortNow: "Sắp xếp lại",
   noGrouping: "Tắt gộp nhóm",
   directory: "Thư mục",
   gitRepo: "Git Repo",

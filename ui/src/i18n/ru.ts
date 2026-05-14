@@ -95,6 +95,7 @@ export const ru: TranslationKeys = {
   hideSubagents: "Скрыть субагентов",
   showSubagents: "Показать субагентов",
   groupConversations: "Группировать диалоги",
+  resortNow: "Пересортировать",
   noGrouping: "Без группировки",
   directory: "Каталог",
   gitRepo: "Git-репозиторий",

@@ -95,6 +95,7 @@ export const upgoer5: TranslationKeys = {
   hideSubagents: "Hide little helpers",
   showSubagents: "Show little helpers",
   groupConversations: "Put talks in groups",
+  resortNow: "Put in order now",
   noGrouping: "No groups",
   directory: "Place",
   gitRepo: "Where Your Work Lives",
