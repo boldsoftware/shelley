@@ -65,3 +65,55 @@ export function setVimModeEnabled(enabled: boolean): void {
     // ignore
   }
 }
+
+// Register ex commands (:q, :wq, :x) and ZZ/ZQ key mappings that route to
+// a caller-provided quit handler. monaco-vim's Vim object is global, so we
+// install these handlers once and dispatch via a module-level callback.
+// Only one editor's quit handler is active at a time (set/cleared by the
+// useMonacoVim hook when it attaches/detaches a vim adapter).
+let activeQuitHandler: ((opts: { save: boolean }) => void) | null = null;
+let vimQuitInstalled = false;
+
+export function setVimQuitHandler(handler: ((opts: { save: boolean }) => void) | null): void {
+  activeQuitHandler = handler;
+}
+
+// Clear the active handler only if it still matches the caller's. This
+// prevents an unmounting adapter from wiping out a handler that a later
+// adapter has since installed (e.g. when both modals are mounted at once).
+export function clearVimQuitHandlerIf(handler: (opts: { save: boolean }) => void): void {
+  if (activeQuitHandler === handler) activeQuitHandler = null;
+}
+
+export async function ensureVimQuitCommands(): Promise<void> {
+  if (vimQuitInstalled) return;
+  const mod = await loadMonacoVim();
+  // CMAdapter (VimMode) exposes the underlying Vim API as a static property.
+  // It's not declared in monaco-vim's types, so cast through unknown.
+  const Vim = (mod.VimMode as unknown as { Vim?: VimApi }).Vim;
+  if (!Vim) return;
+  const quit = (save: boolean) => () => activeQuitHandler?.({ save });
+  Vim.defineEx?.("quit", "q", quit(false));
+  Vim.defineEx?.("wq", "wq", quit(true));
+  Vim.defineEx?.("xit", "x", quit(true));
+  // ZZ = save+quit, ZQ = quit without saving. Use `action` mappings backed
+  // by defineAction so the keys work in normal mode without conflicting
+  // with existing motions.
+  Vim.defineAction?.("shelleyQuit", () => activeQuitHandler?.({ save: false }));
+  Vim.defineAction?.("shelleyQuitSave", () => activeQuitHandler?.({ save: true }));
+  Vim.mapCommand?.("ZQ", "action", "shelleyQuit", undefined, { context: "normal" });
+  Vim.mapCommand?.("ZZ", "action", "shelleyQuitSave", undefined, { context: "normal" });
+  vimQuitInstalled = true;
+}
+
+interface VimApi {
+  defineEx?: (name: string, prefix: string, fn: (...args: unknown[]) => void) => void;
+  defineAction?: (name: string, fn: (...args: unknown[]) => void) => void;
+  mapCommand?: (
+    keys: string,
+    type: string,
+    name: string,
+    args: unknown,
+    extra: { context?: string },
+  ) => void;
+}

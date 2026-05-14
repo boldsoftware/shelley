@@ -1,6 +1,13 @@
 import { useEffect, useState, useCallback } from "react";
 import type * as Monaco from "monaco-editor";
-import { getVimModeEnabled, setVimModeEnabled, loadMonacoVim } from "../services/monaco";
+import {
+  getVimModeEnabled,
+  setVimModeEnabled,
+  loadMonacoVim,
+  ensureVimQuitCommands,
+  setVimQuitHandler,
+  clearVimQuitHandlerIf,
+} from "../services/monaco";
 
 // Tracks the global vim-enabled flag in localStorage so multiple Monaco views
 // share state, and updates broadcast to all open editors via a custom event.
@@ -27,19 +34,25 @@ export function useVimEnabled(): [boolean, (v: boolean) => void] {
 
 // Attach a monaco-vim adapter to `editor` whenever vim mode is enabled.
 // `statusBarNode` is where the vim status bar (mode/command line) renders;
-// pass null to skip the status bar entirely.
+// pass null to skip the status bar entirely. `onQuit` (if provided) is
+// invoked when the user runs :q / :wq / :x or presses ZZ / ZQ in normal
+// mode; `save` is true for the save+quit variants.
 export function useMonacoVim(
   editor: Monaco.editor.IStandaloneCodeEditor | null,
   statusBarNode: HTMLElement | null,
   enabled: boolean,
+  onQuit?: (opts: { save: boolean }) => void,
 ): void {
   useEffect(() => {
     if (!editor || !enabled) return;
     let cancelled = false;
     let adapter: { dispose: () => void } | null = null;
     loadMonacoVim()
-      .then((mod) => {
+      .then(async (mod) => {
         if (cancelled) return;
+        await ensureVimQuitCommands();
+        if (cancelled) return;
+        if (onQuit) setVimQuitHandler(onQuit);
         adapter = mod.initVimMode(editor, statusBarNode ?? undefined);
       })
       .catch((err) => {
@@ -48,9 +61,10 @@ export function useMonacoVim(
     return () => {
       cancelled = true;
       adapter?.dispose();
+      if (onQuit) clearVimQuitHandlerIf(onQuit);
       // initVimMode appends children to statusBarNode; clear them on detach
       // so toggling off doesn't leave a stale status line behind.
       if (statusBarNode) statusBarNode.replaceChildren();
     };
-  }, [editor, statusBarNode, enabled]);
+  }, [editor, statusBarNode, enabled, onQuit]);
 }

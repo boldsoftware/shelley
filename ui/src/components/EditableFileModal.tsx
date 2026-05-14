@@ -48,7 +48,6 @@ export default function EditableFileModal({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  useMonacoVim(editor, vimStatusNode, isDesktop && vimEnabled);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -123,6 +122,24 @@ export default function EditableFileModal({
     },
     [saveContent],
   );
+
+  // Quit handler for vim's :q / :wq / :x and ZZ / ZQ. We flush any pending
+  // debounced save synchronously when the user asks to save+quit so the
+  // modal closes only after the latest content has been persisted.
+  const handleVimQuit = useCallback(
+    ({ save }: { save: boolean }) => {
+      if (save && editorRef.current) {
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+          saveTimeoutRef.current = null;
+        }
+        saveContent(editorRef.current.getValue());
+      }
+      onClose();
+    },
+    [saveContent, onClose],
+  );
+  useMonacoVim(editor, vimStatusNode, isDesktop && vimEnabled, handleVimQuit);
 
   useEffect(() => {
     if (!monacoLoaded || content === null || !containerRef.current || !monacoRef.current) return;

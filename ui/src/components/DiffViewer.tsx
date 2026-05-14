@@ -155,7 +155,12 @@ function DiffViewer({
     null,
   );
   const [vimStatusNode, setVimStatusNode] = useState<HTMLDivElement | null>(null);
-  useMonacoVim(modifiedEditor, vimStatusNode, !isMobile && vimEnabled);
+  // :q / :wq / :x and ZZ / ZQ close the diff viewer. The diff viewer's edits
+  // are persisted by other paths (handler comments / auto-save), so we treat
+  // save+quit the same as plain quit. We pass `onClose` directly (not an
+  // inline arrow) so the effect deps stay stable across renders and the
+  // vim adapter isn't torn down on every parent re-render.
+  useMonacoVim(modifiedEditor, vimStatusNode, !isMobile && vimEnabled, onClose);
   // Mirror of isMobile for handlers attached once at editor-creation time
   // (those handlers must honor the *current* viewport, not the viewport at
   // creation time, because we intentionally don't recreate the editor on
