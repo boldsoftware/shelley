@@ -37,8 +37,53 @@ function rangeSyntax(
   if (!selectedDiff) return "Choose\u2026";
   if (selectedDiff === "working") return "Working Changes";
   const from = commitLabel(diffs, selectedDiff);
-  if (selectedTo === "self") return `${from} (only this commit)`;
-  return `${from}^\u2026 (through working tree)`;
+  if (selectedTo === "self") return `${from} (Single Commit)`;
+  return `${from} \u2192 Now`;
+}
+
+// RangeToggle renders the "Single Commit" vs "Selected Commit → Now"
+// segmented control. Used inside the commit picker popover and in the
+// diff viewer sidebar so the choice is reachable in both layouts.
+export function RangeToggle({
+  selectedDiff,
+  selectedTo,
+  onChange,
+}: {
+  selectedDiff: string | null;
+  selectedTo: "working" | "self";
+  onChange: (selectedDiff: string, selectedTo: "working" | "self") => void;
+}) {
+  const disabled = selectedDiff === null || selectedDiff === "working";
+  return (
+    <div className="commit-picker-range-toggle" role="radiogroup" aria-label="Diff range">
+      <button
+        type="button"
+        className={`commit-picker-range-btn${selectedTo === "self" ? " active" : ""}`}
+        onClick={() => {
+          if (selectedDiff && selectedDiff !== "working") onChange(selectedDiff, "self");
+        }}
+        disabled={disabled}
+        role="radio"
+        aria-checked={selectedTo === "self"}
+        title="Single Commit"
+      >
+        Single Commit
+      </button>
+      <button
+        type="button"
+        className={`commit-picker-range-btn${selectedTo === "working" ? " active" : ""}`}
+        onClick={() => {
+          if (selectedDiff && selectedDiff !== "working") onChange(selectedDiff, "working");
+        }}
+        disabled={disabled}
+        role="radio"
+        aria-checked={selectedTo === "working"}
+        title="From the selected commit through the working tree"
+      >
+        Selected Commit → Now
+      </button>
+    </div>
+  );
 }
 
 // CommitPicker is a single-select popover over the commit history.
@@ -222,39 +267,10 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
   };
 
   // Range-mode toggle inside the popover, mirroring the one in the diff
-  // viewer header so users can flip the variant without closing the
-  // picker. Disabled while the working tree itself is selected, since
-  // there's no "only this commit" interpretation in that case.
-  const rangeDisabled = selectedDiff === null || selectedDiff === "working";
+  // viewer sidebar/header so users can flip the variant without closing
+  // the picker.
   const rangeToggle = (
-    <div className="commit-picker-range-toggle" role="radiogroup" aria-label="Diff range">
-      <button
-        type="button"
-        className={`commit-picker-range-btn${selectedTo === "self" ? " active" : ""}`}
-        onClick={() => {
-          if (selectedDiff && selectedDiff !== "working") onChange(selectedDiff, "self");
-        }}
-        disabled={rangeDisabled}
-        role="radio"
-        aria-checked={selectedTo === "self"}
-        title="Only this commit"
-      >
-        only this
-      </button>
-      <button
-        type="button"
-        className={`commit-picker-range-btn${selectedTo === "working" ? " active" : ""}`}
-        onClick={() => {
-          if (selectedDiff && selectedDiff !== "working") onChange(selectedDiff, "working");
-        }}
-        disabled={rangeDisabled}
-        role="radio"
-        aria-checked={selectedTo === "working"}
-        title="This commit through the working tree"
-      >
-        through working
-      </button>
-    </div>
+    <RangeToggle selectedDiff={selectedDiff} selectedTo={selectedTo} onChange={onChange} />
   );
 
   const list = (

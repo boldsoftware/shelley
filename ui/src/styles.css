@@ -5536,6 +5536,19 @@ svg {
   margin: 0 -0.25rem;
 }
 
+.diff-viewer-sidebar-range {
+  margin-bottom: 0.375rem;
+}
+
+.diff-viewer-sidebar-range .commit-picker-range-toggle {
+  width: 100%;
+}
+
+.diff-viewer-sidebar-range .commit-picker-range-btn {
+  flex: 1;
+  white-space: nowrap;
+}
+
 .diff-viewer-sidebar-files {
   /* Take all remaining vertical space below the commit section. */
   flex: 1 1 0;

@@ -7,7 +7,7 @@ import { useVimEnabled, useMonacoVim } from "../hooks/useMonacoVim";
 import VimToggle from "./VimToggle";
 import { GitDiffInfo, GitFileInfo, GitFileDiff, GitCommitMessage } from "../types";
 import DirectoryPickerModal from "./DirectoryPickerModal";
-import CommitPicker from "./CommitPicker";
+import CommitPicker, { RangeToggle } from "./CommitPicker";
 
 interface DiffViewerProps {
   cwd: string;
@@ -1496,6 +1496,16 @@ function DiffViewer({
               <div className="diff-viewer-sidebar-section diff-viewer-sidebar-commits">
                 <div className="diff-viewer-sidebar-label">
                   <span>Commits</span>
+                </div>
+                <div className="diff-viewer-sidebar-range">
+                  <RangeToggle
+                    selectedDiff={selectedDiff}
+                    selectedTo={selectedTo}
+                    onChange={(diff, to) => {
+                      setSelectedDiff(diff);
+                      setSelectedTo(to);
+                    }}
+                  />
                 </div>
                 <div className="diff-viewer-sidebar-commits-scroll">{commitList}</div>
               </div>
