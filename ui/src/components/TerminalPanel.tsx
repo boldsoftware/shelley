@@ -689,6 +689,11 @@ function TerminalInstanceWithRegistry({
     fitAddon.fit();
     onRegister(term.id, xterm);
 
+    // Show the command as a banner so users can see and copy/paste what they
+    // ran. Written client-side on every attach (the xterm buffer is fresh on
+    // each mount, so there's no duplication).
+    xterm.write(`\x1b[2m$ ${term.command}\x1b[0m\r\n`);
+
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     // If we already have a persistent session id, reattach to it. Otherwise
     // spawn a new one by sending cmd+cwd.
