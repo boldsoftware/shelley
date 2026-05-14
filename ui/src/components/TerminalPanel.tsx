@@ -659,6 +659,8 @@ function TerminalInstanceWithRegistry({
       fontFamily: 'Consolas, "Liberation Mono", Menlo, Courier, monospace',
       theme: getTerminalTheme(isDark),
       scrollback: 10000,
+      // Kitty keyboard protocol — clients opt in via `CSI = u` so this is safe to leave on.
+      vtExtensions: { kittyKeyboard: true },
     });
     xtermRef.current = xterm;
 
