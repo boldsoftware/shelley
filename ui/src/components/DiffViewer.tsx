@@ -85,9 +85,8 @@ function DiffViewer({
   // Right-hand-side bound for the commit range:
   //   "working": through working tree (default)
   //   "self":    only the selected commit
-  //   <hash>:    arbitrary newer commit
   // Only meaningful when selectedDiff is a commit (not "working").
-  const [selectedTo, setSelectedTo] = useState<string>("working");
+  const [selectedTo, setSelectedTo] = useState<"working" | "self">("working");
   const [files, setFiles] = useState<GitFileInfo[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileDiff, setFileDiff] = useState<GitFileDiff | null>(null);
@@ -123,6 +122,26 @@ function DiffViewer({
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [vimEnabled, setVimEnabled] = useVimEnabled();
+  // Desktop-only layout: "header" puts commit + file selectors in the top
+  // header row; "sidebar" moves them into a left column with the commit
+  // picker stacked above a scrollable list of files. Persisted in
+  // localStorage so it survives reloads.
+  const [layout, setLayoutState] = useState<"header" | "sidebar">(() => {
+    try {
+      const v = localStorage.getItem("diff-viewer-layout");
+      return v === "sidebar" ? "sidebar" : "header";
+    } catch {
+      return "header";
+    }
+  });
+  const setLayout = useCallback((v: "header" | "sidebar") => {
+    setLayoutState(v);
+    try {
+      localStorage.setItem("diff-viewer-layout", v);
+    } catch {
+      // ignore
+    }
+  }, []);
   // The vim adapter attaches to the modified (right-hand) code editor; we
   // surface it via state because we have the diff editor in a ref.
   const [modifiedEditor, setModifiedEditor] = useState<Monaco.editor.IStandaloneCodeEditor | null>(
@@ -232,16 +251,6 @@ function DiffViewer({
       // below (keyed on isOpen), so we don't dispose it here.
     }
   }, [isOpen, cwd, initialCommit]);
-
-  // If `selectedTo` references a commit hash that's no longer in the loaded
-  // diffs (e.g. after refreshing the list), drop back to the working-tree
-  // default rather than silently sending a stale hash to the backend.
-  useEffect(() => {
-    if (selectedTo === "working" || selectedTo === "self") return;
-    if (!diffs.some((d) => d.id === selectedTo)) {
-      setSelectedTo("working");
-    }
-  }, [diffs, selectedTo]);
 
   // Load files when diff (or its `to` bound) is selected
   useEffect(() => {
@@ -1077,6 +1086,209 @@ function DiffViewer({
     />
   );
 
+  // Sidebar commit list. We want a short, scannable list of "interesting"
+  // commits: working tree, then everything up to (and including) the
+  // merge-base with @{upstream}. When there's no merge-base info (e.g.
+  // detached HEAD with no upstream), fall back to the top 10 commits.
+  const sidebarCommits = (() => {
+    const list: GitDiffInfo[] = [];
+    const working = diffs.find((d) => d.id === "working");
+    if (working) list.push(working);
+    const commitsOnly = diffs.filter((d) => d.id !== "working");
+    const mergeBaseIdx = commitsOnly.findIndex((d) => d.isMergeBase);
+    if (mergeBaseIdx >= 0) {
+      // Include up to and including the merge-base. Cap to keep the
+      // sidebar usable for branches with huge divergence.
+      list.push(...commitsOnly.slice(0, Math.min(mergeBaseIdx + 1, 50)));
+    } else {
+      list.push(...commitsOnly.slice(0, 10));
+    }
+    return list;
+  })();
+
+  // Compute which sidebar rows fall inside the active diff range so we
+  // can highlight either the single selected commit or the whole span
+  // through the working tree. `sidebarCommits` is rendered with the
+  // working row first, then commits in newest-first order, matching the
+  // git history's natural top-down layout.
+  const sidebarSelIdx = selectedDiff ? sidebarCommits.findIndex((d) => d.id === selectedDiff) : -1;
+  const inSidebarRange = (idx: number): boolean => {
+    if (sidebarSelIdx < 0) return false;
+    if (selectedDiff === "working") return idx === sidebarSelIdx;
+    if (selectedTo === "self") return idx === sidebarSelIdx;
+    // through working tree: highlight from the working row (idx 0) down
+    // to and including the selected commit row.
+    return idx >= 0 && idx <= sidebarSelIdx;
+  };
+
+  const commitList = (
+    <ul className="diff-viewer-commit-list" role="listbox" aria-label="Commits">
+      {sidebarCommits.length === 0 && <li className="diff-viewer-file-list-empty">No commits</li>}
+      {sidebarCommits.map((d, idx) => {
+        const isWorking = d.id === "working";
+        const isSelected = selectedDiff === d.id;
+        const inRange = inSidebarRange(idx);
+        const subject = isWorking ? "Working Changes" : d.message;
+        const refs = d.refs ?? [];
+        return (
+          <li key={d.id}>
+            <button
+              type="button"
+              className={[
+                "diff-viewer-commit-list-item",
+                isSelected && "selected",
+                inRange && "in-range",
+                isWorking && "working",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              onClick={() => {
+                // Clicking a row picks that commit; keep the current
+                // range mode (only this / through working) so the
+                // header toggle stays in charge of the variant.
+                if (isWorking) {
+                  setSelectedDiff("working");
+                } else {
+                  setSelectedDiff(d.id);
+                }
+              }}
+              title={isWorking ? "Working changes" : `${d.message}\n${d.id}`}
+              role="option"
+              aria-selected={isSelected}
+            >
+              <div className="diff-viewer-commit-list-line1">
+                <span className="diff-viewer-commit-list-subject">{subject}</span>
+              </div>
+              {!isWorking && (refs.length > 0 || d.isMergeBase) && (
+                <div className="diff-viewer-commit-list-refs">
+                  {refs.map((ref) => (
+                    <span
+                      key={ref}
+                      className={`diff-viewer-commit-list-ref${
+                        ref === "HEAD" ? " head" : ""
+                      }${ref.includes("/") ? " remote" : ""}`}
+                    >
+                      {ref}
+                    </span>
+                  ))}
+                  {d.isMergeBase && !refs.some((r) => r.includes("/")) && (
+                    <span
+                      className="diff-viewer-commit-list-ref mergebase"
+                      title="Merge-base with @{upstream}"
+                    >
+                      merge-base
+                    </span>
+                  )}
+                </div>
+              )}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  // Sidebar file list: a clickable column equivalent of the file selector
+  // <select>. Only used in desktop sidebar layout.
+  const fileList = (
+    <ul className="diff-viewer-file-list" role="listbox" aria-label="Files">
+      {files.length === 0 && <li className="diff-viewer-file-list-empty">No files</li>}
+      {files.map((file) => {
+        const isSelected = file.path === selectedFile;
+        if (isCommitMessageFile(file.path)) {
+          const hash = commitHashFromPath(file.path);
+          const msg = commitMessages.find((m) => m.hash === hash);
+          const subject = msg ? msg.subject : hash.slice(0, 8);
+          return (
+            <li key={file.path}>
+              <button
+                type="button"
+                className={`diff-viewer-file-list-item commit-message${isSelected ? " active" : ""}`}
+                onClick={() => setSelectedFile(file.path)}
+                title={subject + (msg?.isHead ? " [HEAD]" : "")}
+                role="option"
+                aria-selected={isSelected}
+              >
+                <span className="diff-viewer-file-list-icon">📝</span>
+                <span className="diff-viewer-file-list-name">
+                  {subject}
+                  {msg?.isHead ? " [HEAD]" : ""}
+                </span>
+              </button>
+            </li>
+          );
+        }
+        return (
+          <li key={file.path}>
+            <button
+              type="button"
+              className={`diff-viewer-file-list-item${isSelected ? " active" : ""}`}
+              onClick={() => setSelectedFile(file.path)}
+              title={file.path}
+              role="option"
+              aria-selected={isSelected}
+            >
+              <span
+                className={`diff-viewer-file-list-status status-${file.status}`}
+                aria-hidden="true"
+              >
+                {getStatusSymbol(file.status)}
+              </span>
+              <span className="diff-viewer-file-list-name">{file.path}</span>
+              <span className="diff-viewer-file-list-stats">
+                {file.additions > 0 && <span className="add">+{file.additions}</span>}
+                {file.deletions > 0 && <span className="del">-{file.deletions}</span>}
+                {file.isGenerated && <span className="gen">[gen]</span>}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  // Chevron-double sidebar toggle. In header mode (no sidebar) we show
+  // `«` to invite the user to pull a panel in from the left; once the
+  // sidebar is showing, the button at its top edge becomes `»` to push
+  // it back away.
+  const expandSidebarButton = (
+    <button
+      type="button"
+      className="btn-icon diff-viewer-expand-btn"
+      onClick={() => setLayout("sidebar")}
+      aria-label="Show sidebar"
+      title="Show sidebar"
+    >
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="20" height="20">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+        />
+      </svg>
+    </button>
+  );
+
+  const collapseSidebarButton = (
+    <button
+      type="button"
+      className="btn-icon diff-viewer-collapse-btn"
+      onClick={() => setLayout("header")}
+      aria-label="Hide sidebar"
+      title="Hide sidebar"
+    >
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="20" height="20">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M13 5l7 7-7 7M5 5l7 7-7 7"
+        />
+      </svg>
+    </button>
+  );
+
   const fileIndexIndicator =
     files.length > 1 && currentFileIndex >= 0 ? `(${currentFileIndex + 1}/${files.length})` : null;
 
@@ -1232,21 +1444,31 @@ function DiffViewer({
             </button>
           </div>
         ) : (
-          // Desktop header: selectors expand, controls on right
+          // Desktop header: selectors expand, controls on right.
+          // In sidebar layout, the « collapse button is the leftmost
+          // element in the top bar (sitting directly above the sidebar);
+          // the inline commit/file selectors are hidden in that mode
+          // because the sidebar shows commit and file lists instead.
           <div className="diff-viewer-header">
             <div className="diff-viewer-header-row">
-              <div className="diff-viewer-selectors-row">
-                <div className="diff-viewer-selector-group">
-                  <label className="diff-viewer-selector-label">Commits</label>
-                  {commitSelector}
+              {layout === "sidebar" && collapseSidebarButton}
+              {layout === "header" && expandSidebarButton}
+              {layout === "header" ? (
+                <div className="diff-viewer-selectors-row">
+                  <div className="diff-viewer-selector-group">
+                    <label className="diff-viewer-selector-label">Commits</label>
+                    {commitSelector}
+                  </div>
+                  <div className="diff-viewer-selector-group">
+                    <label className="diff-viewer-selector-label">
+                      Commit messages and changed files
+                    </label>
+                    {fileSelector}
+                  </div>
                 </div>
-                <div className="diff-viewer-selector-group">
-                  <label className="diff-viewer-selector-label">
-                    Commit messages and changed files
-                  </label>
-                  {fileSelector}
-                </div>
-              </div>
+              ) : (
+                <div className="diff-viewer-selectors-row" />
+              )}
               <div className="diff-viewer-controls-row">
                 {navButtons}
                 {modeToggle}
@@ -1264,37 +1486,62 @@ function DiffViewer({
         {error && <div className="diff-viewer-error">{error}</div>}
 
         {/* Main content */}
-        <div className="diff-viewer-content">
-          {loading && !fileDiff && (
-            <div className="diff-viewer-loading">
-              <div className="spinner"></div>
-              <span>Loading...</span>
-            </div>
+        <div
+          className={`diff-viewer-content${
+            !isMobile && layout === "sidebar" ? " diff-viewer-content-sidebar" : ""
+          }`}
+        >
+          {!isMobile && layout === "sidebar" && (
+            <aside className="diff-viewer-sidebar">
+              <div className="diff-viewer-sidebar-section diff-viewer-sidebar-commits">
+                <div className="diff-viewer-sidebar-label">
+                  <span>Commits</span>
+                </div>
+                <div className="diff-viewer-sidebar-commits-scroll">{commitList}</div>
+              </div>
+              <div className="diff-viewer-sidebar-section diff-viewer-sidebar-files">
+                <div className="diff-viewer-sidebar-label">
+                  <span>Commit Messages and Files</span>
+                  {fileIndexIndicator && (
+                    <span className="diff-viewer-file-index">{fileIndexIndicator}</span>
+                  )}
+                </div>
+                <div className="diff-viewer-sidebar-files-scroll">{fileList}</div>
+              </div>
+            </aside>
           )}
+          <div className="diff-viewer-main">
+            {loading && !fileDiff && (
+              <div className="diff-viewer-loading">
+                <div className="spinner"></div>
+                <span>Loading...</span>
+              </div>
+            )}
 
-          {!loading && !monacoLoaded && !error && (
-            <div className="diff-viewer-loading">
-              <div className="spinner"></div>
-              <span>Loading editor...</span>
-            </div>
-          )}
+            {!loading && !monacoLoaded && !error && (
+              <div className="diff-viewer-loading">
+                <div className="spinner"></div>
+                <span>Loading editor...</span>
+              </div>
+            )}
 
-          {!loading && monacoLoaded && !fileDiff && !error && (
-            <div className="diff-viewer-empty">
-              <p>Select a diff and file to view changes.</p>
-              <p className="diff-viewer-hint">Click on line numbers to add comments.</p>
-            </div>
-          )}
+            {!loading && monacoLoaded && !fileDiff && !error && (
+              <div className="diff-viewer-empty">
+                <p>Select a diff and file to view changes.</p>
+                <p className="diff-viewer-hint">Click on line numbers to add comments.</p>
+              </div>
+            )}
 
-          {/* Monaco editor container */}
-          <div
-            ref={editorContainerRef}
-            className="diff-viewer-editor"
-            style={{ display: fileDiff && monacoLoaded ? "block" : "none" }}
-          />
-          {!isMobile && vimEnabled && fileDiff && monacoLoaded && (
-            <div ref={setVimStatusNode} className="monaco-vim-status" />
-          )}
+            {/* Monaco editor container */}
+            <div
+              ref={editorContainerRef}
+              className="diff-viewer-editor"
+              style={{ display: fileDiff && monacoLoaded ? "block" : "none" }}
+            />
+            {!isMobile && vimEnabled && fileDiff && monacoLoaded && (
+              <div ref={setVimStatusNode} className="monaco-vim-status" />
+            )}
+          </div>
         </div>
 
         {/* Mobile floating nav buttons at bottom */}

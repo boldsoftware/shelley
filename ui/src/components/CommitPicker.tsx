@@ -4,9 +4,10 @@ import { GitDiffInfo } from "../types";
 interface CommitPickerProps {
   diffs: GitDiffInfo[];
   selectedDiff: string | null;
-  // Right-hand bound: "working", "self", or a commit hash.
-  selectedTo: string;
-  onChange: (selectedDiff: string, selectedTo: string) => void;
+  // Right-hand bound. The diff is either "this commit only" or
+  // "through working tree"; arbitrary endpoints are no longer supported.
+  selectedTo: "working" | "self";
+  onChange: (selectedDiff: string, selectedTo: "working" | "self") => void;
   isMobile: boolean;
 }
 
@@ -20,54 +21,32 @@ function shortHash(id: string): string {
   return id.slice(0, 8);
 }
 
-// commitLabel returns a quoted, truncated commit subject suitable for use
-// in the trigger and status line. Falls back to the short hash when no
-// matching diff is found.
 function commitLabel(diffs: GitDiffInfo[], id: string, maxLen = 40): string {
   const d = diffs.find((x) => x.id === id);
   if (!d) return shortHash(id);
-  return `\u201c${truncate(d.message, maxLen)}\u201d`;
+  return truncate(d.message, maxLen);
 }
 
-// rangeSyntax produces a compact git-syntax-flavoured description of the
-// currently active selection, using commit subjects (not hashes) as the
-// human-friendly identifier. Used both on the closed trigger and in the
-// open picker's status header so users always see exactly what's shown.
-//
-// Examples:
-//   selectedDiff=null            -> "Choose\u2026"
-//   selectedDiff="working"       -> "Working Changes"
-//   to="self"                    -> "\u201c<subj>\u201d (only this commit)"
-//   to="working"|""              -> "\u201c<subj>\u201d^\u2026 (through working tree)"
-//   to=<hash2>                   -> "\u201c<subj1>\u201d^\u2026\u201c<subj2>\u201d"
+// rangeSyntax describes the active selection in compact prose. Used on
+// the closed trigger and at the top of the open picker.
 function rangeSyntax(
   diffs: GitDiffInfo[],
   selectedDiff: string | null,
-  selectedTo: string,
+  selectedTo: "working" | "self",
 ): string {
   if (!selectedDiff) return "Choose\u2026";
   if (selectedDiff === "working") return "Working Changes";
   const from = commitLabel(diffs, selectedDiff);
   if (selectedTo === "self") return `${from} (only this commit)`;
-  if (selectedTo === "" || selectedTo === "working") {
-    return `${from}^\u2026 (through working tree)`;
-  }
-  return `${from}^\u2026${commitLabel(diffs, selectedTo)}`;
+  return `${from}^\u2026 (through working tree)`;
 }
 
-// CommitPicker is a single-control replacement for the prior pair of
-// <select> elements. Each commit row exposes three actions:
-//   "this^\u2026"   -> from=this, to=working   (this commit through working tree)
-//   "this"          -> from=this, to=self      (only this commit)
-//   "this^\u2026?"  -> set this as the range anchor; choose another commit
-//                       as the other endpoint (button labels on other rows
-//                       relabel to reflect what clicking them will produce).
+// CommitPicker is a single-select popover over the commit history.
+// Clicking a row selects that commit; the "only this / through working"
+// distinction lives on the surrounding range toggle (rendered both in
+// the diff viewer header and inside this popover).
 function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: CommitPickerProps) {
   const [open, setOpen] = useState(false);
-  // pendingFrom holds the anchor commit while the picker waits for the
-  // user to choose the other end of the range. null means no pending
-  // range; any row click is interpreted as a one-shot action.
-  const [pendingFrom, setPendingFrom] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -75,11 +54,6 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
   const workingDiff = useMemo(() => diffs.find((d) => d.id === "working"), [diffs]);
 
   const indexOf = (id: string) => commitDiffs.findIndex((d) => d.id === id);
-
-  // Reset pendingFrom whenever the picker closes so the next open starts fresh.
-  useEffect(() => {
-    if (!open) setPendingFrom(null);
-  }, [open]);
 
   // Close on outside click and Escape (capture phase + stopPropagation so
   // Escape closes only the picker, not the surrounding diff modal).
@@ -95,13 +69,7 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
       if (e.key === "Escape") {
         e.stopImmediatePropagation();
         e.preventDefault();
-        // Inside pending mode, Escape cancels the pending anchor first;
-        // a second Escape closes the picker.
-        if (pendingFrom !== null) {
-          setPendingFrom(null);
-        } else {
-          setOpen(false);
-        }
+        setOpen(false);
       }
     };
     document.addEventListener("mousedown", onDocDown);
@@ -110,7 +78,7 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
       document.removeEventListener("mousedown", onDocDown);
       document.removeEventListener("keydown", onKey, true);
     };
-  }, [open, pendingFrom]);
+  }, [open]);
 
   // Focus management: focus the highlighted row on open, return focus to
   // the trigger on close.
@@ -132,7 +100,6 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
     wasOpenRef.current = open;
   }, [open]);
 
-  // Arrow-key navigation between commit rows.
   const onListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") {
       return;
@@ -155,43 +122,12 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
     }
   };
 
-  // Action helpers. All of these close the picker on success (except
-  // setAnchor, which opens pending mode).
-  const pickThrough = (id: string) => {
-    onChange(id, "working");
-    setOpen(false);
-  };
-  const pickOnly = (id: string) => {
-    onChange(id, "self");
+  const pickCommit = (id: string) => {
+    onChange(id, selectedTo);
     setOpen(false);
   };
   const pickWorking = () => {
     onChange("working", "working");
-    setOpen(false);
-  };
-  const setAnchor = (id: string) => {
-    setPendingFrom(id);
-    // Preview as `id^\u2026` so the diff updates while the user picks the
-    // second endpoint. They can still cancel via Escape.
-    onChange(id, "working");
-  };
-  const completeRange = (anchor: string, otherEnd: string) => {
-    if (anchor === otherEnd) {
-      // Closing on the anchor itself reduces to "this^\u2026".
-      pickThrough(anchor);
-      return;
-    }
-    const a = indexOf(anchor);
-    const b = indexOf(otherEnd);
-    if (a < 0 || b < 0) {
-      pickThrough(otherEnd);
-      return;
-    }
-    // commitDiffs is newest-first, so the smaller index is the newer
-    // commit. The from end of a git range is older.
-    const fromId = a < b ? otherEnd : anchor;
-    const toId = a < b ? anchor : otherEnd;
-    onChange(fromId, toId);
     setOpen(false);
   };
 
@@ -233,160 +169,39 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
     return <span className="commit-picker-refs">{chips}</span>;
   };
 
-  // Render the three (or contextual) action buttons for a single commit row.
-  const renderRowActions = (d: GitDiffInfo) => {
-    const isAnchor = pendingFrom === d.id;
-    if (pendingFrom !== null && !isAnchor) {
-      // Pending mode, on a non-anchor row: a single button that completes
-      // the range. Label adjusts to show the resulting normalized range.
-      const a = indexOf(pendingFrom);
-      const b = indexOf(d.id);
-      let label = "";
-      if (a >= 0 && b >= 0) {
-        // newest-first list: smaller index == newer.
-        const fromId = a < b ? d.id : pendingFrom;
-        const toId = a < b ? pendingFrom : d.id;
-        label = `${commitLabel(diffs, fromId, 16)}^\u2026${commitLabel(diffs, toId, 16)}`;
-      } else {
-        label = `\u2192 here`;
-      }
-      return (
-        <div className="commit-picker-row-actions">
-          <button
-            type="button"
-            className="commit-picker-action commit-picker-action-primary"
-            onClick={(e) => {
-              e.stopPropagation();
-              completeRange(pendingFrom, d.id);
-            }}
-            title="Complete the range"
-          >
-            {label}
-          </button>
-        </div>
-      );
-    }
-    if (isAnchor) {
-      // Pending-mode, on the anchor: offer Cancel.
-      return (
-        <div className="commit-picker-row-actions">
-          <button
-            type="button"
-            className="commit-picker-action"
-            onClick={(e) => {
-              e.stopPropagation();
-              setPendingFrom(null);
-            }}
-            title="Cancel range selection"
-          >
-            cancel
-          </button>
-        </div>
-      );
-    }
-    // Default mode: three buttons.
-    return (
-      <div className="commit-picker-row-actions">
-        <button
-          type="button"
-          className="commit-picker-action"
-          onClick={(e) => {
-            e.stopPropagation();
-            pickThrough(d.id);
-          }}
-          title="This commit through the working tree"
-        >
-          {"this^\u2026"}
-        </button>
-        <button
-          type="button"
-          className="commit-picker-action"
-          onClick={(e) => {
-            e.stopPropagation();
-            pickOnly(d.id);
-          }}
-          title="Only this commit"
-        >
-          this
-        </button>
-        <button
-          type="button"
-          className="commit-picker-action"
-          onClick={(e) => {
-            e.stopPropagation();
-            setAnchor(d.id);
-          }}
-          title="Pick another commit as the other end of the range"
-        >
-          {"this^\u2026?"}
-        </button>
-      </div>
-    );
+  // Compute which commit rows are inside the active range. In
+  // "through working" mode the range covers the working row down to
+  // (and including) the selected commit. In "only this" mode just the
+  // selected commit lights up.
+  const fromIdx = selectedDiff && selectedDiff !== "working" ? indexOf(selectedDiff) : -1;
+  const rowInRange = (idx: number) => {
+    if (selectedDiff === "working") return false;
+    if (fromIdx < 0) return false;
+    if (selectedTo === "self") return idx === fromIdx;
+    return idx <= fromIdx;
   };
+  const workingInRange =
+    selectedDiff === "working" || (selectedDiff !== null && selectedTo === "working");
 
-  // Click on a commit row body. In default mode, this is shorthand for
-  // "this^\u2026". In pending mode, clicking any non-anchor row body
-  // completes the range; clicking the anchor row body is a no-op so the
-  // user has to be explicit (cancel button or click another row).
-  const onRowClick = (d: GitDiffInfo) => {
-    if (pendingFrom === null) {
-      pickThrough(d.id);
-      return;
-    }
-    if (d.id === pendingFrom) return;
-    completeRange(pendingFrom, d.id);
-  };
-
-  // Render a single commit row.
   const renderCommitRow = (d: GitDiffInfo, idx: number) => {
-    const effectiveFrom = pendingFrom ?? selectedDiff;
-    const effectiveTo = pendingFrom ? "working" : selectedTo;
-
-    const isFrom = d.id === effectiveFrom;
-    const isTo =
-      effectiveFrom !== null &&
-      effectiveFrom !== "working" &&
-      effectiveTo !== "" &&
-      effectiveTo !== "working" &&
-      effectiveTo !== "self" &&
-      d.id === effectiveTo;
-    const fromIdx = effectiveFrom ? indexOf(effectiveFrom) : -1;
-    const toIdx =
-      effectiveTo !== "" && effectiveTo !== "working" && effectiveTo !== "self"
-        ? indexOf(effectiveTo)
-        : -1;
-    const inRange =
-      !isFrom &&
-      !isTo &&
-      effectiveFrom !== null &&
-      effectiveFrom !== "working" &&
-      fromIdx >= 0 &&
-      idx < fromIdx &&
-      (effectiveTo === "working" || (toIdx >= 0 && idx > toIdx));
-
+    const isFrom = d.id === selectedDiff;
+    const inRange = !isFrom && rowInRange(idx);
     const stats = `+${d.additions}/-${d.deletions}`;
     const hash = shortHash(d.id);
 
     const classes = [
       "commit-picker-row",
       isFrom && "commit-picker-row-from",
-      isTo && "commit-picker-row-to",
       inRange && "commit-picker-row-in-range",
-      pendingFrom === d.id && "commit-picker-row-pending",
     ]
       .filter(Boolean)
       .join(" ");
 
     return (
       <div key={d.id} className={classes}>
-        <button
-          type="button"
-          className="commit-picker-row-main"
-          onClick={() => onRowClick(d)}
-          title={pendingFrom && pendingFrom !== d.id ? "Complete the range here" : ""}
-        >
+        <button type="button" className="commit-picker-row-main" onClick={() => pickCommit(d.id)}>
           <div className="commit-picker-row-marker" aria-hidden="true">
-            {isFrom ? "\u25cf" : isTo ? "\u25cb" : inRange ? "\u2502" : ""}
+            {isFrom ? "\u25cf" : inRange ? "\u2502" : ""}
           </div>
           <div className="commit-picker-row-text">
             <div className="commit-picker-row-subject">
@@ -402,10 +217,45 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
             </div>
           </div>
         </button>
-        {renderRowActions(d)}
       </div>
     );
   };
+
+  // Range-mode toggle inside the popover, mirroring the one in the diff
+  // viewer header so users can flip the variant without closing the
+  // picker. Disabled while the working tree itself is selected, since
+  // there's no "only this commit" interpretation in that case.
+  const rangeDisabled = selectedDiff === null || selectedDiff === "working";
+  const rangeToggle = (
+    <div className="commit-picker-range-toggle" role="radiogroup" aria-label="Diff range">
+      <button
+        type="button"
+        className={`commit-picker-range-btn${selectedTo === "self" ? " active" : ""}`}
+        onClick={() => {
+          if (selectedDiff && selectedDiff !== "working") onChange(selectedDiff, "self");
+        }}
+        disabled={rangeDisabled}
+        role="radio"
+        aria-checked={selectedTo === "self"}
+        title="Only this commit"
+      >
+        only this
+      </button>
+      <button
+        type="button"
+        className={`commit-picker-range-btn${selectedTo === "working" ? " active" : ""}`}
+        onClick={() => {
+          if (selectedDiff && selectedDiff !== "working") onChange(selectedDiff, "working");
+        }}
+        disabled={rangeDisabled}
+        role="radio"
+        aria-checked={selectedTo === "working"}
+        title="This commit through the working tree"
+      >
+        through working
+      </button>
+    </div>
+  );
 
   const list = (
     <div className="commit-picker-list" onKeyDown={onListKeyDown}>
@@ -413,17 +263,13 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
         <div
           className={
             "commit-picker-row commit-picker-row-working" +
-            (selectedDiff === "working" && pendingFrom === null ? " commit-picker-row-from" : "")
+            (selectedDiff === "working" ? " commit-picker-row-from" : "") +
+            (workingInRange && selectedDiff !== "working" ? " commit-picker-row-in-range" : "")
           }
         >
-          <button
-            type="button"
-            className="commit-picker-row-main"
-            onClick={pickWorking}
-            disabled={pendingFrom !== null}
-          >
+          <button type="button" className="commit-picker-row-main" onClick={pickWorking}>
             <div className="commit-picker-row-marker" aria-hidden="true">
-              {selectedDiff === "working" && pendingFrom === null ? "\u25cf" : ""}
+              {selectedDiff === "working" ? "\u25cf" : workingInRange ? "\u2502" : ""}
             </div>
             <div className="commit-picker-row-text">
               <div className="commit-picker-row-subject">Working Changes</div>
@@ -444,22 +290,14 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
     </div>
   );
 
-  // The trigger button shows the active range using commit subjects.
   const triggerPrimary = rangeSyntax(diffs, selectedDiff, selectedTo);
 
-  // Status line shown at the top of the open picker.
-  const statusLine = pendingFrom ? (
-    <div className="commit-picker-status commit-picker-status-pending">
-      Pick the other end of{" "}
-      <code>
-        {commitLabel(diffs, pendingFrom)}
-        {"^\u2026?"}
-      </code>{" "}
-      (Esc to cancel)
-    </div>
-  ) : (
+  const statusLine = (
     <div className="commit-picker-status">
-      Showing <code>{rangeSyntax(diffs, selectedDiff, selectedTo)}</code>
+      <span>
+        Showing <code>{rangeSyntax(diffs, selectedDiff, selectedTo)}</code>
+      </span>
+      {rangeToggle}
     </div>
   );
 
