@@ -71,6 +71,10 @@ Destructive commands (deleting .git, home dirs, broad wildcards) require
 explicit paths and user confirmation.
 
 Keep commands under 60k tokens; for complex scripts, write a file and run it.
+
+Don't pipe to head/tail/sed -n just to truncate output; the tool already tails
+on yield and otherwise returns it in full. Filter only when targeting a
+specific pattern (e.g. grep).
 `
 
 // shellInputSchema is built dynamically so the description reflects the
