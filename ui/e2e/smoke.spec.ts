@@ -44,8 +44,11 @@ test.describe('Shelley Smoke Tests', () => {
     // Verify input is empty initially
     await expect(messageInput).toHaveValue('');
     
-    // Verify placeholder text is present
-    await expect(messageInput).toHaveAttribute('placeholder', 'Message...');
+    // Verify placeholder text is present. The actual value is picked
+    // randomly from a pool of hints on each mount (see placeholderHints.ts),
+    // so just assert that *some* non-empty placeholder is set rather than
+    // a specific string.
+    await expect(messageInput).toHaveAttribute('placeholder', /.+/);
   });
   
   test('send button is disabled when input is empty', async ({ page }) => {
