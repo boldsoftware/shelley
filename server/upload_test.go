@@ -56,9 +56,9 @@ func TestUploadEndpoint(t *testing.T) {
 		t.Fatal("response missing 'path' field")
 	}
 
-	// Verify the path is in the screenshot directory
-	if !strings.HasPrefix(path, browse.ScreenshotDir) {
-		t.Errorf("expected path to start with %s, got %s", browse.ScreenshotDir, path)
+	// Verify the path is in the upload directory
+	if !strings.HasPrefix(path, browse.UploadDir) {
+		t.Errorf("expected path to start with %s, got %s", browse.UploadDir, path)
 	}
 
 	// Verify the file has the correct extension

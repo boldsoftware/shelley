@@ -103,6 +103,7 @@ func (s *Server) handleRead(w http.ResponseWriter, r *http.Request) {
 
 func isReadableUIFile(path string) bool {
 	return strings.HasPrefix(path, browse.ScreenshotDir+"/") ||
+		strings.HasPrefix(path, browse.UploadDir+"/") ||
 		strings.HasPrefix(path, browse.ConsoleLogsDir+"/") ||
 		strings.HasPrefix(path, browse.ScreencastDir+"/") ||
 		isDistillationTempFile(path)
@@ -195,7 +196,7 @@ func userAgentsMdPath() (string, error) {
 }
 
 // handleUpload handles file uploads via POST /api/upload
-// Files are saved to the ScreenshotDir with a random filename
+// Files are saved to the UploadDir with a random filename
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -233,11 +234,11 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	// Get file extension from the original filename
 	ext := filepath.Ext(handler.Filename)
 
-	// Create a unique filename in the ScreenshotDir
-	filename := filepath.Join(browse.ScreenshotDir, fmt.Sprintf("upload_%s%s", hex.EncodeToString(randBytes), ext))
+	// Create a unique filename in the UploadDir
+	filename := filepath.Join(browse.UploadDir, fmt.Sprintf("upload_%s%s", hex.EncodeToString(randBytes), ext))
 
 	// Ensure the directory exists
-	if err := os.MkdirAll(browse.ScreenshotDir, 0o755); err != nil {
+	if err := os.MkdirAll(browse.UploadDir, 0o755); err != nil {
 		http.Error(w, "failed to create directory: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

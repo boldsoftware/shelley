@@ -104,7 +104,7 @@ test.describe('File Upload via Paste and Drag', () => {
     expect(response.status()).toBe(200);
     const json = await response.json();
     expect(json.path).toBeDefined();
-    expect(json.path).toContain('/tmp/shelley-screenshots/');
+    expect(json.path).toContain('/tmp/shelley-uploads/');
     expect(json.path).toContain('.txt');
   });
 

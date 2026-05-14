@@ -31,6 +31,11 @@ import (
 // ScreenshotDir is the directory where screenshots are stored
 const ScreenshotDir = "/tmp/shelley-screenshots"
 
+// UploadDir is the directory where files uploaded via /api/upload are stored.
+// Kept distinct from ScreenshotDir so that browser-tool screenshots and
+// user-uploaded files don't get mixed up in one bucket.
+const UploadDir = "/tmp/shelley-uploads"
+
 // DownloadDir is the directory where downloads are stored
 const DownloadDir = "/tmp/shelley-downloads"
 
@@ -102,7 +107,7 @@ func NewBrowseTools(ctx context.Context, idleTimeout time.Duration, maxImageDime
 	if idleTimeout <= 0 {
 		idleTimeout = DefaultIdleTimeout
 	}
-	for _, dir := range []string{ScreenshotDir, DownloadDir, ConsoleLogsDir} {
+	for _, dir := range []string{ScreenshotDir, UploadDir, DownloadDir, ConsoleLogsDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			log.Printf("Failed to create directory %s: %v", dir, err)
 		}

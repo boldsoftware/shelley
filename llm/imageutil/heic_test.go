@@ -34,7 +34,7 @@ func TestIsHEIC(t *testing.T) {
 
 func TestConvertHEICToPNG(t *testing.T) {
 	// Skip if no real HEIC test file available
-	testFile := "/tmp/shelley-screenshots/upload_349d2aa15d2b3e4e.heic"
+	testFile := "/tmp/shelley-uploads/upload_349d2aa15d2b3e4e.heic"
 	data, err := os.ReadFile(testFile)
 	if err != nil {
 		t.Skipf("test HEIC file not available: %v", err)
