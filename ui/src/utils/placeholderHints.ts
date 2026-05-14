@@ -24,13 +24,13 @@ export const PLACEHOLDER_HINTS: PlaceholderHint[] = [
   { id: "graph", text: "you can ask shelley for a graph", platform: "any", weight: 1 },
   {
     id: "history",
-    text: "\u{1F4A1} ask shelley to search its history",
+    text: "ask shelley to search its history",
     platform: "any",
     weight: 1,
   },
   {
     id: "command-k",
-    text: "\u2728 command-k for the command palette",
+    text: "command-k for the command palette",
     platform: "desktop",
     weight: 1,
   },
