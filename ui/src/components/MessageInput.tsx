@@ -271,7 +271,19 @@ function MessageInput({
       });
 
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+        const errorText = await response.text();
+        let message = response.statusText;
+        if (errorText.trim()) {
+          try {
+            const payload = JSON.parse(errorText) as { message?: unknown };
+            if (typeof payload.message === "string" && payload.message.trim()) {
+              message = payload.message.trim();
+            }
+          } catch {
+            message = errorText.trim();
+          }
+        }
+        throw new Error(`Upload failed: ${message}`);
       }
 
       const data = await response.json();

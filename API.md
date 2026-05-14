@@ -191,6 +191,10 @@ fresh reset event.
 - `POST /api/create-directory` — `mkdir -p`.
 - `POST /api/write-file` — write a file.
 - `POST /api/upload` — binary upload (multipart).
+- `POST /api/upload/raw?filename=` — binary upload with the file content as
+  the request body (no multipart framing). Newer clients prefer this to
+  avoid building a multipart body on device. Older servers return 404/405;
+  clients should fall back to the multipart endpoint.
 - `GET /api/read?path=` — read a file (images served as `image/*`).
 - `POST /api/validate-cwd` — check whether a path is a valid working
   directory.

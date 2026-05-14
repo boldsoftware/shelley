@@ -195,71 +195,207 @@ func userAgentsMdPath() (string, error) {
 	return filepath.Join(home, ".config", "shelley", "AGENTS.md"), nil
 }
 
-// handleUpload handles file uploads via POST /api/upload
-// Files are saved to the UploadDir with a random filename
+const maxUploadBytes = 1 << 30 // 1 GiB
+
+type uploadErrorResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+// handleUpload handles file uploads via POST /api/upload.
+// Files are saved to the UploadDir with a random filename.
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Cap uploads at 1 GiB so a runaway client can't fill the disk, but allow
-	// videos and other large attachments through. Anything bigger than
-	// maxInMemoryUpload bytes is buffered to a temp file by ParseMultipartForm.
-	const maxUploadBytes = 1 << 30     // 1 GiB
-	const maxInMemoryUpload = 32 << 20 // 32 MiB
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
-
-	// Parse the multipart form
-	if err := r.ParseMultipartForm(maxInMemoryUpload); err != nil {
-		http.Error(w, "failed to parse form: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Get the file from the multipart form
-	file, handler, err := r.FormFile("file")
+	mr, err := r.MultipartReader()
 	if err != nil {
-		http.Error(w, "failed to get uploaded file: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	// Generate a unique ID (8 random bytes converted to 16 hex chars)
-	randBytes := make([]byte, 8)
-	if _, err := rand.Read(randBytes); err != nil {
-		http.Error(w, "failed to generate random filename: "+err.Error(), http.StatusInternalServerError)
+		writeUploadParseError(w, "failed to parse form: ", err)
 		return
 	}
 
-	// Get file extension from the original filename
-	ext := filepath.Ext(handler.Filename)
+	for {
+		part, err := mr.NextPart()
+		if errors.Is(err, io.EOF) {
+			writeUploadError(w, http.StatusBadRequest, "missing_file", "failed to get uploaded file: http: no such file")
+			return
+		}
+		if err != nil {
+			writeUploadParseError(w, "failed to parse form: ", err)
+			return
+		}
+		if part.FormName() != "file" || part.FileName() == "" {
+			part.Close()
+			continue
+		}
 
-	// Create a unique filename in the UploadDir
-	filename := filepath.Join(browse.UploadDir, fmt.Sprintf("upload_%s%s", hex.EncodeToString(randBytes), ext))
+		path, err := saveUploadFile(part.FileName(), part)
+		part.Close()
+		if err != nil {
+			writeUploadSaveError(w, err)
+			return
+		}
+		writeUploadResponse(w, path)
+		return
+	}
+}
 
-	// Ensure the directory exists
-	if err := os.MkdirAll(browse.UploadDir, 0o755); err != nil {
-		http.Error(w, "failed to create directory: "+err.Error(), http.StatusInternalServerError)
+// handleUploadRaw handles file uploads via POST /api/upload/raw?filename=...
+// The request body is the file content. Clients try this endpoint first and
+// fall back to multipart /api/upload if they see 404/405.
+func (s *Server) handleUploadRaw(w http.ResponseWriter, r *http.Request) {
+	filename := r.URL.Query().Get("filename")
+	if filename == "" {
+		writeUploadError(w, http.StatusBadRequest, "filename_required", "filename required")
 		return
 	}
 
-	// Create the destination file
-	destFile, err := os.Create(filename)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
+	path, err := saveUploadFile(filename, r.Body)
 	if err != nil {
-		http.Error(w, "failed to create destination file: "+err.Error(), http.StatusInternalServerError)
+		writeUploadSaveError(w, err)
 		return
 	}
-	defer destFile.Close()
+	writeUploadResponse(w, path)
+}
 
-	// Copy the file contents to the destination file
-	if _, err := io.Copy(destFile, file); err != nil {
-		http.Error(w, "failed to save file: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Return the path to the saved file
+func writeUploadResponse(w http.ResponseWriter, path string) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"path": filename})
+	_ = json.NewEncoder(w).Encode(map[string]string{"path": path})
+}
+
+func writeUploadError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(uploadErrorResponse{
+		Error:   code,
+		Message: message,
+	})
+}
+
+func writeUploadParseError(w http.ResponseWriter, prefix string, err error) {
+	var maxErr *http.MaxBytesError
+	if errors.As(err, &maxErr) {
+		writeUploadError(w, http.StatusRequestEntityTooLarge, "request_body_too_large", "request body too large")
+		return
+	}
+	writeUploadError(w, http.StatusBadRequest, "invalid_multipart", prefix+err.Error())
+}
+
+func writeUploadSaveError(w http.ResponseWriter, err error) {
+	var maxErr *http.MaxBytesError
+	if errors.As(err, &maxErr) {
+		writeUploadError(w, http.StatusRequestEntityTooLarge, "request_body_too_large", "request body too large")
+		return
+	}
+	writeUploadError(w, http.StatusInternalServerError, "upload_save_failed", "failed to save file: "+err.Error())
+}
+
+// saveUploadFile writes src into browse.UploadDir under a sanitized name
+// derived from originalFilename. Writes are scoped via os.Root so a hostile
+// client can't escape the upload directory via traversal or symlinks. Names
+// that collide with an existing file get a random suffix instead of
+// overwriting the existing entry. Names that pass through filepath.Base
+// as an unusable value (".", "..", empty) fall back to a fully random name.
+func saveUploadFile(originalFilename string, src io.Reader) (string, error) {
+	if err := os.MkdirAll(browse.UploadDir, 0o755); err != nil {
+		return "", fmt.Errorf("create upload directory: %w", err)
+	}
+	root, err := os.OpenRoot(browse.UploadDir)
+	if err != nil {
+		return "", fmt.Errorf("open upload root: %w", err)
+	}
+	defer root.Close()
+
+	preferred := sanitizedUploadBasename(originalFilename)
+	if preferred != "" {
+		if path, err := createAndCopy(root, preferred, src); err == nil {
+			return path, nil
+		} else if !errors.Is(err, os.ErrExist) {
+			return "", err
+		}
+	}
+
+	ext := filepath.Ext(preferred)
+	stem := strings.TrimSuffix(preferred, ext)
+	if stem == "" {
+		stem = "upload"
+	}
+	for attempt := 0; attempt < 10; attempt++ {
+		randBytes := make([]byte, 8)
+		if _, err := rand.Read(randBytes); err != nil {
+			return "", fmt.Errorf("generate random filename: %w", err)
+		}
+		name := fmt.Sprintf("%s_%s%s", stem, hex.EncodeToString(randBytes), ext)
+		path, err := createAndCopy(root, name, src)
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		return path, nil
+	}
+	return "", fmt.Errorf("generate unique upload filename")
+}
+
+// sanitizedUploadBasename returns a filename safe to use directly inside the
+// upload directory and embedded as a [path] token in model-facing chat text:
+// just the basename, restricted to a conservative ASCII whitelist with
+// everything else mapped to '_'. Traversal-only or empty results return ""
+// so the caller knows to fall back to a random name.
+func sanitizedUploadBasename(originalFilename string) string {
+	base := filepath.Base(originalFilename)
+	switch base {
+	case ".", "..", "/", `\`, "":
+		return ""
+	}
+	safe := strings.Map(func(r rune) rune {
+		switch {
+		case 'a' <= r && r <= 'z',
+			'A' <= r && r <= 'Z',
+			'0' <= r && r <= '9',
+			r == '.', r == '-', r == '_', r == ' ':
+			return r
+		}
+		return '_'
+	}, base)
+	// Cap length to leave room for a collision-avoidance random suffix while
+	// preserving the extension. Filesystem limit is typically 255 bytes.
+	const maxLen = 200
+	if len(safe) > maxLen {
+		ext := filepath.Ext(safe)
+		if len(ext) > 20 {
+			ext = ""
+		}
+		stem := strings.TrimSuffix(safe, ext)
+		if len(stem) > maxLen-len(ext) {
+			stem = stem[:maxLen-len(ext)]
+		}
+		safe = stem + ext
+	}
+	return safe
+}
+
+func createAndCopy(root *os.Root, name string, src io.Reader) (string, error) {
+	destFile, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return "", err
+	}
+	_, copyErr := io.Copy(destFile, src)
+	closeErr := destFile.Close()
+	if copyErr != nil {
+		root.Remove(name)
+		return "", copyErr
+	}
+	if closeErr != nil {
+		root.Remove(name)
+		return "", closeErr
+	}
+	return filepath.Join(browse.UploadDir, name), nil
 }
 
 // staticHandler serves files from the provided filesystem.
