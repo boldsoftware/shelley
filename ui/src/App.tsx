@@ -7,6 +7,7 @@ import ConversationDrawer from "./components/ConversationDrawer";
 import CommandPalette from "./components/CommandPalette";
 import ModelsModal from "./components/ModelsModal";
 import NotificationsModal from "./components/NotificationsModal";
+import { focusMessageInputIfUnfocused } from "./utils/focusMessageInput";
 import { Conversation, ConversationWithState, ConversationListPatchEvent } from "./types";
 import { api } from "./services/api";
 import { conversationCache } from "./services/conversationCache";
@@ -698,7 +699,10 @@ function App() {
         {/* Command Palette */}
         <CommandPalette
           isOpen={commandPaletteOpen}
-          onClose={() => setCommandPaletteOpen(false)}
+          onClose={() => {
+            setCommandPaletteOpen(false);
+            focusMessageInputIfUnfocused();
+          }}
           conversations={topLevelConversations}
           currentConversation={currentConversation || null}
           onNewConversation={() => {
@@ -753,13 +757,19 @@ function App() {
 
         <ModelsModal
           isOpen={modelsModalOpen}
-          onClose={() => setModelsModalOpen(false)}
+          onClose={() => {
+            setModelsModalOpen(false);
+            focusMessageInputIfUnfocused();
+          }}
           onModelsChanged={() => setModelsRefreshTrigger((prev) => prev + 1)}
         />
 
         <NotificationsModal
           isOpen={notificationsModalOpen}
-          onClose={() => setNotificationsModalOpen(false)}
+          onClose={() => {
+            setNotificationsModalOpen(false);
+            focusMessageInputIfUnfocused();
+          }}
         />
 
         {/* Backdrop for mobile drawer */}

@@ -28,6 +28,7 @@ import ConversationTOC from "./ConversationTOC";
 import MessageTimestamp, { formatDay } from "./MessageTimestamp";
 import MessageInput from "./MessageInput";
 import DiffViewer from "./DiffViewer";
+import { focusMessageInputIfUnfocused } from "../utils/focusMessageInput";
 import MessageSelectionToolbar from "./MessageSelectionToolbar";
 import { buildMessageQuote } from "../utils/messageQuote";
 import { tildifyPath } from "../utils/tildify";
@@ -3123,10 +3124,7 @@ function ChatInterface({
         autoFocusId={terminalAutoFocusId}
         onAutoFocusConsumed={() => setTerminalAutoFocusId(null)}
         onActiveTerminalExited={() => {
-          const input = document.querySelector<HTMLTextAreaElement>(
-            '[data-testid="message-input"]',
-          );
-          input?.focus();
+          focusMessageInputIfUnfocused();
         }}
       />
 
@@ -3180,7 +3178,10 @@ function ChatInterface({
         cwd={(diffViewerCwd || currentConversation?.cwd || selectedCwd) as string}
         isOpen={showGitGraph}
         covered={showDiffViewer}
-        onClose={() => setShowGitGraph(false)}
+        onClose={() => {
+          setShowGitGraph(false);
+          focusMessageInputIfUnfocused();
+        }}
         onOpenDiff={(commit, cwd) => {
           // Leave the graph mounted underneath so closing the diff returns
           // here. ChatInterface keeps both `showGitGraph` and `showDiffViewer`
@@ -3199,6 +3200,9 @@ function ChatInterface({
           setShowDiffViewer(false);
           setDiffViewerInitialCommit(undefined);
           setDiffViewerCwd(undefined);
+          // If the git graph is still mounted underneath, let it reclaim
+          // focus; otherwise return focus to the chat input.
+          if (!showGitGraph) focusMessageInputIfUnfocused();
         }}
         onCommentTextChange={setDiffCommentText}
         initialCommit={diffViewerInitialCommit}
