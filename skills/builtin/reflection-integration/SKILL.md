@@ -1,24 +1,19 @@
 ---
 name: reflection-integration
-description: Use when a task on an exe.dev VM needs metadata about itself — owner email, attached integrations, VM tags, or comment.
+description: Use to discover external services and APIs available on this exe.dev VM via network-edge-injected credentials and to discover VM metadata like owner email, VM tags, and default port.
 when: exe.dev
 ---
 
-New exe.dev users get a default integration named `reflection`, attached to all VMs via `auto:all`. From the VM:
+Most exe.dev VMs have a `reflection` endpoint available.
+
+Start with
 
 ```
 curl https://reflection.int.exe.xyz/
 ```
 
-Returns a JSON index of available endpoints. Subpaths (all return JSON):
+and explore from there.
 
-- `/email` — owner's exe.dev email
-- `/integrations` — name, type, help string, and comment for each integration attached to this VM
-- `/tags` — VM tags
-- `/comment` — the VM's comment
+If this fails, the VM may be old, or the user may have removed the reflection integration or given it an unusual name.
 
-If endpoints fail to resolve, the user may have detached the integration. They can reattach it with:
-
-```
-exe.dev ▶ integrations attach reflection auto:all
-```
+Integrations CRUD (user only): https://exe.dev/integrations.
