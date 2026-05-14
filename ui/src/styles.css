@@ -3538,6 +3538,19 @@ svg {
   color: var(--text-secondary);
   font-style: italic;
 }
+.toc-entry-gen {
+  position: relative;
+  margin-top: 0.5rem;
+  padding-top: 0.625rem;
+}
+.toc-entry-gen::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0.875rem;
+  right: 0.875rem;
+  border-top: 1px solid var(--border);
+}
 .toc-entry-user .toc-entry-label {
   font-weight: 500;
 }
