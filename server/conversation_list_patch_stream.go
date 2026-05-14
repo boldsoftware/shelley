@@ -46,6 +46,9 @@ type conversationListStream struct {
 	currentList []ConversationWithState
 	currentHash string
 	history     []ConversationListPatchEvent
+	// historyOffset is the number of events trimmed from the front of history.
+	// Subscribers use absolute event ids, then subtract this for slice indices.
+	historyOffset int
 }
 
 func newConversationListStream(server *Server) *conversationListStream {
@@ -111,7 +114,9 @@ func (cls *conversationListStream) recompute(ctx context.Context) error {
 	cls.currentHash = nextHash
 	cls.history = append(cls.history, event)
 	if len(cls.history) > conversationListPatchHistoryLimit {
-		cls.history = cls.history[len(cls.history)-conversationListPatchHistoryLimit:]
+		trim := len(cls.history) - conversationListPatchHistoryLimit
+		cls.history = cls.history[trim:]
+		cls.historyOffset += trim
 	}
 	cls.cond.Broadcast()
 	return nil
@@ -188,6 +193,7 @@ func (cls *conversationListStream) connect(ctx context.Context, oldHash string) 
 		return nil, nil, nil, err
 	}
 
+	// startIdx is an absolute event id; see historyOffset.
 	next := func() (ConversationListPatchEvent, bool) {
 		cls.mu.Lock()
 		defer cls.mu.Unlock()
@@ -195,8 +201,23 @@ func (cls *conversationListStream) connect(ctx context.Context, oldHash string) 
 			if ctx.Err() != nil {
 				return ConversationListPatchEvent{}, false
 			}
-			if startIdx < len(cls.history) {
-				event := cls.history[startIdx]
+			end := cls.historyOffset + len(cls.history)
+			if startIdx < cls.historyOffset {
+				// Subscriber fell so far behind that the events it would
+				// have next consumed have already been trimmed. We can't
+				// deliver a continuous patch chain anymore, so synthesize
+				// a reset to currentHash and skip past the lost events.
+				// The client bypasses its hash-chain check when reset is
+				// true, so this recovers without a reconnect.
+				reset, err := resetEvent(cls.currentList, cls.currentHash, "")
+				if err != nil {
+					return ConversationListPatchEvent{}, false
+				}
+				startIdx = end
+				return reset, true
+			}
+			if startIdx < end {
+				event := cls.history[startIdx-cls.historyOffset]
 				startIdx++
 				return event, true
 			}
@@ -213,14 +234,15 @@ func (cls *conversationListStream) connect(ctx context.Context, oldHash string) 
 //   - Old hash matches a known event boundary: replay forward from there.
 //   - Otherwise: reset.
 func (cls *conversationListStream) initialEventsLocked(oldHash string) ([]ConversationListPatchEvent, int, error) {
+	end := cls.historyOffset + len(cls.history)
 	if oldHash != "" && oldHash == cls.currentHash {
-		return nil, len(cls.history), nil
+		return nil, end, nil
 	}
 	if oldHash != "" {
 		for i, event := range cls.history {
 			if event.OldHash != nil && *event.OldHash == oldHash {
 				replay := append([]ConversationListPatchEvent(nil), cls.history[i:]...)
-				return replay, len(cls.history), nil
+				return replay, end, nil
 			}
 		}
 	}
@@ -228,7 +250,7 @@ func (cls *conversationListStream) initialEventsLocked(oldHash string) ([]Conver
 	if err != nil {
 		return nil, 0, err
 	}
-	return []ConversationListPatchEvent{reset}, len(cls.history), nil
+	return []ConversationListPatchEvent{reset}, end, nil
 }
 
 // snapshot returns the current list and its hash, recomputing first to make

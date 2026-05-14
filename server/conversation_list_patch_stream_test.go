@@ -396,3 +396,140 @@ func verifyHash(t *testing.T, state []ConversationWithState, want string) {
 }
 
 func strPtr(s string) *string { return &s }
+
+// TestConversationListPatchStreamSurvivesHistoryTrim is a regression test:
+// once history fills up and starts being trimmed, an active subscriber must
+// keep observing new events. A prior implementation tracked the subscriber's
+// cursor as a slice index, so a trim shifted indices out from under the
+// blocked subscriber and it silently dropped events forever — including the
+// archive/unarchive patches the drawer relies on.
+func TestConversationListPatchStreamSurvivesHistoryTrim(t *testing.T) {
+	t.Parallel()
+	server, database, _ := newTestServer(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rec := newFlusherRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/stream", nil).WithContext(ctx)
+	done := make(chan struct{})
+	go func() {
+		server.handleStream(rec, req)
+		close(done)
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+
+	initial := waitForPatchEventAfter(t, rec, "")
+	lastHash := initial.NewHash
+
+	// Cycle the working state on a single conversation enough times to
+	// overflow the history ring. We need the subscriber to be actively
+	// draining so the cap is enforced.
+	conv, err := database.CreateConversation(context.Background(), strPtr("trim-test"), true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Drain the patch for the create.
+	created := waitForPatchEventAfter(t, rec, lastHash)
+	lastHash = created.NewHash
+
+	cycles := conversationListPatchHistoryLimit + 5
+	for i := 0; i < cycles; i++ {
+		want := i%2 == 0
+		if err := database.SetConversationAgentWorking(context.Background(), conv.ConversationID, want); err != nil {
+			t.Fatalf("set working: %v", err)
+		}
+		ev := waitForPatchEventAfter(t, rec, lastHash)
+		lastHash = ev.NewHash
+	}
+
+	// After the ring has wrapped, a fresh change must still reach the
+	// subscriber. This is the bit that regressed: the cursor was a slice
+	// index, so once history was trimmed, the subscriber's index pointed
+	// past the end of the slice forever.
+	if err := database.SetConversationAgentWorking(context.Background(), conv.ConversationID, false); err != nil {
+		t.Fatalf("set working final: %v", err)
+	}
+	final := waitForPatchEventAfter(t, rec, lastHash)
+	if final.OldHash == nil || *final.OldHash != lastHash {
+		t.Fatalf("expected continuation event after trim, got %+v", final)
+	}
+}
+
+// TestConversationListPatchStreamOverrunSendsReset verifies that a subscriber
+// that fell so far behind the history cap that its next event has been
+// trimmed receives a synthetic reset rather than a continuation event with an
+// unknown OldHash. Without this, the client (which silently drops patches
+// whose old_hash doesn't match) would zombie out exactly like the original
+// trim bug.
+func TestConversationListPatchStreamOverrunSendsReset(t *testing.T) {
+	t.Parallel()
+	server, database, _ := newTestServer(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Connect but do NOT drain next() — we want the subscriber stalled while
+	// recompute trims the history out from under it.
+	initial, next, release, err := server.conversationListStream.connect(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if len(initial) != 1 || !initial[0].Reset {
+		t.Fatalf("expected initial reset, got %+v", initial)
+	}
+
+	// Generate enough events to fully roll over the history buffer past the
+	// subscriber's stalled startIdx, which is the stream end after connect.
+	// On an empty server, connect's recompute appends the empty-list event,
+	// so startIdx is 1.
+	conv, err := database.CreateConversation(context.Background(), strPtr("overrun-test"), true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cycles := conversationListPatchHistoryLimit + 5
+	for i := 0; i < cycles; i++ {
+		if err := database.SetConversationAgentWorking(context.Background(), conv.ConversationID, i%2 == 0); err != nil {
+			t.Fatalf("set working: %v", err)
+		}
+		if err := server.conversationListStream.recompute(context.Background()); err != nil {
+			t.Fatalf("recompute: %v", err)
+		}
+	}
+
+	// Now drain. The first event must be a synthetic reset (not the
+	// long-trimmed event id 0), because the chain is unrecoverable.
+	ev, ok := next()
+	if !ok {
+		t.Fatal("next() returned !ok")
+	}
+	if !ev.Reset {
+		t.Fatalf("expected synthetic reset after overrun, got non-reset event %+v", ev)
+	}
+	if ev.NewHash != server.conversationListStream.currentHash {
+		t.Fatalf("reset NewHash %q != current %q", ev.NewHash, server.conversationListStream.currentHash)
+	}
+
+	// After reset, subscriber should be caught up — a further change must
+	// arrive as a normal continuation event whose OldHash chains from the
+	// reset's NewHash.
+	resetHash := ev.NewHash
+	if err := database.SetConversationAgentWorking(context.Background(), conv.ConversationID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.conversationListStream.recompute(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ev, ok = next()
+	if !ok {
+		t.Fatal("next() returned !ok after reset")
+	}
+	if ev.Reset {
+		t.Fatalf("expected continuation after reset, got another reset: %+v", ev)
+	}
+	if ev.OldHash == nil || *ev.OldHash != resetHash {
+		t.Fatalf("expected OldHash=%q after reset, got %+v", resetHash, ev)
+	}
+}
