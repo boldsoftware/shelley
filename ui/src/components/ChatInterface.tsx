@@ -2386,6 +2386,14 @@ function ChatInterface({
             <span className="status-stop-label">{cancelling ? "Cancelling..." : "Stop"}</span>
           </button>
         </div>
+        {(currentConversation?.cwd || selectedCwd) && (
+          <span
+            className="status-cwd-readonly hide-on-mobile"
+            title={currentConversation?.cwd || selectedCwd}
+          >
+            {currentConversation?.cwd || selectedCwd}
+          </span>
+        )}
         <ContextUsageBar
           contextWindowSize={contextWindowSize}
           maxContextTokens={
@@ -2558,6 +2566,14 @@ function ChatInterface({
           <span className="hide-on-mobile">Ready on </span>
           {hostname}
         </span>
+        {(currentConversation?.cwd || selectedCwd) && (
+          <span
+            className="status-cwd-readonly hide-on-mobile"
+            title={currentConversation?.cwd || selectedCwd}
+          >
+            {currentConversation?.cwd || selectedCwd}
+          </span>
+        )}
         <ContextUsageBar
           contextWindowSize={contextWindowSize}
           maxContextTokens={

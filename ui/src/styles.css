@@ -4494,13 +4494,30 @@ svg {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.75rem;
   width: 100%;
+  min-width: 0;
 }
 
 .status-working-group {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.status-cwd-readonly {
+  margin-left: auto;
+  margin-right: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 60ch;
+  direction: rtl;
+  text-align: left;
+  unicode-bidi: plaintext;
 }
 
 .status-stop-button {
