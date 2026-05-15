@@ -1571,10 +1571,10 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 	}
 }
 
-// handleVersion returns build information as JSON, including the API
-// protocol_version. The protocol version lives on the API response (not on
-// version.Info) so the `shelley version` CLI output isn't coupled to the
-// HTTP/SSE contract.
+// handleVersion returns build information plus the capabilities list as
+// JSON. The capabilities slot exists so clients can negotiate optional,
+// additive features without reshaping the response; the set is currently
+// empty.
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1583,12 +1583,10 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 
 	resp := struct {
 		version.Info
-		ProtocolVersion int      `json:"protocol_version"`
-		Capabilities    []string `json:"capabilities"`
+		Capabilities []string `json:"capabilities"`
 	}{
-		Info:            version.GetInfo(),
-		ProtocolVersion: version.ProtocolVersion,
-		Capabilities:    version.Capabilities(),
+		Info:         version.GetInfo(),
+		Capabilities: version.Capabilities(),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {

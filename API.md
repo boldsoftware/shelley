@@ -5,65 +5,34 @@ clients (the web UI, the iOS app, the CLI in `client/`, and tests). All
 routes are mounted under `/api/` unless noted; the version endpoint is at
 `/version`.
 
-## Protocol version
+## Capabilities
 
 ```
 GET /version
 ```
 
-Returns build info plus `protocol_version` (integer) and `capabilities`
-(string list). Clients should check `protocol_version` on connect and
-refuse to talk to a server with a different major version.
+Returns build info plus `capabilities` (string list). Capabilities
+advertise optional, additive features that clients can opt into when
+present; a client that doesn't recognize a capability just doesn't use
+it, and an older server that doesn't ship the field is equivalent to
+advertising none.
 
-**Current version: `2`.**
+The set is currently empty; it exists as a forward slot so we can add
+capabilities later without reshaping the response.
 
-`capabilities` advertises optional, additive features. Unlike
-`protocol_version` (which gates whether a client can talk to the server
-at all), capabilities are non-breaking: a client that doesn't recognize
-a capability just doesn't use it, and an older server that doesn't ship
-the capability list is equivalent to advertising none.
+## Stream architecture
 
-Known capabilities:
-
-- `raw_upload` — `POST /api/upload/raw` accepts a raw (non-multipart)
-  request body. Clients without this should use `POST /api/upload`.
-
-### Protocol 1 (historical)
-
-In protocol 1 the conversation list and per-conversation streams were
-separate SSE endpoints:
-
-- `GET /api/conversations/stream` — list-level events (`conversation_list_update`,
-  `conversation_state_update`, `subagent_update`, etc.) for sidebar UIs.
-- `GET /api/conversation/<id>/stream` — per-conversation message stream.
-- `GET /api/conversations/previews` — a side-channel `map<id, {text,
-  updated_at}>` of last-agent-message previews that the web UI fetched
-  once at mount.
-- `GET /version` returned only build info; no `protocol_version` field.
-
-The UI had to merge events from multiple streams, dedupe its own
-optimistic conversation-list updates, and re-fetch previews on its own
-schedule. As traffic grew this became hard to keep coherent: dropped
-events could desync the list, and there was no way for a reconnecting
-client to verify it was in a consistent state.
-
-### Protocol 2 (current)
-
-The server now derives the conversation list from the database and
-publishes RFC-6902 JSON Patch diffs on a single unified SSE stream:
+The server derives the conversation list from the database and publishes
+RFC-6902 JSON Patch diffs on a single unified SSE stream:
 
 - `GET /api/stream` — unified SSE: per-conversation messages **and**
   conversation-list patches.
 - `GET /api/conversations/snapshot` — seed the patch stream with the
   current list and its content hash.
-- Previews are now embedded in each conversation list row (`preview`,
-  `preview_updated_at`); the `/api/conversations/previews` endpoint is
-  gone.
-- `GET /api/conversations/stream` is gone.
+- Previews are embedded in each conversation list row (`preview`,
+  `preview_updated_at`).
 - `GET /api/conversation/<id>/stream` survives for non-web clients (iOS,
   CLI, tests) but new clients should use `/api/stream`.
-- `Modified` was removed from the `/version` build info; clients should
-  read `protocol_version` instead.
 
 The patch stream is driven exclusively by `Pool.OnCommit`: every
 successful write transaction triggers a recompute, and a `recomputeMu`
@@ -75,7 +44,7 @@ reconcile their state on every patch.
 
 ### Versioning
 
-- `GET /version` — `{tag, commit, commit_time, protocol_version: 2, capabilities: [...]}`.
+- `GET /version` — `{tag, commit, commit_time, capabilities: [...]}`.
 - `GET /version-check` — `{has_update, current_tag, latest_tag, ...}`.
 - `GET /version-changelog` — markdown changelog.
 

@@ -15,22 +15,14 @@ var (
 	Tag     = ""
 )
 
-// ProtocolVersion is the version of the Shelley HTTP/SSE API contract.
-// Bump it when making a breaking change to the API surface (request or
-// response shapes, stream event semantics, etc.) so clients can detect
-// incompatibility before they try to talk to the server.
-const ProtocolVersion = 2
-
 // Capabilities advertises optional, additive features that clients can
-// opt into when present. Unlike ProtocolVersion (which gates whether a
-// client can talk to the server at all), capabilities are non-breaking:
-// a client that doesn't recognize a capability just doesn't use it.
-//
-// Known capabilities:
-//   - "raw_upload": POST /api/upload/raw accepts a raw (non-multipart)
-//     request body. Clients that don't see this should use /api/upload.
+// opt into when present. Capabilities are non-breaking: a client that
+// doesn't recognize a capability just doesn't use it, and an older
+// server that doesn't ship the field is equivalent to advertising none.
+// The set is currently empty; it exists as a forward slot so we can add
+// capabilities later without reshaping the response.
 func Capabilities() []string {
-	return []string{"raw_upload"}
+	return []string{}
 }
 
 // Info holds build information from runtime/debug.ReadBuildInfo

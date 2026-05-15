@@ -11,7 +11,6 @@ import (
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
-	"shelley.exe.dev/version"
 )
 
 func TestHandleVersion(t *testing.T) {
@@ -21,9 +20,6 @@ func TestHandleVersion(t *testing.T) {
 	mux := http.NewServeMux()
 	h.server.RegisterRoutes(mux)
 
-	// /version serves the build info plus the API protocol_version. The
-	// protocol version is hard-coded here so a regression that flips both
-	// the constant and the test would still fail.
 	req := httptest.NewRequest(http.MethodGet, "/version", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -36,28 +32,18 @@ func TestHandleVersion(t *testing.T) {
 	}
 
 	var body struct {
-		ProtocolVersion int      `json:"protocol_version"`
-		Capabilities    []string `json:"capabilities"`
-		Modified        *bool    `json:"modified"`
+		Capabilities *[]string `json:"capabilities"`
+		Modified     *bool     `json:"modified"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
-	if body.ProtocolVersion != 2 {
-		t.Errorf("expected protocol_version 2, got %d", body.ProtocolVersion)
-	}
-	if body.ProtocolVersion != version.ProtocolVersion {
-		t.Errorf("protocol_version constant drifted from response: const=%d resp=%d",
-			version.ProtocolVersion, body.ProtocolVersion)
-	}
-	hasRawUpload := false
-	for _, c := range body.Capabilities {
-		if c == "raw_upload" {
-			hasRawUpload = true
-		}
-	}
-	if !hasRawUpload {
-		t.Errorf("expected capabilities to include raw_upload, got %v", body.Capabilities)
+	// capabilities is an empty list today, but the field must be present
+	// so clients can rely on its shape.
+	if body.Capabilities == nil {
+		t.Errorf("expected capabilities field in response, got nil")
+	} else if len(*body.Capabilities) != 0 {
+		t.Errorf("expected empty capabilities, got %v", *body.Capabilities)
 	}
 	if body.Modified != nil {
 		t.Errorf("unexpected modified field in response: %v", *body.Modified)
