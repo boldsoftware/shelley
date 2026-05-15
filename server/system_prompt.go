@@ -640,6 +640,8 @@ func isExeDev() bool {
 // exeDevDefaultPort returns the live HTTP proxy port for this VM, fetched
 // via the default "reflection" integration. Returns 0 if unavailable
 // (integration disabled/detached, network error, etc.).
+var exeDevDefaultPortHTTPClient = http.DefaultClient
+
 func exeDevDefaultPort() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -647,7 +649,7 @@ func exeDevDefaultPort() int {
 	if err != nil {
 		return 0
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := exeDevDefaultPortHTTPClient.Do(req)
 	if err != nil {
 		return 0
 	}

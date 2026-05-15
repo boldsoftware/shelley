@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -937,4 +939,30 @@ func TestRunEndOfTurnHookFailureIsNonFatal(t *testing.T) {
 	}
 	// Just make sure it doesn't panic.
 	RunEndOfTurnHook(EndOfTurnHookInput{ConversationID: "abc"})
+}
+
+func TestExeDevDefaultPortUsesInjectableClient(t *testing.T) {
+	oldClient := exeDevDefaultPortHTTPClient
+	t.Cleanup(func() { exeDevDefaultPortHTTPClient = oldClient })
+
+	exeDevDefaultPortHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.String() != "https://reflection.int.exe.xyz/default_port" {
+			t.Fatalf("unexpected URL %s", req.URL)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"default_port":8123}`)),
+			Header:     make(http.Header),
+		}, nil
+	})}
+
+	if got := exeDevDefaultPort(); got != 8123 {
+		t.Fatalf("exeDevDefaultPort() = %d, want 8123", got)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
