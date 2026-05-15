@@ -1583,10 +1583,12 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 
 	resp := struct {
 		version.Info
-		ProtocolVersion int `json:"protocol_version"`
+		ProtocolVersion int      `json:"protocol_version"`
+		Capabilities    []string `json:"capabilities"`
 	}{
 		Info:            version.GetInfo(),
 		ProtocolVersion: version.ProtocolVersion,
+		Capabilities:    version.Capabilities(),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {

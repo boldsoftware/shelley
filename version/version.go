@@ -21,6 +21,18 @@ var (
 // incompatibility before they try to talk to the server.
 const ProtocolVersion = 2
 
+// Capabilities advertises optional, additive features that clients can
+// opt into when present. Unlike ProtocolVersion (which gates whether a
+// client can talk to the server at all), capabilities are non-breaking:
+// a client that doesn't recognize a capability just doesn't use it.
+//
+// Known capabilities:
+//   - "raw_upload": POST /api/upload/raw accepts a raw (non-multipart)
+//     request body. Clients that don't see this should use /api/upload.
+func Capabilities() []string {
+	return []string{"raw_upload"}
+}
+
 // Info holds build information from runtime/debug.ReadBuildInfo
 type Info struct {
 	Version    string `json:"version,omitempty"`

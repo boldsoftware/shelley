@@ -11,11 +11,22 @@ routes are mounted under `/api/` unless noted; the version endpoint is at
 GET /version
 ```
 
-Returns build info plus `protocol_version` (integer). Clients should check
-this on connect and refuse to talk to a server with a different major
-version.
+Returns build info plus `protocol_version` (integer) and `capabilities`
+(string list). Clients should check `protocol_version` on connect and
+refuse to talk to a server with a different major version.
 
 **Current version: `2`.**
+
+`capabilities` advertises optional, additive features. Unlike
+`protocol_version` (which gates whether a client can talk to the server
+at all), capabilities are non-breaking: a client that doesn't recognize
+a capability just doesn't use it, and an older server that doesn't ship
+the capability list is equivalent to advertising none.
+
+Known capabilities:
+
+- `raw_upload` — `POST /api/upload/raw` accepts a raw (non-multipart)
+  request body. Clients without this should use `POST /api/upload`.
 
 ### Protocol 1 (historical)
 
@@ -64,7 +75,7 @@ reconcile their state on every patch.
 
 ### Versioning
 
-- `GET /version` — `{tag, commit, commit_time, protocol_version: 2}`.
+- `GET /version` — `{tag, commit, commit_time, protocol_version: 2, capabilities: [...]}`.
 - `GET /version-check` — `{has_update, current_tag, latest_tag, ...}`.
 - `GET /version-changelog` — markdown changelog.
 

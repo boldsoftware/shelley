@@ -36,8 +36,9 @@ func TestHandleVersion(t *testing.T) {
 	}
 
 	var body struct {
-		ProtocolVersion int   `json:"protocol_version"`
-		Modified        *bool `json:"modified"`
+		ProtocolVersion int      `json:"protocol_version"`
+		Capabilities    []string `json:"capabilities"`
+		Modified        *bool    `json:"modified"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
@@ -48,6 +49,15 @@ func TestHandleVersion(t *testing.T) {
 	if body.ProtocolVersion != version.ProtocolVersion {
 		t.Errorf("protocol_version constant drifted from response: const=%d resp=%d",
 			version.ProtocolVersion, body.ProtocolVersion)
+	}
+	hasRawUpload := false
+	for _, c := range body.Capabilities {
+		if c == "raw_upload" {
+			hasRawUpload = true
+		}
+	}
+	if !hasRawUpload {
+		t.Errorf("expected capabilities to include raw_upload, got %v", body.Capabilities)
 	}
 	if body.Modified != nil {
 		t.Errorf("unexpected modified field in response: %v", *body.Modified)
