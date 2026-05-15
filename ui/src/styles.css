@@ -6059,23 +6059,31 @@ svg {
     flex-shrink: 0;
   }
 
-  /* Monaco editor mobile styles - hide gutters completely */
+  /* Monaco editor mobile styles - keep a small left inset so text and
+   * selection handles do not sit flush against the viewport edge. */
   .diff-viewer-editor .monaco-editor .margin {
-    display: none !important;
-    width: 0 !important;
+    width: 8px !important;
   }
 
   .diff-viewer-editor .monaco-editor .margin-view-overlays {
-    display: none !important;
-    width: 0 !important;
+    width: 8px !important;
   }
 
   .diff-viewer-editor .monaco-editor .editor-scrollable {
-    left: 0 !important;
+    left: 8px !important;
   }
 
   .diff-viewer-editor .monaco-editor .lines-content {
     margin-left: 0 !important;
+  }
+
+  /* The inline diff gutters are just change markers on mobile. Keep them
+   * narrow so red/green columns don't consume code space. */
+  .diff-viewer-editor .monaco-diff-editor .line-delete,
+  .diff-viewer-editor .monaco-diff-editor .line-insert,
+  .diff-viewer-editor .monaco-diff-editor .char-delete,
+  .diff-viewer-editor .monaco-diff-editor .char-insert {
+    border-left-width: 2px !important;
   }
 
   /* Ensure diff editor uses full width */

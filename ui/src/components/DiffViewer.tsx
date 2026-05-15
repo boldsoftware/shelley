@@ -48,6 +48,13 @@ const NextFileIcon = () => (
 type ViewMode = "comment" | "edit";
 
 const COMMIT_MSG_PREFIX = "commit-message:";
+const MOBILE_LINE_DECORATIONS_WIDTH = 8;
+const DESKTOP_LINE_DECORATIONS_WIDTH = 10;
+const MOBILE_SCROLLBAR_SIZE = 8;
+const DESKTOP_VERTICAL_SCROLLBAR_SIZE = 14;
+const DESKTOP_HORIZONTAL_SCROLLBAR_SIZE = 10;
+const MOBILE_OVERVIEW_RULER_LANES = 1;
+const DESKTOP_OVERVIEW_RULER_LANES = 3;
 
 function isCommitMessageFile(path: string): boolean {
   return path.startsWith(COMMIT_MSG_PREFIX);
@@ -308,8 +315,17 @@ function DiffViewer({
       scrollBeyondLastLine: true, // Enable scroll past end for mobile floating buttons
       wordWrap: "on",
       glyphMargin: !initMobile, // Enable glyph margin for comment indicator on hover
-      lineDecorationsWidth: initMobile ? 0 : 10,
+      lineDecorationsWidth: initMobile
+        ? MOBILE_LINE_DECORATIONS_WIDTH
+        : DESKTOP_LINE_DECORATIONS_WIDTH,
       lineNumbersMinChars: initMobile ? 0 : 3,
+      scrollbar: {
+        verticalScrollbarSize: initMobile ? MOBILE_SCROLLBAR_SIZE : DESKTOP_VERTICAL_SCROLLBAR_SIZE,
+        horizontalScrollbarSize: initMobile
+          ? MOBILE_SCROLLBAR_SIZE
+          : DESKTOP_HORIZONTAL_SCROLLBAR_SIZE,
+      },
+      overviewRulerLanes: initMobile ? MOBILE_OVERVIEW_RULER_LANES : DESKTOP_OVERVIEW_RULER_LANES,
       quickSuggestions: false,
       suggestOnTriggerCharacters: false,
       lightbulb: { enabled: false },
@@ -504,8 +520,17 @@ function DiffViewer({
       renderSideBySide: !isMobile,
       lineNumbers: isMobile ? "off" : "on",
       glyphMargin: !isMobile,
-      lineDecorationsWidth: isMobile ? 0 : 10,
+      lineDecorationsWidth: isMobile
+        ? MOBILE_LINE_DECORATIONS_WIDTH
+        : DESKTOP_LINE_DECORATIONS_WIDTH,
       lineNumbersMinChars: isMobile ? 0 : 3,
+      scrollbar: {
+        verticalScrollbarSize: isMobile ? MOBILE_SCROLLBAR_SIZE : DESKTOP_VERTICAL_SCROLLBAR_SIZE,
+        horizontalScrollbarSize: isMobile
+          ? MOBILE_SCROLLBAR_SIZE
+          : DESKTOP_HORIZONTAL_SCROLLBAR_SIZE,
+      },
+      overviewRulerLanes: isMobile ? MOBILE_OVERVIEW_RULER_LANES : DESKTOP_OVERVIEW_RULER_LANES,
       folding: !isMobile,
       padding: isMobile ? { bottom: 80 } : {},
     });
