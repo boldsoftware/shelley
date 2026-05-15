@@ -293,6 +293,25 @@ func TestUploadRoutesRawEndpoint(t *testing.T) {
 	defer os.Remove(response["path"])
 }
 
+func TestUploadRawProbeRespondsToGET(t *testing.T) {
+	t.Parallel()
+	server, _, _ := newTestServer(t)
+
+	mux := http.NewServeMux()
+	server.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/upload/raw", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if body := w.Body.Bytes(); len(body) != 0 {
+		t.Fatalf("expected empty body, got %q", body)
+	}
+}
+
 func TestUploadedFileCanBeReadViaReadEndpoint(t *testing.T) {
 	t.Parallel()
 	server, _, _ := newTestServer(t)

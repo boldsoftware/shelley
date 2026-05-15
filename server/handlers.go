@@ -243,9 +243,16 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleUploadRawProbe answers a GET on the raw upload endpoint with an
+// empty 200 so clients can detect support without sending a body. Older
+// servers return 404/405; newer clients use the probe to decide between
+// raw and multipart transports.
+func (s *Server) handleUploadRawProbe(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+
 // handleUploadRaw handles file uploads via POST /api/upload/raw?filename=...
-// The request body is the file content. Clients try this endpoint first and
-// fall back to multipart /api/upload if they see 404/405.
+// The request body is the file content.
 func (s *Server) handleUploadRaw(w http.ResponseWriter, r *http.Request) {
 	filename := r.URL.Query().Get("filename")
 	if filename == "" {

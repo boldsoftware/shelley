@@ -175,6 +175,9 @@ fresh reset event.
   the request body (no multipart framing). Newer clients prefer this to
   avoid building a multipart body on device. Older servers return 404/405;
   clients should fall back to the multipart endpoint.
+- `GET /api/upload/raw` — empty `200 OK` if the server supports the raw
+  upload endpoint; clients use this as a capability probe (older servers
+  return 404/405).
 - `GET /api/read?path=` — read a file (images served as `image/*`).
 - `POST /api/validate-cwd` — check whether a path is a valid working
   directory.

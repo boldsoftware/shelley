@@ -355,6 +355,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/git/amend-message", http.HandlerFunc(s.handleGitAmendMessage))
 	mux.Handle("/api/git/create-worktree", http.HandlerFunc(s.handleGitCreateWorktree))                            // Small response
 	mux.HandleFunc("POST /api/upload/raw", s.handleUploadRaw)                                                      // Raw binary uploads
+	mux.HandleFunc("GET /api/upload/raw", s.handleUploadRawProbe)                                                  // Capability probe
 	mux.HandleFunc("/api/upload", s.handleUpload)                                                                  // Multipart binary uploads
 	mux.HandleFunc("/api/read", s.handleRead)                                                                      // Serves images from disk
 	mux.HandleFunc("GET /api/message/{message_id}/image/{content_index}/{toolresult_index}", s.handleMessageImage) // Serves images from DB
