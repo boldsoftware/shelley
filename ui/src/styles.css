@@ -3485,10 +3485,6 @@ svg {
   font-weight: 600;
   color: var(--text-primary);
 }
-.toc-popover-counts {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
 .toc-popover-list {
   overflow-y: auto;
   padding: 0.25rem 0;
@@ -3533,22 +3529,26 @@ svg {
   min-width: 0;
 }
 .toc-entry-top .toc-entry-label,
-.toc-entry-bottom .toc-entry-label,
-.toc-entry-gen .toc-entry-label {
+.toc-entry-bottom .toc-entry-label {
   color: var(--text-secondary);
   font-style: italic;
 }
 .toc-entry-gen {
-  position: relative;
-  margin-top: 0.5rem;
-  padding-top: 0.625rem;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
 }
-.toc-entry-gen::before {
+.toc-entry-gen .toc-entry-label {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.toc-entry-gen::before,
+.toc-entry-gen::after {
   content: "";
-  position: absolute;
-  top: 0;
-  left: 0.875rem;
-  right: 0.875rem;
+  flex: 1 1 auto;
   border-top: 1px solid var(--border);
 }
 .toc-entry-user .toc-entry-label {

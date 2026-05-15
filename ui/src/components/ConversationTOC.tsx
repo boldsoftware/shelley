@@ -302,19 +302,6 @@ const ConversationTOC: React.FC<ConversationTOCProps> = ({ messages, containerRe
     history.replaceState(null, "", url);
   };
 
-  // Counts for status text
-  const counts = useMemo(() => {
-    let user = 0,
-      eot = 0,
-      gen = 0;
-    for (const e of entries) {
-      if (e.kind === "user") user++;
-      else if (e.kind === "eot") eot++;
-      else if (e.kind === "gen") gen++;
-    }
-    return { user, eot, gen };
-  }, [entries]);
-
   return (
     <>
       <button
@@ -350,10 +337,6 @@ const ConversationTOC: React.FC<ConversationTOCProps> = ({ messages, containerRe
         >
           <div className="toc-popover-header">
             <span className="toc-popover-title">Jump to…</span>
-            <span className="toc-popover-counts">
-              {counts.user} user · {counts.eot} replies
-              {counts.gen ? ` · ${counts.gen + 1} gens` : ""}
-            </span>
           </div>
           <div className="toc-popover-list">
             {entries.map((entry) => (
@@ -362,13 +345,14 @@ const ConversationTOC: React.FC<ConversationTOCProps> = ({ messages, containerRe
                 className={`toc-entry toc-entry-${entry.kind}${activeId === entry.id ? " toc-entry-active" : ""}`}
                 onClick={() => handleGoto(entry)}
               >
-                <span className="toc-entry-icon" aria-hidden="true">
-                  {entry.kind === "top" && "↑"}
-                  {entry.kind === "bottom" && "↓"}
-                  {entry.kind === "user" && "•"}
-                  {entry.kind === "eot" && "✓"}
-                  {entry.kind === "gen" && "✦"}
-                </span>
+                {entry.kind !== "gen" && (
+                  <span className="toc-entry-icon" aria-hidden="true">
+                    {entry.kind === "top" && "↑"}
+                    {entry.kind === "bottom" && "↓"}
+                    {entry.kind === "user" && "•"}
+                    {entry.kind === "eot" && "✓"}
+                  </span>
+                )}
                 <span className="toc-entry-label">{entry.label}</span>
               </button>
             ))}
