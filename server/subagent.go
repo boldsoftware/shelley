@@ -75,12 +75,11 @@ func (r *SubagentRunner) RunSubagent(ctx context.Context, conversationID, prompt
 		return "", fmt.Errorf("failed to get conversation manager: %w", err)
 	}
 
-	// Use the parent's model if provided, otherwise fall back to server default
+	// Use the parent's model if provided, otherwise fall back to server
+	// default (preferring a ready model from the catalog; see
+	// effectiveDefaultModel).
 	if modelID == "" {
-		modelID = s.defaultModel
-	}
-	if modelID == "" && s.predictableOnly {
-		modelID = "predictable"
+		modelID = s.effectiveDefaultModel(s.getModelList())
 	}
 
 	// Persist model on the subagent conversation record

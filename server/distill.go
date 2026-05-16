@@ -384,7 +384,7 @@ func (s *Server) handleDistillNewGeneration(w http.ResponseWriter, r *http.Reque
 		modelID = *sourceConv.Model
 	}
 	if modelID == "" {
-		modelID = s.defaultModel
+		modelID = s.effectiveDefaultModel(s.getModelList())
 	}
 
 	if req.Cwd != "" && (sourceConv.Cwd == nil || *sourceConv.Cwd != req.Cwd) {

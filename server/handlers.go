@@ -585,32 +585,7 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 
 	// Build initialization data
 	modelList := s.getModelList()
-
-	// Select default model - use configured default if available, otherwise first ready model
-	// If no models are available, default_model should be empty
-	defaultModel := ""
-	if len(modelList) > 0 {
-		defaultModel = s.defaultModel
-		if defaultModel == "" {
-			defaultModel = models.Default().ID
-		}
-		defaultModelAvailable := false
-		for _, m := range modelList {
-			if m.ID == defaultModel && m.Ready {
-				defaultModelAvailable = true
-				break
-			}
-		}
-		if !defaultModelAvailable {
-			// Fall back to first ready model
-			for _, m := range modelList {
-				if m.Ready {
-					defaultModel = m.ID
-					break
-				}
-			}
-		}
-	}
+	defaultModel := s.effectiveDefaultModel(modelList)
 
 	// Get hostname (add .exe.xyz suffix if no dots, matching system_prompt.go)
 	hostname := "localhost"
@@ -987,7 +962,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	// Get LLM service for the requested model
 	modelID := req.Model
 	if modelID == "" {
-		modelID = s.defaultModel
+		modelID = s.effectiveDefaultModel(s.getModelList())
 	}
 
 	llmService, err := s.llmManager.GetService(modelID)
@@ -1087,7 +1062,7 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 	// Get LLM service for the requested model
 	modelID := req.Model
 	if modelID == "" {
-		modelID = s.defaultModel
+		modelID = s.effectiveDefaultModel(s.getModelList())
 	}
 
 	llmService, err := s.llmManager.GetService(modelID)
@@ -1637,6 +1612,35 @@ func (s *Server) getModelList() []ModelInfo {
 		}
 	}
 	return modelList
+}
+
+// effectiveDefaultModel returns the model id to use when the client
+// hasn't picked one. It tries `s.defaultModel`, then the process-wide
+// default from package models, then the first ready model in
+// `modelList`. Returns "" only when no model is ready, which is the
+// same signal `getModelList` produces when the host has no working
+// LLM service at all.
+func (s *Server) effectiveDefaultModel(modelList []ModelInfo) string {
+	if len(modelList) == 0 {
+		return ""
+	}
+	candidates := []string{s.defaultModel, models.Default().ID}
+	for _, c := range candidates {
+		if c == "" {
+			continue
+		}
+		for _, m := range modelList {
+			if m.ID == c && m.Ready {
+				return c
+			}
+		}
+	}
+	for _, m := range modelList {
+		if m.Ready {
+			return m.ID
+		}
+	}
+	return ""
 }
 
 // handleModels returns the list of available models
