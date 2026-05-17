@@ -489,14 +489,27 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 		}
 	}
 
-	// Retry mechanism
-	backoff := []time.Duration{1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 15 * time.Second}
+	// Retry mechanism: long tail because providers regularly have multi-hour
+	// incidents and returning after two minutes is a worse UX than waiting.
+	backoff := []time.Duration{
+		1 * time.Second,
+		2 * time.Second,
+		5 * time.Second,
+		10 * time.Second,
+		30 * time.Second,
+		1 * time.Minute,
+		2 * time.Minute,
+		5 * time.Minute,
+		10 * time.Minute,
+		20 * time.Minute,
+		30 * time.Minute,
+	}
 
 	// retry loop
 	var errs error            // accumulated errors across all attempts
 	var retryAfter time.Duration // hint from upstream Retry-After header, reset each attempt
 	for attempts := 0; ; attempts++ {
-		if attempts > 10 {
+		if attempts > 15 {
 			return nil, fmt.Errorf("responses request failed after %d attempts (url=%s, model=%s): %w", attempts, fullURL, model.ModelName, errs)
 		}
 		if attempts > 0 {

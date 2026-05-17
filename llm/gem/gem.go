@@ -642,9 +642,24 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 	endTime := startTime // Initialize endTime
 	var gemRes *gemini.Response
 
-	// Retry mechanism for handling server errors and rate limiting
-	backoff := []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second, 10 * time.Second}
-	for attempts := 0; attempts <= len(backoff); attempts++ {
+	// Retry mechanism for handling server errors and rate limiting. Long tail
+	// because providers regularly have multi-hour incidents and returning after
+	// twenty seconds is a worse UX than waiting.
+	backoff := []time.Duration{
+		1 * time.Second,
+		3 * time.Second,
+		5 * time.Second,
+		10 * time.Second,
+		30 * time.Second,
+		1 * time.Minute,
+		2 * time.Minute,
+		5 * time.Minute,
+		10 * time.Minute,
+		20 * time.Minute,
+		30 * time.Minute,
+	}
+	const maxAttempts = 16
+	for attempts := 0; attempts < maxAttempts; attempts++ {
 		gemApiErr := error(nil)
 		gemRes, gemApiErr = model.GenerateContent(ctx, gemReq)
 		endTime = time.Now()
@@ -658,9 +673,9 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			break
 		}
 
-		if attempts == len(backoff) {
+		if attempts == maxAttempts-1 {
 			// We've exhausted all retry attempts
-			return nil, fmt.Errorf("gemini: API error after %d attempts (last at %s): %w", attempts, time.Now().Format(time.DateTime), gemApiErr)
+			return nil, fmt.Errorf("gemini: API error after %d attempts (last at %s): %w", attempts+1, time.Now().Format(time.DateTime), gemApiErr)
 		}
 
 		// Check if the error is retryable (server error or rate limiting).
@@ -670,7 +685,7 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			return nil, fmt.Errorf("gemini: API error: %w", gemApiErr)
 		}
 		random := time.Duration(rand.Int63n(int64(time.Second)))
-		sleep := backoff[attempts] + random
+		sleep := backoff[min(attempts, len(backoff)-1)] + random
 		if retryAfter := llm.ParseRetryAfter(apiErr.Header.Get("Retry-After")); retryAfter > sleep {
 			sleep = retryAfter
 		}

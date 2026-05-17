@@ -923,7 +923,18 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 
 	backoff := s.Backoff
 	if backoff == nil {
-		backoff = []time.Duration{15 * time.Second, 30 * time.Second, time.Minute}
+		// Long tail: many model providers have multi-hour incidents, and it is
+		// a much worse UX to return after a few minutes than to keep waiting.
+		backoff = []time.Duration{
+			15 * time.Second,
+			30 * time.Second,
+			60 * time.Second,
+			2 * time.Minute,
+			5 * time.Minute,
+			10 * time.Minute,
+			20 * time.Minute,
+			30 * time.Minute,
+		}
 	}
 
 	url := cmp.Or(s.URL, DefaultURL)
@@ -933,7 +944,7 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 	var errs error // accumulated errors across all attempts
 	var retryAfter time.Duration // hint from upstream Retry-After header, reset each attempt
 	for attempts := 0; ; attempts++ {
-		if attempts > 10 {
+		if attempts > 15 {
 			return nil, fmt.Errorf("anthropic request failed after %d attempts: %w", attempts, errs)
 		}
 		if attempts > 0 {
