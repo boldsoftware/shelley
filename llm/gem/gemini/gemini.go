@@ -168,6 +168,17 @@ const (
 
 const defaultEndpoint = "https://generativelanguage.googleapis.com/v1beta"
 
+// APIError is returned by GenerateContent when the server returns a non-200 status.
+type APIError struct {
+	StatusCode int
+	Body       string
+	Header     http.Header
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("GenerateContent: HTTP status: %d, %s", e.StatusCode, e.Body)
+}
+
 type Model struct {
 	Model    string // e.g. "models/gemini-1.5-flash"
 	APIKey   string
@@ -195,7 +206,7 @@ func (m Model) GenerateContent(ctx context.Context, req *Request) (*Response, er
 		return nil, fmt.Errorf("GenerateContent: reading response body: %w", err)
 	}
 	if httpResp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GenerateContent: HTTP status: %d, %s", httpResp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: httpResp.StatusCode, Body: string(body), Header: httpResp.Header}
 	}
 	var res Response
 	if err := json.Unmarshal(body, &res); err != nil {
