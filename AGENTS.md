@@ -37,3 +37,5 @@
       reads the `action` field from the input and dispatches to the right sub-component)
     - `loop/predictable.go` (the "tool smorgasbord" demo response)
     - See `ui/src/components/AGENTS.md` for more detail.
+
+16. Prefer `wait: false` for subagents doing background research. Use `wait: true` only when you need the result to continue, and keep timeouts short (30s max). Never block the conversation for minutes.

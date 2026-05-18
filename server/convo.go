@@ -73,6 +73,10 @@ type ConversationManager struct {
 	// onStateChange is called when the conversation state changes.
 	// This allows the server to broadcast state changes to all subscribers.
 	onStateChange func(state ConversationState)
+
+	// onDone is called when the agent finishes working (transitions to not working).
+	// Used by subagents to notify their parent conversation.
+	onDone func()
 }
 
 // NewConversationManager constructs a manager with dependencies but defers hydration until needed.
@@ -134,6 +138,7 @@ func (cm *ConversationManager) SetAgentWorking(working bool) {
 	}
 	cm.agentWorking = working
 	onStateChange := cm.onStateChange
+	onDone := cm.onDone
 	convID := cm.conversationID
 	modelID := cm.modelID
 	cm.mu.Unlock()
@@ -148,6 +153,9 @@ func (cm *ConversationManager) SetAgentWorking(working bool) {
 			Working:        working,
 			Model:          modelID,
 		})
+	}
+	if !working && onDone != nil {
+		onDone()
 	}
 }
 
