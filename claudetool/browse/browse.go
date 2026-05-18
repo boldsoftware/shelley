@@ -597,6 +597,12 @@ func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) 
 		}
 	}
 
+	// Ensure image is under the API's 5MB base64 limit
+	imageData, format, err = imageutil.EnsureUnderMaxBytes(imageData)
+	if err != nil {
+		return llm.ErrorToolOut(fmt.Errorf("failed to compress screenshot: %w", err))
+	}
+
 	base64Data := base64.StdEncoding.EncodeToString(imageData)
 	mediaType := "image/" + format
 
@@ -915,6 +921,12 @@ func (b *BrowseTools) readImageRun(ctx context.Context, input readImageInput) ll
 		if err != nil {
 			return llm.ErrorToolOut(fmt.Errorf("failed to resize image: %w", err))
 		}
+	}
+
+	// Ensure image is under the API's 5MB base64 limit
+	imageData, format, err = imageutil.EnsureUnderMaxBytes(imageData)
+	if err != nil {
+		return llm.ErrorToolOut(fmt.Errorf("failed to compress image: %w", err))
 	}
 
 	base64Data := base64.StdEncoding.EncodeToString(imageData)

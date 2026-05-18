@@ -150,3 +150,47 @@ func TestResizeImageNoResizeNeeded(t *testing.T) {
 		t.Error("Expected original data when no resize needed")
 	}
 }
+
+func TestEnsureUnderMaxBytes_SmallImage(t *testing.T) {
+	data := createTestPNG(t, 100, 100)
+	result, format, err := EnsureUnderMaxBytes(data)
+	if err != nil {
+		t.Fatalf("EnsureUnderMaxBytes() error = %v", err)
+	}
+	if format != "png" {
+		t.Errorf("format = %v, want png", format)
+	}
+	if !bytes.Equal(result, data) {
+		t.Error("Expected original data for small image")
+	}
+}
+
+func TestEnsureUnderMaxBytes_LargeImage(t *testing.T) {
+	// Create a large JPEG that exceeds TargetRawSize (3.75MB)
+	// Use a large image with random-ish data encoded as high-quality JPEG.
+	img := image.NewNRGBA(image.Rect(0, 0, 5000, 5000))
+	pix := img.Pix
+	for i := 0; i < len(pix); i++ {
+		pix[i] = byte((i * 127) ^ (i >> 3)) // pseudo-random to defeat compression
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 100}); err != nil {
+		t.Fatalf("Failed to create large test image: %v", err)
+	}
+	data := buf.Bytes()
+
+	if len(data) <= TargetRawSize {
+		t.Skipf("Test image too small (%d bytes), need > %d", len(data), TargetRawSize)
+	}
+
+	result, format, err := EnsureUnderMaxBytes(data)
+	if err != nil {
+		t.Fatalf("EnsureUnderMaxBytes() error = %v", err)
+	}
+	if format != "jpeg" {
+		t.Errorf("format = %v, want jpeg (should have been compressed)", format)
+	}
+	if len(result) > TargetRawSize {
+		t.Errorf("result size %d exceeds target %d", len(result), TargetRawSize)
+	}
+}

@@ -348,6 +348,12 @@ func fromLLMContent(c llm.Content) content {
 		for i, tr := range c.ToolResult {
 			// For image content inside a tool_result, we need to map it to "image" type
 			if tr.MediaType != "" && tr.MediaType == "image/jpeg" || tr.MediaType == "image/png" {
+				// Drop images that exceed the API's 5MB base64 limit (e.g. from history)
+				if len(tr.Data) > maxBase64ImageSize {
+					placeholder := "[image omitted: exceeded 5MB API limit]"
+					toolResult[i] = content{Type: "text", Text: &placeholder}
+					continue
+				}
 				// Format as an image for Claude
 				toolResult[i] = content{
 					Type: "image",
@@ -370,9 +376,15 @@ func fromLLMContent(c llm.Content) content {
 	case llm.ContentTypeText:
 		// Images are represented as text with MediaType and Data
 		if c.MediaType != "" {
-			d.Type = "image"
-			d.Source = json.RawMessage(fmt.Sprintf(`{"type":"base64","media_type":"%s","data":"%s"}`,
-				c.MediaType, c.Data))
+			// Drop images that exceed the API's 5MB base64 limit (e.g. from history)
+			if len(c.Data) > maxBase64ImageSize {
+				placeholder := "[image omitted: exceeded 5MB API limit]"
+				d.Text = &placeholder
+			} else {
+				d.Type = "image"
+				d.Source = json.RawMessage(fmt.Sprintf(`{"type":"base64","media_type":"%s","data":"%s"}`,
+					c.MediaType, c.Data))
+			}
 		} else {
 			d.Text = &c.Text
 		}
@@ -412,6 +424,75 @@ func fromLLMToolUse(tu *llm.ToolUse) *toolUse {
 // stripThinkingBlocks returns a copy of the message with thinking and
 // redacted_thinking content blocks removed. Used to strip stale thinking
 // from older assistant turns before sending to the API.
+// maxBase64ImageSize is the Anthropic API limit for base64-encoded image data (5MB).
+const maxBase64ImageSize = 5 * 1024 * 1024
+
+// maxMediaPerRequest is the maximum number of image blocks allowed per API request.
+// The API rejects requests exceeding this limit.
+// Source: Claude CLI constants/apiLimits.ts (API_MAX_MEDIA_PER_REQUEST)
+const maxMediaPerRequest = 100
+
+// isImageContent reports whether a content block is an image.
+func isImageContent(c llm.Content) bool {
+	return c.MediaType != ""
+}
+
+// stripExcessImages removes the oldest image blocks from messages if the total
+// count exceeds maxMediaPerRequest. This mirrors Claude CLI's stripExcessMediaItems.
+func stripExcessImages(messages []llm.Message) []llm.Message {
+	// Count total images
+	total := 0
+	for _, m := range messages {
+		for _, c := range m.Content {
+			if isImageContent(c) {
+				total++
+			}
+			for _, tr := range c.ToolResult {
+				if isImageContent(tr) {
+					total++
+				}
+			}
+		}
+	}
+
+	toRemove := total - maxMediaPerRequest
+	if toRemove <= 0 {
+		return messages
+	}
+
+	result := make([]llm.Message, len(messages))
+	for i, m := range messages {
+		if toRemove <= 0 {
+			result[i] = m
+			continue
+		}
+		var filtered []llm.Content
+		for _, c := range m.Content {
+			// Strip images nested in tool results
+			if len(c.ToolResult) > 0 && toRemove > 0 {
+				var filteredTR []llm.Content
+				for _, tr := range c.ToolResult {
+					if toRemove > 0 && isImageContent(tr) {
+						toRemove--
+						continue
+					}
+					filteredTR = append(filteredTR, tr)
+				}
+				c.ToolResult = filteredTR
+			}
+			// Strip top-level images
+			if toRemove > 0 && isImageContent(c) {
+				toRemove--
+				continue
+			}
+			filtered = append(filtered, c)
+		}
+		result[i] = m
+		result[i].Content = filtered
+	}
+	return result
+}
+
 func stripThinkingBlocks(msg llm.Message) llm.Message {
 	var filtered []llm.Content
 	for _, c := range msg.Content {
@@ -473,21 +554,24 @@ func (s *Service) fromLLMRequest(r *llm.Request) *request {
 	model := cmp.Or(s.Model, DefaultModel)
 	maxTokens := cmp.Or(s.MaxTokens, maxOutputTokens(model))
 
+	// Strip excess image blocks to stay within API limits (oldest first).
+	inputMessages := stripExcessImages(r.Messages)
+
 	// Find the last assistant message index so we can strip thinking blocks
 	// from all earlier assistant messages. The Anthropic API validates thinking
 	// signatures, and they become invalid when the underlying model version
 	// rotates (e.g. "claude-opus-4-6" points to a new version). Only the
 	// most recent assistant turn's thinking blocks need to be preserved.
 	lastAssistantIdx := -1
-	for i := len(r.Messages) - 1; i >= 0; i-- {
-		if r.Messages[i].Role == llm.MessageRoleAssistant {
+	for i := len(inputMessages) - 1; i >= 0; i-- {
+		if inputMessages[i].Role == llm.MessageRoleAssistant {
 			lastAssistantIdx = i
 			break
 		}
 	}
 
 	var messages []message
-	for i, m := range r.Messages {
+	for i, m := range inputMessages {
 		// Strip thinking/redacted_thinking blocks from all assistant messages
 		// except the last one. This avoids "Invalid signature" errors when
 		// the model version has changed since the thinking was generated.
@@ -543,8 +627,10 @@ func (s *Service) fromLLMRequestStrippingAllThinking(r *llm.Request) *request {
 	model := cmp.Or(s.Model, DefaultModel)
 	maxTokens := cmp.Or(s.MaxTokens, maxOutputTokens(model))
 
+	inputMessages := stripExcessImages(r.Messages)
+
 	var messages []message
-	for _, m := range r.Messages {
+	for _, m := range inputMessages {
 		if m.Role == llm.MessageRoleAssistant {
 			m = stripThinkingBlocks(m)
 		}
