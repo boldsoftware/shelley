@@ -375,12 +375,12 @@ function ConversationDrawer({
   // Format cwd with ~ for home directory (display only)
   const formatCwdForDisplay = tildifyPath;
 
-  const getConversationPreview = (conversation: Conversation) => {
-    if (conversation.slug) {
-      return conversation.slug;
-    }
-    // Show full conversation ID
-    return conversation.conversation_id;
+  // Render the conversation title. If there's no slug yet (the title hasn't
+  // come in), show an italic "untitled" placeholder. Used for both top-level
+  // and subagent items.
+  const renderConversationTitle = (conversation: Conversation) => {
+    if (conversation.slug) return conversation.slug;
+    return <em>untitled</em>;
   };
 
   const handleArchive = async (e: React.MouseEvent, conversationId: string) => {
@@ -705,7 +705,7 @@ function ConversationDrawer({
                 ) : isDraft ? (
                   <div className="conversation-title conversation-title-draft">draft</div>
                 ) : (
-                  <div className="conversation-title">{getConversationPreview(conversation)}</div>
+                  <div className="conversation-title">{renderConversationTitle(conversation)}</div>
                 )}
               </div>
               {(conversation as ConversationWithState).working && (
@@ -896,7 +896,7 @@ function ConversationDrawer({
                   <div className="drawer-conversation-item-flex-container">
                     <div className="drawer-conversation-header-row">
                       <div className="drawer-conversation-item-flex-container">
-                        <div className="conversation-title">{sub.slug || sub.conversation_id}</div>
+                        <div className="conversation-title">{renderConversationTitle(sub)}</div>
                       </div>
                       {sub.working && (
                         <span
