@@ -57,7 +57,6 @@ import TerminalPanel, { EphemeralTerminal } from "./TerminalPanel";
 import ModelPicker from "./ModelPicker";
 import ModelBar from "./ModelBar";
 import SystemPromptView from "./SystemPromptView";
-import Modal from "./Modal";
 import { toolEmoji, toolHeadline, isAutoExpandTool } from "../utils/toolMeta";
 import { useFeatureFlag } from "../services/featureFlagsStore";
 
@@ -484,12 +483,13 @@ const CoalescedToolCall = React.memo(function CoalescedToolCall({
 });
 
 // A single tool call rendered as a compact, color-coded "pill":
-// emoji + short headline + (optional) running spinner. Tapping a
-// pill opens a modal showing the full CoalescedToolCall card for
-// that one call — the same view we used to inline.
+// emoji + short headline + (optional) running spinner. Clicking a
+// pill expands the full CoalescedToolCall card inline beneath the
+// pill row (no modal) — clicking the pill again collapses it.
 //
 // Mirrors iOS/exe.dev/ToolPillsRow.swift so the desktop and iOS
-// clients have the same visual grammar for tool activity.
+// clients have the same visual grammar for tool activity, but
+// stays in the conversation flow rather than presenting a sheet.
 interface ToolPillsRowProps {
   items: CoalescedItem[]; // all of type "tool"
   onCommentTextChange?: (text: string) => void;
@@ -501,8 +501,16 @@ const ToolPillsRow = React.memo(function ToolPillsRow({
   onCommentTextChange,
   toolProgress,
 }: ToolPillsRowProps) {
-  const [openId, setOpenId] = useState<string | null>(null);
-  const active = openId != null ? (items.find((i) => i.toolUseId === openId) ?? null) : null;
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggle = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const expandedItems = items.filter((i) => i.toolUseId && expanded.has(i.toolUseId));
   return (
     <div className="message message-tool tool-pills-row-wrap">
       <div className="message-content">
@@ -512,6 +520,7 @@ const ToolPillsRow = React.memo(function ToolPillsRow({
             const headline = toolHeadline(name, item.toolInput);
             const running = !item.hasResult;
             const errored = !!item.toolError && item.hasResult;
+            const isExpanded = !!item.toolUseId && expanded.has(item.toolUseId);
             const stateSuffix = running ? ", running" : errored ? ", failed" : "";
             // toolHeadline already includes the tool name when relevant
             // (e.g. "browser: screenshot"), so we don't add another prefix.
@@ -521,10 +530,11 @@ const ToolPillsRow = React.memo(function ToolPillsRow({
               <li key={key} className="tool-pill-item">
                 <button
                   type="button"
-                  className={`tool-pill${errored ? " tool-pill--error" : ""}`}
-                  onClick={() => item.toolUseId && setOpenId(item.toolUseId)}
+                  className={`tool-pill${errored ? " tool-pill--error" : ""}${isExpanded ? " tool-pill--expanded" : ""}`}
+                  onClick={() => item.toolUseId && toggle(item.toolUseId)}
                   disabled={!item.toolUseId}
                   aria-label={`${label}${stateSuffix}`}
+                  aria-expanded={isExpanded}
                   title={label}
                   data-testid={running ? "tool-call-running" : "tool-call-completed"}
                   data-tool-name={name}
@@ -544,28 +554,33 @@ const ToolPillsRow = React.memo(function ToolPillsRow({
             );
           })}
         </ul>
+        {expandedItems.length > 0 && (
+          <div className="tool-pill-expanded-list">
+            {expandedItems.map((item) => (
+              <div
+                key={item.toolUseId}
+                className="tool-pill-expanded"
+                data-tool-name={item.toolName || "tool"}
+              >
+                <CoalescedToolCall
+                  toolName={item.toolName || "Unknown Tool"}
+                  toolInput={item.toolInput}
+                  toolResult={item.toolResult}
+                  toolError={item.toolError}
+                  toolStartTime={item.toolStartTime}
+                  toolEndTime={item.toolEndTime}
+                  hasResult={item.hasResult}
+                  display={item.display}
+                  onCommentTextChange={onCommentTextChange}
+                  streamingOutput={
+                    item.toolUseId ? toolProgress[item.toolUseId]?.output : undefined
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-      {active && (
-        <Modal
-          isOpen={true}
-          onClose={() => setOpenId(null)}
-          title={active.toolName || "tool"}
-          className="tool-pill-detail-modal"
-        >
-          <CoalescedToolCall
-            toolName={active.toolName || "Unknown Tool"}
-            toolInput={active.toolInput}
-            toolResult={active.toolResult}
-            toolError={active.toolError}
-            toolStartTime={active.toolStartTime}
-            toolEndTime={active.toolEndTime}
-            hasResult={active.hasResult}
-            display={active.display}
-            onCommentTextChange={onCommentTextChange}
-            streamingOutput={active.toolUseId ? toolProgress[active.toolUseId]?.output : undefined}
-          />
-        </Modal>
-      )}
     </div>
   );
 });

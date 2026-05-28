@@ -55,7 +55,7 @@ test.describe('Tool Component Verification', () => {
       await expect(first).toBeVisible();
       await first.scrollIntoViewIfNeeded();
       await first.click();
-      const modal = page.locator('.tool-pill-detail-modal');
+      const modal = page.locator('.tool-pill-expanded');
       await expect(modal).toBeVisible();
       await modalAssertion(modal);
       // Pill itself must NOT use the GenericTool gear icon.
@@ -143,7 +143,7 @@ test.describe('Tool Component Verification', () => {
     const pill = page.locator('.tool-pill[data-tool-name="bash"]').filter({ hasText: 'unique-test-command-xyz123' });
     await expect(pill).toBeVisible({ timeout: 15000 });
     await pill.click();
-    const modal = page.locator('.tool-pill-detail-modal');
+    const modal = page.locator('.tool-pill-expanded');
     await expect(modal).toBeVisible();
 
     // Verify bash tool shows the command in the header (collapsed state)
@@ -193,7 +193,7 @@ test.describe('Tool Component Verification', () => {
     await expect(navigatePill).toContainText('https://example.com');
     await navigatePill.scrollIntoViewIfNeeded();
     await navigatePill.click();
-    const navigateModal = page.locator('.tool-pill-detail-modal');
+    const navigateModal = page.locator('.tool-pill-expanded');
     await expect(navigateModal.locator('.tool .tool-command').filter({ hasText: 'https://example.com' })).toBeVisible();
     await closeToolModal(page);
   });

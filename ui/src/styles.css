@@ -10496,15 +10496,24 @@ kbd {
  * look like a tappable chip. (iOS uses color because its native
  * surfaces are richer, see ToolPillsRow.swift.) */
 
-/* Inside the modal the CoalescedToolCall is the only content; its
- * own .message wrapper is redundant, so trim its outer chrome. */
-.tool-pill-detail-modal .message-tool {
-  margin: 0;
+/* Pill in the expanded state: keep it visually anchored to the
+ * card that opened below it. */
+.tool-pill--expanded {
+  background: var(--bg-secondary, var(--bg-tertiary));
+  border-color: var(--link-color);
 }
-.tool-pill-detail-modal .message-tool .message-content {
-  padding: 0;
-  background: none;
-  border: none;
+
+/* Inline-expanded tool cards live directly under the pill row
+ * inside the same .message-content wrapper. */
+.tool-pill-expanded-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tool-pill-expanded > .message-tool {
+  margin: 0;
 }
 
 @media (max-width: 600px) {

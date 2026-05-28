@@ -129,29 +129,44 @@ export async function createConversationViaAPI(
 
 /**
  * Tool calls (except diffs, screenshots, image reads and output_iframe)
- * now render as compact "pills" in the conversation stream. The full
- * tool card is one tap away inside a modal. These helpers open that
- * modal and return the modal scope for tests that need to assert
- * against the expanded view.
+ * now render as compact "pills" in the conversation stream. Clicking
+ * a pill expands the full tool card inline beneath the pill row (no
+ * modal). These helpers open that inline expansion and return its
+ * scope for tests that need to assert against the expanded view.
  */
 /** Click the pill for the first tool call whose visible text matches
- *  `hasText` and wait for the resulting detail modal to open.
- *  Returns the modal locator (scope for further assertions). */
+ *  `hasText` and wait for its inline expansion to appear. Returns the
+ *  expanded card locator (scope for further assertions). */
 export async function openToolPill(
   page: Page,
   hasText: string | RegExp,
 ): Promise<Locator> {
   const pill = page.locator(".tool-pill").filter({ hasText }).first();
   await pill.click();
-  const modal = page.locator(".tool-pill-detail-modal");
-  await expect(modal).toBeVisible({ timeout: 5000 });
-  return modal;
+  // The expanded card is a sibling, inside the same row's content.
+  const row = pill.locator("xpath=ancestor::*[contains(@class,'tool-pills-row-wrap')][1]");
+  const expanded = row.locator(".tool-pill-expanded").first();
+  await expect(expanded).toBeVisible({ timeout: 5000 });
+  return expanded;
 }
 
-/** Close the currently-open tool detail modal (Esc). */
-export async function closeToolModal(page: Page) {
-  await page.keyboard.press("Escape");
-  await expect(page.locator(".tool-pill-detail-modal")).toBeHidden({ timeout: 5000 });
+/** Collapse the currently-expanded tool card. Pass the same `hasText`
+ *  used to open it; clicking the pill again toggles it off. */
+export async function closeToolModal(page: Page, hasText?: string | RegExp) {
+  if (hasText !== undefined) {
+    const pill = page.locator(".tool-pill").filter({ hasText }).first();
+    await pill.click();
+    const row = pill.locator("xpath=ancestor::*[contains(@class,'tool-pills-row-wrap')][1]");
+    await expect(row.locator(".tool-pill-expanded")).toHaveCount(0, { timeout: 5000 });
+    return;
+  }
+  // Backwards-compat: collapse every expanded pill on the page.
+  const expandedPills = page.locator(".tool-pill[aria-expanded='true']");
+  const count = await expandedPills.count();
+  for (let i = count - 1; i >= 0; i--) {
+    await expandedPills.nth(i).click();
+  }
+  await expect(page.locator(".tool-pill-expanded")).toHaveCount(0, { timeout: 5000 });
 }
 
 /** Override a boolean feature flag for THIS page only (via localStorage).
