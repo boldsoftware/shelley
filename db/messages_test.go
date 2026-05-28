@@ -276,7 +276,7 @@ func TestMessageService_GetLatest(t *testing.T) {
 
 	// Create multiple test messages
 	var lastCreated *generated.Message
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		created, err := db.CreateMessage(ctx, CreateMessageParams{
 			ConversationID: conv.ConversationID,
 			Type:           MessageTypeUser,
@@ -372,7 +372,7 @@ func TestMessageService_CountInConversation(t *testing.T) {
 	}
 
 	// Create test messages
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		_, err := db.CreateMessage(ctx, CreateMessageParams{
 			ConversationID: conv.ConversationID,
 			Type:           MessageTypeUser,
@@ -471,7 +471,7 @@ func TestMessageService_ListMessagesByConversationPaginated(t *testing.T) {
 	}
 
 	// Create multiple test messages
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		_, err := db.CreateMessage(ctx, CreateMessageParams{
 			ConversationID: conv.ConversationID,
 			Type:           MessageTypeUser,

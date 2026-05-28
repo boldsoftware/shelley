@@ -175,7 +175,7 @@ func TestConversationService_List(t *testing.T) {
 	defer cancel()
 
 	// Create multiple test conversations
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		slug := stringPtr("conversation-" + string(rune('a'+i)))
 		_, err := db.CreateConversation(ctx, slug, true, nil, nil, ConversationOptions{})
 		if err != nil {
@@ -323,7 +323,7 @@ func TestConversationService_Count(t *testing.T) {
 	}
 
 	// Create test conversations
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		_, err := db.CreateConversation(ctx, stringPtr("conversation-"+string(rune('a'+i))), true, nil, nil, ConversationOptions{})
 		if err != nil {
 			t.Fatalf("Failed to create test conversation %d: %v", i, err)

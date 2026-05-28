@@ -242,7 +242,7 @@ func TestDB_WithTxRes(t *testing.T) {
 	defer cancel()
 
 	// Test WithTxRes with a simple function that returns a string
-	result, err := WithTxRes[string](db, ctx, func(queries *generated.Queries) (string, error) {
+	result, err := WithTxRes(db, ctx, func(queries *generated.Queries) (string, error) {
 		return "test result", nil
 	})
 	if err != nil {
@@ -254,7 +254,7 @@ func TestDB_WithTxRes(t *testing.T) {
 	}
 
 	// Test WithTxRes with error handling
-	_, err = WithTxRes[string](db, ctx, func(queries *generated.Queries) (string, error) {
+	_, err = WithTxRes(db, ctx, func(queries *generated.Queries) (string, error) {
 		return "", fmt.Errorf("test error")
 	})
 

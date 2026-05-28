@@ -20,7 +20,7 @@ func TestCreateWarningMessageCapsConsecutiveWarnings(t *testing.T) {
 	}
 
 	var result *CreateWarningMessageResult
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		result, err = database.CreateWarningMessage(ctx, conv.ConversationID, "retrying", 3, "Suppressing further warnings.")
 		if err != nil {
 			t.Fatalf("CreateWarningMessage %d: %v", i, err)
@@ -90,7 +90,7 @@ func TestCreateWarningMessageCountsCurrentGeneration(t *testing.T) {
 		t.Fatalf("CreateConversation: %v", err)
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		result, err := database.CreateWarningMessage(ctx, conv.ConversationID, "old generation", 3, "Suppressing further warnings.")
 		if err != nil {
 			t.Fatalf("CreateWarningMessage old generation %d: %v", i, err)

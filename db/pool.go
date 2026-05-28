@@ -62,7 +62,7 @@ func NewPool(dataSourceName string, readerCount int) (*Pool, error) {
 	}
 
 	var conns []*sql.Conn
-	for i := 0; i < numConns; i++ {
+	for range numConns {
 		conn, err := db.Conn(context.Background())
 		if err != nil {
 			db.Close()
@@ -102,7 +102,7 @@ func InitPoolDB(db *sql.DB, numConns int) error {
 	}
 
 	var conns []*sql.Conn
-	for i := 0; i < numConns; i++ {
+	for i := range numConns {
 		conn, err := db.Conn(context.Background())
 		if err != nil {
 			db.Close()
