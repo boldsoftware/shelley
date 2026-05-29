@@ -1966,11 +1966,11 @@ func TestServiceReasoningEffort(t *testing.T) {
 		{name: "all zero", wantEffort: ""},
 		{name: "svc default medium", svcLevel: llm.ThinkingLevelMedium, wantEffort: "medium"},
 		{name: "svc high", svcLevel: llm.ThinkingLevelHigh, wantEffort: "high"},
-		{name: "svc xhigh", svcLevel: llm.ThinkingLevelXHigh, wantEffort: "xhigh"},
+		{name: "svc xhigh clamped to high", svcLevel: llm.ThinkingLevelXHigh, wantEffort: "high"},
 		{name: "svc off, svc verbatim wins", svcLevel: llm.ThinkingLevelOff, svcEffort: "verbatim", wantEffort: "verbatim"},
 		{name: "req override beats svc default", svcLevel: llm.ThinkingLevelMedium, reqLevel: llm.ThinkingLevelLow, wantEffort: "low"},
 		{name: "req off wins", svcLevel: llm.ThinkingLevelMedium, svcEffort: "v", reqLevel: llm.ThinkingLevelOff, wantEffort: ""},
-		{name: "req xhigh beats svc verbatim", svcLevel: llm.ThinkingLevelMedium, svcEffort: "v", reqLevel: llm.ThinkingLevelXHigh, wantEffort: "xhigh"},
+		{name: "req xhigh beats svc verbatim, clamped to high", svcLevel: llm.ThinkingLevelMedium, svcEffort: "v", reqLevel: llm.ThinkingLevelXHigh, wantEffort: "high"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

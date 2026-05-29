@@ -527,6 +527,12 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 	case level != llm.ThinkingLevelOff:
 		effort = level.ThinkingEffort()
 	}
+	// gpt-5.x-codex rejects `reasoning.effort="minimal"` with HTTP 400;
+	// clamp to "low". Verbatim user-supplied values (s.ReasoningEffort) are
+	// intentionally NOT clamped.
+	if effort == "minimal" && effort != s.ReasoningEffort && strings.Contains(model.ModelName, "codex") {
+		effort = "low"
+	}
 	if effort != "" {
 		req.Reasoning = &responsesReasoning{Effort: effort}
 	}

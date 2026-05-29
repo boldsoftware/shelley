@@ -1172,6 +1172,19 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 	case level != llm.ThinkingLevelOff && level != llm.ThinkingLevelDefault:
 		req.ReasoningEffort = level.ThinkingEffort()
 	}
+	// Many chat-completions backends (Fireworks gpt-oss, GLM, etc.) only
+	// accept low/medium/high for `reasoning_effort` and reject "minimal" and
+	// "xhigh" with HTTP 400. Clamp those down to the closest supported tier.
+	// Verbatim user-configured ReasoningEffort strings are intentionally
+	// preserved (they're an explicit "I know what this provider takes").
+	if req.ReasoningEffort != "" && req.ReasoningEffort != s.ReasoningEffort {
+		switch req.ReasoningEffort {
+		case "minimal":
+			req.ReasoningEffort = "low"
+		case "xhigh":
+			req.ReasoningEffort = "high"
+		}
+	}
 	// Construct the full URL for logging and debugging
 	fullURL := baseURL + "/chat/completions"
 

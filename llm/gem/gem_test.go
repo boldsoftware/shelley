@@ -1354,7 +1354,7 @@ func TestThinkingConfigRequestOverride(t *testing.T) {
 		wantOmitted bool
 	}{
 		{name: "req high beats svc medium on 3-flash", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium}, reqLevel: llm.ThinkingLevelHigh, wantLevel: "high"},
-		{name: "req xhigh on 3-flash", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x"}, reqLevel: llm.ThinkingLevelXHigh, wantLevel: "xhigh"},
+		{name: "req xhigh on 3-flash clamps to high", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x"}, reqLevel: llm.ThinkingLevelXHigh, wantLevel: "high"},
 		{name: "req high on 3-pro", svc: &Service{Model: "gemini-3-pro-preview", APIKey: "x"}, reqLevel: llm.ThinkingLevelHigh, wantLevel: "high"},
 		{name: "req medium clamps to high on 3-pro", svc: &Service{Model: "gemini-3-pro-preview", APIKey: "x"}, reqLevel: llm.ThinkingLevelMedium, wantLevel: "high"},
 		{name: "req off on 3-flash uses low", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium}, reqLevel: llm.ThinkingLevelOff, wantLevel: "low"},

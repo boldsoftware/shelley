@@ -397,12 +397,17 @@ func (s *Service) thinkingConfig(req *llm.Request) *gemini.ThinkingConfig {
 		if effort == "" {
 			return nil
 		}
+		// Gemini 3.x only accepts low/medium/high (plus, on some snapshots,
+		// minimal). xhigh always errors with HTTP 400; clamp to high.
+		if effort == "xhigh" {
+			effort = "high"
+		}
 		// gemini-3-pro-preview accepts only "low" and "high"; collapse minimal/medium.
 		if model == "gemini-3-pro-preview" {
 			switch effort {
 			case "minimal", "low":
 				effort = "low"
-			case "medium", "high", "xhigh":
+			case "medium", "high":
 				effort = "high"
 			}
 		}
