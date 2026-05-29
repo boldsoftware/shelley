@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createConversationViaAPI, openToolPill } from './helpers';
+import { createConversationViaAPI } from './helpers';
 
 test.describe('Shelley Conversation Tests', () => {
   test('can send Hello and get greeting response', async ({ page }) => {
@@ -270,9 +270,9 @@ test.describe('Shelley Conversation Tests', () => {
       timeout: 30000
     });
 
-    // Bash now renders as a pill; open it to surface the full bash card.
-    const modal = await openToolPill(page, /echo/);
-    await expect(modal.locator('.bash-tool-header').first()).toBeVisible({ timeout: 10000 });
+    // Check for bash tool header (collapsible element)
+    const bashToolHeader = page.locator('.bash-tool-header');
+    await expect(bashToolHeader.first()).toBeVisible({ timeout: 10000 });
   });
 
   test('handles multiple consecutive tool calls', async ({ page }) => {
@@ -332,10 +332,11 @@ test('coalesces tool calls - shows tool result with details', async ({ page }) =
     timeout: 30000
   });
 
-  // Bash now renders as a pill; open it to inspect the full card.
-  const modal = await openToolPill(page, /echo/);
-  await expect(modal.locator('.bash-tool-header').first()).toBeVisible();
-  await expect(modal.locator('.bash-tool-command').first()).toBeVisible();
+  // Verify the bash tool header is visible
+  await expect(page.locator('.bash-tool-header').first()).toBeVisible();
+
+  // Verify bash tool shows command
+  await expect(page.locator('.bash-tool-command').first()).toBeVisible();
 });
 
 test('coalesces tool calls - displays agent text and tool separately', async ({ page }) => {

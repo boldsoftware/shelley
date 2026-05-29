@@ -1,7 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { createConversationViaAPI, openToolPill, closeToolModal } from './helpers';
+import { createConversationViaAPI, openToolPill, closeToolModal, setPageFeatureFlag } from './helpers';
 
 test.describe('Tool Component Verification', () => {
+  // Pill rendering is gated behind a feature flag; opt in for this suite.
+  test.beforeEach(async ({ page }) => {
+    await setPageFeatureFlag(page, 'tool-pills', true);
+  });
+
   // Shared smorgasbord conversation (created once, reused by multiple tests).
   // The smorgasbord launches browser tools (chromedp) which need up to 60s
   // for the initial Chrome startup, so we only pay that cost once.

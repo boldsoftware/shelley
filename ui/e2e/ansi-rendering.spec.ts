@@ -1,7 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { createConversationViaAPI, openToolPill } from './helpers';
+import { createConversationViaAPI, openToolPill, setPageFeatureFlag } from './helpers';
 
 test.describe('ANSI escape sequence rendering', () => {
+  // Pill rendering is gated behind a feature flag; opt in for this suite.
+  test.beforeEach(async ({ page }) => {
+    await setPageFeatureFlag(page, 'tool-pills', true);
+  });
+
   test('bash output with ANSI colors renders styled text, not raw escapes', async ({ page, request }) => {
     // Run a command that produces ANSI-colored output
     const slug = await createConversationViaAPI(request, `bash: printf '\\033[32mGreen\\033[0m \\033[31mRed\\033[0m \\033[1mBold\\033[0m \\033[33mYellow\\033[0m plain'`);

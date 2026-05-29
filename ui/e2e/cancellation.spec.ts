@@ -1,9 +1,14 @@
 import { test, expect } from '@playwright/test';
-import { createConversationViaAPI, openToolPill, closeToolModal } from './helpers';
+import { createConversationViaAPI, openToolPill, closeToolModal, setPageFeatureFlag } from './helpers';
 
 // Cancellation tests reload the page and inspect global state (sidebar),
 // so they must not run in parallel with other tests.
 test.describe.configure({ mode: 'serial' });
+
+// Pill rendering is gated behind a feature flag; opt in for this suite.
+test.beforeEach(async ({ page }) => {
+  await setPageFeatureFlag(page, 'tool-pills', true);
+});
 
 async function openConversation(page: import('@playwright/test').Page, request: import('@playwright/test').APIRequestContext) {
   const slug = await createConversationViaAPI(request, 'echo: cancellation seed');

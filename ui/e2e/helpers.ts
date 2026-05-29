@@ -169,7 +169,6 @@ export async function closeToolModal(page: Page, hasText?: string | RegExp) {
   await expect(page.locator(".tool-pill-expanded")).toHaveCount(0, { timeout: 5000 });
 }
 
-
 /** Override a boolean feature flag for THIS page only (via localStorage).
  *  Call before the first `page.goto(...)` so the override is in place when
  *  the React app first reads the flag. Per-page scope means parallel

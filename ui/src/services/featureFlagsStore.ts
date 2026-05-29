@@ -59,7 +59,7 @@ export async function refreshFeatureFlags(): Promise<void> {
 // here mainly for E2E tests: writing the global DB-backed override races
 // across parallel Playwright workers, but a localStorage value set via
 // `page.addInitScript` is private to that page. Manual users can flip it
-// too via the devtools console (`localStorage['ff:<name>']='true'`).
+// too via the devtools console (`localStorage['ff:tool-pills']='true'`).
 function localOverride(name: string): boolean | undefined {
   if (typeof window === "undefined") return undefined;
   let raw: string | null = null;
