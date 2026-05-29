@@ -2497,16 +2497,6 @@ function ChatInterface({
     ) : !conversationId ? (
       // New conversation — show model picker and cwd selector
       <div className="status-bar-new-conversation">
-        <div className="status-field status-field-thinking">
-          <span className="status-field-label" title="Reasoning effort">
-            think
-          </span>
-          <ThinkingLevelPicker
-            value={thinkingLevel}
-            onChange={setThinkingLevel}
-            disabled={sending}
-          />
-        </div>
         <div className="status-field status-field-model">
           <span className="status-field-label" title="AI model to use for this conversation">
             {t("modelLabel")}
@@ -2516,6 +2506,13 @@ function ChatInterface({
             selectedModel={selectedModel}
             onSelectModel={setSelectedModel}
             onManageModels={() => onOpenModelsModal?.()}
+            disabled={sending}
+          />
+        </div>
+        <div className="status-field status-field-thinking">
+          <ThinkingLevelPicker
+            value={thinkingLevel}
+            onChange={setThinkingLevel}
             disabled={sending}
           />
           <div className="advanced-settings-wrapper" ref={advancedSettingsRef}>
