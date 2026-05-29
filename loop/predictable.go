@@ -13,6 +13,36 @@ import (
 	"shelley.exe.dev/llm"
 )
 
+// Constants for the "inline image" demo pattern. The service first writes a
+// tiny PNG into the conversation working directory via bash, then references it
+// with relative-path markdown so the UI renders it through the per-message file
+// endpoint (server/message_file.go).
+const (
+	inlineImagePath     = "shelley-inline-image-demo.png"
+	inlineImageSentinel = "SHELLEY_INLINE_IMAGE_DEMO"
+	// A small (48x48) four-color PNG so the demo image is actually visible in
+	// the UI (a 1x1 pixel would render but be invisible).
+	inlineImagePNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAAAS0lEQVR42u3OMQ0AIAwAsMlBxEQgBznImQiUcGFiH00qoHEyW+Q+LUJISEhISEhISEhISOiz0K3RYtZqISQkJCQkJCQkJCQk9FnoAQiSrlPnJLTeAAAAAElFTkSuQmCC"
+)
+
+// requestMentions reports whether any message in the request contains the given
+// substring (across text and tool-result content).
+func requestMentions(req *llm.Request, needle string) bool {
+	for _, m := range req.Messages {
+		for _, c := range m.Content {
+			if strings.Contains(c.Text, needle) {
+				return true
+			}
+			for _, tr := range c.ToolResult {
+				if strings.Contains(tr.Text, needle) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // PredictableService is an LLM service that returns predictable responses for testing.
 //
 // To add new test patterns, update the Do() method directly by adding cases to the switch
@@ -111,8 +141,18 @@ func (s *PredictableService) Do(ctx context.Context, req *llm.Request) (*llm.Res
 		}
 	}
 
-	// If the message is purely a tool result (no text), acknowledge it and end turn
+	// If the message is purely a tool result (no text), acknowledge it and end turn.
 	if hasToolResult && inputText == "" {
+		// Special case: if we previously wrote the inline-image demo file via
+		// bash, now reference it with markdown so the UI renders it through the
+		// per-message file endpoint. This exercises the full local-image path:
+		// model emits ![](relative/path) -> frontend rewrites -> server serves.
+		if requestMentions(req, inlineImageSentinel) {
+			return s.makeResponse(
+				"Here is the generated image:\n\n![demo image]("+inlineImagePath+")\n\nGenerated locally and served from the conversation working directory.",
+				inputTokens,
+			), nil
+		}
 		return s.makeResponse("Done.", inputTokens), nil
 	}
 
@@ -205,6 +245,17 @@ func (s *PredictableService) Do(ctx context.Context, req *llm.Request) (*llm.Res
 
 		if text, ok := strings.CutPrefix(inputText, "markdown: "); ok {
 			return s.makeResponse(text, inputTokens), nil
+		}
+
+		if inputText == "inline image" {
+			// Write a tiny valid PNG to the working directory, then (next turn)
+			// reference it in markdown. The sentinel lets us recognize the
+			// follow-up tool result.
+			cmd := fmt.Sprintf(
+				"printf %%s %q | base64 -d > %s && echo %s",
+				inlineImagePNGBase64, inlineImagePath, inlineImageSentinel,
+			)
+			return s.makeBashToolResponse(cmd, inputTokens), nil
 		}
 
 		if path, ok := strings.CutPrefix(inputText, "change_dir: "); ok {

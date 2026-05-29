@@ -2,68 +2,38 @@
 // Run with: tsx src/components/MarkdownContent.test.ts
 
 import { JSDOM } from "jsdom";
-import { Marked } from "marked";
-import DOMPurify from "dompurify";
 
-// Set up a DOM environment for DOMPurify.
+// Provide a DOM environment so DOMPurify (which MarkdownContent imports) can
+// run under tsx/node. Must be set up before importing the module under test.
 const dom = new JSDOM("");
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const purify = DOMPurify(dom.window as any);
-
-// Mirror the exact config from MarkdownContent.tsx.
-const markedInstance = new Marked({ gfm: true, breaks: true });
-
-purify.addHook("afterSanitizeAttributes", (node: Element) => {
-  if (node.tagName === "A") {
-    node.setAttribute("target", "_blank");
-    node.setAttribute("rel", "noopener noreferrer");
+const g = globalThis as any;
+g.window = dom.window;
+g.document = dom.window.document;
+// Newer Node versions expose a read-only `navigator` global; only set it when
+// it is writable so DOMPurify can find one without crashing under CI's Node.
+if (!g.navigator) {
+  try {
+    g.navigator = dom.window.navigator;
+  } catch {
+    // ignore: a built-in read-only navigator is already present.
   }
-  if (node.tagName === "INPUT" && node.getAttribute("type") !== "checkbox") {
-    node.remove();
-  }
-});
+}
 
-const ALLOWED_TAGS = [
-  "p",
-  "br",
-  "strong",
-  "em",
-  "code",
-  "pre",
-  "blockquote",
-  "ul",
-  "ol",
-  "li",
-  "a",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "hr",
-  "table",
-  "thead",
-  "tbody",
-  "tr",
-  "th",
-  "td",
-  "del",
-  "input",
-  "span",
-  "div",
-];
+const { renderMarkdownToSafeHTML, classifyImageSrc } = await import("./MarkdownContent");
 
-const ALLOWED_ATTR = ["href", "target", "rel", "type", "checked", "disabled", "class"];
+// Default message id used so local images get rewritten/rendered in tests.
+const MSG = "msg-test";
 
 function renderMarkdown(text: string): string {
-  const raw = markedInstance.parse(text, { async: false }) as string;
-  return purify.sanitize(raw, { ALLOWED_TAGS, ALLOWED_ATTR });
+  return renderMarkdownToSafeHTML(text, MSG);
 }
 
 interface TestCase {
   name: string;
   input: string;
+  // When set, render without a messageId (local images cannot be authorized).
+  noMessageId?: boolean;
   // A substring that MUST appear in the output.
   mustContain?: string[];
   // A substring that must NOT appear in the output.
@@ -125,9 +95,47 @@ const testCases: TestCase[] = [
     mustNotContain: ["<script", "alert"],
   },
   {
-    name: "markdown image syntax is rendered then stripped",
+    name: "remote markdown image is dropped (no tracking pixels)",
     input: "![alt text](https://evil.com/tracker.png)",
     mustNotContain: ["<img", "tracker.png"],
+  },
+  {
+    name: "protocol-relative image is dropped",
+    input: "![x](//evil.com/a.png)",
+    mustNotContain: ["<img", "evil.com"],
+  },
+  {
+    name: "local relative image is rewritten to file endpoint",
+    input: "![chart](./out/chart.png)",
+    mustContain: ["<img", "/api/message/msg-test/file?path=", "chart.png"],
+    mustNotContain: ["onerror"],
+  },
+  {
+    name: "local absolute image is rewritten to file endpoint",
+    input: "![x](/tmp/work/a.png)",
+    mustContain: ["<img", "/api/message/msg-test/file?path="],
+  },
+  {
+    name: "local image without messageId is dropped",
+    input: "![chart](./out/chart.png)",
+    noMessageId: true,
+    mustNotContain: ["<img"],
+  },
+  {
+    name: "small inline image data URI is kept",
+    input:
+      "![dot](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==)",
+    mustContain: ["<img", "data:image/png;base64"],
+  },
+  {
+    name: "non-image data URI is dropped",
+    input: "![x](data:text/html;base64,PHNjcmlwdD4=)",
+    mustNotContain: ["<img", "data:text/html"],
+  },
+  {
+    name: "raw img tag with file endpoint path is still dropped if onerror present",
+    input: '<img src="x" onerror="alert(1)">',
+    mustNotContain: ["<img", "onerror", "alert"],
   },
   {
     name: "object tag is stripped",
@@ -263,7 +271,7 @@ function runTests(): { passed: number; failed: number; failures: string[] } {
   const failures: string[] = [];
 
   for (const tc of testCases) {
-    const output = renderMarkdown(tc.input);
+    const output = tc.noMessageId ? renderMarkdownToSafeHTML(tc.input) : renderMarkdown(tc.input);
     let ok = true;
     const problems: string[] = [];
 
@@ -296,7 +304,39 @@ function runTests(): { passed: number; failed: number; failures: string[] } {
 // Export for potential future use by a generic runner.
 export { testCases, runTests };
 
+// ---- classifyImageSrc unit checks ----
+function runClassifyTests(): string[] {
+  const cases: Array<[string, string]> = [
+    ["./out/x.png", "local"],
+    ["out/x.png", "local"],
+    ["../shared/x.png", "local"],
+    ["/abs/x.png", "local"],
+    ["https://e.com/x.png", "remote"],
+    ["http://e.com/x.png", "remote"],
+    ["//e.com/x.png", "remote"],
+    ["file:///etc/passwd", "remote"],
+    ["data:image/png;base64,AAAA", "data"],
+    ["data:text/html,<b>", "invalid"],
+    ["", "invalid"],
+  ];
+  const problems: string[] = [];
+  for (const [src, want] of cases) {
+    const got = classifyImageSrc(src);
+    if (got !== want) {
+      problems.push(`classifyImageSrc(${JSON.stringify(src)}) = ${got}, want ${want}`);
+    }
+  }
+  return problems;
+}
+
 // ---- Self-running ----
+const classifyProblems = runClassifyTests();
+if (classifyProblems.length > 0) {
+  console.log("classifyImageSrc failures:");
+  for (const p of classifyProblems) console.log("  " + p);
+  process.exit(1);
+}
+
 const { passed, failed, failures } = runTests();
 
 console.log(`\nMarkdown Sanitization Tests: ${passed} passed, ${failed} failed\n`);

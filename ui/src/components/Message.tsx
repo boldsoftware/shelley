@@ -600,7 +600,7 @@ const Message = React.memo(function Message({
         );
       case "text":
         if (shouldRenderMarkdown(markdownMode, isUser, isDistilledUser)) {
-          return <MarkdownContent text={content.Text || ""} />;
+          return <MarkdownContent text={content.Text || ""} messageId={message.message_id} />;
         }
         return (
           <div className="whitespace-pre-wrap break-words">

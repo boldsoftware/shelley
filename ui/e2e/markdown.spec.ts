@@ -40,7 +40,7 @@ test.describe("Markdown rendering and sanitization", () => {
     expect(html).not.toContain("alert");
   });
 
-  test("strips img tags (remote image tracking)", async ({ page, request }) => {
+  test("strips remote img tags (image tracking)", async ({ page, request }) => {
     const slug = await createConversationViaAPI(
       request,
       "markdown: ![tracker](https://evil.com/pixel.gif) safe text",
@@ -54,6 +54,29 @@ test.describe("Markdown rendering and sanitization", () => {
     const html = await agent.innerHTML();
     expect(html).not.toContain("<img");
     expect(html).not.toContain("evil.com");
+  });
+
+  test("renders local images via the per-message file endpoint", async ({ page, request }) => {
+    // The "inline image" predictable pattern writes a tiny PNG into the
+    // conversation cwd (/tmp) via bash, then references it with relative-path
+    // markdown. The UI should rewrite the src to /api/message/{id}/file and
+    // load the bytes from the server.
+    const slug = await createConversationViaAPI(request, "inline image", { agentTimeout: 60000 });
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
+
+    const img = page.locator(".message-agent img").last();
+    await expect(img).toBeVisible({ timeout: 30000 });
+    const src = await img.getAttribute("src");
+    expect(src).toMatch(/^\/api\/message\/[^/]+\/file\?path=/);
+
+    // The browser should successfully fetch the image bytes (naturalWidth > 0
+    // only when the image actually loaded).
+    await expect
+      .poll(async () => img.evaluate((el: HTMLImageElement) => el.naturalWidth), {
+        timeout: 15000,
+      })
+      .toBeGreaterThan(0);
   });
 
   test("strips iframe tags", async ({ page, request }) => {
