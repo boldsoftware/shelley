@@ -28,7 +28,7 @@ type Service struct {
 	URL           string            // Gemini API URL, uses the gemini package default if empty
 	APIKey        string            // must be non-empty
 	Model         string            // defaults to DefaultModel if empty
-	ThinkingLevel llm.ThinkingLevel // thinking level (ThinkingLevelOff disables thinkingConfig)
+	ThinkingLevel llm.ThinkingLevel // service-level default; zero (ThinkingLevelDefault) leaves thinkingConfig at the model default
 
 	// ReasoningEffort, if non-empty, is used as the thinkingConfig.thinkingLevel
 	// value sent to Gemini 3.x verbatim, overriding ThinkingLevel. Ignored for
@@ -373,9 +373,6 @@ func (s *Service) thinkingConfig(req *llm.Request) *gemini.ThinkingConfig {
 		reqLevel = req.ThinkingLevel
 	}
 	level := llm.EffectiveThinkingLevel(s.ThinkingLevel, reqLevel)
-	if reqLevel == llm.ThinkingLevelOff {
-		level = llm.ThinkingLevelOff
-	}
 	if level == llm.ThinkingLevelDefault && s.ReasoningEffort == "" {
 		return nil
 	}

@@ -28,7 +28,7 @@ type ResponsesService struct {
 	ModelURL      string            // optional, overrides Model.URL
 	Org           string            // optional - organization ID
 	DumpLLM       bool              // whether to dump request/response text to files for debugging; defaults to false
-	ThinkingLevel llm.ThinkingLevel // thinking level (ThinkingLevelOff disables reasoning)
+	ThinkingLevel llm.ThinkingLevel // service-level default; zero (ThinkingLevelDefault) and ThinkingLevelOff both leave the field off the wire
 	ProviderName  string            // e.g., "openai"
 
 	// ReasoningEffort, if non-empty, is used as the reasoning.effort value sent to

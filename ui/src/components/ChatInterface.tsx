@@ -1964,6 +1964,19 @@ function ChatInterface({
     return modelObj?.display_name || selectedModel;
   })();
 
+  // Pull the conversation's reasoning effort out of conversation_options once
+  // per options-string change, rather than re-parsing on every render.
+  const conversationThinkingLevel = React.useMemo<string | null>(() => {
+    const raw = currentConversation?.conversation_options;
+    if (!raw) return null;
+    try {
+      const opts = JSON.parse(raw);
+      return opts?.thinking_level || null;
+    } catch {
+      return null;
+    }
+  }, [currentConversation?.conversation_options]);
+
   const handleUnarchive = async () => {
     if (!conversationId) return;
     try {
@@ -2283,14 +2296,7 @@ function ChatInterface({
           key={`model-bar-${generation}`}
           model={modelsByGeneration.get(generation) || currentConversation?.model}
           models={models}
-          thinkingLevel={(() => {
-            try {
-              const opts = JSON.parse(currentConversation?.conversation_options || "{}");
-              return opts?.thinking_level || null;
-            } catch {
-              return null;
-            }
-          })()}
+          thinkingLevel={conversationThinkingLevel}
         />,
       ];
       const systemMessages = systemMessagesByGeneration.get(generation) || [];

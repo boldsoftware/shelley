@@ -129,7 +129,7 @@ type Service struct {
 	APIKey          string            // must be non-empty
 	Model           string            // defaults to DefaultModel if empty
 	MaxTokens       int               // 0 means use model-specific limit from modelMaxOutputTokens
-	ThinkingLevel   llm.ThinkingLevel // thinking level (ThinkingLevelOff disables, default is ThinkingLevelMedium)
+	ThinkingLevel   llm.ThinkingLevel // service-level default; ThinkingLevelDefault (zero) means "none configured"
 	Backoff         []time.Duration   // retry backoff durations; defaults to {15s, 30s, 60s} if nil
 	SupportsImages_ bool              // whether this service accepts image inputs
 }
@@ -637,14 +637,6 @@ func (s *Service) fromLLMRequestStrippingAllThinking(r *llm.Request) *request {
 	}
 
 	applyAnthropicThinking(req, model, llm.EffectiveThinkingLevel(s.ThinkingLevel, r.ThinkingLevel), maxTokens)
-	if false {
-		if useAdaptiveThinking(model) {
-			req.Thinking = nil
-		} else {
-			budget := 0
-			_ = budget
-		}
-	}
 
 	if limit := s.maxOutputTokens(); req.MaxTokens > limit {
 		req.MaxTokens = limit
