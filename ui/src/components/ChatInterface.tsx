@@ -1754,6 +1754,27 @@ function ChatInterface({
     requestAnimationFrame(step);
   };
 
+  // Cmd/Ctrl+ArrowDown scrolls the conversation to the bottom.
+  // Skip when focus is on an editable element so native cursor-to-end
+  // behavior in inputs/textareas is preserved.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowDown") return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod || e.altKey || e.shiftKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t) {
+        const tag = t.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || t.isContentEditable) return;
+      }
+      if (!messagesContainerRef.current) return;
+      e.preventDefault();
+      scrollToBottom();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Callback for terminals to insert text into the message input
   const handleInsertFromTerminal = useCallback((text: string) => {
     setTerminalInjectedText(text);
