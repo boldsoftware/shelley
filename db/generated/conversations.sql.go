@@ -370,9 +370,33 @@ func (q *Queries) IncrementConversationGeneration(ctx context.Context, conversat
 }
 
 const listAllConversations = `-- name: ListAllConversations :many
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags FROM conversations
-WHERE archived = FALSE
-ORDER BY updated_at DESC
+SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags,
+  -- preview_packed: locate the newest agent message that actually contains a
+  -- text block (the EXISTS short-circuits on the first one), then pull that
+  -- block. The outer ORDER BY rides idx_messages_conv_type_seq, so we stop at
+  -- the first qualifying message instead of expanding and globally sorting
+  -- every agent message's content blocks. The first 20 bytes are the fixed
+  -- RFC3339 timestamp (strftime '%Y-%m-%dT%H:%M:%SZ'); the rest is the preview
+  -- text capped to 300 chars so we don't haul multi-KB replies across the
+  -- driver + JSON + gzip for a one-line UI field. db.splitPreviewPacked splits
+  -- it back apart.
+  CAST(COALESCE((
+    SELECT strftime('%Y-%m-%dT%H:%M:%SZ', m.created_at) || substr((
+             SELECT je.value ->> 'Text'
+               FROM json_each(m.llm_data, '$.Content') je
+              WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> ''
+              ORDER BY je.key DESC LIMIT 1), 1, 300)
+      FROM messages m
+     WHERE m.conversation_id = c.conversation_id AND m.type = 'agent'
+       AND EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') je
+                   WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> '')
+     ORDER BY m.sequence_id DESC LIMIT 1), '') AS TEXT) AS preview_packed,
+  CAST(COALESCE((
+    SELECT MAX(m.sequence_id) FROM messages m
+     WHERE m.conversation_id = c.conversation_id), 0) AS INTEGER) AS max_sequence_id
+FROM conversations c
+WHERE c.archived = FALSE
+ORDER BY c.updated_at DESC
 LIMIT ? OFFSET ?
 `
 
@@ -381,32 +405,40 @@ type ListAllConversationsParams struct {
 	Offset int64 `json:"offset"`
 }
 
+type ListAllConversationsRow struct {
+	Conversation  Conversation `json:"conversation"`
+	PreviewPacked string       `json:"preview_packed"`
+	MaxSequenceID int64        `json:"max_sequence_id"`
+}
+
 // Like ListConversations but includes subagents. Used by the conversation
 // list patch stream so the UI can render subagents inline and pick up their
 // working state from diffs alone.
-func (q *Queries) ListAllConversations(ctx context.Context, arg ListAllConversationsParams) ([]Conversation, error) {
+func (q *Queries) ListAllConversations(ctx context.Context, arg ListAllConversationsParams) ([]ListAllConversationsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listAllConversations, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Conversation{}
+	items := []ListAllConversationsRow{}
 	for rows.Next() {
-		var i Conversation
+		var i ListAllConversationsRow
 		if err := rows.Scan(
-			&i.ConversationID,
-			&i.Slug,
-			&i.UserInitiated,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Cwd,
-			&i.Archived,
-			&i.ParentConversationID,
-			&i.Model,
-			&i.ConversationOptions,
-			&i.CurrentGeneration,
-			&i.AgentWorking,
-			&i.Tags,
+			&i.Conversation.ConversationID,
+			&i.Conversation.Slug,
+			&i.Conversation.UserInitiated,
+			&i.Conversation.CreatedAt,
+			&i.Conversation.UpdatedAt,
+			&i.Conversation.Cwd,
+			&i.Conversation.Archived,
+			&i.Conversation.ParentConversationID,
+			&i.Conversation.Model,
+			&i.Conversation.ConversationOptions,
+			&i.Conversation.CurrentGeneration,
+			&i.Conversation.AgentWorking,
+			&i.Conversation.Tags,
+			&i.PreviewPacked,
+			&i.MaxSequenceID,
 		); err != nil {
 			return nil, err
 		}
@@ -471,9 +503,33 @@ func (q *Queries) ListArchivedConversations(ctx context.Context, arg ListArchive
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags FROM conversations
-WHERE archived = FALSE AND parent_conversation_id IS NULL
-ORDER BY updated_at DESC
+SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags,
+  -- preview_packed: locate the newest agent message that actually contains a
+  -- text block (the EXISTS short-circuits on the first one), then pull that
+  -- block. The outer ORDER BY rides idx_messages_conv_type_seq, so we stop at
+  -- the first qualifying message instead of expanding and globally sorting
+  -- every agent message's content blocks. The first 20 bytes are the fixed
+  -- RFC3339 timestamp (strftime '%Y-%m-%dT%H:%M:%SZ'); the rest is the preview
+  -- text capped to 300 chars so we don't haul multi-KB replies across the
+  -- driver + JSON + gzip for a one-line UI field. db.splitPreviewPacked splits
+  -- it back apart.
+  CAST(COALESCE((
+    SELECT strftime('%Y-%m-%dT%H:%M:%SZ', m.created_at) || substr((
+             SELECT je.value ->> 'Text'
+               FROM json_each(m.llm_data, '$.Content') je
+              WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> ''
+              ORDER BY je.key DESC LIMIT 1), 1, 300)
+      FROM messages m
+     WHERE m.conversation_id = c.conversation_id AND m.type = 'agent'
+       AND EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') je
+                   WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> '')
+     ORDER BY m.sequence_id DESC LIMIT 1), '') AS TEXT) AS preview_packed,
+  CAST(COALESCE((
+    SELECT MAX(m.sequence_id) FROM messages m
+     WHERE m.conversation_id = c.conversation_id), 0) AS INTEGER) AS max_sequence_id
+FROM conversations c
+WHERE c.archived = FALSE AND c.parent_conversation_id IS NULL
+ORDER BY c.updated_at DESC
 LIMIT ? OFFSET ?
 `
 
@@ -482,29 +538,37 @@ type ListConversationsParams struct {
 	Offset int64 `json:"offset"`
 }
 
-func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error) {
+type ListConversationsRow struct {
+	Conversation  Conversation `json:"conversation"`
+	PreviewPacked string       `json:"preview_packed"`
+	MaxSequenceID int64        `json:"max_sequence_id"`
+}
+
+func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsParams) ([]ListConversationsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listConversations, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Conversation{}
+	items := []ListConversationsRow{}
 	for rows.Next() {
-		var i Conversation
+		var i ListConversationsRow
 		if err := rows.Scan(
-			&i.ConversationID,
-			&i.Slug,
-			&i.UserInitiated,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Cwd,
-			&i.Archived,
-			&i.ParentConversationID,
-			&i.Model,
-			&i.ConversationOptions,
-			&i.CurrentGeneration,
-			&i.AgentWorking,
-			&i.Tags,
+			&i.Conversation.ConversationID,
+			&i.Conversation.Slug,
+			&i.Conversation.UserInitiated,
+			&i.Conversation.CreatedAt,
+			&i.Conversation.UpdatedAt,
+			&i.Conversation.Cwd,
+			&i.Conversation.Archived,
+			&i.Conversation.ParentConversationID,
+			&i.Conversation.Model,
+			&i.Conversation.ConversationOptions,
+			&i.Conversation.CurrentGeneration,
+			&i.Conversation.AgentWorking,
+			&i.Conversation.Tags,
+			&i.PreviewPacked,
+			&i.MaxSequenceID,
 		); err != nil {
 			return nil, err
 		}
@@ -583,9 +647,33 @@ func (q *Queries) SearchArchivedConversations(ctx context.Context, arg SearchArc
 }
 
 const searchConversations = `-- name: SearchConversations :many
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags FROM conversations
-WHERE slug LIKE '%' || ? || '%' AND archived = FALSE AND parent_conversation_id IS NULL
-ORDER BY updated_at DESC
+SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags,
+  -- preview_packed: locate the newest agent message that actually contains a
+  -- text block (the EXISTS short-circuits on the first one), then pull that
+  -- block. The outer ORDER BY rides idx_messages_conv_type_seq, so we stop at
+  -- the first qualifying message instead of expanding and globally sorting
+  -- every agent message's content blocks. The first 20 bytes are the fixed
+  -- RFC3339 timestamp (strftime '%Y-%m-%dT%H:%M:%SZ'); the rest is the preview
+  -- text capped to 300 chars so we don't haul multi-KB replies across the
+  -- driver + JSON + gzip for a one-line UI field. db.splitPreviewPacked splits
+  -- it back apart.
+  CAST(COALESCE((
+    SELECT strftime('%Y-%m-%dT%H:%M:%SZ', m.created_at) || substr((
+             SELECT je.value ->> 'Text'
+               FROM json_each(m.llm_data, '$.Content') je
+              WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> ''
+              ORDER BY je.key DESC LIMIT 1), 1, 300)
+      FROM messages m
+     WHERE m.conversation_id = c.conversation_id AND m.type = 'agent'
+       AND EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') je
+                   WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> '')
+     ORDER BY m.sequence_id DESC LIMIT 1), '') AS TEXT) AS preview_packed,
+  CAST(COALESCE((
+    SELECT MAX(m.sequence_id) FROM messages m
+     WHERE m.conversation_id = c.conversation_id), 0) AS INTEGER) AS max_sequence_id
+FROM conversations c
+WHERE c.slug LIKE '%' || ? || '%' AND c.archived = FALSE AND c.parent_conversation_id IS NULL
+ORDER BY c.updated_at DESC
 LIMIT ? OFFSET ?
 `
 
@@ -595,29 +683,37 @@ type SearchConversationsParams struct {
 	Offset  int64   `json:"offset"`
 }
 
-func (q *Queries) SearchConversations(ctx context.Context, arg SearchConversationsParams) ([]Conversation, error) {
+type SearchConversationsRow struct {
+	Conversation  Conversation `json:"conversation"`
+	PreviewPacked string       `json:"preview_packed"`
+	MaxSequenceID int64        `json:"max_sequence_id"`
+}
+
+func (q *Queries) SearchConversations(ctx context.Context, arg SearchConversationsParams) ([]SearchConversationsRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchConversations, arg.Column1, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Conversation{}
+	items := []SearchConversationsRow{}
 	for rows.Next() {
-		var i Conversation
+		var i SearchConversationsRow
 		if err := rows.Scan(
-			&i.ConversationID,
-			&i.Slug,
-			&i.UserInitiated,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Cwd,
-			&i.Archived,
-			&i.ParentConversationID,
-			&i.Model,
-			&i.ConversationOptions,
-			&i.CurrentGeneration,
-			&i.AgentWorking,
-			&i.Tags,
+			&i.Conversation.ConversationID,
+			&i.Conversation.Slug,
+			&i.Conversation.UserInitiated,
+			&i.Conversation.CreatedAt,
+			&i.Conversation.UpdatedAt,
+			&i.Conversation.Cwd,
+			&i.Conversation.Archived,
+			&i.Conversation.ParentConversationID,
+			&i.Conversation.Model,
+			&i.Conversation.ConversationOptions,
+			&i.Conversation.CurrentGeneration,
+			&i.Conversation.AgentWorking,
+			&i.Conversation.Tags,
+			&i.PreviewPacked,
+			&i.MaxSequenceID,
 		); err != nil {
 			return nil, err
 		}
@@ -639,7 +735,31 @@ WITH fts_hits AS (
   JOIN messages_fts ON messages_fts.rowid = m.rowid
   WHERE messages_fts MATCH ?4
 )
-SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags FROM conversations c
+SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags,
+  -- preview_packed: locate the newest agent message that actually contains a
+  -- text block (the EXISTS short-circuits on the first one), then pull that
+  -- block. The outer ORDER BY rides idx_messages_conv_type_seq, so we stop at
+  -- the first qualifying message instead of expanding and globally sorting
+  -- every agent message's content blocks. The first 20 bytes are the fixed
+  -- RFC3339 timestamp (strftime '%Y-%m-%dT%H:%M:%SZ'); the rest is the preview
+  -- text capped to 300 chars so we don't haul multi-KB replies across the
+  -- driver + JSON + gzip for a one-line UI field. db.splitPreviewPacked splits
+  -- it back apart.
+  CAST(COALESCE((
+    SELECT strftime('%Y-%m-%dT%H:%M:%SZ', m.created_at) || substr((
+             SELECT je.value ->> 'Text'
+               FROM json_each(m.llm_data, '$.Content') je
+              WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> ''
+              ORDER BY je.key DESC LIMIT 1), 1, 300)
+      FROM messages m
+     WHERE m.conversation_id = c.conversation_id AND m.type = 'agent'
+       AND EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') je
+                   WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> '')
+     ORDER BY m.sequence_id DESC LIMIT 1), '') AS TEXT) AS preview_packed,
+  CAST(COALESCE((
+    SELECT MAX(m.sequence_id) FROM messages m
+     WHERE m.conversation_id = c.conversation_id), 0) AS INTEGER) AS max_sequence_id
+FROM conversations c
 WHERE c.parent_conversation_id IS NULL
   AND (
     c.slug LIKE ?1 ESCAPE '\'
@@ -656,11 +776,17 @@ type SearchConversationsFTSListParams struct {
 	FtsMatch *string `json:"fts_match"`
 }
 
+type SearchConversationsFTSListRow struct {
+	Conversation  Conversation `json:"conversation"`
+	PreviewPacked string       `json:"preview_packed"`
+	MaxSequenceID int64        `json:"max_sequence_id"`
+}
+
 // Top-level conversations (active first, then archived) matching either a
 // slug substring or an FTS5 MATCH against messages_fts. The caller builds
 // both the LIKE pattern (with %, _, \ pre-escaped) and the MATCH
 // expression from user input.
-func (q *Queries) SearchConversationsFTSList(ctx context.Context, arg SearchConversationsFTSListParams) ([]Conversation, error) {
+func (q *Queries) SearchConversationsFTSList(ctx context.Context, arg SearchConversationsFTSListParams) ([]SearchConversationsFTSListRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchConversationsFTSList,
 		arg.SlugLike,
 		arg.Offset,
@@ -671,23 +797,25 @@ func (q *Queries) SearchConversationsFTSList(ctx context.Context, arg SearchConv
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Conversation{}
+	items := []SearchConversationsFTSListRow{}
 	for rows.Next() {
-		var i Conversation
+		var i SearchConversationsFTSListRow
 		if err := rows.Scan(
-			&i.ConversationID,
-			&i.Slug,
-			&i.UserInitiated,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Cwd,
-			&i.Archived,
-			&i.ParentConversationID,
-			&i.Model,
-			&i.ConversationOptions,
-			&i.CurrentGeneration,
-			&i.AgentWorking,
-			&i.Tags,
+			&i.Conversation.ConversationID,
+			&i.Conversation.Slug,
+			&i.Conversation.UserInitiated,
+			&i.Conversation.CreatedAt,
+			&i.Conversation.UpdatedAt,
+			&i.Conversation.Cwd,
+			&i.Conversation.Archived,
+			&i.Conversation.ParentConversationID,
+			&i.Conversation.Model,
+			&i.Conversation.ConversationOptions,
+			&i.Conversation.CurrentGeneration,
+			&i.Conversation.AgentWorking,
+			&i.Conversation.Tags,
+			&i.PreviewPacked,
+			&i.MaxSequenceID,
 		); err != nil {
 			return nil, err
 		}
@@ -764,7 +892,24 @@ func (q *Queries) SearchConversationsFTSSnippets(ctx context.Context, arg Search
 }
 
 const searchConversationsWithMessages = `-- name: SearchConversationsWithMessages :many
-SELECT DISTINCT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags FROM conversations c
+SELECT DISTINCT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags,
+  -- See preview_packed note on ListConversations. Inner messages alias is
+  -- pm here to avoid colliding with the outer LEFT JOIN messages m.
+  CAST(COALESCE((
+    SELECT strftime('%Y-%m-%dT%H:%M:%SZ', pm.created_at) || substr((
+             SELECT je.value ->> 'Text'
+               FROM json_each(pm.llm_data, '$.Content') je
+              WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> ''
+              ORDER BY je.key DESC LIMIT 1), 1, 300)
+      FROM messages pm
+     WHERE pm.conversation_id = c.conversation_id AND pm.type = 'agent'
+       AND EXISTS (SELECT 1 FROM json_each(pm.llm_data, '$.Content') je
+                   WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> '')
+     ORDER BY pm.sequence_id DESC LIMIT 1), '') AS TEXT) AS preview_packed,
+  CAST(COALESCE((
+    SELECT MAX(pm.sequence_id) FROM messages pm
+     WHERE pm.conversation_id = c.conversation_id), 0) AS INTEGER) AS max_sequence_id
+FROM conversations c
 LEFT JOIN messages m ON c.conversation_id = m.conversation_id AND m.type IN ('user', 'agent')
 WHERE c.archived = FALSE
   AND (
@@ -784,9 +929,15 @@ type SearchConversationsWithMessagesParams struct {
 	Offset  int64   `json:"offset"`
 }
 
+type SearchConversationsWithMessagesRow struct {
+	Conversation  Conversation `json:"conversation"`
+	PreviewPacked string       `json:"preview_packed"`
+	MaxSequenceID int64        `json:"max_sequence_id"`
+}
+
 // Search conversations by slug OR message content (user messages and agent responses, not system prompts)
 // Includes both top-level conversations and subagent conversations
-func (q *Queries) SearchConversationsWithMessages(ctx context.Context, arg SearchConversationsWithMessagesParams) ([]Conversation, error) {
+func (q *Queries) SearchConversationsWithMessages(ctx context.Context, arg SearchConversationsWithMessagesParams) ([]SearchConversationsWithMessagesRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchConversationsWithMessages,
 		arg.Column1,
 		arg.Column2,
@@ -798,23 +949,25 @@ func (q *Queries) SearchConversationsWithMessages(ctx context.Context, arg Searc
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Conversation{}
+	items := []SearchConversationsWithMessagesRow{}
 	for rows.Next() {
-		var i Conversation
+		var i SearchConversationsWithMessagesRow
 		if err := rows.Scan(
-			&i.ConversationID,
-			&i.Slug,
-			&i.UserInitiated,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Cwd,
-			&i.Archived,
-			&i.ParentConversationID,
-			&i.Model,
-			&i.ConversationOptions,
-			&i.CurrentGeneration,
-			&i.AgentWorking,
-			&i.Tags,
+			&i.Conversation.ConversationID,
+			&i.Conversation.Slug,
+			&i.Conversation.UserInitiated,
+			&i.Conversation.CreatedAt,
+			&i.Conversation.UpdatedAt,
+			&i.Conversation.Cwd,
+			&i.Conversation.Archived,
+			&i.Conversation.ParentConversationID,
+			&i.Conversation.Model,
+			&i.Conversation.ConversationOptions,
+			&i.Conversation.CurrentGeneration,
+			&i.Conversation.AgentWorking,
+			&i.Conversation.Tags,
+			&i.PreviewPacked,
+			&i.MaxSequenceID,
 		); err != nil {
 			return nil, err
 		}

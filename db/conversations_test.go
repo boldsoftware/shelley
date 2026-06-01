@@ -827,3 +827,30 @@ func TestUnarchivePreservesSortOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestSplitPreviewPacked(t *testing.T) {
+	const ts = "2026-06-01T21:51:28Z" // exactly previewTimestampLen bytes
+	tests := []struct {
+		name          string
+		packed        string
+		wantPreview   string
+		wantUpdatedAt string
+	}{
+		{"empty", "", "", ""},
+		{"timestamp only", ts, "", ts},
+		{"timestamp and text", ts + "hello world", "hello world", ts},
+		{"shorter than timestamp", "abc", "", ""},
+		{"multibyte text preserved", ts + "héllo\u00e9", "héllo\u00e9", ts},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			preview, updatedAt := splitPreviewPacked(tt.packed)
+			if preview != tt.wantPreview {
+				t.Errorf("preview = %q, want %q", preview, tt.wantPreview)
+			}
+			if updatedAt != tt.wantUpdatedAt {
+				t.Errorf("updatedAt = %q, want %q", updatedAt, tt.wantUpdatedAt)
+			}
+		})
+	}
+}

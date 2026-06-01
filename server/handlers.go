@@ -829,9 +829,14 @@ func (s *Server) searchConversationsFTSWithState(ctx context.Context, query stri
 	if err != nil {
 		return nil, err
 	}
-	conversations := make([]generated.Conversation, len(hits))
+	conversations := make([]db.ConversationListItem, len(hits))
 	for i, h := range hits {
-		conversations[i] = h.Conversation
+		conversations[i] = db.ConversationListItem{
+			Conversation:     h.Conversation,
+			Preview:          h.Preview,
+			PreviewUpdatedAt: h.PreviewUpdatedAt,
+			MaxSequenceID:    h.MaxSequenceID,
+		}
 	}
 	decorated, err := s.decorateConversations(ctx, conversations)
 	if err != nil {
@@ -847,7 +852,7 @@ func (s *Server) searchConversationsFTSWithState(ctx context.Context, query stri
 // patch stream. When includeSubagents is true the result also contains
 // subagent conversations so the UI can render and diff their working state.
 func (s *Server) conversationListWithStateInternal(ctx context.Context, limit, offset int, query string, searchContent, includeSubagents bool) ([]ConversationWithState, error) {
-	var conversations []generated.Conversation
+	var conversations []db.ConversationListItem
 	var err error
 	if query != "" {
 		if searchContent {
@@ -866,9 +871,13 @@ func (s *Server) conversationListWithStateInternal(ctx context.Context, limit, o
 	return s.decorateConversations(ctx, conversations)
 }
 
-// decorateConversations wraps a list of raw conversation rows with the
-// preview/working/subagent/git metadata used by the conversation list UI.
-func (s *Server) decorateConversations(ctx context.Context, conversations []generated.Conversation) ([]ConversationWithState, error) {
+// decorateConversations wraps a list of conversation list items with the
+// working/subagent/git metadata used by the conversation list UI. The
+// preview, preview timestamp and max sequence_id are already carried on each
+// item (computed in the very query that listed the conversations, scoped to
+// the visible window — see db.ConversationListItem), so decorate just copies
+// them across rather than running a separate previews/max-sequence query.
+func (s *Server) decorateConversations(ctx context.Context, conversations []db.ConversationListItem) ([]ConversationWithState, error) {
 	// Working state lives on the conversation row itself (see
 	// ResetAllAgentWorking on startup + SetConversationAgentWorking on every
 	// transition), so we don't have to consult the in-memory manager map.
@@ -878,29 +887,17 @@ func (s *Server) decorateConversations(ctx context.Context, conversations []gene
 		subagentCounts = make(map[string]int64)
 	}
 
-	previews, err := s.loadConversationPreviews(ctx)
-	if err != nil {
-		s.logger.Error("Failed to load conversation previews", "error", err)
-		previews = nil
-	}
-
-	maxSeqs, err := s.db.GetMaxSequenceIDsForAllConversations(ctx)
-	if err != nil {
-		s.logger.Error("Failed to load max sequence IDs", "error", err)
-		maxSeqs = nil
-	}
-
 	now := time.Now()
 	result := make([]ConversationWithState, len(conversations))
-	for i, conv := range conversations {
-		pv := previews[conv.ConversationID]
+	for i, item := range conversations {
+		conv := item.Conversation
 		cws := ConversationWithState{
 			Conversation:     conv,
 			Working:          conv.AgentWorking,
 			SubagentCount:    subagentCounts[conv.ConversationID],
-			Preview:          pv.text,
-			PreviewUpdatedAt: pv.updatedAt,
-			MaxSequenceID:    maxSeqs[conv.ConversationID],
+			Preview:          item.Preview,
+			PreviewUpdatedAt: item.PreviewUpdatedAt,
+			MaxSequenceID:    item.MaxSequenceID,
 		}
 		if conv.Cwd != nil {
 			entry, ok := s.conversationListGitCache.get(*conv.Cwd, now)
@@ -2210,62 +2207,6 @@ func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"tools": claudetool.ToolRegistry,
 	})
-}
-
-// conversationPreview is the trailing agent message text plus its
-// timestamp, embedded per-row in the conversation list snapshot/stream.
-type conversationPreview struct {
-	text      string
-	updatedAt string
-}
-
-// loadConversationPreviews returns the most recent non-empty agent
-// message text for each unarchived conversation (parents and subagents
-// alike). The query returns the 5 most recent agent messages per
-// conversation (DESC) for the 500 most recently updated conversations;
-// we walk that list and take the first one with a non-empty text block
-// so a tail of tool-only responses doesn't leave the conversation
-// without a preview. Conversations outside that window render with
-// empty preview fields.
-func (s *Server) loadConversationPreviews(ctx context.Context) (map[string]conversationPreview, error) {
-	var messages []generated.GetLatestAgentMessagesForConversationsRow
-	err := s.db.Queries(ctx, func(q *generated.Queries) error {
-		var err error
-		messages, err = q.GetLatestAgentMessagesForConversations(ctx)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]conversationPreview)
-	for _, msg := range messages {
-		if _, done := result[msg.ConversationID]; done {
-			continue // we already have the most recent non-empty preview for this conv
-		}
-		if msg.LlmData == nil {
-			continue
-		}
-		var llmMsg llm.Message
-		if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err != nil {
-			continue
-		}
-		// Use the last text block in this message — in agent messages
-		// with tool calls, the final text block is typically the
-		// summary/conclusion.
-		var text string
-		for _, c := range llmMsg.Content {
-			if c.Type == llm.ContentTypeText && c.Text != "" {
-				text = c.Text
-			}
-		}
-		if text != "" {
-			result[msg.ConversationID] = conversationPreview{
-				text:      text,
-				updatedAt: msg.CreatedAt.UTC().Format(time.RFC3339),
-			}
-		}
-	}
-	return result, nil
 }
 
 // handleSearchConversations handles GET /api/conversations/search?q=...

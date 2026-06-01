@@ -358,70 +358,148 @@ func (db *DB) GetConversationBySlug(ctx context.Context, slug string) (*generate
 	return &conversation, err
 }
 
+// ConversationListItem is a conversation row plus the three derived fields the
+// conversation list needs but that don't live on the conversation row: a
+// one-line preview of the trailing agent message, that message's timestamp,
+// and the conversation's current max sequence_id. All three are computed by
+// correlated subqueries IN the list/search query itself (see
+// conversations.sql), scoped to exactly the window of conversations returned,
+// so we never scan or JSON-decode messages for conversations off-window.
+type ConversationListItem struct {
+	generated.Conversation
+	Preview          string
+	PreviewUpdatedAt string // RFC 3339 (trailing Z), empty if there's no preview message
+	MaxSequenceID    int64
+}
+
+// previewTimestampLen is the fixed width of the RFC3339 timestamp
+// ("2006-01-02T15:04:05Z") that the list/search queries prepend to the
+// preview text in the preview_packed column. See the preview_packed note in
+// conversations.sql.
+const previewTimestampLen = len("2006-01-02T15:04:05Z")
+
+// splitPreviewPacked splits the preview_packed column back into its timestamp
+// and (already truncated) preview text. An empty packed value means the
+// conversation has no agent-message preview, so both results are empty.
+func splitPreviewPacked(packed string) (preview, updatedAt string) {
+	if len(packed) < previewTimestampLen {
+		return "", ""
+	}
+	return packed[previewTimestampLen:], packed[:previewTimestampLen]
+}
+
 // ListConversations retrieves conversations with pagination
-func (db *DB) ListConversations(ctx context.Context, limit, offset int64) ([]generated.Conversation, error) {
-	var conversations []generated.Conversation
+func (db *DB) ListConversations(ctx context.Context, limit, offset int64) ([]ConversationListItem, error) {
+	var items []ConversationListItem
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
 		q := generated.New(rx.Conn())
-		var err error
-		conversations, err = q.ListConversations(ctx, generated.ListConversationsParams{
+		rows, err := q.ListConversations(ctx, generated.ListConversationsParams{
 			Limit:  limit,
 			Offset: offset,
 		})
-		return err
+		if err != nil {
+			return err
+		}
+		items = make([]ConversationListItem, len(rows))
+		for i, r := range rows {
+			preview, updatedAt := splitPreviewPacked(r.PreviewPacked)
+			items[i] = ConversationListItem{
+				Conversation:     r.Conversation,
+				Preview:          preview,
+				PreviewUpdatedAt: updatedAt,
+				MaxSequenceID:    r.MaxSequenceID,
+			}
+		}
+		return nil
 	})
-	return conversations, err
+	return items, err
 }
 
 // ListAllConversations retrieves all conversations (including subagents) with pagination.
-func (db *DB) ListAllConversations(ctx context.Context, limit, offset int64) ([]generated.Conversation, error) {
-	var conversations []generated.Conversation
+func (db *DB) ListAllConversations(ctx context.Context, limit, offset int64) ([]ConversationListItem, error) {
+	var items []ConversationListItem
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
 		q := generated.New(rx.Conn())
-		var err error
-		conversations, err = q.ListAllConversations(ctx, generated.ListAllConversationsParams{
+		rows, err := q.ListAllConversations(ctx, generated.ListAllConversationsParams{
 			Limit:  limit,
 			Offset: offset,
 		})
-		return err
+		if err != nil {
+			return err
+		}
+		items = make([]ConversationListItem, len(rows))
+		for i, r := range rows {
+			preview, updatedAt := splitPreviewPacked(r.PreviewPacked)
+			items[i] = ConversationListItem{
+				Conversation:     r.Conversation,
+				Preview:          preview,
+				PreviewUpdatedAt: updatedAt,
+				MaxSequenceID:    r.MaxSequenceID,
+			}
+		}
+		return nil
 	})
-	return conversations, err
+	return items, err
 }
 
 // SearchConversations searches for conversations containing the given query in their slug
-func (db *DB) SearchConversations(ctx context.Context, query string, limit, offset int64) ([]generated.Conversation, error) {
+func (db *DB) SearchConversations(ctx context.Context, query string, limit, offset int64) ([]ConversationListItem, error) {
 	queryPtr := &query
-	var conversations []generated.Conversation
+	var items []ConversationListItem
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
 		q := generated.New(rx.Conn())
-		var err error
-		conversations, err = q.SearchConversations(ctx, generated.SearchConversationsParams{
+		rows, err := q.SearchConversations(ctx, generated.SearchConversationsParams{
 			Column1: queryPtr,
 			Limit:   limit,
 			Offset:  offset,
 		})
-		return err
+		if err != nil {
+			return err
+		}
+		items = make([]ConversationListItem, len(rows))
+		for i, r := range rows {
+			preview, updatedAt := splitPreviewPacked(r.PreviewPacked)
+			items[i] = ConversationListItem{
+				Conversation:     r.Conversation,
+				Preview:          preview,
+				PreviewUpdatedAt: updatedAt,
+				MaxSequenceID:    r.MaxSequenceID,
+			}
+		}
+		return nil
 	})
-	return conversations, err
+	return items, err
 }
 
 // SearchConversationsWithMessages searches for conversations containing the query in slug or message content
-func (db *DB) SearchConversationsWithMessages(ctx context.Context, query string, limit, offset int64) ([]generated.Conversation, error) {
+func (db *DB) SearchConversationsWithMessages(ctx context.Context, query string, limit, offset int64) ([]ConversationListItem, error) {
 	queryPtr := &query
-	var conversations []generated.Conversation
+	var items []ConversationListItem
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
 		q := generated.New(rx.Conn())
-		var err error
-		conversations, err = q.SearchConversationsWithMessages(ctx, generated.SearchConversationsWithMessagesParams{
+		rows, err := q.SearchConversationsWithMessages(ctx, generated.SearchConversationsWithMessagesParams{
 			Column1: queryPtr,
 			Column2: queryPtr,
 			Column3: queryPtr,
 			Limit:   limit,
 			Offset:  offset,
 		})
-		return err
+		if err != nil {
+			return err
+		}
+		items = make([]ConversationListItem, len(rows))
+		for i, r := range rows {
+			preview, updatedAt := splitPreviewPacked(r.PreviewPacked)
+			items[i] = ConversationListItem{
+				Conversation:     r.Conversation,
+				Preview:          preview,
+				PreviewUpdatedAt: updatedAt,
+				MaxSequenceID:    r.MaxSequenceID,
+			}
+		}
+		return nil
 	})
-	return conversations, err
+	return items, err
 }
 
 // ConversationSearchResult is a conversation with an optional snippet showing
@@ -431,6 +509,12 @@ func (db *DB) SearchConversationsWithMessages(ctx context.Context, query string,
 type ConversationSearchResult struct {
 	Conversation generated.Conversation
 	Snippet      string // empty if matched only by slug
+	// Preview, PreviewUpdatedAt and MaxSequenceID are the same derived
+	// conversation-list fields carried by ConversationListItem, computed in
+	// the search query itself (see SearchConversationsFTSList).
+	Preview          string
+	PreviewUpdatedAt string
+	MaxSequenceID    int64
 }
 
 // SnippetMarkStart and SnippetMarkEnd surround matched terms inside
@@ -482,8 +566,14 @@ func (db *DB) SearchConversationsFTS(ctx context.Context, query string, limit, o
 		results = make([]ConversationSearchResult, len(convs))
 		convIDs := make([]string, len(convs))
 		for i, c := range convs {
-			results[i] = ConversationSearchResult{Conversation: c}
-			convIDs[i] = c.ConversationID
+			preview, updatedAt := splitPreviewPacked(c.PreviewPacked)
+			results[i] = ConversationSearchResult{
+				Conversation:     c.Conversation,
+				Preview:          preview,
+				PreviewUpdatedAt: updatedAt,
+				MaxSequenceID:    c.MaxSequenceID,
+			}
+			convIDs[i] = c.Conversation.ConversationID
 		}
 		if len(convIDs) == 0 {
 			return nil

@@ -7,7 +7,6 @@ package generated
 
 import (
 	"context"
-	"time"
 )
 
 const countConsecutiveMessagesByType = `-- name: CountConsecutiveMessagesByType :one
@@ -132,86 +131,6 @@ WHERE message_id = ?
 func (q *Queries) DeleteMessage(ctx context.Context, messageID string) error {
 	_, err := q.db.ExecContext(ctx, deleteMessage, messageID)
 	return err
-}
-
-const getLatestAgentMessagesForConversations = `-- name: GetLatestAgentMessagesForConversations :many
-WITH recent_convs AS (
-  SELECT conversation_id
-  FROM conversations
-  WHERE archived = FALSE
-  ORDER BY updated_at DESC
-  LIMIT 500
-),
-ranked AS (
-  SELECT m.message_id, m.conversation_id, m.sequence_id, m.type,
-         m.llm_data, m.user_data, m.usage_data, m.created_at,
-         m.display_data, m.excluded_from_context, m.generation,
-         ROW_NUMBER() OVER (PARTITION BY m.conversation_id ORDER BY m.sequence_id DESC) AS rn
-  FROM messages m
-  INNER JOIN recent_convs c ON m.conversation_id = c.conversation_id
-  WHERE m.type = 'agent'
-)
-SELECT message_id, conversation_id, sequence_id, type,
-       llm_data, user_data, usage_data, created_at,
-       display_data, excluded_from_context, generation
-FROM ranked
-WHERE rn <= 5
-ORDER BY conversation_id, sequence_id DESC
-`
-
-type GetLatestAgentMessagesForConversationsRow struct {
-	MessageID           string    `json:"message_id"`
-	ConversationID      string    `json:"conversation_id"`
-	SequenceID          int64     `json:"sequence_id"`
-	Type                string    `json:"type"`
-	LlmData             *string   `json:"llm_data"`
-	UserData            *string   `json:"user_data"`
-	UsageData           *string   `json:"usage_data"`
-	CreatedAt           time.Time `json:"created_at"`
-	DisplayData         *string   `json:"display_data"`
-	ExcludedFromContext bool      `json:"excluded_from_context"`
-	Generation          int64     `json:"generation"`
-}
-
-// Returns the 5 most recent agent messages per unarchived conversation
-// (parents and subagents). The caller scans these to find the most recent
-// one with a non-empty text block - a tail of tool-only messages doesn't
-// leave the conversation with an empty preview. Bounded to the 500 most
-// recently updated conversations so the patch-stream recompute stays
-// cheap; anything outside the window renders with empty preview fields.
-func (q *Queries) GetLatestAgentMessagesForConversations(ctx context.Context) ([]GetLatestAgentMessagesForConversationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getLatestAgentMessagesForConversations)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetLatestAgentMessagesForConversationsRow{}
-	for rows.Next() {
-		var i GetLatestAgentMessagesForConversationsRow
-		if err := rows.Scan(
-			&i.MessageID,
-			&i.ConversationID,
-			&i.SequenceID,
-			&i.Type,
-			&i.LlmData,
-			&i.UserData,
-			&i.UsageData,
-			&i.CreatedAt,
-			&i.DisplayData,
-			&i.ExcludedFromContext,
-			&i.Generation,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getLatestMessage = `-- name: GetLatestMessage :one
