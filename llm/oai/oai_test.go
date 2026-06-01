@@ -1599,6 +1599,43 @@ func TestServiceDo(t *testing.T) {
 	}
 }
 
+func TestServiceDoOmitsMaxCompletionTokens(t *testing.T) {
+	var gotReq map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
+			t.Fatalf("decode req: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(openai.ChatCompletionResponse{
+			ID: "chatcmpl-test",
+			Choices: []openai.ChatCompletionChoice{{
+				Message:      openai.ChatCompletionMessage{Role: "assistant", Content: "ok"},
+				FinishReason: "stop",
+			}},
+		})
+	}))
+	defer server.Close()
+
+	svc := &Service{
+		APIKey:   "test-api-key",
+		Model:    Model{ModelName: "test-model"},
+		ModelURL: server.URL + "/v1",
+	}
+
+	_, err := svc.Do(context.Background(), &llm.Request{
+		Messages: []llm.Message{{
+			Role:    llm.MessageRoleUser,
+			Content: []llm.Content{{Type: llm.ContentTypeText, Text: "hi"}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if _, hasCap := gotReq["max_completion_tokens"]; hasCap {
+		t.Fatalf("max_completion_tokens present; body = %#v", gotReq)
+	}
+}
+
 func TestServiceDoProxyPlainTextError(t *testing.T) {
 	// Simulate a proxy returning a plain-text error (not JSON).
 	// Previously this would fail to parse as *openai.APIError and

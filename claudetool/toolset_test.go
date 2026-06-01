@@ -529,17 +529,17 @@ func TestNewToolSet_WebSearchForAnthropicModels(t *testing.T) {
 		})
 	}
 
-	// OpenAI models should have the OpenAI-flavored web_search tool
-	// (only when the service is the Responses-API-backed one).
-	t.Run("openai has web_search_preview", func(t *testing.T) {
+	// OpenAI models should have the OpenAI-flavored web_search tool (only
+	// when the service is the Responses-API-backed one).
+	t.Run("openai responses has web_search", func(t *testing.T) {
 		cfg := ToolSetConfig{
 			LLMProvider: provider,
 			ModelID:     "gpt-5.3-codex",
 			WorkingDir:  "/test",
 		}
 		ts := NewToolSet(context.Background(), cfg)
-		if !hasWebSearchToolOfType(ts, "web_search_preview") {
-			t.Error("expected web_search_preview tool for OpenAI model")
+		if !hasWebSearchToolOfType(ts, "web_search") {
+			t.Error("expected web_search tool for OpenAI Responses model")
 		}
 	})
 

@@ -1,6 +1,7 @@
 package oai
 
 import (
+	"bufio"
 	"bytes"
 	"cmp"
 	"context"
@@ -25,7 +26,6 @@ type ResponsesService struct {
 	APIKey        string            // optional, if not set will try to load from env var
 	Model         Model             // defaults to DefaultModel if zero value
 	ModelURL      string            // optional, overrides Model.URL
-	MaxTokens     int               // defaults to DefaultMaxTokens if zero
 	Org           string            // optional - organization ID
 	DumpLLM       bool              // whether to dump request/response text to files for debugging; defaults to false
 	ThinkingLevel llm.ThinkingLevel // thinking level (ThinkingLevelOff disables reasoning)
@@ -43,12 +43,14 @@ var _ llm.Service = (*ResponsesService)(nil)
 // Responses API request/response types
 
 type responsesRequest struct {
-	Model           string               `json:"model"`
-	Input           []responsesInputItem `json:"input"`
-	Tools           []responsesTool      `json:"tools,omitempty"`
-	ToolChoice      any                  `json:"tool_choice,omitempty"`
-	MaxOutputTokens int                  `json:"max_output_tokens,omitempty"`
-	Reasoning       *responsesReasoning  `json:"reasoning,omitempty"`
+	Model        string               `json:"model"`
+	Instructions string               `json:"instructions,omitempty"`
+	Store        bool                 `json:"store"`
+	Stream       bool                 `json:"stream"`
+	Input        []responsesInputItem `json:"input"`
+	Tools        []responsesTool      `json:"tools,omitempty"`
+	ToolChoice   any                  `json:"tool_choice,omitempty"`
+	Reasoning    *responsesReasoning  `json:"reasoning,omitempty"`
 }
 
 type responsesReasoning struct {
@@ -88,7 +90,7 @@ type responsesImageDetail string
 const responsesImageDetailAuto responsesImageDetail = "auto"
 
 type responsesTool struct {
-	Type        string          `json:"type"` // "function" or "web_search_preview"
+	Type        string          `json:"type"` // "function" or provider-hosted tool type
 	Name        string          `json:"name,omitempty"`
 	Description string          `json:"description,omitempty"`
 	Parameters  json.RawMessage `json:"parameters,omitempty"`
@@ -285,37 +287,16 @@ func fromLLMToolResponses(t *llm.Tool) responsesTool {
 	}
 }
 
-// fromLLMSystemResponses converts llm.SystemContent to Responses API input items
-func fromLLMSystemResponses(systemContent []llm.SystemContent) []responsesInputItem {
-	if len(systemContent) == 0 {
-		return nil
-	}
-
-	// Combine all system content into a single system message
-	var systemText string
-	for i, content := range systemContent {
-		if i > 0 && systemText != "" && content.Text != "" {
-			systemText += "\n"
+// responsesInstructionsFromLLMSystem converts llm.SystemContent to the
+// Responses API top-level instructions field.
+func responsesInstructionsFromLLMSystem(systemContent []llm.SystemContent) string {
+	var parts []string
+	for _, content := range systemContent {
+		if content.Text != "" {
+			parts = append(parts, content.Text)
 		}
-		systemText += content.Text
 	}
-
-	if systemText == "" {
-		return nil
-	}
-
-	return []responsesInputItem{
-		{
-			Type: "message",
-			Role: "user",
-			Content: []responsesContent{
-				{
-					Type: "input_text",
-					Text: systemText,
-				},
-			},
-		},
-	}
+	return strings.Join(parts, "\n")
 }
 
 // toLLMResponseFromResponses converts Responses API response to llm.Response
@@ -447,8 +428,6 @@ func (s *ResponsesService) toLLMUsageFromResponses(usage responsesUsage, headers
 
 func (s *ResponsesService) Provider() string { return s.ProviderName }
 
-// SupportsServerSideWebSearch reports that the Responses API supports the
-// OpenAI server-side `web_search_preview` tool.
 func (s *ResponsesService) SupportsServerSideWebSearch() bool { return true }
 
 // SupportsImages reports whether this service accepts image inputs.
@@ -499,20 +478,13 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 	httpc := cmp.Or(s.HTTPC, http.DefaultClient)
 	model := cmp.Or(s.Model, DefaultModel)
 
-	// Start with system messages if provided
 	var allInput []responsesInputItem
-	if len(ir.System) > 0 {
-		sysItems := fromLLMSystemResponses(ir.System)
-		allInput = append(allInput, sysItems...)
-	}
-
-	// Add regular messages
 	for _, msg := range ir.Messages {
 		items := fromLLMMessageResponses(msg)
 		allInput = append(allInput, items...)
 	}
 
-	// Convert tools. Server-side tools (e.g. web_search_preview) are passed
+	// Convert tools. Server-side tools (e.g. web_search) are passed
 	// through as their provider-specific type with no name/description/schema.
 	var tools []responsesTool
 	for _, t := range ir.Tools {
@@ -525,12 +497,18 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 		tools = append(tools, fromLLMToolResponses(t))
 	}
 
+	// Construct the full URL
+	baseURL := cmp.Or(s.ModelURL, model.URL, OpenAIURL)
+	fullURL := baseURL + "/responses"
+
 	// Create the request
 	req := responsesRequest{
-		Model:           model.ModelName,
-		Input:           allInput,
-		Tools:           tools,
-		MaxOutputTokens: cmp.Or(s.MaxTokens, DefaultMaxTokens),
+		Model:        model.ModelName,
+		Instructions: responsesInstructionsFromLLMSystem(ir.System),
+		Store:        false,
+		Stream:       true,
+		Input:        allInput,
+		Tools:        tools,
 	}
 
 	// Add reasoning if thinking is enabled. ReasoningEffort, if set, takes
@@ -548,10 +526,6 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 	if ir.ToolChoice != nil {
 		req.ToolChoice = fromLLMToolChoice(ir.ToolChoice)
 	}
-
-	// Construct the full URL
-	baseURL := cmp.Or(s.ModelURL, model.URL, OpenAIURL)
-	fullURL := baseURL + "/responses"
 
 	// Marshal the request
 	reqJSON, err := json.Marshal(req)
@@ -632,23 +606,20 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 			errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: %w", attempts+1, time.Now().Format(time.DateTime), err))
 			continue
 		}
-		defer httpResp.Body.Close()
-
-		// Read response body
-		body, err := io.ReadAll(httpResp.Body)
-		if err != nil {
-			if shouldRetryResponsesReadError(err) {
-				now := time.Now().Format(time.DateTime)
-				lastErrSummary = "read: " + llm.Truncate(err.Error(), 160)
-				slog.WarnContext(ctx, "responses_request_read_failed", "error", err, "url", fullURL, "model", model.ModelName)
-				errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: read response body (url=%s, model=%s): %w", attempts+1, now, fullURL, model.ModelName, err))
-				continue
-			}
-			return nil, errors.Join(errs, fmt.Errorf("attempt %d at %s: failed to read response body (url=%s, model=%s): %w", attempts+1, time.Now().Format(time.DateTime), fullURL, model.ModelName, err))
-		}
-
-		// Handle non-200 responses
 		if httpResp.StatusCode != http.StatusOK {
+			body, readErr := io.ReadAll(httpResp.Body)
+			httpResp.Body.Close()
+			if readErr != nil {
+				if shouldRetryResponsesReadError(readErr) {
+					now := time.Now().Format(time.DateTime)
+					lastErrSummary = "read: " + llm.Truncate(readErr.Error(), 160)
+					slog.WarnContext(ctx, "responses_request_read_failed", "error", readErr, "url", fullURL, "model", model.ModelName)
+					errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: read response body (url=%s, model=%s): %w", attempts+1, now, fullURL, model.ModelName, readErr))
+					continue
+				}
+				return nil, errors.Join(errs, fmt.Errorf("attempt %d at %s: failed to read response body (url=%s, model=%s): %w", attempts+1, time.Now().Format(time.DateTime), fullURL, model.ModelName, readErr))
+			}
+
 			var apiErr responsesError
 			if jsonErr := json.Unmarshal(body, &struct {
 				Error *responsesError `json:"error"`
@@ -684,16 +655,41 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 			return nil, fmt.Errorf("status %d (url=%s, model=%s): %s", httpResp.StatusCode, fullURL, model.ModelName, string(body))
 		}
 
-		// Parse successful response
 		var resp responsesResponse
-		if err := json.Unmarshal(body, &resp); err != nil {
-			if shouldRetryResponsesDecodeError(err, body) {
+		if responsesShouldParseStream(req, httpResp.Header) {
+			streamResp, err := parseResponsesSSEStream(httpResp.Body, ir.OnStream)
+			httpResp.Body.Close()
+			if err != nil {
 				now := time.Now().Format(time.DateTime)
-				slog.WarnContext(ctx, "responses_request_decode_failed", "error", err, "url", fullURL, "model", model.ModelName, "body_length", len(body))
-				errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: decode response body (url=%s, model=%s, bytes=%d): %w", attempts+1, now, fullURL, model.ModelName, len(body), err))
+				lastErrSummary = "stream: " + llm.Truncate(err.Error(), 160)
+				slog.WarnContext(ctx, "responses_request_stream_failed", "error", err, "url", fullURL, "model", model.ModelName)
+				errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: stream response body (url=%s, model=%s): %w", attempts+1, now, fullURL, model.ModelName, err))
 				continue
 			}
-			return nil, errors.Join(errs, fmt.Errorf("attempt %d at %s: failed to unmarshal response (url=%s, model=%s, bytes=%d): %w", attempts+1, time.Now().Format(time.DateTime), fullURL, model.ModelName, len(body), err))
+			resp = *streamResp
+		} else {
+			body, err := io.ReadAll(httpResp.Body)
+			httpResp.Body.Close()
+			if err != nil {
+				if shouldRetryResponsesReadError(err) {
+					now := time.Now().Format(time.DateTime)
+					lastErrSummary = "read: " + llm.Truncate(err.Error(), 160)
+					slog.WarnContext(ctx, "responses_request_read_failed", "error", err, "url", fullURL, "model", model.ModelName)
+					errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: read response body (url=%s, model=%s): %w", attempts+1, now, fullURL, model.ModelName, err))
+					continue
+				}
+				return nil, errors.Join(errs, fmt.Errorf("attempt %d at %s: failed to read response body (url=%s, model=%s): %w", attempts+1, time.Now().Format(time.DateTime), fullURL, model.ModelName, err))
+			}
+
+			if err := json.Unmarshal(body, &resp); err != nil {
+				if shouldRetryResponsesDecodeError(err, body) {
+					now := time.Now().Format(time.DateTime)
+					slog.WarnContext(ctx, "responses_request_decode_failed", "error", err, "url", fullURL, "model", model.ModelName, "body_length", len(body))
+					errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: decode response body (url=%s, model=%s, bytes=%d): %w", attempts+1, now, fullURL, model.ModelName, len(body), err))
+					continue
+				}
+				return nil, errors.Join(errs, fmt.Errorf("attempt %d at %s: failed to unmarshal response (url=%s, model=%s, bytes=%d): %w", attempts+1, time.Now().Format(time.DateTime), fullURL, model.ModelName, len(body), err))
+			}
 		}
 
 		// Check for errors in the response
@@ -716,6 +712,164 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 
 func shouldRetryResponsesReadError(err error) bool {
 	return errors.Is(err, io.ErrUnexpectedEOF)
+}
+
+type responsesSSEEvent struct {
+	EventType string
+	Data      string
+}
+
+type responsesStreamEvent struct {
+	Type         string               `json:"type"`
+	Response     *responsesResponse   `json:"response,omitempty"`
+	Error        *responsesError      `json:"error,omitempty"`
+	Message      string               `json:"message,omitempty"`
+	Delta        string               `json:"delta,omitempty"`
+	ContentIndex int                  `json:"content_index,omitempty"`
+	OutputIndex  int                  `json:"output_index,omitempty"`
+	Item         *responsesOutputItem `json:"item,omitempty"`
+}
+
+func responsesResponseIsSSE(h http.Header) bool {
+	return strings.Contains(strings.ToLower(h.Get("Content-Type")), "text/event-stream")
+}
+
+func responsesShouldParseStream(req responsesRequest, h http.Header) bool {
+	if responsesResponseIsSSE(h) {
+		return true
+	}
+	if !req.Stream {
+		return false
+	}
+	// The ChatGPT subscription backend currently streams SSE with
+	// Content-Type: text/plain. Treat stream=true as authoritative unless the
+	// server explicitly returns a JSON body.
+	return !strings.Contains(strings.ToLower(h.Get("Content-Type")), "json")
+}
+
+func iterResponsesSSEEvents(r io.Reader, yield func(responsesSSEEvent) error) error {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+
+	var (
+		eventType string
+		dataLines []string
+		hasData   bool
+	)
+
+	dispatch := func() error {
+		if !hasData {
+			eventType = ""
+			return nil
+		}
+		ev := responsesSSEEvent{
+			EventType: eventType,
+			Data:      strings.Join(dataLines, "\n"),
+		}
+		eventType = ""
+		dataLines = dataLines[:0]
+		hasData = false
+		return yield(ev)
+	}
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			if err := dispatch(); err != nil {
+				return err
+			}
+			continue
+		}
+		if strings.HasPrefix(line, ":") {
+			continue
+		}
+
+		field, value, ok := strings.Cut(line, ":")
+		if ok && strings.HasPrefix(value, " ") {
+			value = value[1:]
+		}
+		if !ok {
+			field = line
+			value = ""
+		}
+
+		switch field {
+		case "event":
+			eventType = value
+		case "data":
+			dataLines = append(dataLines, value)
+			hasData = true
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("reading SSE stream: %w", err)
+	}
+	return dispatch()
+}
+
+func parseResponsesSSEStream(r io.Reader, onStream func(llm.StreamDelta)) (*responsesResponse, error) {
+	var completed *responsesResponse
+	// Responses streams finalize message/tool output in output_item.done.
+	// response.completed may only carry completion metadata and usage.
+	var outputItems []responsesOutputItem
+	err := iterResponsesSSEEvents(r, func(sse responsesSSEEvent) error {
+		if sse.Data == "[DONE]" {
+			return nil
+		}
+
+		var event responsesStreamEvent
+		if err := json.Unmarshal([]byte(sse.Data), &event); err != nil {
+			return fmt.Errorf("parsing SSE event (event=%q): %w", sse.EventType, err)
+		}
+		eventType := event.Type
+		if eventType == "" {
+			eventType = sse.EventType
+		}
+
+		switch eventType {
+		case "response.output_text.delta":
+			if onStream != nil && event.Delta != "" {
+				onStream(llm.StreamDelta{Type: "text", Text: event.Delta, Index: event.ContentIndex})
+			}
+		case "response.reasoning_summary_text.delta":
+			if onStream != nil && event.Delta != "" {
+				onStream(llm.StreamDelta{Type: "thinking", Text: event.Delta, Index: event.ContentIndex})
+			}
+		case "response.output_item.done":
+			if event.Item != nil {
+				outputItems = append(outputItems, *event.Item)
+			}
+		case "response.completed", "response.incomplete":
+			if event.Response == nil {
+				return fmt.Errorf("%s event has no response", eventType)
+			}
+			completed = event.Response
+			if len(completed.Output) == 0 {
+				completed.Output = outputItems
+			}
+		case "response.failed":
+			if event.Response != nil && event.Response.Error != nil {
+				return fmt.Errorf("response failed: %s", event.Response.Error.Message)
+			}
+			return fmt.Errorf("response failed")
+		case "error":
+			if event.Error != nil && event.Error.Message != "" {
+				return fmt.Errorf("stream error event: %s", event.Error.Message)
+			}
+			if event.Message != "" {
+				return fmt.Errorf("stream error event: %s", event.Message)
+			}
+			return fmt.Errorf("stream error event: %s", sse.Data)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if completed == nil {
+		return nil, fmt.Errorf("incomplete stream: no response.completed event")
+	}
+	return completed, nil
 }
 
 func shouldRetryResponsesDecodeError(err error, body []byte) bool {

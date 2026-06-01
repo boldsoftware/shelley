@@ -18,8 +18,6 @@ import (
 )
 
 const (
-	DefaultMaxTokens = 32768
-
 	OpenAIURL    = "https://api.openai.com/v1"
 	FireworksURL = "https://api.fireworks.ai/inference/v1"
 	CerebrasURL  = "https://api.cerebras.ai/v1"
@@ -489,7 +487,6 @@ type Service struct {
 	APIKey       string          // optional, if not set will try to load from env var
 	Model        Model           // defaults to DefaultModel if zero value
 	ModelURL     string          // optional, overrides Model.URL
-	MaxTokens    int             // defaults to DefaultMaxTokens if zero
 	ProviderName string          // e.g., "openai", "fireworks"
 	Org          string          // optional - organization ID
 	Backoff      []time.Duration // retry backoff durations; defaults to {1s, 2s, 5s, 10s, 15s} if nil
@@ -1143,11 +1140,10 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 
 	// Create the OpenAI request
 	req := openai.ChatCompletionRequest{
-		Model:               model.ModelName,
-		Messages:            allMessages,
-		Tools:               tools,
-		ToolChoice:          fromLLMToolChoice(ir.ToolChoice), // TODO: make fromLLMToolChoice return an error when a perfect translation is not possible
-		MaxCompletionTokens: cmp.Or(s.MaxTokens, DefaultMaxTokens),
+		Model:      model.ModelName,
+		Messages:   allMessages,
+		Tools:      tools,
+		ToolChoice: fromLLMToolChoice(ir.ToolChoice), // TODO: make fromLLMToolChoice return an error when a perfect translation is not possible
 	}
 	// Construct the full URL for logging and debugging
 	fullURL := baseURL + "/chat/completions"

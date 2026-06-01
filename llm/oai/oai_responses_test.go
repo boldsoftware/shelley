@@ -3,6 +3,7 @@ package oai
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -271,23 +272,23 @@ func TestFromLLMToolResponses(t *testing.T) {
 	}
 }
 
-func TestFromLLMSystemResponses(t *testing.T) {
+func TestResponsesInstructionsFromLLMSystem(t *testing.T) {
 	tests := []struct {
-		name     string
-		system   []llm.SystemContent
-		expected int
+		name   string
+		system []llm.SystemContent
+		want   string
 	}{
 		{
-			name:     "empty system",
-			system:   []llm.SystemContent{},
-			expected: 0,
+			name:   "empty system",
+			system: []llm.SystemContent{},
+			want:   "",
 		},
 		{
 			name: "single system message",
 			system: []llm.SystemContent{
 				{Text: "You are a helpful assistant"},
 			},
-			expected: 1,
+			want: "You are a helpful assistant",
 		},
 		{
 			name: "multiple system messages",
@@ -295,15 +296,25 @@ func TestFromLLMSystemResponses(t *testing.T) {
 				{Text: "You are a helpful assistant"},
 				{Text: "Be concise"},
 			},
-			expected: 1, // should be combined into one message
+			want: "You are a helpful assistant\nBe concise",
+		},
+		{
+			name: "skips empty system messages",
+			system: []llm.SystemContent{
+				{Text: ""},
+				{Text: "You are a helpful assistant"},
+				{Text: ""},
+				{Text: "Be concise"},
+			},
+			want: "You are a helpful assistant\nBe concise",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			items := fromLLMSystemResponses(tt.system)
-			if len(items) != tt.expected {
-				t.Errorf("expected %d items, got %d", len(items), tt.expected)
+			got := responsesInstructionsFromLLMSystem(tt.system)
+			if got != tt.want {
+				t.Errorf("instructions = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -616,15 +627,107 @@ func TestResponsesServiceIntegration(t *testing.T) {
 	})
 }
 
-// Test system content with all empty text (should return nil)
-func TestFromLLMSystemResponsesAllEmpty(t *testing.T) {
-	items := fromLLMSystemResponses([]llm.SystemContent{
+func TestResponsesInstructionsFromLLMSystemAllEmpty(t *testing.T) {
+	instructions := responsesInstructionsFromLLMSystem([]llm.SystemContent{
 		{Text: ""},
 		{Text: ""},
 		{Text: ""},
 	})
-	if items != nil {
-		t.Errorf("fromLLMSystemResponses(all empty) = %v, expected nil", items)
+	if instructions != "" {
+		t.Errorf("responsesInstructionsFromLLMSystem(all empty) = %q, expected empty", instructions)
+	}
+}
+
+func TestResponsesServiceDoSendsSystemAsInstructions(t *testing.T) {
+	var gotReq responsesRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
+			t.Fatalf("decode req: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(responsesResponse{
+			ID:     "responses-test123",
+			Status: "completed",
+			Model:  "test-model",
+			Output: []responsesOutputItem{{Type: "message", Role: "assistant", Content: []responsesContent{{Type: "output_text", Text: "ok"}}}},
+			Usage:  responsesUsage{InputTokens: 10, OutputTokens: 20},
+		})
+	}))
+	defer server.Close()
+
+	svc := &ResponsesService{
+		APIKey:   "test-api-key",
+		Model:    GPT41,
+		ModelURL: server.URL,
+	}
+
+	_, err := svc.Do(context.Background(), &llm.Request{
+		System: []llm.SystemContent{
+			{Text: "You are a helpful assistant"},
+			{Text: "Be concise"},
+		},
+		Messages: []llm.Message{
+			{
+				Role: llm.MessageRoleUser,
+				Content: []llm.Content{
+					{Type: llm.ContentTypeText, Text: "Hello!"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+
+	if gotReq.Instructions != "You are a helpful assistant\nBe concise" {
+		t.Fatalf("instructions = %q", gotReq.Instructions)
+	}
+	if len(gotReq.Input) != 1 {
+		t.Fatalf("input = %+v, want only conversation message", gotReq.Input)
+	}
+	input := gotReq.Input[0]
+	if input.Type != "message" || input.Role != "user" || len(input.Content) != 1 {
+		t.Fatalf("input[0] = %+v, want user message", input)
+	}
+	if input.Content[0].Type != "input_text" || input.Content[0].Text != "Hello!" {
+		t.Fatalf("input[0].content[0] = %+v, want user text", input.Content[0])
+	}
+}
+
+func TestResponsesServiceDoOmitsMaxOutputTokens(t *testing.T) {
+	var gotReq map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
+			t.Fatalf("decode req: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(responsesResponse{
+			ID:     "responses-test",
+			Status: "completed",
+			Model:  "test-model",
+			Output: []responsesOutputItem{{Type: "message", Role: "assistant", Content: []responsesContent{{Type: "output_text", Text: "ok"}}}},
+			Usage:  responsesUsage{InputTokens: 1, OutputTokens: 1, TotalTokens: 2},
+		})
+	}))
+	defer server.Close()
+
+	svc := &ResponsesService{
+		APIKey:   "test-api-key",
+		Model:    Model{ModelName: "test-model"},
+		ModelURL: server.URL,
+	}
+
+	_, err := svc.Do(context.Background(), &llm.Request{
+		Messages: []llm.Message{{
+			Role:    llm.MessageRoleUser,
+			Content: []llm.Content{{Type: llm.ContentTypeText, Text: "hi"}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if _, hasCap := gotReq["max_output_tokens"]; hasCap {
+		t.Fatalf("max_output_tokens present; body = %#v", gotReq)
 	}
 }
 
@@ -729,6 +832,108 @@ func TestResponsesServiceDo(t *testing.T) {
 	// ContextWindowUsed = TotalInput + Output = 10 + 20 = 30
 	if resp.Usage.ContextWindowUsed() != 30 {
 		t.Errorf("resp.Usage.ContextWindowUsed() = %d, expected 30", resp.Usage.ContextWindowUsed())
+	}
+}
+
+func TestResponsesServiceDoConsumesPlainTextStream(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req responsesRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode req: %v", err)
+		}
+		if !req.Stream {
+			http.Error(w, "stream is required", http.StatusBadRequest)
+			return
+		}
+
+		response := responsesResponse{
+			ID:     "responses-stream-test",
+			Model:  "test-model",
+			Status: "completed",
+			Usage: responsesUsage{
+				InputTokens:  10,
+				OutputTokens: 20,
+			},
+		}
+		messageItem := responsesOutputItem{
+			Type: "message",
+			Role: "assistant",
+			Content: []responsesContent{
+				{Type: "output_text", Text: "streamed response"},
+			},
+		}
+		outputDone, err := json.Marshal(struct {
+			Type        string              `json:"type"`
+			OutputIndex int                 `json:"output_index"`
+			Item        responsesOutputItem `json:"item"`
+		}{
+			Type:        "response.output_item.done",
+			OutputIndex: 1,
+			Item:        messageItem,
+		})
+		if err != nil {
+			t.Fatalf("marshal output item event: %v", err)
+		}
+		completed, err := json.Marshal(struct {
+			Type     string            `json:"type"`
+			Response responsesResponse `json:"response"`
+		}{
+			Type:     "response.completed",
+			Response: response,
+		})
+		if err != nil {
+			t.Fatalf("marshal completed event: %v", err)
+		}
+		reasoningDone, err := json.Marshal(struct {
+			Type        string              `json:"type"`
+			OutputIndex int                 `json:"output_index"`
+			Item        responsesOutputItem `json:"item"`
+		}{
+			Type:        "response.output_item.done",
+			OutputIndex: 0,
+			Item: responsesOutputItem{
+				ID:      "reasoning-1",
+				Type:    "reasoning",
+				Summary: nil,
+			},
+		})
+		if err != nil {
+			t.Fatalf("marshal reasoning event: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprintf(w, "event: response.output_item.done\ndata: %s\n\n", reasoningDone)
+		fmt.Fprint(w, "event: response.output_text.delta\n")
+		fmt.Fprint(w, `data: {"type":"response.output_text.delta","delta":"streamed ","content_index":0}`)
+		fmt.Fprint(w, "\n\n")
+		fmt.Fprint(w, "event: response.output_text.delta\n")
+		fmt.Fprint(w, `data: {"type":"response.output_text.delta","delta":"response","content_index":0}`)
+		fmt.Fprint(w, "\n\n")
+		fmt.Fprintf(w, "event: response.output_item.done\ndata: %s\n\n", outputDone)
+		fmt.Fprintf(w, "event: response.completed\ndata: %s\n\n", completed)
+	}))
+	defer server.Close()
+
+	var streamed strings.Builder
+	svc := &ResponsesService{
+		APIKey:   "test-api-key",
+		Model:    GPT41,
+		ModelURL: server.URL,
+	}
+	resp, err := svc.Do(context.Background(), &llm.Request{
+		Messages: []llm.Message{{Role: llm.MessageRoleUser, Content: []llm.Content{{Type: llm.ContentTypeText, Text: "Hello!"}}}},
+		OnStream: func(delta llm.StreamDelta) {
+			streamed.WriteString(delta.Text)
+		},
+	})
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if got := resp.Content[0].Text; got != "streamed response" {
+		t.Fatalf("response text = %q, want streamed response", got)
+	}
+	if got := streamed.String(); got != "streamed response" {
+		t.Fatalf("streamed text = %q, want streamed response", got)
 	}
 }
 

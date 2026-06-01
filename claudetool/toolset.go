@@ -240,9 +240,9 @@ func NewOrchestratorToolSet(ctx context.Context, cfg OrchestratorToolSetConfig) 
 	}
 }
 
-// ServerSideWebSearchCapable is implemented by services that support the
-// OpenAI-style `web_search_preview` server-side tool. Only the Responses API
-// supports web search; the legacy Chat Completions API does not.
+// ServerSideWebSearchCapable is implemented by services that support OpenAI
+// server-side web search. Only the Responses API supports web search; the
+// legacy Chat Completions API does not.
 type ServerSideWebSearchCapable interface {
 	SupportsServerSideWebSearch() bool
 }
@@ -276,16 +276,15 @@ func serverSideTools(svc llm.Service) []*llm.Tool {
 			},
 		}
 	case "openai":
-		// Only OpenAI's Responses API supports server-side web search;
-		// skip Chat Completions services for OpenAI-compatible endpoints.
-		// https://platform.openai.com/docs/guides/tools-web-search
+		// Only OpenAI's Responses API supports server-side web search; skip
+		// Chat Completions services for OpenAI-compatible endpoints.
 		if c, ok := svc.(ServerSideWebSearchCapable); !ok || !c.SupportsServerSideWebSearch() {
 			return nil
 		}
 		return []*llm.Tool{
 			{
 				Name:       "web_search",
-				Type:       "web_search_preview",
+				Type:       "web_search",
 				ServerSide: true,
 			},
 		}
