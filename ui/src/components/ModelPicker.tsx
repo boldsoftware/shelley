@@ -1,5 +1,8 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Model } from "../types";
+
+const dropdownViewportGutterPx = 8;
+const dropdownMaxHeightPx = 500;
 
 interface ModelPickerProps {
   models: Model[];
@@ -18,6 +21,7 @@ function ModelPicker({
 }: ModelPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
+  const [dropdownMaxHeight, setDropdownMaxHeight] = useState(dropdownMaxHeightPx);
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -49,14 +53,39 @@ function ModelPicker({
     }
   }, [isOpen]);
 
-  // Open upward when there's more room above the trigger than below.
-  useEffect(() => {
-    if (isOpen && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      setOpenUpward(rect.top > spaceBelow);
+  const updateDropdownPlacement = useCallback(() => {
+    if (!containerRef.current) {
+      return;
     }
-  }, [isOpen]);
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const spaceAbove = Math.max(0, rect.top - dropdownViewportGutterPx);
+    const spaceBelow = Math.max(0, viewportHeight - rect.bottom - dropdownViewportGutterPx);
+    const shouldOpenUpward = spaceAbove > spaceBelow;
+    const availableSpace = shouldOpenUpward ? spaceAbove : spaceBelow;
+
+    setOpenUpward(shouldOpenUpward);
+    setDropdownMaxHeight(Math.min(dropdownMaxHeightPx, availableSpace));
+  }, []);
+
+  // Open toward the larger side and cap height to the visible viewport.
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    updateDropdownPlacement();
+    window.addEventListener("resize", updateDropdownPlacement);
+    window.visualViewport?.addEventListener("resize", updateDropdownPlacement);
+    window.visualViewport?.addEventListener("scroll", updateDropdownPlacement);
+
+    return () => {
+      window.removeEventListener("resize", updateDropdownPlacement);
+      window.visualViewport?.removeEventListener("resize", updateDropdownPlacement);
+      window.visualViewport?.removeEventListener("scroll", updateDropdownPlacement);
+    };
+  }, [isOpen, models.length, updateDropdownPlacement]);
 
   const selectedModelObj = models.find((m) => m.id === selectedModel);
   const displayName = selectedModelObj?.display_name || selectedModel;
@@ -75,6 +104,26 @@ function ModelPicker({
     onManageModels();
   };
 
+  const manageOption = (
+    <button
+      className="model-picker-option model-picker-manage"
+      onClick={handleManageModels}
+      type="button"
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path d="M12 4v16m-8-8h16" />
+      </svg>
+      <span>Add / Remove Models...</span>
+    </button>
+  );
+
   return (
     <div className="model-picker" ref={containerRef}>
       <button
@@ -82,8 +131,9 @@ function ModelPicker({
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
         type="button"
+        title={displayWithSource}
       >
-        <span className="model-picker-value">{displayWithSource}</span>
+        <span className="model-picker-value">{displayName}</span>
         <svg
           className={`model-picker-chevron ${isOpen ? "open" : ""}`}
           width="12"
@@ -101,28 +151,12 @@ function ModelPicker({
         <div
           className={`model-picker-dropdown ${openUpward ? "open-upward" : ""}`}
           ref={dropdownRef}
+          style={{ maxHeight: `${dropdownMaxHeight}px` }}
         >
-          {/* Pin the manage action at the top so it stays reachable on
-             narrow viewports where the bottom of the dropdown may be
-             clipped by the app-container or mobile browser chrome. */}
-          <button
-            className="model-picker-option model-picker-manage"
-            onClick={handleManageModels}
-            type="button"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M12 4v16m-8-8h16" />
-            </svg>
-            <span>Add / Remove Models...</span>
-          </button>
-          <div className="model-picker-divider" />
+          <div className="model-picker-action">
+            {manageOption}
+            <div className="model-picker-divider" />
+          </div>
           <div className="model-picker-options">
             {models.map((model) => (
               <button

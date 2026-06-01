@@ -4186,10 +4186,13 @@ svg {
 
 .model-picker-options {
   overflow-y: auto;
-  /* Fill whatever vertical space the dropdown has left after the pinned
-     manage button and divider. */
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.model-picker-action {
+  flex: 0 0 auto;
+  background: var(--bg-secondary);
 }
 
 .model-picker-option {
@@ -4256,12 +4259,14 @@ svg {
 }
 
 .model-picker-divider {
+  flex-shrink: 0;
   height: 1px;
   background: var(--border);
   margin: 0.25rem 0;
 }
 
 .model-picker-manage {
+  background: var(--bg-secondary);
   color: var(--blue-text);
 }
 
