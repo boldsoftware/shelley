@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -42,9 +41,9 @@ type BashTool struct {
 	WorkingDir *MutableWorkingDir
 	// LLMProvider provides access to LLM services for tool validation
 	LLMProvider LLMServiceProvider
-	// ConversationID is the ID of the conversation this tool belongs to.
-	// It is exposed to invoked commands via SHELLEY_CONVERSATION_ID.
-	ConversationID string
+	// Env holds the conversation context exposed to invoked commands as
+	// SHELLEY_* environment variables.
+	Env ShelleyEnv
 }
 
 const (
@@ -233,15 +232,11 @@ func (b *BashTool) makeBashCommand(ctx context.Context, command string, out io.W
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) // kill entire process group
 	}
 	cmd.WaitDelay = 15 * time.Second // prevent indefinite hangs when child processes keep pipes open
-	// Remove SHELLEY_CONVERSATION_ID so we control it explicitly below.
-	env := slices.DeleteFunc(os.Environ(), func(s string) bool {
-		return strings.HasPrefix(s, "SHELLEY_CONVERSATION_ID=")
-	})
+	// Strip any inherited SHELLEY_* vars so we control them explicitly below.
+	env := stripShelleyEnv(os.Environ())
 	env = append(env, "SKETCH=1")          // signal that this has been run by Sketch, sometimes useful for scripts
 	env = append(env, "EDITOR=/bin/false") // interactive editors won't work
-	if b.ConversationID != "" {
-		env = append(env, "SHELLEY_CONVERSATION_ID="+b.ConversationID)
-	}
+	env = append(env, b.Env.Environ(cmd.Dir)...)
 	cmd.Env = env
 	return cmd
 }

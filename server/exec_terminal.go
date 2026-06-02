@@ -12,6 +12,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 
+	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/dtach"
 )
 
@@ -105,33 +106,17 @@ func (s *Server) handleExecWS(w http.ResponseWriter, r *http.Request) {
 }
 
 // buildTerminalEnv returns the SHELLEY_* environment variables to inject into
-// ephemeral / persistent terminals spawned from the UI. Empty values are
-// omitted so hooks can use the usual "is set?" tests.
+// ephemeral / persistent terminals spawned from the UI. It shares the same
+// claudetool.ShelleyEnv used by the agent's bash/shell tools so interactive
+// "!" commands and agent-run commands see an identical environment.
 func buildTerminalEnv(conversationID, slug, model, userEmail, cwd string, listenPort int) []string {
-	var env []string
-	add := func(k, v string) {
-		if v == "" {
-			return
-		}
-		env = append(env, k+"="+v)
-	}
-	add("SHELLEY_CONVERSATION_ID", conversationID)
-	add("SHELLEY_CONVERSATION_SLUG", slug)
-	add("SHELLEY_MODEL", model)
-	add("SHELLEY_USER_EMAIL", userEmail)
-	add("SHELLEY_CWD", cwd)
-	if cwd != "" {
-		if root, err := getGitRoot(cwd); err == nil && root != "" {
-			add("SHELLEY_GIT_ROOT", root)
-		}
-	}
-	if listenPort > 0 {
-		add("SHELLEY_PORT", fmt.Sprintf("%d", listenPort))
-		// Local URL — scripts running on the VM can reach the shelley API
-		// directly without going through the exe.dev auth proxy.
-		add("SHELLEY_URL", fmt.Sprintf("http://localhost:%d", listenPort))
-	}
-	return env
+	return claudetool.ShelleyEnv{
+		ConversationID:   conversationID,
+		ConversationSlug: slug,
+		Model:            model,
+		UserEmail:        userEmail,
+		Port:             listenPort,
+	}.Environ(cwd)
 }
 
 func (s *Server) attachOrSpawn(termID, cmd, cwd string, cols, rows uint16, extraEnv []string) (*TerminalSession, *dtach.Client, error) {

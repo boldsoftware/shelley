@@ -62,6 +62,12 @@ type ToolSetConfig struct {
 	// ConversationID is the ID of the conversation these tools belong to.
 	// This is exposed to bash commands via the SHELLEY_CONVERSATION_ID environment variable.
 	ConversationID string
+	// Env holds additional conversation context (slug, model, user email,
+	// server port) exposed to bash/shell commands as SHELLEY_* environment
+	// variables, matching the variables injected into interactive "!"
+	// terminals. ConversationID above is authoritative for
+	// SHELLEY_CONVERSATION_ID and overrides Env.ConversationID.
+	Env ShelleyEnv
 	// SubagentDepth is the nesting depth of this conversation.
 	// 0 = top-level conversation, 1 = subagent, 2 = sub-subagent, etc.
 	SubagentDepth int
@@ -310,11 +316,14 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 	}
 	wd := NewMutableWorkingDir(workingDir)
 
+	env := cfg.Env
+	env.ConversationID = cfg.ConversationID
+
 	bashTool := &BashTool{
 		WorkingDir:       wd,
 		LLMProvider:      cfg.LLMProvider,
 		EnableJITInstall: cfg.EnableJITInstall,
-		ConversationID:   cfg.ConversationID,
+		Env:              env,
 	}
 
 	// Use simplified patch schema for weaker models, full schema for sonnet/opus
@@ -338,7 +347,7 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		WorkingDir:       wd,
 		LLMProvider:      cfg.LLMProvider,
 		EnableJITInstall: cfg.EnableJITInstall,
-		ConversationID:   cfg.ConversationID,
+		Env:              env,
 		BackgroundCtx:    ctx,
 	}
 

@@ -167,8 +167,8 @@ func TestExecuteBash(t *testing.T) {
 	// Test SHELLEY_CONVERSATION_ID environment variable is set when configured
 	t.Run("SHELLEY_CONVERSATION_ID Environment Variable", func(t *testing.T) {
 		bashWithConvID := &BashTool{
-			WorkingDir:     NewMutableWorkingDir("/"),
-			ConversationID: "test-conv-123",
+			WorkingDir: NewMutableWorkingDir("/"),
+			Env:        ShelleyEnv{ConversationID: "test-conv-123"},
 		}
 		req := bashInput{
 			Command: "echo $SHELLEY_CONVERSATION_ID",
@@ -182,6 +182,32 @@ func TestExecuteBash(t *testing.T) {
 		want := "test-conv-123\n"
 		if output != want {
 			t.Errorf("Expected SHELLEY_CONVERSATION_ID=test-conv-123, got %q", output)
+		}
+	})
+
+	// The bash tool should inject the full SHELLEY_* environment, matching the
+	// vars exposed to interactive "!" terminals.
+	t.Run("Full Shelley Environment", func(t *testing.T) {
+		bashWithEnv := &BashTool{
+			WorkingDir: NewMutableWorkingDir("/"),
+			Env: ShelleyEnv{
+				ConversationID:   "cid",
+				ConversationSlug: "slug",
+				Model:            "predictable",
+				UserEmail:        "x@y.z",
+				Port:             4242,
+			},
+		}
+		req := bashInput{
+			Command: `printf '%s|%s|%s|%s|%s|%s' "$SHELLEY_CONVERSATION_ID" "$SHELLEY_CONVERSATION_SLUG" "$SHELLEY_MODEL" "$SHELLEY_USER_EMAIL" "$SHELLEY_PORT" "$SHELLEY_URL"`,
+		}
+		output, err := bashWithEnv.executeBash(ctx, req, 5*time.Second)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		want := "cid|slug|predictable|x@y.z|4242|http://localhost:4242"
+		if output != want {
+			t.Errorf("Expected %q, got %q", want, output)
 		}
 	})
 

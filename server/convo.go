@@ -83,6 +83,8 @@ type ConversationManager struct {
 	hasConversationEvents bool
 	cwd                   string // working directory for tools
 	userEmail             string // exe.dev auth email, from X-ExeDev-Email header
+	serverPort            int    // TCP port the shelley server listens on, for SHELLEY_PORT/SHELLEY_URL
+	slug                  string // conversation slug, for SHELLEY_CONVERSATION_SLUG
 
 	// agentWorking tracks whether the agent is currently working.
 	// This is explicitly managed and broadcast to subscribers when it changes.
@@ -332,6 +334,10 @@ func (cm *ConversationManager) Hydrate(ctx context.Context) error {
 		cwd = *conversation.Cwd
 	}
 	cm.cwd = cwd
+
+	if conversation.Slug != nil {
+		cm.slug = *conversation.Slug
+	}
 
 	// Load model from conversation if available
 	var modelID string
@@ -1163,6 +1169,12 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 	conversationID := cm.conversationID
 	conversationOpts := cm.conversationOptions
 	database := cm.db
+	toolSetConfig.Env = claudetool.ShelleyEnv{
+		ConversationSlug: cm.slug,
+		Model:            modelID,
+		UserEmail:        cm.userEmail,
+		Port:             cm.serverPort,
+	}
 	cm.mu.Unlock()
 
 	// Load conversation history fresh from the database. This is the canonical

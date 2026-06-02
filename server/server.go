@@ -871,6 +871,7 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 
 		manager := NewConversationManager(conversationID, s.db, s.logger, s.toolSetConfig, recordMessage, onStateChange, s.streamPub)
 		manager.userEmail = userEmail
+		manager.serverPort = s.listenPort
 		// Hydrate runs DB transactions, which fire OnCommit hooks. Those hooks
 		// (e.g. notify on the conversation list patch stream) acquire s.mu, so
 		// we must not hold it here.
@@ -920,6 +921,7 @@ func (s *Server) getOrCreateSubagentConversationManager(ctx context.Context, con
 		subagentConfig.SubagentDepth = s.toolSetConfig.SubagentDepth + 1
 
 		manager := NewConversationManager(conversationID, s.db, s.logger, subagentConfig, recordMessage, onStateChange, s.streamPub)
+		manager.serverPort = s.listenPort
 		// Wire up done notification: when this subagent finishes, notify the parent
 		// by injecting a user message into the parent's loop so the LLM sees it.
 		manager.onDone = func() {

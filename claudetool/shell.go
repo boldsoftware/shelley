@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -34,8 +33,9 @@ type ShellTool struct {
 	WorkingDir *MutableWorkingDir
 	// LLMProvider provides access to LLM services for tool validation.
 	LLMProvider LLMServiceProvider
-	// ConversationID is exposed to invoked commands via SHELLEY_CONVERSATION_ID.
-	ConversationID string
+	// Env holds the conversation context exposed to invoked commands as
+	// SHELLEY_* environment variables.
+	Env ShelleyEnv
 	// BackgroundCtx is the long-lived context that owns spawned processes.
 	// When nil, defaults to context.Background(): yielded jobs survive the
 	// per-call ctx ending. Set this to a server- or conversation-lifetime
@@ -229,18 +229,14 @@ func (s *ShellTool) run(ctx context.Context, req shellInput) llm.ToolOut {
 	}
 	cmd.WaitDelay = shellWaitDelay
 
-	env := slices.DeleteFunc(os.Environ(), func(s string) bool {
-		return strings.HasPrefix(s, "SHELLEY_CONVERSATION_ID=")
-	})
+	env := stripShelleyEnv(os.Environ())
 	env = append(
 		env,
 		"SKETCH=1",
 		"EDITOR=/bin/false",
 		`GIT_SEQUENCE_EDITOR=echo "To do an interactive rebase, run it in a tmux session." && exit 1`,
 	)
-	if s.ConversationID != "" {
-		env = append(env, "SHELLEY_CONVERSATION_ID="+s.ConversationID)
-	}
+	env = append(env, s.Env.Environ(cmd.Dir)...)
 	cmd.Env = env
 
 	if err := cmd.Start(); err != nil {
