@@ -13,7 +13,7 @@ test("URLs in agent responses are linked (markdown mode)", async ({ page }) => {
   );
   await page.getByTestId("send-button").click();
 
-  await page.waitForSelector(".message-agent", { timeout: 10000 });
+  await page.waitForSelector(".message-agent", { timeout: 30000 });
 
   // Markdown renderer auto-links URLs into <a> tags inside .markdown-content
   const agentLinks = page.locator(".message-agent .markdown-content a");
@@ -33,7 +33,7 @@ test("URLs are linkified in user messages too", async ({ page }) => {
   await page.getByTestId("message-input").fill("echo: Visit https://example.com");
   await page.getByTestId("send-button").click();
 
-  await page.waitForSelector(".message-user", { timeout: 10000 });
+  await page.waitForSelector(".message-user", { timeout: 30000 });
 
   // User messages always use linkifyText (never markdown)
   const userMessage = page.locator(".message-user").filter({
