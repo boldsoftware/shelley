@@ -297,10 +297,10 @@ func (t *TerminalSessions) spawnSubprocess(socket, logFile, cwd, command string,
 	if err := cmd.Start(); err != nil {
 		return 0, fmt.Errorf("terminals: start dtach: %w", err)
 	}
-	// Waiting for the listener to come up is the caller's job (attachWithRetry).
-	pid := cmd.Process.Pid
-	_ = cmd.Process.Release()
-	return pid, nil
+	// Wait in a goroutine to reap the zombie when the process exits.
+    // The process is still detached via Setsid, so shelley restarts won't affect it
+	go func() { _ = cmd.Wait() }()
+	return cmd.Process.Pid, nil
 }
 
 // InProcessSpawner runs the dtach server in a goroutine inside the current
