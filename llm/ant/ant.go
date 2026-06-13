@@ -278,10 +278,18 @@ type systemContent struct {
 // (thinking: {type: "adaptive"} + output_config: {effort: "..."}) instead of
 // the legacy manual thinking (thinking: {type: "enabled", budget_tokens: N}).
 // Claude Opus 4.7 and later require adaptive thinking.
+// Matching is done on '-'/'.'-delimited tokens so it covers dated snapshots
+// ("claude-opus-4-8-20260115") and provider-qualified names
+// ("us.anthropic.claude-opus-4-8-v1:0") without false positives like
+// "claude-opus-4-80".
 func useAdaptiveThinking(model string) bool {
-	return model == ClaudeFable5 || strings.HasPrefix(model, "claude-fable-5-") ||
-		model == Claude48Opus || strings.HasPrefix(model, "claude-opus-4-8-") ||
-		model == Claude47Opus || strings.HasPrefix(model, "claude-opus-4-7-")
+	model = "-" + strings.ReplaceAll(model, ".", "-") + "-"
+	for _, m := range []string{ClaudeFable5, Claude48Opus, Claude47Opus} {
+		if strings.Contains(model, "-"+m+"-") {
+			return true
+		}
+	}
+	return false
 }
 
 // request represents the request payload for creating a message.

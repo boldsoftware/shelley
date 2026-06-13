@@ -2697,6 +2697,31 @@ func TestWebSearchContentSurvivesJSONRoundTrip(t *testing.T) {
 	}
 }
 
+func TestUseAdaptiveThinking(t *testing.T) {
+	tests := []struct {
+		model string
+		want  bool
+	}{
+		{Claude48Opus, true},
+		{Claude47Opus, true},
+		{ClaudeFable5, true},
+		{"claude-opus-4-8-20260115", true},
+		{"anthropic.claude-opus-4-8", true},
+		{"us.anthropic.claude-opus-4-8-v1:0", true},
+		{"anthropic.claude-fable-5-20260301-v1:0", true},
+		{Claude46Opus, false},
+		{Claude46Sonnet, false},
+		{"anthropic.claude-sonnet-4-5-20250929-v1:0", false},
+		{"claude-opus-4-80", false},
+		{"anthropic.claude-opus-4-85-v1:0", false},
+	}
+	for _, tt := range tests {
+		if got := useAdaptiveThinking(tt.model); got != tt.want {
+			t.Errorf("useAdaptiveThinking(%q) = %v, want %v", tt.model, got, tt.want)
+		}
+	}
+}
+
 // TestFromLLMRequestThinkingLevels exercises the per-request ThinkingLevel
 // override across both adaptive and budget-style Claude models.
 func TestFromLLMRequestThinkingLevels(t *testing.T) {
@@ -2713,6 +2738,7 @@ func TestFromLLMRequestThinkingLevels(t *testing.T) {
 		{name: "adaptive req xhigh", model: Claude47Opus, svcLevel: llm.ThinkingLevelMedium, reqLevel: llm.ThinkingLevelXHigh, wantType: "adaptive", wantEffort: "xhigh"},
 		{name: "adaptive opus48 xhigh", model: Claude48Opus, svcLevel: llm.ThinkingLevelMedium, reqLevel: llm.ThinkingLevelXHigh, wantType: "adaptive", wantEffort: "xhigh"},
 		{name: "adaptive req off", model: Claude47Opus, svcLevel: llm.ThinkingLevelMedium, reqLevel: llm.ThinkingLevelOff, wantType: ""},
+		{name: "adaptive provider-qualified opus48", model: "us.anthropic.claude-opus-4-8-v1:0", svcLevel: llm.ThinkingLevelMedium, wantType: "adaptive", wantEffort: "medium"},
 		{name: "budget default medium", model: Claude45Sonnet, svcLevel: llm.ThinkingLevelMedium, wantType: "enabled", wantBudgetGreat: 8192},
 		{name: "budget req low", model: Claude45Sonnet, svcLevel: llm.ThinkingLevelMedium, reqLevel: llm.ThinkingLevelLow, wantType: "enabled", wantBudgetGreat: 2048},
 		{name: "budget req off", model: Claude45Sonnet, svcLevel: llm.ThinkingLevelMedium, reqLevel: llm.ThinkingLevelOff, wantType: ""},
