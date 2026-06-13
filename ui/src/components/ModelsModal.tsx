@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Modal from "./Modal";
 import { useI18n } from "../i18n";
 import {
@@ -167,6 +167,11 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
   // Tooltip state
   const [showTagsTooltip, setShowTagsTooltip] = useState(false);
 
+  // Remote model discovery from /v1/models (or provider equivalent)
+  const [remoteModels, setRemoteModels] = useState<{ name: string; model_name: string }[]>([]);
+  const [loadingRemoteModels, setLoadingRemoteModels] = useState(false);
+  const discoverRequestId = useRef(0);
+
   const loadModels = useCallback(async () => {
     try {
       setLoading(true);
@@ -195,7 +200,95 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
     }
   }, [isOpen, loadModels, setBuiltInFromModelList]);
 
+  const modelSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const suggestions: { name: string; model_name: string }[] = [];
+    const add = (name: string, model_name: string) => {
+      if (!model_name || seen.has(model_name)) {
+        return;
+      }
+      seen.add(model_name);
+      suggestions.push({ name, model_name });
+    };
+    for (const preset of remoteModels) {
+      add(preset.name, preset.model_name);
+    }
+    for (const preset of DEFAULT_MODELS[form.provider_type]) {
+      add(preset.name, preset.model_name);
+    }
+    return suggestions;
+  }, [remoteModels, form.provider_type]);
+
+  useEffect(() => {
+    if (!showForm) {
+      setRemoteModels([]);
+      return;
+    }
+
+    const canDiscover = Boolean(form.endpoint && (form.api_key || editingModelId));
+    if (!canDiscover) {
+      setRemoteModels([]);
+      return;
+    }
+
+    const requestId = ++discoverRequestId.current;
+    const timer = window.setTimeout(async () => {
+      setLoadingRemoteModels(true);
+      try {
+        const result = await customModelsApi.discoverRemoteModels({
+          model_id: editingModelId || undefined,
+          provider_type: form.provider_type,
+          endpoint: form.endpoint,
+          api_key: form.api_key,
+        });
+        if (requestId !== discoverRequestId.current) {
+          return;
+        }
+        if (!result.success) {
+          setRemoteModels([]);
+          return;
+        }
+        const discovered = result.models.map((model) => ({
+          name: model.display_name || model.id,
+          model_name: model.id,
+        }));
+        setRemoteModels(discovered);
+        if (discovered.length === 1) {
+          setForm((prev) => {
+            if (prev.model_name) {
+              return prev;
+            }
+            const only = discovered[0];
+            return {
+              ...prev,
+              model_name: only.model_name,
+              display_name: prev.display_name || only.name,
+            };
+          });
+        }
+      } catch {
+        if (requestId === discoverRequestId.current) {
+          setRemoteModels([]);
+        }
+      } finally {
+        if (requestId === discoverRequestId.current) {
+          setLoadingRemoteModels(false);
+        }
+      }
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    showForm,
+    editingModelId,
+    form.provider_type,
+    form.endpoint,
+    form.api_key,
+    form.endpoint_custom,
+  ]);
+
   const handleProviderChange = (provider: ProviderType) => {
+    setRemoteModels([]);
     setForm((prev) => ({
       ...prev,
       provider_type: provider,
@@ -204,6 +297,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
   };
 
   const handleEndpointModeChange = (custom: boolean) => {
+    setRemoteModels([]);
     setForm((prev) => ({
       ...prev,
       endpoint_custom: custom,
@@ -328,6 +422,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
     setEditingModelId(null);
     setForm(emptyForm);
     setTestResult(null);
+    setRemoteModels([]);
   };
 
   const handleAddNew = () => {
@@ -335,6 +430,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
     setForm(emptyForm);
     setShowForm(true);
     setTestResult(null);
+    setRemoteModels([]);
   };
 
   const handleRefreshModels = async () => {
@@ -460,9 +556,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                     // If the user picked a known suggestion and the display
                     // name is empty, pre-fill it from the preset's friendly
                     // name. Never overwrite a non-empty display name.
-                    const preset = DEFAULT_MODELS[prev.provider_type].find(
-                      (p) => p.model_name === v,
-                    );
+                    const preset = modelSuggestions.find((p) => p.model_name === v);
                     return {
                       ...prev,
                       model_name: v,
@@ -475,8 +569,11 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                 list={`model-name-suggestions-${form.provider_type}`}
                 autoComplete="off"
               />
+              {loadingRemoteModels && (
+                <div className="form-hint">{t("loadingModels")}</div>
+              )}
               <datalist id={`model-name-suggestions-${form.provider_type}`}>
-                {DEFAULT_MODELS[form.provider_type].map((preset) => (
+                {modelSuggestions.map((preset) => (
                   <option key={preset.model_name} value={preset.model_name}>
                     {preset.name}
                   </option>
