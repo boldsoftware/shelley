@@ -702,3 +702,88 @@ func TestCreateMessages(t *testing.T) {
 		t.Fatalf("expected updated row for %s with user_data %q, got %+v", first.MessageID, updatedData, upd)
 	}
 }
+
+// TestCreateMessageFoldsAgentWorkingAndTimestamp verifies that MarkAgentStart,
+// MarkAgentDone, and BumpTimestamp all apply inside the single message-INSERT
+// transaction (one commit hook), so the chat loop doesn't pay a second commit
+// (and a second full conversation-list recompute) for the agent_working flip
+// or the updated_at bump.
+func TestCreateMessageFoldsAgentWorkingAndTimestamp(t *testing.T) {
+	database := setupTestDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conv, err := database.CreateConversation(ctx, stringPtr("fold"), true, nil, nil, ConversationOptions{})
+	if err != nil {
+		t.Fatalf("CreateConversation: %v", err)
+	}
+	if conv.AgentWorking {
+		t.Fatalf("new conversation should not be agent_working")
+	}
+
+	// Backdate updated_at so a CURRENT_TIMESTAMP bump (second granularity) is
+	// observably newer even when the test runs within the same wall-clock second.
+	backdated := time.Now().Add(-time.Hour).UTC()
+	if err := database.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		_, err := tx.Conn().ExecContext(ctx, "UPDATE conversations SET updated_at = ? WHERE conversation_id = ?", backdated, conv.ConversationID)
+		return err
+	}); err != nil {
+		t.Fatalf("backdate updated_at: %v", err)
+	}
+	startTimestamp := backdated
+
+	// MarkAgentStart + BumpTimestamp in one Tx (one commit hook).
+	var commits int
+	database.Pool().OnCommit(func() { commits++ })
+	if _, err := database.CreateMessage(ctx, CreateMessageParams{
+		ConversationID: conv.ConversationID,
+		Type:           MessageTypeUser,
+		MarkAgentStart: true,
+		BumpTimestamp:  true,
+	}); err != nil {
+		t.Fatalf("CreateMessage(start): %v", err)
+	}
+	if commits != 1 {
+		t.Fatalf("expected exactly 1 commit hook for start insert, got %d", commits)
+	}
+	afterStart, err := database.GetConversationByID(ctx, conv.ConversationID)
+	if err != nil {
+		t.Fatalf("GetConversationByID: %v", err)
+	}
+	if !afterStart.AgentWorking {
+		t.Fatalf("MarkAgentStart did not set agent_working=true in the insert Tx")
+	}
+	if !afterStart.UpdatedAt.After(startTimestamp) {
+		t.Fatalf("BumpTimestamp did not advance updated_at: before=%v after=%v", startTimestamp, afterStart.UpdatedAt)
+	}
+
+	// MarkAgentDone clears it again in one Tx.
+	commits = 0
+	if _, err := database.CreateMessage(ctx, CreateMessageParams{
+		ConversationID: conv.ConversationID,
+		Type:           MessageTypeAgent,
+		MarkAgentDone:  true,
+	}); err != nil {
+		t.Fatalf("CreateMessage(done): %v", err)
+	}
+	if commits != 1 {
+		t.Fatalf("expected exactly 1 commit hook for done insert, got %d", commits)
+	}
+	afterDone, err := database.GetConversationByID(ctx, conv.ConversationID)
+	if err != nil {
+		t.Fatalf("GetConversationByID: %v", err)
+	}
+	if afterDone.AgentWorking {
+		t.Fatalf("MarkAgentDone did not set agent_working=false in the insert Tx")
+	}
+
+	// MarkAgentStart and MarkAgentDone are mutually exclusive.
+	if _, err := database.CreateMessage(ctx, CreateMessageParams{
+		ConversationID: conv.ConversationID,
+		Type:           MessageTypeUser,
+		MarkAgentStart: true,
+		MarkAgentDone:  true,
+	}); err == nil {
+		t.Fatalf("expected error when both MarkAgentStart and MarkAgentDone are set")
+	}
+}

@@ -64,9 +64,13 @@ type ConversationManager struct {
 	lastActivity        time.Time
 	modelID             string
 	recordMessage       loop.MessageRecordFunc
-	logger              *slog.Logger
-	toolSetConfig       claudetool.ToolSetConfig
-	toolSet             *claudetool.ToolSet // created per-conversation when loop starts
+	// recordTurnStartMessage records the user message that begins a turn,
+	// folding the agent_working=true flip and timestamp bump into the INSERT Tx
+	// (see Server.recordTurnStartMessage). Falls back to recordMessage when nil.
+	recordTurnStartMessage loop.MessageRecordFunc
+	logger                 *slog.Logger
+	toolSetConfig          claudetool.ToolSetConfig
+	toolSet                *claudetool.ToolSet // created per-conversation when loop starts
 
 	subpub *subpub.SubPub[StreamResponse]
 	// streamPub mirrors per-conversation events to the server-wide /api/stream2
@@ -152,7 +156,7 @@ type ConversationManager struct {
 }
 
 // NewConversationManager constructs a manager with dependencies but defers hydration until needed.
-func NewConversationManager(conversationID string, database *db.DB, baseLogger *slog.Logger, toolSetConfig claudetool.ToolSetConfig, recordMessage loop.MessageRecordFunc, onStateChange func(ConversationState), streamPub *subpub.SubPub[StreamResponse]) *ConversationManager {
+func NewConversationManager(conversationID string, database *db.DB, baseLogger *slog.Logger, toolSetConfig claudetool.ToolSetConfig, recordMessage, recordTurnStartMessage loop.MessageRecordFunc, onStateChange func(ConversationState), streamPub *subpub.SubPub[StreamResponse]) *ConversationManager {
 	logger := baseLogger
 	if logger == nil {
 		logger = slog.Default()
@@ -160,15 +164,16 @@ func NewConversationManager(conversationID string, database *db.DB, baseLogger *
 	logger = logger.With("conversationID", conversationID)
 
 	return &ConversationManager{
-		conversationID: conversationID,
-		db:             database,
-		lastActivity:   time.Now(),
-		recordMessage:  recordMessage,
-		logger:         logger,
-		toolSetConfig:  toolSetConfig,
-		subpub:         subpub.New[StreamResponse](),
-		streamPub:      streamPub,
-		onStateChange:  onStateChange,
+		conversationID:         conversationID,
+		db:                     database,
+		lastActivity:           time.Now(),
+		recordMessage:          recordMessage,
+		recordTurnStartMessage: recordTurnStartMessage,
+		logger:                 logger,
+		toolSetConfig:          toolSetConfig,
+		subpub:                 subpub.New[StreamResponse](),
+		streamPub:              streamPub,
+		onStateChange:          onStateChange,
 	}
 }
 
@@ -222,11 +227,24 @@ func (cm *ConversationManager) EndOfTurnHooks(ctx context.Context) ([]db.Convers
 	return hooks, nil
 }
 
-// SetAgentWorking updates the agent working state and notifies the server to broadcast.
-// The new value is also persisted to the conversations table so the
-// conversation list patch stream picks it up via the standard Pool.OnCommit
-// hook (no explicit notify required).
+// SetAgentWorking updates the agent working state, persists it to the
+// conversations table (so the conversation list patch stream picks it up via
+// the standard Pool.OnCommit hook), and notifies the server to broadcast.
 func (cm *ConversationManager) SetAgentWorking(working bool) {
+	cm.setAgentWorking(working, true)
+}
+
+// syncAgentWorking flips the in-memory flag and fires the same notifications as
+// SetAgentWorking but WITHOUT writing conversations.agent_working. Use it when
+// the persisted value has already been written in another transaction — e.g.
+// folded into a message INSERT via CreateMessageParams.MarkAgentStart/
+// MarkAgentDone — so we don't pay a second commit (and a second full
+// conversation-list recompute) just to re-write a value the DB already holds.
+func (cm *ConversationManager) syncAgentWorking(working bool) {
+	cm.setAgentWorking(working, false)
+}
+
+func (cm *ConversationManager) setAgentWorking(working, persist bool) {
 	cm.mu.Lock()
 	if cm.agentWorking == working {
 		cm.mu.Unlock()
@@ -251,9 +269,11 @@ func (cm *ConversationManager) SetAgentWorking(working bool) {
 	}
 	cm.mu.Unlock()
 
-	cm.logger.Debug("agent working state changed", "working", working)
-	if err := cm.db.SetConversationAgentWorking(context.Background(), convID, working); err != nil {
-		cm.logger.Error("failed to persist agent working state", "error", err, "working", working)
+	cm.logger.Debug("agent working state changed", "working", working, "persist", persist)
+	if persist {
+		if err := cm.db.SetConversationAgentWorking(context.Background(), convID, working); err != nil {
+			cm.logger.Error("failed to persist agent working state", "error", err, "working", working)
+		}
 	}
 	if onStateChange != nil {
 		onStateChange(ConversationState{
@@ -514,28 +534,35 @@ func (cm *ConversationManager) AcceptUserMessage(ctx context.Context, service ll
 	loopInstance := cm.loop
 	cm.lastActivity = time.Now()
 	recordMessage := cm.recordMessage
+	recordTurnStart := cm.recordTurnStartMessage
 	cm.mu.Unlock()
 
 	if loopInstance == nil {
 		return false, fmt.Errorf("conversation loop not initialized")
 	}
 
-	// Mark agent as working BEFORE persisting the user message. The
-	// conversation_list_patch stream fires off the Pool.OnCommit hook on
-	// every Tx commit and snapshots conversations.agent_working at that
-	// moment, so we must commit the agent_working=true flip first.
-	// Otherwise the user-message commit's list-patch carries the stale
-	// agent_working=false row that pre-dated this turn, the client applies
-	// it as authoritative, and the working/thinking indicator flickers off
-	// until the agent_working=true commit's patch lands a moment later.
-	cm.SetAgentWorking(true)
-
-	// Record the user message to the database immediately so it appears in the UI,
-	// even if the loop is busy processing a previous request
-	if recordMessage != nil {
-		if err := recordMessage(ctx, message, llm.Usage{}); err != nil {
+	// Flip the in-memory working flag and notify subscribers up front so the
+	// thinking indicator shows immediately. The PERSISTED agent_working=true is
+	// written in the same Tx as the user-message INSERT below (via
+	// recordTurnStartMessage / MarkAgentStart), so the user-message commit's
+	// list-patch already carries working=true — no stale working=false snapshot,
+	// and no separate working-flip commit. syncAgentWorking does the in-memory
+	// flip + broadcast without its own DB write.
+	if recordTurnStart != nil {
+		cm.syncAgentWorking(true)
+		if err := recordTurnStart(ctx, message, llm.Usage{}); err != nil {
 			cm.logger.Error("failed to record user message immediately", "error", err)
-			// Continue anyway - the loop will also try to record it
+			// Continue anyway - the loop will also try to record it.
+		}
+	} else {
+		// No turn-start recorder wired (e.g. a manager built without one):
+		// fall back to the two-Tx ordering — persist working=true first, then
+		// the message — to preserve the no-flicker guarantee.
+		cm.SetAgentWorking(true)
+		if recordMessage != nil {
+			if err := recordMessage(ctx, message, llm.Usage{}); err != nil {
+				cm.logger.Error("failed to record user message immediately", "error", err)
+			}
 		}
 	}
 
@@ -642,16 +669,12 @@ func (cm *ConversationManager) QueueMessage(ctx context.Context, s *Server, mode
 		UserData:            userData,
 		UsageData:           llm.Usage{},
 		ExcludedFromContext: true,
+		// Bump updated_at in the same Tx so the queued message re-sorts the
+		// conversation without a second commit / full-list recompute.
+		BumpTimestamp: true,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to record queued message: %w", err)
-	}
-
-	// Update conversation timestamp
-	if err := s.db.QueriesTx(ctx, func(q *generated.Queries) error {
-		return q.UpdateConversationTimestamp(ctx, cm.conversationID)
-	}); err != nil {
-		cm.logger.Warn("Failed to update conversation timestamp", "error", err)
 	}
 
 	// Notify subscribers so the queued message appears in the UI

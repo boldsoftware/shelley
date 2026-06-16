@@ -885,6 +885,17 @@ type CreateMessageParams struct {
 	// SetAgentWorking(true)-before-recordMessage ordering AcceptUserMessage
 	// uses on the Send side.
 	MarkAgentDone bool
+	// MarkAgentStart is the symmetric counterpart of MarkAgentDone: when true,
+	// it writes conversations.agent_working=true inside the message-INSERT Tx.
+	// AcceptUserMessage uses it on the user message that starts a turn so the
+	// working flip and the message land in one commit (one list-patch), instead
+	// of a separate SetAgentWorking(true) Tx fired right before.
+	MarkAgentStart bool
+	// BumpTimestamp, when true, updates conversations.updated_at inside the same
+	// Tx as the INSERT so the conversation re-sorts to the top without a second
+	// commit. Most message writes want this; system-prompt and other internal
+	// metadata inserts deliberately leave it false (see the callers in convo.go).
+	BumpTimestamp bool
 }
 
 // marshalMessageJSON marshals the four JSON columns of a message into the
@@ -929,6 +940,9 @@ func marshalMessageJSON(params CreateMessageParams) (llmDataJSON, userDataJSON, 
 // sequence_id and stamping the conversation's current generation. Shared by
 // CreateMessage and CreateMessages so single and bulk inserts are identical.
 func insertMessageTx(ctx context.Context, q *generated.Queries, params CreateMessageParams) (generated.Message, error) {
+	if params.MarkAgentDone && params.MarkAgentStart {
+		return generated.Message{}, fmt.Errorf("insertMessageTx: MarkAgentDone and MarkAgentStart are mutually exclusive")
+	}
 	llmDataJSON, userDataJSON, usageDataJSON, displayDataJSON, err := marshalMessageJSON(params)
 	if err != nil {
 		return generated.Message{}, err
@@ -956,11 +970,16 @@ func insertMessageTx(ctx context.Context, q *generated.Queries, params CreateMes
 	if err != nil {
 		return generated.Message{}, err
 	}
-	if params.MarkAgentDone {
+	if params.MarkAgentDone || params.MarkAgentStart {
 		if err := q.SetConversationAgentWorking(ctx, generated.SetConversationAgentWorkingParams{
-			AgentWorking:   false,
+			AgentWorking:   params.MarkAgentStart,
 			ConversationID: params.ConversationID,
 		}); err != nil {
+			return generated.Message{}, err
+		}
+	}
+	if params.BumpTimestamp {
+		if err := q.UpdateConversationTimestamp(ctx, params.ConversationID); err != nil {
 			return generated.Message{}, err
 		}
 	}

@@ -863,12 +863,15 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		recordMessage := func(ctx context.Context, message llm.Message, usage llm.Usage) error {
 			return s.recordMessage(ctx, conversationID, message, usage)
 		}
+		recordTurnStart := func(ctx context.Context, message llm.Message, usage llm.Usage) error {
+			return s.recordTurnStartMessage(ctx, conversationID, message, usage)
+		}
 
 		onStateChange := func(state ConversationState) {
 			s.publishConversationState(state)
 		}
 
-		manager := NewConversationManager(conversationID, s.db, s.logger, s.toolSetConfig, recordMessage, onStateChange, s.streamPub)
+		manager := NewConversationManager(conversationID, s.db, s.logger, s.toolSetConfig, recordMessage, recordTurnStart, onStateChange, s.streamPub)
 		manager.userEmail = userEmail
 		manager.serverPort = s.listenPort
 		// Hydrate runs DB transactions, which fire OnCommit hooks. Those hooks
@@ -910,6 +913,9 @@ func (s *Server) getOrCreateSubagentConversationManager(ctx context.Context, con
 		recordMessage := func(ctx context.Context, message llm.Message, usage llm.Usage) error {
 			return s.recordMessage(ctx, conversationID, message, usage)
 		}
+		recordTurnStart := func(ctx context.Context, message llm.Message, usage llm.Usage) error {
+			return s.recordTurnStartMessage(ctx, conversationID, message, usage)
+		}
 
 		onStateChange := func(state ConversationState) {
 			s.publishConversationState(state)
@@ -919,7 +925,7 @@ func (s *Server) getOrCreateSubagentConversationManager(ctx context.Context, con
 		subagentConfig := s.toolSetConfig
 		subagentConfig.SubagentDepth = s.toolSetConfig.SubagentDepth + 1
 
-		manager := NewConversationManager(conversationID, s.db, s.logger, subagentConfig, recordMessage, onStateChange, s.streamPub)
+		manager := NewConversationManager(conversationID, s.db, s.logger, subagentConfig, recordMessage, recordTurnStart, onStateChange, s.streamPub)
 		manager.serverPort = s.listenPort
 		// Wire up done notification: when this subagent finishes, notify the parent
 		// by injecting a user message into the parent's loop so the LLM sees it.
@@ -1031,30 +1037,28 @@ func (s *Server) recordMessage(ctx context.Context, conversationID string, messa
 	if err != nil {
 		return err
 	}
+	// Bump updated_at in the same Tx as the INSERT so the conversation
+	// re-sorts to the top on a single commit, rather than a second
+	// UpdateConversationTimestamp Tx (which fired a redundant full-list
+	// recompute on its own commit hook).
+	params.BumpTimestamp = true
 	markAgentDone := params.MarkAgentDone
 	createdMsg, err := s.db.CreateMessage(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to create message: %w", err)
 	}
 	// Sync the conversation manager's in-memory agentWorking flag and fire
-	// onStateChange / onDone now that the DB has committed. SetAgentWorking
-	// also rewrites conversations.agent_working, but the value is already
-	// false from the message-INSERT Tx above, so the recompute on this
-	// commit finds no list-state change and emits no extra patch.
+	// onStateChange / onDone now that the DB has committed. The persisted
+	// agent_working=false was already written in the message-INSERT Tx above
+	// (via MarkAgentDone), so syncAgentWorking deliberately skips the DB write
+	// — re-writing it would only cost an extra commit + full-list recompute.
 	if markAgentDone {
 		s.mu.Lock()
 		mgr := s.activeConversations[conversationID]
 		s.mu.Unlock()
 		if mgr != nil {
-			mgr.SetAgentWorking(false)
+			mgr.syncAgentWorking(false)
 		}
-	}
-
-	// Update conversation's last updated timestamp for correct ordering
-	if err := s.db.QueriesTx(ctx, func(q *generated.Queries) error {
-		return q.UpdateConversationTimestamp(ctx, conversationID)
-	}); err != nil {
-		s.logger.Warn("Failed to update conversation timestamp", "conversationID", conversationID, "error", err)
 	}
 
 	// Touch active manager activity time if present and bump its max sequence ID.
@@ -1070,6 +1074,36 @@ func (s *Server) recordMessage(ctx context.Context, conversationID string, messa
 	// we still want the notification to complete so SSE clients see the message immediately
 	go s.notifySubscribersNewMessage(context.WithoutCancel(ctx), conversationID, createdMsg)
 
+	return nil
+}
+
+// recordTurnStartMessage records the user message that starts an agent turn,
+// folding the agent_working=true flip and the updated_at bump into the same Tx
+// as the message INSERT. This replaces a separate SetAgentWorking(true) commit
+// fired right before the insert: a single commit now carries the new message
+// AND working=true, so the conversation-list patch can't briefly snapshot a
+// stale working=false row (the flicker the old ordering guarded against), and
+// we drop two commits (the working flip and the timestamp bump) per turn.
+func (s *Server) recordTurnStartMessage(ctx context.Context, conversationID string, message llm.Message, usage llm.Usage) error {
+	params, err := s.buildCreateMessageParams(conversationID, message, usage)
+	if err != nil {
+		return err
+	}
+	params.MarkAgentStart = true
+	params.BumpTimestamp = true
+	createdMsg, err := s.db.CreateMessage(ctx, params)
+	if err != nil {
+		return fmt.Errorf("failed to create turn-start message: %w", err)
+	}
+
+	s.mu.Lock()
+	mgr, ok := s.activeConversations[conversationID]
+	s.mu.Unlock()
+	if ok {
+		mgr.Touch()
+	}
+
+	go s.notifySubscribersNewMessage(context.WithoutCancel(ctx), conversationID, createdMsg)
 	return nil
 }
 
