@@ -308,6 +308,16 @@ var (
 		SupportsImages:     false,
 	}
 
+	GLM52Fireworks = Model{
+		UserName:           "glm-5.2-fireworks",
+		ModelName:          "accounts/fireworks/models/glm-5p2",
+		URL:                FireworksURL,
+		APIKeyEnv:          FireworksAPIKeyEnv,
+		IsReasoningModel:   false,
+		UseSimplifiedPatch: false,
+		SupportsImages:     false,
+	}
+
 	GLM51Fireworks = Model{
 		UserName:           "glm-5.1-fireworks",
 		ModelName:          "accounts/fireworks/models/glm-5p1",
@@ -540,6 +550,7 @@ var ModelsRegistry = []Model{
 	MoonshotKimiK2,
 	MistralMedium,
 	DevstralSmall,
+	GLM52Fireworks,
 	GLM51Fireworks,
 	KimiK26Fireworks,
 	Qwen36PlusFireworks,

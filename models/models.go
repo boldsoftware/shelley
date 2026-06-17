@@ -224,6 +224,12 @@ func All() []Model {
 			Build: antSvc(ant.Claude46Opus),
 		},
 		{
+			ID: "glm-5.2-fireworks", Provider: ProviderFireworks,
+			Description: "GLM-5.2 on Fireworks", APIModelName: oai.GLM52Fireworks.ModelName,
+			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
+			Build: oaiChatSvc(oai.GLM52Fireworks, "fireworks"),
+		},
+		{
 			ID: "glm-5.1-fireworks", Provider: ProviderFireworks,
 			Description: "GLM-5.1 on Fireworks", APIModelName: oai.GLM51Fireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
