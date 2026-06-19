@@ -3,6 +3,7 @@ package claudetool
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os/exec"
@@ -85,8 +86,26 @@ IMPORTANT: Do NOT use this tool if you have precise information like log lines, 
 )
 
 type keywordInput struct {
-	Query       string   `json:"query"`
-	SearchTerms []string `json:"search_terms"`
+	Query       string      `json:"query"`
+	SearchTerms stringSlice `json:"search_terms"`
+}
+
+// stringSlice is a []string that also accepts a single JSON string, since
+// models sometimes pass search_terms as a bare string instead of an array.
+type stringSlice []string
+
+func (s *stringSlice) UnmarshalJSON(data []byte) error {
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil {
+		*s = arr
+		return nil
+	}
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	*s = stringSlice{str}
+	return nil
 }
 
 //go:embed keyword_system_prompt.txt

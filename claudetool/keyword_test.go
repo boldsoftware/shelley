@@ -2,13 +2,38 @@ package claudetool
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"shelley.exe.dev/llm"
 )
+
+func TestKeywordInputSearchTermsFlexible(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+		want []string
+	}{
+		{"array", `{"query":"q","search_terms":["a","b"]}`, []string{"a", "b"}},
+		{"string", `{"query":"q","search_terms":"a"}`, []string{"a"}},
+		{"empty array", `{"query":"q","search_terms":[]}`, []string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var in keywordInput
+			if err := json.Unmarshal([]byte(tt.json), &in); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if !reflect.DeepEqual([]string(in.SearchTerms), tt.want) {
+				t.Errorf("got %#v, want %#v", in.SearchTerms, tt.want)
+			}
+		})
+	}
+}
 
 // Mock LLM provider for testing
 type mockLLMProvider struct{}
@@ -134,7 +159,7 @@ func TestKeywordRun(t *testing.T) {
 	// Test with valid input
 	input := keywordInput{
 		Query:       "what files exist in this project",
-		SearchTerms: []string{"test", "file"},
+		SearchTerms: stringSlice{"test", "file"},
 	}
 	result := keywordTool.keywordRun(context.Background(), input)
 
