@@ -346,7 +346,14 @@ func TestExecTerminal_ControlCharacters(t *testing.T) {
 	// Sending Ctrl-B (\x02) should appear as "^B" in the output.
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/exec-ws?cmd=cat+-v"
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Generous overall deadline: under heavy CI load the pty spawn + first
+	// output can lag well past a second. We bound every Read on this single
+	// context rather than a per-read sub-context — with coder/websocket a Read
+	// whose context is cancelled fails the whole connection, so the old
+	// 200ms-per-read pattern poisoned the socket on the first premature
+	// timeout (every later Read then errored, yielding empty output). This
+	// loop instead blocks on Read until data arrives or the deadline fires.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	conn, _, err := websocket.Dial(ctx, wsURL, nil)
@@ -360,20 +367,23 @@ func TestExecTerminal_ControlCharacters(t *testing.T) {
 		t.Fatalf("Failed to write init message: %v", err)
 	}
 
-	// Send Ctrl-B (\x02) followed by newline to flush the line buffer.
-	if err := wsjson.Write(ctx, conn, ExecMessage{Type: "input", Data: "\x02\n"}); err != nil {
-		t.Fatalf("Failed to write input: %v", err)
-	}
-
-	// Read output until we see ^B (cat -v notation for \x02).
+	// Read output until we see ^B (cat -v notation for \x02). Wait for the
+	// server's "attached" handshake before sending input so the pty (and
+	// cat -v) is guaranteed to be running and won't drop the keystroke.
 	var output strings.Builder
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		readCtx, readCancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	sentInput := false
+	for {
 		var msg ExecMessage
-		err := wsjson.Read(readCtx, conn, &msg)
-		readCancel()
-		if err != nil {
+		if err := wsjson.Read(ctx, conn, &msg); err != nil {
+			t.Errorf("Ctrl-B (\\x02) was not delivered through pty (read: %v); cat -v output: %q", err, output.String())
+			return
+		}
+		if msg.Type == "attached" && !sentInput {
+			// Send Ctrl-B (\x02) followed by newline to flush the line buffer.
+			if err := wsjson.Write(ctx, conn, ExecMessage{Type: "input", Data: "\x02\n"}); err != nil {
+				t.Fatalf("Failed to write input: %v", err)
+			}
+			sentInput = true
 			continue
 		}
 		if msg.Type == "output" {
@@ -384,7 +394,6 @@ func TestExecTerminal_ControlCharacters(t *testing.T) {
 			return // success
 		}
 	}
-	t.Errorf("Ctrl-B (\\x02) was not delivered through pty; cat -v output: %q", output.String())
 }
 
 // TestExecTerminal_ShelleyEnvVars confirms the websocket spawner exposes
