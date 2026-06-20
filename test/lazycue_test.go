@@ -116,6 +116,20 @@ func TestNewPageDraftStatusBarNotDuplicated(t *testing.T) {
 	lazyTest(t, `Navigate to /new. There should be exactly one new-conversation status block (selector ".status-bar-new-conversation" should match exactly 1 element). Type "hello draft" into the message input (data-testid "message-input"). Typing promotes the conversation to a draft, so wait for the URL to contain "/c/". After that, add a short sleep (about 1 second) to let the UI settle, then confirm the new-conversation status block is NOT duplicated: selector ".status-bar-new-conversation" should still match exactly 1 element.`)
 }
 
+// Regression test for the iOS "keyboard closes after the first character" bug.
+// Typing into the new-conversation composer lazily creates a draft conversation
+// (~600ms after the first keystroke), which flips the app's conversationId from
+// null to the new draft id. A bug made that flip run the conversation-switch
+// load path on a cache miss, briefly setting loading=true and DISABLING the
+// focused textarea. On iOS, disabling a focused element fires a blur event and
+// dismisses the soft keyboard, forcing the user to tap the field again. We
+// detect that symptom deterministically: focus the textarea, install a blur
+// counter, type enough to materialize the draft, then assert the textarea never
+// blurred, is still enabled, and is still the active element.
+func TestNewPageDraftKeepsInputFocused(t *testing.T) {
+	lazyTest(t, `Navigate to /new. Using an eval step, focus the message input and install a blur counter on it: run the JavaScript "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');el.focus();window.__blurCount=0;el.addEventListener('blur',function(){window.__blurCount++;});return document.activeElement===el;})()" and expect the result "true". Then type "hello there" into the message input (data-testid "message-input"). Typing lazily promotes the conversation to a draft, so wait for the URL to contain "/c/". After that, add a sleep of about 1.5 seconds to let the draft creation and any re-render settle. Then assert the textarea never lost focus during the draft creation: eval "window.__blurCount" and expect "0". Also assert the textarea is still enabled and focused: eval "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');return (!el.disabled)&&document.activeElement===el;})()" and expect "true".`)
+}
+
 // --- Conversation tests (ported from ui/e2e/conversation.spec.ts) ---
 //
 // These drive the predictable LLM service through the real UI. The predictable

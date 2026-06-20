@@ -2991,6 +2991,20 @@ function ChatInterface({
         })
         .then((conv) => {
           draftConvIdRef.current = conv.conversation_id;
+          // Seed the message store with an empty full-history record for the
+          // brand-new draft *before* conversationId flips to it. Otherwise the
+          // conversation-switch effect runs loadMessages on a cache miss,
+          // which sets loading=true and disables the textarea. On iOS,
+          // disabling the focused textarea blurs it and dismisses the soft
+          // keyboard mid-typing — the user has to tap the field again. With a
+          // cache hit, loadMessages short-circuits and never toggles loading.
+          messageStore.applyFullHistory(conv.conversation_id, {
+            conversation_id: conv.conversation_id,
+            messages: [],
+            conversation: conv,
+            context_window_size: 0,
+            max_sequence_id: 0,
+          });
           // Mark this as the current input session's draft so the key flip
           // below doesn't remount the textarea out from under the caret.
           setLazyDraftId(conv.conversation_id);
