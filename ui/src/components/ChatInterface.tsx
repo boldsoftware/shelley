@@ -1280,6 +1280,11 @@ function ChatInterface({
   const loadingProgressDelayRef = useRef<number | null>(null);
   // Track the current conversation ID to detect if user navigated away during async operations
   const currentConversationIdRef = useRef<string | null>(conversationId);
+  // Mirror of lazyDraftId (the state lives with the draft logic below) that the
+  // message-load effect can read without taking lazyDraftId as a dependency.
+  // Written synchronously when a draft is lazily created so the load triggered
+  // by the resulting conversationId flip can be skipped before any effect runs.
+  const lazyDraftIdRef = useRef<string | null>(null);
 
   const handleOpenDiffViewer = useCallback((commit: string, cwd?: string) => {
     setDiffViewerInitialCommit(commit);
@@ -1448,7 +1453,15 @@ function ChatInterface({
     const unsubStore = messageStore.subscribe(focusedId, sync);
     const unsubTransient = messageStore.subscribeTransient(focusedId, syncTransient);
 
-    loadMessages(focusedId);
+    // A draft we just lazily created from this input session has no messages
+    // to load. Skip the load so `loading` never flips on — toggling it would
+    // disable the textarea, which on iOS dismisses the soft keyboard mid-typing
+    // (and the post-load refocus can't reopen it without a user gesture). Live
+    // updates still arrive via the store subscription above; reconnect-driven
+    // reloads still call loadMessages normally.
+    if (focusedId !== lazyDraftIdRef.current) {
+      loadMessages(focusedId);
+    }
 
     return () => {
       unsubStore();
@@ -2937,7 +2950,10 @@ function ChatInterface({
   const [lazyDraftId, setLazyDraftId] = useState<string | null>(null);
   useEffect(() => {
     // Genuine navigation to a different conversation ends the session.
-    if (lazyDraftId && conversationId !== lazyDraftId) setLazyDraftId(null);
+    if (lazyDraftId && conversationId !== lazyDraftId) {
+      setLazyDraftId(null);
+      lazyDraftIdRef.current = null;
+    }
   }, [conversationId, lazyDraftId]);
 
   // Initialize from the conversation row when switching into a draft.
@@ -2991,9 +3007,13 @@ function ChatInterface({
         })
         .then((conv) => {
           draftConvIdRef.current = conv.conversation_id;
-          // Mark this as the current input session's draft so the key flip
-          // below doesn't remount the textarea out from under the caret.
+          // Mark this as the current input session's draft so (a) the key flip
+          // below doesn't remount the textarea out from under the caret and
+          // (b) the message-load effect skips its pointless, keyboard-dismissing
+          // load for it. The ref is set synchronously (before the conversationId
+          // flip's effect runs); the state drives the render-time key.
           setLazyDraftId(conv.conversation_id);
+          lazyDraftIdRef.current = conv.conversation_id;
           onDraftCreated?.(conv.conversation_id);
           return conv.conversation_id;
         });
