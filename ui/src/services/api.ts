@@ -223,6 +223,25 @@ class ApiService {
     return response.json();
   }
 
+  async updateThinkingLevel(
+    conversationId: string,
+    thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh",
+  ): Promise<{ status: string; conversation_id: string; thinking_level: string; changed: boolean }> {
+    const response = await fetch(
+      `${this.baseUrl}/conversation/${conversationId}/thinking-level`,
+      {
+        method: "POST",
+        headers: this.postHeaders,
+        body: JSON.stringify({ thinking_level: thinkingLevel }),
+      },
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Failed to update reasoning level: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
   async startNewGeneration(conversationId: string): Promise<Conversation> {
     const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/new-generation`, {
       method: "POST",

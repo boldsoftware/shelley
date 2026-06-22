@@ -999,6 +999,9 @@ func (s *Server) conversationMux() *http.ServeMux {
 	mux.HandleFunc("POST /{id}/switch-model", func(w http.ResponseWriter, r *http.Request) {
 		s.handleSwitchModel(w, r, r.PathValue("id"))
 	})
+	mux.HandleFunc("POST /{id}/thinking-level", func(w http.ResponseWriter, r *http.Request) {
+		s.handleUpdateThinkingLevel(w, r, r.PathValue("id"))
+	})
 	return mux
 }
 

@@ -799,6 +799,26 @@ function App() {
     }
   };
 
+  const handleUpdateThinkingLevel = async (
+    conversationId: string,
+    level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh",
+  ) => {
+    try {
+      const result = await api.updateThinkingLevel(conversationId, level);
+      if (result.changed && viewedConversation?.conversation_id === conversationId) {
+        const opts = JSON.parse(viewedConversation.conversation_options || "{}");
+        setViewedConversation({
+          ...viewedConversation,
+          conversation_options: JSON.stringify({ ...opts, thinking_level: level }),
+        });
+      }
+    } catch (err) {
+      console.error("Failed to update reasoning level:", err);
+      setError(err instanceof Error ? err.message : "Failed to update reasoning level");
+      throw err;
+    }
+  };
+
   return (
     <WorkerPoolContextProvider
       poolOptions={diffsPoolOptions}
@@ -850,6 +870,7 @@ function App() {
             }}
             onDistillNewGeneration={handleDistillNewGeneration}
             onSwitchModel={handleSwitchModel}
+            onUpdateThinkingLevel={handleUpdateThinkingLevel}
             mostRecentCwd={mostRecentCwd}
             isDrawerCollapsed={drawerCollapsed}
             onToggleDrawerCollapse={toggleDrawerCollapsed}

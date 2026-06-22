@@ -776,6 +776,7 @@ interface ChatInterfaceProps {
     instructions?: string,
   ) => Promise<void>;
   onSwitchModel?: (conversationId: string, model: string) => Promise<void>;
+  onUpdateThinkingLevel?: (conversationId: string, level: ThinkingLevel) => Promise<void>;
   mostRecentCwd?: string | null;
   isDrawerCollapsed?: boolean;
   onToggleDrawerCollapse?: () => void;
@@ -918,6 +919,7 @@ function ChatInterface({
   onFirstMessage,
   onDistillNewGeneration,
   onSwitchModel,
+  onUpdateThinkingLevel,
   mostRecentCwd,
   isDrawerCollapsed,
   onToggleDrawerCollapse,
@@ -953,6 +955,9 @@ function ChatInterface({
       source?: string;
       ready: boolean;
       max_context_tokens?: number;
+      base_url?: string;
+      api_type?: string;
+      supports_images?: boolean;
     }>
   >(window.__SHELLEY_INIT__?.models || []);
   const THINKING_LEVEL_KEY = "shelley.thinkingLevel";
@@ -2076,6 +2081,18 @@ function ChatInterface({
     }
   };
 
+  const handleUpdateThinkingLevel = async (level: ThinkingLevel) => {
+    if (!conversationId || !onUpdateThinkingLevel) return;
+    if (level === effectiveThinkingLevel) return;
+    try {
+      await onUpdateThinkingLevel(conversationId, level);
+      setThinkingLevel(level);
+    } catch (err) {
+      console.error("Failed to update reasoning level:", err);
+      setError(err instanceof Error ? err.message : "Failed to update reasoning level");
+    }
+  };
+
   const handleStartNewGeneration = async () => {
     if (!conversationId) return;
     const conversation = await api.startNewGeneration(conversationId);
@@ -2100,6 +2117,7 @@ function ChatInterface({
       return null;
     }
   }, [currentConversation?.conversation_options]);
+  const effectiveThinkingLevel = (conversationThinkingLevel || DEFAULT_THINKING_LEVEL) as ThinkingLevel;
 
   const handleUnarchive = async () => {
     if (!conversationId) return;
@@ -2720,6 +2738,9 @@ function ChatInterface({
         <span className="status-model-readonly hide-on-mobile" title="Active model">
           {selectedModelDisplayName}
         </span>
+        <span className="status-model-readonly hide-on-mobile" title="Reasoning level">
+          {t("thinkingLabel")}: {effectiveThinkingLevel}
+        </span>
         {(currentConversation?.cwd || selectedCwd) && (
           <span
             className="status-cwd-readonly hide-on-mobile"
@@ -2920,6 +2941,21 @@ function ChatInterface({
               selectedModel={selectedModel}
               onSelectModel={handleSwitchModel}
               onManageModels={() => onOpenModelsModal?.()}
+              disabled={agentWorking}
+            />
+          </div>
+        )}
+        {onUpdateThinkingLevel && conversationId && (
+          <div className="status-field status-field-thinking hide-on-mobile">
+            <span
+              className="status-field-label"
+              title="Reasoning effort the model spends before answering"
+            >
+              {t("thinkingLabel")}
+            </span>
+            <ThinkingLevelPicker
+              value={effectiveThinkingLevel}
+              onChange={handleUpdateThinkingLevel}
               disabled={agentWorking}
             />
           </div>
