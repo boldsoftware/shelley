@@ -775,6 +775,7 @@ interface ChatInterfaceProps {
     method?: "default" | "compact",
     instructions?: string,
   ) => Promise<void>;
+  onSwitchModel?: (conversationId: string, model: string) => Promise<void>;
   mostRecentCwd?: string | null;
   isDrawerCollapsed?: boolean;
   onToggleDrawerCollapse?: () => void;
@@ -916,6 +917,7 @@ function ChatInterface({
   onConversationUpdate,
   onFirstMessage,
   onDistillNewGeneration,
+  onSwitchModel,
   mostRecentCwd,
   isDrawerCollapsed,
   onToggleDrawerCollapse,
@@ -2062,6 +2064,18 @@ function ChatInterface({
     );
   };
 
+  const handleSwitchModel = async (newModelId: string) => {
+    if (!conversationId || !onSwitchModel) return;
+    if (newModelId === selectedModel) return;
+    try {
+      await onSwitchModel(conversationId, newModelId);
+      setSelectedModel(newModelId);
+    } catch (err) {
+      console.error("Failed to switch model:", err);
+      setError(err instanceof Error ? err.message : "Failed to switch model");
+    }
+  };
+
   const handleStartNewGeneration = async () => {
     if (!conversationId) return;
     const conversation = await api.startNewGeneration(conversationId);
@@ -2467,6 +2481,9 @@ function ChatInterface({
           model={modelsByGeneration.get(generation) || currentConversation?.model}
           models={models}
           thinkingLevel={conversationThinkingLevel}
+          onSwitchModel={onSwitchModel && conversationId ? handleSwitchModel : undefined}
+          onManageModels={onOpenModelsModal}
+          switchDisabled={agentWorking}
         />,
       ];
       const systemMessages = systemMessagesByGeneration.get(generation) || [];
@@ -2887,12 +2904,23 @@ function ChatInterface({
         </div>
       </div>
     ) : (
-      // Active conversation — show ready message and context bar
+      // Active conversation — show ready message, model picker, and context bar
       <div className="status-bar-active">
         <span className="status-message status-ready">
           <span className="hide-on-mobile">Ready on </span>
           {hostname}
         </span>
+        {onSwitchModel && conversationId && (
+          <div className="status-field status-field-model hide-on-mobile">
+            <ModelPicker
+              models={models}
+              selectedModel={selectedModel}
+              onSelectModel={handleSwitchModel}
+              onManageModels={() => onOpenModelsModal?.()}
+              disabled={agentWorking}
+            />
+          </div>
+        )}
         {(currentConversation?.cwd || selectedCwd) && (
           <span
             className="status-cwd-readonly hide-on-mobile"

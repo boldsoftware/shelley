@@ -783,6 +783,22 @@ function App() {
     }
   };
 
+  const handleSwitchModel = async (conversationId: string, model: string) => {
+    try {
+      const result = await api.switchModel(conversationId, model);
+      if (result.changed && viewedConversation?.conversation_id === conversationId) {
+        // Optimistically update the viewed conversation so the UI reflects
+        // the switch immediately. The SSE stream will deliver the canonical
+        // update shortly after.
+        setViewedConversation({ ...viewedConversation, model });
+      }
+    } catch (err) {
+      console.error("Failed to switch model:", err);
+      setError(err instanceof Error ? err.message : "Failed to switch model");
+      throw err;
+    }
+  };
+
   return (
     <WorkerPoolContextProvider
       poolOptions={diffsPoolOptions}
@@ -833,6 +849,7 @@ function App() {
               setCurrentConversationId(id);
             }}
             onDistillNewGeneration={handleDistillNewGeneration}
+            onSwitchModel={handleSwitchModel}
             mostRecentCwd={mostRecentCwd}
             isDrawerCollapsed={drawerCollapsed}
             onToggleDrawerCollapse={toggleDrawerCollapsed}

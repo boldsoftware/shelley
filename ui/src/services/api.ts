@@ -204,6 +204,25 @@ class ApiService {
     return response.json();
   }
 
+  async switchModel(
+    conversationId: string,
+    model: string,
+  ): Promise<{ status: string; conversation_id: string; model: string; changed: boolean }> {
+    const response = await fetch(
+      `${this.baseUrl}/conversation/${conversationId}/switch-model`,
+      {
+        method: "POST",
+        headers: this.postHeaders,
+        body: JSON.stringify({ model }),
+      },
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Failed to switch model: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
   async startNewGeneration(conversationId: string): Promise<Conversation> {
     const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/new-generation`, {
       method: "POST",
