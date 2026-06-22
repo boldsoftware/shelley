@@ -4695,6 +4695,17 @@ svg {
   unicode-bidi: plaintext;
 }
 
+.status-model-readonly {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 20ch;
+}
+
 .status-stop-button {
   display: flex;
   align-items: center;

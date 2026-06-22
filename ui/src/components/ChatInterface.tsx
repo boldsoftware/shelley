@@ -2717,6 +2717,9 @@ function ChatInterface({
             <span className="status-stop-label">{cancelling ? "Cancelling..." : "Stop"}</span>
           </button>
         </div>
+        <span className="status-model-readonly hide-on-mobile" title="Active model">
+          {selectedModelDisplayName}
+        </span>
         {(currentConversation?.cwd || selectedCwd) && (
           <span
             className="status-cwd-readonly hide-on-mobile"
