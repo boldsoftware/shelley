@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from "@playwright/test";
 
 /**
  * The test server is managed by globalSetup (scripts/global-setup.ts).
@@ -11,8 +11,8 @@ import { defineConfig, devices } from '@playwright/test';
  * @see https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
-  testDir: './e2e',
-  globalSetup: './scripts/global-setup.ts',
+  testDir: "./e2e",
+  globalSetup: "./scripts/global-setup.ts",
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -33,23 +33,45 @@ export default defineConfig({
    * low while avoiding the overload that made every run drop ~1 test. */
   workers: process.env.CI ? 2 : 1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: process.env.CI ? [['html', { open: 'never' }], ['list']] : 'list',
+  reporter: process.env.CI ? [["html", { open: "never" }], ["list"]] : "list",
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* baseURL is set automatically via PLAYWRIGHT_TEST_BASE_URL from global-setup */
     /* Collect trace on all tests, keep only on failure */
-    trace: 'retain-on-failure',
+    trace: "retain-on-failure",
     /* Take a screenshot after every test */
-    screenshot: 'on',
+    screenshot: "on",
     /* Record video on all tests, keep only on failure */
-    video: 'retain-on-failure',
+    video: "retain-on-failure",
   },
 
-  /* Just test mobile Chrome for simplicity */
-  projects: [
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-  ],
+  /*
+   * Both frontends ("worlds") are built and served by one binary; the server
+   * picks one per request from the `vue-ui` feature flag, overridable by the
+   * X-Shelley-UI header. We run the whole suite once per world by pinning that
+   * header per project, so every shared spec is exercised against both the Vue
+   * and React frontends.
+   *
+   * Test layout:
+   *   e2e/*.spec.ts        shared — run in BOTH worlds (the DOM/ARIA contract
+   *                        is identical, so a spec should pass in both)
+   *   e2e/vue/*.spec.ts    Vue-only — run only in the vue project
+   *   e2e/react/*.spec.ts  React-only — run only in the react project
+   *
+   * When a behavior legitimately diverges between worlds, copy the spec into
+   * e2e/vue/ and e2e/react/ and edit each independently, rather than adding
+   * world conditionals to a shared spec.
+   *
+   * Set UI_WORLD=vue|react to run just one world locally.
+   */
+  projects: (["vue", "react"] as const)
+    .filter((world) => !process.env.UI_WORLD || process.env.UI_WORLD === world)
+    .map((world) => ({
+      name: world,
+      testIgnore: world === "vue" ? "**/react/**" : "**/vue/**",
+      use: {
+        ...devices["Pixel 5"],
+        extraHTTPHeaders: { "X-Shelley-UI": world },
+      },
+    })),
 });

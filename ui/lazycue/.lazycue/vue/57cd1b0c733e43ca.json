@@ -1,0 +1,64 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type the text bash: echo \"just plain text with no escapes\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for a completed tool call (data-testid \"tool-call-completed\") to appear, then click the bash tool header (\".bash-tool-header\") to expand the details panel (\".bash-tool-details\" should become visible). The output area (the last \".bash-tool-code\" element) should contain the text \"just plain text with no escapes\". Since there are no ANSI codes, that output element should contain zero \u003cspan\u003e elements (selector \".bash-tool-details .bash-tool-code span\" should match 0 elements).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "bash: echo \"just plain text with no escapes\""
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='tool-call-completed']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool-header",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool-header"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool-details",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const els = document.querySelectorAll('.bash-tool-details .bash-tool-code'); return els[els.length - 1].textContent; })()",
+      "expect": "just plain text with no escapes\n"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool-details .bash-tool-code span",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T00:18:14.53507545Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 81882,
+    "output_tokens": 3731,
+    "estimated_cost_usd": 0.301611,
+    "git_sha": "4d2b2cf83724808c579db702e84d39bf407ee24d",
+    "mode": "generated"
+  }
+}

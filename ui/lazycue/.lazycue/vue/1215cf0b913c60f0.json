@@ -1,0 +1,81 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"bash: sleep 50\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the thinking indicator (data-testid \"agent-thinking\") and the stop button (\".status-stop-button\") to become visible. Click the stop button: the thinking indicator and the stop button should both become hidden. Then type \"echo: after cancel\" into the message input and click the send button again; the echoed text \"after cancel\" should appear on the page.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "bash: sleep 50"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".status-stop-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".status-stop-button"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".status-stop-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='agent-thinking']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-stop-button"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: after cancel"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "after cancel",
+      "timeout": "15s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T00:45:02.284093423Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 31565,
+    "output_tokens": 1345,
+    "estimated_cost_usd": 0.11487,
+    "git_sha": "4d2b2cf83724808c579db702e84d39bf407ee24d",
+    "mode": "generated"
+  }
+}

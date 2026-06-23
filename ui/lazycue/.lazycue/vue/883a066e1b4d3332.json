@@ -1,0 +1,48 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"delay: 15\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). The agent becomes busy: the thinking indicator (data-testid \"agent-thinking\") should become visible, and the split-button chevron (data-testid \"send-options-button\") should also be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "delay: 15"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='agent-thinking']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='send-options-button']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T00:22:00.090006513Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 34804,
+    "output_tokens": 1267,
+    "estimated_cost_usd": 0.123417,
+    "git_sha": "4d2b2cf83724808c579db702e84d39bf407ee24d",
+    "mode": "generated"
+  }
+}

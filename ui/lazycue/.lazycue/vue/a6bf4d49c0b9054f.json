@@ -1,0 +1,48 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. The page title should be \"Shelley Agent\". The message input (a textarea with data-testid \"message-input\") should be visible and initially empty, and the send button (data-testid \"send-button\") should be visible but disabled while the input is empty.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_title",
+      "text": "Shelley Agent"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value",
+      "expect": ""
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"send-button\"]').disabled",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-09T00:44:02.027782916Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 29132,
+    "output_tokens": 1174,
+    "estimated_cost_usd": 0.105006,
+    "git_sha": "9a3f93f30b229df35839b908ba55c5f30d8a750f",
+    "mode": "generated"
+  }
+}

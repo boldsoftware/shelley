@@ -1,0 +1,49 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"error: test error message\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the error text \"LLM request failed: predictable error: test error message\" to appear. An element with role \"alert\" should be visible and contain that error text.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "error: test error message"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "LLM request failed: predictable error: test error message",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='alert']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='alert']",
+      "text": "LLM request failed: predictable error: test error message"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-09T23:54:03.153607156Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 17202,
+    "output_tokens": 1101,
+    "estimated_cost_usd": 0.068121,
+    "git_sha": "fd9dd6cf135ef1f880b5e4caf42958d35fa6b341",
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"delay: 10\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"); wait for the thinking indicator (data-testid \"agent-thinking\") to become visible. Then type \"echo: queued drain test\" into the message input, click the split-button chevron (data-testid \"send-options-button\"), and click the queue option (data-testid \"queue-option\"); wait for the queued badge (data-testid \"queued-badge\") to become visible. Then wait (up to 30 seconds) for the first agent reply \"Delayed for 10 seconds\" to appear. After the agent finishes, the queued message drains and is processed: wait (up to 30 seconds) for the queued badge (data-testid \"queued-badge\") to no longer be visible, and wait (up to 30 seconds) for the echoed text \"queued drain test\" to appear on the page.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "delay: 10"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: queued drain test"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-options-button']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='queue-option']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='queued-badge']",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_text",
+      "text": "Delayed for 10 seconds",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='queued-badge']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_text",
+      "text": "queued drain test",
+      "timeout": "30s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T01:21:19.143681844Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 40752,
+    "output_tokens": 1691,
+    "estimated_cost_usd": 0.147621,
+    "git_sha": "941cfe71964934066ad33a370e26aa42e557ecd8",
+    "mode": "generated"
+  }
+}

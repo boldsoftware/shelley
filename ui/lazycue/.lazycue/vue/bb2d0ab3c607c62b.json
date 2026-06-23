@@ -1,0 +1,67 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"delay: 30\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the thinking indicator (data-testid \"agent-thinking\") to become visible and the stop button (\".status-stop-button\") to become visible. Click the stop button. Afterwards the stop button (\".status-stop-button\") should no longer be visible and the thinking indicator (data-testid \"agent-thinking\") should no longer be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "delay: 30"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".status-stop-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".status-stop-button"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".status-stop-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-stop-button"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='agent-thinking']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T00:44:32.424603924Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 81256,
+    "output_tokens": 1821,
+    "estimated_cost_usd": 0.271083,
+    "git_sha": "4d2b2cf83724808c579db702e84d39bf407ee24d",
+    "mode": "generated"
+  }
+}

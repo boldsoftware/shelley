@@ -1,0 +1,74 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"Hello\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the reply \"Hello! I'm Shelley, your AI assistant. How can I help you today?\" to appear. Sending the first message navigates the app to a new conversation URL, so wait for the URL to contain \"/c/\" before continuing. Then type \"echo: second message\" into the same message input and click the send button again; wait for the echoed text \"second message\" to appear. Finally, both the first reply \"Hello! I'm Shelley, your AI assistant. How can I help you today?\" and the text \"second message\" should still be present in the page body.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Hello"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "Hello! I'm Shelley, your AI assistant. How can I help you today?",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: second message"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "second message",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_text",
+      "text": "Hello! I'm Shelley, your AI assistant. How can I help you today?",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_text",
+      "text": "second message",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T00:10:39.33578667Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 25017,
+    "output_tokens": 1675,
+    "estimated_cost_usd": 0.10017600000000002,
+    "git_sha": "fd9dd6cf135ef1f880b5e4caf42958d35fa6b341",
+    "mode": "generated"
+  }
+}

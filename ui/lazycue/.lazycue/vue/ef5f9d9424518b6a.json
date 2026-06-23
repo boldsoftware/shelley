@@ -1,0 +1,62 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"delay: 15\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"); wait for the thinking indicator (data-testid \"agent-thinking\") to become visible. Then type \"echo: queued hello\" into the message input, click the split-button chevron (data-testid \"send-options-button\") to open the menu, and click the queue option (data-testid \"queue-option\"). A queued badge (data-testid \"queued-badge\") should become visible, and within it a cancel button (data-testid \"cancel-queued\") should be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "delay: 15"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "15s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: queued hello"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-options-button']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='queue-option']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='queued-badge']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='queued-badge'] [data-testid='cancel-queued']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T00:22:30.292076251Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 28568,
+    "output_tokens": 1484,
+    "estimated_cost_usd": 0.107964,
+    "git_sha": "4d2b2cf83724808c579db702e84d39bf407ee24d",
+    "mode": "generated"
+  }
+}

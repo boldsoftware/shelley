@@ -1,0 +1,48 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. The message input (data-testid \"message-input\") should have an aria-label of \"Message input\" and a non-empty placeholder attribute. The send button (data-testid \"send-button\") should have an aria-label of \"Send message\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='message-input']",
+      "attribute": "aria-label",
+      "value": "Message input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').placeholder.length \u003e 0",
+      "expect": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='send-button']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='send-button']",
+      "attribute": "aria-label",
+      "value": "Send message"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-09T00:44:34.096420928Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 31851,
+    "output_tokens": 1082,
+    "estimated_cost_usd": 0.111783,
+    "git_sha": "9a3f93f30b229df35839b908ba55c5f30d8a750f",
+    "mode": "generated"
+  }
+}

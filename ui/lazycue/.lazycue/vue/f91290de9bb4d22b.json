@@ -1,0 +1,55 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type the text bash: echo \"hello world\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the agent text that begins with \"I'll run the command:\" and includes echo \"hello world\". A completed tool call (an element with data-testid \"tool-call-completed\") should become visible, and the text \"bash\" should be visible somewhere on the page.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "bash: echo \"hello world\""
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "I'll run the command:",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_text",
+      "text": "echo \"hello world\"",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='tool-call-completed']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_text",
+      "text": "bash",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-09T23:51:42.770355728Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 14436,
+    "output_tokens": 1106,
+    "estimated_cost_usd": 0.059898,
+    "git_sha": "fd9dd6cf135ef1f880b5e4caf42958d35fa6b341",
+    "mode": "generated"
+  }
+}

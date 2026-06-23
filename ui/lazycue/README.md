@@ -14,6 +14,16 @@ The cache files in `.lazycue/` are tracked in git and committed like any
 other source. They are clearly marked as machine-managed — don't hand-edit
 them; edit the test description instead.
 
+### Two worlds: `.lazycue/vue/` and `.lazycue/react/`
+
+Shelley ships two frontends ("worlds") from one binary, selected by the
+`vue-ui` feature flag. The lazycue suite runs once per world (CI sets
+`LAZYCUE_WORLD=vue|react`), and each world has its **own** cache subdir.
+The cache key is the description hash, which is identical across worlds, so a
+shared dir would let a heal in one world silently overwrite the other's cached
+script. Keeping them separate means each world's DSL is healed and committed
+independently — the worlds can diverge without healing each other.
+
 ## Adding a test
 
 Add a Go test function in `shelley/test/lazycue_test.go` that calls

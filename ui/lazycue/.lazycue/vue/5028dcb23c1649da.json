@@ -1,0 +1,50 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"think: This is a long thought that should be truncated in the header display\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the agent text \"I've considered my approach.\" to appear. The thinking content element (\".thinking-content\") should be visible and contain the text \"This is a long thought\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "think: This is a long thought that should be truncated in the header display"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "I've considered my approach.",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".thinking-content",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".thinking-content",
+      "text": "This is a long thought"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T00:56:55.561982945Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 168025,
+    "output_tokens": 4092,
+    "estimated_cost_usd": 0.565455,
+    "git_sha": "26f42e97566481cedf8db4ad32bb30008c1ea10f",
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"this is an undefined message\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the default fallback reply \"edit predictable.go to add a response for that one...\" to appear on the page. The sent message \"this is an undefined message\" should also be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "this is an undefined message"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "edit predictable.go to add a response for that one...",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "wait_text",
+      "text": "this is an undefined message",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-09T23:53:01.726373674Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 17401,
+    "output_tokens": 1016,
+    "estimated_cost_usd": 0.067443,
+    "git_sha": "fd9dd6cf135ef1f880b5e4caf42958d35fa6b341",
+    "mode": "generated"
+  }
+}

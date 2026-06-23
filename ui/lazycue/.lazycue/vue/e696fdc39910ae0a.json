@@ -1,0 +1,49 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"bash: unique-test-command-xyz123\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for a completed tool call (data-testid \"tool-call-completed\") to appear. The bash tool command element (\".bash-tool-command\") should be visible and contain the text \"unique-test-command-xyz123\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "bash: unique-test-command-xyz123"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='tool-call-completed']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".bash-tool-command"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool-command",
+      "text": "unique-test-command-xyz123"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T00:18:46.406461278Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 31541,
+    "output_tokens": 1411,
+    "estimated_cost_usd": 0.115788,
+    "git_sha": "4d2b2cf83724808c579db702e84d39bf407ee24d",
+    "mode": "generated"
+  }
+}

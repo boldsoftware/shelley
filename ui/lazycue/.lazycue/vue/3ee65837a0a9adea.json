@@ -1,0 +1,66 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"wide tables\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the agent's tall table response by waiting for the text \"Wide Table (many columns)\" to appear. The tall markdown content keeps laying out for a moment after that text appears, so add a short sleep (about 1 second) to let the scrollable messages container (\".messages-container\") settle. While pinned at the bottom, the scroll-to-bottom button (\".scroll-to-bottom-button\") should not be visible. Then, using an eval step, set the scrollTop of \".messages-container\" to 0 to scroll to the top. After that, wait for the scroll-to-bottom button (\".scroll-to-bottom-button\") to become visible (it appears in response to the scroll event). Click it, then wait for \".scroll-to-bottom-button\" to become hidden again.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "wide tables"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "Wide Table (many columns)",
+      "timeout": "30s"
+    },
+    {
+      "action": "sleep",
+      "timeout": "1s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container').scrollTop = 0"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T00:43:36.191839653Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 28373,
+    "output_tokens": 1319,
+    "estimated_cost_usd": 0.104904,
+    "git_sha": "4d2b2cf83724808c579db702e84d39bf407ee24d",
+    "mode": "generated"
+  }
+}

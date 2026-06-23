@@ -1,0 +1,36 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new?diff=working\u0026cwd=/tmp/shelley-lazycue-diff-fixture . This opens the git diff viewer for the working-tree changes of that repository. Wait for the file picker (a \u003cselect\u003e element with selector \"select.diff-viewer-select\") to be visible. The working tree has exactly four changed files, each appearing as an \u003coption\u003e in that select with a status-symbol prefix: a modified file shown as \"~ tracked_mod.txt\", a deleted file shown as \"- tracked_del.txt\", a brand-new untracked file shown as \"+ untracked_added.txt\", and a modified committed file whose name contains a space shown as \"~ spaced name.txt\". Verify all four options are present, with their full untruncated paths, by running an eval step whose expression is \"(() =\u003e { const opts = Array.from(document.querySelectorAll('select.diff-viewer-select option')).map(o =\u003e o.textContent.trim()); const has = (sym, name) =\u003e opts.some(t =\u003e t.startsWith(sym) \u0026\u0026 t.includes(name)); return has('+','untracked_added.txt') \u0026\u0026 has('~','tracked_mod.txt') \u0026\u0026 has('-','tracked_del.txt') \u0026\u0026 has('~','spaced name.txt') ? 'true' : 'false'; })()\" and expect the result \"true\". Two regression cases matter here: the untracked (added) file must be present with the \"+\" prefix, and the committed file with a space must appear as the full \"spaced name.txt\" (not truncated at the space to \"spaced\").",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new?diff=working\u0026cwd=/tmp/shelley-lazycue-diff-fixture"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "select.diff-viewer-select",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_text_gone",
+      "text": "No files",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const opts = Array.from(document.querySelectorAll('select.diff-viewer-select option')).map(o =\u003e o.textContent.trim()); const has = (sym, name) =\u003e opts.some(t =\u003e t.startsWith(sym) \u0026\u0026 t.includes(name)); return has('+','untracked_added.txt') \u0026\u0026 has('~','tracked_mod.txt') \u0026\u0026 has('-','tracked_del.txt') \u0026\u0026 has('~','spaced name.txt') ? 'true' : 'false'; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-16T04:32:28.072928352Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 11621,
+    "output_tokens": 1072,
+    "estimated_cost_usd": 0.050943,
+    "git_sha": "eea59e3903cdcdc66c9eba00102fedbecc44fb5e",
+    "mode": "generated"
+  }
+}

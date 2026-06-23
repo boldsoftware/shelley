@@ -1,0 +1,60 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type the text markdown: \u003cinput type=\"text\" placeholder=\"Enter password\"\u003e \u003cinput type=\"password\"\u003e safe into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the agent message to render. The last agent message (\".message-agent\") should contain the text \"safe\". The text and password input elements should be stripped: selector \".message-agent input[type='text']\" should match 0 elements and selector \".message-agent input[type='password']\" should match 0 elements.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "markdown: \u003cinput type=\"text\" placeholder=\"Enter password\"\u003e \u003cinput type=\"password\"\u003e safe"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-agent",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_text",
+      "text": "safe",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-agent",
+      "text": "safe"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-agent input[type='text']",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-agent input[type='password']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T00:51:29.799320519Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 20724,
+    "output_tokens": 684,
+    "estimated_cost_usd": 0.072432,
+    "git_sha": "26f42e97566481cedf8db4ad32bb30008c1ea10f",
+    "mode": "generated"
+  }
+}

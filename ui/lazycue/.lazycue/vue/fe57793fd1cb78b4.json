@@ -1,0 +1,46 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type the text \"hello world\" into the message input (data-testid \"message-input\"). After typing, the send button (data-testid \"send-button\") should become enabled.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='send-button']",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"send-button\"]').disabled",
+      "expect": "true"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "hello world"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"send-button\"]').disabled",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-09T00:44:49.901245633Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13359,
+    "output_tokens": 582,
+    "estimated_cost_usd": 0.048807,
+    "git_sha": "9a3f93f30b229df35839b908ba55c5f30d8a750f",
+    "mode": "generated"
+  }
+}

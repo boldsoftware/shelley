@@ -1,0 +1,55 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Using an eval step, focus the message input and install a blur counter on it: run the JavaScript \"(function(){var el=document.querySelector('[data-testid=\\\"message-input\\\"]');el.focus();window.__blurCount=0;el.addEventListener('blur',function(){window.__blurCount++;});return document.activeElement===el;})()\" and expect the result \"true\". Then type \"hello there\" into the message input (data-testid \"message-input\"). Typing lazily promotes the conversation to a draft, so wait for the URL to contain \"/c/\". After that, add a sleep of about 1.5 seconds to let the draft creation and any re-render settle. Then assert the textarea never lost focus during the draft creation: eval \"window.__blurCount\" and expect \"0\". Also assert the textarea is still enabled and focused: eval \"(function(){var el=document.querySelector('[data-testid=\\\"message-input\\\"]');return (!el.disabled)\u0026\u0026document.activeElement===el;})()\" and expect \"true\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');el.focus();window.__blurCount=0;el.addEventListener('blur',function(){window.__blurCount++;});return document.activeElement===el;})()",
+      "expect": "true"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "hello there"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "15s"
+    },
+    {
+      "action": "sleep",
+      "timeout": "1.5s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__blurCount",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');return (!el.disabled)\u0026\u0026document.activeElement===el;})()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-23T17:12:12.110481517Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 22069,
+    "output_tokens": 807,
+    "estimated_cost_usd": 0.078312,
+    "git_sha": "0ed76fd0914ea88f626a0d0c9f9e65eb30de5752",
+    "mode": "generated"
+  }
+}

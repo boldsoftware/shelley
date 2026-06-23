@@ -1,0 +1,50 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"inline image\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait (up to 60 seconds) for an \u003cimg\u003e element to appear inside an agent message (selector \".message-agent img\"). That image's src attribute should match the pattern of starting with \"/api/message/\" and containing \"/file?path=\". The image should actually load: its naturalWidth (read via eval on the img element) should be greater than 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "inline image"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-agent img",
+      "timeout": "60s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const src = document.querySelector('.message-agent img').getAttribute('src'); return src.startsWith('/api/message/') \u0026\u0026 src.includes('/file?path='); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const img = document.querySelector('.message-agent img'); return img.complete \u0026\u0026 img.naturalWidth \u003e 0; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T01:04:09.282840903Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 35933,
+    "output_tokens": 1458,
+    "estimated_cost_usd": 0.129669,
+    "git_sha": "e30b86d134206f12b3b50ca564b2eeb88729393e",
+    "mode": "generated"
+  }
+}

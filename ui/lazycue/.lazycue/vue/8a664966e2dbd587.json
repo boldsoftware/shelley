@@ -1,0 +1,51 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"echo: Visit https://example.com\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the user message to render. Within the user message (\".message-user\") there should be exactly one anchor with class \"text-link\" (selector \".message-user a.text-link\") whose href is \"https://example.com\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: Visit https://example.com"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-user",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-user a.text-link",
+      "count": 1
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-user a.text-link",
+      "attribute": "href",
+      "value": "https://example.com"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-09T23:55:09.30440332Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 26162,
+    "output_tokens": 1292,
+    "estimated_cost_usd": 0.09786600000000001,
+    "git_sha": "fd9dd6cf135ef1f880b5e4caf42958d35fa6b341",
+    "mode": "generated"
+  }
+}

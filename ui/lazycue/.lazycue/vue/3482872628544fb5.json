@@ -1,0 +1,81 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"delay: 60\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"); wait for the thinking indicator (data-testid \"agent-thinking\") to become visible. Then type \"echo: to be cancelled\" into the message input, click the split-button chevron (data-testid \"send-options-button\"), and click the queue option (data-testid \"queue-option\"). Wait for the queued badge (data-testid \"queued-badge\") to become visible, then click the cancel button (data-testid \"cancel-queued\"). The cancel only takes effect on the server and is not reflected live, so reload the page (use an eval step that calls location.reload()) and wait for the message input (data-testid \"message-input\") to be visible again. After the reload, the queued badge (data-testid \"queued-badge\") should match 0 elements and the text \"to be cancelled\" should no longer be present on the page.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "delay: 60"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "15s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: to be cancelled"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-options-button']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='queue-option']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='queued-badge']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='cancel-queued']"
+    },
+    {
+      "action": "eval",
+      "expression": "location.reload()"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='queued-badge']",
+      "count": 0
+    },
+    {
+      "action": "wait_text_gone",
+      "text": "to be cancelled",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T01:11:20.743597056Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 27376,
+    "output_tokens": 1473,
+    "estimated_cost_usd": 0.10422300000000001,
+    "git_sha": "e30b86d134206f12b3b50ca564b2eeb88729393e",
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Into the message input (data-testid \"message-input\") fill exactly this value (keep the leading 'markdown: ' prefix): `markdown: \u003cform action=\"https://evil.com/steal\"\u003e\u003cbutton type=\"submit\"\u003eLogin\u003c/button\u003e\u003c/form\u003e safe` then click the send button (data-testid \"send-button\"). Wait for the agent message to render. The last agent message (\".message-agent\") should contain the text \"safe\". Inspect only the rendered markdown body via the last \".message-agent [data-testid='message-content']\" element's innerHTML: it must NOT contain the substring \"\u003cform\", must NOT contain \"\u003cbutton\", and must NOT contain \"evil.com\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "markdown: \u003cform action=\"https://evil.com/steal\"\u003e\u003cbutton type=\"submit\"\u003eLogin\u003c/button\u003e\u003c/form\u003e safe"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-agent",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_text",
+      "text": "safe",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-agent",
+      "text": "safe"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const els = document.querySelectorAll('.message-agent [data-testid=\"message-content\"]'); const el = els[els.length - 1]; const html = el.innerHTML; if (html.includes('\u003cform')) return 'FAIL: contains \u003cform'; if (html.includes('\u003cbutton')) return 'FAIL: contains \u003cbutton'; if (html.includes('evil.com')) return 'FAIL: contains evil.com'; return 'PASS'; })()",
+      "expect": "PASS"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-10T01:12:16.420432254Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 24364,
+    "output_tokens": 1360,
+    "estimated_cost_usd": 0.093492,
+    "git_sha": "e30b86d134206f12b3b50ca564b2eeb88729393e",
+    "mode": "generated"
+  }
+}

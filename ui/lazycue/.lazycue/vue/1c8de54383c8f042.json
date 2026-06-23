@@ -1,0 +1,113 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "This test verifies that archiving the current conversation selects the one immediately below it in the list. Conversations are listed newest-first.\nStep A — create conversation \"alpha\": navigate to /new, wait for the message input (data-testid \"message-input\") to be visible, fill it with \"echo: alpha\", and click the send button (data-testid \"send-button\"). Wait for the echoed text \"alpha\" to appear and for the URL to contain \"/c/\". Then run an eval step with expression \"sessionStorage.setItem('alphaUrl', location.pathname)\".\nStep B — create conversation \"bravo\": navigate to /new again, wait for the message input (data-testid \"message-input\") to be visible, fill it with \"echo: bravo\", and click the send button (data-testid \"send-button\"). Wait for the echoed text \"bravo\" to appear and for the URL to contain \"/c/\". Then run an eval step with expression \"sessionStorage.setItem('bravoUrl', location.pathname)\".\nNow \"bravo\" is the current conversation and is at the TOP of the list, with \"alpha\" immediately below it.\nStep C — open the conversation drawer by clicking the button with aria-label \"Open conversations\", and wait for the active conversation item (selector \".conversation-item.active\") to be visible. Confirm the current URL is bravo's: run an eval step whose expression is \"location.pathname === sessionStorage.getItem('bravoUrl') ? 'true' : 'false'\" and expect the result \"true\".\nStep D — archive the active conversation. The archive button is a small icon button that a coordinate-based click can miss, so trigger it with an eval step whose expression is \"document.querySelector(\\\".conversation-item.active button[aria-label='Archive']\\\").click()\". After archiving, the app asynchronously selects the conversation immediately below bravo, which is alpha, and the URL changes to alpha's path. The selection update is not instantaneous, so add a sleep of about 2 seconds to let it settle before asserting. Then run an eval step whose expression is \"location.pathname === sessionStorage.getItem('alphaUrl') ? 'true' : 'false'\" and expect the result \"true\". Then run an eval step whose expression is \"location.pathname === sessionStorage.getItem('bravoUrl') ? 'true' : 'false'\" and expect the result \"false\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: alpha"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "alpha",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "sessionStorage.setItem('alphaUrl', location.pathname)"
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: bravo"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "bravo",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "sessionStorage.setItem('bravoUrl', location.pathname)"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label='Open conversations']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item.active",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "location.pathname === sessionStorage.getItem('bravoUrl') ? 'true' : 'false'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".conversation-item.active button[aria-label='Archive']\").click()"
+    },
+    {
+      "action": "sleep",
+      "timeout": "2s"
+    },
+    {
+      "action": "eval",
+      "expression": "location.pathname === sessionStorage.getItem('alphaUrl') ? 'true' : 'false'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "location.pathname === sessionStorage.getItem('bravoUrl') ? 'true' : 'false'",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-15T04:35:26.99941468Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_cost_usd": 0,
+    "git_sha": "c90d32f951ea8eda402a09bd49ab233e5d8e0b58",
+    "mode": "generated"
+  }
+}

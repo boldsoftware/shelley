@@ -14,10 +14,13 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Shelley Agent</title>
     <link rel="stylesheet" href="/styles.css" />
-    <link rel="stylesheet" href="/main.css" />
+    <!-- The per-world app stylesheet + script (main.<world>.css / .js) are
+         injected by the server at request time based on the `vue-ui` feature
+         flag. See server/handlers.go (serveIndexWithInit) and ui_world.go.
+         The marker on the next line is replaced server-side. -->
+    %SHELLEY_UI_ASSETS%
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/main.js"></script>
   </body>
 </html>

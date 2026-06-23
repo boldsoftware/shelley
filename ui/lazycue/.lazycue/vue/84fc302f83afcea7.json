@@ -1,0 +1,58 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type the text markdown: [example](https://example.com) into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the agent message to render. The first anchor inside the last agent message (\".message-agent a\") should have href \"https://example.com\", target \"_blank\", and rel \"noopener noreferrer\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "markdown: [example](https://example.com)"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-agent a",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-agent:last-of-type a:first-of-type",
+      "attribute": "href",
+      "value": "https://example.com"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-agent:last-of-type a:first-of-type",
+      "attribute": "target",
+      "value": "_blank"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-agent:last-of-type a:first-of-type",
+      "attribute": "rel",
+      "value": "noopener noreferrer"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-09T23:58:58.920617645Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 28725,
+    "output_tokens": 1499,
+    "estimated_cost_usd": 0.10866,
+    "git_sha": "fd9dd6cf135ef1f880b5e4caf42958d35fa6b341",
+    "mode": "generated"
+  }
+}

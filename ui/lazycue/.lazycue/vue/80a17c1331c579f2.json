@@ -1,0 +1,51 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type the text markdown: **bold** and *italic* and `code` into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the agent message to render markdown. The last agent message (\".message-agent\") should contain a \u003cstrong\u003e element with text \"bold\", an \u003cem\u003e element with text \"italic\", and a \u003ccode\u003e element with text \"code\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "**bold** and *italic* and `code`"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-agent",
+      "timeout": "30s"
+    },
+    {
+      "action": "sleep",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.message-agent')).map((el, i) =\u003e i + ': innerHTML=' + el.innerHTML.substring(0, 300)).join(' || ')"
+    },
+    {
+      "action": "screenshot"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-09T23:56:52.113983791Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 101653,
+    "output_tokens": 2393,
+    "estimated_cost_usd": 0.340854,
+    "git_sha": "fd9dd6cf135ef1f880b5e4caf42958d35fa6b341",
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"echo: Check https://example.com and https://test.com\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"). Wait for the agent message to render. Inside the agent message's markdown content (a \".message-agent .markdown-content a\" anchor) the first link should be visible with href \"https://example.com\", target \"_blank\", and rel \"noopener noreferrer\". The second such anchor should have href \"https://test.com\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: Check https://example.com and https://test.com"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-agent .markdown-content a",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-agent .markdown-content a:nth-of-type(1)",
+      "attribute": "href",
+      "value": "https://example.com"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-agent .markdown-content a:nth-of-type(1)",
+      "attribute": "target",
+      "value": "_blank"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-agent .markdown-content a:nth-of-type(1)",
+      "attribute": "rel",
+      "value": "noopener noreferrer"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-agent .markdown-content a:nth-of-type(2)",
+      "attribute": "href",
+      "value": "https://test.com"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-09T23:54:32.383888888Z",
+    "hostname": "phil-lazy-playwright",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 27884,
+    "output_tokens": 1472,
+    "estimated_cost_usd": 0.105732,
+    "git_sha": "fd9dd6cf135ef1f880b5e4caf42958d35fa6b341",
+    "mode": "generated"
+  }
+}

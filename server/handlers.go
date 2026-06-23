@@ -705,6 +705,10 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 	// Note: AGENTS.md content is NOT embedded in init data. It is fetched fresh
 	// via /api/user-agents-md when the editor modal opens so that reopening
 	// after a save shows current disk state, not stale page-load content.
+	// Decide which frontend bundle to serve (vue vs react). Used both to inject
+	// the right <script>/<link> and to tell the client its active world.
+	world := s.resolveUIWorld(r)
+
 	initData := map[string]interface{}{
 		"models":              modelList,
 		"default_model":       defaultModel,
@@ -712,6 +716,9 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		"default_cwd":         defaultCwd,
 		"home_dir":            homeDir,
 		"user_agents_md_path": userAgentsMdPath,
+		// The frontend the server selected for this page load. The client reads
+		// this so the feature-flags UI can reflect the live world.
+		"ui_world": string(world),
 	}
 	// On exe.dev VMs (where /exe.dev exists), auto-derive the terminal URL and
 	// default links from the current hostname so they pick up hostname changes
@@ -760,6 +767,10 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 	initScript := fmt.Sprintf(`<script>window.__SHELLEY_INIT__=%s;</script>`, initJSON)
 	injection := faviconLink + initScript
 	modifiedHTML := strings.Replace(string(indexHTML), "</head>", injection+"</head>", 1)
+
+	// Inject the per-world app bundle (<link>/<script>) chosen for this request.
+	// index.html ships a %SHELLEY_UI_ASSETS% marker in place of static tags.
+	modifiedHTML = strings.Replace(modifiedHTML, "%SHELLEY_UI_ASSETS%", uiAssetsHTML(world), 1)
 
 	w.Write([]byte(modifiedHTML))
 }
