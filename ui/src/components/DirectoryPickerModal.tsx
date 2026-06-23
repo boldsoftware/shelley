@@ -1,6 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback, useId } from "react";
+import {
+  CheckIcon,
+  CornerLeftUpIcon,
+  FolderIcon,
+  FolderPlusIcon,
+  GitBranchIcon,
+  Loader2Icon,
+  XIcon,
+} from "lucide-react";
 import { api } from "../services/api";
-import { useEscapeClose } from "./useEscapeClose";
+import Modal from "./Modal";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 interface DirectoryEntry {
   name: string;
@@ -286,317 +299,231 @@ function DirectoryPickerModal({
     }
   };
 
-  useEscapeClose(isOpen, onClose);
-
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
-  if (!isOpen) return null;
-
   // Determine if we should show the parent entry
   const showParent = displayDir?.parent && displayDir.parent !== "";
 
   return (
-    <div className="modal-overlay" onClick={handleBackdropClick}>
-      <div className="modal directory-picker-modal">
-        {/* Header */}
-        <div className="modal-header">
-          <h2 className="modal-title">Select Directory</h2>
-          <button onClick={onClose} className="btn-icon" aria-label="Close modal">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
+    <Modal isOpen={isOpen} onClose={onClose} title="Select Directory" className="sm:max-w-lg">
+      <div className="flex flex-col gap-3">
+        {/* Path input */}
+        <Input
+          ref={inputRef}
+          type="text"
+          value={inputPath}
+          onChange={(e) => setInputPath(e.target.value)}
+          onKeyDown={handleInputKeyDown}
+          placeholder="/path/to/directory"
+          className="font-mono"
+        />
 
-        {/* Content */}
-        <div className="modal-body directory-picker-body">
-          {/* Path input */}
-          <div className="directory-picker-input-container">
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputPath}
-              onChange={(e) => setInputPath(e.target.value)}
-              onKeyDown={handleInputKeyDown}
-              className="directory-picker-input"
-              placeholder="/path/to/directory"
-            />
-          </div>
-
-          {/* Current directory indicator */}
-          {displayDir && (
-            <div
-              className={`directory-picker-current${displayDir.git_head_subject ? " directory-picker-current-git" : ""}`}
-            >
-              <span className="directory-picker-current-path">
-                {displayDir.path}
-                {filterPrefix && <span className="directory-picker-filter">/{filterPrefix}*</span>}
+        {/* Current directory indicator */}
+        {displayDir && (
+          <div
+            className={cn(
+              "flex min-w-0 flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-sm",
+              displayDir.git_head_subject ? "bg-amber-500/10" : "bg-muted"
+            )}
+          >
+            <span className="truncate font-mono text-foreground">
+              {displayDir.path}
+              {filterPrefix && <span className="text-muted-foreground">/{filterPrefix}*</span>}
+            </span>
+            {displayDir.git_head_subject && (
+              <span
+                className="truncate text-xs text-muted-foreground"
+                title={displayDir.git_head_subject}
+              >
+                {displayDir.git_head_subject}
               </span>
-              {displayDir.git_head_subject && (
-                <span
-                  className="directory-picker-current-subject"
-                  title={displayDir.git_head_subject}
-                >
-                  {displayDir.git_head_subject}
+            )}
+          </div>
+        )}
+
+        {/* Quick-jump buttons to git worktree root / main repo root */}
+        {(displayDir?.git_repo_root || displayDir?.git_worktree_root) && (
+          <div className="flex flex-col gap-1.5">
+            {displayDir.git_repo_root && displayDir.git_repo_root !== displayDir.path && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-auto justify-start gap-2 py-1.5 text-left font-normal"
+                onClick={() => setInputPath(displayDir.git_repo_root + "/")}
+                title={displayDir.git_repo_root}
+              >
+                <GitBranchIcon className="shrink-0 text-muted-foreground" />
+                <span className="shrink-0">Go to git worktree root</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+                  {displayDir.git_repo_root}
                 </span>
-              )}
-            </div>
-          )}
+              </Button>
+            )}
+            {displayDir.git_worktree_root && displayDir.git_worktree_root !== displayDir.path && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-auto justify-start gap-2 py-1.5 text-left font-normal"
+                onClick={() => setInputPath(displayDir.git_worktree_root + "/")}
+                title={displayDir.git_worktree_root}
+              >
+                <GitBranchIcon className="shrink-0 text-muted-foreground" />
+                <span className="shrink-0">Go to git root</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+                  {displayDir.git_worktree_root}
+                </span>
+              </Button>
+            )}
+          </div>
+        )}
 
-          {/* Quick-jump buttons to git worktree root / main repo root */}
-          {(displayDir?.git_repo_root || displayDir?.git_worktree_root) && (
-            <div className="directory-picker-git-root-row">
-              {displayDir.git_repo_root && displayDir.git_repo_root !== displayDir.path && (
-                <button
-                  className="directory-picker-git-root-btn"
-                  onClick={() => setInputPath(displayDir.git_repo_root + "/")}
-                  title={displayDir.git_repo_root}
-                >
-                  <svg
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    className="directory-picker-icon"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
-                    />
-                  </svg>
-                  <span>Go to git worktree root</span>
-                  <span className="directory-picker-git-root-path">{displayDir.git_repo_root}</span>
-                </button>
-              )}
-              {displayDir.git_worktree_root && displayDir.git_worktree_root !== displayDir.path && (
-                <button
-                  className="directory-picker-git-root-btn"
-                  onClick={() => setInputPath(displayDir.git_worktree_root + "/")}
-                  title={displayDir.git_worktree_root}
-                >
-                  <svg
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    className="directory-picker-icon"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
-                    />
-                  </svg>
-                  <span>Go to git root</span>
-                  <span className="directory-picker-git-root-path">
-                    {displayDir.git_worktree_root}
-                  </span>
-                </button>
-              )}
-            </div>
-          )}
+        {/* Error message */}
+        {error && (
+          <div className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-sm text-destructive">
+            {error}
+          </div>
+        )}
 
-          {/* Error message */}
-          {error && <div className="directory-picker-error">{error}</div>}
+        {/* Loading state */}
+        {loading && (
+          <div className="flex items-center gap-2 px-1 py-4 text-sm text-muted-foreground">
+            <Loader2Icon className="size-4 animate-spin" />
+            <span>Loading...</span>
+          </div>
+        )}
 
-          {/* Loading state */}
-          {loading && (
-            <div className="directory-picker-loading">
-              <div className="spinner spinner-small"></div>
-              <span>Loading...</span>
-            </div>
-          )}
+        {/* Directory listing */}
+        {!loading && !error && (
+          <div className="flex max-h-[40vh] flex-col gap-0.5 overflow-y-auto rounded-md border border-border p-1">
+            {/* Parent directory entry */}
+            {showParent && (
+              <button
+                type="button"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                onClick={handleParentClick}
+              >
+                <CornerLeftUpIcon className="size-4 shrink-0" />
+                <span>..</span>
+              </button>
+            )}
 
-          {/* Directory listing */}
-          {!loading && !error && (
-            <div className="directory-picker-list">
-              {/* Parent directory entry */}
-              {showParent && (
-                <button
-                  className="directory-picker-entry directory-picker-entry-parent"
-                  onClick={handleParentClick}
-                >
-                  <svg
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    className="directory-picker-icon"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M11 17l-5-5m0 0l5-5m-5 5h12"
-                    />
-                  </svg>
-                  <span>..</span>
-                </button>
-              )}
-
-              {/* Directory entries */}
-              {filteredEntries.map((entry) => (
-                <button
-                  key={entry.name}
-                  className={`directory-picker-entry${entry.git_head_subject ? " directory-picker-entry-git" : ""}`}
-                  onClick={() => handleEntryClick(entry)}
-                >
-                  <svg
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    className="directory-picker-icon"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                    />
-                  </svg>
-                  <span className="directory-picker-entry-name">
-                    {filterPrefix &&
-                    entry.name.toLowerCase().startsWith(filterPrefix.toLowerCase()) ? (
-                      <>
-                        <strong>{entry.name.slice(0, filterPrefix.length)}</strong>
-                        {entry.name.slice(filterPrefix.length)}
-                      </>
-                    ) : (
-                      entry.name
-                    )}
-                  </span>
-                  {entry.git_head_subject && (
-                    <span className="directory-picker-git-subject" title={entry.git_head_subject}>
-                      {entry.git_head_subject}
-                    </span>
+            {/* Directory entries */}
+            {filteredEntries.map((entry) => (
+              <button
+                key={entry.name}
+                type="button"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                onClick={() => handleEntryClick(entry)}
+              >
+                <FolderIcon
+                  className={cn(
+                    "size-4 shrink-0",
+                    entry.git_head_subject ? "text-amber-500" : "text-muted-foreground"
                   )}
-                </button>
-              ))}
-
-              {/* Create new directory inline form */}
-              {isCreating && (
-                <div className="directory-picker-create-form">
-                  <svg
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    className="directory-picker-icon"
+                />
+                <span className="min-w-0 truncate">
+                  {filterPrefix &&
+                  entry.name.toLowerCase().startsWith(filterPrefix.toLowerCase()) ? (
+                    <>
+                      <strong className="font-semibold text-foreground">
+                        {entry.name.slice(0, filterPrefix.length)}
+                      </strong>
+                      {entry.name.slice(filterPrefix.length)}
+                    </>
+                  ) : (
+                    entry.name
+                  )}
+                </span>
+                {entry.git_head_subject && (
+                  <span
+                    className="ml-auto min-w-0 truncate text-xs text-muted-foreground"
+                    title={entry.git_head_subject}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"
-                    />
-                  </svg>
-                  <label htmlFor={createInputId} className="sr-only">
-                    New folder name
-                  </label>
-                  <input
-                    id={createInputId}
-                    ref={newDirInputRef}
-                    type="text"
-                    value={newDirName}
-                    onChange={(e) => setNewDirName(e.target.value)}
-                    onKeyDown={handleCreateKeyDown}
-                    placeholder="New folder name"
-                    className="directory-picker-create-input"
-                    disabled={createLoading}
-                  />
-                  <button
-                    className="directory-picker-create-btn"
-                    onClick={handleCreateDirectory}
-                    disabled={createLoading || !newDirName.trim()}
-                    title="Create"
-                  >
-                    {createLoading ? (
-                      <div className="spinner spinner-small"></div>
-                    ) : (
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                    )}
-                  </button>
-                  <button
-                    className="directory-picker-create-btn directory-picker-cancel-btn"
-                    onClick={handleCancelCreate}
-                    disabled={createLoading}
-                    title="Cancel"
-                  >
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              )}
+                    {entry.git_head_subject}
+                  </span>
+                )}
+              </button>
+            ))}
 
-              {/* Create error message */}
-              {createError && <div className="directory-picker-create-error">{createError}</div>}
+            {/* Create new directory inline form */}
+            {isCreating && (
+              <div className="flex items-center gap-2 px-2 py-1.5">
+                <FolderPlusIcon className="size-4 shrink-0 text-muted-foreground" />
+                <Label htmlFor={createInputId} className="sr-only">
+                  New folder name
+                </Label>
+                <Input
+                  id={createInputId}
+                  ref={newDirInputRef}
+                  type="text"
+                  value={newDirName}
+                  onChange={(e) => setNewDirName(e.target.value)}
+                  onKeyDown={handleCreateKeyDown}
+                  placeholder="New folder name"
+                  className="h-7 flex-1"
+                  disabled={createLoading}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={handleCreateDirectory}
+                  disabled={createLoading || !newDirName.trim()}
+                  title="Create"
+                >
+                  {createLoading ? (
+                    <Loader2Icon className="animate-spin" />
+                  ) : (
+                    <CheckIcon className="text-emerald-600 dark:text-emerald-500" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={handleCancelCreate}
+                  disabled={createLoading}
+                  title="Cancel"
+                >
+                  <XIcon />
+                </Button>
+              </div>
+            )}
 
-              {/* Empty state */}
-              {filteredEntries.length === 0 && !showParent && !isCreating && (
-                <div className="directory-picker-empty">
-                  {filterPrefix ? "No matching directories" : "No subdirectories"}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+            {/* Create error message */}
+            {createError && (
+              <div className="px-2 py-1 text-xs text-destructive">{createError}</div>
+            )}
+
+            {/* Empty state */}
+            {filteredEntries.length === 0 && !showParent && !isCreating && (
+              <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                {filterPrefix ? "No matching directories" : "No subdirectories"}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Footer */}
-        <div className="directory-picker-footer">
+        <div className="flex items-center gap-2 border-t border-border pt-3">
           {/* New Folder button */}
           {!isCreating && !loading && !error && (
-            <button
-              className="btn directory-picker-new-btn"
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleStartCreate}
               title="Create new folder"
             >
-              <svg
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                className="directory-picker-new-icon"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"
-                />
-              </svg>
+              <FolderPlusIcon />
               New Folder
-            </button>
+            </Button>
           )}
-          <div className="directory-picker-footer-spacer"></div>
-          <button className="btn" onClick={onClose}>
+          <div className="flex-1" />
+          <Button variant="outline" size="sm" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn-primary" onClick={handleSelect} disabled={loading || !!error}>
+          </Button>
+          <Button size="sm" onClick={handleSelect} disabled={loading || !!error}>
             Select
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

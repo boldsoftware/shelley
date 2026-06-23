@@ -1,7 +1,6 @@
 import React from "react";
-import { createPortal } from "react-dom";
 import { Message } from "../types";
-import { useEscapeClose } from "./useEscapeClose";
+import Modal from "./Modal";
 
 interface MessageInfoModalProps {
   message: Message;
@@ -25,30 +24,19 @@ function MessageInfoModal({ message, onClose }: MessageInfoModalProps) {
     });
   };
 
-  useEscapeClose(true, onClose);
-
-  return createPortal(
-    <div className="usage-detail-overlay" onClick={onClose}>
-      <div className="usage-detail-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="usage-detail-header">
-          <h2 className="usage-detail-title">Message Details</h2>
-          <button onClick={onClose} className="usage-detail-close-button" aria-label="Close">
-            ×
-          </button>
-        </div>
-        <div className="usage-detail-grid">
-          <div className="usage-detail-label">Type:</div>
-          <div className="usage-detail-value">{message.type}</div>
-          {message.created_at && (
-            <>
-              <div className="usage-detail-label">Timestamp:</div>
-              <div className="usage-detail-value">{formatTimestamp(message.created_at)}</div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <Modal isOpen onClose={onClose} title="Message Details" className="sm:max-w-md">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+        <dt className="font-medium text-muted-foreground">Type</dt>
+        <dd className="font-mono text-foreground">{message.type}</dd>
+        {message.created_at && (
+          <>
+            <dt className="font-medium text-muted-foreground">Timestamp</dt>
+            <dd className="text-foreground">{formatTimestamp(message.created_at)}</dd>
+          </>
+        )}
+      </dl>
+    </Modal>
   );
 }
 

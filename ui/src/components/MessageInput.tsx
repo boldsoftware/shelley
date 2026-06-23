@@ -1,6 +1,19 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import {
+  Paperclip,
+  Mic,
+  Square,
+  ChevronDown,
+  Clock,
+  Loader2,
+  X,
+  FileIcon,
+  TerminalIcon,
+  SendHorizontal,
+} from "lucide-react";
 import { useI18n } from "../i18n";
 import { pickPlaceholderHint } from "../utils/placeholderHints";
+import { cn } from "@/lib/utils";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -629,94 +642,91 @@ function MessageInput({
 
   return (
     <div
-      className={`message-input-container ${isDraggingOver ? "drag-over" : ""} ${isShellMode ? "shell-mode" : ""}`}
+      className={cn(
+        "message-input-container relative flex-none border-t border-border bg-background px-4 pt-4",
+        "pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]",
+        "md:px-4 max-md:px-3",
+        isDraggingOver && "border-primary",
+      )}
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       {isDraggingOver && (
-        <div className="drag-overlay">
-          <div className="drag-overlay-content">{t("dropFilesHere")}</div>
+        <div className="drag-overlay pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-md border-2 border-dashed border-primary bg-primary/10">
+          <div className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
+            {t("dropFilesHere")}
+          </div>
         </div>
       )}
-      <form onSubmit={handleSubmit} className="message-input-form">
+      <form
+        onSubmit={handleSubmit}
+        className="mx-auto flex max-w-[800px] flex-wrap items-end gap-2 max-md:flex-col-reverse max-md:items-stretch max-md:gap-1.5"
+      >
         <input
           type="file"
           ref={fileInputRef}
           onChange={handleFileSelect}
-          className="message-input-hidden"
+          className="message-input-hidden hidden"
           multiple
           aria-hidden="true"
         />
         {attachments.length > 0 && (
-          <div className="message-attachments" data-testid="message-attachments">
+          <div
+            className="order-first flex w-full flex-wrap gap-2 pb-2 pt-1"
+            data-testid="message-attachments"
+          >
             {attachments.map((a) => (
               <div
                 key={a.id}
-                className={`message-attachment message-attachment-${a.status}`}
+                className={cn(
+                  "message-attachment relative size-16 shrink-0 overflow-hidden rounded-md border bg-muted",
+                  a.status === "error" ? "border-destructive/60" : "border-border",
+                )}
                 title={a.status === "error" ? `${a.name}: ${a.error}` : a.name}
               >
                 {a.isImage && a.previewUrl ? (
-                  <img src={a.previewUrl} alt={a.name} className="message-attachment-thumb" />
+                  <img
+                    src={a.previewUrl}
+                    alt={a.name}
+                    className="block size-full object-cover"
+                  />
                 ) : (
-                  <div className="message-attachment-file">
-                    <svg
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                      width="20"
-                      height="20"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"
-                      />
-                      <polyline
-                        points="14 2 14 8 20 8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <span className="message-attachment-name">{a.name}</span>
+                  <div className="flex size-full flex-col items-center justify-center gap-0.5 p-1 text-center text-muted-foreground">
+                    <FileIcon className="size-5" />
+                    <span className="max-w-full truncate text-[0.65rem]">{a.name}</span>
                   </div>
                 )}
                 {a.status === "uploading" && (
-                  <div className="message-attachment-overlay">
-                    <div className="spinner spinner-small"></div>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/45">
+                    <Loader2 className="size-4 animate-spin text-white" />
                   </div>
                 )}
-                {a.status === "error" && <div className="message-attachment-error-badge">!</div>}
+                {a.status === "error" && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-destructive/70 text-xl font-bold text-white">
+                    !
+                  </div>
+                )}
                 <button
                   type="button"
-                  className="message-attachment-remove"
+                  className="absolute right-0.5 top-0.5 flex size-[18px] items-center justify-center rounded-full bg-black/60 p-0.5 text-white opacity-85 transition-opacity hover:bg-black/80 hover:opacity-100"
                   onClick={() => removeAttachment(a.id)}
                   aria-label={`Remove ${a.name}`}
                 >
-                  <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="size-full" />
                 </button>
               </div>
             ))}
           </div>
         )}
-        <div className="textarea-wrapper">
+        <div className="relative min-w-0 flex-1">
           {isShellMode && (
-            <div className="shell-mode-indicator" title="This will run as a shell command">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <polyline points="4 17 10 11 4 5" />
-                <line x1="12" y1="19" x2="20" y2="19" />
-              </svg>
+            <div
+              className="pointer-events-none absolute left-3 top-3.5 z-[1] flex items-center justify-center text-amber-600 dark:text-amber-500"
+              title="This will run as a shell command"
+            >
+              <TerminalIcon className="size-4" />
             </div>
           )}
           <textarea
@@ -732,7 +742,14 @@ function MessageInput({
               }
             }}
             placeholder={placeholderText}
-            className="message-textarea"
+            className={cn(
+              "block max-h-[200px] min-h-[46px] w-full resize-none rounded-md border bg-background px-4 py-2.5 text-base leading-relaxed text-foreground transition-colors placeholder:text-muted-foreground",
+              "focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/30",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+              isShellMode
+                ? "border-amber-400 bg-amber-50/60 pl-9 font-mono dark:border-amber-500/50 dark:bg-amber-950/20"
+                : "border-border",
+            )}
             disabled={isDisabled}
             rows={initialRows}
             aria-label="Message input"
@@ -740,115 +757,101 @@ function MessageInput({
             autoFocus={autoFocus}
           />
         </div>
-        <div className="message-controls-row">
-          {statusSlot && <div className="message-controls-status-slot">{statusSlot}</div>}
+        <div className="flex items-center justify-end gap-1 max-md:w-full">
+          {statusSlot && (
+            <div className="mr-auto hidden min-w-0 flex-1 items-center overflow-hidden text-sm max-md:flex">
+              {statusSlot}
+            </div>
+          )}
           <button
             type="button"
             onClick={handleAttachClick}
             disabled={isDisabled}
-            className="message-attach-btn"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 md:mb-1"
             aria-label={t("attachFile")}
             data-testid="attach-button"
           >
-            <svg
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              width="20"
-              height="20"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-              />
-            </svg>
+            <Paperclip className="size-5" />
           </button>
           {speechRecognitionAvailable && (
             <button
               type="button"
               onClick={toggleListening}
               disabled={isDisabled}
-              className={`message-voice-btn ${isListening ? "listening" : ""}`}
+              className={cn(
+                "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 md:mb-1",
+                isListening
+                  ? "animate-pulse bg-red-600 text-white hover:bg-red-600 dark:bg-red-500"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
               aria-label={isListening ? t("stopVoiceInput") : t("startVoiceInput")}
               data-testid="voice-button"
             >
               {isListening ? (
-                <svg fill="currentColor" viewBox="0 0 24 24" width="20" height="20">
-                  <circle cx="12" cy="12" r="6" />
-                </svg>
+                <Square className="size-5 fill-current" />
               ) : (
-                <svg fill="currentColor" viewBox="0 0 24 24" width="20" height="20">
-                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-                </svg>
+                <Mic className="size-5" />
               )}
             </button>
           )}
-          <div className="message-send-wrapper" ref={queueMenuRef}>
+          <div className="relative flex items-end md:mb-1" ref={queueMenuRef}>
             {showQueueOption && onQueue ? (
               /* Slack-style split button: [Send | ▾] — always same width */
-              <div className={`send-split-btn${autoQueue ? " send-split-btn-queue" : ""}`}>
+              <div
+                className={cn(
+                  "flex items-stretch overflow-hidden rounded-full transition-colors",
+                  canSubmit
+                    ? autoQueue
+                      ? "bg-orange-500"
+                      : "bg-primary"
+                    : "bg-muted opacity-60",
+                )}
+              >
                 <button
                   type="submit"
                   disabled={!canSubmit}
-                  className="send-split-main"
+                  className="flex size-9 items-center justify-center text-primary-foreground transition-colors hover:bg-white/15 active:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label={autoQueue ? "Queue message" : t("sendMessage")}
                   data-testid="send-button"
                 >
                   {isDisabled || submitting ? (
-                    <div className="flex items-center justify-center">
-                      <div className="spinner spinner-small message-send-spinner-white"></div>
-                    </div>
+                    <Loader2 className="size-4 animate-spin" />
                   ) : (
-                    <svg fill="currentColor" viewBox="0 0 24 24" width="18" height="18">
-                      <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
-                    </svg>
+                    <SendHorizontal className="size-[18px]" />
                   )}
                 </button>
-                <div className="send-split-divider" />
+                <div className="my-1.5 w-px bg-white/30" />
                 <button
                   type="button"
                   disabled={!canSubmit || (!canQueue && !autoQueue)}
-                  className={`send-split-chevron${canQueue || autoQueue ? "" : " send-split-chevron-inactive"}`}
+                  className={cn(
+                    "flex w-7 items-center justify-center text-primary-foreground transition-colors hover:bg-white/15 active:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50",
+                    !canQueue && !autoQueue && "cursor-default opacity-40",
+                  )}
                   aria-label="Send options"
                   data-testid="send-options-button"
                   onClick={() => setShowQueueMenu((v) => !v)}
                 >
-                  <svg fill="currentColor" viewBox="0 0 24 24" width="14" height="14">
-                    <path d="M7 10l5 5 5-5z" />
-                  </svg>
+                  <ChevronDown className="size-3.5" />
                 </button>
                 {showQueueMenu && (canQueue || autoQueue) && (
-                  <div className="queue-menu">
+                  <div className="absolute bottom-[calc(100%+4px)] right-0 z-[100] min-w-[220px] rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg">
                     <button
                       type="button"
-                      className="queue-menu-item"
+                      className="flex w-full items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-left text-[0.85rem] transition-colors hover:bg-accent hover:text-accent-foreground"
                       data-testid="queue-option"
                       onClick={autoQueue ? handleSendNow : handleQueueMessage}
                     >
                       {autoQueue ? (
                         /* During distill (autoQueue=true), main button queues, dropdown offers "send now" */
                         <>
-                          <svg fill="currentColor" viewBox="0 0 24 24" width="16" height="16">
-                            <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
-                          </svg>
+                          <SendHorizontal className="size-4 shrink-0 text-muted-foreground" />
                           Send now
                         </>
                       ) : (
                         /* Clock icon — "queue for later" */
                         <>
-                          <svg
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            viewBox="0 0 24 24"
-                            width="16"
-                            height="16"
-                          >
-                            <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 6 12 12 16 14" />
-                          </svg>
+                          <Clock className="size-4 shrink-0 text-muted-foreground" />
                           Queue after agent finishes
                         </>
                       )}
@@ -861,18 +864,14 @@ function MessageInput({
               <button
                 type="submit"
                 disabled={!canSubmit}
-                className="message-send-btn"
+                className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform hover:bg-primary/90 hover:not-disabled:scale-105 active:not-disabled:scale-95 disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60"
                 aria-label={t("sendMessage")}
                 data-testid="send-button"
               >
                 {isDisabled || submitting ? (
-                  <div className="flex items-center justify-center">
-                    <div className="spinner spinner-small message-send-spinner-white"></div>
-                  </div>
+                  <Loader2 className="size-4 animate-spin" />
                 ) : (
-                  <svg fill="currentColor" viewBox="0 0 24 24" width="20" height="20">
-                    <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
-                  </svg>
+                  <SendHorizontal className="size-5" />
                 )}
               </button>
             )}

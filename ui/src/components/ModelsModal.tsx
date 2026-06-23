@@ -1,6 +1,31 @@
 import React, { useState, useEffect, useCallback } from "react";
+import {
+  Loader2Icon,
+  PlusIcon,
+  CopyIcon,
+  PencilIcon,
+  Trash2Icon,
+  InfoIcon,
+  XIcon,
+} from "lucide-react";
 import Modal from "./Modal";
 import { useI18n } from "../i18n";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import {
   api,
   AvailableModel,
@@ -114,7 +139,7 @@ function ImageSupportIndicator(props: ImageSupportIndicatorProps) {
   if (kind === "yes") {
     return (
       <span
-        className="models-table-image-yes"
+        className="font-medium text-emerald-600 dark:text-emerald-500"
         role="img"
         title={t("imageSupportYes")}
         aria-label={t("imageSupportYes")}
@@ -126,7 +151,7 @@ function ImageSupportIndicator(props: ImageSupportIndicatorProps) {
   if (kind === "no") {
     return (
       <span
-        className="models-table-image-no"
+        className="font-medium text-muted-foreground"
         role="img"
         title={t("imageSupportNo")}
         aria-label={t("imageSupportNo")}
@@ -137,13 +162,33 @@ function ImageSupportIndicator(props: ImageSupportIndicatorProps) {
   }
   return (
     <span
-      className="models-table-image-auto"
+      className="text-xs text-muted-foreground"
       role="img"
       title={t("imageSupportAuto")}
       aria-label={t("imageSupportAuto")}
     >
       {t("imageSupportAutoShort")}
     </span>
+  );
+}
+
+// Shared field wrapper for the add/edit form.
+function FormGroup({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: React.ReactNode;
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={htmlFor} className="text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+    </div>
   );
 }
 
@@ -163,9 +208,6 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
   // Test state
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-
-  // Tooltip state
-  const [showTagsTooltip, setShowTagsTooltip] = useState(false);
 
   const loadModels = useCallback(async () => {
     try {
@@ -355,17 +397,19 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
   };
 
   const headerRight = !showForm ? (
-    <div className="models-header-actions">
-      <button
-        className="btn-secondary btn-sm"
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
         onClick={handleRefreshModels}
         disabled={refreshing || loading}
       >
         {refreshing ? t("refreshingModels") : t("refreshModels")}
-      </button>
-      <button className="btn-primary btn-sm" onClick={handleAddNew}>
-        + {t("addModel")}
-      </button>
+      </Button>
+      <Button size="sm" onClick={handleAddNew}>
+        <PlusIcon className="size-4" />
+        {t("addModel")}
+      </Button>
     </div>
   ) : null;
 
@@ -375,38 +419,47 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
       onClose={onClose}
       title={t("manageModels")}
       titleRight={headerRight}
-      className="modal-xwide"
+      className="sm:max-w-5xl"
     >
-      <div className="models-modal">
+      <div className="flex flex-col gap-4">
         {error && (
-          <div className="models-error">
-            {error}
-            <button onClick={() => setError(null)} className="models-error-dismiss">
-              ×
+          <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <span className="flex-1">{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="shrink-0 rounded p-0.5 hover:bg-destructive/15"
+            >
+              <XIcon className="size-4" />
             </button>
           </div>
         )}
 
         {loading ? (
-          <div className="models-loading">
-            <div className="spinner"></div>
+          <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+            <Loader2Icon className="size-5 animate-spin" />
             <span>{t("loadingModels")}</span>
           </div>
         ) : showForm ? (
           // Add/Edit form
-          <div className="model-form">
-            <h3>{editingModelId ? t("editModel") : t("addModel")}</h3>
+          <div className="flex max-w-2xl flex-col gap-4">
+            <h3 className="text-base font-semibold">
+              {editingModelId ? t("editModel") : t("addModel")}
+            </h3>
 
             {/* Provider Selection */}
-            <div className="form-group">
-              <label>{t("providerApiFormat")}</label>
-              <div className="provider-buttons">
+            <FormGroup label={t("providerApiFormat")}>
+              <div className="flex flex-wrap gap-2">
                 {(["anthropic", "openai", "openai-responses", "gemini"] as ProviderType[]).map(
                   (p) => (
                     <button
                       key={p}
                       type="button"
-                      className={`provider-btn ${form.provider_type === p ? "selected" : ""}`}
+                      className={cn(
+                        "rounded-md border px-3 py-1.5 text-sm transition-colors",
+                        form.provider_type === p
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-foreground hover:bg-muted",
+                      )}
                       onClick={() => handleProviderChange(p)}
                     >
                       {PROVIDER_LABELS[p]}
@@ -414,44 +467,54 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                   ),
                 )}
               </div>
-            </div>
+            </FormGroup>
 
             {/* Endpoint Selection */}
-            <div className="form-group">
-              <label>{t("endpoint")}</label>
-              <div className="endpoint-toggle">
+            <FormGroup label={t("endpoint")}>
+              <div className="flex gap-0.5 self-start rounded-md border border-border p-0.5 text-sm">
                 <button
                   type="button"
-                  className={`toggle-btn ${!form.endpoint_custom ? "selected" : ""}`}
+                  className={cn(
+                    "rounded-sm px-3 py-1 transition-colors",
+                    !form.endpoint_custom
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
                   onClick={() => handleEndpointModeChange(false)}
                 >
                   {t("defaultEndpoint")}
                 </button>
                 <button
                   type="button"
-                  className={`toggle-btn ${form.endpoint_custom ? "selected" : ""}`}
+                  className={cn(
+                    "rounded-sm px-3 py-1 transition-colors",
+                    form.endpoint_custom
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
                   onClick={() => handleEndpointModeChange(true)}
                 >
                   {t("customEndpoint")}
                 </button>
               </div>
               {form.endpoint_custom ? (
-                <input
+                <Input
                   type="text"
                   value={form.endpoint}
                   onChange={(e) => setForm((prev) => ({ ...prev, endpoint: e.target.value }))}
                   placeholder="https://..."
-                  className="form-input"
                 />
               ) : (
-                <div className="endpoint-display">{form.endpoint}</div>
+                <div className="rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs text-muted-foreground">
+                  {form.endpoint}
+                </div>
               )}
-            </div>
+            </FormGroup>
 
             {/* Model Name with autocomplete suggestions */}
-            <div className="form-group">
-              <label>{t("model")}</label>
-              <input
+            <FormGroup label={t("model")} htmlFor="model-name-input">
+              <Input
+                id="model-name-input"
                 type="text"
                 value={form.model_name}
                 onChange={(e) => {
@@ -471,7 +534,6 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                   });
                 }}
                 placeholder="Model name (e.g., claude-sonnet-4-6)"
-                className="form-input"
                 list={`model-name-suggestions-${form.provider_type}`}
                 autoComplete="off"
               />
@@ -482,78 +544,77 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                   </option>
                 ))}
               </datalist>
-            </div>
+            </FormGroup>
 
             {/* Display Name */}
-            <div className="form-group">
-              <label>{t("displayName")}</label>
-              <input
+            <FormGroup label={t("displayName")} htmlFor="display-name-input">
+              <Input
+                id="display-name-input"
                 type="text"
                 value={form.display_name}
                 onChange={(e) => setForm((prev) => ({ ...prev, display_name: e.target.value }))}
                 placeholder={t("nameShownInSelector")}
-                className="form-input"
               />
-            </div>
+            </FormGroup>
 
             {/* API Key */}
-            <div className="form-group">
-              <label>{t("apiKey")}</label>
-              <input
+            <FormGroup label={t("apiKey")} htmlFor="api-key-input">
+              <Input
+                id="api-key-input"
                 type="text"
                 value={form.api_key}
                 onChange={(e) => setForm((prev) => ({ ...prev, api_key: e.target.value }))}
                 placeholder={t("enterApiKey")}
-                className="form-input"
                 autoComplete="off"
               />
-            </div>
+            </FormGroup>
 
             {/* Max Tokens */}
-            <div className="form-group">
-              <label>{t("maxContextTokens")}</label>
-              <input
+            <FormGroup label={t("maxContextTokens")} htmlFor="max-tokens-input">
+              <Input
+                id="max-tokens-input"
                 type="number"
                 value={form.max_tokens}
                 onChange={(e) =>
                   setForm((prev) => ({ ...prev, max_tokens: parseInt(e.target.value) || 200000 }))
                 }
-                className="form-input"
               />
-            </div>
+            </FormGroup>
 
             {/* Image input support */}
-            <div className="form-group">
-              <label>{t("imageSupport")}</label>
-              <select
+            <FormGroup label={t("imageSupport")}>
+              <Select
                 value={form.image_support}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setForm((prev) => ({
                     ...prev,
-                    image_support: e.target.value as "auto" | "yes" | "no",
+                    image_support: value as "auto" | "yes" | "no",
                   }))
                 }
-                className="form-input"
               >
-                <option value="auto">{t("imageSupportAuto")}</option>
-                <option value="yes">{t("imageSupportYes")}</option>
-                <option value="no">{t("imageSupportNo")}</option>
-              </select>
-              <div className="form-hint">{t("imageSupportHelp")}</div>
-            </div>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">{t("imageSupportAuto")}</SelectItem>
+                  <SelectItem value="yes">{t("imageSupportYes")}</SelectItem>
+                  <SelectItem value="no">{t("imageSupportNo")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{t("imageSupportHelp")}</p>
+            </FormGroup>
 
             {/* Reasoning Effort (OpenAI Responses API only) */}
             {form.provider_type === "openai-responses" && (
-              <div className="form-group">
-                <label>{t("reasoningEffort")}</label>
-                <input
+              <FormGroup label={t("reasoningEffort")} htmlFor="reasoning-effort-input">
+                <Input
+                  id="reasoning-effort-input"
                   type="text"
                   value={form.reasoning_effort}
                   onChange={(e) =>
                     setForm((prev) => ({ ...prev, reasoning_effort: e.target.value }))
                   }
                   placeholder={t("reasoningEffortPlaceholder")}
-                  className="form-input"
                   list="reasoning-effort-suggestions"
                   autoComplete="off"
                 />
@@ -562,65 +623,65 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                     <option key={suggestion} value={suggestion} />
                   ))}
                 </datalist>
-                <div className="form-hint">{t("reasoningEffortHint")}</div>
-              </div>
+                <p className="text-xs text-muted-foreground">{t("reasoningEffortHint")}</p>
+              </FormGroup>
             )}
 
             {/* Tags */}
-            <div className="form-group">
-              <label>
-                {t("tags")}
-                <span
-                  className="info-icon-wrapper"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setShowTagsTooltip(!showTagsTooltip);
-                  }}
-                >
-                  <span className="info-icon">
-                    <svg
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      width="14"
-                      height="14"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                  </span>
-                  {showTagsTooltip && <span className="info-tooltip">{t("tagsTooltip")}</span>}
+            <FormGroup
+              htmlFor="tags-input"
+              label={
+                <span className="flex items-center gap-1.5">
+                  {t("tags")}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                      >
+                        <InfoIcon className="size-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("tagsTooltip")}</TooltipContent>
+                  </Tooltip>
                 </span>
-              </label>
-              <input
+              }
+            >
+              <Input
+                id="tags-input"
                 type="text"
                 value={form.tags}
                 onChange={(e) => setForm((prev) => ({ ...prev, tags: e.target.value }))}
                 placeholder={t("tagsPlaceholder")}
-                className="form-input"
               />
-            </div>
+            </FormGroup>
 
             {/* Test Result */}
             {testResult && (
-              <div className={`test-result ${testResult.success ? "success" : "error"}`}>
+              <div
+                className={cn(
+                  "rounded-md border px-3 py-2 text-sm",
+                  testResult.success
+                    ? "border-emerald-600/30 bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"
+                    : "border-destructive/30 bg-destructive/10 text-destructive",
+                )}
+              >
                 {testResult.success ? "✓" : "✗"} {testResult.message}
               </div>
             )}
 
             {/* Form Actions */}
-            <div className="form-actions">
-              <button type="button" className="btn-secondary" onClick={handleCancel}>
+            <div className="flex justify-end gap-2 border-t border-border pt-4">
+              <Button type="button" variant="outline" onClick={handleCancel}>
                 {t("cancel")}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="btn-secondary"
+                variant="secondary"
                 onClick={handleTest}
                 disabled={testing || (!form.api_key && !editingModelId) || !form.model_name}
                 title={
@@ -632,36 +693,35 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                 }
               >
                 {testing ? t("testingButton") : t("testButton")}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="btn-primary"
                 onClick={handleSave}
                 disabled={!form.display_name || !form.api_key || !form.model_name}
               >
                 {editingModelId ? t("save") : t("addModel")}
-              </button>
+              </Button>
             </div>
           </div>
         ) : // Model List
         builtInModels.length === 0 && models.length === 0 ? (
-          <div className="models-empty">
-            <p>{t("noModelsConfigured")}</p>
-            <p className="models-empty-hint">{t("noModelsHint")}</p>
+          <div className="flex flex-col items-center gap-1 py-12 text-center">
+            <p className="text-foreground">{t("noModelsConfigured")}</p>
+            <p className="text-sm text-muted-foreground">{t("noModelsHint")}</p>
           </div>
         ) : (
-          <div className="models-modal-scroll">
-            <table className="models-table">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
               <thead>
-                <tr>
-                  <th>{t("columnName")}</th>
-                  <th>{t("columnModelId")}</th>
-                  <th>{t("columnProvider")}</th>
-                  <th>{t("columnSource")}</th>
-                  <th>{t("endpoint")}</th>
-                  <th>{t("tags")}</th>
-                  <th className="models-table-images-col">{t("columnImages")}</th>
-                  <th className="models-table-actions-col">
+                <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
+                  <th className="px-3 py-2 font-medium">{t("columnName")}</th>
+                  <th className="px-3 py-2 font-medium">{t("columnModelId")}</th>
+                  <th className="px-3 py-2 font-medium">{t("columnProvider")}</th>
+                  <th className="px-3 py-2 font-medium">{t("columnSource")}</th>
+                  <th className="px-3 py-2 font-medium">{t("endpoint")}</th>
+                  <th className="px-3 py-2 font-medium">{t("tags")}</th>
+                  <th className="px-3 py-2 text-center font-medium">{t("columnImages")}</th>
+                  <th className="w-px px-3 py-2 font-medium">
                     <span className="sr-only">{t("columnActions")}</span>
                   </th>
                 </tr>
@@ -670,114 +730,103 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                 {builtInModels
                   .filter((m) => m.id !== "predictable")
                   .map((model) => (
-                    <tr key={model.id} className="models-table-row models-table-row-builtin">
-                      <td className="models-table-name">{model.display_name || model.id}</td>
-                      <td className="models-table-mono">{model.id}</td>
+                    <tr
+                      key={model.id}
+                      className="border-b border-border/60 bg-muted/30 align-middle"
+                    >
+                      <td className="px-3 py-2 font-medium">{model.display_name || model.id}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                        {model.id}
+                      </td>
                       <td
-                        className={
-                          model.api_type && API_TYPE_LABELS[model.api_type]
-                            ? undefined
-                            : "models-table-muted"
-                        }
+                        className={cn(
+                          "px-3 py-2",
+                          !(model.api_type && API_TYPE_LABELS[model.api_type]) &&
+                            "text-muted-foreground",
+                        )}
                       >
                         {(model.api_type && API_TYPE_LABELS[model.api_type]) || "—"}
                       </td>
-                      <td>{model.source}</td>
+                      <td className="px-3 py-2">{model.source}</td>
                       <td
-                        className={model.base_url ? "models-table-endpoint" : "models-table-muted"}
+                        className={cn(
+                          "max-w-[16rem] truncate px-3 py-2 font-mono text-xs",
+                          model.base_url ? "text-muted-foreground" : "text-muted-foreground",
+                        )}
                         title={model.base_url || undefined}
                       >
                         {model.base_url || "—"}
                       </td>
-                      <td className="models-table-muted">—</td>
-                      <td className="models-table-images">
+                      <td className="px-3 py-2 text-muted-foreground">—</td>
+                      <td className="px-3 py-2 text-center">
                         <ImageSupportIndicator
                           mode="resolved"
                           resolved={model.supports_images ?? true}
                         />
                       </td>
-                      <td className="models-table-actions"></td>
+                      <td className="px-3 py-2"></td>
                     </tr>
                   ))}
                 {models.map((model) => (
-                  <tr key={model.model_id} className="models-table-row">
-                    <td className="models-table-name">{model.display_name}</td>
-                    <td className="models-table-mono">{model.model_name}</td>
-                    <td>{PROVIDER_LABELS[model.provider_type]}</td>
-                    <td className="models-table-muted">custom</td>
-                    <td className="models-table-endpoint" title={model.endpoint}>
+                  <tr
+                    key={model.model_id}
+                    className="border-b border-border/60 align-middle hover:bg-muted/40"
+                  >
+                    <td className="px-3 py-2 font-medium">{model.display_name}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                      {model.model_name}
+                    </td>
+                    <td className="px-3 py-2">{PROVIDER_LABELS[model.provider_type]}</td>
+                    <td className="px-3 py-2 text-muted-foreground">custom</td>
+                    <td
+                      className="max-w-[16rem] truncate px-3 py-2 font-mono text-xs text-muted-foreground"
+                      title={model.endpoint}
+                    >
                       {model.endpoint}
                     </td>
-                    <td className="models-table-tags" title={model.tags || undefined}>
+                    <td
+                      className="max-w-[10rem] truncate px-3 py-2 text-muted-foreground"
+                      title={model.tags || undefined}
+                    >
                       {model.tags || "—"}
                     </td>
-                    <td className="models-table-images">
+                    <td className="px-3 py-2 text-center">
                       <ImageSupportIndicator
                         mode="custom"
                         imageSupport={model.image_support ?? "auto"}
                       />
                     </td>
-                    <td className="models-table-actions">
-                      <button
-                        className="btn-icon"
-                        onClick={() => handleDuplicate(model)}
-                        title={t("duplicate")}
-                      >
-                        <svg
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          width="16"
-                          height="16"
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleDuplicate(model)}
+                          title={t("duplicate")}
+                          aria-label={t("duplicate")}
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                          />
-                        </svg>
-                      </button>
-                      <button
-                        className="btn-icon"
-                        onClick={() => handleEdit(model)}
-                        title={t("editModel")}
-                      >
-                        <svg
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          width="16"
-                          height="16"
+                          <CopyIcon className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleEdit(model)}
+                          title={t("editModel")}
+                          aria-label={t("editModel")}
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                          />
-                        </svg>
-                      </button>
-                      <button
-                        className="btn-icon btn-danger"
-                        onClick={() => handleDelete(model.model_id)}
-                        title={t("delete_")}
-                      >
-                        <svg
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          width="16"
-                          height="16"
+                          <PencilIcon className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => handleDelete(model.model_id)}
+                          title={t("delete_")}
+                          aria-label={t("delete_")}
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
+                          <Trash2Icon className="size-4" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

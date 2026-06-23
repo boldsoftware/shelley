@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type * as Monaco from "monaco-editor";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ChevronsLeftIcon,
+  ChevronsRightIcon,
+  FolderIcon,
+  Loader2Icon,
+  MessageSquareIcon,
+  PencilIcon,
+  XIcon,
+} from "lucide-react";
 import { api } from "../services/api";
 import { loadMonaco } from "../services/monaco";
 import { isDarkModeActive } from "../services/theme";
@@ -13,6 +24,9 @@ import DiffFileTree, {
   COMMIT_MESSAGES_DIR,
   treeRealPathOrder,
 } from "./DiffFileTree";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 interface DiffViewerProps {
   cwd: string;
@@ -23,32 +37,13 @@ interface DiffViewerProps {
   onCwdChange?: (cwd: string) => void; // Called when user picks a different git directory
 }
 
-// Icon components for cleaner JSX
-const PrevFileIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-    <path d="M8 2L2 8l6 6V2z" />
-    <path d="M14 2L8 8l6 6V2z" />
-  </svg>
-);
-
-const PrevChangeIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-    <path d="M10 2L4 8l6 6V2z" />
-  </svg>
-);
-
-const NextChangeIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-    <path d="M6 2l6 6-6 6V2z" />
-  </svg>
-);
-
-const NextFileIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-    <path d="M2 2l6 6-6 6V2z" />
-    <path d="M8 2l6 6-6 6V2z" />
-  </svg>
-);
+// Navigation glyphs, mapped onto lucide icons so the chrome stays on the
+// shared icon set. Double-chevrons step between files; single-chevrons step
+// between changes within a file.
+const PrevFileIcon = () => <ChevronsLeftIcon className="size-4" />;
+const PrevChangeIcon = () => <ChevronLeftIcon className="size-4" />;
+const NextChangeIcon = () => <ChevronRightIcon className="size-4" />;
+const NextFileIcon = () => <ChevronsRightIcon className="size-4" />;
 
 type ViewMode = "comment" | "edit";
 
@@ -1261,8 +1256,10 @@ function DiffViewer({
   };
 
   const commitList = (
-    <ul className="diff-viewer-commit-list" role="listbox" aria-label="Commits">
-      {sidebarCommits.length === 0 && <li className="diff-viewer-file-list-empty">No commits</li>}
+    <ul className="flex flex-col gap-0.5" role="listbox" aria-label="Commits">
+      {sidebarCommits.length === 0 && (
+        <li className="px-2 py-3 text-center text-xs text-muted-foreground">No commits</li>
+      )}
       {sidebarCommits.map((d, idx) => {
         const isWorking = d.id === "working";
         const isSelected = selectedDiff === d.id;
@@ -1273,14 +1270,12 @@ function DiffViewer({
           <li key={d.id}>
             <button
               type="button"
-              className={[
-                "diff-viewer-commit-list-item",
-                isSelected && "selected",
-                inRange && "in-range",
-                isWorking && "working",
-              ]
-                .filter(Boolean)
-                .join(" ")}
+              className={cn(
+                "flex w-full flex-col gap-1 rounded-md border border-transparent px-2 py-1.5 text-left transition-colors hover:bg-muted",
+                inRange && "bg-muted/60",
+                isSelected && "border-primary/40 bg-primary/10",
+                isWorking && "font-medium",
+              )}
               onClick={() => {
                 // Clicking a row picks that commit; keep the current
                 // range mode (only this / through working) so the
@@ -1295,24 +1290,29 @@ function DiffViewer({
               role="option"
               aria-selected={isSelected}
             >
-              <div className="diff-viewer-commit-list-line1">
-                <span className="diff-viewer-commit-list-subject">{subject}</span>
+              <div className="min-w-0">
+                <span className="block truncate text-sm">{subject}</span>
               </div>
               {!isWorking && (refs.length > 0 || d.isMergeBase) && (
-                <div className="diff-viewer-commit-list-refs">
+                <div className="flex flex-wrap gap-1">
                   {refs.map((ref) => (
                     <span
                       key={ref}
-                      className={`diff-viewer-commit-list-ref${
-                        ref === "HEAD" ? " head" : ""
-                      }${ref.includes("/") ? " remote" : ""}`}
+                      className={cn(
+                        "rounded-sm px-1 py-0.5 font-mono text-[10px] leading-none",
+                        ref === "HEAD"
+                          ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                          : ref.includes("/")
+                            ? "bg-blue-500/15 text-blue-700 dark:text-blue-400"
+                            : "bg-muted text-muted-foreground",
+                      )}
                     >
                       {ref}
                     </span>
                   ))}
                   {d.isMergeBase && !refs.some((r) => r.includes("/")) && (
                     <span
-                      className="diff-viewer-commit-list-ref mergebase"
+                      className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[10px] leading-none text-muted-foreground"
                       title="Merge-base with @{upstream}"
                     >
                       merge-base
@@ -1335,10 +1335,12 @@ function DiffViewer({
   // working with the real paths via DiffFileTreeEntry's realPath /
   // treePath mapping.
   const fileList = (
-    <div className="diff-viewer-file-list" aria-label="Files">
-      {files.length === 0 && <div className="diff-viewer-file-list-empty">No files</div>}
+    <div className="min-h-0" aria-label="Files">
+      {files.length === 0 && (
+        <div className="px-2 py-3 text-center text-xs text-muted-foreground">No files</div>
+      )}
       {files.length > 0 && (
-        <div className="diff-viewer-file-tree-wrap">
+        <div className="py-1">
           <DiffFileTree
             entries={treeEntries}
             selectedRealPath={selectedFile}
@@ -1354,41 +1356,29 @@ function DiffViewer({
   // sidebar is showing, the button at its top edge becomes `»` to push
   // it back away.
   const expandSidebarButton = (
-    <button
+    <Button
       type="button"
-      className="btn-icon diff-viewer-expand-btn"
+      variant="ghost"
+      size="icon-sm"
       onClick={() => setLayout("sidebar")}
       aria-label="Show sidebar"
       title="Show sidebar"
     >
-      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="20" height="20">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-        />
-      </svg>
-    </button>
+      <ChevronsLeftIcon className="size-5" />
+    </Button>
   );
 
   const collapseSidebarButton = (
-    <button
+    <Button
       type="button"
-      className="btn-icon diff-viewer-collapse-btn"
+      variant="ghost"
+      size="icon-sm"
       onClick={() => setLayout("header")}
       aria-label="Hide sidebar"
       title="Hide sidebar"
     >
-      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="20" height="20">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M13 5l7 7-7 7M5 5l7 7-7 7"
-        />
-      </svg>
-    </button>
+      <ChevronsRightIcon className="size-5" />
+    </Button>
   );
 
   const fileIndexIndicator =
@@ -1397,11 +1387,11 @@ function DiffViewer({
       : null;
 
   const fileSelector = (
-    <div className="diff-viewer-file-selector-wrapper">
+    <div className="flex min-w-0 items-center gap-2">
       <select
         value={selectedFile || ""}
         onChange={(e) => setSelectedFile(e.target.value || null)}
-        className="diff-viewer-select"
+        className="diff-viewer-select h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
         disabled={files.length === 0}
       >
         <option value="">{files.length === 0 ? "No files" : "Choose file..."}</option>
@@ -1429,107 +1419,127 @@ function DiffViewer({
           );
         })}
       </select>
-      {fileIndexIndicator && <span className="diff-viewer-file-index">{fileIndexIndicator}</span>}
+      {fileIndexIndicator && (
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          {fileIndexIndicator}
+        </span>
+      )}
     </div>
   );
 
   const modeToggle = (
-    <div className="diff-viewer-mode-toggle">
+    <div className="flex gap-0.5 rounded-md border border-border p-0.5">
       <button
-        className={`diff-viewer-mode-btn ${mode === "comment" ? "active" : ""}`}
+        type="button"
+        className={cn(
+          "flex size-7 items-center justify-center rounded-sm transition-colors",
+          mode === "comment"
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        )}
         onClick={() => setMode("comment")}
         title="Comment mode"
       >
-        💬
+        <MessageSquareIcon className="size-4" />
       </button>
       <button
-        className={`diff-viewer-mode-btn ${mode === "edit" ? "active" : ""}`}
+        type="button"
+        className={cn(
+          "flex size-7 items-center justify-center rounded-sm transition-colors",
+          mode === "edit"
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        )}
         onClick={() => setMode("edit")}
         title="Edit mode"
       >
-        ✏️
+        <PencilIcon className="size-4" />
       </button>
     </div>
   );
 
   const navButtons = (
-    <div className="diff-viewer-nav-buttons">
-      <button
-        className="diff-viewer-nav-btn"
+    <div className="flex items-center gap-0.5">
+      <Button
+        variant="ghost"
+        size="icon-sm"
         onClick={goToPreviousFile}
         disabled={!hasPrevFile}
         title="Previous file (<)"
       >
         <PrevFileIcon />
-      </button>
-      <button
-        className="diff-viewer-nav-btn"
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
         onClick={goToPreviousChange}
         disabled={!fileDiff}
         title="Previous change (,)"
       >
         <PrevChangeIcon />
-      </button>
-      <button
-        className="diff-viewer-nav-btn"
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
         onClick={goToNextChange}
         disabled={!fileDiff}
         title="Next change (.)"
       >
         <NextChangeIcon />
-      </button>
-      <button
-        className="diff-viewer-nav-btn"
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
         onClick={() => goToNextFile()}
         disabled={!hasNextFile}
         title="Next file (>)"
       >
         <NextFileIcon />
-      </button>
+      </Button>
     </div>
   );
 
   const dirButton = (
-    <button
-      className="diff-viewer-dir-btn"
+    <Button
+      variant="ghost"
+      size="icon-sm"
       onClick={() => setShowDirPicker(true)}
       title={`Git directory: ${cwd}\nClick to change`}
+      aria-label="Change git directory"
     >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-      </svg>
-    </button>
+      <FolderIcon className="size-4" />
+    </Button>
   );
 
+  const toastBase =
+    "pointer-events-none absolute top-3 left-1/2 z-50 -translate-x-1/2 rounded-md border px-3 py-1.5 text-sm shadow-lg";
+  const toastTone = (status: "saving" | "saved" | "error") =>
+    status === "error"
+      ? "border-destructive/40 bg-popover text-destructive"
+      : status === "saved"
+        ? "border-emerald-500/40 bg-popover text-emerald-600 dark:text-emerald-400"
+        : "border-border bg-popover text-popover-foreground";
+
   return (
-    <div className="diff-viewer-overlay">
-      <div className="diff-viewer-container">
+    <div className="diff-viewer-overlay fixed inset-0 z-40 flex items-stretch justify-stretch bg-background/80 backdrop-blur-sm">
+      <div className="diff-viewer-container relative flex min-h-0 w-full flex-col bg-background text-foreground">
         {/* Toast notification */}
         {saveStatus !== "idle" && (
-          <div className={`diff-viewer-toast diff-viewer-toast-${saveStatus}`}>
+          <div className={cn(toastBase, toastTone(saveStatus))}>
             {saveStatus === "saving" && "💾 Saving..."}
             {saveStatus === "saved" && "✅ Saved"}
             {saveStatus === "error" && "❌ Error saving"}
           </div>
         )}
         {amendStatus !== "idle" && (
-          <div className={`diff-viewer-toast diff-viewer-toast-${amendStatus}`}>
+          <div className={cn(toastBase, toastTone(amendStatus))}>
             {amendStatus === "saving" && "💾 Amending..."}
             {amendStatus === "saved" && "✅ Amended"}
             {amendStatus === "error" && "❌ Error amending"}
           </div>
         )}
         {showKeyboardHint && (
-          <div className="diff-viewer-toast diff-viewer-toast-hint">
+          <div className={cn(toastBase, "border-border bg-popover text-popover-foreground")}>
             ⌨️ Use . , for next/prev change, &lt; &gt; for files
           </div>
         )}
@@ -1537,15 +1547,21 @@ function DiffViewer({
         {/* Header - different layout for desktop vs mobile */}
         {isMobile ? (
           // Mobile header: just selectors 50/50
-          <div className="diff-viewer-header diff-viewer-header-mobile">
-            <div className="diff-viewer-mobile-selectors">
+          <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 py-2">
+            <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
               {commitSelector}
               {fileSelector}
             </div>
             {dirButton}
-            <button className="diff-viewer-close" onClick={onClose} title="Close (Esc)">
-              ×
-            </button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onClose}
+              title="Close (Esc)"
+              aria-label="Close (Esc)"
+            >
+              <XIcon className="size-5" />
+            </Button>
           </div>
         ) : (
           // Desktop header: selectors expand, controls on right.
@@ -1553,57 +1569,66 @@ function DiffViewer({
           // element in the top bar (sitting directly above the sidebar);
           // the inline commit/file selectors are hidden in that mode
           // because the sidebar shows commit and file lists instead.
-          <div className="diff-viewer-header">
-            <div className="diff-viewer-header-row">
+          <div className="shrink-0 border-b border-border px-3 py-2">
+            <div className="flex items-center gap-3">
               {layout === "sidebar" && collapseSidebarButton}
               {layout === "header" && expandSidebarButton}
               {layout === "header" ? (
-                <div className="diff-viewer-selectors-row">
-                  <div className="diff-viewer-selector-group">
-                    <label className="diff-viewer-selector-label">Commits</label>
+                <div className="flex min-w-0 flex-1 items-end gap-4">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Commits</label>
                     {commitSelector}
                   </div>
-                  <div className="diff-viewer-selector-group">
-                    <label className="diff-viewer-selector-label">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">
                       Commit messages and changed files
                     </label>
                     {fileSelector}
                   </div>
                 </div>
               ) : (
-                <div className="diff-viewer-header-title" title={currentTitleTooltip ?? undefined}>
+                <div
+                  className="min-w-0 flex-1 truncate text-sm font-medium"
+                  title={currentTitleTooltip ?? undefined}
+                >
                   {currentTitleText ?? "\u00a0"}
                 </div>
               )}
-              <div className="diff-viewer-controls-row">
+              <div className="flex shrink-0 items-center gap-2">
                 {navButtons}
                 {modeToggle}
                 <VimToggle enabled={vimEnabled} onChange={setVimEnabled} />
                 {dirButton}
-                <button className="diff-viewer-close" onClick={onClose} title="Close (Esc)">
-                  ×
-                </button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onClose}
+                  title="Close (Esc)"
+                  aria-label="Close (Esc)"
+                >
+                  <XIcon className="size-5" />
+                </Button>
               </div>
             </div>
           </div>
         )}
 
         {/* Error banner */}
-        {error && <div className="diff-viewer-error">{error}</div>}
+        {error && (
+          <div className="shrink-0 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
 
         {/* Main content */}
-        <div
-          className={`diff-viewer-content${
-            !isMobile && layout === "sidebar" ? " diff-viewer-content-sidebar" : ""
-          }`}
-        >
+        <div className="flex min-h-0 flex-1">
           {!isMobile && layout === "sidebar" && (
-            <aside className="diff-viewer-sidebar">
-              <div className="diff-viewer-sidebar-section diff-viewer-sidebar-commits">
-                <div className="diff-viewer-sidebar-label">
+            <aside className="flex w-72 shrink-0 flex-col border-r border-border">
+              <div className="flex min-h-0 flex-1 flex-col border-b border-border">
+                <div className="flex shrink-0 items-center justify-between px-3 py-1.5 text-xs font-medium text-muted-foreground">
                   <span>Commits</span>
                 </div>
-                <div className="diff-viewer-sidebar-range">
+                <div className="shrink-0 px-3 pb-2">
                   <RangeToggle
                     selectedDiff={selectedDiff}
                     selectedTo={selectedTo}
@@ -1613,45 +1638,45 @@ function DiffViewer({
                     }}
                   />
                 </div>
-                <div className="diff-viewer-sidebar-commits-scroll">{commitList}</div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">{commitList}</div>
               </div>
-              <div className="diff-viewer-sidebar-section diff-viewer-sidebar-files">
-                <div className="diff-viewer-sidebar-label">
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="flex shrink-0 items-center justify-between px-3 py-1.5 text-xs font-medium text-muted-foreground">
                   <span>Commit Messages and Files</span>
                   {fileIndexIndicator && (
-                    <span className="diff-viewer-file-index">{fileIndexIndicator}</span>
+                    <span className="tabular-nums">{fileIndexIndicator}</span>
                   )}
                 </div>
-                <div className="diff-viewer-sidebar-files-scroll">{fileList}</div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">{fileList}</div>
               </div>
             </aside>
           )}
-          <div className="diff-viewer-main">
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             {loading && !fileDiff && (
-              <div className="diff-viewer-loading">
-                <div className="spinner"></div>
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+                <Loader2Icon className="size-6 animate-spin" />
                 <span>Loading...</span>
               </div>
             )}
 
             {!loading && !monacoLoaded && !error && (
-              <div className="diff-viewer-loading">
-                <div className="spinner"></div>
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+                <Loader2Icon className="size-6 animate-spin" />
                 <span>Loading editor...</span>
               </div>
             )}
 
             {!loading && monacoLoaded && !fileDiff && !error && (
-              <div className="diff-viewer-empty">
+              <div className="flex flex-1 flex-col items-center justify-center gap-1 text-center text-muted-foreground">
                 <p>Select a diff and file to view changes.</p>
-                <p className="diff-viewer-hint">Click on line numbers to add comments.</p>
+                <p className="text-sm">Click on line numbers to add comments.</p>
               </div>
             )}
 
             {/* Monaco editor container */}
             <div
               ref={editorContainerRef}
-              className="diff-viewer-editor"
+              className="diff-viewer-editor min-h-0 flex-1"
               style={{ display: fileDiff && monacoLoaded ? "block" : "none" }}
             />
             {!isMobile && vimEnabled && fileDiff && monacoLoaded && (
@@ -1662,9 +1687,15 @@ function DiffViewer({
 
         {/* Mobile floating nav buttons at bottom */}
         {isMobile && (
-          <div className="diff-viewer-mobile-nav">
+          <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-popover/95 px-2 py-1.5 shadow-lg backdrop-blur">
             <button
-              className={`diff-viewer-mobile-nav-btn diff-viewer-mobile-mode-btn ${mode === "comment" ? "active" : ""}`}
+              type="button"
+              className={cn(
+                "flex size-9 items-center justify-center rounded-full text-lg transition-colors",
+                mode === "comment"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
               onClick={() => setMode(mode === "comment" ? "edit" : "comment")}
               title={
                 mode === "comment" ? "Comment mode (tap to switch)" : "Edit mode (tap to switch)"
@@ -1672,45 +1703,53 @@ function DiffViewer({
             >
               {mode === "comment" ? "💬" : "✏️"}
             </button>
-            <button
-              className="diff-viewer-mobile-nav-btn"
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
               onClick={goToPreviousFile}
               disabled={!hasPrevFile}
               title="Previous file (<)"
             >
               <PrevFileIcon />
-            </button>
-            <button
-              className="diff-viewer-mobile-nav-btn"
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
               onClick={goToPreviousChange}
               disabled={!fileDiff}
               title="Previous change (,)"
             >
               <PrevChangeIcon />
-            </button>
-            <button
-              className="diff-viewer-mobile-nav-btn"
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
               onClick={goToNextChange}
               disabled={!fileDiff}
               title="Next change (.)"
             >
               <NextChangeIcon />
-            </button>
-            <button
-              className="diff-viewer-mobile-nav-btn"
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
               onClick={() => goToNextFile()}
               disabled={!hasNextFile}
               title="Next file (>)"
             >
               <NextFileIcon />
-            </button>
+            </Button>
           </div>
         )}
 
         {/* Comment dialog */}
         {showCommentDialog && (
-          <div className="diff-viewer-comment-dialog">
-            <h4>
+          <div className="absolute bottom-4 left-1/2 z-40 flex w-[min(28rem,90vw)] -translate-x-1/2 flex-col gap-3 rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg">
+            <h4 className="text-sm font-medium">
               Add Comment (Line
               {showCommentDialog.startLine !== showCommentDialog.endLine
                 ? `s ${showCommentDialog.startLine}-${showCommentDialog.endLine}`
@@ -1718,30 +1757,24 @@ function DiffViewer({
               , {showCommentDialog.side === "left" ? "old" : "new"})
             </h4>
             {showCommentDialog.selectedText && (
-              <pre className="diff-viewer-selected-text">{showCommentDialog.selectedText}</pre>
+              <pre className="max-h-24 overflow-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs whitespace-pre-wrap break-words text-muted-foreground">
+                {showCommentDialog.selectedText}
+              </pre>
             )}
-            <textarea
+            <Textarea
               ref={commentInputRef}
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
               placeholder="Enter your comment..."
-              className="diff-viewer-comment-input"
               autoFocus
             />
-            <div className="diff-viewer-comment-actions">
-              <button
-                onClick={() => setShowCommentDialog(null)}
-                className="diff-viewer-btn diff-viewer-btn-secondary"
-              >
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowCommentDialog(null)}>
                 Cancel
-              </button>
-              <button
-                onClick={handleAddComment}
-                className="diff-viewer-btn diff-viewer-btn-primary"
-                disabled={!commentText.trim()}
-              >
+              </Button>
+              <Button size="sm" onClick={handleAddComment} disabled={!commentText.trim()}>
                 Add Comment
-              </button>
+              </Button>
             </div>
           </div>
         )}

@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useEscapeClose } from "./useEscapeClose";
+import { FolderGitIcon, GitBranchIcon } from "lucide-react";
+import Modal from "./Modal";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { cn } from "@/lib/utils";
 
 // Picker that lists every git repo under (by default) $HOME and lets the
 // user fuzzy-filter the list. Designed for the git-graph viewer where we
@@ -141,7 +146,7 @@ function Highlight({ text, positions }: { text: string; positions: number[] }) {
     const end = positions[j] + 1;
     if (start > cursor) out.push(text.slice(cursor, start));
     out.push(
-      <mark key={start} className="grp-hit">
+      <mark key={start} className="rounded-sm bg-amber-200 text-foreground dark:bg-amber-400/30">
         {text.slice(start, end)}
       </mark>,
     );
@@ -167,8 +172,6 @@ export default function GitRepoPicker({
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-
-  useEscapeClose(isOpen, onClose);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -268,116 +271,100 @@ export default function GitRepoPicker({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="modal-overlay"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="modal grp-modal" role="dialog" aria-label="Pick a git repository">
-        <div className="modal-header">
-          <h2 className="modal-title">Pick git repository</h2>
-          <button onClick={onClose} className="btn-icon" aria-label="Close">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-        <div className="modal-body grp-body">
-          <input
-            ref={inputRef}
-            className="grp-filter"
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKey}
-            placeholder={
-              loading ? "Scanning…" : repos ? `Filter ${repos.length} repos…` : "Filter repos…"
-            }
-            spellCheck={false}
-            aria-label="Filter"
-          />
+    <Modal isOpen={isOpen} onClose={onClose} title="Pick git repository" className="sm:max-w-2xl">
+      <div className="flex flex-col gap-3">
+        <Input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKey}
+          placeholder={
+            loading ? "Scanning…" : repos ? `Filter ${repos.length} repos…` : "Filter repos…"
+          }
+          spellCheck={false}
+          aria-label="Filter"
+        />
 
-          {error && <div className="grp-error">{error}</div>}
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-          <div className="grp-list" ref={listRef}>
-            {filtered.map((hit, idx) => {
-              const r = hit.repo;
-              const isActive = idx === activeIdx;
-              const isCurrent = r.path === currentPath;
-              return (
-                <button
-                  key={r.path}
-                  data-idx={idx}
-                  type="button"
-                  className={`grp-row${isActive ? " grp-row-active" : ""}${
-                    isCurrent ? " grp-row-current" : ""
-                  }`}
-                  onMouseEnter={() => setActiveIdx(idx)}
-                  onClick={() => {
-                    onSelect(r.path);
-                    onClose();
-                  }}
-                >
-                  <svg
-                    className="grp-icon"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+        <div ref={listRef} className="flex max-h-[50vh] flex-col gap-0.5 overflow-y-auto">
+          {filtered.map((hit, idx) => {
+            const r = hit.repo;
+            const isActive = idx === activeIdx;
+            const isCurrent = r.path === currentPath;
+            return (
+              <button
+                key={r.path}
+                data-idx={idx}
+                type="button"
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors",
+                  isActive ? "bg-muted" : "hover:bg-muted/50",
+                  isCurrent && "ring-1 ring-primary/40",
+                )}
+                onMouseEnter={() => setActiveIdx(idx)}
+                onClick={() => {
+                  onSelect(r.path);
+                  onClose();
+                }}
+              >
+                <FolderGitIcon
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                  <span className="min-w-0 truncate font-mono text-sm" title={r.path}>
+                    <Highlight
+                      text={displayPath(r.path, home)}
+                      positions={shiftPositions(hit.positions, r.path, home)}
                     />
-                  </svg>
-                  <span className="grp-main">
-                    <span className="grp-path" title={r.path}>
-                      <Highlight
-                        text={displayPath(r.path, home)}
-                        positions={shiftPositions(hit.positions, r.path, home)}
-                      />
-                    </span>
-                    {(r.branch || r.last_activity) && (
-                      <span className="grp-meta">
-                        {r.branch && (
-                          <span className="grp-branch" title="Current branch">
-                            {r.branch}
-                          </span>
-                        )}
-                        {r.last_activity && (
-                          <span
-                            className="grp-when"
-                            title={new Date(r.last_activity * 1000).toLocaleString()}
-                          >
-                            {formatRelative(r.last_activity)}
-                          </span>
-                        )}
-                      </span>
-                    )}
                   </span>
-                </button>
-              );
-            })}
-            {!loading && repos && filtered.length === 0 && (
-              <div className="grp-empty">No matching repos.</div>
-            )}
-            {loading && <div className="grp-empty">Scanning your home directory…</div>}
-          </div>
-
-          {truncated && <div className="grp-truncated">Showing first results — try filtering.</div>}
+                  {(r.branch || r.last_activity) && (
+                    <span className="flex shrink-0 items-center gap-2">
+                      {r.branch && (
+                        <Badge variant="secondary" className="font-mono" title="Current branch">
+                          <GitBranchIcon aria-hidden="true" />
+                          {r.branch}
+                        </Badge>
+                      )}
+                      {r.last_activity && (
+                        <span
+                          className="text-xs text-muted-foreground tabular-nums"
+                          title={new Date(r.last_activity * 1000).toLocaleString()}
+                        >
+                          {formatRelative(r.last_activity)}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+          {!loading && repos && filtered.length === 0 && (
+            <div className="px-2.5 py-6 text-center text-sm text-muted-foreground">
+              No matching repos.
+            </div>
+          )}
+          {loading && (
+            <div className="px-2.5 py-6 text-center text-sm text-muted-foreground">
+              Scanning your home directory…
+            </div>
+          )}
         </div>
+
+        {truncated && (
+          <div className="text-xs text-muted-foreground">
+            Showing first results — try filtering.
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }

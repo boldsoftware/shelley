@@ -6,6 +6,9 @@ test.describe("Scroll behavior", () => {
     page,
     request,
   }) => {
+    // Several sequential agent round-trips below; give headroom over the
+    // default 30s so this doesn't time out under full-suite load.
+    test.setTimeout(120_000);
     // Seed a conversation with enough content via the API so we don't race
     // with other tests on the shared server (page.goto('/') used to pick up
     // whichever conversation was most recent, often mid-stream).
@@ -17,8 +20,11 @@ test.describe("Scroll behavior", () => {
     const sendButton = page.locator('[data-testid="send-button"]');
     await expect(input).toBeVisible({ timeout: 30000 });
 
-    // Add more messages to ensure we have scrollable content.
-    for (let i = 1; i < 4; i++) {
+    // Add more messages to ensure we have scrollable content. The shadcn
+    // redesign is more vertically compact than the old UI, so a few short echo
+    // exchanges no longer overflow the viewport; seed enough to guarantee the
+    // messages container actually scrolls.
+    for (let i = 1; i < 6; i++) {
       await input.fill(`echo message ${i}`);
       await sendButton.click();
       // Wait for the agent reply for this specific message to appear.

@@ -1,6 +1,6 @@
 import React from "react";
 import { LLMContent } from "../types";
-import { useToolExpandedState } from "./ToolDetailContext";
+import { ToolCard, ToolSection, ToolCode, ToolStatusMark } from "./ToolCard";
 
 interface KeywordSearchToolProps {
   // For tool_use (pending state)
@@ -20,8 +20,6 @@ function KeywordSearchTool({
   hasError,
   executionTime,
 }: KeywordSearchToolProps) {
-  const [isExpanded, setIsExpanded] = useToolExpandedState();
-
   // Extract query and search terms from toolInput
   const query =
     typeof toolInput === "object" &&
@@ -55,70 +53,40 @@ function KeywordSearchTool({
   const isComplete = !isRunning && toolResult !== undefined;
 
   return (
-    <div className="tool" data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}>
-      <div className="tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="tool-summary">
-          <span className={`tool-emoji ${isRunning ? "running" : ""}`}>🔍</span>
-          <span className="tool-command" title={fullText}>
-            {displayText}
-          </span>
-          {isComplete && hasError && <span className="tool-error">✗</span>}
-          {isComplete && !hasError && <span className="tool-success">✓</span>}
-        </div>
-        <button
-          className="tool-toggle"
-          aria-label={isExpanded ? "Collapse" : "Expand"}
-          aria-expanded={isExpanded}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
-
-      {isExpanded && (
-        <div className="tool-details">
-          {query && (
-            <div className="tool-section">
-              <div className="tool-label">Query:</div>
-              <pre className="tool-code">{query}</pre>
-            </div>
-          )}
-
-          {searchTerms.length > 0 && (
-            <div className="tool-section">
-              <div className="tool-label">Search Terms:</div>
-              <pre className="tool-code">{searchTerms.join(", ")}</pre>
-            </div>
-          )}
-
-          {isComplete && (
-            <div className="tool-section">
-              <div className="tool-label">
-                Results{hasError ? " (Error)" : ""}:
-                {executionTime && <span className="tool-time">{executionTime}</span>}
-              </div>
-              <pre className={`tool-code ${hasError ? "error" : ""}`}>
-                {output || "(no output)"}
-              </pre>
-            </div>
-          )}
-        </div>
+    <ToolCard
+      emoji="🔍"
+      running={isRunning}
+      complete={isComplete}
+      title={<span title={fullText}>{displayText}</span>}
+      status={isComplete ? <ToolStatusMark error={hasError} /> : null}
+    >
+      {query && (
+        <ToolSection label="Query:">
+          <ToolCode>{query}</ToolCode>
+        </ToolSection>
       )}
-    </div>
+
+      {searchTerms.length > 0 && (
+        <ToolSection label="Search Terms:">
+          <ToolCode>{searchTerms.join(", ")}</ToolCode>
+        </ToolSection>
+      )}
+
+      {isComplete && (
+        <ToolSection
+          label={
+            <span className="flex items-center gap-2">
+              <span>Results{hasError ? " (Error)" : ""}:</span>
+              {executionTime && (
+                <span className="text-muted-foreground">{executionTime}</span>
+              )}
+            </span>
+          }
+        >
+          <ToolCode error={hasError}>{output || "(no output)"}</ToolCode>
+        </ToolSection>
+      )}
+    </ToolCard>
   );
 }
 

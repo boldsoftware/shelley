@@ -1,7 +1,6 @@
 import React from "react";
-import { createPortal } from "react-dom";
 import { Usage } from "../types";
-import { useEscapeClose } from "./useEscapeClose";
+import Modal from "./Modal";
 
 interface UsageDetailModalProps {
   usage: Usage;
@@ -30,66 +29,29 @@ function UsageDetailModal({ usage, durationMs, onClose }: UsageDetailModalProps)
     });
   };
 
-  useEscapeClose(true, onClose);
+  const rows: { label: string; value: React.ReactNode }[] = [];
+  if (usage.model) rows.push({ label: "Model", value: usage.model });
+  rows.push({ label: "Input Tokens", value: usage.input_tokens.toLocaleString() });
+  if (usage.cache_read_input_tokens > 0)
+    rows.push({ label: "Cache Read", value: usage.cache_read_input_tokens.toLocaleString() });
+  if (usage.cache_creation_input_tokens > 0)
+    rows.push({ label: "Cache Write", value: usage.cache_creation_input_tokens.toLocaleString() });
+  rows.push({ label: "Output Tokens", value: usage.output_tokens.toLocaleString() });
+  if (usage.cost_usd > 0) rows.push({ label: "Cost", value: `$${usage.cost_usd.toFixed(4)}` });
+  if (durationMs !== null) rows.push({ label: "Duration", value: formatDuration(durationMs) });
+  if (usage.end_time) rows.push({ label: "Timestamp", value: formatTimestamp(usage.end_time) });
 
-  return createPortal(
-    <div className="usage-detail-overlay" onClick={onClose}>
-      <div className="usage-detail-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="usage-detail-header">
-          <h2 className="usage-detail-title">Usage Details</h2>
-          <button onClick={onClose} className="usage-detail-close-button" aria-label="Close">
-            ×
-          </button>
-        </div>
-        <div className="usage-detail-grid">
-          {usage.model && (
-            <>
-              <div className="usage-detail-label">Model:</div>
-              <div className="usage-detail-value">{usage.model}</div>
-            </>
-          )}
-          <div className="usage-detail-label">Input Tokens:</div>
-          <div className="usage-detail-value">{usage.input_tokens.toLocaleString()}</div>
-          {usage.cache_read_input_tokens > 0 && (
-            <>
-              <div className="usage-detail-label">Cache Read:</div>
-              <div className="usage-detail-value">
-                {usage.cache_read_input_tokens.toLocaleString()}
-              </div>
-            </>
-          )}
-          {usage.cache_creation_input_tokens > 0 && (
-            <>
-              <div className="usage-detail-label">Cache Write:</div>
-              <div className="usage-detail-value">
-                {usage.cache_creation_input_tokens.toLocaleString()}
-              </div>
-            </>
-          )}
-          <div className="usage-detail-label">Output Tokens:</div>
-          <div className="usage-detail-value">{usage.output_tokens.toLocaleString()}</div>
-          {usage.cost_usd > 0 && (
-            <>
-              <div className="usage-detail-label">Cost:</div>
-              <div className="usage-detail-value">${usage.cost_usd.toFixed(4)}</div>
-            </>
-          )}
-          {durationMs !== null && (
-            <>
-              <div className="usage-detail-label">Duration:</div>
-              <div className="usage-detail-value">{formatDuration(durationMs)}</div>
-            </>
-          )}
-          {usage.end_time && (
-            <>
-              <div className="usage-detail-label">Timestamp:</div>
-              <div className="usage-detail-value">{formatTimestamp(usage.end_time)}</div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <Modal isOpen onClose={onClose} title="Usage Details" className="sm:max-w-md">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 text-sm">
+        {rows.map((row) => (
+          <React.Fragment key={row.label}>
+            <dt className="text-muted-foreground">{row.label}</dt>
+            <dd className="text-right font-mono break-all text-foreground">{row.value}</dd>
+          </React.Fragment>
+        ))}
+      </dl>
+    </Modal>
   );
 }
 

@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { LLMContent } from "../types";
+import { ToolCard, ToolSection, ToolCode, ToolStatusMark } from "./ToolCard";
 
 interface ReadImageToolProps {
   toolInput?: unknown; // { path: string }
@@ -16,8 +17,6 @@ function ReadImageTool({
   hasError,
   executionTime,
 }: ReadImageToolProps) {
-  const [isExpanded, setIsExpanded] = useState(true); // Default to expanded
-
   // Extract display info from toolInput
   const getPath = (input: unknown): string | undefined => {
     if (
@@ -55,87 +54,61 @@ function ReadImageTool({
   const isComplete = !isRunning && toolResult !== undefined;
 
   return (
-    <div
+    <ToolCard
       className="screenshot-tool"
-      data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}
+      emojiClassName="screenshot-tool-emoji"
+      emoji="🖼️"
+      running={isRunning}
+      complete={isComplete}
+      title={<span title={filename}>{filename}</span>}
+      status={isComplete ? <ToolStatusMark error={hasError} /> : null}
     >
-      <div className="screenshot-tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="screenshot-tool-summary">
-          <span className={`screenshot-tool-emoji ${isRunning ? "running" : ""}`}>🖼️</span>
-          <span className="screenshot-tool-filename" title={filename}>
-            {filename}
-          </span>
-          {isComplete && hasError && <span className="screenshot-tool-error">✗</span>}
-          {isComplete && !hasError && <span className="screenshot-tool-success">✓</span>}
-        </div>
-        <button
-          className="screenshot-tool-toggle"
-          aria-label={isExpanded ? "Collapse" : "Expand"}
-          aria-expanded={isExpanded}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
-
-      {isExpanded && (
-        <div className="screenshot-tool-details">
-          {isComplete && !hasError && imageUrl && (
-            <div className="screenshot-tool-section">
+      {isComplete && !hasError && imageUrl && (
+        <ToolSection
+          label={
+            <span className="flex items-center gap-2">
+              <span>Image:</span>
               {executionTime && (
-                <div className="screenshot-tool-label">
-                  <span>Image:</span>
-                  <span className="screenshot-tool-time">{executionTime}</span>
-                </div>
+                <span className="text-muted-foreground">{executionTime}</span>
               )}
-              <div className="screenshot-tool-image-container">
-                <a href={imageUrl} target="_blank" rel="noopener noreferrer">
-                  <img
-                    src={imageUrl}
-                    alt={`Image: ${filename}`}
-                    className="tool-image-responsive"
-                    width={imageWidth || undefined}
-                    height={imageHeight || undefined}
-                  />
-                </a>
-              </div>
-            </div>
-          )}
-
-          {isComplete && hasError && (
-            <div className="screenshot-tool-section">
-              <div className="screenshot-tool-label">
-                <span>Error:</span>
-                {executionTime && <span className="screenshot-tool-time">{executionTime}</span>}
-              </div>
-              <pre className="screenshot-tool-error-message">
-                {toolResult && toolResult[0]?.Text ? toolResult[0].Text : "Image read failed"}
-              </pre>
-            </div>
-          )}
-
-          {isRunning && (
-            <div className="screenshot-tool-section">
-              <div className="screenshot-tool-label">Reading image...</div>
-            </div>
-          )}
-        </div>
+            </span>
+          }
+        >
+          <a href={imageUrl} target="_blank" rel="noopener noreferrer">
+            <img
+              src={imageUrl}
+              alt={`Image: ${filename}`}
+              className="h-auto max-w-full rounded-md border border-border"
+              width={imageWidth || undefined}
+              height={imageHeight || undefined}
+            />
+          </a>
+        </ToolSection>
       )}
-    </div>
+
+      {isComplete && hasError && (
+        <ToolSection
+          label={
+            <span className="flex items-center gap-2">
+              <span>Error:</span>
+              {executionTime && (
+                <span className="text-muted-foreground">{executionTime}</span>
+              )}
+            </span>
+          }
+        >
+          <ToolCode error>
+            {toolResult && toolResult[0]?.Text ? toolResult[0].Text : "Image read failed"}
+          </ToolCode>
+        </ToolSection>
+      )}
+
+      {isRunning && (
+        <ToolSection label="Status:">
+          <div className="text-muted-foreground italic">Reading image...</div>
+        </ToolSection>
+      )}
+    </ToolCard>
   );
 }
 

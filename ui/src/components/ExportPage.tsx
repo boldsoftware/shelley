@@ -6,11 +6,20 @@
 // (conversationToMarkdown), and shows a split editor: editable Markdown source
 // on the left, live-rendered preview on the right. It reuses the app's bundled
 // marked + DOMPurify (via MarkdownContent), so it works offline.
+//
+// NOTE: this page is mounted WITHOUT the app's TooltipProvider / Toaster /
+// I18nProvider (see main.tsx), so it must not use shadcn Tooltip or sonner —
+// hence the small self-contained inline toast below.
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { Loader2Icon } from "lucide-react";
 import { api } from "../services/api";
 import { Conversation, Message } from "../types";
 import { conversationToMarkdown } from "../utils/conversationMarkdown";
 import MarkdownContent from "./MarkdownContent";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 function filenameFor(conversation: Conversation | null): string {
   const base = (conversation?.slug || "conversation")
@@ -112,7 +121,7 @@ function ExportPage({ conversationId }: { conversationId: string }) {
 
   useEffect(() => {
     if (conversation) {
-      document.title = `${conversation.slug || "Conversation"} \u2014 Export`;
+      document.title = `${conversation.slug || "Conversation"} — Export`;
     }
   }, [conversation]);
 
@@ -142,61 +151,82 @@ function ExportPage({ conversationId }: { conversationId: string }) {
 
   if (loading) {
     return (
-      <div className="export-page export-centered">
-        <div className="export-spinner" aria-label="Loading" />
+      <div className="flex h-screen items-center justify-center bg-background text-foreground">
+        <Loader2Icon className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
       </div>
     );
   }
   if (error) {
     return (
-      <div className="export-page export-centered">
-        <div className="export-error">Failed to load conversation: {error}</div>
+      <div className="flex h-screen items-center justify-center bg-background p-4 text-center text-destructive">
+        <div>Failed to load conversation: {error}</div>
       </div>
     );
   }
 
   return (
-    <div className="export-page">
-      <header className="export-bar">
-        <div className="export-title" title={conversation?.slug || "Conversation"}>
+    <div className="flex h-screen flex-col bg-background text-foreground">
+      <header className="flex items-center gap-3 border-b border-border px-4 py-2">
+        <div className="min-w-0 flex-1 truncate font-medium" title={conversation?.slug || "Conversation"}>
           {conversation?.slug || "Conversation"}
         </div>
-        <label className="export-opt">
-          <input
-            type="checkbox"
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="export-include-tools"
             checked={includeToolOutputs}
-            onChange={(e) => onToggleToolOutputs(e.target.checked)}
+            onCheckedChange={(c) => onToggleToolOutputs(c === true)}
           />
-          Include tool outputs
-        </label>
-        <div className="export-tabs" role="tablist">
+          <Label htmlFor="export-include-tools" className="text-sm font-normal">
+            Include tool outputs
+          </Label>
+        </div>
+        <div
+          className="flex gap-0.5 rounded-md border border-border p-0.5 text-sm md:hidden"
+          role="tablist"
+        >
           <button
-            className={`export-tab${mobilePane === "edit" ? " export-tab-active" : ""}`}
+            className={cn(
+              "rounded-sm px-3 py-1",
+              mobilePane === "edit"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground",
+            )}
             onClick={() => setMobilePane("edit")}
             role="tab"
+            aria-selected={mobilePane === "edit"}
           >
             Markdown
           </button>
           <button
-            className={`export-tab${mobilePane === "preview" ? " export-tab-active" : ""}`}
+            className={cn(
+              "rounded-sm px-3 py-1",
+              mobilePane === "preview"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground",
+            )}
             onClick={() => setMobilePane("preview")}
             role="tab"
+            aria-selected={mobilePane === "preview"}
           >
             Preview
           </button>
         </div>
       </header>
 
-      <main className="export-panes">
+      <main className="flex min-h-0 flex-1">
         <section
-          className={`export-pane export-pane-edit${mobilePane === "edit" ? " export-pane-shown" : ""}`}
+          className={cn(
+            "min-w-0 flex-1 flex-col border-r border-border md:flex",
+            mobilePane === "edit" ? "flex" : "hidden",
+          )}
           aria-label="Markdown source"
         >
-          <div className="export-pane-head">
-            <span className="export-pane-label">Markdown</span>
-            <div className="export-pane-actions">
-              <button
-                className="export-btn"
+          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Markdown</span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() =>
                   copyText(source).then(
                     () => showToast("Markdown copied"),
@@ -205,20 +235,20 @@ function ExportPage({ conversationId }: { conversationId: string }) {
                 }
               >
                 Copy
-              </button>
-              <button
-                className="export-btn export-btn-primary"
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => {
                   download(filename, source, "text/markdown");
                   showToast(`Downloaded ${filename}`);
                 }}
               >
                 Download .md
-              </button>
+              </Button>
             </div>
           </div>
           <textarea
-            className="export-src"
+            className="min-h-0 flex-1 resize-none bg-background p-3 font-mono text-sm text-foreground outline-none"
             spellCheck={false}
             value={source}
             onChange={(e) => {
@@ -230,14 +260,18 @@ function ExportPage({ conversationId }: { conversationId: string }) {
         </section>
 
         <section
-          className={`export-pane export-pane-preview${mobilePane === "preview" ? " export-pane-shown" : ""}`}
+          className={cn(
+            "min-w-0 flex-1 flex-col md:flex",
+            mobilePane === "preview" ? "flex" : "hidden",
+          )}
           aria-label="Rendered preview"
         >
-          <div className="export-pane-head">
-            <span className="export-pane-label">Preview</span>
-            <div className="export-pane-actions">
-              <button
-                className="export-btn"
+          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Preview</span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() =>
                   copyText(source).then(
                     () => showToast("Copied as text"),
@@ -246,16 +280,20 @@ function ExportPage({ conversationId }: { conversationId: string }) {
                 }
               >
                 Copy
-              </button>
+              </Button>
             </div>
           </div>
-          <article className="export-preview markdown-content">
+          <article className="markdown-content min-h-0 flex-1 overflow-auto p-4">
             <MarkdownContent text={source} />
           </article>
         </section>
       </main>
 
-      {toast && <div className="export-toast export-toast-show">{toast}</div>}
+      {toast && (
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-lg">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

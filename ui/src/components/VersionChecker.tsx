@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
 import { VersionInfo, CommitInfo } from "../types";
-import { useEscapeClose } from "./useEscapeClose";
+import Modal from "./Modal";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface VersionCheckerProps {
   onUpdateAvailable?: (hasUpdate: boolean) => void;
@@ -33,8 +38,6 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
       loadAutoUpgradeSetting();
     }
   }, [isOpen, versionInfo]);
-
-  useEscapeClose(isOpen, onClose);
 
   const loadAutoUpgradeSetting = async () => {
     setLoadingAutoUpgrade(true);
@@ -101,8 +104,6 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
     }
   };
 
-  if (!isOpen) return null;
-
   const formatDateTime = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleString(undefined, {
@@ -119,124 +120,114 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
     return `https://github.com/boldsoftware/shelley/commit/${sha}`;
   };
 
+  const InfoRow = ({
+    label,
+    value,
+    date,
+  }: {
+    label: string;
+    value: React.ReactNode;
+    date?: string;
+  }) => (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono font-medium text-foreground">{value}</span>
+      {date && <span className="text-xs text-muted-foreground">({formatDateTime(date)})</span>}
+    </div>
+  );
+
   return (
-    <div className="version-modal-overlay" onClick={onClose}>
-      <div className="version-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="version-modal-header">
-          <h2>Version</h2>
-          <button onClick={onClose} className="version-modal-close" aria-label="Close">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
+    <Modal isOpen={isOpen} onClose={onClose} title="Version" className="sm:max-w-2xl">
+      {isLoading ? (
+        <div className="py-8 text-center text-sm text-muted-foreground">
+          Checking for updates...
+        </div>
+      ) : versionInfo ? (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <InfoRow
+              label="Current:"
+              value={versionInfo.current_tag || versionInfo.current_version || "dev"}
+              date={versionInfo.current_commit_time}
+            />
+            {versionInfo.latest_tag && (
+              <InfoRow
+                label="Latest:"
+                value={versionInfo.latest_tag}
+                date={versionInfo.published_at}
               />
-            </svg>
-          </button>
-        </div>
+            )}
+          </div>
 
-        <div className="version-modal-content">
-          {isLoading ? (
-            <div className="version-loading">Checking for updates...</div>
-          ) : versionInfo ? (
-            <>
-              <div className="version-info-row">
-                <span className="version-label">Current:</span>
-                <span className="version-value">
-                  {versionInfo.current_tag || versionInfo.current_version || "dev"}
-                </span>
-                {versionInfo.current_commit_time && (
-                  <span className="version-date">
-                    ({formatDateTime(versionInfo.current_commit_time)})
-                  </span>
-                )}
-              </div>
-
-              {versionInfo.latest_tag && (
-                <div className="version-info-row">
-                  <span className="version-label">Latest:</span>
-                  <span className="version-value">{versionInfo.latest_tag}</span>
-                  {versionInfo.published_at && (
-                    <span className="version-date">
-                      ({formatDateTime(versionInfo.published_at)})
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {versionInfo.error && (
-                <div className="version-error">
-                  <span>Error: {versionInfo.error}</span>
-                </div>
-              )}
-
-              {/* Changelog */}
-              {versionInfo.has_update && (
-                <div className="version-changelog">
-                  <h3>
-                    <a
-                      href={`https://github.com/boldsoftware/shelley/compare/${versionInfo.current_tag}...${versionInfo.latest_tag}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="changelog-link"
-                    >
-                      Changelog
-                    </a>
-                  </h3>
-                  {loadingCommits ? (
-                    <div className="version-loading">Loading...</div>
-                  ) : commits.length > 0 ? (
-                    <ul className="commit-list">
-                      {commits.map((commit) => (
-                        <li key={commit.sha} className="commit-item">
-                          <a
-                            href={getCommitUrl(commit.sha)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="commit-sha"
-                          >
-                            {commit.sha}
-                          </a>
-                          <span className="commit-message">{commit.message}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="version-no-commits">No commits found</div>
-                  )}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="version-loading">Loading...</div>
+          {versionInfo.error && (
+            <Alert variant="destructive">
+              <AlertDescription>Error: {versionInfo.error}</AlertDescription>
+            </Alert>
           )}
-        </div>
 
-        {/* Footer: auto-upgrade + upgrade button, outside scrolling area */}
-        {!isLoading && versionInfo && (
-          <div className="version-modal-footer">
+          {/* Changelog */}
+          {versionInfo.has_update && (
+            <div className="flex flex-col gap-2">
+              <h3 className="text-sm font-semibold">
+                <a
+                  href={`https://github.com/boldsoftware/shelley/compare/${versionInfo.current_tag}...${versionInfo.latest_tag}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  Changelog
+                </a>
+              </h3>
+              {loadingCommits ? (
+                <div className="py-2 text-sm text-muted-foreground">Loading...</div>
+              ) : commits.length > 0 ? (
+                <ul className="flex max-h-72 flex-col gap-1.5 overflow-y-auto rounded-md border border-border bg-muted/40 p-3">
+                  {commits.map((commit) => (
+                    <li key={commit.sha} className="flex gap-2 text-sm">
+                      <a
+                        href={getCommitUrl(commit.sha)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 font-mono text-xs text-primary underline-offset-4 hover:underline"
+                      >
+                        {commit.sha}
+                      </a>
+                      <span className="min-w-0 break-words text-foreground">{commit.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="py-2 text-sm text-muted-foreground">No commits found</div>
+              )}
+            </div>
+          )}
+
+          <Separator />
+
+          {/* Footer: auto-upgrade + upgrade button */}
+          <div className="flex flex-col gap-4">
             {!loadingAutoUpgrade && (
-              <div className="version-auto-upgrade">
-                <label className="version-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={autoUpgrade}
-                    onChange={(e) => handleAutoUpgradeChange(e.target.checked)}
-                  />
-                  <span>Auto-upgrade when idle (checks daily)</span>
-                </label>
-              </div>
+              <Label className="flex items-center gap-2 text-sm font-normal">
+                <Checkbox
+                  checked={autoUpgrade}
+                  onCheckedChange={(checked) => handleAutoUpgradeChange(checked === true)}
+                />
+                <span>Auto-upgrade when idle (checks daily)</span>
+              </Label>
             )}
 
             {versionInfo.has_update && versionInfo.download_url && (
-              <div className="version-actions">
-                {upgradeError && <div className="version-error">{upgradeError}</div>}
+              <div className="flex flex-col gap-2">
+                {upgradeError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{upgradeError}</AlertDescription>
+                  </Alert>
+                )}
 
-                <button
+                <Button
                   onClick={handleUpgradeAndRestart}
                   disabled={upgrading}
-                  className="version-btn version-btn-primary"
+                  className="self-start"
                 >
                   {upgrading
                     ? versionInfo.running_under_systemd
@@ -245,44 +236,49 @@ function VersionModal({ isOpen, onClose, versionInfo, isLoading }: VersionModalP
                     : versionInfo.running_under_systemd
                       ? "Upgrade Shelley & Restart"
                       : "Upgrade & Kill Shelley Server"}
-                </button>
+                </Button>
               </div>
             )}
 
             {/* Headless Shell (Browser) section */}
             {versionInfo.headless_shell_current && (
-              <div className="version-headless-section">
-                <div className="version-info-row">
-                  <span className="version-label">Browser:</span>
-                  <span className="version-value">{versionInfo.headless_shell_current}</span>
-                </div>
+              <div className="flex flex-col gap-2 border-t border-border pt-4">
+                <InfoRow label="Browser:" value={versionInfo.headless_shell_current} />
                 {versionInfo.headless_shell_update && versionInfo.headless_shell_latest && (
-                  <div className="version-info-row">
-                    <span className="version-label">Latest:</span>
-                    <span className="version-value">{versionInfo.headless_shell_latest}</span>
-                  </div>
+                  <InfoRow label="Latest:" value={versionInfo.headless_shell_latest} />
                 )}
                 {versionInfo.headless_shell_update ? (
-                  <div className="version-actions">
-                    {headlessError && <div className="version-error">{headlessError}</div>}
-                    {headlessSuccess && <div className="version-success">{headlessSuccess}</div>}
-                    <button
+                  <div className="flex flex-col gap-2">
+                    {headlessError && (
+                      <Alert variant="destructive">
+                        <AlertDescription>{headlessError}</AlertDescription>
+                      </Alert>
+                    )}
+                    {headlessSuccess && (
+                      <Alert>
+                        <AlertDescription>{headlessSuccess}</AlertDescription>
+                      </Alert>
+                    )}
+                    <Button
                       onClick={handleUpgradeHeadlessShell}
                       disabled={upgradingHeadless}
-                      className="version-btn version-btn-secondary"
+                      variant="secondary"
+                      className="self-start"
                     >
                       {upgradingHeadless ? "Upgrading Browser..." : "Upgrade Browser"}
-                    </button>
+                    </Button>
                   </div>
                 ) : (
-                  <div className="version-up-to-date">Browser is up to date</div>
+                  <div className="text-sm text-muted-foreground">Browser is up to date</div>
                 )}
               </div>
             )}
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      ) : (
+        <div className="py-8 text-center text-sm text-muted-foreground">Loading...</div>
+      )}
+    </Modal>
   );
 }
 

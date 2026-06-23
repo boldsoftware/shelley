@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Search, Loader2 } from "lucide-react";
 import { ConversationWithState } from "../types";
 import { api } from "../services/api";
 import { messageStore } from "../services/messageStore";
 import { useMarkdown } from "../contexts/MarkdownContext";
 import { useI18n, type Locale } from "../i18n";
 import { tildifyPath } from "../utils/tildify";
+import { cn } from "@/lib/utils";
 
 interface CommandItem {
   id: string;
@@ -967,42 +969,39 @@ function CommandPalette({
   if (!isOpen) return null;
 
   return (
-    <div className="command-palette-overlay" onClick={onClose}>
-      <div className="command-palette" onClick={(e) => e.stopPropagation()}>
-        <div className="command-palette-input-wrapper">
-          <svg
-            className="command-palette-search-icon"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 px-4 pt-[12vh] backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("searchPlaceholder")}
+        className="flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b border-border px-4">
+          <Search className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             ref={inputRef}
             type="text"
-            className="command-palette-input"
+            className="flex-1 bg-transparent py-3.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none"
             placeholder={t("searchPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
           />
-          {isSearching && <div className="command-palette-spinner" />}
-          <div className="command-palette-shortcut">
-            <kbd>esc</kbd>
-          </div>
+          {isSearching && (
+            <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
+          )}
+          <kbd className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">
+            esc
+          </kbd>
         </div>
 
-        <div className="command-palette-list" ref={listRef}>
+        <div className="min-h-0 flex-1 overflow-y-auto p-2" ref={listRef}>
           {displayItems.length === 0 ? (
-            <div className="command-palette-empty">
+            <div className="px-3 py-8 text-center text-sm text-muted-foreground">
               {isSearching ? t("searching") : t("noResults")}
             </div>
           ) : (
@@ -1010,7 +1009,12 @@ function CommandPalette({
               <div
                 key={item.id}
                 data-index={index}
-                className={`command-palette-item ${index === selectedIndex ? "selected" : ""}`}
+                className={cn(
+                  "flex cursor-pointer items-center gap-3 rounded-md px-3 py-2",
+                  index === selectedIndex
+                    ? "bg-accent text-accent-foreground"
+                    : "text-foreground",
+                )}
                 onClick={(e) => {
                   if (item.url && (e.metaKey || e.ctrlKey || e.shiftKey)) {
                     e.preventDefault();
@@ -1029,36 +1033,43 @@ function CommandPalette({
                 }}
                 onMouseEnter={() => setSelectedIndex(index)}
               >
-                <div className="command-palette-item-icon">{item.icon}</div>
-                <div className="command-palette-item-content">
-                  <div className="command-palette-item-title">{item.title}</div>
+                <div className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
+                  {item.icon}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm">{item.title}</div>
                   {item.subtitle && (
-                    <div className="command-palette-item-subtitle">{item.subtitle}</div>
+                    <div className="truncate text-xs text-muted-foreground">{item.subtitle}</div>
                   )}
                 </div>
                 {item.shortcut && (
-                  <div className="command-palette-item-shortcut">
-                    <kbd>{item.shortcut}</kbd>
-                  </div>
+                  <kbd className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">
+                    {item.shortcut}
+                  </kbd>
                 )}
                 {item.type === "action" && !item.shortcut && (
-                  <div className="command-palette-item-badge">{t("action")}</div>
+                  <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-secondary-foreground">
+                    {t("action")}
+                  </span>
                 )}
               </div>
             ))
           )}
         </div>
 
-        <div className="command-palette-footer">
-          <span>
-            <kbd>↑</kbd>
-            <kbd>↓</kbd> {t("toNavigate")}
+        <div className="flex items-center gap-4 border-t border-border px-4 py-2 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium">↑</kbd>
+            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium">↓</kbd>
+            {t("toNavigate")}
           </span>
-          <span>
-            <kbd>↵</kbd> {t("toSelect")}
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium">↵</kbd>
+            {t("toSelect")}
           </span>
-          <span>
-            <kbd>esc</kbd> {t("toClose")}
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium">esc</kbd>
+            {t("toClose")}
           </span>
         </div>
       </div>

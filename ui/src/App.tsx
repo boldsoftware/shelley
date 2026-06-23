@@ -16,6 +16,8 @@ import { applyConversationListPatch } from "./services/conversationListStream";
 import { connectGlobalStream, type StreamStatus } from "./services/globalStream";
 import { handleNotificationEvent } from "./services/notifications";
 import { useI18n } from "./i18n";
+import { Loader2Icon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 // Worker pool configuration for @pierre/diffs syntax highlighting
 // Workers run tokenization off the main thread for better performance with large diffs
@@ -677,10 +679,10 @@ function App() {
 
   if (loading && conversations.length === 0) {
     return (
-      <div className="loading-container">
-        <div className="loading-content">
-          <div className="spinner" style={{ margin: "0 auto 1rem" }}></div>
-          <p className="text-secondary">{t("loading")}</p>
+      <div className="flex h-screen items-center justify-center bg-background text-foreground">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
+          <p className="text-muted-foreground">{t("loading")}</p>
         </div>
       </div>
     );
@@ -688,14 +690,10 @@ function App() {
 
   if (error && conversations.length === 0) {
     return (
-      <div className="error-container">
-        <div className="error-content">
-          <p className="error-message" style={{ marginBottom: "1rem" }}>
-            {error}
-          </p>
-          <button onClick={loadConversations} className="btn-primary">
-            {t("retry")}
-          </button>
+      <div className="flex h-screen items-center justify-center bg-background p-4 text-foreground">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <p className="text-destructive">{error}</p>
+          <Button onClick={loadConversations}>{t("retry")}</Button>
         </div>
       </div>
     );
@@ -788,13 +786,17 @@ function App() {
       poolOptions={diffsPoolOptions}
       highlighterOptions={diffsHighlighterOptions}
     >
-      {window.__SHELLEY_INIT__?.banner && (
-        <div className="top-banner" title={window.__SHELLEY_INIT__.banner}>
-          {window.__SHELLEY_INIT__.banner}
-        </div>
-      )}
-      <div className="app-container">
-        <ConversationDrawer
+      <div className="flex h-screen flex-col bg-background text-foreground">
+        {window.__SHELLEY_INIT__?.banner && (
+          <div
+            className="shrink-0 truncate border-b border-border bg-secondary px-3 py-1 text-center text-xs text-secondary-foreground"
+            title={window.__SHELLEY_INIT__.banner}
+          >
+            {window.__SHELLEY_INIT__.banner}
+          </div>
+        )}
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          <ConversationDrawer
           isOpen={drawerOpen}
           isCollapsed={drawerCollapsed}
           onClose={() => setDrawerOpen(false)}
@@ -811,7 +813,7 @@ function App() {
         />
 
         {/* Main content: Chat interface */}
-        <div className="main-content">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <ChatInterface
             conversationId={currentConversationId}
             streamStatus={streamStatus}
@@ -948,9 +950,13 @@ function App() {
         />
 
         {/* Backdrop for mobile drawer */}
-        {drawerOpen && (
-          <div className="backdrop hide-on-desktop" onClick={() => setDrawerOpen(false)} />
-        )}
+          {drawerOpen && (
+            <div
+              className="fixed inset-0 z-40 bg-black/50 md:hidden"
+              onClick={() => setDrawerOpen(false)}
+            />
+          )}
+        </div>
       </div>
     </WorkerPoolContextProvider>
   );

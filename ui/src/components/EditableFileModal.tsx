@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { Loader2Icon, XIcon } from "lucide-react";
 import type * as Monaco from "monaco-editor";
 import { loadMonaco } from "../services/monaco";
 import { isDarkModeActive } from "../services/theme";
 import { useVimEnabled, useMonacoVim } from "../hooks/useMonacoVim";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import VimToggle from "./VimToggle";
 
 interface EditableFileModalProps {
@@ -238,46 +241,62 @@ export default function EditableFileModal({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="diff-viewer-overlay" role="presentation">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 supports-backdrop-filter:backdrop-blur-sm"
+      role="presentation"
+    >
       <div
-        className="diff-viewer-container"
+        className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-label={title || "Edit file"}
       >
-        <div className="diff-viewer-header">
-          <div className="diff-viewer-header-row">
-            <span className="agents-md-header-title">{title || "Edit file"}</span>
-            <code className="agents-md-header-path">{path}</code>
-            {saveStatus !== "idle" && (
-              <span className={`agents-md-save-status agents-md-save-${saveStatus}`}>
-                {saveStatus === "saving" && "Saving..."}
-                {saveStatus === "saved" && "Saved"}
-                {saveStatus === "error" && "Error saving"}
-              </span>
-            )}
-            {isDesktop && <VimToggle enabled={vimEnabled} onChange={setVimEnabled} />}
-            <button className="diff-viewer-close" onClick={onClose} title="Close (Esc)">
-              ×
-            </button>
-          </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border px-4 py-3">
+          <span className="font-heading text-base font-medium">{title || "Edit file"}</span>
+          <code className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+            {path}
+          </code>
+          {saveStatus !== "idle" && (
+            <span
+              className={cn(
+                "text-xs font-medium",
+                saveStatus === "saving" && "text-muted-foreground",
+                saveStatus === "saved" && "text-emerald-600 dark:text-emerald-500",
+                saveStatus === "error" && "text-destructive",
+              )}
+            >
+              {saveStatus === "saving" && "Saving..."}
+              {saveStatus === "saved" && "Saved"}
+              {saveStatus === "error" && "Error saving"}
+            </span>
+          )}
+          {isDesktop && <VimToggle enabled={vimEnabled} onChange={setVimEnabled} />}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            title="Close (Esc)"
+          >
+            <XIcon />
+            <span className="sr-only">Close</span>
+          </Button>
         </div>
-        <div className="diff-viewer-content">
+        <div className="relative min-h-0 flex-1">
           {loadStatus === "error" ? (
-            <div className="diff-viewer-loading">
+            <div className="flex h-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
               <span>Failed to load {path}. Editing is disabled.</span>
             </div>
           ) : (
             <>
               {(!monacoLoaded || loadStatus !== "loaded") && (
-                <div className="diff-viewer-loading">
-                  <div className="spinner"></div>
+                <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Loader2Icon className="size-4 animate-spin" />
                   <span>Loading editor...</span>
                 </div>
               )}
               <div
                 ref={containerRef}
-                className="diff-viewer-editor"
+                className="h-full w-full"
                 style={{
                   display:
                     monacoLoaded && content !== null && loadStatus === "loaded" ? "block" : "none",

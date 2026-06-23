@@ -1,6 +1,6 @@
 import React from "react";
 import { LLMContent } from "../types";
-import { useToolExpandedState } from "./ToolDetailContext";
+import { ToolCard, ToolSection, ToolCode, ToolStatusMark } from "./ToolCard";
 
 interface BrowserEvalToolProps {
   // For tool_use (pending state)
@@ -20,8 +20,6 @@ function BrowserEvalTool({
   hasError,
   executionTime,
 }: BrowserEvalToolProps) {
-  const [isExpanded, setIsExpanded] = useToolExpandedState();
-
   // Extract expression from toolInput
   const expression =
     typeof toolInput === "object" &&
@@ -47,61 +45,32 @@ function BrowserEvalTool({
   const isComplete = !isRunning && toolResult !== undefined;
 
   return (
-    <div className="tool" data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}>
-      <div className="tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="tool-summary">
-          <span className={`tool-emoji ${isRunning ? "running" : ""}`}>⚡</span>
-          <span className="tool-command" title={expression}>
-            {displayExpression}
-          </span>
-          {isComplete && hasError && <span className="tool-error">✗</span>}
-          {isComplete && !hasError && <span className="tool-success">✓</span>}
-        </div>
-        <button
-          className="tool-toggle"
-          aria-label={isExpanded ? "Collapse" : "Expand"}
-          aria-expanded={isExpanded}
+    <ToolCard
+      emoji="⚡"
+      running={isRunning}
+      complete={isComplete}
+      title={<span title={expression}>{displayExpression}</span>}
+      status={isComplete ? <ToolStatusMark error={hasError} /> : null}
+    >
+      <ToolSection label="Expression:">
+        <ToolCode>{expression}</ToolCode>
+      </ToolSection>
+
+      {isComplete && (
+        <ToolSection
+          label={
+            <span className="flex items-center gap-2">
+              <span>Result{hasError ? " (Error)" : ""}:</span>
+              {executionTime && (
+                <span className="text-muted-foreground">{executionTime}</span>
+              )}
+            </span>
+          }
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
-
-      {isExpanded && (
-        <div className="tool-details">
-          <div className="tool-section">
-            <div className="tool-label">Expression:</div>
-            <pre className="tool-code">{expression}</pre>
-          </div>
-
-          {isComplete && (
-            <div className="tool-section">
-              <div className="tool-label">
-                Result{hasError ? " (Error)" : ""}:
-                {executionTime && <span className="tool-time">{executionTime}</span>}
-              </div>
-              <pre className={`tool-code ${hasError ? "error" : ""}`}>
-                {result || "(no result)"}
-              </pre>
-            </div>
-          )}
-        </div>
+          <ToolCode error={hasError}>{result || "(no result)"}</ToolCode>
+        </ToolSection>
       )}
-    </div>
+    </ToolCard>
   );
 }
 

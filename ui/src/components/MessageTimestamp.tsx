@@ -67,9 +67,9 @@ function MessageTimestamp({ createdAt }: MessageTimestampProps) {
   };
 
   return (
-    <div className="message-timestamp-row" data-testid="message-timestamp">
+    <div className="my-1 flex justify-center" data-testid="message-timestamp">
       <time
-        className="message-timestamp"
+        className="cursor-default text-xs text-muted-foreground"
         dateTime={date.toISOString()}
         title={tooltip ?? formatAbsolute(date)}
         onMouseEnter={refreshTooltip}

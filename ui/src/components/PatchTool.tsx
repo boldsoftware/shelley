@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback, Component, type ReactNode } from "react";
+import { ColumnsIcon, RowsIcon } from "lucide-react";
 import { PatchDiff, MultiFileDiff } from "@pierre/diffs/react";
 import type { FileContents, SupportedLanguages, ThemeTypes, ThemesType } from "@pierre/diffs";
 import { LLMContent } from "../types";
 import { isDarkModeActive } from "../services/theme";
+import { ToolCard, ToolStatusMark } from "./ToolCard";
+import { Button } from "@/components/ui/button";
 
 // LocalStorage key for side-by-side preference
 const STORAGE_KEY_SIDE_BY_SIDE = "shelley-diff-side-by-side";
@@ -136,7 +139,11 @@ class DiffErrorBoundary extends Component<DiffErrorBoundaryProps, DiffErrorBound
 
   render() {
     if (this.state.hasError) {
-      return <pre className="patch-tool-raw-diff">{this.props.diff}</pre>;
+      return (
+        <pre className="max-h-96 overflow-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs whitespace-pre-wrap break-words">
+          {this.props.diff}
+        </pre>
+      );
     }
     return this.props.children;
   }
@@ -166,7 +173,7 @@ function PatchDiffView({ patch, sideBySide }: { patch: string; sideBySide: boole
   const themeType = useThemeType();
 
   return (
-    <div className="patch-tool-diffs-container">
+    <div className="overflow-auto rounded-md border border-border text-xs">
       <DiffErrorBoundary diff={patch}>
         <PatchDiff
           patch={patch}
@@ -205,7 +212,7 @@ function SnapshotDiffView({
   };
 
   return (
-    <div className="patch-tool-diffs-container">
+    <div className="overflow-auto rounded-md border border-border text-xs">
       <DiffErrorBoundary diff={displayData.diff ?? ""}>
         <MultiFileDiff
           oldFile={oldFile}
@@ -249,70 +256,22 @@ function DiffView({
 // Side-by-side toggle icon component
 function DiffModeToggle({ sideBySide, onToggle }: { sideBySide: boolean; onToggle: () => void }) {
   return (
-    <button
-      className="patch-tool-diff-mode-toggle"
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className="text-muted-foreground"
       onClick={(e) => {
         e.stopPropagation();
         onToggle();
       }}
       title={sideBySide ? "Switch to inline diff" : "Switch to side-by-side diff"}
     >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 14 14"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        {sideBySide ? (
-          // Side-by-side icon (two columns)
-          <>
-            <rect
-              x="1"
-              y="2"
-              width="5"
-              height="10"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              fill="none"
-            />
-            <rect
-              x="8"
-              y="2"
-              width="5"
-              height="10"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              fill="none"
-            />
-          </>
-        ) : (
-          // Inline icon (single column with horizontal lines)
-          <>
-            <rect
-              x="2"
-              y="2"
-              width="10"
-              height="10"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              fill="none"
-            />
-            <line x1="4" y1="5" x2="10" y2="5" stroke="currentColor" strokeWidth="1.5" />
-            <line x1="4" y1="9" x2="10" y2="9" stroke="currentColor" strokeWidth="1.5" />
-          </>
-        )}
-      </svg>
-    </button>
+      {sideBySide ? <ColumnsIcon /> : <RowsIcon />}
+    </Button>
   );
 }
 
 function PatchTool({ toolInput, isRunning, toolResult, hasError, display }: PatchToolProps) {
-  // Default to collapsed for errors (since agents typically recover), expanded otherwise
-  const [isExpanded, setIsExpanded] = useState(!hasError);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [sideBySide, setSideBySide] = useState(() => !isMobile && getSideBySidePreference());
 
@@ -367,72 +326,47 @@ function PatchTool({ toolInput, isRunning, toolResult, hasError, display }: Patc
   // Extract filename from path or diff headers
   const filename = displayData?.path || path || "patch";
 
-  // Show toggle only on desktop when expanded and complete with diff data
-  const showDiffToggle = !isMobile && isExpanded && isComplete && !hasError && hasDiff;
+  // Show toggle only on desktop when complete with renderable diff data
+  const showDiffToggle = !isMobile && isComplete && !hasError && hasDiff;
 
   return (
-    <div
+    <ToolCard
       className="patch-tool"
-      data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}
-    >
-      <div className="patch-tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="patch-tool-summary">
-          <span className={`patch-tool-emoji ${isRunning ? "running" : ""}`}>🖋️</span>
-          <span className="patch-tool-filename" title={filename}>
-            {filename}
+      emojiClassName="patch-tool-emoji"
+      toggleClassName="patch-tool-toggle"
+      emoji="🖋️"
+      running={isRunning}
+      complete={isComplete}
+      title={
+        <span title={filename} className="patch-tool-header truncate">
+          {filename}
+        </span>
+      }
+      status={
+        isComplete ? (
+          <span className="flex items-center gap-1.5">
+            {showDiffToggle && (
+              <DiffModeToggle sideBySide={sideBySide} onToggle={toggleSideBySide} />
+            )}
+            <ToolStatusMark error={hasError} />
           </span>
-          {isComplete && hasError && <span className="patch-tool-error">✗</span>}
-          {isComplete && !hasError && <span className="patch-tool-success">✓</span>}
-        </div>
-        <div className="patch-tool-header-controls">
-          {showDiffToggle && <DiffModeToggle sideBySide={sideBySide} onToggle={toggleSideBySide} />}
-          <button
-            className="patch-tool-toggle"
-            aria-label={isExpanded ? "Collapse" : "Expand"}
-            aria-expanded={isExpanded}
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 12 12"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-            >
-              <path
-                d="M4.5 3L7.5 6L4.5 9"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
+        ) : null
+      }
+    >
+      <div className="patch-tool-details">
+        {isComplete && !hasError && displayData && hasDiff && (
+          <DiffView displayData={displayData} sideBySide={sideBySide} />
+        )}
+
+        {isComplete && hasError && (
+          <pre className="max-h-96 overflow-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs whitespace-pre-wrap break-words text-destructive">
+            {errorMessage || "Patch failed"}
+          </pre>
+        )}
+
+        {isRunning && <div className="text-muted-foreground italic">Applying patch...</div>}
       </div>
-
-      {isExpanded && (
-        <div className="patch-tool-details">
-          {isComplete && !hasError && displayData && hasDiff && (
-            <div className="patch-tool-section">
-              <DiffView displayData={displayData} sideBySide={sideBySide} />
-            </div>
-          )}
-
-          {isComplete && hasError && (
-            <div className="patch-tool-section">
-              <pre className="patch-tool-error-message">{errorMessage || "Patch failed"}</pre>
-            </div>
-          )}
-
-          {isRunning && (
-            <div className="patch-tool-section">
-              <div className="patch-tool-label">Applying patch...</div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+    </ToolCard>
   );
 }
 

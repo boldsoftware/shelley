@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Modal from "./Modal";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { featureFlagsApi, type FeatureFlag } from "../services/api";
 import { refreshFeatureFlags } from "../services/featureFlagsStore";
 
@@ -77,57 +81,62 @@ function FlagRow({
   };
 
   return (
-    <div className="feature-flag-row">
-      <div className="feature-flag-head">
-        <code className="feature-flag-name">{flag.name}</code>
-        {overridden && <span className="feature-flag-badge">overridden</span>}
+    <div className="rounded-lg border border-border bg-card p-3 text-card-foreground">
+      <div className="flex items-center gap-2">
+        <code className="font-mono text-sm font-medium">{flag.name}</code>
+        {overridden && (
+          <Badge variant="secondary" className="rounded-md">
+            overridden
+          </Badge>
+        )}
       </div>
-      {flag.description && <div className="feature-flag-desc">{flag.description}</div>}
+      {flag.description && (
+        <div className="mt-1 text-sm text-muted-foreground">{flag.description}</div>
+      )}
 
       {isBool ? (
-        <label className="feature-flag-bool">
-          <input
-            type="checkbox"
+        <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm">
+          <Checkbox
             checked={effective === true}
             disabled={busy}
-            onChange={(e) => toggleBool(e.target.checked)}
+            onCheckedChange={(checked) => toggleBool(checked === true)}
           />
-          <span>{effective === true ? "true" : "false"}</span>
+          <span className="font-mono">{effective === true ? "true" : "false"}</span>
         </label>
       ) : (
         <>
-          <textarea
-            className="form-input feature-flag-json"
+          <Textarea
+            className="mt-3 font-mono text-xs"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             spellCheck={false}
             rows={Math.min(8, draft.split("\n").length)}
             disabled={busy}
           />
-          <div className="feature-flag-actions">
-            <button
-              className="btn-primary"
+          <div className="mt-2 flex justify-end">
+            <Button
+              size="sm"
               onClick={commitJSON}
               disabled={busy || draft === JSON.stringify(effective, null, 2)}
             >
               Save
-            </button>
+            </Button>
           </div>
         </>
       )}
 
-      <div className="feature-flag-meta">
+      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>
-          default: <code>{JSON.stringify(flag.default)}</code>
+          default: <code className="font-mono">{JSON.stringify(flag.default)}</code>
         </span>
         {overridden && (
-          <button className="btn-secondary feature-flag-clear" onClick={clear} disabled={busy}>
+          <Button variant="outline" size="sm" onClick={clear} disabled={busy}>
             Reset to default
-          </button>
+          </Button>
         )}
       </div>
 
-      {error && <div className="feature-flag-error">{error}</div>}
+      {error && <div className="mt-2 text-sm text-destructive">{error}</div>}
     </div>
   );
 }
@@ -173,15 +182,15 @@ function FeatureFlagsModal({ isOpen, onClose }: FeatureFlagsModalProps) {
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Feature flags">
-      {loading && <div>Loading…</div>}
-      {error && <div className="feature-flag-error">{error}</div>}
+      {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
+      {error && <div className="text-sm text-destructive">{error}</div>}
       {!loading && !error && flags.length === 0 && (
-        <div className="feature-flag-empty">
-          No feature flags are defined. Add some by calling <code>featureflags.Register</code> in
-          the Go code.
+        <div className="text-sm text-muted-foreground">
+          No feature flags are defined. Add some by calling{" "}
+          <code className="font-mono">featureflags.Register</code> in the Go code.
         </div>
       )}
-      <div className="feature-flag-list">
+      <div className="flex flex-col gap-3">
         {flags.map((f) => (
           <FlagRow key={f.name} flag={f} onSave={handleSave} onClear={handleClear} />
         ))}

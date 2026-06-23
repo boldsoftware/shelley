@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDownIcon, XIcon } from "lucide-react";
 import { GitDiffInfo } from "../types";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface CommitPickerProps {
   diffs: GitDiffInfo[];
@@ -13,7 +16,7 @@ interface CommitPickerProps {
 
 function truncate(s: string, n: number): string {
   if (s.length <= n) return s;
-  return s.slice(0, Math.max(0, n - 1)) + "\u2026";
+  return s.slice(0, Math.max(0, n - 1)) + "…";
 }
 
 function shortHash(id: string): string {
@@ -34,11 +37,11 @@ function rangeSyntax(
   selectedDiff: string | null,
   selectedTo: "working" | "self",
 ): string {
-  if (!selectedDiff) return "Choose\u2026";
+  if (!selectedDiff) return "Choose…";
   if (selectedDiff === "working") return "Working Changes";
   const from = commitLabel(diffs, selectedDiff);
   if (selectedTo === "self") return `${from} (Single Commit)`;
-  return `${from} \u2192 Now`;
+  return `${from} → Now`;
 }
 
 // RangeToggle renders the "Single Commit" vs "Selected Commit → Now"
@@ -54,10 +57,6 @@ export function RangeToggle({
   onChange: (selectedDiff: string, selectedTo: "working" | "self") => void;
 }) {
   const disabled = selectedDiff === null || selectedDiff === "working";
-  // Render the two options as side-by-side "cards" so the choice between
-  // them reads as a clear A/B at a glance: each tile shows a short label,
-  // a one-line explanation, and an ASCII range hint. The selected tile
-  // gets a filled background; the other stays muted.
   const opts: {
     value: "self" | "working";
     label: string;
@@ -66,14 +65,25 @@ export function RangeToggle({
     { value: "working", label: "Through working tree" },
   ];
   return (
-    <div className="commit-picker-range-toggle" role="radiogroup" aria-label="Diff range">
+    <div
+      className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5"
+      role="radiogroup"
+      aria-label="Diff range"
+    >
       {opts.map((o) => {
         const active = selectedTo === o.value;
         return (
           <button
             key={o.value}
             type="button"
-            className={`commit-picker-range-btn${active ? " active" : ""}`}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              "disabled:pointer-events-none disabled:opacity-50",
+              active
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
             onClick={() => {
               if (selectedDiff && selectedDiff !== "working") onChange(selectedDiff, o.value);
             }}
@@ -81,8 +91,14 @@ export function RangeToggle({
             role="radio"
             aria-checked={active}
           >
-            <span className="commit-picker-range-btn-radio" aria-hidden="true" />
-            <span className="commit-picker-range-btn-label">{o.label}</span>
+            <span
+              className={cn(
+                "size-2.5 shrink-0 rounded-full border",
+                active ? "border-primary bg-primary" : "border-muted-foreground/50",
+              )}
+              aria-hidden="true"
+            />
+            <span>{o.label}</span>
           </button>
         );
       })}
@@ -187,18 +203,23 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
     const refs = d.refs ?? [];
     const hasRemote = refs.some((r) => r.includes("/"));
     const showMergeBase = !!d.isMergeBase && !hasRemote;
+    const chipBase =
+      "inline-flex items-center rounded-md border px-1.5 py-px font-mono text-[10px] leading-tight";
     const chips: React.ReactNode[] = refs.map((ref) => {
       const isHead = ref === "HEAD";
       const isRemote = ref.includes("/");
-      const cls = [
-        "commit-picker-ref",
-        isHead && "commit-picker-ref-head",
-        isRemote && "commit-picker-ref-remote",
-      ]
-        .filter(Boolean)
-        .join(" ");
       return (
-        <span key={ref} className={cls}>
+        <span
+          key={ref}
+          className={cn(
+            chipBase,
+            isHead && "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-400",
+            isRemote && "border-blue-500/40 bg-blue-500/15 text-blue-700 dark:text-blue-400",
+            !isHead &&
+              !isRemote &&
+              "border-border bg-muted text-muted-foreground",
+          )}
+        >
           {ref}
         </span>
       );
@@ -207,7 +228,10 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
       chips.push(
         <span
           key="__mergebase"
-          className="commit-picker-ref commit-picker-ref-mergebase"
+          className={cn(
+            chipBase,
+            "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+          )}
           title="Merge-base with @{upstream}"
         >
           merge-base
@@ -215,7 +239,7 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
       );
     }
     if (chips.length === 0) return null;
-    return <span className="commit-picker-refs">{chips}</span>;
+    return <span className="flex flex-wrap items-center gap-1">{chips}</span>;
   };
 
   // Compute which commit rows are inside the active range. In
@@ -232,36 +256,54 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
   const workingInRange =
     selectedDiff === "working" || (selectedDiff !== null && selectedTo === "working");
 
+  // Shared classes for a clickable row button. `isFrom` is the explicitly
+  // selected commit; `inRange` rows sit between it and the working tree.
+  const rowMainClass = (isFrom: boolean, inRange: boolean) =>
+    cn(
+      "commit-picker-row-main flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+      isFrom
+        ? "bg-primary/15 text-foreground"
+        : inRange
+          ? "bg-muted/60 text-foreground hover:bg-muted"
+          : "text-foreground hover:bg-muted",
+    );
+
   const renderCommitRow = (d: GitDiffInfo, idx: number) => {
     const isFrom = d.id === selectedDiff;
     const inRange = !isFrom && rowInRange(idx);
     const stats = `+${d.additions}/-${d.deletions}`;
     const hash = shortHash(d.id);
 
-    const classes = [
-      "commit-picker-row",
-      isFrom && "commit-picker-row-from",
-      inRange && "commit-picker-row-in-range",
-    ]
-      .filter(Boolean)
-      .join(" ");
-
     return (
-      <div key={d.id} className={classes}>
-        <button type="button" className="commit-picker-row-main" onClick={() => pickCommit(d.id)}>
-          <div className="commit-picker-row-marker" aria-hidden="true">
-            {isFrom ? "\u25cf" : inRange ? "\u2502" : ""}
+      <div
+        key={d.id}
+        className={cn("commit-picker-row", isFrom && "commit-picker-row-from")}
+      >
+        <button
+          type="button"
+          className={rowMainClass(isFrom, inRange)}
+          onClick={() => pickCommit(d.id)}
+        >
+          <div
+            className={cn(
+              "mt-0.5 w-3 shrink-0 text-center font-mono text-xs leading-5",
+              isFrom ? "text-primary" : "text-muted-foreground",
+            )}
+            aria-hidden="true"
+          >
+            {isFrom ? "●" : inRange ? "│" : ""}
           </div>
-          <div className="commit-picker-row-text">
-            <div className="commit-picker-row-subject">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
               {renderRefs(d)}
-              <span className="commit-picker-row-message">{d.message}</span>
+              <span className="min-w-0 truncate text-sm">{d.message}</span>
             </div>
-            <div className="commit-picker-row-meta">
-              <span className="commit-picker-row-hash">{hash}</span>
-              <span className="commit-picker-row-author">{d.author}</span>
-              <span className="commit-picker-row-stats">
-                {d.filesCount} files {"\u00b7"} {stats}
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+              <span className="font-mono">{hash}</span>
+              <span className="truncate">{d.author}</span>
+              <span className="font-mono">
+                {d.filesCount} files {"·"} {stats}
               </span>
             </div>
           </div>
@@ -278,24 +320,36 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
   );
 
   const list = (
-    <div className="commit-picker-list" onKeyDown={onListKeyDown}>
+    <div className="flex flex-col gap-0.5 overflow-y-auto" onKeyDown={onListKeyDown}>
       {workingDiff && (
         <div
-          className={
-            "commit-picker-row commit-picker-row-working" +
-            (selectedDiff === "working" ? " commit-picker-row-from" : "") +
-            (workingInRange && selectedDiff !== "working" ? " commit-picker-row-in-range" : "")
-          }
+          className={cn(
+            "commit-picker-row",
+            selectedDiff === "working" && "commit-picker-row-from",
+          )}
         >
-          <button type="button" className="commit-picker-row-main" onClick={pickWorking}>
-            <div className="commit-picker-row-marker" aria-hidden="true">
-              {selectedDiff === "working" ? "\u25cf" : workingInRange ? "\u2502" : ""}
+          <button
+            type="button"
+            className={rowMainClass(
+              selectedDiff === "working",
+              workingInRange && selectedDiff !== "working",
+            )}
+            onClick={pickWorking}
+          >
+            <div
+              className={cn(
+                "mt-0.5 w-3 shrink-0 text-center font-mono text-xs leading-5",
+                selectedDiff === "working" ? "text-primary" : "text-muted-foreground",
+              )}
+              aria-hidden="true"
+            >
+              {selectedDiff === "working" ? "●" : workingInRange ? "│" : ""}
             </div>
-            <div className="commit-picker-row-text">
-              <div className="commit-picker-row-subject">Working Changes</div>
-              <div className="commit-picker-row-meta">
-                <span className="commit-picker-row-stats">
-                  {workingDiff.filesCount} files {"\u00b7"} +{workingDiff.additions}/-
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium">Working Changes</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                <span className="font-mono">
+                  {workingDiff.filesCount} files {"·"} +{workingDiff.additions}/-
                   {workingDiff.deletions}
                 </span>
               </div>
@@ -305,7 +359,9 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
       )}
       {commitDiffs.map(renderCommitRow)}
       {commitDiffs.length === 0 && !workingDiff && (
-        <div className="commit-picker-empty">No commits or working changes.</div>
+        <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+          No commits or working changes.
+        </div>
       )}
     </div>
   );
@@ -313,54 +369,57 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
   const triggerPrimary = rangeSyntax(diffs, selectedDiff, selectedTo);
 
   const statusLine = (
-    <div className="commit-picker-status">
-      <span>
-        Showing <code>{rangeSyntax(diffs, selectedDiff, selectedTo)}</code>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+      <span className="text-xs text-muted-foreground">
+        Showing{" "}
+        <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">
+          {rangeSyntax(diffs, selectedDiff, selectedTo)}
+        </code>
       </span>
       {rangeToggle}
     </div>
   );
 
   return (
-    <div className="commit-picker">
-      <button
+    <div className="relative inline-block">
+      <Button
         ref={triggerRef}
         type="button"
-        className="commit-picker-trigger"
+        variant="outline"
+        size="sm"
+        className="max-w-[18rem] justify-between gap-2 font-normal"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label="Commit"
       >
-        <div className="commit-picker-trigger-text">
-          <div className="commit-picker-trigger-primary">
-            <code>{triggerPrimary}</code>
-          </div>
-        </div>
-        <span className="commit-picker-trigger-chevron" aria-hidden="true">
-          {"\u25be"}
-        </span>
-      </button>
+        <code className="min-w-0 truncate font-mono text-xs">{triggerPrimary}</code>
+        <ChevronDownIcon className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+      </Button>
 
       {open && isMobile && (
-        <div className="commit-picker-modal-backdrop" onClick={() => setOpen(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
+          onClick={() => setOpen(false)}
+        >
           <div
             ref={popoverRef}
-            className="commit-picker-modal"
+            className="commit-picker-modal flex max-h-[80vh] w-full max-w-lg flex-col gap-3 rounded-t-2xl border border-border bg-popover p-4 text-popover-foreground shadow-lg sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-label="Choose commit"
           >
-            <div className="commit-picker-modal-header">
-              <span>Choose commit</span>
-              <button
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">Choose commit</span>
+              <Button
                 type="button"
-                className="commit-picker-modal-close"
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => setOpen(false)}
                 aria-label="Close"
               >
-                {"\u00d7"}
-              </button>
+                <XIcon className="size-4" aria-hidden="true" />
+              </Button>
             </div>
             {statusLine}
             {list}
@@ -371,7 +430,7 @@ function CommitPicker({ diffs, selectedDiff, selectedTo, onChange, isMobile }: C
       {open && !isMobile && (
         <div
           ref={popoverRef}
-          className="commit-picker-popover"
+          className="commit-picker-popover absolute left-0 z-50 mt-2 flex max-h-[70vh] w-[28rem] max-w-[90vw] flex-col gap-3 rounded-2xl border border-border bg-popover p-4 text-popover-foreground shadow-lg"
           role="dialog"
           aria-label="Choose commit"
         >

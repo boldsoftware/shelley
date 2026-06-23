@@ -1,6 +1,7 @@
 import React from "react";
 import { LLMContent } from "../types";
-import { useToolExpandedState } from "./ToolDetailContext";
+import { ToolCard, ToolSection, ToolCode, ToolStatusMark } from "./ToolCard";
+import { Badge } from "@/components/ui/badge";
 
 interface SubagentToolProps {
   // For tool_use (pending state)
@@ -22,8 +23,6 @@ function SubagentTool({
   executionTime,
   displayData,
 }: SubagentToolProps) {
-  const [isExpanded, setIsExpanded] = useToolExpandedState();
-
   // Extract fields from toolInput
   const input =
     typeof toolInput === "object" && toolInput !== null
@@ -66,92 +65,74 @@ function SubagentTool({
   const isComplete = !isRunning && toolResult !== undefined;
 
   return (
-    <div className="tool" data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}>
-      <div className="tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="tool-summary">
-          <span className={`tool-emoji ${isRunning ? "running" : ""}`}>⚡</span>
-          <span className="tool-name">subagent</span>
-          {cliAgentLabel && <span className="tool-badge cli-agent-badge">{cliAgentLabel}</span>}
-          {isComplete && hasError && <span className="tool-error">✗</span>}
-          {isComplete && !hasError && <span className="tool-success">✓</span>}
-          <span className="tool-command" title={prompt}>
+    <ToolCard
+      emoji="⚡"
+      running={isRunning}
+      complete={isComplete}
+      title={
+        <span className="inline-flex items-center gap-1.5" title={prompt}>
+          <span>subagent</span>
+          {cliAgentLabel && (
+            <Badge variant="secondary" className="font-mono">
+              {cliAgentLabel}
+            </Badge>
+          )}
+          <span className="text-muted-foreground">
             Subagent '{slug}'{model ? ` (${model})` : ""}{" "}
             {isRunning ? (wait ? "running..." : "started") : ""}
             {displayPrompt && !isRunning && ` ${displayPrompt}`}
           </span>
-        </div>
-        <button
-          className="tool-toggle"
-          aria-label={isExpanded ? "Collapse" : "Expand"}
-          aria-expanded={isExpanded}
+        </span>
+      }
+      status={isComplete ? <ToolStatusMark error={hasError} /> : null}
+    >
+      <ToolSection
+        label={
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span>Prompt to '{slug}':</span>
+            {model && <Badge variant="secondary">{model}</Badge>}
+            {!wait && <Badge variant="outline">fire-and-forget</Badge>}
+            {timeout !== 60 && <Badge variant="outline">timeout: {timeout}s</Badge>}
+          </span>
+        }
+      >
+        <ToolCode>{prompt || "(no prompt)"}</ToolCode>
+      </ToolSection>
+
+      {isComplete && (
+        <ToolSection
+          label={
+            <span className="flex items-center gap-2">
+              <span>Response:</span>
+              {executionTime && (
+                <span className="text-muted-foreground">{executionTime}</span>
+              )}
+            </span>
+          }
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
-
-      {isExpanded && (
-        <div className="tool-details">
-          <div className="tool-section">
-            <div className="tool-label">
-              Prompt to '{slug}':
-              {model && <span className="tool-badge subagent-model-badge">{model}</span>}
-              {!wait && <span className="tool-badge">fire-and-forget</span>}
-              {timeout !== 60 && <span className="tool-badge">timeout: {timeout}s</span>}
-            </div>
-            <div className="tool-code">{prompt || "(no prompt)"}</div>
-          </div>
-
-          {isComplete && (
-            <div className="tool-section">
-              <div className="tool-label">
-                Response:
-                {executionTime && <span className="tool-time">{executionTime}</span>}
-              </div>
-              <div className={`tool-code ${hasError ? "error" : ""}`}>
-                {resultText || "(no response)"}
-              </div>
-            </div>
-          )}
-
-          {displayData?.conversation_id && (
-            <div className="tool-section">
-              <div className="tool-label">Conversation:</div>
-              <div className="tool-code">
-                <a
-                  href={`/c/${slug}`}
-                  onClick={(e) => {
-                    // Let the browser handle cmd/ctrl/shift/middle-click (open in new tab/window).
-                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-                    e.preventDefault();
-                    // Navigate to the subagent conversation
-                    window.history.pushState({}, "", `/c/${slug}`);
-                    window.dispatchEvent(new PopStateEvent("popstate"));
-                  }}
-                  className="subagent-link"
-                >
-                  View subagent conversation →
-                </a>
-              </div>
-            </div>
-          )}
-        </div>
+          <ToolCode error={hasError}>{resultText || "(no response)"}</ToolCode>
+        </ToolSection>
       )}
-    </div>
+
+      {displayData?.conversation_id && (
+        <ToolSection label="Conversation:">
+          <a
+            href={`/c/${slug}`}
+            onClick={(e) => {
+              // Let the browser handle cmd/ctrl/shift/middle-click (open in new tab/window).
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+              e.preventDefault();
+              // Navigate to the subagent conversation
+              window.history.pushState({}, "", `/c/${slug}`);
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}
+            className="text-primary hover:underline"
+          >
+            View subagent conversation →
+          </a>
+        </ToolSection>
+      )}
+    </ToolCard>
   );
 }
 

@@ -72,6 +72,32 @@ import {
 import Modal from "./Modal";
 import { ToolDetailContext, useInToolDetail } from "./ToolDetailContext";
 import { useFeatureFlag } from "../services/featureFlagsStore";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  MenuIcon,
+  ChevronsRightIcon,
+  PlusIcon,
+  MoreVerticalIcon,
+  FileTextIcon,
+  GitBranchIcon,
+  TerminalIcon,
+  ExternalLinkIcon,
+  ArchiveIcon,
+  DownloadIcon,
+  PencilIcon,
+  RefreshCwIcon,
+  MonitorIcon,
+  SunIcon,
+  MoonIcon,
+  BellIcon,
+  BellOffIcon,
+  ArrowDownIcon,
+  XIcon,
+  SettingsIcon,
+  ChevronDownIcon,
+  CheckIcon,
+} from "lucide-react";
 
 interface ContextUsageBarProps {
   contextWindowSize: number;
@@ -102,9 +128,9 @@ function ContextUsageBar({
   const showLongConversationWarning = contextWindowSize >= 100000;
 
   const getBarColor = () => {
-    if (percentage >= 90) return "var(--error-text)";
-    if (percentage >= 70) return "var(--warning-text, #f59e0b)";
-    return "var(--blue-text)";
+    if (percentage >= 90) return "rgb(220 38 38)"; // red-600
+    if (percentage >= 70) return "rgb(245 158 11)"; // amber-500
+    return "rgb(37 99 235)"; // blue-600
   };
 
   const formatTokens = (tokens: number) => {
@@ -194,30 +220,30 @@ function ContextUsageBar({
     <div ref={barRef}>
       {showPopup && popupPosition && (
         <div
-          className="chat-context-popup"
+          className="fixed z-[100] rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-muted-foreground shadow-lg"
           style={{
             bottom: popupPosition.bottom,
             right: popupPosition.right,
             maxWidth: `calc(100vw - ${popupPosition.right + 8}px)`,
           }}
         >
-          {modelName && <div className="chat-popup-model-name">{modelName}</div>}
+          {modelName && <div className="mb-1 font-medium text-popover-foreground">{modelName}</div>}
           {formatTokens(contextWindowSize)} / {formatTokens(maxContextTokens)} (
           {percentage.toFixed(1)}%) tokens used
           {showLongConversationWarning && (
-            <div className="chat-popup-warning">
+            <div className="mt-1.5 text-amber-600 dark:text-amber-500">
               This conversation is getting long.
               <br />
               For best results, start a new conversation.
             </div>
           )}
           {conversationId && (onDistillNewGeneration || onStartNewGeneration) && (
-            <div className="chat-distill-container">
+            <div className="mt-2 flex flex-col gap-1.5">
               {onDistillNewGeneration && (
                 <button
                   onClick={handleDistillNewGeneration}
                   disabled={distilling}
-                  className="chat-distill-button chat-distill-generation-button"
+                  className="rounded-md border border-blue-600 px-2 py-1 text-xs text-blue-600 enabled:cursor-pointer disabled:opacity-70 dark:border-blue-400 dark:text-blue-400"
                 >
                   {distilling ? "Distilling..." : "Distill in New Generation"}
                 </button>
@@ -226,13 +252,13 @@ function ContextUsageBar({
                 <button
                   onClick={handleStartNewGeneration}
                   disabled={distilling}
-                  className="chat-distill-button chat-distill-generation-button"
+                  className="rounded-md border border-blue-600 px-2 py-1 text-xs text-blue-600 enabled:cursor-pointer disabled:opacity-70 dark:border-blue-400 dark:text-blue-400"
                 >
                   Start New Generation
                 </button>
               )}
               <div
-                className="chat-distill-info"
+                className="mt-0.5 text-xs leading-tight text-muted-foreground"
                 title="Yeah, we're trying some stuff. Come to discord and talk about it with us!"
               >
                 ⓘ Yeah, we're trying some stuff. Come to discord and talk about it with us!
@@ -241,22 +267,21 @@ function ContextUsageBar({
           )}
         </div>
       )}
-      <div className="context-usage-bar-container">
+      <div className="flex items-center gap-1.5">
         {showLongConversationWarning && (
           <span
-            className="context-warning-icon"
             title="This conversation is getting long. For best results, start a new conversation."
           >
             ⚠️
           </span>
         )}
         <div
-          className="context-usage-bar"
+          className="h-2 w-24 cursor-pointer overflow-hidden rounded-full bg-muted"
           onClick={handleClick}
           title={`Context: ${formatTokens(contextWindowSize)} / ${formatTokens(maxContextTokens)} tokens (${percentage.toFixed(1)}%)`}
         >
           <div
-            className="context-usage-fill"
+            className="h-full rounded-full transition-[width]"
             style={{
               width: `${clampedPercentage}%`,
               backgroundColor: getBarColor(),
@@ -394,37 +419,45 @@ const CoalescedToolCall = React.memo(function CoalescedToolCall({
       // text
       return <div className="whitespace-pre-wrap break-words">{content.Text || ""}</div>;
     }
-    return <div className="text-secondary text-sm italic">[Content type {content.Type}]</div>;
+    return (
+      <div className="text-sm italic text-muted-foreground">[Content type {content.Type}]</div>
+    );
   };
 
   if (!hasResult) {
     // Show "running" state
     return (
-      <div className="message message-tool" data-testid="tool-call-running">
-        <div className="message-content">
-          <div className="tool-running">
-            <div className="tool-running-header">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="chat-tool-icon">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-              <span className="tool-name">Tool: {toolName}</span>
-              <span className="tool-status-running">(running)</span>
-            </div>
-            <div className="tool-input">
-              {typeof toolInput === "string" ? toolInput : JSON.stringify(toolInput, null, 2)}
-            </div>
+      <div
+        className="my-1 overflow-hidden rounded-lg border border-border bg-card text-card-foreground"
+        data-testid="tool-call-running"
+      >
+        <div className="px-3 py-2">
+          <div className="flex items-center gap-2 text-sm">
+            <svg
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              className="size-4 animate-spin text-blue-600 dark:text-blue-400"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+            <span className="font-medium">Tool: {toolName}</span>
+            <span className="text-muted-foreground">(running)</span>
           </div>
+          <pre className="mt-2 max-h-96 overflow-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap">
+            {typeof toolInput === "string" ? toolInput : JSON.stringify(toolInput, null, 2)}
+          </pre>
         </div>
       </div>
     );
@@ -434,73 +467,88 @@ const CoalescedToolCall = React.memo(function CoalescedToolCall({
   const summary = toolResult ? getToolResultSummary(toolResult) : "No output";
 
   return (
-    <div className="message message-tool" data-testid="tool-call-completed">
-      <div className="message-content">
-        <details
-          className={`tool-result-details ${toolError ? "error" : ""}`}
-          open={inToolDetail || undefined}
-        >
-          <summary className="tool-result-summary">
-            <div className="tool-result-meta">
-              <div className="flex items-center space-x-2">
-                <svg
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  className="chat-tool-icon"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-                <span className="text-sm font-medium text-blue">{toolName}</span>
-                <span className={`tool-result-status text-xs ${toolError ? "error" : "success"}`}>
-                  {toolError ? "✗" : "✓"} {summary}
-                </span>
-              </div>
-              <div className="tool-result-time">
-                {executionTime && <span>{executionTime}</span>}
-              </div>
-            </div>
-          </summary>
-          <div className="tool-result-content">
-            {/* Show tool input */}
-            <div className="tool-result-section">
-              <div className="tool-result-label">Input:</div>
-              <div className="tool-result-data">
-                {toolInput ? (
-                  typeof toolInput === "string" ? (
-                    toolInput
-                  ) : (
-                    JSON.stringify(toolInput, null, 2)
-                  )
+    <div
+      className="my-1 overflow-hidden rounded-lg border border-border bg-card text-card-foreground"
+      data-testid="tool-call-completed"
+    >
+      <details className="group" open={inToolDetail || undefined}>
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 select-none hover:bg-muted/50">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <svg
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              className="size-4 shrink-0 text-blue-600 dark:text-blue-400"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+            <span className="shrink-0 text-sm font-medium text-blue-600 dark:text-blue-400">
+              {toolName}
+            </span>
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate text-xs",
+                toolError ? "text-destructive" : "text-emerald-600 dark:text-emerald-500"
+              )}
+            >
+              {toolError ? "✗" : "✓"} {summary}
+            </span>
+          </div>
+          {executionTime && (
+            <span className="shrink-0 font-mono text-xs text-muted-foreground">{executionTime}</span>
+          )}
+        </summary>
+        <div className="border-t border-border px-3 py-2 text-sm">
+          {/* Show tool input */}
+          <div className="mb-2">
+            <div className="mb-1 text-xs font-medium text-muted-foreground">Input:</div>
+            <pre className="max-h-96 overflow-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap">
+              {toolInput ? (
+                typeof toolInput === "string" ? (
+                  toolInput
                 ) : (
-                  <span className="text-secondary italic">No input data</span>
-                )}
-              </div>
-            </div>
+                  JSON.stringify(toolInput, null, 2)
+                )
+              ) : (
+                <span className="italic text-muted-foreground">No input data</span>
+              )}
+            </pre>
+          </div>
 
-            {/* Show tool output with header */}
-            <div className={`tool-result-section output ${toolError ? "error" : ""}`}>
-              <div className="tool-result-label">Output{toolError ? " (Error)" : ""}:</div>
-              <div className="space-y-2">
-                {toolResult?.map((result, idx) => (
-                  <div key={idx}>{renderContent(result)}</div>
-                ))}
-              </div>
+          {/* Show tool output with header */}
+          <div>
+            <div
+              className={cn(
+                "mb-1 text-xs font-medium",
+                toolError ? "text-destructive" : "text-muted-foreground"
+              )}
+            >
+              Output{toolError ? " (Error)" : ""}:
+            </div>
+            <div
+              className={cn(
+                "max-h-96 space-y-2 overflow-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs",
+                toolError && "text-destructive"
+              )}
+            >
+              {toolResult?.map((result, idx) => (
+                <div key={idx}>{renderContent(result)}</div>
+              ))}
             </div>
           </div>
-        </details>
-      </div>
+        </div>
+      </details>
     </div>
   );
 });
@@ -535,21 +583,23 @@ function useHeadlineBudget(): number {
 function CarriedBand({ count, children }: { count: number; children: React.ReactNode }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div className="carried-band" data-testid="carried-band">
+    <div className="my-2" data-testid="carried-band">
       <button
         type="button"
-        className="carried-band-toggle"
+        className="flex w-full items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1.5 text-left text-xs text-muted-foreground hover:bg-secondary"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
       >
-        <span className="carried-band-chevron" aria-hidden="true">
+        <span className="text-[0.7rem] opacity-70" aria-hidden="true">
           {expanded ? "▾" : "▸"}
         </span>
-        <span className="carried-band-label">
+        <span className="opacity-85">
           {count} message{count === 1 ? "" : "s"} carried forward from before compaction
         </span>
       </button>
-      {expanded && <div className="carried-band-body">{children}</div>}
+      {expanded && (
+        <div className="mt-1.5 border-l-2 border-border pl-2 opacity-85">{children}</div>
+      )}
     </div>
   );
 }
@@ -594,94 +644,107 @@ const ToolPillsRow = React.memo(function ToolPillsRow({
         new Date(selected.toolEndTime).getTime() - new Date(selected.toolStartTime).getTime();
       duration = diffMs < 1000 ? `${diffMs}ms` : `${(diffMs / 1000).toFixed(1)}s`;
     }
-    const state = running ? "running" : cancelled ? "cancelled" : failed ? "failed" : "success";
     statusRight = (
-      <div className={`tool-detail-status tool-detail-status--${state}`}>
+      <div className="inline-flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
         {running ? (
           <>
-            <span className="tool-detail-status-spinner" aria-hidden="true" />
-            <span className="tool-detail-status-label">Running</span>
+            <span
+              className="size-[11px] shrink-0 animate-spin rounded-full border-[1.5px] border-muted-foreground border-t-transparent"
+              aria-hidden="true"
+            />
+            <span className="font-medium">Running</span>
           </>
         ) : cancelled ? (
           <>
-            <span className="tool-detail-status-glyph" aria-hidden="true">
+            <span className="font-semibold" aria-hidden="true">
               ✗
             </span>
-            <span className="tool-detail-status-label">Cancelled</span>
+            <span className="tool-detail-status--cancelled font-medium">Cancelled</span>
           </>
         ) : failed ? (
           <>
-            <span className="tool-detail-status-glyph" aria-hidden="true">
+            <span className="font-semibold" aria-hidden="true">
               ✗
             </span>
-            <span className="tool-detail-status-label">Failed</span>
+            <span className="tool-detail-status--failed font-medium">Failed</span>
           </>
         ) : (
           <>
-            <span className="tool-detail-status-glyph" aria-hidden="true">
+            <span className="font-semibold text-emerald-600 dark:text-emerald-500" aria-hidden="true">
               ✓
             </span>
-            <span className="tool-detail-status-label">Success</span>
+            <span className="tool-detail-status--success font-medium">Success</span>
           </>
         )}
-        {duration && <span className="tool-detail-status-time">{duration}</span>}
+        {duration && <span className="font-mono text-xs text-muted-foreground/70">{duration}</span>}
       </div>
     );
   }
   return (
-    <div className="message message-tool tool-pills-row-wrap">
-      <div className="message-content">
-        <ul className="tool-pills-row">
-          {items.map((item, idx) => {
-            const name = item.toolName || "tool";
-            const headline = toolHeadline(name, item.toolInput, budget);
-            const running = !item.hasResult;
-            const errored = !!item.toolError && item.hasResult;
-            const isExpanded = !!item.toolUseId && item.toolUseId === selectedId;
-            const stateSuffix = running ? ", running" : errored ? ", failed" : "";
-            // toolHeadline already includes the tool name when relevant
-            // (e.g. "browser: screenshot"), so we don't add another prefix.
-            const label = headline || name;
-            const key = item.toolUseId || `tool-pill-${idx}-${name}`;
-            return (
-              <li key={key} className="tool-pill-item">
-                <button
-                  type="button"
-                  className={`tool-pill${errored ? " tool-pill--error" : ""}${isExpanded ? " tool-pill--expanded" : ""}`}
-                  onClick={() => item.toolUseId && setSelectedId(item.toolUseId)}
-                  disabled={!item.toolUseId}
-                  aria-label={`${label}${stateSuffix}`}
-                  aria-haspopup="dialog"
-                  aria-expanded={isExpanded}
-                  title={label}
-                  data-testid={running ? "tool-call-running" : "tool-call-completed"}
-                  data-tool-name={name}
-                >
-                  <span className="tool-pill-emoji" aria-hidden="true">
-                    {toolEmoji(name, item.toolInput)}
+    <div className="flex flex-col">
+      <ul className="m-0 flex list-none flex-wrap items-center gap-1.5 py-1">
+        {items.map((item, idx) => {
+          const name = item.toolName || "tool";
+          const headline = toolHeadline(name, item.toolInput, budget);
+          const running = !item.hasResult;
+          const errored = !!item.toolError && item.hasResult;
+          const isExpanded = !!item.toolUseId && item.toolUseId === selectedId;
+          const stateSuffix = running ? ", running" : errored ? ", failed" : "";
+          // toolHeadline already includes the tool name when relevant
+          // (e.g. "browser: screenshot"), so we don't add another prefix.
+          const label = headline || name;
+          const key = item.toolUseId || `tool-pill-${idx}-${name}`;
+          return (
+            <li key={key} className="inline-flex">
+              <button
+                type="button"
+                className={cn(
+                  "tool-pill inline-flex min-h-[26px] max-w-full items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[0.8125rem] leading-tight whitespace-nowrap transition-[filter,transform] hover:brightness-105 active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:cursor-default",
+                  isExpanded
+                    ? "border-primary bg-secondary"
+                    : "border-border bg-muted text-foreground"
+                )}
+                onClick={() => item.toolUseId && setSelectedId(item.toolUseId)}
+                disabled={!item.toolUseId}
+                aria-label={`${label}${stateSuffix}`}
+                aria-haspopup="dialog"
+                aria-expanded={isExpanded}
+                title={label}
+                data-testid={running ? "tool-call-running" : "tool-call-completed"}
+                data-tool-name={name}
+              >
+                <span className="tool-pill-emoji shrink-0 text-[0.8125rem] leading-none" aria-hidden="true">
+                  {toolEmoji(name, item.toolInput)}
+                </span>
+                <span className="max-w-[150px] truncate font-mono text-xs sm:max-w-[360px]">
+                  {headline}
+                </span>
+                {running && (
+                  <span
+                    className="size-2.5 shrink-0 animate-spin rounded-full border-[1.5px] border-muted-foreground border-t-transparent"
+                    aria-hidden="true"
+                  />
+                )}
+                {errored && (
+                  <span className="shrink-0 text-xs font-semibold text-muted-foreground" aria-hidden="true">
+                    ✗
                   </span>
-                  <span className="tool-pill-text">{headline}</span>
-                  {running && <span className="tool-pill-spinner" aria-hidden="true" />}
-                  {errored && (
-                    <span className="tool-pill-err" aria-hidden="true">
-                      ✗
-                    </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <Modal
-          isOpen={!!selected}
-          onClose={() => setSelectedId(null)}
-          title={selected ? toolDisplayName(selectedName) : ""}
-          titleRight={statusRight}
-          className="tool-detail-modal"
-        >
-          {selected && (
-            <div className="tool-pill-expanded" data-tool-name={selectedName}>
-              <ToolDetailContext.Provider value={{ defaultExpanded: true }}>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <Modal
+        isOpen={!!selected}
+        onClose={() => setSelectedId(null)}
+        title={selected ? toolDisplayName(selectedName) : ""}
+        titleRight={statusRight}
+        className="tool-detail-modal sm:max-w-4xl"
+      >
+        {selected && (
+          <div className="tool-pill-expanded" data-tool-name={selectedName}>
+            <ToolDetailContext.Provider value={{ defaultExpanded: true }}>
                 <CoalescedToolCall
                   toolName={selected.toolName || "Unknown Tool"}
                   toolInput={selected.toolInput}
@@ -700,7 +763,6 @@ const ToolPillsRow = React.memo(function ToolPillsRow({
             </div>
           )}
         </Modal>
-      </div>
     </div>
   );
 });
@@ -732,9 +794,9 @@ function AnimatedWorkingStatus() {
   }, [text]);
 
   return (
-    <span className="status-message animated-working">
+    <span className="inline font-mono text-sm text-muted-foreground">
       {text.split("").map((char, idx) => (
-        <span key={idx} className={idx === boldIndex ? "bold-letter" : ""}>
+        <span key={idx} className={idx === boldIndex ? "text-foreground" : ""}>
           {char}
         </span>
       ))}
@@ -836,59 +898,37 @@ function LanguageDropdown({
   }, [open]);
 
   return (
-    <div className="language-dropdown" ref={ref}>
+    <div className="relative" ref={ref}>
       <button
-        className="language-dropdown-trigger"
+        className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-sm hover:bg-accent hover:text-accent-foreground"
         onClick={() => setOpen(!open)}
         aria-label={t("switchLanguage")}
       >
-        <span className="language-dropdown-flag">{current.flag}</span>
-        <span className="language-dropdown-text">{current.label}</span>
-        <svg
-          className={`language-dropdown-chevron${open ? " language-dropdown-chevron-open" : ""}`}
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-        >
-          <path
-            d="M3 4.5L6 7.5L9 4.5"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <span className="text-base leading-none">{current.flag}</span>
+        <span className="text-sm">{current.label}</span>
+        <ChevronDownIcon
+          className={cn("size-3 transition-transform", open && "rotate-180")}
+          aria-hidden="true"
+        />
       </button>
       {open && (
-        <div className="language-dropdown-menu">
+        <div className="absolute right-0 z-50 mt-1 min-w-40 overflow-hidden rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md">
           {LANGUAGE_OPTIONS.map((opt) => (
             <button
               key={opt.locale}
-              className={`language-dropdown-item${opt.locale === locale ? " language-dropdown-item-selected" : ""}`}
+              className={cn(
+                "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                opt.locale === locale && "font-medium"
+              )}
               onClick={() => {
                 setLocale(opt.locale);
                 setOpen(false);
               }}
             >
-              <span className="language-dropdown-flag">{opt.flag}</span>
-              <span>{opt.label}</span>
+              <span className="text-base leading-none">{opt.flag}</span>
+              <span className="flex-1">{opt.label}</span>
               {opt.locale === locale && (
-                <svg
-                  className="language-dropdown-check"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                >
-                  <path
-                    d="M3 7L6 10L11 4"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                <CheckIcon className="size-3.5 text-primary" aria-hidden="true" />
               )}
             </button>
           ))}
@@ -2269,8 +2309,11 @@ function ChatInterface({
   }, [messages]);
 
   const generationDivider = (from: number, to: number) => (
-    <div key={`generation-divider-${from}-${to}`} className="generation-divider">
-      <span>
+    <div
+      key={`generation-divider-${from}-${to}`}
+      className="my-3 flex items-center gap-3 text-center text-xs text-muted-foreground before:flex-1 before:border-t before:border-border after:flex-1 after:border-t after:border-border"
+    >
+      <span className="rounded-full border border-border bg-secondary px-3 py-1">
         New generation started — older messages are retained here but no longer sent to the LLM.
       </span>
     </div>
@@ -2280,13 +2323,18 @@ function ChatInterface({
     if (messages.length === 0) {
       const proxyURL = `https://${hostname}/`;
       return (
-        <div className="empty-state">
-          <div className="empty-state-content">
-            <p className="text-base chat-welcome-text">
+        <div className="flex h-full items-center justify-center text-muted-foreground">
+          <div className="max-w-prose text-center">
+            <p className="text-base leading-relaxed">
               {t("welcomeMessage")
                 .split(/(\{hostname\}|\{docsLink\}|\{proxyLink\})/)
                 .map((part, i) => {
-                  if (part === "{hostname}") return <strong key={i}>{hostname}</strong>;
+                  if (part === "{hostname}")
+                    return (
+                      <strong key={i} className="font-semibold text-foreground">
+                        {hostname}
+                      </strong>
+                    );
                   if (part === "{docsLink}")
                     return (
                       <a
@@ -2294,7 +2342,7 @@ function ChatInterface({
                         href="https://exe.dev/docs/proxy"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="chat-welcome-link"
+                        className="text-primary underline-offset-2 hover:underline"
                       >
                         docs
                       </a>
@@ -2306,7 +2354,7 @@ function ChatInterface({
                         href={proxyURL}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="chat-welcome-link"
+                        className="text-primary underline-offset-2 hover:underline"
                       >
                         {proxyURL}
                       </a>
@@ -2315,11 +2363,11 @@ function ChatInterface({
                 })}
             </p>
             {models.length === 0 ? (
-              <div className="add-model-hint">
-                <p className="text-sm chat-secondary-text">{t("noModelsConfiguredHint")}</p>
+              <div className="mt-3">
+                <p className="text-sm text-muted-foreground">{t("noModelsConfiguredHint")}</p>
               </div>
             ) : (
-              <p className="text-sm chat-secondary-text">{t("sendMessageToStart")}</p>
+              <p className="mt-3 text-sm text-muted-foreground">{t("sendMessageToStart")}</p>
             )}
           </div>
         </div>
@@ -2425,11 +2473,13 @@ function ChatInterface({
       return (
         <div
           key={`tok-${keyPrefix}`}
-          className="context-token-marker"
+          className="pointer-events-none flex justify-center pt-1 pb-0.5"
           data-testid="context-token-marker"
           title={`Context size: ${ctx.toLocaleString()} tokens`}
         >
-          <span>{label}</span>
+          <span className="pointer-events-auto text-[0.625rem] leading-tight tracking-[0.04em] text-muted-foreground/60 uppercase select-none">
+            {label}
+          </span>
         </div>
       );
     };
@@ -2447,8 +2497,11 @@ function ChatInterface({
       return (
         <React.Fragment key={`ts-${keyPrefix}`}>
           {showDay && (
-            <div className="message-day-separator" data-testid="message-day-separator">
-              <span>{formatDay(d, tsState.now)}</span>
+            <div
+              className="mt-3 mb-1 flex items-center gap-3 text-xs text-muted-foreground/60 select-none before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
+              data-testid="message-day-separator"
+            >
+              <span className="whitespace-nowrap">{formatDay(d, tsState.now)}</span>
             </div>
           )}
           <MessageTimestamp createdAt={iso} />
@@ -2546,9 +2599,10 @@ function ChatInterface({
             pillBuf.push(item);
           } else {
             flushPills(index);
-            sink.push(
+            const toolKey =
+              item.toolUseId || `tool-${generation}-${item.toolName || "unknown"}-${index}`;
+            const toolNode = (
               <CoalescedToolCall
-                key={item.toolUseId || `tool-${generation}-${item.toolName || "unknown"}-${index}`}
                 toolName={item.toolName || "Unknown Tool"}
                 toolInput={item.toolInput}
                 toolResult={item.toolResult}
@@ -2559,7 +2613,18 @@ function ChatInterface({
                 display={item.display}
                 onCommentTextChange={setDiffCommentText}
                 streamingOutput={item.toolUseId ? toolProgress[item.toolUseId]?.output : undefined}
-              />,
+              />
+            );
+            // Auto-expand tools (patch, screenshots, read_image, output_iframe)
+            // render their detail open inline, matching isAutoExpandTool.
+            sink.push(
+              isAutoExpandTool(item.toolName) ? (
+                <ToolDetailContext.Provider key={toolKey} value={{ defaultExpanded: true }}>
+                  {toolNode}
+                </ToolDetailContext.Provider>
+              ) : (
+                <React.Fragment key={toolKey}>{toolNode}</React.Fragment>
+              ),
             );
           }
         }
@@ -2614,7 +2679,11 @@ function ChatInterface({
       nodes.push(
         <div
           key={`generation-section-${generation}`}
-          className={`generation-section${generation < currentGeneration ? " generation-section-previous" : ""}`}
+          className={cn(
+            "flex flex-col gap-1",
+            generation < currentGeneration &&
+              "-mx-2 rounded-xl bg-muted/70 p-2 opacity-90"
+          )}
         >
           {sectionItems}
         </div>,
@@ -2627,17 +2696,17 @@ function ChatInterface({
     // transition from streaming to final isn't visually jarring.
     const streamingPreview =
       streamingText && agentWorking ? (
-        <div key="streaming-preview" className="message message-agent streaming-message">
-          <div className="message-content" data-testid="message-content">
+        <div key="streaming-preview" className="flex flex-col opacity-85">
+          <div className="min-h-[1.5em] min-w-0 rounded-lg p-4 break-words" data-testid="message-content">
             {markdownMode === "off" ? (
-              <div className="whitespace-pre-wrap break-words">
+              <div className="break-words whitespace-pre-wrap">
                 {streamingText}
-                <span className="streaming-cursor">▊</span>
+                <span className="animate-pulse text-primary">▊</span>
               </div>
             ) : (
-              <div className="streaming-markdown">
+              <div>
                 <MarkdownContent text={streamingText} />
-                <span className="streaming-cursor">▊</span>
+                <span className="ml-0.5 animate-pulse text-primary">▊</span>
               </div>
             )}
           </div>
@@ -2653,56 +2722,64 @@ function ChatInterface({
     return currentConversation?.archived ? (
       // Archived state
       <>
-        <span className="status-message">This conversation is archived.</span>
-        <button onClick={handleUnarchive} className="status-button status-button-primary">
+        <span className="min-w-0 flex-1 text-sm text-muted-foreground">
+          This conversation is archived.
+        </span>
+        <Button size="sm" onClick={handleUnarchive}>
           Unarchive
-        </button>
+        </Button>
       </>
     ) : streamStatus === "disconnected" ? (
       <>
-        <span className="status-message status-warning">Disconnected</span>
+        <span className="min-w-0 flex-1 text-sm font-medium text-blue-600 dark:text-blue-400">
+          Disconnected
+        </span>
       </>
     ) : streamStatus === "reconnecting" ? (
       <>
-        <span className="status-message status-reconnecting">
-          Reconnecting<span className="reconnecting-dots">...</span>
+        <span className="min-w-0 flex-1 text-sm font-medium text-blue-600 dark:text-blue-400">
+          Reconnecting<span className="inline-block animate-pulse">...</span>
         </span>
       </>
     ) : error ? (
       // Error state
       <>
-        <span className="status-message status-error">{error}</span>
-        <button onClick={() => setError(null)} className="status-button status-button-text">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+        <span className="min-w-0 flex-1 text-sm font-medium text-destructive">{error}</span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => setError(null)}
+          aria-label="Dismiss error"
+        >
+          <XIcon className="size-3.5" />
+        </Button>
       </>
     ) : agentWorking && conversationId ? (
       // Agent working — show status with stop button and context bar
-      <div className="status-bar-active" data-testid="agent-thinking">
-        <div className="status-working-group">
+      <div
+        className="flex w-full min-w-0 items-center justify-between gap-3"
+        data-testid="agent-thinking"
+      >
+        <div className="flex items-center gap-2">
           <AnimatedWorkingStatus />
           <button
             onClick={handleCancel}
             disabled={cancelling}
-            className="status-stop-button"
+            className="status-stop-button flex items-center gap-1 rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive transition-colors enabled:hover:bg-destructive enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             title={cancelling ? "Cancelling..." : "Stop"}
           >
-            <svg viewBox="0 0 24 24" fill="currentColor">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="size-3 shrink-0">
               <rect x="6" y="6" width="12" height="12" rx="1" />
             </svg>
-            <span className="status-stop-label">{cancelling ? "Cancelling..." : "Stop"}</span>
+            <span className="whitespace-nowrap max-[500px]:hidden">
+              {cancelling ? "Cancelling..." : "Stop"}
+            </span>
           </button>
         </div>
         {(currentConversation?.cwd || selectedCwd) && (
           <span
-            className="status-cwd-readonly hide-on-mobile"
+            className="ml-auto mr-3 hidden min-w-0 max-w-[60ch] truncate font-mono text-xs text-muted-foreground md:inline"
+            dir="rtl"
             title={currentConversation?.cwd || selectedCwd}
           >
             {tildifyPath(currentConversation?.cwd || selectedCwd)}
@@ -2723,9 +2800,12 @@ function ChatInterface({
     ) : !conversationId || currentConversation?.is_draft ? (
       // New conversation or draft — show model picker and cwd selector.
       // Drafts are pre-promotion: the model/cwd are still editable.
-      <div className="status-bar-new-conversation">
-        <div className="status-field status-field-model">
-          <span className="status-field-label" title="AI model to use for this conversation">
+      <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex items-center gap-2">
+          <span
+            className="text-xs font-medium text-muted-foreground"
+            title="AI model to use for this conversation"
+          >
             {t("modelLabel")}
           </span>
           <ModelPicker
@@ -2736,9 +2816,9 @@ function ChatInterface({
             disabled={sending}
           />
         </div>
-        <div className="status-field status-field-thinking">
+        <div className="flex items-center gap-2">
           <span
-            className="status-field-label"
+            className="text-xs font-medium text-muted-foreground"
             title="Reasoning effort the model spends before answering"
           >
             {t("thinkingLabel")}
@@ -2748,36 +2828,27 @@ function ChatInterface({
             onChange={setThinkingLevel}
             disabled={sending}
           />
-          <div className="advanced-settings-wrapper" ref={advancedSettingsRef}>
+          <div className="relative" ref={advancedSettingsRef}>
             <button
-              className={`advanced-settings-trigger${
-                Object.keys(toolOverrides).length > 0 ? " active" : ""
-              }`}
+              className={cn(
+                "flex size-7 items-center justify-center rounded-md border border-border transition-colors enabled:hover:bg-accent enabled:hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50",
+                Object.keys(toolOverrides).length > 0
+                  ? "border-primary text-primary"
+                  : "text-muted-foreground"
+              )}
               onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
               title="Advanced settings"
               disabled={sending}
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
+              <SettingsIcon className="size-4" />
             </button>
             {showAdvancedSettings && (
-              <div className="advanced-settings-popover">
-                <div className="advanced-settings-header">
-                  <span>Tools</span>
+              <div className="absolute bottom-full right-0 z-50 mb-2 max-h-[70vh] w-[min(28rem,90vw)] overflow-y-auto rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-lg">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-semibold">Tools</span>
                   <button
                     type="button"
-                    className="advanced-settings-reset"
+                    className="rounded text-xs text-muted-foreground enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={() => {
                       setToolOverridesState({});
                       try {
@@ -2792,7 +2863,7 @@ function ChatInterface({
                     Reset to defaults
                   </button>
                 </div>
-                <div className="tool-override-list">
+                <div className="flex flex-col">
                   {[
                     {
                       name: "orchestrator",
@@ -2805,15 +2876,22 @@ function ChatInterface({
                     const current: "default" | "on" | "off" = override || "default";
                     return (
                       <React.Fragment key={tool.name}>
-                        <div className="tool-override-row">
-                          <div className="tool-override-info">
-                            <span className="tool-override-name">{tool.name}</span>
-                            {tool.name === "orchestrator" && (
-                              <span className="experimental-badge">experimental</span>
-                            )}
-                            <span className="tool-override-summary">{tool.summary}</span>
+                        <div className="flex items-start justify-between gap-3 border-b border-border py-2 last:border-b-0">
+                          <div className="flex min-w-0 flex-col gap-0.5">
+                            <span className="font-mono text-sm">
+                              {tool.name}
+                              {tool.name === "orchestrator" && (
+                                <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[0.625rem] font-medium tracking-wide text-amber-600 uppercase dark:text-amber-500">
+                                  experimental
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-xs text-muted-foreground">{tool.summary}</span>
                           </div>
-                          <div className="tool-override-choices" role="radiogroup">
+                          <div
+                            className="flex shrink-0 overflow-hidden rounded-md border border-border"
+                            role="radiogroup"
+                          >
                             {(
                               [
                                 ["default", `Default (${tool.default_on ? "on" : "off"})`],
@@ -2826,7 +2904,12 @@ function ChatInterface({
                                 type="button"
                                 role="radio"
                                 aria-checked={current === val}
-                                className={`tool-override-choice${current === val ? " active" : ""}`}
+                                className={cn(
+                                  "border-r border-border px-2 py-1 text-xs last:border-r-0 disabled:cursor-not-allowed disabled:opacity-50",
+                                  current === val
+                                    ? "bg-primary text-primary-foreground"
+                                    : "enabled:hover:bg-accent enabled:hover:text-accent-foreground"
+                                )}
                                 onClick={() => setToolOverride(tool.name, val)}
                                 disabled={sending}
                               >
@@ -2836,16 +2919,16 @@ function ChatInterface({
                           </div>
                         </div>
                         {tool.name === "orchestrator" && toolOverrides["orchestrator"] === "on" && (
-                          <div className="tool-override-row tool-override-suboption">
+                          <div className="flex items-center gap-2 border-b border-border py-2 pl-3">
                             <label
-                              className="tool-override-suboption-label"
+                              className="text-xs text-muted-foreground"
                               htmlFor="subagent-backend-select"
                             >
                               Subagent backend
                             </label>
                             <select
                               id="subagent-backend-select"
-                              className="orchestrator-backend-dropdown"
+                              className="rounded-md border border-border bg-background px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                               value={subagentBackend}
                               onChange={(e) =>
                                 setSubagentBackend(
@@ -2873,12 +2956,15 @@ function ChatInterface({
           </div>
         </div>
         <div
-          className={`status-field status-field-cwd${cwdError ? " status-field-error" : ""}`}
+          className="flex min-w-0 items-center gap-2"
           title={cwdError || "Working directory for file operations"}
         >
-          <span className="status-field-label">{t("dirLabel")}</span>
+          <span className="text-xs font-medium text-muted-foreground">{t("dirLabel")}</span>
           <button
-            className={`status-chip${cwdError ? " status-chip-error" : ""}`}
+            className={cn(
+              "min-w-0 truncate rounded-md border px-2 py-1 font-mono text-xs transition-colors enabled:hover:bg-accent enabled:hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50",
+              cwdError ? "border-destructive text-destructive" : "border-border"
+            )}
             onClick={() => setShowDirectoryPicker(true)}
             disabled={sending}
           >
@@ -2888,14 +2974,15 @@ function ChatInterface({
       </div>
     ) : (
       // Active conversation — show ready message and context bar
-      <div className="status-bar-active">
-        <span className="status-message status-ready">
-          <span className="hide-on-mobile">Ready on </span>
+      <div className="flex w-full min-w-0 items-center justify-between gap-3">
+        <span className="min-w-0 flex-1 text-sm text-muted-foreground/70">
+          <span className="hidden md:inline">Ready on </span>
           {hostname}
         </span>
         {(currentConversation?.cwd || selectedCwd) && (
           <span
-            className="status-cwd-readonly hide-on-mobile"
+            className="ml-auto mr-3 hidden min-w-0 max-w-[60ch] truncate font-mono text-xs text-muted-foreground md:inline"
+            dir="rtl"
             title={currentConversation?.cwd || selectedCwd}
           >
             {tildifyPath(currentConversation?.cwd || selectedCwd)}
@@ -3040,89 +3127,66 @@ function ChatInterface({
   }, [draftAutosave]);
 
   return (
-    <div className="full-height flex flex-col">
+    <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="header">
-        <div className="header-left">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-4 py-2 [padding-left:max(1rem,env(safe-area-inset-left))] [padding-right:max(1rem,env(safe-area-inset-right))] [padding-top:calc(0.5rem+env(safe-area-inset-top,0px))]">
+        <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
           <button
             onClick={onOpenDrawer}
-            className="btn-icon hide-on-desktop"
+            className="flex items-center justify-center rounded-md p-2 transition-colors hover:bg-accent hover:text-accent-foreground md:hidden"
             aria-label={t("openConversations")}
           >
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
+            <MenuIcon className="size-5" />
           </button>
 
           {/* Expand drawer button - desktop only when collapsed */}
           {isDrawerCollapsed && onToggleDrawerCollapse && (
             <button
               onClick={onToggleDrawerCollapse}
-              className="btn-icon show-on-desktop-only"
+              className="hidden items-center justify-center rounded-md p-2 transition-colors hover:bg-accent hover:text-accent-foreground md:flex"
               aria-label={t("expandSidebar")}
               title={t("expandSidebar")}
             >
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 5l7 7-7 7M5 5l7 7-7 7"
-                />
-              </svg>
+              <ChevronsRightIcon className="size-5" />
             </button>
           )}
 
-          <h1 className="header-title" title={currentConversation?.slug || "Shelley"}>
+          <h1
+            className="min-w-0 truncate font-mono text-base font-semibold tracking-tight"
+            title={currentConversation?.slug || "Shelley"}
+          >
             {getDisplayTitle()}
           </h1>
         </div>
 
-        <div className="header-actions">
-          {/* Green + icon in circle for new conversation */}
+        <div className="flex shrink-0 items-center gap-2">
+          {/* New conversation */}
           <button
             onClick={(e) => {
               if (handleModifiedNavClick(e, "/new")) return;
               onNewConversation();
             }}
-            className="btn-new"
+            className="flex size-8 items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/80"
             aria-label={t("newConversation")}
           >
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="chat-icon-1rem">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
+            <PlusIcon className="size-4" />
           </button>
 
           {/* Overflow menu */}
-          <div ref={overflowMenuRef} className="chat-overflow-menu-wrapper">
+          <div ref={overflowMenuRef} className="chat-overflow-menu-wrapper relative">
             <button
               onClick={() => setShowOverflowMenu(!showOverflowMenu)}
-              className="btn-icon"
+              className="btn-icon relative flex items-center justify-center rounded-md p-2 transition-colors hover:bg-accent hover:text-accent-foreground"
               aria-label={t("moreOptions")}
             >
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
-                />
-              </svg>
-              {hasUpdate && <span className="version-update-dot" />}
+              <MoreVerticalIcon className="size-5" />
+              {hasUpdate && (
+                <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" />
+              )}
             </button>
 
             {showOverflowMenu && (
-              <div className="overflow-menu">
+              <div className="absolute right-0 z-50 mt-1 w-64 overflow-hidden rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md">
                 {/* Diffs button - show when we have a CWD */}
                 {(currentConversation?.cwd || selectedCwd) && (
                   <button
@@ -3130,21 +3194,9 @@ function ChatInterface({
                       setShowOverflowMenu(false);
                       setShowDiffViewer(true);
                     }}
-                    className="overflow-menu-item"
+                    className="overflow-menu-item flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
                   >
-                    <svg
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      className="chat-menu-icon"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
+                    <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
                     {t("diffs")}
                   </button>
                 )}
@@ -3154,24 +3206,9 @@ function ChatInterface({
                       setShowOverflowMenu(false);
                       setShowGitGraph(true);
                     }}
-                    className="overflow-menu-item"
+                    className="overflow-menu-item flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
                   >
-                    <svg
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      className="chat-menu-icon"
-                    >
-                      <circle cx="6" cy="6" r="2" strokeWidth={2} />
-                      <circle cx="6" cy="18" r="2" strokeWidth={2} />
-                      <circle cx="18" cy="12" r="2" strokeWidth={2} />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 8v8M8 6h2a4 4 0 014 4v0M8 18h2a4 4 0 004-4v0"
-                      />
-                    </svg>
+                    <GitBranchIcon className="size-4 shrink-0 text-muted-foreground" />
                     {t("gitGraph")}
                   </button>
                 )}
@@ -3183,21 +3220,9 @@ function ChatInterface({
                       const url = terminalURL.replace("WORKING_DIR", encodeURIComponent(cwd));
                       window.open(url, "_blank");
                     }}
-                    className="overflow-menu-item"
+                    className="overflow-menu-item flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
                   >
-                    <svg
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      className="chat-menu-icon"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
+                    <TerminalIcon className="size-4 shrink-0 text-muted-foreground" />
                     {t("terminal")}
                   </button>
                 )}
@@ -3208,31 +3233,32 @@ function ChatInterface({
                       setShowOverflowMenu(false);
                       window.open(link.url, "_blank");
                     }}
-                    className="overflow-menu-item"
+                    className="overflow-menu-item flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
                   >
-                    <svg
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      className="chat-menu-icon"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d={
-                          link.icon_svg ||
-                          "M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                        }
-                      />
-                    </svg>
+                    {link.icon_svg ? (
+                      <svg
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        className="size-4 shrink-0 text-muted-foreground"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d={link.icon_svg}
+                        />
+                      </svg>
+                    ) : (
+                      <ExternalLinkIcon className="size-4 shrink-0 text-muted-foreground" />
+                    )}
                     {link.title}
                   </button>
                 ))}
 
                 {conversationId && onArchiveConversation && !currentConversation?.archived && (
                   <>
-                    <div className="overflow-menu-divider" />
+                    <div className="my-1 h-px bg-border" />
                     <button
                       onClick={async () => {
                         setShowOverflowMenu(false);
@@ -3242,21 +3268,9 @@ function ChatInterface({
                           console.error("Failed to archive conversation:", err);
                         }
                       }}
-                      className="overflow-menu-item"
+                      className="overflow-menu-item flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
                     >
-                      <svg
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        className="chat-menu-icon"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 8h14M8 8V6a4 4 0 118 0v2m-9 0v10a2 2 0 002 2h6a2 2 0 002-2V8"
-                        />
-                      </svg>
+                      <ArchiveIcon className="size-4 shrink-0 text-muted-foreground" />
                       {t("archiveConversation")}
                     </button>
                   </>
@@ -3265,7 +3279,7 @@ function ChatInterface({
                 {/* Export conversation as Markdown */}
                 {conversationId && messages.length > 0 && (
                   <>
-                    <div className="overflow-menu-divider" />
+                    <div className="my-1 h-px bg-border" />
                     <button
                       onClick={() => {
                         setShowOverflowMenu(false);
@@ -3274,97 +3288,59 @@ function ChatInterface({
                         // fetches the conversation and renders the editor.
                         window.open(`/export/${conversationId}`, "_blank", "noopener");
                       }}
-                      className="overflow-menu-item"
+                      className="overflow-menu-item flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
                     >
-                      <svg
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        className="chat-menu-icon"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                        />
-                      </svg>
+                      <DownloadIcon className="size-4 shrink-0 text-muted-foreground" />
                       {t("exportConversation")}
                     </button>
                   </>
                 )}
 
                 {/* Edit user AGENTS.md */}
-                <div className="overflow-menu-divider" />
+                <div className="my-1 h-px bg-border" />
                 <button
                   onClick={() => {
                     setShowOverflowMenu(false);
                     setShowAgentsMdEditor(true);
                   }}
-                  className="overflow-menu-item"
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
                 >
-                  <svg
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    className="chat-menu-icon"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                    />
-                  </svg>
+                  <PencilIcon className="size-4 shrink-0 text-muted-foreground" />
                   {t("editUserAgentsMd")}
                 </button>
 
                 {/* Version check */}
-                <div className="overflow-menu-divider" />
+                <div className="my-1 h-px bg-border" />
                 <button
                   onClick={() => {
                     setShowOverflowMenu(false);
                     openVersionModal();
                   }}
-                  className="overflow-menu-item"
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
                 >
-                  <svg
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    className="chat-menu-icon"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
+                  <RefreshCwIcon className="size-4 shrink-0 text-muted-foreground" />
                   {t("checkForNewVersion")}
-                  {hasUpdate && <span className="version-menu-dot" />}
+                  {hasUpdate && <span className="ml-auto size-2 rounded-full bg-primary" />}
                 </button>
 
                 {/* Theme selector */}
-                <div className="overflow-menu-divider" />
-                <div className="theme-toggle-row">
+                <div className="my-1 h-px bg-border" />
+                <div className="flex items-center gap-1 px-3 py-1.5">
                   <button
                     onClick={() => {
                       setThemeMode("system");
                       setStoredTheme("system");
                       applyTheme("system");
                     }}
-                    className={`theme-toggle-btn${themeMode === "system" ? " theme-toggle-btn-selected" : ""}`}
+                    className={cn(
+                      "flex flex-1 items-center justify-center rounded-md py-1.5 transition-colors",
+                      themeMode === "system"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    )}
                     title={t("system")}
                   >
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                      />
-                    </svg>
+                    <MonitorIcon className="size-4" />
                   </button>
                   <button
                     onClick={() => {
@@ -3372,17 +3348,15 @@ function ChatInterface({
                       setStoredTheme("light");
                       applyTheme("light");
                     }}
-                    className={`theme-toggle-btn${themeMode === "light" ? " theme-toggle-btn-selected" : ""}`}
+                    className={cn(
+                      "flex flex-1 items-center justify-center rounded-md py-1.5 transition-colors",
+                      themeMode === "light"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    )}
                     title={t("light")}
                   >
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-                      />
-                    </svg>
+                    <SunIcon className="size-4" />
                   </button>
                   <button
                     onClick={() => {
@@ -3390,25 +3364,23 @@ function ChatInterface({
                       setStoredTheme("dark");
                       applyTheme("dark");
                     }}
-                    className={`theme-toggle-btn${themeMode === "dark" ? " theme-toggle-btn-selected" : ""}`}
+                    className={cn(
+                      "flex flex-1 items-center justify-center rounded-md py-1.5 transition-colors",
+                      themeMode === "dark"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    )}
                     title={t("dark")}
                   >
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-                      />
-                    </svg>
+                    <MoonIcon className="size-4" />
                   </button>
                 </div>
 
                 {/* Browser notifications toggle */}
                 {typeof Notification !== "undefined" && (
                   <>
-                    <div className="overflow-menu-divider" />
-                    <div className="theme-toggle-row">
+                    <div className="my-1 h-px bg-border" />
+                    <div className="flex items-center gap-1 px-3 py-1.5">
                       <button
                         onClick={async () => {
                           if (browserNotifsEnabled) return;
@@ -3417,7 +3389,12 @@ function ChatInterface({
                             setBrowserNotifsEnabled(true);
                           }
                         }}
-                        className={`theme-toggle-btn${browserNotifsEnabled ? " theme-toggle-btn-selected" : ""}`}
+                        className={cn(
+                          "flex flex-1 items-center justify-center rounded-md py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                          browserNotifsEnabled
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground enabled:hover:bg-accent enabled:hover:text-accent-foreground"
+                        )}
                         title={
                           getBrowserNotificationState() === "denied"
                             ? t("blockedByBrowser")
@@ -3425,14 +3402,7 @@ function ChatInterface({
                         }
                         disabled={getBrowserNotificationState() === "denied"}
                       >
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                          />
-                        </svg>
+                        <BellIcon className="size-4" />
                       </button>
                       <button
                         onClick={() => {
@@ -3440,44 +3410,57 @@ function ChatInterface({
                           setChannelEnabled("browser", false);
                           setBrowserNotifsEnabled(false);
                         }}
-                        className={`theme-toggle-btn${!browserNotifsEnabled ? " theme-toggle-btn-selected" : ""}`}
+                        className={cn(
+                          "flex flex-1 items-center justify-center rounded-md py-1.5 transition-colors",
+                          !browserNotifsEnabled
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                        )}
                         title={t("disableNotifications")}
                       >
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5.586 15H4l1.405-1.405A2.032 2.032 0 006 12.158V9a6.002 6.002 0 014-5.659V3a2 2 0 114 0v.341c.588.17 1.14.432 1.636.772M15 17h-6v1a3 3 0 006 0v-1zM18 9a3 3 0 00-3-3M3 3l18 18"
-                          />
-                        </svg>
+                        <BellOffIcon className="size-4" />
                       </button>
                     </div>
                   </>
                 )}
 
                 {/* Markdown rendering toggle */}
-                <div className="overflow-menu-divider" />
-                <div className="md-toggle-row">
-                  <div className="md-toggle-label">{t("markdown")}</div>
-                  <div className="md-toggle-buttons">
+                <div className="my-1 h-px bg-border" />
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5">
+                  <div className="text-xs font-medium text-muted-foreground">{t("markdown")}</div>
+                  <div className="flex overflow-hidden rounded-md border border-border">
                     <button
                       onClick={() => setMarkdownMode("off")}
-                      className={`md-toggle-btn${markdownMode === "off" ? " md-toggle-btn-selected" : ""}`}
+                      className={cn(
+                        "border-r border-border px-2 py-1 text-xs last:border-r-0",
+                        markdownMode === "off"
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-accent hover:text-accent-foreground"
+                      )}
                       title={t("showPlainText")}
                     >
                       {t("off")}
                     </button>
                     <button
                       onClick={() => setMarkdownMode("agent")}
-                      className={`md-toggle-btn${markdownMode === "agent" ? " md-toggle-btn-selected" : ""}`}
+                      className={cn(
+                        "border-r border-border px-2 py-1 text-xs last:border-r-0",
+                        markdownMode === "agent"
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-accent hover:text-accent-foreground"
+                      )}
                       title={t("renderMarkdownAgent")}
                     >
                       {t("agent")}
                     </button>
                     <button
                       onClick={() => setMarkdownMode("all")}
-                      className={`md-toggle-btn${markdownMode === "all" ? " md-toggle-btn-selected" : ""}`}
+                      className={cn(
+                        "px-2 py-1 text-xs",
+                        markdownMode === "all"
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-accent hover:text-accent-foreground"
+                      )}
                       title={t("renderMarkdownAll")}
                     >
                       {t("all")}
@@ -3486,15 +3469,15 @@ function ChatInterface({
                 </div>
 
                 {/* Language selector */}
-                <div className="overflow-menu-divider" />
-                <div className="language-selector-row">
-                  <div className="md-toggle-label">
+                <div className="my-1 h-px bg-border" />
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5">
+                  <div className="text-xs font-medium text-muted-foreground">
                     {t("language")}{" "}
                     <a
                       href={`https://github.com/boldsoftware/shelley/issues/new?labels=translation&title=${encodeURIComponent("Translation issue: ")}&body=${encodeURIComponent("**Language:** \n**Where in the UI:** \n**Current text:** \n**Suggested text:** \n")}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="report-bug-link"
+                      className="text-primary underline-offset-2 hover:underline"
                       onClick={(e) => e.stopPropagation()}
                     >
                       [{t("reportBug")}]
@@ -3510,18 +3493,21 @@ function ChatInterface({
 
       {/* Messages area */}
       {/* Messages area with scroll-to-bottom button wrapper */}
-      <div className="messages-area-wrapper">
-        <div className="messages-container scrollable" ref={messagesContainerRef}>
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <div
+          className="messages-container h-full overflow-x-hidden overflow-y-auto overscroll-contain p-4 [-webkit-overflow-scrolling:touch] [padding-left:max(1rem,env(safe-area-inset-left))] [padding-right:max(1rem,env(safe-area-inset-right))]"
+          ref={messagesContainerRef}
+        >
           {loading ? (
             showLoadingProgressUI ? (
-              <div className="conversation-loading full-height">
-                <div className="spinner"></div>
-                <div className="conversation-loading-title">
+              <div className="flex h-full flex-col items-center justify-center gap-2 p-4">
+                <div className="size-8 animate-spin rounded-full border-2 border-transparent border-t-primary" />
+                <div className="text-base font-medium text-foreground">
                   {loadingProgress?.phase === "parsing"
                     ? "Rendering conversation…"
                     : "Loading conversation…"}
                 </div>
-                <div className="conversation-loading-subtitle">
+                <div className="text-sm text-muted-foreground">
                   {loadingProgress
                     ? loadingProgress.bytesTotal && loadingProgress.bytesTotal > 0
                       ? `${formatBytes(loadingProgress.bytesDownloaded)} of ${formatBytes(loadingProgress.bytesTotal)}`
@@ -3531,15 +3517,16 @@ function ChatInterface({
                     ? ` • ~${lastKnownMessageCount} messages last time`
                     : ""}
                 </div>
-                <div className="conversation-loading-bar">
+                <div className="h-1.5 w-[min(22rem,70vw)] overflow-hidden rounded-full border border-border bg-muted">
                   <div
-                    className={`conversation-loading-bar-fill${
+                    className={cn(
+                      "h-full bg-primary transition-[width] duration-100",
                       loadingProgress?.phase === "parsing"
-                        ? " parsing"
+                        ? "w-full animate-pulse"
                         : !loadingProgress?.bytesTotal || loadingProgress.bytesTotal <= 0
-                          ? " indeterminate"
+                          ? "w-1/3 animate-pulse"
                           : ""
-                    }`}
+                    )}
                     style={
                       loadingProgress?.phase === "parsing"
                         ? undefined
@@ -3553,18 +3540,18 @@ function ChatInterface({
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-center full-height">
-                <div className="spinner"></div>
+              <div className="flex h-full items-center justify-center">
+                <div className="size-8 animate-spin rounded-full border-2 border-transparent border-t-primary" />
               </div>
             )
           ) : (
-            <div className="messages-list">{renderMessages()}</div>
+            <div className="messages messages-list flex flex-col gap-1">{renderMessages()}</div>
           )}
         </div>
 
         {/* Floating nav cluster: TOC + scroll-to-bottom */}
         {conversationId && messages.length > 0 && (
-          <div className="chat-nav-cluster">
+          <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex flex-col-reverse items-end gap-2 [&>*]:pointer-events-auto">
             <ConversationTOC
               messages={messages}
               containerRef={messagesContainerRef}
@@ -3572,24 +3559,12 @@ function ChatInterface({
             />
             {showScrollToBottom && (
               <button
-                className="scroll-to-bottom-button"
+                className="scroll-to-bottom-button flex size-10 items-center justify-center rounded-full border border-border bg-background text-foreground shadow-md transition-colors hover:bg-accent hover:text-accent-foreground active:scale-95"
                 onClick={scrollToBottom}
                 aria-label="Scroll to bottom"
                 title="Scroll to bottom"
               >
-                <svg
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  className="chat-scroll-icon"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 14l-7 7m0 0l-7-7m7 7V3"
-                  />
-                </svg>
+                <ArrowDownIcon className="size-[1.125rem]" />
               </button>
             )}
           </div>
@@ -3618,11 +3593,19 @@ function ChatInterface({
       />
 
       {/* Status bar — always visible on desktop; hidden on mobile for active convos
-          (CSS hides it, and content is suppressed to avoid duplicate DOM elements). */}
+          (content is suppressed to avoid duplicate DOM elements). */}
       <div
-        className={`status-bar${currentConversation?.archived ? " status-bar-archived" : ""}${!conversationId || currentConversation?.is_draft ? " status-bar-new" : ""}`}
+        className={cn(
+          "flex min-h-10 shrink-0 items-center border-t border-border bg-background px-4 py-2 [padding-left:max(1rem,env(safe-area-inset-left))] [padding-right:max(1rem,env(safe-area-inset-right))]",
+          // On mobile the standalone bar is hidden for active conversations
+          // (its content is shown inline in the message input controls). Keep
+          // it visible for archived and new/draft conversations.
+          !currentConversation?.archived &&
+            !(!conversationId || currentConversation?.is_draft) &&
+            "max-md:hidden"
+        )}
       >
-        <div className="status-bar-content">
+        <div className="flex w-full items-center justify-between gap-3">
           {(!isMobile ||
             !conversationId ||
             currentConversation?.is_draft ||

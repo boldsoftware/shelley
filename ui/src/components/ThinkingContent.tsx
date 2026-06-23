@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { ChevronRightIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ThinkingContentProps {
   thinking: string;
@@ -18,31 +20,33 @@ function ThinkingContent({ thinking }: ThinkingContentProps) {
   const preview = truncateThinking(thinking);
 
   return (
-    <div className="thinking-content thinking-content-wrapper" data-testid="thinking-content">
-      <div onClick={() => setIsExpanded(!isExpanded)} className="thinking-clickable-area">
-        <span className="thinking-emoji">💭</span>
-        <div className="thinking-text">{isExpanded ? thinking : preview}</div>
+    <div
+      className="thinking-content my-1 rounded-lg border border-border bg-muted/40 text-sm"
+      data-testid="thinking-content"
+    >
+      <div
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex cursor-pointer items-start gap-2 px-3 py-2 select-none"
+      >
+        <span className="shrink-0 leading-none" aria-hidden>
+          💭
+        </span>
+        <div
+          className={cn(
+            "min-w-0 flex-1 text-muted-foreground italic",
+            isExpanded ? "whitespace-pre-wrap" : "truncate"
+          )}
+        >
+          {isExpanded ? thinking : preview}
+        </div>
         <button
-          className="thinking-toggle thinking-toggle-button"
+          className="shrink-0 text-muted-foreground"
           aria-label={isExpanded ? "Collapse" : "Expand"}
           aria-expanded={isExpanded}
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <ChevronRightIcon
+            className={cn("size-3.5 transition-transform", isExpanded && "rotate-90")}
+          />
         </button>
       </div>
     </div>

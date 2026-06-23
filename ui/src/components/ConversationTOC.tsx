@@ -1,5 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Message, LLMMessage, LLMContent } from "../types";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface TOCEntry {
   id: string; // unique stable id (used as fragment slug)
@@ -144,12 +151,6 @@ export function scrollToFragment(
 const ConversationTOC: React.FC<ConversationTOCProps> = ({ messages, containerRef }) => {
   const [open, setOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const [popoverPos, setPopoverPos] = useState<{
-    bottom: number;
-    right: number;
-  } | null>(null);
 
   const entries = useMemo(() => buildEntries(messages), [messages]);
 
@@ -182,47 +183,6 @@ const ConversationTOC: React.FC<ConversationTOCProps> = ({ messages, containerRe
     container.addEventListener("scroll", update, { passive: true });
     return () => container.removeEventListener("scroll", update);
   }, [entries, containerRef]);
-
-  // Position the popover above the trigger button, anchored to the viewport.
-  useEffect(() => {
-    if (!open) return;
-    const updatePos = () => {
-      const btn = buttonRef.current;
-      if (!btn) return;
-      const rect = btn.getBoundingClientRect();
-      setPopoverPos({
-        bottom: window.innerHeight - rect.top + 8,
-        right: window.innerWidth - rect.right,
-      });
-    };
-    updatePos();
-    window.addEventListener("resize", updatePos);
-    window.addEventListener("scroll", updatePos, true);
-    return () => {
-      window.removeEventListener("resize", updatePos);
-      window.removeEventListener("scroll", updatePos, true);
-    };
-  }, [open]);
-
-  // Close on outside click / Escape
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (popoverRef.current?.contains(t)) return;
-      if (buttonRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
 
   // Resolve URL fragment on mount and on messages/hash change.
   useEffect(() => {
@@ -303,63 +263,89 @@ const ConversationTOC: React.FC<ConversationTOCProps> = ({ messages, containerRe
   };
 
   return (
-    <>
-      <button
-        ref={buttonRef}
-        className={`toc-button${open ? " toc-button-open" : ""}`}
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Conversation table of contents"
-        aria-haspopup="true"
-        aria-expanded={open}
-        title="Table of contents"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="toc-button-icon">
-          <line x1="8" y1="6" x2="20" y2="6" strokeWidth={2} strokeLinecap="round" />
-          <line x1="8" y1="12" x2="20" y2="12" strokeWidth={2} strokeLinecap="round" />
-          <line x1="8" y1="18" x2="20" y2="18" strokeWidth={2} strokeLinecap="round" />
-          <circle cx="4" cy="6" r="1.4" fill="currentColor" />
-          <circle cx="4" cy="12" r="1.4" fill="currentColor" />
-          <circle cx="4" cy="18" r="1.4" fill="currentColor" />
-        </svg>
-      </button>
-
-      {open && (
-        <div
-          ref={popoverRef}
-          className="toc-popover"
-          role="dialog"
-          aria-label="Table of contents"
-          style={
-            popoverPos
-              ? { bottom: `${popoverPos.bottom}px`, right: `${popoverPos.right}px` }
-              : undefined
-          }
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="icon"
+          className="rounded-full shadow-md"
+          aria-label="Conversation table of contents"
+          aria-haspopup="true"
+          title="Table of contents"
         >
-          <div className="toc-popover-header">
-            <span className="toc-popover-title">Jump to…</span>
-          </div>
-          <div className="toc-popover-list">
-            {entries.map((entry) => (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-[1.125rem]">
+            <line x1="8" y1="6" x2="20" y2="6" strokeWidth={2} strokeLinecap="round" />
+            <line x1="8" y1="12" x2="20" y2="12" strokeWidth={2} strokeLinecap="round" />
+            <line x1="8" y1="18" x2="20" y2="18" strokeWidth={2} strokeLinecap="round" />
+            <circle cx="4" cy="6" r="1.4" fill="currentColor" />
+            <circle cx="4" cy="12" r="1.4" fill="currentColor" />
+            <circle cx="4" cy="18" r="1.4" fill="currentColor" />
+          </svg>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        role="dialog"
+        aria-label="Table of contents"
+        side="top"
+        align="end"
+        className="flex max-h-[min(60vh,32rem)] w-[min(28rem,calc(100vw-2rem))] flex-col gap-0 rounded-xl p-0"
+      >
+        <div className="border-b border-border px-3 py-2.5 text-sm font-semibold">
+          Jump to…
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto py-1">
+          {entries.map((entry) => {
+            const active = activeId === entry.id;
+            if (entry.kind === "gen") {
+              return (
+                <button
+                  key={entry.id}
+                  onClick={() => handleGoto(entry)}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase hover:bg-muted"
+                >
+                  <span className="h-px flex-1 bg-border" aria-hidden="true" />
+                  <span className="shrink-0 whitespace-nowrap">{entry.label}</span>
+                  <span className="h-px flex-1 bg-border" aria-hidden="true" />
+                </button>
+              );
+            }
+            const isEnd = entry.kind === "top" || entry.kind === "bottom";
+            return (
               <button
                 key={entry.id}
-                className={`toc-entry toc-entry-${entry.kind}${activeId === entry.id ? " toc-entry-active" : ""}`}
                 onClick={() => handleGoto(entry)}
-              >
-                {entry.kind !== "gen" && (
-                  <span className="toc-entry-icon" aria-hidden="true">
-                    {entry.kind === "top" && "↑"}
-                    {entry.kind === "bottom" && "↓"}
-                    {entry.kind === "user" && "•"}
-                    {entry.kind === "eot" && "✓"}
-                  </span>
+                className={cn(
+                  "flex w-full items-start gap-2 px-3 py-1.5 text-left text-sm leading-snug hover:bg-muted",
+                  active && "bg-muted"
                 )}
-                <span className="toc-entry-label">{entry.label}</span>
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "w-5 shrink-0 pt-px text-center text-sm leading-tight text-muted-foreground",
+                    active && "text-blue-500"
+                  )}
+                >
+                  {entry.kind === "top" && "↑"}
+                  {entry.kind === "bottom" && "↓"}
+                  {entry.kind === "user" && "•"}
+                  {entry.kind === "eot" && "✓"}
+                </span>
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate",
+                    entry.kind === "user" && "font-medium",
+                    isEnd && "text-muted-foreground italic"
+                  )}
+                >
+                  {entry.label}
+                </span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      )}
-    </>
+      </PopoverContent>
+    </Popover>
   );
 };
 

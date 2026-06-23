@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { LLMContent } from "../types";
+import { ToolCard, ToolSection, ToolCode, ToolStatusMark } from "./ToolCard";
 
 interface BrowserScreencastToolProps {
   toolInput?: unknown;
@@ -30,8 +31,6 @@ function BrowserScreencastTool({
   executionTime,
   display,
 }: BrowserScreencastToolProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
-
   const action = getAction(toolInput);
 
   // Determine emoji and label based on action
@@ -72,95 +71,65 @@ function BrowserScreencastTool({
   const isComplete = !isRunning && toolResult !== undefined;
 
   return (
-    <div
+    <ToolCard
       className="screencast-tool"
-      data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}
+      emoji={emoji}
+      running={isRunning}
+      complete={isComplete}
+      title={label}
+      status={isComplete ? <ToolStatusMark error={hasError} /> : null}
     >
-      <div className="screencast-tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="screencast-tool-summary">
-          <span className={`screencast-tool-emoji ${isRunning ? "running" : ""}`}>{emoji}</span>
-          <span className="screencast-tool-label">{label}</span>
-          {isComplete && hasError && <span className="screencast-tool-error">✗</span>}
-          {isComplete && !hasError && <span className="screencast-tool-success">✓</span>}
-        </div>
-        <button
-          className="screencast-tool-toggle"
-          aria-label={isExpanded ? "Collapse" : "Expand"}
-          aria-expanded={isExpanded}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
-
-      {isExpanded && (
-        <div className="screencast-tool-details">
-          {isRunning && (
-            <div className="screencast-tool-section">
-              <div className="screencast-tool-status">
-                {action === "screencast_start" && "Starting screencast recording..."}
-                {action === "screencast_stop" && "Stopping screencast..."}
-                {action === "screencast_status" && "Checking screencast status..."}
-              </div>
-            </div>
-          )}
-
-          {isComplete && !hasError && videoUrl && (
-            <div className="screencast-tool-section">
-              {executionTime && (
-                <div className="screencast-tool-meta">
-                  <span>{executionTime}</span>
-                </div>
-              )}
-              <div className="screencast-tool-video-container">
-                <video controls preload="metadata" className="screencast-tool-video">
-                  <source src={videoUrl} type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
-              </div>
-            </div>
-          )}
-
-          {isComplete && !hasError && !videoUrl && output && (
-            <div className="screencast-tool-section">
-              {executionTime && (
-                <div className="screencast-tool-meta">
-                  <span>{executionTime}</span>
-                </div>
-              )}
-              <pre className="screencast-tool-output">{output}</pre>
-            </div>
-          )}
-
-          {isComplete && hasError && (
-            <div className="screencast-tool-section">
-              {executionTime && (
-                <div className="screencast-tool-meta">
-                  <span>{executionTime}</span>
-                </div>
-              )}
-              <pre className="screencast-tool-error-message">
-                {output || "Screencast operation failed"}
-              </pre>
-            </div>
-          )}
-        </div>
+      {isRunning && (
+        <ToolSection label="Status:">
+          <div className="text-muted-foreground italic">
+            {action === "screencast_start" && "Starting screencast recording..."}
+            {action === "screencast_stop" && "Stopping screencast..."}
+            {action === "screencast_status" && "Checking screencast status..."}
+          </div>
+        </ToolSection>
       )}
-    </div>
+
+      {isComplete && !hasError && videoUrl && (
+        <ToolSection
+          label={
+            executionTime ? (
+              <span className="text-muted-foreground">{executionTime}</span>
+            ) : undefined
+          }
+        >
+          <div className="overflow-hidden rounded-md bg-muted">
+            <video controls preload="metadata" className="block w-full">
+              <source src={videoUrl} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        </ToolSection>
+      )}
+
+      {isComplete && !hasError && !videoUrl && output && (
+        <ToolSection
+          label={
+            executionTime ? (
+              <span className="text-muted-foreground">{executionTime}</span>
+            ) : undefined
+          }
+        >
+          <ToolCode>{output}</ToolCode>
+        </ToolSection>
+      )}
+
+      {isComplete && hasError && (
+        <ToolSection
+          label={
+            executionTime ? (
+              <span className="text-muted-foreground">{executionTime}</span>
+            ) : undefined
+          }
+        >
+          <ToolCode error>{output || "Screencast operation failed"}</ToolCode>
+        </ToolSection>
+      )}
+    </ToolCard>
   );
 }
 

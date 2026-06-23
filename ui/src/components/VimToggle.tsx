@@ -1,4 +1,5 @@
 import React from "react";
+import { Button } from "@/components/ui/button";
 
 interface VimToggleProps {
   enabled: boolean;
@@ -10,14 +11,15 @@ interface VimToggleProps {
 // decides whether to render this at all.
 export default function VimToggle({ enabled, onChange }: VimToggleProps) {
   return (
-    <button
+    <Button
       type="button"
-      className={`vim-toggle ${enabled ? "active" : ""}`}
+      size="sm"
+      variant={enabled ? "default" : "outline"}
       onClick={() => onChange(!enabled)}
       title={enabled ? "Disable Vim mode" : "Enable Vim mode"}
       aria-pressed={enabled}
     >
       Vim
-    </button>
+    </Button>
   );
 }

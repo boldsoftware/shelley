@@ -11,8 +11,27 @@ import {
 } from "../utils/conversationSort";
 import { tildifyPath } from "../utils/tildify";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
+import { cn } from "@/lib/utils";
 
 type GroupBy = "none" | "cwd" | "git_repo";
+
+// Small icon-button used for the per-row inline actions (rename, tag, archive,
+// delete, restore). Muted and dimmed at rest, revealed on row hover via the
+// `group-hover` utilities on the parent conversation row, and fully opaque +
+// legible when the row is active (selected).
+const ROW_ICON_BTN = cn(
+  "flex items-center justify-center rounded p-1 text-muted-foreground opacity-40 transition-[background-color,opacity]",
+  "hover:bg-accent hover:opacity-100",
+  "group-hover/item:opacity-70",
+  "group-[.is-active]/item:text-primary-foreground/80 group-[.is-active]/item:opacity-70",
+  "group-[.is-active]/item:hover:bg-primary-foreground/20 group-[.is-active]/item:hover:opacity-100",
+);
+
+// Danger variant of the row icon button (delete).
+const ROW_ICON_BTN_DANGER = cn(ROW_ICON_BTN, "hover:bg-destructive hover:text-white");
+
+// Standard 1rem stroke icon used throughout the drawer rows.
+const ROW_ICON = "size-4";
 
 // Parses the JSON-encoded tags field on a Conversation. Tolerates the empty
 // string and malformed JSON (treated as no tags) so we never crash the
@@ -55,7 +74,10 @@ function renderSnippet(snippet: string): React.ReactNode[] {
       break;
     }
     out.push(
-      <mark key={key++} className="conversation-snippet-mark">
+      <mark
+        key={key++}
+        className="rounded-[2px] bg-amber-200 px-px font-semibold text-black not-italic dark:bg-amber-700 dark:text-white"
+      >
         {snippet.slice(start + 1, end)}
       </mark>,
     );
@@ -722,20 +744,22 @@ function ConversationDrawer({
     if (pendingDeleteId === conversationId) {
       return (
         <div
-          className="drawer-delete-confirm"
+          className="inline-flex items-center gap-1 rounded bg-muted px-1 py-0.5 group-[.is-active]/item:bg-primary-foreground/15"
           ref={pendingDeleteRef}
           onClick={(e) => e.stopPropagation()}
           title={t("confirmDelete")}
         >
-          <span className="drawer-delete-confirm-label">{t("confirmDeleteShort")}</span>
+          <span className="whitespace-nowrap text-xs text-muted-foreground group-[.is-active]/item:text-primary-foreground/90">
+            {t("confirmDeleteShort")}
+          </span>
           <button
             type="button"
             onClick={(e) => handleConfirmDelete(e, conversationId)}
-            className="btn-icon-sm btn-danger drawer-delete-confirm-yes"
+            className="flex items-center justify-center rounded p-1 text-destructive opacity-100 transition-colors hover:bg-destructive hover:text-white"
             title={t("delete_")}
             aria-label={t("delete_")}
           >
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="drawer-icon-size">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className={ROW_ICON}>
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -747,11 +771,11 @@ function ConversationDrawer({
           <button
             type="button"
             onClick={handleCancelDelete}
-            className="btn-icon-sm"
+            className="flex items-center justify-center rounded p-1 text-muted-foreground opacity-100 transition-colors hover:bg-accent hover:text-foreground"
             title={t("cancel")}
             aria-label={t("cancel")}
           >
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="drawer-icon-size">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className={ROW_ICON}>
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -766,11 +790,11 @@ function ConversationDrawer({
     return (
       <button
         onClick={(e) => handleDeleteClick(e, conversationId)}
-        className="btn-icon-sm btn-danger"
+        className={ROW_ICON_BTN_DANGER}
         title={t("deletePermanently")}
         aria-label={t("delete_")}
       >
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="drawer-icon-size">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className={ROW_ICON}>
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -809,17 +833,22 @@ function ConversationDrawer({
     return (
       <React.Fragment key={conversation.conversation_id}>
         <div
-          className={`conversation-item ${isActive ? "active" : ""}${isNew ? " conversation-item-enter" : ""}`}
+          className={cn(
+            "conversation-item group/item mb-1 flex w-full cursor-pointer flex-row items-center gap-1 rounded-lg p-3 text-left transition-colors",
+            isActive
+              ? "is-active active bg-primary text-primary-foreground"
+              : "hover:bg-accent hover:text-accent-foreground",
+            isNew && "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1",
+          )}
           onClick={(e) => {
             if (handleModifiedClick(e, conversation)) return;
             onSelectConversation(conversation);
           }}
           onAuxClick={(e) => handleAuxClick(e, conversation)}
-          style={{ cursor: "pointer" }}
         >
-          <div className="drawer-conversation-item-flex-container">
-            <div className="drawer-conversation-header-row">
-              <div className="drawer-conversation-item-flex-container">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
                 {editingId === conversation.conversation_id ? (
                   <input
                     ref={renameInputRef}
@@ -830,19 +859,21 @@ function ConversationDrawer({
                     onKeyDown={(e) => handleRenameKeyDown(e, conversation.conversation_id)}
                     onClick={(e) => e.stopPropagation()}
                     autoFocus
-                    className="conversation-title drawer-rename-input"
+                    className="w-full border-0 border-b border-current/50 bg-transparent p-0 text-sm font-medium outline-none"
                   />
                 ) : isDraft ? (
-                  <div className="conversation-title conversation-title-draft">
+                  <div className="text-sm font-medium break-all italic">
                     {draftLabels[conversation.conversation_id] || "draft"}
                   </div>
                 ) : (
-                  <div className="conversation-title">{renderConversationTitle(conversation)}</div>
+                  <div className="conversation-title text-sm font-medium break-all">
+                    {renderConversationTitle(conversation)}
+                  </div>
                 )}
               </div>
               {(conversation as ConversationWithState).working && (
                 <span
-                  className="working-indicator drawer-working-indicator"
+                  className="size-2 shrink-0 rounded-full border-[1.5px] border-current bg-transparent opacity-75"
                   title={t("agentIsWorking")}
                 />
               )}
@@ -852,18 +883,24 @@ function ConversationDrawer({
               if (!editing && conversationTags.length === 0) return null;
               return (
                 <div
-                  className={`conversation-tags${editing ? " conversation-tags-editing" : ""}`}
+                  className={cn(
+                    "mt-1 flex flex-wrap items-center gap-1.5",
+                    editing && "rounded bg-muted/40 p-1 group-[.is-active]/item:bg-primary-foreground/10",
+                  )}
                   onClick={editing ? (e) => e.stopPropagation() : undefined}
                   ref={editing ? tagEditorRef : undefined}
                 >
                   {conversationTags.map((tag) =>
                     editing ? (
-                      <span key={tag} className="conversation-tag conversation-tag-removable">
-                        <span className="conversation-tag-hash">#</span>
+                      <span
+                        key={tag}
+                        className="group/tag inline-flex max-w-48 items-center overflow-hidden text-xs leading-tight text-ellipsis whitespace-nowrap text-primary group-[.is-active]/item:text-primary-foreground/85"
+                      >
+                        <span className="mr-px opacity-60">#</span>
                         {tag}
                         <button
                           type="button"
-                          className="conversation-tag-remove"
+                          className="ml-0.5 cursor-pointer px-0.5 leading-none opacity-0 transition-opacity group-hover/tag:opacity-70 hover:!opacity-100 focus:opacity-70"
                           aria-label={`${t("removeTag")} ${tag}`}
                           title={t("removeTag")}
                           onClick={() => handleRemoveTag(conversation, tag)}
@@ -872,28 +909,32 @@ function ConversationDrawer({
                         </button>
                       </span>
                     ) : (
-                      <span key={tag} className="conversation-tag" title={`#${tag}`}>
-                        <span className="conversation-tag-hash">#</span>
+                      <span
+                        key={tag}
+                        className="inline-flex max-w-48 items-center overflow-hidden text-xs leading-tight text-ellipsis whitespace-nowrap text-primary group-[.is-active]/item:text-primary-foreground/85"
+                        title={`#${tag}`}
+                      >
+                        <span className="mr-px opacity-60">#</span>
                         {tag}
                       </span>
                     ),
                   )}
                   {editing && (
                     <form
-                      className="conversation-tag-inline-form"
+                      className="inline-flex min-w-16 flex-1"
                       onSubmit={(e) => {
                         e.preventDefault();
                         handleAddTag(conversation);
                       }}
                     >
-                      <span className="conversation-tag-hash">#</span>
+                      <span className="mr-px opacity-60">#</span>
                       <input
                         ref={tagInputRef}
                         type="text"
                         value={tagInput}
                         onChange={(e) => setTagInput(e.target.value)}
                         placeholder={t("addTagPlaceholder")}
-                        className="conversation-tag-inline-input"
+                        className="min-w-16 flex-1 border-0 bg-transparent px-0.5 text-xs leading-snug text-inherit outline-none placeholder:opacity-50"
                         onKeyDown={(e) => {
                           if (e.key === "Escape") {
                             e.preventDefault();
@@ -909,44 +950,52 @@ function ConversationDrawer({
             })()}
             {convState.search_snippet ? (
               <div
-                className="conversation-preview conversation-snippet"
+                className="mt-0.5 line-clamp-2 text-xs break-words text-muted-foreground italic group-[.is-active]/item:text-primary-foreground/80"
                 title={stripSnippetMarks(convState.search_snippet)}
               >
                 {renderSnippet(convState.search_snippet)}
               </div>
             ) : isDraft ? (
-              <div className="conversation-preview" title={conversation.draft?.trim() || undefined}>
-                {conversation.draft?.trim() || "\u00a0"}
+              <div
+                className="mt-0.5 truncate text-xs text-muted-foreground group-[.is-active]/item:text-primary-foreground/80"
+                title={conversation.draft?.trim() || undefined}
+              >
+                {conversation.draft?.trim() || " "}
               </div>
             ) : (
-              <div className="conversation-preview" title={convState.preview || undefined}>
-                {convState.preview || "\u00a0"}
+              <div
+                className="mt-0.5 truncate text-xs text-muted-foreground group-[.is-active]/item:text-primary-foreground/80"
+                title={convState.preview || undefined}
+              >
+                {convState.preview || " "}
               </div>
             )}
-            <div className="conversation-meta">
-              <span className="conversation-date">{formatDate(conversation.updated_at)}</span>
+            <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground group-[.is-active]/item:text-primary-foreground/80">
+              <span className="shrink-0">{formatDate(conversation.updated_at)}</span>
               {conversation.cwd && groupBy !== "cwd" && (
-                <span className="conversation-cwd" title={conversation.cwd}>
+                <span
+                  className="min-w-0 truncate text-left font-mono text-xs opacity-80"
+                  title={conversation.cwd}
+                >
                   {formatCwdForDisplay(conversation.cwd)}
                 </span>
               )}
               {!isDraft && !itemArchived && hasSubagents && (
                 <button
                   onClick={(e) => toggleSubagents(e, conversation.conversation_id)}
-                  className="subagent-count-badge"
+                  className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded bg-muted px-1 leading-snug text-muted-foreground transition-colors hover:bg-accent hover:text-foreground group-[.is-active]/item:bg-primary-foreground/15 group-[.is-active]/item:text-primary-foreground/80 group-[.is-active]/item:hover:bg-primary-foreground/25 group-[.is-active]/item:hover:text-primary-foreground"
                   title={isExpanded ? t("hideSubagents") : t("showSubagents")}
                   aria-label={isExpanded ? t("collapseSubagents") : t("expandSubagents")}
                 >
-                  <span className="drawer-subagent-count-badge-text">{subagentCount}</span>
+                  <span className="font-medium">{subagentCount}</span>
                   <svg
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
-                    className={`drawer-subagent-chevron ${
-                      isExpanded
-                        ? "drawer-subagent-chevron-expanded"
-                        : "drawer-subagent-chevron-collapsed"
-                    }`}
+                    className={cn(
+                      "size-2.5 transition-transform",
+                      isExpanded ? "rotate-90" : "rotate-0",
+                    )}
                   >
                     <path
                       strokeLinecap="round"
@@ -958,24 +1007,19 @@ function ConversationDrawer({
                 </button>
               )}
               {isDraft && (
-                <div className="conversation-actions drawer-actions-row">
+                <div className="ml-auto flex gap-1">
                   {renderDeleteButton(conversation.conversation_id)}
                 </div>
               )}
               {!isDraft && !itemArchived && (
-                <div className="conversation-actions drawer-actions-row">
+                <div className="ml-auto flex gap-1">
                   <button
                     onClick={(e) => handleStartRename(e, conversation)}
-                    className="btn-icon-sm"
+                    className={ROW_ICON_BTN}
                     title={t("rename")}
                     aria-label={t("rename")}
                   >
-                    <svg
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      className="drawer-icon-size"
-                    >
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className={ROW_ICON}>
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -986,16 +1030,11 @@ function ConversationDrawer({
                   </button>
                   <button
                     onClick={(e) => handleOpenTagEditor(e, conversation.conversation_id)}
-                    className="btn-icon-sm"
+                    className={ROW_ICON_BTN}
                     title={t("editTags")}
                     aria-label={t("editTags")}
                   >
-                    <svg
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      className="drawer-icon-size"
-                    >
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className={ROW_ICON}>
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -1006,16 +1045,11 @@ function ConversationDrawer({
                   </button>
                   <button
                     onClick={(e) => handleArchive(e, conversation.conversation_id)}
-                    className="btn-icon-sm"
+                    className={ROW_ICON_BTN}
                     title={t("archive")}
                     aria-label={t("archive")}
                   >
-                    <svg
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      className="drawer-icon-size"
-                    >
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className={ROW_ICON}>
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -1029,25 +1063,28 @@ function ConversationDrawer({
             </div>
             {convState.git_commit && (
               <div
-                className={`conversation-git drawer-git-info ${
-                  isActive ? "drawer-git-info-active" : ""
-                }`}
+                className={cn(
+                  "flex items-center gap-[0.3em] text-xs text-muted-foreground",
+                  isActive && "text-primary-foreground/70",
+                )}
               >
                 <span
                   onClick={(e) =>
                     handleCopyGitHash(e, convState.git_commit!, conversation.conversation_id)
                   }
                   title={`Click to copy ${convState.git_commit}`}
-                  className={`drawer-git-hash ${
-                    copiedConvId === conversation.conversation_id ? "drawer-git-hash-copied" : ""
-                  }`}
+                  className={cn(
+                    "cursor-pointer font-mono",
+                    copiedConvId === conversation.conversation_id &&
+                      "text-emerald-600 dark:text-emerald-500",
+                  )}
                 >
                   {copiedConvId === conversation.conversation_id
-                    ? "copied!".padEnd(convState.git_commit!.length, "\u00a0")
+                    ? "copied!".padEnd(convState.git_commit!.length, " ")
                     : convState.git_commit}
                 </span>
                 {convState.git_subject && (
-                  <span title={convState.git_subject} className="drawer-git-subject">
+                  <span title={convState.git_subject} className="min-w-0 truncate">
                     {convState.git_subject}
                   </span>
                 )}
@@ -1055,19 +1092,14 @@ function ConversationDrawer({
             )}
           </div>
           {itemArchived && (
-            <div className="conversation-actions drawer-actions-row-offset">
+            <div className="ml-2 flex gap-1">
               <button
                 onClick={(e) => handleUnarchive(e, conversation.conversation_id)}
-                className="btn-icon-sm"
+                className={ROW_ICON_BTN}
                 title={t("restore")}
                 aria-label={t("restore")}
               >
-                <svg
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  className="drawer-icon-size"
-                >
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className={ROW_ICON}>
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -1082,38 +1114,49 @@ function ConversationDrawer({
         </div>
         {/* Render subagents if expanded */}
         {!itemArchived && isExpanded && conversationSubagents.length > 0 && (
-          <div className="subagent-list drawer-subagent-list">
+          <div className="ml-6">
             {conversationSubagents.map((sub) => {
               const isSubActive = sub.conversation_id === currentConversationId;
               return (
                 <div
                   key={sub.conversation_id}
-                  className={`conversation-item subagent-item drawer-subagent-item-style ${isSubActive ? "active" : ""}${seenIds !== null && !seenIds.has(sub.conversation_id) ? " conversation-item-enter" : ""}`}
+                  className={cn(
+                    "conversation-item group/item mb-1 flex w-full cursor-pointer flex-row items-center gap-1 rounded-lg border-l-2 border-border py-3 pr-3 pl-2 text-left text-sm transition-colors",
+                    isSubActive
+                      ? "is-active bg-primary text-primary-foreground"
+                      : "hover:bg-accent hover:text-accent-foreground",
+                    seenIds !== null &&
+                      !seenIds.has(sub.conversation_id) &&
+                      "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1",
+                  )}
                   onClick={(e) => {
                     if (handleModifiedClick(e, sub)) return;
                     onSelectConversation(sub);
                   }}
                   onAuxClick={(e) => handleAuxClick(e, sub)}
                 >
-                  <div className="drawer-conversation-item-flex-container">
-                    <div className="drawer-conversation-header-row">
-                      <div className="drawer-conversation-item-flex-container">
-                        <div className="conversation-title">{renderConversationTitle(sub)}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="conversation-title text-sm font-medium break-all">
+                          {renderConversationTitle(sub)}
+                        </div>
                       </div>
                       {sub.working && (
                         <span
-                          className="working-indicator drawer-subagent-working-indicator"
+                          className="size-[7px] shrink-0 rounded-full border-[1.5px] border-current bg-transparent opacity-75"
                           title={t("subagentIsWorking")}
                         />
                       )}
                     </div>
-                    <div className="conversation-preview" title={sub.preview || undefined}>
-                      {sub.preview || "\u00a0"}
+                    <div
+                      className="mt-0.5 truncate text-xs text-muted-foreground group-[.is-active]/item:text-primary-foreground/80"
+                      title={sub.preview || undefined}
+                    >
+                      {sub.preview || " "}
                     </div>
-                    <div className="conversation-meta">
-                      <span className="conversation-date drawer-subagent-date">
-                        {formatDate(sub.updated_at)}
-                      </span>
+                    <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground group-[.is-active]/item:text-primary-foreground/80">
+                      <span className="shrink-0 text-sm">{formatDate(sub.updated_at)}</span>
                     </div>
                   </div>
                 </div>
@@ -1127,22 +1170,36 @@ function ConversationDrawer({
 
   return (
     <>
-      {/* Drawer */}
-      <div className={`drawer ${isOpen ? "open" : ""} ${isCollapsed ? "collapsed" : ""}`}>
+      {/* Drawer: fixed slide-in overlay on mobile, static persistent panel on
+          desktop (md+). Collapsing only applies on desktop. */}
+      <div
+        className={cn(
+          "drawer fixed inset-y-0 left-0 z-50 flex h-dvh w-80 max-w-[calc(100vw-3rem)] flex-col border-r border-border bg-background text-foreground transition-transform duration-300 ease-in-out",
+          "[padding-top:env(safe-area-inset-top)] [padding-left:env(safe-area-inset-left)] [padding-bottom:env(safe-area-inset-bottom)]",
+          isOpen ? "open translate-x-0" : "-translate-x-full",
+          "md:static md:h-full md:!translate-x-0",
+          isCollapsed && "md:hidden",
+        )}
+      >
         {/* Header */}
-        <div className="drawer-header">
-          <h2 className="drawer-title">{showArchived ? t("archived") : t("conversations")}</h2>
-          <div className="drawer-header-actions">
+        <div className="flex items-center justify-between p-4">
+          <h2 className="text-xl font-semibold">
+            {showArchived ? t("archived") : t("conversations")}
+          </h2>
+          <div className="flex items-center gap-1">
             {/* Group by button */}
             {!showArchived && (
-              <div className="group-by-wrapper" ref={groupMenuRef}>
+              <div className="relative" ref={groupMenuRef}>
                 <button
                   onClick={() => setGroupMenuOpen((v) => !v)}
-                  className={`btn-icon${groupBy !== "none" ? " group-by-active" : ""}`}
+                  className={cn(
+                    "flex items-center justify-center rounded-md p-2 transition-colors hover:bg-accent",
+                    groupBy !== "none" && "text-primary",
+                  )}
                   aria-label={t("groupConversations")}
                   title={t("groupConversations")}
                 >
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="size-5">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -1152,7 +1209,7 @@ function ConversationDrawer({
                   </svg>
                 </button>
                 {groupMenuOpen && (
-                  <div className="group-by-menu">
+                  <div className="absolute top-full right-0 z-50 mt-1 min-w-32 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg">
                     {(["none", "cwd", "git_repo"] as GroupBy[]).map((value) => {
                       const labels: Record<GroupBy, string> = {
                         none: t("noGrouping"),
@@ -1162,7 +1219,10 @@ function ConversationDrawer({
                       return (
                         <button
                           key={value}
-                          className={`group-by-menu-item${groupBy === value ? " active" : ""}`}
+                          className={cn(
+                            "flex w-full items-center gap-1.5 rounded-sm px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-accent",
+                            groupBy === value && "font-semibold text-primary",
+                          )}
                           onClick={() => {
                             handleGroupByChange(value);
                             setGroupMenuOpen(false);
@@ -1172,9 +1232,9 @@ function ConversationDrawer({
                         </button>
                       );
                     })}
-                    <div className="group-by-menu-separator" />
+                    <div className="mx-1 my-1 h-px bg-border" />
                     <button
-                      className="group-by-menu-item"
+                      className="flex w-full items-center gap-1.5 rounded-sm px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-accent"
                       onClick={() => {
                         setResortKey((n) => n + 1);
                         setGroupMenuOpen(false);
@@ -1185,7 +1245,7 @@ function ConversationDrawer({
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
-                        className="group-by-menu-icon"
+                        className="size-3.5 shrink-0"
                         aria-hidden="true"
                       >
                         <path
@@ -1208,10 +1268,10 @@ function ConversationDrawer({
                   if (handleModifiedNavClick(e, "/new")) return;
                   onNewConversation();
                 }}
-                className="btn-icon hide-on-desktop"
+                className="flex items-center justify-center rounded-md p-2 transition-colors hover:bg-accent md:hidden"
                 aria-label={t("newConversation")}
               >
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="size-5">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -1223,10 +1283,10 @@ function ConversationDrawer({
             )}
             <button
               onClick={onClose}
-              className="btn-icon hide-on-desktop"
+              className="flex items-center justify-center rounded-md p-2 transition-colors hover:bg-accent md:hidden"
               aria-label={t("closeConversations")}
             >
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="size-5">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -1238,11 +1298,11 @@ function ConversationDrawer({
             {/* Collapse button - desktop only */}
             <button
               onClick={onToggleCollapse}
-              className="btn-icon show-on-desktop-only"
+              className="hidden items-center justify-center rounded-md p-2 transition-colors hover:bg-accent md:flex"
               aria-label={t("collapseSidebar")}
               title={t("collapseSidebar")}
             >
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="size-5">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -1255,9 +1315,9 @@ function ConversationDrawer({
         </div>
 
         {/* Search bar — FTS over slug + message content, includes archived */}
-        <div className="drawer-search">
+        <div className="relative flex items-center px-4 pb-2">
           <svg
-            className="drawer-search-icon"
+            className="pointer-events-none absolute left-[1.625rem] text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -1273,7 +1333,7 @@ function ConversationDrawer({
           </svg>
           <input
             type="text"
-            className="drawer-search-input"
+            className="flex-1 rounded-md border border-border bg-background py-1.5 pr-7 pl-[2.1rem] text-sm text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring"
             placeholder={t("searchConversations")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -1288,7 +1348,7 @@ function ConversationDrawer({
           {searchQuery && (
             <button
               type="button"
-              className="drawer-search-clear"
+              className="absolute right-[1.4rem] px-1 py-0.5 text-sm leading-none text-muted-foreground hover:text-foreground"
               onClick={() => setSearchQuery("")}
               aria-label={t("clearSearch")}
               title={t("clearSearch")}
@@ -1299,17 +1359,17 @@ function ConversationDrawer({
         </div>
 
         {/* Conversations list */}
-        <div className="drawer-body scrollable">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {isSearching && searching && searchResults === null ? (
-            <div className="text-secondary drawer-empty-state">
+            <div className="p-4 text-center text-muted-foreground">
               <p>{t("searching")}</p>
             </div>
           ) : loadingArchived && showArchived && !isSearching ? (
-            <div className="text-secondary drawer-empty-state">
+            <div className="p-4 text-center text-muted-foreground">
               <p>{t("loading")}</p>
             </div>
           ) : displayedConversations.length === 0 ? (
-            <div className="text-secondary drawer-empty-state">
+            <div className="p-4 text-center text-muted-foreground">
               <p>
                 {isSearching
                   ? t("noSearchResults")
@@ -1318,21 +1378,24 @@ function ConversationDrawer({
                     : t("noConversationsYet")}
               </p>
               {!showArchived && !isSearching && (
-                <p className="text-sm drawer-empty-state-hint">{t("startNewToGetStarted")}</p>
+                <p className="mt-1 text-sm">{t("startNewToGetStarted")}</p>
               )}
             </div>
           ) : groupedConversations ? (
-            <div className="conversation-list">
+            <div className="p-2">
               {groupedConversations.map(([key, group]) => {
                 const isCollapsed = collapsedGroups.has(key);
                 return (
-                  <div key={key} className="conversation-group">
-                    <button className="conversation-group-header" onClick={() => toggleGroup(key)}>
+                  <div key={key} className="conversation-group mb-1 [&+&]:mt-1.5">
+                    <button
+                      className="flex w-full items-center gap-1.5 rounded-md bg-muted px-3 py-1.5 text-left text-xs font-semibold tracking-wide text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      onClick={() => toggleGroup(key)}
+                    >
                       <svg
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
-                        className="conversation-group-chevron"
+                        className="size-3 shrink-0 transition-transform"
                         style={{
                           transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
                         }} // Dynamic: transform depends on isCollapsed state
@@ -1345,12 +1408,14 @@ function ConversationDrawer({
                         />
                       </svg>
                       <span
-                        className="conversation-group-label"
+                        className="conversation-group-label min-w-0 truncate"
                         title={key === "__ungrouped__" ? undefined : key}
                       >
                         {group.label}
                       </span>
-                      <span className="conversation-group-count">{group.conversations.length}</span>
+                      <span className="shrink-0 font-normal text-muted-foreground/70">
+                        {group.conversations.length}
+                      </span>
                     </button>
                     {!isCollapsed && group.conversations.map(renderConversationItem)}
                   </div>
@@ -1358,19 +1423,17 @@ function ConversationDrawer({
               })}
             </div>
           ) : (
-            <div className="conversation-list">
-              {displayedConversations.map(renderConversationItem)}
-            </div>
+            <div className="p-2">{displayedConversations.map(renderConversationItem)}</div>
           )}
         </div>
 
         {/* Footer with archived toggle */}
-        <div className="drawer-footer">
+        <div className="p-4">
           <button
             onClick={() => setShowArchived(!showArchived)}
-            className="btn-secondary drawer-footer-button"
+            className="flex w-full items-center justify-center gap-2 rounded-md border border-border bg-secondary px-4 py-2 font-medium text-secondary-foreground transition-colors hover:bg-accent"
           >
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="drawer-icon-size">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className={ROW_ICON}>
               {showArchived ? (
                 <path
                   strokeLinecap="round"

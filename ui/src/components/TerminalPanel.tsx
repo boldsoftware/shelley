@@ -2,7 +2,19 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  ClipboardCopyIcon,
+  ClipboardListIcon,
+  CornerDownLeftIcon,
+  TextCursorInputIcon,
+  XIcon,
+} from "lucide-react";
 import { isDarkModeActive } from "../services/theme";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import "@xterm/xterm/css/xterm.css";
 
 function base64ToUint8Array(base64String: string): Uint8Array {
@@ -99,136 +111,6 @@ function getTerminalTheme(isDark: boolean): Record<string, string> {
 
 type TermStatus = "connecting" | "running" | "exited" | "error";
 
-// SVG icons
-const CopyIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-  </svg>
-);
-
-const CopyAllIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    <line x1="12" y1="17" x2="18" y2="17" />
-  </svg>
-);
-
-const InsertIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M12 3v12" />
-    <path d="m8 11 4 4 4-4" />
-    <path d="M4 21h16" />
-  </svg>
-);
-
-const InsertAllIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M12 3v12" />
-    <path d="m8 11 4 4 4-4" />
-    <path d="M4 21h16" />
-    <line x1="4" y1="18" x2="20" y2="18" />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-
-const CloseIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
-const ChevronUpIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="18 15 12 9 6 15" />
-  </svg>
-);
-
-const ChevronDownIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
-
 function ActionButton({
   onClick,
   title,
@@ -241,13 +123,20 @@ function ActionButton({
   feedback?: boolean;
 }) {
   return (
-    <button
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
       onClick={onClick}
       title={title}
-      className={`terminal-panel-action-btn${feedback ? " terminal-panel-action-btn-feedback" : ""}`}
+      className={cn(
+        "rounded-md text-muted-foreground",
+        feedback &&
+          "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 hover:text-emerald-600 dark:text-emerald-500",
+      )}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -510,18 +399,31 @@ export default function TerminalPanel({
 
   return (
     <div
-      className={`terminal-panel${minimized ? " terminal-panel-minimized" : ""}`}
+      className={cn(
+        // KEEP "terminal-panel": retained island CSS targets it as an ancestor
+        // for the mobile soft-keyboard fix (.terminal-panel .xterm ...).
+        "terminal-panel flex flex-col overflow-hidden border-t border-border bg-secondary",
+        minimized ? "shrink-0" : "max-h-[800px] min-h-[80px]",
+      )}
       style={minimized ? undefined : { height: `${height}px`, flexShrink: 0 }}
     >
       {/* Resize handle at top — hidden when minimized */}
       {!minimized && (
-        <div className="terminal-panel-resize-handle" onMouseDown={handleResizeMouseDown}>
-          <div className="terminal-panel-resize-grip" />
+        <div
+          className="flex h-1.5 shrink-0 cursor-ns-resize items-center justify-center border-b border-border bg-secondary select-none hover:bg-muted"
+          onMouseDown={handleResizeMouseDown}
+        >
+          <div className="h-[3px] w-10 rounded-full bg-muted-foreground/40" />
         </div>
       )}
 
       {/* Tab bar + actions */}
-      <div className="terminal-panel-header">
+      <div
+        className={cn(
+          "flex h-[34px] shrink-0 items-center gap-2 bg-secondary px-2",
+          !minimized && "border-b border-border",
+        )}
+      >
         {/* Minimize/maximize toggle */}
         <ActionButton
           onClick={toggleMinimized}
@@ -530,14 +432,19 @@ export default function TerminalPanel({
           {minimized ? <ChevronUpIcon /> : <ChevronDownIcon />}
         </ActionButton>
 
-        <div className="terminal-panel-tabs">
+        <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {terminals.map((t) => {
             const info = statusMap.get(t.id);
             const isActive = t.id === activeTabId;
             return (
               <div
                 key={t.id}
-                className={`terminal-panel-tab${isActive ? " terminal-panel-tab-active" : ""}`}
+                className={cn(
+                  "flex cursor-pointer items-center gap-1 rounded-md border border-transparent px-2 py-1 font-mono text-xs whitespace-nowrap text-muted-foreground transition-colors select-none",
+                  isActive
+                    ? "border-border bg-background text-foreground"
+                    : "hover:bg-muted hover:text-foreground",
+                )}
                 onClick={() => {
                   setActiveTabId(t.id);
                   if (minimized) setMinimized(false);
@@ -545,20 +452,26 @@ export default function TerminalPanel({
                 title={t.command}
               >
                 {info?.status === "running" && (
-                  <span className="terminal-panel-tab-indicator terminal-panel-tab-running">●</span>
+                  <span className="text-xs leading-none text-emerald-600 dark:text-emerald-500">
+                    ●
+                  </span>
                 )}
                 {info?.status === "exited" && info.exitCode === 0 && (
-                  <span className="terminal-panel-tab-indicator terminal-panel-tab-success">✓</span>
+                  <span className="text-xs leading-none text-emerald-600 dark:text-emerald-500">
+                    ✓
+                  </span>
                 )}
                 {info?.status === "exited" && info.exitCode !== 0 && (
-                  <span className="terminal-panel-tab-indicator terminal-panel-tab-error">✗</span>
+                  <span className="text-xs leading-none text-destructive">✗</span>
                 )}
                 {info?.status === "error" && (
-                  <span className="terminal-panel-tab-indicator terminal-panel-tab-error">✗</span>
+                  <span className="text-xs leading-none text-destructive">✗</span>
                 )}
-                <span className="terminal-panel-tab-label">{tabLabel(t.command)}</span>
+                <span className="max-w-[120px] overflow-hidden text-ellipsis">
+                  {tabLabel(t.command)}
+                </span>
                 <button
-                  className="terminal-panel-tab-close"
+                  className="flex size-4 items-center justify-center rounded-sm p-0 text-sm leading-none text-muted-foreground hover:bg-muted hover:text-destructive"
                   onClick={(e) => {
                     e.stopPropagation();
                     onClose(t.id);
@@ -574,20 +487,20 @@ export default function TerminalPanel({
 
         {/* Action buttons — hidden when minimized */}
         {!minimized && (
-          <div className="terminal-panel-actions">
+          <div className="flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-background p-0.5">
             <ActionButton
               onClick={copyScreen}
               title="Copy visible screen"
               feedback={copyFeedback === "copyScreen"}
             >
-              {copyFeedback === "copyScreen" ? <CheckIcon /> : <CopyIcon />}
+              {copyFeedback === "copyScreen" ? <CheckIcon /> : <ClipboardCopyIcon />}
             </ActionButton>
             <ActionButton
               onClick={copyAll}
               title="Copy all output"
               feedback={copyFeedback === "copyAll"}
             >
-              {copyFeedback === "copyAll" ? <CheckIcon /> : <CopyAllIcon />}
+              {copyFeedback === "copyAll" ? <CheckIcon /> : <ClipboardListIcon />}
             </ActionButton>
             {onInsertIntoInput && (
               <>
@@ -596,27 +509,30 @@ export default function TerminalPanel({
                   title="Insert visible screen into input"
                   feedback={copyFeedback === "insertScreen"}
                 >
-                  {copyFeedback === "insertScreen" ? <CheckIcon /> : <InsertIcon />}
+                  {copyFeedback === "insertScreen" ? <CheckIcon /> : <TextCursorInputIcon />}
                 </ActionButton>
                 <ActionButton
                   onClick={insertAll}
                   title="Insert all output into input"
                   feedback={copyFeedback === "insertAll"}
                 >
-                  {copyFeedback === "insertAll" ? <CheckIcon /> : <InsertAllIcon />}
+                  {copyFeedback === "insertAll" ? <CheckIcon /> : <CornerDownLeftIcon />}
                 </ActionButton>
               </>
             )}
-            <div className="terminal-panel-actions-divider" />
+            <div className="mx-0.5 h-4 w-px bg-border" />
             <ActionButton onClick={handleCloseActive} title="Close active terminal">
-              <CloseIcon />
+              <XIcon />
             </ActionButton>
           </div>
         )}
       </div>
 
       {/* Terminal content area — hidden (not unmounted) when minimized */}
-      <div className="terminal-panel-content" style={minimized ? { display: "none" } : undefined}>
+      <div
+        className="relative min-h-0 flex-1 overflow-hidden"
+        style={minimized ? { display: "none" } : undefined}
+      >
         {terminals.map((t) => (
           <TerminalInstanceWithRegistry
             key={t.id}
@@ -817,6 +733,7 @@ function TerminalInstanceWithRegistry({
     <div
       ref={containerRef}
       data-terminal-id={term.id}
+      className="absolute inset-1"
       style={{
         width: "100%",
         height: "100%",

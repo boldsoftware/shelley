@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDownIcon, ChevronRightIcon, FileIcon } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 // One row to render. `treePath` controls placement in the tree; we
 // hand back `realPath` to the parent on selection so synthetic rows
@@ -137,37 +140,32 @@ const STATUS_LABEL = {
   deleted: "Deleted",
 } as const;
 
-const CHEVRON_OPEN = (
-  <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
-    <path fill="currentColor" d="M3 5l5 5 5-5H3z" />
-  </svg>
-);
-const CHEVRON_CLOSED = (
-  <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
-    <path fill="currentColor" d="M5 3l5 5-5 5V3z" />
-  </svg>
-);
-const FILE_ICON = (
-  <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
-    <path
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      d="M3.5 1.5h6l3 3v10h-9v-13z M9.5 1.5v3h3"
-    />
-  </svg>
-);
+const CHEVRON_OPEN = <ChevronDownIcon className="size-3" aria-hidden="true" />;
+const CHEVRON_CLOSED = <ChevronRightIcon className="size-3" aria-hidden="true" />;
+const FILE_ICON = <FileIcon className="size-3" aria-hidden="true" />;
 
 function statusLetter(
   s: DiffFileTreeEntry["status"],
 ): { letter: string; cls: string; label: string } | null {
   switch (s) {
     case "added":
-      return { letter: "A", cls: "diff-tree-status-added", label: STATUS_LABEL.added };
+      return {
+        letter: "A",
+        cls: "text-emerald-600 dark:text-emerald-500",
+        label: STATUS_LABEL.added,
+      };
     case "deleted":
-      return { letter: "D", cls: "diff-tree-status-deleted", label: STATUS_LABEL.deleted };
+      return {
+        letter: "D",
+        cls: "text-destructive",
+        label: STATUS_LABEL.deleted,
+      };
     case "modified":
-      return { letter: "M", cls: "diff-tree-status-modified", label: STATUS_LABEL.modified };
+      return {
+        letter: "M",
+        cls: "text-muted-foreground",
+        label: STATUS_LABEL.modified,
+      };
     default:
       return null;
   }
@@ -208,7 +206,13 @@ function Row({
     <button
       type="button"
       ref={rowRef}
-      className={`diff-tree-row${isSelected ? " active" : ""}`}
+      className={cn(
+        "flex w-full min-w-0 items-center gap-1.5 rounded-md py-1 pr-2 text-left text-[13px] outline-none transition-colors",
+        "focus-visible:ring-2 focus-visible:ring-ring/40",
+        isSelected
+          ? "bg-accent font-medium text-accent-foreground"
+          : "text-foreground hover:bg-muted/60",
+      )}
       style={{ paddingLeft: `calc(0.375rem + ${depth} * 0.85rem)` }}
       onClick={onClick}
       title={title}
@@ -216,15 +220,36 @@ function Row({
       aria-selected={ariaSelected}
       aria-expanded={ariaExpanded}
     >
-      <span className="diff-tree-icon">{icon}</span>
-      <span className="diff-tree-label">{label}</span>
+      <span
+        className={cn(
+          "inline-flex size-3.5 shrink-0 items-center justify-center",
+          !isSelected && "text-muted-foreground",
+        )}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
       {decoration && (
-        <span className="diff-tree-decoration" title={decorationTitle}>
+        <span
+          className={cn(
+            "shrink-0 rounded px-1 py-px font-mono text-[10px]",
+            isSelected
+              ? "bg-accent-foreground/15 text-accent-foreground"
+              : "bg-muted text-muted-foreground",
+          )}
+          title={decorationTitle}
+        >
           {decoration}
         </span>
       )}
       {statusInfo && (
-        <span className={`diff-tree-status ${statusInfo.cls}`} aria-label={statusInfo.label}>
+        <span
+          className={cn(
+            "w-3 shrink-0 text-center font-mono text-[11px] font-semibold",
+            isSelected ? "text-accent-foreground" : statusInfo.cls,
+          )}
+          aria-label={statusInfo.label}
+        >
           {statusInfo.letter}
         </span>
       )}
@@ -427,18 +452,21 @@ function DiffFileTree({ entries, selectedRealPath, onSelect }: DiffFileTreeProps
   }, [selectedRealPath]);
 
   return (
-    <div className="diff-tree">
-      <div className="diff-tree-search">
-        <input
+    <div className="flex min-h-0 flex-1 flex-col gap-1">
+      <div className="shrink-0 px-1">
+        <Input
           type="text"
-          className="diff-tree-search-input"
           placeholder="Search…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           aria-label="Filter files"
         />
       </div>
-      <div className="diff-tree-scroll" role="tree" aria-label="Files">
+      <div
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-1 pb-1"
+        role="tree"
+        aria-label="Files"
+      >
         <DirRows
           dir={tree}
           depth={0}

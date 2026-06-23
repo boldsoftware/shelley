@@ -71,6 +71,7 @@ async function build() {
       format: 'iife',
       minify: isProd,
       sourcemap: !dropSourceMaps,
+      alias: { '@': path.resolve(process.cwd(), 'src') },
     });
 
     // Build Monaco editor as a separate chunk (JS + CSS).
@@ -101,6 +102,7 @@ async function build() {
       minify: isProd,
       sourcemap: !dropSourceMaps,
       metafile: true,
+      alias: { '@': path.resolve(process.cwd(), 'src') },
       external: ['monaco-editor', '/monaco-editor.js'],
       // Prefer ESM entry points so dynamic imports (e.g. monaco-vim) end
       // up using `import` rather than CJS `require` (which esbuild can't
@@ -141,9 +143,32 @@ async function build() {
       },
     });
 
+    // Compile Tailwind v4 (shadcn theme) via the standalone CLI into
+    // dist/tailwind.css. Run as its own step (not through esbuild) so it stays
+    // off the main.css graph that already absorbs xterm/excalidraw CSS. The CLI
+    // resolves the @import "tailwindcss" / "shadcn/tailwind.css" / "@fontsource-*"
+    // specifiers from node_modules.
+    log('Compiling Tailwind CSS...');
+    execSync(
+      `node_modules/.bin/tailwindcss -i src/tailwind.css -o dist/tailwind.css${isProd ? ' --minify' : ''}`,
+      { stdio: verbose ? 'inherit' : 'pipe' },
+    );
+
+    // The compiled CSS references the IBM Plex Sans variable font as
+    // url(./files/<subset>-wght-normal.woff2) — relative to /tailwind.css, i.e.
+    // /files/... at runtime. Copy those woff2 files into dist/files/ so the
+    // self-contained binary serves them. woff2 is already compressed (not gzipped).
+    const fontSrcDir = 'node_modules/@fontsource-variable/ibm-plex-sans/files';
+    const fontDstDir = 'dist/files';
+    fs.mkdirSync(fontDstDir, { recursive: true });
+    for (const file of fs.readdirSync(fontSrcDir)) {
+      if (file.endsWith('-wght-normal.woff2')) {
+        fs.copyFileSync(`${fontSrcDir}/${file}`, `${fontDstDir}/${file}`);
+      }
+    }
+
     // Copy static files
     fs.copyFileSync('src/index.html', 'dist/index.html');
-    fs.copyFileSync('src/styles.css', 'dist/styles.css');
 
     // Copy assets (icons, manifest, etc.)
     const assetsDir = 'src/assets';
@@ -190,7 +215,7 @@ async function build() {
     log('\nGenerating gzip compressed files...');
     const filesToCompress = [
       'monaco-editor.js', 'editor.worker.js', 'diffs-worker.js', 'main.js',
-      'monaco-editor.css', 'styles.css', 'main.css',
+      'monaco-editor.css', 'main.css', 'tailwind.css',
       'static/excalidraw/skill.js',
     ];
     const checksums = {};

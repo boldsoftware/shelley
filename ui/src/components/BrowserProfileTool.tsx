@@ -1,6 +1,8 @@
 import React, { useState } from "react";
+import { CopyIcon, FlameIcon } from "lucide-react";
 import { LLMContent } from "../types";
-import { useToolExpandedState } from "./ToolDetailContext";
+import { ToolCard, ToolSection, ToolCode, ToolStatusMark } from "./ToolCard";
+import { Button } from "@/components/ui/button";
 
 interface BrowserProfileToolProps {
   toolInput?: unknown;
@@ -17,7 +19,6 @@ function BrowserProfileTool({
   hasError,
   executionTime,
 }: BrowserProfileToolProps) {
-  const [isExpanded, setIsExpanded] = useToolExpandedState();
   const [copied, setCopied] = useState(false);
 
   const input =
@@ -49,87 +50,70 @@ function BrowserProfileTool({
   };
 
   return (
-    <div className="tool" data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}>
-      <div className="tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="tool-summary">
-          <span className={`tool-emoji ${isRunning ? "running" : ""}`}>📊</span>
-          <span className="tool-command">{summary}</span>
-          {isComplete && hasError && <span className="tool-error">✗</span>}
-          {isComplete && !hasError && <span className="tool-success">✓</span>}
-        </div>
-        <button
-          className="tool-toggle"
-          aria-label={isExpanded ? "Collapse" : "Expand"}
-          aria-expanded={isExpanded}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
+    <ToolCard
+      emoji="📊"
+      running={isRunning}
+      complete={isComplete}
+      title={summary}
+      status={isComplete ? <ToolStatusMark error={hasError} /> : null}
+    >
+      <ToolSection label="Action:">
+        <ToolCode>{action || "(none)"}</ToolCode>
+      </ToolSection>
 
-      {isExpanded && (
-        <div className="tool-details">
-          <div className="tool-section">
-            <div className="tool-label">Action:</div>
-            <pre className="tool-code">{action || "(none)"}</pre>
-          </div>
-
-          {input.categories && (
-            <div className="tool-section">
-              <div className="tool-label">Categories:</div>
-              <pre className="tool-code">{input.categories}</pre>
-            </div>
-          )}
-
-          {isComplete && output && (
-            <div className="tool-section">
-              <div className="tool-label">
-                Output{hasError ? " (Error)" : ""}:
-                {executionTime && <span className="tool-time">{executionTime}</span>}
-              </div>
-              <pre className={`tool-code ${hasError ? "error" : ""}`}>{output}</pre>
-            </div>
-          )}
-
-          {isComplete && savedFilePath && !hasError && (
-            <div className="tool-section">
-              <div className="tool-label">Profile/Trace file:</div>
-              <div className="profile-file-wrapper">
-                <code className="profile-file-path">{savedFilePath}</code>
-                <button onClick={handleCopyPath} className="profile-copy-button">
-                  {copied ? "✓ Copied" : "📋 Copy path"}
-                </button>
-                {(action === "cpu_stop" || action === "trace_stop") && (
-                  <a
-                    href={`https://www.speedscope.app/#profileURL=${encodeURIComponent(window.location.origin + "/api/read?path=" + encodeURIComponent(savedFilePath))}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="profile-speedscope-link"
-                  >
-                    🔥 Open in Speedscope
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+      {input.categories && (
+        <ToolSection label="Categories:">
+          <ToolCode>{input.categories}</ToolCode>
+        </ToolSection>
       )}
-    </div>
+
+      {isComplete && output && (
+        <ToolSection
+          label={
+            <span className="flex items-center gap-2">
+              <span>Output{hasError ? " (Error)" : ""}:</span>
+              {executionTime && (
+                <span className="text-muted-foreground">{executionTime}</span>
+              )}
+            </span>
+          }
+        >
+          <ToolCode error={hasError}>{output}</ToolCode>
+        </ToolSection>
+      )}
+
+      {isComplete && savedFilePath && !hasError && (
+        <ToolSection label="Profile/Trace file:">
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1 font-mono text-xs">
+              {savedFilePath}
+            </code>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleCopyPath}
+            >
+              <CopyIcon />
+              {copied ? "Copied" : "Copy path"}
+            </Button>
+            {(action === "cpu_stop" || action === "trace_stop") && (
+              <Button asChild variant="outline" size="sm">
+                <a
+                  href={`https://www.speedscope.app/#profileURL=${encodeURIComponent(window.location.origin + "/api/read?path=" + encodeURIComponent(savedFilePath))}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <FlameIcon />
+                  Open in Speedscope
+                </a>
+              </Button>
+            )}
+          </div>
+        </ToolSection>
+      )}
+    </ToolCard>
   );
 }
 

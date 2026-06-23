@@ -1,6 +1,6 @@
 import React from "react";
 import { LLMContent } from "../types";
-import { useToolExpandedState } from "./ToolDetailContext";
+import { ToolCard, ToolSection, ToolCode, ToolStatusMark } from "./ToolCard";
 
 interface BrowserNetworkToolProps {
   toolInput?: unknown;
@@ -17,8 +17,6 @@ function BrowserNetworkTool({
   hasError,
   executionTime,
 }: BrowserNetworkToolProps) {
-  const [isExpanded, setIsExpanded] = useToolExpandedState();
-
   const input =
     typeof toolInput === "object" && toolInput !== null
       ? (toolInput as { action?: string; filter?: string; limit?: number })
@@ -36,71 +34,44 @@ function BrowserNetworkTool({
   const summary = summaryParts.filter(Boolean).join(" ") || "network";
 
   return (
-    <div className="tool" data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}>
-      <div className="tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="tool-summary">
-          <span className={`tool-emoji ${isRunning ? "running" : ""}`}>📡</span>
-          <span className="tool-command">{summary}</span>
-          {isComplete && hasError && <span className="tool-error">✗</span>}
-          {isComplete && !hasError && <span className="tool-success">✓</span>}
-        </div>
-        <button
-          className="tool-toggle"
-          aria-label={isExpanded ? "Collapse" : "Expand"}
-          aria-expanded={isExpanded}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
+    <ToolCard
+      emoji="📡"
+      running={isRunning}
+      complete={isComplete}
+      title={summary}
+      status={isComplete ? <ToolStatusMark error={hasError} /> : null}
+    >
+      <ToolSection label="Action:">
+        <ToolCode>{action || "(none)"}</ToolCode>
+      </ToolSection>
 
-      {isExpanded && (
-        <div className="tool-details">
-          <div className="tool-section">
-            <div className="tool-label">Action:</div>
-            <pre className="tool-code">{action || "(none)"}</pre>
-          </div>
-
-          {input.filter && (
-            <div className="tool-section">
-              <div className="tool-label">Filter:</div>
-              <pre className="tool-code">{input.filter}</pre>
-            </div>
-          )}
-
-          {input.limit !== undefined && (
-            <div className="tool-section">
-              <div className="tool-label">Limit:</div>
-              <pre className="tool-code">{input.limit}</pre>
-            </div>
-          )}
-
-          {isComplete && output && (
-            <div className="tool-section">
-              <div className="tool-label">
-                Output{hasError ? " (Error)" : ""}:
-                {executionTime && <span className="tool-time">{executionTime}</span>}
-              </div>
-              <pre className={`tool-code ${hasError ? "error" : ""}`}>{output}</pre>
-            </div>
-          )}
-        </div>
+      {input.filter && (
+        <ToolSection label="Filter:">
+          <ToolCode>{input.filter}</ToolCode>
+        </ToolSection>
       )}
-    </div>
+
+      {input.limit !== undefined && (
+        <ToolSection label="Limit:">
+          <ToolCode>{input.limit}</ToolCode>
+        </ToolSection>
+      )}
+
+      {isComplete && output && (
+        <ToolSection
+          label={
+            <span className="flex items-center gap-2">
+              <span>Output{hasError ? " (Error)" : ""}:</span>
+              {executionTime && (
+                <span className="text-muted-foreground">{executionTime}</span>
+              )}
+            </span>
+          }
+        >
+          <ToolCode error={hasError}>{output}</ToolCode>
+        </ToolSection>
+      )}
+    </ToolCard>
   );
 }
 

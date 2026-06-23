@@ -1,0 +1,396 @@
+/* shadcn/ui theme — preset "beqHF3xK" (style: radix-rhea, base: zinc).
+ * Compiled by @tailwindcss/cli (see scripts/build.js) into dist/tailwind.css.
+ * source("..") pins automatic content detection to the ui/ directory so the
+ * compiler scans ui/src instead of walking the whole Go repo at the git root. */
+@import "tailwindcss" source("..");
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/ibm-plex-sans";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'IBM Plex Sans Variable', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.141 0.005 285.823);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.141 0.005 285.823);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.141 0.005 285.823);
+    --primary: oklch(0.852 0.199 91.936);
+    --primary-foreground: oklch(0.421 0.095 57.708);
+    --secondary: oklch(0.967 0.001 286.375);
+    --secondary-foreground: oklch(0.21 0.006 285.885);
+    --muted: oklch(0.967 0.001 286.375);
+    --muted-foreground: oklch(0.552 0.016 285.938);
+    --accent: oklch(0.967 0.001 286.375);
+    --accent-foreground: oklch(0.21 0.006 285.885);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.92 0.004 286.32);
+    --input: oklch(0.92 0.004 286.32);
+    --ring: oklch(0.705 0.015 286.067);
+    --chart-1: oklch(0.871 0.006 286.286);
+    --chart-2: oklch(0.552 0.016 285.938);
+    --chart-3: oklch(0.442 0.017 285.786);
+    --chart-4: oklch(0.37 0.013 285.805);
+    --chart-5: oklch(0.274 0.006 286.033);
+    --radius: 0.45rem;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.141 0.005 285.823);
+    --sidebar-primary: oklch(0.681 0.162 75.834);
+    --sidebar-primary-foreground: oklch(0.987 0.026 102.212);
+    --sidebar-accent: oklch(0.967 0.001 286.375);
+    --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
+    --sidebar-border: oklch(0.92 0.004 286.32);
+    --sidebar-ring: oklch(0.705 0.015 286.067);
+}
+
+.dark {
+    --background: oklch(0.141 0.005 285.823);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.21 0.006 285.885);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.21 0.006 285.885);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.795 0.184 86.047);
+    --primary-foreground: oklch(0.421 0.095 57.708);
+    --secondary: oklch(0.274 0.006 286.033);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.274 0.006 286.033);
+    --muted-foreground: oklch(0.705 0.015 286.067);
+    --accent: oklch(0.274 0.006 286.033);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.552 0.016 285.938);
+    --chart-1: oklch(0.871 0.006 286.286);
+    --chart-2: oklch(0.552 0.016 285.938);
+    --chart-3: oklch(0.442 0.017 285.786);
+    --chart-4: oklch(0.37 0.013 285.805);
+    --chart-5: oklch(0.274 0.006 286.033);
+    --sidebar: oklch(0.21 0.006 285.885);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.795 0.184 86.047);
+    --sidebar-primary-foreground: oklch(0.987 0.026 102.212);
+    --sidebar-accent: oklch(0.274 0.006 286.033);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.552 0.016 285.938);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+  html {
+    @apply font-sans;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Third-party "island" CSS: raw rules for content that cannot be expressed as
+ * Tailwind utilities on JSX — markdown HTML generated by marked (.markdown-content)
+ * and Monaco editor internals decorated via its API (.diff-viewer-editor
+ * .monaco-editor ...). Carried over from the retired styles.css and remapped to
+ * the new shadcn theme tokens. xterm ships its own CSS (bundled into main.css);
+ * Excalidraw is fully self-contained in its sandboxed iframe.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+/* Markdown prose (rendered HTML from MarkdownContent / ExportPage preview). */
+.markdown-content {
+  line-height: 1.6;
+}
+.markdown-content p {
+  margin: 0.5em 0;
+}
+.markdown-content p:first-child {
+  margin-top: 0;
+}
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  margin: 1em 0 0.5em;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.markdown-content h1:first-child,
+.markdown-content h2:first-child,
+.markdown-content h3:first-child {
+  margin-top: 0;
+}
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  font-size: 1.25rem;
+}
+.markdown-content code {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  background: var(--muted);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+}
+.markdown-content pre {
+  margin: 0.75em 0;
+  padding: 0.75em 1em;
+  background: var(--muted);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.markdown-content pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.875rem;
+}
+.inline-code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--muted);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+}
+.inline-code-block {
+  margin: 0.5em 0;
+  padding: 0.75em 1em;
+  background: var(--muted);
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre;
+}
+.inline-code-block code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: none;
+  padding: 0;
+}
+.markdown-content blockquote {
+  margin: 0.75em 0;
+  padding: 0.25em 1em;
+  border-left: 3px solid var(--border);
+  color: var(--muted-foreground);
+}
+.markdown-content ul,
+.markdown-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.markdown-content ul {
+  list-style: disc;
+}
+.markdown-content ol {
+  list-style: decimal;
+}
+.markdown-content li {
+  margin: 0.25em 0;
+}
+.markdown-content hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+.markdown-content table {
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  word-break: normal;
+  display: block;
+  overflow-x: auto;
+}
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--border);
+  padding: 0.4em 0.75em;
+  text-align: left;
+}
+.markdown-content th {
+  background: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.markdown-content a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.markdown-content a:hover {
+  text-decoration: none;
+}
+.markdown-content del {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
+}
+
+/* Monaco diff-editor decorations (applied to Monaco's own DOM via its
+ * decoration API). The .diff-viewer-editor wrapper + these decoration class
+ * names are kept on the DiffViewer side as island hooks. */
+.diff-viewer-editor {
+  height: 100%;
+  width: 100%;
+}
+.diff-viewer-editor .monaco-editor .diff-viewer-line-hover {
+  background-color: rgba(37, 99, 235, 0.08) !important;
+}
+.dark .diff-viewer-editor .monaco-editor .diff-viewer-line-hover {
+  background-color: rgba(96, 165, 250, 0.12) !important;
+}
+.diff-viewer-editor .monaco-editor .diff-viewer-comment-glyph {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'%3E%3C/path%3E%3Cline x1='9' y1='10' x2='15' y2='10'%3E%3C/line%3E%3C/svg%3E");
+  background-size: 14px 14px;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.diff-viewer-editor .monaco-editor .diff-viewer-comment-glyph:hover {
+  opacity: 1;
+}
+.dark .diff-viewer-editor .monaco-editor .diff-viewer-comment-glyph {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'%3E%3C/path%3E%3Cline x1='9' y1='10' x2='15' y2='10'%3E%3C/line%3E%3C/svg%3E");
+}
+.diff-viewer-editor .monaco-editor .view-lines {
+  cursor: pointer;
+}
+
+@media (max-width: 767px) {
+  .diff-viewer-editor .monaco-editor .margin {
+    width: 8px !important;
+  }
+  .diff-viewer-editor .monaco-editor .margin-view-overlays {
+    width: 8px !important;
+  }
+  .diff-viewer-editor .monaco-editor .editor-scrollable {
+    left: 8px !important;
+  }
+  .diff-viewer-editor .monaco-editor .lines-content {
+    margin-left: 0 !important;
+  }
+  .diff-viewer-editor .monaco-diff-editor .line-delete,
+  .diff-viewer-editor .monaco-diff-editor .line-insert,
+  .diff-viewer-editor .monaco-diff-editor .char-delete,
+  .diff-viewer-editor .monaco-diff-editor .char-insert {
+    border-left-width: 2px !important;
+  }
+  .diff-viewer-editor .monaco-diff-editor {
+    width: 100% !important;
+  }
+  .diff-viewer-editor .monaco-diff-editor .editor.modified {
+    width: 100% !important;
+    left: 0 !important;
+  }
+}
+
+/* Monaco vim status bar (mounted by useMonacoVim into the editor wrapper;
+ * .monaco-vim-status is kept as an island hook by DiffViewer/EditableFileModal). */
+.monaco-vim-status {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--secondary);
+  color: var(--foreground);
+  border-top: 1px solid var(--border);
+  min-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.monaco-vim-status input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: inherit;
+  font: inherit;
+  width: 100%;
+}
+
+/* xterm soft-keyboard fix on touch devices. TerminalPanel keeps .terminal-panel
+ * as the ancestor hook; .xterm/.xterm-helpers is xterm-internal DOM. */
+@media (pointer: coarse) {
+  .terminal-panel .xterm .xterm-helpers {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none !important;
+  }
+  .terminal-panel .xterm .xterm-helper-textarea {
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    font-size: 16px !important;
+  }
+}
+
+/* Message navigation flash — .message-highlight is toggled via classList by
+ * ChatInterface / ConversationTOC when jumping to a message. */
+@keyframes message-nav-highlight {
+  0% {
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 40%, transparent);
+    background-color: color-mix(in oklch, var(--primary) 12%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+    background-color: transparent;
+  }
+}
+.message-highlight {
+  animation: message-nav-highlight 1.5s ease-out;
+  border-radius: 8px;
+}

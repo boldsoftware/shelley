@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { PlusIcon, Trash2Icon } from "lucide-react";
 import Modal from "./Modal";
 import { useI18n } from "../i18n";
 import ConfigFieldInput from "./ConfigFieldInput";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
   api,
   notificationChannelsApi,
@@ -35,6 +41,12 @@ const emptyForm: FormData = {
   display_name: "",
   config: {},
 };
+
+const sectionLabelClass =
+  "mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase";
+
+const cardClass =
+  "mb-2 flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-card-foreground";
 
 function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
   const { t } = useI18n();
@@ -233,33 +245,39 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
         isOpen={isOpen}
         onClose={onClose}
         title={editingChannelId ? t("editChannel") : t("addChannel")}
-        className="modal-wide"
+        className="sm:max-w-2xl"
       >
-        {error && <div className="test-result error notifications-error-message">{error}</div>}
+        {error && (
+          <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
 
         {!editingChannelId && channelTypes.length > 1 && (
-          <div className="form-group">
-            <label>{t("channelType")}</label>
-            <div className="notifications-type-selector">
+          <div className="mb-3 flex flex-col gap-1.5">
+            <Label>{t("channelType")}</Label>
+            <div className="flex flex-wrap gap-2">
               {channelTypes.map((ct) => (
-                <button
+                <Button
                   key={ct.type}
-                  className={`provider-btn${form.channel_type === ct.type ? " selected" : ""}`}
+                  type="button"
+                  size="sm"
+                  variant={form.channel_type === ct.type ? "default" : "outline"}
                   onClick={() =>
                     setForm({ ...form, channel_type: ct.type, config: defaultConfigFor(ct.type) })
                   }
                 >
                   {ct.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
         )}
 
-        <div className="form-group">
-          <label>{t("displayName")}</label>
-          <input
-            className="form-input"
+        <div className="mb-3 flex flex-col gap-1.5">
+          <Label htmlFor="notifications-display-name">{t("displayName")}</Label>
+          <Input
+            id="notifications-display-name"
             value={form.display_name}
             onChange={(e) => setForm({ ...form, display_name: e.target.value })}
             placeholder={getTypeLabel(form.channel_type)}
@@ -276,27 +294,34 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
         ))}
 
         {testResult && (
-          <div className={`test-result ${testResult.success ? "success" : "error"}`}>
+          <div
+            className={cn(
+              "mt-3 rounded-md border px-3 py-2 text-sm",
+              testResult.success
+                ? "border-emerald-600/30 bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"
+                : "border-destructive/30 bg-destructive/10 text-destructive"
+            )}
+          >
             {testResult.message}
           </div>
         )}
 
-        <div className="form-actions">
-          <button className="btn btn-secondary" onClick={handleCancel}>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="outline" onClick={handleCancel}>
             {t("cancel")}
-          </button>
+          </Button>
           {editingChannelId && (
-            <button
-              className="btn btn-secondary"
+            <Button
+              variant="outline"
               onClick={() => handleTest(editingChannelId)}
               disabled={testing}
             >
               {testing ? t("testingButton") : t("testButton")}
-            </button>
+            </Button>
           )}
-          <button className="btn btn-primary" onClick={handleSave} disabled={!canSave}>
+          <Button onClick={handleSave} disabled={!canSave}>
             {editingChannelId ? t("save") : t("addChannel")}
-          </button>
+          </Button>
         </div>
       </Modal>
     );
@@ -308,27 +333,32 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
       isOpen={isOpen}
       onClose={onClose}
       title={t("notifications")}
-      className="modal-wide"
+      className="sm:max-w-2xl"
       titleRight={
         channelTypes.length > 0 ? (
-          <button className="btn btn-primary btn-sm" onClick={handleAdd}>
-            + {t("addChannel")}
-          </button>
+          <Button size="sm" onClick={handleAdd}>
+            <PlusIcon />
+            {t("addChannel")}
+          </Button>
         ) : undefined
       }
     >
-      {error && <div className="test-result error notifications-error-message">{error}</div>}
+      {error && (
+        <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
       {/* Local channels section */}
-      <div className="notifications-section">
-        <div className="overflow-menu-label notifications-section-label">Local</div>
+      <div className="mb-5">
+        <div className={sectionLabelClass}>Local</div>
 
         {/* Browser notifications */}
         {typeof Notification !== "undefined" && (
-          <div className="model-card notifications-card">
-            <div>
-              <div className="notifications-card-title">{t("browserNotifications")}</div>
-              <div className="notifications-card-description">
+          <div className={cardClass}>
+            <div className="min-w-0">
+              <div className="text-sm font-medium">{t("browserNotifications")}</div>
+              <div className="text-xs text-muted-foreground">
                 {browserPermission === "denied"
                   ? t("blockedByBrowser")
                   : browserPermission === "granted"
@@ -336,10 +366,11 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
                     : t("requiresBrowserPermission")}
               </div>
             </div>
-            <div className="notifications-card-actions">
+            <div className="flex shrink-0 items-center gap-2">
               {browserPermission === "default" && !browserEnabled && (
-                <button
-                  className="btn btn-secondary btn-sm"
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={async () => {
                     const granted = await requestBrowserNotificationPermission();
                     setBrowserPermission(getBrowserNotificationState());
@@ -347,11 +378,12 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
                   }}
                 >
                   Enable
-                </button>
+                </Button>
               )}
               {browserPermission === "granted" && (
-                <button
-                  className={`btn btn-sm ${browserEnabled ? "btn-primary" : "btn-secondary"}`}
+                <Button
+                  size="sm"
+                  variant={browserEnabled ? "default" : "outline"}
                   onClick={() => {
                     const newVal = !browserEnabled;
                     setChannelEnabled("browser", newVal);
@@ -359,10 +391,10 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
                   }}
                 >
                   {browserEnabled ? t("on") : t("off")}
-                </button>
+                </Button>
               )}
               {browserPermission === "denied" && (
-                <span className="notifications-denied-text">{t("denied")}</span>
+                <span className="text-xs text-muted-foreground">{t("denied")}</span>
               )}
             </div>
           </div>
@@ -370,32 +402,34 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
 
         {/* exe.dev push notifications (auto-configured) */}
         {exeNotifyAvailable && (
-          <div className="model-card notifications-card">
-            <div>
-              <div className="notifications-card-title">{t("exeDevPushNotifications")}</div>
-              <div className="notifications-card-description">
+          <div className={cardClass}>
+            <div className="min-w-0">
+              <div className="text-sm font-medium">{t("exeDevPushNotifications")}</div>
+              <div className="text-xs text-muted-foreground">
                 {t("exeDevPushNotificationsDescription")}
               </div>
             </div>
-            <button
-              className={`btn btn-sm ${exeNotifyEnabled ? "btn-primary" : "btn-secondary"}`}
+            <Button
+              size="sm"
+              variant={exeNotifyEnabled ? "default" : "outline"}
               onClick={handleToggleExeNotify}
             >
               {exeNotifyEnabled ? t("on") : t("off")}
-            </button>
+            </Button>
           </div>
         )}
 
         {/* Favicon */}
-        <div className="model-card notifications-card">
-          <div>
-            <div className="notifications-card-title">{t("faviconBadge")}</div>
-            <div className="notifications-card-description">
+        <div className={cardClass}>
+          <div className="min-w-0">
+            <div className="text-sm font-medium">{t("faviconBadge")}</div>
+            <div className="text-xs text-muted-foreground">
               Tab icon changes when agent finishes
             </div>
           </div>
-          <button
-            className={`btn btn-sm ${faviconEnabled ? "btn-primary" : "btn-secondary"}`}
+          <Button
+            size="sm"
+            variant={faviconEnabled ? "default" : "outline"}
             onClick={() => {
               const newVal = !faviconEnabled;
               setChannelEnabled("favicon", newVal);
@@ -403,63 +437,57 @@ function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
             }}
           >
             {faviconEnabled ? t("on") : t("off")}
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Backend channels section */}
       <div>
-        <div className="overflow-menu-label notifications-section-label">Server</div>
+        <div className={sectionLabelClass}>Server</div>
 
-        {loading && <div className="notifications-loading">Loading...</div>}
+        {loading && <div className="py-4 text-sm text-muted-foreground">Loading...</div>}
 
         {!loading && channels.length === 0 && (
-          <div className="notifications-empty-state">
+          <div className="py-4 text-sm text-muted-foreground">
             {t("noServerChannelsConfigured")}
             {channelTypes.length > 0 && (
               <>
                 {" "}
-                <button className="btn-link notifications-link-button" onClick={handleAdd}>
+                <Button variant="link" className="h-auto p-0" onClick={handleAdd}>
                   {t("addOne")}
-                </button>
+                </Button>
               </>
             )}
           </div>
         )}
 
         {channels.map((ch) => (
-          <div key={ch.channel_id} className="model-card notifications-card">
-            <div className="notifications-channel-content">
-              <div className="notifications-channel-header">
-                <span className="notifications-channel-name">{ch.display_name}</span>
-                <span className="notifications-channel-type-badge">
-                  {getTypeLabel(ch.channel_type)}
-                </span>
+          <div key={ch.channel_id} className={cardClass}>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-sm font-medium">{ch.display_name}</span>
+                <Badge variant="secondary">{getTypeLabel(ch.channel_type)}</Badge>
               </div>
             </div>
-            <div className="notifications-channel-actions">
-              <button
-                className={`btn btn-sm ${ch.enabled ? "btn-primary" : "btn-secondary"}`}
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                size="sm"
+                variant={ch.enabled ? "default" : "outline"}
                 onClick={() => handleToggleEnabled(ch)}
               >
                 {ch.enabled ? t("on") : t("off")}
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => handleEdit(ch)}>
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => handleEdit(ch)}>
                 {t("edit")}
-              </button>
-              <button
-                className="btn btn-secondary btn-sm"
+              </Button>
+              <Button
+                size="icon-sm"
+                variant="outline"
+                aria-label={t("delete_")}
                 onClick={() => handleDelete(ch.channel_id)}
               >
-                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-              </button>
+                <Trash2Icon />
+              </Button>
             </div>
           </div>
         ))}

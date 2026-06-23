@@ -1,4 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
+import {
+  CheckIcon as LucideCheckIcon,
+  CopyIcon as LucideCopyIcon,
+  ListIcon,
+  Loader2Icon,
+} from "lucide-react";
 import { renderInlineText } from "../utils/inlineText";
 import { useMarkdown } from "../contexts/MarkdownContext";
 import MarkdownContent from "./MarkdownContent";
@@ -38,6 +44,8 @@ import MessageActionBar from "./MessageActionBar";
 import EditableFileModal from "./EditableFileModal";
 import { type MarkdownMode } from "../services/settings";
 import { api } from "../services/api";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 function ErrorRetryButton({ conversationId }: { conversationId: string }) {
   const [pending, setPending] = useState(false);
@@ -61,17 +69,18 @@ function ErrorRetryButton({ conversationId }: { conversationId: string }) {
     }
   };
   return (
-    <div className="error-retry-row">
-      <button
+    <div className="mt-2 flex items-center gap-3">
+      <Button
         type="button"
-        className="error-retry-button"
+        variant="destructive"
+        size="sm"
         onClick={onClick}
         disabled={pending}
         data-testid="error-retry-button"
       >
         {pending ? "Retrying\u2026" : "Retry"}
-      </button>
-      {error && <span className="error-retry-error">{error}</span>}
+      </Button>
+      {error && <span className="text-[0.8125rem] text-destructive/85">{error}</span>}
     </div>
   );
 }
@@ -106,40 +115,6 @@ interface MessageProps {
   // one into a new conversation and navigating to it.
   onFork?: (messageId: string) => void;
 }
-
-// Copy icon for the commit hash copy button
-const CopyIcon = () => (
-  <svg
-    width="12"
-    height="12"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className="msg-icon-middle"
-  >
-    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg
-    width="12"
-    height="12"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className="msg-icon-middle"
-  >
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
 
 // GitInfoMessage renders a compact git state notification
 function GitInfoMessage({
@@ -204,27 +179,37 @@ function GitInfoMessage({
   const truncatedSubject = subject && subject.length > 40 ? subject.slice(0, 37) + "..." : subject;
 
   return (
-    <div className="message message-gitinfo msg-gitinfo-container" data-testid="message-gitinfo">
+    <div
+      className="flex flex-col px-4 py-1.5 text-center text-sm italic text-muted-foreground"
+      data-testid="message-gitinfo"
+    >
       <span>
-        {worktree && <span className="msg-worktree">{worktree}</span>}
-        {branch && <span className="msg-branch">{branch}</span>}
+        {worktree && <span className="mr-2 font-mono text-xs">{worktree}</span>}
+        {branch && <span className="font-medium not-italic">{branch}</span>}
         {branch ? " now at " : "now at "}
         <code
           onClick={handleCopyHash}
           title="Click to copy commit hash"
-          className="msg-commit-hash"
+          className="cursor-pointer rounded-sm bg-muted px-1 py-0.5 font-mono text-xs"
         >
           {commitHash}
         </code>
         <button
           onClick={handleCopyHash}
           title="Copy commit hash"
-          className={copied ? "msg-copy-button copied" : "msg-copy-button"}
+          className={cn(
+            "ml-0.5 inline-flex cursor-pointer align-middle",
+            copied ? "text-emerald-600 dark:text-emerald-500" : "text-muted-foreground",
+          )}
         >
-          {copied ? <CheckIcon /> : <CopyIcon />}
+          {copied ? (
+            <LucideCheckIcon className="size-3 align-middle" />
+          ) : (
+            <LucideCopyIcon className="size-3 align-middle" />
+          )}
         </button>
         {truncatedSubject && (
-          <span className="msg-subject" title={subject || undefined}>
+          <span className="ml-1" title={subject || undefined}>
             "{truncatedSubject}"
           </span>
         )}
@@ -246,7 +231,7 @@ function GitInfoMessage({
                 e.preventDefault();
                 handleDiffClick();
               }}
-              className="msg-diff-link"
+              className="text-primary underline"
             >
               diff
             </a>
@@ -273,8 +258,10 @@ function warningText(message: MessageType): string {
 
 function WarningMessage({ message }: { message: MessageType }) {
   return (
-    <div className="message message-warning" data-testid="message-warning" role="status">
-      <div className="message-content">{warningText(message)}</div>
+    <div className="flex flex-col" data-testid="message-warning" role="status">
+      <div className="mr-auto max-w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-200">
+        {warningText(message)}
+      </div>
     </div>
   );
 }
@@ -307,15 +294,14 @@ function DistillStatusMessage({ message }: { message: MessageType }) {
 
   return (
     <div
-      className={
-        isError
-          ? "message message-gitinfo msg-distill-container error"
-          : "message message-gitinfo msg-distill-container"
-      }
+      className={cn(
+        "flex flex-col px-4 py-2 text-center text-sm italic",
+        isError ? "text-destructive" : "text-muted-foreground",
+      )}
     >
       {isInProgress && (
         <span data-testid="distill-in-progress">
-          <span className="spinner spinner-small msg-spinner-inline" />
+          <Loader2Icon className="mr-1.5 inline-block size-3.5 animate-spin align-middle" />
           {gerund} conversation{sourceSlug ? ` "${sourceSlug}"` : ""}…
         </span>
       )}
@@ -628,11 +614,11 @@ const Message = React.memo(function Message({
       case "message_role_assistant":
         // These shouldn't occur in Content objects, but display as text if they do
         return (
-          <div className="msg-unexpected-role">
-            <div className="msg-unexpected-role-text">
+          <div className="rounded border border-amber-300 bg-amber-50 p-2 text-sm dark:border-amber-400/40 dark:bg-amber-400/10">
+            <div className="text-amber-800 dark:text-amber-200">
               [Unexpected message role content: {contentType}]
             </div>
-            <div className="msg-unexpected-content">{content.Text || JSON.stringify(content)}</div>
+            <div className="mt-1">{content.Text || JSON.stringify(content)}</div>
           </div>
         );
       case "text":
@@ -1048,21 +1034,21 @@ const Message = React.memo(function Message({
       case "web_search_tool_result": {
         if (!content.ToolResult || content.ToolResult.length === 0) return null;
         return (
-          <div className="web-search-results">
+          <div className="flex flex-col gap-2 px-3 py-2">
             {content.ToolResult.map((result, index) => (
-              <div key={index} className="web-search-result">
+              <div key={index} className="border-b border-border py-1.5 last:border-b-0">
                 <a
                   href={result.URL || ""}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="web-search-result-title"
+                  className="block text-sm font-medium leading-tight text-primary hover:underline"
                 >
                   {result.Title || "Untitled"}
                 </a>
-                <div className="web-search-result-meta">
-                  <span className="web-search-result-url">{result.URL || ""}</span>
+                <div className="mt-0.5 flex items-center gap-2 text-xs leading-tight text-muted-foreground">
+                  <span className="max-w-[400px] truncate">{result.URL || ""}</span>
                   {result.PageAge && (
-                    <span className="web-search-result-age">{result.PageAge}</span>
+                    <span className="shrink-0 text-muted-foreground/70">{result.PageAge}</span>
                   )}
                 </div>
               </div>
@@ -1072,23 +1058,27 @@ const Message = React.memo(function Message({
       }
       case "web_search_result":
         return (
-          <div className="web-search-result">
+          <div className="border-b border-border py-1.5 last:border-b-0">
             <a
               href={content.URL || ""}
               target="_blank"
               rel="noopener noreferrer"
-              className="web-search-result-title"
+              className="block text-sm font-medium leading-tight text-primary hover:underline"
             >
               {content.Title || "Untitled"}
             </a>
-            <div className="web-search-result-meta">
-              <span className="web-search-result-url">{content.URL || ""}</span>
-              {content.PageAge && <span className="web-search-result-age">{content.PageAge}</span>}
+            <div className="mt-0.5 flex items-center gap-2 text-xs leading-tight text-muted-foreground">
+              <span className="max-w-[400px] truncate">{content.URL || ""}</span>
+              {content.PageAge && (
+                <span className="shrink-0 text-muted-foreground/70">{content.PageAge}</span>
+              )}
             </div>
           </div>
         );
       case "redacted_thinking":
-        return <div className="text-tertiary italic text-sm">[Thinking content hidden]</div>;
+        return (
+          <div className="text-sm italic text-muted-foreground/70">[Thinking content hidden]</div>
+        );
       case "thinking": {
         const thinkingText = content.Thinking || content.Text || "";
         if (!thinkingText) return null;
@@ -1104,22 +1094,22 @@ const Message = React.memo(function Message({
         );
 
         return (
-          <div className="msg-unknown-content">
-            <div className="text-xs text-secondary msg-unknown-content-label">
+          <div className="rounded border border-border bg-muted p-3">
+            <div className="mb-2 text-xs text-muted-foreground">
               Unknown content type: {contentType} (value: {content.Type})
             </div>
 
             {/* Show media content if available */}
             {hasMediaType && (
-              <div className="msg-media-section">
-                <div className="text-xs text-secondary msg-media-type-label">
+              <div className="mb-2">
+                <div className="mb-1 text-xs text-muted-foreground">
                   Media Type: {content.MediaType}
                 </div>
                 {content.MediaType?.startsWith("image/") && mediaImageUrl && (
                   <img
                     src={mediaImageUrl}
                     alt="Tool output image"
-                    className="rounded border msg-media-image"
+                    className="h-auto max-h-[300px] max-w-full rounded border border-border"
                   />
                 )}
               </div>
@@ -1133,10 +1123,12 @@ const Message = React.memo(function Message({
             {/* Show raw JSON for debugging if no text content */}
             {!displayText && hasOtherData && (
               <details className="text-xs">
-                <summary className="text-secondary msg-raw-content-summary">
+                <summary className="cursor-pointer text-muted-foreground">
                   Show raw content
                 </summary>
-                <pre className="msg-raw-content-pre">{JSON.stringify(content, null, 2)}</pre>
+                <pre className="mt-2 overflow-auto rounded bg-background p-2 text-xs">
+                  {JSON.stringify(content, null, 2)}
+                </pre>
               </details>
             )}
           </div>
@@ -1234,18 +1226,59 @@ const Message = React.memo(function Message({
     );
   };
 
+  // Wrapper classes for the message container. The action bar is absolutely
+  // positioned within it, so the wrapper is always relative.
   const getMessageClasses = () => {
+    // Legacy type marker classes (message-user / -agent / -tool / -error) carry
+    // no styling but are kept as stable hooks for e2e selectors and JS queries.
+    // Distilled user messages render as agent content, so they get message-agent.
+    const marker = isError
+      ? "message-error"
+      : isTool
+        ? "message-tool"
+        : isUser && !isDistilledUser
+          ? "message-user"
+          : "message-agent";
+    return cn(
+      "relative flex flex-col",
+      marker,
+      isUser && !isDistilledUser && isQueued && "opacity-85",
+    );
+  };
+
+  // Classes for the inner content block. Role-appropriate: user messages are a
+  // right-aligned accent bubble; agent/tool messages flow left at full width;
+  // error messages get a destructive-tinted card.
+  const getMessageContentClasses = () => {
+    const base = "min-w-0 break-words rounded-lg text-[0.9375rem]";
     if (isUser && !isDistilledUser) {
-      return `message message-user${isQueued ? " message-queued" : ""}`;
+      return cn(
+        base,
+        "ml-auto max-w-[80%] bg-secondary px-4 py-3 text-secondary-foreground",
+      );
     }
     if (isError) {
-      return "message message-error";
+      return cn(
+        base,
+        "mr-auto max-w-full border-2 border-destructive/30 bg-destructive/10 p-4 text-destructive",
+      );
     }
-    if (isTool) {
-      return "message message-tool";
-    }
-    return "message message-agent";
+    // agent and tool messages
+    return cn(base, "mr-auto max-w-full py-1 text-foreground");
   };
+
+  // The MessageActionBar is positioned by its parent; wrap it in an absolutely
+  // positioned, bordered floating panel anchored to the message's top-right.
+  const renderActionBar = () =>
+    actionBarVisible && (hasCopyAction || hasUsageAction || hasForkAction) ? (
+      <div className="absolute right-2 top-2 z-10 rounded-md border border-border bg-background p-0.5 shadow-sm">
+        <MessageActionBar
+          onCopy={hasCopyAction ? handleCopy : undefined}
+          onShowUsage={hasUsageAction ? handleShowUsage : undefined}
+          onFork={hasForkAction ? handleFork : undefined}
+        />
+      </div>
+    ) : null;
 
   // Special rendering for error messages
   if (isError) {
@@ -1272,7 +1305,7 @@ const Message = React.memo(function Message({
       <>
         <div
           ref={messageRef}
-          className={`${getMessageClasses()} msg-container-relative`}
+          className={getMessageClasses()}
           onClick={handleMessageClick}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
@@ -1280,14 +1313,8 @@ const Message = React.memo(function Message({
           role="alert"
           aria-label="Error message"
         >
-          {actionBarVisible && (hasCopyAction || hasUsageAction || hasForkAction) && (
-            <MessageActionBar
-              onCopy={hasCopyAction ? handleCopy : undefined}
-              onShowUsage={hasUsageAction ? handleShowUsage : undefined}
-              onFork={hasForkAction ? handleFork : undefined}
-            />
-          )}
-          <div className="message-content" data-testid="message-content">
+          {renderActionBar()}
+          <div className={getMessageContentClasses()} data-testid="message-content">
             <div className="whitespace-pre-wrap break-words">{errorText}</div>
             {retryable && !retried && <ErrorRetryButton conversationId={message.conversation_id} />}
           </div>
@@ -1324,15 +1351,18 @@ const Message = React.memo(function Message({
 
   const renderDistillationBox = () =>
     isDistilledUser ? (
-      <div className="distillation-file-box" data-testid="distillation-file-box">
-        <div className="distillation-file-box-header">
-          <div className="distillation-file-box-title">
+      <div
+        className="overflow-hidden rounded-xl border border-blue-300 bg-blue-50 shadow-sm dark:border-blue-400/30 dark:bg-blue-400/5"
+        data-testid="distillation-file-box"
+      >
+        <div className="flex items-center justify-between gap-3 px-3.5 pb-1 pt-3">
+          <div className="text-[0.8125rem] font-bold tracking-tight text-foreground">
             {distillationEditable ? "Editable distillation" : "Compacted summary"}
           </div>
           {distillationEditable && (
             <button
               type="button"
-              className="distillation-edit-button"
+              className="cursor-pointer rounded-full border border-border bg-background px-2.5 py-1 text-xs font-semibold text-primary hover:bg-accent"
               onClick={openDistillationEditor}
               title="Edit distillation in modal"
             >
@@ -1341,15 +1371,16 @@ const Message = React.memo(function Message({
           )}
         </div>
         {distillationEditable && (
-          <div className="distillation-file-box-meta">
-            Shown from editable file <code>{distillationFile}</code>.
+          <div className="px-3.5 pb-3 text-xs text-muted-foreground">
+            Shown from editable file{" "}
+            <code className="break-all font-mono text-xs text-foreground">{distillationFile}</code>.
           </div>
         )}
-        <div className="distillation-file-box-content">
+        <div className="max-h-[50vh] overflow-auto border-t border-blue-300 bg-background px-4 py-3.5 text-foreground dark:border-blue-400/30">
           {displayedDistillationContent ? (
             <MarkdownContent text={displayedDistillationContent} />
           ) : (
-            <span className="distillation-empty">Empty distillation</span>
+            <span className="italic text-muted-foreground">Empty distillation</span>
           )}
         </div>
       </div>
@@ -1361,21 +1392,15 @@ const Message = React.memo(function Message({
       <>
         <div
           ref={messageRef}
-          className={`${getMessageClasses()} msg-container-relative`}
+          className={getMessageClasses()}
           onClick={handleMessageClick}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
           data-testid="message"
           role="article"
         >
-          {actionBarVisible && (hasCopyAction || hasUsageAction || hasForkAction) && (
-            <MessageActionBar
-              onCopy={hasCopyAction ? handleCopy : undefined}
-              onShowUsage={hasUsageAction ? handleShowUsage : undefined}
-              onFork={hasForkAction ? handleFork : undefined}
-            />
-          )}
-          <div className="message-content" data-testid="message-content">
+          {renderActionBar()}
+          <div className={getMessageContentClasses()} data-testid="message-content">
             {displayData.map((toolDisplay, index) => (
               <div key={index}>{renderDisplayData(toolDisplay, toolDisplay.tool_name)}</div>
             ))}
@@ -1440,7 +1465,7 @@ const Message = React.memo(function Message({
     <>
       <div
         ref={messageRef}
-        className={`${getMessageClasses()} msg-container-relative`}
+        className={getMessageClasses()}
         onClick={handleMessageClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -1449,36 +1474,25 @@ const Message = React.memo(function Message({
         data-commentable={isCommentable ? "true" : undefined}
         role="article"
       >
-        {actionBarVisible && (hasCopyAction || hasUsageAction || hasForkAction) && (
-          <MessageActionBar
-            onCopy={hasCopyAction ? handleCopy : undefined}
-            onShowUsage={hasUsageAction ? handleShowUsage : undefined}
-            onFork={hasForkAction ? handleFork : undefined}
-          />
-        )}
+        {renderActionBar()}
         {/* Message content */}
-        <div className="message-content" data-testid="message-content">
+        <div className={getMessageContentClasses()} data-testid="message-content">
           {renderDistillationBox() ||
             contentToRender.map((content, index) => (
               <div key={index}>{renderContent(content)}</div>
             ))}
           {isQueued && (
-            <div className="queued-message-badge" data-testid="queued-badge">
-              <span className="queued-message-badge-label">
-                <svg
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                  width="14"
-                  height="14"
-                  style={{ marginRight: 4, verticalAlign: "middle" }}
-                >
-                  <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
-                </svg>
+            <div
+              className="mt-1.5 flex w-fit items-center gap-2 rounded-md bg-amber-500/10 px-2.5 py-1 text-xs text-amber-600 dark:text-amber-400"
+              data-testid="queued-badge"
+            >
+              <span className="flex items-center font-semibold tracking-wide">
+                <ListIcon className="mr-1 size-3.5 align-middle" />
                 Queued
               </span>
               {onCancelQueued && (
                 <button
-                  className="queued-message-badge-cancel"
+                  className="flex min-h-7 min-w-11 items-center justify-center rounded border border-current bg-transparent px-2.5 py-1 text-xs font-medium opacity-70 transition-opacity hover:opacity-100"
                   data-testid="cancel-queued"
                   onClick={(e) => {
                     e.stopPropagation();

@@ -1,6 +1,6 @@
 import React from "react";
 import { LLMContent } from "../types";
-import { useToolExpandedState } from "./ToolDetailContext";
+import { ToolCard } from "./ToolCard";
 
 interface WebSearchToolProps {
   toolInput?: unknown;
@@ -17,21 +17,24 @@ function WebSearchResultItem({ result }: { result: LLMContent }) {
   const pageAge = result.PageAge || "";
 
   return (
-    <div className="web-search-result">
-      <a href={url} target="_blank" rel="noopener noreferrer" className="web-search-result-title">
+    <div className="border-b border-border py-2 last:border-b-0">
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium text-primary hover:underline"
+      >
         {title}
       </a>
-      <div className="web-search-result-meta">
-        <span className="web-search-result-url">{url}</span>
-        {pageAge && <span className="web-search-result-age">{pageAge}</span>}
+      <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span className="break-all">{url}</span>
+        {pageAge && <span>{pageAge}</span>}
       </div>
     </div>
   );
 }
 
 function WebSearchTool({ toolInput, isRunning, searchResults, toolResult }: WebSearchToolProps) {
-  const [isExpanded, setIsExpanded] = useToolExpandedState();
-
   // Anthropic sends {"query": "..."}; OpenAI Responses sends {"queries": [...]}
   let queries: string[] = [];
   if (toolInput && typeof toolInput === "object") {
@@ -51,54 +54,32 @@ function WebSearchTool({ toolInput, isRunning, searchResults, toolResult }: WebS
   const showCount = resultCount > 0;
 
   return (
-    <div className="tool" data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}>
-      <div className="tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="tool-summary">
-          <span className={`tool-emoji ${isRunning ? "running" : ""}`}>🔍</span>
-          <span className="tool-command">
-            Web Search{query ? ": " : ""}
-            {query && <span className="web-search-query">{query}</span>}
+    <ToolCard
+      emoji="🔍"
+      running={isRunning}
+      complete={isComplete}
+      title={
+        <>
+          Web Search{query ? ": " : ""}
+          {query && <span className="text-muted-foreground">{query}</span>}
+        </>
+      }
+      status={
+        isComplete && showCount ? (
+          <span className="text-muted-foreground">
+            {resultCount} result{resultCount !== 1 ? "s" : ""}
           </span>
-          {isComplete && showCount && (
-            <span className="tool-success">
-              {resultCount} result{resultCount !== 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-        <button
-          className="tool-toggle"
-          aria-label={isExpanded ? "Collapse" : "Expand"}
-          aria-expanded={isExpanded}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            style={{
-              transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-              transition: "transform 0.2s",
-            }}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
-      {isExpanded && results.length > 0 && (
-        <div className="web-search-results">
+        ) : null
+      }
+    >
+      {results.length > 0 ? (
+        <div className="-my-2">
           {results.map((result, index) => (
             <WebSearchResultItem key={index} result={result} />
           ))}
         </div>
-      )}
-    </div>
+      ) : undefined}
+    </ToolCard>
   );
 }
 

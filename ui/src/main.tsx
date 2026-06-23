@@ -6,6 +6,8 @@ import { initializeTheme } from "./services/theme";
 import { initializeNotifications } from "./services/notifications";
 import { MarkdownProvider } from "./contexts/MarkdownContext";
 import { I18nProvider } from "./i18n";
+import { TooltipProvider } from "./components/ui/tooltip";
+import { Toaster } from "./components/ui/sonner";
 
 // Apply theme before render to avoid flash
 initializeTheme();
@@ -33,7 +35,10 @@ if (exportId) {
   root.render(
     <I18nProvider>
       <MarkdownProvider>
-        <App />
+        <TooltipProvider delayDuration={300}>
+          <App />
+          <Toaster />
+        </TooltipProvider>
       </MarkdownProvider>
     </I18nProvider>,
   );

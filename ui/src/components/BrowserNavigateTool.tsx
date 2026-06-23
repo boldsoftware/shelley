@@ -1,6 +1,6 @@
 import React from "react";
 import { LLMContent } from "../types";
-import { useToolExpandedState } from "./ToolDetailContext";
+import { ToolCard, ToolSection, ToolCode, ToolStatusMark } from "./ToolCard";
 
 interface BrowserNavigateToolProps {
   toolInput?: unknown; // { url: string }
@@ -17,8 +17,6 @@ function BrowserNavigateTool({
   hasError,
   executionTime,
 }: BrowserNavigateToolProps) {
-  const [isExpanded, setIsExpanded] = useToolExpandedState();
-
   // Extract URL from toolInput
   const url =
     typeof toolInput === "object" &&
@@ -44,63 +42,41 @@ function BrowserNavigateTool({
   const isComplete = !isRunning && toolResult !== undefined;
 
   return (
-    <div className="tool" data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}>
-      <div className="tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="tool-summary">
-          <span className={`tool-emoji ${isRunning ? "running" : ""}`}>🌐</span>
-          <span className="tool-command" title={url}>
-            {displayUrl}
-          </span>
-          {isComplete && hasError && <span className="tool-error">✗</span>}
-          {isComplete && !hasError && <span className="tool-success">✓</span>}
-        </div>
-        <button
-          className="tool-toggle"
-          aria-label={isExpanded ? "Collapse" : "Expand"}
-          aria-expanded={isExpanded}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
+    <ToolCard
+      emoji="🌐"
+      running={isRunning}
+      complete={isComplete}
+      title={<span title={url}>{displayUrl}</span>}
+      status={isComplete ? <ToolStatusMark error={hasError} /> : null}
+    >
+      <ToolSection label="URL:">
+        <ToolCode>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
           >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
+            {url}
+          </a>
+        </ToolCode>
+      </ToolSection>
 
-      {isExpanded && (
-        <div className="tool-details">
-          <div className="tool-section">
-            <div className="tool-label">URL:</div>
-            <div className="tool-code">
-              <a href={url} target="_blank" rel="noopener noreferrer">
-                {url}
-              </a>
-            </div>
-          </div>
-
-          {isComplete && output && (
-            <div className="tool-section">
-              <div className="tool-label">
-                Output{hasError ? " (Error)" : ""}:
-                {executionTime && <span className="tool-time">{executionTime}</span>}
-              </div>
-              <pre className={`tool-code ${hasError ? "error" : ""}`}>{output}</pre>
-            </div>
-          )}
-        </div>
+      {isComplete && output && (
+        <ToolSection
+          label={
+            <span className="flex items-center gap-2">
+              <span>Output{hasError ? " (Error)" : ""}:</span>
+              {executionTime && (
+                <span className="text-muted-foreground">{executionTime}</span>
+              )}
+            </span>
+          }
+        >
+          <ToolCode error={hasError}>{output}</ToolCode>
+        </ToolSection>
       )}
-    </div>
+    </ToolCard>
   );
 }
 

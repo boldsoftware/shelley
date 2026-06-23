@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { FolderIcon, XIcon } from "lucide-react";
 import { api } from "../services/api";
 import type { GitGraphCommit, GitGraphResponse, GitCommitDetail } from "../types";
 import GitRepoPicker from "./GitRepoPicker";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface GitGraphViewerProps {
   cwd: string;
@@ -234,20 +237,23 @@ function formatRelative(ts: number): string {
   return d.toLocaleDateString();
 }
 
+const REF_BASE =
+  "inline-block rounded-sm border border-transparent px-1.5 text-[0.68rem] leading-[1.4]";
+
 function RefBadge({ name }: { name: string }) {
-  let cls = "git-graph-ref";
+  let tone =
+    "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-200"; // local
   let label = name;
   if (name === "HEAD") {
-    cls += " git-graph-ref-head";
+    tone = "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200"; // head
   } else if (name.startsWith("tag: ")) {
-    cls += " git-graph-ref-tag";
+    tone =
+      "bg-violet-100 text-violet-900 dark:bg-violet-500/20 dark:text-violet-200"; // tag
     label = name.slice(5);
   } else if (name.startsWith("origin/") || name.includes("/")) {
-    cls += " git-graph-ref-remote";
-  } else {
-    cls += " git-graph-ref-local";
+    tone = "bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-200"; // remote
   }
-  return <span className={cls}>{label}</span>;
+  return <span className={cn(REF_BASE, tone)}>{label}</span>;
 }
 
 // MD5 for Gravatar URLs. Gravatar hashes are MD5 of the trimmed,
@@ -431,7 +437,7 @@ function CopyButton({ value, label, title }: { value: string; label: string; tit
   return (
     <button
       type="button"
-      className="git-graph-copy-btn"
+      className="cursor-pointer rounded-sm border border-border bg-background px-1.5 py-0.5 font-mono text-[0.7rem] leading-[1.4] text-foreground hover:border-muted-foreground/50 hover:bg-muted"
       title={title || `Copy ${label}`}
       onClick={async () => {
         if (await copyText(value)) {
@@ -446,6 +452,11 @@ function CopyButton({ value, label, title }: { value: string; label: string; tit
   );
 }
 
+// Shared diff-add / diff-remove accents (emerald / red) used by the
+// diffstat counts, totals and the proportional +/- bar.
+const DIFFSTAT_INS = "text-emerald-600 dark:text-emerald-400";
+const DIFFSTAT_DEL = "text-red-600 dark:text-red-400";
+
 // Compact git diff --stat style list. Each row: +/- counts, a tiny
 // green/red bar scaled by the biggest row, and the path (shortened
 // from the left so the filename stays visible).
@@ -458,7 +469,7 @@ function DiffstatList({
   // 40 chars max wide for the bar; cap smaller for short paths.
   const BAR_CHARS = 24;
   return (
-    <ul className="git-graph-diffstat-list">
+    <ul className="m-0 grid list-none grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-x-2 gap-y-0.5 p-0 font-mono">
       {files.map((f) => {
         const total = f.additions + f.deletions;
         const scale = total === 0 ? 0 : Math.max(1, Math.round((total / maxTotal) * BAR_CHARS));
@@ -471,25 +482,27 @@ function DiffstatList({
               );
         const dels = Math.max(0, scale - adds);
         return (
-          <li key={f.path} className="git-graph-diffstat-row" title={f.path}>
-            <span className="git-graph-diffstat-path">{f.path}</span>
-            <span className="git-graph-diffstat-counts">
+          <li key={f.path} className="contents" title={f.path}>
+            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-foreground">
+              {f.path}
+            </span>
+            <span className="inline-flex justify-self-end gap-1.5 whitespace-nowrap">
               {f.binary ? (
-                <span className="git-graph-diffstat-binary">bin</span>
+                <span className="italic text-muted-foreground">bin</span>
               ) : (
                 <>
                   {f.additions > 0 && (
-                    <span className="git-graph-diffstat-ins">+{f.additions}</span>
+                    <span className={DIFFSTAT_INS}>+{f.additions}</span>
                   )}
                   {f.deletions > 0 && (
-                    <span className="git-graph-diffstat-del">−{f.deletions}</span>
+                    <span className={DIFFSTAT_DEL}>−{f.deletions}</span>
                   )}
                 </>
               )}
             </span>
-            <span className="git-graph-diffstat-bar" aria-hidden="true">
-              <span className="git-graph-diffstat-ins">{"+".repeat(adds)}</span>
-              <span className="git-graph-diffstat-del">{"−".repeat(dels)}</span>
+            <span className="whitespace-nowrap tracking-[-0.05em]" aria-hidden="true">
+              <span className={DIFFSTAT_INS}>{"+".repeat(adds)}</span>
+              <span className={DIFFSTAT_DEL}>{"−".repeat(dels)}</span>
             </span>
           </li>
         );
@@ -807,21 +820,29 @@ export default function GitGraphViewer({
   if (!isOpen) return null;
 
   return (
-    <div className="diff-viewer-overlay" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
       <div
-        className="diff-viewer-container git-graph-container"
+        className="relative flex h-[calc(100%-2rem)] w-[calc(100%-2rem)] flex-col overflow-hidden rounded-lg bg-background text-[0.82rem] text-foreground shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="git-graph-toolbar">
+        <div className="absolute top-2 right-2 z-[5] inline-flex items-center gap-1 rounded-full border border-border bg-background p-0.5 shadow-sm">
           <div
-            className="git-graph-scope"
+            className="inline-flex items-center rounded-full bg-muted p-0.5"
             role="group"
             aria-label="Branch scope"
             title="Which refs to walk"
           >
             <button
               type="button"
-              className={`git-graph-scope-btn${scope === "all" ? " git-graph-scope-btn-active" : ""}`}
+              className={cn(
+                "cursor-pointer rounded-full px-2 py-0.5 text-[0.72rem] leading-tight whitespace-nowrap",
+                scope === "all"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
               onClick={() => setScope("all")}
               aria-pressed={scope === "all"}
               title="Show commits from all branches"
@@ -830,7 +851,12 @@ export default function GitGraphViewer({
             </button>
             <button
               type="button"
-              className={`git-graph-scope-btn${scope === "current" ? " git-graph-scope-btn-active" : ""}`}
+              className={cn(
+                "cursor-pointer rounded-full px-2 py-0.5 text-[0.72rem] leading-tight whitespace-nowrap",
+                scope === "current"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
               onClick={() => setScope("current")}
               aria-pressed={scope === "current"}
               title="Show commits reachable from HEAD only"
@@ -838,29 +864,26 @@ export default function GitGraphViewer({
               Current branch
             </button>
           </div>
-          <button
-            className="git-graph-tool"
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-full text-muted-foreground hover:text-foreground"
             onClick={() => setShowCwdPicker(true)}
             title={`Pick repository (current: ${cwd})`}
             aria-label="Pick repository"
           >
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-              />
-            </svg>
-          </button>
-          <button
-            className="git-graph-tool"
+            <FolderIcon className="size-4" aria-hidden="true" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-full text-muted-foreground hover:text-foreground"
             onClick={onClose}
             title="Close (Esc)"
             aria-label="Close"
           >
-            ×
-          </button>
+            <XIcon className="size-4" aria-hidden="true" />
+          </Button>
         </div>
         <GitRepoPicker
           isOpen={showCwdPicker}
@@ -869,12 +892,14 @@ export default function GitGraphViewer({
           onSelect={(p) => setCwdOverride(p)}
         />
 
-        <div className="git-graph-body" ref={bodyRef}>
-          <div className="git-graph-list">
-            {loading && !data && <div className="git-graph-status">Loading…</div>}
-            {error && <div className="git-graph-status git-graph-error">{error}</div>}
+        <div className="relative flex min-h-0 flex-1 overflow-hidden" ref={bodyRef}>
+          <div className="min-w-0 flex-1 overflow-auto bg-background pt-1 pb-2 font-mono">
+            {loading && !data && (
+              <div className="p-4 text-muted-foreground">Loading…</div>
+            )}
+            {error && <div className="p-4 text-destructive">{error}</div>}
             {!loading && !error && commits.length === 0 && (
-              <div className="git-graph-status">No commits.</div>
+              <div className="p-4 text-muted-foreground">No commits.</div>
             )}
             {commits.length > 0 && (
               <>
@@ -885,14 +910,19 @@ export default function GitGraphViewer({
                     <div
                       key={c.hash}
                       ref={isSel ? selectedRowRef : null}
-                      className={`git-graph-row${isSel ? " git-graph-row-selected" : ""}`}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-2 overflow-hidden px-2 text-[0.8rem] whitespace-nowrap",
+                        isSel ? "bg-primary/15" : "hover:bg-muted",
+                      )}
                       style={{ height: ROW_H }}
                       onClick={() => selectCommit(c.hash)}
                       onDoubleClick={() => onOpenDiff && onOpenDiff(c.hash, cwd)}
                     >
-                      <span className="git-graph-hash">{c.shortHash}</span>
+                      <span className="hidden w-[7ch] shrink-0 text-[0.78rem] text-muted-foreground md:inline">
+                        {c.shortHash}
+                      </span>
                       <svg
-                        className="git-graph-svg"
+                        className="git-graph-svg block shrink-0 pointer-events-none"
                         width={rowWidth(i)}
                         height={ROW_H}
                         style={{ width: rowWidth(i), height: ROW_H }}
@@ -928,22 +958,25 @@ export default function GitGraphViewer({
                           cy={ROW_H / 2}
                           r={DOT_R}
                           fill={laneColor(row.colorIndex)}
-                          stroke={c.isHead ? "var(--text-primary)" : "none"}
+                          stroke={c.isHead ? "var(--foreground)" : "none"}
                           strokeWidth={c.isHead ? 1.5 : 0}
                         >
                           <title>{c.shortHash}</title>
                         </circle>
                       </svg>
-                      <span className="git-graph-main">
+                      <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden font-sans text-foreground">
                         {(c.refs.length > 0 ||
                           (c.isMergeBase && !c.refs.some((r) => r.includes("/")))) && (
-                          <span className="git-graph-refs">
+                          <span className="inline-flex shrink-0 gap-0.5">
                             {c.refs.map((r) => (
                               <RefBadge key={r} name={r} />
                             ))}
                             {c.isMergeBase && !c.refs.some((r) => r.includes("/")) && (
                               <span
-                                className="git-graph-ref git-graph-ref-mergebase"
+                                className={cn(
+                                  REF_BASE,
+                                  "border-dashed border-border italic text-muted-foreground",
+                                )}
                                 title="Merge-base with @{upstream}"
                               >
                                 merge-base
@@ -951,10 +984,16 @@ export default function GitGraphViewer({
                             )}
                           </span>
                         )}
-                        <span className="git-graph-subject">{c.subject}</span>
+                        <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                          {c.subject}
+                        </span>
                       </span>
-                      <span className="git-graph-author">{c.author}</span>
-                      <span className="git-graph-time">{formatRelative(c.timestamp)}</span>
+                      <span className="hidden max-w-[14ch] shrink-0 overflow-hidden text-ellipsis font-sans text-[0.74rem] text-muted-foreground md:block">
+                        {c.author}
+                      </span>
+                      <span className="shrink-0 min-w-[5rem] text-right font-sans text-[0.74rem] text-muted-foreground">
+                        {formatRelative(c.timestamp)}
+                      </span>
                     </div>
                   );
                 })}
@@ -974,15 +1013,15 @@ export default function GitGraphViewer({
             <>
               {sheetOpen && (
                 <div
-                  className="git-graph-sheet-backdrop"
+                  className="absolute inset-0 z-[5] bg-black/35 md:hidden"
                   onClick={() => setSheetOpen(false)}
                   aria-hidden="true"
                 />
               )}
-              {/* Draggable divider — desktop only; hidden on mobile via CSS
+              {/* Draggable divider — desktop only; hidden on mobile
                   because the detail pane becomes a bottom sheet there. */}
               <div
-                className="git-graph-divider"
+                className="group relative hidden w-1.5 shrink-0 cursor-col-resize touch-none items-center justify-center select-none hover:bg-muted md:flex"
                 role="separator"
                 aria-orientation="vertical"
                 aria-label="Resize commit details (double-click to reset)"
@@ -990,19 +1029,29 @@ export default function GitGraphViewer({
                 onMouseDown={onDividerMouseDown}
                 onDoubleClick={onDividerDoubleClick}
               >
-                <div className="git-graph-divider-grip" aria-hidden="true" />
+                <div
+                  className="h-8 w-0.5 rounded-full bg-muted-foreground opacity-50 group-hover:opacity-90"
+                  aria-hidden="true"
+                />
               </div>
               <div
-                className={`git-graph-detail${sheetOpen ? " git-graph-detail-sheet-open" : ""}`}
+                className={cn(
+                  "flex flex-col gap-2 overflow-auto bg-muted/40 px-4 py-3",
+                  // Desktop: static side pane with a left border; width comes
+                  // from the draggable divider (inline style below).
+                  "md:shrink-0 md:border-l md:border-border",
+                  // Mobile: a bottom sheet that slides up over a backdrop.
+                  "max-md:absolute max-md:inset-x-0 max-md:bottom-0 max-md:z-[6] max-md:h-[75vh] max-md:max-h-[85%] max-md:rounded-t-xl max-md:border-t max-md:border-border max-md:pt-1 max-md:shadow-[0_-8px_24px_rgba(0,0,0,0.25)] max-md:transition-transform max-md:duration-200",
+                  sheetOpen ? "max-md:translate-y-0" : "max-md:translate-y-full max-md:pointer-events-none",
+                )}
                 role="dialog"
                 aria-label="Commit details"
                 style={isDesktop ? { width: `${detailWidth}px` } : undefined}
               >
-                <div className="git-graph-sheet-topbar">
-                  <span className="git-graph-sheet-grip" aria-hidden="true" />
+                <div className="sticky top-0 z-[2] m-0 hidden h-0 shrink-0 pointer-events-none max-md:block">
                   <button
                     type="button"
-                    className="git-graph-sheet-close"
+                    className="pointer-events-auto absolute top-2 right-2 inline-flex size-7 items-center justify-center rounded-full border border-border bg-background p-0 text-lg leading-none text-foreground"
                     onClick={() => setSheetOpen(false)}
                     aria-label="Close commit details"
                     title="Close details"
@@ -1010,9 +1059,9 @@ export default function GitGraphViewer({
                     ×
                   </button>
                 </div>
-                <div className="git-graph-detail-top">
+                <div className="flex items-start gap-2.5 pt-9 pr-9">
                   <img
-                    className="git-graph-gravatar"
+                    className="size-12 shrink-0 rounded-md bg-background object-cover"
                     src={gravatarUrl(selectedCommit.email, 72)}
                     alt=""
                     width={48}
@@ -1022,10 +1071,12 @@ export default function GitGraphViewer({
                       (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
                     }}
                   />
-                  <div className="git-graph-detail-subject">{selectedCommit.subject}</div>
+                  <div className="font-semibold whitespace-pre-wrap text-foreground">
+                    {selectedCommit.subject}
+                  </div>
                 </div>
 
-                <div className="git-graph-detail-meta">
+                <div className="flex flex-col gap-1 text-[0.78rem] text-muted-foreground">
                   <div>
                     <strong>Author:</strong> {selectedCommit.author}
                     {selectedCommit.email ? ` <${selectedCommit.email}>` : ""}
@@ -1034,10 +1085,12 @@ export default function GitGraphViewer({
                     <strong>Date:</strong>{" "}
                     {new Date(selectedCommit.timestamp * 1000).toLocaleString()}
                   </div>
-                  <div className="git-graph-detail-sha-row">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <strong>SHA:</strong>{" "}
-                    <code className="git-graph-detail-hash">{selectedCommit.hash}</code>
-                    <span className="git-graph-copy-group">
+                    <code className="text-[0.72rem] break-all text-muted-foreground">
+                      {selectedCommit.hash}
+                    </code>
+                    <span className="ml-auto inline-flex gap-0.5">
                       <CopyButton value={selectedCommit.hash} label="sha" title="Copy full SHA" />
                       <CopyButton
                         value={selectedCommit.shortHash}
@@ -1056,14 +1109,17 @@ export default function GitGraphViewer({
                   {(selectedCommit.refs.length > 0 ||
                     (selectedCommit.isMergeBase &&
                       !selectedCommit.refs.some((r) => r.includes("/")))) && (
-                    <div className="git-graph-detail-refs">
+                    <div className="mt-1 flex flex-wrap gap-1">
                       {selectedCommit.refs.map((r) => (
                         <RefBadge key={r} name={r} />
                       ))}
                       {selectedCommit.isMergeBase &&
                         !selectedCommit.refs.some((r) => r.includes("/")) && (
                           <span
-                            className="git-graph-ref git-graph-ref-mergebase"
+                            className={cn(
+                              REF_BASE,
+                              "border-dashed border-border italic text-muted-foreground",
+                            )}
                             title="Merge-base with @{upstream}"
                           >
                             merge-base
@@ -1072,7 +1128,7 @@ export default function GitGraphViewer({
                     </div>
                   )}
                   {data?.gitRoot && (
-                    <div className="git-graph-detail-root">
+                    <div className="mt-2 text-[0.72rem] break-all">
                       <code>{data.gitRoot}</code>
                       {data.currentBranch && (
                         <>
@@ -1085,30 +1141,35 @@ export default function GitGraphViewer({
                 </div>
 
                 {detail && detail.body && (
-                  <pre className="git-graph-detail-body">{detail.body}</pre>
+                  <pre className="m-0 rounded-md border border-border bg-background px-2.5 py-2 font-mono text-[0.75rem] leading-snug whitespace-pre-wrap break-words text-foreground">
+                    {detail.body}
+                  </pre>
                 )}
 
                 {detail && detail.files.length > 0 && (
-                  <div className="git-graph-diffstat">
-                    <div className="git-graph-diffstat-summary">
+                  <div className="flex flex-col gap-1 text-[0.72rem]">
+                    <div className="text-[0.72rem] text-muted-foreground">
                       {detail.files.length} file{detail.files.length === 1 ? "" : "s"} changed
                       {detail.insTotal > 0 && (
-                        <span className="git-graph-diffstat-ins"> +{detail.insTotal}</span>
+                        <span className={DIFFSTAT_INS}> +{detail.insTotal}</span>
                       )}
                       {detail.delTotal > 0 && (
-                        <span className="git-graph-diffstat-del"> −{detail.delTotal}</span>
+                        <span className={DIFFSTAT_DEL}> −{detail.delTotal}</span>
                       )}
                     </div>
                     <DiffstatList files={detail.files} />
                   </div>
                 )}
                 {detailLoading && !detail && (
-                  <div className="git-graph-detail-loading">Loading…</div>
+                  <div className="text-[0.75rem] italic text-muted-foreground">Loading…</div>
                 )}
 
-                <div className="git-graph-detail-actions">
+                <div className="mt-1 flex items-center gap-2">
                   <a
-                    className={`git-graph-open-diff${!onOpenDiff ? " git-graph-open-diff-disabled" : ""}`}
+                    className={cn(
+                      "inline-block rounded-md bg-primary px-2.5 py-1.5 text-[0.78rem] text-primary-foreground no-underline hover:bg-primary/90",
+                      !onOpenDiff && "pointer-events-none cursor-not-allowed opacity-50",
+                    )}
                     href={(() => {
                       const params = new URLSearchParams();
                       params.set("diff", selectedCommit.hash);
@@ -1130,7 +1191,7 @@ export default function GitGraphViewer({
                   </a>
                   {data?.githubBase && (
                     <a
-                      className="git-graph-github-link"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-[0.75rem] text-foreground no-underline hover:border-muted-foreground/50 hover:bg-muted"
                       href={`${data.githubBase}/commit/${selectedCommit.hash}`}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -1165,15 +1226,15 @@ function LoadMoreRow({
   // repo's history; no point in showing load-more.
   if (commitsLoaded < limit) {
     return (
-      <div className="git-graph-loadmore git-graph-loadmore-end">
+      <div className="px-4 py-3 text-center font-sans text-[0.82rem] italic text-muted-foreground opacity-70">
         — end of history ({commitsLoaded} commits) —
       </div>
     );
   }
   return (
-    <div className="git-graph-loadmore">
+    <div className="px-4 py-3 text-center font-sans text-[0.82rem] text-muted-foreground">
       {loading ? (
-        <span className="git-graph-loadmore-loading">Loading…</span>
+        <span>Loading…</span>
       ) : (
         <>
           Load{" "}
@@ -1182,7 +1243,7 @@ function LoadMoreRow({
               {i > 0 && " / "}
               <a
                 href="#"
-                className="git-graph-loadmore-link"
+                className="text-primary no-underline hover:underline"
                 onClick={(e) => {
                   e.preventDefault();
                   onLoad(limit + step);
@@ -1195,7 +1256,7 @@ function LoadMoreRow({
           {" / "}
           <a
             href="#"
-            className="git-graph-loadmore-link"
+            className="text-primary no-underline hover:underline"
             onClick={(e) => {
               e.preventDefault();
               onLoad(ALL_LIMIT);

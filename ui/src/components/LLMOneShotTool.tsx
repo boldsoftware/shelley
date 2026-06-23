@@ -1,6 +1,6 @@
 import React from "react";
 import { LLMContent } from "../types";
-import { useToolExpandedState } from "./ToolDetailContext";
+import { ToolCard, ToolSection, ToolCode, ToolStatusMark } from "./ToolCard";
 
 interface LLMOneShotToolProps {
   toolInput?: unknown; // { prompt_file: string, output_file?: string, model?: string, system_prompt?: string }
@@ -17,8 +17,6 @@ function LLMOneShotTool({
   hasError,
   executionTime,
 }: LLMOneShotToolProps) {
-  const [isExpanded, setIsExpanded] = useToolExpandedState();
-
   const input =
     typeof toolInput === "object" && toolInput !== null
       ? (toolInput as {
@@ -46,81 +44,55 @@ function LLMOneShotTool({
   const summary = summaryParts.join(" · ") || "llm_one_shot";
 
   return (
-    <div className="tool" data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}>
-      <div className="tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="tool-summary">
-          <span className={`tool-emoji ${isRunning ? "running" : ""}`}>🤖</span>
-          <span className="tool-name">llm_one_shot</span>
-          {isComplete && hasError && <span className="tool-error">✗</span>}
-          {isComplete && !hasError && <span className="tool-success">✓</span>}
-          <span className="tool-command">{summary}</span>
-        </div>
-        <button
-          className="tool-toggle"
-          aria-label={isExpanded ? "Collapse" : "Expand"}
-          aria-expanded={isExpanded}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
+    <ToolCard
+      emoji="🤖"
+      running={isRunning}
+      complete={isComplete}
+      title={
+        <>
+          llm_one_shot{" "}
+          <span className="text-muted-foreground">{summary}</span>
+        </>
+      }
+      status={isComplete ? <ToolStatusMark error={hasError} /> : null}
+    >
+      <ToolSection label="Prompt file:">
+        <ToolCode>{promptFile || "(none)"}</ToolCode>
+      </ToolSection>
 
-      {isExpanded && (
-        <div className="tool-details">
-          <div className="tool-section">
-            <div className="tool-label">Prompt file:</div>
-            <pre className="tool-code">{promptFile || "(none)"}</pre>
-          </div>
-
-          {model && (
-            <div className="tool-section">
-              <div className="tool-label">Model:</div>
-              <pre className="tool-code">{model}</pre>
-            </div>
-          )}
-
-          {input.system_prompt && (
-            <div className="tool-section">
-              <div className="tool-label">System prompt:</div>
-              <pre className="tool-code">{input.system_prompt}</pre>
-            </div>
-          )}
-
-          {input.output_file && (
-            <div className="tool-section">
-              <div className="tool-label">Output file:</div>
-              <pre className="tool-code">{input.output_file}</pre>
-            </div>
-          )}
-
-          {isComplete && (
-            <div className="tool-section">
-              <div className="tool-label">
-                Result{hasError ? " (Error)" : ""}:
-                {executionTime && <span className="tool-time">{executionTime}</span>}
-              </div>
-              <pre className={`tool-code ${hasError ? "error" : ""}`}>
-                {resultText || "(no output)"}
-              </pre>
-            </div>
-          )}
-        </div>
+      {model && (
+        <ToolSection label="Model:">
+          <ToolCode>{model}</ToolCode>
+        </ToolSection>
       )}
-    </div>
+
+      {input.system_prompt && (
+        <ToolSection label="System prompt:">
+          <ToolCode>{input.system_prompt}</ToolCode>
+        </ToolSection>
+      )}
+
+      {input.output_file && (
+        <ToolSection label="Output file:">
+          <ToolCode>{input.output_file}</ToolCode>
+        </ToolSection>
+      )}
+
+      {isComplete && (
+        <ToolSection
+          label={
+            <span className="flex items-center gap-2">
+              <span>Result{hasError ? " (Error)" : ""}:</span>
+              {executionTime && (
+                <span className="text-muted-foreground">{executionTime}</span>
+              )}
+            </span>
+          }
+        >
+          <ToolCode error={hasError}>{resultText || "(no output)"}</ToolCode>
+        </ToolSection>
+      )}
+    </ToolCard>
   );
 }
 

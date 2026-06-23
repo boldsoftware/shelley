@@ -1,6 +1,11 @@
 import React from "react";
-import { createPortal } from "react-dom";
-import { useEscapeClose } from "./useEscapeClose";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 interface ModalProps {
   isOpen: boolean;
@@ -11,41 +16,39 @@ interface ModalProps {
   className?: string;
 }
 
-function Modal({ isOpen, onClose, title, titleRight, children, className }: ModalProps) {
-  useEscapeClose(isOpen, onClose);
-
-  if (!isOpen) return null;
-
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
-  return createPortal(
-    <div className="modal-overlay" onClick={handleBackdropClick}>
-      <div className={`modal ${className || ""}`}>
-        {/* Header */}
-        <div className="modal-header">
-          <h2 className="modal-title">{title}</h2>
-          {titleRight && <div className="modal-title-right">{titleRight}</div>}
-          <button onClick={onClose} className="btn-icon" aria-label="Close modal">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="modal-body">{children}</div>
-      </div>
-    </div>,
-    document.body,
+// Keystone modal wrapper. Built on shadcn's Dialog (Radix) but keeps the exact
+// prop API the ~15 existing modals already pass, so callers don't change.
+// Radix supplies the overlay, focus-trap, Escape and outside-click close, so
+// the previous manual useEscapeClose / backdrop-click handling is gone.
+function Modal({
+  isOpen,
+  onClose,
+  title,
+  titleRight,
+  children,
+  className,
+}: ModalProps) {
+  return (
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        aria-describedby={undefined}
+        className={cn(
+          "flex max-h-[85vh] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl",
+          className
+        )}
+      >
+        <DialogHeader className="flex flex-row items-center gap-3 border-b border-border px-5 py-3 pr-12">
+          <DialogTitle className="flex-1 truncate">{title}</DialogTitle>
+          {titleRight && <div className="shrink-0">{titleRight}</div>}
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

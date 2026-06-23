@@ -17,20 +17,18 @@ function ModelBar({ model, models = [], thinkingLevel }: ModelBarProps) {
   const displayName = modelObj?.display_name || model;
 
   return (
-    <div className="model-bar">
-      <div className="model-bar-summary">
-        <span className="model-bar-icon">🤖</span>
-        <span className="model-bar-label">Model</span>
-        <span className="model-bar-name">{displayName}</span>
-        {thinkingLevel && (
-          <>
-            <span className="model-bar-label" title="Reasoning effort">
-              Reasoning
-            </span>
-            <span className="model-bar-name">{thinkingLevel}</span>
-          </>
-        )}
-      </div>
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 py-1 text-xs text-muted-foreground">
+      <span aria-hidden>🤖</span>
+      <span className="font-medium">Model</span>
+      <span className="text-foreground">{displayName}</span>
+      {thinkingLevel && (
+        <>
+          <span className="font-medium" title="Reasoning effort">
+            Reasoning
+          </span>
+          <span className="text-foreground">{thinkingLevel}</span>
+        </>
+      )}
     </div>
   );
 }

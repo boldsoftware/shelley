@@ -1,6 +1,6 @@
 import React from "react";
 import { LLMContent } from "../types";
-import { useToolExpandedState } from "./ToolDetailContext";
+import { ToolCard, ToolSection, ToolCode, ToolStatusMark } from "./ToolCard";
 
 interface BrowserResizeToolProps {
   toolInput?: unknown; // { width: number, height: number }
@@ -17,8 +17,6 @@ function BrowserResizeTool({
   hasError,
   executionTime,
 }: BrowserResizeToolProps) {
-  const [isExpanded, setIsExpanded] = useToolExpandedState();
-
   // Extract dimensions from toolInput
   const width =
     typeof toolInput === "object" &&
@@ -44,59 +42,34 @@ function BrowserResizeTool({
   const displaySize = width > 0 && height > 0 ? `${width}×${height}` : "...";
 
   return (
-    <div className="tool" data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}>
-      <div className="tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="tool-summary">
-          <span className={`tool-emoji ${isRunning ? "running" : ""}`}>📐</span>
-          <span className="tool-command">resize {displaySize}</span>
-          {isComplete && hasError && <span className="tool-error">✗</span>}
-          {isComplete && !hasError && <span className="tool-success">✓</span>}
-        </div>
-        <button
-          className="tool-toggle"
-          aria-label={isExpanded ? "Collapse" : "Expand"}
-          aria-expanded={isExpanded}
+    <ToolCard
+      emoji="📐"
+      running={isRunning}
+      complete={isComplete}
+      title={`resize ${displaySize}`}
+      status={isComplete ? <ToolStatusMark error={hasError} /> : null}
+    >
+      <ToolSection label="Dimensions:">
+        <ToolCode>
+          {width} × {height} pixels
+        </ToolCode>
+      </ToolSection>
+
+      {isComplete && output && (
+        <ToolSection
+          label={
+            <span className="flex items-center gap-2">
+              <span>Output{hasError ? " (Error)" : ""}:</span>
+              {executionTime && (
+                <span className="text-muted-foreground">{executionTime}</span>
+              )}
+            </span>
+          }
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
-
-      {isExpanded && (
-        <div className="tool-details">
-          <div className="tool-section">
-            <div className="tool-label">Dimensions:</div>
-            <div className="tool-code">
-              {width} × {height} pixels
-            </div>
-          </div>
-
-          {isComplete && output && (
-            <div className="tool-section">
-              <div className="tool-label">
-                Output{hasError ? " (Error)" : ""}:
-                {executionTime && <span className="tool-time">{executionTime}</span>}
-              </div>
-              <pre className={`tool-code ${hasError ? "error" : ""}`}>{output}</pre>
-            </div>
-          )}
-        </div>
+          <ToolCode error={hasError}>{output}</ToolCode>
+        </ToolSection>
       )}
-    </div>
+    </ToolCard>
   );
 }
 

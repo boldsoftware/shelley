@@ -1,4 +1,13 @@
 import React from "react";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ConfigField {
   name: string;
@@ -21,30 +30,31 @@ export default function ConfigFieldInput({ field, value, onChange }: ConfigField
   const descId = `${inputId}-desc`;
 
   return (
-    <div className="form-group">
-      <label htmlFor={inputId}>
+    <div className="mb-3 flex flex-col gap-1.5">
+      <Label htmlFor={inputId}>
         {field.label}
         {field.required && " *"}
-      </label>
+      </Label>
       {field.options && field.options.length > 0 ? (
-        <select
-          id={inputId}
-          className="form-input"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          aria-describedby={field.description ? descId : undefined}
-        >
-          <option value="">Select...</option>
-          {field.options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger
+            id={inputId}
+            className="w-full"
+            aria-describedby={field.description ? descId : undefined}
+          >
+            <SelectValue placeholder="Select..." />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options.map((opt) => (
+              <SelectItem key={opt} value={opt}>
+                {opt}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       ) : (
-        <input
+        <Input
           id={inputId}
-          className="form-input"
           type={field.type === "password" ? "password" : "text"}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -53,7 +63,7 @@ export default function ConfigFieldInput({ field, value, onChange }: ConfigField
         />
       )}
       {field.description && (
-        <span id={descId} className="config-field-description">
+        <span id={descId} className="text-xs text-muted-foreground">
           {field.description}
         </span>
       )}

@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import JSZip from "jszip";
+import { ChevronRightIcon, DownloadIcon, ExternalLinkIcon } from "lucide-react";
 import { LLMContent } from "../types";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 interface EmbeddedFile {
   name: string;
@@ -427,67 +430,62 @@ function OutputIframeTool({
 
   return (
     <div
-      className="output-iframe-tool"
+      className="my-1 overflow-hidden rounded-lg border border-border bg-card text-card-foreground"
       data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}
     >
-      <div className="output-iframe-tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="output-iframe-tool-summary">
-          <span className={`output-iframe-tool-emoji ${isRunning ? "running" : ""}`}>✨</span>
-          <span className="output-iframe-tool-title" title={title}>
-            {title}
+      <div
+        className="flex cursor-pointer items-center gap-2 px-3 py-1.5 select-none hover:bg-muted/50"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <span className={cn("shrink-0 text-base leading-none", isRunning && "animate-pulse")}>
+          ✨
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium" title={title}>
+          {title}
+        </span>
+        {isComplete && hasError && (
+          <span className="shrink-0 text-xs font-medium text-destructive" aria-label="failed">
+            ✗
           </span>
-          {isComplete && hasError && <span className="output-iframe-tool-error">✗</span>}
-          {isComplete && !hasError && <span className="output-iframe-tool-success">✓</span>}
-        </div>
-        <div className="output-iframe-tool-actions">
+        )}
+        {isComplete && !hasError && (
+          <span
+            className="shrink-0 text-xs font-medium text-emerald-600 dark:text-emerald-500"
+            aria-label="succeeded"
+          >
+            ✓
+          </span>
+        )}
+        <div className="flex shrink-0 items-center gap-0.5">
           {isComplete && !hasError && html && (
             <>
-              <button
-                className="output-iframe-tool-download-btn"
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground"
                 onClick={handleDownload}
                 aria-label={downloadLabel}
                 title={downloadLabel}
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-              </button>
-              <button
-                className="output-iframe-tool-open-btn"
+                <DownloadIcon className="size-3.5" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground"
                 onClick={handleOpenInNewTab}
                 aria-label="Open in new tab"
                 title="Open in new tab"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                  <polyline points="15 3 21 3 21 9" />
-                  <line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
-              </button>
+                <ExternalLinkIcon className="size-3.5" />
+              </Button>
             </>
           )}
           <button
-            className="output-iframe-tool-toggle"
+            type="button"
+            className="shrink-0 text-muted-foreground"
             onClick={(e) => {
               e.stopPropagation();
               setIsExpanded(!isExpanded);
@@ -495,37 +493,24 @@ function OutputIframeTool({
             aria-label={isExpanded ? "Collapse" : "Expand"}
             aria-expanded={isExpanded}
           >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 12 12"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-            >
-              <path
-                d="M4.5 3L7.5 6L4.5 9"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <ChevronRightIcon
+              className={cn("size-3.5 transition-transform", isExpanded && "rotate-90")}
+            />
           </button>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="output-iframe-tool-details">
+        <div className="border-t border-border px-3 py-2 text-sm">
           {isComplete && !hasError && htmlWithHeightReporter && (
-            <div className="output-iframe-tool-section">
+            <div className="mb-2 last:mb-0">
               {executionTime && (
-                <div className="output-iframe-tool-label">
+                <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
                   <span>Output:</span>
-                  <span className="output-iframe-tool-time">{executionTime}</span>
+                  <span className="text-muted-foreground/70">{executionTime}</span>
                 </div>
               )}
-              <div className="output-iframe-container">
+              <div className="overflow-hidden rounded-md border border-border bg-white">
                 <iframe
                   ref={iframeRef}
                   srcDoc={htmlWithHeightReporter}
@@ -541,7 +526,7 @@ function OutputIframeTool({
                   // iframes need an explicit `allow` to use clipboard APIs.
                   allow="clipboard-write"
                   title={title}
-                  className="output-iframe-wrapper"
+                  className="output-iframe-wrapper block w-full border-0"
                   onLoad={handleIframeLoad}
                   style={{
                     height: `${iframeHeight}px`,
@@ -552,12 +537,14 @@ function OutputIframeTool({
           )}
 
           {isComplete && hasError && (
-            <div className="output-iframe-tool-section">
-              <div className="output-iframe-tool-label">
+            <div className="mb-2 last:mb-0">
+              <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 <span>Error:</span>
-                {executionTime && <span className="output-iframe-tool-time">{executionTime}</span>}
+                {executionTime && (
+                  <span className="text-muted-foreground/70">{executionTime}</span>
+                )}
               </div>
-              <pre className="output-iframe-tool-error-message">
+              <pre className="max-h-96 overflow-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs whitespace-pre-wrap break-words text-destructive">
                 {toolResult && toolResult[0]?.Text
                   ? toolResult[0].Text
                   : "Failed to display HTML content"}
@@ -566,8 +553,8 @@ function OutputIframeTool({
           )}
 
           {isRunning && (
-            <div className="output-iframe-tool-section">
-              <div className="output-iframe-tool-label">Preparing HTML output...</div>
+            <div className="mb-2 text-xs font-medium text-muted-foreground last:mb-0">
+              Preparing HTML output...
             </div>
           )}
         </div>

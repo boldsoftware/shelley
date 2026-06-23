@@ -1,5 +1,7 @@
 import React, { useState } from "react";
+import { ChevronRightIcon } from "lucide-react";
 import { Message, LLMContent } from "../types";
+import { cn } from "@/lib/utils";
 
 interface JSONSchemaProperty {
   type?: string | string[];
@@ -43,9 +45,12 @@ function ToolItem({ tool }: { tool: ToolDescription }) {
   const properties = tool.parameters?.properties ?? {};
 
   return (
-    <div className="system-prompt-tool-item">
+    <div className="overflow-hidden rounded-md border border-border bg-card">
       <div
-        className={`system-prompt-tool-header${hasDetails ? " system-prompt-tool-header--clickable" : ""}`}
+        className={cn(
+          "flex items-center gap-2 px-2.5 py-1.5",
+          hasDetails && "cursor-pointer select-none hover:bg-muted/50"
+        )}
         onClick={hasDetails ? () => setExpanded(!expanded) : undefined}
         onKeyDown={
           hasDetails
@@ -61,40 +66,33 @@ function ToolItem({ tool }: { tool: ToolDescription }) {
         role={hasDetails ? "button" : undefined}
         aria-expanded={hasDetails ? expanded : undefined}
       >
-        {hasDetails && (
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 10 10"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-item-chevron${expanded ? " tool-item-chevron--expanded" : ""}`}
-          >
-            <path
-              d="M3 2L7 5L3 8"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+        {hasDetails ? (
+          <ChevronRightIcon
+            className={cn(
+              "size-3 shrink-0 text-muted-foreground transition-transform",
+              expanded && "rotate-90"
+            )}
+          />
+        ) : (
+          <span className="size-3 shrink-0" />
         )}
-        {!hasDetails && <span className="tool-item-chevron-spacer" />}
-        <code className="system-prompt-tool-name">{tool.name}</code>
-        <span className="system-prompt-tool-desc">{firstLine}</span>
+        <code className="shrink-0 font-mono text-[13px] text-primary">{tool.name}</code>
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {firstLine}
+        </span>
       </div>
 
       {expanded && hasDetails && (
-        <div className="system-prompt-tool-detail">
+        <div className="border-t border-border px-2.5 py-2 text-sm">
           {tool.description.trim().includes("\n") && (
-            <p className="system-prompt-tool-full-desc">
+            <p className="mb-2 whitespace-pre-wrap text-muted-foreground">
               {tool.description.trim().split("\n").slice(1).join("\n").trim()}
             </p>
           )}
           {Object.keys(properties).length > 0 && (
-            <div className="system-prompt-tool-params">
-              <div className="system-prompt-tool-params-label">Parameters</div>
-              <table className="system-prompt-tool-params-table">
+            <div>
+              <div className="mb-1 text-xs font-medium text-muted-foreground">Parameters</div>
+              <table className="w-full border-collapse text-xs">
                 <tbody>
                   {Object.entries(properties).map(([paramName, prop]) => {
                     const isRequired = required.has(paramName);
@@ -102,26 +100,24 @@ function ToolItem({ tool }: { tool: ToolDescription }) {
                       ? prop.type.join(" | ")
                       : (prop.type ?? "");
                     return (
-                      <tr key={paramName} className="system-prompt-tool-param-row">
-                        <td className="system-prompt-tool-param-name">
-                          <code>{paramName}</code>
-                          {isRequired && (
-                            <span className="system-prompt-tool-param-required">*</span>
-                          )}
+                      <tr key={paramName} className="align-top">
+                        <td className="py-1 pr-3 whitespace-nowrap">
+                          <code className="font-mono text-foreground">{paramName}</code>
+                          {isRequired && <span className="text-destructive">*</span>}
                         </td>
-                        <td className="system-prompt-tool-param-type">
-                          <code>{typeLabel}</code>
+                        <td className="py-1 pr-3 whitespace-nowrap">
+                          <code className="font-mono text-muted-foreground">{typeLabel}</code>
                         </td>
-                        <td className="system-prompt-tool-param-desc">
+                        <td className="py-1 text-muted-foreground">
                           {prop.description && <span>{prop.description}</span>}
                           {prop.enum && prop.enum.length > 0 && (
-                            <span className="system-prompt-tool-param-enum">
+                            <span>
                               {" "}
                               Allowed values:{" "}
                               {prop.enum.map((v, i) => (
                                 <React.Fragment key={i}>
                                   {i > 0 && ", "}
-                                  <code>{String(v)}</code>
+                                  <code className="font-mono text-foreground">{String(v)}</code>
                                 </React.Fragment>
                               ))}
                             </span>
@@ -186,52 +182,47 @@ function SystemPromptView({ message }: SystemPromptViewProps) {
   const sizeKb = (charCount / 1024).toFixed(1);
 
   return (
-    <div className="system-prompt-view">
-      <div className="system-prompt-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="system-prompt-summary">
-          <span className="system-prompt-icon">📋</span>
-          <span className="system-prompt-label">System Prompt</span>
-          <span className="system-prompt-meta">
+    <div className="my-1 overflow-hidden rounded-lg border border-border bg-card text-card-foreground">
+      <div
+        className="flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 hover:bg-muted/50"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="shrink-0 text-base leading-none">📋</span>
+          <span className="shrink-0 text-[13px] font-medium">System Prompt</span>
+          <span className="min-w-0 truncate text-xs text-muted-foreground">
             {lineCount} lines, {sizeKb} KB{tools.length > 0 && ` · ${tools.length} tools`}
           </span>
         </div>
         <button
-          className="tool-toggle"
+          type="button"
+          className="shrink-0 text-muted-foreground"
           aria-label={isExpanded ? "Collapse" : "Expand"}
           aria-expanded={isExpanded}
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <ChevronRightIcon
+            className={cn("size-3.5 transition-transform", isExpanded && "rotate-90")}
+          />
         </button>
       </div>
 
       {isExpanded && (
-        <div className="system-prompt-content">
+        <div className="border-t border-border px-3 py-2">
           {tools.length > 0 && (
-            <div className="system-prompt-tools">
-              <div className="system-prompt-tools-label">🔧 Tools ({tools.length})</div>
-              <div className="system-prompt-tools-list">
+            <div className="mb-3">
+              <div className="mb-1.5 text-xs font-medium text-muted-foreground">
+                🔧 Tools ({tools.length})
+              </div>
+              <div className="flex flex-col gap-1.5">
                 {tools.map((tool) => (
                   <ToolItem key={tool.name} tool={tool} />
                 ))}
               </div>
             </div>
           )}
-          <pre className="system-prompt-text">{systemPromptText}</pre>
+          <pre className="max-h-96 overflow-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs whitespace-pre-wrap break-words">
+            {systemPromptText}
+          </pre>
         </div>
       )}
     </div>

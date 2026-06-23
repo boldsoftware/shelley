@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { LLMContent } from "../types";
-import { useToolExpandedState, useInToolDetail } from "./ToolDetailContext";
+import { useInToolDetail } from "./ToolDetailContext";
+import { ToolCard, ToolSection, ToolStatusMark } from "./ToolCard";
+import { cn } from "@/lib/utils";
 import AnsiText from "./AnsiText";
 
 // Display data from the bash tool backend
@@ -26,6 +28,10 @@ interface BashToolProps {
 /** Max lines shown in the streaming preview before "Show more" is needed. */
 const PREVIEW_LINES = 5;
 
+/** Shared monospace block styling for code/output, matching ToolCode. */
+const CODE_CLASS =
+  "max-h-96 overflow-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs whitespace-pre-wrap break-words";
+
 function BashTool({
   toolInput,
   isRunning,
@@ -35,29 +41,24 @@ function BashTool({
   display,
   streamingOutput,
 }: BashToolProps) {
-  // Details panel (command, full output) — collapsed by default, stays collapsed after completion.
-  const [isExpanded, setIsExpanded] = useToolExpandedState();
   // Streaming preview — expanded to show full streaming output (beyond PREVIEW_LINES).
   const [previewExpanded, setPreviewExpanded] = useState(false);
   const previewRef = React.useRef<HTMLPreElement>(null);
-  const expandedStreamRef = React.useRef<HTMLPreElement>(null);
 
-  // Collapse details when tool completes (if we auto-expanded for streaming,
-  // the user sees the preview instead, so the details panel should close).
-  // In the detail modal the card must stay open, so skip the auto-collapse.
+  // The live preview duplicates the detail body's output panel, which is open
+  // by default inside the tool detail modal — suppress the preview there.
   const inToolDetail = useInToolDetail();
   const prevRunning = React.useRef(isRunning);
   React.useEffect(() => {
-    if (prevRunning.current && !isRunning && !inToolDetail) {
-      setIsExpanded(false);
+    if (prevRunning.current && !isRunning) {
       setPreviewExpanded(false);
     }
     prevRunning.current = isRunning;
-  }, [isRunning, inToolDetail]);
+  }, [isRunning]);
 
-  // Auto-scroll streaming output to bottom (whichever ref is active).
+  // Auto-scroll streaming preview to bottom.
   React.useEffect(() => {
-    const el = previewRef.current ?? expandedStreamRef.current;
+    const el = previewRef.current;
     if (el && streamingOutput) {
       el.scrollTop = el.scrollHeight;
     }
@@ -110,57 +111,92 @@ function BashTool({
     };
   }, [streamingOutput, previewExpanded]);
 
-  return (
-    <div
-      className="bash-tool"
-      data-testid={isComplete ? "tool-call-completed" : "tool-call-running"}
-    >
-      <div className="bash-tool-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="bash-tool-summary">
-          <span className={`bash-tool-emoji ${isRunning ? "running" : ""}`}>🛠️</span>
-          <span className="bash-tool-command" title={command}>
-            {displayCommand}
-          </span>
-          {displayData?.workingDir && (
-            <span className="bash-tool-cwd" title={displayData.workingDir}>
-              in {displayData.workingDir}
-            </span>
-          )}
-          {isComplete && isCancelled && <span className="bash-tool-cancelled">✗ cancelled</span>}
-          {isComplete && hasError && !isCancelled && <span className="bash-tool-error">✗</span>}
-          {isComplete && !hasError && <span className="bash-tool-success">✓</span>}
-        </div>
-        <button
-          className="bash-tool-toggle"
-          aria-label={isExpanded ? "Collapse" : "Expand"}
-          aria-expanded={isExpanded}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`tool-chevron${isExpanded ? " tool-chevron-expanded" : ""}`}
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
+  // Show the live preview below the card while running (outside the collapsible
+  // body so it stays visible whether or not the card is expanded), except in the
+  // detail modal where the body's streaming output is already shown.
+  const showPreview = isRunning && !!streamingOutput && !inToolDetail;
 
-      {/* Streaming preview — shown below header while running, outside the details panel */}
-      {isRunning && streamingOutput && !isExpanded && (
-        <div className="bash-tool-preview">
-          <AnsiText ref={previewRef} className="bash-tool-preview-code" text={visibleStreaming} />
+  return (
+    <div>
+      <ToolCard
+        className="bash-tool"
+        emoji="🛠️"
+        running={isRunning}
+        complete={isComplete}
+        title={
+          <span className="bash-tool-header flex items-center gap-2">
+            <span className="bash-tool-command min-w-0 truncate" title={command}>
+              {displayCommand}
+            </span>
+            {displayData?.workingDir && (
+              <span className="shrink-0 text-muted-foreground" title={displayData.workingDir}>
+                in {displayData.workingDir}
+              </span>
+            )}
+          </span>
+        }
+        status={
+          isComplete ? (
+            isCancelled ? (
+              <span className="font-medium text-destructive" aria-label="cancelled">
+                ✗ cancelled
+              </span>
+            ) : (
+              <ToolStatusMark error={hasError} />
+            )
+          ) : null
+        }
+      >
+        <div className="bash-tool-details">
+          {displayData?.workingDir && (
+            <ToolSection label="Working Directory:">
+              <pre className={cn(CODE_CLASS, "text-muted-foreground")}>{displayData.workingDir}</pre>
+            </ToolSection>
+          )}
+
+          <ToolSection label="Command:">
+            <pre className={cn("bash-tool-code", CODE_CLASS)}>{command}</pre>
+          </ToolSection>
+
+          {isRunning && streamingOutput && (
+            <ToolSection label="Output (streaming):">
+              <AnsiText className={CODE_CLASS} text={streamingOutput} />
+            </ToolSection>
+          )}
+
+          {isComplete && (
+            <ToolSection
+              label={
+                <span className="flex items-center gap-2">
+                  <span>Output{hasError ? " (Error)" : ""}:</span>
+                  {executionTime && <span className="text-muted-foreground">{executionTime}</span>}
+                </span>
+              }
+            >
+              <AnsiText
+                className={cn("bash-tool-code", CODE_CLASS, hasError && "text-destructive")}
+                text={output || "(no output)"}
+              />
+            </ToolSection>
+          )}
+        </div>
+      </ToolCard>
+
+      {/* Live streaming preview — stays visible below the card while running. */}
+      {showPreview && (
+        <div className="mt-1 px-3">
+          <AnsiText
+            ref={previewRef}
+            className={cn(
+              CODE_CLASS,
+              "max-h-40 border border-primary/60 text-muted-foreground"
+            )}
+            text={visibleStreaming}
+          />
           {hasMoreLines && !previewExpanded && (
             <button
-              className="bash-tool-preview-more"
+              type="button"
+              className="mt-1 font-mono text-xs text-primary hover:underline"
               onClick={(e) => {
                 e.stopPropagation();
                 setPreviewExpanded(true);
@@ -168,45 +204,6 @@ function BashTool({
             >
               Show all {lineCount} lines
             </button>
-          )}
-        </div>
-      )}
-
-      {isExpanded && (
-        <div className="bash-tool-details">
-          {displayData?.workingDir && (
-            <div className="bash-tool-section">
-              <div className="bash-tool-label">Working Directory:</div>
-              <pre className="bash-tool-code bash-tool-code-cwd">{displayData.workingDir}</pre>
-            </div>
-          )}
-          <div className="bash-tool-section">
-            <div className="bash-tool-label">Command:</div>
-            <pre className="bash-tool-code">{command}</pre>
-          </div>
-
-          {isRunning && streamingOutput && (
-            <div className="bash-tool-section">
-              <div className="bash-tool-label">Output (streaming):</div>
-              <AnsiText
-                ref={expandedStreamRef}
-                className="bash-tool-code bash-tool-streaming"
-                text={streamingOutput}
-              />
-            </div>
-          )}
-
-          {isComplete && (
-            <div className="bash-tool-section">
-              <div className="bash-tool-label">
-                Output{hasError ? " (Error)" : ""}:
-                {executionTime && <span className="bash-tool-time">{executionTime}</span>}
-              </div>
-              <AnsiText
-                className={`bash-tool-code ${hasError ? "error" : ""}`}
-                text={output || "(no output)"}
-              />
-            </div>
           )}
         </div>
       )}
