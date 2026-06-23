@@ -7,6 +7,8 @@
 // substitute the localized message placeholder via i18n. All other hints are
 // English easter-egg style tips and are intentionally not i18n'd.
 
+import { SLASH_COMMANDS } from "./slashCommands";
+
 export type PlaceholderHintPlatform = "any" | "desktop" | "mobile";
 
 export interface PlaceholderHint {
@@ -36,13 +38,13 @@ export const PLACEHOLDER_HINTS: PlaceholderHint[] = [
   },
   {
     id: "slash-diff",
-    text: "/diff opens the diff viewer",
+    text: `${SLASH_COMMANDS.DIFF.command} ${SLASH_COMMANDS.DIFF.description}`,
     platform: "any",
     weight: 1,
   },
   {
     id: "slash-new",
-    text: "/new <prompt> starts a new conversation",
+    text: `${SLASH_COMMANDS.NEW.command} <prompt> ${SLASH_COMMANDS.NEW.description}`,
     platform: "any",
     weight: 1,
   },

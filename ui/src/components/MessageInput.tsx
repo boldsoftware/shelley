@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useI18n } from "../i18n";
 import { pickPlaceholderHint } from "../utils/placeholderHints";
+import { SLASH_COMMANDS } from "../utils/slashCommands";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -138,7 +139,10 @@ function MessageInput({
     return window.innerWidth < 480;
   });
   const [showQueueMenu, setShowQueueMenu] = useState(false);
+  const [slashMenuSelectedIndex, setSlashMenuSelectedIndex] = useState(0);
+  const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
   const queueMenuRef = useRef<HTMLDivElement>(null);
+  const slashMenuRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -535,10 +539,103 @@ function MessageInput({
     }
   };
 
+  const isDisabled = disabled;
+  const canSubmit = hasContent && !isDisabled && !submitting && uploadsInProgress === 0;
+
+  // Check if user is typing a shell command (starts with !)
+  const isShellMode = message.trimStart().startsWith("!");
+  const slashPrefixMatch = message.match(/^\/[a-zA-Z0-9_-]*$/);
+  const slashQuery = slashPrefixMatch ? slashPrefixMatch[0].slice(1).toLowerCase() : null;
+  const slashSuggestions = useMemo(() => {
+    if (slashQuery === null) return [];
+    return Object.values(SLASH_COMMANDS).filter((item) =>
+      item.command.slice(1).startsWith(slashQuery),
+    );
+  }, [slashQuery]);
+  const exactSlashCommand = slashSuggestions.some((item) => item.command.slice(1) === slashQuery);
+  const showSlashMenu =
+    slashQuery !== null &&
+    !slashMenuDismissed &&
+    !exactSlashCommand &&
+    slashSuggestions.length > 0 &&
+    !isDisabled &&
+    !isShellMode;
+
+  useEffect(() => {
+    setSlashMenuSelectedIndex(0);
+  }, [slashQuery]);
+
+  useEffect(() => {
+    if (message.length === 0) setSlashMenuDismissed(false);
+  }, [message]);
+
+  useEffect(() => {
+    if (message === SLASH_COMMANDS.SHELL.command) {
+      setMessage("!");
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+  }, [message, setMessage]);
+
+  const chooseSlashCommand = useCallback(
+    async (index: number) => {
+      const item = slashSuggestions[index];
+      if (!item) return;
+      if (!item.takesArgs) {
+        setMessage("");
+        setSlashMenuDismissed(true);
+        onDraftSendStarted?.();
+        try {
+          await onSend(item.command);
+          onDraftCleared?.();
+        } catch {
+          setMessage(item.command);
+        }
+        return;
+      }
+      if (item.command === SLASH_COMMANDS.SHELL.command) {
+        setMessage("!");
+        requestAnimationFrame(() => textareaRef.current?.focus());
+        return;
+      }
+      setMessage(`${item.command} `);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    },
+    [onDraftCleared, onDraftSendStarted, onSend, setMessage, slashSuggestions],
+  );
+
+  useEffect(() => {
+    if (!showSlashMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (slashMenuRef.current?.contains(e.target as Node)) return;
+      setSlashMenuDismissed(true);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSlashMenu]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Don't submit while IME is composing (e.g., converting Japanese hiragana to kanji)
     if (e.nativeEvent.isComposing) {
       return;
+    }
+    if (showSlashMenu) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSlashMenuSelectedIndex((index) => (index + 1) % slashSuggestions.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSlashMenuSelectedIndex(
+          (index) => (index - 1 + slashSuggestions.length) % slashSuggestions.length,
+        );
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        void chooseSlashCommand(slashMenuSelectedIndex);
+        return;
+      }
     }
     // Escape blurs the textarea, so that follow-up shortcuts like
     // Cmd+ArrowDown (scroll conversation to bottom) work without
@@ -619,17 +716,12 @@ function MessageInput({
     };
   }, []);
 
-  const isDisabled = disabled;
-  const canSubmit = hasContent && !isDisabled && !submitting && uploadsInProgress === 0;
-
   const isDraggingOver = dragCounter > 0;
-  // Check if user is typing a shell command (starts with !)
-  const isShellMode = message.trimStart().startsWith("!");
   // Note: injectedText is auto-inserted via useEffect, no manual UI needed
 
   return (
     <div
-      className={`message-input-container ${isDraggingOver ? "drag-over" : ""} ${isShellMode ? "shell-mode" : ""}`}
+      className={`message-input-container ${isDraggingOver ? "drag-over" : ""} ${isShellMode ? "shell-mode" : ""} ${showSlashMenu ? "slash-menu-open" : ""}`}
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
@@ -704,6 +796,31 @@ function MessageInput({
           </div>
         )}
         <div className="textarea-wrapper">
+          {showSlashMenu && (
+            <div
+              ref={slashMenuRef}
+              className="slash-command-menu"
+              role="listbox"
+              aria-label="Slash commands"
+              data-testid="slash-command-menu"
+            >
+              {slashSuggestions.map((item, index) => (
+                <button
+                  key={item.command}
+                  type="button"
+                  className={`slash-command-item${index === slashMenuSelectedIndex ? " selected" : ""}`}
+                  role="option"
+                  aria-selected={index === slashMenuSelectedIndex}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={() => setSlashMenuSelectedIndex(index)}
+                  onClick={() => void chooseSlashCommand(index)}
+                >
+                  <span className="slash-command-name">{item.command}</span>
+                  <span className="slash-command-description">{item.description}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {isShellMode && (
             <div className="shell-mode-indicator" title="This will run as a shell command">
               <svg

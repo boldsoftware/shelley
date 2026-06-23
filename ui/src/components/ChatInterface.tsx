@@ -33,6 +33,7 @@ import MessageSelectionToolbar from "./MessageSelectionToolbar";
 import { buildMessageQuote } from "../utils/messageQuote";
 import { tildifyPath } from "../utils/tildify";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
+import { SLASH_COMMANDS } from "../utils/slashCommands";
 import GitGraphViewer from "./GitGraphViewer";
 import AgentsMdEditorModal from "./AgentsMdEditorModal";
 import BashTool from "./BashTool";
@@ -1843,7 +1844,7 @@ function ChatInterface({
 
     // "/fork" forks the current conversation (all messages) into a new one and
     // navigates to it.
-    if (trimmedMessage === "/fork") {
+    if (trimmedMessage === SLASH_COMMANDS.FORK.command) {
       await forkConversation();
       return;
     }
@@ -1852,7 +1853,7 @@ function ChatInterface({
     // "/diff" opens the diff viewer (mirroring the command palette action).
     // "/new <prompt>" starts a new conversation and sends <prompt> as the
     // first message; "/new" with no prompt just clears the conversation.
-    if (trimmedMessage === "/diff") {
+    if (trimmedMessage === SLASH_COMMANDS.DIFF.command) {
       setShowDiffViewer(true);
       return;
     }
@@ -1861,13 +1862,19 @@ function ChatInterface({
     // generation (summarize older messages, keep recent ones verbatim).
     // Any text after "/compact" is free-form guidance steering what the
     // summary should preserve or emphasize.
-    if (trimmedMessage === "/compact" || trimmedMessage.startsWith("/compact ")) {
-      const instructions = trimmedMessage.slice("/compact".length).trim();
+    if (
+      trimmedMessage === SLASH_COMMANDS.COMPACT.command ||
+      trimmedMessage.startsWith(`${SLASH_COMMANDS.COMPACT.command} `)
+    ) {
+      const instructions = trimmedMessage.slice(SLASH_COMMANDS.COMPACT.command.length).trim();
       await handleDistillCompactNewGeneration(instructions || undefined);
       return;
     }
-    if (trimmedMessage === "/new" || trimmedMessage.startsWith("/new ")) {
-      const prompt = trimmedMessage.slice("/new".length).trim();
+    if (
+      trimmedMessage === SLASH_COMMANDS.NEW.command ||
+      trimmedMessage.startsWith(`${SLASH_COMMANDS.NEW.command} `)
+    ) {
+      const prompt = trimmedMessage.slice(SLASH_COMMANDS.NEW.command.length).trim();
       // Clear current conversation (carries cwd over via localStorage).
       onNewConversation();
       if (!prompt || !onFirstMessage) return;

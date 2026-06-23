@@ -2325,6 +2325,11 @@ button {
   margin: 0 auto;
 }
 
+.message-input-container.slash-menu-open .message-input-form {
+  position: relative;
+  z-index: 130;
+}
+
 .message-textarea {
   width: 100%;
   box-sizing: border-box;
@@ -2749,6 +2754,69 @@ button {
   position: relative;
   flex: 1;
   min-width: 0;
+}
+
+.slash-command-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: min(260px, 40vh);
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+}
+
+.slash-command-item {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.slash-command-item:hover,
+.slash-command-item.selected {
+  background: var(--gray-100);
+}
+
+.dark .slash-command-item:hover,
+.dark .slash-command-item.selected {
+  background: var(--gray-700);
+}
+
+.slash-command-name {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+.slash-command-description {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .message-input-container.shell-mode .message-textarea::placeholder {
