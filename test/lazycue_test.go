@@ -432,9 +432,17 @@ func TestDiffViewerListsAddedModifiedDeleted(t *testing.T) {
 
 // diffFixtureDir is a deterministic path holding a git repo with working-tree
 // changes (a modified, a deleted, and a brand-new untracked file). The diff
-// viewer's file list is loaded from here. The path is stable so the LazyCue
-// description that references it hashes to a consistent cache key.
-var diffFixtureDir = filepath.Join(os.TempDir(), "shelley-lazycue-diff-fixture")
+// viewer's file list is loaded from here.
+//
+// The path is per-world: the vue and react lazycue suites run as separate
+// processes that may share an agent's /tmp, and a single fixed path would race
+// (one process's RemoveAll+git-init stomping the other's, panicking on
+// "directory not empty"). The world suffix keeps each process's fixture
+// isolated while staying deterministic so the LazyCue description that embeds
+// the path hashes to a consistent per-world cache key. lazycueWorld() reads
+// LAZYCUE_WORLD, which the harness sets before the process starts, so it is
+// valid at package init.
+var diffFixtureDir = filepath.Join(os.TempDir(), "shelley-lazycue-diff-fixture-"+lazycueWorld())
 
 // setupDiffFixtureRepo (re)creates a git repo at dir with three kinds of
 // working-tree change: a modified tracked file, a deleted tracked file, and a
