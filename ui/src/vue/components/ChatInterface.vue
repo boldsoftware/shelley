@@ -343,6 +343,12 @@ import {
 } from "../../types";
 import { api } from "../../services/api";
 import { messageStore } from "../../services/messageStore";
+import {
+  loadCachedDraft,
+  saveCachedDraft,
+  clearCachedDraft,
+  pickDraft,
+} from "../../services/draftCache";
 import { setFaviconStatus } from "../../services/favicon";
 import { useMarkdownMode } from "../composables/markdownMode";
 import { useI18n } from "../composables/i18n";
@@ -1345,12 +1351,23 @@ const draftValue = ref("");
 const lazyDraftId = ref<string | null>(null);
 let draftConvId: string | null = props.conversationId;
 let inflightCreate: Promise<string> | null = null;
+// The server `updated_at` of the draft row we last successfully synced to.
+// Keystrokes stamp the localStorage mirror with this so a reload can tell
+// whether the cached text is ahead of what the server acknowledged. "" before
+// any server row exists (new-conversation view). See draftCache.
+let draftSyncedAt = "";
 
 async function saveDraft(value: string) {
   const id = draftConvId;
   if (id) {
     if (props.currentConversation?.is_draft) {
-      await api.updateDraft(id, value);
+      const conv = await api.updateDraft(id, value);
+      // The server advanced updated_at to acknowledge this text. Re-base the
+      // live cache entry onto it so keystrokes typed while this PUT was
+      // outstanding (stamped with the older time) stay ahead of the server.
+      draftSyncedAt = conv.updated_at;
+      const cur = loadCachedDraft(id);
+      if (cur) saveCachedDraft(id, cur.value, conv.updated_at);
     }
     return;
   }
@@ -1367,6 +1384,15 @@ async function saveDraft(value: string) {
     })
     .then((conv) => {
       draftConvId = conv.conversation_id;
+      draftSyncedAt = conv.updated_at;
+      // Migrate the `null` new-view cache to the real id so a reload of
+      // /c/<id> finds the keystrokes (same session; see lazyDraftId). Re-base
+      // onto the new row's updated_at so the migrated text stays ahead.
+      const cached = loadCachedDraft(null);
+      if (cached) {
+        saveCachedDraft(conv.conversation_id, cached.value, conv.updated_at);
+        clearCachedDraft(null);
+      }
       // Seed the message store with an empty full-history record for the
       // brand-new draft *before* conversationId flips to it. Otherwise the
       // conversation-switch watcher runs loadMessages on a cache miss, which
@@ -1396,6 +1422,19 @@ async function saveDraft(value: string) {
 const draftAutosave = useDraftAutosave(saveDraft);
 function handleDraftChange(value: string) {
   draftValue.value = value;
+  // Mirror to localStorage SYNCHRONOUSLY before the debounced server autosave:
+  // if the tab reloads (or the network silently dropped) before the PUT lands,
+  // the keystroke survives, stamped with the last server updated_at we synced
+  // to; on next load that stamp is >= the (frozen, on failure) server
+  // updated_at, so the cached text wins.
+  //
+  // Only mirror for sessions the load path actually reconciles from: the
+  // new-conversation view and real drafts. An already-sent conversation's
+  // composer also routes keystrokes here, but its text is never read back, so
+  // caching it would just leak a dead localStorage key per conversation.
+  if (!props.conversationId || props.currentConversation?.is_draft) {
+    saveCachedDraft(draftConvId, value, draftSyncedAt);
+  }
   draftAutosave.schedule(value);
 }
 function handleDraftSendStarted() {
@@ -1404,6 +1443,11 @@ function handleDraftSendStarted() {
 function handleDraftCleared() {
   draftValue.value = "";
   draftAutosave.cancel();
+  // Draft is gone (sent or deleted): drop the local mirror so a later visit
+  // doesn't resurrect it. Clear both the live id and the `null` new-view slot.
+  clearCachedDraft(draftConvId);
+  clearCachedDraft(null);
+  draftSyncedAt = "";
 }
 
 const messageInputInjectedText = computed(
@@ -1725,14 +1769,25 @@ watch(
     () => props.conversationId,
     () => props.currentConversation?.is_draft,
     () => props.currentConversation?.draft,
+    () => props.currentConversation?.updated_at,
     lazyDraftId,
   ],
   () => {
     if (props.conversationId === lazyDraftId.value && lazyDraftId.value !== null) return;
     if (props.currentConversation?.is_draft) {
-      draftValue.value = props.currentConversation.draft || "";
+      // Reconcile the server's copy with any locally-cached keystrokes that
+      // never reached (or outraced) the server.
+      const serverUpdatedAt = props.currentConversation.updated_at || "";
+      const picked = pickDraft(
+        { value: props.currentConversation.draft || "", updatedAt: serverUpdatedAt },
+        loadCachedDraft(props.conversationId),
+      );
+      draftSyncedAt = serverUpdatedAt;
+      draftValue.value = picked.value;
     } else if (!props.conversationId) {
-      draftValue.value = "";
+      const picked = pickDraft({ value: "", updatedAt: "" }, loadCachedDraft(null));
+      draftSyncedAt = "";
+      draftValue.value = picked.value;
     }
   },
   { immediate: true },

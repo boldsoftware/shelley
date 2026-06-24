@@ -27,6 +27,12 @@ import MessageTimestamp, { formatDay } from "./MessageTimestamp";
 import MessageInput from "./MessageInput";
 import { useDraftAutosave } from "../hooks/useDraftAutosave";
 import { decideDraftSync, NO_SESSION } from "../utils/draftSync";
+import {
+  loadCachedDraft,
+  saveCachedDraft,
+  clearCachedDraft,
+  pickDraft,
+} from "../services/draftCache";
 import DiffViewer from "./DiffViewer";
 import { focusMessageInputIfUnfocused } from "../utils/focusMessageInput";
 import MessageSelectionToolbar from "./MessageSelectionToolbar";
@@ -2984,6 +2990,12 @@ function ChatInterface({
   // edits own the draft for the duration of an editing session; decideDraftSync
   // encapsulates that rule (including the lazy-create snapshot special case).
   const draftInitForRef = useRef<string | null | typeof NO_SESSION>(NO_SESSION);
+  // The server `updated_at` of the draft row we last successfully synced to
+  // (seeded on entry, advanced on each successful autosave). Keystrokes stamp
+  // the localStorage mirror with this so a reload can tell whether the cached
+  // text is ahead of what the server acknowledged. "" before any server row
+  // exists (new-conversation view).
+  const draftSyncedAtRef = useRef<string>("");
   // The row has loaded once currentConversation actually matches the id from
   // the URL. On a fresh navigation the URL flips conversationId first and the
   // row arrives a render or two later (or carries a stale neighbor briefly), so
@@ -3002,11 +3014,24 @@ function ChatInterface({
       initializedFor: draftInitForRef.current,
     });
     draftInitForRef.current = decision.initializedFor;
-    if (decision.adopt) setDraftValue(decision.value);
+    if (decision.adopt) {
+      // Reconcile the server's copy with any locally-cached keystrokes that
+      // never reached (or outraced) the server. The cache is keyed by the
+      // session id: `null` for the new-conversation view, otherwise the
+      // draft conversation id.
+      const serverUpdatedAt = currentConversation?.updated_at || "";
+      const picked = pickDraft(
+        { value: decision.value, updatedAt: serverUpdatedAt },
+        loadCachedDraft(conversationId),
+      );
+      draftSyncedAtRef.current = serverUpdatedAt;
+      setDraftValue(picked.value);
+    }
   }, [
     conversationId,
     currentConversation?.is_draft,
     currentConversation?.draft,
+    currentConversation?.updated_at,
     lazyDraftId,
     conversationLoaded,
   ]);
@@ -3026,7 +3051,16 @@ function ChatInterface({
       if (id) {
         // Only PUT against drafts; non-drafts ignore autosave entirely.
         if (currentConversation?.is_draft) {
-          await api.updateDraft(id, value);
+          const conv = await api.updateDraft(id, value);
+          // The server advanced updated_at to acknowledge this text. Re-base
+          // the live cache entry onto it so the in-flight window is covered:
+          // keystrokes typed while this PUT was outstanding were stamped with
+          // the OLDER synced time, which would otherwise lose to the server
+          // on a reload. Re-stamping the CURRENT cached value (not `value`,
+          // which may already be stale) keeps it ahead of the server.
+          draftSyncedAtRef.current = conv.updated_at;
+          const cur = loadCachedDraft(id);
+          if (cur) saveCachedDraft(id, cur.value, conv.updated_at);
         }
         return;
       }
@@ -3045,6 +3079,17 @@ function ChatInterface({
         })
         .then((conv) => {
           draftConvIdRef.current = conv.conversation_id;
+          draftSyncedAtRef.current = conv.updated_at;
+          // The lazily-created draft inherits the `null` session's cached
+          // keystrokes: migrate the localStorage entry to the real id so a
+          // reload of /c/<id> finds them. (The composer treats this as the
+          // same session; see lazyDraftId.) Re-base onto the new row's
+          // updated_at so the migrated text stays ahead of the server.
+          const cached = loadCachedDraft(null);
+          if (cached) {
+            saveCachedDraft(conv.conversation_id, cached.value, conv.updated_at);
+            clearCachedDraft(null);
+          }
           // Seed the message store with an empty full-history record for the
           // brand-new draft *before* conversationId flips to it. Otherwise the
           // conversation-switch effect runs loadMessages on a cache miss,
@@ -3079,9 +3124,24 @@ function ChatInterface({
   const handleDraftChange = useCallback(
     (value: string) => {
       setDraftValue(value);
+      // Mirror to localStorage SYNCHRONOUSLY before the debounced server
+      // autosave. This is the durability guarantee: if the tab reloads (or the
+      // network silently dropped) before the PUT lands, the keystroke still
+      // survives, stamped with the last server updated_at we synced to. On the
+      // next load that stamp is >= the (frozen, on failure) server updated_at,
+      // so the cached text wins. Keyed by the live session id (null = view).
+      //
+      // Only mirror for sessions the load path actually reconciles from: the
+      // new-conversation view and real drafts (see decideDraftSync). The
+      // composer of an already-sent conversation also routes keystrokes here,
+      // but its text is never read back, so caching it would just leak a dead
+      // localStorage key per conversation.
+      if (conversationId === null || currentConversation?.is_draft) {
+        saveCachedDraft(draftConvIdRef.current, value, draftSyncedAtRef.current);
+      }
       draftAutosave.schedule(value);
     },
-    [draftAutosave],
+    [draftAutosave, conversationId, currentConversation?.is_draft],
   );
   const handleDraftSendStarted = useCallback(() => {
     // Stop any pending autosave but leave the controlled value alone so
@@ -3091,7 +3151,13 @@ function ChatInterface({
   const handleDraftCleared = useCallback(() => {
     setDraftValue("");
     draftAutosave.cancel();
-  }, [draftAutosave]);
+    // The draft is gone (sent or deleted): drop the local mirror so a later
+    // visit doesn't resurrect it. Both the live id and the `null` new-view
+    // slot are cleared since a just-promoted draft empties the new view too.
+    clearCachedDraft(draftConvIdRef.current);
+    clearCachedDraft(null);
+    draftSyncedAtRef.current = "";
+  }, []);
 
   return (
     <div className="full-height flex flex-col">
