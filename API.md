@@ -212,6 +212,8 @@ fresh reset event.
 - `GET /api/tools` — registered tool definitions.
 - `GET/POST/PUT/DELETE /api/custom-models[/<id>]` — custom model CRUD.
 - `POST /api/custom-models-test` — test a custom model config.
+- `POST /api/custom-models-discover` — list models from a remote provider's
+  models endpoint (e.g. `/v1/models`).
 - `GET/POST/PUT/DELETE /api/notification-channels[/<id>]`,
   `GET /api/notification-channel-types` — notification CRUD.
 

@@ -731,6 +731,18 @@ export interface TestCustomModelRequest {
   reasoning_effort?: string;
 }
 
+export interface DiscoverRemoteModelsRequest {
+  model_id?: string; // If provided with empty api_key, use stored key
+  provider_type: "anthropic" | "openai" | "openai-responses" | "gemini";
+  endpoint: string;
+  api_key: string;
+}
+
+export interface RemoteModelOption {
+  id: string;
+  display_name?: string;
+}
+
 class CustomModelsApi {
   private baseUrl = "/api";
 
@@ -804,6 +816,20 @@ class CustomModelsApi {
     });
     if (!response.ok) {
       throw await responseError(response, "Failed to test custom model");
+    }
+    return response.json();
+  }
+
+  async discoverRemoteModels(
+    request: DiscoverRemoteModelsRequest,
+  ): Promise<{ success: boolean; models: RemoteModelOption[]; message?: string }> {
+    const response = await fetch(`${this.baseUrl}/custom-models-discover`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) {
+      throw await responseError(response, "Failed to discover remote models");
     }
     return response.json();
   }

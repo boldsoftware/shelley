@@ -469,6 +469,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/custom-models", http.HandlerFunc(s.handleCustomModels))
 	mux.Handle("/api/custom-models/", http.HandlerFunc(s.handleCustomModel))
 	mux.Handle("/api/custom-models-test", http.HandlerFunc(s.handleTestModel))
+	mux.Handle("/api/custom-models-discover", http.HandlerFunc(s.handleDiscoverModels))
 
 	// Notification channels API
 	mux.Handle("/api/notification-channels", http.HandlerFunc(s.handleNotificationChannels))
