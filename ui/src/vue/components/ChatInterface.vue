@@ -634,6 +634,7 @@ import { tildifyPath } from "../../utils/tildify";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
 import { isAutoExpandTool } from "../../utils/toolMeta";
 import { formatDay } from "../../utils/messageTime";
+import { SLASH_COMMANDS } from "../../utils/slashCommands";
 import { coalesceMessages, type CoalescedItem } from "./coalesce";
 import type { RenderNode, GenerationBlock } from "./renderNode";
 import type { EphemeralTerminal } from "./terminalTypes";
@@ -1427,21 +1428,27 @@ async function sendMessage(message: string) {
   if (!message.trim() || sending.value) return;
   const trimmedMessage = message.trim();
 
-  if (trimmedMessage === "/fork") {
+  if (trimmedMessage === SLASH_COMMANDS.FORK.command) {
     await forkConversation();
     return;
   }
-  if (trimmedMessage === "/diff") {
+  if (trimmedMessage === SLASH_COMMANDS.DIFF.command) {
     showDiffViewer.value = true;
     return;
   }
-  if (trimmedMessage === "/compact" || trimmedMessage.startsWith("/compact ")) {
-    const instructions = trimmedMessage.slice("/compact".length).trim();
+  if (
+    trimmedMessage === SLASH_COMMANDS.COMPACT.command ||
+    trimmedMessage.startsWith(`${SLASH_COMMANDS.COMPACT.command} `)
+  ) {
+    const instructions = trimmedMessage.slice(SLASH_COMMANDS.COMPACT.command.length).trim();
     await handleDistillCompactNewGeneration(instructions || undefined);
     return;
   }
-  if (trimmedMessage === "/new" || trimmedMessage.startsWith("/new ")) {
-    const prompt = trimmedMessage.slice("/new".length).trim();
+  if (
+    trimmedMessage === SLASH_COMMANDS.NEW.command ||
+    trimmedMessage.startsWith(`${SLASH_COMMANDS.NEW.command} `)
+  ) {
+    const prompt = trimmedMessage.slice(SLASH_COMMANDS.NEW.command.length).trim();
     props.onNewConversation();
     if (!prompt || !props.onFirstMessage) return;
     try {

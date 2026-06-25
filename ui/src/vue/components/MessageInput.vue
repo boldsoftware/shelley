@@ -27,7 +27,7 @@
        use the `:on-send` / `:on-queue` function props. -->
 <template>
   <div
-    :class="`message-input-container ${isDraggingOver ? 'drag-over' : ''} ${isShellMode ? 'shell-mode' : ''}`"
+    :class="`message-input-container ${isDraggingOver ? 'drag-over' : ''} ${isShellMode ? 'shell-mode' : ''} ${showSlashMenu ? 'slash-menu-open' : ''}`"
     @dragover="handleDragOver"
     @dragenter="handleDragEnter"
     @dragleave="handleDragLeave"
@@ -97,6 +97,29 @@
         </div>
       </div>
       <div class="textarea-wrapper">
+        <div
+          v-if="showSlashMenu"
+          ref="slashMenuRef"
+          class="slash-command-menu"
+          role="listbox"
+          aria-label="Slash commands"
+          data-testid="slash-command-menu"
+        >
+          <button
+            v-for="(item, index) in slashSuggestions"
+            :key="item.command"
+            type="button"
+            :class="`slash-command-item${index === slashMenuSelectedIndex ? ' selected' : ''}`"
+            role="option"
+            :aria-selected="index === slashMenuSelectedIndex"
+            @mousedown.prevent
+            @mouseenter="slashMenuSelectedIndex = index"
+            @click="chooseSlashCommand(index)"
+          >
+            <span class="slash-command-name">{{ item.command }}</span>
+            <span class="slash-command-description">{{ item.description }}</span>
+          </button>
+        </div>
         <div
           v-if="isShellMode"
           class="shell-mode-indicator"
@@ -263,6 +286,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "../composables/i18n";
 import { pickPlaceholderHint } from "../../utils/placeholderHints";
+import { SLASH_COMMANDS } from "../../utils/slashCommands";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -399,8 +423,11 @@ const dragCounter = ref(0);
 const isListening = ref(false);
 const isSmallScreen = ref(typeof window !== "undefined" ? window.innerWidth < 480 : false);
 const showQueueMenu = ref(false);
+const slashMenuSelectedIndex = ref(0);
+const slashMenuDismissed = ref(false);
 
 const queueMenuRef = ref<HTMLDivElement | null>(null);
+const slashMenuRef = ref<HTMLDivElement | null>(null);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 let recognition: SpeechRecognition | null = null;
@@ -668,6 +695,74 @@ const canSubmit = computed(
 );
 const isDraggingOver = computed(() => dragCounter.value > 0);
 const isShellMode = computed(() => message.value.trimStart().startsWith("!"));
+const slashQuery = computed(() => {
+  const match = message.value.match(/^\/[a-zA-Z0-9_-]*$/);
+  return match ? match[0].slice(1).toLowerCase() : null;
+});
+const slashSuggestions = computed(() => {
+  if (slashQuery.value === null) return [];
+  return Object.values(SLASH_COMMANDS).filter((item) =>
+    item.command.slice(1).startsWith(slashQuery.value!),
+  );
+});
+const exactSlashCommand = computed(() =>
+  slashSuggestions.value.some((item) => item.command.slice(1) === slashQuery.value),
+);
+const showSlashMenu = computed(
+  () =>
+    slashQuery.value !== null &&
+    !slashMenuDismissed.value &&
+    !exactSlashCommand.value &&
+    slashSuggestions.value.length > 0 &&
+    !isDisabled.value &&
+    !isShellMode.value,
+);
+
+watch(slashQuery, () => {
+  slashMenuSelectedIndex.value = 0;
+});
+
+watch(message, (value) => {
+  if (value.length === 0) slashMenuDismissed.value = false;
+  if (value === SLASH_COMMANDS.SHELL.command) {
+    setMessage("!");
+    requestAnimationFrame(() => textareaRef.value?.focus());
+  }
+});
+
+async function chooseSlashCommand(index: number) {
+  const item = slashSuggestions.value[index];
+  if (!item) return;
+  if (!item.takesArgs) {
+    setMessage("");
+    slashMenuDismissed.value = true;
+    emit("draft-send-started");
+    try {
+      await props.onSend(item.command);
+      emit("draft-cleared");
+    } catch {
+      setMessage(item.command);
+    }
+    return;
+  }
+  if (item.command === SLASH_COMMANDS.SHELL.command) {
+    setMessage("!");
+    requestAnimationFrame(() => textareaRef.value?.focus());
+    return;
+  }
+  setMessage(`${item.command} `);
+  requestAnimationFrame(() => textareaRef.value?.focus());
+}
+
+function onSlashMenuOutside(e: MouseEvent) {
+  if (slashMenuRef.value?.contains(e.target as Node)) return;
+  slashMenuDismissed.value = true;
+}
+
+watch(showSlashMenu, (open) => {
+  if (open) document.addEventListener("mousedown", onSlashMenuOutside);
+  else document.removeEventListener("mousedown", onSlashMenuOutside);
+});
 
 async function handleSubmit(e: Event) {
   e.preventDefault();
@@ -754,6 +849,26 @@ function onTextareaFocus() {
 function handleKeyDown(e: KeyboardEvent) {
   // Don't submit while IME is composing.
   if (e.isComposing) return;
+  if (showSlashMenu.value) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      slashMenuSelectedIndex.value =
+        (slashMenuSelectedIndex.value + 1) % slashSuggestions.value.length;
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      slashMenuSelectedIndex.value =
+        (slashMenuSelectedIndex.value - 1 + slashSuggestions.value.length) %
+        slashSuggestions.value.length;
+      return;
+    }
+    if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      void chooseSlashCommand(slashMenuSelectedIndex.value);
+      return;
+    }
+  }
   // Escape blurs the textarea so follow-up shortcuts work.
   if (e.key === "Escape") {
     textareaRef.value?.blur();
@@ -824,6 +939,7 @@ onUnmounted(() => {
     window.visualViewport.removeEventListener("resize", handleViewportResize);
   }
   document.removeEventListener("mousedown", onQueueMenuOutside);
+  document.removeEventListener("mousedown", onSlashMenuOutside);
   if (recognition) recognition.abort();
   attachments.value.forEach((a) => {
     if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
