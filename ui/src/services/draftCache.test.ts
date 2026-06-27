@@ -2,12 +2,7 @@
 //
 // Run via `pnpm test` (see scripts/run-tests.mjs).
 
-import {
-  loadCachedDraft,
-  saveCachedDraft,
-  clearCachedDraft,
-  pickDraft,
-} from "./draftCache";
+import { loadCachedDraft, saveCachedDraft, clearCachedDraft, pickDraft } from "./draftCache";
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`Assertion failed: ${msg}`);
@@ -43,10 +38,7 @@ installLocalStorage();
 run("round-trips a cached draft by id", () => {
   saveCachedDraft("c123", "hello", "2026-01-01T00:00:05Z");
   const got = loadCachedDraft("c123");
-  assert(
-    got?.value === "hello" && got?.basedOn === "2026-01-01T00:00:05Z",
-    "loads what was saved",
-  );
+  assert(got?.value === "hello" && got?.basedOn === "2026-01-01T00:00:05Z", "loads what was saved");
 });
 
 run("uses a distinct slot for the new-conversation session", () => {
