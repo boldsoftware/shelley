@@ -1707,7 +1707,15 @@ function ChatInterface({
         cached = messageStore.peek(focusedId);
 
         pendingScrollRef.current = scrollStore.load();
-        const loadedMessages = response.messages ?? [];
+        // Render from the STORE, not the raw response. applyFullHistory merges
+        // the snapshot with any newer messages already delivered live (the
+        // snapshot can be stale: this fetch may have been issued before an
+        // agent turn committed and resolved only after the live events landed).
+        // Setting React state from `response.messages` directly would re-apply
+        // that stale snapshot and clobber the live messages back out of the
+        // view — the "new conversation stuck showing only the user message"
+        // flake. The store record is authoritative post-merge.
+        const loadedMessages = cached?.messages ?? response.messages ?? [];
         setMessages(loadedMessages);
         setLastKnownMessageCount(loadedMessages.length);
         messageCountStore.save(loadedMessages.length);

@@ -685,14 +685,41 @@ export class MessageStore {
 
   // ── applyFullHistory ───────────────────────────────────────────────────────
 
-  /** Replace cached state with the full REST response. */
+  /**
+   * Apply a full REST history snapshot to the cache. The snapshot is
+   * authoritative for the sequence range it covers, but it is NOT a blind
+   * wholesale replace: any locally-cached messages newer than the snapshot's
+   * tail (delivered live after the snapshot was taken) are preserved. See the
+   * inline note for the staleness race this guards against.
+   */
   applyFullHistory(id: string, response: StreamResponse): void {
-    const messages = (response.messages ?? [])
+    const responseMessages = (response.messages ?? [])
       .slice()
       .sort((a, b) => a.sequence_id - b.sequence_id);
+    const existing = this.hot.get(id);
+
+    // The REST snapshot is authoritative for the range it covers, but it can
+    // be STALE relative to live data: loadMessages may have issued the fetch
+    // before an agent turn was committed (e.g. on a brand-new conversation),
+    // and under load that request can resolve only after the live stream has
+    // already delivered the newer messages into the cache. Blindly replacing
+    // the cache with such a snapshot would REGRESS the view, dropping messages
+    // the user already (correctly) saw. So merge: keep every locally-cached
+    // message whose sequence_id is beyond the snapshot's tail. (Append-only
+    // sequence ids make "beyond the tail" the right boundary; messages within
+    // the snapshot's range are taken from the authoritative snapshot.)
+    const responseMaxSeq =
+      responseMessages.length > 0 ? responseMessages[responseMessages.length - 1].sequence_id : -1;
+    const newerLocal = (existing?.messages ?? []).filter((m) => m.sequence_id > responseMaxSeq);
+    let messages = responseMessages;
+    if (newerLocal.length > 0) {
+      const byMsgId = new Map<string, Message>();
+      for (const m of responseMessages) byMsgId.set(m.message_id, m);
+      for (const m of newerLocal) byMsgId.set(m.message_id, m);
+      messages = Array.from(byMsgId.values()).sort((a, b) => a.sequence_id - b.sequence_id);
+    }
     const minSeq = messages.length > 0 ? messages[0].sequence_id : 0;
     const maxSeq = messages.length > 0 ? messages[messages.length - 1].sequence_id : -1;
-    const existing = this.hot.get(id);
     const responseKnown =
       typeof response.max_sequence_id === "number" ? response.max_sequence_id : 0;
     const knownAfter = Math.max(

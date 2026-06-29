@@ -253,37 +253,67 @@ async function main(): Promise<void> {
     assert(kept !== null && kept.messages.length === 1, "other conv preserved");
   });
 
-  await run("applyFullHistory replace semantics (cross-instance)", async () => {
-    const { factory, dbName, keyId, rawKey } = freshFactory();
-    const s = storeFor({ factory, dbName, keyId, rawKey });
-    const id = "c-full";
-    s.upsertMessages(id, [msg(id, 99, "old")]);
-    await s.settle();
-    const resp: StreamResponse = {
-      conversation_id: id,
-      messages: [msg(id, 2), msg(id, 1), msg(id, 3)],
-      context_window_size: 100,
-      max_sequence_id: 3,
-    };
-    s.applyFullHistory(id, resp);
-    await s.settle();
-    await s.close();
+  await run(
+    "applyFullHistory replace+dedup+sort within snapshot range (cross-instance)",
+    async () => {
+      const { factory, dbName, keyId, rawKey } = freshFactory();
+      const s = storeFor({ factory, dbName, keyId, rawKey });
+      const id = "c-full";
+      // A local row WITHIN the snapshot's range (seq 2) is authoritative-replaced
+      // by the snapshot (same seq, different message_id), not duplicated.
+      s.upsertMessages(id, [msg(id, 2, "stale-dupe")]);
+      await s.settle();
+      const resp: StreamResponse = {
+        conversation_id: id,
+        messages: [msg(id, 2), msg(id, 1), msg(id, 3)],
+        context_window_size: 100,
+        max_sequence_id: 3,
+      };
+      s.applyFullHistory(id, resp);
+      await s.settle();
+      await s.close();
 
-    const s2 = storeFor({ factory, dbName, keyId, rawKey });
-    const hyd = await s2.hydrate(id);
-    assert(hyd !== null, "hydrated");
-    assert(hyd!.messages.length === 3, `expected 3, got ${hyd!.messages.length}`);
-    assert(
-      hyd!.messages[0].sequence_id === 1 &&
-        hyd!.messages[1].sequence_id === 2 &&
-        hyd!.messages[2].sequence_id === 3,
-      "sorted asc",
-    );
-    assert(
-      hyd!.messages.every((m) => m.message_id !== "old"),
-      "old row replaced",
-    );
-    assert(hyd!.hasFullHistory === true, "hasFullHistory persisted");
+      const s2 = storeFor({ factory, dbName, keyId, rawKey });
+      const hyd = await s2.hydrate(id);
+      assert(hyd !== null, "hydrated");
+      assert(hyd!.messages.length === 3, `expected 3, got ${hyd!.messages.length}`);
+      assert(
+        hyd!.messages[0].sequence_id === 1 &&
+          hyd!.messages[1].sequence_id === 2 &&
+          hyd!.messages[2].sequence_id === 3,
+        "sorted asc",
+      );
+      assert(
+        hyd!.messages.every((m) => m.message_id !== "stale-dupe"),
+        "in-range row replaced by snapshot",
+      );
+      assert(hyd!.hasFullHistory === true, "hasFullHistory persisted");
+    },
+  );
+
+  await run("applyFullHistory does not regress messages newer than the snapshot", async () => {
+    // Regression guard: a REST backfill can be STALE relative to live data
+    // (the fetch was issued before an agent turn committed but resolved only
+    // after the live stream delivered the newer messages). applyFullHistory
+    // must keep locally-cached messages beyond the snapshot's tail rather than
+    // clobbering them — otherwise a brand-new conversation gets stuck showing
+    // only the first message until reload.
+    const s = freshStore();
+    const id = "c-race";
+    // Live stream already delivered the full conversation (seqs 1..3).
+    s.upsertMessages(id, [msg(id, 1), msg(id, 2), msg(id, 3)]);
+    // A stale REST snapshot taken earlier only has seq 1.
+    const stale: StreamResponse = {
+      conversation_id: id,
+      messages: [msg(id, 1)],
+      context_window_size: 100,
+      max_sequence_id: 1,
+    };
+    s.applyFullHistory(id, stale);
+    const rec = s.peek(id);
+    assert(rec !== null, "record present");
+    assert(rec!.messages.length === 3, `expected 3 (no regression), got ${rec!.messages.length}`);
+    assert(rec!.maxSequenceId === 3, `expected maxSequenceId 3, got ${rec!.maxSequenceId}`);
   });
 
   await run("backfill detection via maxSequenceIdKnown", async () => {

@@ -1031,29 +1031,17 @@ async function loadMessages(focusedId: string) {
     });
     if (!isCurrent()) return;
 
-    // Guard against a REST/stream ordering race. The live /api/stream2 feed
-    // may have already pushed messages newer than this REST snapshot into the
-    // store — e.g. the agent reply to a just-created conversation lands
-    // between when we issue the GET and when its response resolves.
-    // applyFullHistory replaces the cached messages wholesale, which would
-    // silently drop those newer streamed messages (the agent reply vanishes
-    // until the next reload). Merge any newer streamed messages into the
-    // response so a stale snapshot never regresses live state.
-    const live = messageStore.peek(focusedId);
-    const respMsgs = response.messages ?? [];
-    const respMax = respMsgs.reduce((m, x) => Math.max(m, x.sequence_id), 0);
-    if (live && live.messages.length > 0) {
-      const newer = live.messages.filter((m) => m.sequence_id > respMax);
-      if (newer.length > 0) {
-        response = { ...response, messages: [...respMsgs, ...newer] };
-      }
-    }
-
+    // applyFullHistory is non-regressing: a REST snapshot can be STALE relative
+    // to the live /api/stream2 feed (the agent reply to a just-created
+    // conversation can land between issuing the GET and its response
+    // resolving), so the store merges in any newer streamed messages rather
+    // than replacing wholesale. Render from the STORE (post-merge), not the
+    // raw response, so a stale snapshot never regresses live state.
     messageStore.applyFullHistory(focusedId, response);
     cached = messageStore.peek(focusedId);
 
     pendingScroll = loadScroll();
-    const loadedMessages = response.messages ?? [];
+    const loadedMessages = cached?.messages ?? response.messages ?? [];
     messages.value = loadedMessages;
     lastKnownMessageCount.value = loadedMessages.length;
     saveMsgCount(loadedMessages.length);
