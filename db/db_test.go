@@ -679,28 +679,6 @@ func TestCreateMessages(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for mixed-conversation batch")
 	}
-
-	// The optional user_data update is applied in the same Tx (one commit hook)
-	// and the updated row is returned. Flip `first`'s user_data while inserting.
-	updatedData := `{"n":"updated"}`
-	commits = 0
-	ins, upd, err := database.CreateMessagesWithUserDataUpdate(
-		ctx,
-		[]CreateMessageParams{{ConversationID: conv.ConversationID, Type: MessageTypeUser, UserData: map[string]any{"n": 4}}},
-		&MessageUserDataUpdate{MessageID: first.MessageID, UserData: &updatedData},
-	)
-	if err != nil {
-		t.Fatalf("CreateMessagesWithUserDataUpdate: %v", err)
-	}
-	if commits != 1 {
-		t.Fatalf("expected exactly 1 commit hook for batch+update, got %d", commits)
-	}
-	if len(ins) != 1 {
-		t.Fatalf("expected 1 inserted message, got %d", len(ins))
-	}
-	if upd == nil || upd.MessageID != first.MessageID || upd.UserData == nil || *upd.UserData != updatedData {
-		t.Fatalf("expected updated row for %s with user_data %q, got %+v", first.MessageID, updatedData, upd)
-	}
 }
 
 // TestCreateMessageFoldsAgentWorkingAndTimestamp verifies that MarkAgentStart,

@@ -1125,22 +1125,6 @@ func (s *Server) recordTurnStartMessage(ctx context.Context, conversationID stri
 // recordMessage; compaction uses it to copy a whole tail of messages forward
 // without paying a full-list recompute per message.
 func (s *Server) recordMessages(ctx context.Context, conversationID string, msgs []recordMessageInput) error {
-	return s.recordMessagesWithUserDataUpdate(ctx, conversationID, msgs, nil)
-}
-
-// recordMessagesWithUserDataUpdate is recordMessages plus an optional in-place
-// user_data overwrite of one existing message, applied in the SAME transaction
-// as the inserts (so the whole thing is one commit hook → one conversation-list
-// recompute). Compaction uses the update slot to flip its "Compacting…" status
-// message to "complete" together with writing the summary and carried tail,
-// instead of paying a second commit for the status flip. The updated message is
-// broadcast via broadcastMessageUpdate (its sequence_id is unchanged) after the
-// new messages are published.
-//
-// NOTE: an empty msgs slice is a no-op, so a non-nil update is dropped along
-// with it. Callers that may have an empty batch but still need the update must
-// apply it separately (compaction does, via updateDistillStatus).
-func (s *Server) recordMessagesWithUserDataUpdate(ctx context.Context, conversationID string, msgs []recordMessageInput, update *db.MessageUserDataUpdate) error {
 	if len(msgs) == 0 {
 		return nil
 	}
@@ -1162,7 +1146,7 @@ func (s *Server) recordMessagesWithUserDataUpdate(ctx context.Context, conversat
 			break
 		}
 	}
-	created, updated, err := s.db.CreateMessagesWithUserDataUpdate(ctx, paramsList, update)
+	created, err := s.db.CreateMessages(ctx, paramsList)
 	if err != nil {
 		return fmt.Errorf("failed to create messages: %w", err)
 	}
@@ -1181,9 +1165,6 @@ func (s *Server) recordMessagesWithUserDataUpdate(ctx context.Context, conversat
 	}
 
 	go s.notifySubscribersNewMessages(context.WithoutCancel(ctx), conversationID, created)
-	if updated != nil {
-		go s.broadcastMessageUpdate(context.WithoutCancel(ctx), conversationID, updated)
-	}
 	return nil
 }
 

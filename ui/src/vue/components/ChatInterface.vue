@@ -340,6 +340,7 @@ import {
   type Conversation,
   type ToolProgress,
   isDistillStatusMessage,
+  distillStatus,
 } from "../../types";
 import { api } from "../../services/api";
 import { messageStore } from "../../services/messageStore";
@@ -655,17 +656,22 @@ function loadScroll(): number | null {
 }
 
 // ---- derived ----
-const isDistilling = computed(() =>
-  messages.value.some((m) => {
-    if (m.type !== "system" || !m.user_data) return false;
-    try {
-      const userData = typeof m.user_data === "string" ? JSON.parse(m.user_data) : m.user_data;
-      return userData.distill_status === "in_progress";
-    } catch {
-      return false;
+// Distilling = an in_progress distill status message exists with no later
+// terminal (complete/error) one. Status messages are immutable, so a finished
+// distillation appends a second terminal message rather than mutating the
+// in_progress one.
+const isDistilling = computed(() => {
+  let inProgress = false;
+  for (const m of messages.value) {
+    const status = distillStatus(m);
+    if (status === "in_progress") {
+      inProgress = true;
+    } else if (status === "complete" || status === "error") {
+      inProgress = false;
     }
-  }),
-);
+  }
+  return inProgress;
+});
 
 const selectedModelDisplayName = computed(() => {
   const modelObj = models.value.find((m) => m.id === selectedModel.value);

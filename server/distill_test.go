@@ -242,6 +242,80 @@ func TestDistillNewGenerationResetsContextWindow(t *testing.T) {
 	})
 }
 
+// distillStatusMessages returns the user_data maps of every distill_status
+// message in the conversation, in sequence order.
+func distillStatusMessages(t *testing.T, h *TestHarness, convID string) []map[string]string {
+	t.Helper()
+	msgs, err := h.db.ListMessages(context.Background(), convID)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	var out []map[string]string
+	for _, m := range msgs {
+		if m.UserData == nil {
+			continue
+		}
+		var ud map[string]string
+		if json.Unmarshal([]byte(*m.UserData), &ud) != nil {
+			continue
+		}
+		if ud["distill_status"] != "" {
+			out = append(out, ud)
+		}
+	}
+	return out
+}
+
+// TestDistillStatusEmitsTerminalMessage verifies the immutable two-message
+// model: the in_progress status message is left untouched and a SECOND terminal
+// ("complete") status message is appended when distillation finishes, carrying
+// the same descriptive fields.
+func TestDistillStatusEmitsTerminalMessage(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		h := NewTestHarness(t)
+		defer stopActiveConversationLoops(h.server)
+
+		h.NewConversation("echo hello", "")
+		h.WaitResponse()
+		synctest.Wait()
+		convID := h.convID
+
+		reqBody := DistillNewGenerationRequest{
+			SourceConversationID: convID,
+			Model:                "predictable",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/conversations/distill-new-generation", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.server.handleDistillNewGeneration(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+		}
+		waitForConversationDistillingToClear(t, h.server, convID)
+		synctest.Wait()
+
+		statuses := distillStatusMessages(t, h, convID)
+		if len(statuses) != 2 {
+			t.Fatalf("expected 2 distill_status messages (in_progress + terminal), got %d: %+v", len(statuses), statuses)
+		}
+		if statuses[0]["distill_status"] != "in_progress" {
+			t.Errorf("first status = %q, want in_progress", statuses[0]["distill_status"])
+		}
+		if statuses[1]["distill_status"] != "complete" {
+			t.Errorf("second status = %q, want complete", statuses[1]["distill_status"])
+		}
+		// Descriptive fields are copied onto the terminal message.
+		if statuses[1]["new_generation"] != "true" {
+			t.Errorf("terminal status new_generation = %q, want true", statuses[1]["new_generation"])
+		}
+		if statuses[0]["source_slug"] != statuses[1]["source_slug"] {
+			t.Errorf("terminal source_slug %q != in_progress %q", statuses[1]["source_slug"], statuses[0]["source_slug"])
+		}
+	})
+}
+
 func waitForConversationDistillingToClear(t *testing.T, server *Server, convID string) {
 	t.Helper()
 

@@ -1022,30 +1022,11 @@ func (db *DB) CreateMessage(ctx context.Context, params CreateMessageParams) (*g
 // is visibly slow on a large conversation list. Returns the created rows in
 // input order. All messages must target the same conversation.
 func (db *DB) CreateMessages(ctx context.Context, paramsList []CreateMessageParams) ([]generated.Message, error) {
-	created, _, err := db.CreateMessagesWithUserDataUpdate(ctx, paramsList, nil)
-	return created, err
-}
-
-// MessageUserDataUpdate replaces an existing message's user_data column.
-type MessageUserDataUpdate struct {
-	MessageID string
-	UserData  *string
-}
-
-// CreateMessagesWithUserDataUpdate inserts the batch, bumps the conversation
-// timestamp, and (optionally) overwrites one existing message's user_data — all
-// in a SINGLE transaction, so exactly one commit hook fires. Compaction uses
-// the update slot to flip its "Compacting…" status message to "complete" in the
-// same Tx that writes the summary + carried tail, instead of paying a second
-// commit (and a second full conversation-list recompute) for the status flip.
-// Returns the created rows (input order) and the re-fetched updated row, if any.
-func (db *DB) CreateMessagesWithUserDataUpdate(ctx context.Context, paramsList []CreateMessageParams, update *MessageUserDataUpdate) ([]generated.Message, *generated.Message, error) {
 	if len(paramsList) == 0 {
-		return nil, nil, nil
+		return nil, nil
 	}
 	conversationID := paramsList[0].ConversationID
 	out := make([]generated.Message, 0, len(paramsList))
-	var updated *generated.Message
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
 		q := generated.New(tx.Conn())
 		for _, params := range paramsList {
@@ -1058,28 +1039,12 @@ func (db *DB) CreateMessagesWithUserDataUpdate(ctx context.Context, paramsList [
 			}
 			out = append(out, msg)
 		}
-		if err := q.UpdateConversationTimestamp(ctx, conversationID); err != nil {
-			return err
-		}
-		if update != nil {
-			if err := q.UpdateMessageUserData(ctx, generated.UpdateMessageUserDataParams{
-				MessageID: update.MessageID,
-				UserData:  update.UserData,
-			}); err != nil {
-				return err
-			}
-			msg, err := q.GetMessage(ctx, update.MessageID)
-			if err != nil {
-				return err
-			}
-			updated = &msg
-		}
-		return nil
+		return q.UpdateConversationTimestamp(ctx, conversationID)
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return out, updated, nil
+	return out, nil
 }
 
 type CreateWarningMessageResult struct {

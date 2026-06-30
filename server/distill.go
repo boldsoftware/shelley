@@ -127,7 +127,7 @@ func (s *Server) performDistillation(ctx context.Context, conversationID, source
 	}
 
 	// Update the status message to "complete"
-	s.updateDistillStatus(ctx, conversationID, "complete")
+	s.insertDistillStatus(ctx, conversationID, "complete")
 
 	// Insert a user-visible message that refers to the editable temp file while
 	// retaining the distillation text in user_data for UI display and context.
@@ -189,7 +189,7 @@ func cleanupOldDistillationTempFiles(dir string, maxAge time.Duration) {
 }
 
 func (s *Server) insertDistillError(ctx context.Context, conversationID, errMsg string) {
-	s.updateDistillStatus(ctx, conversationID, "error")
+	s.insertDistillStatus(ctx, conversationID, "error")
 
 	// Insert an error message so the user knows what happened
 	errorMessage := llm.Message{
@@ -204,18 +204,19 @@ func (s *Server) insertDistillError(ctx context.Context, conversationID, errMsg 
 	}
 }
 
-// distillStatusUpdate computes the user_data overwrite needed to set the
-// conversation's distill status message to status, without performing any
-// write. Older distill flows used system messages; new-generation distill uses
-// an agent-side status message — in both cases we scan from the end for the
-// most recent message carrying a distill_status key. Returns false if none is
-// found. Callers either apply it standalone (updateDistillStatus) or fold it
-// into another transaction (compaction's batch write).
-func (s *Server) distillStatusUpdate(ctx context.Context, conversationID, status string) (db.MessageUserDataUpdate, bool) {
+// terminalDistillStatusMessage builds a NEW immutable status message carrying
+// the terminal distill_status ("complete" or "error"). It copies the
+// descriptive fields (source_slug, distill_method, new_generation) from the
+// in_progress status message so the terminal message renders the same way.
+// Messages are immutable after creation, so instead of mutating the in_progress
+// message we emit a second message; the UI collapses the pair to just the
+// terminal one. The message is ExcludedFromContext (a UI-only status marker).
+// Returns false if no in_progress status message exists.
+func (s *Server) terminalDistillStatusMessage(ctx context.Context, conversationID, status string) (llm.Message, map[string]string, bool) {
 	messages, err := s.db.ListMessages(ctx, conversationID)
 	if err != nil {
 		s.logger.Error("Failed to list messages", "conversationID", conversationID, "error", err)
-		return db.MessageUserDataUpdate{}, false
+		return llm.Message{}, nil, false
 	}
 
 	for i := len(messages) - 1; i >= 0; i-- {
@@ -227,41 +228,35 @@ func (s *Server) distillStatusUpdate(ctx context.Context, conversationID, status
 		if err := json.Unmarshal([]byte(*msg.UserData), &userData); err != nil {
 			continue
 		}
-		if userData["distill_status"] != "" {
-			userData["distill_status"] = status
-			newData, err := json.Marshal(userData)
-			if err != nil {
-				s.logger.Error("Failed to marshal distill status", "error", err)
-				return db.MessageUserDataUpdate{}, false
-			}
-			newDataStr := string(newData)
-			return db.MessageUserDataUpdate{MessageID: msg.MessageID, UserData: &newDataStr}, true
+		if userData["distill_status"] == "" {
+			continue
 		}
+		terminalData := map[string]string{"distill_status": status}
+		for _, k := range []string{"source_slug", "new_generation", "distill_method"} {
+			if v := userData[k]; v != "" {
+				terminalData[k] = v
+			}
+		}
+		return llm.Message{
+			Role:                llm.MessageRoleAssistant,
+			Content:             []llm.Content{{Type: llm.ContentTypeText, Text: "Distillation " + status}},
+			ExcludedFromContext: true,
+		}, terminalData, true
 	}
-	return db.MessageUserDataUpdate{}, false
+	return llm.Message{}, nil, false
 }
 
-// updateDistillStatus updates the distill status message in its own
-// transaction and broadcasts the change to SSE subscribers.
-func (s *Server) updateDistillStatus(ctx context.Context, conversationID, status string) {
-	update, ok := s.distillStatusUpdate(ctx, conversationID, status)
+// insertDistillStatus inserts a NEW immutable terminal status message
+// ("complete" or "error") and broadcasts it to SSE subscribers via the normal
+// new-message path, so it streams to clients and lands in cache with a fresh
+// sequence_id. The earlier in_progress message is left untouched.
+func (s *Server) insertDistillStatus(ctx context.Context, conversationID, status string) {
+	message, userData, ok := s.terminalDistillStatusMessage(ctx, conversationID, status)
 	if !ok {
 		return
 	}
-	if err := s.db.UpdateMessageUserData(ctx, update.MessageID, update.UserData); err != nil {
-		s.logger.Error("Failed to update distill status", "messageID", update.MessageID, "error", err)
-		return
-	}
-	// Re-fetch the updated message and broadcast it to SSE subscribers so the
-	// client sees the status change (spinner → complete). We use
-	// broadcastMessageUpdate (Broadcast) instead of notifySubscribersNewMessage
-	// (Publish) because the message's sequence_id hasn't changed — it's an update
-	// to an existing message. Publish skips subscribers whose index >= the
-	// sequence_id, so subscribers that already received the "in_progress"
-	// message would never see the update.
-	updatedMsg, err := s.db.GetMessageByID(ctx, update.MessageID)
-	if err == nil {
-		go s.broadcastMessageUpdate(ctx, conversationID, updatedMsg)
+	if err := s.recordMessage(ctx, conversationID, message, llm.Usage{}, userData); err != nil {
+		s.logger.Error("Failed to insert distill status", "conversationID", conversationID, "error", err)
 	}
 }
 

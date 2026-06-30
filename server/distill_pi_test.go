@@ -445,13 +445,26 @@ func TestCompactBatchesMessageWrites(t *testing.T) {
 			t.Fatalf("expected at least 3 carried messages to exercise batching, got %d", carried)
 		}
 
+		// The status is split into two immutable messages: in_progress at start
+		// and a terminal "complete" appended (folded into the batch Tx) at the end.
+		statuses := distillStatusMessages(t, h, convID)
+		if len(statuses) != 2 {
+			t.Fatalf("expected 2 distill_status messages, got %d: %+v", len(statuses), statuses)
+		}
+		if statuses[0]["distill_status"] != "in_progress" || statuses[1]["distill_status"] != "complete" {
+			t.Fatalf("expected [in_progress, complete], got [%q, %q]", statuses[0]["distill_status"], statuses[1]["distill_status"])
+		}
+		if statuses[1]["distill_method"] != distillMethodCompact {
+			t.Errorf("terminal status distill_method = %q, want %q", statuses[1]["distill_method"], distillMethodCompact)
+		}
+
 		// The whole compaction's commit count must stay well under one-per-
 		// carried-message and not scale with the tail length. With batching, the
-		// summary + carried tail + the "complete" status flip are all a SINGLE
-		// commit. The remaining commits are fixed setup overhead (generation bump,
-		// status-spinner insert, new-generation hydrate). We cap at a small fixed
-		// constant so a regression that splits the batch — or restores the separate
-		// status-flip Tx — trips the test even on a short tail.
+		// summary + carried tail + the terminal "complete" status message are all a
+		// SINGLE commit. The remaining commits are fixed setup overhead (generation
+		// bump, status-spinner insert, new-generation hydrate). We cap at a small
+		// fixed constant so a regression that splits the batch — or appends the
+		// terminal status in its own Tx — trips the test even on a short tail.
 		got := atomic.LoadInt64(&commits)
 		if got > int64(carried) {
 			t.Fatalf("compaction fired %d commit hooks for %d carried messages; expected the tail to be batched into one Tx (no per-message recompute)", got, carried)

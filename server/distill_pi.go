@@ -470,7 +470,7 @@ func (s *Server) performPiDistillation(ctx context.Context, conversationID, sour
 	ctxMsgs := piContextMessages(sourceGeneration, messages)
 	if len(ctxMsgs) == 0 {
 		logger.Warn("pi distillation found no context messages")
-		s.updateDistillStatus(ctx, conversationID, "complete")
+		s.insertDistillStatus(ctx, conversationID, "complete")
 		return ""
 	}
 
@@ -556,27 +556,29 @@ func (s *Server) performPiDistillation(ctx context.Context, conversationID, sour
 		batch = append(batch, recordMessageInput{message: entry.llm, userData: []interface{}{ud}})
 	}
 
-	// Flip the "Compacting…" status message to "complete" in the SAME Tx that
-	// writes the summary + carried tail, so the status flip doesn't cost a
-	// second commit (and a second full conversation-list recompute). Fall back
-	// to a standalone update if the status message can't be located.
-	statusUpdate, haveStatus := s.distillStatusUpdate(ctx, conversationID, "complete")
-	// Only fold the status flip into the batch Tx when there are messages to
-	// write (recordMessagesWithUserDataUpdate is a no-op for an empty batch, so
-	// it would silently drop the update). foldedStatus tracks whether the flip
-	// rode along, so we can apply it standalone otherwise.
-	var updatePtr *db.MessageUserDataUpdate
+	// Append the terminal "complete" status message as an additional INSERT in
+	// the SAME batch that writes the summary + carried tail, so it rides along in
+	// one commit (one conversation-list recompute, one SSE frame) rather than
+	// paying a second commit. Messages are immutable, so instead of mutating the
+	// "Compacting…" in_progress message we emit a second message and let the UI
+	// collapse the pair. Fall back to a standalone insert if the batch is empty
+	// (recordMessages is a no-op for an empty batch) or the in_progress message
+	// can't be located.
+	statusMsg, statusData, haveStatus := s.terminalDistillStatusMessage(ctx, conversationID, "complete")
 	foldedStatus := haveStatus && len(batch) > 0
 	if foldedStatus {
-		updatePtr = &statusUpdate
+		batch = append(batch, recordMessageInput{
+			message:  statusMsg,
+			userData: []interface{}{statusData},
+		})
 	}
-	if rerr := s.recordMessagesWithUserDataUpdate(ctx, conversationID, batch, updatePtr); rerr != nil {
+	if rerr := s.recordMessages(ctx, conversationID, batch); rerr != nil {
 		logger.Error("Failed to record compaction messages", "error", rerr)
 		s.insertDistillError(ctx, conversationID, fmt.Sprintf("Failed to record compaction messages: %v", rerr))
 		return ""
 	}
 	if !foldedStatus {
-		s.updateDistillStatus(ctx, conversationID, "complete")
+		s.insertDistillStatus(ctx, conversationID, "complete")
 	}
 	logger.Info("pi distillation complete", "summary_length", len(summary), "kept_messages", len(recent))
 	return summary

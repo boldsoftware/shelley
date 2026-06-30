@@ -284,16 +284,22 @@ export interface CommitInfo {
   date: string;
 }
 
-// Helper to check if a message is a distill status message
-export function isDistillStatusMessage(message: Message): boolean {
-  if (!message.user_data) return false;
+// Helper to read a message's distill_status value ("in_progress" | "complete"
+// | "error"), or null if the message is not a distill status message.
+export function distillStatus(message: Message): string | null {
+  if (!message.user_data) return null;
   try {
     const userData =
       typeof message.user_data === "string" ? JSON.parse(message.user_data) : message.user_data;
-    return !!userData.distill_status;
+    return userData.distill_status || null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+// Helper to check if a message is a distill status message
+export function isDistillStatusMessage(message: Message): boolean {
+  return distillStatus(message) !== null;
 }
 
 // Helper to check if a message was copied verbatim into the current generation
