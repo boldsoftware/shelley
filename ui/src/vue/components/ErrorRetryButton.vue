@@ -33,10 +33,10 @@ async function onClick(e: MouseEvent) {
   error.value = null;
   try {
     await api.retryConversation(props.conversationId);
-    // On success the server flags the error message with retried=true and
-    // re-broadcasts it; the upserted user_data hides this button on the next
-    // render. Clear pending after a fallback delay so the button recovers even
-    // if the broadcast was dropped (e.g. transient SSE disconnect).
+    // On success the server starts a new turn, appending messages so this error
+    // is no longer the last message and this button stops rendering. Clear
+    // pending after a fallback delay so the button recovers even if no new
+    // message arrives (e.g. transient SSE disconnect).
     window.setTimeout(() => (pending.value = false), 10000);
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err);

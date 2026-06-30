@@ -44,7 +44,7 @@
       <div class="message-content" data-testid="message-content">
         <div class="whitespace-pre-wrap break-words">{{ errorText }}</div>
         <ErrorRetryButton
-          v-if="errorRetryable && !errorRetried"
+          v-if="errorRetryable && isLastMessage"
           :conversation-id="message.conversation_id"
         />
       </div>
@@ -219,7 +219,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, inject, onUnmounted, ref, watch, type ComputedRef } from "vue";
 import {
   type Message as MessageType,
   type LLMMessage,
@@ -447,7 +447,6 @@ const errorText = computed(() => {
 });
 const errorMeta = computed(() => {
   let retryable = false;
-  let retried = false;
   if (props.message.user_data) {
     try {
       const ud =
@@ -455,15 +454,20 @@ const errorMeta = computed(() => {
           ? JSON.parse(props.message.user_data)
           : props.message.user_data;
       retryable = !!ud?.retryable;
-      retried = !!ud?.retried;
     } catch {
       // ignore
     }
   }
-  return { retryable, retried };
+  return { retryable };
 });
 const errorRetryable = computed(() => errorMeta.value.retryable);
-const errorRetried = computed(() => errorMeta.value.retried);
+
+// lastMessageId is provided by ChatInterface; an error message only offers its
+// Retry button when it is the bottom-most message (see provide in
+// ChatInterface.vue). Once a retry starts a new turn the error is no longer
+// last and the button disappears.
+const lastMessageId = inject<ComputedRef<string | null>>("lastMessageId");
+const isLastMessage = computed(() => lastMessageId?.value === props.message.message_id);
 
 // ---- Content filtering for the main path ----
 const meaningfulContent = computed<LLMContent[]>(() => {

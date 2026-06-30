@@ -334,7 +334,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from "vue";
 import {
   type Message,
   type Conversation,
@@ -453,6 +453,16 @@ const {
 
 // ---- core state ----
 const messages = ref<Message[]>([]);
+
+// The id of the bottom-most message in the conversation. Provided to
+// descendant Message components (through the recursive MessageRenderNode) so
+// an error message can show its Retry button only when it is last: once a
+// retry (or any new turn) appends a message, the error is no longer at the
+// bottom and retrying it would be a server-side no-op.
+const lastMessageId = computed(() =>
+  messages.value.length > 0 ? messages.value[messages.value.length - 1].message_id : null,
+);
+provide("lastMessageId", lastMessageId);
 const loading = ref(true);
 const showLoadingProgressUI = ref(false);
 const loadingProgress = ref<{
