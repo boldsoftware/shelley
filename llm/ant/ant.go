@@ -608,11 +608,18 @@ func fromLLMToolChoice(tc *llm.ToolChoice) *toolChoice {
 }
 
 func fromLLMTool(t *llm.Tool) *tool {
+	schema := t.InputSchema
+	if schema == nil {
+		// Some proxies (e.g. Vertex AI via Langdock) strictly require input_schema
+		// to be present on every tool, even server-side tools where Anthropic's
+		// own API accepts omitting it. Default to an empty object schema.
+		schema = json.RawMessage(`{"type":"object","properties":{}}`)
+	}
 	return &tool{
 		Name:         t.Name,
 		Type:         t.Type,
 		Description:  t.Description,
-		InputSchema:  t.InputSchema,
+		InputSchema:  schema,
 		CacheControl: fromLLMCache(t.Cache),
 	}
 }
