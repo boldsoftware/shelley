@@ -475,3 +475,78 @@ func TestCompactBatchesMessageWrites(t *testing.T) {
 		}
 	})
 }
+
+// TestDistillMethodCoercesToCompact verifies that we have consolidated on
+// compaction: legacy method values (empty and "default") are accepted for
+// compatibility but always run the compaction strategy, tagging the terminal
+// status message with distill_method=compact. A clearly bogus method is
+// rejected.
+func TestDistillMethodCoercesToCompact(t *testing.T) {
+	t.Parallel()
+	for _, method := range []string{"", "default", "compact"} {
+		method := method
+		t.Run("method="+method, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				h := NewTestHarness(t)
+				defer stopActiveConversationLoops(h.server)
+
+				h.NewConversation("echo hello", "")
+				h.WaitResponse()
+				synctest.Wait()
+				convID := h.convID
+
+				reqBody := DistillNewGenerationRequest{
+					SourceConversationID: convID,
+					Model:                "predictable",
+					Method:               method,
+				}
+				body, _ := json.Marshal(reqBody)
+				req := httptest.NewRequest("POST", "/api/conversations/distill-new-generation", strings.NewReader(string(body)))
+				req.Header.Set("Content-Type", "application/json")
+				w := httptest.NewRecorder()
+				h.server.handleDistillNewGeneration(w, req)
+				if w.Code != http.StatusCreated {
+					t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+				}
+				waitForConversationDistillingToClear(t, h.server, convID)
+				synctest.Wait()
+
+				statuses := distillStatusMessages(t, h, convID)
+				if len(statuses) != 2 {
+					t.Fatalf("expected 2 distill_status messages, got %d: %+v", len(statuses), statuses)
+				}
+				if statuses[1]["distill_method"] != distillMethodCompact {
+					t.Errorf("terminal status distill_method = %q, want %q (method %q should compact)", statuses[1]["distill_method"], distillMethodCompact, method)
+				}
+			})
+		})
+	}
+}
+
+// TestDistillRejectsUnknownMethod verifies a bogus method is still rejected.
+func TestDistillRejectsUnknownMethod(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		h := NewTestHarness(t)
+		defer stopActiveConversationLoops(h.server)
+
+		h.NewConversation("echo hello", "")
+		h.WaitResponse()
+		synctest.Wait()
+
+		reqBody := DistillNewGenerationRequest{
+			SourceConversationID: h.convID,
+			Model:                "predictable",
+			Method:               "bogus",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/conversations/distill-new-generation", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.server.handleDistillNewGeneration(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for unknown method, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}

@@ -67,8 +67,10 @@ Unless noted, results exclude **archived** conversations.
 - `GET /api/conversations/archived` — archived list.
 - `POST /api/conversations/new` — create a conversation and post the
   first user message.
-- `POST /api/conversations/distill-new-generation` — distill the current
-  conversation into the next generation of the same conversation.
+- `POST /api/conversations/distill-new-generation` — compact the current
+  conversation into the next generation of the same conversation. The
+  optional `method` field (`default` or `compact`) is accepted for
+  compatibility but is ignored: compaction is always used.
 
 `ConversationWithState` row shape:
 

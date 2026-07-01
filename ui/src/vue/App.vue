@@ -642,8 +642,8 @@ async function handleDistillNewGeneration(
     await api.distillNewGeneration(sourceConversationId, model, cwd, method, instructions);
     currentConversationId.value = sourceConversationId;
   } catch (err) {
-    console.error("Failed to distill into new generation:", err);
-    error.value = "Failed to distill into new generation";
+    console.error("Failed to compact into new generation:", err);
+    error.value = "Failed to compact conversation";
     throw err;
   }
 }

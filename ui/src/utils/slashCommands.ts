@@ -25,6 +25,12 @@ export const SLASH_COMMANDS = {
     description: "compacts this conversation",
     takesArgs: true,
   },
+  DISTILL: {
+    // Legacy alias for /compact, kept for compatibility. Compacts too.
+    command: "/distill",
+    description: "compacts this conversation (alias for /compact)",
+    takesArgs: true,
+  },
   NEW: {
     command: "/new",
     description: "starts a new conversation",

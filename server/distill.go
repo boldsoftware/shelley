@@ -5,10 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
 	"unicode/utf8"
 
 	"shelley.exe.dev/db"
@@ -16,177 +12,8 @@ import (
 	"shelley.exe.dev/llm"
 )
 
-const distillSystemPrompt = `You are a conversation distillation engine for Shelley, an AI coding assistant.
-
-You will receive a full conversation transcript between a user and Shelley. The transcript includes user messages, agent responses, tool calls (bash, patch, browser, keyword_search, etc.), and tool results.
-
-Your job is to produce an OPERATIONAL DISTILLATION — not a narrative summary. The output will become the opening user message in a brand-new continuation conversation. It must give the new Shelley instance everything it needs to pick up the work seamlessly.
-
-Write the distillation AS IF you are the user briefing a fresh Shelley instance. Use second person: "You were working on...", "You created...", "The approach is...".
-
-## Output Format
-
-Produce exactly this structure (no markdown code fences around the whole output, no meta-commentary):
-
-This is a continuation of conversation "SLUG_HERE".
-
-WRITE 2-6 SENTENCES HERE describing what was being worked on, what state things are in, and what the immediate next steps or open tasks are. Be concrete — name files, describe the current approach, note where things left off. This is a situational briefing, not a history. Write the sentences directly with no wrapper tags.
-
-## Retained Facts
-
-- fact 1
-- fact 2
-- ...
-
-The "## Retained Facts" section IS part of the output. The instructions below are NOT part of the output.
-
-Each fact bullet should be a single concrete, referenceable fact. Aim for 10-40 bullets depending on conversation length. Include:
-
-- File paths and roles (full paths, what each file does)
-- Decisions and rationale ("X because Y")
-- Current task state (done, in progress, blocked, next)
-- User preferences and corrections (style choices, explicit instructions)
-- Specific values (URLs, ports, config paths, env vars, schemas, version numbers, commands)
-- Error resolutions (problem + fix, not the debugging journey)
-- Working directory and git state
-- Dependencies and tooling
-- Interfaces and contracts (signatures, API shapes, types)
-- Constraints and gotchas (limitations, workarounds)
-
-EXCISE: dead-end debugging (keep only final fix), verbose tool output (keep only findings), abandoned tangents (unless the reason matters), greetings/filler, already-resolved questions (keep only conclusions), redundant info, thinking blocks, intermediate file states that were later overwritten.
-
-Compression: recent activity (~last 20%) gets more detail; older activity compresses to conclusions. Short conversations (< 20 messages) preserve more. Long conversations (> 100 messages) aggressively compress old activity. Total output: 500-2000 words. When in doubt, keep it.`
-
-// performDistillation does the LLM call and inserts the distilled message.
-// Returns the distilled text, or empty string on error (errors are logged and
-// a distill error is inserted into the conversation).
-func (s *Server) performDistillation(ctx context.Context, conversationID, sourceSlug, modelID, instructions string, messages []generated.Message) string {
-	logger := s.logger.With("conversationID", conversationID, "sourceSlug", sourceSlug)
-
-	// Build the transcript for the LLM
-	transcript := buildDistillTranscript(sourceSlug, messages)
-
-	// Get LLM service
-	svc, err := s.llmManager.GetService(modelID)
-	if err != nil {
-		logger.Error("Failed to get LLM service for distillation", "model", modelID, "error", err)
-		s.insertDistillError(ctx, conversationID, fmt.Sprintf("Failed to get model %q: %v", modelID, err))
-		return ""
-	}
-
-	// Make the LLM call
-	distillCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
-	defer cancel()
-
-	// TODO: consider disabling thinking for distillation requests to reduce
-	// cost and latency — it's a simple summarization task.
-	userText := transcript
-	if steer := strings.TrimSpace(instructions); steer != "" {
-		userText += steeringSection(steer)
-	}
-	resp, err := svc.Do(distillCtx, &llm.Request{
-		System: []llm.SystemContent{
-			{Text: distillSystemPrompt, Type: "text"},
-		},
-		Messages: []llm.Message{
-			{
-				Role: llm.MessageRoleUser,
-				Content: []llm.Content{
-					{Type: llm.ContentTypeText, Text: userText},
-				},
-			},
-		},
-	})
-	if err != nil {
-		logger.Error("LLM distillation failed", "error", err)
-		s.insertDistillError(ctx, conversationID, fmt.Sprintf("Distillation failed: %v", err))
-		return ""
-	}
-
-	// Extract text from response
-	var distilledText string
-	for _, content := range resp.Content {
-		if content.Type == llm.ContentTypeText {
-			distilledText += content.Text
-		}
-	}
-
-	if distilledText == "" {
-		logger.Error("LLM returned empty distillation")
-		s.insertDistillError(ctx, conversationID, "Distillation returned empty result")
-		return ""
-	}
-
-	logger.Info("Distillation complete", "output_length", len(distilledText))
-
-	distillFilePath, err := writeDistillationTempFile(conversationID, distilledText)
-	if err != nil {
-		logger.Error("Failed to write distillation temp file", "error", err)
-		s.insertDistillError(ctx, conversationID, fmt.Sprintf("Failed to write distillation temp file: %v", err))
-		return ""
-	}
-
-	// Update the status message to "complete"
-	s.insertDistillStatus(ctx, conversationID, "complete")
-
-	// Insert a user-visible message that refers to the editable temp file while
-	// retaining the distillation text in user_data for UI display and context.
-	userMessage := llm.Message{
-		Role: llm.MessageRoleUser,
-		Content: []llm.Content{
-			{Type: llm.ContentTypeText, Text: distillationMessageText(distillFilePath)},
-		},
-	}
-	userData := map[string]string{
-		"distilled":             "true",
-		"distillation_file":     distillFilePath,
-		"distillation_content":  distilledText,
-		"distillation_editable": "true",
-	}
-	if err := s.recordMessage(ctx, conversationID, userMessage, llm.Usage{}, userData); err != nil {
-		logger.Error("Failed to record distilled message", "error", err)
-		return ""
-	}
-
-	return distilledText
-}
-
-func distillationMessageText(path string) string {
-	return fmt.Sprintf("Distillation written to %s", path)
-}
-
-func writeDistillationTempFile(conversationID, content string) (string, error) {
-	dir := filepath.Join(os.TempDir(), "shelley-distillations")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	cleanupOldDistillationTempFiles(dir, 7*24*time.Hour)
-	file, err := os.CreateTemp(dir, conversationID+"-*.md")
-	if err != nil {
-		return "", err
-	}
-	path := file.Name()
-	defer file.Close()
-	if _, err := file.WriteString(content); err != nil {
-		return "", err
-	}
-	return path, nil
-}
-
-func cleanupOldDistillationTempFiles(dir string, maxAge time.Duration) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	cutoff := time.Now().Add(-maxAge)
-	for _, entry := range entries {
-		info, err := entry.Info()
-		if err != nil || info.IsDir() || !info.ModTime().Before(cutoff) {
-			continue
-		}
-		_ = os.Remove(filepath.Join(dir, entry.Name()))
-	}
-}
+// performDistillation and its default-strategy helpers were removed when we
+// consolidated on compaction (see performPiDistillation in distill_pi.go).
 
 func (s *Server) insertDistillError(ctx context.Context, conversationID, errMsg string) {
 	s.insertDistillStatus(ctx, conversationID, "error")
@@ -276,69 +103,11 @@ func truncateUTF8(s string, maxBytes int) string {
 	return s[:maxBytes] + "..."
 }
 
-// buildDistillTranscript builds a full conversation transcript for the LLM to distill.
-func buildDistillTranscript(sourceSlug string, messages []generated.Message) string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Conversation slug: %q\n\n", sourceSlug))
-
-	for _, msg := range messages {
-		if msg.Type != string(db.MessageTypeUser) && msg.Type != string(db.MessageTypeAgent) {
-			continue
-		}
-		if msg.LlmData == nil {
-			continue
-		}
-
-		var llmMsg llm.Message
-		if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err != nil {
-			continue
-		}
-
-		var role string
-		if msg.Type == string(db.MessageTypeUser) {
-			role = "User"
-		} else {
-			role = "Agent"
-		}
-
-		for _, content := range llmMsg.Content {
-			switch content.Type {
-			case llm.ContentTypeText:
-				if content.Text != "" {
-					text := truncateUTF8(content.Text, 2000)
-					sb.WriteString(fmt.Sprintf("%s: %s\n\n", role, text))
-				}
-			case llm.ContentTypeToolUse:
-				inputStr := truncateUTF8(string(content.ToolInput), 500)
-				sb.WriteString(fmt.Sprintf("%s: [Tool: %s] %s\n\n", role, content.ToolName, inputStr))
-			case llm.ContentTypeToolResult:
-				var resultText string
-				for _, res := range content.ToolResult {
-					if res.Type == llm.ContentTypeText && res.Text != "" {
-						resultText = res.Text
-						break
-					}
-				}
-				resultText = truncateUTF8(resultText, 500)
-				if resultText != "" {
-					errStr := ""
-					if content.ToolError {
-						errStr = " (error)"
-					}
-					sb.WriteString(fmt.Sprintf("%s: [Tool Result%s] %s\n\n", role, errStr, resultText))
-				}
-			case llm.ContentTypeThinking:
-				// Skip thinking blocks
-			}
-		}
-	}
-
-	return sb.String()
-}
-
-// distillMethodDefault collapses the whole conversation into a single briefing
-// message. distillMethodCompact uses the compaction algorithm (modeled on the
-// pi coding agent): summarize older messages, keep recent ones verbatim.
+// distillMethodCompact is the single conversation-shrinking strategy: it uses
+// the compaction algorithm (modeled on the pi coding agent) to summarize older
+// messages and keep recent ones verbatim. distillMethodDefault is the legacy
+// "default" briefing strategy value, retained only so the endpoint keeps
+// accepting it for compatibility (it is coerced to compaction).
 const (
 	distillMethodDefault = "default"
 	distillMethodCompact = "compact"
@@ -350,7 +119,7 @@ func steeringSection(instructions string) string {
 	return "\n\n## User Guidance\n\nThe user provided the following guidance on what to preserve or emphasize in this distillation. Follow it closely:\n\n" + instructions
 }
 
-func (s *Server) runDistillNewGeneration(ctx context.Context, conversationID, sourceSlug, modelID, method, instructions string, sourceGeneration int64, messages []generated.Message) {
+func (s *Server) runDistillNewGeneration(ctx context.Context, conversationID, sourceSlug, modelID, instructions string, sourceGeneration int64, messages []generated.Message) {
 	defer func() {
 		s.mu.Lock()
 		manager, ok := s.activeConversations[conversationID]
@@ -361,11 +130,7 @@ func (s *Server) runDistillNewGeneration(ctx context.Context, conversationID, so
 		}
 	}()
 
-	if method == distillMethodCompact {
-		s.performPiDistillation(ctx, conversationID, sourceSlug, modelID, instructions, sourceGeneration, messages)
-	} else {
-		s.performDistillation(ctx, conversationID, sourceSlug, modelID, instructions, messages)
-	}
+	s.performPiDistillation(ctx, conversationID, sourceSlug, modelID, instructions, sourceGeneration, messages)
 	// The new generation's messages carry no usage data yet, so the UI's
 	// context-usage bar would keep showing the pre-distillation size until the
 	// next agent turn. Broadcast an estimate of the new generation's context
@@ -467,14 +232,15 @@ func (s *Server) handleDistillNewGeneration(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	method := req.Method
-	if method == "" {
-		method = distillMethodDefault
-	}
-	if method != distillMethodDefault && method != distillMethodCompact {
-		http.Error(w, fmt.Sprintf("unknown distill method %q", method), http.StatusBadRequest)
+	// We have consolidated on compaction as the single strategy. The legacy
+	// "default" distillation method is retained only for request
+	// compatibility: any method value (including empty or "default") is
+	// coerced to compaction. Reject only clearly bogus method strings.
+	if req.Method != "" && req.Method != distillMethodDefault && req.Method != distillMethodCompact {
+		http.Error(w, fmt.Sprintf("unknown distill method %q", req.Method), http.StatusBadRequest)
 		return
 	}
+	method := distillMethodCompact
 
 	sourceConv, err := s.db.GetConversationByID(ctx, req.SourceConversationID)
 	if err != nil {
@@ -587,7 +353,7 @@ func (s *Server) handleDistillNewGeneration(w http.ResponseWriter, r *http.Reque
 
 	ctxNoCancel := context.WithoutCancel(ctx)
 	go func() {
-		s.runDistillNewGeneration(ctxNoCancel, req.SourceConversationID, sourceSlug, modelID, method, req.Instructions, sourceGeneration, messages)
+		s.runDistillNewGeneration(ctxNoCancel, req.SourceConversationID, sourceSlug, modelID, req.Instructions, sourceGeneration, messages)
 	}()
 
 	w.Header().Set("Content-Type", "application/json")

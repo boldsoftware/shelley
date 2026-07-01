@@ -32,7 +32,7 @@
           class="chat-distill-button chat-distill-generation-button"
           @click="handleDistillNewGeneration"
         >
-          {{ distilling ? "Distilling..." : "Distill in New Generation" }}
+          {{ distilling ? "Compacting..." : "Compact Conversation" }}
         </button>
         <button
           v-if="onStartNewGeneration"

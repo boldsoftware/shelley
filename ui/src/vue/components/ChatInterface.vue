@@ -1195,13 +1195,13 @@ async function sendMessage(message: string) {
     showDiffViewer.value = true;
     return;
   }
-  if (
-    trimmedMessage === SLASH_COMMANDS.COMPACT.command ||
-    trimmedMessage.startsWith(`${SLASH_COMMANDS.COMPACT.command} `)
-  ) {
-    const instructions = trimmedMessage.slice(SLASH_COMMANDS.COMPACT.command.length).trim();
-    await handleDistillCompactNewGeneration(instructions || undefined);
-    return;
+  // /compact and its legacy alias /distill both run compaction.
+  for (const cmd of [SLASH_COMMANDS.COMPACT.command, SLASH_COMMANDS.DISTILL.command]) {
+    if (trimmedMessage === cmd || trimmedMessage.startsWith(`${cmd} `)) {
+      const instructions = trimmedMessage.slice(cmd.length).trim();
+      await handleDistillCompactNewGeneration(instructions || undefined);
+      return;
+    }
   }
   if (
     trimmedMessage === SLASH_COMMANDS.NEW.command ||
@@ -1300,17 +1300,6 @@ async function handleCancel() {
   } finally {
     cancelling.value = false;
   }
-}
-
-async function handleDistillNewGeneration(instructions?: string) {
-  if (!props.conversationId || !props.onDistillNewGeneration) return;
-  await props.onDistillNewGeneration(
-    props.conversationId,
-    selectedModel.value,
-    props.currentConversation?.cwd || selectedCwd.value || undefined,
-    "default",
-    instructions,
-  );
 }
 
 async function handleDistillCompactNewGeneration(instructions?: string) {
@@ -1513,9 +1502,9 @@ const statusBarClass = computed(
     }`,
 );
 
-// distill callback for the context bar (only when handler available)
+// compact callback for the context bar (only when handler available)
 const contextBarDistill = computed(() =>
-  props.onDistillNewGeneration ? () => handleDistillNewGeneration() : undefined,
+  props.onDistillNewGeneration ? () => handleDistillCompactNewGeneration() : undefined,
 );
 
 function setDiffCommentText(text: string) {
