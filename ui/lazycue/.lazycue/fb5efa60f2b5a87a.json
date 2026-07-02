@@ -1,0 +1,105 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Reproduces the \"open a draft, get a forever spinner\" bug, which only surfaces on a COLD message cache. Perform these steps in order, exactly as described; do not add extra steps.\n1. Navigate to /new.\n2. Wait for the message input (data-testid \"message-input\") to be visible.\n3. Fill the message input (data-testid \"message-input\") with the value \"draft body text\". This lazily creates a draft.\n4. Wait for the URL to contain \"/c/\".\n5. Sleep about 1 second.\n6. Navigate to /new.\n7. Wait for the message input (data-testid \"message-input\") to be visible.\n8. Eval: delete the message cache. Expression: \"(function(){try{indexedDB.deleteDatabase('shelley-messages');}catch(e){}return 'cleared';})()\". Expect \"cleared\".\n9. Sleep about 1 second.\n10. Navigate to /new (a fresh load with the now-empty cache).\n11. Wait for the message input (data-testid \"message-input\") to be visible.\n12. Eval: install a fetch shim so the conversation-detail GET hangs forever. Expression: \"(function(){var o=window.fetch;window.fetch=function(u,opt){var s=(typeof u==='string')?u:u.url;if(/\\/api\\/conversation\\/[^\\/]+$/.test(s)\u0026\u0026(!opt||!opt.method||opt.method==='GET')){return new Promise(function(){});}return o(u,opt);};return 'stalled';})()\". Expect \"stalled\".\n13. Click the button with aria-label \"Open conversations\".\n14. Wait for a draft row (selector \".conversation-title-draft\") to be visible.\n15. Eval: click the draft row. Expression: \"(function(){var el=document.querySelector('.conversation-title-draft');el.closest('.conversation-item').click();return 'clicked';})()\". Expect \"clicked\".\n16. Sleep about 1.5 seconds.\n17. Wait for the URL to contain \"/c/\" (the app should have switched to the draft).\n18. Assert that selector \".spinner\" matches 0 elements (no loading spinner, despite the stalled fetch).\n19. Eval: confirm the composer is usable and seeded with the draft text. Expression: \"(function(){var el=document.querySelector('[data-testid=\\\"message-input\\\"]');return (!!el)\u0026\u0026(!el.disabled)\u0026\u0026el.value.indexOf('draft body text')\u003e=0 ? 'true' : 'false';})()\". Expect \"true\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "draft body text"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "15s"
+    },
+    {
+      "action": "sleep",
+      "timeout": "1s"
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){try{indexedDB.deleteDatabase('shelley-messages');}catch(e){}return 'cleared';})()",
+      "expect": "cleared"
+    },
+    {
+      "action": "sleep",
+      "timeout": "1s"
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var o=window.fetch;window.fetch=function(u,opt){var s=(typeof u==='string')?u:u.url;if(/\\/api\\/conversation\\/[^\\/]+$/.test(s)\u0026\u0026(!opt||!opt.method||opt.method==='GET')){return new Promise(function(){});}return o(u,opt);};return 'stalled';})()",
+      "expect": "stalled"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label=\"Open conversations\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-title-draft",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var el=document.querySelector('.conversation-title-draft');el.closest('.conversation-item').click();return 'clicked';})()",
+      "expect": "clicked"
+    },
+    {
+      "action": "sleep",
+      "timeout": "1.5s"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".spinner",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');return (!!el)\u0026\u0026(!el.disabled)\u0026\u0026el.value.indexOf('draft body text')\u003e=0 ? 'true' : 'false';})()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-07-02T05:17:03.334942327Z",
+    "hostname": "phil-exe-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 73605,
+    "output_tokens": 3107,
+    "estimated_cost_usd": 0.26742,
+    "git_sha": "acd174cc546cb162796700b3f3cdd67de4fa999c",
+    "mode": "generated"
+  }
+}

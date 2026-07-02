@@ -130,6 +130,40 @@ func TestNewPageDraftKeepsInputFocused(t *testing.T) {
 	lazyTest(t, `Navigate to /new. Using an eval step, focus the message input and install a blur counter on it: run the JavaScript "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');el.focus();window.__blurCount=0;el.addEventListener('blur',function(){window.__blurCount++;});return document.activeElement===el;})()" and expect the result "true". Then type "hello there" into the message input (data-testid "message-input"). Typing lazily promotes the conversation to a draft, so wait for the URL to contain "/c/". After that, add a sleep of about 1.5 seconds to let the draft creation and any re-render settle. Then assert the textarea never lost focus during the draft creation: eval "window.__blurCount" and expect "0". Also assert the textarea is still enabled and focused: eval "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');return (!el.disabled)&&document.activeElement===el;})()" and expect "true".`)
 }
 
+// Regression test for the "draft opens to a forever spinner" bug. Selecting a
+// draft conversation used to run the normal conversation-switch load path,
+// which fires GET /api/conversation/<id> and shows a "Loading conversation…"
+// spinner until it resolves. A draft has NO server-side messages (it only
+// carries composer text), so nothing cleared the loading state for the empty
+// result; if that fetch stalled (or a switch race tripped loadMessages'
+// isCurrent() early-return), the spinner was stranded indefinitely. The fix
+// short-circuits drafts so they never spin or hit the network. We reproduce the
+// exact failure mode deterministically: install a fetch shim that makes the
+// conversation-detail GET hang forever, then select the draft and assert it
+// renders its composer immediately with no spinner.
+func TestNewPageDraftOpensWithoutSpinner(t *testing.T) {
+	lazyTest(t, `Reproduces the "open a draft, get a forever spinner" bug, which only surfaces on a COLD message cache. Perform these steps in order, exactly as described; do not add extra steps.
+1. Navigate to /new.
+2. Wait for the message input (data-testid "message-input") to be visible.
+3. Fill the message input (data-testid "message-input") with the value "draft body text". This lazily creates a draft.
+4. Wait for the URL to contain "/c/".
+5. Sleep about 1 second.
+6. Navigate to /new.
+7. Wait for the message input (data-testid "message-input") to be visible.
+8. Eval: delete the message cache. Expression: "(function(){try{indexedDB.deleteDatabase('shelley-messages');}catch(e){}return 'cleared';})()". Expect "cleared".
+9. Sleep about 1 second.
+10. Navigate to /new (a fresh load with the now-empty cache).
+11. Wait for the message input (data-testid "message-input") to be visible.
+12. Eval: install a fetch shim so the conversation-detail GET hangs forever. Expression: "(function(){var o=window.fetch;window.fetch=function(u,opt){var s=(typeof u==='string')?u:u.url;if(/\/api\/conversation\/[^\/]+$/.test(s)&&(!opt||!opt.method||opt.method==='GET')){return new Promise(function(){});}return o(u,opt);};return 'stalled';})()". Expect "stalled".
+13. Click the button with aria-label "Open conversations".
+14. Wait for a draft row (selector ".conversation-title-draft") to be visible.
+15. Eval: click the draft row. Expression: "(function(){var el=document.querySelector('.conversation-title-draft');el.closest('.conversation-item').click();return 'clicked';})()". Expect "clicked".
+16. Sleep about 1.5 seconds.
+17. Wait for the URL to contain "/c/" (the app should have switched to the draft).
+18. Assert that selector ".spinner" matches 0 elements (no loading spinner, despite the stalled fetch).
+19. Eval: confirm the composer is usable and seeded with the draft text. Expression: "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');return (!!el)&&(!el.disabled)&&el.value.indexOf('draft body text')>=0 ? 'true' : 'false';})()". Expect "true".`)
+}
+
 // --- Conversation tests (ported from ui/e2e/conversation.spec.ts) ---
 //
 // These drive the predictable LLM service through the real UI. The predictable

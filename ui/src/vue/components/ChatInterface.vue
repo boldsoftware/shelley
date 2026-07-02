@@ -1005,6 +1005,26 @@ function syncTransientFromStore(focusedId: string) {
 async function loadMessages(focusedId: string) {
   const isCurrent = () => focusedId === currentConversationId;
 
+  // Drafts never have server-side messages; skip the network load entirely so
+  // a stalled fetch can't strand the loading spinner. The switch watcher
+  // already renders the empty composer for drafts, but guard here too in case
+  // loadMessages is reached via another path. Match the draft flag to this id
+  // so a stale currentConversation can't suppress a real load.
+  if (
+    props.currentConversation?.is_draft &&
+    props.currentConversation.conversation_id === focusedId
+  ) {
+    loadingFlag = false;
+    loading.value = false;
+    if (loadingProgressDelay) {
+      clearTimeout(loadingProgressDelay);
+      loadingProgressDelay = null;
+    }
+    showLoadingProgressUI.value = false;
+    loadingProgress.value = null;
+    return;
+  }
+
   if (!messageStore.isHydrated(focusedId)) {
     await messageStore.hydrate(focusedId);
   }
@@ -1757,6 +1777,24 @@ watch(
     unsubTransient = messageStore.subscribeTransient(focusedId, () =>
       syncTransientFromStore(focusedId),
     );
+
+    // A draft conversation has no server-side messages by definition: it only
+    // carries composer text. Never spin or hit the network for it — that path
+    // could strand the spinner forever if the fetch stalls or a switch race
+    // trips loadMessages' isCurrent() early-return before `loading` is cleared.
+    // Show its (empty) message list + composer immediately.
+    if (props.currentConversation?.is_draft) {
+      messages.value = messageStore.peek(focusedId)?.messages ?? [];
+      loadingFlag = false;
+      loading.value = false;
+      if (loadingProgressDelay) {
+        clearTimeout(loadingProgressDelay);
+        loadingProgressDelay = null;
+      }
+      showLoadingProgressUI.value = false;
+      loadingProgress.value = null;
+      return;
+    }
 
     // Decide the loading state SYNCHRONOUSLY before kicking off the async
     // load. Otherwise `loading` stays false (its value from the previous
