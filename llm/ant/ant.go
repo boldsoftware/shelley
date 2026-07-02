@@ -84,6 +84,18 @@ func ClaudeModelName(userName string) string {
 
 func (s *Service) Provider() string { return "anthropic" }
 
+// DefaultReasoningLevel reports the reasoning level applied to requests that
+// carry no per-conversation override. applyAnthropicThinking treats both
+// ThinkingLevelDefault and ThinkingLevelOff as "send no thinking", so those
+// surface as "off"; any other configured level surfaces by name.
+func (s *Service) DefaultReasoningLevel() string {
+	eff := s.ThinkingLevel
+	if eff == llm.ThinkingLevelDefault || eff == llm.ThinkingLevelOff {
+		return "off"
+	}
+	return eff.Name()
+}
+
 // SupportsImages reports whether this service accepts image inputs.
 // Anthropic models support images by default; set SupportsImages=false to opt out
 // (e.g. for a custom endpoint that proxies a text-only model).

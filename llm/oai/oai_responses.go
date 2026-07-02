@@ -428,6 +428,21 @@ func (s *ResponsesService) toLLMUsageFromResponses(usage responsesUsage, headers
 
 func (s *ResponsesService) Provider() string { return s.ProviderName }
 
+// DefaultReasoningLevel reports the reasoning effort applied to un-overridden
+// requests, mirroring the request builder's precedence: verbatim
+// ReasoningEffort wins, else a configured service-level ThinkingLevel. When
+// neither is set, no reasoning field is emitted and the provider applies its
+// own default (which Shelley cannot name), so it returns "".
+func (s *ResponsesService) DefaultReasoningLevel() string {
+	if s.ReasoningEffort != "" {
+		return s.ReasoningEffort
+	}
+	if s.ThinkingLevel != llm.ThinkingLevelDefault && s.ThinkingLevel != llm.ThinkingLevelOff {
+		return s.ThinkingLevel.Name()
+	}
+	return ""
+}
+
 func (s *ResponsesService) SupportsServerSideWebSearch() bool { return true }
 
 // SupportsImages reports whether this service accepts image inputs.

@@ -1169,6 +1169,23 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 				return
 			}
 		}
+		// Apply send-time conversation_options. The web UI autosaves a draft
+		// (via POST /draft) as soon as the composer has text, and that draft is
+		// born WITHOUT options. The user's actual selection (thinking level,
+		// orchestrator mode, tool overrides) only travels with the promoting
+		// chat request, so without this the selection is dropped and reasoning
+		// is silently disabled for adaptive models.
+		if req.ConversationOptions != nil {
+			if msg := validateConversationOptions(*req.ConversationOptions); msg != "" {
+				http.Error(w, msg, http.StatusBadRequest)
+				return
+			}
+			if err := s.db.UpdateConversationOptions(ctx, conversationID, *req.ConversationOptions); err != nil {
+				s.logger.Error("Failed to update draft options before promote", "conversationID", conversationID, "error", err)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+		}
 		if err := s.db.PromoteDraft(ctx, conversationID); err != nil {
 			s.logger.Error("Failed to promote draft", "conversationID", conversationID, "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -2112,6 +2129,12 @@ type ModelInfo struct {
 	MaxContextTokens int    `json:"max_context_tokens,omitempty"`
 	IsDefault        bool   `json:"is_default,omitempty"`
 	SupportsImages   bool   `json:"supports_images"`
+	// DefaultReasoningLevel is the reasoning level a conversation gets when it
+	// carries no explicit thinking_level override. Lets the UI label
+	// conversations honestly (e.g. "Reasoning medium") instead of leaving the
+	// badge blank. Empty means the provider picks its own default and Shelley
+	// can't name it up front.
+	DefaultReasoningLevel string `json:"default_reasoning_level,omitempty"`
 }
 
 // getModelList returns the list of available models
@@ -2129,11 +2152,13 @@ func (s *Server) getModelList() []ModelInfo {
 			svc, err := s.llmManager.GetService(id)
 			maxCtx := 0
 			supportsImages := false
+			defaultReasoning := ""
 			if err == nil && svc != nil {
 				maxCtx = svc.TokenContextWindow()
 				supportsImages = svc.SupportsImages()
+				defaultReasoning = llm.ServiceDefaultReasoningLevel(svc)
 			}
-			info := ModelInfo{ID: id, Ready: err == nil, MaxContextTokens: maxCtx, SupportsImages: supportsImages}
+			info := ModelInfo{ID: id, Ready: err == nil, MaxContextTokens: maxCtx, SupportsImages: supportsImages, DefaultReasoningLevel: defaultReasoning}
 			// Add display name and source from model info
 			if modelInfo := s.llmManager.GetModelInfo(id); modelInfo != nil {
 				info.DisplayName = modelInfo.DisplayName

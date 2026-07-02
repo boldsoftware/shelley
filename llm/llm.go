@@ -44,6 +44,34 @@ func UseSimplifiedPatch(svc Service) bool {
 	return false
 }
 
+// DefaultReasoner is implemented by services that can report the reasoning
+// level they apply when a request carries no per-conversation override (i.e.
+// ThinkingLevelDefault). This is the level actually sent to the model, so the
+// UI can label conversations honestly instead of leaving the badge blank.
+type DefaultReasoner interface {
+	// DefaultReasoningLevel returns the user-facing name of the reasoning
+	// level applied to un-overridden requests ("off", "minimal", "low",
+	// "medium", "high", "xhigh", or a provider-verbatim effort string).
+	// Empty string means the provider is left to pick its own default and
+	// Shelley cannot know the concrete level up front.
+	//
+	// This reports the configured/effective level by name; it does NOT
+	// replicate the per-model effort clamping some request builders apply
+	// (e.g. chat backends downgrading "xhigh"->"high"). That only diverges
+	// when a service-level default is itself set to a clamped level, which
+	// does not happen for the shipped defaults (all "medium").
+	DefaultReasoningLevel() string
+}
+
+// ServiceDefaultReasoningLevel returns the service's default reasoning level
+// name, or "" when the service doesn't implement DefaultReasoner.
+func ServiceDefaultReasoningLevel(svc Service) string {
+	if dr, ok := svc.(DefaultReasoner); ok {
+		return dr.DefaultReasoningLevel()
+	}
+	return ""
+}
+
 // MustSchema validates that schema is a valid JSON schema and returns it as a json.RawMessage.
 // It panics if the schema is invalid.
 // The schema must have at least type="object" and a properties key.

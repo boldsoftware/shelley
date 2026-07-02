@@ -580,6 +580,20 @@ func calculateUsage(req *gemini.Request, res *gemini.Response) llm.Usage {
 
 func (s *Service) Provider() string { return "gemini" }
 
+// DefaultReasoningLevel reports the reasoning level applied to un-overridden
+// requests. A verbatim per-model ReasoningEffort or a configured service-level
+// ThinkingLevel surfaces by name; otherwise Gemini is left to its own dynamic
+// default, which Shelley cannot name, so it returns "".
+func (s *Service) DefaultReasoningLevel() string {
+	if s.ReasoningEffort != "" {
+		return s.ReasoningEffort
+	}
+	if s.ThinkingLevel != llm.ThinkingLevelDefault {
+		return s.ThinkingLevel.Name()
+	}
+	return ""
+}
+
 // SupportsImages reports whether this service accepts image inputs.
 // Gemini models support images by default; set SupportsImages_=false to opt out.
 func (s *Service) SupportsImages() bool { return s.SupportsImages_ }

@@ -485,6 +485,12 @@ func (l *loggingService) SupportsImages() bool {
 	return l.service.SupportsImages()
 }
 
+// DefaultReasoningLevel forwards the wrapped service's default reasoning level
+// so the llm.DefaultReasoner assertion survives the logging wrapper.
+func (l *loggingService) DefaultReasoningLevel() string {
+	return llm.ServiceDefaultReasoningLevel(l.service)
+}
+
 // NewManager registers the supplied built-in models, then loads custom
 // models from cfg.DB.
 func NewManager(cfg *Config) (*Manager, error) {

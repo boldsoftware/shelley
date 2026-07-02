@@ -69,6 +69,9 @@ export interface Model {
   max_context_tokens?: number;
   is_default?: boolean;
   supports_images?: boolean;
+  // Reasoning level applied when a conversation carries no explicit
+  // thinking_level override. Empty when the provider picks its own default.
+  default_reasoning_level?: string;
 }
 
 export interface ChatRequest {

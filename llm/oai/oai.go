@@ -1056,6 +1056,22 @@ func toStopReason(reason string) llm.StopReason {
 
 func (s *Service) Provider() string { return s.ProviderName }
 
+// DefaultReasoningLevel reports the reasoning effort applied to un-overridden
+// requests, mirroring the precedence used when building a chat-completions
+// request: verbatim per-model ReasoningEffort wins, else a configured
+// service-level ThinkingLevel. When neither is set, no reasoning_effort is
+// emitted and the provider applies its own default (often not "off" for
+// reasoning models), which Shelley cannot name — so it returns "".
+func (s *Service) DefaultReasoningLevel() string {
+	if s.ReasoningEffort != "" {
+		return s.ReasoningEffort
+	}
+	if s.ThinkingLevel != llm.ThinkingLevelDefault && s.ThinkingLevel != llm.ThinkingLevelOff {
+		return s.ThinkingLevel.Name()
+	}
+	return ""
+}
+
 // SupportsImages reports whether this model accepts image inputs. Defaults
 // to true; set Model.SupportsImages on image-capable models.
 func (s *Service) SupportsImages() bool { return s.Model.SupportsImages }

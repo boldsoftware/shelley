@@ -355,6 +355,7 @@ import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 
 import {
   type Message,
   type Conversation,
+  type ChatRequest,
   type ToolProgress,
   isDistillStatusMessage,
   distillStatus,
@@ -1164,6 +1165,33 @@ async function cancelQueuedMessage(queuedId: string) {
 // JSON array (not messages rows). Rendered at the bottom of the conversation.
 const queuedGhosts = computed(() => parseQueuedMessages(props.currentConversation?.queued_messages));
 
+// Build the conversation_options bundle from the current composer selection
+// (orchestrator mode, tool overrides, thinking level). thinkingLevel always
+// has a value (defaults to "medium"), so the bundle is effectively always
+// present; it only returns undefined in the degenerate case of no thinking
+// level and no other overrides. Used when promoting an autosaved draft on
+// first send — the draft is created (via POST /draft autosave) without
+// options, so the selection only reaches the server on the promoting chat
+// request.
+function buildConversationOptions(): ChatRequest["conversation_options"] | undefined {
+  const orchestratorOn = toolOverrides.value["orchestrator"] === "on";
+  const realOverrides: Record<string, "on" | "off"> = {};
+  for (const [k, v] of Object.entries(toolOverrides.value)) {
+    if (k === "orchestrator") continue;
+    realOverrides[k] = v;
+  }
+  const hasOverrides = Object.keys(realOverrides).length > 0;
+  const hasThinking = !!thinkingLevel.value;
+  if (!orchestratorOn && !hasOverrides && !hasThinking) return undefined;
+  return {
+    ...(orchestratorOn
+      ? { type: "orchestrator" as const, subagent_backend: subagentBackend.value }
+      : {}),
+    ...(hasOverrides ? { tool_overrides: realOverrides } : {}),
+    ...(hasThinking ? { thinking_level: thinkingLevel.value } : {}),
+  };
+}
+
 async function sendFirstMessage(prompt: string) {
   if (!props.onFirstMessage) return;
   if (selectedCwd.value) {
@@ -1293,6 +1321,13 @@ async function sendMessage(message: string) {
     if (!effectiveId && props.onFirstMessage) {
       await sendFirstMessage(message.trim());
     } else if (effectiveId) {
+      // When this send promotes an autosaved draft, carry the composer's
+      // conversation_options (thinking level, orchestrator, tool overrides).
+      // The draft was created without them, and PromoteDraft only preserves
+      // what's stored — so without this the selection is lost and reasoning
+      // is silently disabled for adaptive models. Follow-up messages on an
+      // already-promoted conversation must NOT resend options (they're locked).
+      const promoting = isDraftConv || (!props.conversationId && !!draftConvId);
       await api.sendMessage(effectiveId, {
         message: message.trim(),
         model: selectedModel.value,
@@ -1300,6 +1335,7 @@ async function sendMessage(message: string) {
           (isDraftConv || !props.conversationId) && selectedCwd.value
             ? selectedCwd.value
             : undefined,
+        conversation_options: promoting ? buildConversationOptions() : undefined,
       });
     }
   } catch (err) {
