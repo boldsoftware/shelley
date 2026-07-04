@@ -161,6 +161,14 @@
               </div>
               <div
                 v-if="tool.name === 'orchestrator' && toolOverrides['orchestrator'] === 'on'"
+                class="tool-override-warning"
+              >
+                Orchestrator changes the conversation mode: the main agent will plan and delegate
+                work to subagents, and will not run shell or edit files directly. Leave this off
+                for normal coding sessions.
+              </div>
+              <div
+                v-if="tool.name === 'orchestrator' && toolOverrides['orchestrator'] === 'on'"
                 class="tool-override-row tool-override-suboption"
               >
                 <label class="tool-override-suboption-label" for="subagent-backend-select"

@@ -646,7 +646,8 @@ const toolOverrideCount = computed(() => Object.keys(toolOverrides.value).length
 
 const orchestratorPseudoTool = {
   name: "orchestrator",
-  summary: "Shelley orchestrator mode (delegates to subagents).",
+  summary:
+    "Advanced mode: the main agent delegates execution to subagents instead of using shell/file tools directly.",
   default_on: false,
 };
 const toolOverrideList = computed(() => [orchestratorPseudoTool, ...availableTools.value]);
