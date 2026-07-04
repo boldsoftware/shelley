@@ -102,6 +102,7 @@ const (
 	ErrorTypeNone       ErrorType = ""            // Not an error
 	ErrorTypeTruncation ErrorType = "truncation"  // Response truncated due to max tokens
 	ErrorTypeLLMRequest ErrorType = "llm_request" // LLM request failed
+	ErrorTypeRefusal    ErrorType = "refusal"     // Model declined to continue (stop_reason=refusal)
 )
 
 // StreamDelta represents a partial content update during streaming.

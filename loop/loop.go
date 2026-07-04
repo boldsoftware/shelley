@@ -412,6 +412,17 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 			return l.handleMaxTokensTruncation(ctx, resp)
 		}
 
+		// Handle refusals BEFORE adding to history. On stop_reason=refusal the
+		// model declines to continue and typically returns no visible content
+		// (often just a thinking block). Recorded normally it becomes a silent
+		// empty end-of-turn bubble, and — worse — re-queuing "continue" replays
+		// the same context and refuses again, wedging the conversation in an
+		// endless string of blank turns. Surface it as a visible error instead.
+		if resp.StopReason == llm.StopReasonRefusal {
+			l.logger.Warn("LLM declined to continue (stop_reason=refusal)")
+			return l.handleRefusal(ctx, resp)
+		}
+
 		// Convert response to message and add to history
 		assistantMessage := resp.ToMessage()
 		l.mu.Lock()
@@ -603,6 +614,60 @@ func (l *Loop) handleMaxTokensTruncation(ctx context.Context, resp *llm.Response
 	}
 
 	// End the turn - don't automatically continue
+	l.checkGitStateChange(ctx)
+	return nil
+}
+
+// handleRefusal handles a stop_reason=refusal response: the model declined to
+// continue. Such responses usually carry no visible content (just a thinking
+// block, or nothing), so recording them normally leaves a blank agent bubble
+// and, because the empty response ends up in history, every follow-up
+// "continue" replays the same context and refuses again. We instead record the
+// raw response excluded from context (for cost tracking) and append a visible,
+// non-retryable error message that ends the turn.
+func (l *Loop) handleRefusal(ctx context.Context, resp *llm.Response) error {
+	// Record the raw refusal for cost tracking, but keep it out of context so it
+	// doesn't poison future turns (an empty/near-empty assistant turn biases the
+	// model toward refusing again, and empty content blocks can wedge replay).
+	rawMessage := resp.ToMessage()
+	rawMessage.ExcludedFromContext = true
+
+	usageWithMeta := resp.Usage
+	usageWithMeta.Model = resp.Model
+	usageWithMeta.URL = resp.URL
+	usageWithMeta.StartTime = resp.StartTime
+	usageWithMeta.EndTime = resp.EndTime
+	if err := l.recordMessage(ctx, rawMessage, usageWithMeta); err != nil {
+		l.logger.Error("failed to record refusal message", "error", err)
+	}
+
+	// Record a visible refusal notice with EndOfTurn=true. Marked non-retryable:
+	// re-running the identical request just refuses again, so the UI should not
+	// offer a Retry button. Rephrasing the request is what actually helps.
+	errorMessage := llm.Message{
+		Role: llm.MessageRoleAssistant,
+		Content: []llm.Content{
+			{
+				Type: llm.ContentTypeText,
+				Text: "[The model declined to continue this request (content-policy refusal) " +
+					"and returned no response. Retrying the same request will likely be refused " +
+					"again; try rephrasing or clarifying the intent instead.]",
+			},
+		},
+		EndOfTurn:      true,
+		ErrorType:      llm.ErrorTypeRefusal,
+		ErrorRetryable: false,
+	}
+
+	l.mu.Lock()
+	l.history = append(l.history, errorMessage)
+	l.mu.Unlock()
+
+	if err := l.recordMessage(ctx, errorMessage, llm.Usage{}); err != nil {
+		l.logger.Error("failed to record refusal error message", "error", err)
+	}
+
+	// End the turn - don't automatically continue.
 	l.checkGitStateChange(ctx)
 	return nil
 }

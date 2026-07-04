@@ -205,6 +205,11 @@ func (s *PredictableService) Do(ctx context.Context, req *llm.Request) (*llm.Res
 		// Simulate a max_tokens truncation
 		return s.makeMaxTokensResponse("This is a truncated response that was cut off mid-sentence because the output token limit was", inputTokens), nil
 
+	case "refusal":
+		// Simulate a stop_reason=refusal response (model declines mid-turn,
+		// often after producing only thinking and no visible content).
+		return s.makeRefusalResponse(inputTokens), nil
+
 	default:
 		// Handle pattern-based inputs
 		if text, ok := strings.CutPrefix(inputText, "echo: "); ok {
@@ -306,6 +311,28 @@ func (s *PredictableService) makeMaxTokensResponse(text string, inputTokens uint
 		Usage: llm.Usage{
 			InputTokens:  inputTokens,
 			OutputTokens: outputTokens,
+			CostUSD:      0.001,
+		},
+	}
+}
+
+// makeRefusalResponse creates a response that simulates the model declining to
+// continue (stop_reason=refusal). Mirrors what real providers do: they may emit
+// only a thinking block (or nothing) and set stop_reason=refusal, leaving no
+// visible content for the user.
+func (s *PredictableService) makeRefusalResponse(inputTokens uint64) *llm.Response {
+	return &llm.Response{
+		ID:    fmt.Sprintf("pred-%d", time.Now().UnixNano()),
+		Type:  "message",
+		Role:  llm.MessageRoleAssistant,
+		Model: "predictable-v1",
+		Content: []llm.Content{
+			{Type: llm.ContentTypeThinking, Thinking: "", Signature: "pred-sig"},
+		},
+		StopReason: llm.StopReasonRefusal,
+		Usage: llm.Usage{
+			InputTokens:  inputTokens,
+			OutputTokens: 42,
 			CostUSD:      0.001,
 		},
 	}

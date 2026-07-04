@@ -2041,6 +2041,96 @@ func TestMaxTokensTruncation(t *testing.T) {
 	}
 }
 
+// TestRefusal verifies that a stop_reason=refusal response is surfaced to the
+// user as a visible, non-retryable error message rather than a silent empty
+// end-of-turn. Regression test: previously refusals fell through as an empty
+// assistant bubble, so "continue" produced an endless string of blank turns.
+func TestRefusal(t *testing.T) {
+	var mu sync.Mutex
+	var recordedMessages []llm.Message
+	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage) error {
+		mu.Lock()
+		recordedMessages = append(recordedMessages, message)
+		mu.Unlock()
+		return nil
+	}
+
+	service := NewPredictableService()
+	loop := NewLoop(Config{
+		LLM:           service,
+		History:       []llm.Message{},
+		Tools:         []*llm.Tool{},
+		RecordMessage: recordFunc,
+	})
+
+	userMessage := llm.Message{
+		Role:    llm.MessageRoleUser,
+		Content: []llm.Content{{Type: llm.ContentTypeText, Text: "refusal"}},
+	}
+	loop.QueueUserMessage(userMessage)
+
+	// The loop should end the turn after handling the refusal, so Go returns
+	// when the queue drains (context deadline) rather than spinning.
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	if err := loop.Go(ctx); err != context.DeadlineExceeded {
+		t.Errorf("expected context deadline exceeded, got %v", err)
+	}
+
+	mu.Lock()
+	messages := make([]llm.Message, len(recordedMessages))
+	copy(messages, recordedMessages)
+	mu.Unlock()
+
+	// We should see two recorded messages:
+	// 1. The raw refusal response (excluded from context, for cost tracking).
+	// 2. A visible refusal error message (ErrorType=refusal, EndOfTurn=true).
+	if len(messages) != 2 {
+		t.Fatalf("expected 2 recorded messages (refusal + error), got %d", len(messages))
+	}
+
+	rawMsg := messages[0]
+	if !rawMsg.ExcludedFromContext {
+		t.Error("raw refusal message should have ExcludedFromContext=true")
+	}
+
+	errMsg := messages[1]
+	if errMsg.Role != llm.MessageRoleAssistant {
+		t.Errorf("error message should be assistant, got %v", errMsg.Role)
+	}
+	if errMsg.ErrorType != llm.ErrorTypeRefusal {
+		t.Errorf("error message should have ErrorType=refusal, got %v", errMsg.ErrorType)
+	}
+	if !errMsg.EndOfTurn {
+		t.Error("error message should have EndOfTurn=true")
+	}
+	if errMsg.ErrorRetryable {
+		t.Error("refusal error should not be retryable (retrying the same context refuses again)")
+	}
+	if errMsg.ExcludedFromContext {
+		t.Error("error message should not be excluded from context")
+	}
+	if len(errMsg.Content) == 0 || errMsg.Content[0].Text == "" {
+		t.Fatal("error message should have non-empty text")
+	}
+	if !strings.Contains(errMsg.Content[0].Text, "declined") {
+		t.Errorf("error message should explain the refusal, got: %s", errMsg.Content[0].Text)
+	}
+
+	// The raw empty refusal must NOT be in history (it would poison future
+	// turns); the visible error message should be.
+	loop.mu.Lock()
+	history := loop.history
+	loop.mu.Unlock()
+	if len(history) != 2 {
+		t.Fatalf("history should have 2 messages (user + error), got %d", len(history))
+	}
+	if history[1].ErrorType != llm.ErrorTypeRefusal {
+		t.Errorf("history tail should be the refusal error, got ErrorType=%v", history[1].ErrorType)
+	}
+}
+
 //func TestInsertMissingToolResultsEdgeCases(t *testing.T) {
 //	loop := NewLoop(Config{
 //		LLM:     NewPredictableService(),
