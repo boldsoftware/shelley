@@ -697,7 +697,7 @@ func TestResponsesServiceDoSendsSystemAsInstructions(t *testing.T) {
 	}
 }
 
-func TestResponsesServiceDoOmitsMaxOutputTokens(t *testing.T) {
+func TestResponsesServiceDoSendsMaxOutputTokens(t *testing.T) {
 	var gotReq map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
@@ -729,8 +729,8 @@ func TestResponsesServiceDoOmitsMaxOutputTokens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Do() error = %v", err)
 	}
-	if _, hasCap := gotReq["max_output_tokens"]; hasCap {
-		t.Fatalf("max_output_tokens present; body = %#v", gotReq)
+	if gotReq["max_output_tokens"] != float64(DefaultMaxTokens) {
+		t.Fatalf("max_output_tokens = %#v, want %d; body = %#v", gotReq["max_output_tokens"], DefaultMaxTokens, gotReq)
 	}
 }
 

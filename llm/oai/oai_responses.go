@@ -26,6 +26,7 @@ type ResponsesService struct {
 	APIKey        string            // optional, if not set will try to load from env var
 	Model         Model             // defaults to DefaultModel if zero value
 	ModelURL      string            // optional, overrides Model.URL
+	MaxTokens     int               // defaults to DefaultMaxTokens if zero
 	Org           string            // optional - organization ID
 	DumpLLM       bool              // whether to dump request/response text to files for debugging; defaults to false
 	ThinkingLevel llm.ThinkingLevel // service-level default; zero (ThinkingLevelDefault) and ThinkingLevelOff both leave the field off the wire
@@ -43,14 +44,15 @@ var _ llm.Service = (*ResponsesService)(nil)
 // Responses API request/response types
 
 type responsesRequest struct {
-	Model        string               `json:"model"`
-	Instructions string               `json:"instructions,omitempty"`
-	Store        bool                 `json:"store"`
-	Stream       bool                 `json:"stream"`
-	Input        []responsesInputItem `json:"input"`
-	Tools        []responsesTool      `json:"tools,omitempty"`
-	ToolChoice   any                  `json:"tool_choice,omitempty"`
-	Reasoning    *responsesReasoning  `json:"reasoning,omitempty"`
+	Model           string               `json:"model"`
+	Instructions    string               `json:"instructions,omitempty"`
+	Store           bool                 `json:"store"`
+	Stream          bool                 `json:"stream"`
+	Input           []responsesInputItem `json:"input"`
+	Tools           []responsesTool      `json:"tools,omitempty"`
+	ToolChoice      any                  `json:"tool_choice,omitempty"`
+	MaxOutputTokens int                  `json:"max_output_tokens,omitempty"`
+	Reasoning       *responsesReasoning  `json:"reasoning,omitempty"`
 }
 
 type responsesReasoning struct {
@@ -522,12 +524,13 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 
 	// Create the request
 	req := responsesRequest{
-		Model:        model.ModelName,
-		Instructions: responsesInstructionsFromLLMSystem(ir.System),
-		Store:        false,
-		Stream:       true,
-		Input:        allInput,
-		Tools:        tools,
+		Model:           model.ModelName,
+		Instructions:    responsesInstructionsFromLLMSystem(ir.System),
+		Store:           false,
+		Stream:          true,
+		Input:           allInput,
+		Tools:           tools,
+		MaxOutputTokens: cmp.Or(s.MaxTokens, DefaultMaxTokens),
 	}
 
 	// Add reasoning. Precedence:

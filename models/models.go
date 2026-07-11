@@ -721,6 +721,7 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 				URL:            model.Endpoint,
 				SupportsImages: supportsImages,
 			},
+			MaxTokens:    int(model.MaxTokens),
 			HTTPC:        m.httpc,
 			ProviderName: "openai",
 		}
@@ -733,6 +734,7 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 				URL:            model.Endpoint,
 				SupportsImages: supportsImages,
 			},
+			MaxTokens:       int(model.MaxTokens),
 			HTTPC:           m.httpc,
 			ThinkingLevel:   llm.ThinkingLevelMedium,
 			ReasoningEffort: model.ReasoningEffort,

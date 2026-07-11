@@ -1614,7 +1614,7 @@ func TestServiceDo(t *testing.T) {
 	}
 }
 
-func TestServiceDoOmitsMaxCompletionTokens(t *testing.T) {
+func TestServiceDoSendsMaxCompletionTokens(t *testing.T) {
 	var gotReq map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
@@ -1646,8 +1646,8 @@ func TestServiceDoOmitsMaxCompletionTokens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Do() error = %v", err)
 	}
-	if _, hasCap := gotReq["max_completion_tokens"]; hasCap {
-		t.Fatalf("max_completion_tokens present; body = %#v", gotReq)
+	if gotReq["max_completion_tokens"] != float64(DefaultMaxTokens) {
+		t.Fatalf("max_completion_tokens = %#v, want %d; body = %#v", gotReq["max_completion_tokens"], DefaultMaxTokens, gotReq)
 	}
 }
 
