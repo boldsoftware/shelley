@@ -161,6 +161,89 @@ func TestSubagentDone(t *testing.T) {
 	t.Run("ConcurrentSubagentFinishes_BothPairsAtomic", testSubagentDone_ConcurrentFinishes)
 	t.Run("LastMessageIsToolUse_FallsBackGracefully", testSubagentDone_LastMessageIsToolUse)
 	t.Run("GitInfoMessageDoesNotLeakIntoNotification", testSubagentDone_GitInfoIgnored)
+	t.Run("EvictedParentManagerStillNotified", testSubagentDone_EvictedParentManagerStillNotified)
+}
+
+// Regression: the parent was blocked inside the subagent tool call (its
+// lastActivity going stale because tool execution doesn't Touch the parent
+// manager), the periodic Cleanup() evicted the parent's ConversationManager
+// from activeConversations, and then the subagent finished.
+// notifyParentSubagentDone looked the parent up in activeConversations, found
+// nothing, and returned — silently dropping the completion. The parent's turn
+// had also been torn down (stopLoop cancels its context), so nothing ever
+// surfaced the subagent's result: the conversation hung until the user typed
+// something. The fix is to (re)create the parent manager on demand, exactly
+// like the wake-idle-loop path already re-hydrates a parked loop.
+func testSubagentDone_EvictedParentManagerStillNotified(t *testing.T) {
+	f := newSubagentDoneFixture(t, "Finished after the parent manager was evicted.")
+
+	// Simulate Cleanup() evicting the parent manager (30 min inactivity).
+	f.server.mu.Lock()
+	delete(f.server.activeConversations, f.parentID)
+	f.server.mu.Unlock()
+	f.parentMgr.stopLoop()
+
+	f.fireOnDone()
+
+	// The synthetic pair must still be persisted on the parent.
+	waitFor(t, 5*time.Second, func() bool {
+		return hasSyntheticDonePair(t, f.parentMessages())
+	})
+
+	// And a live manager must exist again so the loop actually runs the turn.
+	f.server.mu.Lock()
+	_, ok := f.server.activeConversations[f.parentID]
+	f.server.mu.Unlock()
+	if !ok {
+		t.Fatalf("expected parent manager to be recreated in activeConversations")
+	}
+}
+
+// Cleanup must never evict a conversation manager whose agent is mid-turn
+// (agentWorking=true). Tool calls — e.g. a wait=true subagent call that
+// blocks for many minutes — do not Touch the manager, so lastActivity goes
+// stale even though the conversation is very much alive. Evicting it tears
+// down the loop context mid-flight (cancelling in-flight tool calls and LLM
+// requests) and orphans the turn.
+func TestCleanupSkipsWorkingConversations(t *testing.T) {
+	t.Parallel()
+	server, database, _ := newTestServer(t)
+	ctx := context.Background()
+
+	mkStale := func(working bool) (string, *ConversationManager) {
+		conv, err := database.CreateConversation(ctx, nil, true, nil, nil, db.ConversationOptions{})
+		if err != nil {
+			t.Fatalf("create conversation: %v", err)
+		}
+		mgr, err := server.getOrCreateConversationManager(ctx, conv.ConversationID, "")
+		if err != nil {
+			t.Fatalf("get manager: %v", err)
+		}
+		if working {
+			mgr.SetAgentWorking(true)
+		}
+		mgr.mu.Lock()
+		mgr.lastActivity = time.Now().Add(-time.Hour) // well past the 30-min cutoff
+		mgr.mu.Unlock()
+		return conv.ConversationID, mgr
+	}
+
+	workingID, _ := mkStale(true)
+	idleID, _ := mkStale(false)
+
+	server.Cleanup()
+
+	server.mu.Lock()
+	_, workingKept := server.activeConversations[workingID]
+	_, idleKept := server.activeConversations[idleID]
+	server.mu.Unlock()
+
+	if !workingKept {
+		t.Fatalf("Cleanup evicted a conversation whose agent is still working")
+	}
+	if idleKept {
+		t.Fatalf("Cleanup kept a stale idle conversation; want evicted")
+	}
 }
 
 // 1. Happy path: parent is idle (agentWorking=false), subagent finishes; two

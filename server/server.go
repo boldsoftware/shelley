@@ -1650,11 +1650,21 @@ func (s *Server) Cleanup() {
 	s.mu.Lock()
 	now := time.Now()
 	for id, manager := range s.activeConversations {
-		// Remove managers that have been inactive for more than 30 minutes
+		// Remove managers that have been inactive for more than 30 minutes.
+		// A manager whose agent is mid-turn is NEVER inactive, no matter how
+		// stale lastActivity looks: long-running tool calls (e.g. a wait=true
+		// subagent call that blocks for an hour) don't Touch the parent
+		// manager. Evicting it would tear down the loop context mid-flight,
+		// cancelling in-flight tool calls and LLM requests and orphaning the
+		// turn — the parent then never sees its subagent's completion.
+		// Same for managers still holding queued work or a registered
+		// synchronous subagent waiter.
 		manager.mu.Lock()
 		lastActivity := manager.lastActivity
+		busy := manager.agentWorking || manager.distilling || manager.draining ||
+			len(manager.pendingBatches) > 0 || manager.subagentWaitOwners > 0
 		manager.mu.Unlock()
-		if now.Sub(lastActivity) > 30*time.Minute {
+		if !busy && now.Sub(lastActivity) > 30*time.Minute {
 			toCleanup = append(toCleanup, manager)
 			toCleanupIDs = append(toCleanupIDs, id)
 			delete(s.activeConversations, id)

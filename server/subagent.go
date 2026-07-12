@@ -529,10 +529,18 @@ func (s *Server) notifyParentSubagentDone(subagentConversationID string) {
 		slug = *conv.Slug
 	}
 
-	s.mu.Lock()
-	parentManager, ok := s.activeConversations[parentID]
-	s.mu.Unlock()
-	if !ok {
+	// Get or (re)create the parent's manager. The parent may have been
+	// evicted from activeConversations by the periodic Cleanup while it sat
+	// idle (or blocked — pre-fix — inside this very subagent's tool call)
+	// waiting for the subagent to finish. Bailing out here silently dropped
+	// the completion and the parent hung until the user typed something.
+	// getOrCreateConversationManager hydrates from the DB, and the
+	// pending-batch drain below re-establishes the loop, mirroring how a
+	// user message wakes a parked conversation.
+	parentManager, err := s.getOrCreateConversationManager(ctx, parentID, "")
+	if err != nil {
+		s.logger.Error("Failed to get parent manager for subagent-done notification",
+			"parent", parentID, "subagent", subagentConversationID, "error", err)
 		return
 	}
 
