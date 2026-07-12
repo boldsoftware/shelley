@@ -73,10 +73,10 @@ func Predictable() Source {
 }
 
 // Gateway returns a Source for the exe.dev gateway. The gateway serves
-// Anthropic, OpenAI, and Fireworks but not Gemini; Gemini models must
+// Anthropic, OpenAI, Fireworks, and xAI but not Gemini; Gemini models must
 // come from an env-var or LLM-integration source. Any non-empty
 // explicit per-provider key overrides the gateway's implicit credential.
-func Gateway(gatewayURL, anthropicKey, openAIKey, fireworksKey string) Source {
+func Gateway(gatewayURL, anthropicKey, openAIKey, fireworksKey, xaiKey string) Source {
 	key := func(k string) string {
 		if k != "" {
 			return k
@@ -89,8 +89,9 @@ func Gateway(gatewayURL, anthropicKey, openAIKey, fireworksKey string) Source {
 			models.ProviderAnthropic: {baseURL: gatewayURL + "/anthropic", apiKey: key(anthropicKey)},
 			models.ProviderOpenAI:    {baseURL: gatewayURL + "/openai", apiKey: key(openAIKey)},
 			models.ProviderFireworks: {baseURL: gatewayURL + "/fireworks/inference", apiKey: key(fireworksKey)},
+			models.ProviderXAI:       {baseURL: gatewayURL + "/xai", apiKey: key(xaiKey)},
 		},
-		providerLabels: explicitEnvLabels(anthropicKey, openAIKey, fireworksKey),
+		providerLabels: explicitEnvLabels(anthropicKey, openAIKey, fireworksKey, xaiKey),
 	}
 }
 
@@ -131,6 +132,7 @@ func LLMIntegration(integ *LLMIntegrationConfig, idSuffix string) Source {
 			models.ProviderAnthropic: {baseURL: integ.URL, apiKey: "implicit"},
 			models.ProviderOpenAI:    {baseURL: integ.URL, apiKey: "implicit"},
 			models.ProviderFireworks: {baseURL: integ.URL, apiKey: "implicit"},
+			models.ProviderXAI:       {baseURL: integ.URL, apiKey: "implicit"},
 			// Gemini: the integration's /v1/models is OpenAI-shaped and does
 			// not expose Gemini-native endpoints. Omit.
 		},
@@ -141,7 +143,7 @@ func LLMIntegration(integ *LLMIntegrationConfig, idSuffix string) Source {
 // explicitEnvLabels returns providerLabels that overlay env-var-style
 // labels on top of a gateway source for any provider whose key was set
 // explicitly. Gemini is omitted because the gateway never serves it.
-func explicitEnvLabels(anthropic, openAI, fireworks string) map[models.Provider]string {
+func explicitEnvLabels(anthropic, openAI, fireworks, xai string) map[models.Provider]string {
 	labels := map[models.Provider]string{}
 	if anthropic != "" {
 		labels[models.ProviderAnthropic] = "$ANTHROPIC_API_KEY"
@@ -151,6 +153,9 @@ func explicitEnvLabels(anthropic, openAI, fireworks string) map[models.Provider]
 	}
 	if fireworks != "" {
 		labels[models.ProviderFireworks] = "$FIREWORKS_API_KEY"
+	}
+	if xai != "" {
+		labels[models.ProviderXAI] = "$XAI_API_KEY"
 	}
 	return labels
 }
@@ -361,6 +366,8 @@ func integrationModelSupportedByShelley(model IntegrationModel) bool {
 		return slices.Contains(model.APIs, "openai_responses") || slices.Contains(model.APIs, "openai_chat")
 	case string(models.ProviderFireworks):
 		return slices.Contains(model.APIs, "openai_chat")
+	case string(models.ProviderXAI):
+		return slices.Contains(model.APIs, "openai_responses") || slices.Contains(model.APIs, "openai_chat")
 	default:
 		return false
 	}

@@ -79,16 +79,19 @@ func TestEnvSourceLabels(t *testing.T) {
 
 func TestGatewaySourceLabels(t *testing.T) {
 	// Plain gateway.
-	bs := Build(models.All(), []Source{Gateway("https://gw.example.com", "", "", "")}, &http.Client{}, nil)
+	bs := Build(models.All(), []Source{Gateway("https://gw.example.com", "", "", "", "")}, &http.Client{}, nil)
 	if b := findBuilt(bs, "claude-opus-4.6"); b == nil || b.Source != "exe.dev gateway" {
 		t.Errorf("claude-opus-4.6 with plain gateway: %+v", b)
 	}
 	if b := findBuilt(bs, "gemini-3-pro"); b != nil {
 		t.Errorf("gemini-3-pro should not be built by gateway, got %+v", b)
 	}
+	if b := findBuilt(bs, "grok-4.5"); b == nil || b.Source != "exe.dev gateway" {
+		t.Errorf("grok-4.5 with plain gateway: %+v", b)
+	}
 
 	// Gateway with explicit anthropic key: provider label switches.
-	bs = Build(models.All(), []Source{Gateway("https://gw.example.com", "real-key", "", "")}, &http.Client{}, nil)
+	bs = Build(models.All(), []Source{Gateway("https://gw.example.com", "real-key", "", "", "")}, &http.Client{}, nil)
 	if b := findBuilt(bs, "claude-opus-4.6"); b == nil || b.Source != "$ANTHROPIC_API_KEY" {
 		t.Errorf("claude-opus-4.6 with explicit anthropic key: %+v", b)
 	}
