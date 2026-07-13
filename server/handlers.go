@@ -1242,11 +1242,16 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 
 	// Run chat-message hook; the hook may rewrite the message text. Hook
 	// failures abort the request — the user's message is not delivered.
+	reasoningLevel := manager.GetThinkingLevel()
+	if reasoningLevel == "" {
+		reasoningLevel = llm.ServiceDefaultReasoningLevel(llmService)
+	}
 	newMsg, err := RunChatMessageHookIn(s.hooksDir, ChatMessageHookInput{
 		Message: req.Message,
 		Readonly: ChatMessageReadonly{
 			ConversationID: conversationID,
 			Model:          modelID,
+			ReasoningLevel: reasoningLevel,
 			Queued:         willQueue,
 			Headers:        HookHeaders(r.Header),
 		},

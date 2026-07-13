@@ -1041,6 +1041,7 @@ func TestRunChatMessageHookReceivesContext(t *testing.T) {
 		Readonly: ChatMessageReadonly{
 			ConversationID: "conv-42",
 			Model:          "claude-sonnet",
+			ReasoningLevel: "high",
 			Queued:         true,
 			Headers:        [][2]string{{"X-Hdr", "v"}},
 		},
@@ -1055,6 +1056,7 @@ func TestRunChatMessageHookReceivesContext(t *testing.T) {
 		`"message":"hello"`,
 		`"conversation_id":"conv-42"`,
 		`"model":"claude-sonnet"`,
+		`"reasoning_level":"high"`,
 		`"queued":true`,
 		`["X-Hdr","v"]`,
 	} {

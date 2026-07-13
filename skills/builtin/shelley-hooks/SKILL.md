@@ -51,12 +51,13 @@ stdin JSON:
   "readonly": {
     "conversation_id": "cXXXXXX",
     "model": "claude-sonnet-4.5",
+    "reasoning_level": "high",
     "queued": false,
     "headers": [["X-Exedev-Email", "user@example.com"]]
   }
 }
 ```
-`queued` is true when the message will be queued (client requested queue mode or the agent is distilling) rather than interrupting the current turn.
+`reasoning_level` is the conversation's explicit reasoning level (`off`, `minimal`, `low`, `medium`, `high`, or `xhigh`), or the service's configured default when no override is set. It is empty only when the provider chooses the default dynamically and Shelley cannot know it in advance. `queued` is true when the message will be queued (client requested queue mode or the agent is distilling) rather than interrupting the current turn.
 
 stdout: `{"message": "..."}`. Empty stdout, empty `message`, or an identical `message` means no change.
 

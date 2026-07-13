@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -919,5 +920,70 @@ func TestModelChangeMarkerDisplayNames(t *testing.T) {
 	}
 	if !strings.Contains(ud.Text, "Model A") || !strings.Contains(ud.Text, "Model B") {
 		t.Fatalf("summary should use display names, got %q", ud.Text)
+	}
+}
+
+func TestChatMessageHookReceivesConversationReasoningLevel(t *testing.T) {
+	srv, database := newTwoModelTestServer(t)
+	ctx := context.Background()
+	model := "model-a"
+	conv, err := database.CreateConversation(ctx, nil, true, nil, &model, db.ConversationOptions{ThinkingLevel: "high"})
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+
+	dumpFile := filepath.Join(t.TempDir(), "chat-message.json")
+	hookPath := filepath.Join(srv.hooksDir, "chat-message")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\ncat > "+dumpFile+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if w := postChat(t, srv, conv.ConversationID, "echo: hello"); w.Code != http.StatusAccepted {
+		t.Fatalf("chat: expected 202, got %d: %s", w.Code, w.Body.String())
+	}
+	data, err := os.ReadFile(dumpFile)
+	if err != nil {
+		t.Fatalf("read hook input: %v", err)
+	}
+	if !strings.Contains(string(data), `"reasoning_level":"high"`) {
+		t.Fatalf("hook input missing reasoning level: %s", data)
+	}
+}
+
+type defaultReasoningService struct {
+	llm.Service
+	level string
+}
+
+func (s defaultReasoningService) DefaultReasoningLevel() string { return s.level }
+
+func TestChatMessageHookMaterializesDefaultReasoningLevel(t *testing.T) {
+	srv, database := newTwoModelTestServer(t)
+	srv.llmManager = &twoModelLLMManager{service: defaultReasoningService{
+		Service: loop.NewPredictableService(),
+		level:   "medium",
+	}}
+	ctx := context.Background()
+	model := "model-a"
+	conv, err := database.CreateConversation(ctx, nil, true, nil, &model, db.ConversationOptions{})
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+
+	dumpFile := filepath.Join(t.TempDir(), "chat-message.json")
+	hookPath := filepath.Join(srv.hooksDir, "chat-message")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\ncat > "+dumpFile+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if w := postChat(t, srv, conv.ConversationID, "echo: hello"); w.Code != http.StatusAccepted {
+		t.Fatalf("chat: expected 202, got %d: %s", w.Code, w.Body.String())
+	}
+	data, err := os.ReadFile(dumpFile)
+	if err != nil {
+		t.Fatalf("read hook input: %v", err)
+	}
+	if !strings.Contains(string(data), `"reasoning_level":"medium"`) {
+		t.Fatalf("hook input missing materialized default reasoning level: %s", data)
 	}
 }

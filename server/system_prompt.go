@@ -396,6 +396,7 @@ type ChatMessageHookInput struct {
 type ChatMessageReadonly struct {
 	ConversationID string      `json:"conversation_id"`
 	Model          string      `json:"model"`
+	ReasoningLevel string      `json:"reasoning_level"`
 	Queued         bool        `json:"queued"`
 	Headers        [][2]string `json:"headers,omitempty"`
 }

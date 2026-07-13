@@ -87,6 +87,7 @@ For subagent conversations, `readonly.is_subagent` is `true`,
   "readonly": {
     "conversation_id": "cH3UICU",
     "model": "predictable",
+    "reasoning_level": "high",
     "queued": false,
     "headers": [
       ["Accept", "*/*"],
@@ -98,6 +99,8 @@ For subagent conversations, `readonly.is_subagent` is `true`,
   }
 }
 ```
+
+`reasoning_level` is the conversation override when set; otherwise Shelley materializes the service's configured default. It is empty only when the provider chooses the default dynamically and Shelley cannot know it in advance.
 
 Stdout (empty = no-op):
 
