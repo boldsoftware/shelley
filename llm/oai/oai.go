@@ -30,7 +30,12 @@ const (
 	MoonshotURL  = "https://api.moonshot.ai/v1"
 	XAIURL       = "https://api.x.ai/v1"
 
-	// Environment variable names for API keys
+	// Environment variable names for API keys.
+	//
+	// DEPRECATED: Env-var-based model credentials are frozen. Do NOT add new
+	// providers or models here. New models should be served through the
+	// exe.dev LLM gateway or an exe.dev LLM integration (or added as DB-backed
+	// custom models).
 	OpenAIAPIKeyEnv    = "OPENAI_API_KEY"
 	FireworksAPIKeyEnv = "FIREWORKS_API_KEY"
 	CerebrasAPIKeyEnv  = "CEREBRAS_API_KEY"

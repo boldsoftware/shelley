@@ -412,6 +412,9 @@ func buildLLMModelSources(ctx context.Context, global GlobalConfig, logger *slog
 	openAIKey := os.Getenv("OPENAI_API_KEY")
 	geminiKey := os.Getenv("GEMINI_API_KEY")
 	fireworksKey := os.Getenv("FIREWORKS_API_KEY")
+	// DEPRECATED: Per-provider env-var credentials are frozen. Do NOT add new
+	// env vars or models here; new models belong to the exe.dev LLM gateway or
+	// an exe.dev LLM integration.
 
 	var sources []modelsources.Source
 

@@ -99,6 +99,11 @@ func Gateway(gatewayURL, anthropicKey, openAIKey, fireworksKey string) Source {
 
 // Env returns a Source for direct-to-provider env-var credentials. Only
 // providers with a non-empty key are included.
+//
+// DEPRECATED: Per-provider env-var model credentials are frozen. Do NOT add
+// new providers here. New models should be served through the exe.dev LLM
+// gateway or an exe.dev LLM integration (or added as DB-backed custom
+// models) rather than a new direct env-var credential.
 func Env(anthropicKey, openAIKey, geminiKey, fireworksKey string) Source {
 	prov := map[models.Provider]*providerConn{}
 	labels := map[models.Provider]string{}
