@@ -15,6 +15,12 @@ import (
 	"shelley.exe.dev/llm"
 )
 
+func modelForTest(name string) Model {
+	model := zeroModel()
+	model.ModelName = name
+	return model
+}
+
 func TestToRoleFromString(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -177,6 +183,7 @@ func TestTokenContextWindow(t *testing.T) {
 			model: Model{
 				UserName:           "",
 				ModelName:          "unknown-model",
+				TextVerbosity:      "",
 				URL:                "",
 				APIKeyEnv:          "",
 				IsReasoningModel:   false,
@@ -234,6 +241,7 @@ func TestUseSimplifiedPatch(t *testing.T) {
 			model: Model{
 				UserName:           "",
 				ModelName:          "",
+				TextVerbosity:      "",
 				URL:                "",
 				APIKeyEnv:          "",
 				IsReasoningModel:   false,
@@ -285,6 +293,7 @@ func TestOAIResponsesServiceUseSimplifiedPatch(t *testing.T) {
 	model := Model{
 		UserName:           "",
 		ModelName:          "",
+		TextVerbosity:      "",
 		URL:                "",
 		APIKeyEnv:          "",
 		IsReasoningModel:   false,
@@ -1467,6 +1476,7 @@ func TestTokenContextWindowAdditionalCases(t *testing.T) {
 			model: Model{
 				UserName:           "",
 				ModelName:          "gpt-5.5-2026-04-23",
+				TextVerbosity:      "",
 				URL:                "",
 				APIKeyEnv:          "",
 				IsReasoningModel:   false,
@@ -1480,6 +1490,7 @@ func TestTokenContextWindowAdditionalCases(t *testing.T) {
 			model: Model{
 				UserName:           "",
 				ModelName:          "gpt-5.5-pro-2026-04-23",
+				TextVerbosity:      "",
 				URL:                "",
 				APIKeyEnv:          "",
 				IsReasoningModel:   false,
@@ -1503,6 +1514,7 @@ func TestTokenContextWindowAdditionalCases(t *testing.T) {
 			model: Model{
 				UserName:           "",
 				ModelName:          "unknown-model-name",
+				TextVerbosity:      "",
 				URL:                "",
 				APIKeyEnv:          "",
 				IsReasoningModel:   false,
@@ -1633,7 +1645,7 @@ func TestServiceDoSendsMaxCompletionTokens(t *testing.T) {
 
 	svc := &Service{
 		APIKey:   "test-api-key",
-		Model:    Model{ModelName: "test-model"},
+		Model:    modelForTest("test-model"),
 		ModelURL: server.URL + "/v1",
 	}
 
@@ -1862,7 +1874,7 @@ func TestServiceDoDeepSeekRoundTripsReasoningContent(t *testing.T) {
 	httpc := &http.Client{Transport: rewriteHostTransport{addr: u.Host}}
 	svc := &Service{
 		APIKey:   "k",
-		Model:    Model{ModelName: "deepseek-v4-pro"},
+		Model:    modelForTest("deepseek-v4-pro"),
 		ModelURL: "https://api.deepseek.com",
 		HTTPC:    httpc,
 	}
@@ -1906,7 +1918,7 @@ func TestServiceDoDeepSeekPlaceholderWhenNoThinking(t *testing.T) {
 	httpc := &http.Client{Transport: rewriteHostTransport{addr: u.Host}}
 	svc := &Service{
 		APIKey:   "k",
-		Model:    Model{ModelName: "deepseek-v4-pro"},
+		Model:    modelForTest("deepseek-v4-pro"),
 		ModelURL: "https://api.deepseek.com",
 		HTTPC:    httpc,
 	}

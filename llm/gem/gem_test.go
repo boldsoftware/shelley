@@ -1179,6 +1179,36 @@ func TestRoundTripThinking(t *testing.T) {
 	}
 }
 
+func TestBuildGeminiRequestSkipsOpenAIResponsesReasoningMetadata(t *testing.T) {
+	service := &Service{Model: DefaultModel, APIKey: "test-api-key"}
+	request, err := service.buildGeminiRequest(&llm.Request{
+		Messages: []llm.Message{{
+			Role: llm.MessageRoleAssistant,
+			Content: []llm.Content{
+				{
+					Type: llm.ContentTypeThinking,
+					Text: "OpenAI display summary",
+					OpenAIResponsesReasoning: &llm.OpenAIResponsesReasoningMetadata{
+						ID:               "rs_openai",
+						EncryptedContent: "encrypted-openai-state",
+					},
+				},
+				{Type: llm.ContentTypeText, Text: "visible answer"},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(request.Contents) != 1 || len(request.Contents[0].Parts) != 1 {
+		t.Fatalf("Gemini request contains provider-specific reasoning: %+v", request.Contents)
+	}
+	part := request.Contents[0].Parts[0]
+	if part.Text != "visible answer" || part.Thought || part.ThoughtSignature != "" {
+		t.Fatalf("Gemini visible part = %+v", part)
+	}
+}
+
 func TestThinkingConfig(t *testing.T) {
 	userMsg := llm.Request{
 		Messages: []llm.Message{{

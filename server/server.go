@@ -149,9 +149,8 @@ func NewLLMServiceManager(cfg *LLMConfig) LLMProvider {
 }
 
 // toAPIMessages converts database messages to API messages.
-// Image data is stripped from llm_data and replaced with URLs to
-// /api/message/{id}/image endpoints to avoid sending large base64
-// blobs to clients.
+// Image data is replaced with URLs and opaque provider continuation metadata
+// is stripped from llm_data before it is sent to clients.
 func toAPIMessages(messages []generated.Message) []APIMessage {
 	apiMessages := make([]APIMessage, len(messages))
 	for i, msg := range messages {
@@ -183,8 +182,8 @@ func toAPIMessages(messages []generated.Message) []APIMessage {
 }
 
 // llmDataForAPI prepares a message's llm_data for the API in a single JSON
-// parse, returning the (possibly image-stripped) data plus the end-of-turn
-// flag for agent messages. It combines what stripImageDataFromLLMData and
+// parse, returning client-safe data plus the end-of-turn flag for agent
+// messages. It combines what stripImageDataFromLLMData and
 // extractEndOfTurn did separately, each of which unmarshalled the full
 // message; doing it once halves the JSON work in the per-conversation
 // backfill, which dominates stream connect time for long conversations.
@@ -206,7 +205,14 @@ func llmDataForAPI(llmData *string, msgType, messageID string) (*string, *bool) 
 		endOfTurnPtr = &eot
 	}
 
-	if !stripImageDataFromContents(msg.Content, messageID) {
+	changed := stripImageDataFromContents(msg.Content, messageID)
+	for i := range msg.Content {
+		if msg.Content[i].OpenAIResponsesReasoning != nil {
+			msg.Content[i].OpenAIResponsesReasoning = nil
+			changed = true
+		}
+	}
+	if !changed {
 		return llmData, endOfTurnPtr
 	}
 	stripped, err := json.Marshal(msg)

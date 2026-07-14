@@ -199,6 +199,9 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 
 		// Map each content item to Gemini's format
 		for _, c := range msg.Content {
+			if c.OpenAIResponsesReasoning != nil {
+				continue
+			}
 			switch c.Type {
 			case llm.ContentTypeText, llm.ContentTypeThinking, llm.ContentTypeRedactedThinking:
 				// Image content is represented as ContentTypeText with MediaType + Data set.

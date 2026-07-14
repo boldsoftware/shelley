@@ -12,10 +12,12 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/llm/llmhttp"
 )
 
 // ResponsesService provides chat completions using the OpenAI Responses API.
@@ -44,29 +46,41 @@ var _ llm.Service = (*ResponsesService)(nil)
 // Responses API request/response types
 
 type responsesRequest struct {
-	Model           string               `json:"model"`
-	Instructions    string               `json:"instructions,omitempty"`
-	Store           bool                 `json:"store"`
-	Stream          bool                 `json:"stream"`
-	Input           []responsesInputItem `json:"input"`
-	Tools           []responsesTool      `json:"tools,omitempty"`
-	ToolChoice      any                  `json:"tool_choice,omitempty"`
-	MaxOutputTokens int                  `json:"max_output_tokens,omitempty"`
-	Reasoning       *responsesReasoning  `json:"reasoning,omitempty"`
+	Model             string               `json:"model"`
+	Instructions      string               `json:"instructions,omitempty"`
+	Store             bool                 `json:"store"`
+	Stream            bool                 `json:"stream"`
+	Input             []responsesInputItem `json:"input"`
+	Tools             []responsesTool      `json:"tools,omitempty"`
+	ToolChoice        any                  `json:"tool_choice,omitempty"`
+	ParallelToolCalls bool                 `json:"parallel_tool_calls,omitempty"`
+	MaxOutputTokens   int                  `json:"max_output_tokens,omitempty"`
+	Reasoning         *responsesReasoning  `json:"reasoning,omitempty"`
+	Include           []string             `json:"include,omitempty"`
+	PromptCacheKey    string               `json:"prompt_cache_key,omitempty"`
+	Text              *responsesText       `json:"text,omitempty"`
 }
 
 type responsesReasoning struct {
-	Effort string `json:"effort,omitempty"` // "low", "medium", "high"
+	Effort  string `json:"effort,omitempty"` // "low", "medium", "high"
+	Summary string `json:"summary,omitempty"`
+}
+
+type responsesText struct {
+	Verbosity string `json:"verbosity,omitempty"`
 }
 
 type responsesInputItem struct {
-	Type      string             `json:"type"`                // "message", "function_call", "function_call_output"
-	Role      string             `json:"role,omitempty"`      // for messages: "user", "assistant"
-	Content   []responsesContent `json:"content,omitempty"`   // for messages
-	CallID    string             `json:"call_id,omitempty"`   // for function_call and function_call_output
-	Name      string             `json:"name,omitempty"`      // for function_call
-	Arguments string             `json:"arguments,omitempty"` // for function_call
-	Output    string             `json:"output,omitempty"`    // for function_call_output
+	ID               string              `json:"id,omitempty"`                // for replayed output items
+	Type             string              `json:"type"`                        // "message", "reasoning", "function_call", "function_call_output"
+	Role             string              `json:"role,omitempty"`              // for messages: "user", "assistant"
+	Content          []responsesContent  `json:"content,omitempty"`           // for messages
+	CallID           string              `json:"call_id,omitempty"`           // for function_call and function_call_output
+	Name             string              `json:"name,omitempty"`              // for function_call
+	Arguments        string              `json:"arguments,omitempty"`         // for function_call
+	Output           string              `json:"output,omitempty"`            // for function_call_output
+	Summary          *[]responsesSummary `json:"summary,omitempty"`           // for reasoning; pointer preserves an empty array
+	EncryptedContent string              `json:"encrypted_content,omitempty"` // for reasoning
 }
 
 type responsesContent struct {
@@ -110,16 +124,17 @@ type responsesResponse struct {
 }
 
 type responsesOutputItem struct {
-	ID        string             `json:"id"`
-	Type      string             `json:"type"`           // "message", "reasoning", "function_call", "web_search_call"
-	Role      string             `json:"role,omitempty"` // for messages: "assistant"
-	Status    string             `json:"status,omitempty"`
-	Content   []responsesContent `json:"content,omitempty"`   // for messages
-	CallID    string             `json:"call_id,omitempty"`   // for function_call
-	Name      string             `json:"name,omitempty"`      // for function_call
-	Arguments string             `json:"arguments,omitempty"` // for function_call
-	Summary   []responsesSummary `json:"summary,omitempty"`   // for reasoning
-	Action    *responsesAction   `json:"action,omitempty"`    // for web_search_call (queries)
+	ID               string             `json:"id"`
+	Type             string             `json:"type"`           // "message", "reasoning", "function_call", "web_search_call"
+	Role             string             `json:"role,omitempty"` // for messages: "assistant"
+	Status           string             `json:"status,omitempty"`
+	Content          []responsesContent `json:"content,omitempty"`           // for messages
+	CallID           string             `json:"call_id,omitempty"`           // for function_call
+	Name             string             `json:"name,omitempty"`              // for function_call
+	Arguments        string             `json:"arguments,omitempty"`         // for function_call
+	Summary          []responsesSummary `json:"summary,omitempty"`           // for reasoning
+	EncryptedContent string             `json:"encrypted_content,omitempty"` // for reasoning
+	Action           *responsesAction   `json:"action,omitempty"`            // for web_search_call (queries)
 }
 
 // responsesAction is the action descriptor for server-side tool calls like
@@ -220,10 +235,26 @@ func fromLLMMessageResponses(msg llm.Message) []responsesInputItem {
 		}
 	}
 
-	// Process regular content
+	// Process regular content in provider output order. Contiguous text/image
+	// blocks are coalesced into one message item; reasoning and function calls
+	// remain distinct items in their original relative order.
 	if len(regularContent) > 0 {
 		var messageContent []responsesContent
-		var functionCalls []responsesInputItem
+		flushMessage := func() {
+			if len(messageContent) == 0 {
+				return
+			}
+			role := "user"
+			if msg.Role == llm.MessageRoleAssistant {
+				role = "assistant"
+			}
+			items = append(items, responsesInputItem{
+				Type:    "message",
+				Role:    role,
+				Content: messageContent,
+			})
+			messageContent = nil
+		}
 
 		for _, c := range regularContent {
 			switch c.Type {
@@ -240,9 +271,25 @@ func fromLLMMessageResponses(msg llm.Message) []responsesInputItem {
 						Text: c.Text,
 					})
 				}
+			case llm.ContentTypeThinking:
+				metadata := c.OpenAIResponsesReasoning
+				if msg.Role != llm.MessageRoleAssistant || metadata == nil || metadata.EncryptedContent == "" {
+					continue
+				}
+				flushMessage()
+				summary := make([]responsesSummary, len(metadata.Summary))
+				for i, part := range metadata.Summary {
+					summary[i] = responsesSummary{Type: part.Type, Text: part.Text}
+				}
+				items = append(items, responsesInputItem{
+					ID:               metadata.ID,
+					Type:             "reasoning",
+					Summary:          &summary,
+					EncryptedContent: metadata.EncryptedContent,
+				})
 			case llm.ContentTypeToolUse:
-				// Tool use becomes a function_call in the input
-				functionCalls = append(functionCalls, responsesInputItem{
+				flushMessage()
+				items = append(items, responsesInputItem{
 					Type:      "function_call",
 					CallID:    c.ID,
 					Name:      c.ToolName,
@@ -250,22 +297,7 @@ func fromLLMMessageResponses(msg llm.Message) []responsesInputItem {
 				})
 			}
 		}
-
-		// Add message if it has content
-		if len(messageContent) > 0 {
-			role := "user"
-			if msg.Role == llm.MessageRoleAssistant {
-				role = "assistant"
-			}
-			items = append(items, responsesInputItem{
-				Type:    "message",
-				Role:    role,
-				Content: messageContent,
-			})
-		}
-
-		// Add function calls
-		items = append(items, functionCalls...)
+		flushMessage()
 	}
 
 	return items
@@ -335,20 +367,24 @@ func (s *ResponsesService) toLLMResponseFromResponses(resp *responsesResponse, h
 				}
 			}
 		case "reasoning":
-			// Convert reasoning to thinking content
-			if len(item.Summary) > 0 {
-				parts := make([]string, 0, len(item.Summary))
-				for _, s := range item.Summary {
-					if s.Text != "" {
-						parts = append(parts, s.Text)
-					}
+			parts := make([]string, 0, len(item.Summary))
+			summary := make([]llm.OpenAIResponsesReasoningSummary, len(item.Summary))
+			for i, s := range item.Summary {
+				summary[i] = llm.OpenAIResponsesReasoningSummary{Type: s.Type, Text: s.Text}
+				if s.Text != "" {
+					parts = append(parts, s.Text)
 				}
-				if len(parts) > 0 {
-					contents = append(contents, llm.Content{
-						Type: llm.ContentTypeThinking,
-						Text: strings.Join(parts, "\n"),
-					})
-				}
+			}
+			if len(parts) > 0 || item.EncryptedContent != "" {
+				contents = append(contents, llm.Content{
+					Type: llm.ContentTypeThinking,
+					Text: strings.Join(parts, "\n"),
+					OpenAIResponsesReasoning: &llm.OpenAIResponsesReasoningMetadata{
+						ID:               item.ID,
+						EncryptedContent: item.EncryptedContent,
+						Summary:          summary,
+					},
+				})
 			}
 		case "web_search_call":
 			// Server-side web search call. Surface it as a server_tool_use
@@ -498,9 +534,14 @@ func (s *ResponsesService) MaxImageBytes() int {
 func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error) {
 	httpc := cmp.Or(s.HTTPC, http.DefaultClient)
 	model := cmp.Or(s.Model, DefaultModel)
+	openAIResponses := s.isOpenAIResponses()
 
 	var allInput []responsesInputItem
-	for _, msg := range ir.Messages {
+	messages := ir.Messages
+	if !openAIResponses {
+		messages = withoutOpenAIResponsesReasoning(messages)
+	}
+	for _, msg := range messages {
 		items := fromLLMMessageResponses(msg)
 		allInput = append(allInput, items...)
 	}
@@ -532,6 +573,15 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 		Tools:           tools,
 		MaxOutputTokens: cmp.Or(s.MaxTokens, DefaultMaxTokens),
 	}
+	if openAIResponses {
+		req.Include = []string{"reasoning.encrypted_content"}
+		req.ToolChoice = "auto"
+		req.ParallelToolCalls = true
+		req.PromptCacheKey = llmhttp.ConversationIDFromContext(ctx)
+		if model.TextVerbosity != "" {
+			req.Text = &responsesText{Verbosity: model.TextVerbosity}
+		}
+	}
 
 	// Add reasoning. Precedence:
 	//   1. ir.ThinkingLevel (request-level override from the caller)
@@ -559,6 +609,9 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 	}
 	if effort != "" {
 		req.Reasoning = &responsesReasoning{Effort: effort}
+		if openAIResponses {
+			req.Reasoning.Summary = "auto"
+		}
 	}
 
 	// Add tool choice if specified
@@ -751,6 +804,25 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 	}
 }
 
+func (s *ResponsesService) isOpenAIResponses() bool {
+	return s.ProviderName == "" || s.ProviderName == "openai"
+}
+
+func withoutOpenAIResponsesReasoning(messages []llm.Message) []llm.Message {
+	filtered := make([]llm.Message, len(messages))
+	copy(filtered, messages)
+	for i, msg := range messages {
+		content := make([]llm.Content, 0, len(msg.Content))
+		for _, item := range msg.Content {
+			if item.OpenAIResponsesReasoning == nil {
+				content = append(content, item)
+			}
+		}
+		filtered[i].Content = content
+	}
+	return filtered
+}
+
 func shouldRetryResponsesReadError(err error) bool {
 	return errors.Is(err, io.ErrUnexpectedEOF)
 }
@@ -852,7 +924,7 @@ func parseResponsesSSEStream(r io.Reader, onStream func(llm.StreamDelta)) (*resp
 	var completed *responsesResponse
 	// Responses streams finalize message/tool output in output_item.done.
 	// response.completed may only carry completion metadata and usage.
-	var outputItems []responsesOutputItem
+	outputItems := make(map[int]responsesOutputItem)
 	err := iterResponsesSSEEvents(r, func(sse responsesSSEEvent) error {
 		if sse.Data == "[DONE]" {
 			return nil
@@ -878,16 +950,14 @@ func parseResponsesSSEStream(r io.Reader, onStream func(llm.StreamDelta)) (*resp
 			}
 		case "response.output_item.done":
 			if event.Item != nil {
-				outputItems = append(outputItems, *event.Item)
+				outputItems[event.OutputIndex] = *event.Item
 			}
 		case "response.completed", "response.incomplete":
 			if event.Response == nil {
 				return fmt.Errorf("%s event has no response", eventType)
 			}
 			completed = event.Response
-			if len(completed.Output) == 0 {
-				completed.Output = outputItems
-			}
+			completed.Output = mergeResponsesStreamOutput(completed.Output, outputItems)
 		case "response.failed":
 			if event.Response != nil && event.Response.Error != nil {
 				return fmt.Errorf("response failed: %s", event.Response.Error.Message)
@@ -911,6 +981,38 @@ func parseResponsesSSEStream(r io.Reader, onStream func(llm.StreamDelta)) (*resp
 		return nil, fmt.Errorf("incomplete stream: no response.completed event")
 	}
 	return completed, nil
+}
+
+func mergeResponsesStreamOutput(final []responsesOutputItem, streamed map[int]responsesOutputItem) []responsesOutputItem {
+	if len(final) == 0 {
+		indexes := make([]int, 0, len(streamed))
+		for index := range streamed {
+			indexes = append(indexes, index)
+		}
+		sort.Ints(indexes)
+		output := make([]responsesOutputItem, 0, len(indexes))
+		for _, index := range indexes {
+			output = append(output, streamed[index])
+		}
+		return output
+	}
+
+	for index := range final {
+		streamedItem, ok := streamed[index]
+		if !ok || final[index].Type != "reasoning" || streamedItem.Type != "reasoning" {
+			continue
+		}
+		if final[index].ID != "" && streamedItem.ID != "" && final[index].ID != streamedItem.ID {
+			continue
+		}
+		if final[index].EncryptedContent == "" {
+			final[index].EncryptedContent = streamedItem.EncryptedContent
+		}
+		if len(final[index].Summary) == 0 {
+			final[index].Summary = streamedItem.Summary
+		}
+	}
+	return final
 }
 
 func shouldRetryResponsesDecodeError(err error, body []byte) bool {

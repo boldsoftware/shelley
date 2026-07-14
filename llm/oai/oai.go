@@ -49,6 +49,7 @@ const (
 type Model struct {
 	UserName           string // provided by the user to identify this model (e.g. "gpt4.1")
 	ModelName          string // provided to the service provide to specify which model to use (e.g. "gpt-4.1-2025-04-14")
+	TextVerbosity      string // Responses API default text verbosity; empty omits the field
 	URL                string
 	APIKeyEnv          string // environment variable name for the API key
 	IsReasoningModel   bool   // whether this model is a reasoning model (e.g. O3, O4-mini)
@@ -62,6 +63,7 @@ var (
 	GPT41 = Model{
 		UserName:           "gpt4.1",
 		ModelName:          "gpt-4.1-2025-04-14",
+		TextVerbosity:      "",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -72,6 +74,7 @@ var (
 	GPT4o = Model{
 		UserName:           "gpt4o",
 		ModelName:          "gpt-4o-2024-08-06",
+		TextVerbosity:      "",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -82,6 +85,7 @@ var (
 	GPT4oMini = Model{
 		UserName:           "gpt4o-mini",
 		ModelName:          "gpt-4o-mini-2024-07-18",
+		TextVerbosity:      "",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -92,6 +96,7 @@ var (
 	GPT41Mini = Model{
 		UserName:           "gpt4.1-mini",
 		ModelName:          "gpt-4.1-mini-2025-04-14",
+		TextVerbosity:      "",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -102,6 +107,7 @@ var (
 	GPT41Nano = Model{
 		UserName:           "gpt4.1-nano",
 		ModelName:          "gpt-4.1-nano-2025-04-14",
+		TextVerbosity:      "",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -112,6 +118,7 @@ var (
 	O3 = Model{
 		UserName:           "o3",
 		ModelName:          "o3-2025-04-16",
+		TextVerbosity:      "",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   true,
@@ -122,6 +129,7 @@ var (
 	O4Mini = Model{
 		UserName:           "o4-mini",
 		ModelName:          "o4-mini-2025-04-16",
+		TextVerbosity:      "",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   true,
@@ -132,6 +140,7 @@ var (
 	Gemini25Flash = Model{
 		UserName:           "gemini-flash-2.5",
 		ModelName:          "gemini-2.5-flash-preview-04-17",
+		TextVerbosity:      "",
 		URL:                GeminiURL,
 		APIKeyEnv:          GeminiAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -140,9 +149,10 @@ var (
 	}
 
 	Gemini25Pro = Model{
-		UserName:  "gemini-pro-2.5",
-		ModelName: "gemini-2.5-pro-preview-03-25",
-		URL:       GeminiURL,
+		UserName:      "gemini-pro-2.5",
+		ModelName:     "gemini-2.5-pro-preview-03-25",
+		TextVerbosity: "",
+		URL:           GeminiURL,
 		// GRRRR. Really??
 		// Input is: $1.25, prompts <= 200k tokens, $2.50, prompts > 200k tokens
 		// Output is: $10.00, prompts <= 200k tokens, $15.00, prompts > 200k
@@ -159,6 +169,7 @@ var (
 	TogetherDeepseekV3 = Model{
 		UserName:           "together-deepseek-v3",
 		ModelName:          "deepseek-ai/DeepSeek-V3",
+		TextVerbosity:      "",
 		URL:                TogetherURL,
 		APIKeyEnv:          TogetherAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -169,6 +180,7 @@ var (
 	TogetherDeepseekR1 = Model{
 		UserName:           "together-deepseek-r1",
 		ModelName:          "deepseek-ai/DeepSeek-R1",
+		TextVerbosity:      "",
 		URL:                TogetherURL,
 		APIKeyEnv:          TogetherAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -179,6 +191,7 @@ var (
 	TogetherLlama4Maverick = Model{
 		UserName:           "together-llama4-maverick",
 		ModelName:          "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+		TextVerbosity:      "",
 		URL:                TogetherURL,
 		APIKeyEnv:          TogetherAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -189,6 +202,7 @@ var (
 	FireworksLlama4Maverick = Model{
 		UserName:           "fireworks-llama4-maverick",
 		ModelName:          "accounts/fireworks/models/llama4-maverick-instruct-basic",
+		TextVerbosity:      "",
 		URL:                FireworksURL,
 		APIKeyEnv:          FireworksAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -199,6 +213,7 @@ var (
 	TogetherLlama3_3_70B = Model{
 		UserName:           "together-llama3-70b",
 		ModelName:          "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+		TextVerbosity:      "",
 		URL:                TogetherURL,
 		APIKeyEnv:          TogetherAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -209,6 +224,7 @@ var (
 	TogetherMistralSmall = Model{
 		UserName:           "together-mistral-small",
 		ModelName:          "mistralai/Mistral-Small-24B-Instruct-2501",
+		TextVerbosity:      "",
 		URL:                TogetherURL,
 		APIKeyEnv:          TogetherAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -219,6 +235,7 @@ var (
 	TogetherQwen3 = Model{
 		UserName:           "together-qwen3",
 		ModelName:          "Qwen/Qwen3-235B-A22B-fp8-tput",
+		TextVerbosity:      "",
 		URL:                TogetherURL,
 		APIKeyEnv:          TogetherAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -229,6 +246,7 @@ var (
 	TogetherGemma2 = Model{
 		UserName:           "together-gemma2",
 		ModelName:          "google/gemma-2-27b-it",
+		TextVerbosity:      "",
 		URL:                TogetherURL,
 		APIKeyEnv:          TogetherAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -239,6 +257,7 @@ var (
 	LlamaCPP = Model{
 		UserName:           "llama.cpp",
 		ModelName:          "llama.cpp local model",
+		TextVerbosity:      "",
 		URL:                LlamaCPPURL,
 		APIKeyEnv:          "NONE",
 		IsReasoningModel:   false,
@@ -249,6 +268,7 @@ var (
 	FireworksDeepseekV3 = Model{
 		UserName:           "fireworks-deepseek-v3",
 		ModelName:          "accounts/fireworks/models/deepseek-v3p2",
+		TextVerbosity:      "",
 		URL:                FireworksURL,
 		APIKeyEnv:          FireworksAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -259,6 +279,7 @@ var (
 	DeepseekV4ProFireworks = Model{
 		UserName:           "deepseek-v4-pro-fireworks",
 		ModelName:          "accounts/fireworks/models/deepseek-v4-pro",
+		TextVerbosity:      "",
 		URL:                FireworksURL,
 		APIKeyEnv:          FireworksAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -269,6 +290,7 @@ var (
 	DeepseekV4FlashFireworks = Model{
 		UserName:           "deepseek-v4-flash-fireworks",
 		ModelName:          "accounts/fireworks/models/deepseek-v4-flash",
+		TextVerbosity:      "",
 		URL:                FireworksURL,
 		APIKeyEnv:          FireworksAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -279,6 +301,7 @@ var (
 	Qwen36PlusFireworks = Model{
 		UserName:           "qwen3.6-plus-fireworks",
 		ModelName:          "accounts/fireworks/models/qwen3p6-plus",
+		TextVerbosity:      "",
 		URL:                FireworksURL,
 		APIKeyEnv:          FireworksAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -289,6 +312,7 @@ var (
 	MoonshotKimiK2 = Model{
 		UserName:           "moonshot-kimi-k2",
 		ModelName:          "moonshot-v1-auto",
+		TextVerbosity:      "",
 		URL:                MoonshotURL,
 		APIKeyEnv:          MoonshotAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -299,6 +323,7 @@ var (
 	MistralMedium = Model{
 		UserName:           "mistral-medium-3",
 		ModelName:          "mistral-medium-latest",
+		TextVerbosity:      "",
 		URL:                MistralURL,
 		APIKeyEnv:          MistralAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -309,6 +334,7 @@ var (
 	DevstralSmall = Model{
 		UserName:           "devstral-small",
 		ModelName:          "devstral-small-latest",
+		TextVerbosity:      "",
 		URL:                MistralURL,
 		APIKeyEnv:          MistralAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -319,6 +345,7 @@ var (
 	GLM52Fireworks = Model{
 		UserName:           "glm-5.2-fireworks",
 		ModelName:          "accounts/fireworks/models/glm-5p2",
+		TextVerbosity:      "",
 		URL:                FireworksURL,
 		APIKeyEnv:          FireworksAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -329,6 +356,7 @@ var (
 	GLM51Fireworks = Model{
 		UserName:           "glm-5.1-fireworks",
 		ModelName:          "accounts/fireworks/models/glm-5p1",
+		TextVerbosity:      "",
 		URL:                FireworksURL,
 		APIKeyEnv:          FireworksAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -339,6 +367,7 @@ var (
 	KimiK26Fireworks = Model{
 		UserName:           "kimi-k2.6-fireworks",
 		ModelName:          "accounts/fireworks/models/kimi-k2p6",
+		TextVerbosity:      "",
 		URL:                FireworksURL,
 		APIKeyEnv:          FireworksAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -349,6 +378,7 @@ var (
 	Grok45 = Model{
 		UserName:           "grok-4.5",
 		ModelName:          "grok-4.5",
+		TextVerbosity:      "",
 		URL:                XAIURL,
 		APIKeyEnv:          "", // gateway-only; no direct XAI_API_KEY env support
 		IsReasoningModel:   true,
@@ -359,6 +389,7 @@ var (
 	GPTOSS20B = Model{
 		UserName:           "gpt-oss-20b",
 		ModelName:          "accounts/fireworks/models/gpt-oss-20b",
+		TextVerbosity:      "",
 		URL:                FireworksURL,
 		APIKeyEnv:          FireworksAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -369,6 +400,7 @@ var (
 	GPTOSS120B = Model{
 		UserName:           "gpt-oss-120b",
 		ModelName:          "accounts/fireworks/models/gpt-oss-120b",
+		TextVerbosity:      "",
 		URL:                FireworksURL,
 		APIKeyEnv:          FireworksAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -379,6 +411,7 @@ var (
 	GPT5 = Model{
 		UserName:           "gpt-5-thinking",
 		ModelName:          "gpt-5.1",
+		TextVerbosity:      "low",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -389,6 +422,7 @@ var (
 	GPT5Mini = Model{
 		UserName:           "gpt-5-thinking-mini",
 		ModelName:          "gpt-5.1-mini",
+		TextVerbosity:      "medium",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -399,6 +433,7 @@ var (
 	GPT5Nano = Model{
 		UserName:           "gpt-5-thinking-nano",
 		ModelName:          "gpt-5.1-nano",
+		TextVerbosity:      "medium",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -409,6 +444,7 @@ var (
 	GPT5Codex = Model{
 		UserName:           "gpt-5.1-codex",
 		ModelName:          "gpt-5.1-codex",
+		TextVerbosity:      "low",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -419,6 +455,7 @@ var (
 	GPT52Codex = Model{
 		UserName:           "gpt-5.2-codex",
 		ModelName:          "gpt-5.2-codex",
+		TextVerbosity:      "low",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -429,6 +466,7 @@ var (
 	GPT56Sol = Model{
 		UserName:           "gpt-5.6-sol",
 		ModelName:          "gpt-5.6-sol",
+		TextVerbosity:      "low",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   true,
@@ -439,6 +477,7 @@ var (
 	GPT56Terra = Model{
 		UserName:           "gpt-5.6-terra",
 		ModelName:          "gpt-5.6-terra",
+		TextVerbosity:      "low",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   true,
@@ -449,6 +488,7 @@ var (
 	GPT56Luna = Model{
 		UserName:           "gpt-5.6-luna",
 		ModelName:          "gpt-5.6-luna",
+		TextVerbosity:      "low",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   true,
@@ -459,6 +499,7 @@ var (
 	GPT55 = Model{
 		UserName:           "gpt-5.5",
 		ModelName:          "gpt-5.5",
+		TextVerbosity:      "low",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -469,6 +510,7 @@ var (
 	GPT55Pro = Model{
 		UserName:           "gpt-5.5-pro",
 		ModelName:          "gpt-5.5-pro",
+		TextVerbosity:      "low",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -479,6 +521,7 @@ var (
 	GPT54 = Model{
 		UserName:           "gpt-5.4",
 		ModelName:          "gpt-5.4",
+		TextVerbosity:      "low",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -489,6 +532,7 @@ var (
 	GPT54Mini = Model{
 		UserName:           "gpt-5.4-mini",
 		ModelName:          "gpt-5.4-mini",
+		TextVerbosity:      "medium",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -499,6 +543,7 @@ var (
 	GPT54Nano = Model{
 		UserName:           "gpt-5.4-nano",
 		ModelName:          "gpt-5.4-nano",
+		TextVerbosity:      "medium",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -509,6 +554,7 @@ var (
 	GPT53Codex = Model{
 		UserName:           "gpt-5.3-codex",
 		ModelName:          "gpt-5.3-codex",
+		TextVerbosity:      "low",
 		URL:                OpenAIURL,
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
@@ -521,6 +567,7 @@ var (
 	Qwen = Model{
 		UserName:           "qwen",
 		ModelName:          "qwen", // skaband will map this to the actual provider model
+		TextVerbosity:      "",
 		URL:                "",
 		APIKeyEnv:          "",
 		IsReasoningModel:   false,
@@ -530,6 +577,7 @@ var (
 	GLM = Model{
 		UserName:           "glm",
 		ModelName:          "glm", // skaband will map this to the actual provider model
+		TextVerbosity:      "",
 		URL:                "",
 		APIKeyEnv:          "",
 		IsReasoningModel:   false,
@@ -648,6 +696,7 @@ func zeroModel() Model {
 	return Model{
 		UserName:           "",
 		ModelName:          "",
+		TextVerbosity:      "",
 		URL:                "",
 		APIKeyEnv:          "",
 		IsReasoningModel:   false,

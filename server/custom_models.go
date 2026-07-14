@@ -502,6 +502,7 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			Model: oai.Model{
 				UserName:           "",
 				ModelName:          req.ModelName,
+				TextVerbosity:      "",
 				URL:                req.Endpoint,
 				APIKeyEnv:          "",
 				IsReasoningModel:   false,
@@ -522,6 +523,7 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			Model: oai.Model{
 				UserName:           "",
 				ModelName:          req.ModelName,
+				TextVerbosity:      "",
 				URL:                req.Endpoint,
 				APIKeyEnv:          "",
 				IsReasoningModel:   false,

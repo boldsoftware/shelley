@@ -9,7 +9,63 @@ import (
 	"time"
 
 	"shelley.exe.dev/db/generated"
+	"shelley.exe.dev/llm"
 )
+
+func TestMessageOpenAIResponsesReasoningMetadataRoundTrip(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+
+	ctx := context.Background()
+	conv, err := database.CreateConversation(ctx, stringPtr("reasoning-round-trip"), true, nil, nil, ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := llm.Message{
+		Role: llm.MessageRoleAssistant,
+		Content: []llm.Content{{
+			Type: llm.ContentTypeThinking,
+			Text: "Summary part one.\nSummary part two.",
+			OpenAIResponsesReasoning: &llm.OpenAIResponsesReasoningMetadata{
+				ID:               "rs_persisted",
+				EncryptedContent: "encrypted-persisted",
+				Summary: []llm.OpenAIResponsesReasoningSummary{
+					{Type: "summary_text", Text: "Summary part one."},
+					{Type: "summary_text", Text: "Summary part two."},
+				},
+			},
+		}},
+	}
+	if _, err := database.CreateMessage(ctx, CreateMessageParams{
+		ConversationID: conv.ConversationID,
+		Type:           MessageTypeAgent,
+		LLMData:        want,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	messages, err := database.ListMessages(ctx, conv.ConversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 1 || messages[0].LlmData == nil {
+		t.Fatalf("messages = %+v", messages)
+	}
+	var got llm.Message
+	if err := json.Unmarshal([]byte(*messages[0].LlmData), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Role != want.Role || len(got.Content) != 1 || got.Content[0].Text != want.Content[0].Text {
+		t.Fatalf("visible message changed: %#v", got)
+	}
+	metadata := got.Content[0].OpenAIResponsesReasoning
+	if metadata == nil || metadata.ID != "rs_persisted" || metadata.EncryptedContent != "encrypted-persisted" {
+		t.Fatalf("reasoning metadata = %#v", metadata)
+	}
+	if len(metadata.Summary) != 2 || metadata.Summary[0].Text != "Summary part one." || metadata.Summary[1].Text != "Summary part two." {
+		t.Fatalf("reasoning summary = %#v", metadata.Summary)
+	}
+}
 
 func TestMessageService_Create(t *testing.T) {
 	db := setupTestDB(t)

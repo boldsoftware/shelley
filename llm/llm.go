@@ -297,6 +297,24 @@ type ToolOut struct {
 	Error error
 }
 
+// OpenAIResponsesReasoningSummary preserves one Responses API reasoning
+// summary part for stateless replay. It is intentionally provider-specific:
+// other adapters must not interpret it as their own thinking signature.
+type OpenAIResponsesReasoningSummary struct {
+	Type string
+	Text string
+}
+
+// OpenAIResponsesReasoningMetadata is the opaque state needed to continue an
+// OpenAI Responses reasoning turn when store=false. ID and EncryptedContent
+// are replayed together as a self-contained reasoning item; the ID alone would
+// be a persisted item reference that cannot be resolved when storage is off.
+type OpenAIResponsesReasoningMetadata struct {
+	ID               string
+	EncryptedContent string
+	Summary          []OpenAIResponsesReasoningSummary
+}
+
 type Content struct {
 	ID   string
 	Type ContentType
@@ -309,6 +327,8 @@ type Content struct {
 	Thinking  string
 	Data      string
 	Signature string
+
+	OpenAIResponsesReasoning *OpenAIResponsesReasoningMetadata `json:",omitempty"`
 
 	// for tool_use
 	ToolName  string

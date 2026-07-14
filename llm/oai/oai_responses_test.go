@@ -484,6 +484,7 @@ func TestResponsesServiceTokenContextWindow(t *testing.T) {
 		{model: Model{
 			UserName:           "gpt-5.5-2026-04-23",
 			ModelName:          "gpt-5.5-2026-04-23",
+			TextVerbosity:      "",
 			URL:                "",
 			APIKeyEnv:          "",
 			IsReasoningModel:   false,
@@ -493,6 +494,7 @@ func TestResponsesServiceTokenContextWindow(t *testing.T) {
 		{model: Model{
 			UserName:           "gpt-5.5-pro-2026-04-23",
 			ModelName:          "gpt-5.5-pro-2026-04-23",
+			TextVerbosity:      "",
 			URL:                "",
 			APIKeyEnv:          "",
 			IsReasoningModel:   false,
@@ -719,7 +721,7 @@ func TestResponsesServiceDoSendsMaxOutputTokens(t *testing.T) {
 
 	svc := &ResponsesService{
 		APIKey:   "test-api-key",
-		Model:    Model{ModelName: "test-model"},
+		Model:    modelForTest("test-model"),
 		ModelURL: server.URL,
 	}
 
