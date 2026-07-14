@@ -169,6 +169,8 @@ const renderedRows = computed<RenderedRow[]>(() => {
           decoration: child.entry.decoration,
           decorationTitle: child.entry.decorationTitle,
           statusInfo: statusLetter(child.entry.status),
+          additions: child.entry.additions,
+          deletions: child.entry.deletions,
         });
       }
     }

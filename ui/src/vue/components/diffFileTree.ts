@@ -13,6 +13,8 @@ export interface DiffFileTreeEntry {
   realPath: string;
   treePath: string[];
   status?: "added" | "modified" | "deleted";
+  additions?: number;
+  deletions?: number;
   decoration?: string;
   decorationTitle?: string;
 }
@@ -179,4 +181,6 @@ export type RenderedRow =
       decoration?: string;
       decorationTitle?: string;
       statusInfo: StatusInfo | null;
+      additions?: number;
+      deletions?: number;
     };

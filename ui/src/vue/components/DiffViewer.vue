@@ -1550,7 +1550,13 @@ const treeEntries = computed<DiffFileTreeEntry[]>(() => {
         decorationTitle: msg?.isHead ? `${hash} (HEAD)` : undefined,
       };
     }
-    return { realPath: f.path, treePath: f.path.split("/"), status: f.status };
+    return {
+      realPath: f.path,
+      treePath: f.path.split("/"),
+      status: f.status,
+      additions: f.additions,
+      deletions: f.deletions,
+    };
   });
 });
 

@@ -5990,6 +5990,27 @@ svg {
   opacity: 0.85;
 }
 
+.diff-tree-changes {
+  flex-shrink: 0;
+  display: inline-flex;
+  gap: 0.3rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.625rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.diff-tree-changes-added {
+  color: var(--green-text, #16a34a);
+}
+.diff-tree-changes-deleted {
+  color: var(--red-text, #dc2626);
+}
+.diff-tree-row.active .diff-tree-changes-added,
+.diff-tree-row.active .diff-tree-changes-deleted {
+  color: inherit;
+}
+
 .diff-tree-status-added {
   color: var(--green-text, #16a34a);
 }

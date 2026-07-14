@@ -1,6 +1,7 @@
 <!-- Renders the flat row list produced by DiffFileTree.vue. Split out so the
      tree itself stays recursion-free. Preserves the diff-tree-row /
-     diff-tree-icon / diff-tree-label / diff-tree-decoration / diff-tree-status
+     diff-tree-icon / diff-tree-label / diff-tree-decoration / diff-tree-changes /
+     diff-tree-status
      class contract, role="treeitem", aria-expanded/aria-selected, the
      paddingLeft depth formula, and the chevron/file SVG icons. Emits
      "select" (file realPath), "toggle" (dir pathsCovered), and "selected-row"
@@ -38,6 +39,18 @@
         row.decoration
       }}</span>
       <span
+        v-if="(row.additions ?? 0) > 0 || (row.deletions ?? 0) > 0"
+        class="diff-tree-changes"
+        :aria-label="changesLabel(row.additions, row.deletions)"
+      >
+        <span v-if="(row.additions ?? 0) > 0" class="diff-tree-changes-added"
+          >+{{ row.additions }}</span
+        >
+        <span v-if="(row.deletions ?? 0) > 0" class="diff-tree-changes-deleted"
+          >&minus;{{ row.deletions }}</span
+        >
+      </span>
+      <span
         v-if="row.statusInfo"
         :class="`diff-tree-status ${row.statusInfo.cls}`"
         :aria-label="row.statusInfo.label"
@@ -73,5 +86,13 @@ const FILE_ICON =
 // one.
 function setFileRef(el: Element | ComponentPublicInstance | null, isSelected: boolean) {
   if (isSelected) emit("selected-row", (el as HTMLButtonElement) ?? null);
+}
+
+function changesLabel(additions?: number, deletions?: number): string {
+  const parts: string[] = [];
+  const plural = (n: number) => (n === 1 ? "line" : "lines");
+  if ((additions ?? 0) > 0) parts.push(`${additions} ${plural(additions!)} added`);
+  if ((deletions ?? 0) > 0) parts.push(`${deletions} ${plural(deletions!)} removed`);
+  return parts.join(", ");
 }
 </script>
