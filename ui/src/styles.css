@@ -277,6 +277,10 @@ button {
 .btn {
   padding: 0.5rem 0.75rem;
   border-radius: 0.25rem;
+  /* The global button reset inherits font-family but not font-size, so
+     unstyled buttons fall back to the browser default (13.33px). Pin the
+     styled button classes to the app's standard 14px UI size. */
+  font-size: 0.875rem;
   transition: background-color 0.2s;
 }
 
@@ -294,6 +298,7 @@ button {
   background: var(--primary);
   color: white;
   border-radius: 0.25rem;
+  font-size: 0.875rem;
   font-weight: 500;
   transition: background-color 0.2s;
   letter-spacing: -0.01em;
@@ -318,6 +323,7 @@ button {
   color: var(--text-primary);
   border: 1px solid var(--border);
   border-radius: 0.25rem;
+  font-size: 0.875rem;
   font-weight: 500;
   transition: background-color 0.2s;
   letter-spacing: -0.01em;
@@ -2892,6 +2898,10 @@ button {
   min-width: 0;
   max-height: 80vh;
   overflow: hidden;
+  /* Flex column so the header (and optional .modal-footer) stay pinned while
+     .modal-body scrolls. */
+  display: flex;
+  flex-direction: column;
 }
 
 .modal.modal-wide {
@@ -2908,6 +2918,7 @@ button {
   justify-content: space-between;
   padding: 1rem;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .modal-title {
@@ -3005,7 +3016,18 @@ button {
 .modal-body {
   padding: 1rem;
   overflow-y: auto;
-  max-height: calc(80vh - 60px);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Optional pinned footer row (Modal.vue #footer slot). */
+.modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 /* Form Elements */
@@ -4315,8 +4337,14 @@ svg {
 .directory-picker-modal {
   max-width: 32rem;
   height: 70vh;
+}
+
+/* The list scrolls internally; make the modal body a non-scrolling flex
+   column so .directory-picker-body can fill it. */
+.directory-picker-modal .modal-body {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .directory-picker-body {
@@ -4505,19 +4533,17 @@ svg {
   text-align: right;
 }
 
-.directory-picker-empty {
+.directory-picker-empty,
+.directory-picker-truncated {
   padding: 2rem;
   text-align: center;
   color: var(--text-tertiary);
   font-size: 0.875rem;
 }
 
-.directory-picker-footer {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
-  border-top: 1px solid var(--border);
+/* The truncation hint sits under 500 rows; keep it compact. */
+.directory-picker-truncated {
+  padding: 0.75rem 2rem;
 }
 
 .directory-picker-footer-spacer {
@@ -6901,76 +6927,23 @@ svg {
   flex-shrink: 0;
 }
 
-.version-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
-.version-modal {
-  background: var(--bg-base);
-  border-radius: 0.5rem;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+/* Version modal: chrome comes from the shared Modal (PrimeVue Dialog);
+   these classes only size it and lay out the body/footer content. */
+.modal.version-modal {
   max-width: 500px;
-  width: 100%;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
 }
 
-.version-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.version-modal-header h2 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.version-modal-close {
-  background: none;
-  border: none;
-  padding: 0.25rem;
-  cursor: pointer;
-  color: var(--text-secondary);
-  border-radius: 0.25rem;
-}
-
-.version-modal-close:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.version-modal-close svg {
-  width: 1.25rem;
-  height: 1.25rem;
-}
-
-.version-modal-content {
-  padding: 1.25rem;
-  overflow-y: auto;
+.version-modal .modal-body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  min-height: 0;
 }
 
-.version-modal-footer {
-  padding: 1rem 1.25rem;
-  border-top: 1px solid var(--border-color);
-  flex-shrink: 0;
+.version-modal-footer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
 }
 
 .version-info-row {
@@ -7154,12 +7127,12 @@ svg {
 }
 
 @media (max-width: 600px) {
-  .version-modal-overlay {
+  /* Full-screen on phones: drop the mask padding so 100dvh fits. */
+  .modal-overlay:has(.version-modal) {
     padding: 0;
-    align-items: stretch;
   }
 
-  .version-modal {
+  .modal.version-modal {
     max-height: 100dvh;
     max-width: 100%;
     border-radius: 0;
@@ -8134,62 +8107,10 @@ kbd {
 }
 
 /* Usage Detail Modal */
-.usage-detail-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10001;
-  padding: 1rem;
-}
-
-.usage-detail-modal {
-  background-color: var(--bg-base);
-  border-radius: 0.5rem;
-  padding: 1.5rem;
+/* Usage / message details: chrome comes from the shared Modal (PrimeVue
+   Dialog); only size it and lay out the details grid. */
+.modal.usage-detail-modal {
   max-width: 31.25rem;
-  width: 100%;
-  box-shadow:
-    0 1.25rem 1.5625rem -0.3125rem rgba(0, 0, 0, 0.1),
-    0 0.625rem 0.625rem -0.3125rem rgba(0, 0, 0, 0.04);
-}
-
-.usage-detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.25rem;
-}
-
-.usage-detail-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.usage-detail-close-button {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 0;
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.25rem;
-}
-
-.usage-detail-close-button:hover {
-  background-color: var(--bg-tertiary);
 }
 
 .usage-detail-grid {
@@ -9066,11 +8987,12 @@ kbd {
 }
 
 /* Floating toolbar shown above/below a text selection inside a commentable
- * message. Portaled to document.body so it sits above everything and doesn't
- * participate in the selection itself. */
+ * message. Portaled to document.body so it sits above everything in the chat
+ * view (but below PrimeVue dialog masks, ~1100+, so an open modal covers it)
+ * and doesn't participate in the selection itself. */
 .message-selection-toolbar {
   position: fixed;
-  z-index: 10000;
+  z-index: 900;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -10101,8 +10023,10 @@ kbd {
   font-size: 1rem;
 }
 .grp-modal .modal-body {
-  /* Override the default 80vh cap; we already cap the modal itself. */
-  max-height: none;
+  /* .grp-list scrolls internally; make the body a non-scrolling flex column. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0.5rem 0.75rem 0.75rem;
 }
 .grp-body {
@@ -10227,6 +10151,10 @@ kbd {
 /* Mobile: use the full screen, slim header, and stack branch/worktree
    onto a second line so the repo path always gets full width. */
 @media (max-width: 768px) {
+  /* Full-screen on phones: drop the mask padding so 100dvh fits. */
+  .modal-overlay:has(.grp-modal) {
+    padding: 0;
+  }
   .grp-modal {
     height: 100vh;
     height: 100dvh;
@@ -11373,6 +11301,25 @@ kbd {
      wide inner content (e.g. the models table) push this wrapper past the
      viewport. Allow it to shrink so the inner .modal can scroll instead. */
   min-width: 0;
+  /* Span the mask (minus its padding) and center the .modal panel inside.
+     Without this the wrapper shrink-wraps to its content's preferred width,
+     so the panel's `width: 100%` can't reach the mask edges — visible on
+     phones where full-width content (e.g. the repo picker list) got an
+     arbitrary content-sized width instead of the viewport's. */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* The wrapper is invisible but, spanning the mask, it would swallow
+     backdrop clicks beside the panel (PrimeVue's dismissable-mask only fires
+     when the click target IS the mask). Let clicks fall through to the mask;
+     the real panel re-enables hit testing below. !important beats PrimeVue's
+     inline pointer-events on the dialog root. */
+  pointer-events: none !important;
+}
+
+.modal-dialog-root > .modal {
+  pointer-events: auto;
 }
 
 /* We move focus to the .modal panel on open so PrimeVue's focus trap engages,

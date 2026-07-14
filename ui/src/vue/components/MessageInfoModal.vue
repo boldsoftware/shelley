@@ -1,35 +1,30 @@
 <!-- Vue port of components/MessageInfoModal.tsx. Lightweight metadata modal for
-     messages without token-usage data (e.g. user messages). Mirrors
-     UsageDetailModal's chrome (.usage-detail-overlay/-modal/-header/-title/
-     -close-button/-grid/-label/-value) and the aria-label "Close". -->
+     messages without token-usage data (e.g. user messages). Uses the shared
+     Modal (PrimeVue Dialog) chrome and mirrors UsageDetailModal's grid classes
+     (.usage-detail-grid/-label/-value). Mounted only while open (parent v-if). -->
 <template>
-  <Teleport to="body">
-    <div class="usage-detail-overlay" @click="emit('close')">
-      <div class="usage-detail-modal" @click.stop>
-        <div class="usage-detail-header">
-          <h2 class="usage-detail-title">Message Details</h2>
-          <button class="usage-detail-close-button" aria-label="Close" @click="emit('close')">
-            ×
-          </button>
-        </div>
-        <div class="usage-detail-grid">
-          <div class="usage-detail-label">Type:</div>
-          <div class="usage-detail-value">{{ message.type }}</div>
-          <template v-if="message.created_at">
-            <div class="usage-detail-label">Timestamp:</div>
-            <div class="usage-detail-value">{{ formatTimestamp(message.created_at) }}</div>
-          </template>
-        </div>
-      </div>
+  <Modal
+    :is-open="true"
+    title="Message Details"
+    class-name="usage-detail-modal"
+    @close="emit('close')"
+  >
+    <div class="usage-detail-grid">
+      <div class="usage-detail-label">Type:</div>
+      <div class="usage-detail-value">{{ message.type }}</div>
+      <template v-if="message.created_at">
+        <div class="usage-detail-label">Timestamp:</div>
+        <div class="usage-detail-value">{{ formatTimestamp(message.created_at) }}</div>
+      </template>
     </div>
-  </Teleport>
+  </Modal>
 </template>
 
 <script setup lang="ts">
 import type { Message } from "../../types";
-import { useEscapeClose } from "../composables/escapeClose";
+import Modal from "./Modal.vue";
 
-const props = defineProps<{ message: Message }>();
+defineProps<{ message: Message }>();
 const emit = defineEmits<{ (e: "close"): void }>();
 
 function formatTimestamp(isoString: string): string {
@@ -44,11 +39,4 @@ function formatTimestamp(isoString: string): string {
     second: "2-digit",
   });
 }
-
-// Mounted only while open (parent v-if), so Escape is always active here.
-useEscapeClose(
-  () => true,
-  () => emit("close"),
-);
-void props;
 </script>

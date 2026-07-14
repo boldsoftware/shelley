@@ -6,7 +6,7 @@
      aria-label "Close modal". PrimeVue owns backdrop-click closing; Escape is
      handled by a shared stack (modalEscapeStack) so that when modals are
      stacked only the topmost one closes. Use the #title-right slot for
-     titleRight. -->
+     titleRight and the #footer slot for a pinned footer row. -->
 <template>
   <Dialog
     :visible="isOpen"
@@ -40,6 +40,9 @@
         </div>
         <div class="modal-body">
           <slot />
+        </div>
+        <div v-if="$slots.footer" class="modal-footer">
+          <slot name="footer" />
         </div>
       </div>
     </template>
@@ -90,8 +93,14 @@ function onVisibleChange(visible: boolean) {
 
 // The #container slot replaces PrimeVue's default header/content, so its
 // built-in focus() has nothing to target. Move focus into the panel ourselves
-// so the FocusTrap directive engages and screen readers announce the dialog.
+// so the FocusTrap directive engages and screen readers announce the dialog —
+// unless a child already claimed focus (e.g. an autofocused filter input).
 function onShow() {
-  nextTick(() => panelRef.value?.focus());
+  nextTick(() => {
+    const panel = panelRef.value;
+    if (!panel) return;
+    if (panel.contains(document.activeElement)) return;
+    panel.focus();
+  });
 }
 </script>

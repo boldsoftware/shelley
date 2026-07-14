@@ -1,60 +1,56 @@
 <!-- Vue port of components/UsageDetailModal.tsx. Token/cost/duration breakdown
-     for an agent message's usage data. Preserves the .usage-detail-* class
-     contract and the aria-label "Close". -->
+     for an agent message's usage data. Uses the shared Modal (PrimeVue Dialog)
+     for the chrome; the .usage-detail-grid/-label/-value content classes are
+     preserved. Mounted only while open (parent v-if), so isOpen is constant. -->
 <template>
-  <Teleport to="body">
-    <div class="usage-detail-overlay" @click="emit('close')">
-      <div class="usage-detail-modal" @click.stop>
-        <div class="usage-detail-header">
-          <h2 class="usage-detail-title">Usage Details</h2>
-          <button class="usage-detail-close-button" aria-label="Close" @click="emit('close')">
-            ×
-          </button>
+  <Modal
+    :is-open="true"
+    title="Usage Details"
+    class-name="usage-detail-modal"
+    @close="emit('close')"
+  >
+    <div class="usage-detail-grid">
+      <template v-if="usage.model">
+        <div class="usage-detail-label">Model:</div>
+        <div class="usage-detail-value">{{ usage.model }}</div>
+      </template>
+      <div class="usage-detail-label">Input Tokens:</div>
+      <div class="usage-detail-value">{{ usage.input_tokens.toLocaleString() }}</div>
+      <template v-if="usage.cache_read_input_tokens > 0">
+        <div class="usage-detail-label">Cache Read:</div>
+        <div class="usage-detail-value">
+          {{ usage.cache_read_input_tokens.toLocaleString() }}
         </div>
-        <div class="usage-detail-grid">
-          <template v-if="usage.model">
-            <div class="usage-detail-label">Model:</div>
-            <div class="usage-detail-value">{{ usage.model }}</div>
-          </template>
-          <div class="usage-detail-label">Input Tokens:</div>
-          <div class="usage-detail-value">{{ usage.input_tokens.toLocaleString() }}</div>
-          <template v-if="usage.cache_read_input_tokens > 0">
-            <div class="usage-detail-label">Cache Read:</div>
-            <div class="usage-detail-value">
-              {{ usage.cache_read_input_tokens.toLocaleString() }}
-            </div>
-          </template>
-          <template v-if="usage.cache_creation_input_tokens > 0">
-            <div class="usage-detail-label">Cache Write:</div>
-            <div class="usage-detail-value">
-              {{ usage.cache_creation_input_tokens.toLocaleString() }}
-            </div>
-          </template>
-          <div class="usage-detail-label">Output Tokens:</div>
-          <div class="usage-detail-value">{{ usage.output_tokens.toLocaleString() }}</div>
-          <template v-if="usage.cost_usd > 0">
-            <div class="usage-detail-label">Cost:</div>
-            <div class="usage-detail-value">${{ usage.cost_usd.toFixed(4) }}</div>
-          </template>
-          <template v-if="durationMs !== null">
-            <div class="usage-detail-label">Duration:</div>
-            <div class="usage-detail-value">{{ formatDuration(durationMs!) }}</div>
-          </template>
-          <template v-if="usage.end_time">
-            <div class="usage-detail-label">Timestamp:</div>
-            <div class="usage-detail-value">{{ formatTimestamp(usage.end_time) }}</div>
-          </template>
+      </template>
+      <template v-if="usage.cache_creation_input_tokens > 0">
+        <div class="usage-detail-label">Cache Write:</div>
+        <div class="usage-detail-value">
+          {{ usage.cache_creation_input_tokens.toLocaleString() }}
         </div>
-      </div>
+      </template>
+      <div class="usage-detail-label">Output Tokens:</div>
+      <div class="usage-detail-value">{{ usage.output_tokens.toLocaleString() }}</div>
+      <template v-if="usage.cost_usd > 0">
+        <div class="usage-detail-label">Cost:</div>
+        <div class="usage-detail-value">${{ usage.cost_usd.toFixed(4) }}</div>
+      </template>
+      <template v-if="durationMs !== null">
+        <div class="usage-detail-label">Duration:</div>
+        <div class="usage-detail-value">{{ formatDuration(durationMs!) }}</div>
+      </template>
+      <template v-if="usage.end_time">
+        <div class="usage-detail-label">Timestamp:</div>
+        <div class="usage-detail-value">{{ formatTimestamp(usage.end_time) }}</div>
+      </template>
     </div>
-  </Teleport>
+  </Modal>
 </template>
 
 <script setup lang="ts">
 import type { Usage } from "../../types";
-import { useEscapeClose } from "../composables/escapeClose";
+import Modal from "./Modal.vue";
 
-const props = defineProps<{
+defineProps<{
   usage: Usage;
   durationMs: number | null;
 }>();
@@ -77,10 +73,4 @@ function formatTimestamp(isoString: string): string {
     second: "2-digit",
   });
 }
-
-useEscapeClose(
-  () => true,
-  () => emit("close"),
-);
-void props;
 </script>

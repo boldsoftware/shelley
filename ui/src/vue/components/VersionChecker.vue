@@ -1,85 +1,68 @@
 <!-- Vue port of the VersionModal from components/VersionChecker.tsx. The
      useVersionChecker hook lives in composables/versionChecker.ts; this file
-     is the modal chrome. Preserves the version-modal-* / version-* class
-     contract and the "Close" aria-label. Loads changelog + auto-upgrade
-     setting on open, and drives the upgrade / headless-shell upgrade flows.
-     Uses escapeClose + api. -->
+     is the modal chrome. Uses the shared Modal (PrimeVue Dialog); the
+     version-* content classes are preserved. Loads changelog + auto-upgrade
+     setting on open, and drives the upgrade / headless-shell upgrade flows. -->
 <template>
-  <div v-if="isOpen" class="version-modal-overlay" @click="emit('close')">
-    <div class="version-modal" @click.stop>
-      <div class="version-modal-header">
-        <h2>Version</h2>
-        <button class="version-modal-close" aria-label="Close" @click="emit('close')">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              :stroke-width="2"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+  <Modal :is-open="isOpen" title="Version" class-name="version-modal" @close="emit('close')">
+    <div v-if="isLoading" class="version-loading">Checking for updates...</div>
+    <template v-else-if="versionInfo">
+      <div class="version-info-row">
+        <span class="version-label">Current:</span>
+        <span class="version-value">
+          {{ versionInfo.current_tag || versionInfo.current_version || "dev" }}
+        </span>
+        <span v-if="versionInfo.current_commit_time" class="version-date">
+          ({{ formatDateTime(versionInfo.current_commit_time) }})
+        </span>
       </div>
 
-      <div class="version-modal-content">
-        <div v-if="isLoading" class="version-loading">Checking for updates...</div>
-        <template v-else-if="versionInfo">
-          <div class="version-info-row">
-            <span class="version-label">Current:</span>
-            <span class="version-value">
-              {{ versionInfo.current_tag || versionInfo.current_version || "dev" }}
-            </span>
-            <span v-if="versionInfo.current_commit_time" class="version-date">
-              ({{ formatDateTime(versionInfo.current_commit_time) }})
-            </span>
-          </div>
-
-          <div v-if="versionInfo.latest_tag" class="version-info-row">
-            <span class="version-label">Latest:</span>
-            <span class="version-value">{{ versionInfo.latest_tag }}</span>
-            <span v-if="versionInfo.published_at" class="version-date">
-              ({{ formatDateTime(versionInfo.published_at) }})
-            </span>
-          </div>
-
-          <div v-if="versionInfo.error" class="version-error">
-            <span>Error: {{ versionInfo.error }}</span>
-          </div>
-
-          <!-- Changelog -->
-          <div v-if="versionInfo.has_update" class="version-changelog">
-            <h3>
-              <a
-                :href="`https://github.com/boldsoftware/shelley/compare/${versionInfo.current_tag}...${versionInfo.latest_tag}`"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="changelog-link"
-              >
-                Changelog
-              </a>
-            </h3>
-            <div v-if="loadingCommits" class="version-loading">Loading...</div>
-            <ul v-else-if="commits.length > 0" class="commit-list">
-              <li v-for="commit in commits" :key="commit.sha" class="commit-item">
-                <a
-                  :href="getCommitUrl(commit.sha)"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="commit-sha"
-                >
-                  {{ commit.sha }}
-                </a>
-                <span class="commit-message">{{ commit.message }}</span>
-              </li>
-            </ul>
-            <div v-else class="version-no-commits">No commits found</div>
-          </div>
-        </template>
-        <div v-else class="version-loading">Loading...</div>
+      <div v-if="versionInfo.latest_tag" class="version-info-row">
+        <span class="version-label">Latest:</span>
+        <span class="version-value">{{ versionInfo.latest_tag }}</span>
+        <span v-if="versionInfo.published_at" class="version-date">
+          ({{ formatDateTime(versionInfo.published_at) }})
+        </span>
       </div>
 
-      <!-- Footer: auto-upgrade + upgrade button -->
-      <div v-if="!isLoading && versionInfo" class="version-modal-footer">
+      <div v-if="versionInfo.error" class="version-error">
+        <span>Error: {{ versionInfo.error }}</span>
+      </div>
+
+      <!-- Changelog -->
+      <div v-if="versionInfo.has_update" class="version-changelog">
+        <h3>
+          <a
+            :href="`https://github.com/boldsoftware/shelley/compare/${versionInfo.current_tag}...${versionInfo.latest_tag}`"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="changelog-link"
+          >
+            Changelog
+          </a>
+        </h3>
+        <div v-if="loadingCommits" class="version-loading">Loading...</div>
+        <ul v-else-if="commits.length > 0" class="commit-list">
+          <li v-for="commit in commits" :key="commit.sha" class="commit-item">
+            <a
+              :href="getCommitUrl(commit.sha)"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="commit-sha"
+            >
+              {{ commit.sha }}
+            </a>
+            <span class="commit-message">{{ commit.message }}</span>
+          </li>
+        </ul>
+        <div v-else class="version-no-commits">No commits found</div>
+      </div>
+    </template>
+    <div v-else class="version-loading">Loading...</div>
+
+    <!-- Footer: auto-upgrade + upgrade button -->
+    <template v-if="!isLoading && versionInfo" #footer>
+      <div class="version-modal-footer-content">
         <div v-if="!loadingAutoUpgrade" class="version-auto-upgrade">
           <label class="version-checkbox-label">
             <input
@@ -137,15 +120,15 @@
           <div v-else class="version-up-to-date">Browser is up to date</div>
         </div>
       </div>
-    </div>
-  </div>
+    </template>
+  </Modal>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { api } from "../../services/api";
 import type { VersionInfo, CommitInfo } from "../../types";
-import { useEscapeClose } from "../composables/escapeClose";
+import Modal from "./Modal.vue";
 
 const props = defineProps<{
   isOpen: boolean;
@@ -163,11 +146,6 @@ const loadingAutoUpgrade = ref(true);
 const upgradingHeadless = ref(false);
 const headlessError = ref<string | null>(null);
 const headlessSuccess = ref<string | null>(null);
-
-useEscapeClose(
-  () => props.isOpen,
-  () => emit("close"),
-);
 
 async function loadAutoUpgradeSetting() {
   loadingAutoUpgrade.value = true;

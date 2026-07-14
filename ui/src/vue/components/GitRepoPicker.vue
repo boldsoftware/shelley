@@ -1,107 +1,97 @@
 <!-- Vue port of components/GitRepoPicker.tsx. Lists git repos under $HOME with
-     fuzzy filtering. Preserves the grp-* class contract, the dialog
-     aria-label "Pick a git repository", the visible title "Pick git
-     repository", and the "Close"/"Filter" aria-labels. Uses escapeClose.
-     The React <Highlight> subcomponent is reproduced by splitting each path
-     into highlighted/plain segments via a computed helper. -->
+     fuzzy filtering. Uses the shared Modal (PrimeVue Dialog) for the chrome;
+     preserves the grp-* class contract, the visible title "Pick git
+     repository", and the "Filter" aria-label. The React <Highlight>
+     subcomponent is reproduced by splitting each path into highlighted/plain
+     segments via a computed helper. -->
 <template>
-  <div v-if="isOpen" class="modal-overlay" @click="onBackdrop">
-    <div class="modal grp-modal" role="dialog" aria-label="Pick a git repository">
-      <div class="modal-header">
-        <h2 class="modal-title">Pick git repository</h2>
-        <button class="btn-icon" aria-label="Close" @click="emit('close')">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <Modal
+    :is-open="isOpen"
+    title="Pick git repository"
+    class-name="grp-modal"
+    @close="emit('close')"
+  >
+    <div class="grp-body">
+      <input
+        ref="inputRef"
+        class="grp-filter"
+        type="text"
+        v-model="query"
+        :placeholder="
+          loading ? 'Scanning…' : repos ? `Filter ${repos.length} repos…` : 'Filter repos…'
+        "
+        spellcheck="false"
+        aria-label="Filter"
+        @keydown="handleKey"
+      />
+
+      <div v-if="error" class="grp-error">{{ error }}</div>
+
+      <div class="grp-list" ref="listRef">
+        <button
+          v-for="(hit, idx) in filtered"
+          :key="hit.repo.path"
+          :data-idx="idx"
+          type="button"
+          :class="`grp-row${idx === activeIdx ? ' grp-row-active' : ''}${hit.repo.path === currentPath ? ' grp-row-current' : ''}`"
+          @mouseenter="activeIdx = idx"
+          @click="pick(hit.repo.path)"
+        >
+          <svg
+            class="grp-icon"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
               :stroke-width="2"
-              d="M6 18L18 6M6 6l12 12"
+              d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
             />
           </svg>
-        </button>
-      </div>
-      <div class="modal-body grp-body">
-        <input
-          ref="inputRef"
-          class="grp-filter"
-          type="text"
-          v-model="query"
-          :placeholder="
-            loading ? 'Scanning…' : repos ? `Filter ${repos.length} repos…` : 'Filter repos…'
-          "
-          spellcheck="false"
-          aria-label="Filter"
-          @keydown="handleKey"
-        />
-
-        <div v-if="error" class="grp-error">{{ error }}</div>
-
-        <div class="grp-list" ref="listRef">
-          <button
-            v-for="(hit, idx) in filtered"
-            :key="hit.repo.path"
-            :data-idx="idx"
-            type="button"
-            :class="`grp-row${idx === activeIdx ? ' grp-row-active' : ''}${hit.repo.path === currentPath ? ' grp-row-current' : ''}`"
-            @mouseenter="activeIdx = idx"
-            @click="pick(hit.repo.path)"
-          >
-            <svg
-              class="grp-icon"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                :stroke-width="2"
-                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-              />
-            </svg>
-            <span class="grp-main">
-              <span class="grp-path" :title="hit.repo.path">
-                <template
-                  v-for="(seg, si) in highlightSegments(
-                    displayPath(hit.repo.path, home),
-                    shiftPositions(hit.positions, hit.repo.path, home),
-                  )"
-                  :key="si"
-                >
-                  <mark v-if="seg.hit" class="grp-hit">{{ seg.text }}</mark>
-                  <template v-else>{{ seg.text }}</template>
-                </template>
-              </span>
-              <span v-if="hit.repo.branch || hit.repo.last_activity" class="grp-meta">
-                <span v-if="hit.repo.branch" class="grp-branch" title="Current branch">{{
-                  hit.repo.branch
-                }}</span>
-                <span
-                  v-if="hit.repo.last_activity"
-                  class="grp-when"
-                  :title="new Date(hit.repo.last_activity * 1000).toLocaleString()"
-                >
-                  {{ formatRelative(hit.repo.last_activity) }}
-                </span>
+          <span class="grp-main">
+            <span class="grp-path" :title="hit.repo.path">
+              <template
+                v-for="(seg, si) in highlightSegments(
+                  displayPath(hit.repo.path, home),
+                  shiftPositions(hit.positions, hit.repo.path, home),
+                )"
+                :key="si"
+              >
+                <mark v-if="seg.hit" class="grp-hit">{{ seg.text }}</mark>
+                <template v-else>{{ seg.text }}</template>
+              </template>
+            </span>
+            <span v-if="hit.repo.branch || hit.repo.last_activity" class="grp-meta">
+              <span v-if="hit.repo.branch" class="grp-branch" title="Current branch">{{
+                hit.repo.branch
+              }}</span>
+              <span
+                v-if="hit.repo.last_activity"
+                class="grp-when"
+                :title="new Date(hit.repo.last_activity * 1000).toLocaleString()"
+              >
+                {{ formatRelative(hit.repo.last_activity) }}
               </span>
             </span>
-          </button>
-          <div v-if="!loading && repos && filtered.length === 0" class="grp-empty">
-            No matching repos.
-          </div>
-          <div v-if="loading" class="grp-empty">Scanning your home directory…</div>
+          </span>
+        </button>
+        <div v-if="!loading && repos && filtered.length === 0" class="grp-empty">
+          No matching repos.
         </div>
-
-        <div v-if="truncated" class="grp-truncated">Showing first results — try filtering.</div>
+        <div v-if="loading" class="grp-empty">Scanning your home directory…</div>
       </div>
+
+      <div v-if="truncated" class="grp-truncated">Showing first results — try filtering.</div>
     </div>
-  </div>
+  </Modal>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { useEscapeClose } from "../composables/escapeClose";
+import Modal from "./Modal.vue";
 
 interface GitRepoInfo {
   path: string;
@@ -132,11 +122,6 @@ const query = ref("");
 const activeIdx = ref(0);
 const inputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLDivElement | null>(null);
-
-useEscapeClose(
-  () => props.isOpen,
-  () => emit("close"),
-);
 
 function formatRelative(ts: number): string {
   const diff = Date.now() / 1000 - ts;
@@ -281,10 +266,6 @@ function handleKey(e: KeyboardEvent) {
     const hit = filtered.value[activeIdx.value];
     if (hit) pick(hit.repo.path);
   }
-}
-
-function onBackdrop(e: MouseEvent) {
-  if (e.target === e.currentTarget) emit("close");
 }
 
 watch(query, () => {
