@@ -213,7 +213,12 @@ fresh reset event.
 - `GET /api/models` — available models.
 - `GET /api/tools` — registered tool definitions.
 - `GET/POST/PUT/DELETE /api/custom-models[/<id>]` — custom model CRUD.
-- `POST /api/custom-models-test` — test a custom model config.
+  Custom models accept an optional `user_agent` string. When set, Shelley uses
+  it as the outbound `User-Agent` for that model; when empty, Shelley sends its
+  normal `Shelley/<commit>` value.
+- `POST /api/custom-models-test` — test a custom model config. The request also
+  accepts `user_agent`, so client-restricted providers can be tested before the
+  model is saved.
 - `GET/POST/PUT/DELETE /api/notification-channels[/<id>]`,
   `GET /api/notification-channel-types` — notification CRUD.
 

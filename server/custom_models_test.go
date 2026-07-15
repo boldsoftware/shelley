@@ -139,3 +139,45 @@ func TestCustomModelTestEndpoint(t *testing.T) {
 		t.Error("Got empty response error despite having a valid API key")
 	}
 }
+func TestCustomModelUserAgentCRUD(t *testing.T) {
+	h := NewTestHarness(t)
+
+	body := `{"display_name":"UA model","provider_type":"openai-responses","endpoint":"https://example.com/v1","api_key":"secret","model_name":"test-model","max_tokens":4096,"user_agent":"  custom-agent/1.0  "}`
+	req := httptest.NewRequest(http.MethodPost, "/api/custom-models", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+	h.server.handleCreateModel(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create status = %d: %s", w.Code, w.Body.String())
+	}
+	var created ModelAPI
+	if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created.UserAgent != "custom-agent/1.0" {
+		t.Fatalf("created User-Agent = %q", created.UserAgent)
+	}
+
+	empty := ""
+	update := UpdateModelRequest{
+		DisplayName: created.DisplayName, ProviderType: created.ProviderType,
+		Endpoint: created.Endpoint, ModelName: created.ModelName, MaxTokens: created.MaxTokens,
+		UserAgent: &empty,
+	}
+	updateBody, err := json.Marshal(update)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodPut, "/api/custom-models/"+created.ModelID, bytes.NewReader(updateBody))
+	w = httptest.NewRecorder()
+	h.server.handleUpdateModel(w, req, created.ModelID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("update status = %d: %s", w.Code, w.Body.String())
+	}
+	var updated ModelAPI
+	if err := json.NewDecoder(w.Body).Decode(&updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.UserAgent != "" {
+		t.Fatalf("cleared User-Agent = %q", updated.UserAgent)
+	}
+}

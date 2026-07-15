@@ -13,6 +13,7 @@ import (
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/llm/llmhttp"
 	"shelley.exe.dev/loop"
 )
 
@@ -196,6 +197,42 @@ func (m *mockLLMService) MaxImageDimension() int {
 
 func (m *mockLLMService) MaxImageBytes() int       { return 5 * 1024 * 1024 }
 func (m *mockLLMService) UseSimplifiedPatch() bool { return m.useSimplifiedPatch }
+
+type contextCapturingService struct {
+	mockLLMService
+	userAgent string
+}
+
+func (s *contextCapturingService) Do(ctx context.Context, request *llm.Request) (*llm.Response, error) {
+	s.userAgent = llmhttp.UserAgentFromContext(ctx)
+	return s.mockLLMService.Do(ctx, request)
+}
+
+func TestManagerAppliesUserAgentWithoutLogger(t *testing.T) {
+	inner := &contextCapturingService{}
+	mgr, err := NewManager(&Config{Models: []Built{{
+		ID:       "custom-ua",
+		Provider: ProviderOpenAI,
+		Source:   "test",
+		Service:  inner,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr.services["custom-ua"] = serviceEntry{
+		service: inner, provider: ProviderOpenAI, modelID: "custom-ua", userAgent: "codex_cli_rs/0.144.0",
+	}
+	svc, err := mgr.GetService("custom-ua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Do(context.Background(), &llm.Request{}); err != nil {
+		t.Fatal(err)
+	}
+	if inner.userAgent != "codex_cli_rs/0.144.0" {
+		t.Fatalf("User-Agent override = %q", inner.userAgent)
+	}
+}
 
 func TestManagerGetService(t *testing.T) {
 	mgr, err := NewManager(&Config{Models: []Built{predictableBuilt()}})

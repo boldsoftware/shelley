@@ -12,6 +12,7 @@ import (
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/ant"
 	"shelley.exe.dev/llm/gem"
+	"shelley.exe.dev/llm/llmhttp"
 	"shelley.exe.dev/llm/oai"
 	"shelley.exe.dev/models"
 )
@@ -27,6 +28,7 @@ type ModelAPI struct {
 	MaxTokens       int64  `json:"max_tokens"`
 	Tags            string `json:"tags"` // Comma-separated tags (e.g., "slug" for slug generation)
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
+	UserAgent       string `json:"user_agent"`
 	// ImageSupport is one of "auto", "yes", or "no". "auto" is resolved
 	// automatically from the model's endpoint and name.
 	ImageSupport      string `json:"image_support"`
@@ -48,6 +50,7 @@ type CreateModelRequest struct {
 	MaxTokens        int64  `json:"max_tokens"`
 	Tags             string `json:"tags"` // Comma-separated tags
 	ReasoningEffort  string `json:"reasoning_effort,omitempty"`
+	UserAgent        string `json:"user_agent"`
 	ImageSupport     string `json:"image_support"`     // "auto"|"yes"|"no"; empty = "auto"
 	ReasoningSupport string `json:"reasoning_support"` // "auto"|"yes"|"no"; empty = "auto"
 	ReasoningMap     string `json:"reasoning_map"`     // JSON map of Shelley level to provider-supported level
@@ -63,6 +66,7 @@ type UpdateModelRequest struct {
 	MaxTokens        int64   `json:"max_tokens"`
 	Tags             string  `json:"tags"` // Comma-separated tags
 	ReasoningEffort  *string `json:"reasoning_effort,omitempty"`
+	UserAgent        *string `json:"user_agent"`        // Nil preserves existing; empty clears override
 	ImageSupport     string  `json:"image_support"`     // "auto"|"yes"|"no"; empty preserves existing
 	ReasoningSupport string  `json:"reasoning_support"` // "auto"|"yes"|"no"; empty preserves existing
 	ReasoningMap     string  `json:"reasoning_map"`
@@ -115,6 +119,7 @@ type TestModelRequest struct {
 	ReasoningSupport string  `json:"reasoning_support"`
 	ReasoningMap     string  `json:"reasoning_map"`
 	ReasoningEffort  *string `json:"reasoning_effort,omitempty"`
+	UserAgent        string  `json:"user_agent"`
 }
 
 func toModelAPI(m generated.Model) ModelAPI {
@@ -128,6 +133,7 @@ func toModelAPI(m generated.Model) ModelAPI {
 		MaxTokens:         m.MaxTokens,
 		Tags:              m.Tags,
 		ReasoningEffort:   m.ReasoningEffort,
+		UserAgent:         m.UserAgent,
 		ImageSupport:      m.ImageSupport,
 		ReasoningSupport:  m.ReasoningSupport,
 		ReasoningMap:      m.ReasoningMap,
@@ -222,6 +228,7 @@ func (s *Server) handleCreateModel(w http.ResponseWriter, r *http.Request) {
 		ImageSupport:     imageSupport,
 		ReasoningSupport: reasoningSupport,
 		ReasoningMap:     req.ReasoningMap,
+		UserAgent:        strings.TrimSpace(req.UserAgent),
 	})
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create model: %v", err), http.StatusInternalServerError)
@@ -338,6 +345,10 @@ func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request, model
 	if req.ReasoningEffort != nil {
 		reasoningEffort = *req.ReasoningEffort
 	}
+	userAgent := existing.UserAgent
+	if req.UserAgent != nil {
+		userAgent = strings.TrimSpace(*req.UserAgent)
+	}
 
 	model, err := s.db.UpdateModel(r.Context(), generated.UpdateModelParams{
 		DisplayName:      req.DisplayName,
@@ -351,6 +362,7 @@ func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request, model
 		ImageSupport:     imageSupport,
 		ReasoningSupport: reasoningSupport,
 		ReasoningMap:     req.ReasoningMap,
+		UserAgent:        userAgent,
 		ModelID:          modelID,
 	})
 	if err != nil {
@@ -429,6 +441,7 @@ func (s *Server) handleDuplicateModel(w http.ResponseWriter, r *http.Request, mo
 		ImageSupport:     source.ImageSupport,
 		ReasoningSupport: source.ReasoningSupport,
 		ReasoningMap:     source.ReasoningMap,
+		UserAgent:        source.UserAgent,
 	})
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to duplicate model: %v", err), http.StatusInternalServerError)
@@ -472,6 +485,9 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 		if req.ReasoningEffort == nil {
 			req.ReasoningEffort = &model.ReasoningEffort
 		}
+		if req.UserAgent == "" {
+			req.UserAgent = model.UserAgent
+		}
 	}
 
 	if req.ProviderType == "" || req.Endpoint == "" || req.APIKey == "" || req.ModelName == "" {
@@ -484,6 +500,9 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 		reasoningEffort = *req.ReasoningEffort
 	}
 
+	// Test with the same shared transport used at runtime.
+	testClient := llmhttp.NewClient(nil)
+
 	// Create the appropriate service based on provider type
 	var service llm.Service
 	switch req.ProviderType {
@@ -493,6 +512,7 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			URL:           req.Endpoint,
 			Model:         req.ModelName,
 			ThinkingLevel: llm.ThinkingLevelMedium,
+			HTTPC:         testClient,
 		}
 	case "openai":
 		service = &oai.Service{
@@ -509,6 +529,8 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 				UseSimplifiedPatch: false,
 				SupportsImages:     true,
 			},
+			HTTPC:        testClient,
+			ProviderName: "openai",
 		}
 	case "gemini":
 		service = &gem.Service{
@@ -516,6 +538,7 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			URL:             req.Endpoint,
 			Model:           req.ModelName,
 			ReasoningEffort: reasoningEffort,
+			HTTPC:           testClient,
 		}
 	case "openai-responses":
 		service = &oai.ResponsesService{
@@ -534,6 +557,7 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			// medium is the default when no explicit override is given.
 			ThinkingLevel:   llm.ThinkingLevelMedium,
 			ReasoningEffort: reasoningEffort,
+			HTTPC:           testClient,
 		}
 	default:
 		http.Error(w, "Invalid provider_type", http.StatusBadRequest)
@@ -552,6 +576,9 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 	// Send a simple test request
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+	if req.UserAgent != "" {
+		ctx = llmhttp.WithUserAgent(ctx, strings.TrimSpace(req.UserAgent))
+	}
 
 	request := &llm.Request{
 		Messages: []llm.Message{

@@ -108,6 +108,21 @@
         />
       </div>
 
+      <!-- User-Agent override -->
+      <div class="form-group">
+        <label>User-Agent</label>
+        <input
+          v-model="form.user_agent"
+          type="text"
+          placeholder="Shelley default (for example: codex_cli_rs/0.144.0)"
+          class="form-input"
+          autocomplete="off"
+        />
+        <div class="form-hint">
+          Optional. Overrides the User-Agent only for this custom model.
+        </div>
+      </div>
+
       <!-- Max Tokens -->
       <div class="form-group">
         <label>{{ t("maxContextTokens") }}</label>
@@ -348,6 +363,7 @@ watch(
         max_tokens: m.max_tokens,
         tags: m.tags,
         reasoning_effort: m.reasoning_effort || "",
+        user_agent: m.user_agent || "",
         reasoning_support: m.reasoning_support || "auto",
         reasoning_map: parseReasoningMap(m.reasoning_map),
         image_support: m.image_support ?? "auto",
@@ -394,6 +410,7 @@ async function handleTest() {
       api_key: form.api_key,
       model_name: form.model_name,
       reasoning_effort: form.reasoning_effort,
+      user_agent: form.user_agent,
       reasoning_support: form.reasoning_support,
       reasoning_map: serializeReasoningMap(),
     };
@@ -424,6 +441,7 @@ async function handleSave() {
       max_tokens: form.max_tokens,
       tags: form.tags,
       reasoning_effort: form.reasoning_effort,
+      user_agent: form.user_agent,
       reasoning_support: form.reasoning_support,
       reasoning_map: serializeReasoningMap(),
       image_support: form.image_support,

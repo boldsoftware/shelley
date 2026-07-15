@@ -437,6 +437,7 @@ type serviceEntry struct {
 	source      string
 	displayName string
 	tags        string
+	userAgent   string
 	baseURL     string
 	apiType     APIType
 }
@@ -448,47 +449,55 @@ type ConfigInfo interface {
 
 // loggingService wraps an llm.Service with request/usage logging.
 type loggingService struct {
-	service  llm.Service
-	logger   *slog.Logger
-	modelID  string
-	provider Provider
+	service   llm.Service
+	logger    *slog.Logger
+	modelID   string
+	provider  Provider
+	userAgent string
 }
 
 func (l *loggingService) Do(ctx context.Context, request *llm.Request) (*llm.Response, error) {
 	start := time.Now()
 	ctx = llmhttp.WithModelID(ctx, l.modelID)
 	ctx = llmhttp.WithProvider(ctx, string(l.provider))
+	if l.userAgent != "" {
+		ctx = llmhttp.WithUserAgent(ctx, l.userAgent)
+	}
 	response, err := l.service.Do(ctx, request)
 	durationSeconds := time.Since(start).Seconds()
 
 	if err != nil {
-		logAttrs := []any{"model", l.modelID, "duration_seconds", durationSeconds}
-		if configProvider, ok := l.service.(ConfigInfo); ok {
-			for k, v := range configProvider.ConfigDetails() {
-				logAttrs = append(logAttrs, k, v)
+		if l.logger != nil {
+			logAttrs := []any{"model", l.modelID, "duration_seconds", durationSeconds}
+			if configProvider, ok := l.service.(ConfigInfo); ok {
+				for k, v := range configProvider.ConfigDetails() {
+					logAttrs = append(logAttrs, k, v)
+				}
 			}
+			logAttrs = append(logAttrs, "error", err)
+			l.logger.Error("LLM request failed", logAttrs...)
 		}
-		logAttrs = append(logAttrs, "error", err)
-		l.logger.Error("LLM request failed", logAttrs...)
 		return response, err
 	}
 
-	logAttrs := []any{"model", l.modelID, "duration_seconds", durationSeconds}
-	if !response.Usage.IsZero() {
-		logAttrs = append(
-			logAttrs,
-			"input_tokens", response.Usage.InputTokens,
-			"output_tokens", response.Usage.OutputTokens,
-			"cost_usd", response.Usage.CostUSD,
-		)
-		if response.Usage.CacheCreationInputTokens > 0 {
-			logAttrs = append(logAttrs, "cache_creation_input_tokens", response.Usage.CacheCreationInputTokens)
+	if l.logger != nil {
+		logAttrs := []any{"model", l.modelID, "duration_seconds", durationSeconds}
+		if !response.Usage.IsZero() {
+			logAttrs = append(
+				logAttrs,
+				"input_tokens", response.Usage.InputTokens,
+				"output_tokens", response.Usage.OutputTokens,
+				"cost_usd", response.Usage.CostUSD,
+			)
+			if response.Usage.CacheCreationInputTokens > 0 {
+				logAttrs = append(logAttrs, "cache_creation_input_tokens", response.Usage.CacheCreationInputTokens)
+			}
+			if response.Usage.CacheReadInputTokens > 0 {
+				logAttrs = append(logAttrs, "cache_read_input_tokens", response.Usage.CacheReadInputTokens)
+			}
 		}
-		if response.Usage.CacheReadInputTokens > 0 {
-			logAttrs = append(logAttrs, "cache_read_input_tokens", response.Usage.CacheReadInputTokens)
-		}
+		l.logger.Info("LLM request completed", logAttrs...)
 	}
-	l.logger.Info("LLM request completed", logAttrs...)
 	return response, err
 }
 
@@ -608,6 +617,7 @@ func (m *Manager) loadCustomModelsLocked(dbModels []generated.Model) {
 			source:      SourceCustomLabel,
 			displayName: model.DisplayName,
 			tags:        model.Tags,
+			userAgent:   model.UserAgent,
 		}
 		m.modelOrder = append(m.modelOrder, model.ModelID)
 	}
@@ -660,15 +670,13 @@ func (m *Manager) GetService(modelID string) (llm.Service, error) {
 	if !ok {
 		return nil, fmt.Errorf("unsupported model: %s", modelID)
 	}
-	if m.logger != nil {
-		return &loggingService{
-			service:  entry.service,
-			logger:   m.logger,
-			modelID:  entry.modelID,
-			provider: entry.provider,
-		}, nil
-	}
-	return entry.service, nil
+	return &loggingService{
+		service:   entry.service,
+		logger:    m.logger,
+		modelID:   entry.modelID,
+		provider:  entry.provider,
+		userAgent: entry.userAgent,
+	}, nil
 }
 
 func (m *Manager) GetAvailableModels() []string {

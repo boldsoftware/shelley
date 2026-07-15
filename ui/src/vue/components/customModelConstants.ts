@@ -71,6 +71,7 @@ export interface FormData {
   max_tokens: number;
   tags: string;
   reasoning_effort: string;
+  user_agent: string;
   reasoning_support: "auto" | "yes" | "no";
   reasoning_map: ReasoningMap;
   image_support: "auto" | "yes" | "no";
@@ -86,6 +87,7 @@ export const emptyForm: FormData = {
   max_tokens: 200000,
   tags: "",
   reasoning_effort: "",
+  user_agent: "",
   reasoning_support: "auto",
   reasoning_map: { ...DEFAULT_REASONING_MAP },
   image_support: "auto",
