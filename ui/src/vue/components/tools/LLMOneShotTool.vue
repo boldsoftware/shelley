@@ -49,6 +49,11 @@
         <pre class="tool-code">{{ model }}</pre>
       </div>
 
+      <div v-if="input.attachments?.length" class="tool-section">
+        <div class="tool-label">Attachments:</div>
+        <pre class="tool-code">{{ input.attachments.join("\n") }}</pre>
+      </div>
+
       <div v-if="input.system_prompt" class="tool-section">
         <div class="tool-label">System prompt:</div>
         <pre class="tool-code">{{ input.system_prompt }}</pre>
@@ -80,6 +85,7 @@ interface LLMOneShotInput {
   output_file?: string;
   model?: string;
   system_prompt?: string;
+  attachments?: string[];
 }
 
 const props = defineProps<{
@@ -115,6 +121,9 @@ const summary = computed(() => {
   const parts: string[] = [];
   if (promptFile.value) parts.push(promptFile.value);
   if (model.value) parts.push(`model: ${model.value}`);
+  if (input.value.attachments?.length) {
+    parts.push(`${input.value.attachments.length} image attachment${input.value.attachments.length === 1 ? "" : "s"}`);
+  }
   return parts.join(" · ") || "llm_one_shot";
 });
 </script>

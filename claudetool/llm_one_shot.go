@@ -1,13 +1,17 @@
 package claudetool
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/llm/imageutil"
 )
 
 // LLMOneShotTool sends a one-shot prompt to an LLM and returns the result.
@@ -30,9 +34,11 @@ func (t *LLMOneShotTool) llmOneShotDescription() string {
 	base := `Send a one-shot prompt to an LLM and get a response.
 
 Unlike subagents, this is a single request/response with no conversation history or tools.
-Use this for simple LLM tasks like summarization, extraction, classification, or reformatting.
+Use this for simple LLM tasks like summarization, extraction, classification, reformatting,
+or image analysis with a vision-capable model.
 
-The prompt is read from a file (to handle large inputs cleanly).
+The prompt is read from a UTF-8 text file (to handle large inputs cleanly).
+To send images, pass their paths in attachments; do not use an image as prompt_file.
 Short results are returned inline; long results are written to a file.`
 
 	if len(t.AvailableModels) > 0 {
@@ -80,16 +86,22 @@ func (t *LLMOneShotTool) llmOneShotInputSchema() string {
     "system_prompt": {
       "type": "string",
       "description": "Optional system prompt to include."
+    },
+    "attachments": {
+      "type": "array",
+      "description": "Paths to image files to attach to the prompt. Relative paths are resolved from the working directory. The selected model must support images.",
+      "items": { "type": "string" }
     }%s
   }
 }`, modelProp)
 }
 
 type llmOneShotInput struct {
-	PromptFile   string `json:"prompt_file"`
-	OutputFile   string `json:"output_file,omitempty"`
-	Model        string `json:"model,omitempty"`
-	SystemPrompt string `json:"system_prompt,omitempty"`
+	PromptFile   string   `json:"prompt_file"`
+	OutputFile   string   `json:"output_file,omitempty"`
+	Model        string   `json:"model,omitempty"`
+	SystemPrompt string   `json:"system_prompt,omitempty"`
+	Attachments  []string `json:"attachments,omitempty"`
 }
 
 // Tool returns an llm.Tool for the LLM one-shot functionality.
@@ -118,6 +130,9 @@ func (t *LLMOneShotTool) run(ctx context.Context, req llmOneShotInput) llm.ToolO
 	promptBytes, err := os.ReadFile(promptPath)
 	if err != nil {
 		return llm.ErrorfToolOut("failed to read prompt file: %w", err)
+	}
+	if !utf8.Valid(promptBytes) || bytes.IndexByte(promptBytes, 0) >= 0 {
+		return llm.ErrorfToolOut("prompt_file must be a UTF-8 text file; pass image files in attachments")
 	}
 	prompt := string(promptBytes)
 	if strings.TrimSpace(prompt) == "" {
@@ -157,12 +172,35 @@ func (t *LLMOneShotTool) run(ctx context.Context, req llmOneShotInput) llm.ToolO
 	if err != nil {
 		return llm.ErrorfToolOut("failed to get LLM service for model %q: %w", modelID, err)
 	}
+	if len(req.Attachments) > 0 && !svc.SupportsImages() {
+		return llm.ErrorfToolOut("model %q does not support image attachments", modelID)
+	}
 
 	// Build the request
+	message := llm.UserStringMessage(prompt)
+	for _, attachment := range req.Attachments {
+		path := attachment
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(wd, path)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return llm.ErrorfToolOut("failed to read attachment %q: %w", attachment, err)
+		}
+		prepared, err := imageutil.Prepare(data, path, svc.MaxImageDimension(), svc.MaxImageBytes())
+		if err != nil {
+			return llm.ErrorfToolOut("invalid attachment %q: %w", attachment, err)
+		}
+		message.Content = append(message.Content, llm.Content{
+			Type:          llm.ContentTypeText,
+			MediaType:     prepared.MediaType,
+			Data:          base64.StdEncoding.EncodeToString(prepared.Data),
+			DisplayWidth:  prepared.Width,
+			DisplayHeight: prepared.Height,
+		})
+	}
 	llmReq := &llm.Request{
-		Messages: []llm.Message{
-			llm.UserStringMessage(prompt),
-		},
+		Messages: []llm.Message{message},
 	}
 	if req.SystemPrompt != "" {
 		llmReq.System = []llm.SystemContent{{Text: req.SystemPrompt}}
