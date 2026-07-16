@@ -17,6 +17,17 @@ type Prepared struct {
 }
 
 // Prepare validates image data and fits it within a model's advertised limits.
+// HEIC is converted because Go's image package does not decode it directly.
+//
+// Recognized formats are fully decoded before being returned. Header sniffing
+// alone can accept a truncated upload; embedding those bytes can make the
+// provider reject the entire request and permanently wedge the conversation.
+//
+// Dimension overflow is fixed transparently by downscaling because callers do
+// not request a specific image size. Byte overflow that remains after resizing
+// is returned as an error so the caller can recompress or choose another image
+// instead of sending a request the provider will reject. source is included in
+// errors so the caller knows which input needs attention.
 func Prepare(data []byte, source string, maxDimension, maxBytes int) (Prepared, error) {
 	converted := false
 	if IsHEIC(data) {
@@ -39,6 +50,9 @@ func Prepare(data []byte, source string, maxDimension, maxBytes int) (Prepared, 
 	resized := false
 	format := strings.TrimPrefix(mediaType, "image/")
 	if maxDimension > 0 {
+		// ResizeImage returns the original bytes when the image already fits.
+		// If it cannot decode a format such as WebP, leave the bytes unchanged
+		// and continue to the byte-limit check.
 		resizedData, resizedFormat, didResize, err := ResizeImage(data, maxDimension)
 		if err == nil {
 			data = resizedData

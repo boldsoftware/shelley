@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -608,17 +607,16 @@ func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) 
 	// (potentially) downscaled. A byte-overflow that can't be fixed by
 	// downscaling produces an error so we never send a request the API will
 	// reject.
-	imageData, format, resized, err := prepareImageForModel(ctx, buf, "png", screenshotPath)
+	maxDimension, maxBytes := imageLimits(ctx)
+	prepared, err := imageutil.Prepare(buf, screenshotPath, maxDimension, maxBytes)
 	if err != nil {
 		return llm.ErrorToolOut(err)
 	}
 
-	base64Data := base64.StdEncoding.EncodeToString(imageData)
-	mediaType := "image/" + format
-	widthPx, heightPx, _ := imageutil.DecodeDimensions(imageData)
+	base64Data := base64.StdEncoding.EncodeToString(prepared.Data)
 
 	description := fmt.Sprintf("Screenshot taken (saved as %s)", screenshotPath)
-	if resized {
+	if prepared.Resized {
 		description += " [resized to fit model limits]"
 	}
 
@@ -629,10 +627,10 @@ func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) 
 		},
 		{
 			Type:          llm.ContentTypeText,
-			MediaType:     mediaType,
+			MediaType:     prepared.MediaType,
 			Data:          base64Data,
-			DisplayWidth:  widthPx,
-			DisplayHeight: heightPx,
+			DisplayWidth:  prepared.Width,
+			DisplayHeight: prepared.Height,
 		},
 	}, Display: display}
 }
@@ -1053,48 +1051,19 @@ func (b *BrowseTools) readImageRun(ctx context.Context, input readImageInput) ll
 		return llm.ErrorfToolOut("failed to read image file: %w", err)
 	}
 
-	// Convert HEIC to PNG if needed (Go's image library doesn't support HEIC)
-	converted := false
-	if imageutil.IsHEIC(imageData) {
-		imageData, err = imageutil.ConvertHEICToPNG(imageData)
-		if err != nil {
-			return llm.ErrorfToolOut("failed to convert HEIC image: %w", err)
-		}
-		converted = true
-	}
-
-	detectedType := http.DetectContentType(imageData)
-	if !strings.HasPrefix(detectedType, "image/") {
-		return llm.ErrorfToolOut("file is not an image: %s", detectedType)
-	}
-
-	// Fully decode to reject truncated/corrupt images (e.g. an upload cut short
-	// by a flaky connection) whose header still sniffs as a valid image. Sending
-	// such bytes to the model makes the provider 400 the whole request, which
-	// permanently wedges the conversation; failing here keeps it recoverable.
-	if err := imageutil.Validate(imageData); err != nil {
-		return llm.ErrorfToolOut("image file appears corrupt or truncated (%s); re-upload or pick a different file: %v", input.Path, err)
-	}
-
-	// Fit the image inside the model's per-image limits. Dimension overflow
-	// is fixed transparently by downscaling; byte overflow that can't be
-	// fixed by downscaling becomes a tool error so we never send a request
-	// the API will reject.
-	format := strings.TrimPrefix(detectedType, "image/")
-	imageData, format, resized, err := prepareImageForModel(ctx, imageData, format, input.Path)
+	maxDimension, maxBytes := imageLimits(ctx)
+	prepared, err := imageutil.Prepare(imageData, input.Path, maxDimension, maxBytes)
 	if err != nil {
 		return llm.ErrorToolOut(err)
 	}
 
-	base64Data := base64.StdEncoding.EncodeToString(imageData)
-	mediaType := "image/" + format
-	widthPx, heightPx, _ := imageutil.DecodeDimensions(imageData)
+	base64Data := base64.StdEncoding.EncodeToString(prepared.Data)
 
-	description := fmt.Sprintf("Image from %s (type: %s)", input.Path, mediaType)
-	if converted {
+	description := fmt.Sprintf("Image from %s (type: %s)", input.Path, prepared.MediaType)
+	if prepared.Converted {
 		description += " [converted from HEIC]"
 	}
-	if resized {
+	if prepared.Resized {
 		description += " [resized to fit model limits]"
 	}
 
@@ -1105,51 +1074,20 @@ func (b *BrowseTools) readImageRun(ctx context.Context, input readImageInput) ll
 		},
 		{
 			Type:          llm.ContentTypeText,
-			MediaType:     mediaType,
+			MediaType:     prepared.MediaType,
 			Data:          base64Data,
-			DisplayWidth:  widthPx,
-			DisplayHeight: heightPx,
+			DisplayWidth:  prepared.Width,
+			DisplayHeight: prepared.Height,
 		},
 	}}
 }
 
-// prepareImageForModel fits imageData inside the limits advertised by the
-// llm.Service in ctx. Dimension overflow is fixed transparently by
-// downscaling so the user (and the model) don't have to care, since the
-// caller never asked for a specific size. Byte overflow that we can't fix
-// by downscaling produces an error so the agent can recompress or pick a
-// smaller source rather than having the API reject the whole request.
-//
-// Returns the (possibly resized) bytes, the resulting format, whether a
-// resize happened, and any error. source is included in error messages so
-// the agent knows what to fix. If no service is attached to ctx (e.g.
-// tests, ad-hoc callers) the data is returned unchanged.
-func prepareImageForModel(ctx context.Context, imageData []byte, detectedFormat, source string) (out []byte, format string, resized bool, err error) {
+func imageLimits(ctx context.Context) (maxDimension, maxBytes int) {
 	svc := llm.ServiceFromContext(ctx)
 	if svc == nil {
-		return imageData, detectedFormat, false, nil
+		return 0, 0
 	}
-
-	if maxDim := svc.MaxImageDimension(); maxDim > 0 {
-		// imageutil.ResizeImage no-ops when the image already fits and
-		// returns the original bytes (and format) unchanged. DecodeConfig
-		// failure (e.g. webp without a Go decoder) is treated as "can't
-		// resize"; we fall through to the byte-size check.
-		resizedData, resizedFormat, didResize, rerr := imageutil.ResizeImage(imageData, maxDim)
-		if rerr == nil {
-			imageData = resizedData
-			detectedFormat = resizedFormat
-			resized = didResize
-		}
-	}
-
-	if maxBytes := svc.MaxImageBytes(); maxBytes > 0 && len(imageData) > maxBytes {
-		return nil, "", false, fmt.Errorf(
-			"image too large for model: %s is %d bytes (after any auto-resize), model limit is %d bytes; recompress the image (e.g. lower JPEG quality) and try again",
-			source, len(imageData), maxBytes,
-		)
-	}
-	return imageData, detectedFormat, resized, nil
+	return svc.MaxImageDimension(), svc.MaxImageBytes()
 }
 
 // parseTimeout parses a timeout string and returns a time.Duration
