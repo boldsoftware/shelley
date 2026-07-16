@@ -4128,6 +4128,17 @@ svg {
   flex: 1;
 }
 
+.tool-override-warning {
+  margin: 0.35rem 0 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid rgba(202, 138, 4, 0.35);
+  border-radius: 0.375rem;
+  background: rgba(202, 138, 4, 0.12);
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+
 .tool-override-suboption {
   padding-left: 1rem;
   justify-content: flex-start;
