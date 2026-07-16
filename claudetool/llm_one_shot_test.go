@@ -96,6 +96,61 @@ func TestLLMOneShotShortResult(t *testing.T) {
 	}
 }
 
+func TestLLMOneShotInlinePrompt(t *testing.T) {
+	dir := t.TempDir()
+	var capturedReq *llm.Request
+	provider := &oneShotMockProvider{
+		services: map[string]llm.Service{
+			"test-model": &oneShotMockService{
+				response: "4",
+				onDo: func(req *llm.Request) {
+					capturedReq = req
+				},
+			},
+		},
+	}
+	tool := &LLMOneShotTool{
+		LLMProvider: provider,
+		ModelID:     "test-model",
+		WorkingDir:  NewMutableWorkingDir(dir),
+	}
+
+	input, _ := json.Marshal(llmOneShotInput{Prompt: "What is 2+2?"})
+	result := tool.Tool().Run(context.Background(), input)
+
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+	if capturedReq == nil || len(capturedReq.Messages) != 1 || len(capturedReq.Messages[0].Content) != 1 {
+		t.Fatalf("unexpected request: %#v", capturedReq)
+	}
+	if got := capturedReq.Messages[0].Content[0].Text; got != "What is 2+2?" {
+		t.Errorf("prompt = %q, want %q", got, "What is 2+2?")
+	}
+}
+
+func TestLLMOneShotPromptValidation(t *testing.T) {
+	tool := &LLMOneShotTool{WorkingDir: NewMutableWorkingDir(t.TempDir())}
+	tests := []struct {
+		name  string
+		input llmOneShotInput
+		want  string
+	}{
+		{name: "neither", want: "exactly one of prompt or prompt_file is required"},
+		{name: "both", input: llmOneShotInput{Prompt: "hello", PromptFile: "prompt.txt"}, want: "prompt and prompt_file are mutually exclusive"},
+		{name: "empty inline", input: llmOneShotInput{Prompt: "  \n"}, want: "prompt is empty"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input, _ := json.Marshal(tt.input)
+			result := tool.Tool().Run(context.Background(), input)
+			if result.Error == nil || !strings.Contains(result.Error.Error(), tt.want) {
+				t.Fatalf("error = %v, want %q", result.Error, tt.want)
+			}
+		})
+	}
+}
+
 func TestLLMOneShotLongResult(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "prompt.txt"), []byte("Generate a long story"), 0o644)
@@ -340,6 +395,7 @@ func TestLLMOneShotImageAttachments(t *testing.T) {
 	}
 	input, _ := json.Marshal(llmOneShotInput{
 		PromptFile:  "prompt.txt",
+		Model:       "vision",
 		Attachments: []string{"first.png", absolute},
 	})
 	result := tool.Tool().Run(context.Background(), input)
@@ -389,7 +445,7 @@ func TestLLMOneShotAttachmentErrors(t *testing.T) {
 				}},
 				ModelID: "vision", WorkingDir: NewMutableWorkingDir(dir),
 			}
-			input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt", Attachments: []string{tt.attachment}})
+			input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt", Model: "vision", Attachments: []string{tt.attachment}})
 			result := tool.Tool().Run(context.Background(), input)
 			if result.Error == nil || !strings.Contains(result.Error.Error(), tt.want) {
 				t.Fatalf("error = %v, want %q", result.Error, tt.want)
@@ -408,7 +464,7 @@ func TestLLMOneShotRejectsAttachmentsForNonImageModel(t *testing.T) {
 		}},
 		ModelID: "text", WorkingDir: NewMutableWorkingDir(dir),
 	}
-	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt", Attachments: []string{"image.png"}})
+	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt", Model: "text", Attachments: []string{"image.png"}})
 	result := tool.Tool().Run(context.Background(), input)
 	if result.Error == nil || !strings.Contains(result.Error.Error(), "does not support image attachments") {
 		t.Fatalf("unexpected error: %v", result.Error)
@@ -432,6 +488,15 @@ func TestLLMOneShotToolDescription(t *testing.T) {
 	}
 	if !strings.Contains(llmTool.Description, "- model-b (Model B (fancy))") {
 		t.Errorf("expected model-b with display name in description, got: %s", llmTool.Description)
+	}
+	if !strings.Contains(llmTool.Description, "Use a subagent instead") {
+		t.Errorf("expected subagent boundary, got: %s", llmTool.Description)
+	}
+	if !strings.Contains(llmTool.Description, "only the level of detail needed") {
+		t.Errorf("expected focused-response guidance, got: %s", llmTool.Description)
+	}
+	if !strings.Contains(llmTool.Description, "Attachments add image files") {
+		t.Errorf("expected attachment guidance, got: %s", llmTool.Description)
 	}
 }
 

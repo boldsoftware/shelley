@@ -36,9 +36,13 @@ func (t *LLMOneShotTool) llmOneShotDescription() string {
 Unlike subagents, this is a single request/response with no conversation history or tools.
 Use this for simple LLM tasks like summarization, extraction, classification, reformatting,
 or image analysis with a vision-capable model.
+Use a subagent instead when the task requires tools, multiple steps, or iterative follow-up.
+Keep the request focused and ask for only the level of detail needed.
 
-The prompt is read from a UTF-8 text file (to handle large inputs cleanly).
-To send images, pass their paths in attachments; do not use an image as prompt_file.
+Pass short prompts directly in prompt. For large or generated prompts, use prompt_file.
+Exactly one of prompt or prompt_file is required; prompt_file must contain UTF-8 text.
+Attachments add image files to the request and require a vision-capable model.
+Do not use an image as prompt_file.
 Short results are returned inline; long results are written to a file.`
 
 	if len(t.AvailableModels) > 0 {
@@ -66,15 +70,18 @@ func (t *LLMOneShotTool) llmOneShotInputSchema() string {
 		modelProp = fmt.Sprintf(`,
     "model": {
       "type": "string",
-      "description": "LLM model to use. Defaults to the conversation's current model.",
+      "description": "LLM model to use. Select the model best suited to the request, considering the task's required capabilities and complexity. Defaults to the conversation's current model.",
       "enum": [%s]
     }`, strings.Join(enumItems, ", "))
 	}
 
 	return fmt.Sprintf(`{
   "type": "object",
-  "required": ["prompt_file"],
   "properties": {
+    "prompt": {
+      "type": "string",
+      "description": "Prompt text to send. Use prompt_file instead for large or generated prompts."
+    },
     "prompt_file": {
       "type": "string",
       "description": "Path to a file containing the prompt to send. Relative paths are resolved from the working directory."
@@ -97,7 +104,8 @@ func (t *LLMOneShotTool) llmOneShotInputSchema() string {
 }
 
 type llmOneShotInput struct {
-	PromptFile   string   `json:"prompt_file"`
+	Prompt       string   `json:"prompt,omitempty"`
+	PromptFile   string   `json:"prompt_file,omitempty"`
 	OutputFile   string   `json:"output_file,omitempty"`
 	Model        string   `json:"model,omitempty"`
 	SystemPrompt string   `json:"system_prompt,omitempty"`
@@ -115,30 +123,34 @@ func (t *LLMOneShotTool) Tool() *llm.Tool {
 }
 
 func (t *LLMOneShotTool) run(ctx context.Context, req llmOneShotInput) llm.ToolOut {
-	if req.PromptFile == "" {
-		return llm.ErrorfToolOut("prompt_file is required")
+	if req.Prompt == "" && req.PromptFile == "" {
+		return llm.ErrorfToolOut("exactly one of prompt or prompt_file is required")
+	}
+	if req.Prompt != "" && req.PromptFile != "" {
+		return llm.ErrorfToolOut("prompt and prompt_file are mutually exclusive")
 	}
 
-	// Resolve paths relative to working directory
 	wd := t.WorkingDir.Get()
-	promptPath := req.PromptFile
-	if !filepath.IsAbs(promptPath) {
-		promptPath = filepath.Join(wd, promptPath)
+	prompt := req.Prompt
+	if req.PromptFile != "" {
+		promptPath := req.PromptFile
+		if !filepath.IsAbs(promptPath) {
+			promptPath = filepath.Join(wd, promptPath)
+		}
+		promptBytes, err := os.ReadFile(promptPath)
+		if err != nil {
+			return llm.ErrorfToolOut("failed to read prompt file: %w", err)
+		}
+		if !utf8.Valid(promptBytes) || bytes.IndexByte(promptBytes, 0) >= 0 {
+			return llm.ErrorfToolOut("prompt_file must be a UTF-8 text file; pass image files in attachments")
+		}
+		prompt = string(promptBytes)
+		if strings.TrimSpace(prompt) == "" {
+			return llm.ErrorfToolOut("prompt file is empty")
+		}
+	} else if strings.TrimSpace(prompt) == "" {
+		return llm.ErrorfToolOut("prompt is empty")
 	}
-
-	// Read the prompt file
-	promptBytes, err := os.ReadFile(promptPath)
-	if err != nil {
-		return llm.ErrorfToolOut("failed to read prompt file: %w", err)
-	}
-	if !utf8.Valid(promptBytes) || bytes.IndexByte(promptBytes, 0) >= 0 {
-		return llm.ErrorfToolOut("prompt_file must be a UTF-8 text file; pass image files in attachments")
-	}
-	prompt := string(promptBytes)
-	if strings.TrimSpace(prompt) == "" {
-		return llm.ErrorfToolOut("prompt file is empty")
-	}
-
 	// Determine which model to use: explicit choice > conversation's model
 	modelID := t.ModelID
 	if req.Model != "" {

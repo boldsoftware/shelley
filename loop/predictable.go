@@ -971,7 +971,11 @@ func (s *PredictableService) makeToolSmorgasbordResponse(inputTokens uint64) *ll
 	})
 
 	// llm_one_shot tool
-	llmInput, _ := json.Marshal(map[string]string{"prompt_file": "/tmp/test-prompt.txt"})
+	llmInput, _ := json.Marshal(map[string]any{
+		"prompt":      "Describe the attached image briefly.",
+		"model":       "vision-model",
+		"attachments": []string{"/tmp/test-image.png"},
+	})
 	content = append(content, llm.Content{
 		ID:        fmt.Sprintf("tool_llm_%d", (baseNano+13)%1000),
 		Type:      llm.ContentTypeToolUse,

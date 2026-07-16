@@ -39,9 +39,14 @@
     </div>
 
     <div v-if="isExpanded" class="tool-details">
-      <div class="tool-section">
+      <div v-if="prompt" class="tool-section">
+        <div class="tool-label">Prompt:</div>
+        <pre class="tool-code">{{ prompt }}</pre>
+      </div>
+
+      <div v-if="promptFile" class="tool-section">
         <div class="tool-label">Prompt file:</div>
-        <pre class="tool-code">{{ promptFile || "(none)" }}</pre>
+        <pre class="tool-code">{{ promptFile }}</pre>
       </div>
 
       <div v-if="model" class="tool-section">
@@ -81,6 +86,7 @@ import type { LLMContent } from "../../../types";
 import { useToolExpanded } from "../../composables/toolDetail";
 
 interface LLMOneShotInput {
+  prompt?: string;
   prompt_file?: string;
   output_file?: string;
   model?: string;
@@ -104,6 +110,7 @@ const input = computed<LLMOneShotInput>(() =>
     : {},
 );
 
+const prompt = computed(() => input.value.prompt || "");
 const promptFile = computed(() => input.value.prompt_file || "");
 const model = computed(() => input.value.model || "");
 
@@ -119,7 +126,8 @@ const isComplete = computed(() => !props.isRunning && props.toolResult !== undef
 
 const summary = computed(() => {
   const parts: string[] = [];
-  if (promptFile.value) parts.push(promptFile.value);
+  if (prompt.value) parts.push(prompt.value.length > 80 ? `${prompt.value.slice(0, 77)}...` : prompt.value);
+  else if (promptFile.value) parts.push(promptFile.value);
   if (model.value) parts.push(`model: ${model.value}`);
   if (input.value.attachments?.length) {
     parts.push(`${input.value.attachments.length} image attachment${input.value.attachments.length === 1 ? "" : "s"}`);
