@@ -8,13 +8,13 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"slices"
 	"time"
 
+	"shelley.exe.dev/exeenv"
 	"shelley.exe.dev/llm/llmhttp"
 	"shelley.exe.dev/models"
 )
@@ -269,11 +269,8 @@ type reflectionIntegration struct {
 	Team bool   `json:"team,omitempty"`
 }
 
-func (i reflectionIntegration) host() string {
-	if i.Team {
-		return fmt.Sprintf("%s.team.exe.xyz", i.Name)
-	}
-	return fmt.Sprintf("%s.int.exe.xyz", i.Name)
+func (i reflectionIntegration) host(env exeenv.Environment) string {
+	return env.IntegrationHost(i.Name, i.Team)
 }
 
 type reflectionIntegrationsResponse struct {
@@ -297,12 +294,21 @@ func DiscoverLLMIntegrations(ctx context.Context, httpc *http.Client, logger *sl
 	if _, err := os.Stat(exeDevMarkerPath); err != nil {
 		return LLMIntegrationDiscoveryResult{}
 	}
+	env, err := exeenv.Current()
+	if err != nil {
+		logger.Warn("LLM integration discovery: environment detection failed", "error", err)
+		return LLMIntegrationDiscoveryResult{}
+	}
+	return discoverLLMIntegrations(ctx, httpc, logger, env)
+}
+
+func discoverLLMIntegrations(ctx context.Context, httpc *http.Client, logger *slog.Logger, env exeenv.Environment) LLMIntegrationDiscoveryResult {
 	if httpc == nil {
 		httpc = http.DefaultClient
 	}
 
 	var ints reflectionIntegrationsResponse
-	if !fetchJSON(ctx, httpc, "https://reflection.int.exe.xyz/integrations", &ints) {
+	if !fetchJSON(ctx, httpc, env.ReflectionURL()+"/integrations", &ints) {
 		return LLMIntegrationDiscoveryResult{}
 	}
 
@@ -319,13 +325,13 @@ func DiscoverLLMIntegrations(ctx context.Context, httpc *http.Client, logger *sl
 		if c := cmp.Compare(a.Name, b.Name); c != 0 {
 			return c
 		}
-		return cmp.Compare(a.host(), b.host())
+		return cmp.Compare(a.host(env), b.host(env))
 	})
 
 	result := LLMIntegrationDiscoveryResult{Found: true}
 	for _, integ := range llmIntegrations {
-		host := integ.host()
-		base := "https://" + host
+		host := integ.host(env)
+		base := env.IntegrationURL(integ.Name, integ.Team)
 		var catalog llmIntegrationModelCatalog
 		if !fetchJSON(ctx, httpc, base+"/models.json", &catalog) {
 			logger.Warn("LLM integration discovery: models.json fetch failed; skipping", "name", integ.Name, "host", host)

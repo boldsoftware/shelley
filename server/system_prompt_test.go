@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"shelley.exe.dev/exeenv"
 )
 
 // TestSystemPromptIncludesCwdGuidanceFiles verifies that AGENTS.md from the working directory
@@ -953,8 +955,28 @@ func TestExeDevDefaultPortUsesInjectableClient(t *testing.T) {
 		}, nil
 	})}
 
-	if got := exeDevDefaultPort(); got != 8123 {
-		t.Fatalf("exeDevDefaultPort() = %d, want 8123", got)
+	if got := exeDevDefaultPortIn(exeenv.FromHostname("box.exe.xyz")); got != 8123 {
+		t.Fatalf("exeDevDefaultPortIn() = %d, want 8123", got)
+	}
+}
+
+func TestExeDevDefaultPortUsesDevelopmentReflectionURL(t *testing.T) {
+	oldClient := exeDevDefaultPortHTTPClient
+	t.Cleanup(func() { exeDevDefaultPortHTTPClient = oldClient })
+
+	exeDevDefaultPortHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.String() != "http://reflection.int.exe.cloud/default_port" {
+			t.Fatalf("unexpected URL %s", req.URL)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"default_port":8123}`)),
+			Header:     make(http.Header),
+		}, nil
+	})}
+
+	if got := exeDevDefaultPortIn(exeenv.FromHostname("box.exe.cloud")); got != 8123 {
+		t.Fatalf("exeDevDefaultPortIn() = %d, want 8123", got)
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 	"text/template"
 	"time"
 
+	"shelley.exe.dev/exeenv"
 	"shelley.exe.dev/skills"
 )
 
@@ -902,9 +903,17 @@ func isExeDev() bool {
 var exeDevDefaultPortHTTPClient = http.DefaultClient
 
 func exeDevDefaultPort() int {
+	env, err := exeenv.Current()
+	if err != nil {
+		return 0
+	}
+	return exeDevDefaultPortIn(env)
+}
+
+func exeDevDefaultPortIn(env exeenv.Environment) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://reflection.int.exe.xyz/default_port", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", env.ReflectionURL()+"/default_port", nil)
 	if err != nil {
 		return 0
 	}

@@ -11,6 +11,7 @@ import (
 
 	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/db"
+	"shelley.exe.dev/exeenv"
 	"shelley.exe.dev/loop"
 )
 
@@ -33,10 +34,14 @@ func newExeNotifyTestServer(t *testing.T) *Server {
 // integrations JSON, restoring the original on cleanup.
 func withReflection(t *testing.T, integrationsJSON string) {
 	t.Helper()
+	env, err := exeenv.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
 	old := exeReflectionHTTPClient
 	t.Cleanup(func() { exeReflectionHTTPClient = old })
 	exeReflectionHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.String() != "https://reflection.int.exe.xyz/integrations" {
+		if req.URL.String() != env.ReflectionURL()+"/integrations" {
 			t.Fatalf("unexpected reflection URL %s", req.URL)
 		}
 		return &http.Response{
@@ -112,6 +117,37 @@ func TestReflectionProbeSkippedWithoutInjectedClient(t *testing.T) {
 	if exeDevHasNotifyIntegration() {
 		t.Fatal("reflection probe must be disabled (no real network) when the" +
 			" default client is used inside a test binary")
+	}
+}
+
+func TestExeDevHasNotifyIntegrationUsesEnvironmentReflectionURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		hostname string
+		wantURL  string
+	}{
+		{"production", "box.exe.xyz", "https://reflection.int.exe.xyz/integrations"},
+		{"development", "box.exe.cloud", "http://reflection.int.exe.cloud/integrations"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			old := exeReflectionHTTPClient
+			t.Cleanup(func() { exeReflectionHTTPClient = old })
+			exeReflectionHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.URL.String() != tt.wantURL {
+					t.Fatalf("unexpected reflection URL %s", req.URL)
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"integrations":[{"name":"notify","type":"notify"}]}`)),
+					Header:     make(http.Header),
+				}, nil
+			})}
+
+			if !exeDevHasNotifyIntegrationIn(exeenv.FromHostname(tt.hostname)) {
+				t.Fatal("expected notify integration")
+			}
+		})
 	}
 }
 

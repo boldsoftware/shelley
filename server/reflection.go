@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"shelley.exe.dev/exeenv"
 )
 
 // exeReflectionHTTPClient is the HTTP client used to query the exe.dev
@@ -35,9 +37,17 @@ func exeDevHasNotifyIntegration() bool {
 	if testing.Testing() && exeReflectionHTTPClient == http.DefaultClient {
 		return false
 	}
+	env, err := exeenv.Current()
+	if err != nil {
+		return false
+	}
+	return exeDevHasNotifyIntegrationIn(env)
+}
+
+func exeDevHasNotifyIntegrationIn(env exeenv.Environment) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://reflection.int.exe.xyz/integrations", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", env.ReflectionURL()+"/integrations", nil)
 	if err != nil {
 		return false
 	}
