@@ -243,8 +243,8 @@
             <div class="send-split-divider" />
             <button
               type="button"
-              :disabled="!canSubmit || (!canQueue && !autoQueue)"
-              :class="`send-split-chevron${canQueue || autoQueue ? '' : ' send-split-chevron-inactive'}`"
+              :disabled="!canSubmit || (!canQueue && !autoQueue && !canCompact)"
+              :class="`send-split-chevron${canQueue || autoQueue || canCompact ? '' : ' send-split-chevron-inactive'}`"
               aria-label="Send options"
               data-testid="send-options-button"
               @click="showQueueMenu = !showQueueMenu"
@@ -253,8 +253,9 @@
                 <path d="M7 10l5 5 5-5z" />
               </svg>
             </button>
-            <div v-if="showQueueMenu && (canQueue || autoQueue)" class="queue-menu">
+            <div v-if="showQueueMenu && (canQueue || autoQueue || canCompact)" class="queue-menu">
               <button
+                v-if="canQueue || autoQueue"
                 type="button"
                 class="queue-menu-item"
                 data-testid="queue-option"
@@ -282,6 +283,30 @@
                   </svg>
                   Queue after agent finishes
                 </template>
+              </button>
+              <!-- Compact the conversation, then queue this message to run once
+                   compaction finishes. -->
+              <button
+                v-if="canCompact"
+                type="button"
+                class="queue-menu-item"
+                data-testid="compact-and-send-option"
+                @click="handleCompactAndSend"
+              >
+                <svg
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                >
+                  <polyline points="4 14 10 14 10 20" />
+                  <polyline points="20 10 14 10 14 4" />
+                  <line x1="14" y1="10" x2="21" y2="3" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+                Compact and send
               </button>
             </div>
           </div>
@@ -370,6 +395,10 @@ const props = withDefaults(
     onSend: (message: string) => Promise<void> | void;
     /** Async queue handler (awaited). Mirrors React's onQueue prop. */
     onQueue?: (message: string) => Promise<void> | void;
+    /** Async compaction handler (awaited). When provided, the send-options
+     * menu offers "Compact and send": it compacts the conversation and then
+     * queues the composed message so it runs once compaction finishes. */
+    onCompact?: () => Promise<void> | void;
     /** Show the split send button with queue chevron (e.g. when in a conversation) */
     showQueueOption?: boolean;
     /** Whether queuing is available right now (agent is working) */
@@ -420,6 +449,9 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const hasQueueHandler = computed(() => props.onQueue !== undefined);
+// The "Compact and send" option is available whenever a compaction handler is
+// wired and we're not already mid-compaction (autoQueue signals distilling).
+const canCompact = computed(() => props.onCompact !== undefined && !props.autoQueue);
 
 const message = ref(props.draftValue ?? "");
 // setMessage mirrors the React controlled-value path: surfaces every change via
@@ -453,6 +485,10 @@ const isSmallScreen = ref(typeof window !== "undefined" ? window.innerWidth < 48
 const showQueueMenu = ref(false);
 const slashMenuSelectedIndex = ref(0);
 const slashMenuDismissed = ref(false);
+// Set once the user has moved the highlight in the /model argument menu (via
+// Arrow keys). When they then press Enter we complete the highlighted option
+// rather than sending the (possibly bare) command — mirroring a mouse click.
+const modelArgMenuNavigated = ref(false);
 
 const queueMenuRef = ref<HTMLDivElement | null>(null);
 const slashMenuRef = ref<HTMLDivElement | null>(null);
@@ -747,9 +783,10 @@ const showSlashMenu = computed(
 );
 
 // --- /model argument autocomplete ---------------------------------------
-// Once "/model " has been typed, offer the ready model ids plus the reasoning
-// levels as completions for the token currently under the cursor. This mirrors
-// the command grammar: /model <id> and/or <level>, order independent.
+// As soon as "/model" has been typed (with or without a trailing space), offer
+// the ready model ids plus the reasoning levels as completions for the token
+// currently under the cursor. This mirrors the command grammar: /model <id>
+// and/or <level>, order independent.
 interface ModelArgOption {
   value: string;
   kind: "model" | "level";
@@ -758,12 +795,13 @@ const modelArgOptions = computed<ModelArgOption[]>(() => [
   ...(props.modelOptions ?? []).map((id) => ({ value: id, kind: "model" as const })),
   ...THINKING_LEVELS.map((l) => ({ value: l.value, kind: "level" as const })),
 ]);
-// Matches "/model <args...>" with at least one trailing space (i.e. the user is
-// past the command name and into the arguments). Captures everything after it.
+// Matches "/model" and everything after it. The trailing arguments are
+// optional, so a bare "/model" (no space yet) also opens the menu — arrowing
+// then Enter, or just Enter, picks the top model. Captures the argument tail.
 const modelArgContext = computed(() => {
-  const m = message.value.match(/^\/model\s+(.*)$/s);
+  const m = message.value.match(/^\/model(?:\s+(.*))?$/s);
   if (m === null) return null;
-  const rest = m[1];
+  const rest = m[1] ?? "";
   // The token under the cursor is the final whitespace-delimited chunk; the
   // preceding tokens are already-entered arguments we must not re-suggest.
   const priorEnd = rest.replace(/\S*$/, "");
@@ -821,14 +859,19 @@ function chooseModelArg(index: number) {
   const ctx = modelArgContext.value;
   if (!opt || ctx === null) return;
   // Replace the partial token under the cursor with the full option + a space,
-  // so the next argument can be typed/autocompleted immediately.
-  const withoutPartial = ctx.partial === "" ? message.value : message.value.slice(0, -ctx.partial.length);
-  setMessage(`${withoutPartial}${opt.value} `);
+  // so the next argument can be typed/autocompleted immediately. When the
+  // message has no partial yet (e.g. bare "/model" with no trailing space),
+  // ensure a separating space so we don't produce "/modelclaude-...".
+  const withoutPartial =
+    ctx.partial === "" ? message.value : message.value.slice(0, -ctx.partial.length);
+  const sep = /\s$/.test(withoutPartial) ? "" : " ";
+  setMessage(`${withoutPartial}${sep}${opt.value} `);
   requestAnimationFrame(() => textareaRef.value?.focus());
 }
 
 watch(modelArgContext, () => {
   slashMenuSelectedIndex.value = 0;
+  modelArgMenuNavigated.value = false;
 });
 
 watch(slashQuery, () => {
@@ -930,6 +973,27 @@ async function handleQueueMessage() {
   }
 }
 
+/** Compact the conversation, then queue the composed message so it runs once
+ * compaction completes. Kicks off compaction and queues in one gesture. */
+async function handleCompactAndSend() {
+  if (hasContent.value && props.onCompact && props.onQueue) {
+    if (isListening.value) stopListening();
+    const messageToQueue = composeMessageWithAttachments(message.value).trim();
+    setMessage("");
+    clearAttachments();
+    emit("draft-cleared");
+    showQueueMenu.value = false;
+    try {
+      // Start compaction first so the conversation enters the distilling
+      // state, then queue — enqueued messages drain after distillation ends.
+      await props.onCompact();
+      await props.onQueue(messageToQueue);
+    } catch {
+      setMessage(messageToQueue);
+    }
+  }
+}
+
 /** Send now (bypass auto-queue) — used from the dropdown during distill mode */
 async function handleSendNow() {
   if (hasContent.value && !props.disabled && !submitting.value && uploadsInProgress.value === 0) {
@@ -985,30 +1049,40 @@ function handleKeyDown(e: KeyboardEvent) {
   if (showModelArgMenu.value) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      modelArgMenuNavigated.value = true;
       slashMenuSelectedIndex.value =
         (slashMenuSelectedIndex.value + 1) % modelArgSuggestions.value.length;
       return;
     }
     if (e.key === "ArrowUp") {
       e.preventDefault();
+      modelArgMenuNavigated.value = true;
       slashMenuSelectedIndex.value =
         (slashMenuSelectedIndex.value - 1 + modelArgSuggestions.value.length) %
         modelArgSuggestions.value.length;
       return;
     }
-    // Tab always completes the highlighted option. Enter completes only when
-    // the token under the cursor is a genuine partial (not yet a full option),
-    // so users can chain arguments; once the token is a complete, valid option
-    // (e.g. "/model low"), Enter falls through and sends the command.
+    // Tab always completes the highlighted option. Enter completes the
+    // highlighted option when:
+    //   - the user moved the highlight with the arrow keys (Enter == click), or
+    //   - the token under the cursor is a genuine partial (not yet a full
+    //     option), so users can chain arguments, or
+    //   - nothing has been chosen yet (bare "/model" with no argument): Enter
+    //     picks the top suggestion instead of sending a useless bare command.
+    // Once an argument is present and the token is complete (e.g. "/model low"
+    // or "/model <id> "), Enter falls through and sends the command.
     if (e.key === "Tab") {
       e.preventDefault();
       chooseModelArg(slashMenuSelectedIndex.value);
       return;
     }
+    const ctx = modelArgContext.value;
+    const nothingChosenYet = ctx !== null && ctx.partial === "" && ctx.prior.length === 0;
     if (
       e.key === "Enter" &&
-      modelArgContext.value?.partial !== "" &&
-      !partialIsCompleteOption.value
+      (modelArgMenuNavigated.value ||
+        nothingChosenYet ||
+        (ctx?.partial !== "" && !partialIsCompleteOption.value))
     ) {
       e.preventDefault();
       chooseModelArg(slashMenuSelectedIndex.value);

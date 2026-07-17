@@ -275,6 +275,7 @@
       v-if="!currentConversation?.archived"
       :on-send="sendMessage"
       :on-queue="queueMessage"
+      :on-compact="conversationId && onDistillNewGeneration ? handleDistillCompactNewGeneration : undefined"
       :show-queue-option="!!conversationId"
       :can-queue="canQueue"
       :auto-queue="autoQueue"

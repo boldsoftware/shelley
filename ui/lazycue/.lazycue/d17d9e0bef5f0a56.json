@@ -1,0 +1,78 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"Hello\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"); wait for the reply \"Hello! I'm Shelley, your AI assistant. How can I help you today?\" to appear and for the URL to contain \"/c/\". Then type \"echo: compacted hello\" into the message input (data-testid \"message-input\"). Click the split-button chevron (data-testid \"send-options-button\") to open the send-options menu, and wait for the \"Compact and send\" option (data-testid \"compact-and-send-option\") to be visible. Click it. Compaction runs into a new generation: wait (up to 30 seconds) for the text \"New generation started\" to appear on the page. After compaction finishes, the queued message drains: wait (up to 30 seconds) for the echoed text \"compacted hello\" to appear on the page.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Hello"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "Hello! I'm Shelley, your AI assistant. How can I help you today?",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: compacted hello"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-options-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='compact-and-send-option']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='compact-and-send-option']"
+    },
+    {
+      "action": "wait_text",
+      "text": "New generation started",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_text",
+      "text": "compacted hello",
+      "timeout": "30s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-07-16T00:48:18.719947425Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 67432,
+    "output_tokens": 2399,
+    "estimated_cost_usd": 0.23828100000000002,
+    "git_sha": "d57cce3317b7991a7ad40f79ee26a59d529ed64e",
+    "mode": "generated"
+  }
+}

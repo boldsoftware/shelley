@@ -1,0 +1,70 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"Hello\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"); wait for the reply \"Hello! I'm Shelley, your AI assistant. How can I help you today?\" to appear and for the URL to contain \"/c/\" (a real conversation is needed for /model). Then, using an eval step, set the message input's value to \"/model \" (the word slash-model followed by a single trailing space) via the native textarea value setter and dispatch an \"input\" event so the framework picks it up; the exact expression is: \"(function(){var el=document.querySelector('[data-testid=\\\"message-input\\\"]');var s=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;s.call(el,'/model ');el.dispatchEvent(new Event('input',{bubbles:true}));el.focus();return 'set';})()\" and expect \"set\". Wait for the model-argument menu (data-testid \"model-arg-menu\") to be visible. Using an eval step, dispatch an ArrowDown keydown on the message input to move the highlight: expression \"(function(){document.querySelector('[data-testid=\\\"message-input\\\"]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));return 'down';})()\", expect \"down\". Then dispatch an Enter keydown on the message input: expression \"(function(){document.querySelector('[data-testid=\\\"message-input\\\"]').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return 'enter';})()\", expect \"enter\". Finally assert that Enter COMPLETED the highlighted option rather than sending a bare \"/model\": eval \"(function(){var v=document.querySelector('[data-testid=\\\"message-input\\\"]').value;return (v.indexOf('/model ')===0 \u0026\u0026 v.length\u003e'/model '.length) ? 'completed' : ('BUG:'+JSON.stringify(v));})()\" and expect \"completed\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Hello"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_text",
+      "text": "Hello! I'm Shelley, your AI assistant. How can I help you today?",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');var s=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;s.call(el,'/model ');el.dispatchEvent(new Event('input',{bubbles:true}));el.focus();return 'set';})()",
+      "expect": "set"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"model-arg-menu\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){document.querySelector('[data-testid=\"message-input\"]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));return 'down';})()",
+      "expect": "down"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){document.querySelector('[data-testid=\"message-input\"]').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return 'enter';})()",
+      "expect": "enter"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return (v.indexOf('/model ')===0 \u0026\u0026 v.length\u003e'/model '.length) ? 'completed' : ('BUG:'+JSON.stringify(v));})()",
+      "expect": "completed"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-07-16T00:47:25.49158986Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 14730,
+    "output_tokens": 1505,
+    "estimated_cost_usd": 0.066765,
+    "git_sha": "d57cce3317b7991a7ad40f79ee26a59d529ed64e",
+    "mode": "generated"
+  }
+}

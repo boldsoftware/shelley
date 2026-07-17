@@ -37,3 +37,10 @@
     - `ui/src/vue/components/tools/BrowserTool.vue` (if the tool is a browser action — this component
       reads the `action` field from the input and dispatches to the right sub-component)
     - `loop/predictable.go` (the "tool smorgasbord" demo response)
+16. Never surface a bare "default" (or "Default") in the UI without saying what the default
+    actually resolves to. A control that reads `effort: default` tells the user nothing. When
+    the concrete value is knowable (usually it is; the server sends it), prefer to just
+    pre-select the real value — e.g. show and select `medium`, don't add a separate `default`
+    entry that duplicates one of the real choices. Only keep a `default` sentinel when the
+    concrete value is genuinely unknowable; even then, spell it out if you can (e.g. `Default
+    (on)` for a boolean toggle).

@@ -104,6 +104,7 @@
         :disabled="sending"
         :supported="selectedModelInfo?.supports_reasoning !== false"
         :levels="selectedModelInfo?.reasoning_levels"
+        :default-level="selectedModelInfo?.default_reasoning_level"
         @change="onThinkingChange"
       />
       <div ref="advancedSettingsRef" class="advanced-settings-wrapper">
@@ -230,6 +231,7 @@ type ModelInfo = {
   max_context_tokens?: number;
   supports_reasoning?: boolean;
   reasoning_levels?: Exclude<ThinkingLevel, "default">[];
+  default_reasoning_level?: string;
 };
 type ToolInfo = { name: string; summary: string; default_on: boolean };
 

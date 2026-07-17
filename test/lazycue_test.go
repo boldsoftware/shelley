@@ -541,6 +541,48 @@ func setupDiffFixtureRepo(dir string) error {
 	return nil
 }
 
+// --- Bare "/model" + Enter picks the top model ---
+//
+// Regression for the exact user-reported bug: typing "/model" with NO trailing
+// space and pressing Enter sent a useless bare "/model" to the server (which
+// just echoes the help/model list) instead of selecting the top suggestion. The
+// model-argument menu must open as soon as "/model" is typed (space optional),
+// and Enter with nothing chosen yet must complete the top suggestion into the
+// composer (e.g. "/model <top-id> ") rather than send. We assert on the textarea
+// value: on the bug it becomes empty ("/model" was sent), on the fix it grows to
+// a completed argument.
+func TestNewPageBareModelEnterPicksTop(t *testing.T) {
+	lazyTest(t, `Navigate to /new. Type "Hello" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"); wait for the reply "Hello! I'm Shelley, your AI assistant. How can I help you today?" to appear and for the URL to contain "/c/" (a real conversation is needed for /model). Then, using an eval step, set the message input's value to "/model" with NO trailing space via the native textarea value setter and dispatch an "input" event so the framework picks it up; the exact expression is: "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');var s=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;s.call(el,'/model');el.dispatchEvent(new Event('input',{bubbles:true}));el.focus();return 'set';})()" and expect "set". Wait for the model-argument menu (data-testid "model-arg-menu") to be visible (it must open even without a trailing space). Then, WITHOUT pressing any arrow keys, dispatch an Enter keydown on the message input: expression "(function(){document.querySelector('[data-testid=\"message-input\"]').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return 'enter';})()", expect "enter". Finally assert that Enter COMPLETED the top model suggestion rather than sending a bare "/model": eval "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return (v.indexOf('/model ')===0 && v.length>'/model '.length) ? 'completed' : ('BUG:'+JSON.stringify(v));})()" and expect "completed".`)
+}
+
+// --- /model argument menu: Enter completes the highlighted option ---
+//
+// Regression for the bug where, in the /model argument autocomplete menu,
+// arrowing to an option and pressing Enter sent a bare "/model" to the server
+// (clearing the composer) instead of completing the highlighted option like a
+// mouse click would. After navigating the menu with the arrow keys, Enter must
+// insert the highlighted option into the composer (e.g. "/model <option> ") and
+// leave the menu ready for the next argument — NOT send the command. We assert
+// on the textarea value: on the bug it becomes empty ("/model" was sent), and
+// on the fix it grows to a completed argument.
+func TestNewPageModelMenuEnterCompletesHighlighted(t *testing.T) {
+	lazyTest(t, `Navigate to /new. Type "Hello" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"); wait for the reply "Hello! I'm Shelley, your AI assistant. How can I help you today?" to appear and for the URL to contain "/c/" (a real conversation is needed for /model). Then, using an eval step, set the message input's value to "/model " (the word slash-model followed by a single trailing space) via the native textarea value setter and dispatch an "input" event so the framework picks it up; the exact expression is: "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');var s=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;s.call(el,'/model ');el.dispatchEvent(new Event('input',{bubbles:true}));el.focus();return 'set';})()" and expect "set". Wait for the model-argument menu (data-testid "model-arg-menu") to be visible. Using an eval step, dispatch an ArrowDown keydown on the message input to move the highlight: expression "(function(){document.querySelector('[data-testid=\"message-input\"]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));return 'down';})()", expect "down". Then dispatch an Enter keydown on the message input: expression "(function(){document.querySelector('[data-testid=\"message-input\"]').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return 'enter';})()", expect "enter". Finally assert that Enter COMPLETED the highlighted option rather than sending a bare "/model": eval "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return (v.indexOf('/model ')===0 && v.length>'/model '.length) ? 'completed' : ('BUG:'+JSON.stringify(v));})()" and expect "completed".`)
+}
+
+// --- Compact and send: send-options menu offers compaction + queue in one ---
+//
+// The split send button's options menu (opened via the chevron, data-testid
+// "send-options-button") offers a "Compact and send" action (data-testid
+// "compact-and-send-option") whenever a conversation is open. Clicking it
+// compacts the conversation into a new generation and queues the composed
+// message so it runs once compaction completes. We drive the whole flow with
+// the predictable server: send a first message to open a conversation, type an
+// echo command, open the menu, click "Compact and send", then assert a new
+// generation started (compaction ran) and the queued echo eventually drained.
+func TestNewPageCompactAndSend(t *testing.T) {
+	lazyTest(t, `Navigate to /new. Type "Hello" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"); wait for the reply "Hello! I'm Shelley, your AI assistant. How can I help you today?" to appear and for the URL to contain "/c/". Then type "echo: compacted hello" into the message input (data-testid "message-input"). Click the split-button chevron (data-testid "send-options-button") to open the send-options menu, and wait for the "Compact and send" option (data-testid "compact-and-send-option") to be visible. Click it. Compaction runs into a new generation: wait (up to 30 seconds) for the text "New generation started" to appear on the page. After compaction finishes, the queued message drains: wait (up to 30 seconds) for the echoed text "compacted hello" to appear on the page.`)
+}
+
 // startPredictableServer boots a Shelley server in predictable mode backed by a
 // temp DB and the embedded UI. It returns the test server and a cleanup func.
 func startPredictableServer() (*httptest.Server, func()) {
