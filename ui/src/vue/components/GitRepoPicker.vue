@@ -92,6 +92,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import Modal from "./Modal.vue";
+import { isImeComposing } from "../../utils/imeComposing";
 
 interface GitRepoInfo {
   path: string;
@@ -254,7 +255,7 @@ function pick(path: string) {
 }
 
 function handleKey(e: KeyboardEvent) {
-  if (e.isComposing) return;
+  if (isImeComposing(e)) return;
   if (e.key === "ArrowDown") {
     e.preventDefault();
     activeIdx.value = Math.min(filtered.value.length - 1, activeIdx.value + 1);

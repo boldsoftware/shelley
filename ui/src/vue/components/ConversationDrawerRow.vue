@@ -290,6 +290,7 @@
 import { computed, defineComponent, h, inject, ref, watch, type VNode } from "vue";
 import Button from "primevue/button";
 import type { Conversation, ConversationWithState } from "../../types";
+import { isImeComposing } from "../../utils/imeComposing";
 import {
   DrawerCtxKey,
   parseTags,
@@ -342,6 +343,11 @@ function onSubClick(e: MouseEvent, sub: Conversation) {
   ctx.selectConversation(sub);
 }
 function onTagInputKeyDown(e: KeyboardEvent) {
+  if (isImeComposing(e)) {
+    // Stop the Enter that confirms an IME conversion from submitting the form.
+    if (e.key === "Enter") e.preventDefault();
+    return;
+  }
   if (e.key === "Escape") {
     e.preventDefault();
     ctx.tagEditorId.value = null;

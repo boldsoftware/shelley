@@ -300,6 +300,7 @@ import {
   neighborAfterRemoval,
 } from "../../utils/conversationSort";
 import { tildifyPath } from "../../utils/tildify";
+import { isImeComposing } from "../../utils/imeComposing";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
 import ConversationRow from "./ConversationDrawerRow.vue";
 import Button from "primevue/button";
@@ -699,7 +700,7 @@ async function handleRename(conversationId: string) {
   }
 }
 function handleRenameKeyDown(e: KeyboardEvent, conversationId: string) {
-  if (e.isComposing) return;
+  if (isImeComposing(e)) return;
   if (e.key === "Enter") {
     e.preventDefault();
     void handleRename(conversationId);

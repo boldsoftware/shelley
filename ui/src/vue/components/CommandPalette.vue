@@ -114,6 +114,7 @@ import { messageStore } from "../../services/messageStore";
 import { useMarkdownMode } from "../composables/markdownMode";
 import { useI18n } from "../composables/i18n";
 import { tildifyPath } from "../../utils/tildify";
+import { isImeComposing } from "../../utils/imeComposing";
 
 interface CommandItem {
   id: string;
@@ -769,6 +770,7 @@ watch(selectedIndex, (idx) => {
 });
 
 function handleKeyDown(e: KeyboardEvent) {
+  if (isImeComposing(e)) return;
   switch (e.key) {
     case "ArrowDown":
       e.preventDefault();

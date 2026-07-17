@@ -241,6 +241,7 @@ import { computed, nextTick, ref, useId, watch } from "vue";
 import { api } from "../../services/api";
 import Button from "primevue/button";
 import Modal from "./Modal.vue";
+import { isImeComposing } from "../../utils/imeComposing";
 
 interface DirectoryEntry {
   name: string;
@@ -364,7 +365,7 @@ function handleParentClick() {
 }
 
 function handleInputKeyDown(e: KeyboardEvent) {
-  if (e.isComposing) return;
+  if (isImeComposing(e)) return;
   if (e.key === "Enter") {
     e.preventDefault();
     handleSelect();
@@ -422,7 +423,7 @@ async function handleCreateDirectory() {
 }
 
 function handleCreateKeyDown(e: KeyboardEvent) {
-  if (e.isComposing) return;
+  if (isImeComposing(e)) return;
   if (e.key === "Enter") {
     e.preventDefault();
     handleCreateDirectory();

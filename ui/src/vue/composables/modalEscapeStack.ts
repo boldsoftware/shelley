@@ -8,10 +8,12 @@
 // closes. Each open Modal registers its close callback; one document listener
 // (installed lazily) invokes just the last-registered one.
 
+import { isImeComposing } from "../../utils/imeComposing";
+
 const stack: Array<() => void> = [];
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key !== "Escape" || event.isComposing || stack.length === 0) return;
+  if (event.key !== "Escape" || isImeComposing(event) || stack.length === 0) return;
   event.stopPropagation();
   // Close only the topmost modal.
   stack[stack.length - 1]();

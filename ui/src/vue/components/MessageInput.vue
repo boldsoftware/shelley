@@ -337,6 +337,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "../composables/i18n";
 import { pickPlaceholderHint } from "../../utils/placeholderHints";
 import { SLASH_COMMANDS } from "../../utils/slashCommands";
+import { isImeComposing } from "../../utils/imeComposing";
 import { THINKING_LEVELS } from "./thinkingLevel";
 
 // Web Speech API types
@@ -1025,7 +1026,7 @@ function onTextareaFocus() {
 
 function handleKeyDown(e: KeyboardEvent) {
   // Don't submit while IME is composing.
-  if (e.isComposing) return;
+  if (isImeComposing(e)) return;
   if (showSlashMenu.value) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
