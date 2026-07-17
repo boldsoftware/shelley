@@ -100,6 +100,13 @@ test.describe('Tool Component Verification', () => {
     await expect(readImageTool.first()).toBeVisible();
     await expect(readImageTool.locator('.screenshot-tool-emoji').filter({ hasText: '🖼️' }).first()).toBeVisible();
 
+    // A browser: screenshot action is an auto-expand tool too: it must render
+    // inline as a ScreenshotTool card, never collapse into a pill.
+    await expect(
+      page.locator('.tool-pill[data-tool-name="browser"]').filter({ hasText: /screenshot/i }),
+    ).toHaveCount(0);
+    await expect(page.locator('.screenshot-tool .screenshot-tool-emoji').filter({ hasText: '📷' }).first()).toBeVisible();
+
     // browser: screencast_stop pill -> ScreencastTool widget in modal.
     await verifyPill('browser', 'screencast_stop', async (modal) => {
       await expect(modal.locator('.screencast-tool').first()).toBeVisible();

@@ -1106,7 +1106,9 @@ const renderModel = computed<GenerationBlock[]>(() => {
 
     const renderItemInto = (sink: RenderNode[], item: CoalescedItem, index: number) => {
       const isPillable =
-        toolPillsEnabled.value && item.type === "tool" && !isAutoExpandTool(item.toolName);
+        toolPillsEnabled.value &&
+        item.type === "tool" &&
+        !isAutoExpandTool(item.toolName, item.toolInput);
       if (!isPillable || pillBuf.length === 0) {
         const tsNodes = maybeTimestamp(
           itemTime(item),

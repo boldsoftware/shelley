@@ -440,7 +440,12 @@ function inputSummary(name: string | undefined | null, input: unknown): string {
  *  current full-bleed card so the user sees the diff / image
  *  without an extra tap.
  */
-export function isAutoExpandTool(name: string | undefined | null): boolean {
+export function isAutoExpandTool(name: string | undefined | null, input?: unknown): boolean {
+  // The umbrella "browser" tool multiplexes many actions; only its
+  // screenshot action produces an inline image worth auto-expanding.
+  if (name === "browser") {
+    return browserAction(input) === "screenshot";
+  }
   switch (name) {
     case "patch":
     case "screenshot":
