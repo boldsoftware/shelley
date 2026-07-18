@@ -158,6 +158,41 @@ test.describe("Scroll behavior", () => {
     // Button should disappear once we're back at bottom
     await expect(scrollButton).not.toBeVisible({ timeout: 5000 });
 
+    // An upward wheel gesture must immediately release lazy-layout pinning.
+    await messagesContainer.evaluate((el) => {
+      el.dispatchEvent(new WheelEvent("wheel", { deltaY: -200, bubbles: true }));
+      el.scrollTop = 0;
+    });
+    await expect(scrollButton).toBeVisible({ timeout: 5000 });
+    await messagesContainer.evaluate((container) => {
+      const button = document.querySelector<HTMLButtonElement>(".scroll-to-bottom-button");
+      const list = container.querySelector(".messages-list");
+      const sentinel = container.querySelector(".messages-bottom-sentinel");
+      if (!button || !list || !sentinel) throw new Error("scroll controls not found");
+      button.click();
+      const spacer = document.createElement("div");
+      spacer.style.height = "1200px";
+      list.insertBefore(spacer, sentinel);
+      container.dispatchEvent(new WheelEvent("wheel", { deltaY: -200, bubbles: true }));
+      container.scrollTop = Math.max(0, container.scrollTop - 200);
+    });
+    await expect
+      .poll(() =>
+        messagesContainer.evaluate(
+          (el) => el.scrollHeight - el.clientHeight - el.scrollTop > 100,
+        ),
+      )
+      .toBe(true);
+    await expect(scrollButton).toBeVisible({ timeout: 5000 });
+    await scrollButton.click();
+    await expect
+      .poll(() =>
+        messagesContainer.evaluate(
+          (el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) <= 1,
+        ),
+      )
+      .toBe(true);
+
     // Send another message - should auto-scroll since we're at bottom
     await input.fill("echo final message");
     await sendButton.click();

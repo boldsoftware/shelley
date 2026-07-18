@@ -1212,6 +1212,21 @@ function stopBottomPin() {
   bottomPinFrame = null;
 }
 
+function releaseBottomPinForUser() {
+  if (!bottomPinActive) return;
+  stopBottomPin();
+  userScrolled = true;
+  showScrollToBottom.value = true;
+}
+
+function handleBottomPinWheel(e: WheelEvent) {
+  if (e.deltaY < 0) releaseBottomPinForUser();
+}
+
+function handleBottomPinTouch() {
+  releaseBottomPinForUser();
+}
+
 function scrollToBottom() {
   const container = messagesContainerRef.value;
   if (!container) return;
@@ -2392,6 +2407,8 @@ function setupScrollObservers() {
   if (!container) return;
   lastObservedScrollTop = container.scrollTop;
   container.addEventListener("scroll", handleScroll);
+  container.addEventListener("wheel", handleBottomPinWheel, { passive: true });
+  container.addEventListener("touchstart", handleBottomPinTouch, { passive: true });
   bottomObserver = new IntersectionObserver(
     ([entry]) => {
       const nearBottom = entry?.isIntersecting ?? false;
@@ -2501,6 +2518,8 @@ onUnmounted(() => {
   stopBottomPin();
   const container = messagesContainerRef.value;
   container?.removeEventListener("scroll", handleScroll);
+  container?.removeEventListener("wheel", handleBottomPinWheel);
+  container?.removeEventListener("touchstart", handleBottomPinTouch);
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
   mo?.disconnect();
   ro?.disconnect();
