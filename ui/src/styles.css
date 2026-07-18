@@ -899,6 +899,12 @@ body {
   contain-intrinsic-size: auto 80px;
 }
 
+.messages-bottom-sentinel {
+  height: 1px;
+  content-visibility: visible;
+  contain: none;
+}
+
 .message {
   display: flex;
   flex-direction: column;
@@ -3811,10 +3817,11 @@ svg {
   color: var(--text-primary);
 }
 .toc-popover-list {
-  overflow-y: auto;
-  padding: 0.25rem 0;
+  width: 100%;
 }
 .toc-entry {
+  box-sizing: border-box;
+  height: 30px;
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
@@ -8828,6 +8835,7 @@ kbd {
 }
 
 .message-action-button {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8841,6 +8849,36 @@ kbd {
   transition:
     background-color 0.15s,
     color 0.15s;
+}
+
+.message-action-button:hover {
+  background: var(--bg-tertiary);
+}
+
+.message-action-button::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.4rem);
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 0.25rem 0.45rem;
+  border-radius: 0.25rem;
+  background: var(--text-primary);
+  color: var(--bg-base);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.1s ease;
+}
+
+.message-action-button:hover::after,
+.message-action-button:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
 }
 
 .message-action-button-success {

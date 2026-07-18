@@ -21,6 +21,7 @@ test.describe("Conversation TOC popover", () => {
     await tocButton.click();
     const popover = page.locator(".toc-popover");
     await expect(popover).toBeVisible();
+    await expect(popover.locator(".p-virtualscroller")).toBeVisible();
     await expect(tocButton).toHaveAttribute("aria-expanded", "true");
     await expect(popover.locator(".toc-popover-title")).toHaveText("Jump to…");
 
@@ -52,6 +53,25 @@ test.describe("Conversation TOC popover", () => {
     await expect(async () => {
       expect(new URL(page.url()).hash).toMatch(/^#m-[a-zA-Z0-9]+$/);
     }).toPass({ timeout: 5000 });
+  });
+});
+
+test.describe("Message action bar", () => {
+  test("uses CSS-only hover labels", async ({ page, request }) => {
+    const slug = await createConversationViaAPI(request, "echo action bar");
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
+
+    const message = page
+      .locator('[data-testid="message"]')
+      .filter({ hasText: "echo action bar" })
+      .first();
+    await expect(message).toBeVisible({ timeout: 30000 });
+    await message.hover();
+
+    const copy = message.getByRole("button", { name: "Copy" });
+    await expect(copy).toBeVisible();
+    await expect(copy).toHaveAttribute("data-tooltip", "Copy");
   });
 });
 

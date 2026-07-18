@@ -30,34 +30,41 @@
       root: { class: 'toc-popover', 'aria-label': 'Table of contents' },
       content: { class: 'toc-popover-content' },
     }"
-    @show="open = true"
+    @show="handleShow"
     @hide="open = false"
   >
     <div class="toc-popover-header">
       <span class="toc-popover-title">Jump to…</span>
     </div>
-    <div class="toc-popover-list">
-      <button
-        v-for="entry in entries"
-        :key="entry.id"
-        :class="`toc-entry toc-entry-${entry.kind}${activeId === entry.id ? ' toc-entry-active' : ''}`"
-        @click="handleGoto(entry)"
-      >
-        <span v-if="entry.kind !== 'gen'" class="toc-entry-icon" aria-hidden="true">
-          <template v-if="entry.kind === 'top'">↑</template>
-          <template v-if="entry.kind === 'bottom'">↓</template>
-          <template v-if="entry.kind === 'user'">•</template>
-          <template v-if="entry.kind === 'eot'">✓</template>
-        </span>
-        <span class="toc-entry-label">{{ entry.label }}</span>
-      </button>
-    </div>
+    <VirtualScroller
+      ref="scrollerRef"
+      :items="entries"
+      :item-size="30"
+      :scroll-height="tocScrollHeight"
+      class="toc-popover-list"
+    >
+      <template #item="{ item: entry }">
+        <button
+          :class="`toc-entry toc-entry-${entry.kind}${activeId === entry.id ? ' toc-entry-active' : ''}`"
+          @click="handleGoto(entry)"
+        >
+          <span v-if="entry.kind !== 'gen'" class="toc-entry-icon" aria-hidden="true">
+            <template v-if="entry.kind === 'top'">↑</template>
+            <template v-if="entry.kind === 'bottom'">↓</template>
+            <template v-if="entry.kind === 'user'">•</template>
+            <template v-if="entry.kind === 'eot'">✓</template>
+          </span>
+          <span class="toc-entry-label">{{ entry.label }}</span>
+        </button>
+      </template>
+    </VirtualScroller>
   </Popover>
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import Popover from "primevue/popover";
+import VirtualScroller from "primevue/virtualscroller";
 import type { Message, LLMMessage, LLMContent } from "../../types";
 
 interface TOCEntry {
@@ -71,12 +78,14 @@ interface TOCEntry {
 const props = defineProps<{
   messages: Message[];
   containerRef: HTMLElement | null;
+  nearBottom: boolean;
   conversationSlug?: string | null;
 }>();
 
 const open = ref(false);
 const activeId = ref<string | null>(null);
 const popoverRef = ref<InstanceType<typeof Popover> | null>(null);
+const scrollerRef = ref<{ scrollToIndex: (index: number) => void } | null>(null);
 
 function extractMessageLabel(message: Message, maxLen = 70): string {
   if (!message.llm_data) return "";
@@ -202,6 +211,10 @@ function scrollToFragment(
 }
 
 const entries = computed(() => buildEntries(props.messages));
+const tocScrollHeight = computed(() => {
+  const height = Math.min(Math.max(entries.value.length, 1) * 30, 448);
+  return `min(${height}px, 52vh)`;
+});
 const activeEntryByMessageId = computed(() => {
   const entryByMessageId = new Map<string, string>();
   for (const entry of entries.value) {
@@ -216,6 +229,14 @@ const activeEntryByMessageId = computed(() => {
   }
   return result;
 });
+
+function handleShow() {
+  open.value = true;
+  nextTick(() => {
+    const index = entries.value.findIndex((entry) => entry.id === activeId.value);
+    scrollerRef.value?.scrollToIndex(Math.max(index, 0));
+  });
+}
 
 function messageAtCutoff(container: HTMLElement): HTMLElement | null {
   const rect = container.getBoundingClientRect();
@@ -238,13 +259,12 @@ function attachScroll() {
   const container = props.containerRef;
   if (!container) return;
   const update = () => {
-    if (container.scrollTop <= 40) {
-      activeId.value = "top";
+    if (props.nearBottom) {
+      activeId.value = "bottom";
       return;
     }
-    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
-    if (nearBottom) {
-      activeId.value = "bottom";
+    if (container.scrollTop <= 40) {
+      activeId.value = "top";
       return;
     }
 
@@ -265,7 +285,9 @@ function detachScroll() {
   scrollHandler = null;
 }
 
-watch([() => props.containerRef, entries], attachScroll, { immediate: true });
+watch([() => props.containerRef, entries, () => props.nearBottom], attachScroll, {
+  immediate: true,
+});
 
 function handleGoto(entry: TOCEntry) {
   const container = props.containerRef;
@@ -277,22 +299,7 @@ function handleGoto(entry: TOCEntry) {
     return;
   }
   if (entry.kind === "bottom") {
-    let lastHeight = -1;
-    let stable = 0;
-    let frames = 0;
-    const step = () => {
-      const el = props.containerRef;
-      if (!el) return;
-      el.scrollTop = el.scrollHeight;
-      if (el.scrollHeight === lastHeight) {
-        if (++stable >= 3) return;
-      } else {
-        stable = 0;
-        lastHeight = el.scrollHeight;
-      }
-      if (++frames < 60) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
+    container.scrollTop = Number.MAX_SAFE_INTEGER;
     history.replaceState(null, "", window.location.pathname + window.location.search);
     return;
   }

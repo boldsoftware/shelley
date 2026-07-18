@@ -6,12 +6,10 @@
   <div class="message-action-bar message-action-bar-wrapper" data-action-bar>
     <button
       v-if="onCopy"
-      v-tooltip.top="'Copy'"
       aria-label="Copy"
+      data-tooltip="Copy"
       :class="`message-action-button${copyFeedback ? ' message-action-button-success' : ''}`"
       @click="handleCopy"
-      @mouseenter="onEnter($event, !copyFeedback)"
-      @mouseleave="onLeave($event, !copyFeedback)"
     >
       <svg
         v-if="copyFeedback"
@@ -43,12 +41,10 @@
     </button>
     <button
       v-if="onFork"
-      v-tooltip.top="'Fork conversation from here'"
       aria-label="Fork conversation from here"
+      data-tooltip="Fork conversation from here"
       class="message-action-button"
       @click="handleFork"
-      @mouseenter="onEnter($event, true)"
-      @mouseleave="onLeave($event, true)"
     >
       <svg
         width="16"
@@ -69,12 +65,10 @@
     </button>
     <button
       v-if="onShowUsage"
-      v-tooltip.top="'Details'"
       aria-label="Details"
+      data-tooltip="Details"
       class="message-action-button"
       @click="handleShowUsage"
-      @mouseenter="onEnter($event, true)"
-      @mouseleave="onLeave($event, true)"
     >
       <svg
         width="16"
@@ -122,12 +116,5 @@ function handleShowUsage(e: MouseEvent) {
 function handleFork(e: MouseEvent) {
   e.stopPropagation();
   props.onFork?.();
-}
-
-function onEnter(e: MouseEvent, apply: boolean) {
-  if (apply) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-tertiary)";
-}
-function onLeave(e: MouseEvent, apply: boolean) {
-  if (apply) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
 }
 </script>

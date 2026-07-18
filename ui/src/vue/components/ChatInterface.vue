@@ -215,6 +215,7 @@
               Cancel all queued
             </button>
           </div>
+          <div ref="bottomSentinelRef" class="messages-bottom-sentinel" aria-hidden="true" />
         </div>
       </div>
 
@@ -223,6 +224,7 @@
         <ConversationTOC
           :messages="messages"
           :container-ref="messagesContainerRef"
+          :near-bottom="!showScrollToBottom"
           :conversation-slug="currentConversation?.slug"
         />
         <button
@@ -668,6 +670,7 @@ const terminalAutoFocusId = ref<string | null>(null);
 
 // ---- refs to DOM ----
 const messagesContainerRef = ref<HTMLDivElement | null>(null);
+const bottomSentinelRef = ref<HTMLDivElement | null>(null);
 
 // ---- non-reactive refs (mutable closures) ----
 let userScrolled = false;
@@ -1203,22 +1206,8 @@ function scrollToBottom() {
   if (!container) return;
   userScrolled = false;
   showScrollToBottom.value = false;
-  let lastHeight = -1;
-  let stableCount = 0;
-  let frames = 0;
-  const step = () => {
-    const el = messagesContainerRef.value;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-    if (el.scrollHeight === lastHeight) {
-      if (++stableCount >= 3) return;
-    } else {
-      stableCount = 0;
-      lastHeight = el.scrollHeight;
-    }
-    if (++frames < 60) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
+  container.scrollTop = Number.MAX_SAFE_INTEGER;
+  lastObservedScrollTop = container.scrollTop;
 }
 
 function syncFromStore(focusedId: string) {
@@ -2339,9 +2328,8 @@ watch(
           const container = messagesContainerRef.value;
           if (container) {
             container.scrollTop = pending;
-            const isNearBottom = container.scrollHeight - pending - container.clientHeight < 100;
-            userScrolled = !isNearBottom;
-            showScrollToBottom.value = !isNearBottom;
+            userScrolled = true;
+            showScrollToBottom.value = true;
           }
         } else {
           scrollToBottom();
@@ -2357,15 +2345,18 @@ watch(
 // ---- scroll listeners + ResizeObserver ----
 let scrollSaveTimer: number | null = null;
 let ro: ResizeObserver | null = null;
+let bottomObserver: IntersectionObserver | null = null;
 let mo: MutationObserver | null = null;
+let lastObservedScrollTop = 0;
 
 function handleScroll() {
   const container = messagesContainerRef.value;
   if (!container) return;
-  const { scrollTop, scrollHeight, clientHeight } = container;
-  const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-  showScrollToBottom.value = !isNearBottom;
-  userScrolled = !isNearBottom;
+  if (container.scrollTop < lastObservedScrollTop) {
+    userScrolled = true;
+    showScrollToBottom.value = true;
+  }
+  lastObservedScrollTop = container.scrollTop;
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
   scrollSaveTimer = window.setTimeout(() => {
     if (!loadingFlag) saveScroll(container.scrollTop);
@@ -2375,24 +2366,39 @@ function handleScroll() {
 function setupScrollObservers() {
   const container = messagesContainerRef.value;
   if (!container) return;
+  lastObservedScrollTop = container.scrollTop;
   container.addEventListener("scroll", handleScroll);
-  let lastScrollHeight = container.scrollHeight;
+  bottomObserver = new IntersectionObserver(
+    ([entry]) => {
+      const nearBottom = entry?.isIntersecting ?? false;
+      showScrollToBottom.value = !nearBottom;
+      if (nearBottom) userScrolled = false;
+    },
+    { root: container, rootMargin: "0px 0px 100px 0px", threshold: 0 },
+  );
   ro = new ResizeObserver(() => {
-    if (container.scrollHeight === lastScrollHeight) return;
-    lastScrollHeight = container.scrollHeight;
-    if (!userScrolled && !catchingUp) container.scrollTop = container.scrollHeight;
-  });
-  const attachRO = () => {
-    const list = container.querySelector(".messages-list");
-    if (list) {
-      ro!.observe(list);
-      return true;
+    if (container.scrollTop < lastObservedScrollTop) {
+      userScrolled = true;
+      showScrollToBottom.value = true;
+      lastObservedScrollTop = container.scrollTop;
+      return;
     }
-    return false;
+    if (!userScrolled && !catchingUp) {
+      container.scrollTop = Number.MAX_SAFE_INTEGER;
+      lastObservedScrollTop = container.scrollTop;
+    }
+  });
+  const attachObservers = () => {
+    const list = container.querySelector(".messages-list");
+    const sentinel = bottomSentinelRef.value;
+    if (!list || !sentinel) return false;
+    ro!.observe(list);
+    bottomObserver!.observe(sentinel);
+    return true;
   };
-  if (!attachRO()) {
+  if (!attachObservers()) {
     mo = new MutationObserver((_, self) => {
-      if (attachRO()) {
+      if (attachObservers()) {
         self.disconnect();
         mo = null;
       }
@@ -2470,6 +2476,7 @@ onUnmounted(() => {
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
   mo?.disconnect();
   ro?.disconnect();
+  bottomObserver?.disconnect();
   document.removeEventListener("visibilitychange", onVisChangeSave);
   window.removeEventListener("beforeunload", saveScrollNow);
   document.removeEventListener("visibilitychange", handleVisibilityChange);

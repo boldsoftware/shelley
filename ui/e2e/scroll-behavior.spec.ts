@@ -34,15 +34,31 @@ test.describe("Scroll behavior", () => {
     // That forces Safari to lay out content-visibility:auto messages that are
     // far off screen and turns one scroll event into a long main-thread stall.
     await page.evaluate(() => {
-      const state = window as Window & { __messageRectReads?: number };
-      const original = Element.prototype.getBoundingClientRect;
+      const state = window as Window & {
+        __messageRectReads?: number;
+        __messagesScrollHeightReads?: number;
+      };
+      const originalRect = Element.prototype.getBoundingClientRect;
+      const scrollHeight = Object.getOwnPropertyDescriptor(Element.prototype, "scrollHeight");
+      if (!scrollHeight?.get) throw new Error("Element.scrollHeight getter not found");
       state.__messageRectReads = 0;
+      state.__messagesScrollHeightReads = 0;
       Element.prototype.getBoundingClientRect = function () {
         if (this instanceof HTMLElement && this.hasAttribute("data-message-id")) {
           state.__messageRectReads = (state.__messageRectReads || 0) + 1;
         }
-        return original.call(this);
+        return originalRect.call(this);
       };
+      Object.defineProperty(Element.prototype, "scrollHeight", {
+        configurable: scrollHeight.configurable,
+        enumerable: scrollHeight.enumerable,
+        get() {
+          if (this instanceof HTMLElement && this.classList.contains("messages-container")) {
+            state.__messagesScrollHeightReads = (state.__messagesScrollHeightReads || 0) + 1;
+          }
+          return scrollHeight.get!.call(this);
+        },
+      });
     });
 
     // Scroll up to the top and verify the scroll-to-bottom button appears.
@@ -55,7 +71,12 @@ test.describe("Scroll behavior", () => {
     // the test, then assert the button stays visible once it's settled.
     await expect(async () => {
       await page.evaluate(() => {
-        (window as Window & { __messageRectReads?: number }).__messageRectReads = 0;
+        const state = window as Window & {
+          __messageRectReads?: number;
+          __messagesScrollHeightReads?: number;
+        };
+        state.__messageRectReads = 0;
+        state.__messagesScrollHeightReads = 0;
       });
       await messagesContainer.evaluate((el) => {
         el.scrollTop = 0;
@@ -66,6 +87,15 @@ test.describe("Scroll behavior", () => {
       .poll(() =>
         page.evaluate(
           () => (window as Window & { __messageRectReads?: number }).__messageRectReads || 0,
+        ),
+      )
+      .toBe(0);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as Window & { __messagesScrollHeightReads?: number })
+              .__messagesScrollHeightReads || 0,
         ),
       )
       .toBe(0);
