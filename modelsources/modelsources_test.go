@@ -119,7 +119,7 @@ func TestLLMIntegrationSourceLabelsAndFiltering(t *testing.T) {
 			{ID: "fireworks/kimi-k2p6", Provider: "fireworks", NativeID: "accounts/fireworks/models/kimi-k2p6", APIs: []string{"openai_chat"}},
 			{ID: "fireworks/deepseek-v4-pro", Provider: "fireworks", NativeID: "accounts/fireworks/models/deepseek-v4-pro", APIs: []string{"openai_chat"}},
 			{ID: "fireworks/deepseek-v4-flash", Provider: "fireworks", NativeID: "accounts/fireworks/models/deepseek-v4-flash", APIs: []string{"openai_chat"}},
-			{ID: "fireworks/qwen3p6-plus", Provider: "fireworks", NativeID: "accounts/fireworks/models/qwen3p6-plus", APIs: []string{"openai_chat"}},
+			{ID: "fireworks/qwen3p7-plus", Provider: "fireworks", NativeID: "accounts/fireworks/models/qwen3p7-plus", APIs: []string{"openai_chat"}},
 			{ID: "fireworks/gpt-oss-20b", Provider: "fireworks", NativeID: "accounts/fireworks/models/gpt-oss-20b", APIs: []string{"openai_chat"}},
 		},
 	}
@@ -138,7 +138,7 @@ func TestLLMIntegrationSourceLabelsAndFiltering(t *testing.T) {
 		"kimi-k2.6-fireworks",
 		"deepseek-v4-pro-fireworks",
 		"deepseek-v4-flash-fireworks",
-		"qwen3.6-plus-fireworks",
+		"qwen3.7-plus-fireworks",
 		"gpt-oss-20b-fireworks",
 	} {
 		b := findBuilt(bs, id)
@@ -158,7 +158,7 @@ func TestLLMIntegrationSourceLabelsAndFiltering(t *testing.T) {
 		"kimi-k2p6",
 		"deepseek-v4-pro",
 		"deepseek-v4-flash",
-		"qwen3p6-plus",
+		"qwen3p7-plus",
 		"gpt-oss-20b",
 		"gemini-3-pro",
 	} {

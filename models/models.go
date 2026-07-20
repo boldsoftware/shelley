@@ -279,6 +279,12 @@ func All() []Model {
 			Build: oaiChatSvc(oai.KimiK26Fireworks, "fireworks"),
 		},
 		{
+			ID: "kimi-k2.7-code-fireworks", Provider: ProviderFireworks,
+			Description: "Kimi K2.7 Code on Fireworks", APIModelName: oai.KimiK27CodeFireworks.ModelName,
+			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
+			Build: oaiChatSvc(oai.KimiK27CodeFireworks, "fireworks"),
+		},
+		{
 			ID: "deepseek-v4-pro-fireworks", Provider: ProviderFireworks,
 			Description: "DeepSeek V4 Pro on Fireworks", APIModelName: oai.DeepseekV4ProFireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
@@ -363,10 +369,10 @@ func All() []Model {
 			Build: oaiChatSvc(oai.DeepseekV4FlashFireworks, "fireworks"),
 		},
 		{
-			ID: "qwen3.6-plus-fireworks", Provider: ProviderFireworks,
-			Description: "Qwen 3.6 Plus on Fireworks", APIModelName: oai.Qwen36PlusFireworks.ModelName,
+			ID: "qwen3.7-plus-fireworks", Provider: ProviderFireworks,
+			Description: "Qwen 3.7 Plus on Fireworks", APIModelName: oai.Qwen37PlusFireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
-			Build: oaiChatSvc(oai.Qwen36PlusFireworks, "fireworks"),
+			Build: oaiChatSvc(oai.Qwen37PlusFireworks, "fireworks"),
 		},
 		{
 			ID: "gpt-oss-20b-fireworks", Provider: ProviderFireworks, Tags: "slug",
