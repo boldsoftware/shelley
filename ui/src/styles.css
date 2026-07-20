@@ -2952,8 +2952,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem;
-  border-bottom: 1px solid var(--border);
+  /* No bottom border and a snug bottom padding: the title sits close to the
+     body rather than being separated by whitespace + a divider line. */
+  padding: 1rem 1rem 0.5rem;
   flex-shrink: 0;
 }
 
@@ -3054,7 +3055,8 @@ body {
 }
 
 .modal-body {
-  padding: 1rem;
+  /* Snug top padding since the header no longer has a bottom border/gap. */
+  padding: 0.5rem 1rem 1rem;
   overflow-y: auto;
   flex: 1 1 auto;
   min-height: 0;
