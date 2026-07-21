@@ -405,8 +405,12 @@ function inputSummary(name: string | undefined | null, input: unknown): string {
       return pick("query");
     case "subagent":
       return pick("slug", "prompt");
-    case "llm_one_shot":
-      return pick("prompt_file", "prompt");
+    case "llm_one_shot": {
+      const files = o.prompt_files;
+      if (Array.isArray(files) && files.length > 0) return files.join(", ");
+      if (typeof files === "string") return files;
+      return pick("prompt");
+    }
     case "output_iframe":
       return pick("title", "path");
     case "browser_eval":

@@ -1,9 +1,13 @@
 package claudetool
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/png"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,7 +78,7 @@ func TestLLMOneShotShortResult(t *testing.T) {
 		AvailableModels: []AvailableModel{{ID: "test-model"}},
 	}
 
-	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt"})
+	input, _ := json.Marshal(llmOneShotInput{PromptFiles: []string{"prompt.txt"}})
 	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error != nil {
@@ -108,7 +112,7 @@ func TestLLMOneShotLongResult(t *testing.T) {
 		AvailableModels: []AvailableModel{{ID: "test-model"}},
 	}
 
-	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt"})
+	input, _ := json.Marshal(llmOneShotInput{PromptFiles: []string{"prompt.txt"}})
 	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error != nil {
@@ -146,7 +150,7 @@ func TestLLMOneShotExplicitOutputFile(t *testing.T) {
 		AvailableModels: []AvailableModel{{ID: "test-model"}},
 	}
 
-	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt", OutputFile: "output.txt"})
+	input, _ := json.Marshal(llmOneShotInput{PromptFiles: []string{"prompt.txt"}, OutputFile: "output.txt"})
 	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error != nil {
@@ -189,7 +193,7 @@ func TestLLMOneShotAlternateModel(t *testing.T) {
 		},
 	}
 
-	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt", Model: "other-model"})
+	input, _ := json.Marshal(llmOneShotInput{PromptFiles: []string{"prompt.txt"}, Model: "other-model"})
 	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error != nil {
@@ -221,7 +225,7 @@ func TestLLMOneShotUnknownModel(t *testing.T) {
 		AvailableModels: []AvailableModel{{ID: "test-model"}},
 	}
 
-	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt", Model: "bogus-model"})
+	input, _ := json.Marshal(llmOneShotInput{PromptFiles: []string{"prompt.txt"}, Model: "bogus-model"})
 	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error == nil {
@@ -248,7 +252,7 @@ func TestLLMOneShotMissingFile(t *testing.T) {
 		AvailableModels: []AvailableModel{{ID: "test-model"}},
 	}
 
-	input, _ := json.Marshal(llmOneShotInput{PromptFile: "nonexistent.txt"})
+	input, _ := json.Marshal(llmOneShotInput{PromptFiles: []string{"nonexistent.txt"}})
 	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error == nil {
@@ -276,13 +280,13 @@ func TestLLMOneShotEmptyPrompt(t *testing.T) {
 		AvailableModels: []AvailableModel{{ID: "test-model"}},
 	}
 
-	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt"})
+	input, _ := json.Marshal(llmOneShotInput{PromptFiles: []string{"prompt.txt"}})
 	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error == nil {
 		t.Fatal("expected error for empty prompt")
 	}
-	if !strings.Contains(result.Error.Error(), "prompt file is empty") {
+	if !strings.Contains(result.Error.Error(), "prompt is empty") {
 		t.Errorf("expected empty prompt error, got: %v", result.Error)
 	}
 }
@@ -368,7 +372,7 @@ func TestLLMOneShotSystemPrompt(t *testing.T) {
 		AvailableModels: []AvailableModel{{ID: "test-model"}},
 	}
 
-	input, _ := json.Marshal(llmOneShotInput{PromptFile: "prompt.txt", SystemPrompt: "You are a pirate."})
+	input, _ := json.Marshal(llmOneShotInput{PromptFiles: []string{"prompt.txt"}, SystemPrompt: "You are a pirate."})
 	result := tool.Tool().Run(context.Background(), input)
 
 	if result.Error != nil {
@@ -383,3 +387,206 @@ func TestLLMOneShotSystemPrompt(t *testing.T) {
 }
 
 func (m *oneShotMockService) SupportsImages() bool { return true }
+
+type noImageOneShotService struct{ oneShotMockService }
+
+func (m *noImageOneShotService) SupportsImages() bool { return false }
+
+func writeOneShotPNG(t *testing.T, path string, width int) {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewNRGBA(image.Rect(0, 0, width, 2))); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLLMOneShotStringPromptFiles(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "prompt.txt"), []byte("What is 2+2?"), 0o644)
+
+	var captured *llm.Request
+	tool := &LLMOneShotTool{
+		LLMProvider: &oneShotMockProvider{services: map[string]llm.Service{
+			"test-model": &oneShotMockService{response: "4", onDo: func(req *llm.Request) { captured = req }},
+		}},
+		ModelID:    "test-model",
+		WorkingDir: NewMutableWorkingDir(dir),
+	}
+
+	// prompt_files as a bare string instead of an array.
+	input := []byte(`{"prompt_files": "prompt.txt"}`)
+	result := tool.Tool().Run(context.Background(), input)
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+	if captured == nil || len(captured.Messages) != 1 || captured.Messages[0].Content[0].Text != "What is 2+2?" {
+		t.Fatalf("unexpected request: %+v", captured)
+	}
+}
+
+func TestLLMOneShotConcatenatesTextFiles(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("first part"), 0o644)
+	os.WriteFile(filepath.Join(dir, "b.txt"), []byte("second part"), 0o644)
+
+	var captured *llm.Request
+	tool := &LLMOneShotTool{
+		LLMProvider: &oneShotMockProvider{services: map[string]llm.Service{
+			"test-model": &oneShotMockService{response: "ok", onDo: func(req *llm.Request) { captured = req }},
+		}},
+		ModelID:    "test-model",
+		WorkingDir: NewMutableWorkingDir(dir),
+	}
+
+	input, _ := json.Marshal(llmOneShotInput{PromptFiles: []string{"a.txt", "b.txt"}})
+	result := tool.Tool().Run(context.Background(), input)
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+	if captured == nil || len(captured.Messages) != 1 || len(captured.Messages[0].Content) != 1 {
+		t.Fatalf("unexpected request: %+v", captured)
+	}
+	if got, want := captured.Messages[0].Content[0].Text, "first part\nsecond part"; got != want {
+		t.Errorf("prompt = %q, want %q", got, want)
+	}
+}
+
+func TestLLMOneShotImagePromptFiles(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "prompt.txt"), []byte("Compare these images"), 0o644)
+	relative := filepath.Join(dir, "first.png")
+	absolute := filepath.Join(t.TempDir(), "second.png")
+	writeOneShotPNG(t, relative, 3)
+	writeOneShotPNG(t, absolute, 4)
+
+	var captured *llm.Request
+	tool := &LLMOneShotTool{
+		LLMProvider: &oneShotMockProvider{services: map[string]llm.Service{
+			"vision": &oneShotMockService{response: "done", onDo: func(req *llm.Request) { captured = req }},
+		}},
+		ModelID:    "vision",
+		WorkingDir: NewMutableWorkingDir(dir),
+	}
+	input, _ := json.Marshal(llmOneShotInput{
+		PromptFiles: []string{"prompt.txt", "first.png", absolute},
+	})
+	result := tool.Tool().Run(context.Background(), input)
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+	if captured == nil || len(captured.Messages) != 1 || len(captured.Messages[0].Content) != 3 {
+		t.Fatalf("unexpected request: %+v", captured)
+	}
+	contents := captured.Messages[0].Content
+	if contents[0].Text != "Compare these images" {
+		t.Errorf("prompt text = %q", contents[0].Text)
+	}
+	for i, width := range []int{3, 4} {
+		content := contents[i+1]
+		if content.MediaType != "image/png" || content.Data == "" {
+			t.Errorf("image %d = %+v", i, content)
+		}
+		if content.DisplayWidth != width || content.DisplayHeight != 2 {
+			t.Errorf("image %d dimensions = %dx%d", i, content.DisplayWidth, content.DisplayHeight)
+		}
+	}
+
+	// Display should carry viewable copies of the images for the UI.
+	display, ok := result.Display.(map[string]any)
+	if !ok {
+		t.Fatalf("display = %#v, want map", result.Display)
+	}
+	imgs, ok := display["images"].([]map[string]any)
+	if !ok || len(imgs) != 2 {
+		t.Fatalf("display images = %#v, want 2 entries", display["images"])
+	}
+	for i, img := range imgs {
+		urlStr, _ := img["url"].(string)
+		if !strings.HasPrefix(urlStr, "/api/read?path=") {
+			t.Errorf("display image %d url = %q", i, urlStr)
+		}
+		savedPath, err := url.ParseQuery(strings.TrimPrefix(urlStr, "/api/read?"))
+		if err != nil {
+			t.Fatalf("display image %d url parse: %v", i, err)
+		}
+		if _, err := os.Stat(savedPath.Get("path")); err != nil {
+			t.Errorf("display image %d not saved: %v", i, err)
+		}
+	}
+}
+
+func TestLLMOneShotImageOnlyPrompt(t *testing.T) {
+	dir := t.TempDir()
+	writeOneShotPNG(t, filepath.Join(dir, "pic.png"), 5)
+
+	var captured *llm.Request
+	tool := &LLMOneShotTool{
+		LLMProvider: &oneShotMockProvider{services: map[string]llm.Service{
+			"vision": &oneShotMockService{response: "a picture", onDo: func(req *llm.Request) { captured = req }},
+		}},
+		ModelID:    "vision",
+		WorkingDir: NewMutableWorkingDir(dir),
+	}
+	input, _ := json.Marshal(llmOneShotInput{PromptFiles: []string{"pic.png"}})
+	result := tool.Tool().Run(context.Background(), input)
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+	if captured == nil || len(captured.Messages[0].Content) != 1 || captured.Messages[0].Content[0].MediaType != "image/png" {
+		t.Fatalf("unexpected request: %+v", captured)
+	}
+}
+
+func TestLLMOneShotRejectsImageForNonVisionModel(t *testing.T) {
+	dir := t.TempDir()
+	writeOneShotPNG(t, filepath.Join(dir, "pic.png"), 2)
+	tool := &LLMOneShotTool{
+		LLMProvider: &oneShotMockProvider{services: map[string]llm.Service{
+			"text": &noImageOneShotService{},
+		}},
+		ModelID:    "text",
+		WorkingDir: NewMutableWorkingDir(dir),
+	}
+	input, _ := json.Marshal(llmOneShotInput{PromptFiles: []string{"pic.png"}})
+	result := tool.Tool().Run(context.Background(), input)
+	if result.Error == nil || !strings.Contains(result.Error.Error(), "does not support image attachments") {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+}
+
+func TestLLMOneShotPromptFileErrors(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "binary.bin"), []byte{0x00, 0x01, 0xff, 0xfe, 0x00}, 0o644)
+	writeOneShotPNG(t, filepath.Join(dir, "truncated.png"), 10)
+	data, _ := os.ReadFile(filepath.Join(dir, "truncated.png"))
+	os.WriteFile(filepath.Join(dir, "truncated.png"), data[:len(data)/2], 0o644)
+
+	tests := []struct {
+		name string
+		file string
+		want string
+	}{
+		{name: "missing", file: "missing.png", want: "failed to read prompt file"},
+		{name: "binary non-image", file: "binary.bin", want: "neither UTF-8 text nor a supported image"},
+		{name: "corrupt image", file: "truncated.png", want: "corrupt or truncated"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tool := &LLMOneShotTool{
+				LLMProvider: &oneShotMockProvider{services: map[string]llm.Service{
+					"vision": &oneShotMockService{response: "unused"},
+				}},
+				ModelID:    "vision",
+				WorkingDir: NewMutableWorkingDir(dir),
+			}
+			input, _ := json.Marshal(llmOneShotInput{PromptFiles: []string{tt.file}})
+			result := tool.Tool().Run(context.Background(), input)
+			if result.Error == nil || !strings.Contains(result.Error.Error(), tt.want) {
+				t.Fatalf("error = %v, want %q", result.Error, tt.want)
+			}
+		})
+	}
+}

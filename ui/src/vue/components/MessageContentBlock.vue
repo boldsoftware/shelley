@@ -261,7 +261,8 @@ const toolDispatch = computed<{ is: unknown; props: Record<string, unknown> } | 
       toolName === "browser" ||
       toolName === "output_iframe" ||
       toolName === "screenshot" ||
-      toolName === "browser_take_screenshot"
+      toolName === "browser_take_screenshot" ||
+      toolName === "llm_one_shot"
     ) {
       base.display = c.Display;
     }

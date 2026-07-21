@@ -38,10 +38,25 @@
       </button>
     </div>
 
+    <!-- Images are always visible, even when the card is collapsed. -->
+    <div v-if="displayImages.length" class="tool-section llm-one-shot-images">
+      <div v-for="img in displayImages" :key="img.url" class="screenshot-tool-image-container">
+        <a :href="img.url" target="_blank" rel="noopener noreferrer">
+          <img
+            :src="img.url"
+            :alt="`Image: ${img.path || 'attachment'}`"
+            class="tool-image-responsive"
+            :width="img.width || undefined"
+            :height="img.height || undefined"
+          />
+        </a>
+      </div>
+    </div>
+
     <div v-if="isExpanded" class="tool-details">
       <div class="tool-section">
-        <div class="tool-label">Prompt file:</div>
-        <pre class="tool-code">{{ promptFile || "(none)" }}</pre>
+        <div class="tool-label">Prompt files:</div>
+        <pre class="tool-code">{{ promptFiles.join("\n") || "(none)" }}</pre>
       </div>
 
       <div v-if="model" class="tool-section">
@@ -76,10 +91,17 @@ import type { LLMContent } from "../../../types";
 import { useToolExpanded } from "../../composables/toolDetail";
 
 interface LLMOneShotInput {
-  prompt_file?: string;
+  prompt_files?: string[] | string;
   output_file?: string;
   model?: string;
   system_prompt?: string;
+}
+
+interface LLMOneShotDisplayImage {
+  url: string;
+  path?: string;
+  width?: number;
+  height?: number;
 }
 
 const props = defineProps<{
@@ -88,6 +110,7 @@ const props = defineProps<{
   toolResult?: LLMContent[];
   hasError?: boolean;
   executionTime?: string;
+  display?: unknown; // Display data from the tool_result Content
 }>();
 
 const isExpanded = useToolExpanded();
@@ -98,8 +121,24 @@ const input = computed<LLMOneShotInput>(() =>
     : {},
 );
 
-const promptFile = computed(() => input.value.prompt_file || "");
+const promptFiles = computed(() => {
+  const pf = input.value.prompt_files;
+  if (Array.isArray(pf)) return pf;
+  if (typeof pf === "string" && pf) return [pf];
+  return [];
+});
 const model = computed(() => input.value.model || "");
+
+const displayImages = computed<LLMOneShotDisplayImage[]>(() => {
+  const d = props.display;
+  if (typeof d !== "object" || d === null) return [];
+  const images = (d as { images?: unknown }).images;
+  if (!Array.isArray(images)) return [];
+  return images.filter(
+    (img): img is LLMOneShotDisplayImage =>
+      typeof img === "object" && img !== null && typeof (img as { url?: unknown }).url === "string",
+  );
+});
 
 const resultText = computed(
   () =>
@@ -113,7 +152,7 @@ const isComplete = computed(() => !props.isRunning && props.toolResult !== undef
 
 const summary = computed(() => {
   const parts: string[] = [];
-  if (promptFile.value) parts.push(promptFile.value);
+  if (promptFiles.value.length) parts.push(promptFiles.value.join(", "));
   if (model.value) parts.push(`model: ${model.value}`);
   return parts.join(" · ") || "llm_one_shot";
 });

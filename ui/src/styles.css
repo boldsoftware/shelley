@@ -1406,6 +1406,12 @@ body {
   gap: 0.5rem;
 }
 
+/* llm_one_shot image previews sit outside the collapsible .tool-details so
+ * they are visible even when the card is collapsed. */
+.llm-one-shot-images {
+  padding: 0 1rem 0.75rem 1rem;
+}
+
 .tool-label {
   font-size: 0.75rem;
   font-weight: 500;
@@ -10951,6 +10957,7 @@ kbd {
 
 /* Align the body to the modal padding (the modal-body already pads). */
 .tool-detail-modal .bash-tool-details,
+.tool-detail-modal .llm-one-shot-images,
 .tool-detail-modal .tool-details {
   padding: 0;
   gap: 1rem;

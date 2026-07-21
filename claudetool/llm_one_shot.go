@@ -2,12 +2,20 @@ package claudetool
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/llm/imageutil"
 )
 
 // LLMOneShotTool sends a one-shot prompt to an LLM and returns the result.
@@ -25,14 +33,23 @@ const (
 	llmOneShotMaxInlineLen = 4000
 )
 
+// OneShotImageDir is where llm_one_shot saves copies of image prompt files so
+// the UI can display them via /api/read (the originals may live anywhere on
+// disk, which /api/read must not serve).
+const OneShotImageDir = "/tmp/shelley-oneshot-images"
+
 // llmOneShotDescription builds the tool description, including model info when models are available.
 func (t *LLMOneShotTool) llmOneShotDescription() string {
 	base := `Send a one-shot prompt to an LLM and get a response.
 
 Unlike subagents, this is a single request/response with no conversation history or tools.
-Use this for simple LLM tasks like summarization, extraction, classification, or reformatting.
+Use this for simple LLM tasks like summarization, extraction, classification, reformatting,
+or image analysis with a vision-capable model.
 
-The prompt is read from a file (to handle large inputs cleanly).
+The prompt is read from files (to handle large inputs cleanly). prompt_files
+is a list of paths: text files are concatenated in order, and image files
+(png, jpeg, gif, webp, heic) are attached as images. Attaching images requires a
+vision-capable model.
 Short results are returned inline; long results are written to a file.`
 
 	if len(t.AvailableModels) > 0 {
@@ -67,11 +84,12 @@ func (t *LLMOneShotTool) llmOneShotInputSchema() string {
 
 	return fmt.Sprintf(`{
   "type": "object",
-  "required": ["prompt_file"],
+  "required": ["prompt_files"],
   "properties": {
-    "prompt_file": {
-      "type": "string",
-      "description": "Path to a file containing the prompt to send. Relative paths are resolved from the working directory."
+    "prompt_files": {
+      "type": ["array", "string"],
+      "items": { "type": "string" },
+      "description": "Paths to files for the prompt. Image files are attached as images. Relative paths resolved from working dir."
     },
     "output_file": {
       "type": "string",
@@ -85,11 +103,26 @@ func (t *LLMOneShotTool) llmOneShotInputSchema() string {
 }`, modelProp)
 }
 
+// stringOrList unmarshals from either a JSON string or an array of strings.
+type stringOrList []string
+
+func (s *stringOrList) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] == '"' {
+		var one string
+		if err := json.Unmarshal(data, &one); err != nil {
+			return err
+		}
+		*s = stringOrList{one}
+		return nil
+	}
+	return json.Unmarshal(data, (*[]string)(s))
+}
+
 type llmOneShotInput struct {
-	PromptFile   string `json:"prompt_file"`
-	OutputFile   string `json:"output_file,omitempty"`
-	Model        string `json:"model,omitempty"`
-	SystemPrompt string `json:"system_prompt,omitempty"`
+	PromptFiles  stringOrList `json:"prompt_files,omitempty"`
+	OutputFile   string       `json:"output_file,omitempty"`
+	Model        string       `json:"model,omitempty"`
+	SystemPrompt string       `json:"system_prompt,omitempty"`
 }
 
 // Tool returns an llm.Tool for the LLM one-shot functionality.
@@ -102,27 +135,35 @@ func (t *LLMOneShotTool) Tool() *llm.Tool {
 	}
 }
 
+// isImageData reports whether data looks like an image file.
+func isImageData(data []byte) bool {
+	return imageutil.IsHEIC(data) || strings.HasPrefix(http.DetectContentType(data), "image/")
+}
+
+// saveOneShotImage writes a prepared image to OneShotImageDir so /api/read can
+// serve it to the UI (mirroring how browser screenshots are surfaced). Returns
+// the saved path, or "" on failure.
+func saveOneShotImage(ctx context.Context, prepared imageutil.Prepared) string {
+	if err := os.MkdirAll(OneShotImageDir, 0o755); err != nil {
+		slog.WarnContext(ctx, "llm_one_shot: failed to create image dir", "error", err)
+		return ""
+	}
+	ext := strings.TrimPrefix(prepared.MediaType, "image/")
+	path := filepath.Join(OneShotImageDir, uuid.New().String()+"."+ext)
+	if err := os.WriteFile(path, prepared.Data, 0o644); err != nil {
+		slog.WarnContext(ctx, "llm_one_shot: failed to save image copy", "error", err)
+		return ""
+	}
+	return path
+}
+
 func (t *LLMOneShotTool) run(ctx context.Context, req llmOneShotInput) llm.ToolOut {
-	if req.PromptFile == "" {
-		return llm.ErrorfToolOut("prompt_file is required")
+	promptFiles := []string(req.PromptFiles)
+	if len(promptFiles) == 0 {
+		return llm.ErrorfToolOut("prompt_files is required")
 	}
 
-	// Resolve paths relative to working directory
 	wd := t.WorkingDir.Get()
-	promptPath := req.PromptFile
-	if !filepath.IsAbs(promptPath) {
-		promptPath = filepath.Join(wd, promptPath)
-	}
-
-	// Read the prompt file
-	promptBytes, err := os.ReadFile(promptPath)
-	if err != nil {
-		return llm.ErrorfToolOut("failed to read prompt file: %w", err)
-	}
-	prompt := string(promptBytes)
-	if strings.TrimSpace(prompt) == "" {
-		return llm.ErrorfToolOut("prompt file is empty")
-	}
 
 	// Determine which model to use: explicit choice > conversation's model
 	modelID := t.ModelID
@@ -158,14 +199,70 @@ func (t *LLMOneShotTool) run(ctx context.Context, req llmOneShotInput) llm.ToolO
 		return llm.ErrorfToolOut("failed to get LLM service for model %q: %w", modelID, err)
 	}
 
+	// Assemble the prompt: concatenate text files in order, attach images.
+	var promptText strings.Builder
+	var images []llm.Content
+	var displayImages []map[string]any
+	for _, pf := range promptFiles {
+		path := pf
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(wd, path)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return llm.ErrorfToolOut("failed to read prompt file: %w", err)
+		}
+		if isImageData(data) {
+			if !svc.SupportsImages() {
+				return llm.ErrorfToolOut("prompt file %q is an image, but model %q does not support image attachments", pf, modelID)
+			}
+			prepared, err := imageutil.Prepare(data, path, svc.MaxImageDimension(), svc.MaxImageBytes())
+			if err != nil {
+				return llm.ErrorfToolOut("invalid image %q: %w", pf, err)
+			}
+			images = append(images, llm.Content{
+				Type:          llm.ContentTypeText,
+				MediaType:     prepared.MediaType,
+				Data:          base64.StdEncoding.EncodeToString(prepared.Data),
+				DisplayWidth:  prepared.Width,
+				DisplayHeight: prepared.Height,
+			})
+			// Save a copy so the UI can render the image via /api/read.
+			// Failures are non-fatal: the request itself is unaffected.
+			if saved := saveOneShotImage(ctx, prepared); saved != "" {
+				displayImages = append(displayImages, map[string]any{
+					"url":    "/api/read?path=" + url.QueryEscape(saved),
+					"path":   pf,
+					"width":  prepared.Width,
+					"height": prepared.Height,
+				})
+			}
+			continue
+		}
+		if !utf8.Valid(data) {
+			return llm.ErrorfToolOut("prompt file %q is neither UTF-8 text nor a supported image format", pf)
+		}
+		if promptText.Len() > 0 && len(data) > 0 {
+			promptText.WriteString("\n")
+		}
+		promptText.Write(data)
+	}
+	prompt := promptText.String()
+	if strings.TrimSpace(prompt) == "" && len(images) == 0 {
+		return llm.ErrorfToolOut("prompt is empty")
+	}
+
 	// Build the request
+	message := llm.Message{Role: llm.MessageRoleUser}
+	if strings.TrimSpace(prompt) != "" {
+		message.Content = append(message.Content, llm.StringContent(prompt))
+	}
+	message.Content = append(message.Content, images...)
 	llmReq := &llm.Request{
-		Messages: []llm.Message{
-			llm.UserStringMessage(prompt),
-		},
+		Messages: []llm.Message{message},
 	}
 	if req.SystemPrompt != "" {
-		llmReq.System = []llm.SystemContent{{Text: req.SystemPrompt}}
+		llmReq.System = []llm.SystemContent{{Type: "text", Text: req.SystemPrompt}}
 	}
 
 	// Send the request
@@ -202,6 +299,11 @@ func (t *LLMOneShotTool) run(ctx context.Context, req llmOneShotInput) llm.ToolO
 		f.Close()
 	}
 
+	var display any
+	if len(displayImages) > 0 {
+		display = map[string]any{"images": displayImages}
+	}
+
 	if outputPath != "" {
 		if err := os.WriteFile(outputPath, []byte(resultText), 0o644); err != nil {
 			return llm.ErrorfToolOut("failed to write output file: %w", err)
@@ -210,6 +312,7 @@ func (t *LLMOneShotTool) run(ctx context.Context, req llmOneShotInput) llm.ToolO
 			modelID, resp.Usage.InputTokens, resp.Usage.OutputTokens)
 		return llm.ToolOut{
 			LLMContent: llm.TextContent(fmt.Sprintf("Response written to %s (%d bytes)%s", outputPath, len(resultText), usage)),
+			Display:    display,
 		}
 	}
 
@@ -217,5 +320,6 @@ func (t *LLMOneShotTool) run(ctx context.Context, req llmOneShotInput) llm.ToolO
 		modelID, resp.Usage.InputTokens, resp.Usage.OutputTokens)
 	return llm.ToolOut{
 		LLMContent: llm.TextContent(resultText + usage),
+		Display:    display,
 	}
 }
