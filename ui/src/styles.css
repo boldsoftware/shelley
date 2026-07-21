@@ -3917,15 +3917,48 @@ svg {
 }
 
 /* Wrapper for messages area to position scroll-to-bottom button */
+/* Positioning wrapper for messages + floating TOC. Transcript landmark is
+   an inner region so floating controls are not announced as inside it. */
 .messages-area-wrapper {
   position: relative;
   flex: 1 1 auto;
   min-height: 0; /* Important for flex children to shrink properly */
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.messages-transcript-region {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .messages-container {
   height: 100%;
+}
+
+/* Keyboard skip link — visible on focus only */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: 0.5rem;
+  z-index: 10000;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-base, #fff);
+  color: var(--text-primary, #111);
+  border: 2px solid var(--accent-primary, #2563eb);
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: translateY(0);
+  outline: 2px solid var(--accent-primary, #2563eb);
+  outline-offset: 2px;
 }
 
 /* Status bar configuration controls for empty conversations */
