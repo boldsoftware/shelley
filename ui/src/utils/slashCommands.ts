@@ -31,6 +31,11 @@ export const SLASH_COMMANDS = {
     description: "compacts this conversation (alias for /compact)",
     takesArgs: true,
   },
+  CLEAR: {
+    command: "/clear",
+    description: "clears context, keeping this conversation",
+    takesArgs: false,
+  },
   NEW: {
     command: "/new",
     description: "starts a new conversation",

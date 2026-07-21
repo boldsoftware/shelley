@@ -48,6 +48,12 @@ export const PLACEHOLDER_HINTS: PlaceholderHint[] = [
     platform: "any",
     weight: 1,
   },
+  {
+    id: "slash-clear",
+    text: `${SLASH_COMMANDS.CLEAR.command} ${SLASH_COMMANDS.CLEAR.description}`,
+    platform: "any",
+    weight: 1,
+  },
 ];
 
 export function hintsForPlatform(

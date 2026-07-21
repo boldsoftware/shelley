@@ -1514,6 +1514,20 @@ async function sendMessage(message: string) {
     await forkConversation();
     return;
   }
+  // /clear starts a fresh generation in the same conversation: it drops the
+  // prior context and re-hydrates a vanilla system prompt (like compaction,
+  // but without the summary). No-op when there is no conversation yet.
+  if (trimmedMessage === SLASH_COMMANDS.CLEAR.command) {
+    if (!props.conversationId) return;
+    try {
+      error.value = null;
+      await handleStartNewGeneration();
+    } catch (err) {
+      console.error("Failed to run /clear:", err);
+      error.value = err instanceof Error ? err.message : "Failed to clear conversation";
+    }
+    return;
+  }
   // /model is handled server-side synchronously (it switches the model and
   // returns immediately without starting a turn), so it must NOT flip the
   // agent-working state — otherwise "Agent working..." would stick on. Send it
