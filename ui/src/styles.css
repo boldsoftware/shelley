@@ -2399,6 +2399,7 @@ body {
 }
 
 .message-textarea {
+  display: block;
   width: 100%;
   box-sizing: border-box;
   min-height: 46px;
