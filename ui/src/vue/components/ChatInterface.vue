@@ -3,9 +3,17 @@
      bar, terminal/diff/git panels, model/thinking pickers, distill, TOC,
      scroll behavior. Preserves the e2e DOM/ARIA/CSS contract. -->
 <template>
-  <div class="full-height flex flex-col">
+  <div class="full-height flex flex-col" role="main" aria-label="Shelley conversation">
+    <a href="#shelley-message-input" class="skip-link">Skip to message input</a>
+    <StatusAnnouncer
+      :agent-working="agentWorking"
+      :stream-status="streamStatus"
+      :error="error"
+      :tools-completed="toolsCompletedThisTurn"
+      :assistant-preview="assistantTurnPreview"
+    />
     <!-- Header -->
-    <div class="header">
+    <div class="header" role="banner" aria-label="Conversation header">
       <div class="header-left">
         <Button
           class="btn-icon hide-on-desktop"
@@ -82,9 +90,21 @@
       </div>
     </div>
 
-    <!-- Messages area -->
+    <!-- Messages area. Positioning wrapper is not the transcript landmark —
+         floating TOC/scroll controls sit as siblings so focusing them does
+         not also announce "Conversation transcript region". -->
     <div class="messages-area-wrapper">
-      <div ref="messagesContainerRef" class="messages-container scrollable">
+      <div
+        class="messages-transcript-region"
+        role="region"
+        aria-label="Conversation transcript"
+      >
+      <div
+        ref="messagesContainerRef"
+        class="messages-container scrollable"
+        data-a11y-transcript
+        tabindex="-1"
+      >
         <template v-if="loading">
           <div v-if="showLoadingProgressUI" class="conversation-loading full-height">
             <div class="spinner" />
@@ -220,8 +240,9 @@
           <div ref="bottomSentinelRef" class="messages-bottom-sentinel" aria-hidden="true" />
         </div>
       </div>
+      </div>
 
-      <!-- Floating nav cluster -->
+      <!-- Floating nav cluster: sibling of the transcript region, not a child. -->
       <div v-if="conversationId && messages.length > 0" class="chat-nav-cluster">
         <ConversationTOC
           :messages="messages"
@@ -385,6 +406,7 @@ import {
   reconcileComposerDraft,
 } from "../../services/draftCache";
 import { setFaviconStatus } from "../../services/favicon";
+import { plainTextCache } from "../../services/plainTextCache";
 import { useMarkdownMode } from "../composables/markdownMode";
 import { useI18n } from "../composables/i18n";
 import { useDraftAutosave } from "../composables/draftAutosave";
@@ -404,9 +426,11 @@ import { coalesceMessages, type CoalescedItem } from "./coalesce";
 import type { RenderNode, RenderChunk, GenerationBlock } from "./renderNode";
 import type { EphemeralTerminal } from "./terminalTypes";
 import { DEFAULT_THINKING_LEVEL, type ThinkingLevel } from "./thinkingLevel";
+import { currentTurnAssistantPreview } from "./assistantTurnPreview";
 
 import MessageInput from "./MessageInput.vue";
 import ConversationTOC from "./ConversationTOC.vue";
+import StatusAnnouncer from "./StatusAnnouncer.vue";
 import ModelBar from "./ModelBar.vue";
 import SystemPromptView from "./SystemPromptView.vue";
 import DirectoryPickerModal from "./DirectoryPickerModal.vue";
@@ -659,6 +683,8 @@ const diffViewerInitialCommit = ref<string | undefined>(undefined);
 const diffViewerCwd = ref<string | undefined>(undefined);
 const diffCommentText = ref("");
 const agentWorking = ref(false);
+/** Tools that finished during the turn that just ended (for StatusAnnouncer). */
+const toolsCompletedThisTurn = ref(0);
 const cancelling = ref(false);
 const contextWindowSize = ref(0);
 const toolProgress = ref<Record<string, ToolProgress>>({});
@@ -666,6 +692,13 @@ const streamingText = ref("");
 const showAdvancedSettings = ref(false);
 const advancedSettingsRef = ref<HTMLDivElement | null>(null);
 const availableTools = ref<Array<{ name: string; summary: string; default_on: boolean }>>([]);
+
+// Only the current turn (after the latest user message). Never fall back to
+// an earlier agent reply — that made VO announce the previous turn's text
+// when agent_working flipped false before the new agent message arrived.
+const assistantTurnPreview = computed(() =>
+  currentTurnAssistantPreview(messages.value, (id, text) => plainTextCache.get(id, text)),
+);
 
 const showScrollToBottom = ref(false);
 // Keyboard shortcut for jumping to the newest message, surfaced in the
@@ -2167,9 +2200,22 @@ const mobileMq = window.matchMedia("(max-width: 767px)");
 const onMobileChange = (e: MediaQueryListEvent) => (isMobile.value = e.matches);
 mobileMq.addEventListener("change", onMobileChange);
 
-// Favicon working indicator.
-watch(agentWorking, (working) => {
-  if (working) setFaviconStatus("working");
+// Favicon working indicator + tool-count for end-of-turn SR announce.
+watch(agentWorking, (working, wasWorking) => {
+  if (working) {
+    setFaviconStatus("working");
+    toolsCompletedThisTurn.value = 0;
+    return;
+  }
+  if (wasWorking) {
+    let n = 0;
+    for (let i = messages.value.length - 1; i >= 0; i--) {
+      const m = messages.value[i];
+      if (m.type === "user") break;
+      if (m.type === "tool") n++;
+    }
+    toolsCompletedThisTurn.value = n;
+  }
 });
 
 // ---- conversation switch: hydrate + subscribe ----

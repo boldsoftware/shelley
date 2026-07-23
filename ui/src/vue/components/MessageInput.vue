@@ -169,6 +169,7 @@
           class="message-textarea"
           :disabled="isDisabled"
           :rows="initialRows ?? 1"
+          id="shelley-message-input"
           aria-label="Message input"
           data-testid="message-input"
           @input="onTextareaInput"
