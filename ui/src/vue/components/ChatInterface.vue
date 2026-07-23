@@ -43,7 +43,7 @@
           </svg>
         </Button>
 
-        <h1 class="header-title" :title="currentConversation?.slug || 'Shelley'">
+        <h1 class="app-bar-title header-title" :title="currentConversation?.slug || 'Shelley'">
           {{ displayTitle }}
         </h1>
       </div>

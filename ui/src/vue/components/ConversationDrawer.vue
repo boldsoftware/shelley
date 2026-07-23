@@ -32,7 +32,9 @@
   <div :class="`drawer ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''}`">
     <!-- Header -->
     <div class="drawer-header">
-      <h2 class="drawer-title">{{ showArchived ? t("archived") : t("conversations") }}</h2>
+      <h2 class="app-bar-title drawer-title">
+        {{ showArchived ? t("archived") : t("conversations") }}
+      </h2>
       <div class="drawer-header-actions">
         <!-- Search toggle button -->
         <Button

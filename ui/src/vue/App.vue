@@ -209,6 +209,7 @@ import {
 import { connectGlobalStream, type StreamStatus } from "../services/globalStream";
 import { handleNotificationEvent } from "../services/notifications";
 import { loadCachedDraft } from "../services/draftCache";
+import { shouldStartDrawerCollapsed } from "../utils/drawerStartup";
 import { useI18n } from "./composables/i18n";
 
 const { t } = useI18n();
@@ -293,6 +294,7 @@ const showActiveTrigger = ref(0);
 
 // ---- non-reactive refs ----
 let initialSlugResolved = false;
+let startupDrawerStateApplied = false;
 let conversationListHash: string | null = null;
 let globalStreamHandle: { forceReconnect: () => void; close: () => void } | null = null;
 
@@ -470,6 +472,10 @@ async function loadConversations() {
       commitListState({ list: snapshot.conversations, hash: snapshot.hash });
     }
     const currentList = streamHash ? conversations.value : snapshot.conversations;
+    if (!startupDrawerStateApplied) {
+      drawerCollapsed.value = shouldStartDrawerCollapsed(currentList);
+      startupDrawerStateApplied = true;
+    }
     const topLevel = currentList.filter((c) => !c.parent_conversation_id);
 
     const slugConv = await resolveInitialSlug(currentList);
