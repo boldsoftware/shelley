@@ -3973,24 +3973,6 @@ svg {
   gap: 0.5rem;
 }
 
-/* On smaller screens, allow the fields to stack vertically */
-@media (max-width: 600px) {
-  .status-bar-new-conversation {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .status-field {
-    width: 100%;
-    max-width: none;
-  }
-
-  .status-field-label {
-    width: 4rem;
-    text-align: right;
-  }
-}
-
 .status-bar-controls {
   display: flex;
   align-items: center;
@@ -4785,10 +4767,9 @@ svg {
     flex-shrink: 0;
   }
 
-  /* Override column stacking for new-conversation fields when inline */
+  /* Let new-conversation fields share a row when they fit and wrap naturally
+     when the available width is too narrow. */
   .message-controls-status-slot .status-bar-new-conversation {
-    flex-direction: column;
-    align-items: stretch;
     width: 100%;
     gap: 0.375rem;
   }

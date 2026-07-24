@@ -52,6 +52,26 @@ test.describe("Model picker (PrimeVue)", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
   });
 
+  test("keeps model and directory inline when they fit, then wraps when needed", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto("/new");
+
+    const fieldTops = () =>
+      page.evaluate(() => ({
+        model: document.querySelector(".status-field-model")!.getBoundingClientRect().top,
+        cwd: document.querySelector(".status-field-cwd")!.getBoundingClientRect().top,
+      }));
+
+    let tops = await fieldTops();
+    expect(Math.abs(tops.model - tops.cwd)).toBeLessThan(2);
+
+    await page.setViewportSize({ width: 320, height: 700 });
+    tops = await fieldTops();
+    expect(Math.abs(tops.model - tops.cwd)).toBeGreaterThan(2);
+  });
+
   test("effort pills select a level, persist it, and keep the popover open", async ({ page }) => {
     test.setTimeout(60000);
 
