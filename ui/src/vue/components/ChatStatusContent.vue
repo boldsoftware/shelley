@@ -167,7 +167,7 @@
         :disabled="sending"
         @click="onOpenDirectoryPicker"
       >
-        {{ selectedCwd || "(no cwd)" }}
+        {{ tildifyPath(selectedCwd) || "(no cwd)" }}
       </button>
     </div>
   </div>

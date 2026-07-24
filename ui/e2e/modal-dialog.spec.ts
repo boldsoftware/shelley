@@ -127,6 +127,22 @@ test.describe("Base modal backdrop click beside the panel (desktop)", () => {
 // create form whose local Escape must cancel create mode without closing the
 // dialog (it stopPropagation()s before the shared modal Escape stack sees it).
 test.describe("Directory picker modal (shared Modal consumer)", () => {
+  test("uses a home-relative path in the new-conversation cwd chip", async ({ page }) => {
+    await page.goto("/new");
+    const homeDir = await page.evaluate(() => window.__SHELLEY_INIT__?.home_dir || "");
+    expect(homeDir).not.toBe("");
+
+    const absoluteCwd = `${homeDir}/exe`;
+    await page.evaluate((cwd) => localStorage.setItem("shelley_selected_cwd", cwd), absoluteCwd);
+    await page.reload();
+
+    const chip = page.locator(".status-field-cwd .status-chip");
+    await expect(chip).toHaveText("~/exe");
+
+    await chip.click();
+    await expect(page.locator(".directory-picker-input")).toHaveValue(`${absoluteCwd}/`);
+  });
+
   test("opens from the cwd chip, pins the footer, and handles nested Escape", async ({ page }) => {
     test.setTimeout(60000);
 
