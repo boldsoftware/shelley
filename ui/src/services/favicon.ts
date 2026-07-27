@@ -1,7 +1,9 @@
-// Favicon service for dynamic status indication
-// Modifies the server-injected favicon to show a colored dot when the agent state changes
+// Favicon service for dynamic conversation-status indication
+// When the agent is working, the entire favicon is ghosted rather than badged
 
 type FaviconStatus = "working" | "ready";
+
+const WORKING_OPACITY = "0.35";
 
 let currentStatus: FaviconStatus = "ready";
 let originalSVG: string | null = null;
@@ -23,25 +25,18 @@ function extractSVGFromDataURI(dataURI: string): string | null {
   }
 }
 
-// Add a status dot to the SVG
-function addStatusDot(svg: string, status: FaviconStatus): string {
-  // Remove the closing </svg> tag
-  const closingTagIndex = svg.lastIndexOf("</svg>");
-  if (closingTagIndex === -1) {
+// Ghost every element in the favicon while the agent is working
+function applyStatus(svg: string, status: FaviconStatus): string {
+  if (status === "ready") {
     return svg;
   }
 
-  const svgWithoutClose = svg.substring(0, closingTagIndex);
+  const openingTagEnd = svg.indexOf(">");
+  if (openingTagEnd === -1 || !svg.startsWith("<svg")) {
+    return svg;
+  }
 
-  // Add the status dot in the bottom-right corner
-  // New viewBox is 400x400, so position dot near bottom-right at ~350,350
-  const dotColor = status === "working" ? "#f59e0b" : "#22c55e";
-  const statusDot = `
-  <circle cx="340" cy="340" r="50" fill="white"/>
-  <circle cx="340" cy="340" r="40" fill="${dotColor}"/>
-`;
-
-  return svgWithoutClose + statusDot + "</svg>";
+  return `${svg.slice(0, openingTagEnd)} opacity="${WORKING_OPACITY}"${svg.slice(openingTagEnd)}`;
 }
 
 // Update the favicon to reflect the current status
@@ -61,19 +56,13 @@ export function setFaviconStatus(status: FaviconStatus): void {
     if (extracted) {
       originalSVG = extracted;
     } else {
-      // If we can't extract SVG, give up
       return;
     }
   }
 
   currentStatus = status;
-
-  // Generate new SVG with status dot
-  const newSVG = addStatusDot(originalSVG, status);
-  const newDataURI = "data:image/svg+xml," + encodeURIComponent(newSVG);
-
-  // Update the favicon
-  link.href = newDataURI;
+  const newSVG = applyStatus(originalSVG, status);
+  link.href = "data:image/svg+xml," + encodeURIComponent(newSVG);
 }
 
 // Initialize the favicon service (call on app start)
