@@ -288,7 +288,7 @@
         @click="emit('open-experience')"
       >
         <span class="drawer-icon-size" aria-hidden="true">🧠</span>
-        <span>Project experience</span>
+        <span>{{ t("projectExperience") }}</span>
       </Button>
       <Button
         class="drawer-footer-button"
