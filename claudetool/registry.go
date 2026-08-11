@@ -23,6 +23,9 @@ var ToolRegistry = []ToolInfo{
 	{Name: "output_iframe", Summary: "Show HTML/visualizations to the user.", DefaultOn: true},
 	{Name: "subagent", Summary: "Spawn a subagent conversation.", DefaultOn: true},
 	{Name: "llm_one_shot", Summary: "One-shot prompt to another LLM.", DefaultOn: true},
+	{Name: "memory", Summary: "Search and save durable project experience.", DefaultOn: true},
+	{Name: "task_journal", Summary: "Save and restore task checkpoints.", DefaultOn: true},
+	{Name: "dream", Summary: "Consolidate verified work into reusable lessons.", DefaultOn: true},
 	{Name: "browser", Summary: "Browser automation (navigate, eval, screenshot, emulate, network, accessibility, profile).", DefaultOn: true},
 	{Name: "read_image", Summary: "Read an image file for the model.", DefaultOn: true},
 }

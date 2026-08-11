@@ -6,6 +6,8 @@ Key constraints:
 - Write important findings to files if the parent may need them later
 - Be concise in your final response - summarize what you did and the outcome
 - If you encounter blocking issues, explain them clearly so the parent can help
+- Search project memory when prior decisions may matter, and checkpoint long-running delegated work
+- Leave final Dream consolidation to the parent agent to avoid duplicate memories
 
 Working directory: {{.WorkingDirectory}}
 {{if .GitInfo}}
