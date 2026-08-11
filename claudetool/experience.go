@@ -64,7 +64,8 @@ type memoryInput struct {
 
 var sensitiveMemory = regexp.MustCompile(`(?i)(ghp_[a-z0-9]+|github_pat_[a-z0-9_]+|sk-[a-z0-9_-]{16,}|AKIA[A-Z0-9]{16}|eyJ[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+|(api[_-]?key|password|passwd|secret|access[_-]?token|authorization)[\s\"']*[:=][\s\"']*[^\s\"']{6,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|bearer\s+[a-z0-9._-]+)`)
 
-func validateMemory(scope, kind, title, content string, confidence float64) error {
+// ValidateMemory rejects invalid, oversized, cross-project, or credential-like memories.
+func ValidateMemory(scope, kind, title, content string, confidence float64) error {
 	if scope != "project" {
 		return fmt.Errorf("scope must be project; global writes require a future explicit user-approval UI")
 	}
@@ -119,7 +120,7 @@ func (e *ExperienceTools) runMemory(ctx context.Context, in memoryInput) llm.Too
 		if in.Confidence == 0 {
 			in.Confidence = 1
 		}
-		if err := validateMemory(in.Scope, in.Kind, in.Title, in.Content, in.Confidence); err != nil {
+		if err := ValidateMemory(in.Scope, in.Kind, in.Title, in.Content, in.Confidence); err != nil {
 			return llm.ErrorfToolOut("save memory: %v", err)
 		}
 		project := ""
@@ -252,7 +253,7 @@ func (e *ExperienceTools) runDream(ctx context.Context, in dreamInput) llm.ToolO
 			in.Memories[i].Confidence = 1
 		}
 		m := in.Memories[i]
-		if err := validateMemory(m.Scope, m.Kind, m.Title, m.Content, m.Confidence); err != nil {
+		if err := ValidateMemory(m.Scope, m.Kind, m.Title, m.Content, m.Confidence); err != nil {
 			return llm.ErrorfToolOut("dream memory %q: %v", m.Title, err)
 		}
 	}

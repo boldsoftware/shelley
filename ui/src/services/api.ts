@@ -26,6 +26,45 @@ async function responseError(response: Response, prefix: string): Promise<Error>
   return new Error(`${prefix}: ${detail}`);
 }
 
+export interface ExperienceMemory {
+  id: string;
+  scope: "project";
+  project_path: string;
+  kind: "fact" | "decision" | "preference" | "lesson";
+  title: string;
+  content: string;
+  confidence: number;
+  source_conversation_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskCheckpoint {
+  id: string;
+  conversation_id: string;
+  event_type: string;
+  summary: string;
+  state: {
+    goal?: string;
+    constraints?: string[];
+    completed?: string[];
+    open?: string[];
+    errors?: string[];
+    verification?: string[];
+    next?: string;
+  };
+  created_at: string;
+}
+
+export interface DreamRun {
+  id: string;
+  conversation_id: string;
+  project_path: string;
+  summary: string;
+  memory_count: number;
+  created_at: string;
+}
+
 export interface AvailableModel {
   id: string;
   display_name?: string;
@@ -90,6 +129,76 @@ class ApiService {
     if (!response.ok) {
       throw new Error(`Failed to get tools: ${response.statusText}`);
     }
+    return response.json();
+  }
+
+  async getExperienceMemories(cwd: string, query = ""): Promise<ExperienceMemory[]> {
+    const params = new URLSearchParams({ cwd });
+    if (query.trim()) params.set("q", query.trim());
+    const response = await fetch(`${this.baseUrl}/experience/memories?${params}`);
+    if (!response.ok) throw await responseError(response, "Failed to load memories");
+    return response.json();
+  }
+
+  async createExperienceMemory(input: {
+    cwd: string;
+    conversation_id?: string;
+    kind: ExperienceMemory["kind"];
+    title: string;
+    content: string;
+    confidence: number;
+  }): Promise<ExperienceMemory> {
+    const response = await fetch(`${this.baseUrl}/experience/memories`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify(input),
+    });
+    if (!response.ok) throw await responseError(response, "Failed to create memory");
+    return response.json();
+  }
+
+  async updateExperienceMemory(cwd: string, memory: Pick<ExperienceMemory, "id" | "kind" | "title" | "content" | "confidence">): Promise<void> {
+    const params = new URLSearchParams({ cwd });
+    const response = await fetch(`${this.baseUrl}/experience/memories/${encodeURIComponent(memory.id)}?${params}`, {
+      method: "PUT",
+      headers: this.postHeaders,
+      body: JSON.stringify(memory),
+    });
+    if (!response.ok) throw await responseError(response, "Failed to update memory");
+  }
+
+  async deleteExperienceMemory(cwd: string, id: string): Promise<void> {
+    const params = new URLSearchParams({ cwd });
+    const response = await fetch(`${this.baseUrl}/experience/memories/${encodeURIComponent(id)}?${params}`, { method: "DELETE" });
+    if (!response.ok) throw await responseError(response, "Failed to delete memory");
+  }
+
+  async getTaskCheckpoints(conversationId: string): Promise<TaskCheckpoint[]> {
+    const params = new URLSearchParams({ conversation_id: conversationId });
+    const response = await fetch(`${this.baseUrl}/experience/journal?${params}`);
+    if (!response.ok) throw await responseError(response, "Failed to load checkpoints");
+    return response.json();
+  }
+
+  async createTaskCheckpoint(input: {
+    conversation_id: string;
+    summary: string;
+    state: TaskCheckpoint["state"];
+  }): Promise<TaskCheckpoint> {
+    const response = await fetch(`${this.baseUrl}/experience/journal`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify(input),
+    });
+    if (!response.ok) throw await responseError(response, "Failed to create checkpoint");
+    return response.json();
+  }
+
+  async getDreamRuns(cwd: string, conversationId = ""): Promise<DreamRun[]> {
+    const params = new URLSearchParams({ cwd });
+    if (conversationId) params.set("conversation_id", conversationId);
+    const response = await fetch(`${this.baseUrl}/experience/dreams?${params}`);
+    if (!response.ok) throw await responseError(response, "Failed to load Dream history");
     return response.json();
   }
 

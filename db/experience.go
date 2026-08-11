@@ -243,3 +243,113 @@ func (db *DB) LatestCheckpointJSON(ctx context.Context, conversationID string) (
 	}
 	return json.Marshal(checkpoint)
 }
+
+// ListMemories returns recent project memories without requiring a search term.
+func (db *DB) ListMemories(ctx context.Context, projectPath string, limit int) ([]MemoryItem, error) {
+	return db.SearchMemories(ctx, projectPath, "", limit)
+}
+
+func (db *DB) UpdateMemory(ctx context.Context, id, projectPath, kind, title, content string, confidence float64) error {
+	if id == "" || title == "" || content == "" || len(title) > 200 || len(content) > 4000 || confidence < 0 || confidence > 1 {
+		return fmt.Errorf("invalid memory update")
+	}
+	result := sql.Result(nil)
+	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		var err error
+		result, err = tx.Exec(`UPDATE memory_items SET kind = ?, title = ?, content = ?, confidence = ?, updated_at = ? WHERE id = ? AND project_path = ?`,
+			kind, title, content, confidence, time.Now().UTC(), id, projectPath)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("update memory: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (db *DB) DeleteMemory(ctx context.Context, id, projectPath string) error {
+	var result sql.Result
+	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		var err error
+		result, err = tx.Exec(`DELETE FROM memory_items WHERE id = ? AND project_path = ?`, id, projectPath)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("delete memory: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (db *DB) ListTaskCheckpoints(ctx context.Context, conversationID string, limit int) ([]TaskCheckpoint, error) {
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+	var checkpoints []TaskCheckpoint
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		rows, err := rx.Query(`SELECT id, conversation_id, event_type, summary, state_json, created_at
+			FROM task_journal WHERE conversation_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`, conversationID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var checkpoint TaskCheckpoint
+			var state string
+			if err := rows.Scan(&checkpoint.ID, &checkpoint.ConversationID, &checkpoint.EventType,
+				&checkpoint.Summary, &state, &checkpoint.CreatedAt); err != nil {
+				return err
+			}
+			checkpoint.State = json.RawMessage(state)
+			checkpoints = append(checkpoints, checkpoint)
+		}
+		return rows.Err()
+	})
+	return checkpoints, err
+}
+
+type DreamRun struct {
+	ID             string    `json:"id"`
+	ConversationID string    `json:"conversation_id"`
+	ProjectPath    string    `json:"project_path"`
+	Summary        string    `json:"summary"`
+	MemoryCount    int       `json:"memory_count"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+func (db *DB) ListDreamRuns(ctx context.Context, projectPath, conversationID string, limit int) ([]DreamRun, error) {
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+	var runs []DreamRun
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		rows, err := rx.Query(`SELECT id, conversation_id, project_path, summary, memory_count, created_at
+			FROM dream_runs WHERE (? = '' OR project_path = ?) AND (? = '' OR conversation_id = ?)
+			ORDER BY created_at DESC, rowid DESC LIMIT ?`, projectPath, projectPath, conversationID, conversationID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var run DreamRun
+			if err := rows.Scan(&run.ID, &run.ConversationID, &run.ProjectPath, &run.Summary, &run.MemoryCount, &run.CreatedAt); err != nil {
+				return err
+			}
+			runs = append(runs, run)
+		}
+		return rows.Err()
+	})
+	return runs, err
+}

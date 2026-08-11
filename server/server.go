@@ -508,6 +508,12 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/terminals/{id}", s.handleTerminalDelete)
 	mux.HandleFunc("POST /api/terminals/{id}/kill", s.handleTerminalDelete)
 
+	// Durable experience management API.
+	mux.HandleFunc("/api/experience/memories", s.handleExperienceMemories)
+	mux.HandleFunc("/api/experience/memories/{id}", s.handleExperienceMemory)
+	mux.HandleFunc("/api/experience/journal", s.handleExperienceJournal)
+	mux.HandleFunc("/api/experience/dreams", s.handleExperienceDreams)
+
 	// Custom models API
 	mux.Handle("/api/custom-models", http.HandlerFunc(s.handleCustomModels))
 	mux.Handle("/api/custom-models/", http.HandlerFunc(s.handleCustomModel))

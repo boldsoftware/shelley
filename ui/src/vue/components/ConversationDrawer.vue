@@ -279,8 +279,17 @@
       </div>
     </div>
 
-    <!-- Footer with archived toggle -->
+    <!-- Footer actions -->
     <div class="drawer-footer">
+      <Button
+        v-if="!showArchived"
+        class="drawer-footer-button"
+        severity="secondary"
+        @click="emit('open-experience')"
+      >
+        <span class="drawer-icon-size" aria-hidden="true">🧠</span>
+        <span>Project experience</span>
+      </Button>
       <Button
         class="drawer-footer-button"
         severity="secondary"
@@ -345,6 +354,7 @@ const emit = defineEmits<{
   (e: "archived", id: string, next?: Conversation | null): void;
   (e: "unarchived", c: Conversation): void;
   (e: "renamed", c: Conversation): void;
+  (e: "open-experience"): void;
 }>();
 
 const { t } = useI18n();
