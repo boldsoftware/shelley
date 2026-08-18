@@ -124,6 +124,47 @@ export interface TranslationKeys {
   yesterday: string;
   daysAgo: string;
 
+  // Project Experience
+  projectExperience: string;
+  memory: string;
+  taskJournal: string;
+  dream: string;
+  selectConversationForExperience: string;
+  searchProjectMemory: string;
+  search: string;
+  addMemory: string;
+  shortTitle: string;
+  verifiedReusableProjectKnowledge: string;
+  confidence: string;
+  saveMemory: string;
+  noProjectMemories: string;
+  checkpointSummary: string;
+  currentGoal: string;
+  nextAction: string;
+  saveCheckpoint: string;
+  openConversationForJournal: string;
+  noCheckpoints: string;
+  consolidateThisTask: string;
+  dreamDescription: string;
+  dreamAgentPrompt: string;
+  runDream: string;
+  refresh: string;
+  dreamRequested: string;
+  noDreamRuns: string;
+  memories: string;
+  goalLabel: string;
+  nextLabel: string;
+  kindFact: string;
+  kindDecision: string;
+  kindPreference: string;
+  kindLesson: string;
+  manualCheckpoint: string;
+  agentCheckpoint: string;
+  restoreCheckpoint: string;
+  inputLabel: string;
+  resultLabel: string;
+  noOutput: string;
+
   // Message Input
   messagePlaceholder: string;
   messagePlaceholderShort: string;

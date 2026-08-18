@@ -450,6 +450,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	// Set up subagent support
 	s.toolSetConfig.SubagentRunner = NewSubagentRunner(s)
 	s.toolSetConfig.SubagentDB = &db.SubagentDBAdapter{DB: database}
+	s.toolSetConfig.ExperienceStore = database
 	s.toolSetConfig.MaxSubagentDepth = 1 // Only top-level conversations can spawn subagents
 
 	return s
@@ -507,6 +508,12 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/terminals/{id}", s.handleTerminalDelete)
 	mux.HandleFunc("POST /api/terminals/{id}/kill", s.handleTerminalDelete)
 	mux.HandleFunc("PUT /api/terminals/{id}/scope", s.handleTerminalScope) // Move a terminal between conversation-local and global
+
+	// Durable experience management API.
+	mux.HandleFunc("/api/experience/memories", s.handleExperienceMemories)
+	mux.HandleFunc("/api/experience/memories/{id}", s.handleExperienceMemory)
+	mux.HandleFunc("/api/experience/journal", s.handleExperienceJournal)
+	mux.HandleFunc("/api/experience/dreams", s.handleExperienceDreams)
 
 	// Custom models API
 	mux.Handle("/api/custom-models", http.HandlerFunc(s.handleCustomModels))

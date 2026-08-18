@@ -1107,6 +1107,14 @@ func (s *PredictableService) makeToolSmorgasbordResponse(inputTokens uint64) *ll
 		ToolInput: json.RawMessage(llmInput),
 	})
 
+	// durable experience tools
+	memoryInput, _ := json.Marshal(map[string]any{"action": "search", "query": "database conventions"})
+	content = append(content, llm.Content{ID: fmt.Sprintf("tool_memory_%d", (baseNano+20)%1000), Type: llm.ContentTypeToolUse, ToolName: "memory", ToolInput: memoryInput})
+	journalInput, _ := json.Marshal(map[string]any{"action": "checkpoint", "summary": "UI demo", "state": map[string]any{"goal": "render tools"}})
+	content = append(content, llm.Content{ID: fmt.Sprintf("tool_journal_%d", (baseNano+21)%1000), Type: llm.ContentTypeToolUse, ToolName: "task_journal", ToolInput: journalInput})
+	dreamInput, _ := json.Marshal(map[string]any{"summary": "Demo completed", "memories": []any{}})
+	content = append(content, llm.Content{ID: fmt.Sprintf("tool_dream_%d", (baseNano+22)%1000), Type: llm.ContentTypeToolUse, ToolName: "dream", ToolInput: dreamInput})
+
 	// browser: screencast_stop action (tests screencast UI widget)
 	screencastInput, _ := json.Marshal(map[string]string{"action": "screencast_stop"})
 	content = append(content, llm.Content{

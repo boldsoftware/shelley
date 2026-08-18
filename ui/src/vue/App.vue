@@ -42,6 +42,7 @@
         @archived="handleConversationArchived"
         @unarchived="handleConversationUnarchived"
         @renamed="handleConversationRenamed"
+        @open-experience="experienceModalOpen = true"
       />
 
       <div class="main-content">
@@ -174,6 +175,13 @@
         "
       />
 
+      <ExperienceModal
+        :is-open="experienceModalOpen"
+        :cwd="finderDir"
+        :conversation-id="currentConversationId"
+        @close="experienceModalOpen = false"
+      />
+
       <FeatureFlagsModal
         :is-open="featureFlagsModalOpen"
         @close="
@@ -218,6 +226,7 @@ import CommandPalette from "./components/CommandPalette.vue";
 import ModelsModal from "./components/ModelsModal.vue";
 import NotificationsModal from "./components/NotificationsModal.vue";
 import FeatureFlagsModal from "./components/FeatureFlagsModal.vue";
+import ExperienceModal from "./components/ExperienceModal.vue";
 import FileFinderModal from "./components/FileFinderModal.vue";
 import EditableFileModal from "./components/EditableFileModal.vue";
 import Button from "primevue/button";
@@ -324,6 +333,7 @@ const terminalTrigger = ref(0);
 const modelsModalOpen = ref(false);
 const notificationsModalOpen = ref(false);
 const featureFlagsModalOpen = ref(false);
+const experienceModalOpen = ref(false);
 // Fuzzy file finder (Cmd/Ctrl+Shift+P) + the generic editor it opens.
 const fileFinderOpen = ref(false);
 const editorFilePath = ref<string | null>(null);

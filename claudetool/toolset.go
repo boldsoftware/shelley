@@ -87,6 +87,9 @@ type ToolSetConfig struct {
 	// snapshot taken at server start. If nil, the list is built from
 	// LLMProvider.GetAvailableModels() (without display names).
 	BuildAvailableModels func() []AvailableModel
+	// ExperienceStore persists task checkpoints and reusable project lessons.
+	// If set, memory, task_journal, and dream tools are available.
+	ExperienceStore ExperienceStore
 	// ToolOverrides maps tool name to "on" or "off". Tools not listed use their default.
 	ToolOverrides map[string]string
 	// DisableAllTools disables every tool by default; ToolOverrides with "on" re-enable.
@@ -248,6 +251,15 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 			ParentReasoning:      cfg.ReasoningLevel,
 		}
 		tools = append(tools, subagentTool.Tool())
+	}
+
+	if cfg.ExperienceStore != nil && cfg.ConversationID != "" {
+		experience := &ExperienceTools{
+			Store:          cfg.ExperienceStore,
+			ConversationID: cfg.ConversationID,
+			WorkingDir:     wd,
+		}
+		tools = append(tools, experience.MemoryTool(), experience.JournalTool(), experience.DreamTool())
 	}
 
 	// Add LLM one-shot tool if LLM provider is configured

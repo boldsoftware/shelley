@@ -136,6 +136,7 @@ import KeywordSearchTool from "./tools/KeywordSearchTool.vue";
 import ChangeDirTool from "./tools/ChangeDirTool.vue";
 import SubagentTool from "./tools/SubagentTool.vue";
 import LLMOneShotTool from "./tools/LLMOneShotTool.vue";
+import ExperienceTool from "./tools/ExperienceTool.vue";
 import OutputIframeTool from "./tools/OutputIframeTool.vue";
 import WebSearchTool from "./tools/WebSearchTool.vue";
 import { toolCardPlaceholderKind } from "./toolCardMount";
@@ -190,6 +191,9 @@ const TOOL_COMPONENTS: Record<string, any> = {
   subagent: SubagentTool,
   output_iframe: OutputIframeTool,
   llm_one_shot: LLMOneShotTool,
+  memory: ExperienceTool,
+  task_journal: ExperienceTool,
+  dream: ExperienceTool,
   browser_emulate: BrowserEmulateTool,
   browser_network: BrowserNetworkTool,
   browser_accessibility: BrowserAccessibilityTool,
@@ -215,6 +219,7 @@ const toolComponent = computed(() => TOOL_COMPONENTS[props.toolName] || null);
 
 const toolComponentProps = computed<Record<string, unknown>>(() => {
   const base: Record<string, unknown> = {
+    toolName: props.toolName,
     toolInput: props.toolInput,
     isRunning: !props.hasResult,
     toolResult: props.toolResult,
