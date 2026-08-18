@@ -87,7 +87,9 @@ type ConversationManager struct {
 	conversationOptions db.ConversationOptions
 	db                  *db.DB
 	loop                *loop.Loop
-	loopCancel          context.CancelFunc
+	loopCancel          context.CancelCauseFunc
+	loopTimeoutCancel   context.CancelFunc
+	loopDone            chan struct{}
 	loopCtx             context.Context
 	mu                  sync.Mutex
 	lastActivity        time.Time
@@ -1871,9 +1873,13 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 		// The list patch stream refreshes from the Pool commit hook.
 	}
 
-	// Create a context with the conversation ID for LLM request recording/prefix dedup
+	// Create a context with the conversation ID for LLM request recording/prefix dedup.
+	// The cancel cause distinguishes graceful shutdown (whose final writes must
+	// survive cancellation) from user cancellation (whose synthetic closeout is
+	// recorded by CancelConversation).
 	baseCtx := llmhttp.WithConversationID(context.Background(), conversationID)
-	processCtx, cancel := context.WithTimeout(baseCtx, 12*time.Hour)
+	cancelCtx, cancel := context.WithCancelCause(baseCtx)
+	processCtx, timeoutCancel := context.WithTimeout(cancelCtx, 12*time.Hour)
 
 	toolSetConfig.ToolOverrides = conversationOpts.ToolOverrides
 	toolSetConfig.DisableAllTools = conversationOpts.DisableAllTools
@@ -1912,11 +1918,13 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 			return cm.takeInjectableSubagentDone(ctx)
 		},
 	})
+	loopDone := make(chan struct{})
 
 	cm.mu.Lock()
 	if cm.loop != nil {
 		cm.mu.Unlock()
-		cancel()
+		cancel(context.Canceled)
+		timeoutCancel()
 		toolSet.Cleanup()
 		existingModel := cm.modelID
 		if existingModel != "" && modelID != "" && existingModel != modelID {
@@ -1928,6 +1936,8 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 	needsPersist := cm.modelID == "" && modelID != ""
 	cm.loop = loopInstance
 	cm.loopCancel = cancel
+	cm.loopTimeoutCancel = timeoutCancel
+	cm.loopDone = loopDone
 	cm.loopCtx = processCtx
 	cm.modelID = modelID
 	cm.toolSet = toolSet
@@ -1953,6 +1963,7 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 	}
 
 	go func() {
+		defer close(loopDone)
 		if err := loopInstance.Go(processCtx); err != nil && err != context.DeadlineExceeded && err != context.Canceled {
 			if logger != nil {
 				logger.Error("Conversation loop stopped", "error", err)
@@ -1966,19 +1977,37 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 }
 
 func (cm *ConversationManager) stopLoop() {
-	cm.resetLoop(false)
+	cm.resetLoop(false, loop.ErrShutdown)
+}
+
+func (cm *ConversationManager) stopLoopAndWait(ctx context.Context) {
+	loopDone := cm.resetLoop(false, loop.ErrShutdown)
+	if loopDone == nil {
+		return
+	}
+	select {
+	case <-loopDone:
+	case <-ctx.Done():
+	}
 }
 
 // ResetLoop drops the in-memory LLM loop so the next turn hydrates from the DB.
 func (cm *ConversationManager) ResetLoop() {
-	cm.resetLoop(true)
+	cm.resetLoop(true, context.Canceled)
 }
 
-func (cm *ConversationManager) resetLoop(markUnhydrated bool) {
+func (cm *ConversationManager) resetLoop(markUnhydrated bool, cause error) <-chan struct{} {
 	cm.mu.Lock()
 	cancel := cm.loopCancel
+	timeoutCancel := cm.loopTimeoutCancel
+	loopDone := cm.loopDone
 	toolSet := cm.toolSet
+	if cm.cancelling {
+		cause = context.Canceled
+	}
 	cm.loopCancel = nil
+	cm.loopTimeoutCancel = nil
+	cm.loopDone = nil
 	cm.loopCtx = nil
 	cm.loop = nil
 	cm.modelID = ""
@@ -1990,11 +2019,15 @@ func (cm *ConversationManager) resetLoop(markUnhydrated bool) {
 	cm.mu.Unlock()
 
 	if cancel != nil {
-		cancel()
+		cancel(cause)
+	}
+	if timeoutCancel != nil {
+		timeoutCancel()
 	}
 	if toolSet != nil {
 		toolSet.Cleanup()
 	}
+	return loopDone
 }
 
 // CancelConversation cancels the current conversation loop and records a cancelled tool result if a tool was in progress
@@ -2003,6 +2036,10 @@ func (cm *ConversationManager) CancelConversation(ctx context.Context) error {
 	loopInstance := cm.loop
 	loopCtx := cm.loopCtx
 	cancel := cm.loopCancel
+	timeoutCancel := cm.loopTimeoutCancel
+	if loopInstance != nil {
+		cm.cancelling = true
+	}
 	cm.mu.Unlock()
 
 	if loopInstance == nil {
@@ -2010,13 +2047,7 @@ func (cm *ConversationManager) CancelConversation(ctx context.Context) error {
 		return nil
 	}
 
-	// Mark the manager as cancelling so the synthetic "[Operation cancelled]"
-	// end-of-turn message recorded below does not fire onDone — a cancellation
-	// is not a subagent completion and must not notify the parent. Cleared
-	// once teardown finishes.
-	cm.mu.Lock()
-	cm.cancelling = true
-	cm.mu.Unlock()
+	// Suppress onDone while the synthetic cancellation closeout is recorded.
 	defer func() {
 		cm.mu.Lock()
 		cm.cancelling = false
@@ -2082,9 +2113,14 @@ func (cm *ConversationManager) CancelConversation(ctx context.Context) error {
 		}
 	}
 
-	// Cancel the context
+	// Cancel the context. Ordinary user cancellation deliberately does not use
+	// loop.ErrShutdown: CancelConversation owns the synthetic tool result and
+	// end-of-turn rows, so late loop writes must remain cancelled.
 	if cancel != nil {
-		cancel()
+		cancel(context.Canceled)
+	}
+	if timeoutCancel != nil {
+		timeoutCancel()
 	}
 
 	// Wait briefly for the loop to stop
@@ -2164,12 +2200,16 @@ func (cm *ConversationManager) CancelConversation(ctx context.Context) error {
 	cm.SetAgentWorking(false)
 
 	cm.mu.Lock()
-	cm.loopCancel = nil
-	cm.loopCtx = nil
-	cm.loop = nil
-	cm.modelID = ""
-	// Reset hydrated so that the next AcceptUserMessage will reload history from the database
-	cm.hydrated = false
+	if cm.loop == loopInstance {
+		cm.loopCancel = nil
+		cm.loopTimeoutCancel = nil
+		cm.loopDone = nil
+		cm.loopCtx = nil
+		cm.loop = nil
+		cm.modelID = ""
+		// Reset hydrated so that the next AcceptUserMessage reloads history.
+		cm.hydrated = false
+	}
 	cm.mu.Unlock()
 
 	return nil

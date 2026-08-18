@@ -23,7 +23,14 @@ import (
 // heartbeats/keepalives (which reset the idle timer) from hanging a turn
 // indefinitely. It is deliberately far larger than the idle window so that
 // genuinely long, steadily-streaming turns are unaffected.
-const maxTurnDuration = 15 * time.Minute
+const (
+	maxTurnDuration       = 15 * time.Minute
+	durableMessageTimeout = 5 * time.Second
+)
+
+// ErrShutdown marks loop cancellation caused by graceful server shutdown.
+// Final tool results and closeout errors use a detached context for this cause.
+var ErrShutdown = errors.New("loop stopped by server shutdown")
 
 // MessageRecordFunc is called to record new messages to persistent storage.
 // otherUsage carries the usage of indirect LLM calls affiliated with the
@@ -136,6 +143,21 @@ func NewLoop(config Config) *Loop {
 		thinkingLevel:    config.ThinkingLevel,
 		notify:           make(chan struct{}, 1),
 	}
+}
+
+// recordMessageDurably detaches a bounded write from the turn context while
+// preserving its values.
+func (l *Loop) recordMessageDurably(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	durableCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), durableMessageTimeout)
+	defer cancel()
+	return l.recordMessage(durableCtx, message, usage, otherUsage)
+}
+
+func (l *Loop) recordToolResult(ctx context.Context, message llm.Message, otherUsage []llm.PurposedUsage) error {
+	if ctx.Err() == nil || (errors.Is(ctx.Err(), context.Canceled) && !errors.Is(context.Cause(ctx), ErrShutdown)) {
+		return l.recordMessage(ctx, message, llm.Usage{}, otherUsage)
+	}
+	return l.recordMessageDurably(ctx, message, llm.Usage{}, otherUsage)
 }
 
 // Retry signals the loop to re-attempt the next LLM request without queueing
@@ -267,6 +289,9 @@ func (l *Loop) Go(ctx context.Context) error {
 			l.logger.Debug("processing queued messages", "count", 1)
 			if err := l.processLLMRequest(ctx); err != nil {
 				l.logger.Error("failed to process LLM request", "error", err)
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				time.Sleep(time.Second) // Wait before retrying
 				continue
 			}
@@ -458,17 +483,15 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 			// duplicate that — and, because ctx is already dead, the write
 			// failed anyway ("failed to create message: Tx: context canceled"),
 			// producing a scary log line on every user cancel. Skip it.
-			if errors.Is(ctx.Err(), context.Canceled) {
+			if errors.Is(ctx.Err(), context.Canceled) && !errors.Is(context.Cause(ctx), ErrShutdown) {
 				l.logger.Info("LLM request aborted by loop cancellation", "error", err)
 				return fmt.Errorf("LLM request failed: %w", err)
 			}
 			// Record the error as a message so it can be displayed in the UI.
 			// EndOfTurn must be true so the agent working state is properly
-			// updated. WithoutCancel: this row's MarkAgentDone is what clears
-			// the persisted agent_working flag; losing the write to a context
-			// that expired (e.g. the 12-hour conversation-loop ceiling) or was
-			// cancelled between the failure above and this write would wedge
-			// the conversation in "Agent working..." forever.
+			// updated. recordMessageDurably detaches this write when the turn
+			// expired or graceful shutdown cancelled it; losing the row would
+			// wedge the conversation in "Agent working..." forever.
 			errorMessage := llm.Message{
 				Role: llm.MessageRoleAssistant,
 				Content: []llm.Content{
@@ -481,7 +504,7 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 				ErrorType:      llm.ErrorTypeLLMRequest,
 				ErrorRetryable: IsRetryableLLMError(err),
 			}
-			if recordErr := l.recordMessage(context.WithoutCancel(ctx), errorMessage, llm.Usage{}, nil); recordErr != nil {
+			if recordErr := l.recordMessageDurably(ctx, errorMessage, llm.Usage{}, nil); recordErr != nil {
 				l.logger.Error("failed to record error message", "error", recordErr)
 			}
 			return fmt.Errorf("LLM request failed: %w", err)
@@ -870,7 +893,7 @@ func (l *Loop) executeToolCalls(ctx context.Context, content []llm.Content) erro
 		l.mu.Unlock()
 
 		// Record tool result message
-		if err := l.recordMessage(ctx, toolMessage, llm.Usage{}, otherUsage.Take()); err != nil {
+		if err := l.recordToolResult(ctx, toolMessage, otherUsage.Take()); err != nil {
 			l.logger.Error("failed to record tool result message", "error", err)
 		}
 	}

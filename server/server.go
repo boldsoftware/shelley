@@ -1721,10 +1721,8 @@ func (s *Server) IsAgentWorking(conversationID string) bool {
 // stopAllConversations stops every active conversation loop and cleans up
 // their tool sets. Used on graceful shutdown to ensure browser subprocesses
 // (headless-shell and its descendants) are killed. Returns when every loop
-// has stopped or ctx is done. On timeout, lingering stopLoop goroutines keep
-// running in the background; if the process exits before they finish their
-// browser groups will be orphaned, but that's a strict improvement over the
-// previous unbounded behavior.
+// has stopped or ctx is done. On timeout, lingering loop goroutines may keep
+// running until process exit, but shutdown itself remains bounded.
 func (s *Server) stopAllConversations(ctx context.Context) {
 	s.mu.Lock()
 	managers := make([]*ConversationManager, 0, len(s.activeConversations))
@@ -1744,7 +1742,7 @@ func (s *Server) stopAllConversations(ctx context.Context) {
 			wg.Add(1)
 			go func(m *ConversationManager) {
 				defer wg.Done()
-				m.stopLoop()
+				m.stopLoopAndWait(ctx)
 			}(manager)
 		}
 		wg.Wait()
