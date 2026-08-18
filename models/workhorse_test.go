@@ -12,6 +12,8 @@ type fakeCatalog struct {
 	ids       []string
 	providers map[string]Provider
 	dates     map[string]string
+	sources   map[string]string
+	baseURLs  map[string]string
 	services  map[string]*recordingService
 }
 
@@ -22,7 +24,13 @@ func (f *fakeCatalog) GetModelInfo(modelID string) *ModelInfo {
 	if !ok {
 		return nil
 	}
-	return &ModelInfo{DisplayName: modelID, Provider: provider, ReleaseDate: f.dates[modelID]}
+	return &ModelInfo{
+		DisplayName: modelID,
+		Provider:    provider,
+		ReleaseDate: f.dates[modelID],
+		Source:      f.sources[modelID],
+		BaseURL:     f.baseURLs[modelID],
+	}
 }
 
 func (f *fakeCatalog) GetService(modelID string) (llm.Service, error) {
@@ -100,6 +108,44 @@ func TestWorkhorseModel(t *testing.T) {
 		if got := workhorseModel(catalog, test.conversationModel); got != test.want {
 			t.Errorf("workhorseModel(%q) = %q, want %q", test.conversationModel, got, test.want)
 		}
+	}
+}
+
+func TestWorkhorseModelStaysOnConversationGateway(t *testing.T) {
+	catalog := &fakeCatalog{
+		ids: []string{
+			"gpt-5.6-terra@priyanka",
+			"gpt-5.7-luna@chelsea",
+			"gpt-5.6-luna@priyanka",
+		},
+		providers: map[string]Provider{
+			"gpt-5.6-terra@priyanka": ProviderOpenAI,
+			"gpt-5.7-luna@chelsea":   ProviderOpenAI,
+			"gpt-5.6-luna@priyanka":  ProviderOpenAI,
+		},
+		dates: map[string]string{
+			"gpt-5.7-luna@chelsea":  "2026-08-15",
+			"gpt-5.6-luna@priyanka": "2026-07-09",
+		},
+		sources: map[string]string{
+			"gpt-5.6-terra@priyanka": "priyanka gateway",
+			"gpt-5.7-luna@chelsea":   "chelsea gateway",
+			"gpt-5.6-luna@priyanka":  "priyanka gateway",
+		},
+		baseURLs: map[string]string{
+			"gpt-5.6-terra@priyanka": "https://priyanka.example",
+			"gpt-5.7-luna@chelsea":   "https://chelsea.example",
+			"gpt-5.6-luna@priyanka":  "https://priyanka.example",
+		},
+	}
+
+	if got := workhorseModel(catalog, "gpt-5.6-terra@priyanka"); got != "gpt-5.6-luna@priyanka" {
+		t.Fatalf("workhorseModel() = %q, want Priyanka's Luna", got)
+	}
+
+	delete(catalog.providers, "gpt-5.6-luna@priyanka")
+	if got := workhorseModel(catalog, "gpt-5.6-terra@priyanka"); got != "gpt-5.6-terra@priyanka" {
+		t.Fatalf("workhorseModel() = %q, want conversation model rather than cross-gateway fallback", got)
 	}
 }
 

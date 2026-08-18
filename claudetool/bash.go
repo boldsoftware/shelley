@@ -184,11 +184,10 @@ func (b *BashTool) run(ctx context.Context, req bashInput) llm.ToolOut {
 		}
 	}
 
-	// Check for missing tools and try to install them if needed, best effort only
+	// Check for missing tools and install them before executing the command.
 	if b.EnableJITInstall {
-		err := b.checkAndInstallMissingTools(ctx, req.Command)
-		if err != nil {
-			slog.DebugContext(ctx, "failed to auto-install missing tools", "error", err)
+		if err := b.checkAndInstallMissingTools(ctx, req.Command); err != nil {
+			return llm.ErrorfToolOut("automatic tool installation failed: %w", err)
 		}
 	}
 
@@ -505,11 +504,11 @@ func (b *BashTool) checkAndInstallMissingTools(ctx context.Context, command stri
 	}
 
 	for _, cmd := range missing {
-		err := b.installTool(ctx, cmd)
-		if err != nil {
+		if err := b.installTool(ctx, cmd); err != nil {
 			slog.WarnContext(ctx, "failed to install tool", "tool", cmd, "error", err)
+			return fmt.Errorf("install %s: %w", cmd, err)
 		}
-		doNotAttemptToolInstall[cmd] = true // either it's installed or it's not--either way, we're done with it
+		doNotAttemptToolInstall[cmd] = true
 	}
 	return nil
 }
