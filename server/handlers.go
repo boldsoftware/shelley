@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"mime"
 	"net/http"
@@ -625,6 +626,12 @@ func generateFaviconSVG(hostname string) string {
 	)
 }
 
+func generateEmojiFaviconSVG(emoji string) string {
+	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+<text x="200" y="200" text-anchor="middle" dominant-baseline="central" font-size="320" font-family="Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif">%s</text>
+</svg>`, html.EscapeString(emoji))
+}
+
 // serveIndexWithInit serves index.html with injected initialization data
 func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs http.FileSystem) {
 	// Read index.html from the filesystem
@@ -728,6 +735,9 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		faviconKey = fmt.Sprintf("%s:%d", hostname, s.listenPort)
 	}
 	faviconSVG := generateFaviconSVG(faviconKey)
+	if emoji := cachedReflectionEmoji(r.Context()); emoji != "" {
+		faviconSVG = generateEmojiFaviconSVG(emoji)
+	}
 	faviconDataURI := "data:image/svg+xml," + url.PathEscape(faviconSVG)
 	faviconLink := fmt.Sprintf(`<link rel="icon" type="image/svg+xml" href="%s"/>`, faviconDataURI)
 
