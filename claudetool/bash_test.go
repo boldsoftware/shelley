@@ -143,6 +143,25 @@ func TestBashTool(t *testing.T) {
 	})
 }
 
+func TestBashJITInstallFailureIsToolError(t *testing.T) {
+	const command = "shelley-definitely-missing-command"
+	autoInstallMu.Lock()
+	delete(doNotAttemptToolInstall, command)
+	autoInstallMu.Unlock()
+
+	tool := (&BashTool{
+		WorkingDir:       NewMutableWorkingDir("/"),
+		EnableJITInstall: true,
+	}).Tool()
+	out := tool.Run(context.Background(), json.RawMessage(`{"command":"`+command+`"}`))
+	if out.Error == nil {
+		t.Fatal("expected missing command installation to return a tool error")
+	}
+	if got := out.Error.Error(); !strings.Contains(got, "automatic tool installation failed") || !strings.Contains(got, command) {
+		t.Fatalf("error = %q, want explicit installation failure for %s", got, command)
+	}
+}
+
 func TestExecuteBash(t *testing.T) {
 	ctx := context.Background()
 	bashTool := &BashTool{WorkingDir: NewMutableWorkingDir("/")}

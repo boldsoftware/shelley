@@ -32,9 +32,9 @@ var workhorseFamilies = map[Provider]workhorseFamily{
 	ProviderFireworks: {contains: "deepseek-v4-flash"},
 }
 
-// WorkhorseDo sends req to a cheap model from the conversation's provider. If
-// that call fails, or no workhorse is configured, it uses the conversation
-// model once.
+// WorkhorseDo sends req to a cheap model from the conversation's exact
+// upstream gateway/account. If that call fails, or no workhorse is configured
+// on that gateway, it uses the conversation model once.
 func WorkhorseDo(ctx context.Context, p WorkhorseProvider, conversationModelID string, req *llm.Request) (*llm.Response, error) {
 	modelID := workhorseModel(p, conversationModelID)
 	if modelID == "" {
@@ -73,7 +73,11 @@ func workhorseModel(c WorkhorseProvider, conversationModelID string) string {
 	bestDate := ""
 	for _, modelID := range c.GetAvailableModels() {
 		candidate := c.GetModelInfo(modelID)
-		if candidate == nil || candidate.Provider != info.Provider || !matchesWorkhorseFamily(modelID, family) {
+		if candidate == nil ||
+			candidate.Provider != info.Provider ||
+			candidate.BaseURL != info.BaseURL ||
+			candidate.Source != info.Source ||
+			!matchesWorkhorseFamily(modelID, family) {
 			continue
 		}
 		if bestID == "" || candidate.ReleaseDate > bestDate {
