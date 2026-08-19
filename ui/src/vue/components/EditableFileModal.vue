@@ -59,7 +59,7 @@
               </button>
             </div>
             <VimToggle
-              v-if="isDesktop && mode === 'edit'"
+              v-if="isDesktop && mode !== 'comment'"
               :enabled="vimEnabled"
               @change="setVimEnabled"
             />
@@ -96,6 +96,7 @@
               v-if="
                 mode === 'preview' && monacoLoaded && content !== null && loadStatus === 'loaded'
               "
+              ref="previewRef"
               class="diff-viewer-preview"
             >
               <MarkdownContent :text="previewText" />
@@ -206,6 +207,9 @@ let monacoMod: typeof Monaco | null = null;
 const containerRef = ref<HTMLDivElement | null>(null);
 const contentRef = ref<HTMLDivElement | null>(null);
 const vimStatusRef = ref<HTMLDivElement | null>(null);
+// Scrollable preview panel (markdown preview mode); target for vim-style
+// navigation keys.
+const previewRef = ref<HTMLDivElement | null>(null);
 let saveTimeout: number | null = null;
 let statusTimeout: number | null = null;
 const [vimEnabledRef, setVimEnabledFn] = useVimEnabled();
@@ -460,8 +464,80 @@ watch(
   { immediate: true },
 );
 
+// --- Preview vim-style navigation ---
+// When vim is enabled and the preview panel is shown, normal-mode keys scroll
+// the rendered document. `i`/`a`/`o` return to the editor (vim's "insert
+// mode" ≈ edit mode). Only active while focus isn't in a form control.
+const PREVIEW_VIM_KEYS: Record<string, () => void> = {
+  j: () => previewRef.value?.scrollBy({ top: 40, behavior: "auto" }),
+  k: () => previewRef.value?.scrollBy({ top: -40, behavior: "auto" }),
+  "Ctrl+d": () =>
+    previewRef.value?.scrollBy({ top: previewRef.value.clientHeight / 2, behavior: "auto" }),
+  "Ctrl+u": () =>
+    previewRef.value?.scrollBy({ top: -previewRef.value.clientHeight / 2, behavior: "auto" }),
+  "Ctrl+f": () =>
+    previewRef.value?.scrollBy({ top: previewRef.value.clientHeight, behavior: "auto" }),
+  "Ctrl+b": () =>
+    previewRef.value?.scrollBy({ top: -previewRef.value.clientHeight, behavior: "auto" }),
+};
+
+let previewVimPendingG = false;
+function handlePreviewVimKey(e: KeyboardEvent): boolean {
+  if (!previewRef.value || !vimEnabled.value || mode.value !== "preview") return false;
+  const t = e.target as HTMLElement | null;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
+    return false;
+  }
+  const key = e.key.toLowerCase();
+  const plain = !e.ctrlKey && !e.altKey && !e.metaKey;
+  if (plain && key === "g" && !previewVimPendingG) {
+    previewVimPendingG = true;
+    setTimeout(() => (previewVimPendingG = false), 500);
+    return true;
+  }
+  if (plain && key === "g" && previewVimPendingG) {
+    previewVimPendingG = false;
+    previewRef.value?.scrollTo({ top: 0, behavior: "auto" });
+    return true;
+  }
+  previewVimPendingG = false;
+  // Shift+G jumps to the bottom; check the raw key (lowercase would collide
+  // with the gg pending state).
+  if (plain && e.key === "G") {
+    e.preventDefault();
+    previewRef.value?.scrollTo({ top: previewRef.value.scrollHeight, behavior: "auto" });
+    return true;
+  }
+  if (plain && (key === "i" || key === "a" || key === "o")) {
+    e.preventDefault();
+    mode.value = "edit";
+    editor.value?.focus();
+    return true;
+  }
+  if (plain && (key === "j" || key === "k")) {
+    e.preventDefault();
+    PREVIEW_VIM_KEYS[key]();
+    return true;
+  }
+  if (
+    e.ctrlKey &&
+    !e.altKey &&
+    !e.metaKey &&
+    (key === "d" || key === "u" || key === "f" || key === "b")
+  ) {
+    e.preventDefault();
+    PREVIEW_VIM_KEYS[`Ctrl+${key}`]();
+    return true;
+  }
+  return false;
+}
+
 // --- Escape handling (capture phase; vim-aware guard) ---
 function handleKeyDown(e: KeyboardEvent) {
+  // Vim-style navigation in the markdown preview (only when vim is enabled).
+  if (mode.value === "preview" && vimEnabled.value && handlePreviewVimKey(e)) {
+    return;
+  }
   if (e.key === "k" || e.key === "K") {
     if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && isMarkdown.value) {
       e.preventDefault();
