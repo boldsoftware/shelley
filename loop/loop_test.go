@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1494,6 +1495,49 @@ func TestProcessLLMRequestError(t *testing.T) {
 	}
 }
 
+func TestProcessLLMRequestShutdownPersistsError(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.WithValue(context.Background(), "test-key", "test-value"))
+	service := &cancelingLLMService{cancel: cancel}
+
+	var recorded llm.Message
+	var recordCount int
+	var recordCtxErr error
+	var recordCtxValue any
+	var recordCtxHasDeadline bool
+	agentLoop := NewLoop(Config{
+		LLM: service,
+		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+			recordCount++
+			recorded = message
+			recordCtxErr = ctx.Err()
+			recordCtxValue = ctx.Value("test-key")
+			_, recordCtxHasDeadline = ctx.Deadline()
+			return nil
+		},
+	})
+	agentLoop.QueueUserMessage(llm.UserStringMessage("cancel this request"))
+
+	err := agentLoop.ProcessOneTurn(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ProcessOneTurn error = %v, want context.Canceled", err)
+	}
+	if recordCount != 1 {
+		t.Fatalf("record count = %d, want 1", recordCount)
+	}
+	if recorded.Role != llm.MessageRoleAssistant || !recorded.EndOfTurn {
+		t.Fatalf("recorded message = %+v, want end-of-turn assistant error", recorded)
+	}
+	if recordCtxErr != nil {
+		t.Fatalf("record context error = %v, want nil", recordCtxErr)
+	}
+	if recordCtxValue != "test-value" {
+		t.Fatalf("record context value = %v, want test-value", recordCtxValue)
+	}
+	if !recordCtxHasDeadline {
+		t.Fatal("record context has no durability deadline")
+	}
+}
+
 // errorLLMService is a test LLM service that always returns an error
 type errorLLMService struct {
 	err error
@@ -1515,6 +1559,16 @@ func (e *errorLLMService) MaxImageDimension() int {
 
 func (e *errorLLMService) MaxImageBytes() int {
 	return 5 * 1024 * 1024
+}
+
+type cancelingLLMService struct {
+	errorLLMService
+	cancel context.CancelCauseFunc
+}
+
+func (s *cancelingLLMService) Do(ctx context.Context, req *llm.Request) (*llm.Response, error) {
+	s.cancel(ErrShutdown)
+	return nil, ctx.Err()
 }
 
 // retryableLLMService fails with a retryable error a specified number of times, then succeeds
@@ -1869,6 +1923,69 @@ func TestExecuteToolCallsWithMissingTool(t *testing.T) {
 	expectedText := "Tool 'nonexistent_tool' not found"
 	if toolResult.ToolResult[0].Text != expectedText {
 		t.Errorf("expected tool result text '%s', got '%s'", expectedText, toolResult.ToolResult[0].Text)
+	}
+}
+
+func TestExecuteToolCallsShutdownPersistsResult(t *testing.T) {
+	var recorded llm.Message
+	var recordCount int
+	agentLoop := NewLoop(Config{
+		Tools: []*llm.Tool{},
+		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			recordCount++
+			recorded = message
+			return nil
+		},
+	})
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(ErrShutdown)
+	err := agentLoop.executeToolCalls(ctx, []llm.Content{{
+		ID:       "cancelled-tool",
+		Type:     llm.ContentTypeToolUse,
+		ToolName: "missing-tool",
+	}})
+	if err != nil {
+		t.Fatalf("executeToolCalls error = %v", err)
+	}
+	if recordCount != 1 {
+		t.Fatalf("record count = %d, want 1", recordCount)
+	}
+	if recorded.Role != llm.MessageRoleUser || len(recorded.Content) != 1 {
+		t.Fatalf("recorded message = %+v, want one user tool result", recorded)
+	}
+	if got := recorded.Content[0]; got.Type != llm.ContentTypeToolResult || got.ToolUseID != "cancelled-tool" {
+		t.Fatalf("recorded content = %+v, want cancelled-tool result", got)
+	}
+}
+
+func TestExecuteToolCallsUserCancellationDoesNotPersistLateResult(t *testing.T) {
+	var persisted bool
+	agentLoop := NewLoop(Config{
+		Tools: []*llm.Tool{},
+		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			persisted = true
+			return nil
+		},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := agentLoop.executeToolCalls(ctx, []llm.Content{{
+		ID:       "cancelled-tool",
+		Type:     llm.ContentTypeToolUse,
+		ToolName: "missing-tool",
+	}}); err != nil {
+		t.Fatalf("executeToolCalls error = %v", err)
+	}
+	if persisted {
+		t.Fatal("late tool result persisted after user cancellation")
 	}
 }
 
