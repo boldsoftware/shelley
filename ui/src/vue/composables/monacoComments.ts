@@ -48,7 +48,7 @@ export interface CommentPromptInfo {
 export interface MonacoCommentsDeps {
   monaco: () => typeof Monaco | null;
   /** Current interaction mode; all handlers are inert unless "comment". */
-  mode: () => "comment" | "edit";
+  mode: () => "comment" | "edit" | "preview";
   isMobile: () => boolean;
   /** Element the floating prompt is positioned relative to. */
   promptHost: () => HTMLElement | null;
