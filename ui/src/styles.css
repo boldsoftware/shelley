@@ -9839,7 +9839,19 @@ kbd {
 
 .chat-welcome-link {
   color: var(--blue-text);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.chat-welcome-link:hover,
+.chat-welcome-link:focus-visible {
   text-decoration: underline;
+}
+
+.chat-welcome-proxy-link {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .chat-secondary-text {
