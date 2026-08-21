@@ -103,7 +103,7 @@
                   >
                   <a
                     v-else-if="part === '{customizeLink}'"
-                    href="https://github.com/boldsoftware/shelley/"
+                    href="https://blog.exe.dev/customizing-shelley"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="chat-welcome-link"
@@ -122,7 +122,7 @@
                     :href="proxyURL"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="chat-welcome-link"
+                    class="chat-welcome-link chat-welcome-proxy-link"
                     >{{ proxyURL }}</a
                   >
                   <template v-else>{{ part }}</template>
@@ -143,7 +143,7 @@
                 </ul>
                 <p v-if="modelSetupHint.footer">{{ t(modelSetupHint.footer) }}</p>
               </PvMessage>
-              <p v-else class="text-sm chat-secondary-text">{{ t("sendMessageToStart") }}</p>
+              <p v-else class="chat-secondary-text">{{ t("sendMessageToStart") }}</p>
             </div>
           </div>
           <!-- generations -->
