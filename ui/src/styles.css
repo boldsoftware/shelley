@@ -6691,6 +6691,19 @@ svg {
   width: 100%;
 }
 
+/* Markdown preview panel inside the editor modal. Chat-style rendering via
+   .markdown-content, scrollable, prose width capped for readability. */
+.diff-viewer-preview {
+  height: 100%;
+  overflow: auto;
+  padding: 12px 20px;
+}
+
+.diff-viewer-preview .markdown-content {
+  max-width: 80ch;
+  margin: 0 auto;
+}
+
 /* Diff viewer line hover highlighting (via decoration API) */
 .diff-viewer-editor .monaco-editor .diff-viewer-line-hover {
   background-color: rgba(37, 99, 235, 0.08) !important;
