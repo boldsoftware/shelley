@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>@pierre/diffs FileDiff crash repro</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 2rem; color: #111; }
+  h1 { font-size: 1.1rem; }
+  #out { white-space: pre-wrap; margin-top: 1rem; }
+  .crash { color: #b00; }
+  .ok { color: #070; }
+  .result { margin-top: 1rem; font-weight: bold; }
+  code { background: #f2f2f2; padding: 0 .25em; }
+  pre { background: #f6f6f6; padding: .75rem; overflow:auto; }
+</style>
+</head>
+<body>
+<h1>@pierre/diffs <code>FileDiff</code> crash: <code>deletionLine and additionLine are null</code></h1>
+<p>
+  Rendering a diff through <code>FileDiff</code> + the worker pool throws once the
+  worker is warm, for any hunk with unchanged <b>context lines between two
+  changes</b>. Reproduces on 1.3.0 / 1.3.5 / 1.3.6; fine on 1.2.x and 1.1.x.
+  Everything (incl. the highlight worker) loads from esm.sh — no build step.
+</p>
+<p>Change the version by editing <code>?v=</code> in the URL, e.g. <code>#v=1.2.12</code>.</p>
+<p>Minimal triggering unified diff (2 context lines between the two changes):</p>
+<pre>--- f
++++ f
+@@ -1,6 +1,6 @@
+-a
++A
+ c0
+ c1
+-b
++B
+</pre>
+
+<div id="out"></div>
+
+<script type="module">
+// Version is taken from the URL hash (#v=1.3.6) so you can flip it without
+// editing the file. Defaults to the newest release that reproduces.
+const VERSION = (location.hash.match(/v=([\w.\-]+)/) || [])[1] || "1.3.6";
+const CDN = `https://esm.sh/@pierre/diffs@${VERSION}`;
+
+const out = document.getElementById("out");
+const log = (msg, cls) => {
+  const div = document.createElement("div");
+  if (cls) div.className = cls;
+  div.textContent = msg;
+  out.appendChild(div);
+};
+
+try {
+  const { FileDiff, DIFFS_TAG_NAME, getSingularPatch } = await import(CDN);
+  const { getOrCreateWorkerPoolSingleton } = await import(`${CDN}/worker`);
+
+  // Build the highlight worker as a module worker that just imports the CDN
+  // worker entry (its message-handler registration is a load-time side effect).
+  const workerFactory = () => {
+    const src = `import "${CDN}/worker/worker.js";`;
+    const url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+    return new Worker(url, { type: "module" });
+  };
+
+  const pool = getOrCreateWorkerPoolSingleton({
+    poolOptions: { workerFactory },
+    highlighterOptions: { langs: ["text"] },
+  });
+
+  const THEMES = { dark: "github-dark", light: "github-light" };
+
+  // Render one unified diff by hydrating a fresh FileDiff against the shared
+  // (warm) worker pool — exactly how a host framework drives it.
+  const renderOnce = (patch) => new Promise((resolve) => {
+    const host = document.createElement("div");
+    host.style.display = "none";
+    document.body.appendChild(host);
+    const container = document.createElement(DIFFS_TAG_NAME);
+    host.appendChild(container);
+    const fd = getSingularPatch(patch);
+    const inst = new FileDiff(
+      { diffStyle: "unified", theme: THEMES, themeType: "dark",
+        disableFileHeader: true, disableErrorHandling: false },
+      pool,
+      /* isContainerManaged */ true,
+    );
+    inst.hydrate({ fileDiff: fd, fileContainer: container });
+    setTimeout(() => { try { inst.cleanUp(); } catch {} host.remove(); resolve(); }, 400);
+  });
+
+  // A hunk with N unchanged context lines between two changes.
+  const contextGapDiff = (n) => {
+    const ctx = Array.from({ length: n }, (_, i) => ` c${i}`).join("\n");
+    const count = n + 4;
+    return `--- f\n+++ f\n@@ -1,${count} +1,${count} @@\n-a\n+A\n${ctx}\n-b\n+B\n`;
+  };
+
+  // Count only the specific crash from console.error.
+  let crashCount = 0;
+  const origError = console.error.bind(console);
+  console.error = (...args) => {
+    const text = args.map((a) => (a && a.message ? a.message : String(a))).join(" ");
+    if (/deletionLine and additionLine are null/.test(text)) crashCount++;
+    origError(...args);
+  };
+
+  log(`@pierre/diffs version: ${VERSION}`);
+
+  // 1) Warm the worker with a trivial diff (the crash needs a warm worker).
+  await renderOnce("--- w\n+++ w\n@@ -1,1 +1,1 @@\n-warm\n+up\n");
+  await new Promise((r) => setTimeout(r, 300));
+
+  // 2) Render diffs with increasing context-gap sizes.
+  for (const n of [1, 2, 3, 4, 5, 8, 20]) {
+    const before = crashCount;
+    await renderOnce(contextGapDiff(n));
+    const crashed = crashCount > before;
+    log(`context lines between changes = ${n}: ${crashed ? "CRASH" : "ok"}`,
+        crashed ? "crash" : "ok");
+  }
+
+  console.error = origError;
+  log(crashCount > 0
+    ? `RESULT: reproduced (${crashCount} crash${crashCount === 1 ? "" : "es"}).`
+    : `RESULT: no crash on this version.`, "result");
+} catch (err) {
+  log(`Failed to load/run: ${err && err.stack ? err.stack : err}`, "crash");
+}
+</script>
+</body>
+</html>
