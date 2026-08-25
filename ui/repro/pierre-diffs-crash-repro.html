@@ -24,10 +24,20 @@
   Everything (incl. the highlight worker) loads from esm.sh — no build step.
 </p>
 <p>Change the version by editing <code>?v=</code> in the URL, e.g. <code>#v=1.2.12</code>.</p>
+<p>
+  <b>Note on the diff below:</b> an earlier version of this repro used the hunk
+  header <code>@@ -1,6 +1,6 @@</code>, whose line counts were wrong. That was a
+  typo in the repro, not the cause: the parser produces identical
+  <code>FileDiffMetadata</code> regardless of the declared counts, and the
+  crash reproduces identically with correct headers (verified across many
+  well-formed, git-generated diffs). The real cause is the auto-assigned,
+  content-insensitive fallback cache key colliding across successive diffs of
+  the same file.
+</p>
 <p>Minimal triggering unified diff (2 context lines between the two changes):</p>
 <pre>--- f
 +++ f
-@@ -1,6 +1,6 @@
+@@ -1,4 +1,4 @@
 -a
 +A
  c0
@@ -90,10 +100,13 @@ try {
     setTimeout(() => { try { inst.cleanUp(); } catch {} host.remove(); resolve(); }, 400);
   });
 
-  // A hunk with N unchanged context lines between two changes.
+  // A hunk with N unchanged context lines between two changes. The hunk header
+  // counts each side as the two changed lines plus the N context lines (N + 2),
+  // so these are well-formed unified diffs -- the crash does not depend on a
+  // malformed header (verified: valid and invalid counts crash identically).
   const contextGapDiff = (n) => {
     const ctx = Array.from({ length: n }, (_, i) => ` c${i}`).join("\n");
-    const count = n + 4;
+    const count = n + 2;
     return `--- f\n+++ f\n@@ -1,${count} +1,${count} @@\n-a\n+A\n${ctx}\n-b\n+B\n`;
   };
 
