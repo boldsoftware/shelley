@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/klauspost/compress/zstd"
@@ -32,6 +33,7 @@ import (
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/models"
 	"shelley.exe.dev/slug"
+	"shelley.exe.dev/subpub"
 	"shelley.exe.dev/ui"
 	"shelley.exe.dev/version"
 )
@@ -733,8 +735,10 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		faviconKey = fmt.Sprintf("%s:%d", hostname, s.listenPort)
 	}
 	faviconSVG := generateFaviconSVG(faviconKey)
-	if emoji := cachedReflectionEmoji(r.Context()); emoji != "" {
-		faviconSVG = generateEmojiFaviconSVG(emoji)
+	if s.featureFlagBool(r.Context(), FlagReflectionEmojiFavicon) {
+		if emoji := cachedReflectionEmoji(r.Context()); emoji != "" {
+			faviconSVG = generateEmojiFaviconSVG(emoji)
+		}
 	}
 	faviconDataURI := "data:image/svg+xml," + url.PathEscape(faviconSVG)
 	faviconLink := fmt.Sprintf(`<link rel="icon" type="image/svg+xml" href="%s"/>`, faviconDataURI)
@@ -979,6 +983,9 @@ func (s *Server) conversationMux() *http.ServeMux {
 	mux.HandleFunc("POST /{id}/fork", func(w http.ResponseWriter, r *http.Request) {
 		s.handleForkConversation(w, r, r.PathValue("id"))
 	})
+	mux.HandleFunc("POST /{id}/cwd", func(w http.ResponseWriter, r *http.Request) {
+		s.handleSetConversationCwd(w, r, r.PathValue("id"))
+	})
 	return mux
 }
 
@@ -1148,6 +1155,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	// transaction: a concurrent PUT /draft can no longer slip between an
 	// override and the promote, so the promoted row's model is exactly what
 	// the loop below pins to. For non-drafts this branch is skipped.
+	promotedDraft := existing.IsDraft
 	if existing.IsDraft {
 		// Apply send-time conversation_options. The web UI autosaves a draft
 		// (via POST /draft) as soon as the composer has text, and that draft is
@@ -1212,6 +1220,35 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		s.logger.Error("Failed to get conversation manager", "conversationID", conversationID, "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
+	}
+
+	// Announce the rows hydrate just created for a promoted draft — in practice
+	// the system prompt, sequence 1.
+	//
+	// createSystemPrompt deliberately neither broadcasts nor bumps updated_at:
+	// it is lazy internal metadata, and bumping would reorder the conversation
+	// list every time a stream connects to a brand-new conversation. That is
+	// right for ordinary hydration, but promotion makes it user-visible: the
+	// is_draft flip is announced BEFORE hydrate runs, so a client refetching on
+	// that signal sees an empty conversation, and then the only row it ever
+	// hears about is the user's message at sequence 2. Its history would start
+	// at 2 forever (the client cache correctly refuses to call that complete,
+	// but nothing re-renders the missing prompt until the next focus).
+	//
+	// Publishing here rather than from createSystemPrompt is deliberate:
+	// getOrCreateConversationManager registers the manager only AFTER Hydrate
+	// returns, so a notify fired during hydrate finds no manager and is
+	// silently dropped. Mirrors startNewGeneration's post-hydrate broadcast.
+	if promotedDraft {
+		if msgs, lerr := s.db.ListMessages(ctx, conversationID); lerr == nil {
+			for i := range msgs {
+				if msgs[i].Type == string(db.MessageTypeSystem) {
+					s.notifySubscribersNewMessage(ctx, conversationID, &msgs[i])
+				}
+			}
+		} else {
+			s.logger.Warn("Failed to list messages to announce promoted draft's system prompt", "conversationID", conversationID, "error", lerr)
+		}
 	}
 
 	// Built-in /model command: switch the conversation to a different model
@@ -1786,6 +1823,49 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	s.runStream(w, r, r.URL.Query().Get("conversation"), true)
 }
 
+const streamUpdatesQueueCapacity = 200
+
+type streamUpdatesQueue struct {
+	ch      chan StreamResponse
+	logFull func()
+	fullLog sync.Once
+}
+
+func newStreamUpdatesQueue(logFull func()) *streamUpdatesQueue {
+	return &streamUpdatesQueue{
+		ch:      make(chan StreamResponse, streamUpdatesQueueCapacity),
+		logFull: logFull,
+	}
+}
+
+func (q *streamUpdatesQueue) enqueue(ctx context.Context, streamData StreamResponse) bool {
+	select {
+	case q.ch <- streamData:
+		return true
+	default:
+		if ctx.Err() != nil {
+			return false
+		}
+		q.fullLog.Do(q.logFull)
+	}
+	select {
+	case q.ch <- streamData:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func (s *Server) newStreamUpdatesQueue(ctx context.Context, conversationID string) *streamUpdatesQueue {
+	return newStreamUpdatesQueue(func() {
+		s.logger.WarnContext(
+			ctx, "SSE updates queue saturated; subscriber may be disconnected",
+			"capacity", streamUpdatesQueueCapacity,
+			"conversationID", conversationID,
+		)
+	})
+}
+
 func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationID string, includeConversationListPatches bool) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1793,7 +1873,19 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 	}
 
 	ctx, cancelStream := context.WithCancel(r.Context())
-	defer cancelStream()
+	responseController := http.NewResponseController(w)
+	var streamInterruptResult <-chan bool
+	defer func() {
+		cancelStream()
+		if streamInterruptResult == nil || !<-streamInterruptResult {
+			return
+		}
+		// SetWriteDeadline applies to the connection, not just this response.
+		// Clear the forced deadline before net/http can reuse the connection.
+		if err := responseController.SetWriteDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
+			s.logger.Debug("failed to clear unified stream write deadline", "error", err)
+		}
+	}()
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -1952,27 +2044,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 		}
 	}
 
-	// For per-conversation streams on the unified /api/stream2 endpoint that
-	// have no list replay to emit, send a bare heartbeat *before* the blocking
-	// per-conversation work (Hydrate, message read) so the client always sees
-	// a first flush within milliseconds. Hydrate walks the working tree for
-	// guidance and skill files, which under load on CI has taken several
-	// seconds — long enough to time out client waits and to look like a hung
-	// connection. We restrict this to the unified endpoint to avoid changing
-	// the first-frame contract of the legacy /api/conversation/<id>/stream
-	// endpoint, where the first frame is expected to carry messages.
-	//
-	// List-only streams (conversationID == "") keep their contract: when a
-	// matching conversation_list_hash means there's nothing to replay, the
-	// stream stays silent until the next real event.
-	if conversationID != "" && includeConversationListPatches && len(listInitial) == 0 {
-		if !writeStreamData(StreamResponse{Heartbeat: true}) {
-			return
-		}
-	}
-
-	updates := make(chan StreamResponse, 10)
-
+	updates := s.newStreamUpdatesQueue(ctx, conversationID)
 	if listNext != nil {
 		go func() {
 			for {
@@ -1981,9 +2053,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 					return
 				}
 				patch := event
-				select {
-				case updates <- StreamResponse{ConversationListPatch: &patch}:
-				case <-ctx.Done():
+				if !updates.enqueue(ctx, StreamResponse{ConversationListPatch: &patch}) {
 					return
 				}
 			}
@@ -1994,21 +2064,68 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 	// events for ALL active conversations on the same connection. The optional
 	// ?conversation= parameter governs only backfill of that conversation's
 	// initial history (handled below).
+	//
+	// SubPub disconnects a subscriber whose bounded queue fills. Surface that
+	// as an ended HTTP response: if we silently leave this handler alive, its
+	// local heartbeats keep EventSource OPEN even though conversation updates
+	// have stopped forever. Closing lets EventSource reconnect and the UI
+	// backfill anything missed while the client/proxy was backpressured.
+	var subscriptionDone <-chan struct{}
+	watchSubscription := func(status *subpub.SubscriptionStatus, queue string) {
+		subscriptionDone = status.Done()
+		interruptResult := make(chan bool, 1)
+		streamInterruptResult = interruptResult
+		go func() {
+			<-status.Done()
+			if !status.FellBehind() {
+				interruptResult <- false
+				return
+			}
+			s.logger.WarnContext(
+				ctx, "SSE subscriber queue full; reconnecting",
+				"queue", queue,
+				"capacity", subpub.SubscriberQueueCapacity,
+				"conversationID", conversationID,
+			)
+			// The handler may currently be blocked in Write because the client or
+			// proxy stopped reading. Expire that write immediately; otherwise we
+			// cannot reach the select below that notices subscriptionDone.
+			err := responseController.SetWriteDeadline(time.Now())
+			if err != nil && !errors.Is(err, http.ErrNotSupported) {
+				s.logger.Debug("failed to interrupt dropped SSE stream", "error", err)
+			}
+			interruptResult <- err == nil
+		}()
+	}
+
 	if includeConversationListPatches && s.streamPub != nil {
-		next := s.streamPub.Subscribe(ctx, -1)
+		next, status := s.streamPub.SubscribeWithStatus(ctx, -1)
+		watchSubscription(status, "global")
 		go func() {
 			for {
 				streamData, cont := next()
 				if !cont {
 					return
 				}
-				select {
-				case updates <- streamData:
-				case <-ctx.Done():
+				if !updates.enqueue(ctx, streamData) {
 					return
 				}
 			}
 		}()
+	}
+
+	// On the unified /api/stream2 endpoint, send a bare heartbeat whenever
+	// there is no list replay to emit. Subscribe to streamPub first: a blocked
+	// first write must still accumulate live events and trigger the
+	// fell-behind reconnect path rather than leaving an apparently healthy
+	// stream that has silently missed updates. The heartbeat commits the SSE
+	// headers before any blocking per-conversation work and also keeps a
+	// caught-up list-only reconnect from staying header-silent until the 30s
+	// periodic heartbeat. The legacy endpoint keeps its first-frame contract.
+	if includeConversationListPatches && len(listInitial) == 0 {
+		if !writeStreamData(StreamResponse{Heartbeat: true}) {
+			return
+		}
 	}
 
 	if conversationID == "" {
@@ -2021,11 +2138,13 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 			select {
 			case <-ctx.Done():
 				return
+			case <-subscriptionDone:
+				return
 			case <-ticker.C:
 				if !writeStreamData(StreamResponse{Heartbeat: true}) {
 					return
 				}
-			case streamData := <-updates:
+			case streamData := <-updates.ch:
 				if !writeStreamData(streamData) {
 					return
 				}
@@ -2119,11 +2238,23 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 	//
 	// Subscribe BEFORE sending initial data so we don't miss broadcasts that
 	// happen between the DB query and the start of the event loop. The subpub
-	// channel is buffered (10), so events arriving while we write the initial
+	// channel is buffered, so events arriving while we write the initial
 	// response are queued rather than lost.
 	var next func() (StreamResponse, bool)
 	if !includeConversationListPatches {
-		next = manager.subpub.Subscribe(ctx, lastSeqID)
+		var status *subpub.SubscriptionStatus
+		next, status = manager.subpub.SubscribeWithStatus(ctx, lastSeqID)
+		go func() {
+			<-status.Done()
+			if status.FellBehind() {
+				s.logger.WarnContext(
+					ctx, "SSE subscriber queue full; legacy stream stalled",
+					"queue", "conversation",
+					"capacity", subpub.SubscriberQueueCapacity,
+					"conversationID", conversationID,
+				)
+			}
+		}()
 	}
 
 	if len(messages) > 0 {
@@ -2217,9 +2348,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 				if !cont {
 					return
 				}
-				select {
-				case updates <- streamData:
-				case <-ctx.Done():
+				if !updates.enqueue(ctx, streamData) {
 					return
 				}
 			}
@@ -2232,6 +2361,8 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 		select {
 		case <-ctx.Done():
 			return
+		case <-subscriptionDone:
+			return
 		case <-ticker.C:
 			// Local heartbeat keeps the connection alive even when no active
 			// manager is broadcasting one (e.g., on /api/stream2 with no
@@ -2239,7 +2370,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 			if !writeStreamData(StreamResponse{Heartbeat: true}) {
 				return
 			}
-		case streamData := <-updates:
+		case streamData := <-updates.ch:
 			// Always forward updates, even if only the conversation changed (e.g., slug added).
 			if !writeStreamData(streamData) {
 				return
@@ -2402,9 +2533,11 @@ func (s *Server) handleModelCommand(ctx context.Context, w http.ResponseWriter, 
 		if msg := validateModelReasoningLevel(targetInfo, newReasoning); msg != "" {
 			return reply(msg)
 		}
-	} else if modelSet && validateModelReasoningLevel(targetInfo, currentReasoning) != "" {
-		reasoningSet = true
-		newReasoning = ""
+	} else if modelSet {
+		if rounded, changed := roundModelReasoningLevel(targetInfo, currentReasoning); changed {
+			reasoningSet = true
+			newReasoning = rounded
+		}
 	}
 
 	// Reduce to the actual deltas: ignore no-op changes.
@@ -2438,7 +2571,7 @@ func (s *Server) handleModelCommand(ctx context.Context, w http.ResponseWriter, 
 // reasoningLevelNames are the user-facing reasoning levels accepted by /model.
 // They match the levels offered by the ThinkingLevelPicker in the UI. The word
 // "default" is deliberately not a level: it selects the default MODEL instead.
-var reasoningLevelNames = []string{"off", "minimal", "low", "medium", "high", "xhigh"}
+var reasoningLevelNames = []string{"off", "minimal", "low", "medium", "high", "xhigh", "max"}
 
 func isReasoningLevelName(s string) bool {
 	s = strings.ToLower(strings.TrimSpace(s))
@@ -2552,7 +2685,8 @@ func isReadyModel(id string, modelList []ModelInfo) bool {
 
 // modelCommandStatus builds the human-readable body shown for a bare /model
 // command or an invalid argument: the current model and reasoning level plus
-// the available options.
+// the available options. Models that advertise an exact reasoning level list
+// show it; the rest accept the standard levels through xhigh.
 func modelCommandStatus(currentModel, currentReasoning string, modelList []ModelInfo) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Current model: %s\nCurrent reasoning: %s", currentModel, reasoningDisplayName(currentReasoning))
@@ -2566,8 +2700,15 @@ func modelCommandStatus(currentModel, currentReasoning string, modelList []Model
 			name = fmt.Sprintf("%s (%s)", m.ID, m.DisplayName)
 		}
 		fmt.Fprintf(&b, "\n  /model %s", name)
+		switch {
+		case !m.SupportsReasoning:
+			b.WriteString(" — no reasoning")
+		case len(m.ReasoningLevels) > 0:
+			fmt.Fprintf(&b, " — %s", strings.Join(m.ReasoningLevels, ", "))
+		}
 	}
-	fmt.Fprintf(&b, "\n\nReasoning levels (use as /model <level> or /model <id> <level>): %s", strings.Join(reasoningLevelNames, ", "))
+	fmt.Fprintf(&b, "\n\nReasoning levels (use as /model <level> or /model <id> <level>): %s\nModels without a listed set accept %s through %s.",
+		strings.Join(reasoningLevelNames, ", "), reasoningLevelNames[0], reasoningLevelNames[len(reasoningLevelNames)-2])
 	return b.String()
 }
 
@@ -2884,7 +3025,17 @@ func (s *Server) handleDeleteConversation(w http.ResponseWriter, r *http.Request
 	}
 
 	ctx := r.Context()
+	// Terminals owned by this conversation would otherwise point at a
+	// conversation that no longer exists, so make them global first. If that
+	// fails, leave the conversation alone rather than orphaning them.
+	if err := s.terminals.GlobalizeConversation(conversationID); err != nil {
+		s.logger.Error("Failed to globalize conversation terminals", "conversationID", conversationID, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 	if err := s.db.DeleteConversation(ctx, conversationID); err != nil {
+		// The terminals are already global at this point. That is harmless and
+		// visible to the user, so no rollback is attempted.
 		s.logger.Error("Failed to delete conversation", "conversationID", conversationID, "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -2980,6 +3131,125 @@ func (s *Server) handleRenameConversation(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(conversation)
+}
+
+// SetCwdRequest represents a request to move a conversation to a different
+// working directory.
+type SetCwdRequest struct {
+	Cwd string `json:"cwd"`
+}
+
+// handleSetConversationCwd handles POST /conversation/<id>/cwd: the user-driven
+// counterpart of the agent's change_dir tool, backing the directory segment of
+// the status readout.
+//
+// Validation happens before anything moves. A half-applied change — the row
+// updated but the running toolset not, or vice versa — is worse than a refused
+// one, because nothing afterwards would notice the disagreement.
+func (s *Server) handleSetConversationCwd(w http.ResponseWriter, r *http.Request, conversationID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := r.Context()
+
+	var req SetCwdRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Absolute only: a relative path has no meaning here. The obvious base to
+	// resolve against would be the conversation's current cwd, which is the very
+	// thing being replaced — so ".." would mean different directories depending
+	// on when the request landed.
+	if req.Cwd == "" || !filepath.IsAbs(req.Cwd) {
+		http.Error(w, "cwd must be an absolute path", http.StatusBadRequest)
+		return
+	}
+	cwd := filepath.Clean(req.Cwd)
+	info, err := os.Stat(cwd)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "directory does not exist", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, fmt.Sprintf("cannot use directory: %v", err), http.StatusBadRequest)
+		return
+	}
+	if !info.IsDir() {
+		http.Error(w, "path is not a directory", http.StatusBadRequest)
+		return
+	}
+
+	conversation, err := s.db.GetConversationByID(ctx, conversationID)
+	if err != nil {
+		s.logger.Error("Failed to load conversation for cwd change", "conversationID", conversationID, "error", err)
+		http.Error(w, "Conversation not found", http.StatusNotFound)
+		return
+	}
+	if conversation.Archived {
+		http.Error(w, "conversation is archived", http.StatusConflict)
+		return
+	}
+	// A draft has no agent and no history yet; its cwd is still client state and
+	// travels with the first send (see the promote path in handleChatConversation).
+	// Creating a manager here to move it would hydrate the conversation and write
+	// a system prompt — pinned to the OLD directory, since the row hasn't moved
+	// yet — well before the user has sent anything.
+	if conversation.IsDraft {
+		http.Error(w, "conversation is still a draft; set its directory before sending", http.StatusConflict)
+		return
+	}
+
+	userEmail := r.Header.Get("X-ExeDev-Email")
+	ctx = contextWithUserEmail(ctx, userEmail)
+
+	// Route through the manager even when one isn't already live: it owns the
+	// in-memory cwd and the toolset, and creating it here is what makes the
+	// change visible to a turn that starts moments later.
+	manager, err := s.getOrCreateConversationManager(ctx, conversationID, userEmail)
+	if err != nil {
+		s.logger.Error("Failed to get conversation manager for cwd change", "conversationID", conversationID, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Mid-turn, the agent may be running a command right now; moving the ground
+	// under it would make its output a lie. Ask the user to wait rather than
+	// cancelling their turn for them. (The model picker takes the opposite side
+	// of this trade, but it has no choice — a model switch cannot be applied
+	// without rebuilding the loop.) SetCwd re-checks this atomically; the point
+	// of checking here is the specific message.
+	if manager.IsAgentWorking() {
+		http.Error(w, "Finish or stop the current turn to change the directory", http.StatusConflict)
+		return
+	}
+
+	if err := manager.SetCwd(ctx, cwd); err != nil {
+		if errors.Is(err, errAgentWorking) {
+			http.Error(w, "Finish or stop the current turn to change the directory", http.StatusConflict)
+			return
+		}
+		s.logger.Error("Failed to change conversation cwd", "conversationID", conversationID, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	updated, err := s.db.GetConversationByID(ctx, conversationID)
+	if err != nil {
+		s.logger.Error("Failed to reload conversation after cwd change", "conversationID", conversationID, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	go s.publishConversationListUpdate(ConversationListUpdate{
+		Type:         "update",
+		Conversation: updated,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updated)
 }
 
 // TagsRequest represents a request to update a conversation's tags.
@@ -3088,6 +3358,10 @@ func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if restart {
+		if err := s.markResumeAfterRestart(r.Context()); err != nil {
+			s.logger.Error("Failed to mark resume-after-upgrade; continuing restart", "error", err)
+		}
+
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Upgrade complete. Restarting..."})
 
 		// Flush the response
@@ -3245,22 +3519,47 @@ func (s *Server) handleUpgradeHeadlessShell(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// handleExit exits the process, expecting systemd or similar to restart it
-func (s *Server) handleExit(w http.ResponseWriter, r *http.Request) {
-	// Send response before exiting
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Exiting..."})
+// markResumeAfterRestart makes the next server process continue conversations
+// that are still mid-turn when this process exits. The startup path consumes
+// the marker exactly once.
+func (s *Server) markResumeAfterRestart(ctx context.Context) error {
+	return s.db.SetSetting(ctx, db.ResumeAfterUpgradeSettingKey, "1")
+}
 
-	// Flush the response
+// restartExitCode makes systemd's Restart=on-failure immediately start the
+// replacement process. A clean exit may leave Shelley stopped until its socket
+// receives another request, which cannot resume a headless conversation.
+const restartExitCode = 1
+
+// handleExit exits the process, expecting systemd or similar to restart it.
+// With ?resume=true, in-flight conversations continue on the next process.
+func (s *Server) handleExit(w http.ResponseWriter, r *http.Request) {
+	resume := r.URL.Query().Get("resume") == "true"
+	message := "Exiting..."
+	exitCode := 0
+	if resume {
+		if err := s.markResumeAfterRestart(r.Context()); err != nil {
+			s.logger.Error("Failed to mark conversations for resume after restart", "error", err)
+			http.Error(w, fmt.Sprintf("Failed to prepare conversations for restart: %v", err), http.StatusInternalServerError)
+			return
+		}
+		message = "Exiting; active conversations will resume after restart..."
+		exitCode = restartExitCode
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": message})
+
+	// Flush the response before exiting. The delay also gives an agent that
+	// invoked this endpoint as a tool time to persist the tool result before
+	// the process is replaced.
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}
-
-	// Exit after a short delay to allow response to be sent
 	go func() {
-		time.Sleep(100 * time.Millisecond)
-		s.logger.Info("Exiting Shelley via /exit endpoint")
-		os.Exit(0)
+		time.Sleep(s.exitDelay)
+		s.logger.Info("Exiting Shelley via /exit endpoint", "resume", resume, "exit_code", exitCode)
+		s.exitProcess(exitCode)
 	}()
 }
 
@@ -3700,6 +3999,35 @@ func findModelInfo(id string, models []ModelInfo) *ModelInfo {
 	return nil
 }
 
+func roundModelReasoningLevel(model *ModelInfo, level string) (string, bool) {
+	if level == "" || model == nil {
+		return level, false
+	}
+	if !model.SupportsReasoning {
+		return "", true
+	}
+	if len(model.ReasoningLevels) == 0 {
+		if level == "max" {
+			return "", true
+		}
+		return level, false
+	}
+	supported := make([]llm.ThinkingLevel, 0, len(model.ReasoningLevels))
+	for _, name := range model.ReasoningLevels {
+		if parsed := llm.ParseThinkingLevel(name); parsed != llm.ThinkingLevelDefault {
+			supported = append(supported, parsed)
+		}
+	}
+	rounded := llm.ClampThinkingLevel(llm.ParseThinkingLevel(level), supported).Name()
+	if validateModelReasoningLevel(model, rounded) != "" {
+		// Clamping can fail to land on a supported level (e.g. a model that
+		// only advertises off never attracts non-off levels); reset instead
+		// of persisting an unsendable level.
+		return "", true
+	}
+	return rounded, rounded != level
+}
+
 func validateModelReasoningLevel(model *ModelInfo, level string) string {
 	if level == "" || model == nil {
 		return ""
@@ -3708,6 +4036,9 @@ func validateModelReasoningLevel(model *ModelInfo, level string) string {
 		return fmt.Sprintf("Model %s does not support reasoning; use default.", model.ID)
 	}
 	if len(model.ReasoningLevels) == 0 {
+		if level == "max" {
+			return fmt.Sprintf("Model %s does not advertise reasoning level max; use default or a standard level through xhigh.", model.ID)
+		}
 		return ""
 	}
 	for _, supported := range model.ReasoningLevels {
@@ -3731,9 +4062,9 @@ func validateConversationOptions(opts db.ConversationOptions) string {
 	}
 	if opts.ThinkingLevel != "" {
 		switch opts.ThinkingLevel {
-		case "off", "minimal", "low", "medium", "high", "xhigh":
+		case "off", "minimal", "low", "medium", "high", "xhigh", "max":
 		default:
-			return fmt.Sprintf("Invalid thinking_level: %q; must be one of off, minimal, low, medium, high, xhigh", opts.ThinkingLevel)
+			return fmt.Sprintf("Invalid thinking_level: %q; must be one of off, minimal, low, medium, high, xhigh, max", opts.ThinkingLevel)
 		}
 	}
 	return ""

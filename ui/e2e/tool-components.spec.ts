@@ -136,7 +136,7 @@ test.describe('Tool Component Verification', () => {
       await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📡' }).first()).toBeAttached();
     });
     await verifyPill('browser', 'accessibility_tree', async (modal) => {
-      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '♿' }).first()).toBeAttached();
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '🌳' }).first()).toBeAttached();
     });
     await verifyPill('browser', 'profile_metrics', async (modal) => {
       await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📊' }).first()).toBeAttached();
@@ -150,7 +150,7 @@ test.describe('Tool Component Verification', () => {
       await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📡' }).first()).toBeAttached();
     });
     await verifyPill('browser_accessibility', null, async (modal) => {
-      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '♿' }).first()).toBeAttached();
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '🌳' }).first()).toBeAttached();
     });
     await verifyPill('browser_profile', null, async (modal) => {
       await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📊' }).first()).toBeAttached();

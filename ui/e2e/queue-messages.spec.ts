@@ -126,6 +126,73 @@ test.describe('Queue Messages', () => {
     await expect(page.locator('text=to be cancelled')).toHaveCount(0, { timeout: 10000 });
   });
 
+  test('cancelling restores all queued messages to the composer', async ({ page, request }) => {
+    await openConversation(page, request);
+    await sendAndWaitForWorking(page, 'delay: 60');
+
+    await queueMessage(page, 'echo: first queued message');
+    await queueMessage(page, 'echo: second queued message');
+    await expect(page.getByTestId('queued-badge')).toHaveCount(2, { timeout: 10000 });
+
+    const stopButton = page.getByRole('button', { name: 'Stop' });
+    const [cancelResp] = await Promise.all([
+      page.waitForResponse((resp) => resp.url().includes('/cancel') && resp.status() === 200, {
+        timeout: 10000,
+      }),
+      stopButton.tap(),
+    ]);
+    expect(cancelResp.url()).toContain('/cancel');
+
+    const messageInput = page.getByTestId('message-input');
+    await expect(messageInput).toHaveValue('echo: first queued message\necho: second queued message');
+    await expect(page.getByTestId('queued-badge')).toHaveCount(0, { timeout: 10000 });
+  });
+
+  test('cancelling does not replace text already in the composer', async ({ page, request }) => {
+    await openConversation(page, request);
+    await sendAndWaitForWorking(page, 'delay: 60');
+
+    await queueMessage(page, 'echo: queued message');
+    await expect(page.getByTestId('queued-badge')).toHaveCount(1, { timeout: 10000 });
+
+    const messageInput = page.getByTestId('message-input');
+    await messageInput.fill('keep this draft');
+    await page.getByRole('button', { name: 'Stop' }).tap();
+
+    await expect(messageInput).toHaveValue('keep this draft');
+    await expect(page.getByTestId('queued-badge')).toHaveCount(0, { timeout: 10000 });
+  });
+
+  test('cancelling restores a queue request that has not been accepted', async ({ page, request }) => {
+    await openConversation(page, request);
+    await sendAndWaitForWorking(page, 'delay: 60');
+
+    let releaseQueue: (() => void) | undefined;
+    let markQueueStarted: (() => void) | undefined;
+    const queueBlocked = new Promise<void>((resolve) => {
+      releaseQueue = resolve;
+    });
+    const queueStarted = new Promise<void>((resolve) => {
+      markQueueStarted = resolve;
+    });
+    await page.route('**/api/conversation/*/chat', async (route) => {
+      const body = route.request().postDataJSON();
+      if (body.queue) {
+        markQueueStarted?.();
+        await queueBlocked;
+      }
+      await route.continue();
+    });
+
+    void queueMessage(page, 'echo: pending steering');
+    await queueStarted;
+
+    await page.getByRole('button', { name: 'Stop' }).tap();
+    await expect(page.getByTestId('message-input')).toHaveValue('echo: pending steering');
+
+    releaseQueue?.();
+  });
+
   test('queued message drains after agent finishes', async ({ page, request }) => {
     await openConversation(page, request);
 

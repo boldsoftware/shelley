@@ -117,6 +117,8 @@ func Run(args []string) {
 		fmt.Fprintf(fs.Output(), "  read     Read conversation messages\n")
 		fmt.Fprintf(fs.Output(), "  list     List conversations\n")
 		fmt.Fprintf(fs.Output(), "  search   Search conversations by content\n")
+		fmt.Fprintf(fs.Output(), "  tag      Show/add/remove a conversation's tags\n")
+		fmt.Fprintf(fs.Output(), "  tags     List tags already in use\n")
 		fmt.Fprintf(fs.Output(), "  archive  Archive a conversation\n")
 		fmt.Fprintf(fs.Output(), "  help     Print detailed help\n")
 	}
@@ -149,6 +151,10 @@ func Run(args []string) {
 		cmdList(cc, subArgs[1:])
 	case "search":
 		cmdSearch(cc, subArgs[1:])
+	case "tag":
+		cmdTag(cc, subArgs[1:])
+	case "tags":
+		cmdTags(cc, subArgs[1:])
 	case "archive":
 		cmdArchive(cc, subArgs[1:])
 	case "help":
@@ -729,6 +735,18 @@ Subcommands:
   search [-limit N] QUERY
       Search conversations by slug and message content.
       Prints matching conversations as JSON lines.
+
+  tag [-rm | -set] CONVERSATION_ID [TAG...]
+      Show, add, or remove conversation tags. With no TAGs, prints the
+      current list. Tags may be brand new or ones already in use on other
+      conversations. -rm removes the listed tags; -set replaces the whole
+      list (with no TAGs it clears them).
+      Prints JSON with the resulting tag list.
+
+  tags [-limit N]
+      List the tags already in use across active and archived
+      conversations, most-used first, as JSON lines ({tag, count}).
+      Use it to pick an existing tag rather than inventing a near-duplicate.
 
   archive CONVERSATION_ID
       Archive a conversation.

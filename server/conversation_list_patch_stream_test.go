@@ -302,7 +302,7 @@ func TestConversationListPatchStreamRapidReordersApplyCleanly(t *testing.T) {
 	<-done
 }
 
-func TestConversationListPatchStreamCurrentHashSkipsInitial(t *testing.T) {
+func TestConversationListPatchStreamCurrentHashSendsHeartbeatNotReset(t *testing.T) {
 	t.Parallel()
 	server, _, _ := newTestServer(t)
 	// Prime current state.
@@ -320,8 +320,16 @@ func TestConversationListPatchStreamCurrentHashSkipsInitial(t *testing.T) {
 
 	select {
 	case <-rec.flushed:
-		t.Fatalf("did not expect any events; body=%s", rec.getString())
-	case <-time.After(150 * time.Millisecond):
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected an immediate heartbeat")
+	}
+	var first StreamResponse
+	body := strings.TrimSpace(rec.getString())
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(body, "data: ")), &first); err != nil {
+		t.Fatalf("decode first event: %v; body=%q", err, body)
+	}
+	if !first.Heartbeat || first.ConversationListPatch != nil {
+		t.Fatalf("current hash should produce heartbeat without reset, got %+v", first)
 	}
 	cancel()
 	<-done

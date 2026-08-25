@@ -53,6 +53,7 @@ type DownloadInfo struct {
 	URL               string
 	SuggestedFilename string
 	FinalPath         string
+	Generation        uint64
 	Completed         bool
 	Error             string
 }
@@ -76,9 +77,11 @@ type BrowseTools struct {
 	idleTimeout time.Duration
 	idleTimer   *time.Timer
 	// Download tracking
-	downloads      map[string]*DownloadInfo // keyed by GUID
-	downloadsMutex sync.Mutex
-	downloadCond   *sync.Cond
+	downloads          map[string]*DownloadInfo // keyed by GUID
+	downloadsMutex     sync.Mutex
+	downloadActionMu   sync.Mutex
+	downloadGeneration uint64
+	downloadCond       *sync.Cond
 	// Network monitoring
 	networkEnabled     bool
 	networkRequests    []*NetworkRequest
@@ -412,8 +415,15 @@ func (b *BrowseTools) navigateRun(ctx context.Context, input navigateInput) llm.
 		return llm.ErrorToolOut(err)
 	}
 
+	b.downloadActionMu.Lock()
+	defer b.downloadActionMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return llm.ErrorToolOut(err)
+	}
+	generation := b.beginDownloadAction()
+
 	// Create a timeout context for this operation
-	timeoutCtx, cancel := context.WithTimeout(browserCtx, parseTimeout(input.Timeout))
+	timeoutCtx, cancel := browserActionContext(ctx, browserCtx, input.Timeout)
 	defer cancel()
 
 	err = chromedp.Run(
@@ -426,7 +436,7 @@ func (b *BrowseTools) navigateRun(ctx context.Context, input navigateInput) llm.
 		// Wait briefly for download events to be processed, then check if we got any downloads.
 		if strings.Contains(err.Error(), "net::ERR_ABORTED") {
 			time.Sleep(500 * time.Millisecond)
-			downloads := b.GetRecentDownloads()
+			downloads := b.GetRecentDownloads(generation)
 			if len(downloads) > 0 {
 				// Download succeeded - report it instead of error
 				var sb strings.Builder
@@ -444,7 +454,7 @@ func (b *BrowseTools) navigateRun(ctx context.Context, input navigateInput) llm.
 		return llm.ErrorToolOut(err)
 	}
 
-	return b.toolOutWithDownloads("done")
+	return b.toolOutWithDownloads("done", generation)
 }
 
 type resizeInput struct {
@@ -489,8 +499,15 @@ func (b *BrowseTools) evalRun(ctx context.Context, input evalInput) llm.ToolOut 
 		return llm.ErrorToolOut(err)
 	}
 
+	b.downloadActionMu.Lock()
+	defer b.downloadActionMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return llm.ErrorToolOut(err)
+	}
+	generation := b.beginDownloadAction()
+
 	// Create a timeout context for this operation
-	timeoutCtx, cancel := context.WithTimeout(browserCtx, parseTimeout(input.Timeout))
+	timeoutCtx, cancel := browserActionContext(ctx, browserCtx, input.Timeout)
 	defer cancel()
 
 	var result any
@@ -529,10 +546,10 @@ func (b *BrowseTools) evalRun(ctx context.Context, input evalInput) llm.ToolOut 
 		return b.toolOutWithDownloads(fmt.Sprintf(
 			"JavaScript result (%d bytes) written to: %s\nUse `cat %s` to view the full content.",
 			len(response), filePath, filePath,
-		))
+		), generation)
 	}
 
-	return b.toolOutWithDownloads("<javascript_result>" + string(response) + "</javascript_result>")
+	return b.toolOutWithDownloads("<javascript_result>"+string(response)+"</javascript_result>", generation)
 }
 
 type screenshotInput struct {
@@ -1145,6 +1162,15 @@ func parseTimeout(timeout string) time.Duration {
 	return dur
 }
 
+func browserActionContext(toolCtx, browserCtx context.Context, timeout string) (context.Context, context.CancelFunc) {
+	actionCtx, cancel := context.WithTimeout(browserCtx, parseTimeout(timeout))
+	stop := context.AfterFunc(toolCtx, cancel)
+	return actionCtx, func() {
+		stop()
+		cancel()
+	}
+}
+
 // captureConsoleLog captures a console log event and stores it
 func (b *BrowseTools) captureConsoleLog(e *runtime.EventConsoleAPICalled) {
 	// Add to logs with mutex protection
@@ -1167,6 +1193,7 @@ func (b *BrowseTools) handleDownloadWillBegin(e *browser.EventDownloadWillBegin)
 		GUID:              e.GUID,
 		URL:               e.URL,
 		SuggestedFilename: e.SuggestedFilename,
+		Generation:        b.downloadGeneration,
 	}
 }
 
@@ -1178,7 +1205,7 @@ func (b *BrowseTools) handleDownloadProgress(e *browser.EventDownloadProgress) {
 	info, ok := b.downloads[e.GUID]
 	if !ok {
 		// Download started before we started tracking, create entry
-		info = &DownloadInfo{GUID: e.GUID}
+		info = &DownloadInfo{GUID: e.GUID, Generation: b.downloadGeneration}
 		b.downloads[e.GUID] = info
 	}
 
@@ -1228,14 +1255,22 @@ func (b *BrowseTools) generateDownloadFilename(suggested string) string {
 	return fmt.Sprintf("%s_%s%s", base, randomSuffix, ext)
 }
 
-// GetRecentDownloads returns download info for recently completed downloads and clears the list
-func (b *BrowseTools) GetRecentDownloads() []*DownloadInfo {
+func (b *BrowseTools) beginDownloadAction() uint64 {
+	b.downloadsMutex.Lock()
+	defer b.downloadsMutex.Unlock()
+	b.downloadGeneration++
+	return b.downloadGeneration
+}
+
+// GetRecentDownloads returns completed downloads owned by one browser action
+// and clears them from the tracker.
+func (b *BrowseTools) GetRecentDownloads(generation uint64) []*DownloadInfo {
 	b.downloadsMutex.Lock()
 	defer b.downloadsMutex.Unlock()
 
 	var completed []*DownloadInfo
 	for guid, info := range b.downloads {
-		if info.Completed {
+		if info.Completed && info.Generation == generation {
 			completed = append(completed, info)
 			delete(b.downloads, guid)
 		}
@@ -1243,9 +1278,10 @@ func (b *BrowseTools) GetRecentDownloads() []*DownloadInfo {
 	return completed
 }
 
-// toolOutWithDownloads creates a tool output that includes any completed downloads
-func (b *BrowseTools) toolOutWithDownloads(message string) llm.ToolOut {
-	downloads := b.GetRecentDownloads()
+// toolOutWithDownloads creates a tool output that includes downloads owned by
+// the current browser action.
+func (b *BrowseTools) toolOutWithDownloads(message string, generation uint64) llm.ToolOut {
+	downloads := b.GetRecentDownloads(generation)
 	if len(downloads) == 0 {
 		return llm.ToolOut{LLMContent: llm.TextContent(message)}
 	}

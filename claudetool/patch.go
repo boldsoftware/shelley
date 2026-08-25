@@ -11,7 +11,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/pkg/diff"
 	"shelley.exe.dev/llm"
@@ -25,22 +29,115 @@ import (
 // and returns a new, possibly altered tool output.
 type PatchCallback func(input PatchInput, output llm.ToolOut) llm.ToolOut
 
+type patchFileIdentity struct {
+	info os.FileInfo
+}
+
+type patchPathLock struct {
+	path     string
+	identity atomic.Pointer[patchFileIdentity]
+	mu       sync.Mutex
+}
+
 // PatchTool specifies an llm.Tool for patching files.
-// PatchTools are not concurrency-safe.
 type PatchTool struct {
-	Callback PatchCallback // may be nil
+	Callback PatchCallback // may be nil; must support concurrent calls
+	Provider string
+	Profile  string
 	// WorkingDir is the shared mutable working directory.
-	WorkingDir *MutableWorkingDir
-	// Simplified indicates whether to use the simplified input schema.
-	// Helpful for weaker models.
-	Simplified bool
-	// ClipboardEnabled controls whether clipboard functionality is enabled.
-	// Ignored if Simplified is true.
-	// NB: The actual implementation of the patch tool is unchanged,
-	// this flag merely extends the description and input schema to include the clipboard operations.
-	ClipboardEnabled bool
-	// clipboards stores clipboard name -> text
-	clipboards map[string]string
+	WorkingDir     *MutableWorkingDir
+	clipboardMu    sync.RWMutex
+	clipboards     map[string]string
+	clipboardLocks sync.Map // map[string]*sync.Mutex
+	pathLocksMu    sync.Mutex
+	pathLocks      []*patchPathLock
+}
+
+func canonicalPatchPath(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	if parent, err := filepath.EvalSymlinks(filepath.Dir(path)); err == nil {
+		return filepath.Join(parent, filepath.Base(path))
+	}
+	return path
+}
+
+func (p *PatchTool) lockPath(path string) func() {
+	path = canonicalPatchPath(path)
+	info, _ := os.Stat(path)
+
+	p.pathLocksMu.Lock()
+	var pathLock *patchPathLock
+	for _, candidate := range p.pathLocks {
+		identity := candidate.identity.Load()
+		if candidate.path == path || (info != nil && identity != nil && os.SameFile(info, identity.info)) {
+			pathLock = candidate
+			break
+		}
+	}
+	if pathLock == nil {
+		pathLock = &patchPathLock{path: path}
+		if info != nil {
+			pathLock.identity.Store(&patchFileIdentity{info: info})
+		}
+		p.pathLocks = append(p.pathLocks, pathLock)
+	}
+	p.pathLocksMu.Unlock()
+
+	pathLock.mu.Lock()
+	return func() {
+		if info, err := os.Stat(path); err == nil {
+			pathLock.identity.Store(&patchFileIdentity{info: info})
+		}
+		pathLock.mu.Unlock()
+	}
+}
+
+func (p *PatchTool) lockClipboards(patches []PatchRequest) func() {
+	namesSet := make(map[string]bool)
+	for _, patch := range patches {
+		if patch.ToClipboard != "" {
+			namesSet[patch.ToClipboard] = true
+		}
+		if patch.FromClipboard != "" {
+			namesSet[patch.FromClipboard] = true
+		}
+	}
+	names := make([]string, 0, len(namesSet))
+	for name := range namesSet {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	locks := make([]*sync.Mutex, 0, len(names))
+	for _, name := range names {
+		lockValue, _ := p.clipboardLocks.LoadOrStore(name, &sync.Mutex{})
+		lock := lockValue.(*sync.Mutex)
+		lock.Lock()
+		locks = append(locks, lock)
+	}
+	return func() {
+		for i := len(locks) - 1; i >= 0; i-- {
+			locks[i].Unlock()
+		}
+	}
+}
+
+func (p *PatchTool) setClipboard(name, text string) {
+	p.clipboardMu.Lock()
+	defer p.clipboardMu.Unlock()
+	if p.clipboards == nil {
+		p.clipboards = make(map[string]string)
+	}
+	p.clipboards[name] = text
+}
+
+func (p *PatchTool) getClipboard(name string) (string, bool) {
+	p.clipboardMu.RLock()
+	defer p.clipboardMu.RUnlock()
+	text, ok := p.clipboards[name]
+	return text, ok
 }
 
 // getWorkingDir returns the current working directory.
@@ -50,18 +147,18 @@ func (p *PatchTool) getWorkingDir() string {
 
 // Tool returns an llm.Tool based on p.
 func (p *PatchTool) Tool() *llm.Tool {
-	description := PatchBaseDescription + PatchUsageNotes
-	schema := PatchStandardInputSchema
-	switch {
-	case p.Simplified:
-		schema = PatchStandardSimplifiedSchema
-	case p.ClipboardEnabled:
-		description = PatchBaseDescription + PatchClipboardDescription + PatchUsageNotes
-		schema = PatchClipboardInputSchema
+	if p.Profile == "codex_apply_patch" {
+		return p.applyPatchTool()
+	}
+	schema := PatchNestedInputSchema
+	description := strings.TrimSpace(PatchBaseDescription + PatchUsageNotes)
+	if p.Profile == "simple" {
+		schema = PatchSimpleInputSchema
+		description = PatchSimpleDescription
 	}
 	return &llm.Tool{
 		Name:        PatchName,
-		Description: strings.TrimSpace(description),
+		Description: description,
 		InputSchema: llm.MustSchema(schema),
 		Run:         p.Run,
 	}
@@ -99,6 +196,26 @@ Recipes:
 - in-place indentation change: same as copy, but add indentation adjustment
 `
 
+	ApplyPatchName        = "apply_patch"
+	ApplyPatchDescription = `The apply_patch tool edits files using the Codex patch format. This is a FREEFORM tool: send only an envelope beginning with "*** Begin Patch" and ending with "*** End Patch"; do not wrap it in JSON.
+Use "*** Add File: path" with every content line prefixed "+", "*** Delete File: path", or "*** Update File: path" with hunk lines prefixed by exactly one " " (context), "-" (remove), or "+" (add). Context text after its one-character marker must match the file verbatim, including leading spaces and tabs.
+For every update hunk, include enough unchanged context to identify one location—up to 3 unchanged lines before and after the edit when available, unless fewer lines already include a unique structural anchor such as a function declaration, type name, CSS selector, or test name. Do not patch using only a short repeated fragment.
+The patch is validated as a unit: a parse or match failure rejects the entire patch without changing files. For "matched 0 locations," reread the current file and retry with exact current context; do not trim or normalize whitespace.`
+	ApplyPatchGrammar = `start: begin_patch hunk+ end_patch
+begin_patch: "*** Begin Patch" LF
+end_patch: "*** End Patch" LF?
+hunk: add_hunk | delete_hunk | update_hunk
+add_hunk: "*** Add File: " filename LF add_line+
+delete_hunk: "*** Delete File: " filename LF
+update_hunk: "*** Update File: " filename LF change?
+filename: /(.+)/
+add_line: "+" /(.*)/ LF
+change: (change_context | change_line)+ eof_line?
+change_context: ("@@" | "@@ " /(.+)/) LF
+change_line: ("+" | "-" | " ") /(.*)/ LF
+eof_line: "*** End of File" LF
+%import common.LF`
+
 	PatchUsageNotes = `
 Usage notes:
 - All inputs are interpreted literally (no automatic newline or whitespace handling)
@@ -109,36 +226,25 @@ changes, break them into multiple smaller patch operations rather than one
 large overwrite. Prefer incremental replace operations over full file overwrites.
 `
 
-	// If you modify this, update the termui template for prettier rendering.
-	PatchStandardInputSchema = `
+	PatchNestedInputSchema = `
 {
   "type": "object",
+  "additionalProperties": false,
   "required": ["path", "patches"],
   "properties": {
-    "path": {
-      "type": "string",
-      "description": "Path to the file to patch"
-    },
+    "path": {"type": "string", "description": "Path to the file to patch"},
     "patches": {
       "type": "array",
-      "description": "List of patch requests to apply",
+      "minItems": 1,
+      "description": "Patch operations to apply in order",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["operation", "newText"],
         "properties": {
-          "operation": {
-            "type": "string",
-            "enum": ["replace", "append_eof", "prepend_bof", "overwrite"],
-            "description": "Type of operation to perform"
-          },
-          "oldText": {
-            "type": "string",
-            "description": "Text to locate for the operation (must be unique in file, required for replace)"
-          },
-          "newText": {
-            "type": "string",
-            "description": "The new text to use (empty for deletions)"
-          }
+          "operation": {"type": "string", "enum": ["replace", "append_eof", "prepend_bof", "overwrite"]},
+          "oldText": {"type": "string"},
+          "newText": {"type": "string"}
         }
       }
     }
@@ -146,90 +252,33 @@ large overwrite. Prefer incremental replace operations over full file overwrites
 }
 `
 
-	PatchStandardSimplifiedSchema = `{
-  "type": "object",
-  "required": ["path", "patch"],
-  "properties": {
-    "path": {
-      "type": "string",
-      "description": "Path to the file to patch"
-    },
-    "patch": {
-      "type": "object",
-      "required": ["operation", "newText"],
-      "properties": {
-        "operation": {
-          "type": "string",
-          "enum": ["replace", "append_eof", "prepend_bof", "overwrite"],
-          "description": "Type of operation to perform"
-        },
-        "oldText": {
-          "type": "string",
-          "description": "Text to locate for the operation (must be unique in file, required for replace)"
-        },
-        "newText": {
-          "type": "string",
-          "description": "The new text to use (empty for deletions)"
-        }
-      }
-    }
-  }
-}`
+	PatchSimpleDescription = `Edit one file with precise text replacements and optional content appended at EOF.
 
-	PatchClipboardInputSchema = `
+Each oldText must match exactly once in the original file. Edits must not overlap
+or depend on text produced by another edit in the same call. Append does not need
+an oldText anchor. The file is written only after every edit validates.`
+
+	PatchSimpleInputSchema = `
 {
   "type": "object",
-  "required": ["path", "patches"],
+  "additionalProperties": false,
+  "required": ["path"],
   "properties": {
-    "path": {
-      "type": "string",
-      "description": "Path to the file to patch"
-    },
-    "patches": {
+    "path": {"type": "string", "description": "Path to the file to edit"},
+    "edits": {
       "type": "array",
-      "description": "List of patch requests to apply",
+      "description": "Non-overlapping replacements matched against the original file",
       "items": {
         "type": "object",
-        "required": ["operation"],
+        "additionalProperties": false,
+        "required": ["oldText", "newText"],
         "properties": {
-          "operation": {
-            "type": "string",
-            "enum": ["replace", "append_eof", "prepend_bof", "overwrite"],
-            "description": "Type of operation to perform"
-          },
-          "oldText": {
-            "type": "string",
-            "description": "Text to locate (must be unique in file, required for replace)"
-          },
-          "newText": {
-            "type": "string",
-            "description": "The new text to use (empty for deletions, leave empty if fromClipboard is set)"
-          },
-          "toClipboard": {
-            "type": "string",
-            "description": "Save oldText to this named clipboard before the operation"
-          },
-          "fromClipboard": {
-            "type": "string",
-            "description": "Use content from this clipboard as newText (overrides newText field)"
-          },
-          "reindent": {
-            "type": "object",
-            "description": "Modify indentation of the inserted text (newText or fromClipboard) before insertion",
-            "properties": {
-              "strip": {
-                "type": "string",
-                "description": "Remove this prefix from each non-empty line before insertion"
-              },
-              "add": {
-                "type": "string",
-                "description": "Add this prefix to each non-empty line after stripping"
-              }
-            }
-          }
+          "oldText": {"type": "string", "description": "Exact text to replace; must be unique in the original file"},
+          "newText": {"type": "string", "description": "Replacement text"}
         }
       }
-    }
+    },
+    "append": {"type": "string", "description": "Content to append at the end of the file"}
   }
 }
 `
@@ -243,27 +292,40 @@ type PatchInput struct {
 	Patches []PatchRequest `json:"patches"`
 }
 
-// PatchInputOne is a simplified version of PatchInput for single patch operations.
-type PatchInputOne struct {
-	Path    string        `json:"path"`
-	Patches *PatchRequest `json:"patches"`
+type PatchSimpleInput struct {
+	Path   string            `json:"path"`
+	Edits  []PatchSimpleEdit `json:"edits"`
+	Append *string           `json:"append"`
 }
 
-// PatchInputOneSingular is PatchInputOne with a better name for the singular case.
-type PatchInputOneSingular struct {
-	Path  string        `json:"path"`
-	Patch *PatchRequest `json:"patch"`
-}
-
-type PatchInputOneString struct {
-	Path    string `json:"path"`
-	Patches string `json:"patches"` // contains Patches as a JSON string 🤦
+type PatchSimpleEdit struct {
+	OldText string `json:"oldText"`
+	NewText string `json:"newText"`
 }
 
 // PatchDisplayData is the structured data sent to the UI for display.
 type PatchDisplayData struct {
 	Path string `json:"path"`
 	Diff string `json:"diff"`
+}
+
+type applyPatchInput struct {
+	Input string `json:"input"`
+}
+
+type applyPatchFile struct {
+	operation string
+	path      string
+	patches   []PatchRequest
+}
+
+type applyPatchMutation struct {
+	path    string
+	old     []byte
+	new     []byte
+	mode    os.FileMode
+	created bool
+	deleted bool
 }
 
 // PatchRequest represents a single patch operation.
@@ -287,77 +349,358 @@ type Reindent struct {
 }
 
 // Run implements the patch tool logic.
+func (p *PatchTool) applyPatchTool() *llm.Tool {
+	return &llm.Tool{
+		Name:          ApplyPatchName,
+		Description:   ApplyPatchDescription,
+		InputSchema:   llm.MustSchema(`{"type":"object","required":["input"],"properties":{"input":{"type":"string"}}}`),
+		CustomGrammar: ApplyPatchGrammar,
+		Run: func(ctx context.Context, raw json.RawMessage) llm.ToolOut {
+			var input applyPatchInput
+			if err := json.Unmarshal(raw, &input); err != nil {
+				return llm.ErrorfToolOut("invalid apply_patch input: %w", err)
+			}
+			return p.runApplyPatch(ctx, input.Input)
+		},
+	}
+}
+
 func (p *PatchTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
-	if p.clipboards == nil {
-		p.clipboards = make(map[string]string)
-	}
 	input, err := p.patchParse(m)
-	var output llm.ToolOut
 	if err != nil {
-		output = llm.ErrorToolOut(err)
-	} else {
-		output = p.patchRun(ctx, &input)
+		p.logResult(ctx, "invalid_input", err)
+		return llm.ErrorToolOut(err)
 	}
+	output := p.runInput(ctx, input)
+	if output.Error == nil {
+		p.logResult(ctx, "success", nil)
+	} else {
+		p.logResult(ctx, classifyPatchError(output.Error), output.Error)
+	}
+	return output
+}
+
+func (p *PatchTool) logResult(ctx context.Context, result string, err error) {
+	attrs := []any{"result", result, "provider", p.Provider, "profile", p.Profile}
+	if err != nil {
+		attrs = append(attrs, "error", err)
+	}
+	slog.InfoContext(ctx, "patch_tool_result", attrs...)
+}
+
+func classifyPatchError(err error) string {
+	message := err.Error()
+	switch {
+	case strings.Contains(message, "old text not found"), strings.Contains(message, "matched 0 locations"):
+		return "old_text_not_found"
+	case strings.Contains(message, "old text not unique"), strings.Contains(message, "matched ") && strings.Contains(message, " locations at lines "):
+		return "old_text_not_unique"
+	case strings.Contains(message, "does not exist"):
+		return "path_not_found"
+	case strings.Contains(message, "failed to read file"):
+		return "path_read_failed"
+	default:
+		return "execution_failed"
+	}
+}
+
+func (p *PatchTool) runApplyPatch(ctx context.Context, text string) llm.ToolOut {
+	files, err := parseApplyPatch(text)
+	if err != nil {
+		p.logResult(ctx, "invalid_input", err)
+		return llm.ErrorToolOut(err)
+	}
+
+	pathSet := make(map[string]struct{}, len(files))
+	for _, file := range files {
+		path := file.path
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(p.getWorkingDir(), path)
+		}
+		pathSet[filepath.Clean(path)] = struct{}{}
+	}
+	paths := make([]string, 0, len(pathSet))
+	for path := range pathSet {
+		paths = append(paths, path)
+	}
+	// Acquire all locks in a stable order so validation and commit see one
+	// consistent snapshot without deadlocking concurrent multi-file patches.
+	sort.Strings(paths)
+	unlocks := make([]func(), 0, len(paths))
+	for _, path := range paths {
+		unlocks = append(unlocks, p.lockPath(path))
+	}
+	defer func() {
+		for i := len(unlocks) - 1; i >= 0; i-- {
+			unlocks[i]()
+		}
+	}()
+
+	mutations := make([]applyPatchMutation, 0, len(files))
+	for _, file := range files {
+		path := file.path
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(p.getWorkingDir(), path)
+		}
+		path = filepath.Clean(path)
+		old, readErr := os.ReadFile(path)
+		mutation := applyPatchMutation{path: path, old: old, mode: 0o600}
+		if info, statErr := os.Stat(path); statErr == nil {
+			mutation.mode = info.Mode().Perm()
+		}
+
+		switch file.operation {
+		case "overwrite":
+			if readErr == nil {
+				err = fmt.Errorf("file %q already exists", path)
+			} else if !errors.Is(readErr, os.ErrNotExist) {
+				err = readErr
+			} else {
+				mutation.created = true
+				mutation.new = []byte(file.patches[0].NewText)
+			}
+		case "delete":
+			if readErr != nil {
+				err = readErr
+			} else {
+				mutation.deleted = true
+			}
+		case "replace":
+			if readErr != nil {
+				err = readErr
+				break
+			}
+			content := string(old)
+			for _, request := range file.patches {
+				spec, count := patchkit.Unique(content, request.OldText, request.NewText)
+				if count != 1 {
+					err = applyPatchMatchError(path, content, request.OldText)
+					break
+				}
+				content = content[:spec.Off] + request.NewText + content[spec.Off+spec.Len:]
+			}
+			mutation.new = []byte(content)
+		}
+		if err != nil {
+			p.logResult(ctx, "execution_failed", err)
+			return llm.ErrorToolOut(err)
+		}
+		mutations = append(mutations, mutation)
+	}
+
+	// Apply from validated snapshots. Roll back earlier writes if an OS error
+	// occurs so a multi-file patch is atomic from the agent's perspective.
+	for i, mutation := range mutations {
+		if mutation.deleted {
+			err = os.Remove(mutation.path)
+		} else {
+			err = os.MkdirAll(filepath.Dir(mutation.path), 0o700)
+			if err == nil {
+				err = os.WriteFile(mutation.path, mutation.new, mutation.mode)
+			}
+		}
+		if err != nil {
+			for j := i - 1; j >= 0; j-- {
+				prior := mutations[j]
+				if prior.created {
+					_ = os.Remove(prior.path)
+				} else {
+					_ = os.WriteFile(prior.path, prior.old, prior.mode)
+				}
+			}
+			p.logResult(ctx, "execution_failed", err)
+			return llm.ErrorToolOut(err)
+		}
+	}
+
+	var diff strings.Builder
+	for _, mutation := range mutations {
+		diff.WriteString(generateUnifiedDiff(mutation.path, string(mutation.old), string(mutation.new)))
+	}
+	p.logResult(ctx, "success", nil)
+	return llm.ToolOut{
+		LLMContent: llm.TextContent(fmt.Sprintf("Applied patch to %d file(s).", len(mutations))),
+		Display:    PatchDisplayData{Path: applyPatchDisplayPath(mutations), Diff: diff.String()},
+	}
+}
+
+func applyPatchMatchError(path, content, oldText string) error {
+	lines := exactMatchLines(content, oldText)
+	if len(lines) == 0 {
+		return fmt.Errorf("apply_patch update for %q matched 0 locations\n\nThe context must match exactly, including whitespace. Reread the current file and retry with context copied from it.\n\nNo files were changed", path)
+	}
+
+	lineText := make([]string, len(lines))
+	for i, line := range lines {
+		lineText[i] = strconv.Itoa(line)
+	}
+	return fmt.Errorf("apply_patch update for %q matched %d locations at lines %s\n\nInclude more surrounding unchanged lines so the context identifies one location.\n\nNo files were changed", path, len(lines), strings.Join(lineText, ", "))
+}
+
+func exactMatchLines(content, oldText string) []int {
+	if oldText == "" {
+		return nil
+	}
+
+	var lines []int
+	for offset := 0; ; {
+		match := strings.Index(content[offset:], oldText)
+		if match < 0 {
+			return lines
+		}
+		match += offset
+		lines = append(lines, 1+strings.Count(content[:match], "\n"))
+		offset = match + len(oldText)
+	}
+}
+
+func applyPatchDisplayPath(mutations []applyPatchMutation) string {
+	if len(mutations) == 1 {
+		return mutations[0].path
+	}
+	return "multiple files"
+}
+
+func parseApplyPatch(text string) ([]applyPatchFile, error) {
+	lines := strings.Split(strings.ReplaceAll(strings.TrimSpace(text), "\r\n", "\n"), "\n")
+	if len(lines) < 3 || lines[0] != "*** Begin Patch" || lines[len(lines)-1] != "*** End Patch" {
+		return nil, fmt.Errorf("apply_patch must start with '*** Begin Patch' and end with '*** End Patch'")
+	}
+	var files []applyPatchFile
+	for i := 1; i < len(lines)-1; {
+		line := lines[i]
+		i++
+		switch {
+		case strings.HasPrefix(line, "*** Add File: "):
+			path := strings.TrimPrefix(line, "*** Add File: ")
+			if path == "" {
+				return nil, fmt.Errorf("apply_patch add path is required")
+			}
+			var content []string
+			for i < len(lines)-1 && !strings.HasPrefix(lines[i], "*** ") {
+				if !strings.HasPrefix(lines[i], "+") {
+					return nil, fmt.Errorf("add-file lines must start with '+'")
+				}
+				content = append(content, strings.TrimPrefix(lines[i], "+"))
+				i++
+			}
+			if len(content) == 0 {
+				return nil, fmt.Errorf("add-file hunk for %q is empty", path)
+			}
+			files = append(files, applyPatchFile{operation: "overwrite", path: path, patches: []PatchRequest{{Operation: "overwrite", NewText: strings.Join(content, "\n") + "\n"}}})
+		case strings.HasPrefix(line, "*** Delete File: "):
+			path := strings.TrimPrefix(line, "*** Delete File: ")
+			if path == "" {
+				return nil, fmt.Errorf("apply_patch delete path is required")
+			}
+			files = append(files, applyPatchFile{operation: "delete", path: path, patches: []PatchRequest{{Operation: "delete"}}})
+		case strings.HasPrefix(line, "*** Update File: "):
+			path := strings.TrimPrefix(line, "*** Update File: ")
+			if path == "" {
+				return nil, fmt.Errorf("apply_patch update path is required")
+			}
+			var patches []PatchRequest
+			for i < len(lines)-1 && !strings.HasPrefix(lines[i], "*** ") {
+				if strings.HasPrefix(lines[i], "@@") {
+					i++
+				}
+				var oldLines, newLines []string
+				for i < len(lines)-1 && !strings.HasPrefix(lines[i], "@@") && !strings.HasPrefix(lines[i], "*** ") {
+					switch {
+					case strings.HasPrefix(lines[i], " "):
+						value := strings.TrimPrefix(lines[i], " ")
+						oldLines, newLines = append(oldLines, value), append(newLines, value)
+					case strings.HasPrefix(lines[i], "-"):
+						oldLines = append(oldLines, strings.TrimPrefix(lines[i], "-"))
+					case strings.HasPrefix(lines[i], "+"):
+						newLines = append(newLines, strings.TrimPrefix(lines[i], "+"))
+					default:
+						return nil, fmt.Errorf("update lines must start with ' ', '+', or '-'")
+					}
+					i++
+				}
+				if len(oldLines) == 0 {
+					return nil, fmt.Errorf("update hunk for %q has no old lines", path)
+				}
+				patches = append(patches, PatchRequest{Operation: "replace", OldText: strings.Join(oldLines, "\n"), NewText: strings.Join(newLines, "\n")})
+			}
+			if len(patches) == 0 {
+				return nil, fmt.Errorf("update hunk for %q is empty", path)
+			}
+			files = append(files, applyPatchFile{operation: "replace", path: path, patches: patches})
+		default:
+			return nil, fmt.Errorf("invalid apply_patch hunk header %q", line)
+		}
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("apply_patch contains no file hunks")
+	}
+	return files, nil
+}
+
+func (p *PatchTool) runInput(ctx context.Context, input PatchInput) llm.ToolOut {
+	if !filepath.IsAbs(input.Path) {
+		input.Path = filepath.Join(p.getWorkingDir(), input.Path)
+	}
+	input.Path = filepath.Clean(input.Path)
+	unlockClipboards := p.lockClipboards(input.Patches)
+	defer unlockClipboards()
+	unlockPath := p.lockPath(input.Path)
+	defer unlockPath()
+	output := p.patchRun(ctx, &input)
 	if p.Callback != nil {
 		return p.Callback(input, output)
 	}
 	return output
 }
 
-// patchParse parses the input message into a PatchInput structure.
-// It accepts a few different formats, because empirically,
-// LLMs sometimes generate slightly different JSON structures,
-// and we may as well accept such near misses.
 func (p *PatchTool) patchParse(m json.RawMessage) (PatchInput, error) {
-	var input PatchInput
-	originalErr := json.Unmarshal(m, &input)
-	if originalErr == nil && len(input.Patches) > 0 {
-		return input, nil
-	}
-	var inputOne PatchInputOne
-	if err := json.Unmarshal(m, &inputOne); err == nil && inputOne.Patches != nil {
-		return PatchInput{Path: inputOne.Path, Patches: []PatchRequest{*inputOne.Patches}}, nil
-	} else if originalErr == nil {
-		originalErr = err
-	}
-	var inputOneSingular PatchInputOneSingular
-	if err := json.Unmarshal(m, &inputOneSingular); err == nil && inputOneSingular.Patch != nil {
-		return PatchInput{Path: inputOneSingular.Path, Patches: []PatchRequest{*inputOneSingular.Patch}}, nil
-	} else if originalErr == nil {
-		originalErr = err
-	}
-	var inputOneString PatchInputOneString
-	if err := json.Unmarshal(m, &inputOneString); err == nil && inputOneString.Patches != "" {
-		var onePatch PatchRequest
-		if err := json.Unmarshal([]byte(inputOneString.Patches), &onePatch); err == nil && onePatch.Operation != "" {
-			return PatchInput{Path: inputOneString.Path, Patches: []PatchRequest{onePatch}}, nil
-		} else if originalErr == nil {
-			originalErr = err
+	decoder := json.NewDecoder(bytes.NewReader(m))
+	decoder.DisallowUnknownFields()
+	if p.Profile == "simple" {
+		var simple PatchSimpleInput
+		if err := decoder.Decode(&simple); err != nil {
+			return PatchInput{}, fmt.Errorf("invalid patch input: %w; expected path, edits, and append fields", err)
 		}
-		var patches []PatchRequest
-		if err := json.Unmarshal([]byte(inputOneString.Patches), &patches); err == nil {
-			return PatchInput{Path: inputOneString.Path, Patches: patches}, nil
-		} else if originalErr == nil {
-			originalErr = err
+		patches := make([]PatchRequest, len(simple.Edits), len(simple.Edits)+1)
+		for i, edit := range simple.Edits {
+			patches[i] = PatchRequest{Operation: "replace", OldText: edit.OldText, NewText: edit.NewText}
+		}
+		if simple.Append != nil {
+			patches = append(patches, PatchRequest{Operation: "append_eof", NewText: *simple.Append})
+		}
+		return validatePatchInput(PatchInput{Path: simple.Path, Patches: patches})
+	}
+	var nested PatchInput
+	if err := decoder.Decode(&nested); err != nil {
+		return PatchInput{}, fmt.Errorf("invalid patch input: %w; expected path and patches fields", err)
+	}
+	return validatePatchInput(nested)
+}
+
+func validatePatchInput(input PatchInput) (PatchInput, error) {
+	if strings.TrimSpace(input.Path) == "" {
+		return PatchInput{}, fmt.Errorf("patch path is required")
+	}
+	for i, patch := range input.Patches {
+		switch patch.Operation {
+		case "replace":
+			if patch.OldText == "" {
+				return PatchInput{}, fmt.Errorf("patch %d: oldText is required for replace operation", i)
+			}
+		case "append_eof", "prepend_bof", "overwrite":
+		case "":
+			return PatchInput{}, fmt.Errorf("patch %d: operation is required", i)
+		default:
+			return PatchInput{}, fmt.Errorf("patch %d: unrecognized operation %q", i, patch.Operation)
 		}
 	}
-	// If JSON parsed but patches field was missing/empty, provide a clear error
-	if originalErr == nil {
-		return PatchInput{}, fmt.Errorf("patches field is missing or empty (this may indicate a truncated LLM response)\nJSON: %s", string(m))
-	}
-	return PatchInput{}, fmt.Errorf("failed to unmarshal patch input: %w\nJSON: %s", originalErr, string(m))
+	return input, nil
 }
 
 // patchRun implements the guts of the patch tool.
 // It populates input from m.
 func (p *PatchTool) patchRun(ctx context.Context, input *PatchInput) llm.ToolOut {
-	path := input.Path
-	if !filepath.IsAbs(input.Path) {
-		// Use shared WorkingDir if available, then context, then Pwd fallback
-		pwd := p.getWorkingDir()
-		path = filepath.Join(pwd, input.Path)
-	}
-	input.Path = path
 	if len(input.Patches) == 0 {
 		return llm.ErrorToolOut(fmt.Errorf("no patches provided"))
 	}
@@ -402,7 +745,7 @@ func (p *PatchTool) patchRun(ctx context.Context, input *PatchInput) llm.ToolOut
 		}
 		// Update clipboard with the actual matched text
 		matchedOldText := origStr[spec.Off : spec.Off+spec.Len]
-		p.clipboards[patch.ToClipboard] = matchedOldText
+		p.setClipboard(patch.ToClipboard, matchedOldText)
 		clipboardsModified = append(clipboardsModified, fmt.Sprintf(`<clipboard_modified name="%s"><message>clipboard contents altered in order to match uniquely</message><new_contents>%q</new_contents></clipboard_modified>`, patch.ToClipboard, matchedOldText))
 	}
 
@@ -415,13 +758,13 @@ func (p *PatchTool) patchRun(ctx context.Context, input *PatchInput) llm.ToolOut
 			if patch.OldText == "" {
 				return llm.ErrorfToolOut("toClipboard (%s): oldText cannot be empty when using toClipboard", patch.ToClipboard)
 			}
-			p.clipboards[patch.ToClipboard] = patch.OldText
+			p.setClipboard(patch.ToClipboard, patch.OldText)
 		}
 
 		// Handle fromClipboard
 		newText := patch.NewText
 		if patch.FromClipboard != "" {
-			clipboardText, ok := p.clipboards[patch.FromClipboard]
+			clipboardText, ok := p.getClipboard(patch.FromClipboard)
 			if !ok {
 				return llm.ErrorfToolOut("fromClipboard (%s): no clipboard with that name", patch.FromClipboard)
 			}

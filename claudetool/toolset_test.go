@@ -2,36 +2,15 @@ package claudetool
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/models"
 )
-
-func TestIsStrongModel(t *testing.T) {
-	tests := []struct {
-		modelID  string
-		expected bool
-	}{
-		{"claude-3-sonnet-20240229", true},
-		{"claude-3-opus-20240229", true},
-		{"claude-3-haiku-20240307", false},
-		{"Sonnet Model", true},
-		{"OPUS Model", true},
-		{"haiku model", false},
-		{"other-model", false},
-		{"", false},
-	}
-
-	for _, test := range tests {
-		result := isStrongModel(test.modelID)
-		if result != test.expected {
-			t.Errorf("isStrongModel(%q) = %v, expected %v", test.modelID, result, test.expected)
-		}
-	}
-}
 
 func TestNewToolSet(t *testing.T) {
 	provider := &mockLLMProvider{}
@@ -479,6 +458,10 @@ func (m *mockLLMProviderWithProviders) GetAvailableModels() []string {
 	return nil
 }
 
+func (m *mockLLMProviderWithProviders) GetModelInfo(modelID string) *models.ModelInfo {
+	return &models.ModelInfo{DisplayName: modelID}
+}
+
 // plainOpenAIProvider returns a mockServiceWithProvider (no web search
 // capability) reporting provider "openai".
 type plainOpenAIProvider struct{}
@@ -487,6 +470,10 @@ func (p *plainOpenAIProvider) GetService(modelID string) (llm.Service, error) {
 	return &mockServiceWithProvider{provider: "openai"}, nil
 }
 func (p *plainOpenAIProvider) GetAvailableModels() []string { return nil }
+
+func (p *plainOpenAIProvider) GetModelInfo(modelID string) *models.ModelInfo {
+	return &models.ModelInfo{DisplayName: modelID}
+}
 
 // plainAnthropicProvider returns a mockServiceWithProvider (no web search
 // capability) reporting provider "anthropic". This mirrors a non-Claude model
@@ -499,6 +486,10 @@ func (p *plainAnthropicProvider) GetService(modelID string) (llm.Service, error)
 	return &mockServiceWithProvider{provider: "anthropic"}, nil
 }
 func (p *plainAnthropicProvider) GetAvailableModels() []string { return nil }
+
+func (p *plainAnthropicProvider) GetModelInfo(modelID string) *models.ModelInfo {
+	return &models.ModelInfo{DisplayName: modelID}
+}
 
 func TestNewToolSet_WebSearchForAnthropicModels(t *testing.T) {
 	provider := &mockLLMProviderWithProviders{
@@ -656,4 +647,85 @@ func TestNewToolSet_WebSearchForAnthropicModels(t *testing.T) {
 		}
 		t.Error("web_search tool not found")
 	})
+}
+
+type rawPatchService struct{ mockService }
+
+func (*rawPatchService) Provider() string     { return "openai" }
+func (*rawPatchService) PatchProfile() string { return "codex_apply_patch" }
+
+type rawPatchProvider struct{}
+
+func (*rawPatchProvider) GetService(string) (llm.Service, error) { return &rawPatchService{}, nil }
+func (*rawPatchProvider) GetAvailableModels() []string           { return []string{"test"} }
+func (*rawPatchProvider) GetModelInfo(string) *models.ModelInfo  { return nil }
+
+func TestNewToolSetPatchStrategyFlags(t *testing.T) {
+	boolFn := func(value bool) func() bool { return func() bool { return value } }
+	for _, tt := range []struct {
+		name, want  string
+		simple, raw bool
+	}{
+		{name: "both off uses full nested", want: "patch"},
+		{name: "simple on uses simplified nested", simple: true, want: "patch"},
+		{name: "raw overrides full nested", raw: true, want: "apply_patch"},
+		{name: "raw overrides simple", simple: true, raw: true, want: "apply_patch"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := NewToolSet(context.Background(), ToolSetConfig{
+				LLMProvider:           &rawPatchProvider{},
+				ModelID:               "test",
+				PatchSimpleEnabled:    boolFn(tt.simple),
+				PatchOpenAIRawEnabled: boolFn(tt.raw),
+			})
+			var patch *llm.Tool
+			for _, tool := range ts.Tools() {
+				if tool.Name == "patch" || tool.Name == "apply_patch" {
+					patch = tool
+					break
+				}
+			}
+			if patch == nil || patch.Name != tt.want {
+				t.Fatalf("patch tool = %+v, want %q", patch, tt.want)
+			}
+			if patch.Name == "patch" {
+				var schema struct {
+					Properties map[string]json.RawMessage `json:"properties"`
+				}
+				if err := json.Unmarshal(patch.InputSchema, &schema); err != nil {
+					t.Fatal(err)
+				}
+				_, hasEdits := schema.Properties["edits"]
+				if hasEdits != tt.simple {
+					t.Fatalf("edits present = %v, want %v", hasEdits, tt.simple)
+				}
+			}
+		})
+	}
+}
+
+func TestNewToolSetRawFlagDoesNotOverrideUnsupportedService(t *testing.T) {
+	ts := NewToolSet(context.Background(), ToolSetConfig{
+		LLMProvider:           &mockLLMProvider{},
+		ModelID:               "test-model",
+		PatchOpenAIRawEnabled: func() bool { return true },
+	})
+	for _, tool := range ts.Tools() {
+		if tool.Name == "apply_patch" {
+			t.Fatal("unsupported service received raw apply_patch")
+		}
+		if tool.Name == "patch" {
+			var schema struct {
+				Properties map[string]json.RawMessage `json:"properties"`
+			}
+			if err := json.Unmarshal(tool.InputSchema, &schema); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := schema.Properties["patches"]; !ok {
+				t.Fatal("raw flag changed unsupported service from nested strategy")
+			}
+			return
+		}
+	}
+	t.Fatal("patch tool not found")
 }

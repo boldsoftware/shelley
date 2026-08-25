@@ -52,11 +52,12 @@ func (s *Server) handleSubagentUsage(w http.ResponseWriter, r *http.Request, con
 		return
 	}
 	var resp struct {
-		LLMCalls       int64    `json:"llm_calls"`
-		EstimatedUsd   float64  `json:"estimated_usd"`
-		ReportedUsd    float64  `json:"reported_usd"`
-		UnpricedModels []string `json:"unpriced_models"`
-		UnpricedCalls  int64    `json:"unpriced_calls"`
+		LLMCalls            int64    `json:"llm_calls"`
+		EstimatedUsd        float64  `json:"estimated_usd"`
+		ReportedUsd         float64  `json:"reported_usd"`
+		UnpricedReportedUsd float64  `json:"unpriced_reported_usd"`
+		UnpricedModels      []string `json:"unpriced_models"`
+		UnpricedCalls       int64    `json:"unpriced_calls"`
 	}
 	resp.UnpricedModels = []string{}
 	fold := func(model, url string, llmCalls, in, cacheWrite, cacheRead, out int64, costUsd float64) {
@@ -68,6 +69,7 @@ func (s *Server) handleSubagentUsage(w http.ResponseWriter, r *http.Request, con
 				float64(cacheRead)*c.CacheRead/1e6 +
 				float64(out)*c.Output/1e6
 		} else {
+			resp.UnpricedReportedUsd += costUsd
 			resp.UnpricedModels = append(resp.UnpricedModels, model)
 			resp.UnpricedCalls += llmCalls
 		}

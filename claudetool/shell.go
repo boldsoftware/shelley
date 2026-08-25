@@ -33,6 +33,9 @@ type ShellTool struct {
 	WorkingDir *MutableWorkingDir
 	// LLMProvider provides access to LLM services for tool validation.
 	LLMProvider LLMServiceProvider
+	// ModelID is the conversation's model, used to pick a workhorse model
+	// for tool validation.
+	ModelID string
 	// Env holds the conversation context exposed to invoked commands as
 	// SHELLEY_* environment variables.
 	Env ShelleyEnv
@@ -199,7 +202,7 @@ func (s *ShellTool) run(ctx context.Context, req shellInput) llm.ToolOut {
 	if s.EnableJITInstall {
 		// Reuse the bash JIT installer; it operates per-command and is
 		// independent of the BashTool struct beyond the LLM provider.
-		bt := &BashTool{LLMProvider: s.LLMProvider}
+		bt := &BashTool{LLMProvider: s.LLMProvider, ModelID: s.ModelID}
 		if err := bt.checkAndInstallMissingTools(ctx, req.Command); err != nil {
 			slog.DebugContext(ctx, "failed to auto-install missing tools", "error", err)
 		}

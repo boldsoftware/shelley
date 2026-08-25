@@ -51,6 +51,22 @@ assert(
   renderMarkdownToSafeHTML("# Title\n\nSome **bold** text.").includes("<strong>bold</strong>"),
   "basic markdown renders bold",
 );
+const fencedCode = renderMarkdownToSafeHTML("```typescript\nconst answer = 42;\n```");
+assert(
+  fencedCode.includes('<pre><code class="language-typescript">const answer = 42;\n</code></pre>'),
+  "fenced code preserves its language class for post-render highlighting",
+);
+const unknownFencedCode = renderMarkdownToSafeHTML("```unknown-language\nplain text\n```");
+assert(
+  unknownFencedCode.includes(
+    '<pre><code class="language-unknown-language">plain text\n</code></pre>',
+  ),
+  "unknown fenced code keeps its source and language class for a plain render",
+);
+assert(
+  renderMarkdownToSafeHTML("```\nplain text\n```").includes("<pre><code>plain text\n</code></pre>"),
+  "unlabeled fenced code remains plain",
+);
 assert(
   renderMarkdownToSafeHTML("<script>alert(1)</script>hello").includes("hello") &&
     !renderMarkdownToSafeHTML("<script>alert(1)</script>hello").includes("<script>"),

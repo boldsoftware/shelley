@@ -26,6 +26,108 @@ test.describe("Markdown rendering", () => {
     await expect(agent.locator("code")).toContainText("code");
   });
 
+  test("highlights bundled languages and aliases without changing plain fences", async ({ page, request }) => {
+    const highlightedFences = [
+      ["elixir", "answer = 42\n"],
+      ["haskell", "answer :: Int\nanswer = 42\n"],
+      ["zig", "const answer: i32 = 42;\n"],
+      ["Dockerfile", "FROM alpine:latest\n"],
+      ["nix", "answer = 42;\n"],
+      ["clojure", "(def answer 42)\n"],
+      ["clj", "(def alias-answer 42)\n"],
+    ] as const;
+    const unknownSource = "leave_this_plain();\n";
+    const unlabeledSource = "also_plain();\n";
+    const markdown = [
+      ...highlightedFences.map(([language, source]) => `\`\`\`${language}\n${source}\`\`\``),
+      `\`\`\`unknown-language\n${unknownSource}\`\`\``,
+      `\`\`\`\n${unlabeledSource}\`\`\``,
+    ].join("\n\n");
+    const slug = await createConversationViaAPI(request, `markdown: ${markdown}`);
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
+
+    const blocks = page.locator(".message-agent").last().locator("pre > code");
+    await expect(blocks).toHaveCount(highlightedFences.length + 2, { timeout: 30000 });
+
+    for (const [index, [language, source]] of highlightedFences.entries()) {
+      const block = blocks.nth(index);
+      await expect(block).toHaveClass(`language-${language}`);
+      const tokens = block.locator(".shelley-code-token");
+      await expect(tokens.first()).toBeAttached({ timeout: 30000 });
+      expect(await block.textContent()).toBe(source);
+    }
+
+    const unknown = blocks.nth(highlightedFences.length);
+    const unlabeled = blocks.nth(highlightedFences.length + 1);
+    await expect(unknown).toHaveClass("language-unknown-language");
+    expect(await unlabeled.getAttribute("class")).toBeNull();
+    expect(await unknown.textContent()).toBe(unknownSource);
+    expect(await unlabeled.textContent()).toBe(unlabeledSource);
+    await expect(unknown.locator(".shelley-code-token")).toHaveCount(0);
+    await expect(unlabeled.locator(".shelley-code-token")).toHaveCount(0);
+
+    const tokens = blocks.nth(0).locator(".shelley-code-token");
+    const tokenCount = await tokens.count();
+    const lightColor = await tokens.first().evaluate((token) => getComputedStyle(token).color);
+    await page.locator("html").evaluate((root) => root.classList.toggle("dark", true));
+    await expect
+      .poll(() => tokens.first().evaluate((token) => getComputedStyle(token).color))
+      .not.toBe(lightColor);
+    expect(await tokens.count()).toBe(tokenCount);
+  });
+
+  test("defers fence highlighting until blocks come near the viewport", async ({
+    page,
+    request,
+  }) => {
+    // Every loremipsum turn carries a ```go fence. In a 17k-message
+    // conversation that was 5,000 eagerly-highlighted blocks = 65k token
+    // spans = 22% of the DOM, almost all of it dozens of screens above the
+    // fold. Highlighting must instead hydrate like tool cards do: only once
+    // the block comes within a viewport of view (sticky thereafter).
+    const generated = await request.post("/debug/loremipsum?json=1", {
+      form: { size: "medium", model: "predictable" },
+    });
+    expect(generated.ok()).toBeTruthy();
+    const { conversation_id: conversationId } = await generated.json();
+
+    await page.goto(`/c/${conversationId}`);
+    await expect(page.getByTestId("message").first()).toBeVisible({ timeout: 30000 });
+
+    // Loaded pinned to the bottom: the newest fence highlights. This wait is
+    // also the barrier that makes the negative assertions below meaningful —
+    // eager highlighting (the old behavior) would have tokenized every block
+    // by the time the last one is done.
+    const blocks = page.locator(".message-agent pre > code");
+    await expect(blocks.last().locator(".shelley-code-token").first()).toBeAttached({
+      timeout: 30000,
+    });
+    expect(await blocks.count()).toBe(50);
+
+    // The first fence, far above the fold, stays a plain text node, and the
+    // total token count is bounded by the handful of on-screen blocks (each
+    // loremipsum fence is ~13 tokens; 50 eager blocks would be ~650).
+    await expect(blocks.first().locator(".shelley-code-token")).toHaveCount(0);
+    expect(await page.locator(".shelley-code-token").count()).toBeLessThan(200);
+
+    // Scrolling it into the scrollport hydrates it. The wheel gesture first:
+    // without it auto-follow is still armed and its rAF pin (see
+    // ChatInterface.vue handleScroll/lastScrollGestureAt) snaps the view
+    // straight back to the bottom — webkit loses that race reliably. The
+    // shared observer's rootMargin lookahead cannot see through the scroll
+    // container's clip, so hydration lands on scrollport entry — invisible
+    // for highlighting, which changes colors, never geometry.
+    await page.evaluate(() => {
+      const container = document.querySelector(".messages-container")!;
+      container.dispatchEvent(new WheelEvent("wheel", { deltaY: -200, bubbles: true }));
+      document.querySelector(".message-agent pre > code")!.scrollIntoView({ block: "center" });
+    });
+    await expect(blocks.first().locator(".shelley-code-token").first()).toBeAttached({
+      timeout: 30000,
+    });
+  });
+
   test("renders local images via the per-message file endpoint", async ({ page, request }) => {
     // The "inline image" predictable pattern writes a tiny PNG into the
     // conversation cwd (/tmp) via bash, then references it with relative-path

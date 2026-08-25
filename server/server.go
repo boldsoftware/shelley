@@ -371,10 +371,12 @@ type Server struct {
 	// streamPub is the server-wide subpub that fans out per-conversation
 	// events to every /api/stream2 subscriber. Events are tagged with their
 	// ConversationID so clients can route them.
-	streamPub  *subpub.SubPub[StreamResponse]
-	shutdownCh chan struct{} // Signals background routines to stop
-	listenPort int           // TCP port the server is listening on
-	terminals  *TerminalSessions
+	streamPub   *subpub.SubPub[StreamResponse]
+	shutdownCh  chan struct{} // Signals background routines to stop
+	listenPort  int           // TCP port the server is listening on
+	terminals   *TerminalSessions
+	exitDelay   time.Duration
+	exitProcess func(int)
 
 	// Banner, when non-empty, is shown in a full-width bar at the top of
 	// the UI. Useful for marking demo instances so they're not confused
@@ -415,6 +417,8 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		notifDispatcher:     notifications.NewDispatcher(logger),
 		shutdownCh:          make(chan struct{}),
 		hooksDir:            defaultHooksDir(),
+		exitDelay:           500 * time.Millisecond,
+		exitProcess:         os.Exit,
 	}
 
 	s.conversationListStream = newConversationListStream(s)
@@ -503,9 +507,10 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/read-file", compressionHandler(http.HandlerFunc(s.handleReadFile)))                           // Reads arbitrary text files as JSON
 	mux.Handle("/api/user-agents-md", http.HandlerFunc(s.handleUserAgentsMd))                                      // Small response
 	mux.HandleFunc("/api/exec-ws", s.handleExecWS)                                                                 // Websocket for shell commands
-	mux.HandleFunc("GET /api/terminals", s.handleTerminalsList)                                                    // List persistent dtach sessions
+	mux.HandleFunc("GET /api/terminals", s.handleTerminalsList)                                                    // List persistent terminal sessions
 	mux.HandleFunc("DELETE /api/terminals/{id}", s.handleTerminalDelete)
 	mux.HandleFunc("POST /api/terminals/{id}/kill", s.handleTerminalDelete)
+	mux.HandleFunc("PUT /api/terminals/{id}/scope", s.handleTerminalScope) // Move a terminal between conversation-local and global
 
 	// Custom models API
 	mux.Handle("/api/custom-models", http.HandlerFunc(s.handleCustomModels))
@@ -1818,6 +1823,16 @@ func (s *Server) StartWithListener(listener net.Listener) error {
 // The Unix socket listener gets only the logger middleware (no CSRF, no requireHeader)
 // since it is local and trusted.
 func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string) error {
+	// agent_working is runtime-only state. Decide what to do with the values the
+	// previous process left behind BEFORE serving: an ordinary restart or crash
+	// clears them, while an upgrade-with-restart hands back the conversations
+	// that were mid-turn so we can resume them once the server is up.
+	resumeIDs, err := s.db.ConsumeResumeAfterUpgrade(context.Background())
+	if err != nil {
+		s.logger.Error("Failed to recover agent_working state", "error", err)
+		return err
+	}
+
 	// Set up shared mux with routes
 	mux := http.NewServeMux()
 	s.RegisterRoutes(mux)
@@ -1902,6 +1917,10 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 			}
 		}()
 	}
+
+	// Resume conversations interrupted by an upgrade restart now that the
+	// listeners (and therefore ports, streams and the subagent runner) are live.
+	go s.resumeInterruptedConversations(context.Background(), resumeIDs)
 
 	// Wait for shutdown signal or server error
 	quit := make(chan os.Signal, 1)
@@ -2175,6 +2194,8 @@ func withExeNotifyHook(hooks []db.ConversationHook, enabled bool) []db.Conversat
 // about end-of-turn pushes.
 const endOfTurnPushCategory = "SHELLEY_END_OF_TURN_MESSAGE_V2"
 
+const shelleyConversationIDHeader = "Shelley-Conversation-Id"
+
 func (s *Server) sendEndOfTurnHook(ctx context.Context, hook db.ConversationHook, event notifications.Event) {
 	payload, ok := event.Payload.(notifications.AgentDonePayload)
 	if !ok {
@@ -2231,6 +2252,9 @@ func (s *Server) sendEndOfTurnHook(ctx context.Context, hook db.ConversationHook
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if event.ConversationID != "" {
+		req.Header.Set(shelleyConversationIDHeader, event.ConversationID)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

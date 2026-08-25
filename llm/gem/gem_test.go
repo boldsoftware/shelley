@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"shelley.exe.dev/llm"
@@ -1367,6 +1368,29 @@ func TestBuildGeminiRequestImageInToolResult(t *testing.T) {
 }
 
 // TestThinkingConfigRequestOverride exercises per-request ThinkingLevel
+func TestSupportedReasoningLevelsFromModelsDev(t *testing.T) {
+	tests := []struct {
+		model string
+		want  string
+	}{
+		{model: "gemini-3-flash-preview", want: "minimal,low,medium,high"},
+		{model: "gemini-3.1-pro-preview", want: "low,medium,high"},
+		{model: "gemini-2.5-pro", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			levels := (&Service{Model: tt.model}).SupportedReasoningLevels()
+			names := make([]string, len(levels))
+			for i, level := range levels {
+				names[i] = level.Name()
+			}
+			if got := strings.Join(names, ","); got != tt.want {
+				t.Fatalf("levels = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // overrides on Gemini.
 func TestThinkingConfigRequestOverride(t *testing.T) {
 	tests := []struct {
@@ -1381,7 +1405,7 @@ func TestThinkingConfigRequestOverride(t *testing.T) {
 		{name: "req xhigh on 3-flash clamps to high", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x"}, reqLevel: llm.ThinkingLevelXHigh, wantLevel: "high"},
 		{name: "req high on 3.1-pro", svc: &Service{Model: "gemini-3.1-pro-preview", APIKey: "x"}, reqLevel: llm.ThinkingLevelHigh, wantLevel: "high"},
 		{name: "req medium on 3.1-pro", svc: &Service{Model: "gemini-3.1-pro-preview", APIKey: "x"}, reqLevel: llm.ThinkingLevelMedium, wantLevel: "medium"},
-		{name: "req off on 3-flash uses low", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium}, reqLevel: llm.ThinkingLevelOff, wantLevel: "low"},
+		{name: "req off on 3-flash rounds to minimal", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium}, reqLevel: llm.ThinkingLevelOff, wantLevel: "minimal"},
 		{name: "req beats verbatim", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x", ReasoningEffort: "medium"}, reqLevel: llm.ThinkingLevelHigh, wantLevel: "high"},
 		{name: "req low on 2.5", svc: &Service{Model: "gemini-2.5-pro", APIKey: "x"}, reqLevel: llm.ThinkingLevelLow, wantBudget: ptr(2048)},
 		{name: "req off on 2.5 zero budget", svc: &Service{Model: "gemini-2.5-pro", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium}, reqLevel: llm.ThinkingLevelOff, wantBudget: ptr(0)},
@@ -1413,7 +1437,7 @@ func TestThinkingConfigRequestOverride(t *testing.T) {
 					t.Errorf("thinkingBudget = %v, want %d", tc.ThinkingBudget, *tt.wantBudget)
 				}
 			}
-			wantThoughts := tt.wantBudget == nil || *tt.wantBudget != 0
+			wantThoughts := tt.reqLevel != llm.ThinkingLevelOff && (tt.wantBudget == nil || *tt.wantBudget != 0)
 			if tc.IncludeThoughts != wantThoughts {
 				t.Errorf("includeThoughts = %v, want %v (thought summaries are only returned when requested)", tc.IncludeThoughts, wantThoughts)
 			}

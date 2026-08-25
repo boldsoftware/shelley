@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"shelley.exe.dev/gitstate"
 	"shelley.exe.dev/llm"
@@ -26,6 +27,7 @@ type ChangeDirTool struct {
 	// OnChange is called after the working directory changes successfully.
 	// This can be used to persist the change to a database.
 	OnChange func(newDir string)
+	mu       sync.Mutex
 }
 
 const (
@@ -67,6 +69,9 @@ func (c *ChangeDirTool) Tool() *llm.Tool {
 
 // run executes the change_dir tool.
 func (c *ChangeDirTool) run(ctx context.Context, req changeDirInput) llm.ToolOut {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if req.Path == "" {
 		return llm.ErrorfToolOut("path is required")
 	}

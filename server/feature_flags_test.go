@@ -11,6 +11,38 @@ import (
 	"shelley.exe.dev/featureflags"
 )
 
+func TestFeatureFlagBool(t *testing.T) {
+	flag := featureflags.Register(featureflags.Flag{
+		Name:        "test-feature-flag-bool",
+		Description: "test flag",
+		Default:     false,
+	})
+
+	srv, database, _ := newTestServer(t)
+	ctx := context.Background()
+
+	// No override: the registered default applies.
+	if got := srv.featureFlagBool(ctx, flag); got != false {
+		t.Fatalf("featureFlagBool default = %v, want false", got)
+	}
+
+	// Override to true.
+	if err := database.SetFeatureFlagOverride(ctx, flag.Name, `true`); err != nil {
+		t.Fatal(err)
+	}
+	if got := srv.featureFlagBool(ctx, flag); got != true {
+		t.Fatalf("featureFlagBool with true override = %v, want true", got)
+	}
+
+	// A non-boolean override falls back to the default.
+	if err := database.SetFeatureFlagOverride(ctx, flag.Name, `"nope"`); err != nil {
+		t.Fatal(err)
+	}
+	if got := srv.featureFlagBool(ctx, flag); got != false {
+		t.Fatalf("featureFlagBool with bad override = %v, want false", got)
+	}
+}
+
 func TestFeatureFlagsHandlers(t *testing.T) {
 	// Register a unique flag for this test. Registry is process-global so a
 	// distinctive name avoids collisions with future real flags.

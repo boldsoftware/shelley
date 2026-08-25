@@ -9,6 +9,7 @@ export const ru: TranslationKeys = {
   // Chat Header & Actions
   newConversation: "Новый диалог",
   moreOptions: "Ещё",
+  actions: "Действия",
   conversations: "Диалоги",
 
   // Overflow Menu
@@ -18,6 +19,11 @@ export const ru: TranslationKeys = {
   archiveConversation: "Архивировать диалог",
   exportConversation: "Экспортировать диалог",
   checkForNewVersion: "Проверить обновления",
+  conversationView: "Вид беседы",
+  seeAllMessages: "Показать всё",
+  seeEndOfTurnMessagesOnly: "Показывать только сообщения конца хода",
+  brevity: "Краткость",
+  look: "Вид",
 
   // Theme
   system: "Системная",
@@ -71,6 +77,7 @@ export const ru: TranslationKeys = {
   archiveConversationAction: "Архивировать диалог",
   archiveCurrentConversation: "Архивировать текущий диалог",
   newConversationInMainRepo: "Новый диалог в основном репозитории",
+  newConversationInHomeDirectory: "Новый диалог в домашнем каталоге",
   newConversationInNewWorktree: "Новый диалог в новом worktree",
   createNewWorktree: "Создать новый Git worktree для этого диалога",
   setWorkingDirToRepoRoot: "Установить рабочий каталог в корень git-репозитория",
@@ -98,6 +105,7 @@ export const ru: TranslationKeys = {
   subagentIsWorking: "Субагент работает...",
   running: "работает",
   hideSubagents: "Скрыть субагентов",
+  terminalsPinnedHere: "терминалов в этом разговоре",
   showSubagents: "Показать субагентов",
   groupConversations: "Группировать диалоги",
   resortNow: "Пересортировать",
@@ -105,6 +113,12 @@ export const ru: TranslationKeys = {
   directory: "Каталог",
   gitRepo: "Git-репозиторий",
   other: "Другое",
+  clearTagFilter: "Очистить всё",
+  searchOrTagPlaceholder: "Поиск или tag: для фильтра",
+  untagged: "Без тегов",
+  noMatchingTags: "Нет подходящих тегов",
+  noTagsToNarrow: "Больше нечем сужать",
+  noConversationsMatchTags: "Нет диалогов с этими тегами",
   collapseSubagents: "Свернуть субагентов",
   expandSubagents: "Развернуть субагентов",
   collapseSidebar: "Свернуть боковую панель",
@@ -137,6 +151,9 @@ export const ru: TranslationKeys = {
   effortLabel: "Усилие рассуждения",
   effortAuto: "авто",
   modelSwitchBusy: "Завершите или остановите текущий ход, чтобы сменить модель",
+  modelSwitchHint: "Нажмите, чтобы сменить модель или уровень рассуждений",
+  cwdChangeHint: "нажмите, чтобы сменить рабочий каталог",
+  cwdChangeBusy: "Завершите или остановите текущий ход, чтобы сменить каталог",
   customModelsGroup: "Пользовательские модели",
   editModel: "Редактировать модель",
   loadingModels: "Загрузка моделей...",
@@ -241,7 +258,11 @@ export const ru: TranslationKeys = {
   welcomeTitle: "Shelley Agent",
   welcomeSubtitle: "",
   welcomeMessage:
-    "Shelley — это агент, работающий на {hostname}. Вы можете попросить Shelley выполнить задачи. Если вы создали веб-сайт с помощью Shelley, вы можете использовать прокси-функции exe.dev (см. {docsLink}), чтобы открыть его по адресу {proxyLink}.",
+    "Shelley — это агент, работающий на {hostname}. Если вы создали веб-сайт с помощью Shelley, вы можете использовать прокси-функции exe.dev (см. {docsLink}), чтобы открыть его по адресу {proxyLink}. Shelley — {openSourceLink}, его {customizeLink}.",
+  welcomeMessageLocal:
+    "Shelley — это агент, работающий на {hostname}. Shelley — {openSourceLink}, его {customizeLink}.",
+  welcomeOpenSource: "проект с открытым исходным кодом",
+  welcomeCustomize: "можно настроить",
   sendMessageToStart: "Отправьте сообщение, чтобы начать диалог.",
   noModelsTitle: "Нет доступных моделей ИИ",
   noModelsExeNote:
@@ -261,6 +282,7 @@ export const ru: TranslationKeys = {
   editFileShortcutFirefox:
     "Firefox резервирует это сочетание для приватного окна — используйте палитру команд (Cmd/Ctrl+K)",
   openConversations: "Открыть диалоги",
+  commandMenu: "Меню команд",
   expandSidebar: "Развернуть боковую панель",
 
   // Language

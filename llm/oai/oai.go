@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/sashabaranov/go-openai"
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/models/modelsdev"
 )
 
 const (
@@ -53,7 +55,8 @@ type Model struct {
 	URL                string
 	APIKeyEnv          string // environment variable name for the API key
 	IsReasoningModel   bool   // whether this model is a reasoning model (e.g. O3, O4-mini)
-	UseSimplifiedPatch bool   // whether to use the simplified patch input schema; defaults to false
+	UseSimplifiedPatch bool   // deprecated; retained in generated model literals until removed
+	SupportsApplyPatch bool   // whether this model is trained for Codex apply_patch custom tools
 	SupportsImages     bool   // whether this model accepts image inputs
 }
 
@@ -266,8 +269,8 @@ var (
 	}
 
 	DeepseekV4FlashFireworks = Model{
-		UserName:           "deepseek-v4-flash-fireworks",
-		ModelName:          "accounts/fireworks/models/deepseek-v4-flash",
+		UserName:           "deepseek-v4-flash-0731-fireworks",
+		ModelName:          "accounts/fireworks/models/deepseek-v4-flash-0731",
 		TextVerbosity:      "",
 		URL:                FireworksURL,
 		APIKeyEnv:          FireworksAPIKeyEnv,
@@ -364,17 +367,6 @@ var (
 		SupportsImages:     true,
 	}
 
-	GPTOSS20B = Model{
-		UserName:           "gpt-oss-20b",
-		ModelName:          "accounts/fireworks/models/gpt-oss-20b",
-		TextVerbosity:      "",
-		URL:                FireworksURL,
-		APIKeyEnv:          FireworksAPIKeyEnv,
-		IsReasoningModel:   false,
-		UseSimplifiedPatch: false,
-		SupportsImages:     false,
-	}
-
 	GPTOSS120B = Model{
 		UserName:           "gpt-oss-120b",
 		ModelName:          "accounts/fireworks/models/gpt-oss-120b",
@@ -394,6 +386,7 @@ var (
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
 		UseSimplifiedPatch: false,
+		SupportsApplyPatch: true,
 		SupportsImages:     true,
 	}
 
@@ -405,6 +398,7 @@ var (
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
 		UseSimplifiedPatch: false,
+		SupportsApplyPatch: true,
 		SupportsImages:     true,
 	}
 
@@ -416,6 +410,7 @@ var (
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
 		UseSimplifiedPatch: false,
+		SupportsApplyPatch: true,
 		SupportsImages:     true,
 	}
 
@@ -427,6 +422,7 @@ var (
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   true,
 		UseSimplifiedPatch: false,
+		SupportsApplyPatch: true,
 		SupportsImages:     true,
 	}
 
@@ -438,6 +434,7 @@ var (
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   true,
 		UseSimplifiedPatch: false,
+		SupportsApplyPatch: true,
 		SupportsImages:     true,
 	}
 
@@ -449,6 +446,7 @@ var (
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   true,
 		UseSimplifiedPatch: false,
+		SupportsApplyPatch: true,
 		SupportsImages:     true,
 	}
 
@@ -460,6 +458,7 @@ var (
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
 		UseSimplifiedPatch: false,
+		SupportsApplyPatch: true,
 		SupportsImages:     true,
 	}
 
@@ -471,6 +470,7 @@ var (
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
 		UseSimplifiedPatch: false,
+		SupportsApplyPatch: true,
 		SupportsImages:     true,
 	}
 
@@ -482,6 +482,7 @@ var (
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
 		UseSimplifiedPatch: false,
+		SupportsApplyPatch: true,
 		SupportsImages:     true,
 	}
 
@@ -493,6 +494,7 @@ var (
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
 		UseSimplifiedPatch: false,
+		SupportsApplyPatch: true,
 		SupportsImages:     true,
 	}
 
@@ -504,6 +506,7 @@ var (
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
 		UseSimplifiedPatch: false,
+		SupportsApplyPatch: true,
 		SupportsImages:     true,
 	}
 
@@ -515,6 +518,7 @@ var (
 		APIKeyEnv:          OpenAIAPIKeyEnv,
 		IsReasoningModel:   false,
 		UseSimplifiedPatch: false,
+		SupportsApplyPatch: true,
 		SupportsImages:     true,
 	}
 
@@ -607,7 +611,6 @@ var ModelsRegistry = []Model{
 	KimiK27CodeFireworks,
 	KimiK3Fireworks,
 	GPTOSS120B,
-	GPTOSS20B,
 	LlamaCPP,
 	// Skaband-supported models
 	Qwen,
@@ -1088,6 +1091,124 @@ func (s *Service) toLLMResponse(r *openai.ChatCompletionResponse) *llm.Response 
 	}
 }
 
+type chatCompletionStreamResponse struct {
+	ID      string `json:"id"`
+	Model   string `json:"model"`
+	Choices []struct {
+		Index int `json:"index"`
+		Delta struct {
+			Content          string            `json:"content"`
+			Role             string            `json:"role"`
+			ToolCalls        []openai.ToolCall `json:"tool_calls"`
+			ReasoningContent string            `json:"reasoning_content"`
+			Reasoning        string            `json:"reasoning"`
+		} `json:"delta"`
+		FinishReason openai.FinishReason `json:"finish_reason"`
+	} `json:"choices"`
+	Usage *openai.Usage `json:"usage"`
+}
+
+func (s *Service) consumeChatCompletionStream(stream *openai.ChatCompletionStream, onStream func(llm.StreamDelta)) (*llm.Response, error) {
+	msg := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleAssistant}
+	headers := stream.Header()
+	var (
+		id           string
+		model        string
+		finishReason openai.FinishReason
+		usage        openai.Usage
+		started      bool
+	)
+
+	for {
+		raw, err := stream.RecvRaw()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			if started {
+				return nil, fmt.Errorf("chat completion stream failed after response started: %v", err)
+			}
+			return nil, err
+		}
+		var chunk chatCompletionStreamResponse
+		if err := json.Unmarshal(raw, &chunk); err != nil {
+			if started {
+				return nil, fmt.Errorf("chat completion stream failed after response started: %v", err)
+			}
+			return nil, err
+		}
+		started = true
+		if chunk.ID != "" {
+			id = chunk.ID
+		}
+		if chunk.Model != "" {
+			model = chunk.Model
+		}
+		if chunk.Usage != nil {
+			usage = *chunk.Usage
+		}
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+
+		choice := chunk.Choices[0]
+		if choice.FinishReason != "" {
+			finishReason = choice.FinishReason
+		}
+		delta := choice.Delta
+		if delta.Role != "" {
+			msg.Role = delta.Role
+		}
+		reasoning := cmp.Or(delta.ReasoningContent, delta.Reasoning)
+		if reasoning != "" {
+			msg.ReasoningContent += reasoning
+			if onStream != nil {
+				onStream(llm.StreamDelta{Type: "thinking", Text: reasoning, Index: 0})
+			}
+		}
+		if delta.Content != "" {
+			msg.Content += delta.Content
+			if onStream != nil {
+				index := 0
+				if msg.ReasoningContent != "" {
+					index = 1
+				}
+				onStream(llm.StreamDelta{Type: "text", Text: delta.Content, Index: index})
+			}
+		}
+		for _, fragment := range delta.ToolCalls {
+			index := 0
+			if fragment.Index != nil {
+				index = *fragment.Index
+			}
+			for len(msg.ToolCalls) <= index {
+				msg.ToolCalls = append(msg.ToolCalls, openai.ToolCall{})
+			}
+			toolCall := &msg.ToolCalls[index]
+			if fragment.ID != "" {
+				toolCall.ID = fragment.ID
+			}
+			if fragment.Type != "" {
+				toolCall.Type = fragment.Type
+			}
+			toolCall.Function.Name += fragment.Function.Name
+			toolCall.Function.Arguments += fragment.Function.Arguments
+		}
+	}
+
+	if finishReason == "" {
+		return nil, fmt.Errorf("incomplete chat completion stream: no finish reason")
+	}
+	return &llm.Response{
+		ID:         id,
+		Model:      model,
+		Role:       toRoleFromString(msg.Role),
+		Content:    toLLMContents(msg),
+		StopReason: toStopReason(string(finishReason)),
+		Usage:      s.toLLMUsage(usage, headers),
+	}, nil
+}
+
 // toRoleFromString converts a role string to llm.MessageRole.
 func toRoleFromString(role string) llm.MessageRole {
 	if role == "tool" || role == "system" || role == "function" {
@@ -1152,9 +1273,9 @@ func (s *Service) TokenContextWindow() int {
 		return 128000
 	case "qwen":
 		return 256000
-	case "gpt-oss-20b", "gpt-oss-120b":
+	case "gpt-oss-120b":
 		return 128000
-	case "accounts/fireworks/models/deepseek-v4-pro", "accounts/fireworks/models/deepseek-v4-flash":
+	case "accounts/fireworks/models/deepseek-v4-pro", "accounts/fireworks/models/deepseek-v4-flash", "accounts/fireworks/models/deepseek-v4-flash-0731":
 		return 1048576
 	case "accounts/fireworks/models/kimi-k2p7-code", "accounts/fireworks/models/kimi-k2p6":
 		return 262144
@@ -1179,6 +1300,50 @@ func (s *Service) MaxImageDimension() int {
 // (https://platform.openai.com/docs/guides/images-vision).
 func (s *Service) MaxImageBytes() int {
 	return 20 * 1024 * 1024
+}
+
+func modelReasoningCapabilities(endpoint string, model Model) (modelsdev.ReasoningCapabilities, bool) {
+	return modelsdev.LookupReasoningCapabilities(cmp.Or(endpoint, model.URL), model.ModelName)
+}
+
+func advertisedReasoningLevels(caps modelsdev.ReasoningCapabilities, found bool) []llm.ThinkingLevel {
+	if !found {
+		return nil
+	}
+	return append([]llm.ThinkingLevel(nil), caps.Levels...)
+}
+
+func effortForThinkingLevel(level llm.ThinkingLevel) string {
+	if level == llm.ThinkingLevelOff {
+		return "none"
+	}
+	return level.ThinkingEffort()
+}
+
+func clampKnownReasoningEffort(effort string, levels []llm.ThinkingLevel) string {
+	level := llm.ParseThinkingLevel(effort)
+	if effort == "none" {
+		level = llm.ThinkingLevelOff
+	}
+	if level == llm.ThinkingLevelDefault {
+		return effort
+	}
+	return effortForThinkingLevel(llm.ClampThinkingLevel(level, levels))
+}
+
+// SupportsReasoning reports the models.dev capability when known. Unknown
+// models retain the historical default of supporting reasoning controls.
+func (s *Service) SupportsReasoning() bool {
+	caps, found := modelReasoningCapabilities(s.ModelURL, cmp.Or(s.Model, DefaultModel))
+	return !found || caps.Supported
+}
+
+// SupportedReasoningLevels advertises exact effort levels from models.dev.
+// Nil means the model has no exact effort metadata and callers use the
+// historical provider fallback.
+func (s *Service) SupportedReasoningLevels() []llm.ThinkingLevel {
+	caps, found := modelReasoningCapabilities(s.ModelURL, cmp.Or(s.Model, DefaultModel))
+	return advertisedReasoningLevels(caps, found)
 }
 
 // Do sends a request to OpenAI using the go-openai package.
@@ -1254,38 +1419,52 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 		ToolChoice:          fromLLMToolChoice(ir.ToolChoice), // TODO: make fromLLMToolChoice return an error when a perfect translation is not possible
 		MaxCompletionTokens: cmp.Or(s.MaxTokens, DefaultMaxTokens),
 	}
+	streaming := ir.OnStream != nil
+	if streaming && (s.ProviderName == "fireworks" || s.ProviderName == "openai") {
+		req.StreamOptions = &openai.StreamOptions{IncludeUsage: true}
+	}
 
 	// Reasoning effort. Precedence:
 	//   1. ir.ThinkingLevel (request-level override)
 	//   2. s.ReasoningEffort (verbatim per-model config)
 	//   3. s.ThinkingLevel (service-level default)
 	level := llm.EffectiveThinkingLevel(s.ThinkingLevel, ir.ThinkingLevel)
+	levels := s.SupportedReasoningLevels()
+	genericEffort := false
 	switch {
 	case ir.ReasoningEffort != "":
 		req.ReasoningEffort = ir.ReasoningEffort
 	case ir.ThinkingLevel == llm.ThinkingLevelOff:
-		// Some providers require an explicit value to disable reasoning.
-		if s.ReasoningEffort == "none" {
+		// Preserve the historical unknown-model behavior, but use the explicit
+		// models.dev level set when one is available.
+		if len(levels) > 0 {
+			req.ReasoningEffort = "none"
+			genericEffort = true
+		} else if s.ReasoningEffort == "none" {
 			req.ReasoningEffort = s.ReasoningEffort
 		}
 	case ir.ThinkingLevel != llm.ThinkingLevelDefault:
 		req.ReasoningEffort = ir.ThinkingLevel.ThinkingEffort()
+		genericEffort = true
 	case s.ReasoningEffort != "":
 		req.ReasoningEffort = s.ReasoningEffort
 	case level != llm.ThinkingLevelOff && level != llm.ThinkingLevelDefault:
 		req.ReasoningEffort = level.ThinkingEffort()
+		genericEffort = true
 	}
-	// Many chat-completions backends (Fireworks gpt-oss, GLM, etc.) only
-	// accept low/medium/high for `reasoning_effort` and reject "minimal" and
-	// "xhigh" with HTTP 400. Clamp those down to the closest supported tier.
-	// Verbatim user-configured ReasoningEffort strings are intentionally
-	// preserved (they're an explicit "I know what this provider takes").
-	if req.ReasoningEffort != "" && req.ReasoningEffort != s.ReasoningEffort {
-		switch req.ReasoningEffort {
-		case "minimal":
-			req.ReasoningEffort = "low"
-		case "xhigh":
-			req.ReasoningEffort = "high"
+	// Exact models.dev effort lists use one rounding rule. Models without an
+	// exact list retain the historical conservative chat-completions clamps.
+	// Provider-verbatim values from the service or request are never clamped.
+	if genericEffort && req.ReasoningEffort != "" {
+		if len(levels) > 0 {
+			req.ReasoningEffort = clampKnownReasoningEffort(req.ReasoningEffort, levels)
+		} else {
+			switch req.ReasoningEffort {
+			case "minimal":
+				req.ReasoningEffort = "low"
+			case "xhigh", "max":
+				req.ReasoningEffort = "high"
+			}
 		}
 	}
 	// Construct the full URL for logging and debugging
@@ -1337,11 +1516,30 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			}
 		}
 
-		resp, err := client.CreateChatCompletion(ctx, req)
+		var (
+			result *llm.Response
+			err    error
+		)
+		if streaming {
+			var stream *openai.ChatCompletionStream
+			stream, err = client.CreateChatCompletionStream(ctx, req)
+			if err == nil {
+				result, err = s.consumeChatCompletionStream(stream, ir.OnStream)
+				closeErr := stream.Close()
+				if err == nil && closeErr != nil {
+					err = closeErr
+				}
+			}
+		} else {
+			var resp openai.ChatCompletionResponse
+			resp, err = client.CreateChatCompletion(ctx, req)
+			if err == nil {
+				result = s.toLLMResponse(&resp)
+			}
+		}
 
 		// Handle successful response
 		if err == nil {
-			result := s.toLLMResponse(&resp)
 			// Record the endpoint actually used. baseURL omits the
 			// OpenAIURL fallback (the go-openai client applies it
 			// internally), so apply it here to avoid recording a
@@ -1410,10 +1608,6 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			continue
 		}
 	}
-}
-
-func (s *Service) UseSimplifiedPatch() bool {
-	return s.Model.UseSimplifiedPatch
 }
 
 // ConfigDetails returns configuration information for logging

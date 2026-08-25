@@ -21,6 +21,7 @@ import (
 	"shelley.exe.dev/llm/llmhttp"
 	"shelley.exe.dev/llm/oai"
 	"shelley.exe.dev/models"
+	"shelley.exe.dev/models/modelsdev"
 )
 
 // providerConn is the connection configuration for one upstream provider
@@ -153,6 +154,11 @@ func explicitEnvLabels(anthropic, openAI, fireworks string) map[models.Provider]
 	return labels
 }
 
+func modelReleaseDate(endpoint, modelName string) string {
+	date, _ := modelsdev.LookupReleaseDate(endpoint, modelName)
+	return date
+}
+
 // Build walks the catalog × sources and produces ready-to-use
 // models.Built values. Order: each Source in turn (preserving catalog
 // order within), first to claim an ID wins.
@@ -185,6 +191,7 @@ func Build(catalog []models.Model, sources []Source, httpc *http.Client, logger 
 					DisplayName: id,
 					Provider:    models.Provider(m.Provider),
 					Source:      src.label,
+					ReleaseDate: modelReleaseDate(src.integration.URL, m.apiModelName()),
 					Service:     svc,
 					APIType:     apiType,
 					BaseURL:     src.integration.URL,
@@ -215,6 +222,7 @@ func Build(catalog []models.Model, sources []Source, httpc *http.Client, logger 
 				Provider:    m.Provider,
 				Tags:        m.Tags,
 				Source:      label,
+				ReleaseDate: modelReleaseDate(baseURL, m.APIModelName),
 				Service:     svc,
 				APIType:     m.APIType,
 				BaseURL:     baseURL,

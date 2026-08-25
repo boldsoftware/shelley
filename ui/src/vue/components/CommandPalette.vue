@@ -189,6 +189,7 @@ const ICON_FLAG = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="roun
 const ICON_MARKDOWN = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" /></svg>`;
 const ICON_ARCHIVE = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>`;
 const ICON_FOLDER = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>`;
+const ICON_HOME = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7m-14 0v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>`;
 const ICON_WORKTREE = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>`;
 const ICON_LANG = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>`;
 const ICON_TRASH = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" /></svg>`;
@@ -292,6 +293,22 @@ const actionItems = computed<CommandItem[]>(() => {
     },
     keywords: ["new", "create", "start", "conversation", "chat"],
   });
+
+  const homeDir = window.__SHELLEY_INIT__?.home_dir;
+  if (homeDir) {
+    items.push({
+      id: "new-conversation-home",
+      type: "action",
+      title: t("newConversationInHomeDirectory"),
+      subtitle: homeDir,
+      icon: ICON_HOME,
+      action: () => {
+        emit("new-conversation-with-cwd", homeDir);
+        emit("close");
+      },
+      keywords: ["new", "create", "start", "conversation", "chat", "home", "$HOME", "~"],
+    });
+  }
 
   items.push({
     id: "next-conversation",

@@ -62,13 +62,15 @@ After a successful build, offer the user both options:
    sudo mv "$DEST.new" "$DEST"
    ```
 
-   You are likely running *inside* the server you're about to restart: restarting mid-turn kills this conversation's turn. Finish your reply first and detach the restart:
+   You are likely running *inside* the server you're replacing. When the version check reports `running_under_systemd: true`, install the binary, then make this the final tool action of the turn:
 
    ```
-   tmux new-session -d 'sleep 5 && sudo systemctl restart shelley'
+   curl -fsS -X POST -H 'X-Shelley-Request: 1' "$SHELLEY_URL/exit?resume=true"
    ```
 
-   (If Shelley isn't under systemd, tell the user to restart it themselves.)
+   The endpoint marks every in-flight conversation for one-shot continuation, exits the old process, and lets systemd start the newly installed binary. Shelley will continue this installation conversation after the restart, so do not send a final reply first and do not separately run `systemctl restart shelley`.
+
+   If Shelley is not under systemd or another restart-on-exit supervisor, do not call `/exit`; tell the user to restart it themselves.
 
 Never install without the user explicitly choosing option 2.
 

@@ -8,17 +8,19 @@ import (
 )
 
 // streamFlusher batches LLM stream deltas and flushes them periodically.
-// Anthropic's SSE stream emits hundreds of tiny text_delta events per second.
-// Broadcasting each one individually overwhelms the subpub channel (buffer=10),
-// causing subscriber disconnections. Instead, we accumulate deltas and flush
-// the combined text every interval (e.g., 50ms), yielding ~20 updates/second.
+// Providers emit hundreds of tiny events per second. Broadcasting each one
+// individually overwhelms the bounded subpub queue, causing subscriber
+// disconnections. Instead, we coalesce adjacent deltas of the same type and
+// index every interval (e.g., 50ms), yielding ~20 updates/second.
 type streamFlusher struct {
 	cm       *ConversationManager
 	interval time.Duration
+	// shouldPublish rejects buffered deltas from a loop generation that has
+	// since been cancelled or replaced.
+	shouldPublish func() bool
 
 	mu      sync.Mutex
-	buf     string // accumulated text since last flush
-	index   int    // content block index of accumulated text
+	buf     []llm.StreamDelta
 	timer   *time.Timer
 	running bool
 }
@@ -30,10 +32,11 @@ func (sf *streamFlusher) nextSeq() int64 {
 	return sf.cm.streamDeltaSeq.Add(1)
 }
 
-func newStreamFlusher(cm *ConversationManager, interval time.Duration) *streamFlusher {
+func newStreamFlusher(cm *ConversationManager, interval time.Duration, shouldPublish func() bool) *streamFlusher {
 	return &streamFlusher{
-		cm:       cm,
-		interval: interval,
+		cm:            cm,
+		interval:      interval,
+		shouldPublish: shouldPublish,
 	}
 }
 
@@ -42,16 +45,13 @@ func (sf *streamFlusher) Push(delta llm.StreamDelta) {
 	sf.mu.Lock()
 	defer sf.mu.Unlock()
 
-	if delta.Type == "text" {
-		sf.buf += delta.Text
-		sf.index = delta.Index
-	} else {
-		// For non-text deltas (thinking, etc.), broadcast immediately.
-		delta.Seq = sf.nextSeq()
-		sf.cm.broadcastStream(StreamResponse{
-			StreamDelta: &delta,
-		})
+	if delta.Text == "" {
 		return
+	}
+	if n := len(sf.buf); n > 0 && sf.buf[n-1].Type == delta.Type && sf.buf[n-1].Index == delta.Index {
+		sf.buf[n-1].Text += delta.Text
+	} else {
+		sf.buf = append(sf.buf, delta)
 	}
 
 	if !sf.running {
@@ -62,37 +62,29 @@ func (sf *streamFlusher) Push(delta llm.StreamDelta) {
 
 func (sf *streamFlusher) flush() {
 	sf.mu.Lock()
-	text := sf.buf
-	idx := sf.index
-	sf.buf = ""
+	deltas := sf.buf
+	sf.buf = nil
 	sf.running = false
 	if sf.timer != nil {
 		sf.timer.Stop()
 		sf.timer = nil
 	}
-	// Assign the seq while still holding sf.mu so its order matches the order
-	// text was accumulated. (nextSeq itself is atomic and doesn't require the
-	// lock; the lock here only orders assignment relative to concurrent
-	// Push calls.)
-	var seq int64
-	if text != "" {
-		seq = sf.nextSeq()
+	for i := range deltas {
+		deltas[i].Seq = sf.nextSeq()
 	}
 	sf.mu.Unlock()
 
-	if text != "" {
+	if !sf.shouldPublish() {
+		return
+	}
+	for i := range deltas {
 		sf.cm.broadcastStream(StreamResponse{
-			StreamDelta: &llm.StreamDelta{
-				Type:  "text",
-				Text:  text,
-				Index: idx,
-				Seq:   seq,
-			},
+			StreamDelta: &deltas[i],
 		})
 	}
 }
 
-// Flush forces any buffered text to be broadcast immediately.
+// Flush forces any buffered deltas to be broadcast immediately.
 // Call this before recording the final assistant message to ensure
 // deltas reach the UI before the full message replaces them.
 func (sf *streamFlusher) Flush() {

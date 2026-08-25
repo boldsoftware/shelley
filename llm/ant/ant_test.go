@@ -2932,6 +2932,27 @@ func TestUseAdaptiveThinking(t *testing.T) {
 	}
 }
 
+func TestSupportedReasoningLevels(t *testing.T) {
+	tests := []struct {
+		model string
+		want  string
+	}{
+		{Claude48Opus, "low,medium,high,xhigh,max"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			levels := (&Service{Model: tt.model}).SupportedReasoningLevels()
+			names := make([]string, len(levels))
+			for i, level := range levels {
+				names[i] = level.Name()
+			}
+			if got := strings.Join(names, ","); got != tt.want {
+				t.Fatalf("levels = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestFromLLMRequestThinkingLevels exercises the per-request ThinkingLevel
 // override across both adaptive and budget-style Claude models.
 func TestFromLLMRequestThinkingLevels(t *testing.T) {
@@ -2949,7 +2970,7 @@ func TestFromLLMRequestThinkingLevels(t *testing.T) {
 		{name: "adaptive opus48 xhigh", model: Claude48Opus, svcLevel: llm.ThinkingLevelMedium, reqLevel: llm.ThinkingLevelXHigh, wantType: "adaptive", wantEffort: "xhigh"},
 		{name: "adaptive minimal maps to low", model: Claude48Opus, svcLevel: llm.ThinkingLevelMedium, reqLevel: llm.ThinkingLevelMinimal, wantType: "adaptive", wantEffort: "low"},
 		{name: "adaptive fable minimal maps to low", model: ClaudeFable5, svcLevel: llm.ThinkingLevelMinimal, wantType: "adaptive", wantEffort: "low"},
-		{name: "adaptive req off", model: Claude47Opus, svcLevel: llm.ThinkingLevelMedium, reqLevel: llm.ThinkingLevelOff, wantType: ""},
+		{name: "adaptive req off rounds to low", model: Claude47Opus, svcLevel: llm.ThinkingLevelMedium, reqLevel: llm.ThinkingLevelOff, wantType: "adaptive", wantEffort: "low"},
 		{name: "adaptive provider-qualified opus48", model: "us.anthropic.claude-opus-4-8-v1:0", svcLevel: llm.ThinkingLevelMedium, wantType: "adaptive", wantEffort: "medium"},
 		{name: "budget default medium", model: Claude45Sonnet, svcLevel: llm.ThinkingLevelMedium, wantType: "enabled", wantBudgetGreat: 8192},
 		{name: "budget req low", model: Claude45Sonnet, svcLevel: llm.ThinkingLevelMedium, reqLevel: llm.ThinkingLevelLow, wantType: "enabled", wantBudgetGreat: 2048},

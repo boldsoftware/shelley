@@ -133,7 +133,7 @@ func TestSubPubContextCancellation(t *testing.T) {
 		sp := New[string]()
 		ctx, cancel := context.WithCancel(context.Background())
 
-		next := sp.Subscribe(ctx, 0)
+		next, status := sp.SubscribeWithStatus(ctx, 0)
 
 		// Cancel the context
 		cancel()
@@ -143,24 +143,30 @@ func TestSubPubContextCancellation(t *testing.T) {
 		if ok {
 			t.Error("Expected closed channel after context cancellation")
 		}
+		if status.FellBehind() {
+			t.Error("context cancellation was reported as falling behind")
+		}
 	})
 }
 
 func TestSubPubSubscriberBehind(t *testing.T) {
 	// Don't use synctest for this test as it involves checking buffer overflow behavior
+	if SubscriberQueueCapacity != 200 {
+		t.Fatalf("SubscriberQueueCapacity = %d, want 200", SubscriberQueueCapacity)
+	}
 	sp := New[string]()
 	ctx := context.Background()
 
 	// Subscriber waiting for messages after index 0
 	next := sp.Subscribe(ctx, 0)
 
-	// Fill up the channel buffer (10 messages) quickly before subscriber reads
-	for i := 1; i <= 10; i++ {
+	// Fill the channel quickly before the subscriber reads.
+	for i := 1; i <= SubscriberQueueCapacity; i++ {
 		sp.Publish(int64(i), fmt.Sprintf("message%d", i))
 	}
 
-	// Try to send one more - subscriber should be disconnected because buffer is full
-	sp.Publish(11, "overflow")
+	// One more message disconnects the subscriber because its buffer is full.
+	sp.Publish(SubscriberQueueCapacity+1, "overflow")
 
 	// Try to receive - should work for buffered messages
 	received := 0
@@ -172,14 +178,13 @@ func TestSubPubSubscriberBehind(t *testing.T) {
 		}
 		messages = append(messages, msg)
 		received++
-		if received > 11 {
+		if received > SubscriberQueueCapacity {
 			t.Fatal("Received more messages than expected")
 		}
 	}
 
-	// Should have received exactly 10 messages before being disconnected
-	if received != 10 {
-		t.Errorf("Expected to receive 10 buffered messages, got %d: %v", received, messages)
+	if received != SubscriberQueueCapacity {
+		t.Errorf("Expected to receive %d buffered messages, got %d: %v", SubscriberQueueCapacity, received, messages)
 	}
 }
 
@@ -333,12 +338,12 @@ func TestSubPubSubscriberDisconnected(t *testing.T) {
 	// Create subscriber
 	next := sp.Subscribe(ctx, 0)
 
-	// Fill up the channel buffer (10 messages) + 1 more to trigger disconnection
-	for i := 1; i <= 11; i++ {
+	// Fill the channel and publish one more message to trigger disconnection.
+	for i := 1; i <= SubscriberQueueCapacity+1; i++ {
 		sp.Publish(int64(i), fmt.Sprintf("message%d", i))
 	}
 
-	// Try to receive all messages - should get exactly 10, then be disconnected
+	// Buffered messages remain available before the disconnection is observed.
 	received := 0
 	for {
 		_, ok := next()
@@ -346,18 +351,52 @@ func TestSubPubSubscriberDisconnected(t *testing.T) {
 			break
 		}
 		received++
-		if received > 11 {
+		if received > SubscriberQueueCapacity {
 			t.Fatal("Received more messages than expected")
 		}
 	}
 
-	// Should have received exactly 10 messages before being disconnected
-	if received != 10 {
-		t.Errorf("Expected to receive 10 buffered messages, got %d", received)
+	if received != SubscriberQueueCapacity {
+		t.Errorf("Expected to receive %d buffered messages, got %d", SubscriberQueueCapacity, received)
 	}
 }
 
-// TestSubPubSubscriberNotInterested tests that subscribers don't receive messages they're not interested in
+// TestSubPubDoneClosesImmediatelyWhenSubscriberFallsBehind verifies that the
+// cancellation signal does not wait for buffered messages to be drained.
+func TestSubPubStatusReportsSubscriberFellBehind(t *testing.T) {
+	sp := New[string]()
+	ctx, cancel := context.WithCancel(context.Background())
+	next, status := sp.SubscribeWithStatus(ctx, 0)
+
+	for i := 1; i <= SubscriberQueueCapacity+1; i++ {
+		sp.Publish(int64(i), fmt.Sprintf("message%d", i))
+	}
+	// Request cancellation can race with overflow handling in the stream
+	// handler; it must not erase the reason the subscription already ended.
+	cancel()
+
+	select {
+	case <-status.Done():
+	default:
+		t.Fatal("done channel remained open after subscriber was disconnected")
+	}
+	if !status.FellBehind() {
+		t.Fatal("status did not report that the subscriber fell behind")
+	}
+
+	// The immediate done signal does not change Subscribe's buffered-drain
+	// contract: callers using next still receive the queued messages.
+	for i := 0; i < SubscriberQueueCapacity; i++ {
+		if _, ok := next(); !ok {
+			t.Fatalf("next returned false after %d buffered messages", i)
+		}
+	}
+	if _, ok := next(); ok {
+		t.Fatal("next remained open after buffered messages were drained")
+	}
+}
+
+// TestSubPubSubscriberNotInterested tests that subscribers don't receive messages they're not interested in.
 func TestSubPubSubscriberNotInterested(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		sp := New[int]()

@@ -22,25 +22,7 @@
         :aria-label="isExpanded ? 'Collapse' : 'Expand'"
         :aria-expanded="isExpanded"
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          :style="{
-            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-            transition: 'transform 0.2s',
-          }"
-        >
-          <path
-            d="M4.5 3L7.5 6L4.5 9"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
+        <ToolChevron :expanded="isExpanded" />
       </button>
     </div>
     <div v-if="isExpanded && results.length > 0" class="web-search-results">
@@ -66,6 +48,7 @@
 import { computed } from "vue";
 import type { LLMContent } from "../../../types";
 import { useToolExpanded } from "../../composables/toolDetail";
+import ToolChevron from "./ToolChevron.vue";
 
 const props = defineProps<{
   toolInput?: unknown;

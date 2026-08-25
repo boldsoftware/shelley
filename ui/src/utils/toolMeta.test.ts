@@ -137,7 +137,7 @@ run("umbrella browser tool picks per-family emoji for folded-in actions", () => 
   const cases: Array<[string, string]> = [
     ["emulate_device", "\u{1F4F1}"],
     ["network_enable", "\u{1F4E1}"],
-    ["accessibility_tree", "\u267F"],
+    ["accessibility_tree", "\u{1F333}"],
     ["profile_metrics", "\u{1F4CA}"],
     ["navigate", "\u{1F310}"],
     ["eval", "\u26A1"],

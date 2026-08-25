@@ -9,8 +9,8 @@
      summarization, LLM-backed tools, slug generation, … — are not part of the
      graph. Other-usage rows arrive via the otherUsageRows prop (aggregated
      client-side from message other_usage_data) and subagent cost is fetched
-     separately; both show up as an "Other (indirect)" breakdown section and
-     "plus ≈$Y other, plus ≈$Z for subagents" note segments. -->
+     separately; subagents appear as another breakdown row and both are
+     included in the total below the table. -->
 <template>
   <div class="token-cost-graph">
     <div v-if="loading" class="token-cost-graph-note">Loading pricing…</div>
@@ -120,15 +120,9 @@
         <template v-if="otherBreakdown && otherBreakdown.perPurpose.length > 0">
           <div class="token-cost-model-row">
             <span class="token-cost-model-name">Other (indirect)</span>
-            <span v-if="otherBreakdown.totals.estimatedUsd > 0" class="token-cost-legend-cost">{{
-              formatUsd(otherBreakdown.totals.estimatedUsd)
+            <span v-if="otherKnownUsd > 0" class="token-cost-legend-cost">{{
+              formatUsd(otherKnownUsd)
             }}</span>
-            <span
-              v-else-if="otherBreakdown.totals.reportedUsd > 0"
-              class="token-cost-legend-cost"
-            >
-              {{ formatUsd(otherBreakdown.totals.reportedUsd) }} reported
-            </span>
             <span
               v-else-if="otherBreakdown.totals.unpricedCalls === 0"
               class="token-cost-legend-cost"
@@ -146,47 +140,133 @@
               >{{ p.llmCalls }} {{ p.llmCalls === 1 ? "call" : "calls" }}</span
             >
             <span class="token-cost-legend-tokens">{{ formatTokenCount(p.tokens) }}</span>
-            <span v-if="p.priced" class="token-cost-legend-cost">{{
-              formatUsd(p.estimatedUsd)
+            <span v-if="otherPurposeKnownUsd(p) > 0" class="token-cost-legend-cost">{{
+              formatUsd(otherPurposeKnownUsd(p))
             }}</span>
-            <span v-else-if="p.reportedUsd > 0" class="token-cost-legend-cost">
-              {{ formatUsd(p.reportedUsd) }} reported
-            </span>
+            <span v-else-if="p.priced" class="token-cost-legend-cost">{{ formatUsd(0) }}</span>
             <span v-else class="token-cost-legend-unit">no pricing</span>
           </div>
         </template>
+        <template v-if="subagentUsage && subagentUsage.llm_calls > 0">
+          <div class="token-cost-model-row" data-testid="subagent-cost-row">
+            <span class="token-cost-model-name">Subagents</span>
+            <span v-if="subagentKnownUsd > 0" class="token-cost-legend-cost">{{
+              formatUsd(subagentKnownUsd)
+            }}</span>
+            <span v-else-if="subagentUsage.unpriced_calls === 0" class="token-cost-legend-cost">{{
+              formatUsd(0)
+            }}</span>
+            <span v-else class="token-cost-legend-unit">no pricing</span>
+          </div>
+        </template>
+        <div
+          v-if="!subagentLoading && showCostSummary"
+          class="token-cost-model-row token-cost-total-row"
+          data-testid="token-cost-total"
+        >
+          <span class="token-cost-model-name">Total</span>
+          <span class="token-cost-legend-cost">≈{{ formatUsd(costSummary.totalUsd) }}</span>
+        </div>
       </div>
-      <div class="token-cost-graph-note">
-        <template v-if="fetchFailed && !stack.weighted">
-          Pricing lookup failed — showing raw token counts.
-        </template>
-        <template v-else-if="stack.weighted">
-          ≈{{ formatUsd(stack.maxY) }} total<template v-if="otherNote">, {{ otherNote }}</template
-          ><template v-if="subagentNote">, {{ subagentNote }}</template>
-          <template v-if="fetchFailed"> · pricing lookup failed for some models</template>
-          <template v-if="stack.reportedCostUsd > 0">
-            · provider-reported {{ formatUsd(stack.reportedCostUsd) }}
-          </template>
-        </template>
+      <div v-if="stack.weighted && fetchFailed" class="token-cost-graph-note">
+        Pricing lookup failed for some models.
+      </div>
+      <div v-if="stack.weighted && stack.reportedCostUsd > 0" class="token-cost-graph-note">
+        Provider-reported direct cost: {{ formatUsd(stack.reportedCostUsd) }}.
+      </div>
+      <div v-if="!stack.weighted" class="token-cost-graph-note">
+        <template v-if="fetchFailed"> Pricing lookup failed — showing raw token counts. </template>
         <template v-else
           >Raw token counts — no pricing known.<template v-if="stack.reportedCostUsd > 0">
             Provider-reported {{ formatUsd(stack.reportedCostUsd) }}.</template
           ></template
         >
       </div>
-      <div v-if="!stack.weighted && otherNote" class="token-cost-graph-note">
-        Other: {{ otherNote }}
-      </div>
-      <div v-if="!stack.weighted && subagentNote" class="token-cost-graph-note">
-        Subagents: {{ subagentNote }}
-      </div>
     </template>
-    <div v-else class="token-cost-graph-note">No usage data yet.</div>
+    <div v-else-if="!loading" class="token-cost-graph-note">No direct usage data yet.</div>
+    <div
+      v-if="
+        !loading &&
+        !stack &&
+        ((otherBreakdown && otherBreakdown.perPurpose.length > 0) ||
+          (subagentUsage && subagentUsage.llm_calls > 0))
+      "
+      class="token-cost-legend"
+    >
+      <template v-if="otherBreakdown && otherBreakdown.perPurpose.length > 0">
+        <div class="token-cost-model-row">
+          <span class="token-cost-model-name">Other (indirect)</span>
+          <span v-if="otherKnownUsd > 0" class="token-cost-legend-cost">{{
+            formatUsd(otherKnownUsd)
+          }}</span>
+          <span
+            v-else-if="otherBreakdown.totals.unpricedCalls === 0"
+            class="token-cost-legend-cost"
+            >{{ formatUsd(0) }}</span
+          >
+          <span v-else class="token-cost-legend-unit">no pricing</span>
+        </div>
+        <div v-for="p in otherBreakdown.perPurpose" :key="p.purpose" class="token-cost-legend-row">
+          <span class="token-cost-legend-label">{{ p.purpose }}</span>
+          <span class="token-cost-legend-tokens"
+            >{{ p.llmCalls }} {{ p.llmCalls === 1 ? "call" : "calls" }}</span
+          >
+          <span class="token-cost-legend-tokens">{{ formatTokenCount(p.tokens) }}</span>
+          <span v-if="otherPurposeKnownUsd(p) > 0" class="token-cost-legend-cost">{{
+            formatUsd(otherPurposeKnownUsd(p))
+          }}</span>
+          <span v-else-if="p.priced" class="token-cost-legend-cost">{{ formatUsd(0) }}</span>
+          <span v-else class="token-cost-legend-unit">no pricing</span>
+        </div>
+      </template>
+      <div
+        v-if="subagentUsage && subagentUsage.llm_calls > 0"
+        class="token-cost-model-row"
+        data-testid="subagent-cost-row"
+      >
+        <span class="token-cost-model-name">Subagents</span>
+        <span v-if="subagentKnownUsd > 0" class="token-cost-legend-cost">{{
+          formatUsd(subagentKnownUsd)
+        }}</span>
+        <span v-else-if="subagentUsage.unpriced_calls === 0" class="token-cost-legend-cost">{{
+          formatUsd(0)
+        }}</span>
+        <span v-else class="token-cost-legend-unit">no pricing</span>
+      </div>
+      <div
+        v-if="!subagentLoading && showCostSummary"
+        class="token-cost-model-row token-cost-total-row"
+        data-testid="token-cost-total"
+      >
+        <span class="token-cost-model-name">Total</span>
+        <span class="token-cost-legend-cost">≈{{ formatUsd(costSummary.totalUsd) }}</span>
+      </div>
+    </div>
+    <div v-if="!loading && subagentLoading" class="token-cost-graph-note">
+      Loading total including subagents…
+    </div>
+    <div
+      v-if="!loading && showCostSummary && costSummary.unpricedCalls > 0"
+      class="token-cost-graph-note token-cost-graph-warning"
+    >
+      {{ costSummary.unpricedCalls }}
+      {{ costSummary.unpricedCalls === 1 ? "call has" : "calls have" }} no model pricing; provider
+      reports are included when available, but the total may be incomplete.
+    </div>
+    <div
+      v-if="!loading && subagentFetchFailed"
+      class="token-cost-graph-note token-cost-graph-warning"
+    >
+      Subagent cost unavailable; total may be incomplete.
+    </div>
+    <div v-if="!loading && !stack && fetchFailed" class="token-cost-graph-note">
+      Pricing lookup failed.
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import {
   modelCostsApi,
   subagentUsageApi,
@@ -194,6 +274,7 @@ import {
   type SubagentUsageDTO,
 } from "../../services/api";
 import {
+  buildCostSummary,
   buildOtherUsageBreakdown,
   buildTokenCostStack,
   callXLayout,
@@ -204,6 +285,7 @@ import {
   timeXLayout,
   yTicks,
   type ModelUsage,
+  type OtherPurposeUsage,
   type OtherUsageBreakdown,
   type OtherUsageRow,
   type TokenCostStack,
@@ -215,6 +297,7 @@ const props = defineProps<{
   entries: UsageEntry[];
   otherUsageRows?: OtherUsageRow[];
   conversationId?: string | null;
+  active?: boolean;
 }>();
 
 const W = 280;
@@ -246,21 +329,31 @@ const distinctModels = computed(() => {
   return seen;
 });
 
+let pricingRequest = 0;
 watch(
   distinctModels,
   async (models) => {
-    if (models.size === 0) return;
+    const request = ++pricingRequest;
+    if (models.size === 0) {
+      costs.value = {};
+      fetchFailed.value = false;
+      loading.value = false;
+      return;
+    }
     loading.value = Object.keys(costs.value).length === 0;
     try {
-      costs.value = await modelCostsApi.lookup(
+      const nextCosts = await modelCostsApi.lookup(
         Array.from(models).map(([model, url]) => ({ model, url })),
       );
+      if (request !== pricingRequest) return;
+      costs.value = nextCosts;
       fetchFailed.value = false;
     } catch (e) {
+      if (request !== pricingRequest) return;
       console.warn("model costs lookup failed", e);
       fetchFailed.value = true;
     } finally {
-      loading.value = false;
+      if (request === pricingRequest) loading.value = false;
     }
   },
   { immediate: true },
@@ -271,31 +364,102 @@ const stack = computed<TokenCostStack | null>(() =>
 );
 
 // Subagent usage is aggregated server-side (a recursive query over descendant
-// conversations) and shown as a separate note line, not in the graph.
+// conversations) and shown as a separate subtotal, not in the graph. Refresh
+// on parent activity and while the popup is open so a running child's spend
+// does not leave the emphasized total stale.
 const subagentUsage = ref<SubagentUsageDTO | null>(null);
+const subagentLoading = ref(false);
+const subagentFetchFailed = ref(false);
+let subagentRequest = 0;
+let subagentAbort: AbortController | null = null;
+
+function cancelSubagentUsage(): void {
+  subagentAbort?.abort();
+  subagentAbort = null;
+  subagentLoading.value = false;
+}
+
+async function loadSubagentUsage(showLoading: boolean): Promise<void> {
+  const id = props.conversationId;
+  if (!id) {
+    cancelSubagentUsage();
+    subagentUsage.value = null;
+    return;
+  }
+  // Polls never stack. Conversation changes cancel explicitly before loading.
+  if (subagentAbort) return;
+  const controller = new AbortController();
+  subagentAbort = controller;
+  const request = ++subagentRequest;
+  if (showLoading) subagentLoading.value = true;
+  try {
+    const usage = await subagentUsageApi.get(id, controller.signal);
+    if (request !== subagentRequest) return;
+    subagentUsage.value = usage;
+    subagentFetchFailed.value = false;
+  } catch (e) {
+    if ((e as Error).name === "AbortError") return;
+    console.warn("subagent usage lookup failed", e);
+    if (request === subagentRequest) subagentFetchFailed.value = true;
+  } finally {
+    if (subagentAbort === controller) subagentAbort = null;
+    if (request === subagentRequest) subagentLoading.value = false;
+  }
+}
+
 watch(
   () => props.conversationId,
-  async (id) => {
+  () => {
+    cancelSubagentUsage();
+    subagentFetchFailed.value = false;
     subagentUsage.value = null;
-    if (!id) return;
-    try {
-      subagentUsage.value = await subagentUsageApi.get(id);
-    } catch (e) {
-      console.warn("subagent usage lookup failed", e);
-    }
+    void loadSubagentUsage(true);
   },
   { immediate: true },
 );
 
-const subagentNote = computed(() => {
+watch(
+  () =>
+    [
+      props.entries.length,
+      (props.otherUsageRows ?? []).reduce((sum, row) => sum + row.llm_calls, 0),
+    ] as const,
+  () => {
+    if (subagentUsage.value) void loadSubagentUsage(false);
+  },
+);
+
+const SUBAGENT_REFRESH_MS = 5_000;
+let subagentRefreshTimer: number | null = null;
+function stopSubagentRefresh(): void {
+  if (subagentRefreshTimer === null) return;
+  window.clearInterval(subagentRefreshTimer);
+  subagentRefreshTimer = null;
+}
+watch(
+  () => props.active,
+  (active) => {
+    stopSubagentRefresh();
+    if (!active) {
+      cancelSubagentUsage();
+      return;
+    }
+    if (!subagentLoading.value) void loadSubagentUsage(subagentUsage.value === null);
+    subagentRefreshTimer = window.setInterval(
+      () => void loadSubagentUsage(false),
+      SUBAGENT_REFRESH_MS,
+    );
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  stopSubagentRefresh();
+  cancelSubagentUsage();
+});
+
+const subagentKnownUsd = computed(() => {
   const sub = subagentUsage.value;
-  if (!sub || sub.llm_calls === 0) return "";
-  if (sub.estimated_usd > 0) {
-    let note = `plus ≈${formatUsd(sub.estimated_usd)} for subagents`;
-    if (sub.unpriced_calls > 0) note += ` (${sub.unpriced_calls} calls unpriced)`;
-    return note;
-  }
-  return `plus ${sub.llm_calls} unpriced subagent calls`;
+  return sub ? sub.estimated_usd + sub.unpriced_reported_usd : 0;
 });
 
 const otherBreakdown = computed<OtherUsageBreakdown | null>(() => {
@@ -304,19 +468,46 @@ const otherBreakdown = computed<OtherUsageBreakdown | null>(() => {
   return buildOtherUsageBreakdown(rows, costs.value);
 });
 
-const otherNote = computed(() => {
-  const b = otherBreakdown.value;
-  if (!b || b.totals.llmCalls === 0) return "";
-  if (b.totals.estimatedUsd > 0) {
-    let note = `plus ≈${formatUsd(b.totals.estimatedUsd)} other`;
-    if (b.totals.unpricedCalls > 0) note += ` (${b.totals.unpricedCalls} calls unpriced)`;
-    return note;
-  }
-  if (b.totals.reportedUsd > 0) {
-    return `plus ${formatUsd(b.totals.reportedUsd)} other (reported)`;
-  }
-  return `plus ${b.totals.llmCalls} unpriced other calls`;
+const otherKnownUsd = computed(() => {
+  const totals = otherBreakdown.value?.totals;
+  return totals ? totals.estimatedUsd + totals.reportedUnpricedUsd : 0;
 });
+
+function otherPurposeKnownUsd(purpose: OtherPurposeUsage): number {
+  return purpose.estimatedUsd + purpose.reportedUnpricedUsd;
+}
+
+const costSummary = computed(() => {
+  const s = stack.value;
+  const other = otherBreakdown.value?.totals;
+  const subagents = subagentUsage.value;
+  const conversationUnpricedCalls = s
+    ? props.entries.filter((entry) => !entry.model || !costs.value[entry.model]).length
+    : 0;
+  const conversationUnpricedReportedUsd = s
+    ? s.perModel.filter((model) => !model.priced).reduce((sum, model) => sum + model.reportedUsd, 0)
+    : 0;
+  const conversationEstimatedUsd = s?.weighted ? s.maxY : 0;
+  return buildCostSummary(conversationEstimatedUsd + conversationUnpricedReportedUsd, {
+    conversationUnpricedCalls,
+    other: other
+      ? {
+          estimatedUsd: other.estimatedUsd,
+          reportedUnpricedUsd: other.reportedUnpricedUsd,
+          unpricedCalls: other.unpricedCalls,
+        }
+      : undefined,
+    subagents: subagents
+      ? {
+          estimatedUsd: subagents.estimated_usd,
+          reportedUnpricedUsd: subagents.unpriced_reported_usd,
+          unpricedCalls: subagents.unpriced_calls,
+        }
+      : undefined,
+  });
+});
+
+const showCostSummary = computed(() => !!stack.value?.weighted || costSummary.value.totalUsd > 0);
 
 const plotW = W - PADL - PADR;
 const plotH = H - PADT - PADB;

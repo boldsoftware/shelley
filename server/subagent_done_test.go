@@ -906,7 +906,10 @@ func testSubagentDone_InjectionSkippedWhileDistilling(t *testing.T) {
 		return countPendingSubagentDone(f.parentMgr, f.subagentID) == 1
 	})
 
-	if msgs := f.parentMgr.takeInjectableSubagentDone(ctx); len(msgs) != 0 {
+	f.parentMgr.mu.Lock()
+	generation := f.parentMgr.loopGeneration
+	f.parentMgr.mu.Unlock()
+	if msgs := f.parentMgr.takeInjectableSubagentDone(ctx, generation); len(msgs) != 0 {
 		t.Fatalf("expected no injectable messages while distilling, got %d", len(msgs))
 	}
 	if n := countPendingSubagentDone(f.parentMgr, f.subagentID); n != 1 {

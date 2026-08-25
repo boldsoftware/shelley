@@ -8,7 +8,55 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"shelley.exe.dev/exescroll"
 )
+
+func TestForgetRetainsExitStatusForConcurrentAttachments(t *testing.T) {
+	ts, err := NewTerminalSessions(t.TempDir(), slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "tfinished"
+	exitFile := ts.exitFile(id)
+	if err := os.WriteFile(exitFile, []byte("42\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ts.sessions[id] = &TerminalSession{ID: id, Engine: terminalEngineExeScroll}
+	ts.Forget(id)
+	if _, err := os.Stat(exitFile); err != nil {
+		t.Fatalf("exit status removed before other attachments could read it: %v", err)
+	}
+	if code, err := exescroll.ReadExitStatus(exitFile); err != nil || code != 42 {
+		t.Fatalf("retained exit status = %d, %v", code, err)
+	}
+	os.Remove(exitFile)
+}
+
+func TestKillExeScrollKeepsRecordWhenPIDValidationFails(t *testing.T) {
+	ts, err := NewTerminalSessions(t.TempDir(), slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := &TerminalSession{
+		ID:     "tvalidation",
+		Socket: filepath.Join(ts.dir, "tvalidation.sock"),
+		PID:    os.Getpid(),
+		Engine: terminalEngineExeScroll,
+	}
+	if err := ts.writeSession(sess); err != nil {
+		t.Fatal(err)
+	}
+	if err := ts.Kill(sess.ID); err == nil {
+		t.Fatal("Kill succeeded despite PID title mismatch")
+	}
+	if ts.Get(sess.ID) == nil {
+		t.Fatal("failed Kill removed the in-memory session")
+	}
+	if _, err := os.Stat(filepath.Join(ts.dir, sess.ID+".json")); err != nil {
+		t.Fatalf("failed Kill removed the session record: %v", err)
+	}
+}
 
 // procState returns the single-character process state from /proc/<pid>/stat
 // (e.g. "R", "S", "Z"), or "" if the process no longer exists (fully reaped).

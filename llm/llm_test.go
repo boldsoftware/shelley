@@ -12,10 +12,8 @@ import (
 
 // mockService implements Service interface for testing
 type mockService struct {
-	tokenContextWindow   int
-	maxImageDimension    int
-	useSimplifiedPatch   bool
-	implementsSimplified bool
+	tokenContextWindow int
+	maxImageDimension  int
 }
 
 func (m *mockService) Do(ctx context.Context, req *Request) (*Response, error) {
@@ -34,15 +32,6 @@ func (m *mockService) MaxImageDimension() int {
 
 func (m *mockService) MaxImageBytes() int {
 	return 0
-}
-
-// mockSimplifiedService implements both Service and SimplifiedPatcher interfaces
-type mockSimplifiedService struct {
-	mockService
-}
-
-func (m *mockSimplifiedService) UseSimplifiedPatch() bool {
-	return m.useSimplifiedPatch
 }
 
 func TestMustSchema(t *testing.T) {
@@ -107,52 +96,6 @@ func TestEmptySchema(t *testing.T) {
 	expected := `{"type": "object", "properties": {}}`
 	if string(schema) != expected {
 		t.Errorf("EmptySchema() = %s, want %s", string(schema), expected)
-	}
-}
-
-func TestUseSimplifiedPatch(t *testing.T) {
-	tests := []struct {
-		name     string
-		service  Service
-		expected bool
-	}{
-		{
-			name: "service without SimplifiedPatcher",
-			service: &mockService{
-				implementsSimplified: false,
-				useSimplifiedPatch:   false,
-			},
-			expected: false,
-		},
-		{
-			name: "service with SimplifiedPatcher returning false",
-			service: &mockSimplifiedService{
-				mockService: mockService{
-					implementsSimplified: true,
-					useSimplifiedPatch:   false,
-				},
-			},
-			expected: false,
-		},
-		{
-			name: "service with SimplifiedPatcher returning true",
-			service: &mockSimplifiedService{
-				mockService: mockService{
-					implementsSimplified: true,
-					useSimplifiedPatch:   true,
-				},
-			},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := UseSimplifiedPatch(tt.service)
-			if result != tt.expected {
-				t.Errorf("UseSimplifiedPatch() = %v, want %v", result, tt.expected)
-			}
-		})
 	}
 }
 
@@ -685,3 +628,39 @@ func TestContentCallerCitationsOmitEmpty(t *testing.T) {
 }
 
 func (m *mockService) SupportsImages() bool { return true }
+
+func TestClampThinkingLevel(t *testing.T) {
+	tests := []struct {
+		name      string
+		level     ThinkingLevel
+		supported []ThinkingLevel
+		want      ThinkingLevel
+	}{
+		{name: "supported unchanged", level: ThinkingLevelHigh, supported: []ThinkingLevel{ThinkingLevelLow, ThinkingLevelHigh}, want: ThinkingLevelHigh},
+		{name: "unknown levels unchanged", level: ThinkingLevelMax, want: ThinkingLevelMax},
+		{name: "max rounds down", level: ThinkingLevelMax, supported: []ThinkingLevel{ThinkingLevelOff, ThinkingLevelHigh, ThinkingLevelXHigh}, want: ThinkingLevelXHigh},
+		{name: "tie rounds lower", level: ThinkingLevelXHigh, supported: []ThinkingLevel{ThinkingLevelHigh, ThinkingLevelMax}, want: ThinkingLevelHigh},
+		{name: "non-off never rounds to off", level: ThinkingLevelMinimal, supported: []ThinkingLevel{ThinkingLevelOff, ThinkingLevelLow}, want: ThinkingLevelLow},
+		{name: "unsupported off uses lowest tier", level: ThinkingLevelOff, supported: []ThinkingLevel{ThinkingLevelLow, ThinkingLevelHigh}, want: ThinkingLevelLow},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClampThinkingLevel(tt.level, tt.supported); got != tt.want {
+				t.Fatalf("ClampThinkingLevel(%s) = %s, want %s", tt.level, got, tt.want)
+			}
+		})
+	}
+}
+
+type profiledService struct{ mockService }
+
+func (profiledService) PatchProfile() string { return "codex_apply_patch" }
+
+func TestPatchProfile(t *testing.T) {
+	if got := PatchProfile(&mockService{}); got != "flat" {
+		t.Fatalf("plain service profile = %q, want flat", got)
+	}
+	if got := PatchProfile(&profiledService{}); got != "codex_apply_patch" {
+		t.Fatalf("profiled service profile = %q, want codex_apply_patch", got)
+	}
+}

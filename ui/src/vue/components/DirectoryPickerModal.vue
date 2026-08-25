@@ -39,17 +39,35 @@
         </span>
       </div>
 
-      <div
-        v-if="displayDir && (displayDir.git_repo_root || displayDir.git_worktree_root)"
-        class="directory-picker-git-root-row"
-      >
+      <div v-if="directoryShortcuts.length" class="directory-picker-shortcuts">
         <button
-          v-if="displayDir.git_repo_root && displayDir.git_repo_root !== displayDir.path"
-          class="directory-picker-git-root-btn"
-          :title="displayDir.git_repo_root"
-          @click="inputPath = displayDir.git_repo_root + '/'"
+          v-for="shortcut in directoryShortcuts"
+          :key="shortcut.path"
+          class="directory-picker-shortcut"
+          :title="shortcut.path"
+          @click="goToDirectory(shortcut.path)"
         >
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="directory-picker-icon">
+          <svg
+            v-if="shortcut.isHome"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            class="directory-picker-icon"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              :stroke-width="2"
+              d="M3 12l2-2m0 0l7-7 7 7m-14 0v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+            />
+          </svg>
+          <svg
+            v-else
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            class="directory-picker-icon"
+          >
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -57,25 +75,8 @@
               d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
             />
           </svg>
-          <span>Go to git worktree root</span>
-          <span class="directory-picker-git-root-path">{{ displayDir.git_repo_root }}</span>
-        </button>
-        <button
-          v-if="displayDir.git_worktree_root && displayDir.git_worktree_root !== displayDir.path"
-          class="directory-picker-git-root-btn"
-          :title="displayDir.git_worktree_root"
-          @click="inputPath = displayDir.git_worktree_root + '/'"
-        >
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="directory-picker-icon">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              :stroke-width="2"
-              d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
-            />
-          </svg>
-          <span>Go to git root</span>
-          <span class="directory-picker-git-root-path">{{ displayDir.git_worktree_root }}</span>
+          <span>{{ shortcut.label }}</span>
+          <span class="directory-picker-shortcut-path">{{ shortcut.path }}</span>
         </button>
       </div>
 
@@ -258,6 +259,12 @@ interface CachedDirectory {
   git_worktree_root?: string;
 }
 
+interface DirectoryShortcut {
+  label: string;
+  path: string;
+  isHome?: boolean;
+}
+
 const props = defineProps<{
   isOpen: boolean;
   initialPath?: string;
@@ -288,7 +295,7 @@ const cache = new Map<string, CachedDirectory>();
 
 const displayDir = ref<CachedDirectory | null>(null);
 const filterPrefix = ref("");
-let expectedPath = "";
+let loadSequence = 0;
 
 function parseInputPath(path: string): { dirPath: string; prefix: string } {
   if (!path) return { dirPath: "", prefix: "" };
@@ -299,36 +306,45 @@ function parseInputPath(path: string): { dirPath: string; prefix: string } {
   return { dirPath: path.slice(0, lastSlash), prefix: path.slice(lastSlash + 1) };
 }
 
-async function loadDirectory(path: string): Promise<CachedDirectory | null> {
+async function loadDirectory(path: string): Promise<CachedDirectory> {
   const normalizedPath = path || "/";
   const cached = cache.get(normalizedPath);
   if (cached) return cached;
 
-  loading.value = true;
-  error.value = null;
-  try {
-    const result = await api.listDirectory(path || undefined);
-    if (result.error) {
-      error.value = result.error;
-      return null;
-    }
-    const dirData: CachedDirectory = {
-      path: result.path,
-      parent: result.parent,
-      entries: result.entries || [],
-      git_head_subject: result.git_head_subject,
-      git_repo_root: result.git_repo_root,
-      git_worktree_root: result.git_worktree_root,
-    };
-    cache.set(result.path, dirData);
-    return dirData;
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : "Failed to load directory";
-    return null;
-  } finally {
-    loading.value = false;
-  }
+  const result = await api.listDirectory(path || undefined);
+  if (result.error) throw new Error(result.error);
+  const dirData: CachedDirectory = {
+    path: result.path,
+    parent: result.parent,
+    entries: result.entries || [],
+    git_head_subject: result.git_head_subject,
+    git_repo_root: result.git_repo_root,
+    git_worktree_root: result.git_worktree_root,
+  };
+  cache.set(result.path, dirData);
+  return dirData;
 }
+
+const homeDir = window.__SHELLEY_INIT__?.home_dir || "";
+const directoryShortcuts = computed<DirectoryShortcut[]>(() => {
+  const shortcuts: DirectoryShortcut[] = [];
+  const addShortcut = (shortcut: DirectoryShortcut) => {
+    if (!shortcuts.some(({ path }) => path === shortcut.path)) shortcuts.push(shortcut);
+  };
+  const dir = displayDir.value;
+  const inputDir = parseInputPath(inputPath.value).dirPath;
+  const browsingHome = !error.value && dir?.path === homeDir && (!inputDir || inputDir === homeDir);
+  if (homeDir && !browsingHome) {
+    addShortcut({ label: "Go to home directory", path: homeDir, isHome: true });
+  }
+  if (dir?.git_repo_root && dir.git_repo_root !== dir.path) {
+    addShortcut({ label: "Go to git worktree root", path: dir.git_repo_root });
+  }
+  if (dir?.git_worktree_root && dir.git_worktree_root !== dir.path) {
+    addShortcut({ label: "Go to git root", path: dir.git_worktree_root });
+  }
+  return shortcuts;
+});
 
 const filteredEntries = computed(
   () =>
@@ -358,9 +374,13 @@ function handleEntryClick(entry: DirectoryEntry) {
   }
 }
 
+function goToDirectory(path: string) {
+  inputPath.value = path === "/" ? "/" : `${path}/`;
+}
+
 function handleParentClick() {
   if (displayDir.value?.parent) {
-    inputPath.value = displayDir.value.parent === "/" ? "/" : `${displayDir.value.parent}/`;
+    goToDirectory(displayDir.value.parent);
   }
 }
 
@@ -440,17 +460,27 @@ function handleCreateKeyDown(e: KeyboardEvent) {
 watch(
   [() => props.isOpen, inputPath],
   ([open]) => {
-    if (!open) return;
+    const requestSequence = ++loadSequence;
+    if (!open) {
+      loading.value = false;
+      return;
+    }
     const { dirPath, prefix } = parseInputPath(inputPath.value);
     filterPrefix.value = prefix;
-    const normalizedDirPath = dirPath || "/";
-    expectedPath = normalizedDirPath;
-    loadDirectory(dirPath).then((dir) => {
-      if (dir && expectedPath === normalizedDirPath) {
+    loading.value = true;
+    error.value = null;
+    loadDirectory(dirPath)
+      .then((dir) => {
+        if (requestSequence !== loadSequence) return;
         displayDir.value = dir;
-        error.value = null;
-      }
-    });
+      })
+      .catch((err) => {
+        if (requestSequence !== loadSequence) return;
+        error.value = err instanceof Error ? err.message : "Failed to load directory";
+      })
+      .finally(() => {
+        if (requestSequence === loadSequence) loading.value = false;
+      });
   },
   { immediate: true },
 );

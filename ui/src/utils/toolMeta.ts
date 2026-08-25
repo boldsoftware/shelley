@@ -39,7 +39,7 @@ export function toolEmoji(name: string | undefined | null, input?: unknown): str
     // Folded-in families: emulate_*, network_*, accessibility_*, profile_*.
     if (action.startsWith("emulate")) return "📱";
     if (action.startsWith("network")) return "📡";
-    if (action.startsWith("accessibility")) return "♿";
+    if (action.startsWith("accessibility")) return "🌳";
     if (action.startsWith("profile")) return "📊";
   }
   switch (name) {
@@ -69,7 +69,7 @@ export function toolEmoji(name: string | undefined | null, input?: unknown): str
     case "browser_resize":
       return "📐";
     case "browser_accessibility":
-      return "♿";
+      return "🌳";
     case "browser_network":
       return "📡";
     case "browser_profile":

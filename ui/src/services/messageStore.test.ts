@@ -631,6 +631,131 @@ async function main(): Promise<void> {
     await s2.close();
   });
 
+  await run("an empty draft cache rejects a streamed sequence-2 first message", async () => {
+    // Draft creation seeds an empty cache as complete so focusing the draft
+    // does not blur the composer behind a loading state. Promotion creates the
+    // system prompt as sequence 1 without broadcasting it, then streams the
+    // user's message as sequence 2. Treating that append as contiguous poisons
+    // the cache permanently: the system-prompt card disappears in this browser
+    // while a cold browser fetches the complete server history and shows it.
+    const { factory, dbName, keyId, rawKey } = freshFactory();
+    const s = storeFor({ factory, dbName, keyId, rawKey });
+    const id = "c-draft-prefix-race";
+    s.applyFullHistory(id, {
+      conversation_id: id,
+      messages: [],
+      context_window_size: 0,
+      max_sequence_id: 0,
+    });
+    await s.settle();
+
+    s.upsertMessages(id, [msg(id, 2)]);
+    const rec = s.peek(id)!;
+    assert(rec.hasFullHistory === false, "sequence 2 cannot extend an empty full history");
+    assert(needsBackfill(rec), "the missing system prompt must force a full REST repair");
+    await s.settle();
+    await s.close();
+
+    const s2 = storeFor({ factory, dbName, keyId, rawKey });
+    const hyd = await s2.hydrate(id);
+    assert(hyd !== null, "hydrated");
+    assert(hyd!.hasFullHistory === false, "the missing prefix stays invalid on disk");
+    await s2.close();
+  });
+
+  await run("an empty snapshot cannot certify grafted live rows as full history", async () => {
+    // The draft-promotion race, from the REST side. The server flips is_draft
+    // and announces it BEFORE creating the system prompt as sequence 1, and
+    // that row is never broadcast. A refetch landing in that window returns
+    // zero messages while the streamed user message (sequence 2) is already
+    // cached, so applyFullHistory merges [2] and would historically stamp it
+    // complete -- permanently hiding the system prompt in this browser.
+    // upsertMessages' join check cannot save us here: seq 2 arrived BEFORE the
+    // certification, so there was nothing for it to compare against.
+    const { factory, dbName, keyId, rawKey } = freshFactory();
+    const s = storeFor({ factory, dbName, keyId, rawKey });
+    const id = "c-promotion-empty-snapshot";
+
+    // Live stream delivers the user's message first.
+    s.upsertMessages(id, [msg(id, 2)]);
+    // The racing refetch comes back empty.
+    s.applyFullHistory(id, {
+      conversation_id: id,
+      messages: [],
+      context_window_size: 0,
+      max_sequence_id: 0,
+    });
+
+    const rec = s.peek(id)!;
+    assert(rec.messages.length === 1, "the live row is preserved, not dropped");
+    assert(rec.messages[0].sequence_id === 2, "the preserved row is sequence 2");
+    assert(
+      rec.hasFullHistory === false,
+      "an empty snapshot cannot certify a history starting at 2",
+    );
+    assert(needsBackfill(rec), "the next focus must fetch the full history");
+    await s.settle();
+    await s.close();
+
+    const s2 = storeFor({ factory, dbName, keyId, rawKey });
+    const hyd = await s2.hydrate(id);
+    assert(hyd !== null, "hydrated");
+    assert(hyd!.hasFullHistory === false, "the refusal must survive a reload");
+    await s2.close();
+  });
+
+  await run("an empty snapshot still certifies when the graft starts at sequence 1", async () => {
+    // Same race, but the stream delivered sequence 1 before the refetch
+    // resolved. The merged set genuinely starts at the beginning, so it is a
+    // complete history and must stay certified -- this is the case
+    // applyFullHistory's newerLocal merge exists to protect.
+    const { factory, dbName, keyId, rawKey } = freshFactory();
+    const s = storeFor({ factory, dbName, keyId, rawKey });
+    const id = "c-empty-snapshot-from-one";
+
+    s.upsertMessages(id, [msg(id, 1), msg(id, 2)]);
+    s.applyFullHistory(id, {
+      conversation_id: id,
+      messages: [],
+      context_window_size: 0,
+      max_sequence_id: 0,
+    });
+
+    const rec = s.peek(id)!;
+    assert(rec.hasFullHistory === true, "a graft starting at sequence 1 is a complete history");
+    assert(!needsBackfill(rec), "no repair fetch is needed");
+    await s.settle();
+    await s.close();
+  });
+
+  await run("a fork whose history starts past sequence 1 stays certified", async () => {
+    // db.CopyMessagesForFork copies a single generation while PRESERVING the
+    // source sequence ids, so a fork taken after a compaction legitimately
+    // begins well past 1. A full GET returns that whole history, so whatever
+    // it starts at IS the start. Treating "first row > 1" as damage would make
+    // these conversations re-download everything on every focus, forever.
+    const { factory, dbName, keyId, rawKey } = freshFactory();
+    const s = storeFor({ factory, dbName, keyId, rawKey });
+    const id = "c-fork-offset-history";
+    s.applyFullHistory(id, {
+      conversation_id: id,
+      messages: [msg(id, 20), msg(id, 21)],
+      context_window_size: 0,
+      max_sequence_id: 21,
+    });
+    const rec = s.peek(id)!;
+    assert(rec.hasFullHistory === true, "a full GET starting at 20 is still complete");
+    await s.settle();
+    await s.close();
+
+    const s2 = storeFor({ factory, dbName, keyId, rawKey });
+    const hyd = await s2.hydrate(id);
+    assert(hyd !== null, "hydrated");
+    assert(hyd!.hasFullHistory === true, "a fork's offset history survives a reload certified");
+    assert(!needsBackfill(hyd), "a fork must not refetch its whole history on every focus");
+    await s2.close();
+  });
+
   await run("a redelivered message replaces the cached copy, not duplicates it", async () => {
     // Redelivery is normal: a stream reconnect can resend rows we already
     // hold, and subpub replays from a cursor. Upserting by message_id must be
@@ -1606,17 +1731,19 @@ async function main(): Promise<void> {
     },
   );
 
-  await run("resetTransient clears toolProgress and streamingText", async () => {
+  await run("resetTransient clears tool progress and streamed content", async () => {
     const s = freshStore();
     const id = "c-reset-ephemera";
     s.setToolProgress(id, { tool_use_id: "tool-1", tool_name: "shell", output: "x" });
-    s.appendStreamDelta(id, "hello");
+    s.appendStreamText(id, "hello");
+    s.appendStreamThinking(id, "hmm");
     s.setAgentWorking(id, true);
     s.resetTransient(id);
     const t = s.getTransient(id);
     assert(t.agentWorking === true, "agentWorking should still be preserved");
     assert(Object.keys(t.toolProgress).length === 0, "toolProgress should be wiped on reset");
     assert(t.streamingText === "", "streamingText should be wiped on reset");
+    assert(t.streamingThinking === "", "streamingThinking should be wiped on reset");
   });
 
   // ── Multi-tab liveness ──────────────────────────────────────────────────────

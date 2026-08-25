@@ -66,3 +66,41 @@ export function getTerminalTheme(isDark: boolean): Record<string, string> {
     brightWhite: "#ffffff",
   };
 }
+
+// visibleTerminals returns the terminals to show for a conversation: global
+// terminals first, then the ones owned by that conversation. Order within each
+// group is the order the terminals were created in, so re-scoping a terminal
+// moves it between groups without reshuffling anything else.
+//
+// Terminals not in this list are still mounted and attached; they are just not
+// offered as tabs.
+export function visibleTerminals<T extends { conversationId: string | null }>(
+  terminals: readonly T[],
+  conversationId: string | null,
+): T[] {
+  const local = conversationId ? terminals.filter((t) => t.conversationId === conversationId) : [];
+  const global = terminals.filter((t) => t.conversationId === null);
+  return [...global, ...local];
+}
+
+// nextActiveTab decides which tab is selected after the visible set changed.
+//
+// `createdIds` are the terminals that just entered the app-wide collection
+// (freshly opened, or restored on load) and are visible here. Only those steal
+// the selection. A terminal that merely became visible because the user
+// switched conversations does not, which is what keeps a selected global
+// terminal selected across conversation switches.
+//
+// `created` in the result reports that the selection moved to a brand-new
+// terminal, which is when the panel expands itself.
+export function nextActiveTab(
+  visibleIds: readonly string[],
+  createdIds: readonly string[],
+  activeId: string | null,
+): { id: string | null; created: boolean } {
+  if (visibleIds.length === 0) return { id: null, created: false };
+  const created = createdIds.filter((id) => visibleIds.includes(id));
+  if (created.length > 0) return { id: created[created.length - 1], created: true };
+  if (activeId !== null && visibleIds.includes(activeId)) return { id: activeId, created: false };
+  return { id: visibleIds[visibleIds.length - 1], created: false };
+}

@@ -9,6 +9,18 @@ import (
 	"context"
 )
 
+const deleteSetting = `-- name: DeleteSetting :execrows
+DELETE FROM settings WHERE key = ?
+`
+
+func (q *Queries) DeleteSetting(ctx context.Context, key string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteSetting, key)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getAllSettings = `-- name: GetAllSettings :many
 SELECT key, value FROM settings
 `

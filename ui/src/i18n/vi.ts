@@ -9,6 +9,7 @@ export const vi: TranslationKeys = {
   // Chat Header & Actions
   newConversation: "Hội thoại mới",
   moreOptions: "Tùy chọn khác",
+  actions: "Thao tác",
   conversations: "Lịch sử",
 
   // Overflow Menu
@@ -18,6 +19,11 @@ export const vi: TranslationKeys = {
   archiveConversation: "Hội thoại đã lưu trữ",
   exportConversation: "Xuất hội thoại",
   checkForNewVersion: "Kiểm tra cập nhật",
+  conversationView: "Chế độ xem cuộc trò chuyện",
+  seeAllMessages: "Xem tất cả",
+  seeEndOfTurnMessagesOnly: "Chỉ xem tin nhắn cuối lượt",
+  brevity: "Ngắn gọn",
+  look: "Giao diện",
 
   // Theme
   system: "Hệ thống",
@@ -71,6 +77,7 @@ export const vi: TranslationKeys = {
   archiveConversationAction: "Lưu trữ",
   archiveCurrentConversation: "Lưu trữ cuộc hội thoại hiện tại",
   newConversationInMainRepo: "Hội thoại mới ở repo chính",
+  newConversationInHomeDirectory: "Hội thoại mới trong thư mục chính",
   newConversationInNewWorktree: "Hội thoại mới ở worktree mới",
   createNewWorktree: "Tạo Git worktree mới cho hội thoại",
   setWorkingDirToRepoRoot: "Đặt thư mục làm việc về gốc kho git",
@@ -98,6 +105,7 @@ export const vi: TranslationKeys = {
   subagentIsWorking: "Subagent đang làm việc...",
   running: "đang chạy",
   hideSubagents: "Ẩn subagent",
+  terminalsPinnedHere: "terminal trong cuộc trò chuyện này",
   showSubagents: "Hiện subagent",
   groupConversations: "Gộp nhóm các hội thoại",
   resortNow: "Sắp xếp lại",
@@ -105,6 +113,12 @@ export const vi: TranslationKeys = {
   directory: "Thư mục",
   gitRepo: "Git Repo",
   other: "Khác",
+  clearTagFilter: "Xóa tất cả",
+  searchOrTagPlaceholder: "Tìm kiếm, hoặc tag: để lọc",
+  untagged: "Chưa gắn thẻ",
+  noMatchingTags: "Không có thẻ khớp",
+  noTagsToNarrow: "Không còn gì để thu hẹp",
+  noConversationsMatchTags: "Không có hội thoại nào khớp các thẻ này",
   collapseSubagents: "Thu gọn subagent",
   expandSubagents: "Mở rộng subagent",
   collapseSidebar: "Thu gọn sidebar",
@@ -137,6 +151,9 @@ export const vi: TranslationKeys = {
   effortLabel: "Mức độ suy nghĩ",
   effortAuto: "tự động",
   modelSwitchBusy: "Hoàn tất hoặc dừng lượt hiện tại để đổi mô hình",
+  modelSwitchHint: "Nhấp để đổi mô hình hoặc mức độ suy luận",
+  cwdChangeHint: "nhấp để đổi thư mục làm việc",
+  cwdChangeBusy: "Hoàn tất hoặc dừng lượt hiện tại để đổi thư mục",
   customModelsGroup: "Models tùy chỉnh",
   editModel: "Chỉnh sửa model",
   loadingModels: "Đang tải danh sách models...",
@@ -240,7 +257,11 @@ export const vi: TranslationKeys = {
   welcomeTitle: "Shelley Agent",
   welcomeSubtitle: "",
   welcomeMessage:
-    "Shelley là một agent lập trình chạy trên {hostname}. Bạn có thể yêu cầu Shelley xây dựng dự án. Nếu bạn build website bằng Shelley, bạn có thể dùng HTTP proxy của exe.dev ({docsLink}) để xem tại {proxyLink}.",
+    "Shelley là một agent lập trình chạy trên {hostname}. Nếu bạn build website bằng Shelley, bạn có thể dùng HTTP proxy của exe.dev ({docsLink}) để xem tại {proxyLink}. Shelley là {openSourceLink} và {customizeLink}.",
+  welcomeMessageLocal:
+    "Shelley là một agent lập trình chạy trên {hostname}. Shelley là {openSourceLink} và {customizeLink}.",
+  welcomeOpenSource: "mã nguồn mở",
+  welcomeCustomize: "có thể tùy chỉnh",
   sendMessageToStart: "Gửi tin nhắn để bắt đầu trò chuyện.",
   noModelsTitle: "Không có model AI khả dụng",
   noModelsExeNote:
@@ -260,6 +281,7 @@ export const vi: TranslationKeys = {
   editFileShortcutFirefox:
     "Firefox dành phím tắt này cho cửa sổ riêng tư — hãy dùng bảng lệnh (Cmd/Ctrl+K)",
   openConversations: "Mở lịch sử trò chuyện",
+  commandMenu: "Menu lệnh",
   expandSidebar: "Mở rộng sidebar",
 
   // Language

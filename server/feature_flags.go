@@ -1,12 +1,41 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"shelley.exe.dev/featureflags"
 )
+
+// featureFlagBool resolves the effective boolean value of a registered flag,
+// applying any persisted override on top of the flag's registered default. It
+// is the server-side counterpart to the UI's useFeatureFlag composable, for
+// features (like the favicon) that are decided while rendering on the server.
+// On any error, or when the override/default is not a boolean, it falls back
+// to the flag's default (and finally to false).
+//
+// Note this only consults the DB-backed override, not the UI's per-tab
+// `ff:<name>` localStorage override (which is client-only and used for E2E
+// isolation): a server-rendered feature must be toggled via a DB override.
+func (s *Server) featureFlagBool(ctx context.Context, flag featureflags.Flag) bool {
+	def, _ := flag.Default.(bool)
+	overrides, err := s.db.GetAllFeatureFlagOverrides(ctx)
+	if err != nil {
+		s.logger.Error("Failed to get feature flag overrides", "error", err, "flag", flag.Name)
+		return def
+	}
+	raw, ok := overrides[flag.Name]
+	if !ok {
+		return def
+	}
+	var v bool
+	if err := json.Unmarshal([]byte(raw), &v); err != nil {
+		return def
+	}
+	return v
+}
 
 // FeatureFlagDTO is the API shape: the static registry entry plus an optional
 // override (raw JSON string). Unknown overrides in the DB are silently skipped.

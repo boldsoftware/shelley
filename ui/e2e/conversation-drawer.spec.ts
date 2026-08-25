@@ -40,13 +40,13 @@ async function stubConversationList(page: Page, conversations: ConversationWithS
 }
 
 test.describe("conversation drawer startup and app bar", () => {
-  test("starts collapsed when the only item is a draft", async ({ page }) => {
+  test("starts expanded even when the only item is a draft", async ({ page }) => {
     await stubConversationList(page, [conversation("draft", true)]);
 
     await page.goto("/new");
 
-    await expect(page.locator(".drawer")).toHaveClass(/collapsed/);
-    await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+    await expect(page.locator(".drawer")).not.toHaveClass(/collapsed/);
+    await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
   });
 
   test("starts expanded for multiple conversations with aligned app-bar titles", async ({
@@ -98,12 +98,18 @@ test.describe("conversation drawer startup and app bar", () => {
     expect(metrics.chatTitle.margin).toBe("0px");
   });
 
-  test("manual expand survives reload despite the sparse heuristic", async ({ page }) => {
+  test("manual collapse survives reload with a single conversation", async ({ page }) => {
     await stubConversationList(page, [conversation("only")]);
 
     await page.goto("/new");
 
     const drawer = page.locator(".drawer");
+    await expect(drawer).not.toHaveClass(/collapsed/);
+    await page.getByRole("button", { name: "Collapse sidebar" }).click();
+    await expect(drawer).toHaveClass(/collapsed/);
+
+    await page.reload();
+
     await expect(drawer).toHaveClass(/collapsed/);
     await page.getByRole("button", { name: "Expand sidebar" }).click();
     await expect(drawer).not.toHaveClass(/collapsed/);
@@ -126,5 +132,103 @@ test.describe("conversation drawer startup and app bar", () => {
     await page.reload();
 
     await expect(drawer).toHaveClass(/collapsed/);
+  });
+});
+
+async function swipe(
+  page: Page,
+  selector: string,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+) {
+  await page.evaluate(
+    ({ selector, start, end }) => {
+      const target = document.querySelector(selector);
+      if (!(target instanceof Element)) throw new Error(`Missing ${selector}`);
+
+      const makeTouch = ({ x, y }: { x: number; y: number }) =>
+        new Touch({
+          identifier: 1,
+          target,
+          clientX: x,
+          clientY: y,
+          screenX: x,
+          screenY: y,
+          pageX: x,
+          pageY: y,
+        });
+      const startTouch = makeTouch(start);
+      const endTouch = makeTouch(end);
+
+      target.dispatchEvent(
+        new TouchEvent("touchstart", {
+          bubbles: true,
+          cancelable: true,
+          touches: [startTouch],
+          targetTouches: [startTouch],
+          changedTouches: [startTouch],
+        }),
+      );
+      target.dispatchEvent(
+        new TouchEvent("touchmove", {
+          bubbles: true,
+          cancelable: true,
+          touches: [endTouch],
+          targetTouches: [endTouch],
+          changedTouches: [endTouch],
+        }),
+      );
+      target.dispatchEvent(
+        new TouchEvent("touchend", {
+          bubbles: true,
+          cancelable: true,
+          touches: [],
+          targetTouches: [],
+          changedTouches: [endTouch],
+        }),
+      );
+    },
+    { selector, start, end },
+  );
+}
+
+test.describe("mobile drawer swipe", () => {
+  test.use({
+    viewport: { width: 393, height: 851 },
+    isMobile: true,
+    hasTouch: true,
+  });
+
+  test("opens and closes with opposite page swipes", async ({ page }) => {
+    await stubConversationList(page, [conversation("first")]);
+    await page.goto("/new");
+
+    const drawer = page.locator(".drawer");
+    const input = page.getByTestId("message-input");
+    await expect(drawer).not.toHaveClass(/open/);
+    await input.focus();
+    await expect(input).toBeFocused();
+
+    await swipe(page, ".main-content", { x: 180, y: 300 }, { x: 232, y: 304 });
+    await expect(drawer).toHaveClass(/open/);
+    await expect(input).not.toBeFocused();
+
+    await swipe(page, ".backdrop", { x: 380, y: 300 }, { x: 328, y: 304 });
+    await expect(drawer).not.toHaveClass(/open/);
+  });
+
+  test("leaves the system edge, short movement, and vertical scrolling alone", async ({ page }) => {
+    await stubConversationList(page, [conversation("first")]);
+    await page.goto("/new");
+
+    const drawer = page.locator(".drawer");
+    await swipe(page, ".main-content", { x: 12, y: 300 }, { x: 112, y: 304 });
+    await expect(drawer).not.toHaveClass(/open/);
+
+    await swipe(page, ".main-content", { x: 160, y: 300 }, { x: 196, y: 304 });
+    await expect(drawer).not.toHaveClass(/open/);
+
+    await swipe(page, ".main-content", { x: 64, y: 200 }, { x: 92, y: 300 });
+    await expect(drawer).not.toHaveClass(/open/);
   });
 });

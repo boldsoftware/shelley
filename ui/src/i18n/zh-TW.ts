@@ -9,6 +9,7 @@ export const zhTW: TranslationKeys = {
   // Chat Header & Actions
   newConversation: "新建對話",
   moreOptions: "更多選項",
+  actions: "操作",
   conversations: "對話",
 
   // Overflow Menu
@@ -18,6 +19,11 @@ export const zhTW: TranslationKeys = {
   archiveConversation: "封存對話",
   exportConversation: "匯出對話",
   checkForNewVersion: "檢查新版本",
+  conversationView: "對話檢視",
+  seeAllMessages: "查看全部",
+  seeEndOfTurnMessagesOnly: "僅查看回合結束訊息",
+  brevity: "簡潔",
+  look: "外觀",
 
   // Theme
   system: "跟隨系統",
@@ -71,6 +77,7 @@ export const zhTW: TranslationKeys = {
   archiveConversationAction: "封存對話",
   archiveCurrentConversation: "封存目前對話",
   newConversationInMainRepo: "在主倉庫中新建對話",
+  newConversationInHomeDirectory: "在主目錄中新建對話",
   newConversationInNewWorktree: "在新工作樹中新建對話",
   createNewWorktree: "為此對話建立新的 Git 工作樹",
   setWorkingDirToRepoRoot: "將工作目錄設定為 git 儲存庫根目錄",
@@ -98,6 +105,7 @@ export const zhTW: TranslationKeys = {
   subagentIsWorking: "子代理正在工作...",
   running: "運行中",
   hideSubagents: "隱藏子代理",
+  terminalsPinnedHere: "個終端在此對話中",
   showSubagents: "顯示子代理",
   groupConversations: "對話分組",
   resortNow: "立即重新排序",
@@ -105,6 +113,12 @@ export const zhTW: TranslationKeys = {
   directory: "目錄",
   gitRepo: "Git 倉庫",
   other: "其他",
+  clearTagFilter: "全部清除",
+  searchOrTagPlaceholder: "搜尋，或用 tag: 篩選",
+  untagged: "無標籤",
+  noMatchingTags: "沒有符合的標籤",
+  noTagsToNarrow: "沒有可繼續縮小的標籤",
+  noConversationsMatchTags: "沒有符合這些標籤的對話",
   collapseSubagents: "收合子代理",
   expandSubagents: "展開子代理",
   collapseSidebar: "收合側邊欄",
@@ -137,6 +151,9 @@ export const zhTW: TranslationKeys = {
   effortLabel: "思考強度",
   effortAuto: "自動",
   modelSwitchBusy: "完成或停止目前回合以切換模型",
+  modelSwitchHint: "點擊以切換模型或推理強度",
+  cwdChangeHint: "點擊以變更工作目錄",
+  cwdChangeBusy: "完成或停止目前回合以變更目錄",
   customModelsGroup: "自訂模型",
   editModel: "編輯模型",
   loadingModels: "載入模型中...",
@@ -239,7 +256,11 @@ export const zhTW: TranslationKeys = {
   welcomeTitle: "Shelley Agent",
   welcomeSubtitle: "",
   welcomeMessage:
-    "Shelley 是一個運行在 {hostname} 上的代理。你可以讓 Shelley 幫你完成各種任務。若你使用 Shelley 建立了網站，可以透過 exe.dev 的代理功能（參見 {docsLink}）在 {proxyLink} 上存取。",
+    "Shelley 是一個運行在 {hostname} 上的代理。若你使用 Shelley 建立了網站，可以透過 exe.dev 的代理功能（參見 {docsLink}）在 {proxyLink} 上存取。Shelley 是{openSourceLink}的，並且{customizeLink}。",
+  welcomeMessageLocal:
+    "Shelley 是一個運行在 {hostname} 上的代理。Shelley 是{openSourceLink}的，並且{customizeLink}。",
+  welcomeOpenSource: "開源",
+  welcomeCustomize: "可以客製化",
   sendMessageToStart: "傳送訊息以開始對話。",
   noModelsTitle: "沒有可用的 AI 模型",
   noModelsExeNote: "Shelley 從 exe.dev 的 llm 整合取得模型。執行下列任一命令即可修復：",
@@ -257,6 +278,7 @@ export const zhTW: TranslationKeys = {
   editFileShortcut: "開啟檔案搜尋器",
   editFileShortcutFirefox: "Firefox 將此快速鍵保留給私密視窗——請改用命令面板 (Cmd/Ctrl+K)",
   openConversations: "開啟對話",
+  commandMenu: "命令選單",
   expandSidebar: "展開側邊欄",
 
   // Language

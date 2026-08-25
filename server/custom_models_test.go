@@ -14,6 +14,12 @@ import (
 	"shelley.exe.dev/llm/ant"
 )
 
+func TestValidReasoningMapAcceptsMax(t *testing.T) {
+	if err := validReasoningMap(`{"max":"max"}`); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestCustomModelWithThinking tests that the custom model test endpoint
 // correctly handles responses from Anthropic models with ThinkingLevel enabled.
 // When thinking is enabled, the first content block is a thinking block, not text.

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/models/modelsdev"
 )
 
 const (
@@ -86,6 +87,22 @@ func ClaudeModelName(userName string) string {
 }
 
 func (s *Service) Provider() string { return "anthropic" }
+
+func (s *Service) SupportsReasoning() bool {
+	caps, found := modelsdev.LookupReasoningCapabilities(s.URL, cmp.Or(s.Model, DefaultModel))
+	return !found || caps.Supported
+}
+
+// SupportedReasoningLevels advertises exact effort levels from models.dev.
+// Budget-token and unknown models return nil and retain the historical
+// standard-level fallback.
+func (s *Service) SupportedReasoningLevels() []llm.ThinkingLevel {
+	caps, found := modelsdev.LookupReasoningCapabilities(s.URL, cmp.Or(s.Model, DefaultModel))
+	if !found {
+		return nil
+	}
+	return append([]llm.ThinkingLevel(nil), caps.Levels...)
+}
 
 // SupportsServerSideWebSearch reports whether this service can run the
 // Anthropic server-side `web_search_20250305` tool. Only genuine Claude
@@ -796,15 +813,20 @@ func (s *Service) fromLLMRequest(r *llm.Request) *request {
 // MaxTokens for budget-style models so max_tokens > budget_tokens (an API
 // requirement).
 func applyAnthropicThinking(req *request, model string, level llm.ThinkingLevel, maxTokens int) {
+	adaptive := useAdaptiveThinking(model)
+	if adaptive {
+		caps, found := modelsdev.LookupReasoningCapabilities("", model)
+		if found && len(caps.Levels) > 0 {
+			level = llm.ClampThinkingLevel(level, caps.Levels)
+		} else if level == llm.ThinkingLevelMinimal {
+			// Historical fallback for adaptive models without exact metadata.
+			level = llm.ThinkingLevelLow
+		}
+	}
 	if level == llm.ThinkingLevelOff || level == llm.ThinkingLevelDefault {
 		return
 	}
-	if useAdaptiveThinking(model) {
-		// The adaptive-thinking API only accepts low/medium/high/xhigh/max;
-		// it rejects "minimal" outright.
-		if level == llm.ThinkingLevelMinimal {
-			level = llm.ThinkingLevelLow
-		}
+	if adaptive {
 		effort := level.ThinkingEffort()
 		// Adaptive-thinking models default thinking.display to "omitted", which
 		// returns thinking blocks with an empty thinking field. Request summarized

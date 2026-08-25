@@ -594,6 +594,38 @@ func (q *Queries) IncrementConversationGeneration(ctx context.Context, conversat
 	return i, err
 }
 
+const listAgentWorkingConversationIDs = `-- name: ListAgentWorkingConversationIDs :many
+SELECT conversation_id FROM conversations
+WHERE agent_working = TRUE
+ORDER BY updated_at DESC
+`
+
+// Conversations left with agent_working = TRUE by the previous process. Used
+// on the resume-after-upgrade path (see DB.ConsumeResumeAfterUpgrade) to find
+// the turns that were interrupted by the upgrade restart.
+func (q *Queries) ListAgentWorkingConversationIDs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listAgentWorkingConversationIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var conversation_id string
+		if err := rows.Scan(&conversation_id); err != nil {
+			return nil, err
+		}
+		items = append(items, conversation_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllConversations = `-- name: ListAllConversations :many
 SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages,
   -- preview_packed: locate the newest agent message that actually contains a

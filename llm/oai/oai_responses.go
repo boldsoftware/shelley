@@ -73,13 +73,14 @@ type responsesText struct {
 
 type responsesInputItem struct {
 	ID               string              `json:"id,omitempty"`                // for replayed output items
-	Type             string              `json:"type"`                        // "message", "reasoning", "function_call", "function_call_output"
+	Type             string              `json:"type"`                        // "message", "reasoning", "function_call", "custom_tool_call", outputs
 	Role             string              `json:"role,omitempty"`              // for messages: "user", "assistant"
 	Content          []responsesContent  `json:"content,omitempty"`           // for messages
 	CallID           string              `json:"call_id,omitempty"`           // for function_call and function_call_output
 	Name             string              `json:"name,omitempty"`              // for function_call
 	Arguments        string              `json:"arguments,omitempty"`         // for function_call
-	Output           string              `json:"output,omitempty"`            // for function_call_output
+	Input            string              `json:"input,omitempty"`             // for custom_tool_call
+	Output           string              `json:"output,omitempty"`            // for tool outputs
 	Summary          *[]responsesSummary `json:"summary,omitempty"`           // for reasoning; pointer preserves an empty array
 	EncryptedContent string              `json:"encrypted_content,omitempty"` // for reasoning
 }
@@ -107,10 +108,17 @@ type responsesImageDetail string
 const responsesImageDetailAuto responsesImageDetail = "auto"
 
 type responsesTool struct {
-	Type        string          `json:"type"` // "function" or provider-hosted tool type
-	Name        string          `json:"name,omitempty"`
-	Description string          `json:"description,omitempty"`
-	Parameters  json.RawMessage `json:"parameters,omitempty"`
+	Type        string                `json:"type"` // function, custom, or provider-hosted type
+	Name        string                `json:"name,omitempty"`
+	Description string                `json:"description,omitempty"`
+	Parameters  json.RawMessage       `json:"parameters,omitempty"`
+	Format      *responsesToolGrammar `json:"format,omitempty"`
+}
+
+type responsesToolGrammar struct {
+	Type       string `json:"type"`
+	Syntax     string `json:"syntax"`
+	Definition string `json:"definition"`
 }
 
 type responsesResponse struct {
@@ -133,6 +141,7 @@ type responsesOutputItem struct {
 	CallID           string             `json:"call_id,omitempty"`           // for function_call
 	Name             string             `json:"name,omitempty"`              // for function_call
 	Arguments        string             `json:"arguments,omitempty"`         // for function_call
+	Input            string             `json:"input,omitempty"`             // for custom_tool_call
 	Summary          []responsesSummary `json:"summary,omitempty"`           // for reasoning
 	EncryptedContent string             `json:"encrypted_content,omitempty"` // for reasoning
 	Action           *responsesAction   `json:"action,omitempty"`            // for web_search_call (queries)
@@ -219,8 +228,12 @@ func fromLLMMessageResponses(msg llm.Message) []responsesInputItem {
 			}
 		}
 
+		outputType := "function_call_output"
+		if tr.ToolName == "apply_patch" {
+			outputType = "custom_tool_call_output"
+		}
 		items = append(items, responsesInputItem{
-			Type:   "function_call_output",
+			Type:   outputType,
 			CallID: tr.ToolUseID,
 			Output: cmp.Or(toolResultContent, " "),
 		})
@@ -290,12 +303,15 @@ func fromLLMMessageResponses(msg llm.Message) []responsesInputItem {
 				})
 			case llm.ContentTypeToolUse:
 				flushMessage()
-				items = append(items, responsesInputItem{
-					Type:      "function_call",
-					CallID:    c.ID,
-					Name:      c.ToolName,
-					Arguments: string(c.ToolInput),
-				})
+				if c.ToolName == "apply_patch" {
+					var input struct {
+						Input string `json:"input"`
+					}
+					_ = json.Unmarshal(c.ToolInput, &input)
+					items = append(items, responsesInputItem{Type: "custom_tool_call", CallID: c.ID, Name: c.ToolName, Input: input.Input})
+				} else {
+					items = append(items, responsesInputItem{Type: "function_call", CallID: c.ID, Name: c.ToolName, Arguments: string(c.ToolInput)})
+				}
 			}
 		}
 		flushMessage()
@@ -314,12 +330,19 @@ func responsesImageContent(c llm.Content) responsesContent {
 
 // fromLLMToolResponses converts llm.Tool to Responses API tool format
 func fromLLMToolResponses(t *llm.Tool) responsesTool {
-	return responsesTool{
-		Type:        "function",
-		Name:        t.Name,
-		Description: t.Description,
-		Parameters:  t.InputSchema,
+	if t.CustomGrammar != "" {
+		return responsesTool{
+			Type:        "custom",
+			Name:        t.Name,
+			Description: t.Description,
+			Format: &responsesToolGrammar{
+				Type:       "grammar",
+				Syntax:     "lark",
+				Definition: t.CustomGrammar,
+			},
+		}
 	}
+	return responsesTool{Type: "function", Name: t.Name, Description: t.Description, Parameters: t.InputSchema}
 }
 
 // responsesInstructionsFromLLMSystem converts llm.SystemContent to the
@@ -413,13 +436,11 @@ func (s *ResponsesService) toLLMResponseFromResponses(resp *responsesResponse, h
 				ToolInput: inputJSON,
 			})
 		case "function_call":
-			// Convert function call to tool use
-			contents = append(contents, llm.Content{
-				ID:        item.CallID,
-				Type:      llm.ContentTypeToolUse,
-				ToolName:  item.Name,
-				ToolInput: json.RawMessage(item.Arguments),
-			})
+			contents = append(contents, llm.Content{ID: item.CallID, Type: llm.ContentTypeToolUse, ToolName: item.Name, ToolInput: json.RawMessage(item.Arguments)})
+			stopReason = llm.StopReasonToolUse
+		case "custom_tool_call":
+			input, _ := json.Marshal(map[string]string{"input": item.Input})
+			contents = append(contents, llm.Content{ID: item.CallID, Type: llm.ContentTypeToolUse, ToolName: item.Name, ToolInput: input})
 			stopReason = llm.StopReasonToolUse
 		}
 	}
@@ -483,6 +504,21 @@ func (s *ResponsesService) DefaultReasoningLevel() string {
 }
 
 func (s *ResponsesService) SupportsServerSideWebSearch() bool { return true }
+
+// SupportsReasoning reports the models.dev capability when known. Unknown
+// models retain the historical default of supporting reasoning controls.
+func (s *ResponsesService) SupportsReasoning() bool {
+	caps, found := modelReasoningCapabilities(s.ModelURL, cmp.Or(s.Model, DefaultModel))
+	return !found || caps.Supported
+}
+
+// SupportedReasoningLevels advertises exact effort levels from models.dev.
+// Nil means the model has no exact effort metadata and callers use the
+// historical provider fallback.
+func (s *ResponsesService) SupportedReasoningLevels() []llm.ThinkingLevel {
+	caps, found := modelReasoningCapabilities(s.ModelURL, cmp.Or(s.Model, DefaultModel))
+	return advertisedReasoningLevels(caps, found)
+}
 
 // SupportsImages reports whether this service accepts image inputs.
 // OpenAI Responses API supports images for vision models; set
@@ -585,24 +621,40 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 	//   2. s.ReasoningEffort (custom verbatim string from per-model config)
 	//   3. s.ThinkingLevel (service-level default)
 	level := llm.EffectiveThinkingLevel(s.ThinkingLevel, ir.ThinkingLevel)
+	levels := s.SupportedReasoningLevels()
+	genericEffort := false
 	var effort string
 	switch {
 	case ir.ReasoningEffort != "":
 		effort = ir.ReasoningEffort
 	case ir.ThinkingLevel == llm.ThinkingLevelOff:
-		effort = ""
+		if len(levels) > 0 {
+			effort = "none"
+			genericEffort = true
+		}
 	case ir.ThinkingLevel != llm.ThinkingLevelDefault:
 		effort = ir.ThinkingLevel.ThinkingEffort()
+		genericEffort = true
 	case s.ReasoningEffort != "":
 		effort = s.ReasoningEffort
 	case level != llm.ThinkingLevelOff:
 		effort = level.ThinkingEffort()
+		genericEffort = true
 	}
-	// gpt-5.x-codex rejects `reasoning.effort="minimal"` with HTTP 400;
-	// clamp to "low". Verbatim user-supplied values (s.ReasoningEffort) are
-	// intentionally NOT clamped.
-	if effort == "minimal" && effort != s.ReasoningEffort && strings.Contains(model.ModelName, "codex") {
-		effort = "low"
+	// Exact models.dev effort lists use the shared rounding rule. Without an
+	// exact list, preserve the historical Responses clamps. Provider-verbatim
+	// values from the service or request are never clamped.
+	if genericEffort && effort != "" {
+		if len(levels) > 0 {
+			effort = clampKnownReasoningEffort(effort, levels)
+		} else {
+			if effort == "minimal" && strings.Contains(model.ModelName, "codex") {
+				effort = "low"
+			}
+			if effort == "max" {
+				effort = "xhigh"
+			}
+		}
 	}
 	if effort != "" {
 		req.Reasoning = &responsesReasoning{Effort: effort}
@@ -654,6 +706,7 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 	retryStart := time.Now()
 	var errs error               // accumulated errors across all attempts
 	var lastErrSummary string    // short description of the most recent attempt failure
+	var lastErrStatus int        // HTTP status of the most recent attempt failure, 0 if none
 	var retryAfter time.Duration // hint from upstream Retry-After header, reset each attempt
 	for attempts := 0; ; attempts++ {
 		if attempts > 15 {
@@ -670,9 +723,9 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 				sleep = retryAfter
 			}
 			retryAfter = 0
-			slog.WarnContext(ctx, "responses request sleep before retry", "sleep", sleep, "attempts", attempts, "elapsed", time.Since(retryStart).Round(time.Second), "last_error", lastErrSummary)
+			slog.WarnContext(ctx, "responses request sleep before retry", "sleep", sleep, "attempts", attempts, "elapsed", time.Since(retryStart).Round(time.Second), "status", lastErrStatus, "last_error", lastErrSummary)
 			if ir.OnRetry != nil {
-				ir.OnRetry(llm.RetryEvent{Attempt: attempts + 1, Sleep: sleep, Err: lastErrSummary, Provider: "openai", Model: model.ModelName})
+				ir.OnRetry(llm.RetryEvent{Attempt: attempts + 1, Sleep: sleep, Err: lastErrSummary, Status: lastErrStatus, Provider: "openai", Model: model.ModelName})
 			}
 			select {
 			case <-time.After(sleep):
@@ -697,6 +750,7 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 		httpResp, err := httpc.Do(httpReq)
 		if err != nil {
 			lastErrSummary = "transport: " + llm.Truncate(err.Error(), 160)
+			lastErrStatus = 0
 			errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: %w", attempts+1, time.Now().Format(time.DateTime), err))
 			continue
 		}
@@ -704,14 +758,7 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 			body, readErr := io.ReadAll(httpResp.Body)
 			httpResp.Body.Close()
 			if readErr != nil {
-				if shouldRetryResponsesReadError(readErr) {
-					now := time.Now().Format(time.DateTime)
-					lastErrSummary = "read: " + llm.Truncate(readErr.Error(), 160)
-					slog.WarnContext(ctx, "responses_request_read_failed", "error", readErr, "url", fullURL, "model", model.ModelName)
-					errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: read response body (url=%s, model=%s): %w", attempts+1, now, fullURL, model.ModelName, readErr))
-					continue
-				}
-				return nil, errors.Join(errs, fmt.Errorf("attempt %d at %s: failed to read response body (url=%s, model=%s): %w", attempts+1, time.Now().Format(time.DateTime), fullURL, model.ModelName, readErr))
+				slog.WarnContext(ctx, "responses_request_read_failed", "error", readErr, "status_code", httpResp.StatusCode, "url", fullURL, "model", model.ModelName)
 			}
 
 			var apiErr responsesError
@@ -723,23 +770,41 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 			if apiErr.Message != "" {
 				errMessage = apiErr.Message
 			}
+			// io.ReadAll returns whatever it managed to read alongside the error, so
+			// a severed body still yields a (possibly empty) partial message. Keep it
+			// and note the truncation; the status code decides retryability below.
+			//
+			// The note deliberately omits readErr's text: it would embed transport
+			// phrases ("connection reset by peer") that loop.IsRetryableLLMError
+			// pattern-matches, flipping a terminal 4xx into a retryable one. The
+			// read error is already in the responses_request_read_failed log line.
+			if readErr != nil {
+				errMessage = strings.TrimSpace(errMessage + " [body truncated]")
+			}
 			retryErrMessage := llm.Truncate(errMessage, 512)
 			terminalErrMessage := llm.Truncate(errMessage, 4<<10)
 			now := time.Now().Format(time.DateTime)
 
+			// The status code is authoritative even when the body never arrived: a
+			// 502 whose explanation was cut off mid-read is still a transient
+			// gateway failure, and a 400 is still terminal. Classifying on the read
+			// error instead would retry unrecoverable client errors and give up on
+			// recoverable server ones.
 			switch {
 			case httpResp.StatusCode >= 500:
 				// Server errors are retryable regardless of whether the provider or
 				// gateway encoded the error as JSON or plain text.
 				retryAfter = llm.ParseRetryAfter(httpResp.Header.Get("Retry-After"))
-				lastErrSummary = fmt.Sprintf("status %d: %s", httpResp.StatusCode, llm.Truncate(errMessage, 160))
+				lastErrSummary = llm.Truncate(errMessage, 160)
+				lastErrStatus = httpResp.StatusCode
 				slog.WarnContext(ctx, "responses_request_failed", "error", retryErrMessage, "status_code", httpResp.StatusCode, "url", fullURL, "model", model.ModelName, "retry_after", retryAfter)
 				errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: status %d (url=%s, model=%s): %s", attempts+1, now, httpResp.StatusCode, fullURL, model.ModelName, retryErrMessage))
 				continue
 
 			case httpResp.StatusCode == http.StatusTooManyRequests:
 				retryAfter = llm.ParseRetryAfter(httpResp.Header.Get("Retry-After"))
-				lastErrSummary = "status 429 rate limited: " + llm.Truncate(errMessage, 160)
+				lastErrSummary = "rate limited: " + llm.Truncate(errMessage, 160)
+				lastErrStatus = httpResp.StatusCode
 				slog.WarnContext(ctx, "responses_request_rate_limited", "error", retryErrMessage, "url", fullURL, "model", model.ModelName, "retry_after", retryAfter)
 				errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: status %d (rate limited, url=%s, model=%s): %s", attempts+1, now, httpResp.StatusCode, fullURL, model.ModelName, retryErrMessage))
 				continue
@@ -761,6 +826,7 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 			if err != nil {
 				now := time.Now().Format(time.DateTime)
 				lastErrSummary = "stream: " + llm.Truncate(err.Error(), 160)
+				lastErrStatus = 0
 				slog.WarnContext(ctx, "responses_request_stream_failed", "error", err, "url", fullURL, "model", model.ModelName)
 				errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: stream response body (url=%s, model=%s): %w", attempts+1, now, fullURL, model.ModelName, err))
 				continue
@@ -770,19 +836,23 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 			body, err := io.ReadAll(httpResp.Body)
 			httpResp.Body.Close()
 			if err != nil {
-				if shouldRetryResponsesReadError(err) {
-					now := time.Now().Format(time.DateTime)
-					lastErrSummary = "read: " + llm.Truncate(err.Error(), 160)
-					slog.WarnContext(ctx, "responses_request_read_failed", "error", err, "url", fullURL, "model", model.ModelName)
-					errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: read response body (url=%s, model=%s): %w", attempts+1, now, fullURL, model.ModelName, err))
-					continue
-				}
-				return nil, errors.Join(errs, fmt.Errorf("attempt %d at %s: failed to read response body (url=%s, model=%s): %w", attempts+1, time.Now().Format(time.DateTime), fullURL, model.ModelName, err))
+				// A severed read of an otherwise-successful response is a
+				// transport hiccup, not a verdict on the request: retry it. The SSE
+				// branch above retries any stream error, and the two branches
+				// differ only in framing, so this must not be stricter.
+				now := time.Now().Format(time.DateTime)
+				lastErrSummary = "read: " + llm.Truncate(err.Error(), 160)
+				lastErrStatus = 0
+				slog.WarnContext(ctx, "responses_request_read_failed", "error", err, "url", fullURL, "model", model.ModelName)
+				errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: read response body (url=%s, model=%s): %w", attempts+1, now, fullURL, model.ModelName, err))
+				continue
 			}
 
 			if err := json.Unmarshal(body, &resp); err != nil {
 				if shouldRetryResponsesDecodeError(err, body) {
 					now := time.Now().Format(time.DateTime)
+					lastErrSummary = "decode: " + llm.Truncate(err.Error(), 160)
+					lastErrStatus = 0
 					slog.WarnContext(ctx, "responses_request_decode_failed", "error", err, "url", fullURL, "model", model.ModelName, "body_length", len(body))
 					errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: decode response body (url=%s, model=%s, bytes=%d): %w", attempts+1, now, fullURL, model.ModelName, len(body), err))
 					continue
@@ -837,10 +907,6 @@ func withoutOpenAIResponsesReasoning(messages []llm.Message) []llm.Message {
 		filtered[i].Content = content
 	}
 	return filtered
-}
-
-func shouldRetryResponsesReadError(err error) bool {
-	return errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 type responsesSSEEvent struct {
@@ -1064,8 +1130,11 @@ func shouldRetryResponsesDecodeError(err error, body []byte) bool {
 	return false
 }
 
-func (s *ResponsesService) UseSimplifiedPatch() bool {
-	return s.Model.UseSimplifiedPatch
+func (s *ResponsesService) PatchProfile() string {
+	if s.isOpenAIResponses() && s.Model.SupportsApplyPatch {
+		return "codex_apply_patch"
+	}
+	return "flat"
 }
 
 // ConfigDetails returns configuration information for logging

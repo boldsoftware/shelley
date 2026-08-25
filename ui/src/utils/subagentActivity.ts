@@ -10,20 +10,8 @@
 //      or the trailing agent text
 //   4. the conversation-list preview (survives refresh; no messages needed)
 import type { Message, ToolProgress, LLMContent } from "../types";
+import { lastLine } from "./lastLine";
 import { toolEmoji, toolHeadline } from "./toolMeta";
-
-const MAX_LEN = 120;
-
-/** Last non-empty line of a blob of text, truncated to MAX_LEN. */
-export function activityTail(text: string): string {
-  const lines = text.split(/\r?\n/);
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    return line.length > MAX_LEN ? line.slice(0, MAX_LEN) + "\u2026" : line;
-  }
-  return "";
-}
 
 export interface SubagentActivityInput {
   /** In-flight assistant text (messageStore transient streamingText). */
@@ -64,7 +52,7 @@ function lastMessageActivity(messages: Message[]): string {
         return `${toolEmoji(c.ToolName, c.ToolInput)} ${headline}`;
       }
       if (c.Type === 2 && c.Text?.trim()) {
-        return activityTail(c.Text);
+        return lastLine(c.Text);
       }
     }
   }
@@ -74,7 +62,7 @@ function lastMessageActivity(messages: Message[]): string {
 /** One-line description of what a subagent is doing right now. */
 export function subagentActivity(input: SubagentActivityInput): string {
   if (input.streamingText) {
-    const tail = activityTail(input.streamingText);
+    const tail = lastLine(input.streamingText);
     if (tail) return tail;
   }
   if (input.toolProgress) {
@@ -85,7 +73,7 @@ export function subagentActivity(input: SubagentActivityInput): string {
     const entries = Object.values(input.toolProgress);
     for (let i = entries.length - 1; i >= 0; i--) {
       const p = entries[i];
-      const tail = activityTail(p.output || "");
+      const tail = lastLine(p.output || "");
       if (tail) return `${toolEmoji(p.tool_name)} ${tail}`;
     }
   }
@@ -94,7 +82,7 @@ export function subagentActivity(input: SubagentActivityInput): string {
     if (fromMessages) return fromMessages;
   }
   if (input.preview) {
-    return activityTail(input.preview);
+    return lastLine(input.preview);
   }
   return "";
 }

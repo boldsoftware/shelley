@@ -211,7 +211,41 @@ test.describe('Conversation cache', () => {
     expect(stats['load.full_rest'] ?? 0).toBe(0);
   });
 
-  test('a stalled incremental refresh reveals and restores hot cached history', async ({ page, request }) => {
+  test('page reload restores a non-bottom reading position', async ({ page, request }) => {
+    const generated = await request.post('/debug/loremipsum?json=1', {
+      form: { size: '15', model: 'predictable' }
+    });
+    expect(generated.ok()).toBeTruthy();
+    const { conversation_id: conversationId } = await generated.json();
+    const slug = `loremipsum-15turns-${conversationId}`;
+
+    await page.goto(`/c/${slug}`);
+    await expect(page.getByTestId('message-input')).toBeVisible({ timeout: 30000 });
+    await expect.poll(() => page.getByTestId('message').count()).toBeGreaterThan(20);
+
+    const restoredScrollTop = 1000;
+    const messagesContainer = page.locator('.messages-container');
+    await messagesContainer.evaluate((element, top) => {
+      element.scrollTop = top;
+      element.dispatchEvent(new Event('scroll'));
+    }, restoredScrollTop);
+    await expect.poll(() => page.evaluate(
+      (id) => localStorage.getItem(`shelley_scroll_${id}`),
+      conversationId
+    )).toBe(String(restoredScrollTop));
+
+    await page.reload();
+    await expect(page.getByTestId('message-input')).toBeVisible({ timeout: 30000 });
+    await expect.poll(() => page.getByTestId('message').count()).toBeGreaterThan(20);
+    await expect.poll(() => messagesContainer.evaluate(
+      (element) => element.scrollTop
+    )).toBeGreaterThan(restoredScrollTop - 100);
+    await expect.poll(() => messagesContainer.evaluate(
+      (element) => element.scrollTop
+    )).toBeLessThan(restoredScrollTop + 100);
+  });
+
+  test('a stalled incremental refresh reveals hot cached history at the bottom', async ({ page, request }) => {
     await page.addInitScript(() => {
       const nativeEventSource = window.EventSource;
       const sources: EventSource[] = [];
@@ -293,15 +327,15 @@ test.describe('Conversation cache', () => {
       await selectConversation(page, slug);
       await expect.poll(() => sawIncremental).toBeTruthy();
       // The network tail is still blocked, but the complete hot-memory prefix
-      // must already be usable, unobscured, and restored to its saved offset.
+      // must already be usable and unobscured. Explicit conversation-list
+      // selection opens at the latest content rather than restoring an old
+      // reading offset.
       await expect.poll(() => page.getByTestId('message').count()).toBeGreaterThan(20);
       await expect(page.locator('.conversation-loading-overlay')).toHaveCount(0);
       await expect.poll(() => messagesContainer.evaluate(
-        (element) => element.scrollTop
-      )).toBeGreaterThan(restoredScrollTop - 100);
-      await expect.poll(() => messagesContainer.evaluate(
-        (element) => element.scrollTop
-      )).toBeLessThan(restoredScrollTop + 100);
+        (element) => element.scrollHeight - element.clientHeight - element.scrollTop
+      )).toBeLessThan(120);
+      await expect(page.locator('.scroll-to-bottom-button')).toHaveCount(0);
     } finally {
       releaseTail();
     }

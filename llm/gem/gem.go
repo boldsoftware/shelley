@@ -14,6 +14,7 @@ import (
 
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/gem/gemini"
+	"shelley.exe.dev/models/modelsdev"
 )
 
 const (
@@ -382,29 +383,38 @@ func (s *Service) thinkingConfig(req *llm.Request) *gemini.ThinkingConfig {
 
 	model := cmp.Or(s.Model, DefaultModel)
 	if strings.HasPrefix(model, "gemini-3") {
+		caps, found := modelsdev.LookupReasoningCapabilities(s.URL, model)
 		var effort string
+		genericLevel := llm.ThinkingLevelDefault
 		switch {
 		case req != nil && req.ReasoningEffort != "":
 			effort = req.ReasoningEffort
-		case reqLevel == llm.ThinkingLevelOff:
-			// Gemini doesn't really have an "off" for 3.x; smallest is "low".
-			effort = "low"
 		case reqLevel != llm.ThinkingLevelDefault:
-			effort = reqLevel.ThinkingEffort()
+			genericLevel = reqLevel
 		case s.ReasoningEffort != "":
 			effort = s.ReasoningEffort
 		default:
-			effort = level.ThinkingEffort()
+			genericLevel = level
+		}
+		includeThoughts := genericLevel != llm.ThinkingLevelOff && effort != "none" && effort != "off"
+		if effort == "" && genericLevel != llm.ThinkingLevelDefault {
+			if found && len(caps.Levels) > 0 {
+				genericLevel = llm.ClampThinkingLevel(genericLevel, caps.Levels)
+			}
+			if genericLevel == llm.ThinkingLevelOff {
+				// Historical fallback: Gemini 3 has no explicit off value.
+				effort = "low"
+			} else {
+				effort = genericLevel.ThinkingEffort()
+			}
+			if len(caps.Levels) == 0 && (effort == "xhigh" || effort == "max") {
+				effort = "high"
+			}
 		}
 		if effort == "" {
 			return nil
 		}
-		// Gemini 3.x only accepts low/medium/high (plus, on some snapshots,
-		// minimal). xhigh always errors with HTTP 400; clamp to high.
-		if effort == "xhigh" {
-			effort = "high"
-		}
-		return &gemini.ThinkingConfig{ThinkingLevel: effort, IncludeThoughts: true}
+		return &gemini.ThinkingConfig{ThinkingLevel: effort, IncludeThoughts: includeThoughts}
 	}
 
 	// Gemini 2.5 (and earlier) uses an integer thinkingBudget. Explicit off
@@ -591,6 +601,22 @@ func (s *Service) DefaultReasoningLevel() string {
 		return s.ThinkingLevel.Name()
 	}
 	return ""
+}
+
+func (s *Service) SupportsReasoning() bool {
+	caps, found := modelsdev.LookupReasoningCapabilities(s.URL, cmp.Or(s.Model, DefaultModel))
+	return !found || caps.Supported
+}
+
+// SupportedReasoningLevels advertises exact effort levels from models.dev.
+// Budget-token and unknown models return nil and retain the historical
+// standard-level fallback.
+func (s *Service) SupportedReasoningLevels() []llm.ThinkingLevel {
+	caps, found := modelsdev.LookupReasoningCapabilities(s.URL, cmp.Or(s.Model, DefaultModel))
+	if !found {
+		return nil
+	}
+	return append([]llm.ThinkingLevel(nil), caps.Levels...)
 }
 
 // SupportsImages reports whether this service accepts image inputs.

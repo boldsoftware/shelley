@@ -432,6 +432,14 @@ UPDATE conversations
 SET agent_working = FALSE
 WHERE agent_working = TRUE;
 
+-- name: ListAgentWorkingConversationIDs :many
+-- Conversations left with agent_working = TRUE by the previous process. Used
+-- on the resume-after-upgrade path (see DB.ConsumeResumeAfterUpgrade) to find
+-- the turns that were interrupted by the upgrade restart.
+SELECT conversation_id FROM conversations
+WHERE agent_working = TRUE
+ORDER BY updated_at DESC;
+
 -- name: SearchConversationsFTSSnippets :many
 -- Best snippet per message for the given conversation IDs, ordered by
 -- FTS rank so the caller can keep the first row seen per conversation.

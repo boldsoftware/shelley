@@ -10,6 +10,7 @@ export const fr: TranslationKeys = {
   // Chat Header & Actions
   newConversation: "Nouvelle conversation",
   moreOptions: "Plus d'options",
+  actions: "Actions",
   conversations: "Conversations",
 
   // Overflow Menu
@@ -19,6 +20,11 @@ export const fr: TranslationKeys = {
   archiveConversation: "Archiver la conversation",
   exportConversation: "Exporter la conversation",
   checkForNewVersion: "Vérifier les mises à jour",
+  conversationView: "Affichage de la conversation",
+  seeAllMessages: "Tout afficher",
+  seeEndOfTurnMessagesOnly: "Afficher uniquement les messages de fin de tour",
+  brevity: "Concision",
+  look: "Apparence",
 
   // Theme
   system: "Système",
@@ -72,6 +78,7 @@ export const fr: TranslationKeys = {
   archiveConversationAction: "Archiver la conversation",
   archiveCurrentConversation: "Archiver la conversation en cours",
   newConversationInMainRepo: "Nouvelle conversation dans le dépôt principal",
+  newConversationInHomeDirectory: "Nouvelle conversation dans le répertoire personnel",
   newConversationInNewWorktree: "Nouvelle conversation dans un nouveau Worktree",
   createNewWorktree: "Créer un nouveau worktree Git pour cette conversation",
   setWorkingDirToRepoRoot: "Définir le répertoire de travail sur la racine du dépôt git",
@@ -100,6 +107,7 @@ export const fr: TranslationKeys = {
   subagentIsWorking: "Le sous-agent travaille...",
   running: "en cours",
   hideSubagents: "Masquer les sous-agents",
+  terminalsPinnedHere: "terminaux dans cette conversation",
   showSubagents: "Afficher les sous-agents",
   groupConversations: "Grouper les conversations",
   resortNow: "Trier maintenant",
@@ -107,6 +115,12 @@ export const fr: TranslationKeys = {
   directory: "Répertoire",
   gitRepo: "Dépôt Git",
   other: "Autre",
+  clearTagFilter: "Tout effacer",
+  searchOrTagPlaceholder: "Rechercher, ou tag: pour filtrer",
+  untagged: "Sans étiquette",
+  noMatchingTags: "Aucune étiquette correspondante",
+  noTagsToNarrow: "Plus rien à affiner",
+  noConversationsMatchTags: "Aucune conversation ne correspond à ces étiquettes",
   collapseSubagents: "Réduire les sous-agents",
   expandSubagents: "Développer les sous-agents",
   collapseSidebar: "Réduire la barre latérale",
@@ -139,6 +153,9 @@ export const fr: TranslationKeys = {
   effortLabel: "Effort de raisonnement",
   effortAuto: "auto",
   modelSwitchBusy: "Terminez ou arrêtez le tour en cours pour changer de modèle",
+  modelSwitchHint: "Cliquez pour changer de modèle ou d'effort de raisonnement",
+  cwdChangeHint: "cliquez pour changer le répertoire de travail",
+  cwdChangeBusy: "Terminez ou arrêtez le tour en cours pour changer de répertoire",
   customModelsGroup: "Modèles personnalisés",
   editModel: "Modifier le modèle",
   loadingModels: "Chargement des modèles...",
@@ -243,7 +260,11 @@ export const fr: TranslationKeys = {
   welcomeTitle: "Shelley Agent",
   welcomeSubtitle: "",
   welcomeMessage:
-    "Shelley est un agent qui s'exécute sur {hostname}. Vous pouvez demander à Shelley de faire des choses. Si vous créez un site web avec Shelley, vous pouvez utiliser les fonctionnalités de proxy d'exe.dev (voir {docsLink}) pour y accéder via {proxyLink}.",
+    "Shelley est un agent qui s'exécute sur {hostname}. Si vous créez un site web avec Shelley, vous pouvez utiliser les fonctionnalités de proxy d'exe.dev (voir {docsLink}) pour y accéder via {proxyLink}. Shelley est {openSourceLink} et {customizeLink}.",
+  welcomeMessageLocal:
+    "Shelley est un agent qui s'exécute sur {hostname}. Shelley est {openSourceLink} et {customizeLink}.",
+  welcomeOpenSource: "open source",
+  welcomeCustomize: "personnalisable",
   sendMessageToStart: "Envoyez un message pour démarrer la conversation.",
   noModelsTitle: "Aucun modèle IA disponible",
   noModelsExeNote:
@@ -263,6 +284,7 @@ export const fr: TranslationKeys = {
   editFileShortcutFirefox:
     "Firefox réserve ce raccourci pour une fenêtre privée — utilisez la palette de commandes (Cmd/Ctrl+K)",
   openConversations: "Ouvrir les conversations",
+  commandMenu: "Menu de commandes",
   expandSidebar: "Développer la barre latérale",
 
   // Language

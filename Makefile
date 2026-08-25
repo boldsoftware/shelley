@@ -1,9 +1,19 @@
 # Shelley Makefile
 
-.PHONY: build build-custom build-linux-aarch64 build-linux-x86 test test-go test-e2e ui serve clean help templates demo
+.PHONY: build build-custom build-linux-aarch64 build-linux-x86 test test-go test-e2e ui serve clean help templates demo exe-scroll exe-scroll-all
 
 # Default target
 all: build
+
+# Download the pinned exe-scroll release for the current build target. The
+# fetcher caches immutable, SHA-256-verified assets outside the worktree.
+exe-scroll:
+	@python3 scripts/fetch-exe-scroll.py --os "$${GOOS:-$$(go env GOOS)}" --arch "$${GOARCH:-$$(go env GOARCH)}"
+
+# GoReleaser cross-builds all four targets from one checkout, so all matching
+# embed files must be present before it starts compiling.
+exe-scroll-all:
+	@python3 scripts/fetch-exe-scroll.py --all --wait 900
 
 # Build templates into tarballs
 templates:
@@ -13,7 +23,7 @@ templates:
 	done
 
 # Build the UI and Go binary
-build: ui templates
+build: exe-scroll ui templates
 	@echo "Building Shelley..."
 	go build -o bin/shelley ./cmd/shelley
 
@@ -22,7 +32,7 @@ build: ui templates
 # merge-base with origin/main) and marks the build as customized, so the
 # version dialog knows the build has diverged from mainline and offers
 # rebase-style upgrades instead of binary self-updates.
-build-custom: ui templates
+build-custom: exe-scroll ui templates
 	@set -e; \
 	CANON="$$HOME/.config/shelley/shelley-customization"; \
 	if [ "$$(pwd -P)" != "$$(cd "$$CANON" 2>/dev/null && pwd -P)" ]; then \
@@ -51,16 +61,19 @@ build-linux: ui templates
 		aarch64|arm64) GOARCH=arm64 ;; \
 		*) echo "Unsupported architecture: $$ARCH" && exit 1 ;; \
 	esac; \
+	GOOS=linux GOARCH=$$GOARCH $(MAKE) exe-scroll; \
 	GOOS=linux GOARCH=$$GOARCH go build -o bin/shelley-linux ./cmd/shelley
 
 # Build for Linux ARM64
 build-linux-aarch64: ui templates
 	@echo "Building Shelley for Linux ARM64..."
+	@GOOS=linux GOARCH=arm64 $(MAKE) exe-scroll
 	GOOS=linux GOARCH=arm64 go build -o bin/shelley-linux-aarch64 ./cmd/shelley
 
 # Build for Linux x86_64
 build-linux-x86: ui templates
 	@echo "Building Shelley for Linux x86_64..."
+	@GOOS=linux GOARCH=amd64 $(MAKE) exe-scroll
 	GOOS=linux GOARCH=amd64 go build -o bin/shelley-linux-x86 ./cmd/shelley
 
 # Build UI
@@ -68,7 +81,7 @@ ui:
 	@cd ui && pnpm install --frozen-lockfile --silent && pnpm run --silent build
 
 # Run Go tests
-test-go: ui
+test-go: exe-scroll ui
 	@echo "Running Go tests..."
 	go test -v ./...
 

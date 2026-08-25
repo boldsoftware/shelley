@@ -10,6 +10,10 @@ export interface EphemeralTerminal {
   command: string;
   cwd: string;
   createdAt: Date;
+  // conversationId is the conversation that owns this terminal. null means
+  // global: the terminal shows up in every conversation. Terminals opened from
+  // /new (where there is no conversation yet) start global.
+  conversationId: string | null;
   // termId is the server-side dtach session id. Set once the websocket reports
   // "attached". When reconnecting to a known session, set this up front so the
   // websocket re-attaches rather than spawning a new session.

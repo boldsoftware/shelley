@@ -273,10 +273,11 @@ func (t *OutputIframeTool) run(ctx context.Context, input outputIframeInput) llm
 		return llm.ErrorfToolOut("path is required")
 	}
 
-	// Resolve the path relative to working directory
+	// Resolve every relative path against one working-directory snapshot.
+	wd := t.WorkingDir.Get()
 	path := input.Path
 	if !filepath.IsAbs(path) {
-		path = filepath.Join(t.WorkingDir.Get(), path)
+		path = filepath.Join(wd, path)
 	}
 
 	// Read the main HTML file
@@ -290,7 +291,7 @@ func (t *OutputIframeTool) run(ctx context.Context, input outputIframeInput) llm
 	for name, filePath := range input.Files {
 		// Resolve relative paths
 		if !filepath.IsAbs(filePath) {
-			filePath = filepath.Join(t.WorkingDir.Get(), filePath)
+			filePath = filepath.Join(wd, filePath)
 		}
 		content, err := os.ReadFile(filePath)
 		if err != nil {

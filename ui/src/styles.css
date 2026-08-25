@@ -65,6 +65,21 @@ body {
   --warning-bg: #fffbeb;
   --warning-border: #fcd34d;
   --warning-text: #92400e;
+  /* Ramp for the context-usage token count: the number warms up as the
+     conversation grows (see .context-usage-label-tokens-*). Its own scale
+     rather than reusing --warning-text, which is tuned for text on
+     --warning-bg, not for a lone number on the status bar. Contrast climbs
+     with each step and every step out-contrasts the --text-secondary the
+     count wears when it is plain, so escalating is never a fade.
+
+     The top step follows the theme's error color, because that is what
+     "alarm" looks like everywhere else in the app. The indirection re-resolves
+     per theme because .dark lands on <html>, the same element these are
+     declared on, so its --error-text is the one substituted here. The two
+     lower steps have no such stand-in and are restated in .dark below. */
+  --context-usage-warn: #a16207;
+  --context-usage-high: #c2410c;
+  --context-usage-critical: var(--error-text);
   --blue-bg: #eff6ff;
   --blue-border: #bfdbfe;
   --blue-text: #1e40af;
@@ -103,6 +118,12 @@ body {
   --warning-bg: rgba(251, 191, 36, 0.15);
   --warning-border: #fbbf24;
   --warning-text: #fcd34d;
+  /* Dark counterparts: the light ramp's deeper shades would sink into the bar,
+     so these run lighter with each step instead of darker. Same invariants —
+     climbing contrast, all above the plain count's. (The top step needs no
+     entry: it follows --error-text, overridden above.) */
+  --context-usage-warn: #d4a017;
+  --context-usage-high: #fca55c;
   --blue-bg: rgba(59, 130, 246, 0.1);
   --blue-border: rgba(59, 130, 246, 0.3);
   --blue-text: #93c5fd;
@@ -724,6 +745,147 @@ body {
   color: var(--primary);
 }
 
+/* Tag filter: the `tag:` dropdown under the drawer search box, and the
+   clickable tag chips on each row. */
+/* Anchored to the search bar, which is `position: relative`, and matched to
+   the input's width so it reads as that input's autocomplete. */
+.tag-filter-menu {
+  position: absolute;
+  top: 100%;
+  left: 1rem;
+  right: 1rem;
+  z-index: 50;
+  margin-top: -0.25rem;
+  padding: 0.375rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  animation: tagFilterMenuIn 120ms ease-out;
+}
+
+@keyframes tagFilterMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The row tag editor's suggestion dropdown reuses the `tag:` menu styling,
+   but it is teleported to <body> to escape the drawer's overflow, so it is
+   positioned in viewport coordinates (fixed) rather than anchored to the
+   search bar. */
+.tag-editor-menu {
+  position: fixed;
+  left: 0;
+  right: auto;
+  top: 0;
+  margin-top: 0;
+  min-width: 10rem;
+}
+
+.tag-filter-options {
+  margin-top: 0.25rem;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.tag-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: none;
+  border-radius: 0.25rem;
+  background: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tag-filter-option.highlighted,
+.tag-filter-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.tag-filter-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "Untagged" is a state, not a tag: set apart so it does not read as a tag
+   named "untagged". */
+.tag-filter-option-untagged {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* How many conversations remain if you add this tag. */
+.tag-filter-option-count {
+  flex-shrink: 0;
+  min-width: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.tag-filter-option.highlighted .tag-filter-option-count,
+.tag-filter-option:hover .tag-filter-option-count {
+  background: var(--bg-base);
+}
+
+.tag-filter-menu-empty {
+  padding: 0.5rem 0.4rem 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+/* Row chips toggle the filter. They grow a hit area, so the row is pulled
+   back by that padding to keep the first `#` optically flush with the title
+   above it; editing chips are unpadded and stay put. */
+.conversation-tags:not(.conversation-tags-editing) {
+  margin-left: -0.3rem;
+}
+
+.conversation-tag-filterable {
+  padding: 0.05rem 0.3rem;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.conversation-tag-filterable:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.conversation-tag-filterable.conversation-tag-filter-on {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  font-weight: 600;
+}
+
+.drawer-empty-state-action {
+  margin-top: 0.625rem;
+}
+
 /* Conversation Groups */
 .conversation-group {
   margin-bottom: 0.25rem;
@@ -856,6 +1018,38 @@ body {
   min-width: 0;
 }
 
+/* Terminal count on drawer rows: shown when a conversation has more than one
+   pinned terminal. Sits at the right edge of the meta row, next to the
+   subagent badge when both are present. */
+.conversation-terminal-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  font-size: 0.75rem;
+  padding: 0 0.25rem;
+  border-radius: 0.25rem;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* When both badges are shown, only the first one should push right. */
+.conversation-terminal-count + .subagent-count-badge {
+  margin-left: 0;
+}
+
+.conversation-terminal-count-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.conversation-item.active .conversation-terminal-count {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.8);
+}
+
 .subagent-count-badge {
   display: inline-flex;
   align-items: center;
@@ -908,6 +1102,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  /* Booked height of a never-laid-out chunk. Shared by .messages-chunk's
+     contain-intrinsic-size and .messages-chunk-pending's fixed height: the
+     tail-first placeholder must book exactly the estimate for
+     placeholder→content swaps to be height-neutral. */
+  --messages-chunk-estimate: 4000px;
 }
 
 /* Off-screen rendering containment. Applied per *chunk* of ~50 rendered rows
@@ -924,8 +1123,29 @@ body {
   gap: 0.25rem;
   content-visibility: auto;
   /* ~50 rows x 80px estimate; `auto` remembers the real laid-out size after
-     first paint so the estimate only matters for never-visited chunks. */
-  contain-intrinsic-size: auto 4000px;
+     first paint so the estimate only matters for never-visited chunks. The
+     estimate is systematically low (real chunks measure ~7000px median), and
+     when real layout corrects it the browser clamps scrollTop — WebKit fires
+     that clamp's scroll event before the ResizeObserver's report, which the
+     scroll code must compensate for. Trailing chunks (--live) opt out: they
+     hold the streaming tail the user is actually watching, so skipping buys
+     nothing there and estimates would poison the follow math. */
+  contain-intrinsic-size: auto var(--messages-chunk-estimate);
+}
+
+.messages-chunk--live {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
+/* Tail-first mounting placeholder (PendingChunk.vue): stands in for one
+   not-yet-mounted .messages-chunk at exactly its pre-layout booked height
+   (the contain-intrinsic-size estimate above), so mounting the real chunk in
+   the background is height-neutral. */
+.messages-chunk-pending {
+  height: var(--messages-chunk-estimate);
+  flex: none;
+  contain: strict;
 }
 
 .messages-bottom-sentinel {
@@ -1390,6 +1610,15 @@ body {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* ToolStatusIcon: the ✓/✗ in a tool card header. The colour comes from the
+   per-card .*-success / .*-error class the caller passes; this only handles
+   the box, so the glyph sits on the text baseline like the emoji beside it. */
+.tool-status-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .tool-success {
   color: var(--success-text);
   font-size: 0.875rem;
@@ -1782,57 +2011,49 @@ body {
 
 .patch-tool-success {
   color: var(--success-text);
-  font-size: 0.875rem;
   flex-shrink: 0;
 }
 
 .patch-tool-error {
   color: var(--text-secondary);
-  font-size: 0.875rem;
   flex-shrink: 0;
 }
 
 .patch-tool-header-controls {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.125rem;
   flex-shrink: 0;
 }
 
-.patch-tool-toggle {
+/* Header icon buttons (open in editor / diff mode / expand). One shared look
+   across all three: a quiet secondary-colour glyph with a soft square hover
+   target, using the same hover greys as .btn-icon-sm elsewhere. Kept at full
+   opacity rather than dimmed-until-hover so the glyphs stay legible (and meet
+   contrast) on touch devices, which have no hover. */
+.patch-tool-icon-btn {
   background: none;
   border: none;
+  border-radius: 0.375rem;
   cursor: pointer;
-  padding: 0.25rem;
+  padding: 0.3125rem;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
   flex-shrink: 0;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 
-.patch-tool-toggle:hover {
+.patch-tool-icon-btn:hover {
   color: var(--text-primary);
+  background: var(--gray-200);
 }
 
-.patch-tool-diff-mode-toggle {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 0.25rem;
-  cursor: pointer;
-  padding: 0.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-  transition: all 0.15s ease;
-}
-
-.patch-tool-diff-mode-toggle:hover {
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-  border-color: var(--text-tertiary);
+.dark .patch-tool-icon-btn:hover {
+  background: var(--gray-600);
 }
 
 .patch-tool-details {
@@ -1955,6 +2176,79 @@ body {
 .patch-tool-diffs-container diffs-container {
   display: block;
   contain: content;
+}
+
+.patch-tool-file-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.patch-file-diff {
+  min-width: 0;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--border);
+}
+
+.patch-file-diff:last-child {
+  border-bottom: 0;
+}
+
+.patch-file-diff-header {
+  min-height: 2.125rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.patch-file-diff-header code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-primary);
+}
+
+.patch-file-status {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.patch-file-status-modified {
+  background: #d99c19;
+}
+
+.patch-file-status-added {
+  background: #36a761;
+}
+
+.patch-file-status-deleted {
+  background: #d65b5b;
+}
+
+.patch-file-stats {
+  display: flex;
+  gap: 0.375rem;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.patch-file-additions {
+  color: var(--success-text);
+}
+
+.patch-file-deletions {
+  color: var(--error-text);
 }
 
 /* Screenshot Tool */
@@ -4160,6 +4454,8 @@ svg {
      rightward from its left edge. Anchoring to the right overflowed off the
      left viewport edge and got clipped. */
   left: 0;
+  /* Kept in sync with POPOVER_GAP in ChatStatusContent.vue, which subtracts it
+     from the room above the gear when it caps max-height. */
   margin-bottom: 4px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -4455,14 +4751,14 @@ svg {
   font-weight: 500;
 }
 
-.directory-picker-git-root-row {
+.directory-picker-shortcuts {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   margin-bottom: 0.5rem;
 }
 
-.directory-picker-git-root-btn {
+.directory-picker-shortcut {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -4477,16 +4773,16 @@ svg {
   text-align: left;
 }
 
-.directory-picker-git-root-btn:hover {
+.directory-picker-shortcut:hover {
   background: var(--bg-tertiary);
   border-color: var(--accent-color, #f97316);
 }
 
-.directory-picker-git-root-btn .directory-picker-icon {
+.directory-picker-shortcut .directory-picker-icon {
   flex-shrink: 0;
 }
 
-.directory-picker-git-root-path {
+.directory-picker-shortcut-path {
   color: var(--text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4735,11 +5031,53 @@ svg {
    flex-shrink: 0). flex-shrink is weighted by base size, so the long cwd
    already absorbs most of any deficit — the explicit 3 states the intent
    rather than leaving it emergent, and keeps the model name legible longer.
-   direction: rtl ellipsizes the root, keeping the leaf directory visible. */
+
+   The segment is a button (it opens the directory picker) stripped back to
+   text; the vertical padding/negative margin pair gives it a 24px hit target
+   without moving the layout, as on the token count beside it. */
 .status-readout-cwd {
   flex-shrink: 3;
   min-width: 0;
   max-width: 60ch;
+  display: flex;
+  padding: 5px 0;
+  margin: -5px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.status-readout-cwd:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.status-readout-cwd:focus-visible {
+  outline: 2px solid var(--blue-text);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+/* Disabled while the agent works (the server refuses a mid-turn move). Same
+   treatment as the inline model picker: dim rather than grey out — it is still
+   the readout — drop the pointer cursor, and retract the underline so it stops
+   inviting a click. The tooltip on the button says why. */
+.status-readout-cwd:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.status-readout-cwd:disabled .status-readout-affordance {
+  text-decoration-line: none;
+}
+
+/* direction: rtl ellipsizes the root, keeping the leaf directory visible.
+   On the inner span, not the button: an rtl flex container would also flip the
+   order of its children. */
+.status-readout-cwd-path {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4806,26 +5144,15 @@ svg {
   }
 }
 
-/* Wrapper holding the popover and its anchor. min-width: 0 because a block-level
-   flex item defaults to min-width: auto, which floors it at its content width;
-   the token count itself never shrinks (see .context-usage-label-tokens), but a
+/* Wrapper holding the popover and its anchor. Flex so the button inside sizes
+   to its text rather than stretching as a block; min-width: 0 because a flex
+   item defaults to min-width: auto, which floors it at its content width — the
+   token count itself never shrinks (see .context-usage-label-tokens), but a
    floored segment steals width the model name beside it needs to ellipsize. */
 .context-usage-root {
-  min-width: 0;
-}
-
-.context-usage-container {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
   min-width: 0;
-}
-
-.context-warning-icon {
-  flex-shrink: 0;
-  font-size: 0.875rem;
-  line-height: 1;
-  cursor: help;
 }
 
 /* Context usage readout: "132k · model-name", opens the context usage popup.
@@ -4862,19 +5189,61 @@ svg {
   border-radius: 3px;
 }
 
+/* The affordance shared by all three readout segments. Each is a control that
+   has to read as part of one line of plain text ("~/dir · 115k · Model"), so
+   none of them can have a box or a chevron. A dotted underline is what is left:
+   the conventional "there is more here" mark, and text-decoration rather than a
+   border so it hugs the glyphs and costs no layout — which matters because the
+   token count never shrinks and the model name has to stay free to ellipsize.
+   It solidifies on hover/focus, where the pointer has already committed. */
+.status-readout-affordance {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  transition: text-decoration-color 0.15s ease;
+}
+
+/* :hover on the segment, not on the text: the hit target is the enclosing
+   button, which is taller than its glyphs (see the padding/margin trick on
+   .context-usage-label), so hovering the padding must light the underline too. */
+.status-readout-control:hover .status-readout-affordance,
+.status-readout-control:focus-visible .status-readout-affordance,
+.status-readout-control:focus-within .status-readout-affordance {
+  text-decoration-color: currentColor;
+}
+
+/* The token count adds its size ramp on top of the shared affordance. */
 .context-usage-label-tokens {
   flex-shrink: 0;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  transition: color 0.3s ease;
+  transition:
+    color 0.3s ease,
+    text-decoration-color 0.15s ease;
 }
 
+/* Size, not health: the number colors as the conversation grows past 100k /
+   200k / 300k tokens (or fills the model's window, whichever comes first).
+   Replaces the warning triangle that used to sit beside it. The label's :hover
+   rule (color: var(--text-primary)) can't wash these out — it only reaches the
+   count by inheritance, and the count's own color wins. */
 .context-usage-label-tokens-warn {
-  color: var(--warning-text, #f59e0b);
+  color: var(--context-usage-warn);
 }
 
-.context-usage-label-tokens-error {
-  color: var(--error-text);
+.context-usage-label-tokens-high {
+  color: var(--context-usage-high);
+}
+
+/* Bold at the top step, so the loudest state is not purely a hue: yellow ->
+   orange -> red is exactly the ramp the common color vision deficiencies
+   flatten. Free of layout risk here — the readout is monospace, and the count
+   is flex-shrink: 0. */
+.context-usage-label-tokens-critical {
+  color: var(--context-usage-critical);
+  font-weight: 600;
 }
 
 /* Inline status slot in message controls — hidden on desktop, shown on mobile */
@@ -7415,7 +7784,7 @@ svg {
 .version-modal .modal-body {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .version-modal-footer-content {
@@ -7470,7 +7839,6 @@ svg {
   color: var(--text-secondary);
   font-size: 0.813rem;
   line-height: 1.4;
-  margin-bottom: 0.75rem;
 }
 
 .version-error {
@@ -7493,11 +7861,11 @@ svg {
 
 .version-changelog {
   border-top: 1px solid var(--border-color);
-  padding-top: 1rem;
+  padding-top: 0.75rem;
 }
 
 .version-changelog h3 {
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.5rem 0;
   font-size: 0.875rem;
   font-weight: 600;
 }
@@ -7521,7 +7889,7 @@ svg {
 .commit-item {
   display: flex;
   gap: 0.5rem;
-  padding: 0.5rem 0;
+  padding: 0.25rem 0;
   border-bottom: 1px solid var(--border-color);
   align-items: flex-start;
 }
@@ -7577,6 +7945,113 @@ svg {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.version-rebase-bar {
+  align-items: stretch;
+  background: var(--primary);
+  border-radius: 0.5rem;
+  color: white;
+  display: flex;
+  font-size: 0.875rem;
+  min-height: 2.75rem;
+  min-width: 0;
+  padding: 0.25rem;
+  width: 100%;
+}
+
+.version-rebase-action {
+  background: transparent;
+  border: 0;
+  border-radius: 0.375rem;
+  color: inherit;
+  cursor: pointer;
+  flex: 1;
+  font: inherit;
+  min-width: 0;
+  padding: 0.5rem 1rem;
+}
+
+.version-rebase-action:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.version-rebase-action:focus-visible {
+  box-shadow: inset 0 0 0 2px white;
+  outline: none;
+}
+
+.version-rebase-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* The model name and its effort read as one phrase; on wide screens they wrap
+   together to the next line rather than breaking between (or inside) them. */
+.version-rebase-model-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The picker's trigger is a translucent inset pill riding the right edge of
+   the bar, stretching to the bar's inner height. It is a real PrimeVue
+   Select, so PrimeVue owns opening, positioning and flipping; only its
+   chrome is restyled to match the bar. */
+.version-rebase-model {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.version-rebase-model .p-select {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.14);
+  border: 0;
+  border-radius: 0.375rem;
+  box-shadow: none;
+  color: white;
+  display: inline-flex;
+  font-size: 0.75rem;
+  margin-left: 0.25rem;
+  width: auto;
+}
+
+.version-rebase-model .p-select:not(.p-disabled):hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.version-rebase-model .p-select-label {
+  align-items: center;
+  color: inherit;
+  display: flex;
+  padding: 0 0.375rem 0 0.75rem;
+  white-space: nowrap;
+}
+
+.version-rebase-model .p-select-dropdown {
+  align-items: center;
+  color: inherit;
+  display: inline-flex;
+  padding-inline-end: 0.625rem;
+  width: auto;
+}
+
+.version-rebase-model .p-select-dropdown svg {
+  height: 0.625rem;
+  width: 0.625rem;
+}
+
+/* Narrow: the bar stays one row — the pill keeps its place at the right and
+   the action text folds under itself instead. The name may then break
+   internally rather than colliding with the pill. */
+@media (max-width: 52rem) {
+  .version-rebase-action {
+    white-space: normal;
+  }
+
+  .version-rebase-model-name {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
 }
 
 .version-btn {
@@ -8035,8 +8510,23 @@ kbd {
   line-height: 1;
 }
 
+/* The running blob as a geometric circle, flex-centered like the pin, label,
+   and close button. As a text glyph (\25CF) its baseline descent made it sit
+   visually lower than everything else in the tab. */
 .terminal-panel-tab-running {
-  color: var(--success-text);
+  color: transparent;
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+
+.terminal-panel-tab-running::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--success-text);
 }
 
 .terminal-panel-tab-success {
@@ -8051,6 +8541,75 @@ kbd {
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Per-tab scope toggle: a filled pin when pinned to this conversation, a grey
+   outline when global. Sized as a real touch/click target. */
+.terminal-panel-tab-scope {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.terminal-panel-tab-pin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 11px;
+  height: 16px;
+  margin: 0 -2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  border-radius: 3px;
+  padding: 0;
+}
+
+/* Expand the hit area beyond the narrow visual box so the pin stays easy to
+   click/tap without pushing the tab layout out of line. */
+.terminal-panel-tab-pin::before {
+  content: "";
+  position: absolute;
+  inset: -4px -6px;
+}
+
+.terminal-panel-tab-pin svg {
+  display: block;
+  width: 11px;
+  height: 11px;
+}
+
+.terminal-panel-tab-pin-pinned {
+  color: var(--primary);
+}
+
+.terminal-panel-tab-pin-pinned svg {
+  fill: currentColor;
+  fill-opacity: 0.3;
+}
+
+.terminal-panel-tab-pin:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.terminal-panel-tab-pin-pinned:hover {
+  color: var(--primary-dark);
+}
+
+.terminal-panel-tab-pin:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Separates this conversation's own terminals from the global ones. */
+.terminal-panel-tabs-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
 }
 
 .terminal-panel-tab-close {
@@ -8083,6 +8642,11 @@ kbd {
   border-radius: 4px;
   padding: 2px;
   flex-shrink: 0;
+}
+
+.terminal-panel-action-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .terminal-panel-actions-divider {
@@ -8254,6 +8818,11 @@ kbd {
   overflow-x: auto;
 }
 
+.dark .markdown-content pre {
+  background: var(--bg-base);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
 .markdown-content pre code {
   /* Code inside a fenced block fills the <pre>; keep it block-level (the diffs
      reset already makes it block, but assert it so it survives the rule above). */
@@ -8261,6 +8830,29 @@ kbd {
   background: none;
   padding: 0;
   font-size: 0.875rem;
+}
+
+/* Token colors are installed from Shiki's structured worker response, never
+   from model HTML. Both colors live on each token so flipping html.dark only
+   changes CSS and does not re-tokenize code. */
+.shelley-code-token {
+  color: var(--shelley-code-light);
+}
+
+.dark .shelley-code-token {
+  color: var(--shelley-code-dark);
+}
+
+.shelley-code-italic {
+  font-style: italic;
+}
+
+.shelley-code-bold {
+  font-weight: 700;
+}
+
+.shelley-code-underlined {
+  text-decoration: underline;
 }
 
 .inline-code {
@@ -8739,6 +9331,54 @@ kbd {
   margin-right: 0.25em;
 }
 
+/* The user moved the conversation's working directory (see
+   CwdChangeMessage.vue). Same compact status shape as the modelchange marker
+   beside it — both are "something about this conversation changed here" — with
+   the paths as code so they read as paths. Override the base .message column
+   flex so it lays out inline. */
+.message.msg-cwdchange-container {
+  flex-flow: row wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  font-style: normal;
+  white-space: normal;
+}
+
+.msg-cwdchange-icon {
+  margin-right: 0.25em;
+}
+
+.msg-cwdchange-text {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35em;
+  justify-content: center;
+}
+
+.msg-cwdchange-path {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  background: var(--code-bg);
+  color: var(--text-primary);
+  /* Long paths ellipsize from the left, keeping the leaf directory — the part
+     that says where you actually are — visible. */
+  max-width: 32ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  unicode-bidi: plaintext;
+}
+
+.msg-cwdchange-arrow {
+  color: var(--text-secondary);
+}
+
 /* Customized pill for an actual model/reasoning switch. Override the base
    .message column flex so the chips lay out inline. */
 .message.msg-modelchange-switch {
@@ -8937,6 +9577,15 @@ kbd {
 }
 .chat-context-popup .chat-context-popup-content {
   padding: 6px 10px;
+  max-height: min(42rem, calc(100dvh - 1rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 768px) {
+  .chat-context-popup .chat-context-popup-content {
+    max-height: 70dvh;
+  }
 }
 
 .chat-popup-warning {
@@ -9087,10 +9736,20 @@ kbd {
   font-variant-numeric: tabular-nums;
 }
 
+.token-cost-total-row {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border);
+}
+
 .token-cost-graph-note {
   margin-top: 4px;
   font-size: 0.68rem;
   color: var(--text-secondary);
+}
+
+.token-cost-graph-warning {
+  color: var(--warning-text, #f59e0b);
 }
 
 .chat-distill-container {
@@ -9321,7 +9980,8 @@ kbd {
 }
 
 .thinking-text {
-  flex: 1;
+  flex: 0 1 auto;
+  min-width: 0;
   font-style: italic;
   color: var(--text-secondary);
   white-space: pre-wrap;
@@ -9346,6 +10006,41 @@ kbd {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+}
+
+/* Content entities: a message renders its thinking and answer runs as sibling
+   regions inside one .message-content, each with its own floating action bar.
+   The message's vertical padding moves onto each entity so every region is a
+   full-height hover target and the overall spacing is unchanged. */
+.message-content-entities {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+[data-content-entity] {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+/* Agent content is shrink-to-fit (margin-right: auto), which would pull the
+   action bar leftwards over short thinking text. Stretch the entity container
+   so the bar sits at the far right of the message column. Agent/tool content
+   has no bubble background, so this is visually neutral; user bubbles keep
+   their shrink-to-fit width. */
+.message-agent .message-content-entities,
+.message-tool .message-content-entities {
+  width: 100%;
+}
+
+[data-content-entity] > .message-action-bar-wrapper {
+  top: auto;
+  /* The bar overlaps the entity's top padding, leaving a continuous hover
+     path while remaining one pixel above the rendered content. */
+  bottom: calc(100% - 1rem + 1px);
+}
+
+[data-content-entity="thinking"] .thinking-content-wrapper {
+  margin-bottom: 0;
 }
 
 /* BrowserProfileTool styles */
@@ -9618,6 +10313,8 @@ kbd {
 .drawer-working-indicator {
   width: 8px;
   height: 8px;
+  align-self: flex-start;
+  margin-top: 0.35rem;
 }
 
 .drawer-subagent-count-badge-text {
@@ -9644,6 +10341,62 @@ kbd {
   margin-left: auto;
 }
 
+.drawer-actions-top {
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+
+.drawer-actions-trigger.btn-icon-sm {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  box-shadow: none;
+  opacity: 1;
+  transition: none;
+}
+
+.drawer-actions-trigger-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  pointer-events: none;
+}
+
+.drawer-actions-trigger.btn-icon-sm:hover,
+.drawer-actions-trigger.btn-icon-sm[aria-expanded="true"] {
+  background: transparent;
+  color: var(--text-primary);
+  box-shadow: none;
+  opacity: 1;
+}
+
+.drawer-actions-trigger.btn-icon-sm:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.dark .drawer-actions-trigger.btn-icon-sm:focus-visible,
+.conversation-item.active .drawer-actions-trigger.btn-icon-sm:focus-visible {
+  outline-color: white;
+}
+
+.conversation-item.active .drawer-actions-trigger.btn-icon-sm {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: none;
+  opacity: 1;
+}
+
+.conversation-item.active .drawer-actions-trigger.btn-icon-sm:hover,
+.conversation-item.active .drawer-actions-trigger.btn-icon-sm[aria-expanded="true"] {
+  background: transparent;
+  color: white;
+  box-shadow: none;
+}
+
 .drawer-actions-row-offset {
   display: flex;
   gap: 0.25rem;
@@ -9653,6 +10406,38 @@ kbd {
 .drawer-icon-size {
   width: 1rem;
   height: 1rem;
+}
+
+.drawer-actions-menu.p-menu {
+  min-width: 10.5rem;
+  padding: 0.25rem 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.drawer-actions-menu .p-menu-list {
+  gap: 0;
+  padding: 0;
+}
+
+.drawer-actions-menu .p-menu-item-link {
+  padding: 0.625rem 1rem;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
+.drawer-actions-menu .p-menu-item-icon {
+  margin-right: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.drawer-actions-menu .p-menu-item-content:hover,
+.drawer-actions-menu .p-menu-item.p-focus > .p-menu-item-content {
+  background: var(--bg-hover);
 }
 
 /* Inline delete confirmation rendered in place of the trash icon. */
@@ -10998,6 +11783,26 @@ kbd {
   font-family: var(--font-mono, ui-monospace, monospace);
 }
 
+/* Fuzzy file finder: the scope line appears only when a path query moved the
+   search off the working directory shown in the header chip. */
+.ff-scope {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.ff-scope-path {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Mobile: keep the finder title compact so the directory chip fits on the
    same row instead of wrapping the title across three lines. */
 @media (max-width: 768px) {
@@ -11387,6 +12192,15 @@ kbd {
   white-space: nowrap;
 }
 
+/* While editing, a long tag must truncate inside the chip rather than push
+   the remove button past the chip's max-width, where the chip's own
+   overflow:hidden would clip it out of reach. */
+.conversation-tag-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .conversation-item.active .conversation-tag {
   color: rgba(255, 255, 255, 0.85);
 }
@@ -11397,6 +12211,7 @@ kbd {
 }
 
 .conversation-tag-remove {
+  flex-shrink: 0;
   background: none;
   border: none;
   color: inherit;
@@ -11425,14 +12240,16 @@ kbd {
   display: inline-flex;
   flex: 1;
   min-width: 4rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 .conversation-tag-inline-input {
-  flex: 1;
+  position: relative;
+  width: 100%;
   min-width: 4rem;
   padding: 0 0.15rem;
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font: inherit;
   border: none;
   border-radius: 0;
   background-color: transparent;
@@ -11477,6 +12294,11 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  /* Let a wide pill (a long headline, or a long line of live output) shrink
+   * to the row instead of overflowing it: as a flex item this needs
+   * min-width:0, otherwise its automatic minimum size is its content width. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .tool-pill {
@@ -11519,15 +12341,27 @@ kbd {
   flex-shrink: 0;
 }
 
-.tool-pill-text {
+/* The pill's label: its headline (.tool-pill-text) or, while the tool runs and
+ * reports output, the last line it printed (.tool-pill-output). ToolPillLabel
+ * renders one or the other, never both, so they share their layout. Pills stay
+ * chip-sized rather than growing to the conversation width: each label already
+ * bounds its own text (the headline budget in toolMeta.ts, MAX_LEN in
+ * lastLine.ts), and max-width is the visual guard for both. */
+.tool-pill-text,
+.tool-pill-output {
   font-family: var(--font-mono);
   font-size: 0.75rem;
-  /* Desktop affords wider pills; the headline budget in toolMeta.ts
-   * already picks how much text to surface, this is the visual guard. */
   max-width: 360px;
+  /* overflow:hidden both clips the text and opts these flex items out of the
+   * automatic minimum content size, so a narrow row shrinks them further. */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Live output reads as transient: dimmer than the pill's --text-primary. */
+.tool-pill-output {
+  color: var(--text-secondary);
 }
 
 .tool-pill-spinner {
@@ -11586,6 +12420,9 @@ kbd {
 }
 
 @media (max-width: 600px) {
+  /* Headline only, deliberately: while a tool runs, .tool-pill-output is the
+   * pill's only label and may use the full row, which on a phone is narrower
+   * than the desktop cap anyway (so the cap never actually binds there). */
   .tool-pill-text {
     max-width: 150px;
   }
@@ -11945,8 +12782,8 @@ kbd {
 
 /* =========================================================================
    ChatOverflowMenu.vue — the top-right kebab menu rebuilt on PrimeVue
-   (Popover + SelectButton + Select). Scoped under .overflow-menu-panel so it
-   never touches the legacy React menu, which still uses .overflow-menu and the
+   (Popover + Select). Scoped under .overflow-menu-panel so it never touches
+   the legacy React menu, which still uses .overflow-menu and the
    hand-rolled .theme-toggle-* / .md-toggle-* / .language-dropdown-* classes.
    ========================================================================= */
 
@@ -11971,6 +12808,9 @@ kbd {
 }
 .chat-overflow-popover .overflow-menu-panel {
   padding: 0.25rem 0;
+  max-height: calc(100vh - 1rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* Action rows inside the popover reuse .overflow-menu-item, but that class'
@@ -12013,7 +12853,7 @@ kbd {
   margin: 0.25rem 0;
 }
 
-/* Rows that hold a SelectButton / Select control. */
+/* Row that holds the language Select control. */
 .overflow-menu-control {
   padding: 0.5rem;
 }
@@ -12027,13 +12867,80 @@ kbd {
   font-weight: 500;
 }
 
-/* Make the SelectButton fill the row and behave like a segmented control. */
-.overflow-menu-control .p-selectbutton {
-  display: flex;
-  width: 100%;
+/* One compact row of stateful controls. Every choice stays visible; the
+   selected icon is the only one given full weight and contrast. */
+.overflow-quick-controls {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
 }
-.overflow-menu-control .p-selectbutton .p-togglebutton {
-  flex: 1;
+.overflow-quick-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  gap: 0.3rem;
+}
+.overflow-quick-label {
+  color: var(--text-secondary);
+  font-size: 0.675rem;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+}
+.overflow-choice-options {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+}
+.overflow-choice-option {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 0;
+  border-radius: 0.3rem;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 400;
+  opacity: 0.65;
+  transition:
+    color 0.15s,
+    opacity 0.15s;
+}
+.overflow-choice-option:hover:not(:disabled) {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+.overflow-choice-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.overflow-choice-option.is-selected {
+  color: var(--text-primary);
+  font-weight: 700;
+  opacity: 1;
+}
+.overflow-choice-option.is-selected > i {
+  -webkit-text-stroke: 0.25px currentColor;
+}
+.overflow-choice-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+.overflow-choice-option > svg {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 1.6;
+}
+.overflow-choice-option.is-selected > svg {
+  stroke-width: 2.2;
 }
 
 /* The language Select fills the row. */
@@ -12044,19 +12951,6 @@ kbd {
   font-size: 1rem;
   line-height: 1;
   margin-right: 0.4rem;
-}
-
-/* Visually-hidden label kept for screen readers on icon-only toggle options. */
-.overflow-menu-panel .sr-only-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 
 /* =========================================================================
@@ -12152,6 +13046,13 @@ kbd {
 
 .p-select.model-picker-inline.p-disabled .p-select-label {
   cursor: default;
+}
+
+/* Disabled means the click does nothing, so retract the invitation: no dotted
+   underline while the agent works. (The wrapper still carries a tooltip saying
+   why — see StatusReadout.) */
+.p-select.model-picker-inline.p-disabled .status-readout-affordance {
+  text-decoration-line: none;
 }
 
 /* PrimeVue's .p-select-label is the focusable combobox. Its box is 5px taller

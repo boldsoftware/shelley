@@ -9,6 +9,7 @@ export const en: TranslationKeys = {
   // Chat Header & Actions
   newConversation: "New Conversation",
   moreOptions: "More options",
+  actions: "Actions",
   conversations: "Conversations",
 
   // Overflow Menu
@@ -18,6 +19,11 @@ export const en: TranslationKeys = {
   archiveConversation: "Archive Conversation",
   exportConversation: "Export Conversation",
   checkForNewVersion: "Check for New Version",
+  conversationView: "Conversation view",
+  seeAllMessages: "See All",
+  seeEndOfTurnMessagesOnly: "See End of Turn Messages Only",
+  brevity: "Brevity",
+  look: "Look",
 
   // Theme
   system: "System",
@@ -71,6 +77,7 @@ export const en: TranslationKeys = {
   archiveConversationAction: "Archive Conversation",
   archiveCurrentConversation: "Archive the current conversation",
   newConversationInMainRepo: "New Conversation in Main Repo",
+  newConversationInHomeDirectory: "New Conversation in Home Directory",
   newConversationInNewWorktree: "New Conversation in New Worktree",
   createNewWorktree: "Create a new git worktree for this conversation",
   setWorkingDirToRepoRoot: "Set working directory to git repo root",
@@ -98,6 +105,7 @@ export const en: TranslationKeys = {
   subagentIsWorking: "Subagent is working...",
   running: "running",
   hideSubagents: "Hide subagents",
+  terminalsPinnedHere: "terminals in this conversation",
   showSubagents: "Show subagents",
   groupConversations: "Group conversations",
   resortNow: "Re-sort now",
@@ -105,6 +113,12 @@ export const en: TranslationKeys = {
   directory: "Directory",
   gitRepo: "Git Repo",
   other: "Other",
+  clearTagFilter: "Clear all",
+  searchOrTagPlaceholder: "Search, or tag: to filter",
+  untagged: "Untagged",
+  noMatchingTags: "No matching tags",
+  noTagsToNarrow: "Nothing left to narrow by",
+  noConversationsMatchTags: "No conversations match these tags",
   collapseSubagents: "Collapse subagents",
   expandSubagents: "Expand subagents",
   collapseSidebar: "Collapse sidebar",
@@ -137,6 +151,9 @@ export const en: TranslationKeys = {
   effortLabel: "Reasoning effort",
   effortAuto: "auto",
   modelSwitchBusy: "Finish or stop the current turn to switch models",
+  modelSwitchHint: "Click to switch model or reasoning effort",
+  cwdChangeHint: "click to change the working directory",
+  cwdChangeBusy: "Finish or stop the current turn to change the directory",
   customModelsGroup: "Custom models",
   editModel: "Edit Model",
   loadingModels: "Loading models...",
@@ -241,7 +258,11 @@ export const en: TranslationKeys = {
   welcomeTitle: "Shelley Agent",
   welcomeSubtitle: "",
   welcomeMessage:
-    "Shelley is an agent, running on {hostname}. You can ask Shelley to do stuff. If you build a web site with Shelley, you can use exe.dev's proxy features (see {docsLink}) to visit it over the web at {proxyLink}.",
+    "Shelley is an agent, running on {hostname}. If you build a web site with Shelley, you can use exe.dev's proxy features (see {docsLink}) to visit it over the web at {proxyLink}. Shelley is {openSourceLink} and {customizeLink}.",
+  welcomeMessageLocal:
+    "Shelley is an agent, running on {hostname}. Shelley is {openSourceLink} and {customizeLink}.",
+  welcomeOpenSource: "open-source",
+  welcomeCustomize: "can be customized",
   sendMessageToStart: "Send a message to start the conversation.",
   noModelsTitle: "No AI models available",
   noModelsExeNote:
@@ -261,6 +282,7 @@ export const en: TranslationKeys = {
   editFileShortcutFirefox:
     "Firefox reserves this shortcut for a private window — use the command palette (Cmd/Ctrl+K) instead",
   openConversations: "Open conversations",
+  commandMenu: "Command menu",
   expandSidebar: "Expand sidebar",
 
   // Language

@@ -143,6 +143,105 @@ func TestBashTool(t *testing.T) {
 	})
 }
 
+func TestChainedCdHint(t *testing.T) {
+	tests := []struct {
+		name  string
+		paths []string
+		wd    string
+		want  string
+		avoid string
+	}{
+		{
+			name:  "current directory relative path",
+			paths: []string{"."},
+			wd:    "/work/project",
+			want:  "Drop the redundant `cd`",
+			avoid: "Prefer calling the change_dir tool",
+		},
+		{
+			name:  "current directory absolute path",
+			paths: []string{"/work/project"},
+			wd:    "/work/project",
+			want:  "Drop the redundant `cd`",
+			avoid: "Prefer calling the change_dir tool",
+		},
+		{
+			name:  "multiple directory changes",
+			paths: []string{".", "/tmp"},
+			wd:    "/work/project",
+			want:  "Prefer calling the change_dir tool",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := chainedCdHint(tc.paths, tc.wd)
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("hint %q does not contain %q", got, tc.want)
+			}
+			if tc.avoid != "" && strings.Contains(got, tc.avoid) {
+				t.Errorf("hint %q unexpectedly contains %q", got, tc.avoid)
+			}
+		})
+	}
+}
+
+func TestBashChainedCdHint(t *testing.T) {
+	tool := (&BashTool{WorkingDir: NewMutableWorkingDir(t.TempDir())}).Tool()
+
+	tests := []struct {
+		name         string
+		command      string
+		wantHintPart string
+		avoid        string
+	}{
+		{
+			name:         "current directory",
+			command:      "cd . && printf done",
+			wantHintPart: "Drop the redundant `cd`",
+			avoid:        "Prefer calling the change_dir tool",
+		},
+		{
+			name:         "different directory",
+			command:      "cd / && printf done",
+			wantHintPart: "Prefer calling the change_dir tool",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			input, err := json.Marshal(bashInput{Command: tc.command})
+			if err != nil {
+				t.Fatalf("marshal input: %v", err)
+			}
+			out := tool.Run(context.Background(), input)
+			if out.Error != nil {
+				t.Fatalf("run bash tool: %v", out.Error)
+			}
+			got := out.LLMContent[0].Text
+			if !strings.Contains(got, tc.wantHintPart) {
+				t.Errorf("output %q does not contain %q", got, tc.wantHintPart)
+			}
+			if tc.avoid != "" && strings.Contains(got, tc.avoid) {
+				t.Errorf("output %q unexpectedly contains %q", got, tc.avoid)
+			}
+		})
+	}
+}
+
+func TestExecuteBashInDirUsesSnapshot(t *testing.T) {
+	original := t.TempDir()
+	bashTool := &BashTool{WorkingDir: NewMutableWorkingDir(original)}
+	snapshot := bashTool.getWorkingDir()
+	bashTool.WorkingDir.Set(t.TempDir())
+
+	output, err := bashTool.executeBashInDir(context.Background(), bashInput{Command: "pwd"}, 5*time.Second, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(output); got != original {
+		t.Fatalf("pwd = %q, want snapshotted directory %q", got, original)
+	}
+}
+
 func TestExecuteBash(t *testing.T) {
 	ctx := context.Background()
 	bashTool := &BashTool{WorkingDir: NewMutableWorkingDir("/")}

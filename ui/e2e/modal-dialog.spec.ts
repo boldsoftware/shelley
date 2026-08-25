@@ -122,6 +122,31 @@ test.describe("Base modal backdrop click beside the panel (desktop)", () => {
   });
 });
 
+test.describe("Command palette home-directory action", () => {
+  test("starts a new conversation in $HOME", async ({ page }) => {
+    await page.goto("/new");
+    const homeDir = await page.evaluate(() => window.__SHELLEY_INIT__?.home_dir || "");
+    expect(homeDir).not.toBe("");
+
+    await page.evaluate(
+      (cwd) => localStorage.setItem("shelley_selected_cwd", cwd),
+      `${homeDir}/not-home`,
+    );
+    await page.reload();
+
+    await page.keyboard.press("ControlOrMeta+k");
+    const search = page.locator(".command-palette-input");
+    await expect(search).toBeVisible();
+    await search.fill("home directory");
+    await page.getByText("New Conversation in Home Directory", { exact: true }).click();
+
+    await expect(page.locator(".status-field-cwd .status-chip")).toHaveText("~");
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("shelley_selected_cwd")))
+      .toBe(homeDir);
+  });
+});
+
 // DirectoryPickerModal is the most involved consumer of the shared Modal: it
 // uses the #footer slot (New Folder / Cancel / Select) and has an inline
 // create form whose local Escape must cancel create mode without closing the
@@ -140,7 +165,44 @@ test.describe("Directory picker modal (shared Modal consumer)", () => {
     await expect(chip).toHaveText("~/exe");
 
     await chip.click();
-    await expect(page.locator(".directory-picker-input")).toHaveValue(`${absoluteCwd}/`);
+    const panel = page.locator(".modal.directory-picker-modal");
+    await expect(panel.locator(".directory-picker-input")).toHaveValue(`${absoluteCwd}/`);
+
+    const homeButton = panel.getByRole("button", { name: "Go to home directory" });
+    await homeButton.click();
+    await expect(panel.locator(".directory-picker-input")).toHaveValue(`${homeDir}/`);
+    await expect(panel.locator(".directory-picker-current-path")).toHaveText(homeDir);
+
+    const delayedPath = "/definitely-missing-shelley-directory";
+    let releaseInvalid!: () => void;
+    let markInvalidRequested!: () => void;
+    let markInvalidFulfilled!: () => void;
+    const invalidRequested = new Promise<void>((resolve) => (markInvalidRequested = resolve));
+    const invalidReleased = new Promise<void>((resolve) => (releaseInvalid = resolve));
+    const invalidFulfilled = new Promise<void>((resolve) => (markInvalidFulfilled = resolve));
+    await page.route("**/api/list-directory?*", async (route) => {
+      if (new URL(route.request().url()).searchParams.get("path") !== delayedPath) {
+        await route.continue();
+        return;
+      }
+      markInvalidRequested();
+      await invalidReleased;
+      await route.fulfill({ json: { error: "delayed directory error" } });
+      markInvalidFulfilled();
+    });
+
+    await panel.locator(".directory-picker-input").fill(`${delayedPath}/`);
+    await invalidRequested;
+    await homeButton.click();
+    await expect(panel.locator(".directory-picker-input")).toHaveValue(`${homeDir}/`);
+    await expect(panel.locator(".directory-picker-current-path")).toHaveText(homeDir);
+
+    releaseInvalid();
+    await invalidFulfilled;
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
+    await expect(panel.locator(".directory-picker-error")).toHaveCount(0);
   });
 
   test("opens from the cwd chip, pins the footer, and handles nested Escape", async ({ page }) => {

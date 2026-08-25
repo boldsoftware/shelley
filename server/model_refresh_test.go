@@ -8,9 +8,48 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"shelley.exe.dev/llm"
 	"shelley.exe.dev/loop"
 	"shelley.exe.dev/models"
 )
+
+type modelListReasoningService struct{ llm.Service }
+
+func (s *modelListReasoningService) SupportsReasoning() bool { return true }
+func (s *modelListReasoningService) SupportedReasoningLevels() []llm.ThinkingLevel {
+	return []llm.ThinkingLevel{llm.ThinkingLevelOff, llm.ThinkingLevelHigh, llm.ThinkingLevelMax}
+}
+
+func TestHandleModelsIncludesReasoningLevels(t *testing.T) {
+	mgr, err := models.NewManager(&models.Config{Models: []models.Built{{
+		ID:       "reasoning-model",
+		Provider: models.ProviderBuiltIn,
+		Service:  &modelListReasoningService{Service: loop.NewPredictableService()},
+	}}})
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
+	s := &Server{llmManager: mgr, logger: slog.Default()}
+	rec := httptest.NewRecorder()
+	s.handleModels(rec, httptest.NewRequest(http.MethodGet, "/api/models", nil))
+
+	var got []ModelInfo
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || !got[0].SupportsReasoning {
+		t.Fatalf("models = %+v", got)
+	}
+	want := []string{"off", "high", "max"}
+	if len(got[0].ReasoningLevels) != len(want) {
+		t.Fatalf("reasoning_levels = %v, want %v", got[0].ReasoningLevels, want)
+	}
+	for i := range want {
+		if got[0].ReasoningLevels[i] != want[i] {
+			t.Fatalf("reasoning_levels = %v, want %v", got[0].ReasoningLevels, want)
+		}
+	}
+}
 
 func TestHandleModelRefreshReturnsRefreshedModels(t *testing.T) {
 	mgr, err := models.NewManager(&models.Config{

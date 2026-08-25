@@ -20,6 +20,53 @@ import (
 	"shelley.exe.dev/models"
 )
 
+// TestRoundModelReasoningLevel covers only the server-specific policy around
+// the shared clamp; the rounding rules themselves are pinned by
+// llm.TestClampThinkingLevel.
+func TestRoundModelReasoningLevel(t *testing.T) {
+	tests := []struct {
+		name  string
+		model *ModelInfo
+		level string
+		want  string
+		moved bool
+	}{
+		{name: "supported unchanged", model: &ModelInfo{SupportsReasoning: true, ReasoningLevels: []string{"low", "high"}}, level: "high", want: "high"},
+		{name: "off-only model resets non-off", model: &ModelInfo{SupportsReasoning: true, ReasoningLevels: []string{"off"}}, level: "high", want: "", moved: true},
+		{name: "unsupported model resets", model: &ModelInfo{}, level: "high", want: "", moved: true},
+		{name: "unadvertised max resets", model: &ModelInfo{SupportsReasoning: true}, level: "max", want: "", moved: true},
+		{name: "unknown levels keep standard", model: &ModelInfo{SupportsReasoning: true}, level: "xhigh", want: "xhigh"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, moved := roundModelReasoningLevel(tt.model, tt.level)
+			if got != tt.want || moved != tt.moved {
+				t.Fatalf("roundModelReasoningLevel() = (%q, %v), want (%q, %v)", got, moved, tt.want, tt.moved)
+			}
+		})
+	}
+}
+
+func TestModelCommandStatusListsPerModelLevels(t *testing.T) {
+	status := modelCommandStatus("model-a", "", []ModelInfo{
+		{ID: "model-a", Ready: true, SupportsReasoning: true, ReasoningLevels: []string{"off", "high", "max"}},
+		{ID: "model-b", Ready: true, SupportsReasoning: true},
+		{ID: "model-c", Ready: true},
+	})
+	for _, want := range []string{
+		"/model model-a — off, high, max",
+		"/model model-c — no reasoning",
+		"accept off through xhigh",
+	} {
+		if !strings.Contains(status, want) {
+			t.Errorf("status missing %q:\n%s", want, status)
+		}
+	}
+	if strings.Contains(status, "model-b —") {
+		t.Errorf("unknown-level model should have no annotation:\n%s", status)
+	}
+}
+
 // twoModelLLMManager exposes two ready models ("model-a" and "model-b"), both
 // backed by the same PredictableService, so /model switching can be exercised
 // end-to-end without real providers.

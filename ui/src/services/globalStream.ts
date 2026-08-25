@@ -34,6 +34,16 @@ const HEARTBEAT_TIMEOUT_MS = 60000;
 // 30s heartbeat plus margin. Shorter than HEARTBEAT_TIMEOUT_MS because here
 // we have a positive signal (user returned) and want to recover fast.
 const STALE_MS = 35000;
+// A connection must survive this long before a subsequent error resets the
+// reconnect backoff. Without this, a server that accepts the stream and
+// drops it moments later (e.g. subscriber-queue overflow under a stream
+// flood, a proxy shedding load) traps the client in a hot 1s loop: every
+// reopen zeroed the attempt counter, and every reopen replays the full
+// conversation-list snapshot and triggers a REST backfill — the client
+// hammering the server with its most expensive requests exactly while the
+// server is struggling. With the window, connect→quick-drop cycles keep
+// escalating backoff (1s→2s→5s→30s) like consecutive failures.
+const STABLE_CONNECTION_MS = 30000;
 
 export interface GlobalStreamOptions {
   getHash: () => string | null;
@@ -86,6 +96,12 @@ export function connectGlobalStream({
   let heartbeatTimer: number | null = null;
   let attempts = 0;
   let lastStatus: StreamStatus | null = null;
+  // Wall-clock timestamp at which the CURRENT EventSource delivered its
+  // first frame (0 while none has). Used to distinguish a connection that
+  // died after honest service from one the server dropped moments after
+  // accepting: only the former earns a backoff reset. See
+  // STABLE_CONNECTION_MS.
+  let connectionOpenedAt = 0;
   // Wall-clock timestamp of the last frame (open or any message, incl.
   // heartbeat) received on the current connection. This is the source of
   // truth for connection liveness: unlike setTimeout-based watchdogs, it is
@@ -110,14 +126,14 @@ export function connectGlobalStream({
 
   const clearReconnect = () => {
     if (reconnectTimer !== null) {
-      clearTimeout(reconnectTimer);
+      window.clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
   };
 
   const clearHeartbeat = () => {
     if (heartbeatTimer !== null) {
-      clearTimeout(heartbeatTimer);
+      window.clearTimeout(heartbeatTimer);
       heartbeatTimer = null;
     }
   };
@@ -187,7 +203,7 @@ export function connectGlobalStream({
         if (m.sequence_id > maxSeq) maxSeq = m.sequence_id;
       }
       if (toolIds.length > 0) messageStore.clearToolProgress(convId, toolIds);
-      if (sawAgentMsg) messageStore.resetStreamingText(convId);
+      if (sawAgentMsg) messageStore.resetStreaming(convId);
       messageStore.upsertMessages(convId, data.messages);
       if (maxSeq > 0) messageStore.setMaxSequenceIdKnown(convId, maxSeq);
     }
@@ -229,8 +245,11 @@ export function connectGlobalStream({
     if (data.tool_progress) {
       messageStore.setToolProgress(convId, data.tool_progress);
     }
-    if (data.stream_delta && data.stream_delta.type === "text") {
-      messageStore.appendStreamDelta(convId, data.stream_delta.text);
+    if (data.stream_delta?.type === "text") {
+      messageStore.appendStreamText(convId, data.stream_delta.text);
+    }
+    if (data.stream_delta?.type === "thinking") {
+      messageStore.appendStreamThinking(convId, data.stream_delta.text);
     }
   };
 
@@ -243,10 +262,15 @@ export function connectGlobalStream({
     // socket's onopen doesn't see the previous connection's stale
     // lastFrameAt and tear down the freshly-opened one.
     lastFrameAt = Date.now();
+    connectionOpenedAt = 0;
     eventSource = api.createStream({ conversationListHash: getHash() ?? undefined });
 
     const markConnected = () => {
-      attempts = 0;
+      // NB: attempts is NOT reset here. A connection only counts as healthy
+      // once it has survived STABLE_CONNECTION_MS (judged at error time);
+      // resetting on open let a server stuck in an accept-then-drop cycle
+      // pin the client at the minimum 1s delay forever.
+      if (connectionOpenedAt === 0) connectionOpenedAt = Date.now();
       lastFrameAt = Date.now();
       setStatus("connected");
       if (isReconnecting) {
@@ -282,6 +306,14 @@ export function connectGlobalStream({
       eventSource?.close();
       eventSource = null;
       clearHeartbeat();
+      // A connection that survived STABLE_CONNECTION_MS before dying was
+      // genuinely healthy: start the backoff ladder fresh. One that died
+      // sooner (or never delivered a frame) is treated as a consecutive
+      // failure so accept-then-drop cycles keep escalating 1s→2s→5s→30s.
+      if (connectionOpenedAt !== 0 && Date.now() - connectionOpenedAt >= STABLE_CONNECTION_MS) {
+        attempts = 0;
+      }
+      connectionOpenedAt = 0;
       attempts += 1;
       // Only mark stale on the first reconnect attempt after a confirmed
       // disconnect, not on every retry.

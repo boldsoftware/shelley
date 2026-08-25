@@ -89,10 +89,25 @@ type ConversationManager struct {
 	loop                *loop.Loop
 	loopCancel          context.CancelFunc
 	loopCtx             context.Context
-	mu                  sync.Mutex
-	lastActivity        time.Time
-	modelID             string
-	recordMessage       loop.MessageRecordFunc
+	// loopLifecycleMu serializes loop creation and lifecycle transitions. A
+	// transition releases this mutex while waiting for a loop goroutine, then
+	// re-acquires and revalidates its generation before publishing teardown.
+	loopLifecycleMu sync.Mutex
+	// loopGeneration identifies the currently installed loop. It advances
+	// before a loop is cancelled or reset, so callbacks and delayed work can
+	// reject stale generations.
+	loopGeneration uint64
+	// loopTearingDown prevents a replacement loop from being installed while
+	// cancellation/reset is waiting for the prior loop to exit. Closed once the
+	// lifecycle boundary (including cancellation bookkeeping) is complete.
+	loopTearingDown   bool
+	loopLifecycleDone chan struct{}
+	// loopDone closes after the current loop goroutine has stopped writing.
+	loopDone      chan struct{}
+	mu            sync.Mutex
+	lastActivity  time.Time
+	modelID       string
+	recordMessage loop.MessageRecordFunc
 	// recordMessageBatch persists several messages in one Tx (consecutive
 	// sequence ids). Used by mid-turn injection of subagent-done pairs.
 	recordMessageBatch messageBatchRecordFunc
@@ -123,7 +138,12 @@ type ConversationManager struct {
 	// fields it populates (cwd, modelID, conversationOptions, toolSetConfig,
 	// hasConversationEvents, agentWorking) between the initial unlocked
 	// hydrated-check and the final write under cm.mu.
-	hydrateMu             sync.Mutex
+	hydrateMu sync.Mutex
+	// cwdMu serializes SetCwd. The three writes it makes (the conversation row,
+	// the live toolset, the notice message) are not atomic together, so two
+	// concurrent moves could otherwise interleave into a state where the row
+	// says one directory and the tools are in the other.
+	cwdMu                 sync.Mutex
 	hydrated              bool
 	hasConversationEvents bool
 	cwd                   string // working directory for tools
@@ -195,10 +215,10 @@ type ConversationManager struct {
 	// slug renaming ("rev1" → "rev1-4") that defeated the older,
 	// history-parsing suppression.
 	//
-	// In practice there is at most one waiter at a time: a parent runs its
-	// tool calls serially, a subagent has exactly one parent, and a re-send
-	// to a busy subagent cancels the prior run before registering. The count
-	// (rather than a bool) just makes register/finish robustly balanced; the
+	// In practice there is at most one waiter at a time: SubagentTool serializes
+	// calls to the same slug, a subagent has exactly one parent, and a re-send
+	// to a busy subagent waits for or queues behind the prior run. The count
+	// (rather than a bool) keeps register/finish robustly balanced; the
 	// "exactly one delivery" guarantee in finishSubagentWait assumes this
 	// single-waiter precondition.
 	subagentWaitOwners int
@@ -769,11 +789,15 @@ func (cm *ConversationManager) AcceptUserMessage(ctx context.Context, service ll
 		return false, fmt.Errorf("llm service is required")
 	}
 
+	cm.loopLifecycleMu.Lock()
+	defer cm.loopLifecycleMu.Unlock()
+	cm.waitForLoopTeardownLocked()
+
 	if err := cm.Hydrate(ctx); err != nil {
 		return false, err
 	}
 
-	if err := cm.ensureLoop(service, modelID); err != nil {
+	if err := cm.ensureLoopLocked(service, modelID); err != nil {
 		return false, err
 	}
 
@@ -842,6 +866,10 @@ func (cm *ConversationManager) RetryLastLLMRequest(ctx context.Context) error {
 	// state changes for the duration of the DB update + broadcast).
 	cm.retryMu.Lock()
 	defer cm.retryMu.Unlock()
+	cm.loopLifecycleMu.Lock()
+	defer cm.loopLifecycleMu.Unlock()
+	cm.waitForLoopTeardownLocked()
+
 	cm.mu.Lock()
 	loopInstance := cm.loop
 	logger := cm.logger
@@ -962,10 +990,15 @@ func (cm *ConversationManager) ContinueAfterRefusal(ctx context.Context, ch Mode
 	}
 
 	// Rebuild the loop against the new model and re-fire the refused request.
+	// This is a lifecycle operation: once the lock is held, cancellation/reset
+	// cannot replace the loop between selecting it and Retry().
+	cm.loopLifecycleMu.Lock()
+	defer cm.loopLifecycleMu.Unlock()
+	cm.waitForLoopTeardownLocked()
 	if err := cm.Hydrate(ctx); err != nil {
 		return fmt.Errorf("failed to hydrate before continuing: %w", err)
 	}
-	if err := cm.ensureLoop(service, modelID); err != nil {
+	if err := cm.ensureLoopLocked(service, modelID); err != nil {
 		return fmt.Errorf("failed to build loop before continuing: %w", err)
 	}
 
@@ -985,6 +1018,47 @@ func (cm *ConversationManager) ContinueAfterRefusal(ctx context.Context, ch Mode
 	return nil
 }
 
+// ResumeInterruptedTurn re-fires the LLM request for a turn that was cut short
+// by the process exiting (the upgrade-with-restart path; see
+// db.ConsumeResumeAfterUpgrade and Server.resumeInterruptedConversations). No
+// user message is added and no history row is mutated: the persisted messages
+// are the request, and loop.insertMissingToolResults patches any dangling
+// tool_use block in memory while building it.
+//
+// Shares retryMu with the retry/continue affordances so a resume can't race a
+// user-triggered retry of the same conversation.
+func (cm *ConversationManager) ResumeInterruptedTurn(ctx context.Context, service llm.Service, modelID string) error {
+	if service == nil {
+		return fmt.Errorf("llm service is required")
+	}
+
+	cm.retryMu.Lock()
+	defer cm.retryMu.Unlock()
+	cm.loopLifecycleMu.Lock()
+	defer cm.loopLifecycleMu.Unlock()
+	cm.waitForLoopTeardownLocked()
+
+	if err := cm.Hydrate(ctx); err != nil {
+		return fmt.Errorf("failed to hydrate before resuming: %w", err)
+	}
+	if err := cm.ensureLoopLocked(service, modelID); err != nil {
+		return fmt.Errorf("failed to build loop before resuming: %w", err)
+	}
+
+	cm.mu.Lock()
+	loopInstance := cm.loop
+	logger := cm.logger
+	cm.mu.Unlock()
+	if loopInstance == nil {
+		return fmt.Errorf("conversation loop not initialized")
+	}
+
+	logger.Info("resuming interrupted turn", "model", modelID)
+	cm.SetAgentWorking(true)
+	loopInstance.Retry()
+	return nil
+}
+
 // QueueMessage appends a user message to the conversation's queued_messages
 // JSON array (the single source of truth for queued user input) and holds it
 // for delivery after the current agent turn (or distillation) completes. It
@@ -994,6 +1068,10 @@ func (cm *ConversationManager) ContinueAfterRefusal(ctx context.Context, ch Mode
 // broadcast so the new queued entry reaches subscribers via stream2 diffs.
 func (cm *ConversationManager) QueueMessage(ctx context.Context, s *Server, modelID string, message llm.Message) error {
 	cm.waitDistillingSetup()
+
+	cm.loopLifecycleMu.Lock()
+	defer cm.loopLifecycleMu.Unlock()
+	cm.waitForLoopTeardownLocked()
 
 	llmJSON, err := json.Marshal(message)
 	if err != nil {
@@ -1120,9 +1198,18 @@ func (cm *ConversationManager) DropPendingSubagentDone(subagentConversationID st
 // the OLD generation after the compaction snapshot was taken and thus be
 // absent from the new generation's context (visible in the transcript, not
 // re-fed) — an accepted, pre-existing loss mode of the drain path too.
-func (cm *ConversationManager) takeInjectableSubagentDone(ctx context.Context) []llm.Message {
+func (cm *ConversationManager) takeInjectableSubagentDone(ctx context.Context, generation uint64) []llm.Message {
+	// This callback runs inside a loop goroutine. Never wait for an in-progress
+	// teardown here: cancellation is waiting for this goroutine to exit. Taking
+	// the lifecycle lock only long enough to validate/persist makes the winner
+	// deterministic—either injection commits before cancellation begins, or the
+	// stale loop injects nothing.
+	cm.loopLifecycleMu.Lock()
+	defer cm.loopLifecycleMu.Unlock()
+
 	cm.mu.Lock()
-	if cm.distilling || cm.cancelling || len(cm.pendingBatches) == 0 || cm.recordMessageBatch == nil {
+	if cm.loopTearingDown || cm.loop == nil || cm.loopGeneration != generation ||
+		cm.distilling || cm.cancelling || len(cm.pendingBatches) == 0 || cm.recordMessageBatch == nil {
 		cm.mu.Unlock()
 		return nil
 	}
@@ -1168,6 +1255,11 @@ func (cm *ConversationManager) takeInjectableSubagentDone(ctx context.Context) [
 // batches for the winning drainer to pick up.
 func (cm *ConversationManager) enqueueBatch(s *Server, b pendingBatch) {
 	cm.mu.Lock()
+	if cm.cancelling {
+		cm.mu.Unlock()
+		cm.logger.Info("Dropping queued batch during cancellation", "kind", b.Kind)
+		return
+	}
 	// Producer-side invalidation (see pendingBatch.isStale): a subagent-done
 	// batch whose result has already reached the parent via a synchronous
 	// wait=true tool call is discarded rather than enqueued. Evaluated under
@@ -1357,6 +1449,12 @@ func (cm *ConversationManager) drainPendingMessages(s *Server) {
 
 	ctx := context.Background()
 
+	// Feeding a batch is a lifecycle publication: cancellation/reset must not
+	// clear or replace the target loop between the DB insert and QueueMessages.
+	cm.loopLifecycleMu.Lock()
+	defer cm.loopLifecycleMu.Unlock()
+	cm.waitForLoopTeardownLocked()
+
 restart:
 	cm.mu.Lock()
 	// Bail if distillation started while we were draining (or between the
@@ -1428,7 +1526,7 @@ restart:
 			cm.logger.Error("Failed to hydrate for queued batches", "error", err)
 			return
 		}
-		if err := cm.ensureLoop(svc, modelID); err != nil {
+		if err := cm.ensureLoopLocked(svc, modelID); err != nil {
 			cm.logger.Error("Failed to start loop for queued batches", "error", err)
 			return
 		}
@@ -1752,7 +1850,60 @@ func (cm *ConversationManager) logSystemPromptState(system []llm.SystemContent, 
 	cm.logger.Info("Loaded system prompt from database", "system_items", len(system), "total_length", length)
 }
 
+func (cm *ConversationManager) waitForLoopTeardownLocked() {
+	for {
+		cm.mu.Lock()
+		tearingDown := cm.loopTearingDown
+		done := cm.loopLifecycleDone
+		cm.mu.Unlock()
+		if !tearingDown {
+			return
+		}
+
+		// The loop being torn down can need cm.mu while it exits. Do not hold
+		// the lifecycle mutex while waiting, or cancellation/reset would turn
+		// that ordinary exit into a lock inversion.
+		cm.loopLifecycleMu.Unlock()
+		<-done
+		cm.loopLifecycleMu.Lock()
+	}
+}
+
+func (cm *ConversationManager) isCurrentLoopGeneration(generation uint64) bool {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	return !cm.loopTearingDown && cm.loop != nil && cm.loopGeneration == generation
+}
+
+// finishLoopTeardownLocked reopens the lifecycle boundary after its owner has
+// cancelled/waited/recorded all required teardown state. expectedGeneration is
+// captured before the owner releases loopLifecycleMu; checking it on return
+// makes a stale teardown unable to reopen a newer lifecycle. The caller must
+// hold loopLifecycleMu.
+func (cm *ConversationManager) finishLoopTeardownLocked(expectedGeneration uint64) {
+	cm.mu.Lock()
+	if !cm.loopTearingDown || cm.loopGeneration != expectedGeneration {
+		cm.mu.Unlock()
+		return
+	}
+	done := cm.loopLifecycleDone
+	cm.loopTearingDown = false
+	cm.loopLifecycleDone = nil
+	cm.cancelling = false
+	cm.mu.Unlock()
+	close(done)
+}
+
+// ensureLoop creates a loop only after any prior lifecycle transition has
+// completed. Callers that already hold loopLifecycleMu use ensureLoopLocked.
 func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) error {
+	cm.loopLifecycleMu.Lock()
+	defer cm.loopLifecycleMu.Unlock()
+	cm.waitForLoopTeardownLocked()
+	return cm.ensureLoopLocked(service, modelID)
+}
+
+func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID string) error {
 	cm.mu.Lock()
 	if cm.loop != nil {
 		existingModel := cm.modelID
@@ -1763,6 +1914,10 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 		return nil
 	}
 
+	// loopLifecycleMu is held, so this value remains reserved until we publish
+	// the new loop below. Capturing it in callbacks lets them reject events from
+	// this loop after a later cancellation or reset advances the generation.
+	generation := cm.loopGeneration + 1
 	recordMessage := cm.recordMessage
 	logger := cm.logger
 	cwd := cm.cwd
@@ -1838,9 +1993,11 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 	toolSet := claudetool.NewToolSet(processCtx, toolSetConfig)
 
 	// streamFlusher batches LLM stream deltas and flushes them periodically
-	// to avoid overwhelming the subpub channel (buffer=10) with hundreds
+	// to avoid overwhelming the bounded subpub queue with hundreds
 	// of individual deltas per second from the Anthropic SSE stream.
-	sf := newStreamFlusher(cm, 50*time.Millisecond)
+	sf := newStreamFlusher(cm, 50*time.Millisecond, func() bool {
+		return cm.isCurrentLoopGeneration(generation)
+	})
 
 	loopInstance := loop.NewLoop(loop.Config{
 		LLM:           service,
@@ -1859,6 +2016,9 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 			cm.recordGitStateChange(ctx, state)
 		},
 		OnToolProgress: func(progress llm.ToolProgress) {
+			if !cm.isCurrentLoopGeneration(generation) {
+				return
+			}
 			cm.broadcastStream(StreamResponse{
 				ToolProgress: &progress,
 			})
@@ -1866,7 +2026,7 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 		OnStreamDelta: sf.Push,
 		OnStreamDone:  sf.Flush,
 		InjectMessages: func(ctx context.Context) []llm.Message {
-			return cm.takeInjectableSubagentDone(ctx)
+			return cm.takeInjectableSubagentDone(ctx, generation)
 		},
 	})
 
@@ -1883,11 +2043,26 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 	}
 	// Check if we need to persist the model (for conversations created before model column existed)
 	needsPersist := cm.modelID == "" && modelID != ""
+	cm.loopGeneration = generation
 	cm.loop = loopInstance
 	cm.loopCancel = cancel
 	cm.loopCtx = processCtx
+	loopDone := make(chan struct{})
+	cm.loopDone = loopDone
 	cm.modelID = modelID
 	cm.toolSet = toolSet
+	// The cwd was read at the top of this function and baked into the toolset,
+	// but building one takes a while (DB reads, tool construction) and none of
+	// that happens under cm.mu — a SetCwd could have landed in between. It would
+	// have found cm.toolSet still nil and skipped the toolset update, leaving the
+	// tools pinned to a directory the conversation has already left, behind an
+	// HTTP 200. Re-read the authoritative value here, in the same critical
+	// section that publishes the toolset, so whichever of the two runs last
+	// agrees with the other. (The agentWorking guard does not cover this:
+	// AcceptUserMessage calls ensureLoop before it marks the agent working.)
+	if cm.cwd != "" && cm.cwd != cwd {
+		toolSet.WorkingDir().Set(cm.cwd)
+	}
 	cm.mu.Unlock()
 
 	// Persist model for legacy conversations
@@ -1898,16 +2073,62 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 	}
 
 	go func() {
-		if err := loopInstance.Go(processCtx); err != nil && err != context.DeadlineExceeded && err != context.Canceled {
-			if logger != nil {
-				logger.Error("Conversation loop stopped", "error", err)
-			} else {
-				slog.Default().Error("Conversation loop stopped", "error", err)
-			}
+		defer close(loopDone)
+		err := loopInstance.Go(processCtx)
+		if err == nil || err == context.DeadlineExceeded || err == context.Canceled {
+			return
 		}
+		if logger != nil {
+			logger.Error("Conversation loop stopped", "error", err)
+		} else {
+			slog.Default().Error("Conversation loop stopped", "error", err)
+		}
+		cm.handleFatalLoopExit(loopInstance, generation)
 	}()
 
 	return nil
+}
+
+func (cm *ConversationManager) handleFatalLoopExit(loopInstance *loop.Loop, generation uint64) {
+	cm.loopLifecycleMu.Lock()
+	defer cm.loopLifecycleMu.Unlock()
+
+	// This runs inside the loop goroutine before its deferred close(loopDone).
+	// Never wait for an existing teardown here: cancel/reset may be waiting for
+	// that very loopDone. Their generation invalidation makes this exit stale,
+	// so the identity check below must simply return and let the defer unblock
+	// the owner.
+	var teardownGeneration uint64
+	cm.mu.Lock()
+	if cm.loop != loopInstance || cm.loopGeneration != generation {
+		cm.mu.Unlock()
+		return
+	}
+	cancel := cm.loopCancel
+	toolSet := cm.toolSet
+	cm.loopGeneration++ // invalidate callbacks from the failed loop
+	teardownGeneration = cm.loopGeneration
+	cm.loopTearingDown = true
+	cm.loopLifecycleDone = make(chan struct{})
+	cm.loopCancel = nil
+	cm.loopCtx = nil
+	cm.loopDone = nil
+	cm.loop = nil
+	cm.modelID = ""
+	cm.toolSet = nil
+	cm.hydrated = false
+	cm.hasConversationEvents = false
+	cm.cancelling = true // suppress an onDone notification for a failed turn
+	cm.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if toolSet != nil {
+		toolSet.Cleanup()
+	}
+	cm.SetAgentWorking(false)
+	cm.finishLoopTeardownLocked(teardownGeneration)
 }
 
 func (cm *ConversationManager) stopLoop() {
@@ -1919,12 +2140,35 @@ func (cm *ConversationManager) ResetLoop() {
 	cm.resetLoop(true)
 }
 
+// resetLoop establishes a lifecycle boundary before cancelling the old loop.
+// It releases loopLifecycleMu while waiting so the dying loop can finish, but
+// loopTearingDown prevents any replacement from being installed in that gap.
 func (cm *ConversationManager) resetLoop(markUnhydrated bool) {
+	cm.loopLifecycleMu.Lock()
+	cm.waitForLoopTeardownLocked()
+
+	var teardownGeneration uint64
 	cm.mu.Lock()
+	loopInstance := cm.loop
+	loopDone := cm.loopDone
 	cancel := cm.loopCancel
 	toolSet := cm.toolSet
+	cm.loopGeneration++ // invalidate delayed callbacks before cancellation
+	teardownGeneration = cm.loopGeneration
+	if loopInstance == nil {
+		if markUnhydrated {
+			cm.hydrated = false
+			cm.hasConversationEvents = false
+		}
+		cm.mu.Unlock()
+		cm.loopLifecycleMu.Unlock()
+		return
+	}
+	cm.loopTearingDown = true
+	cm.loopLifecycleDone = make(chan struct{})
 	cm.loopCancel = nil
 	cm.loopCtx = nil
+	cm.loopDone = nil
 	cm.loop = nil
 	cm.modelID = ""
 	cm.toolSet = nil
@@ -1933,190 +2177,97 @@ func (cm *ConversationManager) resetLoop(markUnhydrated bool) {
 		cm.hasConversationEvents = false
 	}
 	cm.mu.Unlock()
+	cm.loopLifecycleMu.Unlock()
 
 	if cancel != nil {
 		cancel()
+	}
+	if loopDone != nil {
+		<-loopDone
 	}
 	if toolSet != nil {
 		toolSet.Cleanup()
 	}
+
+	cm.loopLifecycleMu.Lock()
+	cm.finishLoopTeardownLocked(teardownGeneration)
+	cm.loopLifecycleMu.Unlock()
 }
 
-// CancelConversation cancels the current conversation loop and records a cancelled tool result if a tool was in progress
+// CancelConversation cancels the active loop and synchronously ends its turn.
+// The loop records the complete tool-result batch, including partial output from
+// cancelled tools, before this method writes the end-of-turn marker.
 func (cm *ConversationManager) CancelConversation(ctx context.Context) error {
+	cm.loopLifecycleMu.Lock()
+	cm.waitForLoopTeardownLocked()
+
+	var teardownGeneration uint64
 	cm.mu.Lock()
 	loopInstance := cm.loop
-	loopCtx := cm.loopCtx
+	loopDone := cm.loopDone
 	cancel := cm.loopCancel
-	cm.mu.Unlock()
-
+	toolSet := cm.toolSet
 	if loopInstance == nil {
+		cm.mu.Unlock()
+		cm.loopLifecycleMu.Unlock()
 		cm.logger.Info("No active loop to cancel")
 		return nil
 	}
-
-	// Mark the manager as cancelling so the synthetic "[Operation cancelled]"
-	// end-of-turn message recorded below does not fire onDone — a cancellation
-	// is not a subagent completion and must not notify the parent. Cleared
-	// once teardown finishes.
-	cm.mu.Lock()
+	cm.loopGeneration++ // stale queues/callbacks cannot target this loop
+	teardownGeneration = cm.loopGeneration
+	cm.loopTearingDown = true
+	cm.loopLifecycleDone = make(chan struct{})
 	cm.cancelling = true
+	cm.pendingBatches = nil
+	cm.loopCancel = nil
+	cm.loopCtx = nil
+	cm.loopDone = nil
+	cm.loop = nil
+	cm.modelID = ""
+	cm.toolSet = nil
+	cm.hydrated = false
+	cm.hasConversationEvents = false
 	cm.mu.Unlock()
-	defer func() {
-		cm.mu.Lock()
-		cm.cancelling = false
-		cm.mu.Unlock()
-	}()
+	cm.loopLifecycleMu.Unlock()
 
 	cm.logger.Info("Cancelling conversation")
-
-	// Check if there's an in-progress tool call by examining the history
-	history := loopInstance.GetHistory()
-	var inProgressToolID string
-	var inProgressToolName string
-
-	// Find tool_uses that don't have corresponding tool_results.
-	// Strategy:
-	// 1. Find the last assistant message that contains tool_uses
-	// 2. Collect all tool_result IDs from user messages AFTER that assistant message
-	// 3. Find tool_uses that don't have matching results
-
-	// Step 1: Find the index of the last assistant message with tool_uses
-	lastToolUseAssistantIdx := -1
-	for i := len(history) - 1; i >= 0; i-- {
-		msg := history[i]
-		if msg.Role == llm.MessageRoleAssistant {
-			hasToolUse := false
-			for _, content := range msg.Content {
-				if content.Type == llm.ContentTypeToolUse {
-					hasToolUse = true
-					break
-				}
-			}
-			if hasToolUse {
-				lastToolUseAssistantIdx = i
-				break
-			}
-		}
-	}
-
-	if lastToolUseAssistantIdx >= 0 {
-		// Step 2: Collect all tool_result IDs from messages after the assistant message
-		toolResultIDs := make(map[string]bool)
-		for i := lastToolUseAssistantIdx + 1; i < len(history); i++ {
-			msg := history[i]
-			if msg.Role == llm.MessageRoleUser {
-				for _, content := range msg.Content {
-					if content.Type == llm.ContentTypeToolResult {
-						toolResultIDs[content.ToolUseID] = true
-					}
-				}
-			}
-		}
-
-		// Step 3: Find the first tool_use that doesn't have a result
-		assistantMsg := history[lastToolUseAssistantIdx]
-		for _, content := range assistantMsg.Content {
-			if content.Type == llm.ContentTypeToolUse {
-				if !toolResultIDs[content.ID] {
-					inProgressToolID = content.ID
-					inProgressToolName = content.ToolName
-					break
-				}
-			}
-		}
-	}
-
-	// Cancel the context
-	if cancel != nil {
-		cancel()
-	}
-
-	// Wait briefly for the loop to stop
-	if loopCtx != nil {
-		select {
-		case <-loopCtx.Done():
-		case <-time.After(100 * time.Millisecond):
-		}
-	}
-
-	// Record cancellation messages
-	if inProgressToolID != "" {
-		// If there was an in-progress tool, record a cancelled result
-		cm.logger.Info("Recording cancelled tool result", "tool_id", inProgressToolID, "tool_name", inProgressToolName)
-		cancelTime := time.Now()
-		cancelledMessage := llm.Message{
-			Role: llm.MessageRoleUser,
-			Content: []llm.Content{
-				{
-					Type:             llm.ContentTypeToolResult,
-					ToolUseID:        inProgressToolID,
-					ToolError:        true,
-					ToolResult:       []llm.Content{{Type: llm.ContentTypeText, Text: "Tool execution cancelled by user"}},
-					ToolUseStartTime: &cancelTime,
-					ToolUseEndTime:   &cancelTime,
-				},
-			},
-		}
-
-		if err := cm.recordMessage(ctx, cancelledMessage, llm.Usage{}, nil); err != nil {
-			cm.logger.Error("Failed to record cancelled tool result", "error", err)
-			return fmt.Errorf("failed to record cancelled tool result: %w", err)
-		}
-	}
-
-	// Clear pending queued batches BEFORE recording the end-of-turn message.
-	// The end-of-turn message triggers drainPendingMessages via
-	// notifySubscribers; clearing first ensures the drain finds nothing to
-	// process. We DROP everything on cancel — including pending
-	// subagent-done notifications — because a cancelled turn means the user
-	// is taking over; any followups they want to ask about subagents will
-	// arrive as new user messages.
-	cm.mu.Lock()
-	cm.pendingBatches = nil
-	cm.mu.Unlock()
-
-	// Clear the persistent queued_messages array when it actually holds
-	// entries. We must NOT gate this on the in-memory pendingBatches, which can
-	// diverge from the array (e.g. after a restart the manager may be re-created
-	// with an empty queue while the array still holds entries) — instead we read
-	// the persisted column (cheap reader-pool query) and only issue the
-	// writer-pool clear when there is something to clear. The common cancel case
-	// has an empty queue, so this avoids an extra transaction on SQLite's single
-	// writer connection in the cancel hot path.
-	if conv, err := cm.db.GetConversationByID(ctx, cm.conversationID); err != nil {
+	persistCtx := context.WithoutCancel(ctx)
+	if conv, err := cm.db.GetConversationByID(persistCtx, cm.conversationID); err != nil {
 		cm.logger.Error("Failed to read queued messages on cancel", "error", err)
 	} else if conv.QueuedMessages != "" && conv.QueuedMessages != "[]" {
-		if _, err := cm.db.ClearQueuedMessages(ctx, cm.conversationID); err != nil {
+		if _, err := cm.db.ClearQueuedMessages(persistCtx, cm.conversationID); err != nil {
 			cm.logger.Error("Failed to clear queued messages on cancel", "error", err)
 		}
 	}
 
-	// Always record an assistant message with EndOfTurn to properly end the turn
-	// This ensures agentWorking() returns false, even if no tool was executing
+	if cancel != nil {
+		cancel()
+	}
+	if loopDone != nil {
+		<-loopDone
+	}
+	if toolSet != nil {
+		toolSet.Cleanup()
+	}
+
+	// No replacement can have been installed while loopTearingDown was true.
+	// Reacquire the lifecycle lock before publishing the end marker and reopen
+	// the boundary only after that marker has committed.
+	cm.loopLifecycleMu.Lock()
+	defer cm.loopLifecycleMu.Unlock()
+	defer cm.finishLoopTeardownLocked(teardownGeneration)
+
 	endTurnMessage := llm.Message{
 		Role:      llm.MessageRoleAssistant,
 		Content:   []llm.Content{{Type: llm.ContentTypeText, Text: "[Operation cancelled]"}},
 		EndOfTurn: true,
 	}
-
-	if err := cm.recordMessage(ctx, endTurnMessage, llm.Usage{}, nil); err != nil {
+	if err := cm.recordMessage(persistCtx, endTurnMessage, llm.Usage{}, nil); err != nil {
 		cm.logger.Error("Failed to record end turn message", "error", err)
 		return fmt.Errorf("failed to record end turn message: %w", err)
 	}
 
-	// Mark agent as not working
 	cm.SetAgentWorking(false)
-
-	cm.mu.Lock()
-	cm.loopCancel = nil
-	cm.loopCtx = nil
-	cm.loop = nil
-	cm.modelID = ""
-	// Reset hydrated so that the next AcceptUserMessage will reload history from the database
-	cm.hydrated = false
-	cm.mu.Unlock()
-
 	return nil
 }
 
@@ -2319,6 +2470,142 @@ func reasoningDisplayName(level string) string {
 		return "default"
 	}
 	return level
+}
+
+// Cwd returns the conversation's current working directory.
+func (cm *ConversationManager) Cwd() string {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	return cm.cwd
+}
+
+// errAgentWorking is returned by SetCwd when a turn is in flight. Moving the
+// working directory then would change the ground under a running bash command.
+var errAgentWorking = errors.New("agent is working")
+
+// SetCwd moves the conversation to dir: the directory the agent's tools run in
+// and the one the status bar shows. It is the user-driven counterpart of the
+// agent's own change_dir tool, and has to reach the same three places that tool
+// does, or the user and the agent end up disagreeing about where they are:
+//
+//  1. the conversation row, which the UI reads and which a future loop is
+//     hydrated from;
+//  2. the live toolset's working directory, so the very next bash command lands
+//     in the new directory rather than the one baked in at loop build time
+//     (this is the part a plain DB write would miss);
+//  3. the message log, as an in-context user message — the agent has the old
+//     directory in its history (the system prompt's "Initial pwd", and every
+//     tool result so far) and will keep resolving relative paths against it
+//     unless it is told. A marker excluded from context would move the tools
+//     out from under an agent that still believes it is elsewhere.
+//
+// Returns errAgentWorking if a turn is in flight. Callers check this too, for a
+// better error message, but the authoritative check is the one here: it shares
+// a critical section with the move, so a turn that starts between the caller's
+// check and this one cannot slip through.
+func (cm *ConversationManager) SetCwd(ctx context.Context, dir string) error {
+	cm.cwdMu.Lock()
+	defer cm.cwdMu.Unlock()
+
+	cm.mu.Lock()
+	if cm.agentWorking {
+		cm.mu.Unlock()
+		return errAgentWorking
+	}
+	old := cm.cwd
+	toolSet := cm.toolSet
+	if old == dir {
+		cm.mu.Unlock()
+		return nil
+	}
+	// Move the in-memory cwd inside the same critical section as the check, so
+	// a turn starting concurrently either sees the new directory or is refused.
+	// The DB write below can fail, in which case we roll this back.
+	cm.cwd = dir
+	cm.mu.Unlock()
+
+	if err := cm.db.UpdateConversationCwd(ctx, cm.conversationID, dir); err != nil {
+		cm.mu.Lock()
+		cm.cwd = old
+		cm.mu.Unlock()
+		return fmt.Errorf("failed to persist working directory: %w", err)
+	}
+
+	// The toolset only exists once a loop has been built. Until then there is
+	// nothing to update: ensureLoop reads cm.cwd when it builds one, and
+	// cwdMu keeps a concurrent SetCwd from interleaving with this one.
+	if toolSet != nil {
+		toolSet.WorkingDir().Set(dir)
+	}
+
+	// The move has happened by this point: the row and the tools are both in the
+	// new directory, and neither can be taken back (the tools may already have
+	// run something there). A failed notice therefore must not be reported as a
+	// failed move — answering 500 here would invite a retry of a change that has
+	// already applied. Log it instead: the cost is an agent that has to work the
+	// new directory out from its next tool result, not a wrong directory.
+	if err := cm.recordCwdChangeNotice(ctx, old, dir); err != nil {
+		cm.logger.Error("working directory moved, but the agent was not told",
+			"conversationID", cm.conversationID, "from", old, "to", dir, "error", err)
+	}
+	return nil
+}
+
+// recordCwdChangeNotice tells the agent, in context, that the user moved the
+// conversation. User-role because it is the user's action and the agent has to
+// act on it; consecutive user messages are already ordinary here (queued turns
+// and compaction summaries both produce them).
+func (cm *ConversationManager) recordCwdChangeNotice(ctx context.Context, from, to string) error {
+	text := fmt.Sprintf("[The user changed the working directory to %s. Use it for subsequent commands and relative paths.]", to)
+	if from != "" {
+		text = fmt.Sprintf("[The user changed the working directory from %s to %s. Use the new one for subsequent commands and relative paths.]", from, to)
+	}
+	message := llm.Message{
+		Role:    llm.MessageRoleUser,
+		Content: []llm.Content{{Type: llm.ContentTypeText, Text: text}},
+	}
+	createdMsg, err := cm.db.CreateMessage(ctx, db.CreateMessageParams{
+		ConversationID: cm.conversationID,
+		Type:           db.MessageTypeUser,
+		LLMData:        message,
+		UserData:       map[string]any{"cwd_change": true, "from": from, "to": to},
+		UsageData:      llm.Usage{},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to record working directory change: %w", err)
+	}
+	cm.Touch()
+
+	// Persisting is not enough. A live loop holds its own in-memory history and
+	// only rebuilds it from the DB when it is constructed; between turns it
+	// survives, so a row written here would stay invisible to the model until
+	// something dropped the loop (a model switch, a compaction, eviction). Splice
+	// it in directly — the message must be seen by the NEXT request without
+	// provoking a turn of its own, which rules out QueueUserMessage.
+	//
+	// Safe against a concurrent turn because the only caller, SetCwd, holds
+	// cwdMu and has already established the agent is idle under cm.mu.
+	cm.mu.Lock()
+	liveLoop := cm.loop
+	cm.mu.Unlock()
+	if liveLoop != nil {
+		liveLoop.AppendHistory(message)
+	}
+
+	var conversation generated.Conversation
+	err = cm.db.Queries(ctx, func(q *generated.Queries) error {
+		var qerr error
+		conversation, qerr = q.GetConversation(ctx, cm.conversationID)
+		return qerr
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get conversation for cwd change notification: %w", err)
+	}
+	cm.publishStream(createdMsg.SequenceID, StreamResponse{
+		Messages:     toAPIMessages([]generated.Message{*createdMsg}),
+		Conversation: &conversation,
+	})
+	return nil
 }
 
 // recordModelCommandInfo records an informational modelchange marker (bare

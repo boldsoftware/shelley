@@ -15,7 +15,7 @@ import (
 )
 
 type Service interface {
-	// Do sends a request to an LLM.
+	// Do sends a request to an LLM. Implementations must support concurrent calls.
 	Do(context.Context, *Request) (*Response, error)
 	// Provider returns the provider name (e.g., "anthropic", "openai", "fireworks", "gemini").
 	Provider() string
@@ -33,8 +33,9 @@ type Service interface {
 }
 
 // ReasoningSupporter reports whether a service accepts reasoning controls and
-// which generic levels it exposes to callers. An empty level list means all
-// standard levels are supported.
+// which generic levels it exposes to callers. An empty level list means the
+// standard levels through xhigh are supported; max must be advertised
+// explicitly.
 type ReasoningSupporter interface {
 	SupportsReasoning() bool
 	SupportedReasoningLevels() []ThinkingLevel
@@ -54,16 +55,61 @@ func SupportedReasoningLevels(svc Service) []ThinkingLevel {
 	return nil
 }
 
-type SimplifiedPatcher interface {
-	// UseSimplifiedPatch reports whether the service should use the simplified patch input schema.
-	UseSimplifiedPatch() bool
+// FirstText returns the first non-empty text block of resp, skipping
+// Thinking blocks. Reasoning models sometimes emit thinking content even
+// when asked not to; reading Content[0].Text directly would see the (empty
+// .Text of the) Thinking block.
+func FirstText(resp *Response) string {
+	for _, c := range resp.Content {
+		if c.Type == ContentTypeText && strings.TrimSpace(c.Text) != "" {
+			return c.Text
+		}
+	}
+	return ""
 }
 
-func UseSimplifiedPatch(svc Service) bool {
-	if sp, ok := svc.(SimplifiedPatcher); ok {
-		return sp.UseSimplifiedPatch()
+// ClampThinkingLevel rounds an unsupported generic level to the nearest
+// supported level. Off is a mode rather than an effort tier: non-off values
+// only consider non-off candidates. Equal distances choose the lower effort.
+func ClampThinkingLevel(level ThinkingLevel, supported []ThinkingLevel) ThinkingLevel {
+	if level == ThinkingLevelDefault || len(supported) == 0 {
+		return level
 	}
-	return false
+	for _, candidate := range supported {
+		if candidate == level {
+			return level
+		}
+	}
+	best := ThinkingLevelDefault
+	bestDistance := int(^uint(0) >> 1)
+	for _, candidate := range supported {
+		if level != ThinkingLevelOff && candidate == ThinkingLevelOff {
+			continue
+		}
+		distance := int(candidate) - int(level)
+		if distance < 0 {
+			distance = -distance
+		}
+		if distance < bestDistance || distance == bestDistance && candidate < best {
+			best = candidate
+			bestDistance = distance
+		}
+	}
+	if best == ThinkingLevelDefault {
+		return level
+	}
+	return best
+}
+
+type PatchProfiler interface {
+	PatchProfile() string
+}
+
+func PatchProfile(svc Service) string {
+	if profiler, ok := svc.(PatchProfiler); ok {
+		return profiler.PatchProfile()
+	}
+	return "flat"
 }
 
 // DefaultReasoner is implemented by services that can report the reasoning
@@ -245,6 +291,9 @@ type Tool struct {
 	Type        string
 	Description string
 	InputSchema json.RawMessage
+	// CustomGrammar exposes this tool as an OpenAI custom tool whose raw input
+	// must match the supplied Lark grammar. Empty means a JSON function tool.
+	CustomGrammar string
 	// EndsTurn indicates that this tool should cause the model to end its turn when used
 	EndsTurn bool
 	// Cache indicates whether to use prompt caching for this tool
@@ -256,7 +305,8 @@ type Tool struct {
 	ServerSide bool
 
 	// The Run function is automatically called when the tool is used.
-	// Run functions may be called concurrently with each other and themselves.
+	// Run functions may be called concurrently with adjacent tools, including
+	// other calls to the same tool.
 	// The input to Run function is the input to the tool, as provided by Claude, in compliance with the input schema.
 	// The outputs from Run will be sent back to Claude.
 	// If you do not want to respond to the tool call request from Claude, return ErrDoNotRespond.
@@ -287,6 +337,7 @@ type ToolProgress struct {
 }
 
 // ToolProgressFunc is called by tools to report progress during execution.
+// It must support concurrent calls from sibling tools.
 type ToolProgressFunc func(ToolProgress)
 
 // ToolOut represents the output of a tool run.
@@ -475,7 +526,8 @@ const (
 	ThinkingLevelLow                          // Low thinking (~2048 tokens / "low")
 	ThinkingLevelMedium                       // Medium thinking (~8192 tokens / "medium")
 	ThinkingLevelHigh                         // High thinking (~16384 tokens / "high")
-	ThinkingLevelXHigh                        // Maximum thinking (~32768 tokens / "xhigh")
+	ThinkingLevelXHigh                        // Extra-high thinking (~32768 tokens / "xhigh")
+	ThinkingLevelMax                          // Maximum thinking ("max"; OpenAI GPT-5.6 family)
 )
 
 // EffectiveThinkingLevel resolves the level to use for a request: a non-default
@@ -488,7 +540,7 @@ func EffectiveThinkingLevel(serviceDefault, requestOverride ThinkingLevel) Think
 }
 
 // ParseThinkingLevel parses one of the user-facing level names
-// ("default", "off", "minimal", "low", "medium", "high", "xhigh") into a
+// ("default", "off", "minimal", "low", "medium", "high", "xhigh", "max") into a
 // ThinkingLevel. Empty string and unknown values return ThinkingLevelDefault.
 func ParseThinkingLevel(s string) ThinkingLevel {
 	switch strings.ToLower(strings.TrimSpace(s)) {
@@ -504,13 +556,15 @@ func ParseThinkingLevel(s string) ThinkingLevel {
 		return ThinkingLevelHigh
 	case "xhigh":
 		return ThinkingLevelXHigh
+	case "max":
+		return ThinkingLevelMax
 	default:
 		return ThinkingLevelDefault
 	}
 }
 
 // Name returns the lower-case user-facing name for the thinking level
-// ("off", "minimal", "low", "medium", "high", "xhigh"). Returns "" for
+// ("off", "minimal", "low", "medium", "high", "xhigh", "max"). Returns "" for
 // ThinkingLevelDefault.
 func (t ThinkingLevel) Name() string {
 	switch t {
@@ -526,6 +580,8 @@ func (t ThinkingLevel) Name() string {
 		return "high"
 	case ThinkingLevelXHigh:
 		return "xhigh"
+	case ThinkingLevelMax:
+		return "max"
 	default:
 		return ""
 	}
@@ -533,8 +589,9 @@ func (t ThinkingLevel) Name() string {
 
 // ThinkingBudgetTokens returns the recommended budget_tokens for Anthropic's
 // extended thinking (used by older non-adaptive Claude models). Returns 0 for
-// ThinkingLevelOff/Default. ThinkingLevelXHigh is clamped to the high budget
-// since budget-style APIs don't have a separate "xhigh" tier.
+// ThinkingLevelOff/Default. ThinkingLevelXHigh and ThinkingLevelMax are
+// clamped to the high budget since budget-style APIs don't have separate
+// "xhigh"/"max" tiers.
 func (t ThinkingLevel) ThinkingBudgetTokens() int {
 	switch t {
 	case ThinkingLevelMinimal:
@@ -543,7 +600,7 @@ func (t ThinkingLevel) ThinkingBudgetTokens() int {
 		return 2048
 	case ThinkingLevelMedium:
 		return 8192
-	case ThinkingLevelHigh, ThinkingLevelXHigh:
+	case ThinkingLevelHigh, ThinkingLevelXHigh, ThinkingLevelMax:
 		return 16384
 	default:
 		return 0
@@ -563,6 +620,8 @@ func (t ThinkingLevel) ThinkingEffort() string {
 		return "high"
 	case ThinkingLevelXHigh:
 		return "xhigh"
+	case ThinkingLevelMax:
+		return "max"
 	default:
 		return ""
 	}

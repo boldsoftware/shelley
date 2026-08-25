@@ -220,6 +220,19 @@ fresh reset event.
 ### Shell
 
 - `WS /api/exec-ws?cwd=` — websocket for an interactive shell session.
+  `cmd=` starts a new persistent session; `term_id=` reattaches to an existing
+  one and never reruns the command. `conversation_id=` records which
+  conversation owns a newly spawned terminal.
+- `GET /api/terminals` — all persistent terminals, unfiltered.
+  `conversation_id` is the owning conversation, or `null` for a terminal shown
+  in every conversation.
+- `PUT /api/terminals/<id>/scope` — move a terminal between conversations.
+  Body `{"conversation_id": "<id>"}` confines it to that conversation;
+  `{"conversation_id": null}` shows it in all of them. `null` is the only
+  accepted spelling of global: an absent field or an empty string is a 400.
+  Returns the updated terminal.
+- `DELETE /api/terminals/<id>`, `POST /api/terminals/<id>/kill` — terminate a
+  terminal and drop its record.
 
 ### Debug
 

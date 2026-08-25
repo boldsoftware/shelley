@@ -16,100 +16,108 @@
 
      Preserves: .patch-tool, .patch-tool-details, .patch-tool-header,
      .patch-tool-toggle, .patch-tool-emoji, data-testid tool-call-completed,
-     and all other classes from the React original. -->
+     and all other classes from the React original. The header's icon buttons
+     (open in editor / diff mode / expand) share .patch-tool-icon-btn; the
+     per-button classes remain as selector hooks for tests. -->
 <template>
   <div class="patch-tool" :data-testid="isComplete ? 'tool-call-completed' : 'tool-call-running'">
     <div class="patch-tool-header" @click="isExpanded = !isExpanded">
       <div class="patch-tool-summary">
         <span class="patch-tool-emoji" :class="{ running: isRunning }">🖋️</span>
         <span class="patch-tool-filename" :title="filename">{{ filename }}</span>
-        <span v-if="isComplete && hasError" class="patch-tool-error">✗</span>
-        <span v-if="isComplete && !hasError" class="patch-tool-success">✓</span>
+        <ToolStatusIcon
+          v-if="isComplete && hasError"
+          state="error"
+          class="patch-tool-error"
+          label="Patch failed"
+        />
+        <ToolStatusIcon
+          v-if="isComplete && !hasError"
+          state="ok"
+          class="patch-tool-success"
+          label="Patch applied"
+        />
       </div>
       <div class="patch-tool-header-controls">
         <button
+          v-if="showOpenInEditor"
+          v-tooltip.top="'Open in editor'"
+          class="patch-tool-icon-btn patch-tool-open-editor"
+          type="button"
+          aria-label="Open in editor"
+          @click.stop="openInEditor"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8l-3.9 1 1-3.9Z" />
+          </svg>
+        </button>
+        <button
           v-if="showDiffToggle"
           v-tooltip.top="sideBySide ? 'Switch to inline diff' : 'Switch to side-by-side diff'"
-          class="patch-tool-diff-mode-toggle"
+          class="patch-tool-icon-btn patch-tool-diff-mode-toggle"
+          type="button"
           :aria-label="sideBySide ? 'Switch to inline diff' : 'Switch to side-by-side diff'"
           @click.stop="toggleSideBySide"
         >
           <svg
             width="14"
             height="14"
-            viewBox="0 0 14 14"
+            viewBox="0 0 24 24"
             fill="none"
-            xmlns="http://www.w3.org/2000/svg"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
           >
-            <template v-if="sideBySide">
-              <!-- Side-by-side icon (two columns) -->
-              <rect
-                x="1"
-                y="2"
-                width="5"
-                height="10"
-                rx="1"
-                stroke="currentColor"
-                stroke-width="1.5"
-                fill="none"
-              />
-              <rect
-                x="8"
-                y="2"
-                width="5"
-                height="10"
-                rx="1"
-                stroke="currentColor"
-                stroke-width="1.5"
-                fill="none"
-              />
-            </template>
-            <template v-else>
-              <!-- Inline icon (single column with horizontal lines) -->
-              <rect
-                x="2"
-                y="2"
-                width="10"
-                height="10"
-                rx="1"
-                stroke="currentColor"
-                stroke-width="1.5"
-                fill="none"
-              />
-              <line x1="4" y1="5" x2="10" y2="5" stroke="currentColor" stroke-width="1.5" />
-              <line x1="4" y1="9" x2="10" y2="9" stroke="currentColor" stroke-width="1.5" />
-            </template>
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <!-- Split view: one divider down the middle.
+                 Inline view: stacked rows. -->
+            <path v-if="sideBySide" d="M12 4v16" />
+            <path v-else d="M3 9.3h18M3 14.7h18" />
           </svg>
         </button>
         <button
-          class="patch-tool-toggle"
+          class="patch-tool-icon-btn patch-tool-toggle"
+          type="button"
           :aria-label="isExpanded ? 'Collapse' : 'Expand'"
           :aria-expanded="isExpanded"
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            class="tool-chevron"
-            :class="{ 'tool-chevron-expanded': isExpanded }"
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+          <ToolChevron :expanded="isExpanded" />
         </button>
       </div>
     </div>
 
     <div v-if="isExpanded" class="patch-tool-details">
       <div v-if="isComplete && !hasError && hasDiff" class="patch-tool-section">
-        <div class="patch-tool-diffs-container">
+        <div
+          v-if="patchFiles.length > 1"
+          class="patch-tool-diffs-container patch-tool-file-list"
+        >
+          <PatchFileDiff
+            v-for="file in patchFiles"
+            :key="file.path"
+            :path="file.path"
+            :diff="file.diff"
+            :status="file.status"
+            :additions="file.additions"
+            :deletions="file.deletions"
+            :side-by-side="sideBySide"
+            :theme-type="themeType"
+          />
+        </div>
+        <div v-else class="patch-tool-diffs-container">
           <!-- The FileDiff renderer (driven by useFileDiffInstance) creates its
                own <diffs-container> custom element here and renders into its
                shadow root, so the diff's scoped <style> blocks never leak into
@@ -155,6 +163,10 @@ import { getSingularPatch, parseDiffFromFile } from "@pierre/diffs";
 import { isDarkModeActive } from "../../../services/theme";
 import { useFileDiffInstance } from "../../composables/fileDiffInstance";
 import { useNearViewport } from "../../composables/nearViewport";
+import { useOpenFileEditor } from "../../composables/fileEditor";
+import ToolChevron from "./ToolChevron.vue";
+import ToolStatusIcon from "./ToolStatusIcon.vue";
+import PatchFileDiff from "./PatchFileDiff.vue";
 
 // LocalStorage key for side-by-side preference
 const STORAGE_KEY_SIDE_BY_SIDE = "shelley-diff-side-by-side";
@@ -184,6 +196,14 @@ interface PatchDisplayData {
   diff?: string;
   oldContent?: string;
   newContent?: string;
+}
+
+interface PatchFile {
+  path: string;
+  diff: string;
+  status: "added" | "deleted" | "modified";
+  additions: number;
+  deletions: number;
 }
 
 const DIFF_THEMES: ThemesType = { dark: "github-dark", light: "github-light" };
@@ -342,11 +362,56 @@ const hasDiff = computed(
       (displayData.value.oldContent != null && displayData.value.newContent != null)),
 );
 
-const filename = computed(() => displayData.value?.path || path.value || "patch");
+function parsePatchFiles(diff: string): PatchFile[] {
+  const starts = [...diff.matchAll(/(?:^|\n)--- ([^\n]+)\n\+\+\+ ([^\n]+)\n/g)];
+  return starts.map((match, index) => {
+    const start = match.index! + (match[0].startsWith("\n") ? 1 : 0);
+    const end = index + 1 < starts.length ? starts[index + 1].index! + 1 : diff.length;
+    const fileDiff = diff.slice(start, end);
+    const oldPath = match[1];
+    const newPath = match[2];
+    const status =
+      oldPath === "/dev/null" ? "added" : newPath === "/dev/null" ? "deleted" : "modified";
+    const lines = fileDiff.split("\n");
+    return {
+      path: status === "deleted" ? oldPath : newPath,
+      diff: fileDiff,
+      status,
+      additions: lines.filter((line) => line.startsWith("+") && !line.startsWith("+++")).length,
+      deletions: lines.filter((line) => line.startsWith("-") && !line.startsWith("---")).length,
+    };
+  });
+}
+
+const patchFiles = computed(() => parsePatchFiles(displayData.value?.diff || ""));
+const filename = computed(() =>
+  patchFiles.value.length > 1
+    ? `${patchFiles.value.length} files changed`
+    : displayData.value?.path || path.value || "patch",
+);
 
 const showDiffToggle = computed(
   () => !isMobile.value && isExpanded.value && isComplete.value && !props.hasError && hasDiff.value,
 );
+
+// Path to open in the editor: the display data's path (absolutized by the patch
+// tool) falling back to the tool input's path — which is whatever the agent
+// passed, so possibly relative. Not the "patch" placeholder `filename` uses
+// when neither is known.
+const editorPath = computed(() =>
+  patchFiles.value.length > 1 ? "" : displayData.value?.path || path.value,
+);
+
+// "Open in editor" opens that file in the standalone Monaco editor modal (the
+// same one the fuzzy finder opens). Hidden when we don't know the path, or
+// while the patch is still being applied — the file is mid-write then. Still
+// offered for a failed patch: seeing the file as it stands is what you want.
+const openEditor = useOpenFileEditor();
+const showOpenInEditor = computed(() => !!editorPath.value && isComplete.value);
+
+function openInEditor() {
+  openEditor(editorPath.value);
+}
 
 // Raw diff string for fallback display
 const rawDiff = computed(() => {

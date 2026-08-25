@@ -11,42 +11,58 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"shelley.exe.dev/dtach"
+	"shelley.exe.dev/exescroll"
+)
+
+const (
+	terminalEngineDtach     = "dtach"
+	terminalEngineExeScroll = "exe-scroll"
 )
 
 // TerminalSession is the on-disk + in-memory record of a persistent terminal.
-// The owning process is a `shelley dtach new` child detached via setsid so
-// it survives the parent shelley exiting; it terminates when the user's
-// command exits or the session is killed.
+// New records are owned by an exe-scroll session server; records without an
+// engine field are legacy dtach sessions and remain attachable.
 type TerminalSession struct {
-	ID        string    `json:"id"`
-	Command   string    `json:"command"`
-	Cwd       string    `json:"cwd"`
-	Socket    string    `json:"socket"`
-	LogFile   string    `json:"log_file"`
-	PID       int       `json:"pid"`
-	CreatedAt time.Time `json:"created_at"`
+	ID      string `json:"id"`
+	Command string `json:"command"`
+	Cwd     string `json:"cwd"`
+	Socket  string `json:"socket"`
+	LogFile string `json:"log_file"`
+	PID     int    `json:"pid"`
+	// Engine is omitted on records created by Shelley versions that only used
+	// dtach. An empty value therefore means dtach for compatibility.
+	Engine string `json:"engine,omitempty"`
+	// ConversationID is the conversation that owns this terminal. Empty means
+	// global: the terminal is visible in every conversation. Records written
+	// before scoping existed unmarshal with an empty value and so read as
+	// global. On the wire this is represented as null (see terminalDTO); the
+	// "" <-> null conversion happens only in terminalDTO and in the scope
+	// handler.
+	ConversationID string    `json:"conversation_id"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
-// SpawnerFunc starts a dtach server hosting `cmd` on the given socket. The
-// implementation must not return until the socket is ready to accept
-// connections. The default spawns an out-of-process `shelley dtach serve`
-// child so sessions outlive the parent shelley. Tests can replace it to run
-// in-process.
+// SpawnerFunc starts the legacy dtach server used by tests and compatibility
+// sessions. Production sessions use the embedded exe-scroll binary.
 type SpawnerFunc func(socket, logFile, cwd, command string, cols, rows uint16, extraEnv []string) (pid int, err error)
 
-// TerminalSessions tracks persistent dtach sessions on disk.
+// TerminalSessions tracks persistent terminal sessions on disk.
 type TerminalSessions struct {
-	dir      string // root directory holding per-session files
-	exe      string // path to the shelley executable (for re-exec)
-	logger   *slog.Logger
-	spawner  SpawnerFunc
-	mu       sync.Mutex
-	sessions map[string]*TerminalSession
+	dir              string // root directory holding per-session files
+	exe              string // path to the shelley executable (for re-exec)
+	logger           *slog.Logger
+	spawner          SpawnerFunc
+	exeScrollCommand func(args ...string) *exec.Cmd
+	waitForPID       func(path string, max time.Duration) (int, error)
+	mu               sync.Mutex
+	sessions         map[string]*TerminalSession
 	// attachMu serializes attachOrSpawn for the duration of socket-stat /
 	// spawn so concurrent reconnects for the same id don't double-spawn.
 	attachMu sync.Mutex
@@ -68,7 +84,10 @@ func NewTerminalSessions(dir string, logger *slog.Logger) (*TerminalSessions, er
 		logger:   logger,
 		sessions: make(map[string]*TerminalSession),
 	}
-	ts.spawner = ts.spawnSubprocess
+	ts.exeScrollCommand = func(args ...string) *exec.Cmd {
+		return exec.Command(ts.exe, append([]string{"exe-scroll"}, args...)...)
+	}
+	ts.waitForPID = waitForPIDFile
 	ts.scan()
 	return ts, nil
 }
@@ -76,7 +95,7 @@ func NewTerminalSessions(dir string, logger *slog.Logger) (*TerminalSessions, er
 // SetSpawner overrides the spawn strategy (intended for tests).
 func (t *TerminalSessions) SetSpawner(s SpawnerFunc) { t.spawner = s }
 
-// scan loads sessions from disk, dropping any whose dtach socket is dead.
+// scan loads sessions from disk, dropping any whose socket is dead.
 func (t *TerminalSessions) scan() {
 	entries, err := os.ReadDir(t.dir)
 	if err != nil {
@@ -117,9 +136,23 @@ func (t *TerminalSessions) socketAlive(path string) bool {
 }
 
 func (t *TerminalSessions) removeFiles(id string) {
+	t.removeFilesExceptExit(id)
+	os.Remove(t.exitFile(id))
+}
+
+func (t *TerminalSessions) removeFilesExceptExit(id string) {
 	os.Remove(filepath.Join(t.dir, id+".json"))
 	os.Remove(filepath.Join(t.dir, id+".sock"))
 	os.Remove(filepath.Join(t.dir, id+".log"))
+	os.Remove(t.serverPIDFile(id))
+}
+
+func (t *TerminalSessions) serverPIDFile(id string) string {
+	return filepath.Join(t.dir, id+".pid")
+}
+
+func (t *TerminalSessions) exitFile(id string) string {
+	return filepath.Join(t.dir, id+".exit")
 }
 
 // List returns a snapshot of known live sessions, oldest first.
@@ -141,11 +174,9 @@ func (t *TerminalSessions) Get(id string) *TerminalSession {
 	return t.sessions[id]
 }
 
-// Spawn launches a new dtach-backed session, immediately attaches to it, and
-// returns the session record together with the attached client. Doing the
-// attach inline closes the race where a fast-exiting command tears down the
-// socket before any external attach can succeed.
-func (t *TerminalSessions) Spawn(command, cwd string, cols, rows uint16, extraEnv []string) (*TerminalSession, *dtach.Client, error) {
+// Spawn launches a new persistent session and immediately attaches to it.
+// Production sessions use exe-scroll; tests can set a legacy dtach spawner.
+func (t *TerminalSessions) Spawn(command, cwd, conversationID string, cols, rows uint16, extraEnv []string) (*TerminalSession, terminalClient, error) {
 	if command == "" {
 		return nil, nil, errors.New("terminals: empty command")
 	}
@@ -160,51 +191,239 @@ func (t *TerminalSessions) Spawn(command, cwd string, cols, rows uint16, extraEn
 	if err != nil {
 		return nil, nil, err
 	}
-	socket := filepath.Join(t.dir, id+".sock")
-	logFile := filepath.Join(t.dir, id+".log")
-
-	// SHELLEY_TERMINAL_ID identifies this dtach session. It's stable across
-	// reattaches because the id is the on-disk session id.
 	env := append([]string(nil), extraEnv...)
 	env = append(env, "SHELLEY_TERMINAL_ID="+id)
+	if t.spawner != nil {
+		return t.spawnDtach(id, command, cwd, conversationID, cols, rows, env)
+	}
+	return t.spawnExeScroll(id, command, cwd, conversationID, cols, rows, env)
+}
 
+func (t *TerminalSessions) spawnDtach(id, command, cwd, conversationID string, cols, rows uint16, env []string) (*TerminalSession, terminalClient, error) {
+	socket := filepath.Join(t.dir, id+".sock")
+	logFile := filepath.Join(t.dir, id+".log")
 	pid, err := t.spawner(socket, logFile, cwd, command, cols, rows, env)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	// Attach immediately to pin the session open: while at least one client
-	// is connected, Serve will not tear down even if the command exits quickly.
-	dc, attachErr := attachWithRetry(socket, 3*time.Second)
-	if attachErr != nil {
-		return nil, nil, fmt.Errorf("terminals: attach freshly spawned session: %w", attachErr)
+	dc, err := attachWithRetry(socket, 3*time.Second)
+	if err != nil {
+		return nil, nil, fmt.Errorf("terminals: attach freshly spawned dtach session: %w", err)
 	}
-
+	client := &dtachTerminalClient{client: dc}
 	sess := &TerminalSession{
-		ID:        id,
-		Command:   command,
-		Cwd:       cwd,
-		Socket:    socket,
-		LogFile:   logFile,
-		PID:       pid,
-		CreatedAt: time.Now().UTC(),
+		ID:             id,
+		Command:        command,
+		Cwd:            cwd,
+		Socket:         socket,
+		LogFile:        logFile,
+		PID:            pid,
+		ConversationID: conversationID,
+		CreatedAt:      time.Now().UTC(),
 	}
+	if err := t.writeSession(sess); err != nil {
+		client.Close()
+		return nil, nil, err
+	}
+	t.logger.Info("spawned persistent terminal", "engine", terminalEngineDtach, "id", id, "command", command, "cwd", cwd, "pid", pid, "conversation_id", conversationID)
+	return sess, client, nil
+}
 
+const exeScrollCommandWrapper = `
+umask 077
+pid_tmp="$2.tmp.$$"
+printf '%s\n' "$PPID" > "$pid_tmp" || exit 125
+mv -f "$pid_tmp" "$2" || exit 125
+bash --login -c "$1"
+status=$?
+exit_tmp="$3.tmp.$$"
+printf '%s\n' "$status" > "$exit_tmp" || exit 125
+mv -f "$exit_tmp" "$3" || exit 125
+exit "$status"
+`
+
+func (t *TerminalSessions) spawnExeScroll(id, command, cwd, conversationID string, cols, rows uint16, extraEnv []string) (*TerminalSession, terminalClient, error) {
+	socket := filepath.Join(t.dir, id+".sock")
+	pidFile := t.serverPIDFile(id)
+	exitFile := t.exitFile(id)
+	cmd := t.exeScrollCommand(
+		socket,
+		"--",
+		"sh", "-c", exeScrollCommandWrapper,
+		"shelley-exe-scroll", command, pidFile, exitFile,
+	)
+	cmd.Dir = cwd
+	cmd.Env = terminalEnvironment(extraEnv)
+	if err := exescroll.ConfigureCommand(cmd); err != nil {
+		return nil, nil, fmt.Errorf("terminals: share embedded exe-scroll: %w", err)
+	}
+	client, err := newExeScrollPTYClient(cmd, cols, rows, exitFile)
+	if err != nil {
+		return nil, nil, err
+	}
+	pid, err := t.waitForPID(pidFile, 3*time.Second)
+	if err != nil {
+		cleanupErr := t.terminateSpawnedExeScroll(socket, pid)
+		client.Close()
+		if cleanupErr == nil {
+			t.removeFiles(id)
+		}
+		return nil, nil, errors.Join(
+			fmt.Errorf("terminals: start exe-scroll session: %w", err),
+			cleanupErr,
+		)
+	}
+	sess := &TerminalSession{
+		ID:             id,
+		Command:        command,
+		Cwd:            cwd,
+		Socket:         socket,
+		LogFile:        filepath.Join(t.dir, id+".log"),
+		PID:            pid,
+		Engine:         terminalEngineExeScroll,
+		ConversationID: conversationID,
+		CreatedAt:      time.Now().UTC(),
+	}
+	if err := t.writeSession(sess); err != nil {
+		cleanupErr := t.killExeScroll(sess)
+		client.Close()
+		if cleanupErr == nil {
+			t.removeFiles(id)
+		}
+		return nil, nil, errors.Join(err, cleanupErr)
+	}
+	t.logger.Info("spawned persistent terminal", "engine", terminalEngineExeScroll, "id", id, "command", command, "cwd", cwd, "pid", pid, "conversation_id", conversationID)
+	return sess, client, nil
+}
+
+func terminalEnvironment(extra []string) []string {
+	env := append(os.Environ(), extra...)
+	out := env[:0]
+	for _, value := range env {
+		if strings.HasPrefix(value, "TERM=") || strings.HasPrefix(value, "COLORTERM=") {
+			continue
+		}
+		out = append(out, value)
+	}
+	return append(out, "TERM=xterm-256color", "COLORTERM=truecolor")
+}
+
+func waitForPIDFile(path string, max time.Duration) (int, error) {
+	deadline := time.Now().Add(max)
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		data, err := os.ReadFile(path)
+		if err == nil {
+			pid, parseErr := strconv.Atoi(strings.TrimSpace(string(data)))
+			if parseErr != nil || pid <= 0 {
+				return 0, fmt.Errorf("invalid server pid %q", strings.TrimSpace(string(data)))
+			}
+			return pid, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return 0, err
+		}
+		if time.Now().After(deadline) {
+			return 0, fmt.Errorf("timed out waiting for server pid")
+		}
+		<-ticker.C
+	}
+}
+
+// writeSession persists a session record and then publishes it in memory. The
+// JSON is written to a temp file in the sessions dir and renamed over the
+// record so a crash mid-write can never leave a truncated file, and the
+// in-memory map is only updated once the durable write succeeded.
+func (t *TerminalSessions) writeSession(sess *TerminalSession) error {
 	data, err := json.MarshalIndent(sess, "", "  ")
 	if err != nil {
-		dc.Close()
-		return nil, nil, err
+		return err
 	}
-	if err := os.WriteFile(filepath.Join(t.dir, id+".json"), data, 0o600); err != nil {
-		dc.Close()
-		return nil, nil, err
+	tmp, err := os.CreateTemp(t.dir, sess.ID+".json.*")
+	if err != nil {
+		return fmt.Errorf("terminals: create temp record: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return fmt.Errorf("terminals: write temp record: %w", err)
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return fmt.Errorf("terminals: chmod temp record: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("terminals: close temp record: %w", err)
+	}
+	if err := os.Rename(tmpName, filepath.Join(t.dir, sess.ID+".json")); err != nil {
+		return fmt.Errorf("terminals: rename record: %w", err)
 	}
 
 	t.mu.Lock()
-	t.sessions[id] = sess
+	t.sessions[sess.ID] = sess
 	t.mu.Unlock()
-	t.logger.Info("spawned persistent terminal", "id", id, "command", command, "cwd", cwd, "pid", sess.PID)
-	return sess, dc, nil
+	return nil
+}
+
+// ErrNoSuchTerminal reports that a terminal id is not known.
+var ErrNoSuchTerminal = errors.New("terminals: unknown terminal id")
+
+// SetConversationID re-scopes a terminal. An empty conversationID makes the
+// terminal global. Returns the updated record.
+func (t *TerminalSessions) SetConversationID(id, conversationID string) (*TerminalSession, error) {
+	t.mu.Lock()
+	cur := t.sessions[id]
+	t.mu.Unlock()
+	if cur == nil {
+		return nil, ErrNoSuchTerminal
+	}
+	// Copy so a failed write leaves the in-memory record untouched.
+	updated := *cur
+	updated.ConversationID = conversationID
+	if err := t.writeSession(&updated); err != nil {
+		return nil, err
+	}
+	return &updated, nil
+}
+
+// GlobalizeConversation re-scopes every terminal owned by conversationID to
+// global. Used when a conversation is permanently deleted so its terminals
+// remain reachable rather than pointing at a conversation that no longer
+// exists.
+func (t *TerminalSessions) GlobalizeConversation(conversationID string) error {
+	if conversationID == "" {
+		return nil
+	}
+	for _, s := range t.List() {
+		if s.ConversationID != conversationID {
+			continue
+		}
+		if _, err := t.SetConversationID(s.ID, ""); err != nil && !errors.Is(err, ErrNoSuchTerminal) {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *TerminalSessions) Attach(sess *TerminalSession, cols, rows uint16) (terminalClient, error) {
+	switch sess.Engine {
+	case "", terminalEngineDtach:
+		client, err := dtach.Attach(sess.Socket)
+		if err != nil {
+			return nil, err
+		}
+		return &dtachTerminalClient{client: client}, nil
+	case terminalEngineExeScroll:
+		client, err := exescroll.Attach(sess.Socket, t.exitFile(sess.ID), cols, rows)
+		if err != nil {
+			return nil, err
+		}
+		return &exeScrollTerminalClient{client: client}, nil
+	default:
+		return nil, fmt.Errorf("terminals: unknown engine %q", sess.Engine)
+	}
 }
 
 // attachWithRetry repeatedly tries to dial the dtach socket for up to the
@@ -226,33 +445,149 @@ func attachWithRetry(socket string, max time.Duration) (*dtach.Client, error) {
 	}
 }
 
-// Kill terminates the session (SIGTERM the dtach server group) and removes
-// its on-disk files.
+// Kill terminates the session and removes its on-disk files.
 func (t *TerminalSessions) Kill(id string) error {
 	t.mu.Lock()
 	s := t.sessions[id]
-	if s != nil {
-		delete(t.sessions, id)
-	}
 	t.mu.Unlock()
 	if s == nil {
 		return nil
 	}
-	if s.PID > 0 {
-		// Signal the process group (dtach + child shell + descendants).
-		_ = syscall.Kill(-s.PID, syscall.SIGTERM)
+	var err error
+	switch s.Engine {
+	case terminalEngineExeScroll:
+		err = t.killExeScroll(s)
+	case "", terminalEngineDtach:
+		if s.PID > 0 {
+			// Legacy dtach owns a process group containing the server and command.
+			err = syscall.Kill(-s.PID, syscall.SIGTERM)
+			if errors.Is(err, syscall.ESRCH) {
+				err = nil
+			}
+		}
+	default:
+		err = fmt.Errorf("terminals: unknown engine %q", s.Engine)
 	}
+	if err != nil {
+		return err
+	}
+	t.mu.Lock()
+	if t.sessions[id] == s {
+		delete(t.sessions, id)
+	}
+	t.mu.Unlock()
 	t.removeFiles(id)
 	return nil
 }
 
-// Forget drops a session from memory and disk without signalling it; intended
-// for cleanup after the underlying socket is observed dead.
+func (t *TerminalSessions) terminateSpawnedExeScroll(socket string, pid int) error {
+	if pid <= 0 {
+		var err error
+		pid, err = findExeScrollServerPID(socket)
+		if err != nil {
+			return fmt.Errorf("terminals: locate failed exe-scroll session: %w", err)
+		}
+	}
+	return t.killExeScroll(&TerminalSession{PID: pid, Socket: socket, Engine: terminalEngineExeScroll})
+}
+
+func findExeScrollServerPID(socket string) (int, error) {
+	output, err := exec.Command("ps", "-axo", "pid=,command=").Output()
+	if err != nil {
+		return 0, err
+	}
+	want := "exe-scroll: session " + socket
+	found := 0
+	for _, line := range strings.Split(string(output), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		pid, err := strconv.Atoi(fields[0])
+		if err != nil {
+			continue
+		}
+		command := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), fields[0]))
+		if command != want {
+			continue
+		}
+		if found != 0 {
+			return 0, fmt.Errorf("multiple session servers match %q", socket)
+		}
+		found = pid
+	}
+	if found == 0 {
+		return 0, fmt.Errorf("no session server matches %q", socket)
+	}
+	return found, nil
+}
+
+func (t *TerminalSessions) killExeScroll(sess *TerminalSession) error {
+	if sess.PID <= 0 {
+		return nil
+	}
+	if err := syscall.Kill(sess.PID, 0); errors.Is(err, syscall.ESRCH) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	want := "exe-scroll: session " + sess.Socket
+	command, err := waitForProcessCommand(sess.PID, want, time.Second)
+	if err != nil {
+		return err
+	}
+	if command != want {
+		return fmt.Errorf("terminals: refusing to signal pid %d with command %q", sess.PID, command)
+	}
+	if err := syscall.Kill(sess.PID, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
+		return err
+	}
+	return nil
+}
+
+func waitForProcessCommand(pid int, want string, max time.Duration) (string, error) {
+	deadline := time.Now().Add(max)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	var last string
+	for {
+		command, err := processCommand(pid)
+		if err == nil {
+			last = command
+			if command == want {
+				return command, nil
+			}
+		} else if errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ESRCH) {
+			return "", err
+		}
+		if time.Now().After(deadline) {
+			return last, nil
+		}
+		<-ticker.C
+	}
+}
+
+func processCommand(pid int) (string, error) {
+	if data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline")); err == nil {
+		return strings.TrimSpace(strings.ReplaceAll(string(data), "\x00", " ")), nil
+	}
+	output, err := exec.Command("ps", "-o", "command=", "-p", strconv.Itoa(pid)).Output()
+	if err != nil {
+		return "", fmt.Errorf("terminals: inspect pid %d: %w", pid, err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// Forget drops a finished session from memory and disk without signalling it.
+// Keep the tiny exit-status file briefly so concurrent attachments can all
+// observe the command's status after the shared socket closes.
 func (t *TerminalSessions) Forget(id string) {
 	t.mu.Lock()
 	delete(t.sessions, id)
 	t.mu.Unlock()
-	t.removeFiles(id)
+	t.removeFilesExceptExit(id)
+	exitFile := t.exitFile(id)
+	time.AfterFunc(time.Minute, func() { _ = os.Remove(exitFile) })
 }
 
 func newTerminalID() (string, error) {

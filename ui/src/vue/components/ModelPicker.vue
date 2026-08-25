@@ -36,10 +36,10 @@
     fluid
     size="small"
     :dt="statusPickerDt"
-    scroll-height="22rem"
+    :scroll-height="scrollHeight"
     :class="['model-picker', { 'model-picker-inline': inline }]"
     :aria-label="ariaLabel"
-    :append-to="inline ? 'body' : 'self'"
+    :append-to="inline || appendToBody ? 'body' : 'self'"
     :pt="{
       overlay: { class: 'model-picker-panel' },
       label: disabledReason ? { 'aria-description': disabledReason } : {},
@@ -56,8 +56,10 @@
   >
     <template #value>
       <span class="model-picker-value">
-        <span class="model-picker-value-name">{{ selectedLabel }}</span>
-        <span v-if="effortText && !inline" class="model-picker-value-effort"
+        <span :class="['model-picker-value-name', { 'status-readout-affordance': inline }]">{{
+          triggerLabel || selectedLabel
+        }}</span>
+        <span v-if="effortText && !inline && !triggerLabel" class="model-picker-value-effort"
           >· {{ effortText }}</span
         >
       </span>
@@ -113,9 +115,7 @@
       <template v-if="reasoningSupported">
         <div class="model-picker-divider" />
         <div class="model-picker-effort">
-          <span :id="effortLabelId" class="model-picker-effort-label">{{
-            t("effortLabel")
-          }}</span>
+          <span :id="effortLabelId" class="model-picker-effort-label">{{ t("effortLabel") }}</span>
           <div class="model-picker-effort-pills" role="radiogroup" :aria-labelledby="effortLabelId">
             <button
               v-for="level in effortLevels"
@@ -131,32 +131,34 @@
           </div>
         </div>
       </template>
-      <div class="model-picker-divider" />
-      <div class="model-picker-footer-row">
-        <button class="model-picker-manage" type="button" @click="handleManageModels">
-          {{ t("manageModelsAction") }}
-        </button>
-        <button
-          class="model-picker-refresh"
-          type="button"
-          :disabled="refreshing"
-          v-tooltip.top="refreshing ? t('refreshingModels') : t('refreshModels')"
-          :aria-label="refreshing ? t('refreshingModels') : t('refreshModels')"
-          @click="handleRefreshModels"
-        >
-          <svg
-            :class="`model-picker-refresh-icon ${refreshing ? 'spinning' : ''}`"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
+      <template v-if="catalogActions">
+        <div class="model-picker-divider" />
+        <div class="model-picker-footer-row">
+          <button class="model-picker-manage" type="button" @click="handleManageModels">
+            {{ t("manageModelsAction") }}
+          </button>
+          <button
+            class="model-picker-refresh"
+            type="button"
+            :disabled="refreshing"
+            v-tooltip.top="refreshing ? t('refreshingModels') : t('refreshModels')"
+            :aria-label="refreshing ? t('refreshingModels') : t('refreshModels')"
+            @click="handleRefreshModels"
           >
-            <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
-          </svg>
-        </button>
-      </div>
+            <svg
+              :class="`model-picker-refresh-icon ${refreshing ? 'spinning' : ''}`"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
+            </svg>
+          </button>
+        </div>
+      </template>
     </template>
   </Select>
 </template>
@@ -179,17 +181,41 @@ const props = withDefaults(
     thinkingLevel: ThinkingLevel;
     disabled?: boolean;
     refreshing?: boolean;
+    /** Show the "Manage models…" / refresh footer. Off where the picker
+     *  configures a one-shot action rather than the catalog. */
+    catalogActions?: boolean;
+    /** Portal the overlay to <body> so it isn't clipped by a scrollable
+     *  ancestor (e.g. the version modal). */
+    appendToBody?: boolean;
     /** Render as bare text (no box, no chevron) for the status-bar readout,
      *  where the picker sits among plain dot-separated segments. The overlay
      *  and behavior are unchanged; only the trigger's chrome differs. */
     inline?: boolean;
+    /** Prefix for the combobox's accessible name when the picker configures a
+     *  specific action, such as "Rebase model". */
+    ariaLabelPrefix?: string;
+    /** Fixed text for the trigger instead of the selected model's name, for
+     *  callers that name the selection elsewhere and want the trigger to read
+     *  as a plain control (e.g. "Model" beside a button naming the model). */
+    triggerLabel?: string;
+    /** Max height of the option list. The default suits a trigger with the
+     *  page below it; a trigger near the bottom of a dialog wants less, so the
+     *  panel opens downward instead of flipping over the trigger. */
+    scrollHeight?: string;
     /** Why the picker is disabled, put on the combobox itself so a screen
      *  reader that lands on it is told. Pointer users get the caller's tooltip;
      *  ARIA has to come from here because the disabled element is the thing
      *  assistive tech actually focuses. */
     disabledReason?: string;
   }>(),
-  { disabled: false, refreshing: false, inline: false },
+  {
+    disabled: false,
+    refreshing: false,
+    catalogActions: true,
+    inline: false,
+    appendToBody: false,
+    scrollHeight: "22rem",
+  },
 );
 const emit = defineEmits<{
   (e: "selectModel", modelId: string): void;
@@ -265,9 +291,7 @@ const selectedModelObj = computed(() => props.models.find((m) => m.id === props.
 // control, so the trigger never looks like a model is selected.
 const selectedLabel = computed(
   () =>
-    labels.value.get(props.selectedModel) ||
-    props.selectedModel ||
-    t("noModelSelectedPlaceholder"),
+    labels.value.get(props.selectedModel) || props.selectedModel || t("noModelSelectedPlaceholder"),
 );
 
 // ---- reasoning effort --------------------------------------------------
@@ -294,7 +318,9 @@ const effectiveEffort = computed<ThinkingLevel>(() =>
 const effortLevels = computed(() => {
   const real = THINKING_LEVELS.filter((l) => l.value !== "default");
   const advertised = selectedModelObj.value?.reasoning_levels as ThinkingLevel[] | undefined;
-  const list = advertised?.length ? real.filter((l) => advertised.includes(l.value)) : [...real];
+  const list = advertised?.length
+    ? real.filter((l) => advertised.includes(l.value))
+    : real.filter((l) => l.value !== "max");
   // Make sure the model's default is always selectable, even if it falls
   // outside the advertised subset (defensive; normally it's included).
   if (modelDefault.value && !list.some((l) => l.value === modelDefault.value)) {
@@ -319,11 +345,12 @@ const effortText = computed(() => {
 });
 
 // Names the effort even in the inline variant, whose trigger doesn't show it.
-const ariaLabel = computed(() =>
-  effortText.value
-    ? `Model: ${selectedLabel.value}, reasoning effort: ${effortText.value}`
-    : `Model: ${selectedLabel.value}`,
-);
+const ariaLabel = computed(() => {
+  const prefix = props.ariaLabelPrefix || "Model";
+  return effortText.value
+    ? `${prefix}: ${selectedLabel.value}, reasoning effort: ${effortText.value}`
+    : `${prefix}: ${selectedLabel.value}`;
+});
 
 // ---- actions -----------------------------------------------------------
 

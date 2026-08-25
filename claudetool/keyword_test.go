@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/models"
 )
 
 func TestKeywordInputSearchTermsFlexible(t *testing.T) {
@@ -66,9 +67,13 @@ func (m *mockLLMProvider) GetAvailableModels() []string {
 	return []string{"test-model"}
 }
 
+func (m *mockLLMProvider) GetModelInfo(modelID string) *models.ModelInfo {
+	return &models.ModelInfo{DisplayName: modelID}
+}
+
 func TestNewKeywordTool(t *testing.T) {
 	provider := &mockLLMProvider{}
-	tool := NewKeywordTool(provider)
+	tool := NewKeywordTool(provider, "test-model")
 
 	if tool == nil {
 		t.Fatal("NewKeywordTool returned nil")
@@ -78,7 +83,7 @@ func TestNewKeywordTool(t *testing.T) {
 func TestNewKeywordToolWithWorkingDir(t *testing.T) {
 	provider := &mockLLMProvider{}
 	wd := NewMutableWorkingDir("/test")
-	tool := NewKeywordToolWithWorkingDir(provider, wd)
+	tool := NewKeywordToolWithWorkingDir(provider, "test-model", wd)
 
 	if tool == nil {
 		t.Fatal("NewKeywordToolWithWorkingDir returned nil")
@@ -91,7 +96,7 @@ func TestNewKeywordToolWithWorkingDir(t *testing.T) {
 
 func TestKeywordTool_Tool(t *testing.T) {
 	provider := &mockLLMProvider{}
-	keywordTool := NewKeywordTool(provider)
+	keywordTool := NewKeywordTool(provider, "test-model")
 	tool := keywordTool.Tool()
 
 	if tool == nil {
@@ -154,7 +159,7 @@ func TestKeywordRun(t *testing.T) {
 
 	provider := &mockLLMProvider{}
 	wd := NewMutableWorkingDir(tmpDir)
-	keywordTool := NewKeywordToolWithWorkingDir(provider, wd)
+	keywordTool := NewKeywordToolWithWorkingDir(provider, "test-model", wd)
 
 	// Test with valid input
 	input := keywordInput{

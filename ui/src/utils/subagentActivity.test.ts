@@ -1,4 +1,4 @@
-import { subagentActivity, activityTail } from "./subagentActivity";
+import { subagentActivity } from "./subagentActivity";
 import type { Message } from "../types";
 
 function assert(cond: boolean, msg: string): void {
@@ -76,13 +76,6 @@ run("agent text tail used when last message has no tool_use", () => {
 run("falls back to preview", () => {
   const got = subagentActivity({ preview: "summary of last agent message" });
   assert(got === "summary of last agent message", `got ${JSON.stringify(got)}`);
-});
-
-run("activityTail truncates long lines", () => {
-  const long = "x".repeat(500);
-  const got = activityTail(long);
-  assert(got.length <= 121, `too long: ${got.length}`);
-  assert(got.endsWith("\u2026"), "expected ellipsis");
 });
 
 run("skips unparseable llm_data and keeps scanning", () => {

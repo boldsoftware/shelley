@@ -1,9 +1,4 @@
-import type { Conversation } from "../types";
-import {
-  initialDrawerCollapsed,
-  saveDrawerCollapsedPreference,
-  shouldStartDrawerCollapsed,
-} from "./drawerStartup";
+import { initialDrawerCollapsed, saveDrawerCollapsedPreference } from "./drawerStartup";
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`Assertion failed: ${msg}`);
@@ -19,52 +14,6 @@ function run(name: string, fn: () => void): void {
   }
 }
 
-function conversation(
-  id: string,
-  options: { parentId?: string | null; isDraft?: boolean } = {},
-): Pick<Conversation, "conversation_id" | "parent_conversation_id" | "is_draft"> {
-  return {
-    conversation_id: id,
-    parent_conversation_id: options.parentId ?? null,
-    is_draft: options.isDraft ?? false,
-  };
-}
-
-run("starts collapsed with no saved conversations", () => {
-  assert(shouldStartDrawerCollapsed([]), "empty drawer should start collapsed");
-});
-
-run("starts collapsed with one conversation", () => {
-  assert(
-    shouldStartDrawerCollapsed([conversation("only")]),
-    "single conversation should start collapsed",
-  );
-});
-
-run("starts collapsed with only a draft", () => {
-  assert(
-    shouldStartDrawerCollapsed([conversation("draft", { isDraft: true })]),
-    "single draft should start collapsed",
-  );
-});
-
-run("ignores subagents when deciding whether the drawer is useful", () => {
-  assert(
-    shouldStartDrawerCollapsed([
-      conversation("parent"),
-      conversation("subagent", { parentId: "parent" }),
-    ]),
-    "one top-level conversation plus a subagent should start collapsed",
-  );
-});
-
-run("starts expanded with multiple top-level conversations", () => {
-  assert(
-    !shouldStartDrawerCollapsed([conversation("first"), conversation("second")]),
-    "multiple conversations should start expanded",
-  );
-});
-
 function fakeStorage(initial: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(initial));
   return {
@@ -79,53 +28,33 @@ function fakeStorage(initial: Record<string, string> = {}): Storage {
   };
 }
 
-run("falls back to the heuristic without a saved preference", () => {
-  const storage = fakeStorage();
-  assert(
-    initialDrawerCollapsed([conversation("only")], storage),
-    "single conversation should start collapsed without a preference",
-  );
-  assert(
-    !initialDrawerCollapsed([conversation("first"), conversation("second")], storage),
-    "multiple conversations should start expanded without a preference",
-  );
+run("starts expanded without a saved preference", () => {
+  assert(!initialDrawerCollapsed(fakeStorage()), "drawer should start expanded by default");
 });
 
-run("a saved expanded preference overrides the heuristic", () => {
-  const storage = fakeStorage();
-  saveDrawerCollapsedPreference(false, storage);
-  assert(
-    !initialDrawerCollapsed([conversation("only")], storage),
-    "saved expanded preference should keep the drawer open",
-  );
-});
-
-run("a saved collapsed preference overrides the heuristic", () => {
+run("a saved collapsed preference keeps the drawer collapsed", () => {
   const storage = fakeStorage();
   saveDrawerCollapsedPreference(true, storage);
-  assert(
-    initialDrawerCollapsed([conversation("first"), conversation("second")], storage),
-    "saved collapsed preference should keep the drawer collapsed",
-  );
+  assert(initialDrawerCollapsed(storage), "saved collapsed preference should be honored");
 });
 
-run("garbage stored values fall back to the heuristic", () => {
+run("a saved expanded preference keeps the drawer expanded", () => {
+  const storage = fakeStorage();
+  saveDrawerCollapsedPreference(false, storage);
+  assert(!initialDrawerCollapsed(storage), "saved expanded preference should be honored");
+});
+
+run("garbage stored values start expanded", () => {
   const storage = fakeStorage({ "shelley-drawer-collapsed": "maybe" });
-  assert(
-    !initialDrawerCollapsed([conversation("first"), conversation("second")], storage),
-    "invalid stored value should fall back to the heuristic",
-  );
+  assert(!initialDrawerCollapsed(storage), "invalid stored value should start expanded");
 });
 
-run("storage errors fall back to the heuristic", () => {
+run("storage errors start expanded", () => {
   const storage = fakeStorage();
   storage.getItem = () => {
     throw new Error("denied");
   };
-  assert(
-    initialDrawerCollapsed([conversation("only")], storage),
-    "throwing storage should fall back to the heuristic",
-  );
+  assert(!initialDrawerCollapsed(storage), "throwing storage should start expanded");
 });
 
 console.log("\ndrawerStartup tests passed");

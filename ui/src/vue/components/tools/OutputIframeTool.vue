@@ -18,8 +18,16 @@
       <div class="output-iframe-tool-summary">
         <span class="output-iframe-tool-emoji" :class="{ running: isRunning }">✨</span>
         <span class="output-iframe-tool-title" :title="title">{{ title }}</span>
-        <span v-if="isComplete && hasError" class="output-iframe-tool-error">✗</span>
-        <span v-if="isComplete && !hasError" class="output-iframe-tool-success">✓</span>
+        <ToolStatusIcon
+          v-if="isComplete && hasError"
+          state="error"
+          class="output-iframe-tool-error"
+        />
+        <ToolStatusIcon
+          v-if="isComplete && !hasError"
+          state="ok"
+          class="output-iframe-tool-success"
+        />
       </div>
       <div class="output-iframe-tool-actions">
         <template v-if="isComplete && !hasError && html">
@@ -72,23 +80,7 @@
           :aria-expanded="isExpanded"
           @click.stop="isExpanded = !isExpanded"
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            class="tool-chevron"
-            :class="{ 'tool-chevron-expanded': isExpanded }"
-          >
-            <path
-              d="M4.5 3L7.5 6L4.5 9"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+          <ToolChevron :expanded="isExpanded" />
         </button>
       </div>
     </div>
@@ -137,6 +129,8 @@
 import { computed, ref, onMounted, onUnmounted } from "vue";
 import JSZip from "jszip";
 import type { LLMContent } from "../../../types";
+import ToolChevron from "./ToolChevron.vue";
+import ToolStatusIcon from "./ToolStatusIcon.vue";
 
 interface EmbeddedFile {
   name: string;

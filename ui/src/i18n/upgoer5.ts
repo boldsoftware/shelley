@@ -9,6 +9,7 @@ export const upgoer5: TranslationKeys = {
   // Chat Header & Actions
   newConversation: "New Talk",
   moreOptions: "More things to do",
+  actions: "Things to do",
   conversations: "Talks",
 
   // Overflow Menu
@@ -18,6 +19,11 @@ export const upgoer5: TranslationKeys = {
   archiveConversation: "Put Away Talk",
   exportConversation: "Save Out Talk",
   checkForNewVersion: "Look for a newer one",
+  conversationView: "Talk view",
+  seeAllMessages: "See all",
+  seeEndOfTurnMessagesOnly: "See only end-of-turn messages",
+  brevity: "Shortness",
+  look: "Look",
 
   // Theme
   system: "Same as computer",
@@ -71,6 +77,7 @@ export const upgoer5: TranslationKeys = {
   archiveConversationAction: "Put Away Talk",
   archiveCurrentConversation: "Put away the talk you are in",
   newConversationInMainRepo: "New Talk in Home Place",
+  newConversationInHomeDirectory: "New Talk in Your Home Place",
   newConversationInNewWorktree: "New Talk in New Work Place",
   createNewWorktree: "Make a new work place for this talk",
   setWorkingDirToRepoRoot: "Set work place to the top of this git code home",
@@ -98,6 +105,7 @@ export const upgoer5: TranslationKeys = {
   subagentIsWorking: "Little helper is working...",
   running: "going",
   hideSubagents: "Hide little helpers",
+  terminalsPinnedHere: "type boxes stuck to this talk",
   showSubagents: "Show little helpers",
   groupConversations: "Put talks in groups",
   resortNow: "Put in order now",
@@ -105,6 +113,12 @@ export const upgoer5: TranslationKeys = {
   directory: "Place",
   gitRepo: "Where Your Work Lives",
   other: "Other",
+  clearTagFilter: "Drop them all",
+  searchOrTagPlaceholder: "Look for words, or tag: to pick",
+  untagged: "No word stickers",
+  noMatchingTags: "No word marks like that",
+  noTagsToNarrow: "Nothing left to cut down",
+  noConversationsMatchTags: "No talks have all these word marks",
   collapseSubagents: "Close up little helpers",
   expandSubagents: "Open up little helpers",
   collapseSidebar: "Make side part small",
@@ -137,6 +151,9 @@ export const upgoer5: TranslationKeys = {
   effortLabel: "How hard to think",
   effortAuto: "brain picks",
   modelSwitchBusy: "Let the computer finish, or stop it, before you pick a new brain",
+  modelSwitchHint: "Click here to pick a new brain, or how hard it thinks",
+  cwdChangeHint: "click to pick the place your files are in",
+  cwdChangeBusy: "Let the computer finish, or stop it, before you move to a new place",
   customModelsGroup: "Your own brains",
   editModel: "Change Brain",
   loadingModels: "Getting brains...",
@@ -240,7 +257,11 @@ export const upgoer5: TranslationKeys = {
   welcomeTitle: "Your Helper",
   welcomeSubtitle: "",
   welcomeMessage:
-    "This is a helper, running on {hostname}. You can ask it to do stuff. If you build something for people to see, you can use the pass through (see {docsLink}) to visit it at {proxyLink}.",
+    "This is a helper, running on {hostname}. If you build something for people to see, you can use the pass through (see {docsLink}) to visit it at {proxyLink}. This helper is {openSourceLink} and {customizeLink}.",
+  welcomeMessageLocal:
+    "This is a helper, running on {hostname}. This helper is {openSourceLink} and {customizeLink}.",
+  welcomeOpenSource: "free to use and change",
+  welcomeCustomize: "can be made your own",
   sendMessageToStart: "Send a note to start talking.",
   noModelsTitle: "No brains to talk to",
   noModelsExeNote:
@@ -260,6 +281,7 @@ export const upgoer5: TranslationKeys = {
   editFileShortcutFirefox:
     "This computer program keeps this key press for its own hidden window — use the big command box (Cmd/Ctrl+K) instead",
   openConversations: "Open talks",
+  commandMenu: "Do-stuff box",
   expandSidebar: "Make side bigger",
 
   // Language

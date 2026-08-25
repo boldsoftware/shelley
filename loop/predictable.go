@@ -481,15 +481,11 @@ func (s *PredictableService) makeThinkingResponse(thoughts string, inputTokens u
 // makePatchToolResponse creates a response that calls the patch tool
 func (s *PredictableService) makePatchToolResponse(filePath string, inputTokens uint64) *llm.Response {
 	// Properly marshal the patch data to avoid JSON escaping issues
-	toolInputData := map[string]interface{}{
+	toolInputData := map[string]any{
 		"path": filePath,
-		"patches": []map[string]string{
-			{
-				"operation": "replace",
-				"oldText":   "example",
-				"newText":   "updated example",
-			},
-		},
+		"patches": []map[string]string{{
+			"operation": "replace", "oldText": "example", "newText": "updated example",
+		}},
 	}
 	toolInputBytes, _ := json.Marshal(toolInputData)
 	toolInput := json.RawMessage(toolInputBytes)
@@ -523,14 +519,11 @@ func (s *PredictableService) makePatchToolResponse(filePath string, inputTokens 
 
 // makePatchToolResponseOverwrite creates a response that uses overwrite operation (always succeeds)
 func (s *PredictableService) makePatchToolResponseOverwrite(filePath string, inputTokens uint64) *llm.Response {
-	toolInputData := map[string]interface{}{
+	toolInputData := map[string]any{
 		"path": filePath,
-		"patches": []map[string]string{
-			{
-				"operation": "overwrite",
-				"newText":   "This is the new content of the file.\nLine 2\nLine 3\n",
-			},
-		},
+		"patches": []map[string]string{{
+			"operation": "overwrite", "newText": "This is the new content of the file.\nLine 2\nLine 3\n",
+		}},
 	}
 	toolInputBytes, _ := json.Marshal(toolInputData)
 	toolInput := json.RawMessage(toolInputBytes)
@@ -575,9 +568,9 @@ func (s *PredictableService) makeBigPatchToolResponse(inputTokens uint64) *llm.R
 	filePath := fmt.Sprintf("/tmp/shelley-big-patch-%d.go", time.Now().UnixNano())
 	toolInputData := map[string]any{
 		"path": filePath,
-		"patches": []map[string]string{
-			{"operation": "overwrite", "newText": body.String()},
-		},
+		"patches": []map[string]string{{
+			"operation": "overwrite", "newText": body.String(),
+		}},
 	}
 	toolInputBytes, err := json.Marshal(toolInputData)
 	if err != nil {
@@ -961,11 +954,11 @@ func (s *PredictableService) makeToolSmorgasbordResponse(inputTokens uint64) *ll
 	})
 
 	// patch tool
-	patchInput, _ := json.Marshal(map[string]interface{}{
+	patchInput, _ := json.Marshal(map[string]any{
 		"path": "/tmp/example.txt",
-		"patches": []map[string]string{
-			{"operation": "replace", "oldText": "foo", "newText": "bar"},
-		},
+		"patches": []map[string]string{{
+			"operation": "replace", "oldText": "foo", "newText": "bar",
+		}},
 	})
 	content = append(content, llm.Content{
 		ID:        fmt.Sprintf("tool_patch_%d", (baseNano+2)%1000),

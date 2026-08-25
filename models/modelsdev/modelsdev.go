@@ -13,18 +13,35 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"shelley.exe.dev/llm"
 )
 
 //go:embed api.json
 var apiJSON []byte
 
 type modelEntry struct {
-	Reasoning  bool `json:"reasoning"`
-	Modalities struct {
+	Reasoning        bool              `json:"reasoning"`
+	ReasoningOptions []reasoningOption `json:"reasoning_options"`
+	ReleaseDate      string            `json:"release_date"`
+	Modalities       struct {
 		Input  []string `json:"input"`
 		Output []string `json:"output"`
 	} `json:"modalities"`
 	Cost Cost `json:"cost"`
+}
+
+type reasoningOption struct {
+	Type   string   `json:"type"`
+	Values []string `json:"values"`
+}
+
+// ReasoningCapabilities describes the reasoning controls models.dev records
+// for a model. Levels is empty when the model supports reasoning but its
+// reasoning_options do not contain an explicit effort list.
+type ReasoningCapabilities struct {
+	Supported bool
+	Levels    []llm.ThinkingLevel
 }
 
 // Cost is a model's pricing in USD per million tokens, as recorded by
@@ -144,6 +161,78 @@ func LookupReasoningSupport(endpoint, modelName string) (supported, found bool) 
 	return m.Reasoning, found
 }
 
+// LookupReasoningCapabilities returns the reasoning support and explicit effort
+// levels models.dev records for a model. Unknown models return found=false.
+//
+// Only explicit effort values become levels. "none" maps to off, and a toggle
+// adds off when an effort list is also present. Toggle-only and budget-token
+// controls do not define exact generic levels, so Levels stays empty.
+func LookupReasoningCapabilities(endpoint, modelName string) (ReasoningCapabilities, bool) {
+	m, found := lookupBroad(endpoint, modelName, func(modelEntry) bool { return true })
+	if !found {
+		return ReasoningCapabilities{}, false
+	}
+	return parseReasoningCapabilities(m), true
+}
+
+func parseReasoningCapabilities(m modelEntry) (caps ReasoningCapabilities) {
+	caps.Supported = m.Reasoning
+	if !m.Reasoning {
+		return caps
+	}
+
+	set := map[llm.ThinkingLevel]bool{}
+	hasEffort := false
+	hasToggle := false
+	for _, option := range m.ReasoningOptions {
+		switch option.Type {
+		case "effort":
+			for _, value := range option.Values {
+				level := llm.ParseThinkingLevel(value)
+				if value == "none" {
+					level = llm.ThinkingLevelOff
+				}
+				if level == llm.ThinkingLevelDefault {
+					continue
+				}
+				set[level] = true
+				hasEffort = true
+			}
+		case "toggle":
+			hasToggle = true
+		}
+	}
+	if !hasEffort {
+		return caps
+	}
+	if hasToggle {
+		set[llm.ThinkingLevelOff] = true
+	}
+	for _, level := range reasoningLevels {
+		if set[level] {
+			caps.Levels = append(caps.Levels, level)
+		}
+	}
+	return caps
+}
+
+var reasoningLevels = []llm.ThinkingLevel{
+	llm.ThinkingLevelOff,
+	llm.ThinkingLevelMinimal,
+	llm.ThinkingLevelLow,
+	llm.ThinkingLevelMedium,
+	llm.ThinkingLevelHigh,
+	llm.ThinkingLevelXHigh,
+	llm.ThinkingLevelMax,
+}
+
+// LookupReleaseDate returns the ISO release date models.dev records for a
+// model. Gateway endpoints fall back to first-party catalogs by model name.
+func LookupReleaseDate(endpoint, modelName string) (string, bool) {
+	m, found := lookupBroad(endpoint, modelName, func(m modelEntry) bool { return m.ReleaseDate != "" })
+	return m.ReleaseDate, found
+}
+
 // LookupCost returns models.dev pricing (USD per million tokens) for
 // (endpoint, modelName). The second return value is false when the model is
 // unknown or has no pricing.
@@ -155,43 +244,49 @@ func LookupReasoningSupport(endpoint, modelName string) (supported, found bool) 
 // then first-party catalogs by name, then the OpenRouter catalog — is tried
 // with the full name and with a trailing -YYYY-MM-DD stripped.
 func LookupCost(endpoint, modelName string) (Cost, bool) {
+	m, found := lookupBroad(endpoint, modelName, func(m modelEntry) bool { return !m.Cost.isZero() })
+	return m.Cost, found
+}
+
+// lookupBroad resolves models that may be reached through gateway hosts absent
+// from models.dev: endpoint host first, then first-party catalogs by bare name,
+// then OpenRouter. Each path also tries a trailing date suffix stripped.
+func lookupBroad(endpoint, modelName string, usable func(modelEntry) bool) (modelEntry, bool) {
 	data := load()
 	names := []string{modelName}
 	if stripped := dateSuffixRe.ReplaceAllString(modelName, ""); stripped != modelName {
 		names = append(names, stripped)
 	}
-	tryProvider := func(p providerEntry, n string) (Cost, bool) {
-		if m, ok := lookupInProvider(p, n); ok && !m.Cost.isZero() {
-			return m.Cost, true
-		}
-		return Cost{}, false
+	tryProvider := func(p providerEntry, name string) (modelEntry, bool) {
+		m, found := lookupInProvider(p, name)
+		return m, found && usable(m)
 	}
-	for _, n := range names {
+	for _, name := range names {
 		if host := hostOf(endpoint); host != "" {
-			if p, ok := bestProviderForPath(hostIndex[host], pathSegments(endpoint), n); ok {
-				if c, ok := tryProvider(p, n); ok {
-					return c, true
+			if p, ok := bestProviderForPath(hostIndex[host], pathSegments(endpoint), name); ok {
+				if m, ok := tryProvider(p, name); ok {
+					return m, true
 				}
 			}
 		}
 	}
-	for _, n := range names {
-		for _, pk := range firstPartyProviders {
-			if p, ok := data[pk]; ok {
-				if c, ok := tryProvider(p, n); ok {
-					return c, true
+	for _, name := range names {
+		for _, provider := range firstPartyProviders {
+			if p, ok := data[provider]; ok {
+				if m, ok := tryProvider(p, name); ok {
+					return m, true
 				}
 			}
 		}
 	}
-	for _, n := range names {
+	for _, name := range names {
 		if p, ok := data["openrouter"]; ok {
-			if c, ok := tryProvider(p, n); ok {
-				return c, true
+			if m, ok := tryProvider(p, name); ok {
+				return m, true
 			}
 		}
 	}
-	return Cost{}, false
+	return modelEntry{}, false
 }
 
 // firstPartyProviders are the models.dev catalogs scanned by bare model name
@@ -307,4 +402,27 @@ func entryHasImage(m modelEntry) bool {
 		}
 	}
 	return false
+}
+
+// Modalities are the input and output modalities models.dev records for a
+// model (e.g. Input: ["text", "image"], Output: ["text"]).
+type Modalities struct {
+	Input  []string
+	Output []string
+}
+
+// LookupModalities returns the input/output modalities models.dev records for
+// (endpoint, modelName). The second return value is false when the model is
+// unknown or has no recorded modalities. Matching follows the same strategy
+// as LookupImageSupport: endpoint host with path affinity, then the
+// OpenRouter catalog.
+func LookupModalities(endpoint, modelName string) (Modalities, bool) {
+	m, found := lookup(endpoint, modelName)
+	if !found || (len(m.Modalities.Input) == 0 && len(m.Modalities.Output) == 0) {
+		return Modalities{}, false
+	}
+	return Modalities{
+		Input:  append([]string(nil), m.Modalities.Input...),
+		Output: append([]string(nil), m.Modalities.Output...),
+	}, true
 }

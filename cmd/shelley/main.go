@@ -78,7 +78,8 @@ func main() {
 		fmt.Fprintf(flag.CommandLine.Output(), "  models [flags]                List the models the server would expose, without starting it\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  client [flags] <subcommand>   CLI client (chat, read, list, archive) (experimental)\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  skill <cat|ls|new> [name]     Read, list, or create skills\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  dtach <new|attach> ...        Persistent PTY sessions over a Unix socket\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  dtach <new|attach> ...        Legacy persistent PTY session helper\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  exe-scroll [args]              Run the embedded exe-scroll binary\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  unpack-template <name> <dir>  Unpack a project template to a directory\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  version                       Print version information as JSON\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "\nUse '%s <command> -h' for command-specific help\n", os.Args[0])
@@ -105,6 +106,8 @@ func main() {
 		runSkill(args[1:])
 	case "dtach":
 		runDtach(args[1:])
+	case "exe-scroll":
+		runExeScroll(args[1:])
 	case "unpack-template":
 		runUnpackTemplate(args[1:])
 	case "version":
@@ -201,7 +204,7 @@ func runServe(global GlobalConfig, args []string) {
 	availableModels := llmManager.GetAvailableModels()
 	logger.Info("Available models", "models", strings.Join(availableModels, ", "))
 
-	toolSetConfig := setupToolSetConfig(llmManager, llmManager)
+	toolSetConfig := setupToolSetConfig(llmManager, llmManager, database)
 
 	// Create server
 	svr := server.NewServer(database, llmManager, toolSetConfig, logger, global.PredictableOnly, llmConfig.DefaultModel, *requireHeader)
@@ -279,13 +282,10 @@ func setupDatabase(dbPath string, logger *slog.Logger) *db.DB {
 		logger.Warn("Failed to checkpoint WAL at startup", "error", err)
 	}
 
-	// agent_working is runtime-only state. If the previous process exited
-	// while a loop was running, the column can be left TRUE for one or more
-	// conversations. Clear them so the conversation list reflects reality.
-	if err := database.ResetAllAgentWorking(context.Background()); err != nil {
-		logger.Error("Failed to reset agent_working state", "error", err)
-		os.Exit(1)
-	}
+	// Note: stale agent_working values from a previous process are handled at
+	// server start (Server.StartWithListeners -> db.ConsumeResumeAfterUpgrade),
+	// which either clears them or resumes the interrupted turns after an upgrade
+	// restart.
 	return database
 }
 
@@ -362,7 +362,7 @@ func runVersion() {
 	}
 }
 
-func setupToolSetConfig(llmProvider claudetool.LLMServiceProvider, llmManager server.LLMProvider) claudetool.ToolSetConfig {
+func setupToolSetConfig(llmProvider claudetool.LLMServiceProvider, llmManager server.LLMProvider, database *db.DB) claudetool.ToolSetConfig {
 	wd, err := os.Getwd()
 	if err != nil {
 		// Fallback to "/" if we can't get working directory
@@ -394,12 +394,35 @@ func setupToolSetConfig(llmProvider claudetool.LLMServiceProvider, llmManager se
 		return out
 	}
 
+	flagEnabled := func(name string) func() bool {
+		return func() bool {
+			if database == nil {
+				return false
+			}
+			overrides, err := database.GetAllFeatureFlagOverrides(context.Background())
+			if err != nil {
+				panic(fmt.Sprintf("read feature flag %q: %v", name, err))
+			}
+			raw, ok := overrides[name]
+			if !ok {
+				return false
+			}
+			var enabled bool
+			if err := json.Unmarshal([]byte(raw), &enabled); err != nil {
+				panic(fmt.Sprintf("decode boolean feature flag %q: %v", name, err))
+			}
+			return enabled
+		}
+	}
+
 	return claudetool.ToolSetConfig{
-		WorkingDir:           wd,
-		LLMProvider:          llmProvider,
-		EnableJITInstall:     claudetool.EnableBashToolJITInstall,
-		EnableBrowser:        true,
-		BuildAvailableModels: buildAvailableModels,
+		WorkingDir:            wd,
+		LLMProvider:           llmProvider,
+		EnableJITInstall:      claudetool.EnableBashToolJITInstall,
+		EnableBrowser:         true,
+		BuildAvailableModels:  buildAvailableModels,
+		PatchSimpleEnabled:    flagEnabled(server.FlagPatchSimple.Name),
+		PatchOpenAIRawEnabled: flagEnabled(server.FlagPatchOpenAIRaw.Name),
 	}
 }
 

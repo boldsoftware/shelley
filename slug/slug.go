@@ -15,16 +15,13 @@ import (
 	"shelley.exe.dev/models"
 )
 
-// LLMServiceProvider defines the interface for getting LLM services
-type LLMServiceProvider interface {
-	GetService(modelID string) (llm.Service, error)
-	GetAvailableModels() []string
-	GetModelInfo(modelID string) *models.ModelInfo
-}
+// LLMServiceProvider provides LLM services and workhorse model selection.
+type LLMServiceProvider = models.WorkhorseProvider
 
 // GenerateSlug generates a slug for a conversation and updates the database.
 // If the conversation already has a slug, it is returned unchanged (no LLM call).
-// If conversationModelID is provided, it will be used as a fallback if no model is tagged with "slug".
+// If conversationModelID is provided, its provider's workhorse model is used
+// when available, with one retry on the conversation model if it fails.
 //
 // Also returns the appended slug marker message (nil when no LLM call was made
 // or no usage was reported). The caller MUST publish it: it carries a real
@@ -45,7 +42,7 @@ func GenerateSlug(ctx context.Context, llmProvider LLMServiceProvider, database 
 	ctx = llmhttp.WithUsageCollector(ctx, otherUsage.Collect)
 	ctx = llmhttp.WithConversationID(llmhttp.WithPurpose(ctx, "slug"), conversationID)
 
-	baseSlug, err := generateSlugText(ctx, llmProvider, logger, userMessage, conversationModelID)
+	baseSlug, err := generateSlugText(ctx, llmProvider, userMessage, conversationModelID)
 	if err != nil {
 		return "", nil, err
 	}
@@ -92,133 +89,9 @@ func GenerateSlug(ctx context.Context, llmProvider LLMServiceProvider, database 
 	return "", marker, fmt.Errorf("failed to generate unique slug after 100 attempts")
 }
 
-// preferredModelSubstrings is an ordered priority list of model-ID substrings
-// used to pick a slug model when no tagged model produced a slug. Models
-// discovered from a gateway integration carry no catalog tags, so without
-// this list slug generation would fall through to the conversation's model.
-// Cheap, fast models first.
-var preferredModelSubstrings = []string{
-	"gpt-oss-20b",
-	"gpt-5.6-luna",
-	"haiku",
-	"gemini-3.6-flash",
-	"gemini-3-flash",
-	"-nano",
-	"-mini",
-}
-
-// preferredModels returns available model IDs matching the substring priority
-// list, in priority order, deduplicated and excluding already-tried models.
-func preferredModels(available []string, tried map[string]bool) []string {
-	var out []string
-	seen := make(map[string]bool, len(available))
-	for _, sub := range preferredModelSubstrings {
-		for _, id := range available {
-			if !seen[id] && !tried[id] && strings.Contains(id, sub) {
-				seen[id] = true
-				out = append(out, id)
-			}
-		}
-	}
-	return out
-}
-
-// generateSlugText generates a human-readable slug for a conversation based on the user message
-// Priority order:
-// 1. If conversationModelID is "predictable", use it
-// 2. Try models tagged with "slug" (try the LLM call; if it fails, continue)
-// 3. Try models tagged with "slug-backup"
-// 4. Try models matching preferredModelSubstrings (covers untagged gateway models)
-// 5. Fall back to the conversation's model (conversationModelID)
-func generateSlugText(ctx context.Context, llmProvider LLMServiceProvider, logger *slog.Logger, userMessage, conversationModelID string) (string, error) {
-	// If conversation is using predictable model, use it for slug generation too
-	if conversationModelID == "predictable" {
-		llmService, err := llmProvider.GetService("predictable")
-		if err == nil {
-			logger.Debug("Using predictable model for slug generation")
-			return callSlugLLM(ctx, llmService, userMessage)
-		}
-		logger.Debug("Predictable model not available for slug generation", "error", err)
-	}
-
-	// Try models tagged with "slug", then "slug-backup"
-	tried := map[string]bool{}
-	for _, tag := range []string{"slug", "slug-backup"} {
-		for _, modelID := range llmProvider.GetAvailableModels() {
-			info := llmProvider.GetModelInfo(modelID)
-			if info == nil || !hasTag(info.Tags, tag) {
-				continue
-			}
-			if tried[modelID] {
-				continue
-			}
-			tried[modelID] = true
-			llmService, err := llmProvider.GetService(modelID)
-			if err != nil {
-				logger.Debug("Failed to get model for slug generation", "model", modelID, "tag", tag, "error", err)
-				continue
-			}
-			logger.Debug("Trying model for slug generation", "model", modelID, "tag", tag)
-			slug, err := callSlugLLM(ctx, llmService, userMessage)
-			if err == nil {
-				return slug, nil
-			}
-			logger.Warn("Slug generation failed, trying next model", "model", modelID, "tag", tag, "error", err)
-		}
-	}
-
-	// No tagged model produced a slug (typical for gateway integrations, which
-	// don't carry tags at all). Try the substring preference list, skipping
-	// models already tried above.
-	for _, modelID := range preferredModels(llmProvider.GetAvailableModels(), tried) {
-		if ctx.Err() != nil {
-			break
-		}
-		tried[modelID] = true
-		llmService, err := llmProvider.GetService(modelID)
-		if err != nil {
-			logger.Debug("Failed to get preferred model for slug generation", "model", modelID, "error", err)
-			continue
-		}
-		logger.Debug("Trying preferred model for slug generation", "model", modelID)
-		slug, err := callSlugLLM(ctx, llmService, userMessage)
-		if err == nil {
-			return slug, nil
-		}
-		logger.Warn("Slug generation failed, trying next model", "model", modelID, "error", err)
-	}
-
-	// Fall back to the conversation's model
-	if conversationModelID != "" && conversationModelID != "predictable" && !tried[conversationModelID] {
-		llmService, err := llmProvider.GetService(conversationModelID)
-		if err == nil {
-			logger.Debug("Using conversation model for slug generation", "model", conversationModelID)
-			return callSlugLLM(ctx, llmService, userMessage)
-		}
-		logger.Debug("Conversation model not available for slug generation", "model", conversationModelID, "error", err)
-	}
-
-	return "", fmt.Errorf("no suitable model available for slug generation")
-}
-
-// hasTag checks if a comma-separated tag list contains the exact given tag.
-func hasTag(tags, tag string) bool {
-	for _, t := range strings.Split(tags, ",") {
-		if strings.TrimSpace(t) == tag {
-			return true
-		}
-	}
-	return false
-}
-
-// PromptPreamble is the fixed leading text of the slug-generation prompt. It is
-// exported so tests (e.g. fake LLM services shared with the agent loop) can
-// reliably distinguish a slug request from a real agent turn. Keep it in sync
-// with the format string in callSlugLLM.
-const PromptPreamble = "Generate a short, descriptive slug (2-6 words, lowercase, hyphen-separated) for a conversation that starts with this user message:"
-
-// callSlugLLM calls an LLM service to generate a slug from a user message.
-func callSlugLLM(ctx context.Context, llmService llm.Service, userMessage string) (string, error) {
+// generateSlugText generates a human-readable slug with the conversation's
+// provider workhorse, or the conversation model when no workhorse is available.
+func generateSlugText(ctx context.Context, llmProvider LLMServiceProvider, userMessage, conversationModelID string) (string, error) {
 	slugPrompt := fmt.Sprintf(PromptPreamble+`
 
 %s
@@ -229,50 +102,35 @@ The slug should:
 - Capture the main topic or intent
 - Be suitable as a filename or URL path
 
-Respond with only the slug, nothing else.`, userMessage)
-
-	message := llm.Message{
-		Role: llm.MessageRoleUser,
-		Content: []llm.Content{
-			{Type: llm.ContentTypeText, Text: slugPrompt},
-		},
-	}
+Respond with exactly one slug and no other text or markup.`, userMessage)
 
 	request := &llm.Request{
-		Messages: []llm.Message{message},
+		Messages: []llm.Message{{
+			Role:    llm.MessageRoleUser,
+			Content: []llm.Content{llm.StringContent(slugPrompt)},
+		}},
 	}
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	response, err := llmService.Do(ctxWithTimeout, request)
+	response, err := models.WorkhorseDo(ctxWithTimeout, llmProvider, conversationModelID, request)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate slug: %w", err)
 	}
 
-	if len(response.Content) == 0 {
-		return "", fmt.Errorf("empty response from LLM")
-	}
-
-	// Find the first text content block. Reasoning models (e.g.
-	// gpt-oss-20b) return a leading Thinking block with the actual answer
-	// in a later text block, so we can't just read Content[0].
-	var text string
-	for _, content := range response.Content {
-		if content.Type == llm.ContentTypeText && strings.TrimSpace(content.Text) != "" {
-			text = content.Text
-			break
-		}
-	}
-
-	slug := strings.TrimSpace(text)
-	slug = Sanitize(slug)
+	slug := Sanitize(strings.TrimSpace(llm.FirstText(response)))
 	if slug == "" {
 		return "", fmt.Errorf("generated slug is empty after sanitization")
 	}
-
 	return slug, nil
 }
+
+// PromptPreamble is the fixed leading text of the slug-generation prompt. It is
+// exported so tests (e.g. fake LLM services shared with the agent loop) can
+// reliably distinguish a slug request from a real agent turn. Keep it in sync
+// with the format string in generateSlugText.
+const PromptPreamble = "Generate a short, descriptive slug (2-6 words, lowercase, hyphen-separated) for a conversation that starts with this user message:"
 
 // Sanitize cleans a string to be a valid slug
 func Sanitize(input string) string {

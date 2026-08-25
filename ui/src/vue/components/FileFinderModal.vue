@@ -2,7 +2,10 @@
      ranks them against the query on the server (/api/find-files), so the
      browser never needs the full file list. Selecting a file emits its
      absolute path (the parent opens EditableFileModal on it). A "change
-     directory" affordance re-roots the search via DirectoryPickerModal.
+     directory" affordance re-roots the search via DirectoryPickerModal, and a
+     query that announces itself as a path (a leading /, ~, ./ or ../) re-roots
+     it for that query alone — the server reports the directory it actually
+     searched as `search_dir`, which results are relative to.
 
      Reuses the grp-* class contract from GitRepoPicker for the list chrome;
      ff-* classes cover the directory header row. -->
@@ -44,11 +47,17 @@
         class="grp-filter"
         type="text"
         v-model="query"
-        :placeholder="loading ? 'Searching…' : 'Filter files…'"
+        :placeholder="loading ? 'Searching…' : 'Filter files, or type a path…'"
         spellcheck="false"
         aria-label="Filter files"
         @keydown="handleKey"
       />
+
+      <!-- Shown only when the query re-rooted the search, so it's clear the
+           paths below aren't relative to the directory in the header chip. -->
+      <div v-if="scopeDir" class="ff-scope">
+        Searching <code class="ff-scope-path">{{ tildifyPath(scopeDir) }}</code>
+      </div>
 
       <div v-if="error" class="grp-error">{{ error }}</div>
 
@@ -90,11 +99,9 @@
         </button>
 
         <div v-if="!loading && matches.length === 0 && !error" class="grp-empty">
-          {{ query ? "No matching files." : "No files in this directory." }}
+          {{ matchQuery ? "No matching files." : "No files in this directory." }}
         </div>
-        <div v-if="loading && matches.length === 0" class="grp-empty">
-          Searching {{ displayDir }}…
-        </div>
+        <div v-if="loading && matches.length === 0" class="grp-empty">Searching…</div>
       </div>
 
       <div v-if="truncated" class="grp-truncated">Showing top results — keep typing to narrow.</div>
@@ -129,6 +136,12 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: "close"): void; (e: "select", absPath: string): void }>();
 
 const dir = ref(props.initialDir);
+// Directory the last response's matches are relative to. Equals dir unless the
+// query named a path, in which case the server re-rooted the search there.
+const searchDir = ref(props.initialDir);
+// The part of the query the server actually matched: empty when it listed a
+// whole directory, which is a different kind of "nothing found" to report.
+const matchQuery = ref("");
 const query = ref("");
 const matches = ref<FileMatch[]>([]);
 const loading = ref(false);
@@ -143,6 +156,9 @@ let searchTimeout: number | null = null;
 let abortController: AbortController | null = null;
 
 const displayDir = computed(() => tildifyPath(dir.value));
+// Non-null only while a path query has moved the search off the working
+// directory; that's the case the user needs told about.
+const scopeDir = computed(() => (searchDir.value === dir.value ? null : searchDir.value));
 
 // Split a path into highlighted/plain segments using the server-provided
 // rune offsets. Contiguous matched indexes are coalesced into one <mark>.
@@ -178,13 +194,19 @@ async function runSearch() {
     if (controller.signal.aborted) return;
     // The server resolves an empty/relative dir (e.g. to $HOME) and echoes
     // the absolute path back; adopt it so joinPath produces valid paths.
-    if (res.dir && res.dir !== dir.value) dir.value = res.dir;
+    dir.value = res.dir;
+    // Matches are relative to search_dir, which a path query moves elsewhere.
+    searchDir.value = res.search_dir;
+    matchQuery.value = res.match_query;
     matches.value = res.matches;
     truncated.value = res.truncated;
     activeIdx.value = 0;
   } catch (err) {
     if (controller.signal.aborted || (err as Error).name === "AbortError") return;
     error.value = err instanceof Error ? err.message : String(err);
+    // Nothing was searched, so don't leave the previous scope line claiming
+    // otherwise next to the error.
+    searchDir.value = dir.value;
     matches.value = [];
   } finally {
     if (abortController === controller) {
@@ -217,7 +239,9 @@ watch(
       return;
     }
     dir.value = props.initialDir;
+    searchDir.value = props.initialDir;
     query.value = "";
+    matchQuery.value = "";
     matches.value = [];
     error.value = null;
     activeIdx.value = 0;
@@ -232,7 +256,7 @@ function joinPath(base: string, rel: string): string {
 }
 
 function pick(relPath: string) {
-  emit("select", joinPath(dir.value, relPath));
+  emit("select", joinPath(searchDir.value, relPath));
   emit("close");
 }
 
@@ -240,7 +264,9 @@ function onDirSelected(path: string) {
   showDirPicker.value = false;
   if (path && path !== dir.value) {
     dir.value = path;
+    searchDir.value = path;
     query.value = "";
+    matchQuery.value = "";
     matches.value = [];
     error.value = null;
     void runSearch();

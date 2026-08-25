@@ -65,7 +65,7 @@ var shadowPairs = []shadowPair{
 	{Better: "claude-opus-5", Worse: "claude-sonnet-5"},              // in case opus-4.8 isn't served
 	{Better: "gpt-5.6-terra", Worse: "claude-sonnet-5"},              // cheaper and stronger, and it doesn't run away with fan-out work
 	{Better: "glm-5.2-fireworks", Worse: "kimi-k2.7-code-fireworks"}, // different families; glm costs a bit more; kimi-k3 costs far more, so it doesn't shadow glm
-	{Better: "glm-5.2-fireworks", Worse: "deepseek-v4-flash-fireworks"},
+	{Better: "glm-5.2-fireworks", Worse: "deepseek-v4-flash-0731-fireworks"},
 	{Better: "gpt-5.6-luna", Worse: "claude-haiku-4.5"},
 	{Better: "gpt-5.6-luna", Worse: "gpt-5.3-codex"},
 }

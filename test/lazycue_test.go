@@ -341,11 +341,11 @@ func TestNewPageBashAnsiColors(t *testing.T) {
 		"The output area (the last \".bash-tool-code\" element) should contain the readable words \"Green\", "+
 		"\"Red\", \"Bold\" and \"plain\", and must NOT contain raw escape fragments like \"[0m\" or \"[32m\". "+
 		"Because ANSI colors are present, that output element should contain at least one <span> element "+
-		"(selector \".bash-tool-details .bash-tool-code span\" should match one or more elements).")
+		"(selector \".bash-tool-details .bash-tool-section:last-child .bash-tool-code span\" should match one or more elements).")
 }
 
 func TestNewPageBashPlainText(t *testing.T) {
-	lazyTest(t, `Navigate to /new. Type the text bash: echo "just plain text with no escapes" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"). Wait for a completed tool call (data-testid "tool-call-completed") to appear, then click the bash tool header (".bash-tool-header") to expand the details panel (".bash-tool-details" should become visible). The output area (the last ".bash-tool-code" element) should contain the text "just plain text with no escapes". Since there are no ANSI codes, that output element should contain zero <span> elements (selector ".bash-tool-details .bash-tool-code span" should match 0 elements).`)
+	lazyTest(t, `Navigate to /new. Type the text bash: echo "just plain text with no escapes" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"). Wait for a completed tool call (data-testid "tool-call-completed") to appear, then click the bash tool header (".bash-tool-header") to expand the details panel (".bash-tool-details" should become visible). The output area (the last ".bash-tool-code" element) should contain the text "just plain text with no escapes". Since there are no ANSI codes, that output element should contain zero <span> elements (selector ".bash-tool-details .bash-tool-section:last-child .bash-tool-code span" should match 0 elements).`)
 }
 
 // TestNewPageBashAnsiCursorMovement guards against the regression where

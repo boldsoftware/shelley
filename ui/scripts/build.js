@@ -5,6 +5,7 @@ import * as path from "path";
 import * as zlib from "zlib";
 import * as crypto from "crypto";
 import { execSync } from "child_process";
+import { generateShikiLanguageManifest } from "./generate-shiki-language-manifest.mjs";
 
 // Esbuild plugin: rewrite any "monaco-editor*" import (including deep paths
 // like monaco-editor/esm/vs/editor/editor.api) to the runtime URL
@@ -54,6 +55,10 @@ function log(...args) {
 async function build() {
   const startTime = Date.now();
   try {
+    // Keep fence-label recognition and worker grammar loaders aligned with the
+    // exact bundled Shiki catalog installed by pnpm.
+    await generateShikiLanguageManifest();
+
     // Ensure dist directory exists
     if (!fs.existsSync("dist")) {
       fs.mkdirSync("dist");
@@ -76,6 +81,18 @@ async function build() {
       entryPoints: ["src/diffs-worker.ts"],
       bundle: true,
       outfile: "dist/diffs-worker.js",
+      format: "iife",
+      minify: isProd,
+      sourcemap: !noSourceMaps,
+    });
+
+    // Build fenced-markdown Shiki syntax highlighting worker separately so
+    // initialization and tokenization never run on the UI thread.
+    log("Building markdown highlight worker...");
+    await esbuild.build({
+      entryPoints: ["src/markdown-highlight-worker.ts"],
+      bundle: true,
+      outfile: "dist/markdown-highlight-worker.js",
       format: "iife",
       minify: isProd,
       sourcemap: !noSourceMaps,
@@ -212,6 +229,7 @@ async function build() {
       "monaco-editor.js",
       "editor.worker.js",
       "diffs-worker.js",
+      "markdown-highlight-worker.js",
       "monaco-editor.css",
       "styles.css",
       "main.js",

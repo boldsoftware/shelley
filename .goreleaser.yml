@@ -3,6 +3,7 @@ version: 2
 before:
   hooks:
     - go mod tidy
+    - python3 scripts/fetch-exe-scroll.py --all --wait 900
 
 builds:
   - id: shelley

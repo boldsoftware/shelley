@@ -174,6 +174,20 @@ func (b *BrowseTools) networkDisableRun() llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent("Network monitoring disabled.")}
 }
 
+func (b *BrowseTools) networkRequestsSnapshot(filter string) []NetworkRequest {
+	b.networkMutex.Lock()
+	defer b.networkMutex.Unlock()
+
+	var filtered []NetworkRequest
+	for _, req := range b.networkRequests {
+		if filter != "" && !strings.Contains(req.URL, filter) {
+			continue
+		}
+		filtered = append(filtered, *req)
+	}
+	return filtered
+}
+
 func (b *BrowseTools) networkGetLogRun(limit int, filter string) llm.ToolOut {
 	// Ensure browser is initialized
 	_, err := b.GetBrowserContext()
@@ -185,16 +199,7 @@ func (b *BrowseTools) networkGetLogRun(limit int, filter string) llm.ToolOut {
 		limit = 50
 	}
 
-	b.networkMutex.Lock()
-	// Copy and optionally filter
-	var filtered []*NetworkRequest
-	for _, req := range b.networkRequests {
-		if filter != "" && !strings.Contains(req.URL, filter) {
-			continue
-		}
-		filtered = append(filtered, req)
-	}
-	b.networkMutex.Unlock()
+	filtered := b.networkRequestsSnapshot(filter)
 
 	// Apply limit (take most recent)
 	if len(filtered) > limit {

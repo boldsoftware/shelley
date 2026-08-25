@@ -24,6 +24,22 @@ import (
 	"shelley.exe.dev/llm"
 )
 
+func TestNetworkRequestsSnapshotCopiesValues(t *testing.T) {
+	request := &NetworkRequest{RequestID: "1", URL: "https://example.com/before"}
+	tools := &BrowseTools{networkRequests: []*NetworkRequest{request}}
+
+	snapshot := tools.networkRequestsSnapshot("example.com")
+	if len(snapshot) != 1 {
+		t.Fatalf("snapshot length = %d, want 1", len(snapshot))
+	}
+	tools.networkMutex.Lock()
+	request.URL = "https://example.com/after"
+	tools.networkMutex.Unlock()
+	if snapshot[0].URL != "https://example.com/before" {
+		t.Fatalf("snapshot changed after source mutation: %q", snapshot[0].URL)
+	}
+}
+
 func TestCombinedTool(t *testing.T) {
 	tools := NewBrowseTools(context.Background(), 0)
 	t.Cleanup(func() {
@@ -968,7 +984,7 @@ func TestDownloadTracking(t *testing.T) {
 	}
 }
 
-// TestToolOutWithDownloads tests the download info appending to tool output
+// TestToolOutWithDownloads tests the download info appending to tool output.
 func TestToolOutWithDownloads(t *testing.T) {
 	ctx := context.Background()
 	tools := NewBrowseTools(ctx, 0)
@@ -976,8 +992,9 @@ func TestToolOutWithDownloads(t *testing.T) {
 		tools.Close()
 	})
 
+	generation := tools.beginDownloadAction()
 	// Test with no downloads
-	out := tools.toolOutWithDownloads("test message")
+	out := tools.toolOutWithDownloads("test message", generation)
 	if out.LLMContent[0].Text != "test message" {
 		t.Errorf("Expected %q, got %q", "test message", out.LLMContent[0].Text)
 	}
@@ -989,12 +1006,12 @@ func TestToolOutWithDownloads(t *testing.T) {
 		URL:               "http://example.com/files/test.txt",
 		SuggestedFilename: "test.txt",
 		FinalPath:         "/tmp/test_abc123.txt",
+		Generation:        generation,
 		Completed:         true,
 	}
 	tools.downloadsMutex.Unlock()
 
-	// Test with downloads
-	out = tools.toolOutWithDownloads("done")
+	out = tools.toolOutWithDownloads("done", generation)
 	result := out.LLMContent[0].Text
 	if !strings.Contains(result, "Downloads completed:") {
 		t.Errorf("Expected downloads section, got: %s", result)
@@ -1012,12 +1029,31 @@ func TestToolOutWithDownloads(t *testing.T) {
 		t.Errorf("Expected final path in output, got: %s", result)
 	}
 
-	// Verify download was cleared after retrieval
 	tools.downloadsMutex.Lock()
 	_, exists := tools.downloads["guid1"]
 	tools.downloadsMutex.Unlock()
 	if exists {
 		t.Error("Expected download to be cleared after retrieval")
+	}
+
+	lateGeneration := tools.beginDownloadAction()
+	nextGeneration := tools.beginDownloadAction()
+	tools.downloadsMutex.Lock()
+	tools.downloads["late"] = &DownloadInfo{
+		GUID:       "late",
+		Generation: lateGeneration,
+		Completed:  true,
+	}
+	tools.downloadsMutex.Unlock()
+	out = tools.toolOutWithDownloads("next action", nextGeneration)
+	if strings.Contains(out.LLMContent[0].Text, "Downloads completed") {
+		t.Fatalf("later action claimed an earlier download: %s", out.LLMContent[0].Text)
+	}
+	tools.downloadsMutex.Lock()
+	_, exists = tools.downloads["late"]
+	tools.downloadsMutex.Unlock()
+	if !exists {
+		t.Fatal("earlier download was consumed by later action")
 	}
 }
 

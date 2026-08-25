@@ -2,11 +2,16 @@ package server
 
 import (
 	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/server/notifications"
 )
 
 func agentMsg(t *testing.T, contents ...llm.Content) generated.Message {
@@ -129,5 +134,25 @@ func TestPushTitleAndSubtitle(t *testing.T) {
 		if gotT != tc.wantTitle || gotS != tc.want {
 			t.Errorf("pushTitleAndSubtitle(%q, %q) = (%q, %q); want (%q, %q)", tc.host, tc.slug, gotT, gotS, tc.wantTitle, tc.want)
 		}
+	}
+}
+
+func TestSendEndOfTurnHookIncludesConversationIDHeader(t *testing.T) {
+	const conversationID = "conv-123"
+	var got string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("Shelley-Conversation-Id")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+
+	s := &Server{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	s.sendEndOfTurnHook(t.Context(), db.ConversationHook{URL: upstream.URL}, notifications.Event{
+		ConversationID: conversationID,
+		Payload:        notifications.AgentDonePayload{},
+	})
+
+	if got != conversationID {
+		t.Fatalf("Shelley-Conversation-Id = %q, want %q", got, conversationID)
 	}
 }

@@ -94,24 +94,42 @@
             This build has diverged from mainline: it carries your customizations on top of
             {{ versionInfo.current_tag || "an unknown release" }}.
             <template v-if="versionInfo.has_update">
-              Upgrading starts a Shelley conversation that rebases your customizations onto
-              {{ versionInfo.latest_tag }} and rebuilds.
+              Upgrading starts a Shelley conversation that uses the selected model and reasoning
+              effort to rebase your customizations onto {{ versionInfo.latest_tag }} and rebuilds.
             </template>
             <template v-else-if="!versionInfo.error">Mainline has no newer release.</template>
           </div>
           <div v-if="versionInfo.has_update" class="version-actions">
             <div v-if="upgradeError" class="version-error">{{ upgradeError }}</div>
-            <button
-              :disabled="startingRebase"
-              class="version-btn version-btn-primary"
-              @click="handleRebaseUpgrade"
-            >
-              {{
-                startingRebase
-                  ? "Starting conversation..."
-                  : `Upgrade: rebase onto ${versionInfo.latest_tag}`
-              }}
-            </button>
+            <div class="version-rebase-bar">
+              <button
+                :disabled="startingRebase || !rebaseModel"
+                class="version-rebase-action"
+                @click="handleRebaseUpgrade"
+              >
+                <template v-if="startingRebase">Starting conversation...</template>
+                <template v-else>
+                  Rebase onto {{ versionInfo.latest_tag }} using
+                  <span class="version-rebase-model-name">{{ rebaseModelLabel }}</span>
+                </template>
+              </button>
+              <span v-tooltip.top="noModelsReason" class="version-rebase-model">
+                <ModelPicker
+                  append-to-body
+                  aria-label-prefix="Rebase model"
+                  trigger-label="Model"
+                  scroll-height="16rem"
+                  :catalog-actions="false"
+                  :disabled-reason="noModelsReason"
+                  :models="rebaseModels"
+                  :selected-model="rebaseModel"
+                  :thinking-level="rebaseThinkingLevel"
+                  :disabled="startingRebase || !rebaseModel"
+                  @select-model="rebaseModel = $event"
+                  @thinking-change="rebaseThinkingLevel = $event"
+                />
+              </span>
+            </div>
           </div>
         </template>
         <template v-else>
@@ -178,10 +196,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, computed, watch } from "vue";
 import { api } from "../../services/api";
-import type { VersionInfo, CommitInfo } from "../../types";
+import { prettyModelLabels } from "../../utils/modelNames";
+import type { VersionInfo, CommitInfo, Model } from "../../types";
 import Modal from "./Modal.vue";
+import ModelPicker from "./ModelPicker.vue";
+import { pickReadyModel, storedSelectedModel } from "./selectedModel";
+import { createVersionChangelogLoader, versionChangelogTags } from "./versionChangelog";
+import {
+  DEFAULT_THINKING_LEVEL,
+  normalizeThinkingLevelForModel,
+  storedThinkingLevel,
+  type ThinkingLevel,
+} from "./thinkingLevel";
 
 const props = defineProps<{
   isOpen: boolean;
@@ -191,6 +219,9 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: "close"): void }>();
 
 const commits = ref<CommitInfo[]>([]);
+const changelogLoader = createVersionChangelogLoader((currentTag, latestTag) =>
+  api.getChangelog(currentTag, latestTag),
+);
 const loadingCommits = ref(false);
 const commitsError = ref(false);
 const upgrading = ref(false);
@@ -201,6 +232,41 @@ const loadingAutoUpgrade = ref(true);
 const upgradingHeadless = ref(false);
 const headlessError = ref<string | null>(null);
 const headlessSuccess = ref<string | null>(null);
+const rebaseModels = ref<Model[]>([]);
+const rebaseModel = ref("");
+// Action-scoped: seeded from the composer's stored picks but never written
+// back, so configuring a rebase doesn't move the user's chat defaults.
+const rebaseThinkingLevel = ref<ThinkingLevel>(DEFAULT_THINKING_LEVEL);
+const noModelsReason = computed(() =>
+  rebaseModel.value ? undefined : "No models are ready; configure one in Manage models.",
+);
+const rebaseModelLabel = computed(() => {
+  const labels = prettyModelLabels(rebaseModels.value);
+  const name = labels.get(rebaseModel.value) || rebaseModel.value || "no model";
+  let effort = normalizedRebaseLevel.value;
+  if (effort === "default") {
+    const m = rebaseModels.value.find((x) => x.id === rebaseModel.value);
+    const d = m?.default_reasoning_level;
+    if (d && d !== "default") effort = d as ThinkingLevel;
+  }
+  return effort && effort !== "default" ? `${name} · ${effort}` : name;
+});
+
+// The stored level may not be valid for the chosen model (e.g. "max" on a
+// model that doesn't advertise it); normalize like the composer does so we
+// never send a level the server would reject.
+const normalizedRebaseLevel = computed(() =>
+  normalizeThinkingLevelForModel(
+    rebaseThinkingLevel.value,
+    rebaseModels.value.find((x) => x.id === rebaseModel.value),
+  ),
+);
+
+function initializeRebase() {
+  rebaseModels.value = window.__SHELLEY_INIT__?.models || [];
+  rebaseModel.value = pickReadyModel(rebaseModels.value, storedSelectedModel());
+  rebaseThinkingLevel.value = storedThinkingLevel();
+}
 
 async function loadAutoUpgradeSetting() {
   loadingAutoUpgrade.value = true;
@@ -227,16 +293,18 @@ async function handleAutoUpgradeChange(enabled: boolean) {
 async function loadCommits(currentTag: string, latestTag: string) {
   loadingCommits.value = true;
   commitsError.value = false;
-  try {
-    const result = await api.getChangelog(currentTag, latestTag);
-    commits.value = result || [];
-  } catch (err) {
-    console.error("Failed to load changelog:", err);
-    commits.value = [];
-    commitsError.value = true;
-  } finally {
-    loadingCommits.value = false;
+  const result = await changelogLoader.load(currentTag, latestTag);
+  if (!result) return;
+
+  loadingCommits.value = false;
+  if (result.ok) {
+    commits.value = result.commits;
+    return;
   }
+
+  console.error("Failed to load changelog:", result.error);
+  commits.value = [];
+  commitsError.value = true;
 }
 
 async function handleUpgradeAndRestart() {
@@ -260,7 +328,7 @@ async function handleUpgradeAndRestart() {
 // default cwd and let the agent recreate the checkout per the skill.
 async function handleRebaseUpgrade() {
   const info = props.versionInfo;
-  if (!info) return;
+  if (!info || !rebaseModel.value) return;
   startingRebase.value = true;
   upgradeError.value = null;
   const dir = info.customization_dir;
@@ -278,6 +346,10 @@ async function handleRebaseUpgrade() {
   try {
     const response = await api.sendMessageWithNewConversation({
       message: prompt,
+      model: rebaseModel.value,
+      ...(normalizedRebaseLevel.value === "default"
+        ? {}
+        : { conversation_options: { thinking_level: normalizedRebaseLevel.value } }),
       ...(dir ? { cwd: dir } : {}),
     });
     emit("close");
@@ -324,15 +396,27 @@ watch(
   () => props.isOpen,
   (open) => {
     if (open) {
-      if (
-        props.versionInfo?.has_update &&
-        props.versionInfo.current_tag &&
-        props.versionInfo.latest_tag
-      ) {
-        loadCommits(props.versionInfo.current_tag, props.versionInfo.latest_tag);
-      }
+      initializeRebase();
       loadAutoUpgradeSetting();
     }
+  },
+  { immediate: true },
+);
+
+watch(
+  [
+    () => props.isOpen,
+    () => props.versionInfo?.has_update,
+    () => props.versionInfo?.current_tag,
+    () => props.versionInfo?.latest_tag,
+  ],
+  ([isOpen, hasUpdate, currentTag, latestTag]) => {
+    changelogLoader.invalidate();
+    loadingCommits.value = false;
+    commits.value = [];
+    commitsError.value = false;
+    const tags = versionChangelogTags(isOpen, hasUpdate, currentTag, latestTag);
+    if (tags) loadCommits(tags[0], tags[1]);
   },
   { immediate: true },
 );

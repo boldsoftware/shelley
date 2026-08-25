@@ -271,6 +271,10 @@ const readoutProps = computed(() => ({
   onDistillNewGeneration: props.onDistillNewGeneration,
   onStartNewGeneration: props.onStartNewGeneration,
   onUsageNeeded: props.onUsageNeeded,
+  // The readout's cwd segment. Same picker as the composer's cwd chip, but for
+  // a conversation that already exists, where the pick has to go through the
+  // server (see applyPickedCwd in ChatInterface).
+  onChangeConversationCwd: props.onOpenDirectoryPicker,
   onSwitchConversationModel: props.onSwitchConversationModel,
   onSwitchConversationThinkingLevel: props.onSwitchConversationThinkingLevel,
   onManageModels: props.onManageModels,
@@ -281,11 +285,20 @@ const readoutProps = computed(() => ({
 const showAdvancedSettings = ref(false);
 const advancedSettingsRef = ref<HTMLDivElement | null>(null);
 const advancedPopoverRef = ref<HTMLDivElement | null>(null);
-// Horizontal offset (relative to the gear wrapper) that keeps the popover
-// within the viewport. The gear sits toward the left of the status bar, so a
-// static CSS anchor either overflows off the left edge (right-anchored) or off
-// the right edge on narrow desktop widths (left-anchored) — hence we measure.
+// Placement (relative to the gear wrapper) that keeps the popover within the
+// viewport. The gear sits toward the left of the status bar, so a static CSS
+// anchor either overflows off the left edge (right-anchored) or off the right
+// edge on narrow desktop widths (left-anchored) — hence we measure. Height has
+// the same problem vertically: the popover opens upward (bottom: 100%) and is
+// one row per tool, so on a short window it ran off the top of the screen and
+// the first tools in the list were unreachable.
 const popoverStyle = ref<Record<string, string>>({});
+// Distance from the popover to the gear: mirrors margin-bottom on
+// .advanced-settings-popover in styles.css, which is noted there too.
+const POPOVER_GAP = 4;
+// Roughly three tool rows. Below this the popover is too small to be worth
+// anchoring above the gear, so it overlaps the status bar instead (see below).
+const POPOVER_MIN_HEIGHT = 120;
 function positionPopover() {
   const wrapper = advancedSettingsRef.value;
   const popover = advancedPopoverRef.value;
@@ -298,16 +311,69 @@ function positionPopover() {
     popoverStyle.value = {};
     return;
   }
+  const viewportHeight = document.documentElement.clientHeight;
   const margin = 8;
   const wrapRect = wrapper.getBoundingClientRect();
   const width = popover.offsetWidth;
   const maxLeft = viewportWidth - margin - width;
   // Prefer aligning the popover's left edge to the gear, clamped into view.
   const desiredLeft = Math.max(margin, Math.min(wrapRect.left, maxLeft));
-  popoverStyle.value = {
+  // All the room there is above the gear, less the gap it opens with and a
+  // margin off the top edge. The CSS max-height (70vh) measures the viewport
+  // rather than this gap, so it happily overflows the top on a short window;
+  // capping here turns the overflow into a scroll instead of a clip. The extra
+  // pixel absorbs subpixel skew: these rects are fractional, and the bar can
+  // settle by a fraction of a pixel between this measurement and the paint
+  // that follows, which is enough to put the popover back over the edge.
+  const spaceAbove = wrapRect.top - POPOVER_GAP - margin - 1;
+  const minHeight = Math.min(POPOVER_MIN_HEIGHT, Math.max(0, viewportHeight - 2 * margin));
+  const maxHeight = Math.max(minHeight, spaceAbove);
+  const style: Record<string, string> = {
     left: `${Math.round(desiredLeft - wrapRect.left)}px`,
     right: "auto",
+    // Floored, not rounded: rounding a bound *up* spends a fraction of a pixel
+    // more room than there is, putting the popover back over the very edge it
+    // is being held clear of.
+    maxHeight: `${Math.floor(maxHeight)}px`,
   };
+  // Honouring that floor means the popover no longer fits above the gear, and
+  // `bottom: 100%` would push it back off the top of the screen — the very
+  // thing being fixed. Overlap the status bar instead: pin the bottom edge so
+  // the top lands on the margin. A popover over the bar is worth more than a
+  // two-row one, and more than one that scrolls off-screen. `bottom` positions
+  // the margin edge, so POPOVER_GAP comes out of it too — without that the
+  // popover sits 4px higher than asked — as does the same spare pixel of
+  // subpixel allowance, and flooring rounds it down, away from the top edge.
+  if (maxHeight > spaceAbove) {
+    style.bottom = `${Math.floor(wrapRect.bottom - margin - maxHeight - POPOVER_GAP - 1)}px`;
+  }
+  popoverStyle.value = style;
+}
+// Repositioning is driven by a ResizeObserver rather than window's resize
+// event. Both fire on a viewport change, but resize fires before the layout
+// that follows it: the status bar sits at the bottom of a flex column, so on a
+// resize the gear has not moved yet and positionPopover reads its old rect (a
+// window shrunk to 900x320 while open left the popover 25px off the top).
+// ResizeObserver callbacks run after layout, so the rect is current.
+// documentElement covers the viewport; the status bar row covers the gear
+// moving without one, which is a height change of that row and of nothing
+// above it (a longer cwd or model name wrapping the row onto two lines). The
+// gear's own wrapper is not worth observing: it is a fixed-size box, and a
+// ResizeObserver reports size changes, never position ones.
+let resizeObserver: ResizeObserver | null = null;
+function observeGeometry() {
+  stopObservingGeometry();
+  if (typeof ResizeObserver === "undefined") return;
+  resizeObserver = new ResizeObserver(() => positionPopover());
+  resizeObserver.observe(document.documentElement);
+  // The popover is absolutely positioned, so its own size never feeds back
+  // into the row's — no observer loop.
+  const bar = advancedSettingsRef.value?.closest(".status-bar-new-conversation");
+  if (bar) resizeObserver.observe(bar);
+}
+function stopObservingGeometry() {
+  resizeObserver?.disconnect();
+  resizeObserver = null;
 }
 function onOutside(e: MouseEvent) {
   if (advancedSettingsRef.value && !advancedSettingsRef.value.contains(e.target as Node)) {
@@ -316,18 +382,20 @@ function onOutside(e: MouseEvent) {
 }
 watch(showAdvancedSettings, (open) => {
   document.removeEventListener("mousedown", onOutside);
-  window.removeEventListener("resize", positionPopover);
+  stopObservingGeometry();
   if (open) {
     document.addEventListener("mousedown", onOutside);
-    window.addEventListener("resize", positionPopover);
-    nextTick(positionPopover);
+    nextTick(() => {
+      positionPopover();
+      observeGeometry();
+    });
   } else {
     popoverStyle.value = {};
   }
 });
 onUnmounted(() => {
   document.removeEventListener("mousedown", onOutside);
-  window.removeEventListener("resize", positionPopover);
+  stopObservingGeometry();
 });
 
 function currentOverride(name: string): "default" | "on" | "off" {

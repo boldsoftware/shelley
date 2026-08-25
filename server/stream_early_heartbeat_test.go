@@ -1,11 +1,14 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -78,11 +81,11 @@ func TestConversationStreamFlushesEarlyHeartbeat(t *testing.T) {
 	<-done
 }
 
-// TestConversationListOnlyStreamDoesNotSendEarlyHeartbeat preserves the
-// existing contract for the list-only stream: when the client supplies a
-// conversation_list_hash that matches the current snapshot and no conversation,
-// the server stays silent until something actually changes.
-func TestConversationListOnlyStreamDoesNotSendEarlyHeartbeat(t *testing.T) {
+// TestConversationListOnlyStreamFlushesEarlyHeartbeat verifies that a caught-up
+// list-only stream still commits its headers immediately. Android bounds the
+// response-header wait, so leaving this path silent until the 30s periodic
+// heartbeat makes a healthy resume indistinguishable from a hung proxy.
+func TestConversationListOnlyStreamFlushesEarlyHeartbeat(t *testing.T) {
 	t.Parallel()
 	server, _, _ := newTestServer(t)
 	if err := server.conversationListStream.recompute(context.Background()); err != nil {
@@ -102,10 +105,252 @@ func TestConversationListOnlyStreamDoesNotSendEarlyHeartbeat(t *testing.T) {
 
 	select {
 	case <-rec.flushed:
-		t.Fatalf("list-only stream should be silent until a change; got body=%q", rec.getString())
-	case <-time.After(150 * time.Millisecond):
+	case <-time.After(2 * time.Second):
+		t.Fatalf("list-only stream did not flush an early heartbeat; body=%q", rec.getString())
+	}
+
+	parts := strings.SplitN(rec.getString(), "\n\n", 2)
+	if len(parts) < 1 || !strings.HasPrefix(parts[0], "data: ") {
+		t.Fatalf("expected first chunk to start with 'data: ', got %q", rec.getString())
+	}
+	var first StreamResponse
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(parts[0], "data: ")), &first); err != nil {
+		t.Fatalf("unmarshal first chunk: %v; body=%q", err, rec.getString())
+	}
+	if !first.Heartbeat || len(first.Messages) != 0 || first.Conversation != nil || first.ConversationListPatch != nil {
+		t.Fatalf("list-only first chunk should be a bare heartbeat, got %+v", first)
 	}
 
 	cancel()
 	<-done
+}
+
+type queueLogWriter struct {
+	mu                   sync.Mutex
+	logs                 bytes.Buffer
+	updatesQueueFull     chan struct{}
+	subscriberQueueFull  chan struct{}
+	updatesQueueFullOnce sync.Once
+	subscriberFullOnce   sync.Once
+}
+
+func newQueueLogWriter() *queueLogWriter {
+	return &queueLogWriter{
+		updatesQueueFull:    make(chan struct{}),
+		subscriberQueueFull: make(chan struct{}),
+	}
+}
+
+func (w *queueLogWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if bytes.Contains(p, []byte("SSE updates queue saturated; subscriber may be disconnected")) {
+		w.updatesQueueFullOnce.Do(func() { close(w.updatesQueueFull) })
+	}
+	if bytes.Contains(p, []byte("SSE subscriber queue full;")) {
+		w.subscriberFullOnce.Do(func() { close(w.subscriberQueueFull) })
+	}
+	return w.logs.Write(p)
+}
+
+func (w *queueLogWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.logs.String()
+}
+
+func TestStreamUpdatesQueueLogsWhenFull(t *testing.T) {
+	if streamUpdatesQueueCapacity != 200 {
+		t.Fatalf("streamUpdatesQueueCapacity = %d, want 200", streamUpdatesQueueCapacity)
+	}
+	logs := newQueueLogWriter()
+	logger := slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	server := &Server{logger: logger}
+	updates := server.newStreamUpdatesQueue(ctx, "test-conversation")
+	for range streamUpdatesQueueCapacity {
+		if !updates.enqueue(ctx, StreamResponse{Heartbeat: true}) {
+			t.Fatal("enqueue failed before queue filled")
+		}
+	}
+
+	enqueued := make(chan bool, 1)
+	go func() {
+		enqueued <- updates.enqueue(ctx, StreamResponse{Heartbeat: true})
+	}()
+	select {
+	case <-logs.updatesQueueFull:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("updates queue fill was not logged:\n%s", logs.String())
+	}
+	cancel()
+	if <-enqueued {
+		t.Fatal("enqueue succeeded despite a full queue")
+	}
+}
+
+// blockingStreamWriter models a browser/proxy that stops reading an SSE
+// response long enough for a subscriber buffer to overflow.
+type blockingStreamWriter struct {
+	header      http.Header
+	entered     chan struct{}
+	release     chan struct{}
+	enteredOnce sync.Once
+	releaseOnce sync.Once
+	deadlineMu  sync.Mutex
+	deadlines   []time.Time
+}
+
+func newBlockingStreamWriter() *blockingStreamWriter {
+	return &blockingStreamWriter{
+		header:  make(http.Header),
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+}
+
+func (w *blockingStreamWriter) Header() http.Header { return w.header }
+func (w *blockingStreamWriter) WriteHeader(int)     {}
+func (w *blockingStreamWriter) Flush()              {}
+func (w *blockingStreamWriter) Write(p []byte) (int, error) {
+	w.enteredOnce.Do(func() { close(w.entered) })
+	<-w.release
+	return len(p), nil
+}
+
+func (w *blockingStreamWriter) SetWriteDeadline(deadline time.Time) error {
+	w.deadlineMu.Lock()
+	w.deadlines = append(w.deadlines, deadline)
+	w.deadlineMu.Unlock()
+	if !deadline.IsZero() {
+		w.releaseWrite()
+	}
+	return nil
+}
+
+func (w *blockingStreamWriter) recordedDeadlines() []time.Time {
+	w.deadlineMu.Lock()
+	defer w.deadlineMu.Unlock()
+	return append([]time.Time(nil), w.deadlines...)
+}
+
+func (w *blockingStreamWriter) releaseWrite() {
+	w.releaseOnce.Do(func() { close(w.release) })
+}
+
+// TestUnifiedStreamClosesWhenItsSubscriptionFallsBehind verifies that a
+// dropped streamPub subscription tears down the HTTP response. If the handler
+// instead keeps sending local heartbeats, EventSource believes the connection
+// is healthy forever even though all conversation updates have stopped. The
+// browser can only recover missed messages after the response closes and it
+// reconnects.
+func TestUnifiedStreamClosesWhenItsSubscriptionFallsBehind(t *testing.T) {
+	t.Parallel()
+	server, _, _ := newTestServer(t)
+	logs := newQueueLogWriter()
+	server.logger = slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	if err := server.conversationListStream.recompute(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	currentHash := server.conversationListStream.currentHash
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := newBlockingStreamWriter()
+	req := httptest.NewRequest(http.MethodGet, "/api/stream2?conversation_list_hash="+currentHash, nil).WithContext(ctx)
+	done := make(chan struct{})
+	go func() {
+		server.handleStream(w, req)
+		close(done)
+	}()
+
+	// The caught-up stream writes its early heartbeat immediately. Wait for that
+	// write to block, then overflow streamPub. This is also an ordering check:
+	// the handler must subscribe before writing the heartbeat, or the burst has
+	// no subscriber to drop and the response stays falsely healthy forever.
+	select {
+	case <-w.entered:
+	case <-time.After(2 * time.Second):
+		w.releaseWrite()
+		cancel()
+		<-done
+		t.Fatal("stream never started writing")
+	}
+
+	// With the response blocked, this burst exceeds both bounded queues and
+	// disconnects the subscriber to preserve publisher liveness.
+	for range 1000 {
+		server.streamPub.Broadcast(StreamResponse{Heartbeat: true})
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		w.releaseWrite()
+		cancel()
+		<-done
+		t.Fatal("unified stream stayed open after its streamPub subscription was dropped")
+	}
+
+	deadlines := w.recordedDeadlines()
+	if len(deadlines) != 2 || deadlines[0].IsZero() || !deadlines[1].IsZero() {
+		t.Fatalf("write deadlines = %v, want forced deadline followed by clear", deadlines)
+	}
+	select {
+	case <-logs.subscriberQueueFull:
+	default:
+		t.Fatalf("subscriber queue fill was not logged:\n%s", logs.String())
+	}
+}
+
+func TestLegacyStreamLogsAndStaysOpenWhenSubscriptionFallsBehind(t *testing.T) {
+	t.Parallel()
+	server, database, _ := newTestServer(t)
+	logs := newQueueLogWriter()
+	server.logger = slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	conversation, err := database.CreateConversation(context.Background(), strPtr("legacy-stream-overflow"), true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := server.getOrCreateConversationManager(context.Background(), conversation.ConversationID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	w := newBlockingStreamWriter()
+	req := httptest.NewRequest(http.MethodGet, "/api/conversation/"+conversation.ConversationID+"/stream", nil).WithContext(ctx)
+	done := make(chan struct{})
+	go func() {
+		server.handleStreamConversation(w, req, conversation.ConversationID)
+		close(done)
+	}()
+	defer func() {
+		w.releaseWrite()
+		cancel()
+		<-done
+	}()
+
+	select {
+	case <-w.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("legacy stream never started writing")
+	}
+	for range 1000 {
+		manager.subpub.Broadcast(StreamResponse{Heartbeat: true})
+	}
+	select {
+	case <-logs.subscriberQueueFull:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("subscriber queue fill was not logged:\n%s", logs.String())
+	}
+	select {
+	case <-done:
+		t.Fatal("legacy stream closed even though one-shot clients cannot reconnect")
+	default:
+	}
+	if deadlines := w.recordedDeadlines(); len(deadlines) != 0 {
+		t.Fatalf("legacy stream write deadlines = %v, want none", deadlines)
+	}
 }

@@ -534,3 +534,59 @@ func responsesSSECompleted(t *testing.T, response responsesResponse) string {
 	}
 	return fmt.Sprintf("event: response.completed\ndata: %s\n\n", b)
 }
+
+// TestResponsesReasoningEffortClamps verifies the Responses effort clamps:
+// "max" is only sent to the gpt-5.6 family (others reject it; clamp to
+// xhigh), codex models reject "minimal" (clamp to low), and everything else
+// goes verbatim.
+func TestResponsesReasoningEffortClamps(t *testing.T) {
+	tests := []struct {
+		name       string
+		model      Model
+		reqLevel   llm.ThinkingLevel
+		reqEffort  string
+		wantEffort string
+	}{
+		{name: "gpt-5.6 max verbatim", model: GPT56Sol, reqLevel: llm.ThinkingLevelMax, wantEffort: "max"},
+		{name: "gpt-5.6 minimal rounds to low", model: GPT56Sol, reqLevel: llm.ThinkingLevelMinimal, wantEffort: "low"},
+		{name: "gpt-5.6 off sends none", model: GPT56Sol, reqLevel: llm.ThinkingLevelOff, wantEffort: "none"},
+		{name: "gpt-5.5 max clamped to xhigh", model: GPT55, reqLevel: llm.ThinkingLevelMax, wantEffort: "xhigh"},
+		{name: "gpt-5.5 verbatim max is preserved", model: GPT55, reqEffort: "max", wantEffort: "max"},
+		{name: "gpt-5.4 xhigh verbatim", model: GPT54, reqLevel: llm.ThinkingLevelXHigh, wantEffort: "xhigh"},
+		{name: "codex minimal clamped to low", model: GPT53Codex, reqLevel: llm.ThinkingLevelMinimal, wantEffort: "low"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotReasoning *responsesReasoning
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var req responsesRequest
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					t.Fatalf("decode req: %v", err)
+				}
+				gotReasoning = req.Reasoning
+				resp := responsesResponse{
+					ID:     "r",
+					Status: "completed",
+					Output: []responsesOutputItem{{Type: "message", Role: "assistant", Content: []responsesContent{{Type: "output_text", Text: "ok"}}}},
+					Usage:  responsesUsage{InputTokens: 1, OutputTokens: 1},
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(resp)
+			}))
+			defer server.Close()
+
+			svc := &ResponsesService{APIKey: "k", Model: tt.model, ModelURL: server.URL}
+			_, err := svc.Do(context.Background(), &llm.Request{
+				Messages:        []llm.Message{{Role: llm.MessageRoleUser, Content: []llm.Content{{Type: llm.ContentTypeText, Text: "hi"}}}},
+				ThinkingLevel:   tt.reqLevel,
+				ReasoningEffort: tt.reqEffort,
+			})
+			if err != nil {
+				t.Fatalf("Do: %v", err)
+			}
+			if gotReasoning == nil || gotReasoning.Effort != tt.wantEffort {
+				t.Errorf("effort = %+v, want %q", gotReasoning, tt.wantEffort)
+			}
+		})
+	}
+}

@@ -70,7 +70,7 @@ export interface Model {
   is_default?: boolean;
   supports_images?: boolean;
   supports_reasoning?: boolean;
-  reasoning_levels?: ("off" | "minimal" | "low" | "medium" | "high" | "xhigh")[];
+  reasoning_levels?: ("off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max")[];
   // Tier is 1 for prominent models and 2 for models overshadowed by a better
   // available sibling. The picker keeps tier-2 models behind a "more models"
   // toggle. Absent/0 is treated as tier 1 by the UI.
@@ -87,7 +87,7 @@ export interface ChatRequest {
   conversation_options?: {
     tool_overrides?: Record<string, "on" | "off">;
     disable_all_tools?: boolean;
-    thinking_level?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+    thinking_level?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
     disable_notifications?: boolean;
   };
   queue?: boolean;
@@ -317,6 +317,23 @@ export function distillStatus(message: Message): string | null {
 // Helper to check if a message is a distill status message
 export function isDistillStatusMessage(message: Message): boolean {
   return distillStatus(message) !== null;
+}
+
+// The working directory a user-driven cwd change moved to, or null if the
+// message isn't one. These are user-role messages because the agent has to read
+// them (a marker excluded from context would let it keep using the old
+// directory), but they aren't something the user typed, so the UI renders them
+// as a status line rather than a chat bubble. See recordCwdChangeNotice.
+export function cwdChange(message: Message): { from: string; to: string } | null {
+  if (!message.user_data) return null;
+  try {
+    const userData =
+      typeof message.user_data === "string" ? JSON.parse(message.user_data) : message.user_data;
+    if (!userData?.cwd_change) return null;
+    return { from: userData.from || "", to: userData.to || "" };
+  } catch {
+    return null;
+  }
 }
 
 // Helper to check if a message was copied verbatim into the current generation

@@ -70,6 +70,9 @@ func TestSystemPromptEmptyCwdFallsBackToCurrentDir(t *testing.T) {
 	if !strings.Contains(prompt, currentDir) {
 		t.Errorf("system prompt should contain current directory when cwd is empty")
 	}
+	if !strings.Contains(prompt, "omit `cd` and run the command directly") {
+		t.Errorf("system prompt should tell the model to omit a redundant cd")
+	}
 }
 
 // TestSystemPromptDetectsGitInWorkingDir verifies that the system prompt

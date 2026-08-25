@@ -103,11 +103,12 @@ func _() {
 	_ = x[ThinkingLevelMedium-4]
 	_ = x[ThinkingLevelHigh-5]
 	_ = x[ThinkingLevelXHigh-6]
+	_ = x[ThinkingLevelMax-7]
 }
 
-const _ThinkingLevel_name = "ThinkingLevelDefaultThinkingLevelOffThinkingLevelMinimalThinkingLevelLowThinkingLevelMediumThinkingLevelHighThinkingLevelXHigh"
+const _ThinkingLevel_name = "ThinkingLevelDefaultThinkingLevelOffThinkingLevelMinimalThinkingLevelLowThinkingLevelMediumThinkingLevelHighThinkingLevelXHighThinkingLevelMax"
 
-var _ThinkingLevel_index = [...]uint8{0, 20, 36, 56, 72, 91, 108, 126}
+var _ThinkingLevel_index = [...]uint8{0, 20, 36, 56, 72, 91, 108, 126, 142}
 
 func (i ThinkingLevel) String() string {
 	idx := int(i) - 0

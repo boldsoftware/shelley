@@ -338,7 +338,11 @@ import { useI18n } from "../composables/i18n";
 import { pickPlaceholderHint } from "../../utils/placeholderHints";
 import { SLASH_COMMANDS } from "../../utils/slashCommands";
 import { isImeComposing } from "../../utils/imeComposing";
-import { THINKING_LEVELS } from "./thinkingLevel";
+import {
+  CONCRETE_THINKING_LEVELS,
+  supportedThinkingLevels,
+  type ReasoningModelCapabilities,
+} from "./thinkingLevel";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -431,8 +435,12 @@ const props = withDefaults(
      * attachments. React encodes this exact carve-out in its key:
      * `(conversationId === lazyDraftId ? null : conversationId) || "new"`. */
     lazyDraftId?: string | null;
-    /** Ready model ids, used to autocomplete the /model command arguments. */
-    modelOptions?: string[];
+    /** Ready models (id + reasoning capabilities), used to autocomplete the
+     * /model command arguments with only the levels the target model accepts. */
+    modelOptions?: ({ id: string } & ReasoningModelCapabilities)[];
+    /** Currently selected model id; the levels offered for "/model <level>"
+     * (no model argument) are the ones this model accepts. */
+    currentModelId?: string;
   }>(),
   {
     showQueueOption: false,
@@ -798,14 +806,29 @@ const showSlashMenu = computed(
 // As soon as "/model" has been typed (with or without a trailing space), offer
 // the ready model ids plus the reasoning levels as completions for the token
 // currently under the cursor. This mirrors the command grammar: /model <id>
-// and/or <level>, order independent.
+// and/or <level>, order independent. Levels are limited to what the target
+// model accepts: the model already typed as a prior token, else the current
+// one. "default" is deliberately absent — to /model it means the default MODEL.
 interface ModelArgOption {
   value: string;
   kind: "model" | "level";
 }
+// The model a level argument would apply to: a model id among the prior
+// tokens wins, otherwise the conversation's current model.
+const modelArgTarget = computed(() => {
+  const prior = modelArgContext.value?.prior ?? [];
+  const models = props.modelOptions ?? [];
+  const typed = prior
+    .map((t) => models.find((m) => m.id === t))
+    .find((m) => m !== undefined);
+  return typed ?? models.find((m) => m.id === props.currentModelId);
+});
 const modelArgOptions = computed<ModelArgOption[]>(() => [
-  ...(props.modelOptions ?? []).map((id) => ({ value: id, kind: "model" as const })),
-  ...THINKING_LEVELS.map((l) => ({ value: l.value, kind: "level" as const })),
+  ...(props.modelOptions ?? []).map((m) => ({ value: m.id, kind: "model" as const })),
+  ...supportedThinkingLevels(modelArgTarget.value).map((level) => ({
+    value: level,
+    kind: "level" as const,
+  })),
 ]);
 // Matches "/model" and everything after it. The trailing arguments are
 // optional, so a bare "/model" (no space yet) also opens the menu — arrowing
@@ -829,8 +852,8 @@ const modelArgSuggestions = computed<ModelArgOption[]>(() => {
   const norm = (s: string) => s.toLowerCase().replace(/\./g, "-");
   const q = norm(ctx.partial);
   const priorLower = new Set(ctx.prior.map((t) => t.toLowerCase()));
-  const usedModel = ctx.prior.some((t) => (props.modelOptions ?? []).includes(t));
-  const usedLevel = ctx.prior.some((t) => THINKING_LEVELS.some((l) => l.value === t));
+  const usedModel = ctx.prior.some((t) => (props.modelOptions ?? []).some((m) => m.id === t));
+  const usedLevel = ctx.prior.some((t) => (CONCRETE_THINKING_LEVELS as string[]).includes(t));
   const matched = modelArgOptions.value.filter((o) => {
     if (priorLower.has(o.value.toLowerCase())) return false;
     // Only one model and one level may be chosen.

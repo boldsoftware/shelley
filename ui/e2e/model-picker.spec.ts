@@ -93,10 +93,11 @@ test.describe("Model picker (PrimeVue)", () => {
     const panel = page.locator(".model-picker-panel");
     await expect(panel).toBeVisible();
 
-    // The effort radiogroup offers the real levels (no bare "default" when the
-    // model advertises no concrete default — the sentinel is labeled "auto").
+    // Models without explicit capability metadata use the standard levels
+    // through xhigh; rare max support must be advertised by the model.
     const pills = panel.locator(".model-picker-effort-pill");
     expect(await pills.count()).toBeGreaterThanOrEqual(6);
+    await expect(pills.filter({ hasText: /^max$/ })).toHaveCount(0);
 
     // Pick "high" -> persists, popover stays open, trigger shows the suffix.
     await pills.filter({ hasText: /^high$/ }).click();
@@ -106,9 +107,11 @@ test.describe("Model picker (PrimeVue)", () => {
     );
     await expect(pills.filter({ hasText: /^high$/ })).toHaveAttribute("aria-checked", "true");
 
-    // Close the popover; the trigger reflects the effort.
+    // Close the popover; the trigger reflects the effort and keeps it after reload.
     await page.keyboard.press("Escape");
     await expect(panel).toBeHidden();
+    await expect(picker.locator(".model-picker-value-effort")).toHaveText("· high");
+    await page.reload();
     await expect(picker.locator(".model-picker-value-effort")).toHaveText("· high");
   });
 });

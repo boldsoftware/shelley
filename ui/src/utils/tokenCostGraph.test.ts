@@ -1,5 +1,6 @@
 import {
   aggregateOtherUsage,
+  buildCostSummary,
   buildOtherUsageBreakdown,
   buildTokenCostStack,
   callXLayout,
@@ -161,14 +162,65 @@ function entry(partial: Partial<UsageEntry>): UsageEntry {
   assert(approx(slug.estimatedUsd, 1), "other: unpriced model adds $0");
   assert(!slug.priced, "other: purpose with an unpriced model flagged");
   assert(approx(slug.reportedUsd, 0.35), "other: per-purpose reported cost sums");
+  assert(
+    approx(slug.reportedUnpricedUsd, 0.1),
+    "other: reported cost from the unpriced model is isolated",
+  );
   assert(compaction.reportedUsd === 0, "other: compaction has no reported cost");
   assert(approx(b.totals.estimatedUsd, 8.5), "other: total estimate");
   assert(approx(b.totals.reportedUsd, 0.35), "other: reported cost sums");
+  assert(
+    approx(b.totals.reportedUnpricedUsd, 0.1),
+    "other: unpriced reported cost sums without priced calls",
+  );
   assert(b.totals.llmCalls === 9, "other: total calls");
   assert(b.totals.unpricedCalls === 4, "other: unpriced calls counted");
 
   const empty = buildOtherUsageBreakdown([], {});
   assert(empty.perPurpose.length === 0 && empty.totals.llmCalls === 0, "other: empty rows");
+}
+
+// Cost summary: one obvious total that includes this conversation, indirect
+// usage, and subagents. The values mirror real conversations from the local
+// Shelley database.
+{
+  const minikomi = buildCostSummary(132.619, {
+    other: { estimatedUsd: 1.895, reportedUnpricedUsd: 0, unpricedCalls: 0 },
+    subagents: { estimatedUsd: 55.161, reportedUnpricedUsd: 0, unpricedCalls: 0 },
+  });
+  assert(approx(minikomi.totalUsd, 189.675), "summary: total includes every bucket");
+  assert(approx(minikomi.otherUsd, 1.895), "summary: other bucket retained");
+  assert(approx(minikomi.subagentUsd, 55.161), "summary: subagent bucket retained");
+  assert(minikomi.unpricedCalls === 0, "summary: no unpriced calls");
+
+  const mixedKnownCosts = buildCostSummary(21.051, {
+    other: { estimatedUsd: 1.5, reportedUnpricedUsd: 0.25, unpricedCalls: 2 },
+    subagents: { estimatedUsd: 968.721, reportedUnpricedUsd: 0.75, unpricedCalls: 3 },
+  });
+  assert(
+    approx(mixedKnownCosts.totalUsd, 992.272),
+    "summary: estimates and unpriced reported costs both contribute",
+  );
+  assert(mixedKnownCosts.unpricedCalls === 5, "summary: unpriced calls sum across buckets");
+  assert(
+    mixedKnownCosts.conversationUnpricedCalls === 0 &&
+      mixedKnownCosts.otherUnpricedCalls === 2 &&
+      mixedKnownCosts.subagentUnpricedCalls === 3,
+    "summary: unpriced calls remain attributed to their buckets",
+  );
+
+  const pricedSubagentsOnly = buildCostSummary(0, {
+    conversationUnpricedCalls: 4,
+    subagents: { estimatedUsd: 12.5, reportedUnpricedUsd: 0, unpricedCalls: 0 },
+  });
+  assert(
+    approx(pricedSubagentsOnly.totalUsd, 12.5),
+    "summary: priced subagents survive unpriced direct usage",
+  );
+  assert(
+    pricedSubagentsOnly.conversationUnpricedCalls === 4,
+    "summary: direct unpriced calls retained",
+  );
 }
 
 // Reported cost accumulates, both overall and per model.

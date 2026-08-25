@@ -16,6 +16,8 @@ import (
 	"shelley.exe.dev/llm/llmhttp"
 )
 
+var errMessagePersistence = errors.New("message persistence failed")
+
 // maxTurnDuration is an absolute backstop on a single LLM request (including
 // its inner transport retries). The primary bound on a stuck stream is the
 // transport idle/stall timeout (llmhttp.DefaultIdleTimeout); this ceiling only
@@ -58,6 +60,7 @@ type Config struct {
 	// If nil, Config.WorkingDir is used as a static value.
 	GetWorkingDir func() string
 	// OnToolProgress is called when a tool reports progress (partial output).
+	// It may be called concurrently by sibling tools.
 	OnToolProgress llm.ToolProgressFunc
 	// OnStreamDelta is called when the LLM streams a partial content delta.
 	OnStreamDelta func(llm.StreamDelta)
@@ -87,6 +90,7 @@ type Loop struct {
 	messageQueue     []llm.Message
 	totalUsage       llm.Usage
 	mu               sync.Mutex
+	toolResultMu     sync.Mutex
 	logger           *slog.Logger
 	system           []llm.SystemContent
 	workingDir       string
@@ -188,6 +192,24 @@ func (l *Loop) QueueMessages(messages ...llm.Message) {
 	}
 }
 
+// AppendHistory appends messages to the loop's in-memory history without
+// starting a turn.
+//
+// For out-of-band messages that are already persisted and must be visible to
+// the NEXT request, but should not themselves provoke a response — e.g. the
+// notice that the user moved the working directory. QueueUserMessage is the
+// wrong tool for that: queued messages drive a turn.
+//
+// Only safe between turns. The caller must hold whatever lock keeps a turn from
+// starting concurrently (see ConversationManager.SetCwd); appending mid-request
+// would put a message into history that the in-flight request was built
+// without, so the model would answer without having seen it.
+func (l *Loop) AppendHistory(messages ...llm.Message) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.history = append(l.history, messages...)
+}
+
 // GetUsage returns the total usage accumulated by this loop
 func (l *Loop) GetUsage() llm.Usage {
 	l.mu.Lock()
@@ -248,8 +270,15 @@ func (l *Loop) Go(ctx context.Context) error {
 			// Send request to LLM
 			l.logger.Debug("processing queued messages", "count", 1)
 			if err := l.processLLMRequest(ctx); err != nil {
+				if errors.Is(err, errMessagePersistence) {
+					return err
+				}
+				if ctx.Err() != nil {
+					l.logger.Info("conversation loop canceled")
+					return ctx.Err()
+				}
 				l.logger.Error("failed to process LLM request", "error", err)
-				time.Sleep(time.Second) // Wait before retrying
+				time.Sleep(time.Second)
 				continue
 			}
 			l.logger.Debug("finished processing queued messages")
@@ -433,8 +462,24 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 		}
 
 		if err != nil {
-			// Record the error as a message so it can be displayed in the UI
-			// EndOfTurn must be true so the agent working state is properly updated
+			// If the loop's own context was CANCELLED, the turn's bookkeeping
+			// belongs to whoever cancelled us: CancelConversation records its
+			// own "[Operation cancelled]" end-of-turn message and clears
+			// agent_working itself. Recording an error bubble here would
+			// duplicate that — and, because ctx is already dead, the write
+			// failed anyway ("failed to create message: Tx: context canceled"),
+			// producing a scary log line on every user cancel. Skip it.
+			if errors.Is(ctx.Err(), context.Canceled) {
+				l.logger.Info("LLM request aborted by loop cancellation", "error", err)
+				return fmt.Errorf("LLM request failed: %w", err)
+			}
+			// Record the error as a message so it can be displayed in the UI.
+			// EndOfTurn must be true so the agent working state is properly
+			// updated. WithoutCancel: this row's MarkAgentDone is what clears
+			// the persisted agent_working flag; losing the write to a context
+			// that expired (e.g. the 12-hour conversation-loop ceiling) or was
+			// cancelled between the failure above and this write would wedge
+			// the conversation in "Agent working..." forever.
 			errorMessage := llm.Message{
 				Role: llm.MessageRoleAssistant,
 				Content: []llm.Content{
@@ -447,7 +492,7 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 				ErrorType:      llm.ErrorTypeLLMRequest,
 				ErrorRetryable: IsRetryableLLMError(err),
 			}
-			if recordErr := l.recordMessage(ctx, errorMessage, llm.Usage{}, nil); recordErr != nil {
+			if recordErr := l.recordMessage(context.WithoutCancel(ctx), errorMessage, llm.Usage{}, nil); recordErr != nil {
 				l.logger.Error("failed to record error message", "error", recordErr)
 			}
 			return fmt.Errorf("LLM request failed: %w", err)
@@ -478,15 +523,31 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 			return l.handleRefusal(ctx, resp)
 		}
 
-		// Convert response to message and add to history
 		assistantMessage := resp.ToMessage()
-		l.mu.Lock()
-		l.history = append(l.history, assistantMessage)
-		l.mu.Unlock()
-
-		// Record assistant message with model and timing metadata
-		if err := l.recordMessage(ctx, assistantMessage, resp.UsageWithMeta(), nil); err != nil {
-			l.logger.Error("failed to record assistant message", "error", err)
+		if resp.StopReason == llm.StopReasonToolUse {
+			// Publish assistant tool-use messages atomically relative to
+			// cancellation. Persist before exposing them in history so a cancel
+			// can never create results for a tool_use row that failed to commit.
+			l.toolResultMu.Lock()
+			if err := ctx.Err(); err != nil {
+				l.toolResultMu.Unlock()
+				return err
+			}
+			if err := l.recordMessage(context.WithoutCancel(ctx), assistantMessage, resp.UsageWithMeta(), nil); err != nil {
+				l.toolResultMu.Unlock()
+				return fmt.Errorf("%w: assistant tool-use message: %v", errMessagePersistence, err)
+			}
+			l.mu.Lock()
+			l.history = append(l.history, assistantMessage)
+			l.mu.Unlock()
+			l.toolResultMu.Unlock()
+		} else {
+			l.mu.Lock()
+			l.history = append(l.history, assistantMessage)
+			l.mu.Unlock()
+			if err := l.recordMessage(ctx, assistantMessage, resp.UsageWithMeta(), nil); err != nil {
+				l.logger.Error("failed to record assistant message", "error", err)
+			}
 		}
 
 		// If no tool calls, the turn is over
@@ -738,88 +799,187 @@ func (l *Loop) handleRefusal(ctx context.Context, resp *llm.Response) error {
 	return nil
 }
 
-// executeToolCalls runs the tools from an LLM response and appends the results
-// to l.history. It does NOT call processLLMRequest — the caller loops instead.
+const (
+	// cancelledToolResultText is the final line of a result cancelled by the user.
+	// The UI matches this trailing sentinel in ui/src/vue/utils/toolStatus.ts.
+	cancelledToolResultText   = "Tool execution cancelled by user"
+	notExecutedToolResultText = "Tool not executed because cancellation happened before it started\n\n" + cancelledToolResultText
+	abandonedToolResultText   = "Tool did not stop within the grace period after cancellation; its output was discarded\n\n" + cancelledToolResultText
+)
+
+const toolCancelGrace = time.Second
+
+func (l *Loop) findTool(name string) *llm.Tool {
+	for _, tool := range l.tools {
+		if tool.Name == name {
+			return tool
+		}
+	}
+	return nil
+}
+
+// executeToolCall runs one client-side tool call after its sibling batch has
+// crossed the start barrier. Do not check ctx before invoking Run: once the
+// batch has started, every sibling is logically started even if cancellation
+// reaches a particular goroutine before the scheduler runs it.
+func (l *Loop) executeToolCall(ctx context.Context, c llm.Content) llm.Content {
+	l.logger.Debug("executing tool", "name", c.ToolName, "id", c.ID)
+	tool := l.findTool(c.ToolName)
+	if tool == nil {
+		l.logger.Error("tool not found", "name", c.ToolName)
+		return llm.Content{
+			Type:       llm.ContentTypeToolResult,
+			ToolUseID:  c.ID,
+			ToolError:  true,
+			ToolResult: llm.TextContent(fmt.Sprintf("Tool '%s' not found", c.ToolName)),
+		}
+	}
+
+	toolCtx := ctx
+	if l.workingDir != "" {
+		toolCtx = llm.WithWorkingDir(toolCtx, l.workingDir)
+	}
+	if l.onToolProgress != nil {
+		toolCtx = llm.WithToolProgress(toolCtx, l.onToolProgress)
+	}
+	toolCtx = llm.WithToolUseID(toolCtx, c.ID)
+	toolCtx = llm.WithLLMService(toolCtx, l.llm)
+	startTime := time.Now()
+
+	resultCh := make(chan llm.ToolOut, 1)
+	go func() { resultCh <- tool.Run(toolCtx, c.ToolInput) }()
+
+	var result llm.ToolOut
+	abandoned := false
+	// Prefer an already-completed result before looking at cancellation. Once
+	// selected, that outcome is final even if the shared context is cancelled
+	// immediately afterward.
+	select {
+	case result = <-resultCh:
+	default:
+		select {
+		case result = <-resultCh:
+		case <-ctx.Done():
+			grace := time.NewTimer(toolCancelGrace)
+			select {
+			case result = <-resultCh:
+				if !grace.Stop() {
+					<-grace.C
+				}
+			case <-grace.C:
+				abandoned = true
+			}
+		}
+	}
+	endTime := time.Now()
+
+	if abandoned {
+		// A Go goroutine (and any external process or request a tool started)
+		// cannot be forcefully killed. After the bounded grace we abandon its
+		// result channel: the tool may still cause external side effects, but
+		// it can never publish a late tool result into this conversation.
+		l.logger.Warn("tool ignored cancellation; abandoning", "name", c.ToolName, "id", c.ID)
+		return llm.Content{
+			Type:             llm.ContentTypeToolResult,
+			ToolUseID:        c.ID,
+			ToolError:        true,
+			ToolResult:       llm.TextContent(abandonedToolResultText),
+			ToolUseStartTime: &startTime,
+			ToolUseEndTime:   &endTime,
+		}
+	}
+
+	toolResultContent := result.LLMContent
+	if result.Error != nil {
+		text := result.Error.Error()
+		// Classify cancellation only from the tool's own error. A shared context
+		// can be cancelled after a tool has already completed with an ordinary
+		// error, and must not rewrite that completed outcome.
+		if errors.Is(result.Error, context.Canceled) {
+			l.logger.Info("tool cancelled by user", "name", c.ToolName)
+			text = strings.TrimRight(text, "\r\n") + "\n\n" + cancelledToolResultText
+		} else {
+			l.logger.Error("tool execution failed", "name", c.ToolName, "error", result.Error)
+		}
+		toolResultContent = llm.TextContent(text)
+	} else {
+		l.logger.Debug("tool executed successfully", "name", c.ToolName, "duration", endTime.Sub(startTime))
+	}
+
+	return llm.Content{
+		Type:             llm.ContentTypeToolResult,
+		ToolUseID:        c.ID,
+		ToolError:        result.Error != nil,
+		ToolResult:       toolResultContent,
+		ToolUseStartTime: &startTime,
+		ToolUseEndTime:   &endTime,
+		Display:          result.Display,
+	}
+}
+
+// executeToolCalls runs sibling tools concurrently and appends the results to l.history
+// in request order. It does NOT call processLLMRequest — the caller loops instead.
 func (l *Loop) executeToolCalls(ctx context.Context, content []llm.Content) error {
-	var toolResults []llm.Content
-	// Collect the usage of indirect LLM calls made by tools (keyword_search,
-	// llm_one_shot, tool install validation, subagent progress summaries, ...)
-	// so it can be attached to the tool-result message below. Tools run
-	// sequentially in this loop, but a tool may fan out goroutines internally;
-	// the accumulator is mutex-guarded.
 	var otherUsage llmhttp.UsageAccumulator
 	ctx = llmhttp.WithUsageCollector(ctx, otherUsage.Collect)
 
+	var toolUses []llm.Content
 	for _, c := range content {
-		if c.Type != llm.ContentTypeToolUse {
-			continue
+		if c.Type == llm.ContentTypeToolUse {
+			toolUses = append(toolUses, c)
 		}
-
-		l.logger.Debug("executing tool", "name", c.ToolName, "id", c.ID)
-
-		// Find the tool
-		var tool *llm.Tool
-		for _, t := range l.tools {
-			if t.Name == c.ToolName {
-				tool = t
-				break
-			}
-		}
-
-		if tool == nil {
-			l.logger.Error("tool not found", "name", c.ToolName)
-			toolResults = append(toolResults, llm.Content{
-				Type:      llm.ContentTypeToolResult,
-				ToolUseID: c.ID,
-				ToolError: true,
-				ToolResult: []llm.Content{
-					{Type: llm.ContentTypeText, Text: fmt.Sprintf("Tool '%s' not found", c.ToolName)},
-				},
-			})
-			continue
-		}
-
-		// Execute the tool with working directory and progress callback set in context
-		toolCtx := ctx
-		if l.workingDir != "" {
-			toolCtx = llm.WithWorkingDir(ctx, l.workingDir)
-		}
-		if l.onToolProgress != nil {
-			toolCtx = llm.WithToolProgress(toolCtx, l.onToolProgress)
-		}
-		toolCtx = llm.WithToolUseID(toolCtx, c.ID)
-		toolCtx = llm.WithLLMService(toolCtx, l.llm)
-		startTime := time.Now()
-		result := tool.Run(toolCtx, c.ToolInput)
-		endTime := time.Now()
-
-		var toolResultContent []llm.Content
-		if result.Error != nil {
-			l.logger.Error("tool execution failed", "name", c.ToolName, "error", result.Error)
-			toolResultContent = []llm.Content{
-				{Type: llm.ContentTypeText, Text: result.Error.Error()},
-			}
-		} else {
-			toolResultContent = result.LLMContent
-			l.logger.Debug("tool executed successfully", "name", c.ToolName, "duration", endTime.Sub(startTime))
-		}
-
-		toolResults = append(toolResults, llm.Content{
-			Type:             llm.ContentTypeToolResult,
-			ToolUseID:        c.ID,
-			ToolError:        result.Error != nil,
-			ToolResult:       toolResultContent,
-			ToolUseStartTime: &startTime,
-			ToolUseEndTime:   &endTime,
-			Display:          result.Display,
-		})
 	}
+
+	toolResults := make([]llm.Content, len(toolUses))
+
+	// Do not let goroutine scheduling decide which siblings were "never
+	// started." Every worker first reaches this barrier. If cancellation won
+	// before the cohort was released, all calls get the same not-started
+	// result. Otherwise all calls are logically started and invoke Run, even
+	// when cancellation reaches an individual worker before it is scheduled.
+	var ready, finished sync.WaitGroup
+	ready.Add(len(toolUses))
+	finished.Add(len(toolUses))
+	start := make(chan struct{})
+	run := false
+	for i, c := range toolUses {
+		go func(i int, c llm.Content) {
+			defer finished.Done()
+			ready.Done()
+			<-start
+			if !run {
+				toolResults[i] = llm.Content{
+					Type:       llm.ContentTypeToolResult,
+					ToolUseID:  c.ID,
+					ToolError:  true,
+					ToolResult: llm.TextContent(notExecutedToolResultText),
+				}
+				return
+			}
+			toolResults[i] = l.executeToolCall(ctx, c)
+		}(i, c)
+	}
+	ready.Wait()
+	run = ctx.Err() == nil
+	close(start)
+	finished.Wait()
+
+	l.toolResultMu.Lock()
+	defer l.toolResultMu.Unlock()
+	recordCtx := context.WithoutCancel(ctx)
 
 	if len(toolResults) > 0 {
 		// Add tool results to history as a user message
 		toolMessage := llm.Message{
 			Role:    llm.MessageRoleUser,
 			Content: toolResults,
+		}
+
+		// Persist before exposing the result in memory. Cancellation holds the
+		// same publication lock, so it either observes the committed result or
+		// records a synthetic cancellation result, never a half-published one.
+		if err := l.recordMessage(recordCtx, toolMessage, llm.Usage{}, otherUsage.Take()); err != nil {
+			return fmt.Errorf("%w: tool result message: %v", errMessagePersistence, err)
 		}
 
 		l.mu.Lock()
@@ -834,14 +994,9 @@ func (l *Loop) executeToolCalls(ctx context.Context, content []llm.Content) erro
 			l.logger.Info("processing user interruption during tool execution")
 		}
 		l.mu.Unlock()
-
-		// Record tool result message
-		if err := l.recordMessage(ctx, toolMessage, llm.Usage{}, otherUsage.Take()); err != nil {
-			l.logger.Error("failed to record tool result message", "error", err)
-		}
 	}
 
-	return nil
+	return ctx.Err()
 }
 
 // insertMissingToolResults fixes tool_result issues in the conversation history:

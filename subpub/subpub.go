@@ -3,7 +3,23 @@ package subpub
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 )
+
+// SubscriberQueueCapacity bounds pending messages per subscriber.
+const SubscriberQueueCapacity = 200
+
+// SubscriptionStatus reports why a subscription ended.
+type SubscriptionStatus struct {
+	done       <-chan struct{}
+	fellBehind atomic.Bool
+}
+
+// Done closes when the subscription is canceled or disconnected.
+func (s *SubscriptionStatus) Done() <-chan struct{} { return s.done }
+
+// FellBehind reports whether the subscriber was disconnected because its queue filled.
+func (s *SubscriptionStatus) FellBehind() bool { return s.fellBehind.Load() }
 
 type SubPub[K any] struct {
 	mu          sync.Mutex
@@ -27,6 +43,7 @@ type subscriber[K any] struct {
 	ch     chan K
 	ctx    context.Context
 	cancel context.CancelFunc
+	status *SubscriptionStatus
 }
 
 func New[K any]() *SubPub[K] {
@@ -37,27 +54,36 @@ func New[K any]() *SubPub[K] {
 
 // Subscribe registers an interest in messages after the given index, subject to the
 // expiration/cancellation of the provided context. The returned function blocks
-// until a new message, and can return false as the second arguent if the subscription
-// is done for.
+// until a new message, and can return false as the second argument if the subscription
+// is done.
 func (sp *SubPub[K]) Subscribe(ctx context.Context, idx int64) func() (K, bool) {
+	next, _ := sp.SubscribeWithStatus(ctx, idx)
+	return next
+}
+
+// SubscribeWithStatus is Subscribe plus status that reports immediately when
+// the subscription ends and distinguishes falling behind from cancellation.
+func (sp *SubPub[K]) SubscribeWithStatus(ctx context.Context, idx int64) (func() (K, bool), *SubscriptionStatus) {
 	// Create a child context so we can cancel the subscription independently
 	subCtx, cancel := context.WithCancel(ctx)
+	status := &SubscriptionStatus{done: subCtx.Done()}
 
 	// Buffered channel to avoid blocking publishers
-	ch := make(chan K, 10)
+	ch := make(chan K, SubscriberQueueCapacity)
 	sub := &subscriber[K]{
 		after:  idx,
 		ch:     ch,
 		ctx:    subCtx,
 		cancel: cancel,
+		status: status,
 	}
 
 	sp.mu.Lock()
 	sp.subscribers = append(sp.subscribers, sub)
 	sp.mu.Unlock()
 
-	// Return a function that blocks until the next message
-	return func() (K, bool) {
+	// Return a function that blocks until the next message.
+	next := func() (K, bool) {
 		select {
 		case msg, ok := <-ch:
 			if !ok {
@@ -78,6 +104,7 @@ func (sp *SubPub[K]) Subscribe(ctx context.Context, idx int64) func() (K, bool) 
 			return zero, false
 		}
 	}
+	return next, status
 }
 
 // Publish sends a message to all subscribers whose subscription index is below
@@ -112,6 +139,7 @@ func (sp *SubPub[K]) Publish(idx int64, message K) {
 				remaining = append(remaining, sub)
 			default:
 				// Channel full, subscriber is behind - disconnect them
+				sub.status.fellBehind.Store(true)
 				close(sub.ch)
 				sub.cancel()
 			}
@@ -143,6 +171,7 @@ func (sp *SubPub[K]) Broadcast(message K) {
 			remaining = append(remaining, sub)
 		default:
 			// Channel full, disconnect
+			sub.status.fellBehind.Store(true)
 			close(sub.ch)
 			sub.cancel()
 		}

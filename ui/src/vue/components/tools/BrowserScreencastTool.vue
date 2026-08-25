@@ -11,31 +11,15 @@
       <div class="screencast-tool-summary">
         <span class="screencast-tool-emoji" :class="{ running: isRunning }">{{ emoji }}</span>
         <span class="screencast-tool-label">{{ label }}</span>
-        <span v-if="isComplete && hasError" class="screencast-tool-error">✗</span>
-        <span v-if="isComplete && !hasError" class="screencast-tool-success">✓</span>
+        <ToolStatusIcon v-if="isComplete && hasError" state="error" class="screencast-tool-error" />
+        <ToolStatusIcon v-if="isComplete && !hasError" state="ok" class="screencast-tool-success" />
       </div>
       <button
         class="screencast-tool-toggle"
         :aria-label="isExpanded ? 'Collapse' : 'Expand'"
         :aria-expanded="isExpanded"
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          class="tool-chevron"
-          :class="{ 'tool-chevron-expanded': isExpanded }"
-        >
-          <path
-            d="M4.5 3L7.5 6L4.5 9"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
+        <ToolChevron :expanded="isExpanded" />
       </button>
     </div>
 
@@ -82,6 +66,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import type { LLMContent } from "../../../types";
+import ToolChevron from "./ToolChevron.vue";
+import ToolStatusIcon from "./ToolStatusIcon.vue";
 
 const props = defineProps<{
   toolInput?: unknown;

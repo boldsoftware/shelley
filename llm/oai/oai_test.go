@@ -3,10 +3,12 @@ package oai
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -224,45 +226,6 @@ func TestMaxImageDimension(t *testing.T) {
 	}
 }
 
-func TestUseSimplifiedPatch(t *testing.T) {
-	// Test Service.UseSimplifiedPatch
-	tests := []struct {
-		name     string
-		model    Model
-		expected bool
-	}{
-		{
-			name:     "Default model (false)",
-			model:    GPT41,
-			expected: false,
-		},
-		{
-			name: "Model with UseSimplifiedPatch=true",
-			model: Model{
-				UserName:           "",
-				ModelName:          "",
-				TextVerbosity:      "",
-				URL:                "",
-				APIKeyEnv:          "",
-				IsReasoningModel:   false,
-				UseSimplifiedPatch: true,
-				SupportsImages:     false,
-			},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			service := &Service{Model: tt.model}
-			result := service.UseSimplifiedPatch()
-			if result != tt.expected {
-				t.Errorf("Service.UseSimplifiedPatch() = %v, expected %v", result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestConfigDetails(t *testing.T) {
 	model := GPT41
 	service := &Service{Model: model}
@@ -286,25 +249,6 @@ func TestConfigDetails(t *testing.T) {
 
 	if details["api_key_env"] != model.APIKeyEnv {
 		t.Errorf("ConfigDetails()[api_key_env] = %s, expected %s", details["api_key_env"], model.APIKeyEnv)
-	}
-}
-
-func TestOAIResponsesServiceUseSimplifiedPatch(t *testing.T) {
-	model := Model{
-		UserName:           "",
-		ModelName:          "",
-		TextVerbosity:      "",
-		URL:                "",
-		APIKeyEnv:          "",
-		IsReasoningModel:   false,
-		UseSimplifiedPatch: true,
-		SupportsImages:     false,
-	}
-	service := &ResponsesService{Model: model}
-
-	result := service.UseSimplifiedPatch()
-	if !result {
-		t.Errorf("ResponsesService.UseSimplifiedPatch() = %v, expected true", result)
 	}
 }
 
@@ -1427,11 +1371,6 @@ func TestTokenContextWindowAdditionalCases(t *testing.T) {
 			expected: 256000,
 		},
 		{
-			name:     "GPT-OSS 20B model",
-			model:    GPTOSS20B,
-			expected: 128000,
-		},
-		{
 			name:     "DeepSeek V4 Pro Fireworks model",
 			model:    DeepseekV4ProFireworks,
 			expected: 1048576,
@@ -1626,6 +1565,118 @@ func TestServiceDo(t *testing.T) {
 	}
 }
 
+func TestServiceDoStreamsFireworks(t *testing.T) {
+	var gotReq map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
+			t.Fatalf("decode req: %v", err)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Exedev-Gateway-Cost", "0.001234")
+		events := []string{
+			`{"id":"chatcmpl-fw","model":"accounts/fireworks/models/test","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"think "},"finish_reason":""}]}`,
+			`{"id":"chatcmpl-fw","model":"accounts/fireworks/models/test","choices":[{"index":0,"delta":{"reasoning_content":"more","content":"hello "},"finish_reason":""}]}`,
+			`{"id":"chatcmpl-fw","model":"accounts/fireworks/models/test","choices":[{"index":0,"delta":{"content":"world","tool_calls":[{"index":0,"id":"call_0","type":"function","function":{"name":"get_","arguments":"{\"city\":"}},{"index":1,"id":"call_1","type":"function","function":{"name":"ping","arguments":"{"}}]},"finish_reason":""}]}`,
+			`{"id":"chatcmpl-fw","model":"accounts/fireworks/models/test","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"name":"weather","arguments":"\"Tokyo\"}"}},{"index":1,"function":{"arguments":"}"}}]},"finish_reason":"tool_calls"}]}`,
+			`{"id":"chatcmpl-fw","model":"accounts/fireworks/models/test","choices":[],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}`,
+		}
+		for _, event := range events {
+			if _, err := w.Write([]byte("data: " + event + "\n\n")); err != nil {
+				t.Fatalf("write event: %v", err)
+			}
+		}
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	var deltas []llm.StreamDelta
+	svc := &Service{
+		APIKey:       "test-key",
+		Model:        modelForTest("accounts/fireworks/models/test"),
+		ModelURL:     server.URL,
+		ProviderName: "fireworks",
+	}
+	resp, err := svc.Do(context.Background(), &llm.Request{
+		Messages: []llm.Message{{Role: llm.MessageRoleUser, Content: []llm.Content{{Type: llm.ContentTypeText, Text: "hi"}}}},
+		OnStream: func(delta llm.StreamDelta) {
+			deltas = append(deltas, delta)
+		},
+	})
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if gotReq["stream"] != true {
+		t.Fatalf("stream = %#v, want true", gotReq["stream"])
+	}
+	streamOptions, ok := gotReq["stream_options"].(map[string]any)
+	if !ok || streamOptions["include_usage"] != true {
+		t.Fatalf("stream_options = %#v, want include_usage=true", gotReq["stream_options"])
+	}
+	wantDeltas := []llm.StreamDelta{
+		{Type: "thinking", Text: "think ", Index: 0},
+		{Type: "thinking", Text: "more", Index: 0},
+		{Type: "text", Text: "hello ", Index: 1},
+		{Type: "text", Text: "world", Index: 1},
+	}
+	if !reflect.DeepEqual(deltas, wantDeltas) {
+		t.Fatalf("deltas = %#v, want %#v", deltas, wantDeltas)
+	}
+	if resp.StopReason != llm.StopReasonToolUse || resp.Usage.InputTokens != 10 || resp.Usage.OutputTokens != 20 {
+		t.Fatalf("response metadata = stop %q usage %+v", resp.StopReason, resp.Usage)
+	}
+	if resp.Usage.CostUSD != 0.001234 {
+		t.Fatalf("cost = %f, want gateway header cost", resp.Usage.CostUSD)
+	}
+	if len(resp.Content) != 4 {
+		t.Fatalf("content = %#v, want thinking, text, and two tool calls", resp.Content)
+	}
+	if resp.Content[0].Type != llm.ContentTypeThinking || resp.Content[0].Thinking != "think more" {
+		t.Fatalf("thinking = %#v", resp.Content[0])
+	}
+	if resp.Content[1].Type != llm.ContentTypeText || resp.Content[1].Text != "hello world" {
+		t.Fatalf("text = %#v", resp.Content[1])
+	}
+	if resp.Content[2].ToolName != "get_weather" || string(resp.Content[2].ToolInput) != `{"city":"Tokyo"}` {
+		t.Fatalf("first tool = %#v", resp.Content[2])
+	}
+	if resp.Content[3].ToolName != "ping" || string(resp.Content[3].ToolInput) != `{}` {
+		t.Fatalf("second tool = %#v", resp.Content[3])
+	}
+}
+
+func TestServiceDoRejectsIncompleteFireworksStream(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"},\"finish_reason\":\"\"}]}\n\ndata: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	svc := &Service{APIKey: "test-key", Model: modelForTest("test"), ModelURL: server.URL, ProviderName: "fireworks"}
+	_, err := svc.Do(context.Background(), &llm.Request{Messages: []llm.Message{{Role: llm.MessageRoleUser}}, OnStream: func(llm.StreamDelta) {}})
+	if err == nil || !strings.Contains(err.Error(), "no finish reason") {
+		t.Fatalf("Do() error = %v, want incomplete stream", err)
+	}
+}
+
+func TestServiceDoDoesNotRetryBrokenFireworksStream(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"},\"finish_reason\":\"\"}]}\n\ndata: {broken}\n\n"))
+	}))
+	defer server.Close()
+
+	svc := &Service{APIKey: "test-key", Model: modelForTest("test"), ModelURL: server.URL, ProviderName: "fireworks", Backoff: []time.Duration{0}}
+	_, err := svc.Do(context.Background(), &llm.Request{Messages: []llm.Message{{Role: llm.MessageRoleUser}}, OnStream: func(llm.StreamDelta) {}})
+	if err == nil {
+		t.Fatal("Do() error = nil, want broken stream error")
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1", attempts)
+	}
+}
+
 func TestServiceDoSendsMaxCompletionTokens(t *testing.T) {
 	var gotReq map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1660,6 +1711,56 @@ func TestServiceDoSendsMaxCompletionTokens(t *testing.T) {
 	}
 	if gotReq["max_completion_tokens"] != float64(DefaultMaxTokens) {
 		t.Fatalf("max_completion_tokens = %#v, want %d; body = %#v", gotReq["max_completion_tokens"], DefaultMaxTokens, gotReq)
+	}
+	if _, ok := gotReq["stream"]; ok {
+		t.Fatalf("non-Fireworks request unexpectedly enabled streaming: %#v", gotReq)
+	}
+}
+
+func TestServiceDoStreamsCompatibleProviders(t *testing.T) {
+	for _, tc := range []struct {
+		provider     string
+		streamOption bool
+		reasoningKey string
+	}{
+		{provider: "openrouter", streamOption: false, reasoningKey: "reasoning"},
+		{provider: "openai", streamOption: true, reasoningKey: "reasoning_content"},
+	} {
+		t.Run(tc.provider, func(t *testing.T) {
+			var gotReq map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
+					t.Fatalf("decode req: %v", err)
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = fmt.Fprintf(w, "data: {\"choices\":[{\"index\":0,\"delta\":{\"%s\":\"think\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n", tc.reasoningKey)
+			}))
+			defer server.Close()
+
+			svc := &Service{APIKey: "test-key", Model: modelForTest("test"), ModelURL: server.URL, ProviderName: tc.provider}
+			var deltas []llm.StreamDelta
+			_, err := svc.Do(context.Background(), &llm.Request{
+				Messages: []llm.Message{{Role: llm.MessageRoleUser}},
+				OnStream: func(delta llm.StreamDelta) { deltas = append(deltas, delta) },
+			})
+			if err != nil {
+				t.Fatalf("Do() error = %v", err)
+			}
+			gotStream, _ := gotReq["stream"].(bool)
+			if !gotStream {
+				t.Fatalf("stream = %#v, want true", gotReq["stream"])
+			}
+			streamOptions, hasStreamOptions := gotReq["stream_options"].(map[string]any)
+			if hasStreamOptions != tc.streamOption {
+				t.Fatalf("stream_options = %#v, want present %v", gotReq["stream_options"], tc.streamOption)
+			}
+			if hasStreamOptions && streamOptions["include_usage"] != true {
+				t.Fatalf("stream_options = %#v, want include_usage=true", streamOptions)
+			}
+			if len(deltas) != 2 || deltas[0].Type != "thinking" || deltas[0].Text != "think" {
+				t.Fatalf("deltas = %#v, want thinking then text", deltas)
+			}
+		})
 	}
 }
 
@@ -2009,12 +2110,49 @@ func TestServiceDoNonDeepSeekStripsReasoningContent(t *testing.T) {
 	}
 }
 
+func TestServiceSupportedReasoningLevels(t *testing.T) {
+	tests := []struct {
+		name  string
+		model Model
+		want  string
+	}{
+		{name: "GPT 5.6", model: GPT56Sol, want: "off,low,medium,high,xhigh,max"},
+		{name: "unknown", model: Model{ModelName: "totally-unknown-model"}, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			levels := (&Service{Model: tt.model}).SupportedReasoningLevels()
+			names := make([]string, len(levels))
+			for i, level := range levels {
+				names[i] = level.Name()
+			}
+			if got := strings.Join(names, ","); got != tt.want {
+				t.Fatalf("levels = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestServiceSupportsReasoningFromModelsDev(t *testing.T) {
+	if (&Service{Model: GPT4o}).SupportsReasoning() {
+		t.Fatal("GPT-4o chat service should not advertise reasoning")
+	}
+	if (&ResponsesService{Model: GPT4o}).SupportsReasoning() {
+		t.Fatal("GPT-4o Responses service should not advertise reasoning")
+	}
+	unknown := Model{ModelName: "totally-unknown-model"}
+	if !(&Service{Model: unknown}).SupportsReasoning() || !(&ResponsesService{Model: unknown}).SupportsReasoning() {
+		t.Fatal("unknown models should retain reasoning support")
+	}
+}
+
 // TestServiceReasoningEffort verifies that Service emits the right
 // reasoning_effort field across precedence (request override beats service
 // verbatim beats service default).
 func TestServiceReasoningEffort(t *testing.T) {
 	tests := []struct {
 		name       string
+		model      Model
 		svcLevel   llm.ThinkingLevel
 		svcEffort  string
 		reqLevel   llm.ThinkingLevel
@@ -2024,6 +2162,16 @@ func TestServiceReasoningEffort(t *testing.T) {
 		{name: "svc default medium", svcLevel: llm.ThinkingLevelMedium, wantEffort: "medium"},
 		{name: "svc high", svcLevel: llm.ThinkingLevelHigh, wantEffort: "high"},
 		{name: "svc xhigh clamped to high", svcLevel: llm.ThinkingLevelXHigh, wantEffort: "high"},
+		{name: "svc max clamped to high", svcLevel: llm.ThinkingLevelMax, wantEffort: "high"},
+		{name: "gpt-5.6 minimal rounds to low", model: GPT56Sol, svcLevel: llm.ThinkingLevelMinimal, wantEffort: "low"},
+		{name: "gpt-5.6 off sends none", model: GPT56Sol, reqLevel: llm.ThinkingLevelOff, wantEffort: "none"},
+		{name: "GLM low rounds to high", model: GLM52Fireworks, svcLevel: llm.ThinkingLevelLow, wantEffort: "high"},
+		{name: "GLM xhigh tie rounds to high", model: GLM52Fireworks, svcLevel: llm.ThinkingLevelXHigh, wantEffort: "high"},
+		{name: "Kimi xhigh tie rounds to high", model: KimiK3Fireworks, svcLevel: llm.ThinkingLevelXHigh, wantEffort: "high"},
+		{name: "DeepSeek V4 Pro keeps max", model: DeepseekV4ProFireworks, svcLevel: llm.ThinkingLevelMax, wantEffort: "max"},
+		{name: "DeepSeek V4 Flash keeps max", model: DeepseekV4FlashFireworks, svcLevel: llm.ThinkingLevelMax, wantEffort: "max"},
+		{name: "GLM 5.2 keeps max", model: GLM52Fireworks, svcLevel: llm.ThinkingLevelMax, wantEffort: "max"},
+		{name: "Kimi K3 keeps max", model: KimiK3Fireworks, svcLevel: llm.ThinkingLevelMax, wantEffort: "max"},
 		{name: "svc off, svc verbatim wins", svcLevel: llm.ThinkingLevelOff, svcEffort: "verbatim", wantEffort: "verbatim"},
 		{name: "req override beats svc default", svcLevel: llm.ThinkingLevelMedium, reqLevel: llm.ThinkingLevelLow, wantEffort: "low"},
 		{name: "req off wins", svcLevel: llm.ThinkingLevelMedium, svcEffort: "v", reqLevel: llm.ThinkingLevelOff, wantEffort: ""},
@@ -2048,9 +2196,13 @@ func TestServiceReasoningEffort(t *testing.T) {
 			}))
 			defer server.Close()
 
+			testModel := tt.model
+			if testModel.ModelName == "" {
+				testModel = GPT41
+			}
 			svc := &Service{
 				APIKey:          "k",
-				Model:           GPT41,
+				Model:           testModel,
 				ModelURL:        server.URL + "/v1",
 				ThinkingLevel:   tt.svcLevel,
 				ReasoningEffort: tt.svcEffort,

@@ -3,7 +3,7 @@
      bar, terminal/diff/git panels, model/thinking pickers, distill, TOC,
      scroll behavior. Preserves the e2e DOM/ARIA/CSS contract. -->
 <template>
-  <div class="full-height flex flex-col">
+  <div ref="chatRootRef" class="full-height flex flex-col">
     <!-- Header -->
     <div class="header">
       <div class="header-left">
@@ -60,7 +60,7 @@
           </svg>
         </button>
 
-        <!-- Overflow menu (PrimeVue Popover + SelectButton/Select) -->
+        <!-- Overflow menu (PrimeVue Popover + Select) -->
         <ChatOverflowMenu
           :has-cwd="hasCwd"
           :links="links"
@@ -69,6 +69,7 @@
           "
           :can-export="!!(conversationId && messages.length > 0)"
           :has-update="hasUpdate"
+          @open-command-palette="props.onOpenCommandPalette?.()"
           @open-diffs="showDiffViewer = true"
           @open-git-graph="showGitGraph = true"
           @open-terminal="openInAppTerminal"
@@ -92,6 +93,22 @@
               <p class="text-base chat-welcome-text">
                 <template v-for="(part, i) in welcomeParts" :key="i">
                   <strong v-if="part === '{hostname}'">{{ hostname }}</strong>
+                  <a
+                    v-else-if="part === '{openSourceLink}'"
+                    href="https://github.com/boldsoftware/shelley/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="chat-welcome-link"
+                    >{{ t("welcomeOpenSource") }}</a
+                  >
+                  <a
+                    v-else-if="part === '{customizeLink}'"
+                    href="https://github.com/boldsoftware/shelley/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="chat-welcome-link"
+                    >{{ t("welcomeCustomize") }}</a
+                  >
                   <a
                     v-else-if="part === '{docsLink}'"
                     href="https://exe.dev/docs/proxy"
@@ -150,27 +167,31 @@
                 :key="sp.key"
                 :message="sp.message"
               />
-              <div v-for="chunk in block.chunks" :key="chunk.key" class="messages-chunk">
-                <MessageRenderNode
-                  v-for="node in chunk.nodes"
-                  :key="node.key"
-                  :node="node"
-                  :conversation-id="conversationId"
-                  :on-open-diff-viewer="handleOpenDiffViewer"
-                  :on-comment-text-change="setDiffCommentText"
-                  :on-cancel-queued="cancelQueuedMessages"
-                  :on-fork="forkHandler"
-                />
-              </div>
+              <ChunkHost
+                v-for="chunk in block.chunks"
+                :key="chunk.key"
+                :chunk="chunk"
+                :conversation-id="conversationId"
+                :on-open-diff-viewer="handleOpenDiffViewer"
+                :on-comment-text-change="setDiffCommentText"
+                :on-fork="forkHandler"
+              />
             </div>
           </template>
           <!-- streaming preview -->
-          <div v-if="showStreamingPreview" class="message message-agent streaming-message">
+          <div
+            v-if="showStreamingPreview || showStreamingThinking"
+            class="message message-agent streaming-message"
+          >
             <div class="message-content" data-testid="message-content">
-              <div v-if="markdownMode === 'off'" class="whitespace-pre-wrap break-words">
+              <ThinkingContent v-if="showStreamingThinking" :thinking="streamingThinking" />
+              <div
+                v-if="showStreamingPreview && markdownMode === 'off'"
+                class="whitespace-pre-wrap break-words"
+              >
                 {{ streamingText }}<span class="streaming-cursor">▊</span>
               </div>
-              <div v-else class="streaming-markdown">
+              <div v-else-if="showStreamingPreview" class="streaming-markdown">
                 <MarkdownContent :text="streamingText" />
                 <span class="streaming-cursor">▊</span>
               </div>
@@ -216,11 +237,12 @@
       <!-- Floating nav cluster -->
       <div v-if="conversationId && messages.length > 0" class="chat-nav-cluster">
         <ConversationTOC
-          :messages="messages"
+          :messages="visibleMessages"
           :container-ref="messagesContainerRef"
           :near-bottom="!showScrollToBottom"
           :conversation-slug="currentConversation?.slug"
           @scroll-bottom="scrollToBottom"
+          @scroll-away="markUserScrolledUp"
         />
         <button
           v-if="showScrollToBottom"
@@ -249,6 +271,8 @@
       :auto-focus-id="terminalAutoFocusId"
       :can-insert-into-input="true"
       @attached="(id, termId) => onTerminalAttached?.(id, termId)"
+      @scope-change="(id, cid) => onTerminalScopeChange?.(id, cid)"
+      @scope-error="(message) => (error = message)"
       @close="onTerminalCloseHandler"
       @insert-into-input="handleInsertFromTerminal"
       @auto-focus-consumed="terminalAutoFocusId = null"
@@ -285,7 +309,8 @@
       :initial-rows="messageInputInitialRows"
       :conversation-id="conversationId"
       :lazy-draft-id="lazyDraftId"
-      :model-options="readyModelIds"
+      :model-options="readyModels"
+      :current-model-id="selectedModel"
       @clear-injected-text="
         diffCommentText = '';
         terminalInjectedText = null;
@@ -302,14 +327,9 @@
     <!-- Directory Picker Modal -->
     <DirectoryPickerModal
       :is-open="showDirectoryPicker"
-      :initial-path="selectedCwd"
+      :initial-path="currentConversation?.cwd || selectedCwd"
       @close="showDirectoryPicker = false"
-      @select="
-        (path) => {
-          setSelectedCwd(path);
-          cwdError = null;
-        }
-      "
+      @select="applyPickedCwd"
     />
 
     <MessageSelectionToolbar :on-comment="handleMessageComment" />
@@ -368,7 +388,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, provide, reactive, ref, watch } from "vue";
 import Button from "primevue/button";
 import PvMessage from "primevue/message";
 import {
@@ -381,6 +401,7 @@ import {
   isDistillStatusMessage,
   distillStatus,
   parseQueuedMessages,
+  queuedMessageText,
 } from "../../types";
 import { api } from "../../services/api";
 import { messageStore } from "../../services/messageStore";
@@ -400,12 +421,14 @@ import {
   suggestURL,
 } from "../../utils/modelSetupHint";
 import { useMarkdownMode } from "../composables/markdownMode";
+import { useConversationView } from "../composables/conversationView";
 import { useI18n } from "../composables/i18n";
 import { useDraftAutosave } from "../composables/draftAutosave";
 import { useFeatureFlag } from "../composables/featureFlags";
 import { useVersionChecker } from "../composables/versionChecker";
 import { provideToolProgress } from "../composables/toolProgress";
 import { closeImageComment, useImageCommentTarget } from "../composables/imageComment";
+import { isImeComposing } from "../../utils/imeComposing";
 import { focusMessageInputIfUnfocused } from "../../utils/focusMessageInput";
 import { buildMessageQuote } from "../../utils/messageQuote";
 import { hasMultipleUsers } from "../../utils/messageAuthors";
@@ -413,6 +436,11 @@ import { tildifyPath } from "../../utils/tildify";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
 import { isAutoExpandTool } from "../../utils/toolMeta";
 import { formatDay } from "../../utils/messageTime";
+import {
+  clearConversationViewCache,
+  isHumanUserMessage,
+  isVisibleConversationMessage,
+} from "../../utils/conversationView";
 import { SLASH_COMMANDS } from "../../utils/slashCommands";
 import {
   perfCount,
@@ -429,7 +457,14 @@ import {
 import { coalesceMessages, type CoalescedItem } from "./coalesce";
 import type { RenderNode, RenderChunk, GenerationBlock } from "./renderNode";
 import type { EphemeralTerminal } from "./terminalTypes";
-import { DEFAULT_THINKING_LEVEL, THINKING_LEVELS, type ThinkingLevel } from "./thinkingLevel";
+import {
+  THINKING_LEVELS,
+  normalizeThinkingLevelForModel,
+  THINKING_LEVEL_KEY,
+  storedThinkingLevel,
+  type ThinkingLevel,
+} from "./thinkingLevel";
+import { SELECTED_MODEL_KEY, pickReadyModel, storedSelectedModel } from "./selectedModel";
 
 import MessageInput from "./MessageInput.vue";
 import ConversationTOC from "./ConversationTOC.vue";
@@ -445,10 +480,12 @@ import TerminalPanel from "./TerminalPanel.vue";
 import VersionChecker from "./VersionChecker.vue";
 import ChatOverflowMenu from "./ChatOverflowMenu.vue";
 import { matchChatInterfaceAction } from "../../utils/menuShortcuts";
-import MessageRenderNode from "./MessageRenderNode.vue";
+import ChunkHost from "./ChunkHost.vue";
+import { chunkMountKey } from "./chunkMount";
 import QueuedGhostMessage from "./QueuedGhostMessage.vue";
 import ChatStatusContent from "./ChatStatusContent.vue";
 import MarkdownContent from "./MarkdownContent.vue";
+import ThinkingContent from "./tools/ThinkingContent.vue";
 
 // Props mirror ChatInterfaceProps in the React source. Callbacks that
 // ChatInterface awaits or simply invokes are passed as function props
@@ -488,15 +525,19 @@ const props = withDefaults(
     cwdSyncTrigger?: number;
     onOpenModelsModal?: () => void;
     onOpenFileFinder?: () => void;
+    onOpenCommandPalette?: () => void;
     ephemeralTerminals: EphemeralTerminal[];
     setEphemeralTerminals: (
       next: EphemeralTerminal[] | ((prev: EphemeralTerminal[]) => EphemeralTerminal[]),
     ) => void;
     onTerminalAttached?: (id: string, termId: string) => void;
+    onTerminalScopeChange?: (id: string, conversationId: string | null) => void;
     onTerminalClose?: (id: string) => void;
     navigateUserMessageTrigger?: number;
+    /** Incremented when app navigation explicitly selects a conversation. */
+    scrollToBottomTrigger?: number;
     onConversationUnarchived?: (conversation: Conversation) => void;
-    onDraftCreated?: (conversationId: string) => void;
+    onDraftCreated?: (conversation: Conversation) => void;
     /** Comment block from the standalone file editor (App-level modal) to
      *  inject into the message input. Fresh object per submit. */
     externalCommentText?: { text: string } | null;
@@ -509,6 +550,18 @@ const props = withDefaults(
 
 const { t } = useI18n();
 const { markdownMode } = useMarkdownMode();
+const { conversationViewMode } = useConversationView();
+// A view-mode switch refilters coalescedItems, which renumbers every chunk
+// and can restructure them wholesale; reset the tail-first floor and
+// re-prime for the new model. Synchronous on purpose: renderModel is a
+// pull-based computed, so primeTailFirstMount reads the NEW model here, and
+// the floor is in place before the next DOM flush — toggling back to "all"
+// in a huge conversation must not synchronously mount 20k rows. (Functions
+// hoisted; safe to reference at setup time.)
+watch(conversationViewMode, () => {
+  resetTailFirst();
+  primeTailFirstMount();
+});
 const toolPillsEnabled = useFeatureFlag("tool-pills");
 const {
   hasUpdate,
@@ -577,6 +630,9 @@ const models = ref<
 
 // Ready model ids, surfaced to MessageInput for /model argument autocomplete.
 const readyModelIds = computed(() => models.value.filter((m) => m.ready).map((m) => m.id));
+// Ready models with reasoning capabilities, for the same autocomplete to offer
+// only levels the target model accepts.
+const readyModels = computed(() => models.value.filter((m) => m.ready));
 
 // Copy for the empty-model-list state. The server tells us WHY the list is
 // empty (missing exe.dev reflection/llm integration, or not on exe.dev at
@@ -598,36 +654,15 @@ function noModelErrorMessage(): string {
   return `${t(hint.title)}. ${t(hint.note)}`;
 }
 
-const THINKING_LEVEL_KEY = "shelley.thinkingLevel.v2";
-const thinkingLevel = ref<ThinkingLevel>(
-  (() => {
-    try {
-      const stored = localStorage.getItem(THINKING_LEVEL_KEY);
-      const valid: ThinkingLevel[] = [
-        "default",
-        "off",
-        "minimal",
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-      ];
-      if (stored !== null && valid.includes(stored as ThinkingLevel)) {
-        return stored as ThinkingLevel;
-      }
-    } catch {
-      /* ignore */
-    }
-    return DEFAULT_THINKING_LEVEL;
-  })(),
-);
+const thinkingLevel = ref<ThinkingLevel>(storedThinkingLevel());
 function setThinkingLevel(level: ThinkingLevel) {
   thinkingLevel.value = level;
-  try {
-    localStorage.setItem(THINKING_LEVEL_KEY, level);
-  } catch {
-    /* ignore */
-  }
+  localStorage.setItem(THINKING_LEVEL_KEY, level);
+}
+
+function thinkingLevelForModel(modelId: string, level: ThinkingLevel): ThinkingLevel {
+  const model = models.value.find((candidate) => candidate.id === modelId);
+  return normalizeThinkingLevelForModel(level, model);
 }
 
 // selectedModel is "" when the server serves no models. Deliberately no
@@ -636,24 +671,13 @@ function setThinkingLevel(level: ThinkingLevel) {
 // "no models configured" state into a misleading "Unsupported model:
 // claude-sonnet-4.6" error from the server. Empty disables sending instead.
 const selectedModel = ref<string>(
-  (() => {
-    const storedModel = localStorage.getItem("shelley_selected_model");
-    const initModels = window.__SHELLEY_INIT__?.models || [];
-    if (storedModel) {
-      const modelInfo = initModels.find((m) => m.id === storedModel);
-      if (modelInfo?.ready) return storedModel;
-    }
-    const defaultModel = window.__SHELLEY_INIT__?.default_model;
-    if (defaultModel) return defaultModel;
-    const firstReady = initModels.find((m) => m.ready);
-    return firstReady?.id || "";
-  })(),
+  pickReadyModel(window.__SHELLEY_INIT__?.models || [], storedSelectedModel()),
 );
 // applyModel updates the picker's local state only (ref + localStorage).
 // Used both by user picks and by server echoes; never talks to the server.
 function applyModel(model: string) {
   selectedModel.value = model;
-  localStorage.setItem("shelley_selected_model", model);
+  localStorage.setItem(SELECTED_MODEL_KEY, model);
 }
 // In-flight picker PUT tracking. While a PUT for a draft is outstanding,
 // the conversation-model watch ignores echoes FOR THAT DRAFT: they are
@@ -715,7 +739,10 @@ async function sendModelCommand(arg: string) {
 
 function switchConversationModel(model: string) {
   if (model === selectedModel.value) return;
-  return sendModelCommand(model);
+  const rounded = thinkingLevelForModel(model, thinkingLevel.value);
+  const arg =
+    rounded !== "default" && rounded !== thinkingLevel.value ? `${model} ${rounded}` : model;
+  return sendModelCommand(arg);
 }
 
 // Reasoning pills in the status readout's picker. Same policy as the model
@@ -748,6 +775,8 @@ function switchConversationThinkingLevel(level: ThinkingLevel) {
 // would drop a legitimate re-pick of the original model made while a previous
 // pick's PUT was still in flight.
 function setSelectedModel(model: string) {
+  const rounded = thinkingLevelForModel(model, thinkingLevel.value);
+  if (rounded !== thinkingLevel.value) setThinkingLevel(rounded);
   applyModel(model);
   // Keep the server-side draft row in sync with the picker. Without this,
   // the draft keeps the model it was created with until the promoting chat
@@ -770,6 +799,40 @@ function setSelectedCwd(cwd: string) {
 
 const cwdError = ref<string | null>(null);
 const showDirectoryPicker = ref(false);
+
+// Directory pick from the picker modal. How it applies depends on whether the
+// conversation exists yet — the same split as the model picker: a draft's cwd is
+// client state until the first send, while an existing conversation's is server
+// state (the agent's tools run there), so it has to change through the server so
+// the live toolset moves with it and the agent is told where it now is.
+async function applyPickedCwd(path: string) {
+  cwdError.value = null;
+  const id = props.conversationId;
+  if (!id || props.currentConversation?.is_draft) {
+    setSelectedCwd(path);
+    // Drafts keep their cwd in the row as well as locally, so a reload or
+    // another device sees the pick (and so re-opening this picker starts from
+    // it — it reads currentConversation?.cwd first). 404 once promoted, which
+    // is a no-op: the cwd travels with the send by then. Mirrors
+    // setConversationCwd in App.vue, the command-palette path to the same
+    // change.
+    if (id) {
+      api.updateDraft(id, { cwd: path }).catch((err) => {
+        console.debug("Could not persist draft cwd (likely already promoted):", err);
+      });
+    }
+    return;
+  }
+  try {
+    await api.setConversationCwd(id, path);
+    // Deliberately no local write: the server broadcasts the updated
+    // conversation and the currentConversation watch applies it, so a rejected
+    // change can't leave the readout claiming a directory we are not in.
+  } catch (err) {
+    console.error("Failed to change directory:", err);
+    error.value = err instanceof Error ? err.message : "Failed to change directory";
+  }
+}
 const isMobile = ref(window.innerWidth < 768);
 const showDiffViewer = ref(false);
 const showGitGraph = ref(false);
@@ -789,6 +852,7 @@ const toolProgress = ref<Record<string, ToolProgress>>({});
 // via a changed prop identity (see composables/toolProgress.ts).
 provideToolProgress(toolProgress);
 const streamingText = ref("");
+const streamingThinking = ref("");
 const showAdvancedSettings = ref(false);
 const advancedSettingsRef = ref<HTMLDivElement | null>(null);
 const availableTools = ref<Array<{ name: string; summary: string; default_on: boolean }>>([]);
@@ -806,6 +870,7 @@ const terminalInjectedText = ref<string | null>(null);
 const terminalAutoFocusId = ref<string | null>(null);
 
 // ---- refs to DOM ----
+const chatRootRef = ref<HTMLDivElement | null>(null);
 const messagesContainerRef = ref<HTMLDivElement | null>(null);
 const messagesListRef = ref<HTMLDivElement | null>(null);
 const bottomSentinelRef = ref<HTMLDivElement | null>(null);
@@ -818,6 +883,8 @@ let loadingFlag = false;
 let pendingScroll: number | null | undefined = undefined;
 let loadingProgressDelay: number | null = null;
 let currentConversationId: string | null = props.conversationId;
+let conversationWatchInitialized = false;
+let lastScrollToBottomTrigger = props.scrollToBottomTrigger ?? 0;
 let conversationLoadEpoch = 0;
 let catchingUp = false;
 // Layout-free "is the viewport at/near the bottom" signal, maintained by the
@@ -849,8 +916,312 @@ let inferredScrollUpDelta = 0;
 // Last upward wheel / touch gesture; a scroll-up near a real gesture must
 // never be undone as a clamp misread.
 let lastScrollGestureAt = -Infinity;
+// Last scroll event on the messages container, whatever its cause. Used by
+// the bottom sentinel's IntersectionObserver to tell "the user scrolled away"
+// from "the list grew above the viewport": growth (a tail-first sweep mount
+// laying out near the viewport, an image decoding) moves the sentinel out of
+// the near-bottom zone WITHOUT any scroll event, and must not disarm follow.
+let lastScrollEventAt = -Infinity;
 let hiddenAt: number | null = null;
 let lastGeneration: { id: string | null; gen: number } | null = null;
+
+// ---- tail-first chunk mounting ----
+//
+// Mounting a 20k-message transcript takes seconds of main-thread time even
+// though content-visibility:auto keeps off-screen chunks unlaid-out — the
+// cost is creating the Vue subtrees and DOM nodes themselves. So on load,
+// only the last INITIAL_TAIL_CHUNKS chunks mount (>= tailFloor); everything
+// above renders as a fixed-height PendingChunk placeholder, and a background
+// sweep mounts the rest TOP-DOWN (sweptTop watermark descends the history
+// oldest-first) during idle time.
+//
+// Top-down matters: the placeholder height matches .messages-chunk's
+// contain-intrinsic-size estimate, and a chunk mounted far above the
+// viewport books at that same estimate until first laid out — so each sweep
+// swap is height-neutral and needs no scroll compensation. Mounting
+// floor-adjacent chunks first would put them inside the browser's
+// content-visibility proximity margin, where they lay out (and deflate)
+// immediately under the reader. With the 10-chunk tail the floor boundary
+// sits tens of thousands of pixels above the scrollport, so even the final
+// sweep steps stay estimate-booked. Deflation only happens when the user
+// scrolls up to content — the pre-existing clamp machinery's job.
+//
+// Placeholders scrolled near the viewport reveal themselves early (see
+// PendingChunk), and TOC/fragment jumps reveal their target's chunk through
+// revealChunkTarget, so nothing the user can reach stays a placeholder.
+// Reveals are tracked by chunk KEY (stable under mid-history renumbering);
+// the floor is positional but self-corrects: floorKey is re-located on every
+// render-model rebuild and the floor/watermark shift with it.
+//
+// Known best-effort windows (the sweep drains a 21k-message history in
+// ~3s Chromium / ~6s Safari, so these are brief): find-in-page and
+// select-all miss unmounted history; printing mid-sweep prints placeholder
+// bands (beforeprint triggers reveals, but the mount is async).
+const INITIAL_TAIL_CHUNKS = 10; // ~500 rows at RENDER_CHUNK_SIZE=50
+const SWEEP_CHUNKS_PER_STEP = 4;
+const tailFloor = ref(0);
+const sweptTop = ref(0);
+const revealedChunks = reactive(new Set<string>());
+let tailSweepToken = 0;
+let tailPrimedFor: string | null = null;
+let tailFloorKey: string | null = null;
+let pendingIdle: (() => void) | null = null;
+
+// Test knob: Playwright can't practically seed 500+ rows, so it shrinks the
+// tail/chunks and/or freezes the sweep via localStorage (same tab-scoped
+// pattern as ff:* overrides). Values are clamped to sane minimums so a
+// malformed override can't hang chunking (chunkSize 0) or hide the tail.
+function tailFirstTestOverrides(): { tailChunks?: number; sweep?: boolean; chunkSize?: number } {
+  try {
+    const raw = localStorage.getItem("shelley.tailFirstTest");
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as { tailChunks?: unknown; sweep?: unknown; chunkSize?: unknown };
+    const posInt = (v: unknown): number | undefined =>
+      typeof v === "number" && Number.isInteger(v) && v >= 1 ? v : undefined;
+    return {
+      tailChunks: posInt(parsed.tailChunks),
+      sweep: typeof parsed.sweep === "boolean" ? parsed.sweep : undefined,
+      chunkSize: posInt(parsed.chunkSize),
+    };
+  } catch {
+    return {};
+  }
+}
+
+// Chunk keys in globalIndex order. O(total chunks) but only evaluated when
+// the floor machinery needs it (priming, reveals, and the floor-relocation
+// watcher below).
+const chunkKeysByIndex = computed<string[]>(() => {
+  const keys: string[] = [];
+  for (const block of renderModel.value) {
+    for (const chunk of block.chunks) keys.push(chunk.key);
+  }
+  return keys;
+});
+
+function cancelPendingIdle(): void {
+  pendingIdle?.();
+  pendingIdle = null;
+}
+
+function resetTailFirst(): void {
+  tailSweepToken++;
+  cancelPendingIdle();
+  tailFloor.value = 0;
+  sweptTop.value = 0;
+  revealedChunks.clear();
+  tailPrimedFor = null;
+  tailFloorKey = null;
+}
+
+/** Install the mount floor for the current render model and start the sweep.
+ * Shared by primeTailFirstMount and the floor-relocation watcher's
+ * lost-anchor fallback. Keeps revealedChunks: keys are stable, so regions
+ * the user already visited stay mounted across a re-establish. */
+function establishTailFloor(): void {
+  const overrides = tailFirstTestOverrides();
+  const tailChunks = overrides.tailChunks ?? INITIAL_TAIL_CHUNKS;
+  const keys = chunkKeysByIndex.value;
+  const floor = Math.max(0, keys.length - tailChunks);
+  if (floor <= 0) return;
+  tailPrimedFor = currentConversationId;
+  tailFloor.value = floor;
+  tailFloorKey = keys[floor];
+  sweptTop.value = 0;
+  if (overrides.sweep !== false) startTailSweep();
+}
+
+/** Set the mount floor for the just-loaded conversation. Idempotent per
+ * conversation — but only once a floor was actually established: the
+ * reveal→incremental-tail→finish path calls this twice, and when the first
+ * call saw a small partial cache (floor 0) the second call must still be
+ * able to install a floor for the full network snapshot. */
+function primeTailFirstMount(): void {
+  if (tailPrimedFor === currentConversationId) return;
+  establishTailFloor();
+}
+
+// The floor and watermark are positional; chunk keys are not. A watcher
+// registered below renderModel's definition (TDZ) re-locates the floor
+// anchor on every render-model rebuild — see relocateTailFloor.
+function relocateTailFloor(): void {
+  if (tailFloor.value <= 0 || tailPrimedFor !== currentConversationId) return;
+  const keys = chunkKeysByIndex.value;
+  const idx = tailFloorKey ? keys.indexOf(tailFloorKey) : -1;
+  if (idx === -1) {
+    tailSweepToken++;
+    cancelPendingIdle();
+    establishTailFloor();
+    if (tailFloor.value <= 0) resetTailFirst();
+    return;
+  }
+  const delta = idx - tailFloor.value;
+  if (delta !== 0) {
+    tailFloor.value = idx;
+    // Shifting the watermark with the floor errs toward mounting extra
+    // chunks near it (benign) rather than unmounting swept history.
+    sweptTop.value = Math.max(0, Math.min(sweptTop.value + delta, idx));
+  }
+}
+
+type IdleDeadlineLike = { timeRemaining(): number };
+/** Schedule cb for idle time; returns a cancel function. The setTimeout
+ * fallback (Safari has no requestIdleCallback) uses a frame-ish delay: with
+ * ~150 steps for a 21k-message history, 50ms/step stretched the sweep to
+ * 12s of find-in-page-missing-history, while 16ms keeps it ~3s and the
+ * nextTick between steps still yields to patches and input. */
+function scheduleIdle(cb: (deadline?: IdleDeadlineLike) => void): () => void {
+  if (typeof requestIdleCallback === "function") {
+    const id = requestIdleCallback(cb, { timeout: 500 });
+    return () => cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(() => cb(), 16);
+  return () => clearTimeout(id);
+}
+
+function startTailSweep(): void {
+  const token = ++tailSweepToken;
+  cancelPendingIdle();
+  const step = (deadline?: IdleDeadlineLike) => {
+    pendingIdle = null;
+    if (token !== tailSweepToken) return;
+    if (tailFloor.value <= 0 || sweptTop.value >= tailFloor.value) return;
+    // Pause while the user is actively scrolling: a mount landing mid-fling
+    // competes with scroll frames, and if the fling is heading into the
+    // swept region the near-viewport reveal path covers it anyway.
+    if (performance.now() - lastScrollGestureAt < 250) {
+      pendingIdle = scheduleIdle(step);
+      return;
+    }
+    // Under deadline pressure (timeout-fired callback, busy frame) mount one
+    // chunk instead of a full batch so the sweep never contributes a long
+    // task to a streaming or scrolling frame.
+    const n = deadline && deadline.timeRemaining() < 8 ? 1 : SWEEP_CHUNKS_PER_STEP;
+    sweptTop.value = Math.min(tailFloor.value, sweptTop.value + n);
+    // Let Vue patch the newly mounted chunks before booking the next step, so
+    // one idle callback never batches multiple steps into a single long task.
+    void nextTick(() => {
+      if (token !== tailSweepToken) return;
+      pendingIdle = scheduleIdle(step);
+    });
+  };
+  pendingIdle = scheduleIdle(step);
+}
+
+function revealChunk(globalIndex: number): void {
+  if (globalIndex < 0) return;
+  const keys = chunkKeysByIndex.value;
+  // Look-behind: the near-viewport observer only fires on scrollport entry
+  // (clipped by the scroll container), so pre-reveal a couple of chunks
+  // above to keep upward scrolling ahead of the mount cost.
+  for (let i = Math.max(0, globalIndex - 2); i <= globalIndex; i++) {
+    const key = keys[i];
+    if (key) revealedChunks.add(key);
+  }
+}
+
+// message_id / tool_use_id → chunk globalIndex, for TOC and #fragment jumps
+// into unmounted history. Built lazily (only on a jump) and cached per
+// render-model identity. During streaming the model identity changes every
+// delta, so consecutive jumps may each pay the O(nodes) walk — acceptable
+// for an explicitly user-initiated action.
+interface ChunkTargetIndex {
+  byMessage: Map<string, number>;
+  byTool: Map<string, number>;
+  // Normalized 8-char fragment prefix → index (the TOC's #m-…/#t-… scheme),
+  // precomputed so fragment resolution (which retries on a timer) is O(1).
+  byMessageFrag: Map<string, number>;
+  byToolFrag: Map<string, number>;
+}
+const chunkTargetIndexCache = new WeakMap<GenerationBlock[], ChunkTargetIndex>();
+
+function fragPrefix(id: string): string {
+  return id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8);
+}
+
+function collectChunkTargets(node: RenderNode, index: number, into: ChunkTargetIndex): void {
+  switch (node.kind) {
+    case "message":
+      if (node.item.message) {
+        into.byMessage.set(node.item.message.message_id, index);
+        into.byMessageFrag.set(fragPrefix(node.item.message.message_id), index);
+      }
+      break;
+    case "tool-pills":
+      for (const item of node.items) {
+        if (item.toolUseId) {
+          into.byTool.set(item.toolUseId, index);
+          into.byToolFrag.set(fragPrefix(item.toolUseId), index);
+        }
+      }
+      break;
+    case "tool-call":
+      if (node.item.toolUseId) {
+        into.byTool.set(node.item.toolUseId, index);
+        into.byToolFrag.set(fragPrefix(node.item.toolUseId), index);
+      }
+      break;
+    case "carried-band":
+      for (const child of node.children) collectChunkTargets(child, index, into);
+      break;
+  }
+}
+
+function chunkTargetIndex(): ChunkTargetIndex {
+  const model = renderModel.value;
+  let idx = chunkTargetIndexCache.get(model);
+  if (!idx) {
+    idx = {
+      byMessage: new Map(),
+      byTool: new Map(),
+      byMessageFrag: new Map(),
+      byToolFrag: new Map(),
+    };
+    for (const block of model) {
+      for (const chunk of block.chunks) {
+        for (const node of chunk.nodes) collectChunkTargets(node, chunk.globalIndex, idx);
+      }
+    }
+    chunkTargetIndexCache.set(model, idx);
+  }
+  return idx;
+}
+
+/** Ensure the chunk containing the target is mounted. Returns true when the
+ * target was found in not-fully-mounted history; callers should re-query the
+ * DOM after the next tick. Fragments use the TOC's normalized 8-char prefix
+ * scheme. */
+function revealChunkTarget(target: {
+  messageId?: string;
+  toolUseId?: string;
+  fragment?: string;
+}): boolean {
+  if (tailFloor.value <= 0 || sweptTop.value >= tailFloor.value) return false;
+  const idx = chunkTargetIndex();
+  let found: number | undefined;
+  if (target.messageId !== undefined) found = idx.byMessage.get(target.messageId);
+  else if (target.toolUseId !== undefined) found = idx.byTool.get(target.toolUseId);
+  else if (target.fragment) {
+    if (target.fragment.startsWith("m-")) found = idx.byMessageFrag.get(target.fragment.slice(2));
+    else if (target.fragment.startsWith("t-")) found = idx.byToolFrag.get(target.fragment.slice(2));
+  }
+  if (found === undefined) return false;
+  // A jump usually precedes reading around the target: reveal one chunk of
+  // look-ahead below it too (revealChunk covers the look-behind above).
+  revealChunk(found);
+  const keys = chunkKeysByIndex.value;
+  const below = keys[found + 1];
+  if (below) revealedChunks.add(below);
+  return true;
+}
+
+provide(chunkMountKey, {
+  floor: tailFloor,
+  sweptTop,
+  revealed: revealedChunks,
+  reveal: revealChunk,
+  revealTarget: revealChunkTarget,
+});
 
 const links = window.__SHELLEY_INIT__?.links || [];
 const hostname = window.__SHELLEY_INIT__?.hostname || "localhost";
@@ -972,7 +1343,6 @@ const maxContextTokens = computed(() => selectedModelInfo.value?.max_context_tok
 // Content type constants mirror llm/llm.go.
 const LLM_TYPE_TEXT = 2;
 const LLM_TYPE_TOOL_USE = 5;
-const LLM_TYPE_TOOL_RESULT = 6;
 
 // Short excerpt of an agent message for the token cost graph hover readout:
 // first text block, or the first tool call when the message is tools-only.
@@ -1007,28 +1377,6 @@ function messageSnippet(m: Message): string {
   }
   snippetCache.set(m.message_id, snippet);
   return snippet;
-}
-
-// True for user messages typed by a human (not tool results, which are also
-// type "user" on the wire). Cached by message_id: parsing llm_data is costly
-// and messages are immutable.
-const humanUserCache = new Map<string, boolean>();
-function isHumanUserMessage(m: Message): boolean {
-  if (m.type !== "user") return false;
-  const cached = humanUserCache.get(m.message_id);
-  if (cached !== undefined) return cached;
-  let human = true;
-  if (m.llm_data) {
-    try {
-      const llm = typeof m.llm_data === "string" ? JSON.parse(m.llm_data) : m.llm_data;
-      const content: LLMContent[] = llm?.Content || [];
-      human = !content.some((c) => c.Type === LLM_TYPE_TOOL_RESULT);
-    } catch {
-      /* ignore malformed llm_data */
-    }
-  }
-  humanUserCache.set(m.message_id, human);
-  return human;
 }
 
 // Parsed usage_data / other_usage_data, cached by message_id like
@@ -1158,17 +1506,9 @@ const otherUsageRows = computed<OtherUsageRow[]>(() => usageData.value.otherRows
 watch(
   selectedModelInfo,
   (model) => {
-    if (!model || model.supports_reasoning === false) {
-      setThinkingLevel("default");
-      return;
-    }
-    if (
-      thinkingLevel.value !== "default" &&
-      model.reasoning_levels?.length &&
-      !model.reasoning_levels.includes(thinkingLevel.value)
-    ) {
-      setThinkingLevel("default");
-    }
+    if (!model) return;
+    const rounded = thinkingLevelForModel(model.id, thinkingLevel.value);
+    if (rounded !== thinkingLevel.value) setThinkingLevel(rounded);
   },
   { immediate: true },
 );
@@ -1192,12 +1532,29 @@ const displayTitle = computed(() => {
 
 const hasCwd = computed(() => !!(props.currentConversation?.cwd || selectedCwd.value));
 const proxyURL = computed(() => `https://${hostname}/`);
+// On exe.dev hosts the welcome message advertises the proxy features; off
+// exe.dev those don't apply, so show a shorter variant without proxy details.
+const isExeDev = window.__SHELLEY_INIT__?.is_exe_dev ?? false;
 const welcomeParts = computed(() =>
-  t("welcomeMessage").split(/(\{hostname\}|\{docsLink\}|\{proxyLink\})/),
+  t(isExeDev ? "welcomeMessage" : "welcomeMessageLocal").split(
+    /(\{hostname\}|\{openSourceLink\}|\{customizeLink\}|\{docsLink\}|\{proxyLink\})/,
+  ),
 );
 
-const coalescedItems = computed(
-  perfWrap("chat.coalesceMessages", () => coalesceMessages(messages.value)),
+const coalescedItems = computed(() => {
+  const items = perfWrap("chat.coalesceMessages", () => coalesceMessages(messages.value))();
+  if (conversationViewMode.value === "all") return items;
+  return items.filter(
+    (item) =>
+      item.type === "message" &&
+      !!item.message &&
+      isVisibleConversationMessage(item.message, conversationViewMode.value),
+  );
+});
+const visibleMessages = computed(() =>
+  messages.value.filter((message) =>
+    isVisibleConversationMessage(message, conversationViewMode.value),
+  ),
 );
 
 function formatBytes(bytes: number): string {
@@ -1264,6 +1621,9 @@ const loadingSubtitle = computed(() => {
 
 // ---- Render model (porting renderMessages into structured data) ----
 const renderModel = computed<GenerationBlock[]>(perfWrap("chat.renderModel", buildRenderModel));
+// A mid-history restructure (regenerated turn, compaction) renumbers chunks;
+// re-anchor the tail-first floor to its key. See relocateTailFloor.
+watch(renderModel, relocateTailFloor);
 function buildRenderModel(): GenerationBlock[] {
   const msgs = messages.value;
   if (msgs.length === 0) return [];
@@ -1280,7 +1640,11 @@ function buildRenderModel(): GenerationBlock[] {
 
   msgs.forEach((message) => {
     generationSet.add(message.generation);
-    if (message.type === "system" && !isDistillStatusMessage(message)) {
+    if (
+      conversationViewMode.value === "all" &&
+      message.type === "system" &&
+      !isDistillStatusMessage(message)
+    ) {
       const existing = systemMessagesByGeneration.get(message.generation) || [];
       existing.push(message);
       systemMessagesByGeneration.set(message.generation, existing);
@@ -1489,6 +1853,29 @@ function buildRenderModel(): GenerationBlock[] {
     });
   });
 
+  // The trailing chunks — where following, streaming, and most reading happen —
+  // render live (no content-visibility). A chunk booked at its
+  // contain-intrinsic-size estimate can be thousands of pixels off until real
+  // layout corrects it (WebKit clamps scrollTop when that happens, see the
+  // .messages-chunk comment in styles.css); live chunks have real heights from
+  // birth, so the follow path never does math on estimates. Older chunks flip
+  // back to content-visibility:auto as they leave the window, keeping their
+  // real laid-out size via contain-intrinsic-size:auto's last-remembered-size.
+  let remaining = LIVE_TAIL_CHUNKS;
+  for (let b = blocks.length - 1; b >= 0 && remaining > 0; b--) {
+    const chunks = blocks[b].chunks;
+    for (let c = chunks.length - 1; c >= 0 && remaining > 0; c--) {
+      chunks[c].live = true;
+      remaining--;
+    }
+  }
+
+  // Conversation-wide chunk numbering for tail-first mounting (chunkMount.ts).
+  let globalIndex = 0;
+  for (const block of blocks) {
+    for (const chunk of block.chunks) chunk.globalIndex = globalIndex++;
+  }
+
   return blocks;
 }
 
@@ -1503,16 +1890,34 @@ function buildRenderModel(): GenerationBlock[] {
 // the last chunk, so earlier chunk elements (and their laid-out sizes,
 // remembered via contain-intrinsic-size:auto) stay stable.
 const RENDER_CHUNK_SIZE = 50;
+// How many trailing chunks render live (see buildRenderModel), i.e. the last
+// LIVE_TAIL_CHUNKS * RENDER_CHUNK_SIZE rows. One would suffice for the follow
+// math (only the newborn tail chunk is ever booked at its estimate); a few
+// more keep recent history estimate-free for near-bottom scrolling at
+// negligible cost (measured on real Safari 26.4, 17k-message conversation:
+// see the commit message).
+const LIVE_TAIL_CHUNKS = 5;
+// Read once per component: the override is set via addInitScript before the
+// app boots, and re-reading localStorage on every model rebuild is waste.
+const renderChunkSize = tailFirstTestOverrides().chunkSize ?? RENDER_CHUNK_SIZE;
 function chunkRenderNodes(nodes: RenderNode[]): RenderChunk[] {
   const chunks: RenderChunk[] = [];
-  for (let i = 0; i < nodes.length; i += RENDER_CHUNK_SIZE) {
-    const slice = nodes.slice(i, i + RENDER_CHUNK_SIZE);
-    chunks.push({ key: `chunk-${slice[0].key}`, nodes: slice });
+  for (let i = 0; i < nodes.length; i += renderChunkSize) {
+    const slice = nodes.slice(i, i + renderChunkSize);
+    // globalIndex is assigned conversation-wide in buildRenderModel once all
+    // blocks exist.
+    chunks.push({ key: `chunk-${slice[0].key}`, nodes: slice, globalIndex: 0 });
   }
   return chunks;
 }
 
-const showStreamingPreview = computed(() => !!streamingText.value && agentWorking.value);
+const showStreamingPreview = computed(
+  () => conversationViewMode.value === "all" && !!streamingText.value && agentWorking.value,
+);
+
+const showStreamingThinking = computed(
+  () => conversationViewMode.value === "all" && !!streamingThinking.value && agentWorking.value,
+);
 
 // ---- scroll ----
 const MAX_SCROLL_OFFSET = 0x7fffffff;
@@ -1529,6 +1934,13 @@ const BOTTOM_SENTINEL_MARGIN_PX = 100;
 // scroll event land within a rendering update or two of each other; anything
 // older is stale and must not affect genuine gestures.
 const CLAMP_MISREAD_UNDO_WINDOW_MS = 250;
+// Conversation-list selection means "show me the latest". Large transcripts
+// keep hydrating syntax highlighting and diff widgets after the first bottom
+// paint, so keep following explicit selection until a real user or navigation
+// gesture moves away.
+let followExplicitSelectionToBottom = false;
+let suppressExplicitSelectionClamp = false;
+let scrollPointerActive = false;
 let bottomPinFrame: number | null = null;
 let bottomPinActive = false;
 
@@ -1538,11 +1950,18 @@ function stopBottomPin() {
   bottomPinFrame = null;
 }
 
-function releaseBottomPinForUser() {
-  if (!bottomPinActive) return;
+function markUserScrolledUp() {
   stopBottomPin();
+  followExplicitSelectionToBottom = false;
+  suppressExplicitSelectionClamp = false;
   userScrolled = true;
+  atBottom = false;
   showScrollToBottom.value = true;
+}
+
+function releaseBottomPinForUser() {
+  if (!bottomPinActive && !followExplicitSelectionToBottom) return;
+  markUserScrolledUp();
 }
 
 function handleBottomPinWheel(e: WheelEvent) {
@@ -1554,7 +1973,18 @@ function handleBottomPinWheel(e: WheelEvent) {
 
 function handleBottomPinTouch() {
   lastScrollGestureAt = performance.now();
-  releaseBottomPinForUser();
+  scrollPointerActive = true;
+  stopBottomPin();
+}
+
+function handleScrollPointerDown() {
+  lastScrollGestureAt = performance.now();
+  scrollPointerActive = true;
+  stopBottomPin();
+}
+
+function handleScrollPointerUp() {
+  scrollPointerActive = false;
 }
 
 function scrollToBottom() {
@@ -1563,6 +1993,10 @@ function scrollToBottom() {
   stopBottomPin();
   userScrolled = false;
   showScrollToBottom.value = false;
+  if (followExplicitSelectionToBottom) {
+    atBottom = true;
+    saveScroll(container.scrollTop);
+  }
   let framesRemaining = 120;
   bottomPinActive = true;
   const step = () => {
@@ -1581,6 +2015,21 @@ function scrollToBottom() {
     bottomPinFrame = requestAnimationFrame(step);
   };
   step();
+}
+
+function requestCurrentConversationBottom() {
+  followExplicitSelectionToBottom = true;
+  suppressExplicitSelectionClamp = pendingScroll !== undefined;
+  pendingScroll = null;
+  userScrolled = false;
+  atBottom = true;
+  showScrollToBottom.value = false;
+  nextTick(() => {
+    // A same-row selection may interrupt an in-flight numeric restoration.
+    // Consume that override here even when no message/load watcher will run.
+    if (pendingScroll === null) pendingScroll = undefined;
+    scrollToBottom();
+  });
 }
 
 function syncFromStore(focusedId: string) {
@@ -1605,6 +2054,7 @@ function syncTransientFromStore(focusedId: string) {
   perfCount("chat.syncTransient");
   toolProgress.value = tr.toolProgress;
   streamingText.value = tr.streamingText;
+  streamingThinking.value = tr.streamingThinking;
   agentWorking.value = tr.agentWorking;
 }
 
@@ -1697,6 +2147,7 @@ async function revealCachedConversation(
   if (focusedId !== currentConversationId || loadEpoch !== conversationLoadEpoch) return;
 
   applyConversationRecord(cached);
+  primeTailFirstMount();
   renderingConversation.value = true;
   if (cached.messages.length >= LARGE_LOAD_STATUS_MESSAGES) {
     showLoadingProgressUI.value = true;
@@ -1727,6 +2178,7 @@ async function finishConversationLoad(
   if (focusedId !== currentConversationId || loadEpoch !== conversationLoadEpoch) return;
 
   applyConversationRecord(cached);
+  primeTailFirstMount();
 
   const renderStarted = performance.now();
   if (loading.value) {
@@ -1942,6 +2394,12 @@ async function loadMessages(focusedId: string) {
 }
 
 // ---- sending / actions ----
+const pendingQueuedMessages: {
+  conversationId: string;
+  text: string;
+  controller: AbortController;
+}[] = [];
+
 async function queueMessage(message: string) {
   if (!message.trim() || !props.conversationId) return;
   // Same guard as sendMessage: a queued turn runs the LLM later, so an
@@ -1952,15 +2410,29 @@ async function queueMessage(message: string) {
     error.value = err.message;
     throw err;
   }
+  const pending = {
+    conversationId: props.conversationId,
+    text: message,
+    controller: new AbortController(),
+  };
+  pendingQueuedMessages.push(pending);
   try {
-    await api.sendMessage(props.conversationId, {
-      message: message.trim(),
-      model: selectedModel.value,
-      queue: true,
-    });
+    await api.sendMessage(
+      props.conversationId,
+      {
+        message: message.trim(),
+        model: selectedModel.value,
+        queue: true,
+      },
+      pending.controller.signal,
+    );
   } catch (err) {
+    if (pending.controller.signal.aborted) return;
     console.error("Failed to queue message:", err);
     throw err;
+  } finally {
+    const index = pendingQueuedMessages.indexOf(pending);
+    if (index !== -1) pendingQueuedMessages.splice(index, 1);
   }
 }
 
@@ -2160,6 +2632,7 @@ async function sendMessage(message: string) {
       error.value = null;
       agentWorking.value = true;
       streamingText.value = "";
+      streamingThinking.value = "";
       await sendFirstMessage(prompt);
     } catch (err) {
       console.error("Failed to send /new message:", err);
@@ -2183,6 +2656,9 @@ async function sendMessage(message: string) {
           window.__SHELLEY_INIT__?.default_cwd ||
           "/",
         createdAt: new Date(),
+        // Owned by the conversation it was launched from. On /new there is no
+        // conversation yet, so it starts global.
+        conversationId: props.conversationId ?? null,
       };
       props.setEphemeralTerminals((prev) => [...prev, terminal]);
       const firstWord = shellCommand.split(/\s+/)[0];
@@ -2201,6 +2677,7 @@ async function sendMessage(message: string) {
     error.value = null;
     agentWorking.value = true;
     streamingText.value = "";
+    streamingThinking.value = "";
 
     if (!props.conversationId && inflightCreate) {
       try {
@@ -2243,13 +2720,25 @@ async function sendMessage(message: string) {
 
 async function handleCancel() {
   if (!props.conversationId || cancelling.value) return;
+  const queued = queuedGhosts.value;
+  const pending = pendingQueuedMessages.filter(
+    ({ conversationId }) => conversationId === props.conversationId,
+  );
+  const pendingText = pending.map(({ text }) => text).join("\n");
+  const queuedText = [
+    ...queued.map(queuedMessageText),
+    ...pending.map(({ text }) => text),
+  ].join("\n");
+  pending.forEach(({ controller }) => controller.abort());
   try {
     cancelling.value = true;
     await api.cancelConversation(props.conversationId);
+    if (!draftText && queuedText) seedComposer(queuedText);
     agentWorking.value = false;
   } catch (err) {
     console.error("Failed to cancel conversation:", err);
     error.value = "Failed to cancel. Please try again.";
+    if (!draftText && pendingText) seedComposer(pendingText);
   } finally {
     cancelling.value = false;
   }
@@ -2315,6 +2804,7 @@ function openInAppTerminal() {
     command: 'exec "${SHELL:-bash}" -i',
     cwd,
     createdAt: new Date(),
+    conversationId: props.conversationId ?? null,
   };
   props.setEphemeralTerminals((prev) => [...prev, terminal]);
   terminalAutoFocusId.value = terminal.id;
@@ -2484,22 +2974,11 @@ async function saveDraft(value: string) {
         saveCachedDraft(conv.conversation_id, cached.value, conv.updated_at);
         clearCachedDraft(null);
       }
-      // Seed the message store with an empty full-history record for the
-      // brand-new draft *before* conversationId flips to it. Otherwise the
-      // conversation-switch watcher runs loadMessages on a cache miss, which
-      // sets loading=true and disables the textarea. Disabling the focused
-      // textarea blurs it (dismissing the soft keyboard mid-typing on iOS);
-      // with a cache hit, loadMessages short-circuits and never toggles
-      // loading. Mirrors the React implementation.
-      messageStore.applyFullHistory(conv.conversation_id, {
-        conversation_id: conv.conversation_id,
-        messages: [],
-        conversation: conv,
-        context_window_size: 0,
-        max_sequence_id: 0,
-      });
+      // App receives the complete draft row before switching conversation ids,
+      // so its currentConversation fallback can identify this as a draft and
+      // skip message loading without pretending the empty cache is history.
       lazyDraftId.value = conv.conversation_id;
-      props.onDraftCreated?.(conv.conversation_id);
+      props.onDraftCreated?.(conv);
       return conv.conversation_id;
     });
   inflightCreate = p;
@@ -2806,8 +3285,7 @@ watch(
     if (ready.includes(selectedModel.value)) return;
     // Prefer the server's default (or any ready model) over showing nothing,
     // so a mere catalog reshuffle doesn't strand the composer.
-    const fallback = window.__SHELLEY_INIT__?.default_model;
-    applyModel(fallback && ready.includes(fallback) ? fallback : ready[0] || "");
+    applyModel(pickReadyModel(models.value));
   },
   { immediate: true },
 );
@@ -2876,10 +3354,25 @@ function teardownSubscriptions() {
 }
 
 watch(
-  () => props.conversationId,
-  (id) => {
+  [() => props.conversationId, () => props.scrollToBottomTrigger ?? 0],
+  ([id, scrollToBottomTrigger]) => {
+    const conversationChanged = !conversationWatchInitialized || id !== currentConversationId;
+    const explicitlySelected =
+      conversationWatchInitialized && scrollToBottomTrigger !== lastScrollToBottomTrigger;
+    conversationWatchInitialized = true;
+    lastScrollToBottomTrigger = scrollToBottomTrigger;
+
+    // Selecting the already-open row is still an explicit request for its
+    // latest content. Avoid tearing down subscriptions or reloading it.
+    if (!conversationChanged) {
+      if (explicitlySelected && id) requestCurrentConversationBottom();
+      return;
+    }
+
     currentConversationId = id;
-    pendingScroll = id ? loadScroll() : undefined;
+    followExplicitSelectionToBottom = explicitlySelected;
+    suppressExplicitSelectionClamp = explicitlySelected;
+    pendingScroll = id ? (explicitlySelected ? null : loadScroll()) : undefined;
     teardownSubscriptions();
     // An annotation view belongs to the image it was opened from; switching
     // conversations leaves it stranded.
@@ -2898,20 +3391,26 @@ watch(
     sentinelAtBottom = true;
     inferredScrollUpAt = -Infinity;
     inferredScrollUpDelta = 0;
+    lastScrollGestureAt = -Infinity;
+    lastScrollEventAt = -Infinity;
     atBottom = true;
     // Per-message memo caches are keyed by message_id, which is globally
     // unique, so stale entries are never *wrong* — they'd just accumulate for
     // every conversation visited in the session. Drop them on the switch.
     snippetCache.clear();
-    humanUserCache.clear();
+    clearConversationViewCache();
     usageParseCache.clear();
     otherUsageParseCache.clear();
     usageWanted.value = false;
+    // Tail-first mounting is per conversation: cancel the old sweep and mount
+    // everything until the new load primes a fresh floor.
+    resetTailFirst();
     if (!id) {
       messages.value = [];
       contextWindowSize.value = 0;
       toolProgress.value = {};
       streamingText.value = "";
+      streamingThinking.value = "";
       agentWorking.value = false;
       if (loadingProgressDelay) {
         clearTimeout(loadingProgressDelay);
@@ -2929,6 +3428,7 @@ watch(
     agentWorking.value = initialTransient.agentWorking;
     toolProgress.value = {};
     streamingText.value = "";
+    streamingThinking.value = "";
 
     unsubStore = messageStore.subscribe(focusedId, () => syncFromStore(focusedId));
     unsubTransient = messageStore.subscribeTransient(focusedId, () =>
@@ -2975,6 +3475,19 @@ watch(
     void loadMessages(focusedId);
   },
   { immediate: true },
+);
+
+// A promoted draft keeps the same conversation id, so the switch watcher above
+// does not run again. Fetch the complete history once its row changes from
+// draft to real conversation; this captures the persisted system prompt as
+// well as the streamed user message.
+watch(
+  () => [props.conversationId, props.currentConversation?.is_draft] as const,
+  ([id, isDraft], [previousID, wasDraft]) => {
+    if (id && id === previousID && wasDraft === true && isDraft === false) {
+      void loadMessages(id);
+    }
+  },
 );
 
 // draftConvId mirror.
@@ -3101,6 +3614,7 @@ watch(
     }
     targetIdx = Math.max(0, Math.min(targetIdx, userMessageEls.length - 1));
     const targetEl = userMessageEls[targetIdx] as HTMLElement;
+    markUserScrolledUp();
     targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
     if (highlightTimeout) {
       clearTimeout(highlightTimeout);
@@ -3123,7 +3637,7 @@ watch(
 
 // Auto-scroll after DOM updates (mirrors the useLayoutEffect).
 watch(
-  [messages, loading],
+  [messages, loading, streamingText, streamingThinking],
   () => {
     if (loading.value) return;
     nextTick(() => {
@@ -3187,6 +3701,7 @@ function handleScroll() {
   const container = messagesContainerRef.value;
   if (!container) return;
   perfCount("chat.handleScroll");
+  lastScrollEventAt = performance.now();
   let upwardDelta = lastObservedScrollTop - container.scrollTop;
   // Discount any scrollTop drop the ResizeObserver already attributed to a
   // list shrink (a layout clamp, not a gesture).
@@ -3194,6 +3709,18 @@ function handleScroll() {
     const absorbed = Math.min(upwardDelta, clampBudget);
     upwardDelta -= absorbed;
     clampBudget -= absorbed;
+  }
+  const switchingConversation = pendingScroll !== undefined;
+  const guardedLayoutShift =
+    upwardDelta > 0 && suppressExplicitSelectionClamp && !scrollPointerActive;
+  if (switchingConversation || guardedLayoutShift) {
+    // Replacing one transcript with another clamps the shared scroll container
+    // before the pending destination is applied. Likewise, lazy renderers can
+    // change height just after an explicit open. Neither is a user scroll.
+    clampBudget = 0;
+    lastObservedScrollTop = container.scrollTop;
+    if (guardedLayoutShift) scrollToBottom();
+    return;
   }
   if (bottomPinActive && upwardDelta >= BOTTOM_PIN_SCROLL_RELEASE_DELTA) {
     stopBottomPin();
@@ -3208,7 +3735,7 @@ function handleScroll() {
   // while sentinelAtBottom is still stale-true and yanks the reader back down
   // (measured: scrollTop 0 -> 1607). The wheel/touch handlers only cover this
   // while the bottom pin is active, so they are not a substitute.
-  const definitelyGesture = upwardDelta > BOTTOM_SENTINEL_MARGIN_PX;
+  const definitelyGesture = scrollPointerActive || upwardDelta > BOTTOM_SENTINEL_MARGIN_PX;
   if (!bottomPinActive && upwardDelta > 0 && (!sentinelAtBottom || definitelyGesture)) {
     // Below the gesture threshold, only act when the bottom sentinel has
     // actually left the near-bottom zone. While it still intersects we are
@@ -3234,9 +3761,7 @@ function handleScroll() {
         ? inferredScrollUpDelta + upwardDelta
         : upwardDelta;
     inferredScrollUpAt = now;
-    userScrolled = true;
-    atBottom = false;
-    showScrollToBottom.value = true;
+    markUserScrolledUp();
   }
   // A layout clamp emits its scroll event synchronously right after the resize
   // that caused it, so any unconsumed budget now is stale; drop it so it can't
@@ -3256,6 +3781,11 @@ function setupScrollObservers() {
   container.addEventListener("scroll", handleScroll);
   container.addEventListener("wheel", handleBottomPinWheel, { passive: true });
   container.addEventListener("touchstart", handleBottomPinTouch, { passive: true });
+  container.addEventListener("touchend", handleScrollPointerUp, { passive: true });
+  container.addEventListener("touchcancel", handleScrollPointerUp, { passive: true });
+  container.addEventListener("pointerdown", handleScrollPointerDown, { passive: true });
+  window.addEventListener("pointerup", handleScrollPointerUp, { passive: true });
+  window.addEventListener("pointercancel", handleScrollPointerUp, { passive: true });
   bottomObserver = new IntersectionObserver(
     ([entry]) => {
       const nearBottom = entry?.isIntersecting ?? false;
@@ -3264,21 +3794,33 @@ function setupScrollObservers() {
       showScrollToBottom.value = !nearBottom;
       if (nearBottom) {
         userScrolled = false;
+        suppressExplicitSelectionClamp = false;
         stopBottomPin();
+        if (!loadingFlag && followExplicitSelectionToBottom) {
+          saveScroll(container.scrollTop);
+        }
       } else if (!bottomPinActive) {
-        // The sentinel left the near-bottom zone, so we are no longer following
-        // the conversation and must stop auto-scrolling. handleScroll cannot be
-        // relied on to have noticed: it defers to sentinelAtBottom (so that
-        // routine sub-margin clamps don't strand the button), and this callback
-        // is async, so a genuine gesture's scroll event can land while that flag
-        // is still stale-true. Showing the button without arming userScrolled
-        // left auto-follow on, and the next list growth yanked the reader back
-        // to the bottom.
-        //
-        // Excluded while the bottom pin is active: the pin scrolls the container
-        // itself and briefly moves the sentinel out of view, which is not a
-        // gesture. The pin releases via wheel/touch or a real upward delta.
-        userScrolled = true;
+        if (!userScrolled && followExplicitSelectionToBottom) {
+          // An explicitly selected conversation may grow after its first
+          // bottom paint as lazy renderers hydrate. Keep the selection at its
+          // promised destination unless the user has tried to scroll away.
+          scrollToBottom();
+        } else if (!userScrolled && performance.now() - lastScrollEventAt > 200) {
+          // The sentinel left the near-bottom zone with NO scroll event: the
+          // viewport didn't move, the list grew under it (a tail-first sweep
+          // mount laying out near the viewport, an image decode). We were
+          // following, so keep following. A real gesture always produces
+          // scroll events, so it can't be misread here; layout clamps DO
+          // fire scroll events, but they land at/near the bottom where the
+          // sentinel stays visible and this branch isn't reached.
+          scrollToBottom();
+        } else {
+          // The sentinel left the near-bottom zone, so we are no longer
+          // following the conversation. handleScroll cannot always have
+          // noticed: its event can race this async observer while
+          // sentinelAtBottom is still stale-true.
+          userScrolled = true;
+        }
       }
     },
     { root: container, rootMargin: `0px 0px ${BOTTOM_SENTINEL_MARGIN_PX}px 0px`, threshold: 0 },
@@ -3297,7 +3839,48 @@ function setupScrollObservers() {
       else listHeight = entry.contentRect.height;
     }
     if (listHeight < lastListHeight) {
-      clampBudget += lastListHeight - listHeight;
+      // A list shrink means the imminent — or just-landed — scroll event is a
+      // clamp, not a gesture. Same two orderings as container growth below,
+      // handled the same way: when this shrink report arrives before the
+      // clamp's scroll event, budget the pixels for handleScroll to discount;
+      // when the clamp's scroll event landed first and handleScroll already
+      // misread it as a scroll-up, retroactively undo the misread.
+      //
+      // The scroll-event-first ordering is not exotic — it is how WebKit
+      // resolves content-visibility estimate deflation, and it is what made
+      // Safari silently stop following streaming conversations while Chrome
+      // kept scrolling. While following, the follow branch below writes a
+      // scrollTop computed from list heights that include off-screen
+      // .messages-chunk boxes at their contain-intrinsic-size ESTIMATES.
+      // WebKit's estimates drift far from real heights (measured: a 150136px
+      // target clamped to 146906 — a 3230px jump), so resolving the write
+      // lays the chunks out, deflates the estimates, clamps scrollTop to the
+      // real bottom, and fires the scroll event — all before this observer
+      // runs. handleScroll saw an upward jump far past the unambiguous-
+      // gesture threshold with clampBudget still 0 and disarmed auto-follow;
+      // the viewport sat exactly at the real bottom, so the sentinel never
+      // left view and the IntersectionObserver never corrected it.
+      //
+      // The undo's guards: the sentinel must still be at the bottom (a clamp
+      // that big necessarily leaves us there; a genuine scroll-up of that
+      // size does not), no real wheel/touch gesture nearby, and the misread
+      // delta must be explained by this shrink.
+      const listShrink = lastListHeight - listHeight;
+      const now = performance.now();
+      if (
+        sentinelAtBottom &&
+        now - inferredScrollUpAt < CLAMP_MISREAD_UNDO_WINDOW_MS &&
+        now - lastScrollGestureAt > CLAMP_MISREAD_UNDO_WINDOW_MS &&
+        inferredScrollUpDelta <= listShrink + 1
+      ) {
+        userScrolled = false;
+        atBottom = true;
+        showScrollToBottom.value = false;
+        inferredScrollUpAt = -Infinity;
+        inferredScrollUpDelta = 0;
+      } else {
+        clampBudget += listShrink;
+      }
     }
     // Container growth clamps scrollTop down too (the viewport got taller, so
     // the max offset got smaller). When we were following the bottom, that
@@ -3383,16 +3966,166 @@ function handleVisibilityChange() {
 }
 
 // Cmd/Ctrl+ArrowDown scrolls to bottom.
+//
+// The composer is only exempt while the caret has somewhere left to go, so the
+// native "move down/to end" gesture still works mid-edit. A blanket exemption
+// for every text field broke the shortcut in the most common case there is:
+// selecting a conversation (or finishing a send) auto-focuses the composer, so
+// the shortcut silently did nothing for a reader who had scrolled up and never
+// clicked back into the message list. An empty or already-at-end composer has
+// no caret movement to preserve, so scrolling is unambiguous there.
+function targetOwnsArrowDown(target: HTMLElement): boolean {
+  // The terminal dock. xterm swallows nearly every key, but ArrowDown with Meta
+  // is one it deliberately passes through (macOS reserves the chord), and it
+  // surfaces here with the empty .xterm-helper-textarea as the target -- so
+  // neither the textarea rule below nor the cover check would catch it, and
+  // Cmd+Down at a shell prompt scrolled the conversation behind the dock. The
+  // panel sits below the message list rather than over it, so hit-testing
+  // cannot see it either.
+  if (target.closest(".terminal-panel")) return true;
+  if (target.isContentEditable) return true;
+  // tagName rather than instanceof: matches the check this replaced, and keeps
+  // working for elements from another document (portals, print views).
+  switch (target.tagName) {
+    case "TEXTAREA": {
+      const el = target as HTMLTextAreaElement;
+      // A collapsed caret at the very end of the draft has nowhere further to
+      // go. Anything else — text below the caret, or a live selection the key
+      // would collapse — is an edit gesture worth preserving.
+      return el.selectionStart !== el.selectionEnd || el.selectionEnd < el.value.length;
+    }
+    // Arrow keys drive most native controls: list navigation in the drawer's
+    // search/rename/tag inputs, value stepping in number/date/range, selection
+    // in radio groups, and opening a select. Rather than enumerate the few
+    // types where ArrowDown is inert (checkbox, buttons), leave them all alone
+    // -- none of them is the composer, which is the case this shortcut is for.
+    case "INPUT":
+    case "SELECT":
+      return true;
+  }
+  return false;
+}
+
+// Plain PageUp/PageDown belong to the visible reading surface. The composer is
+// deliberately exempt even though it owns focus; modified page keys and other
+// editable or independently scrollable controls keep their native behavior.
+function targetOwnsPageKey(target: HTMLElement, container: HTMLElement): boolean {
+  if (target.closest(".terminal-panel")) return true;
+  if (target.classList.contains("message-textarea")) return false;
+  if (target.isContentEditable) return true;
+  if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") {
+    return true;
+  }
+
+  for (let el: HTMLElement | null = target; el && el !== chatRootRef.value; el = el.parentElement) {
+    if (el === container) return false;
+    const overflowY = getComputedStyle(el).overflowY;
+    if (
+      (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
+      el.scrollHeight > el.clientHeight + 1
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// True when something is drawn over the message list: the diff viewer, git
+// graph, command palette, a modal dialog. Scrolling a list the user cannot see
+// is never what they meant, and those overlays have their own keyboard
+// bindings. Hit-testing covers every overlay without this component having to
+// know about any of them, and can't be fooled by one that renders into a
+// portal outside our subtree.
+//
+// Three probes down the middle rather than one: an overlay covers all of them,
+// while a tooltip or floating toolbar parked over a single point does not. The
+// points are clamped into the viewport because elementFromPoint returns null
+// for anything outside it, which would otherwise read as "covered" whenever
+// the container extends past the window. Costs one layout read per keypress,
+// which is not a hot path.
+function messageListCovered(container: HTMLElement): boolean {
+  const rect = container.getBoundingClientRect();
+  const left = Math.max(rect.left, 0);
+  const right = Math.min(rect.right, window.innerWidth);
+  const top = Math.max(rect.top, 0);
+  const bottom = Math.min(rect.bottom, window.innerHeight);
+  // Entirely offscreen or zero-sized: nothing to scroll into view.
+  if (right <= left || bottom <= top) return true;
+  const x = (left + right) / 2;
+  return [0.25, 0.5, 0.75].every((f) => {
+    const hit = document.elementFromPoint(x, top + (bottom - top) * f);
+    return !hit || !container.contains(hit);
+  });
+}
+
 function handleScrollKeyDown(e: KeyboardEvent) {
+  if (isImeComposing(e)) return;
+  if (e.key === "PageUp" || e.key === "PageDown") {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented) return;
+    const container = messagesContainerRef.value;
+    if (!container) return;
+    const target = e.target as HTMLElement | null;
+    const root = chatRootRef.value;
+    const direction: -1 | 1 = e.key === "PageUp" ? -1 : 1;
+    if (
+      target &&
+      target !== document.body &&
+      (!root?.contains(target) || targetOwnsPageKey(target, container))
+    ) {
+      return;
+    }
+    if (messageListCovered(container)) return;
+
+    e.preventDefault();
+    const pageDistance = Math.round(container.clientHeight * 0.85);
+    if (direction > 0 && lastListHeight > 0 && lastContainerHeight > 0) {
+      const bottomScrollTop = observedBottomScrollTop(lastListHeight, lastContainerHeight);
+      if (container.scrollTop + pageDistance >= bottomScrollTop) {
+        scrollToBottom();
+        return;
+      }
+    }
+    if (direction < 0 && container.scrollTop > 0) {
+      lastScrollGestureAt = performance.now();
+      markUserScrolledUp();
+    }
+    container.scrollBy({ top: direction * pageDistance });
+    return;
+  }
+
+  if (e.key === "Home" || e.key === "ArrowUp") {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented) return;
+    const container = messagesContainerRef.value;
+    const target = e.target as HTMLElement | null;
+    const root = chatRootRef.value;
+    if (!container || !target || target === document.body) return;
+    if (!root?.contains(target) || messageListCovered(container)) return;
+    if (
+      target.closest(".terminal-panel") ||
+      target.isContentEditable ||
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT"
+    ) {
+      return;
+    }
+    lastScrollGestureAt = performance.now();
+    markUserScrolledUp();
+    return;
+  }
+
   if (e.key !== "ArrowDown") return;
   const mod = e.metaKey || e.ctrlKey;
   if (!mod || e.altKey || e.shiftKey) return;
+  // Something closer to the key already claimed it -- notably the composer's
+  // slash-command and /model autocomplete menus, which step their selection
+  // with ArrowDown regardless of modifiers. Those handlers sit on the element
+  // itself, so they have run by the time this document-level listener does.
+  if (e.defaultPrevented) return;
   const target = e.target as HTMLElement | null;
-  if (target) {
-    const tag = target.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
-  }
-  if (!messagesContainerRef.value) return;
+  if (target && targetOwnsArrowDown(target)) return;
+  const container = messagesContainerRef.value;
+  if (!container || messageListCovered(container)) return;
   e.preventDefault();
   scrollToBottom();
 }
@@ -3427,10 +4160,17 @@ onMounted(() => {
 onUnmounted(() => {
   teardownSubscriptions();
   stopBottomPin();
+  tailSweepToken++; // cancel any in-flight background mount sweep
+  cancelPendingIdle();
   const container = messagesContainerRef.value;
   container?.removeEventListener("scroll", handleScroll);
   container?.removeEventListener("wheel", handleBottomPinWheel);
   container?.removeEventListener("touchstart", handleBottomPinTouch);
+  container?.removeEventListener("touchend", handleScrollPointerUp);
+  container?.removeEventListener("touchcancel", handleScrollPointerUp);
+  container?.removeEventListener("pointerdown", handleScrollPointerDown);
+  window.removeEventListener("pointerup", handleScrollPointerUp);
+  window.removeEventListener("pointercancel", handleScrollPointerUp);
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
   ro?.disconnect();
   bottomObserver?.disconnect();

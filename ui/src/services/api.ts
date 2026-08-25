@@ -283,11 +283,16 @@ class ApiService {
     return response.json();
   }
 
-  async sendMessage(conversationId: string, request: ChatRequest): Promise<void> {
+  async sendMessage(
+    conversationId: string,
+    request: ChatRequest,
+    signal?: AbortSignal,
+  ): Promise<void> {
     const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/chat`, {
       method: "POST",
       headers: this.postHeaders,
       body: JSON.stringify(request),
+      signal,
     });
     if (!response.ok) {
       throw await responseError(response, "Failed to send message");
@@ -593,15 +598,22 @@ class ApiService {
   }
 
   // findFiles fuzzy-searches files under `dir` server-side. `query` is the
-  // fuzzy pattern (empty returns the first files alphabetically). `signal`
-  // lets callers abort superseded requests while the user types.
+  // fuzzy pattern (empty returns the first files alphabetically); whitespace
+  // splits it into terms that are ANDed, so "vm storage s3" matches
+  // vm-storage-s3-design.md. A query that announces itself as a path (a
+  // leading /, ~, ./ or ../) re-roots the search at the directory it names:
+  // `search_dir` is then the directory matches are relative to, and
+  // `match_query` the part of the query matched within it. `signal` lets
+  // callers abort superseded requests while the user types.
   async findFiles(
     dir: string,
     query: string,
     signal?: AbortSignal,
   ): Promise<{
     dir: string;
+    search_dir: string;
     query: string;
+    match_query: string;
     matches: Array<{ path: string; matched_indexes?: number[] }>;
     total: number;
     truncated: boolean;
@@ -624,6 +636,24 @@ class ApiService {
     if (!response.ok) {
       const text = await response.text();
       throw new Error(text.trim() || `Failed to rename conversation: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  // Moves an existing conversation to a different working directory: the
+  // user-driven counterpart of the agent's change_dir tool. The server
+  // validates the path, updates the live toolset, and tells the agent, so this
+  // is deliberately not a draft-style local update. Rejections are meaningful
+  // (a missing directory, or a turn in flight), so the message is surfaced.
+  async setConversationCwd(conversationId: string, cwd: string): Promise<Conversation> {
+    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/cwd`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify({ cwd }),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text.trim() || `Failed to change directory: ${response.statusText}`);
     }
     return response.json();
   }
@@ -801,14 +831,16 @@ export interface SubagentUsageDTO {
   llm_calls: number;
   estimated_usd: number;
   reported_usd: number;
+  unpriced_reported_usd: number;
   unpriced_models: string[];
   unpriced_calls: number;
 }
 
 export const subagentUsageApi = {
-  async get(conversationId: string): Promise<SubagentUsageDTO> {
+  async get(conversationId: string, signal?: AbortSignal): Promise<SubagentUsageDTO> {
     const r = await fetch(`/api/conversation/${conversationId}/subagent-usage`, {
       headers: { "X-Shelley-Request": "1" },
+      signal,
     });
     if (!r.ok) throw new Error(`Failed to load subagent usage: ${r.statusText}`);
     return (await r.json()) as SubagentUsageDTO;

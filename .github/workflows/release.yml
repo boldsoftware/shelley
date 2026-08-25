@@ -21,6 +21,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fetch embedded exe-scroll binaries
+        run: python3 scripts/fetch-exe-scroll.py --all --wait 1800
+
       - name: Generate version tag
         id: version
         run: |

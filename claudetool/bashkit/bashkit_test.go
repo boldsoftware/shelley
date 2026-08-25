@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -783,33 +784,35 @@ func TestHasSketchWipBranchChangesEdgeCases(t *testing.T) {
 	}
 }
 
-func TestChainsCdWithCommand(t *testing.T) {
+func TestChainedCdPaths(t *testing.T) {
 	tests := []struct {
 		name   string
 		script string
-		want   bool
+		want   []string
 	}{
-		{"cd and command", "cd /tmp && ls", true},
-		{"cd semicolon command", "cd /tmp; ls", true},
-		{"cd and multiple commands", "cd foo/bar && make && ./run", true},
-		{"cd with relative path", "cd ../sibling && go test ./...", true},
-		{"cd inside explicit block", "{ cd /tmp; ls; }", true},
-		{"bare cd", "cd", false},
-		{"cd no chain", "cd /tmp", false},
-		{"no cd", "ls -la", false},
-		{"pushd not flagged", "pushd /tmp && ls", false},
-		{"cd or fallback", "cd /tmp || exit 1", false},
-		// Subshells scope the cd; treat as intentional and do not flag.
-		{"cd in subshell and", "(cd /tmp && ls)", false},
-		{"cd in subshell semi", "(cd /tmp; ls)", false},
-		{"subshell then top-level cmd", "(cd /tmp && ls) && echo done", false},
-		{"unparseable", "cd /tmp &&", false},
+		{"cd and command", "cd /tmp && ls", []string{"/tmp"}},
+		{"cd semicolon command", "cd /tmp; ls", []string{"/tmp"}},
+		{"cd and multiple commands", "cd foo/bar && make && ./run", []string{"foo/bar"}},
+		{"multiple chained cd commands", "cd . && cd /tmp && ls", []string{".", "/tmp"}},
+		{"cd with relative path", "cd ../sibling && go test ./...", []string{"../sibling"}},
+		{"cd inside explicit block", "{ cd /tmp; ls; }", []string{"/tmp"}},
+		{"non-literal path", `cd "$PWD" && ls`, []string{""}},
+		{"bare cd", "cd", nil},
+		{"cd no chain", "cd /tmp", nil},
+		{"no cd", "ls -la", nil},
+		{"pushd not flagged", "pushd /tmp && ls", nil},
+		{"cd or fallback", "cd /tmp || exit 1", nil},
+		// Subshells scope the cd; treat as intentional and do not report.
+		{"cd in subshell and", "(cd /tmp && ls)", nil},
+		{"cd in subshell semi", "(cd /tmp; ls)", nil},
+		{"subshell then top-level cmd", "(cd /tmp && ls) && echo done", nil},
+		{"unparseable", "cd /tmp &&", nil},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ChainsCdWithCommand(tc.script)
-			if got != tc.want {
-				t.Errorf("ChainsCdWithCommand(%q) = %v, want %v", tc.script, got, tc.want)
+			got := ChainedCdPaths(tc.script)
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("ChainedCdPaths(%q) = %q, want %q", tc.script, got, tc.want)
 			}
 		})
 	}

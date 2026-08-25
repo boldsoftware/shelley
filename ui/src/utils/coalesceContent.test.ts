@@ -1,6 +1,6 @@
 // Unit tests for coalesceContent.
 // Run with: tsx src/utils/coalesceContent.test.ts
-import { coalesceContent } from "./coalesceContent";
+import { coalesceContent, splitContentEntities } from "./coalesceContent";
 import type { LLMContent } from "../types";
 
 let passed = 0;
@@ -18,6 +18,10 @@ function check(name: string, cond: boolean, detail?: unknown) {
 function text(t: string, citations?: unknown): LLMContent {
   return { ID: "", Type: 2, Text: t, Citations: citations } as unknown as LLMContent;
 }
+function thinking(t: string): LLMContent {
+  return { ID: "", Type: 3, Thinking: t } as LLMContent;
+}
+
 function tool(): LLMContent {
   return { ID: "x", Type: 5, ToolName: "bash" } as unknown as LLMContent;
 }
@@ -105,6 +109,41 @@ function tool(): LLMContent {
   const md = items[0].markdownText;
   check("quote escaped in href", !md.includes('"onerror'), md);
   check("angle escaped in title", !md.includes("<img>"), md);
+}
+
+// --- Thinking and answer content become independent action regions ---
+{
+  const entities = splitContentEntities(
+    coalesceContent([
+      thinking("first thought"),
+      thinking("second thought"),
+      text("answer before "),
+      text("and after"),
+      thinking("final thought"),
+      text("final answer"),
+    ]),
+  );
+  check(
+    "thinking and answer entity order",
+    entities.map((entity) => entity.kind).join(",") ===
+      "thinking,thinking,content,thinking,content",
+    entities,
+  );
+  check("first thinking copies alone", entities[0]?.copyText === "first thought", entities[0]);
+  check("second thinking copies alone", entities[1]?.copyText === "second thought", entities[1]);
+  check(
+    "adjacent answer text stays grouped",
+    entities[2]?.copyText === "answer before and after",
+    entities[2],
+  );
+  check(
+    "thinking-only input is one entity",
+    splitContentEntities(coalesceContent([thinking("only")])).length === 1,
+  );
+  check(
+    "answer-only input is one entity",
+    splitContentEntities(coalesceContent([text("only")])).length === 1,
+  );
 }
 
 console.log(`\ncoalesceContent Tests: ${passed} passed, ${failed} failed\n`);

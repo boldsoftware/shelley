@@ -64,6 +64,9 @@ jobs:
             tar -czf "templates/$name.tar.gz" -C "templates/$name" --exclude='.DS_Store' .
           done
 
+      - name: Fetch embedded exe-scroll
+        run: make exe-scroll
+
       - name: Run Go tests
         run: go test -v ./...
 

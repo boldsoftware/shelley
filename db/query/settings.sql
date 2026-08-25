@@ -11,3 +11,6 @@ ON CONFLICT(key) DO UPDATE SET
 
 -- name: GetAllSettings :many
 SELECT key, value FROM settings;
+
+-- name: DeleteSetting :execrows
+DELETE FROM settings WHERE key = ?;

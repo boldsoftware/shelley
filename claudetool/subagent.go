@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"shelley.exe.dev/llm"
@@ -17,14 +18,14 @@ type SubagentRunner interface {
 	// timeout is the maximum time to wait for a response.
 	// modelID is the model to use for the subagent.
 	// reasoning is the user-facing reasoning/thinking level for the subagent
-	// (one of "off", "minimal", "low", "medium", "high", "xhigh"); an empty
-	// string means "use the service/conversation default".
+	// (one of "off", "minimal", "low", "medium", "high", "xhigh", "max");
+	// an empty string means "use the service/conversation default".
 	RunSubagent(ctx context.Context, conversationID, prompt string, wait bool, timeout time.Duration, modelID, reasoning string) (string, error)
 }
 
 // subagentReasoningLevels are the user-facing reasoning/thinking levels a
 // subagent may be given via the "reasoning" parameter.
-var subagentReasoningLevels = []string{"off", "minimal", "low", "medium", "high", "xhigh"}
+var subagentReasoningLevels = []string{"off", "minimal", "low", "medium", "high", "xhigh", "max"}
 
 // isValidReasoningLevel reports whether s is a recognized reasoning level.
 func isValidReasoningLevel(s string) bool {
@@ -60,10 +61,18 @@ type SubagentTool struct {
 	ModelID              string           // Parent conversation's model ID (default for subagents)
 	AvailableModels      []AvailableModel // Models the agent can choose from
 	// ParentReasoning is the parent conversation's user-facing reasoning level
-	// (one of "off", "minimal", "low", "medium", "high", "xhigh", or "" for the
-	// service default). Subagents inherit this when the "reasoning" parameter is
-	// not specified.
+	// (one of "off", "minimal", "low", "medium", "high", "xhigh", "max",
+	// or "" for the service default). Subagents inherit this when the "reasoning"
+	// parameter is not specified.
 	ParentReasoning string
+	slugLocks       sync.Map // map[string]*sync.Mutex
+}
+
+func (s *SubagentTool) lockSlug(slug string) func() {
+	lockValue, _ := s.slugLocks.LoadOrStore(slug, &sync.Mutex{})
+	lock := lockValue.(*sync.Mutex)
+	lock.Lock()
+	return lock.Unlock
 }
 
 const subagentName = "subagent"
@@ -96,7 +105,7 @@ details — not just prescriptive instructions. The subagent has no context
 beyond what you put in the prompt, so share the "why" alongside the "what".
 
 Use the "reasoning" parameter to set the subagent's thinking effort (off,
-minimal, low, medium, high, xhigh). If omitted, the subagent inherits the
+minimal, low, medium, high, xhigh, max). If omitted, the subagent inherits the
 parent conversation's reasoning level.`
 
 	if len(s.AvailableModels) > 0 {
@@ -198,6 +207,9 @@ func (s *SubagentTool) run(ctx context.Context, req subagentInput) llm.ToolOut {
 	if req.Prompt == "" {
 		return llm.ErrorfToolOut("prompt is required")
 	}
+
+	unlockSlug := s.lockSlug(req.Slug)
+	defer unlockSlug()
 
 	// Set defaults. The default wait is generous (15 min) because subagents
 	// commonly run review/analysis tasks that take several minutes; a short

@@ -3,7 +3,6 @@ package claudetool
 import (
 	"context"
 	"os"
-	"strings"
 	"sync"
 
 	"shelley.exe.dev/claudetool/browse"
@@ -46,8 +45,13 @@ type ToolSetConfig struct {
 	// EnableBrowser enables browser tools.
 	EnableBrowser bool
 	// ModelID is the model being used for this conversation.
-	// Used to determine tool configuration (e.g., simplified patch schema for weaker models).
 	ModelID string
+	// PatchSimpleEnabled selects the simplified path-and-edits schema. When
+	// false, patch uses the full nested patches schema.
+	PatchSimpleEnabled func() bool
+	// PatchOpenAIRawEnabled lets capable OpenAI Responses services override the
+	// selected full/simple schema with the raw grammar-constrained apply_patch.
+	PatchOpenAIRawEnabled func() bool
 	// ReasoningLevel is the parent conversation's user-facing reasoning/thinking
 	// level (one of "off", "minimal", "low", "medium", "high", "xhigh", or ""
 	// for the service default). Subagents inherit this when their "reasoning"
@@ -159,12 +163,6 @@ func serverSideTools(svc llm.Service) []*llm.Tool {
 }
 
 // NewToolSet creates a new set of tools for a conversation.
-// isStrongModel returns true for models that can handle complex tool schemas.
-func isStrongModel(modelID string) bool {
-	lower := strings.ToLower(modelID)
-	return strings.Contains(lower, "sonnet") || strings.Contains(lower, "opus")
-}
-
 func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 	workingDir := cfg.WorkingDir
 	if workingDir == "" {
@@ -182,19 +180,26 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 	bashTool := &BashTool{
 		WorkingDir:       wd,
 		LLMProvider:      cfg.LLMProvider,
+		ModelID:          cfg.ModelID,
 		EnableJITInstall: cfg.EnableJITInstall,
 		Env:              env,
 	}
 
-	// Use simplified patch schema for weaker models, full schema for sonnet/opus
-	simplified := !isStrongModel(cfg.ModelID)
-	patchTool := &PatchTool{
-		Simplified:       simplified,
-		WorkingDir:       wd,
-		ClipboardEnabled: true,
+	patchProvider, patchProfile := "", "nested"
+	if cfg.PatchSimpleEnabled != nil && cfg.PatchSimpleEnabled() {
+		patchProfile = "simple"
 	}
+	if cfg.LLMProvider != nil && cfg.ModelID != "" {
+		if svc, err := cfg.LLMProvider.GetService(cfg.ModelID); err == nil {
+			patchProvider = svc.Provider()
+			if cfg.PatchOpenAIRawEnabled != nil && cfg.PatchOpenAIRawEnabled() && llm.PatchProfile(svc) == "codex_apply_patch" {
+				patchProfile = "codex_apply_patch"
+			}
+		}
+	}
+	patchTool := &PatchTool{WorkingDir: wd, Provider: patchProvider, Profile: patchProfile}
 
-	keywordTool := NewKeywordToolWithWorkingDir(cfg.LLMProvider, wd)
+	keywordTool := NewKeywordToolWithWorkingDir(cfg.LLMProvider, cfg.ModelID, wd)
 
 	changeDirTool := &ChangeDirTool{
 		WorkingDir: wd,
@@ -206,6 +211,7 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 	shellTool := &ShellTool{
 		WorkingDir:       wd,
 		LLMProvider:      cfg.LLMProvider,
+		ModelID:          cfg.ModelID,
 		EnableJITInstall: cfg.EnableJITInstall,
 		Env:              env,
 		BackgroundCtx:    ctx,

@@ -26,8 +26,16 @@ test.describe("/clear slash command", () => {
     await sendButton.click();
 
     // A generation divider should appear, and the composer should clear.
+    //
+    // These two land on independent async paths, so the divider routinely wins
+    // the race: it is pushed over SSE the moment the server *handles* the
+    // new-generation POST, while the composer only clears once that POST's
+    // *response* makes it back to the page (MessageInput keeps the text until
+    // onSend resolves, so a failed send can restore it). The gap is normally
+    // milliseconds but widens under a loaded CI box, so the composer assertion
+    // needs its own generous timeout rather than the 5s default.
     await expect(page.locator(".generation-divider")).toHaveCount(1, { timeout: 30000 });
-    await expect(messageInput).toHaveValue("");
+    await expect(messageInput).toHaveValue("", { timeout: 30000 });
 
     // The prior message text is retained above the divider.
     await expect(page.getByText("before clear").first()).toBeVisible();

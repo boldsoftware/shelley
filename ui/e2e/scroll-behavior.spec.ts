@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 import { createConversationViaAPI, createConversationViaAPIWithDetails } from "./helpers";
 
 test.describe("Scroll behavior", () => {
@@ -225,6 +225,23 @@ test.describe("Scroll behavior", () => {
     // Button should disappear once we're back at bottom
     await expect(scrollButton).not.toBeVisible({ timeout: 5000 });
 
+    // A slow touch/scrollbar drag must release the RAF pin even when its first
+    // scroll event moves less than the pin's 128px jump threshold.
+    await messagesContainer.evaluate(async (el) => {
+      el.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, bubbles: true }));
+      el.scrollTop = Math.max(0, el.scrollTop - 50);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      el.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, bubbles: true }));
+    });
+    await expect
+      .poll(() =>
+        messagesContainer.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop),
+      )
+      .toBeGreaterThan(20);
+    await expect(scrollButton).toBeVisible({ timeout: 5000 });
+    await scrollButton.click();
+    await expect(scrollButton).not.toBeVisible({ timeout: 5000 });
+
     // An upward wheel gesture must immediately release lazy-layout pinning.
     await messagesContainer.evaluate((el) => {
       el.dispatchEvent(new WheelEvent("wheel", { deltaY: -200, bubbles: true }));
@@ -291,6 +308,136 @@ test.describe("Scroll behavior", () => {
     await messagesContainer.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
+    await expect(scrollButton).not.toBeVisible({ timeout: 5000 });
+  });
+
+  test("a clamped follow write does not disarm auto-follow (Safari estimate deflation)", async ({
+    page,
+    request,
+  }) => {
+    // Regression for "Safari stops following the conversation while Chrome
+    // keeps scrolling". .messages-chunk rows use content-visibility:auto with
+    // contain-intrinsic-size estimates, and WebKit's estimates drift far from
+    // real heights. While following, the ResizeObserver's follow branch writes
+    // a scrollTop computed from those estimates; resolving the write lays the
+    // chunks out for real, the estimates deflate (measured: a 150136px target
+    // clamped to 146906 — a 3230px jump), and the clamp's scroll event lands
+    // BEFORE the ResizeObserver's shrink report, so no clampBudget could have
+    // absorbed it. handleScroll saw an upward delta far past the 100px
+    // unambiguous-gesture threshold and disarmed auto-follow: the view stopped
+    // following mid-stream and the scroll-to-bottom button stranded, while the
+    // viewport sat exactly at the (real) bottom — the sentinel never left
+    // view, so the IntersectionObserver never corrected anything.
+    //
+    // The fix mirrors the container-growth retroactive undo for list shrinks:
+    // the ResizeObserver's late shrink report recognizes the just-misread
+    // scroll-up as its clamp and re-arms auto-follow.
+    //
+    // Chromium's estimates track real heights closely and its rendering
+    // pipeline delivered the shrink report first, which is why the bug was
+    // Safari-only. Simulate WebKit's behavior deterministically: grow the
+    // list (inflated estimate), and when the follow branch writes the
+    // now-stale bottom target, deflate the list inside the scrollTop setter —
+    // the browser clamps the write against the deflated layout exactly like
+    // WebKit resolving content-visibility estimates, and the shrink report
+    // reaches the ResizeObserver only after the clamp's scroll event.
+    const slug = await createConversationViaAPI(request, "echo message 0");
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
+
+    const input = page.locator('[data-testid="message-input"]');
+    const sendButton = page.locator('[data-testid="send-button"]');
+    const scrollButton = page.locator(".scroll-to-bottom-button");
+    const messagesContainer = page.locator(".messages-container");
+    await expect(input).toBeVisible({ timeout: 30000 });
+
+    // Enough content that the list actually scrolls.
+    for (let i = 1; i < 4; i++) {
+      await input.fill(`echo message ${i}`);
+      await sendButton.click();
+      await expect(page.locator(`text=echo message ${i}`).last()).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId("agent-thinking")).toBeHidden({ timeout: 30000 });
+    }
+    await expect
+      .poll(() =>
+        messagesContainer.evaluate(
+          (el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) <= 1,
+        ),
+      )
+      .toBe(true);
+    await expect(scrollButton).not.toBeVisible({ timeout: 5000 });
+
+    // Retry until the trap actually fires: scrollToBottom's rAF pin rewrites
+    // scrollTop every frame for ~120 frames after load, but its writes target
+    // the CURRENT bottom (delta ~0), so the >300px-jump guard ignores them and
+    // only the estimate-inflated follow write can spring the trap.
+    await expect
+      .poll(
+        () =>
+          messagesContainer.evaluate(async (container) => {
+            const list = container.querySelector(".messages-list");
+            const sentinel = container.querySelector(".messages-bottom-sentinel");
+            if (!list || !sentinel) throw new Error("message list sentinel not found");
+            const proto = Object.getPrototypeOf(container);
+            const desc =
+              Object.getOwnPropertyDescriptor(proto, "scrollTop") ||
+              Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
+            if (!desc?.get || !desc.set) throw new Error("scrollTop accessors not found");
+            const spacer = document.createElement("div");
+            spacer.style.height = "600px";
+            let fired = false;
+            Object.defineProperty(container, "scrollTop", {
+              configurable: true,
+              get() {
+                return desc.get!.call(this);
+              },
+              set(value: number) {
+                // A follow write targeting far past the current offset is the
+                // one computed from the inflated estimate. Deflate the list
+                // BEFORE the write applies: the browser then clamps the write
+                // against the real layout, exactly like WebKit resolving
+                // content-visibility estimates, and fires a scroll event with
+                // a large upward delta before any ResizeObserver report.
+                if (!fired && value - desc.get!.call(this) > 300) {
+                  fired = true;
+                  spacer.style.height = "0px";
+                }
+                desc.set!.call(this, value);
+              },
+            });
+            list.insertBefore(spacer, sentinel);
+            // Let the ResizeObserver see the growth and follow it down.
+            await new Promise((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(resolve)),
+            );
+            await new Promise((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(resolve)),
+            );
+            spacer.remove();
+            // @ts-expect-error restoring the native accessor
+            delete container.scrollTop;
+            return fired;
+          }),
+        { timeout: 15000 },
+      )
+      .toBe(true);
+
+    // Settled state: the clamp left us at the true bottom, so the button must
+    // be hidden and auto-follow still armed.
+    await expect(scrollButton).not.toBeVisible({ timeout: 5000 });
+    await input.fill("echo after deflation");
+    await sendButton.click();
+    await expect(page.locator("text=echo after deflation").last()).toBeVisible({
+      timeout: 30000,
+    });
+    // Still following: pinned back to the bottom, button hidden.
+    await expect
+      .poll(() =>
+        messagesContainer.evaluate(
+          (el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) <= 1,
+        ),
+      )
+      .toBe(true);
     await expect(scrollButton).not.toBeVisible({ timeout: 5000 });
   });
 
@@ -566,5 +713,620 @@ test.describe("Scroll behavior", () => {
       .poll(() => messagesContainer.evaluate((el) => el.scrollTop), { timeout: 3000 })
       .toBeLessThan(50);
     await expect(scrollButton).toBeVisible({ timeout: 5000 });
+  });
+});
+
+// Desktop keeps the conversation drawer visible, which makes this a direct
+// regression test for the row-click behavior rather than a mobile drawer test.
+test.describe("Conversation drawer selection", () => {
+  test.use({ viewport: { width: 1280, height: 720 }, isMobile: false, hasTouch: false });
+
+  test("opens a previously read conversation at the bottom", async ({ page, request }) => {
+    const firstResponse = await request.post("/debug/loremipsum?json=1", {
+      form: { size: "medium", model: "predictable" },
+    });
+    const secondResponse = await request.post("/debug/loremipsum?json=1", {
+      form: { size: "medium", model: "predictable" },
+    });
+    const thirdResponse = await request.post("/debug/loremipsum?json=1", {
+      form: { size: "15", model: "predictable" },
+    });
+    expect(firstResponse.ok()).toBeTruthy();
+    expect(secondResponse.ok()).toBeTruthy();
+    expect(thirdResponse.ok()).toBeTruthy();
+    const { conversation_id: first } = await firstResponse.json();
+    const { conversation_id: second } = await secondResponse.json();
+    const { conversation_id: third } = await thirdResponse.json();
+
+    await page.goto(`/c/${first}`);
+    const messagesContainer = page.locator(".messages-container");
+    await expect(page.locator('[data-testid="message-input"]')).toBeVisible({ timeout: 30000 });
+    await expect.poll(() => page.getByTestId("message").count()).toBeGreaterThan(100);
+
+    await messagesContainer.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await expect(page.locator(".scroll-to-bottom-button")).toBeVisible({ timeout: 10000 });
+    await expect
+      .poll(() => page.evaluate((id) => localStorage.getItem(`shelley_scroll_${id}`), first))
+      .toBe("0");
+
+    await page.locator(`.conversation-item[data-conversation-id="${second}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`/c/[^/]*${second}`), { timeout: 30000 });
+    await expect.poll(() => page.getByTestId("message").count()).toBeGreaterThan(100);
+
+    await page.locator(`.conversation-item[data-conversation-id="${first}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`/c/[^/]*${first}`), { timeout: 30000 });
+    await expect.poll(() => page.getByTestId("message").count()).toBeGreaterThan(100);
+
+    await expect
+      .poll(
+        () =>
+          messagesContainer.evaluate(
+            (element) => element.scrollHeight - element.clientHeight - element.scrollTop,
+          ),
+        { timeout: 10000 },
+      )
+      .toBeLessThan(120);
+    await expect(page.locator(".scroll-to-bottom-button")).not.toBeVisible({ timeout: 10000 });
+    await expect
+      .poll(() => page.evaluate((id) => localStorage.getItem(`shelley_scroll_${id}`), first))
+      .toBe("bottom");
+
+    // Explicit in-conversation navigation must release the open-at-bottom
+    // follow state rather than being snapped back by late layout protection.
+    await page.locator(".toc-button").click();
+    await page.locator(".toc-entry-top").click();
+    await expect
+      .poll(() => messagesContainer.evaluate((element) => element.scrollTop), { timeout: 10000 })
+      .toBeLessThan(50);
+    await expect(page.locator(".scroll-to-bottom-button")).toBeVisible({ timeout: 10000 });
+
+    // Clicking the already-active conversation is also a selection: it should
+    // return to the latest content without leaving pending scroll state behind.
+    await page.locator(`.conversation-item[data-conversation-id="${first}"]`).click();
+    await expect
+      .poll(
+        () =>
+          messagesContainer.evaluate(
+            (element) => element.scrollHeight - element.clientHeight - element.scrollTop,
+          ),
+        { timeout: 10000 },
+      )
+      .toBeLessThan(120);
+    await expect(page.locator(".scroll-to-bottom-button")).not.toBeVisible({ timeout: 10000 });
+
+    // Browser find/accessibility jumps do not carry wheel or pointer markers.
+    // Once the selected conversation reaches bottom, a raw upward scroll must
+    // be treated as navigation rather than late layout growth.
+    await messagesContainer.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await expect
+      .poll(() => messagesContainer.evaluate((element) => element.scrollTop), { timeout: 10000 })
+      .toBeLessThan(50);
+    await expect(page.locator(".scroll-to-bottom-button")).toBeVisible({ timeout: 10000 });
+    await page.locator(`.conversation-item[data-conversation-id="${first}"]`).click();
+    await expect(page.locator(".scroll-to-bottom-button")).not.toBeVisible({ timeout: 10000 });
+
+    // Reselecting while a saved-position load is still pending must replace
+    // that restoration with the explicit bottom request.
+    await page.evaluate(
+      ([id, top]) => localStorage.setItem(`shelley_scroll_${id}`, top),
+      [third, "1000"],
+    );
+    let sawThirdLoad = false;
+    let releaseThirdLoad = () => {};
+    const thirdLoadGate = new Promise<void>((resolve) => {
+      releaseThirdLoad = resolve;
+    });
+    await page.route(new RegExp(`/api/conversation/${third}$`), async (route) => {
+      sawThirdLoad = true;
+      await thirdLoadGate;
+      await route.continue();
+    });
+    try {
+      await page.goto(`/c/${third}`);
+      await expect.poll(() => sawThirdLoad).toBeTruthy();
+      await page.locator(`.conversation-item[data-conversation-id="${third}"]`).click();
+      releaseThirdLoad();
+      await expect.poll(() => page.getByTestId("message").count()).toBeGreaterThan(20);
+      await expect
+        .poll(
+          () =>
+            messagesContainer.evaluate(
+              (element) => element.scrollHeight - element.clientHeight - element.scrollTop,
+            ),
+          { timeout: 10000 },
+        )
+        .toBeLessThan(120);
+    } finally {
+      releaseThirdLoad();
+    }
+  });
+});
+
+// Desktop viewport: PageUp/PageDown are reading controls for the conversation,
+// even though the composer deliberately keeps keyboard focus for fast replies.
+test.describe("Conversation page-key scrolling", () => {
+  test.use({ viewport: { width: 1280, height: 720 }, isMobile: false, hasTouch: false });
+
+  test("scrolls the conversation while the composer stays focused", async ({ page, request }) => {
+    const generated = await request.post("/debug/loremipsum?json=1", {
+      form: { size: "medium", model: "predictable" },
+    });
+    expect(generated.ok()).toBeTruthy();
+    const { conversation_id: conversationId } = await generated.json();
+
+    await page.goto(`/c/${conversationId}`);
+    const input = page.locator('[data-testid="message-input"]');
+    const messagesContainer = page.locator(".messages-container");
+    await expect(input).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId("message").first()).toBeVisible({ timeout: 30000 });
+
+    // Keep content-visibility estimates from changing scrollTop underneath the
+    // keypress; this test is about routing the key, not lazy-layout anchoring.
+    await page.addStyleTag({
+      content:
+        ".messages-chunk { content-visibility: visible !important; contain-intrinsic-size: none !important; }",
+    });
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+
+    const draft = "keep this draft in the composer";
+    await input.fill(draft);
+    await input.evaluate((el: HTMLTextAreaElement) => {
+      el.selectionStart = el.selectionEnd = el.value.length;
+    });
+    await messagesContainer.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await expect(input).toBeFocused();
+
+    const bottom = await messagesContainer.evaluate((el) => el.scrollTop);
+    await page.keyboard.press("PageUp");
+    await expect
+      .poll(() => messagesContainer.evaluate((el) => el.scrollTop), { timeout: 5000 })
+      .toBeLessThan(bottom - 100);
+    await expect(input).toBeFocused();
+    expect(await input.evaluate((el: HTMLTextAreaElement) => el.selectionEnd)).toBe(draft.length);
+
+    const pageUpPosition = await messagesContainer.evaluate((el) => el.scrollTop);
+    await page.keyboard.press("PageDown");
+    await expect
+      .poll(() => messagesContainer.evaluate((el) => el.scrollTop), { timeout: 5000 })
+      .toBeGreaterThan(pageUpPosition + 100);
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue(draft);
+  });
+
+  test("disarms auto-follow before same-frame conversation growth", async ({ page, request }) => {
+    const generated = await request.post("/debug/loremipsum?json=1", {
+      form: { size: "medium", model: "predictable" },
+    });
+    expect(generated.ok()).toBeTruthy();
+    const { conversation_id: conversationId } = await generated.json();
+
+    // Force the ResizeObserver growth callback to beat the scroll listener,
+    // reproducing the streaming race this test protects against.
+    await page.addInitScript(() => {
+      const addEventListener = EventTarget.prototype.addEventListener;
+      EventTarget.prototype.addEventListener = function (type, listener, options) {
+        if (
+          type === "scroll" &&
+          this instanceof HTMLElement &&
+          this.classList.contains("messages-container") &&
+          listener
+        ) {
+          const delayed: EventListener = (event) => {
+            requestAnimationFrame(() =>
+              requestAnimationFrame(() => {
+                if (typeof listener === "function") listener.call(this, event);
+                else listener.handleEvent(event);
+              }),
+            );
+          };
+          return addEventListener.call(this, type, delayed, options);
+        }
+        return addEventListener.call(this, type, listener, options);
+      };
+    });
+
+    await page.goto(`/c/${conversationId}`);
+    const input = page.locator('[data-testid="message-input"]');
+    const messagesContainer = page.locator(".messages-container");
+    await expect(input).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId("message").first()).toBeVisible({ timeout: 30000 });
+    await page.addStyleTag({
+      content:
+        ".messages-chunk { content-visibility: visible !important; contain-intrinsic-size: none !important; }",
+    });
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    await input.focus();
+    await expect
+      .poll(
+        () =>
+          messagesContainer.evaluate(async (el) => {
+            const bottom = el.scrollHeight - el.clientHeight;
+            el.scrollTop = bottom - 1;
+            await new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+            );
+            const pinStopped = el.scrollTop < bottom;
+            el.scrollTop = el.scrollHeight;
+            return pinStopped;
+          }),
+        { timeout: 5000 },
+      )
+      .toBe(true);
+
+    const positions = await input.evaluate((el) => {
+      const container = document.querySelector<HTMLElement>(".messages-container");
+      const list = container?.querySelector(".messages-list");
+      const sentinel = container?.querySelector(".messages-bottom-sentinel");
+      if (!container || !list || !sentinel) throw new Error("message scroll elements not found");
+      const before = container.scrollTop;
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp", bubbles: true }));
+      const afterKey = container.scrollTop;
+      const filler = document.createElement("div");
+      filler.style.height = "800px";
+      list.insertBefore(filler, sentinel);
+      return { before, afterKey };
+    });
+    expect(positions.afterKey).toBeLessThan(positions.before - 100);
+
+    await expect
+      .poll(
+        () => messagesContainer.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop),
+        { timeout: 5000 },
+      )
+      .toBeGreaterThan(500);
+    await expect(page.locator(".scroll-to-bottom-button")).toBeVisible({ timeout: 5000 });
+  });
+
+  test("rearms auto-follow before same-frame growth at the bottom", async ({ page, request }) => {
+    const generated = await request.post("/debug/loremipsum?json=1", {
+      form: { size: "medium", model: "predictable" },
+    });
+    expect(generated.ok()).toBeTruthy();
+    const { conversation_id: conversationId } = await generated.json();
+
+    await page.goto(`/c/${conversationId}`);
+    const input = page.locator('[data-testid="message-input"]');
+    const messagesContainer = page.locator(".messages-container");
+    const scrollButton = page.locator(".scroll-to-bottom-button");
+    await expect(input).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId("message").first()).toBeVisible({ timeout: 30000 });
+    await page.addStyleTag({
+      content:
+        ".messages-chunk { content-visibility: visible !important; contain-intrinsic-size: none !important; }",
+    });
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    await input.focus();
+    await expect
+      .poll(
+        () =>
+          messagesContainer.evaluate(async (el) => {
+            const bottom = el.scrollHeight - el.clientHeight;
+            el.scrollTop = bottom - 1;
+            await new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+            );
+            const pinStopped = el.scrollTop < bottom;
+            el.scrollTop = el.scrollHeight;
+            return pinStopped;
+          }),
+        { timeout: 5000 },
+      )
+      .toBe(true);
+    await messagesContainer.evaluate((el) => {
+      el.scrollTop = el.scrollHeight - el.clientHeight - el.clientHeight / 2;
+    });
+    await expect(scrollButton).toBeVisible({ timeout: 5000 });
+
+    await input.evaluate((el) => {
+      const container = document.querySelector<HTMLElement>(".messages-container");
+      const list = container?.querySelector(".messages-list");
+      const sentinel = container?.querySelector(".messages-bottom-sentinel");
+      if (!container || !list || !sentinel) throw new Error("message scroll elements not found");
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: "PageDown", bubbles: true }));
+      const filler = document.createElement("div");
+      filler.style.height = "800px";
+      list.insertBefore(filler, sentinel);
+    });
+
+    await expect
+      .poll(
+        () => messagesContainer.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop),
+        { timeout: 5000 },
+      )
+      .toBeLessThan(100);
+    await expect(scrollButton).not.toBeVisible({ timeout: 5000 });
+  });
+
+  test("leaves composing page keys to the IME", async ({ page, request }) => {
+    const slug = await createConversationViaAPI(request, "echo page key IME");
+    await page.goto(`/c/${slug}`);
+    const input = page.locator('[data-testid="message-input"]');
+    await expect(input).toBeVisible({ timeout: 30000 });
+
+    const defaultPrevented = await input.evaluate((el) => {
+      const event = new KeyboardEvent("keydown", {
+        key: "PageUp",
+        bubbles: true,
+        cancelable: true,
+        isComposing: true,
+      });
+      el.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+
+    expect(defaultPrevented).toBe(false);
+  });
+
+  test("keeps modified page keys as composer editing commands", async ({ page, request }) => {
+    const generated = await request.post("/debug/loremipsum?json=1", {
+      form: { size: "medium", model: "predictable" },
+    });
+    expect(generated.ok()).toBeTruthy();
+    const { conversation_id: conversationId } = await generated.json();
+
+    await page.goto(`/c/${conversationId}`);
+    const input = page.locator('[data-testid="message-input"]');
+    const messagesContainer = page.locator(".messages-container");
+    await expect(input).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId("message").first()).toBeVisible({ timeout: 30000 });
+
+    const draft = Array.from({ length: 20 }, (_, i) => `draft line ${i}`).join("\n");
+    await input.fill(draft);
+    await input.evaluate((el: HTMLTextAreaElement) => {
+      el.selectionStart = el.selectionEnd = el.value.length;
+    });
+    await messagesContainer.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+
+    await page.keyboard.press("Shift+PageUp");
+
+    expect(await messagesContainer.evaluate((el) => el.scrollTop)).toBe(0);
+    await expect
+      .poll(() => input.evaluate((el: HTMLTextAreaElement) => el.selectionStart))
+      .toBeLessThan(draft.length);
+    expect(await input.evaluate((el: HTMLTextAreaElement) => el.selectionEnd)).toBe(draft.length);
+  });
+});
+
+// Desktop viewport: the drawer is only rendered alongside the chat on desktop,
+// and the shortcut is a desktop-only affordance anyway.
+test.describe("Cmd/Ctrl+ArrowDown scroll-to-bottom shortcut", () => {
+  test.use({ viewport: { width: 1280, height: 720 }, isMobile: false, hasTouch: false });
+
+  async function seedScrollableConversation(request: APIRequestContext): Promise<string> {
+    const generated = await request.post("/debug/loremipsum?json=1", {
+      form: { size: "medium", model: "predictable" },
+    });
+    expect(generated.ok()).toBeTruthy();
+    const { conversation_id: conversationId } = await generated.json();
+    return conversationId;
+  }
+
+  test("scrolls to the bottom after switching conversations in the drawer", async ({
+    page,
+    request,
+  }) => {
+    // Regression: selecting a conversation in the drawer auto-focuses the
+    // composer, and the shortcut used to bail out on any focused textarea. The
+    // keypress then went nowhere -- exactly the state a reader is in right
+    // after switching conversations.
+    const first = await seedScrollableConversation(request);
+    const second = await seedScrollableConversation(request);
+
+    await page.goto(`/c/${first}`);
+    await expect(page.locator('[data-testid="message-input"]')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId("message").first()).toBeVisible({ timeout: 30000 });
+
+    await page.locator(`.conversation-item[data-conversation-id="${second}"]`).click();
+    // The first conversation's messages stay mounted briefly during the switch,
+    // so waiting on "a message is visible" alone can pass before the second one
+    // has loaded -- and its own load-time autoscroll would then land after the
+    // manual scroll below, greening this test for the wrong reason.
+    await expect(page).toHaveURL(new RegExp(`/c/[^/]*${second}`), { timeout: 30000 });
+    await expect(page.getByTestId("message").first()).toBeVisible({ timeout: 30000 });
+
+    const messagesContainer = page.locator(".messages-container");
+    // Precondition the fix hinges on: focus is in the composer, not the list.
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.tagName), { timeout: 10000 })
+      .toBe("TEXTAREA");
+
+    await messagesContainer.evaluate((el) => {
+      el.dispatchEvent(new WheelEvent("wheel", { deltaY: -200, bubbles: true }));
+      el.scrollTop = 0;
+    });
+    await expect(page.locator(".scroll-to-bottom-button")).toBeVisible({ timeout: 10000 });
+
+    await page.keyboard.press("ControlOrMeta+ArrowDown");
+
+    await expect
+      .poll(
+        () =>
+          messagesContainer.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop <= 2),
+        { timeout: 10000 },
+      )
+      .toBe(true);
+    await expect(page.locator(".scroll-to-bottom-button")).not.toBeVisible({ timeout: 10000 });
+  });
+
+  test("leaves the caret alone when the composer has text below it", async ({ page, request }) => {
+    // The composer only yields the shortcut when the caret has nowhere further
+    // to go; mid-draft, the native "move down/to end" gesture wins.
+    const conversationId = await seedScrollableConversation(request);
+    await page.goto(`/c/${conversationId}`);
+    const input = page.locator('[data-testid="message-input"]');
+    await expect(input).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId("message").first()).toBeVisible({ timeout: 30000 });
+
+    const draft = "first line\nsecond line";
+    await input.fill(draft);
+    await input.evaluate((el: HTMLTextAreaElement) => {
+      el.selectionStart = el.selectionEnd = 0;
+    });
+
+    const messagesContainer = page.locator(".messages-container");
+    await messagesContainer.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await expect(page.locator(".scroll-to-bottom-button")).toBeVisible({ timeout: 10000 });
+
+    await page.keyboard.press("ControlOrMeta+ArrowDown");
+    // Asserting the caret actually moved doubles as a positive control: without
+    // it, this test would also pass if the shortcut had been deleted outright
+    // rather than merely yielding here. Where it lands is platform-specific
+    // (Linux/Windows move down a line, macOS jumps to the end), so only assert
+    // that it left the first line.
+    await expect
+      .poll(() => input.evaluate((el: HTMLTextAreaElement) => el.selectionEnd), { timeout: 5000 })
+      .toBeGreaterThanOrEqual(draft.indexOf("\n") + 1);
+    expect(await messagesContainer.evaluate((el) => el.scrollTop)).toBeLessThan(50);
+  });
+
+  test("leaves the drawer search box alone", async ({ page, request }) => {
+    // ArrowDown is list navigation in the drawer's single-line inputs, so they
+    // keep the key even though no caret moves vertically.
+    const conversationId = await seedScrollableConversation(request);
+    await page.goto(`/c/${conversationId}`);
+    await expect(page.locator('[data-testid="message-input"]')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId("message").first()).toBeVisible({ timeout: 30000 });
+
+    const messagesContainer = page.locator(".messages-container");
+    await messagesContainer.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await expect(page.locator(".scroll-to-bottom-button")).toBeVisible({ timeout: 10000 });
+
+    await page.locator(".drawer-header-actions").getByLabel("Search conversations").click();
+    await expect(page.locator(".drawer-search-input")).toBeFocused({ timeout: 10000 });
+
+    await page.keyboard.press("ControlOrMeta+ArrowDown");
+    await page.waitForTimeout(300);
+
+    expect(await messagesContainer.evaluate((el) => el.scrollTop)).toBeLessThan(50);
+  });
+
+  test("leaves the composer's slash menu alone", async ({ page, request }) => {
+    // The slash-command menu steps its selection with ArrowDown regardless of
+    // modifiers. It handles the key on the textarea itself, so this shortcut
+    // must not also fire and yank the reader to the bottom.
+    const conversationId = await seedScrollableConversation(request);
+    await page.goto(`/c/${conversationId}`);
+    const input = page.locator('[data-testid="message-input"]');
+    await expect(input).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId("message").first()).toBeVisible({ timeout: 30000 });
+
+    await input.click();
+    await input.pressSequentially("/");
+    const menu = page.getByTestId("slash-command-menu");
+    await expect(menu).toBeVisible({ timeout: 10000 });
+
+    const messagesContainer = page.locator(".messages-container");
+    await messagesContainer.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await expect(page.locator(".scroll-to-bottom-button")).toBeVisible({ timeout: 10000 });
+
+    await page.keyboard.press("ControlOrMeta+ArrowDown");
+    // The menu consumed the key and advanced its selection: a positive signal,
+    // so this doesn't green merely because the keypress went unprocessed.
+    await expect(menu.locator('[role="option"]').nth(1)).toHaveAttribute("aria-selected", "true", {
+      timeout: 5000,
+    });
+    expect(await messagesContainer.evaluate((el) => el.scrollTop)).toBeLessThan(50);
+  });
+
+  test("leaves the terminal alone", async ({ page, request }) => {
+    // Regression: xterm consumes almost every key, but deliberately passes
+    // ArrowDown+Meta through (macOS reserves the chord). It arrives with the
+    // empty .xterm-helper-textarea as the target, and the terminal dock sits
+    // below the message list rather than over it, so neither the textarea rule
+    // nor the cover check caught it -- Cmd+Down at a shell prompt scrolled the
+    // conversation behind the dock.
+    const conversationId = await seedScrollableConversation(request);
+    await page.goto(`/c/${conversationId}`);
+    await expect(page.locator('[data-testid="message-input"]')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId("message").first()).toBeVisible({ timeout: 30000 });
+
+    await page.locator(".chat-overflow-menu-wrapper .btn-icon").click();
+    await page.locator(".overflow-menu-item", { hasText: /terminal/i }).click();
+    const xtermInput = page.locator(".terminal-panel .xterm-helper-textarea");
+    await expect(xtermInput).toBeVisible({ timeout: 30000 });
+    await xtermInput.focus();
+
+    const messagesContainer = page.locator(".messages-container");
+    await messagesContainer.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await expect(page.locator(".scroll-to-bottom-button")).toBeVisible({ timeout: 10000 });
+
+    // Meta specifically: Ctrl+ArrowDown is consumed by xterm itself, so it
+    // would pass here even with the bug present.
+    await page.keyboard.press("Meta+ArrowDown");
+    await page.waitForTimeout(500);
+
+    expect(await messagesContainer.evaluate((el) => el.scrollTop)).toBeLessThan(50);
+  });
+
+  test("does not scroll the message list hidden behind an overlay", async ({ page, request }) => {
+    // The git graph covers the conversation and binds ArrowDown to its own
+    // commit navigation. Scrolling a list the reader cannot see would both
+    // fight that binding and lose their place.
+    const conversationId = await seedScrollableConversation(request);
+    await page.goto(`/c/${conversationId}`);
+    await expect(page.locator('[data-testid="message-input"]')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId("message").first()).toBeVisible({ timeout: 30000 });
+
+    const messagesContainer = page.locator(".messages-container");
+    await messagesContainer.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await expect(page.locator(".scroll-to-bottom-button")).toBeVisible({ timeout: 10000 });
+
+    await page.locator(".chat-overflow-menu-wrapper .btn-icon").click();
+    await page.locator(".overflow-menu-item", { hasText: /git graph/i }).click();
+    await expect(page.locator(".git-graph-container")).toBeVisible({ timeout: 30000 });
+
+    await page.keyboard.press("ControlOrMeta+ArrowDown");
+    await page.waitForTimeout(500);
+
+    expect(await messagesContainer.evaluate((el) => el.scrollTop)).toBeLessThan(50);
+
+    // ...and it works again once the overlay is gone. Closing the git graph
+    // returns focus to the (empty) composer, so this also re-exercises the
+    // composer-focused path the fix is about.
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".git-graph-container")).toBeHidden({ timeout: 10000 });
+    await expect(page.locator('[data-testid="message-input"]')).toBeFocused({ timeout: 10000 });
+    await expect(page.locator('[data-testid="message-input"]')).toHaveValue("");
+    await page.keyboard.press("ControlOrMeta+ArrowDown");
+    await expect
+      .poll(
+        () =>
+          messagesContainer.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop <= 2),
+        { timeout: 10000 },
+      )
+      .toBe(true);
   });
 });

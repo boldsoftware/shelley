@@ -258,7 +258,9 @@ export interface OtherPurposeUsage {
   tokens: number;
   /** Cost estimated from token counts × model pricing, like the graph. */
   estimatedUsd: number;
-  /** Provider-reported cost sum (gateway header); fallback when unpriced. */
+  /** Provider-reported cost from rows whose model has no known pricing. */
+  reportedUnpricedUsd: number;
+  /** Provider-reported cost sum (gateway header). */
   reportedUsd: number;
   /** False when any contributing model lacks pricing (estimate incomplete). */
   priced: boolean;
@@ -269,6 +271,8 @@ export interface OtherUsageBreakdown {
   perPurpose: OtherPurposeUsage[];
   totals: {
     estimatedUsd: number;
+    /** Provider-reported cost from calls whose model has no known pricing. */
+    reportedUnpricedUsd: number;
     /** Sum of provider-reported cost_usd. */
     reportedUsd: number;
     llmCalls: number;
@@ -284,7 +288,13 @@ export function buildOtherUsageBreakdown(
   costs: Record<string, ModelCost | null | undefined>,
 ): OtherUsageBreakdown {
   const byPurpose = new Map<string, OtherPurposeUsage>();
-  const totals = { estimatedUsd: 0, reportedUsd: 0, llmCalls: 0, unpricedCalls: 0 };
+  const totals = {
+    estimatedUsd: 0,
+    reportedUnpricedUsd: 0,
+    reportedUsd: 0,
+    llmCalls: 0,
+    unpricedCalls: 0,
+  };
   for (const row of rows) {
     let p = byPurpose.get(row.purpose);
     if (!p) {
@@ -293,6 +303,7 @@ export function buildOtherUsageBreakdown(
         llmCalls: 0,
         tokens: 0,
         estimatedUsd: 0,
+        reportedUnpricedUsd: 0,
         reportedUsd: 0,
         priced: true,
       };
@@ -310,6 +321,8 @@ export function buildOtherUsageBreakdown(
     }
     if (!cost) {
       p.priced = false;
+      p.reportedUnpricedUsd += row.cost_usd || 0;
+      totals.reportedUnpricedUsd += row.cost_usd || 0;
       totals.unpricedCalls += row.llm_calls;
     }
     p.llmCalls += row.llm_calls;
@@ -318,6 +331,53 @@ export function buildOtherUsageBreakdown(
     totals.reportedUsd += row.cost_usd || 0;
   }
   return { perPurpose: [...byPurpose.values()], totals };
+}
+
+export interface CostSummaryUsage {
+  estimatedUsd: number;
+  reportedUnpricedUsd: number;
+  unpricedCalls: number;
+}
+
+export interface CostSummary {
+  conversationUsd: number;
+  conversationUnpricedCalls: number;
+  otherUsd: number;
+  otherUnpricedCalls: number;
+  subagentUsd: number;
+  subagentUnpricedCalls: number;
+  totalUsd: number;
+  unpricedCalls: number;
+}
+
+/** Build the accounting-style total shown below the graph. Estimated model
+ *  costs and provider-reported costs for otherwise-unpriced calls are both
+ *  known spend, so the total includes both without double-counting. */
+export function buildCostSummary(
+  conversationUsd: number,
+  usage: {
+    other?: CostSummaryUsage;
+    subagents?: CostSummaryUsage;
+    conversationUnpricedCalls?: number;
+  } = {},
+): CostSummary {
+  const usageUsd = (part?: CostSummaryUsage) =>
+    part ? part.estimatedUsd + part.reportedUnpricedUsd : 0;
+  const otherUsd = usageUsd(usage.other);
+  const subagentUsd = usageUsd(usage.subagents);
+  const conversationUnpricedCalls = usage.conversationUnpricedCalls || 0;
+  const otherUnpricedCalls = usage.other?.unpricedCalls || 0;
+  const subagentUnpricedCalls = usage.subagents?.unpricedCalls || 0;
+  return {
+    conversationUsd,
+    conversationUnpricedCalls,
+    otherUsd,
+    otherUnpricedCalls,
+    subagentUsd,
+    subagentUnpricedCalls,
+    totalUsd: conversationUsd + otherUsd + subagentUsd,
+    unpricedCalls: conversationUnpricedCalls + otherUnpricedCalls + subagentUnpricedCalls,
+  };
 }
 
 /** "$0.0042", "$0.500", "$12.35" — enough precision for small costs. */

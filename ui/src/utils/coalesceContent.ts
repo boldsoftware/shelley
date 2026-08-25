@@ -41,6 +41,38 @@ export interface CoalescedItem {
   content?: LLMContent;
 }
 
+export interface ContentEntity {
+  key: string;
+  kind: "thinking" | "content";
+  items: CoalescedItem[];
+  copyText: string;
+}
+
+function entityText(item: CoalescedItem): string {
+  if (item.kind === "text") return item.text;
+  return item.content?.Thinking || item.content?.Text || "";
+}
+
+// Split one rendered message into independently actionable content regions
+// without changing the message's outer DOM identity. Each thinking block stands
+// alone; adjacent non-thinking content remains grouped.
+export function splitContentEntities(items: CoalescedItem[]): ContentEntity[] {
+  const entities: ContentEntity[] = [];
+  for (const item of items) {
+    const kind = item.kind === "other" && item.content?.Type === 3 ? "thinking" : "content";
+    const last = entities.at(-1);
+    if (kind === "content" && last?.kind === "content") {
+      last.items.push(item);
+    } else {
+      entities.push({ key: `${kind}-${entities.length}`, kind, items: [item], copyText: "" });
+    }
+  }
+  for (const entity of entities) {
+    entity.copyText = entity.items.map(entityText).filter(Boolean).join("\n");
+  }
+  return entities;
+}
+
 // Anthropic citation wire shape (a text block's Citations is an array of these).
 interface RawCitation {
   type?: string;

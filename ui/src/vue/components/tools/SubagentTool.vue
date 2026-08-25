@@ -22,8 +22,8 @@
       <div class="tool-summary">
         <span class="tool-emoji" :class="{ running: isRunning }">⚡</span>
         <span class="tool-name">subagent</span>
-        <span v-if="isComplete && hasError" class="tool-error">✗</span>
-        <span v-if="isComplete && !hasError" class="tool-success">✓</span>
+        <ToolStatusIcon v-if="isComplete && hasError" state="error" class="tool-error" />
+        <ToolStatusIcon v-if="isComplete && !hasError" state="ok" class="tool-success" />
         <span class="tool-command" :title="prompt">{{ commandText }}</span>
       </div>
       <button
@@ -31,23 +31,7 @@
         :aria-label="isExpanded ? 'Collapse' : 'Expand'"
         :aria-expanded="isExpanded"
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          class="tool-chevron"
-          :class="{ 'tool-chevron-expanded': isExpanded }"
-        >
-          <path
-            d="M4.5 3L7.5 6L4.5 9"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
+        <ToolChevron :expanded="isExpanded" />
       </button>
     </div>
 
@@ -102,6 +86,8 @@ import { computed } from "vue";
 import type { LLMContent } from "../../../types";
 import { useToolExpanded } from "../../composables/toolDetail";
 import { useSubagentLive, navigateToConversationSlug } from "../../composables/subagentLive";
+import ToolChevron from "./ToolChevron.vue";
+import ToolStatusIcon from "./ToolStatusIcon.vue";
 
 interface SubagentInput {
   slug?: string;

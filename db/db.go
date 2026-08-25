@@ -1062,6 +1062,46 @@ func (db *DB) ResetAllAgentWorking(ctx context.Context) error {
 	})
 }
 
+// ResumeAfterUpgradeSettingKey marks that the current process is exiting to
+// install an upgraded or customized binary and that the next process should
+// resume the conversations that were mid-turn instead of clearing their
+// agent_working flags. Written by restart paths that promise continuation,
+// consumed exactly once by ConsumeResumeAfterUpgrade on the next startup.
+const ResumeAfterUpgradeSettingKey = "resume_after_upgrade_restart"
+
+// ConsumeResumeAfterUpgrade decides, in a single transaction, what startup does
+// with the agent_working flags left behind by the previous process:
+//
+//   - No ResumeAfterUpgradeSettingKey row: an ordinary restart or a crash.
+//     Clear all stale agent_working flags (ResetAllAgentWorking) and return nil.
+//   - Row present: the previous process exited to install an upgrade. Delete the
+//     row and return the conversation IDs still marked agent_working, leaving the
+//     flags alone so the caller can resume those turns.
+//
+// The delete happens in the same transaction as the reset/read, so recovery is
+// one-shot with no crash window: once this commits, a crash mid-resume leaves
+// the next boot on the normal (reset) path.
+func (db *DB) ConsumeResumeAfterUpgrade(ctx context.Context) ([]string, error) {
+	var ids []string
+	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		deleted, err := q.DeleteSetting(ctx, ResumeAfterUpgradeSettingKey)
+		if err != nil {
+			return err
+		}
+		if deleted == 0 {
+			ids = nil
+			return q.ResetAllAgentWorking(ctx)
+		}
+		ids, err = q.ListAgentWorkingConversationIDs(ctx)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
 // UpdateConversationCwd updates the working directory for a conversation
 func (db *DB) UpdateConversationCwd(ctx context.Context, conversationID, cwd string) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {

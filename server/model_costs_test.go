@@ -81,8 +81,8 @@ func TestSubagentUsageHandler(t *testing.T) {
 	addUsage(parent.ConversationID, "claude-opus-4-6", "https://llm.int.exe.xyz/v1/messages", 1_000_000, 0, 0)
 	// Child: priced. 1M input @$5 + 1M output @$25 = $30.
 	addUsage(child.ConversationID, "claude-opus-4-6", "https://llm.int.exe.xyz/v1/messages", 1_000_000, 1_000_000, 1.25)
-	// Grandchild (recursive): unpriced model.
-	addUsage(grandchild.ConversationID, "mystery-model", "", 500, 500, 0)
+	// Grandchild (recursive): unpriced model with provider-reported cost.
+	addUsage(grandchild.ConversationID, "mystery-model", "", 500, 500, 0.75)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/conversation/"+parent.ConversationID+"/subagent-usage", nil)
@@ -91,11 +91,12 @@ func TestSubagentUsageHandler(t *testing.T) {
 		t.Fatalf("status %d: %s", w.Code, w.Body.String())
 	}
 	var res struct {
-		LLMCalls       int64    `json:"llm_calls"`
-		EstimatedUsd   float64  `json:"estimated_usd"`
-		ReportedUsd    float64  `json:"reported_usd"`
-		UnpricedModels []string `json:"unpriced_models"`
-		UnpricedCalls  int64    `json:"unpriced_calls"`
+		LLMCalls            int64    `json:"llm_calls"`
+		EstimatedUsd        float64  `json:"estimated_usd"`
+		ReportedUsd         float64  `json:"reported_usd"`
+		UnpricedReportedUsd float64  `json:"unpriced_reported_usd"`
+		UnpricedModels      []string `json:"unpriced_models"`
+		UnpricedCalls       int64    `json:"unpriced_calls"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
@@ -106,8 +107,11 @@ func TestSubagentUsageHandler(t *testing.T) {
 	if res.EstimatedUsd < 29.99 || res.EstimatedUsd > 30.01 {
 		t.Errorf("estimated_usd = %v, want ~30", res.EstimatedUsd)
 	}
-	if res.ReportedUsd != 1.25 {
-		t.Errorf("reported_usd = %v, want 1.25", res.ReportedUsd)
+	if res.ReportedUsd != 2 {
+		t.Errorf("reported_usd = %v, want 2", res.ReportedUsd)
+	}
+	if res.UnpricedReportedUsd != 0.75 {
+		t.Errorf("unpriced_reported_usd = %v, want 0.75", res.UnpricedReportedUsd)
 	}
 	if len(res.UnpricedModels) != 1 || res.UnpricedModels[0] != "mystery-model" || res.UnpricedCalls != 1 {
 		t.Errorf("unpriced = %v / %d calls, want [mystery-model] / 1", res.UnpricedModels, res.UnpricedCalls)

@@ -51,9 +51,25 @@ export const API_TYPE_LABELS: Record<string, string> = {
   builtin: "Built-in",
 };
 
-export const REASONING_EFFORT_SUGGESTIONS = ["none", "minimal", "low", "medium", "high", "xhigh"];
+export const REASONING_EFFORT_SUGGESTIONS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
 
-export const REASONING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+export const REASONING_LEVELS = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
 export type ReasoningLevel = (typeof REASONING_LEVELS)[number];
 export type ReasoningMap = Record<ReasoningLevel, string>;
 export const DEFAULT_REASONING_MAP: ReasoningMap = Object.fromEntries(

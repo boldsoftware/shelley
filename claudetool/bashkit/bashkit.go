@@ -103,74 +103,95 @@ func WillRunGitCommit(bashScript string) (bool, error) {
 	return willCommit, nil
 }
 
-// ChainsCdWithCommand reports whether bashScript chains a top-level
-// `cd <path>` with a subsequent command via `&&` or `;`, e.g.
-// `cd /tmp && ls` or `cd /tmp; ls`. Such patterns are better expressed by
-// calling the change_dir tool first, since `cd` inside a bash invocation
-// does not persist across tool calls.
+// ChainedCdPaths reports the literal paths from top-level `cd <path>` commands
+// chained with a subsequent command via `&&` or `;`, e.g. `cd /tmp && ls` or
+// `cd /tmp; ls`. Such patterns are better expressed by calling the change_dir
+// tool first, since `cd` inside a bash invocation does not persist across tool
+// calls.
 //
-// Patterns intentionally NOT flagged:
+// A non-literal path is returned as an empty string. The caller can still
+// report the chain while avoiding assumptions about shell expansion.
+//
+// Patterns intentionally NOT reported:
 //   - bare `cd` or a standalone `cd <path>` with nothing chained;
 //   - `cd <path> || ...` (fallback/error path);
 //   - `cd` inside a subshell like `(cd /tmp && ls)`, which is the
 //     idiomatic way to scope a directory change without persistence.
-func ChainsCdWithCommand(bashScript string) bool {
+func ChainedCdPaths(bashScript string) []string {
 	r := strings.NewReader(bashScript)
 	parser := syntax.NewParser()
 	file, err := parser.Parse(r, "")
 	if err != nil {
-		return false
+		return nil
 	}
-	isCdWithArg := func(s *syntax.Stmt) bool {
+	paths := []string{}
+	cdPath := func(s *syntax.Stmt) (string, bool) {
 		if s == nil || s.Cmd == nil {
-			return false
+			return "", false
 		}
 		call, ok := s.Cmd.(*syntax.CallExpr)
 		if !ok || len(call.Args) < 2 {
-			return false
+			return "", false
 		}
-		return call.Args[0].Lit() == "cd"
+		if call.Args[0].Lit() != "cd" {
+			return "", false
+		}
+		return call.Args[1].Lit(), true
 	}
-	var checkStmts func(stmts []*syntax.Stmt) bool
-	var checkStmt func(s *syntax.Stmt) bool
-	checkStmts = func(stmts []*syntax.Stmt) bool {
-		// `a; b` at the same level: flag if any non-final stmt is `cd <path>`.
+	var checkStmts func(stmts []*syntax.Stmt)
+	var checkStmt func(s *syntax.Stmt)
+	var andChainStmts func(s *syntax.Stmt) []*syntax.Stmt
+	andChainStmts = func(s *syntax.Stmt) []*syntax.Stmt {
+		if s == nil || s.Cmd == nil {
+			return nil
+		}
+		binary, ok := s.Cmd.(*syntax.BinaryCmd)
+		if !ok || binary.Op != syntax.AndStmt {
+			return []*syntax.Stmt{s}
+		}
+		return append(andChainStmts(binary.X), andChainStmts(binary.Y)...)
+	}
+	checkStmts = func(stmts []*syntax.Stmt) {
+		// `a; b` at the same level: report each non-final `cd <path>`.
 		for i := 0; i+1 < len(stmts); i++ {
-			if isCdWithArg(stmts[i]) {
-				return true
+			if path, ok := cdPath(stmts[i]); ok {
+				paths = append(paths, path)
 			}
 		}
 		for _, s := range stmts {
-			if checkStmt(s) {
-				return true
-			}
+			checkStmt(s)
 		}
-		return false
 	}
-	checkStmt = func(s *syntax.Stmt) bool {
+	checkStmt = func(s *syntax.Stmt) {
 		if s == nil || s.Cmd == nil {
-			return false
+			return
 		}
 		switch c := s.Cmd.(type) {
 		case *syntax.BinaryCmd:
-			if c.Op == syntax.AndStmt && isCdWithArg(c.X) {
-				return true
+			if c.Op == syntax.AndStmt {
+				chain := andChainStmts(s)
+				for i := 0; i+1 < len(chain); i++ {
+					if path, ok := cdPath(chain[i]); ok {
+						paths = append(paths, path)
+					}
+				}
+				for _, chained := range chain {
+					checkStmt(chained)
+				}
+				return
 			}
-			if checkStmt(c.X) || checkStmt(c.Y) {
-				return true
-			}
+			checkStmt(c.X)
+			checkStmt(c.Y)
 		case *syntax.Block:
-			if checkStmts(c.Stmts) {
-				return true
-			}
+			checkStmts(c.Stmts)
 		case *syntax.Subshell:
 			// Intentionally do not recurse: `(cd ... && ...)` is scoped
 			// and does not affect the caller's working directory.
-			return false
+			return
 		}
-		return false
 	}
-	return checkStmts(file.Stmts)
+	checkStmts(file.Stmts)
+	return paths
 }
 
 // noDangerousRmRf checks for rm -rf commands that could delete critical directories.

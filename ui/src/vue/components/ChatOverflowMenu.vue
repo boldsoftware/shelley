@@ -6,10 +6,10 @@
   replaces a hand-rolled dropdown — a `v-if` panel with a manual document
   `mousedown` outside-click listener and bespoke segmented-toggle rows — with:
 
-    - <Popover>     the dropdown surface (dismiss-on-outside-click + Esc + focus
-                    trap come for free, so we delete the manual handlers)
-    - <SelectButton> the theme / notifications / markdown segmented toggles
-    - <Select>      the language picker
+    - <Popover> the dropdown surface (dismiss-on-outside-click + Esc + focus
+                trap come for free, so we delete the manual handlers)
+    - Native icon groups for compact view / theme / notification choices
+    - <Select> the language picker
 
   The e2e DOM/ARIA contract is preserved so the shared Playwright specs keep
   passing in BOTH worlds:
@@ -35,14 +35,7 @@
       :aria-expanded="open"
       @click="toggle"
     >
-      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          :stroke-width="2"
-          d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
-        />
-      </svg>
+      <OverflowDotsIcon />
       <span v-if="hasUpdate" class="version-update-dot" />
     </Button>
 
@@ -52,6 +45,29 @@
       @show="open = true"
       @hide="open = false"
     >
+      <!-- Command palette (search everything / quick actions) -->
+      <button class="overflow-menu-item" @click="onCommandPalette">
+        <svg
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          viewBox="0 0 24 24"
+          class="chat-menu-icon"
+          aria-hidden="true"
+        >
+          <path
+            d="M7 9a2 2 0 1 1 2 -2v10a2 2 0 1 1 -2 -2h10a2 2 0 1 1 -2 2v-10a2 2 0 1 1 2 2h-10"
+          />
+        </svg>
+        {{ t("commandMenu") }}
+        <span class="overflow-menu-shortcut"
+          ><kbd>{{ menuShortcutLabel("commandPalette") }}</kbd></span
+        >
+      </button>
+      <div class="overflow-menu-divider" />
+
       <!-- Conversation / workspace actions -->
       <button v-if="hasCwd" class="overflow-menu-item" @click="onDiffs">
         <!-- Diffs: two rows of +/- changes -->
@@ -178,46 +194,114 @@
         >
       </button>
 
-      <!-- Theme: System / Light / Dark -->
+      <!-- Compact view/theme/notification controls -->
       <div class="overflow-menu-divider" />
-      <div class="overflow-menu-control">
-        <SelectButton
-          v-model="theme"
-          :options="themeOptions"
-          option-value="value"
-          data-key="value"
-          :allow-empty="false"
-          :aria-label="t('system') + ' / ' + t('light') + ' / ' + t('dark')"
-          @update:model-value="onThemeChange"
+      <div class="overflow-quick-controls">
+        <div
+          class="overflow-quick-control"
+          data-testid="conversation-view-toggle"
+          role="group"
+          :aria-label="t('brevity')"
         >
-          <template #option="{ option }">
-            <i :class="['pi', option.icon]" :title="option.label" aria-hidden="true" />
-            <span class="sr-only-label">{{ option.label }}</span>
-          </template>
-        </SelectButton>
-      </div>
-
-      <!-- Browser notifications: on / off -->
-      <template v-if="notificationSupported">
-        <div class="overflow-menu-divider" />
-        <div class="overflow-menu-control">
-          <SelectButton
-            v-model="notifEnabled"
-            :options="notifOptions"
-            option-value="value"
-            option-disabled="disabled"
-            data-key="value"
-            :allow-empty="false"
-            :aria-label="t('enableNotifications') + ' / ' + t('disableNotifications')"
-            @update:model-value="onNotifChange"
-          >
-            <template #option="{ option }">
-              <i :class="['pi', option.icon]" :title="option.label" aria-hidden="true" />
-              <span class="sr-only-label">{{ option.label }}</span>
-            </template>
-          </SelectButton>
+          <span class="overflow-quick-label">{{ t("brevity") }}</span>
+          <div class="overflow-choice-options">
+            <button
+              type="button"
+              class="overflow-choice-option"
+              :class="{ 'is-selected': conversationViewMode === 'all' }"
+              :aria-label="t('seeAllMessages')"
+              :aria-pressed="conversationViewMode === 'all'"
+              :title="t('seeAllMessages')"
+              @click="setConversationViewMode('all')"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                <path d="M8 6h12M8 12h12M8 18h12" stroke-linecap="round" />
+                <circle cx="4" cy="6" r="1.4" fill="currentColor" stroke="none" />
+                <circle cx="4" cy="12" r="1.4" fill="currentColor" stroke="none" />
+                <circle cx="4" cy="18" r="1.4" fill="currentColor" stroke="none" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="overflow-choice-option"
+              :class="{ 'is-selected': conversationViewMode === 'end-of-turn' }"
+              :aria-label="t('seeEndOfTurnMessagesOnly')"
+              :aria-pressed="conversationViewMode === 'end-of-turn'"
+              :title="t('seeEndOfTurnMessagesOnly')"
+              @click="setConversationViewMode('end-of-turn')"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                <path d="M8 7h12M8 17h12" stroke-linecap="round" />
+                <circle cx="4" cy="7" r="1.4" fill="currentColor" stroke="none" />
+                <path d="m2.7 17 1.1 1.1 2.3-2.5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </div>
         </div>
-      </template>
+
+        <div
+          class="overflow-quick-control"
+          data-testid="theme-cycle"
+          role="group"
+          :aria-label="t('look')"
+        >
+          <span class="overflow-quick-label">{{ t("look") }}</span>
+          <div class="overflow-choice-options">
+            <button
+              v-for="choice in themeOrder"
+              :key="choice"
+              type="button"
+              class="overflow-choice-option"
+              :class="{ 'is-selected': theme === choice }"
+              :aria-label="t(choice)"
+              :aria-pressed="theme === choice"
+              :title="t(choice)"
+              @click="setTheme(choice)"
+            >
+              <i :class="['pi', themeIconFor(choice)]" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-if="notificationSupported"
+          class="overflow-quick-control"
+          data-testid="notification-toggle"
+          role="group"
+          :aria-label="t('notifications')"
+        >
+          <span class="overflow-quick-label">{{ t("notifications") }}</span>
+          <div class="overflow-choice-options">
+            <button
+              type="button"
+              class="overflow-choice-option"
+              :class="{ 'is-selected': !notifEnabled }"
+              :aria-label="t('disableNotifications')"
+              :aria-pressed="!notifEnabled"
+              :title="t('disableNotifications')"
+              @click="setNotifications(false)"
+            >
+              <i class="pi pi-bell-slash" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              class="overflow-choice-option"
+              :class="{ 'is-selected': notifEnabled }"
+              :disabled="notifBlocked && !notifEnabled"
+              :aria-label="
+                notifBlocked && !notifEnabled ? t('blockedByBrowser') : t('enableNotifications')
+              "
+              :aria-pressed="notifEnabled"
+              :title="
+                notifBlocked && !notifEnabled ? t('blockedByBrowser') : t('enableNotifications')
+              "
+              @click="setNotifications(true)"
+            >
+              <i class="pi pi-bell" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      </div>
 
       <!-- Language -->
       <div class="overflow-menu-divider" />
@@ -251,11 +335,12 @@
 import { computed, ref } from "vue";
 import Popover from "primevue/popover";
 import Button from "primevue/button";
-import SelectButton from "primevue/selectbutton";
 import Select from "primevue/select";
+import OverflowDotsIcon from "./OverflowDotsIcon.vue";
 import type { Link } from "../../types";
 import type { Locale } from "../../i18n/types";
 import { useI18n } from "../composables/i18n";
+import { useConversationView } from "../composables/conversationView";
 import { menuShortcutLabel, isFirefox } from "../../utils/menuShortcuts";
 import { type ThemeMode, getStoredTheme, setStoredTheme, applyTheme } from "../../services/theme";
 import {
@@ -274,6 +359,7 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
+  (e: "open-command-palette"): void;
   (e: "open-diffs"): void;
   (e: "open-git-graph"): void;
   (e: "open-terminal"): void;
@@ -286,6 +372,7 @@ const emit = defineEmits<{
 }>();
 
 const { t, locale, setLocale } = useI18n();
+const { conversationViewMode, setConversationViewMode } = useConversationView();
 
 // Edit File uses Cmd/Ctrl+Shift+P (VS Code parity). Firefox reserves that combo
 // for "New Private Window" and never delivers it to the page, so the shortcut
@@ -307,6 +394,7 @@ function hide() {
 // Each action emits its event, then closes the Popover. Kept as explicit
 // one-liners (rather than a union-typed helper) so defineEmits' per-event
 // overloads type-check cleanly.
+const onCommandPalette = () => (emit("open-command-palette"), hide());
 const onDiffs = () => (emit("open-diffs"), hide());
 const onGitGraph = () => (emit("open-git-graph"), hide());
 const onTerminal = () => (emit("open-terminal"), hide());
@@ -322,16 +410,15 @@ function onExternalLink(url: string) {
 
 const notificationSupported = typeof Notification !== "undefined";
 
-// ---- Theme toggle (System / Light / Dark) ----
-// Option labels are computed so they re-translate when the locale changes (the
-// language Select lives in this same popover, so a switch is visible live).
+// ---- Theme ----
 const theme = ref<ThemeMode>(getStoredTheme());
-const themeOptions = computed(() => [
-  { value: "system" as ThemeMode, icon: "pi-desktop", label: t("system") },
-  { value: "light" as ThemeMode, icon: "pi-sun", label: t("light") },
-  { value: "dark" as ThemeMode, icon: "pi-moon", label: t("dark") },
-]);
-function onThemeChange(mode: ThemeMode) {
+const themeOrder: ThemeMode[] = ["system", "light", "dark"];
+function themeIconFor(mode: ThemeMode): string {
+  if (mode === "light") return "pi-sun";
+  if (mode === "dark") return "pi-moon";
+  return "pi-desktop";
+}
+function setTheme(mode: ThemeMode) {
   theme.value = mode;
   setStoredTheme(mode);
   applyTheme(mode);
@@ -339,26 +426,16 @@ function onThemeChange(mode: ThemeMode) {
 
 // ---- Browser notifications (on / off) ----
 const notifEnabled = ref<boolean>(isChannelEnabled("browser"));
-const notifBlocked = getBrowserNotificationState() === "denied";
-const notifOptions = computed(() => [
-  {
-    value: true,
-    icon: "pi-bell",
-    label: notifBlocked ? t("blockedByBrowser") : t("enableNotifications"),
-    disabled: notifBlocked,
-  },
-  { value: false, icon: "pi-bell-slash", label: t("disableNotifications"), disabled: false },
-]);
-async function onNotifChange(next: boolean) {
-  if (next) {
-    // v-model has already flipped notifEnabled to true; confirm via the
-    // permission prompt and revert if the user denies.
-    const granted = await requestBrowserNotificationPermission();
-    notifEnabled.value = granted;
-  } else {
+const notifBlocked = ref(getBrowserNotificationState() === "denied");
+async function setNotifications(enabled: boolean) {
+  if (enabled === notifEnabled.value) return;
+  if (!enabled) {
     setChannelEnabled("browser", false);
     notifEnabled.value = false;
+    return;
   }
+  notifEnabled.value = await requestBrowserNotificationPermission();
+  notifBlocked.value = getBrowserNotificationState() === "denied";
 }
 
 // ---- Language picker ----

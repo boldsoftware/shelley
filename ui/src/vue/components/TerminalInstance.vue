@@ -30,7 +30,6 @@ const props = defineProps<{
   term: EphemeralTerminal;
   isVisible: boolean;
   isDark: boolean;
-  conversationId?: string | null;
   model?: string | null;
 }>();
 
@@ -50,6 +49,9 @@ let fitAddon: FitAddon | null = null;
 let ws: WebSocket | null = null;
 let ro: ResizeObserver | null = null;
 let handlePointerDown: ((e: PointerEvent) => void) | null = null;
+// settled is set once the server reported a definitive outcome (exit or
+// error) for this session, so a later socket close is not mistaken for one.
+let settled = false;
 
 onMounted(() => {
   if (!containerRef.value) return;
@@ -108,16 +110,22 @@ onMounted(() => {
   xterm.write(`\x1b[2m$ ${props.term.command}\x1b[0m\r\n`);
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  // If we already have a persistent session id, reattach to it. Otherwise
-  // spawn a new one by sending cmd+cwd.
+  // If we already have a persistent session id, reattach to it and nothing
+  // else: sending cmd as well would let the server silently rerun the command
+  // when the session has died. Otherwise spawn a new one with cmd+cwd.
+  //
+  // conversation_id comes from the terminal itself, not from whatever
+  // conversation happens to be selected right now, so navigating while this
+  // component mounts cannot record the wrong owner.
   const params = new URLSearchParams();
   if (props.term.termId) {
     params.set("term_id", props.term.termId);
+  } else {
+    params.set("cmd", props.term.command);
+    params.set("cwd", props.term.cwd);
+    if (props.term.conversationId) params.set("conversation_id", props.term.conversationId);
+    if (props.model) params.set("model", props.model);
   }
-  params.set("cmd", props.term.command);
-  params.set("cwd", props.term.cwd);
-  if (props.conversationId) params.set("conversation_id", props.conversationId);
-  if (props.model) params.set("model", props.model);
   const wsUrl = `${protocol}//${window.location.host}/api/exec-ws?${params.toString()}`;
   ws = new WebSocket(wsUrl);
   const socket = ws;
@@ -140,9 +148,11 @@ onMounted(() => {
         xterm.write(
           `\r\n\x1b[2;${color}m${props.term.command} completed with exit code ${code}\x1b[0m\r\n`,
         );
+        settled = true;
         emit("status-change", props.term.id, "exited", code);
       } else if (msg.type === "error") {
         xterm.write(`\r\n\x1b[31mError: ${msg.data}\x1b[0m\r\n`);
+        settled = true;
         emit("status-change", props.term.id, "error", null);
       }
     } catch (err) {
@@ -152,6 +162,10 @@ onMounted(() => {
 
   socket.onerror = (event) => console.error("WebSocket error:", event);
   socket.onclose = () => {
+    // An explicit exit or error already told us how this terminal finished;
+    // the socket closing afterwards must not overwrite that with a bare
+    // "exited" and no exit code.
+    if (settled) return;
     emit("status-change", props.term.id, "exited", null);
   };
 

@@ -9,6 +9,7 @@ export const ja: TranslationKeys = {
   // Chat Header & Actions
   newConversation: "新しい会話",
   moreOptions: "その他のオプション",
+  actions: "操作",
   conversations: "会話",
 
   // Overflow Menu
@@ -18,6 +19,11 @@ export const ja: TranslationKeys = {
   archiveConversation: "会話をアーカイブ",
   exportConversation: "会話をエクスポート",
   checkForNewVersion: "新しいバージョンを確認",
+  conversationView: "会話表示",
+  seeAllMessages: "すべて表示",
+  seeEndOfTurnMessagesOnly: "ターン終了メッセージのみ表示",
+  brevity: "簡潔さ",
+  look: "外観",
 
   // Theme
   system: "システム",
@@ -71,6 +77,7 @@ export const ja: TranslationKeys = {
   archiveConversationAction: "会話をアーカイブ",
   archiveCurrentConversation: "現在の会話をアーカイブする",
   newConversationInMainRepo: "メインリポジトリで新しい会話",
+  newConversationInHomeDirectory: "ホームディレクトリで新しい会話",
   newConversationInNewWorktree: "新しいWorktreeで新しい会話",
   createNewWorktree: "この会話用に新しいGit Worktreeを作成する",
   setWorkingDirToRepoRoot: "作業ディレクトリを git リポジトリのルートに設定する",
@@ -98,6 +105,7 @@ export const ja: TranslationKeys = {
   subagentIsWorking: "サブエージェントが作業中...",
   running: "実行中",
   hideSubagents: "サブエージェントを非表示",
+  terminalsPinnedHere: "この会話のターミナル",
   showSubagents: "サブエージェントを表示",
   groupConversations: "会話をグループ化",
   resortNow: "今すぐ並べ替え",
@@ -105,6 +113,12 @@ export const ja: TranslationKeys = {
   directory: "ディレクトリ",
   gitRepo: "Gitリポジトリ",
   other: "その他",
+  clearTagFilter: "すべて解除",
+  searchOrTagPlaceholder: "検索、または tag: で絞り込み",
+  untagged: "タグなし",
+  noMatchingTags: "一致するタグがありません",
+  noTagsToNarrow: "これ以上絞り込めません",
+  noConversationsMatchTags: "このタグに一致する会話はありません",
   collapseSubagents: "サブエージェントを折りたたむ",
   expandSubagents: "サブエージェントを展開",
   collapseSidebar: "サイドバーを折りたたむ",
@@ -137,6 +151,9 @@ export const ja: TranslationKeys = {
   effortLabel: "思考量",
   effortAuto: "自動",
   modelSwitchBusy: "モデルを切り替えるには、現在のターンを終了または停止してください",
+  modelSwitchHint: "クリックしてモデルまたは推論の努力度を切り替えます",
+  cwdChangeHint: "クリックして作業ディレクトリを変更します",
+  cwdChangeBusy: "ディレクトリを変更するには、現在のターンを終了または停止してください",
   customModelsGroup: "カスタムモデル",
   editModel: "モデルの編集",
   loadingModels: "モデルを読み込み中...",
@@ -239,7 +256,11 @@ export const ja: TranslationKeys = {
   welcomeTitle: "Shelley Agent",
   welcomeSubtitle: "",
   welcomeMessage:
-    "Shelleyは{hostname}で動作するエージェントです。Shelleyに作業を依頼できます。Shelleyでウェブサイトを構築した場合、exe.devのプロキシ機能（{docsLink}を参照）を使用して{proxyLink}からアクセスできます。",
+    "Shelleyは{hostname}で動作するエージェントです。Shelleyでウェブサイトを構築した場合、exe.devのプロキシ機能（{docsLink}を参照）を使用して{proxyLink}からアクセスできます。Shelleyは{openSourceLink}であり、{customizeLink}。",
+  welcomeMessageLocal:
+    "Shelleyは{hostname}で動作するエージェントです。Shelleyは{openSourceLink}であり、{customizeLink}。",
+  welcomeOpenSource: "オープンソース",
+  welcomeCustomize: "カスタマイズできます",
   sendMessageToStart: "メッセージを送信して会話を開始してください。",
   noModelsTitle: "利用可能なAIモデルがありません",
   noModelsExeNote:
@@ -259,6 +280,7 @@ export const ja: TranslationKeys = {
   editFileShortcutFirefox:
     "Firefox はこのショートカットをプライベートウィンドウ用に予約しています。コマンドパレット（Cmd/Ctrl+K）を使用してください",
   openConversations: "会話を開く",
+  commandMenu: "コマンドメニュー",
   expandSidebar: "サイドバーを展開",
 
   // Language

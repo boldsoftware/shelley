@@ -291,7 +291,7 @@ func TestToolModelsHideUnknownIntegrationModelsButKeepCustomModels(t *testing.T)
 		},
 	}
 
-	got := setupToolSetConfig(nil, provider).BuildAvailableModels()
+	got := setupToolSetConfig(nil, provider, nil).BuildAvailableModels()
 	if len(got) != 2 || got[0].ID != "gpt-5.6-sol" || got[1].ID != "my-custom-model" {
 		t.Fatalf("available tool models = %+v, want known and custom models", got)
 	}

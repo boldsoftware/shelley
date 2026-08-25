@@ -2,18 +2,36 @@
 
      Three segments, dot-separated, sharing one type style (set here, inherited
      by the segments, so they can't drift apart the way they did when each
-     declared its own). Two of them are controls with distinct destinations:
-     the token count opens the context/cost popup, the model name opens the
-     model picker. The cwd is the only plain text.
+     declared its own). All three are controls with distinct destinations: the
+     cwd opens the directory picker, the token count opens the context/cost
+     popup, the model name opens the model picker. None of them can look like a
+     control in the usual way — they have to read as one line of plain text — so
+     each wears the same dotted underline instead (.status-readout-affordance)
+     and names its destination in a tooltip.
 
      Rendered for a conversation that already exists — both while it is idle and
-     while the agent works — so the model here is server state and a pick has to
-     go through the server (see onSwitchConversationModel). The composer's boxed
-     ModelPicker covers the pre-first-send case instead. -->
+     while the agent works — so the model and cwd here are server state and a
+     change has to go through the server (see onSwitchConversationModel and
+     onChangeConversationCwd). The composer's boxed ModelPicker and cwd chip
+     cover the pre-first-send case instead. -->
 <template>
   <div class="status-readout">
     <template v-if="cwd">
-      <span class="status-readout-cwd hide-on-mobile" :title="cwd">{{ tildifyPath(cwd) }}</span>
+      <!-- Changing the directory mid-turn would move the ground under a running
+           bash command, so the server refuses it (409) and the button is
+           disabled to match, with the tooltip saying why. -->
+      <button
+        type="button"
+        class="status-readout-cwd status-readout-control hide-on-mobile"
+        :disabled="agentWorking || !onChangeConversationCwd"
+        v-tooltip.top="cwdTooltip"
+        :aria-label="cwdAriaLabel"
+        @click="onChangeConversationCwd?.()"
+      >
+        <span class="status-readout-cwd-path status-readout-affordance">{{
+          tildifyPath(cwd)
+        }}</span>
+      </button>
       <span class="status-readout-sep hide-on-mobile" aria-hidden="true">·</span>
     </template>
 
@@ -39,8 +57,15 @@
            so nothing on the picker itself would ever fire), while the ARIA
            description goes on the combobox, which is what a screen reader
            actually lands on. No `title` alongside the tooltip — that renders
-           both the PrimeVue bubble and the browser's native one. -->
-      <span v-tooltip.top="busyReason" class="status-readout-model">
+           both the PrimeVue bubble and the browser's native one.
+
+           The same wrapper carries the idle hint, for the same reason the token
+           count has one: the segment is bare text, so nothing but the dotted
+           underline says it can be clicked. -->
+      <span
+        v-tooltip.top="busyReason || t('modelSwitchHint')"
+        class="status-readout-model status-readout-control"
+      >
         <ModelPicker
           inline
           :disabled-reason="busyReason"
@@ -84,6 +109,7 @@ const props = defineProps<{
   onDistillNewGeneration?: () => Promise<void> | void;
   onStartNewGeneration?: () => Promise<void> | void;
   onUsageNeeded?: () => void;
+  onChangeConversationCwd?: () => void;
   onSwitchConversationModel: (model: string) => void;
   onSwitchConversationThinkingLevel: (level: ThinkingLevel) => void;
   onManageModels: () => void;
@@ -95,4 +121,23 @@ const { t } = useI18n();
 // Undefined rather than "" when idle: v-tooltip treats an empty string as a
 // tooltip to render, and the ModelPicker prop is optional.
 const busyReason = computed(() => (props.agentWorking ? t("modelSwitchBusy") : undefined));
+
+// The cwd segment says the full path (the visible text is tildified, and
+// ellipsized when the bar is tight) plus what a click does — or why it can't.
+const cwdTooltip = computed(() => {
+  if (props.agentWorking) return t("cwdChangeBusy");
+  if (!props.onChangeConversationCwd) return props.cwd;
+  return `${props.cwd} — ${t("cwdChangeHint")}`;
+});
+
+// The accessible name has to carry what the tooltip carries for a pointer: the
+// visible text is just a path, which says nothing about the button doing
+// anything. A tooltip alone wouldn't do it — PrimeVue's is not wired up as an
+// aria-describedby — so the destination goes in the name itself.
+const cwdAriaLabel = computed(() => {
+  const label = `${t("dirLabel")} ${props.cwd}`;
+  if (props.agentWorking) return `${label} — ${t("cwdChangeBusy")}`;
+  if (!props.onChangeConversationCwd) return label;
+  return `${label} — ${t("cwdChangeHint")}`;
+});
 </script>

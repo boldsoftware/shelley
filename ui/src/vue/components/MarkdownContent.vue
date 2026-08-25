@@ -18,11 +18,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { highlightCode, normalizeCodeLanguage } from "../../services/markdownHighlight";
+import { applyHighlightTokens } from "../../utils/codeHighlight";
 import { COMMENT_ICON } from "../../utils/icons";
 import { renderMarkdownToSafeHTML } from "../../utils/markdownRender";
 import { perfWrap } from "../../utils/perf";
 import { handleImageCommentClick, openImageComment } from "../composables/imageComment";
+import { whenNearViewport } from "../composables/nearViewport";
 
 const props = defineProps<{
   text: string;
@@ -47,6 +50,17 @@ const props = defineProps<{
 }>();
 
 const containerRef = ref<HTMLDivElement | null>(null);
+
+// Highlighting swaps a block's single text node for one span per token —
+// measured at 22% of all DOM elements in a large conversation when done
+// eagerly, nearly all of it far off-screen. Defer each block until it comes
+// within a viewport of view (same shared observer that gates tool cards),
+// then tokenize.
+let cancelDeferred: (() => void)[] = [];
+onBeforeUnmount(() => {
+  for (const cancel of cancelDeferred) cancel();
+  cancelDeferred = [];
+});
 
 const html = computed(
   perfWrap("markdown.render", () =>
@@ -76,23 +90,82 @@ function isCommentable(img: HTMLImageElement): boolean {
 watch(
   [html, containerRef],
   () => {
+    // Cancel before the null guard: if the container vanished, stale
+    // registrations would otherwise pin the detached subtree via the
+    // observer's target set.
+    for (const cancel of cancelDeferred) cancel();
+    cancelDeferred = [];
     const root = containerRef.value;
-    if (!root || !props.commentable) return;
-    for (const img of root.querySelectorAll("img")) {
-      // The wrapper marks an image as already done: this runs whenever the
-      // container ref settles, not only when the HTML is replaced.
-      if (!isCommentable(img) || img.closest(".commentable-image-link")) continue;
-      img.setAttribute("role", "button");
-      img.setAttribute("tabindex", "0");
-      img.classList.add("commentable-image");
-      const wrap = document.createElement("span");
-      wrap.className = "commentable-image-link";
-      img.replaceWith(wrap);
-      wrap.append(img, badge());
+    if (!root) return;
+    if (props.commentable) {
+      for (const img of root.querySelectorAll("img")) {
+        // The wrapper marks an image as already done: this runs whenever the
+        // container ref settles, not only when the HTML is replaced.
+        if (!isCommentable(img) || img.closest(".commentable-image-link")) continue;
+        img.setAttribute("role", "button");
+        img.setAttribute("tabindex", "0");
+        img.classList.add("commentable-image");
+        const wrap = document.createElement("span");
+        wrap.className = "commentable-image-link";
+        img.replaceWith(wrap);
+        wrap.append(img, badge());
+      }
     }
+    highlightFencedCode(root);
   },
   { flush: "post", immediate: true },
 );
+
+function languageFor(code: HTMLElement): string | undefined {
+  for (const className of code.classList) {
+    const match = /^language-(.+)$/.exec(className);
+    if (match) return normalizeCodeLanguage(match[1]);
+  }
+  return undefined;
+}
+
+function highlightFencedCode(root: HTMLElement): void {
+  for (const code of root.querySelectorAll<HTMLElement>("pre > code")) {
+    const state = code.dataset.shelleyCodeHighlight;
+    if (state && state !== "deferred") continue;
+    const language = languageFor(code);
+    if (!language) continue;
+
+    // "deferred" blocks re-register on every pass (the watch cancels all
+    // previous registrations first) because v-html replacement may have
+    // produced brand-new elements.
+    code.dataset.shelleyCodeHighlight = "deferred";
+    cancelDeferred.push(
+      whenNearViewport(code, () => highlightBlock(root, code, language), { printReveal: false }),
+    );
+  }
+}
+
+function highlightBlock(root: HTMLElement, code: HTMLElement, language: string): void {
+  // The observer can fire in the window between a v-html replacement and the
+  // post-flush watch pass that would have canceled this registration.
+  if (!code.isConnected) return;
+  const source = code.textContent ?? "";
+  code.dataset.shelleyCodeHighlight = "pending";
+  void highlightCode(language, source)
+    .then((result) => {
+      // v-html can replace this code block while the worker is still tokenizing.
+      if (!root.contains(code) || code.dataset.shelleyCodeHighlight !== "pending") return;
+      if (code.textContent !== source) return;
+      if (result.kind === "unknown") {
+        delete code.dataset.shelleyCodeHighlight;
+        return;
+      }
+      applyHighlightTokens(code, source, result.lines);
+      code.dataset.shelleyCodeHighlight = language;
+    })
+    .catch((error: unknown) => {
+      if (root.contains(code) && code.dataset.shelleyCodeHighlight === "pending") {
+        delete code.dataset.shelleyCodeHighlight;
+      }
+      console.error("Syntax highlighting failed", error);
+    });
+}
 
 function badge(): HTMLElement {
   const el = document.createElement("span");

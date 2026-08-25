@@ -96,10 +96,10 @@ func validReasoningMap(raw string) error {
 	if err := json.Unmarshal([]byte(raw), &values); err != nil {
 		return fmt.Errorf("reasoning_map must be a JSON object: %w", err)
 	}
-	valid := map[string]bool{"off": true, "minimal": true, "low": true, "medium": true, "high": true, "xhigh": true}
+	valid := map[string]bool{"off": true, "minimal": true, "low": true, "medium": true, "high": true, "xhigh": true, "max": true}
 	for from, to := range values {
 		if !valid[from] || strings.TrimSpace(to) == "" {
-			return fmt.Errorf("reasoning_map keys must use off, minimal, low, medium, high, or xhigh and values must be non-empty; got %q: %q", from, to)
+			return fmt.Errorf("reasoning_map keys must use off, minimal, low, medium, high, xhigh, or max and values must be non-empty; got %q: %q", from, to)
 		}
 	}
 	return nil

@@ -1,4 +1,7 @@
 import { expect, type APIRequestContext, type Page, type Locator } from "@playwright/test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export interface CreatedConversation {
   conversationId: string;
@@ -175,4 +178,19 @@ export async function setPageFeatureFlag(page: Page, name: string, value: boolea
     },
     [name, value] as const,
   );
+}
+
+/** Run `fn` with a fresh temp directory, removing it afterwards. Specs that
+ *  need a real cwd with real files on disk (file finder, patch cards) use this
+ *  so a full suite run doesn't litter /tmp. */
+export async function withTempDir(
+  prefix: string,
+  fn: (dir: string) => Promise<void>,
+): Promise<void> {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  try {
+    await fn(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }

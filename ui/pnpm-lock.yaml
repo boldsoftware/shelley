@@ -28,6 +28,18 @@ importers:
       '@primeuix/themes':
         specifier: ^2.0.3
         version: 2.0.3
+      '@shikijs/core':
+        specifier: ^3.22.0
+        version: 3.23.0
+      '@shikijs/engine-javascript':
+        specifier: ^3.22.0
+        version: 3.23.0
+      '@shikijs/langs':
+        specifier: 3.23.0
+        version: 3.23.0
+      '@shikijs/themes':
+        specifier: 3.23.0
+        version: 3.23.0
       '@xterm/addon-fit':
         specifier: 0.12.0-beta.213
         version: 0.12.0-beta.213(@xterm/xterm@6.1.0-beta.213)

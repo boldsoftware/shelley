@@ -40,6 +40,12 @@
 // fork can hold a complete history with holes in it. Lost rows are detected by
 // row count instead (ConvMetaRow.message_count).
 //
+// For the same reason we do not require a cached history to START at sequence
+// 1: a fork taken after a compaction legitimately begins well past it. What a
+// full REST snapshot establishes is that whatever it returned IS the whole
+// history. The one exception is an EMPTY snapshot with live rows grafted on
+// top, which establishes nothing — see applyFullHistory.
+//
 // At-rest encryption (v4): the sensitive payload of each row is AES-GCM
 // encrypted with a per-browser key derived server-side from a long-lived
 // secret + a session cookie (see services/cryptoKey.ts + server/cache_key.go).
@@ -131,6 +137,15 @@ const IDB_OPEN_COOLDOWN_MS = 30_000;
  * the cache, use the network) is cheap.
  */
 const IDB_TX_TIMEOUT_MS = 3_000;
+
+/**
+ * Rows per Promise.all batch for bulk crypto.subtle calls. Awaiting each row
+ * individually serializes on the main-thread/crypto-thread round-trip:
+ * measured on a 21k-message conversation, sequential decrypt took 610ms on
+ * Safari 26.4 (1.0s on Chromium) vs 117ms batched — batches of 512 are within
+ * noise of fully parallel while bounding peak in-flight promises.
+ */
+const CRYPTO_BATCH = 512;
 
 /**
  * Deadline options for a cache READ.
@@ -292,11 +307,12 @@ export interface ConversationCacheRecord {
 export interface TransientState {
   toolProgress: Record<string, ToolProgress>;
   streamingText: string;
+  streamingThinking: string;
   agentWorking: boolean;
 }
 
 function emptyTransient(): TransientState {
-  return { toolProgress: {}, streamingText: "", agentWorking: false };
+  return { toolProgress: {}, streamingText: "", streamingThinking: "", agentWorking: false };
 }
 
 function emptyRecord(id: string): ConversationCacheRecord {
@@ -361,7 +377,6 @@ function mergeRecords(
  * append, so the first one past the disk tail must be exactly tail + 1.
  */
 function joinsUp(disk: ConversationCacheRecord, hot: ConversationCacheRecord): boolean {
-  if (disk.messages.length === 0) return true;
   const known = new Set(disk.messages.map((m) => m.message_id));
   let firstNew = Infinity;
   for (const m of hot.messages) {
@@ -369,7 +384,7 @@ function joinsUp(disk: ConversationCacheRecord, hot: ConversationCacheRecord): b
     if (m.sequence_id > disk.maxSequenceId && m.sequence_id < firstNew) firstNew = m.sequence_id;
   }
   if (firstNew === Infinity) return true;
-  return firstNew === disk.maxSequenceId + 1;
+  return firstNew === (disk.messages.length > 0 ? disk.maxSequenceId + 1 : 1);
 }
 
 function convRange(id: string): IDBKeyRange {
@@ -943,10 +958,14 @@ export class MessageStore {
             readDeadlineOpts("messages"),
           );
           const decrypted: Message[] = [];
-          for (const r of rows) {
-            const m = await this.decryptMessageRow(material.key, r);
-            if (m) decrypted.push(m);
-            else undecryptable++;
+          for (let i = 0; i < rows.length; i += CRYPTO_BATCH) {
+            const batch = await Promise.all(
+              rows.slice(i, i + CRYPTO_BATCH).map((r) => this.decryptMessageRow(material.key, r)),
+            );
+            for (const m of batch) {
+              if (m) decrypted.push(m);
+              else undecryptable++;
+            }
           }
           const minSeq = decrypted.length > 0 ? decrypted[0].sequence_id : 0;
           const maxSeq = decrypted.length > 0 ? decrypted[decrypted.length - 1].sequence_id : -1;
@@ -1105,9 +1124,8 @@ export class MessageStore {
     }
     if (
       rec.hasFullHistory &&
-      rec.messages.length > 0 &&
       firstNewSeq !== Infinity &&
-      firstNewSeq !== prevMax + 1
+      firstNewSeq !== (rec.messages.length > 0 ? prevMax + 1 : 1)
     ) {
       rec.hasFullHistory = false;
       cacheDiag(
@@ -1161,8 +1179,12 @@ export class MessageStore {
     // in its own RX tx first (snapshot), encrypt, then do a single RW tx
     // that does the true RMW of the plaintext ratchet fields.
     const encRows: MessageRow[] = [];
-    for (const m of incoming) {
-      encRows.push(await this.encryptMessageRow(material.key, m));
+    for (let i = 0; i < incoming.length; i += CRYPTO_BATCH) {
+      encRows.push(
+        ...(await Promise.all(
+          incoming.slice(i, i + CRYPTO_BATCH).map((m) => this.encryptMessageRow(material.key, m)),
+        )),
+      );
     }
     const db = await this.db();
     // Snapshot existing meta payload for `conversation` and
@@ -1244,7 +1266,7 @@ export class MessageStore {
     // A live append must continue the history we already hold. If it skips
     // ahead, messages were committed while we weren't listening and the
     // cached set now has a hole — mirror mergeRecords.joinsUp().
-    if (stillFull && firstNewSeq !== Infinity && prevMax >= 0 && firstNewSeq !== prevMax + 1) {
+    if (stillFull && firstNewSeq !== Infinity && firstNewSeq !== (prevMax >= 0 ? prevMax + 1 : 1)) {
       stillFull = false;
     }
     const observedAfter = await msgs.count(convRange(id));
@@ -1366,6 +1388,23 @@ export class MessageStore {
       responseKnown,
       maxSeq < 0 ? 0 : maxSeq,
     );
+    // A full GET returns the conversation's whole history, so whatever the
+    // snapshot starts at IS the start — forks legitimately begin well past
+    // sequence 1 (CopyMessagesForFork preserves source ids). But an EMPTY
+    // snapshot certifies nothing: when we graft locally-cached rows on top of
+    // one, those rows are only a complete history if they start at sequence 1.
+    //
+    // Draft promotion hits exactly that. The server flips is_draft and
+    // announces it, then creates the system prompt as sequence 1 WITHOUT
+    // broadcasting it (see convo.go createSystemPrompt), then streams the
+    // user's message as sequence 2. A refetch racing that window returns zero
+    // messages while seq 2 is already hot, so certifying would permanently
+    // hide the system prompt in this browser — upsertMessages' join check
+    // can't catch it, because seq 2 arrived BEFORE the certification, not
+    // after. Refusing here keeps the cache honestly incomplete so the next
+    // focus repairs it via a full REST load.
+    const certifiesFullHistory =
+      responseMessages.length > 0 || messages.length === 0 || minSeq === 1;
     const rec: ConversationCacheRecord = {
       conversation_id: id,
       messages,
@@ -1374,7 +1413,7 @@ export class MessageStore {
       minSequenceId: minSeq,
       maxSequenceId: maxSeq,
       maxSequenceIdKnown: knownAfter,
-      hasFullHistory: true,
+      hasFullHistory: certifiesFullHistory,
       needsRefresh: false,
       updatedAt: Date.now(),
     };
@@ -1399,8 +1438,14 @@ export class MessageStore {
     if (!material) return;
     // Encrypt all message rows + the meta payload OUTSIDE the IDB tx.
     const encMsgs: MessageRow[] = [];
-    for (const m of rec.messages) {
-      encMsgs.push(await this.encryptMessageRow(material.key, m));
+    for (let i = 0; i < rec.messages.length; i += CRYPTO_BATCH) {
+      encMsgs.push(
+        ...(await Promise.all(
+          rec.messages
+            .slice(i, i + CRYPTO_BATCH)
+            .map((m) => this.encryptMessageRow(material.key, m)),
+        )),
+      );
     }
     const db = await this.db();
     const existingRow = await db.get("conversation_meta", id);
@@ -1439,7 +1484,11 @@ export class MessageStore {
       max_sequence_id_known: Math.max(existing?.max_sequence_id_known ?? 0, rec.maxSequenceIdKnown),
       // Ratchet against any concurrent writer that pushed local higher.
       max_sequence_id_local: Math.max(existing?.max_sequence_id_local ?? -1, rec.maxSequenceId),
-      has_full_history: true,
+      // Mirror the in-memory record rather than hardcoding true: an empty
+      // snapshot with grafted live rows is not a complete history (see
+      // applyFullHistory), and persisting `true` here would let the next
+      // reload hydrate the certification we just refused.
+      has_full_history: rec.hasFullHistory,
       message_count: rowCount,
       // A full REST snapshot IS the re-verification, so clear any pending
       // reconnect-driven refresh flag.
@@ -1652,17 +1701,25 @@ export class MessageStore {
     this.notifyTransient(id);
   }
 
-  appendStreamDelta(id: string, text: string): void {
+  appendStreamText(id: string, text: string): void {
     if (!text) return;
     const t = this.getTransient(id);
     t.streamingText = t.streamingText + text;
     this.notifyTransient(id);
   }
 
-  resetStreamingText(id: string): void {
+  appendStreamThinking(id: string, text: string): void {
+    if (!text) return;
     const t = this.getTransient(id);
-    if (!t.streamingText) return;
+    t.streamingThinking = t.streamingThinking + text;
+    this.notifyTransient(id);
+  }
+
+  resetStreaming(id: string): void {
+    const t = this.getTransient(id);
+    if (!t.streamingText && !t.streamingThinking) return;
     t.streamingText = "";
+    t.streamingThinking = "";
     this.notifyTransient(id);
   }
 
@@ -1678,7 +1735,7 @@ export class MessageStore {
     // (conversations.agent_working) and is authoritative across the
     // lifetime of the conversation, not per-session transient.
     //
-    // toolProgress and streamingText, on the other hand, are stream-only
+    // Tool progress and streamed content, on the other hand, are stream-only
     // ephemera that don't survive a tab switch / refresh and would be
     // misleading if carried across a focus change.
     //
