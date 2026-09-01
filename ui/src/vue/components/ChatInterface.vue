@@ -3338,9 +3338,16 @@ const onMobileChange = (e: MediaQueryListEvent) => (isMobile.value = e.matches);
 mobileMq.addEventListener("change", onMobileChange);
 
 // Favicon working indicator.
-watch(agentWorking, (working) => {
-  if (working) setFaviconStatus("working");
-});
+watch(
+  agentWorking,
+  (working) => {
+    // The completion notification is best-effort: a sleeping/backgrounded tab
+    // can miss it. The conversation's authoritative working state is also
+    // restored by the stream/list-patch path, so derive both transitions here.
+    setFaviconStatus(working ? "working" : "ready");
+  },
+  { immediate: true },
+);
 
 // ---- conversation switch: hydrate + subscribe ----
 let unsubStore: (() => void) | null = null;
