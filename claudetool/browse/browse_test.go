@@ -138,6 +138,15 @@ func TestGetTools(t *testing.T) {
 	}
 }
 
+// browserUnavailable reports whether a message means this machine has no
+// browser for chromedp to drive, rather than a genuine failure. The tools say
+// "browser automation not available"; a launch that gets as far as chromedp
+// and finds no executable says "failed to start browser".
+func browserUnavailable(msg string) bool {
+	return strings.Contains(msg, "browser automation not available") ||
+		strings.Contains(msg, "failed to start browser")
+}
+
 // TestBrowserInitialization verifies that the browser can start correctly
 func TestBrowserInitialization(t *testing.T) {
 	// Skip long tests in short mode
@@ -157,7 +166,7 @@ func TestBrowserInitialization(t *testing.T) {
 	// Get browser context (this initializes the browser)
 	browserCtx, err := tools.GetBrowserContext()
 	if err != nil {
-		if strings.Contains(err.Error(), "failed to start browser") {
+		if browserUnavailable(err.Error()) {
 			t.Skip("Browser automation not available in this environment")
 		}
 		t.Fatalf("Failed to get browser context: %v", err)
@@ -196,12 +205,15 @@ func TestNavigateTool(t *testing.T) {
 	inputJSON := []byte(`{"action": "navigate", "url": "https://example.com"}`)
 	toolOut := tool.Run(ctx, inputJSON)
 	if toolOut.Error != nil {
+		if browserUnavailable(toolOut.Error.Error()) {
+			t.Skip("Browser automation not available in this environment")
+		}
 		t.Fatalf("Error running navigate: %v", toolOut.Error)
 	}
 
 	resultText := toolOut.LLMContent[0].Text
 	if !strings.Contains(resultText, "done") {
-		if strings.Contains(resultText, "browser automation not available") {
+		if browserUnavailable(resultText) {
 			t.Skip("Browser automation not available in this environment")
 		}
 		t.Fatalf("Expected done in result text, got: %s", resultText)
@@ -209,7 +221,7 @@ func TestNavigateTool(t *testing.T) {
 
 	browserCtx, err := tools.GetBrowserContext()
 	if err != nil {
-		if strings.Contains(err.Error(), "browser automation not available") {
+		if browserUnavailable(err.Error()) {
 			t.Skip("Browser automation not available in this environment")
 		}
 		t.Fatalf("Failed to get browser context: %v", err)
@@ -292,7 +304,7 @@ func TestScreenshotRunGatesOnImageSupport(t *testing.T) {
 
 	// Navigate somewhere so a screenshot can be captured.
 	nav := tools.CombinedTool().Run(baseCtx, []byte(`{"action": "navigate", "url": "https://example.com"}`))
-	if nav.Error != nil || (len(nav.LLMContent) > 0 && strings.Contains(nav.LLMContent[0].Text, "browser automation not available")) {
+	if nav.Error != nil || (len(nav.LLMContent) > 0 && browserUnavailable(nav.LLMContent[0].Text)) {
 		t.Skip("Browser automation not available in this environment")
 	}
 
@@ -402,7 +414,7 @@ func TestDefaultViewportSize(t *testing.T) {
 	// Navigate
 	toolOut := tool.Run(ctx, []byte(`{"action": "navigate", "url": "about:blank"}`))
 	if toolOut.Error != nil {
-		if strings.Contains(toolOut.Error.Error(), "browser automation not available") {
+		if browserUnavailable(toolOut.Error.Error()) {
 			t.Skip("Browser automation not available in this environment")
 		}
 		t.Fatalf("Navigation error: %v", toolOut.Error)
@@ -451,7 +463,7 @@ func TestBrowserIdleShutdownAndRestart(t *testing.T) {
 
 	browserCtx1, err := tools.GetBrowserContext()
 	if err != nil {
-		if strings.Contains(err.Error(), "failed to start browser") {
+		if browserUnavailable(err.Error()) {
 			t.Skip("Browser automation not available in this environment")
 		}
 		t.Fatalf("Failed to get browser context: %v", err)
@@ -503,7 +515,7 @@ func TestBrowserCrashRecovery(t *testing.T) {
 	// First use - should start the browser
 	browserCtx1, err := tools.GetBrowserContext()
 	if err != nil {
-		if strings.Contains(err.Error(), "failed to start browser") {
+		if browserUnavailable(err.Error()) {
 			t.Skip("Browser automation not available in this environment")
 		}
 		t.Fatalf("Failed to get browser context: %v", err)
