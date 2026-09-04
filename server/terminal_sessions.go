@@ -651,12 +651,13 @@ func (t *TerminalSessions) spawnSubprocess(socket, logFile, cwd, command string,
 // until the listener is ready.
 func InProcessSpawner(socket, logFile, cwd, command string, cols, rows uint16, extraEnv []string) (int, error) {
 	ready := make(chan struct{})
+	served := make(chan error, 1)
 	var env []string
 	if len(extraEnv) > 0 {
 		env = append(os.Environ(), extraEnv...)
 	}
 	go func() {
-		_ = dtach.Serve(dtach.ServerOptions{
+		served <- dtach.Serve(dtach.ServerOptions{
 			SocketPath: socket,
 			Command:    "bash",
 			Args:       []string{"--login", "-c", command},
@@ -667,7 +668,22 @@ func InProcessSpawner(socket, logFile, cwd, command string, cols, rows uint16, e
 			Ready:      ready,
 		})
 	}()
-	<-ready
+	// Watch the serve result as well as the ready signal: a Serve that fails
+	// before it listens -- a socket path too long for sun_path, say -- never
+	// signals ready, and waiting on ready alone hangs until the test binary's
+	// timeout.
+	select {
+	case <-ready:
+	case err := <-served:
+		select {
+		case <-ready: // raced past ready on its way out; the session did start
+		default:
+			if err == nil {
+				err = errors.New("server exited before listening")
+			}
+			return 0, fmt.Errorf("terminals: in-process dtach: %w", err)
+		}
+	}
 	return os.Getpid(), nil
 }
 
