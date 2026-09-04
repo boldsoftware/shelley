@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/josharian/sockpath"
 	"shelley.exe.dev/db"
 )
 
@@ -18,7 +19,7 @@ import (
 // in-process spawner, so spawned sessions die with the test.
 func newScopeTestSessions(t *testing.T) *TerminalSessions {
 	t.Helper()
-	ts, err := NewTerminalSessions(t.TempDir(), slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	ts, err := NewTerminalSessions(sockpath.TempDir(t), slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelWarn})))
 	if err != nil {
 		t.Fatalf("NewTerminalSessions: %v", err)
 	}

@@ -5,11 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/josharian/sockpath"
 )
 
 func initRepo(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := sockpath.TempDir(t)
 	runGit(t, dir, "init", "-q")
 	runGit(t, dir, "config", "user.email", "test@test.com")
 	runGit(t, dir, "config", "user.name", "Test")
@@ -93,7 +95,7 @@ func TestFileReader_NestedDir(t *testing.T) {
 func TestFileReader_MatchesGitBinary(t *testing.T) {
 	main := initRepo(t)
 	commit(t, main, "main commit")
-	wt := filepath.Join(t.TempDir(), "wt")
+	wt := filepath.Join(sockpath.TempDir(t), "wt")
 	runGit(t, main, "worktree", "add", "-q", "-b", "feature", wt)
 
 	// Detached HEAD repo.

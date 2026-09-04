@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/josharian/sockpath"
 	"shelley.exe.dev/llm"
 )
 
@@ -117,7 +118,7 @@ func TestKeywordTool_Tool(t *testing.T) {
 
 func TestFindRepoRoot(t *testing.T) {
 	// Create a temp directory structure
-	tmpDir := t.TempDir()
+	tmpDir := sockpath.TempDir(t)
 
 	// Test when not in a git repo (should fail)
 	_, err := FindRepoRoot(tmpDir)

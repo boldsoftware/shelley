@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/josharian/sockpath"
 )
 
 func TestBashSlowOk(t *testing.T) {
@@ -228,7 +230,7 @@ func TestBashChainedCdHint(t *testing.T) {
 }
 
 func TestExecuteBashInDirUsesSnapshot(t *testing.T) {
-	original := t.TempDir()
+	original := sockpath.TempDir(t)
 	bashTool := &BashTool{WorkingDir: NewMutableWorkingDir(original)}
 	snapshot := bashTool.getWorkingDir()
 	bashTool.WorkingDir.Set(t.TempDir())

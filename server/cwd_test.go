@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/josharian/sockpath"
 	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/llm"
 )
@@ -370,11 +371,7 @@ func TestListDirectory(t *testing.T) {
 	t.Run("git_worktree_root", func(t *testing.T) {
 		// Create a main git repo and a worktree, then verify that
 		// listing the worktree returns git_worktree_root pointing to the main repo.
-		tmpDir, err := os.MkdirTemp("", "listdir_wtroot_test")
-		if err != nil {
-			t.Fatalf("failed to create temp dir: %v", err)
-		}
-		defer os.RemoveAll(tmpDir)
+		tmpDir := sockpath.TempDir(t)
 
 		mainRepo := filepath.Join(tmpDir, "main-repo")
 		if err := os.Mkdir(mainRepo, 0o755); err != nil {
@@ -760,7 +757,7 @@ func TestGitCreateWorktree(t *testing.T) {
 	h := NewTestHarness(t)
 
 	// Create a git repo
-	tmpDir := t.TempDir()
+	tmpDir := sockpath.TempDir(t)
 	mainRepo := filepath.Join(tmpDir, "myrepo")
 	if err := os.Mkdir(mainRepo, 0o755); err != nil {
 		t.Fatal(err)

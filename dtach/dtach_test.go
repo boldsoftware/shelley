@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/josharian/sockpath"
 )
 
 func TestRingDropsOldest(t *testing.T) {
@@ -35,7 +37,7 @@ func serveInBackground(t *testing.T, opts ServerOptions) <-chan error {
 }
 
 func TestServeAttachSurvivesDetach(t *testing.T) {
-	dir := t.TempDir()
+	dir := sockpath.TempDir(t)
 	sock := filepath.Join(dir, "sock")
 
 	// Use `cat` so the session stays alive until we explicitly signal EOF.
@@ -94,7 +96,7 @@ func TestServeAttachSurvivesDetach(t *testing.T) {
 }
 
 func TestAttachReplaysScrollbackToLateClient(t *testing.T) {
-	dir := t.TempDir()
+	dir := sockpath.TempDir(t)
 	sock := filepath.Join(dir, "sock")
 
 	// Use `cat` so the session stays alive until we send EOF. While running,

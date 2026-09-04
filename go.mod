@@ -11,6 +11,7 @@ require (
 	github.com/fynelabs/selfupdate v0.2.1
 	github.com/go-json-experiment/json v0.0.0-20260820222146-c27c302e5fc3
 	github.com/google/uuid v1.6.0
+	github.com/josharian/sockpath v0.0.0-20260904222211-971ecb607ad7
 	github.com/klauspost/compress v1.20.0
 	github.com/pkg/diff v0.0.0-20241224192749-4e6772a4315c
 	github.com/sahilm/fuzzy v0.1.3

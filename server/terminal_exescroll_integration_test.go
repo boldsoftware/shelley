@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/josharian/sockpath"
 	"shelley.exe.dev/exescroll"
 )
 
@@ -40,7 +41,7 @@ func TestExeScrollHelperProcess(t *testing.T) {
 
 func newExeScrollTestSessions(t *testing.T) *TerminalSessions {
 	t.Helper()
-	ts, err := NewTerminalSessions(t.TempDir(), slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	ts, err := NewTerminalSessions(sockpath.TempDir(t), slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}

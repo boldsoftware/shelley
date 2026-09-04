@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/josharian/sockpath"
 	"shelley.exe.dev/committour"
 )
 
@@ -18,7 +19,7 @@ import (
 func TestGetGitRoot(t *testing.T) {
 	t.Parallel()
 	// Create a temporary directory for testing
-	tempDir := t.TempDir()
+	tempDir := sockpath.TempDir(t)
 
 	// Test with non-git directory
 	_, err := getGitRoot(tempDir)
@@ -129,7 +130,7 @@ func TestParseDiffStat(t *testing.T) {
 // setupTestGitRepo creates a temporary git repository with some content for testing
 func setupTestGitRepo(t *testing.T) string {
 	// Create a temporary directory for testing
-	tempDir := t.TempDir()
+	tempDir := sockpath.TempDir(t)
 
 	// Initialize git repo
 	cmd := exec.Command("git", "init")
