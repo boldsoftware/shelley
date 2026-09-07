@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -143,6 +144,10 @@ type Transport struct {
 	// it measures the gap between chunks (and time-to-first-byte), not total
 	// duration. Zero disables the mechanism.
 	IdleTimeout time.Duration
+	// CustomHeaders are user-configured headers applied to every LLM request.
+	// They are applied after Shelley's own headers, so a custom header may
+	// override one Shelley sets.
+	CustomHeaders http.Header
 }
 
 // RoundTrip implements http.RoundTripper.
@@ -179,6 +184,15 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// Add x-session-affinity header for Fireworks to enable prompt caching
 		if ProviderFromContext(req.Context()) == "fireworks" {
 			req.Header.Set("x-session-affinity", conversationID)
+		}
+	}
+
+	// Apply user-configured custom headers last, so they may override any
+	// header Shelley set above.
+	for name, values := range t.CustomHeaders {
+		req.Header.Del(name)
+		for _, value := range values {
+			req.Header.Add(name, value)
 		}
 	}
 
@@ -327,12 +341,18 @@ func (r *idleReadCloser) Close() error {
 // NewClient creates an http.Client with Shelley headers applied via Transport
 // and the default idle/stall timeout.
 func NewClient(base *http.Client) *http.Client {
-	return NewClientWithIdleTimeout(base, DefaultIdleTimeout)
+	return NewClientWithOptions(base, DefaultIdleTimeout, nil)
 }
 
 // NewClientWithIdleTimeout is like NewClient but with an explicit idle/stall
 // timeout. A value <= 0 disables the idle timeout.
 func NewClientWithIdleTimeout(base *http.Client, idleTimeout time.Duration) *http.Client {
+	return NewClientWithOptions(base, idleTimeout, nil)
+}
+
+// NewClientWithOptions is like NewClientWithIdleTimeout but also applies the
+// given custom headers to every request. A nil or empty header set is a no-op.
+func NewClientWithOptions(base *http.Client, idleTimeout time.Duration, customHeaders http.Header) *http.Client {
 	if base == nil {
 		base = http.DefaultClient
 	}
@@ -343,7 +363,32 @@ func NewClientWithIdleTimeout(base *http.Client, idleTimeout time.Duration) *htt
 	}
 
 	return &http.Client{
-		Transport: &Transport{Base: transport, IdleTimeout: idleTimeout},
+		Transport: &Transport{Base: transport, IdleTimeout: idleTimeout, CustomHeaders: customHeaders},
 		Timeout:   base.Timeout,
 	}
+}
+
+// ParseCustomHeaders parses a newline-separated list of "Name: Value" HTTP
+// header lines into an http.Header. Blank lines and lines without a colon are
+// skipped, and surrounding whitespace on the name and value is trimmed. Repeated
+// names accumulate multiple values. It returns nil when no valid headers are
+// found.
+func ParseCustomHeaders(s string) http.Header {
+	var headers http.Header
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		name, value, ok := strings.Cut(line, ":")
+		name = strings.TrimSpace(name)
+		if !ok || name == "" {
+			continue
+		}
+		if headers == nil {
+			headers = http.Header{}
+		}
+		headers.Add(name, strings.TrimSpace(value))
+	}
+	return headers
 }

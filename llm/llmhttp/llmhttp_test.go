@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -128,6 +129,75 @@ func TestTransportAddsSessionAffinityForFireworks(t *testing.T) {
 	// Verify Shelley-Conversation-Id header was also added
 	if got := receivedHeaders.Get("Shelley-Conversation-Id"); got != "test-conv-id" {
 		t.Errorf("Shelley-Conversation-Id = %q, want %q", got, "test-conv-id")
+	}
+}
+
+func TestParseCustomHeaders(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want map[string][]string
+	}{
+		{name: "empty", in: "", want: nil},
+		{name: "whitespace only", in: "  \n\t\n", want: nil},
+		{name: "no colon", in: "not a header", want: nil},
+		{name: "single", in: "X-Tenant-Id: tenant-abc123", want: map[string][]string{"X-Tenant-Id": {"tenant-abc123"}}},
+		{
+			name: "multiple lines with blanks and whitespace",
+			in:   "  X-A :  one \n\n X-B:two\n",
+			want: map[string][]string{"X-A": {"one"}, "X-B": {"two"}},
+		},
+		{name: "value with colon", in: "X-Url: https://example.com:8080/p", want: map[string][]string{"X-Url": {"https://example.com:8080/p"}}},
+		{name: "empty value", in: "X-Empty:", want: map[string][]string{"X-Empty": {""}}},
+		{name: "empty name skipped", in: ": value", want: nil},
+		{name: "repeated name accumulates", in: "X-A: one\nX-A: two", want: map[string][]string{"X-A": {"one", "two"}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ParseCustomHeaders(tc.in)
+			if tc.want == nil {
+				if got != nil {
+					t.Fatalf("ParseCustomHeaders(%q) = %v, want nil", tc.in, got)
+				}
+				return
+			}
+			for name, values := range tc.want {
+				if gotValues := got.Values(name); !slices.Equal(gotValues, values) {
+					t.Errorf("header %q = %v, want %v", name, gotValues, values)
+				}
+			}
+			if len(got) != len(tc.want) {
+				t.Errorf("got %d headers, want %d (%v)", len(got), len(tc.want), got)
+			}
+		})
+	}
+}
+
+func TestTransportAppliesCustomHeaders(t *testing.T) {
+	var receivedHeaders http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHeaders = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	headers := ParseCustomHeaders("X-Tenant-Id: tenant-abc123\nUser-Agent: override")
+	client := NewClientWithOptions(nil, DefaultIdleTimeout, headers)
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", server.URL, nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	resp.Body.Close()
+
+	if got := receivedHeaders.Get("X-Tenant-Id"); got != "tenant-abc123" {
+		t.Errorf("X-Tenant-Id = %q, want %q", got, "tenant-abc123")
+	}
+	// Custom headers are applied last, so they override Shelley's own headers.
+	if got := receivedHeaders.Get("User-Agent"); got != "override" {
+		t.Errorf("User-Agent = %q, want %q (custom header should override)", got, "override")
 	}
 }
 

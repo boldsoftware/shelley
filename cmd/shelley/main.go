@@ -459,7 +459,8 @@ func buildLLMConfig(global GlobalConfig, logger *slog.Logger, database *db.DB) (
 
 	defaultModel, sources := buildLLMModelSources(context.Background(), global, config, logger)
 
-	httpc := llmhttp.NewClient(nil)
+	customHeaders := llmhttp.ParseCustomHeaders(os.Getenv("SHELLEY_CUSTOM_HEADERS"))
+	httpc := llmhttp.NewClientWithOptions(nil, llmhttp.DefaultIdleTimeout, customHeaders)
 	return &server.LLMConfig{
 		Models:       modelsources.Build(models.All(), sources, httpc, logger),
 		DefaultModel: defaultModel,
