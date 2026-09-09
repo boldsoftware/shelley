@@ -938,7 +938,7 @@ func testSubagentDone_InjectedMidTurn(t *testing.T) {
 
 // testSubagentDone_InjectionSkippedWhileDistilling verifies that mid-turn
 // injection stays hands-off while the conversation is being rewritten by
-// distillation: takeInjectableSubagentDone returns nothing and leaves the
+// distillation: takeInjectable returns nothing and leaves the
 // batch queued for the post-distillation drain (whose delivery is covered by
 // QueuedDuringDistillation).
 func testSubagentDone_InjectionSkippedWhileDistilling(t *testing.T) {
@@ -956,7 +956,7 @@ func testSubagentDone_InjectionSkippedWhileDistilling(t *testing.T) {
 	f.parentMgr.mu.Lock()
 	generation := f.parentMgr.loopGeneration
 	f.parentMgr.mu.Unlock()
-	if msgs := f.parentMgr.takeInjectableSubagentDone(ctx, generation); len(msgs) != 0 {
+	if msgs := f.parentMgr.takeInjectable(ctx, generation); len(msgs) != 0 {
 		t.Fatalf("expected no injectable messages while distilling, got %d", len(msgs))
 	}
 	if n := countPendingSubagentDone(f.parentMgr, f.subagentID); n != 1 {
