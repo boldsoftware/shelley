@@ -94,6 +94,39 @@ func TestTransportAddsHeaders(t *testing.T) {
 	if got := receivedHeaders.Get("x-session-affinity"); got != "" {
 		t.Errorf("x-session-affinity = %q, want empty for non-fireworks", got)
 	}
+
+	// Verify Shelley-Request-Purpose is NOT added without a purpose in context
+	if got := receivedHeaders.Get("Shelley-Request-Purpose"); got != "" {
+		t.Errorf("Shelley-Request-Purpose = %q, want empty without a purpose", got)
+	}
+}
+
+func TestTransportAddsPurposeHeader(t *testing.T) {
+	// Create a test server that echoes request headers
+	var receivedHeaders http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHeaders = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	client := NewClient(nil)
+
+	// Make a request with a purpose in context
+	ctx := llm.WithPurpose(context.Background(), "slug")
+	req, _ := http.NewRequestWithContext(ctx, "GET", server.URL, nil)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	resp.Body.Close()
+
+	// Verify Shelley-Request-Purpose header was added
+	if got := receivedHeaders.Get("Shelley-Request-Purpose"); got != "slug" {
+		t.Errorf("Shelley-Request-Purpose = %q, want %q", got, "slug")
+	}
 }
 
 func TestTransportAddsSessionAffinityForFireworks(t *testing.T) {

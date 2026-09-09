@@ -32,6 +32,11 @@ const (
 // logs, so a user-reported id can be correlated with the server-side trace_id.
 const shelleyRequestIDHeader = "Shelley-Request-Id"
 
+// shelleyRequestPurposeHeader carries the purpose tag of an indirect LLM call
+// (slug, keyword_search, tool_install, compaction, ...) so gateways in front of
+// Shelley can distinguish background chores from conversation turns.
+const shelleyRequestPurposeHeader = "Shelley-Request-Purpose"
+
 // upstreamRequestIDHeaders are response headers, in priority order, that
 // providers use to expose their own request/correlation id. The exe.dev
 // gateway strips account-identifying headers (Cf-Ray, rate limits, org) but
@@ -180,6 +185,11 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if ProviderFromContext(req.Context()) == "fireworks" {
 			req.Header.Set("x-session-affinity", conversationID)
 		}
+	}
+
+	// Add the request purpose header if the call is tagged with one
+	if purpose := llm.PurposeFromContext(req.Context()); purpose != "" {
+		req.Header.Set(shelleyRequestPurposeHeader, purpose)
 	}
 
 	base := t.Base
