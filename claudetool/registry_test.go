@@ -2,11 +2,32 @@ package claudetool
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 
 	"shelley.exe.dev/llm"
 )
+
+func TestToolRegistrySourcesExist(t *testing.T) {
+	for _, tool := range ToolRegistry {
+		if tool.SourcePath == "" {
+			t.Fatalf("tool %q has no source path", tool.Name)
+		}
+		if _, err := os.Stat(filepath.Join("..", tool.SourcePath)); err != nil {
+			t.Fatalf("tool %q source %q: %v", tool.Name, tool.SourcePath, err)
+		}
+		found, ok := ToolInfoByName(tool.Name)
+		if !ok || found.SourcePath != tool.SourcePath {
+			t.Fatalf("ToolInfoByName(%q) = %+v, %v", tool.Name, found, ok)
+		}
+	}
+	patch, ok := ToolInfoByName("apply_patch")
+	if !ok || patch.SourcePath != "claudetool/patch.go" {
+		t.Fatalf("apply_patch source = %+v, %v", patch, ok)
+	}
+}
 
 func TestIsToolEnabled(t *testing.T) {
 	cases := []struct {

@@ -1,13 +1,12 @@
-<!-- Vue port of components/ModelBar.tsx. Preserves the model-bar / -summary /
-     -icon / -label / -name class contract and the "Reasoning effort" title. -->
+<!-- Compact one-line generation metadata rendered inside the shared context card. -->
 <template>
   <div v-if="model" class="model-bar">
     <div class="model-bar-summary">
-      <span class="model-bar-icon">🤖</span>
-      <span class="model-bar-label">Model</span>
+      <span class="model-bar-icon" aria-hidden="true">🤖</span>
+      <span class="model-bar-label">Model:</span>
       <span class="model-bar-name" :title="modelTitle">{{ displayName }}</span>
-      <span class="model-bar-label" title="Reasoning effort">Reasoning</span>
-      <span class="model-bar-name">{{ effectiveReasoning }}</span>
+      <span class="model-bar-comma" aria-hidden="true">,</span>
+      <span class="model-bar-name model-bar-reasoning">{{ effectiveReasoning }}</span>
     </div>
   </div>
 </template>
@@ -40,8 +39,7 @@ const labels = computed(() => prettyModelLabels(props.models));
 function resolveDisplayName(want: string | null | undefined): string | null | undefined {
   if (!want) return want;
   const obj =
-    props.models.find((m) => m.id === want) ||
-    props.models.find((m) => norm(m.id) === norm(want));
+    props.models.find((m) => m.id === want) || props.models.find((m) => norm(m.id) === norm(want));
   if (!obj) return want;
   return labels.value.get(obj.id) || want;
 }
@@ -50,8 +48,7 @@ const modelObj = computed(() => {
   const want = props.model;
   if (!want) return undefined;
   return (
-    props.models.find((m) => m.id === want) ||
-    props.models.find((m) => norm(m.id) === norm(want))
+    props.models.find((m) => m.id === want) || props.models.find((m) => norm(m.id) === norm(want))
   );
 });
 
@@ -59,11 +56,11 @@ const modelObj = computed(() => {
 // switch) shows "Mixed"; the full list is on hover. Otherwise show the single
 // model's display name.
 const isMixed = computed(() => props.modelsUsed.length > 1);
-const displayName = computed(() =>
-  isMixed.value ? "Mixed" : resolveDisplayName(props.model),
-);
+const displayName = computed(() => (isMixed.value ? "Mixed" : resolveDisplayName(props.model)));
 const modelTitle = computed(() =>
-  isMixed.value ? props.modelsUsed.map((m) => resolveDisplayName(m)).join(" \u2192 ") : undefined,
+  isMixed.value
+    ? props.modelsUsed.map((m) => resolveDisplayName(m)).join(" \u2192 ")
+    : (resolveDisplayName(props.model) ?? undefined),
 );
 
 // The reasoning badge is always shown so a conversation never hides how much

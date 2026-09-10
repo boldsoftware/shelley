@@ -155,18 +155,24 @@
               >
             </div>
             <div :class="block.sectionClass">
-              <ModelBar
-                :key="block.modelBar.key"
-                :model="block.modelBar.model"
-                :models-used="block.modelBar.modelsUsed"
-                :models="models"
-                :thinking-level="conversationThinkingLevel"
-              />
-              <SystemPromptView
-                v-for="sp in block.systemPrompts"
-                :key="sp.key"
-                :message="sp.message"
-              />
+              <div
+                v-if="block.modelBar.model || block.systemPrompts.length > 0"
+                class="generation-context"
+                data-testid="generation-context"
+              >
+                <ModelBar
+                  :key="block.modelBar.key"
+                  :model="block.modelBar.model"
+                  :models-used="block.modelBar.modelsUsed"
+                  :models="models"
+                  :thinking-level="conversationThinkingLevel"
+                />
+                <SystemPromptView
+                  v-for="sp in block.systemPrompts"
+                  :key="sp.key"
+                  :message="sp.message"
+                />
+              </div>
               <ChunkHost
                 v-for="chunk in block.chunks"
                 :key="chunk.key"

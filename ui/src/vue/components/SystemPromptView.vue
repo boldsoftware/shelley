@@ -1,68 +1,158 @@
-<!-- Vue port of components/SystemPromptView.tsx. Collapsible system-prompt card
-     with a tools list. Preserves the system-prompt-* / tool-toggle /
-     tool-chevron / tool-item-chevron class contract and the Collapse/Expand
-     aria-labels. The React ToolItem subcomponent is inlined with a per-tool
-     expanded-state map keyed by tool name. -->
+<!-- Collapsible model-context metadata with expandable skill and tool cards. -->
 <template>
   <div v-if="systemPromptText" class="system-prompt-view">
-    <div class="system-prompt-header" @click="isExpanded = !isExpanded">
-      <div class="system-prompt-summary">
-        <span class="system-prompt-icon">📋</span>
-        <span class="system-prompt-label">System Prompt</span>
-        <span class="system-prompt-meta">
-          {{ lineCount }} lines, {{ sizeKb }} KB{{
-            tools.length > 0 ? ` · ${tools.length} tools` : ""
-          }}
+    <button
+      type="button"
+      class="system-prompt-header"
+      :aria-expanded="isExpanded"
+      @click="isExpanded = !isExpanded"
+    >
+      <span class="system-prompt-summary">
+        <span class="system-prompt-icon" aria-hidden="true">📋</span>
+        <span class="system-prompt-copy">
+          <span class="system-prompt-label">System Prompt:</span>
+          <span class="system-prompt-meta">
+            <span>{{ countLabel(tools.length, "tool") }}</span>
+            <span aria-hidden="true">,</span>
+            <span>{{ countLabel(skills.length, "skill") }}</span>
+          </span>
         </span>
-      </div>
-      <button
-        class="tool-toggle"
-        :aria-label="isExpanded ? 'Collapse' : 'Expand'"
-        :aria-expanded="isExpanded"
-      >
+      </span>
+      <span class="sr-only">{{ isExpanded ? "Collapse" : "Expand" }}</span>
+      <span class="tool-toggle" aria-hidden="true">
         <ToolChevron :expanded="isExpanded" />
-      </button>
-    </div>
+      </span>
+    </button>
 
     <div v-if="isExpanded" class="system-prompt-content">
-      <div v-if="tools.length > 0" class="system-prompt-tools">
-        <div class="system-prompt-tools-label">🔧 Tools ({{ tools.length }})</div>
-        <div class="system-prompt-tools-list">
-          <div v-for="tool in tools" :key="tool.name" class="system-prompt-tool-item">
-            <div
-              :class="`system-prompt-tool-header${hasDetails(tool) ? ' system-prompt-tool-header--clickable' : ''}`"
-              :tabindex="hasDetails(tool) ? 0 : undefined"
-              :role="hasDetails(tool) ? 'button' : undefined"
-              :aria-expanded="hasDetails(tool) ? !!expanded[tool.name] : undefined"
-              @click="hasDetails(tool) && toggle(tool.name)"
-              @keydown="onHeaderKeydown($event, tool)"
+      <section v-if="skills.length > 0" class="system-prompt-section system-prompt-skills">
+        <h3 class="system-prompt-section-label">✨ Skills ({{ skills.length }})</h3>
+        <div class="system-prompt-card-grid">
+          <article
+            v-for="skill in skills"
+            :key="skill.name"
+            class="system-prompt-card system-prompt-skill-item"
+            :class="{
+              'system-prompt-card--expanded': isCardExpanded('skill', skill.name),
+            }"
+          >
+            <button
+              type="button"
+              class="system-prompt-card-summary"
+              :aria-expanded="isCardExpanded('skill', skill.name)"
+              @click="toggleCard('skill', skill.name)"
             >
-              <svg
-                v-if="hasDetails(tool)"
-                width="10"
-                height="10"
-                viewBox="0 0 10 10"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                :class="`tool-item-chevron${expanded[tool.name] ? ' tool-item-chevron--expanded' : ''}`"
-              >
-                <path
-                  d="M3 2L7 5L3 8"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-              <span v-else class="tool-item-chevron-spacer" />
-              <code class="system-prompt-tool-name">{{ tool.name }}</code>
-              <span class="system-prompt-tool-desc">{{ firstLine(tool) }}</span>
-            </div>
+              <span class="system-prompt-card-copy">
+                <code class="system-prompt-card-name">{{ skill.name }}</code>
+                <span class="system-prompt-card-preview">{{ skill.description }}</span>
+              </span>
+              <ToolChevron :expanded="isCardExpanded('skill', skill.name)" />
+              <span class="sr-only">
+                {{ isCardExpanded("skill", skill.name) ? "Collapse" : "Expand" }}
+              </span>
+            </button>
 
-            <div v-if="expanded[tool.name] && hasDetails(tool)" class="system-prompt-tool-detail">
-              <p v-if="tool.description.trim().includes('\n')" class="system-prompt-tool-full-desc">
-                {{ tool.description.trim().split("\n").slice(1).join("\n").trim() }}
+            <div v-if="isCardExpanded('skill', skill.name)" class="system-prompt-card-detail">
+              <p class="system-prompt-card-full-description">{{ skill.description }}</p>
+              <dl class="system-prompt-card-metadata">
+                <div v-if="skill.source_path || skill.origin" class="system-prompt-card-meta-row">
+                  <dt>Source</dt>
+                  <dd>
+                    <code v-if="skill.source_path">{{ skill.source_path }}</code>
+                    <span v-if="skill.origin" class="system-prompt-origin-badge">
+                      {{ skill.origin }}
+                    </span>
+                  </dd>
+                </div>
+                <div v-if="skill.activate" class="system-prompt-card-meta-row">
+                  <dt>Activate</dt>
+                  <dd>
+                    <code>{{ skill.activate }}</code>
+                  </dd>
+                </div>
+                <div v-if="skill.compatibility" class="system-prompt-card-meta-row">
+                  <dt>Compatibility</dt>
+                  <dd>{{ skill.compatibility }}</dd>
+                </div>
+                <div v-if="skill.allowed_tools" class="system-prompt-card-meta-row">
+                  <dt>Allowed tools</dt>
+                  <dd>
+                    <code>{{ skill.allowed_tools }}</code>
+                  </dd>
+                </div>
+                <div v-if="skill.when" class="system-prompt-card-meta-row">
+                  <dt>When</dt>
+                  <dd>{{ skill.when }}</dd>
+                </div>
+                <div v-if="skill.license" class="system-prompt-card-meta-row">
+                  <dt>License</dt>
+                  <dd>{{ skill.license }}</dd>
+                </div>
+                <div
+                  v-for="[key, value] in metadataEntries(skill)"
+                  :key="key"
+                  class="system-prompt-card-meta-row"
+                >
+                  <dt>{{ key }}</dt>
+                  <dd>{{ value }}</dd>
+                </div>
+              </dl>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section v-if="tools.length > 0" class="system-prompt-section system-prompt-tools">
+        <h3 class="system-prompt-section-label">🔧 Tools ({{ tools.length }})</h3>
+        <div class="system-prompt-card-grid">
+          <article
+            v-for="tool in tools"
+            :key="tool.name"
+            class="system-prompt-card system-prompt-tool-item"
+            :class="{
+              'system-prompt-card--expanded': isCardExpanded('tool', tool.name),
+            }"
+          >
+            <button
+              type="button"
+              class="system-prompt-card-summary"
+              :aria-expanded="isCardExpanded('tool', tool.name)"
+              @click="toggleCard('tool', tool.name)"
+            >
+              <span class="system-prompt-card-copy">
+                <code class="system-prompt-card-name system-prompt-tool-name">
+                  {{ tool.name }}
+                </code>
+                <span class="system-prompt-card-preview">{{ toolPreview(tool) }}</span>
+              </span>
+              <ToolChevron :expanded="isCardExpanded('tool', tool.name)" />
+              <span class="sr-only">
+                {{ isCardExpanded("tool", tool.name) ? "Collapse" : "Expand" }}
+              </span>
+            </button>
+
+            <div v-if="isCardExpanded('tool', tool.name)" class="system-prompt-card-detail">
+              <p v-if="tool.description.trim()" class="system-prompt-card-full-description">
+                {{ tool.description.trim() }}
               </p>
+              <dl class="system-prompt-card-metadata">
+                <div v-if="tool.source_path || tool.origin" class="system-prompt-card-meta-row">
+                  <dt>Source</dt>
+                  <dd>
+                    <code v-if="tool.source_path">{{ tool.source_path }}</code>
+                    <span v-if="tool.origin" class="system-prompt-origin-badge">
+                      {{ tool.origin }}
+                    </span>
+                  </dd>
+                </div>
+                <div v-if="tool.type" class="system-prompt-card-meta-row">
+                  <dt>Type</dt>
+                  <dd>
+                    <code>{{ tool.type }}</code>
+                  </dd>
+                </div>
+              </dl>
+
               <div v-if="Object.keys(propsOf(tool)).length > 0" class="system-prompt-tool-params">
                 <div class="system-prompt-tool-params-label">Parameters</div>
                 <table class="system-prompt-tool-params-table">
@@ -90,9 +180,9 @@
                           class="system-prompt-tool-param-enum"
                         >
                           {{ " " }}Allowed values:{{ " " }}
-                          <template v-for="(v, i) in prop.enum" :key="i">
-                            <template v-if="i > 0">, </template>
-                            <code>{{ String(v) }}</code>
+                          <template v-for="(value, index) in prop.enum" :key="index">
+                            <template v-if="index > 0">, </template>
+                            <code>{{ String(value) }}</code>
                           </template>
                         </span>
                       </td>
@@ -101,9 +191,10 @@
                 </table>
               </div>
             </div>
-          </div>
+          </article>
         </div>
-      </div>
+      </section>
+
       <pre class="system-prompt-text">{{ systemPromptText }}</pre>
     </div>
   </div>
@@ -112,6 +203,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import type { Message, LLMContent } from "../../types";
+import { extractSystemPromptSkills, type SystemPromptSkill } from "./systemPromptSkills";
 import ToolChevron from "./tools/ToolChevron.vue";
 
 interface JSONSchemaProperty {
@@ -134,46 +226,57 @@ interface ToolDescription {
   name: string;
   description: string;
   parameters?: JSONSchema;
+  source_path?: string;
+  origin?: string;
+  type?: string;
+  server_side?: boolean;
 }
 
 interface SystemPromptDisplayData {
   tools?: ToolDescription[];
+  skills?: SystemPromptSkill[];
 }
 
 const props = defineProps<{ message: Message }>();
 
 const isExpanded = ref(false);
-const expanded = reactive<Record<string, boolean>>({});
+const expandedCards = reactive<Record<string, boolean>>({});
 
-function toggle(name: string) {
-  expanded[name] = !expanded[name];
+function countLabel(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
-function firstLine(tool: ToolDescription): string {
-  return tool.description.trim().split("\n")[0];
+function cardKey(kind: "skill" | "tool", name: string): string {
+  return `${kind}:${name}`;
 }
-function hasDetails(tool: ToolDescription): boolean {
-  return (
-    tool.description.trim().includes("\n") ||
-    Boolean(tool.parameters?.properties && Object.keys(tool.parameters.properties).length > 0)
-  );
+
+function isCardExpanded(kind: "skill" | "tool", name: string): boolean {
+  return Boolean(expandedCards[cardKey(kind, name)]);
 }
+
+function toggleCard(kind: "skill" | "tool", name: string): void {
+  const key = cardKey(kind, name);
+  expandedCards[key] = !expandedCards[key];
+}
+
+function toolPreview(tool: ToolDescription): string {
+  return tool.description.trim().split("\n")[0] || "Provider-managed tool.";
+}
+
 function requiredOf(tool: ToolDescription): Set<string> {
   return new Set(tool.parameters?.required ?? []);
 }
+
 function propsOf(tool: ToolDescription): Record<string, JSONSchemaProperty> {
   return tool.parameters?.properties ?? {};
 }
+
 function typeLabel(prop: JSONSchemaProperty): string {
   return Array.isArray(prop.type) ? prop.type.join(" | ") : (prop.type ?? "");
 }
 
-function onHeaderKeydown(e: KeyboardEvent, tool: ToolDescription) {
-  if (!hasDetails(tool)) return;
-  if (e.key === "Enter" || e.key === " ") {
-    e.preventDefault();
-    toggle(tool.name);
-  }
+function metadataEntries(skill: SystemPromptSkill): [string, string][] {
+  return Object.entries(skill.metadata ?? {});
 }
 
 const systemPromptText = computed<string>(() => {
@@ -184,7 +287,9 @@ const systemPromptText = computed<string>(() => {
         ? JSON.parse(props.message.llm_data)
         : props.message.llm_data;
     if (llmData && llmData.Content && Array.isArray(llmData.Content)) {
-      const textContent = llmData.Content.find((c: LLMContent) => c.Type === 2 && c.Text);
+      const textContent = llmData.Content.find(
+        (content: LLMContent) => content.Type === 2 && content.Text,
+      );
       if (textContent) return textContent.Text;
     }
   } catch (err) {
@@ -193,20 +298,20 @@ const systemPromptText = computed<string>(() => {
   return "";
 });
 
-const tools = computed<ToolDescription[]>(() => {
-  if (!props.message.display_data) return [];
+const displayData = computed<SystemPromptDisplayData>(() => {
+  if (!props.message.display_data) return {};
   try {
-    const displayData: SystemPromptDisplayData =
-      typeof props.message.display_data === "string"
-        ? JSON.parse(props.message.display_data)
-        : (props.message.display_data as SystemPromptDisplayData);
-    if (displayData && displayData.tools) return displayData.tools;
+    return typeof props.message.display_data === "string"
+      ? JSON.parse(props.message.display_data)
+      : (props.message.display_data as SystemPromptDisplayData);
   } catch (err) {
     console.error("Failed to parse system prompt display data:", err);
+    return {};
   }
-  return [];
 });
 
-const lineCount = computed(() => systemPromptText.value.split("\n").length);
-const sizeKb = computed(() => (systemPromptText.value.length / 1024).toFixed(1));
+const skills = computed(() =>
+  extractSystemPromptSkills(systemPromptText.value, displayData.value.skills ?? []),
+);
+const tools = computed(() => displayData.value.tools ?? []);
 </script>

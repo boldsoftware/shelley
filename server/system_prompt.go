@@ -38,6 +38,7 @@ type SystemPromptData struct {
 	Hostname         string // For exe.dev, the public hostname (e.g., "vmname.exe.xyz")
 	DefaultPort      int    // For exe.dev, the auto-routed HTTP port, 0 if unknown
 	SkillsXML        string // XML block for available skills
+	Skills           []skills.Skill
 	UserEmail        string // The exe.dev auth email of the user, if known
 }
 
@@ -89,9 +90,14 @@ func WithUserEmail(email string) SystemPromptOption {
 // GenerateSystemPrompt generates the system prompt using the embedded template.
 // If workingDir is empty, it uses the current working directory.
 func GenerateSystemPrompt(workingDir string, opts ...SystemPromptOption) (string, error) {
+	prompt, _, err := generateSystemPrompt(workingDir, opts...)
+	return prompt, err
+}
+
+func generateSystemPrompt(workingDir string, opts ...SystemPromptOption) (string, []skills.Skill, error) {
 	data, err := collectSystemData(workingDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to collect system data: %w", err)
+		return "", nil, fmt.Errorf("failed to collect system data: %w", err)
 	}
 
 	for _, opt := range opts {
@@ -100,17 +106,21 @@ func GenerateSystemPrompt(workingDir string, opts ...SystemPromptOption) (string
 
 	tmpl, err := template.New("system_prompt").Parse(systemPromptTemplate)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse template: %w", err)
+		return "", nil, fmt.Errorf("failed to parse template: %w", err)
 	}
 
 	var buf strings.Builder
 	err = tmpl.Execute(&buf, data)
 	if err != nil {
-		return "", fmt.Errorf("failed to execute template: %w", err)
+		return "", nil, fmt.Errorf("failed to execute template: %w", err)
 	}
 
 	prompt := collapseBlankLines(buf.String())
-	return runHook(hookSystemPrompt, prompt)
+	prompt, err = runHook(hookSystemPrompt, prompt)
+	if err != nil {
+		return "", nil, err
+	}
+	return prompt, data.Skills, nil
 }
 
 // collapseBlankLines reduces runs of 3+ newlines to 2 (one blank line)
@@ -673,7 +683,7 @@ func collectSystemData(workingDir string) (*SystemPromptData, error) {
 	var (
 		codebaseInfo *CodebaseInfo
 		codebaseErr  error
-		skillsXML    string
+		foundSkills  []skills.Skill
 		wg           sync.WaitGroup
 	)
 	wg.Add(2)
@@ -683,7 +693,7 @@ func collectSystemData(workingDir string) (*SystemPromptData, error) {
 	}()
 	go func() {
 		defer wg.Done()
-		skillsXML = collectSkills(wd, gitRoot, skills.Env{ExeDev: data.IsExeDev})
+		foundSkills = collectSkills(wd, gitRoot, skills.Env{ExeDev: data.IsExeDev})
 	}()
 
 	// Run the remaining cheap synchronous probes while the walks are in flight.
@@ -703,7 +713,8 @@ func collectSystemData(workingDir string) (*SystemPromptData, error) {
 	if codebaseErr == nil {
 		data.Codebase = codebaseInfo
 	}
-	data.SkillsXML = skillsXML
+	data.Skills = foundSkills
+	data.SkillsXML = skills.ToPromptXML(foundSkills)
 
 	return data, nil
 }
@@ -929,8 +940,8 @@ func exeDevDefaultPortIn(env exeenv.Environment) int {
 // collectSkills discovers skills from default directories, project .skills dirs,
 // the project tree, and built-in skills. See skills.ListAll for precedence rules.
 // Skills with a `when:` clause are filtered against env.
-func collectSkills(workingDir, gitRoot string, env skills.Env) string {
-	return skills.ToPromptXML(skills.Filter(skills.ListAll(workingDir, gitRoot), env))
+func collectSkills(workingDir, gitRoot string, env skills.Env) []skills.Skill {
+	return skills.Filter(skills.ListAll(workingDir, gitRoot), env)
 }
 
 // resolveAndNormalize returns a canonical lowercase path for dedup.
@@ -955,16 +966,22 @@ type SubagentSystemPromptData struct {
 	ShelleyDBPath    string
 	ConversationID   string // Parent conversation ID for querying user messages
 	SkillsXML        string // XML block for available skills
+	Skills           []skills.Skill
 }
 
 // GenerateSubagentSystemPrompt generates a minimal system prompt for subagent conversations.
 func GenerateSubagentSystemPrompt(workingDir, parentConversationID string) (string, error) {
+	prompt, _, err := generateSubagentSystemPrompt(workingDir, parentConversationID)
+	return prompt, err
+}
+
+func generateSubagentSystemPrompt(workingDir, parentConversationID string) (string, []skills.Skill, error) {
 	wd := workingDir
 	if wd == "" {
 		var err error
 		wd, err = os.Getwd()
 		if err != nil {
-			return "", fmt.Errorf("failed to get working directory: %w", err)
+			return "", nil, fmt.Errorf("failed to get working directory: %w", err)
 		}
 	}
 
@@ -985,19 +1002,24 @@ func GenerateSubagentSystemPrompt(workingDir, parentConversationID string) (stri
 	if gitInfo != nil {
 		gitRoot = gitInfo.Root
 	}
-	data.SkillsXML = collectSkills(wd, gitRoot, skills.Env{ExeDev: isExeDev()})
+	data.Skills = collectSkills(wd, gitRoot, skills.Env{ExeDev: isExeDev()})
+	data.SkillsXML = skills.ToPromptXML(data.Skills)
 
 	tmpl, err := template.New("subagent_system_prompt").Parse(subagentSystemPromptTemplate)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse subagent template: %w", err)
+		return "", nil, fmt.Errorf("failed to parse subagent template: %w", err)
 	}
 
 	var buf strings.Builder
 	err = tmpl.Execute(&buf, data)
 	if err != nil {
-		return "", fmt.Errorf("failed to execute subagent template: %w", err)
+		return "", nil, fmt.Errorf("failed to execute subagent template: %w", err)
 	}
 
 	prompt := collapseBlankLines(buf.String())
-	return runHook(hookSystemPrompt, prompt)
+	prompt, err = runHook(hookSystemPrompt, prompt)
+	if err != nil {
+		return "", nil, err
+	}
+	return prompt, data.Skills, nil
 }

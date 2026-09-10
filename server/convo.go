@@ -19,6 +19,7 @@ import (
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/llmhttp"
 	"shelley.exe.dev/loop"
+	"shelley.exe.dev/skills"
 	"shelley.exe.dev/subpub"
 )
 
@@ -1789,7 +1790,7 @@ func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generat
 	if cm.userEmail != "" {
 		opts = append(opts, WithUserEmail(cm.userEmail))
 	}
-	systemPrompt, err := GenerateSystemPrompt(cm.cwd, opts...)
+	systemPrompt, promptSkills, err := generateSystemPrompt(cm.cwd, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate system prompt: %w", err)
 	}
@@ -1809,7 +1810,7 @@ func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generat
 		Type:           db.MessageTypeSystem,
 		LLMData:        systemMessage,
 		UsageData:      llm.Usage{},
-		DisplayData:    cm.systemPromptDisplayData(),
+		DisplayData:    cm.systemPromptDisplayData(promptSkills),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to store system prompt: %w", err)
@@ -1824,46 +1825,96 @@ func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generat
 	return created, nil
 }
 
-// toolDisplayData builds display data from a list of tools.
-func toolDisplayData(tools []*llm.Tool) map[string]any {
+// systemPromptDisplayData builds the tool and skill metadata shown alongside a
+// persisted system prompt. Skill bodies stay out of display data; the card only
+// needs discovery metadata and the activation command.
+func systemPromptDisplayData(cfg claudetool.ToolSetConfig, promptSkills []skills.Skill) map[string]any {
 	type toolDesc struct {
 		Name        string          `json:"name"`
 		Description string          `json:"description"`
 		Parameters  json.RawMessage `json:"parameters,omitempty"`
+		SourcePath  string          `json:"source_path,omitempty"`
+		Origin      string          `json:"origin"`
+		Type        string          `json:"type,omitempty"`
+		ServerSide  bool            `json:"server_side,omitempty"`
 	}
-	var descs []toolDesc
-	for _, t := range tools {
-		var params json.RawMessage
-		if len(t.InputSchema) > 0 && string(t.InputSchema) != "null" {
-			params = t.InputSchema
-		}
-		descs = append(descs, toolDesc{
-			Name:        t.Name,
-			Description: t.Description,
-			Parameters:  params,
-		})
+	type skillDesc struct {
+		Name          string            `json:"name"`
+		Description   string            `json:"description"`
+		Activate      string            `json:"activate"`
+		SourcePath    string            `json:"source_path"`
+		Origin        string            `json:"origin"`
+		License       string            `json:"license,omitempty"`
+		Compatibility string            `json:"compatibility,omitempty"`
+		When          string            `json:"when,omitempty"`
+		AllowedTools  string            `json:"allowed_tools,omitempty"`
+		Metadata      map[string]string `json:"metadata,omitempty"`
 	}
-	return map[string]any{
-		"tools": descs,
-	}
-}
 
-// systemPromptDisplayData returns display data for normal system prompt messages.
-func systemPromptDisplayData(cfg claudetool.ToolSetConfig) map[string]any {
 	ts := claudetool.NewToolSet(context.Background(), cfg)
 	defer ts.Cleanup()
-	return toolDisplayData(ts.Tools())
+
+	toolDescs := make([]toolDesc, 0, len(ts.Tools()))
+	for _, tool := range ts.Tools() {
+		var params json.RawMessage
+		if len(tool.InputSchema) > 0 && string(tool.InputSchema) != "null" {
+			params = tool.InputSchema
+		}
+		origin := "Shelley"
+		sourcePath := ""
+		if tool.ServerSide {
+			origin = "Provider"
+		} else if info, ok := claudetool.ToolInfoByName(tool.Name); ok {
+			sourcePath = info.SourcePath
+		}
+		toolDescs = append(toolDescs, toolDesc{
+			Name:        tool.Name,
+			Description: tool.Description,
+			Parameters:  params,
+			SourcePath:  sourcePath,
+			Origin:      origin,
+			Type:        tool.Type,
+			ServerSide:  tool.ServerSide,
+		})
+	}
+
+	skillDescs := make([]skillDesc, 0, len(promptSkills))
+	for _, skill := range promptSkills {
+		sourcePath := skill.Path
+		origin := "File"
+		if sourcePath == "" {
+			sourcePath = "skills/builtin/" + skill.Name + "/SKILL.md"
+			origin = "Built into Shelley"
+		}
+		skillDescs = append(skillDescs, skillDesc{
+			Name:          skill.Name,
+			Description:   skill.Description,
+			Activate:      "shelley skill cat " + skill.Name,
+			SourcePath:    sourcePath,
+			Origin:        origin,
+			License:       skill.License,
+			Compatibility: skill.Compatibility,
+			When:          skill.When,
+			AllowedTools:  skill.AllowedTools,
+			Metadata:      skill.Metadata,
+		})
+	}
+
+	return map[string]any{
+		"tools":  toolDescs,
+		"skills": skillDescs,
+	}
 }
 
-func (cm *ConversationManager) systemPromptDisplayData() map[string]any {
+func (cm *ConversationManager) systemPromptDisplayData(promptSkills []skills.Skill) map[string]any {
 	cfg := cm.toolSetConfig
 	cfg.ToolOverrides = cm.conversationOptions.ToolOverrides
 	cfg.DisableAllTools = cm.conversationOptions.DisableAllTools
-	return systemPromptDisplayData(cfg)
+	return systemPromptDisplayData(cfg, promptSkills)
 }
 
 func (cm *ConversationManager) createSubagentSystemPrompt(ctx context.Context, parentConversationID string) (*generated.Message, error) {
-	systemPrompt, err := GenerateSubagentSystemPrompt(cm.cwd, parentConversationID)
+	systemPrompt, promptSkills, err := generateSubagentSystemPrompt(cm.cwd, parentConversationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate subagent system prompt: %w", err)
 	}
@@ -1883,7 +1934,7 @@ func (cm *ConversationManager) createSubagentSystemPrompt(ctx context.Context, p
 		Type:           db.MessageTypeSystem,
 		LLMData:        systemMessage,
 		UsageData:      llm.Usage{},
-		DisplayData:    cm.systemPromptDisplayData(),
+		DisplayData:    cm.systemPromptDisplayData(promptSkills),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to store subagent system prompt: %w", err)

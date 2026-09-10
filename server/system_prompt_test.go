@@ -161,9 +161,9 @@ func TestSystemPromptIncludesSkillsFromAnyWorkingDir(t *testing.T) {
 
 	// Generate system prompt from a directory completely unrelated to home
 	unrelatedDir := t.TempDir()
-	prompt, err := GenerateSystemPrompt(unrelatedDir)
+	prompt, promptSkills, err := generateSystemPrompt(unrelatedDir)
 	if err != nil {
-		t.Fatalf("GenerateSystemPrompt failed: %v", err)
+		t.Fatalf("generateSystemPrompt failed: %v", err)
 	}
 
 	if !strings.Contains(prompt, "test-skill") {
@@ -171,6 +171,18 @@ func TestSystemPromptIncludesSkillsFromAnyWorkingDir(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "A test skill for issue 83.") {
 		t.Error("system prompt should contain the skill description")
+	}
+
+	var foundPath string
+	for _, skill := range promptSkills {
+		if skill.Name == "test-skill" {
+			foundPath = skill.Path
+			break
+		}
+	}
+	wantPath := filepath.Join(skillDir, "SKILL.md")
+	if foundPath != wantPath {
+		t.Errorf("test-skill path = %q, want %q", foundPath, wantPath)
 	}
 }
 

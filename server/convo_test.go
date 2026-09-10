@@ -8,9 +8,65 @@ import (
 	"strings"
 	"testing"
 
+	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
+	"shelley.exe.dev/skills"
 )
+
+func TestSystemPromptDisplayDataIncludesSourceMetadata(t *testing.T) {
+	t.Parallel()
+	displayData := systemPromptDisplayData(
+		claudetool.ToolSetConfig{
+			DisableAllTools: true,
+			ToolOverrides:   map[string]string{"bash": "on"},
+		},
+		[]skills.Skill{
+			{Name: "file-skill", Description: "From disk.", Path: "/tmp/file-skill/SKILL.md"},
+			{Name: "schedule", Description: "Built in."},
+		},
+	)
+
+	encoded, err := json.Marshal(displayData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Tools []struct {
+			Name       string `json:"name"`
+			SourcePath string `json:"source_path"`
+			Origin     string `json:"origin"`
+		} `json:"tools"`
+		Skills []struct {
+			Name       string `json:"name"`
+			Activate   string `json:"activate"`
+			SourcePath string `json:"source_path"`
+			Origin     string `json:"origin"`
+		} `json:"skills"`
+	}
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got.Tools) != 1 || got.Tools[0].Name != "bash" {
+		t.Fatalf("tools = %+v, want bash only", got.Tools)
+	}
+	if got.Tools[0].SourcePath != "claudetool/bash.go" || got.Tools[0].Origin != "Shelley" {
+		t.Errorf("bash metadata = %+v", got.Tools[0])
+	}
+	if len(got.Skills) != 2 {
+		t.Fatalf("skills = %+v", got.Skills)
+	}
+	if got.Skills[0].SourcePath != "/tmp/file-skill/SKILL.md" || got.Skills[0].Origin != "File" {
+		t.Errorf("file skill metadata = %+v", got.Skills[0])
+	}
+	if got.Skills[1].SourcePath != "skills/builtin/schedule/SKILL.md" || got.Skills[1].Origin != "Built into Shelley" {
+		t.Errorf("built-in skill metadata = %+v", got.Skills[1])
+	}
+	if got.Skills[1].Activate != "shelley skill cat schedule" {
+		t.Errorf("schedule activation = %q", got.Skills[1].Activate)
+	}
+}
 
 func TestHydrateGeneratesSystemPromptWithSubagentTool(t *testing.T) {
 	t.Parallel()
