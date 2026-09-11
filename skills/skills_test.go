@@ -473,12 +473,13 @@ func TestDefaultDirsReturnsExistingCandidates(t *testing.T) {
 	// Create a fake home directory with skill directories
 	tmpHome := t.TempDir()
 
-	// Create all three candidate directories
+	// Create all four candidate directories
 	configShelley := filepath.Join(tmpHome, ".config", "shelley")
 	configAgents := filepath.Join(tmpHome, ".config", "agents", "skills")
+	dotAgentsSkills := filepath.Join(tmpHome, ".agents", "skills")
 	dotShelley := filepath.Join(tmpHome, ".shelley")
 
-	for _, dir := range []string{configShelley, configAgents, dotShelley} {
+	for _, dir := range []string{configShelley, configAgents, dotAgentsSkills, dotShelley} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -491,19 +492,20 @@ func TestDefaultDirsReturnsExistingCandidates(t *testing.T) {
 
 	dirs := DefaultDirs()
 
-	if len(dirs) != 3 {
-		t.Fatalf("expected 3 dirs, got %d: %v", len(dirs), dirs)
+	if len(dirs) != 4 {
+		t.Fatalf("expected 4 dirs, got %d: %v", len(dirs), dirs)
 	}
 
-	// Verify all three candidates are returned
-	want := map[string]bool{
-		configShelley: true,
-		configAgents:  true,
-		dotShelley:    true,
+	// Verify all four candidates are returned, in order
+	want := []string{
+		configShelley,
+		configAgents,
+		dotAgentsSkills,
+		dotShelley,
 	}
-	for _, d := range dirs {
-		if !want[d] {
-			t.Errorf("unexpected dir in result: %s", d)
+	for i, d := range dirs {
+		if d != want[i] {
+			t.Errorf("dirs[%d] = %s, want %s", i, d, want[i])
 		}
 	}
 }
@@ -548,6 +550,14 @@ func TestSkillsFoundRegardlessOfWorkingDir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: my-skill\ndescription: A test skill.\n---\nContent\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// And a skill in ~/.agents/skills/ (non-XDG alternative location)
+	dotAgentsSkillDir := filepath.Join(tmpHome, ".agents", "skills", "my-dot-agents-skill")
+	if err := os.MkdirAll(dotAgentsSkillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dotAgentsSkillDir, "SKILL.md"), []byte("---\nname: my-dot-agents-skill\ndescription: A test skill in ~/.agents.\n---\nContent\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	oldHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpHome)
@@ -561,11 +571,15 @@ func TestSkillsFoundRegardlessOfWorkingDir(t *testing.T) {
 	dirs := DefaultDirs()
 	found := Discover(dirs)
 
-	if len(found) != 1 {
-		t.Fatalf("expected 1 skill, got %d (dirs=%v)", len(found), dirs)
+	if len(found) != 2 {
+		t.Fatalf("expected 2 skills, got %d (dirs=%v)", len(found), dirs)
 	}
-	if found[0].Name != "my-skill" {
-		t.Errorf("expected my-skill, got %s", found[0].Name)
+	gotNames := map[string]bool{}
+	for _, s := range found {
+		gotNames[s.Name] = true
+	}
+	if !gotNames["my-skill"] || !gotNames["my-dot-agents-skill"] {
+		t.Errorf("expected my-skill and my-dot-agents-skill, got %v", gotNames)
 	}
 
 	// DiscoverInTree from the project dir should NOT find user-level skills
@@ -575,10 +589,10 @@ func TestSkillsFoundRegardlessOfWorkingDir(t *testing.T) {
 		t.Errorf("expected 0 tree skills from unrelated project, got %d", len(treeSkills))
 	}
 
-	// But the combined result should still have the skill
+	// But the combined result should still have both skills
 	all := append(found, treeSkills...)
-	if len(all) != 1 {
-		t.Fatalf("expected 1 total skill, got %d", len(all))
+	if len(all) != 2 {
+		t.Fatalf("expected 2 total skills, got %d", len(all))
 	}
 
 	_ = projectDir // used above

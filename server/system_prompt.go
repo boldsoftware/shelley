@@ -751,11 +751,13 @@ func collectCodebaseInfo(wd string, gitInfo *GitInfo) (*CodebaseInfo, error) {
 	seenFiles := make(map[string]bool)
 	seenContents := make(map[string]bool)
 
-	// Check for user-level agent instructions in ~/.config/AGENTS.md, ~/.config/shelley/AGENTS.md, and ~/.shelley/AGENTS.md
+	// Check for user-level agent instructions in ~/.config/AGENTS.md,
+	// ~/.config/shelley/AGENTS.md, ~/.agents/AGENTS.md, and ~/.shelley/AGENTS.md
 	if home, err := os.UserHomeDir(); err == nil {
 		userAgentsFiles := []string{
 			filepath.Join(home, ".config", "AGENTS.md"),
 			filepath.Join(home, ".config", "shelley", "AGENTS.md"),
+			filepath.Join(home, ".agents", "AGENTS.md"),
 			filepath.Join(home, ".shelley", "AGENTS.md"),
 		}
 		for _, f := range userAgentsFiles {

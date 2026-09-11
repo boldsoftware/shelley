@@ -213,20 +213,27 @@ func TestSystemPromptIncludesUserEmail(t *testing.T) {
 // user-level AGENTS.md files have identical content (or are symlinks to the same
 // file), only one copy appears in the system prompt.
 func TestSystemPromptDeduplicatesIdenticalGuidanceFiles(t *testing.T) {
-	// Create a fake home with two AGENTS.md locations containing the same content
+	// Create a fake home with three AGENTS.md locations containing the same content
 	tmpHome := t.TempDir()
 
 	configShelley := filepath.Join(tmpHome, ".config", "shelley")
+	dotAgents := filepath.Join(tmpHome, ".agents")
 	dotShelley := filepath.Join(tmpHome, ".shelley")
 	if err := os.MkdirAll(configShelley, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dotAgents, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(dotShelley, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	agentsContent := "DEDUP_TEST_MARKER: identical content in both files"
+	agentsContent := "DEDUP_TEST_MARKER: identical content in all locations"
 	if err := os.WriteFile(filepath.Join(configShelley, "AGENTS.md"), []byte(agentsContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dotAgents, "AGENTS.md"), []byte(agentsContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dotShelley, "AGENTS.md"), []byte(agentsContent), 0o644); err != nil {
@@ -287,6 +294,33 @@ func TestSystemPromptDeduplicatesSymlinkedGuidanceFiles(t *testing.T) {
 	count := strings.Count(prompt, "SYMLINK_DEDUP_MARKER")
 	if count != 1 {
 		t.Errorf("expected SYMLINK_DEDUP_MARKER to appear exactly 1 time, got %d", count)
+	}
+}
+
+// TestSystemPromptIncludesDotAgentsAgentsMd verifies that a user-level
+// AGENTS.md in ~/.agents/ is injected into the system prompt.
+func TestSystemPromptIncludesDotAgentsAgentsMd(t *testing.T) {
+	tmpHome := t.TempDir()
+
+	dotAgents := filepath.Join(tmpHome, ".agents")
+	if err := os.MkdirAll(dotAgents, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	agentsContent := "DOT_AGENTS_MARKER: instructions from ~/.agents"
+	if err := os.WriteFile(filepath.Join(dotAgents, "AGENTS.md"), []byte(agentsContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("HOME", tmpHome)
+
+	unrelatedDir := t.TempDir()
+	prompt, err := GenerateSystemPrompt(unrelatedDir)
+	if err != nil {
+		t.Fatalf("GenerateSystemPrompt failed: %v", err)
+	}
+
+	if !strings.Contains(prompt, agentsContent) {
+		t.Errorf("system prompt should contain content from ~/.agents/AGENTS.md")
 	}
 }
 
