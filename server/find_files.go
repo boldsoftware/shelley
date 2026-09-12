@@ -96,6 +96,14 @@ func newFileListCache() *fileListCache {
 	return &fileListCache{entries: make(map[string]fileListCacheEntry)}
 }
 
+func findFilesCacheKey(dir string, includeDirs bool) string {
+	if includeDirs {
+		// NUL cannot occur in a filesystem path, so modes cannot collide.
+		return dir + "\x00dirs"
+	}
+	return dir
+}
+
 // get returns the cached file list for dir, computing it via load when the
 // entry is missing or stale. load reports ok=false when the listing failed or
 // was cut short; such results are returned to this caller but NOT cached, so a
@@ -161,10 +169,12 @@ func (c *fileListCache) evictLocked(keep string) {
 	}
 }
 
-// FindFilesMatch is a single ranked file match.
+// FindFilesMatch is a single ranked file or directory match.
 type FindFilesMatch struct {
-	// Path is the file path relative to the response's SearchDir.
+	// Path is relative to the response's SearchDir. Directory paths end in "/".
 	Path string `json:"path"`
+	// IsDir distinguishes directory suggestions from files.
+	IsDir bool `json:"is_dir,omitempty"`
 	// MatchedIndexes are rune (code-point) offsets into Path that matched the
 	// query, used by the UI to highlight the fuzzy match.
 	MatchedIndexes []int `json:"matched_indexes,omitempty"`
@@ -234,6 +244,24 @@ func (s *Server) handleFindFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	includeDirs := false
+	if values, present := r.URL.Query()["include_dirs"]; present {
+		if len(values) != 1 {
+			http.Error(w, "invalid include_dirs parameter", http.StatusBadRequest)
+			return
+		}
+		var err error
+		includeDirs, err = strconv.ParseBool(values[0])
+		if err != nil {
+			http.Error(w, "invalid include_dirs parameter "+strconv.Quote(values[0])+": want a boolean", http.StatusBadRequest)
+			return
+		}
+	}
+	// Content-only results are grep hits, which are always files. Keeping the
+	// path-query and cache behavior file-only also makes this mode identical
+	// whether or not a caller happens to pass include_dirs.
+	includeDirs = includeDirs && contentMode != "only"
+
 	dir := r.URL.Query().Get("dir")
 	if dir == "" {
 		if home, err := os.UserHomeDir(); err == nil {
@@ -270,6 +298,13 @@ func (s *Server) handleFindFiles(w http.ResponseWriter, r *http.Request) {
 	if pq.IsPath {
 		searchDir, matchQuery = pq.Dir, pq.Tail
 	}
+	// Folder completion treats an explicitly named existing directory without
+	// a trailing slash as the item being selected. Search its parent so the
+	// directory itself can be offered and pinned. A trailing slash still means
+	// browse inside it. File-only requests retain the original browse behavior.
+	if includeDirs && pq.DirectoryPath != "" {
+		searchDir, matchQuery = filepath.Dir(pq.DirectoryPath), filepath.Base(pq.DirectoryPath)
+	}
 
 	if contentMode == "only" {
 		// Content-only phase: no listing, no fuzzy matching, no pin — the name
@@ -300,8 +335,9 @@ func (s *Server) handleFindFiles(w http.ResponseWriter, r *http.Request) {
 	var files []string
 	var listTruncated bool
 	if !pq.IsPath || pq.DirExists {
-		files, listTruncated = s.fileListCache.get(searchDir, func() (files []string, truncated, ok bool) {
-			return listWorkingDirFiles(searchDir)
+		cacheKey := findFilesCacheKey(searchDir, includeDirs)
+		files, listTruncated = s.fileListCache.get(cacheKey, func() (files []string, truncated, ok bool) {
+			return listWorkingDirPaths(searchDir, includeDirs)
 		})
 	}
 
@@ -325,7 +361,7 @@ func (s *Server) handleFindFiles(w http.ResponseWriter, r *http.Request) {
 			resp.Truncated = true
 		}
 		for _, p := range sorted {
-			resp.Matches = append(resp.Matches, FindFilesMatch{Path: p})
+			resp.Matches = append(resp.Matches, matchForPath(p, includeDirs))
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
@@ -338,10 +374,9 @@ func (s *Server) handleFindFiles(w http.ResponseWriter, r *http.Request) {
 		resp.Truncated = true
 	}
 	for _, m := range matches {
-		resp.Matches = append(resp.Matches, FindFilesMatch{
-			Path:           m.str,
-			MatchedIndexes: byteToRuneOffsets(m.str, m.matchedIndexes),
-		})
+		match := matchForPath(m.str, includeDirs)
+		match.MatchedIndexes = byteToRuneOffsets(m.str, m.matchedIndexes)
+		resp.Matches = append(resp.Matches, match)
 	}
 	// "Universal find": inside a git repo the same terms also match file
 	// *contents* via `git grep`, so a query can locate a file the user only
@@ -404,6 +439,13 @@ func (s *Server) handleFindFiles(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if includeDirs {
+		if rel, ok := relativeTo(searchDir, pq.DirectoryPath); ok {
+			var dropped bool
+			resp.Matches, dropped = pinMatch(resp.Matches, rel+"/", limit)
+			resp.Truncated = resp.Truncated || dropped
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -452,11 +494,15 @@ func (s *Server) writeFindFilesContentOnly(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(resp)
 }
 
+func matchForPath(path string, includeDirs bool) FindFilesMatch {
+	return FindFilesMatch{Path: path, IsDir: includeDirs && strings.HasSuffix(path, "/")}
+}
+
 // pinMatch puts path at the head of matches, dropping any existing entry for
 // it (whose highlights it keeps) and re-applying limit. dropped reports
 // whether trimming to limit discarded a match the caller had included.
 func pinMatch(matches []FindFilesMatch, path string, limit int) (out []FindFilesMatch, dropped bool) {
-	pin := FindFilesMatch{Path: path}
+	pin := FindFilesMatch{Path: path, IsDir: strings.HasSuffix(path, "/")}
 	out = make([]FindFilesMatch, 1, len(matches)+1)
 	for _, m := range matches {
 		if m.Path == path {
@@ -489,6 +535,10 @@ type pathQuery struct {
 	// when it names no such file. Set for ordinary queries too: a bare
 	// "notes.md" that exists in the working directory is one.
 	FilePath string
+	// DirectoryPath is an existing directory named by an explicit path without
+	// a trailing slash. Folder searches use it to offer the directory itself
+	// from its parent; file-only searches continue to browse inside Dir.
+	DirectoryPath string
 }
 
 // resolvePathQuery reads a query as a filesystem path.
@@ -528,6 +578,10 @@ func resolvePathQuery(query, dir string) pathQuery {
 	pq.IsPath = true
 	if err == nil && info.IsDir() {
 		pq.Dir, pq.DirExists = path, true
+		// A filesystem root has no parent scope in which it can be offered.
+		if !trailingSlash && filepath.Dir(path) != path {
+			pq.DirectoryPath = path
+		}
 		return pq
 	}
 	if trailingSlash {
@@ -1044,24 +1098,65 @@ func buildSnippet(line string, terms []string) (snippet string, matchedIndexes [
 	return snippet, dedupeSorted(matchedIndexes)
 }
 
-// listWorkingDirFiles returns file paths (relative to dir) under dir. It
-// prefers `git ls-files` so .gitignore is honored and the crawl is fast;
-// otherwise it falls back to a bounded filesystem walk. truncated reports
-// whether the list hit findFilesMaxCandidates; ok is false when the listing
-// failed outright (so the caller shouldn't cache it).
-func listWorkingDirFiles(dir string) (files []string, truncated, ok bool) {
+// listWorkingDirPaths returns relative file paths and, when includeDirs is
+// true, directory paths with a trailing slash. Git repositories use
+// `git ls-files` for files and a separate bounded directory walk so empty
+// directories are not lost; non-repositories use one bounded walk for both.
+func listWorkingDirPaths(dir string, includeDirs bool) (paths []string, truncated, ok bool) {
 	// An ignored directory (a node_modules or dist inside a repo) lists as
 	// empty under `git ls-files`, so walk it instead: the user re-rooted the
 	// search there deliberately and .gitignore has nothing left to say about
 	// what's inside. A merely empty-looking directory elsewhere in the repo
 	// still honors .gitignore, so its ignored files stay hidden.
 	if gitFiles, isRepo := gitLsFiles(dir); isRepo && !gitIgnores(dir) {
-		if len(gitFiles) > findFilesMaxCandidates {
-			return gitFiles[:findFilesMaxCandidates], true, true
+		filesTruncated := len(gitFiles) > findFilesMaxCandidates
+		if filesTruncated {
+			gitFiles = gitFiles[:findFilesMaxCandidates]
 		}
-		return gitFiles, false, true
+		if !includeDirs {
+			return gitFiles, filesTruncated, true
+		}
+		dirs, dirsTruncated, dirsOK := listGitDirectories(dir, gitFiles, findFilesMaxCandidates)
+		if !dirsOK {
+			return gitFiles, true, false
+		}
+		paths, combinedTruncated := combineGitFilesAndDirectories(gitFiles, dirs, findFilesMaxCandidates)
+		return paths, filesTruncated || dirsTruncated || combinedTruncated, true
 	}
-	return walkFiles(dir)
+	return walkPaths(dir, includeDirs)
+}
+
+// combineGitFilesAndDirectories removes duplicate paths from Git's file list
+// and the directory walk. Gitlinks are file-shaped in `git ls-files`, while
+// untracked nested repositories may be printed with a trailing slash; when the
+// walk confirms either is a real directory, its directory representation wins.
+func combineGitFilesAndDirectories(files, dirs []string, limit int) (paths []string, truncated bool) {
+	directoryBases := make(map[string]struct{}, len(dirs))
+	for _, dir := range dirs {
+		directoryBases[strings.TrimSuffix(dir, "/")] = struct{}{}
+	}
+	seen := make(map[string]struct{}, min(limit, len(files)+len(dirs)))
+	add := func(path string) {
+		if _, exists := seen[path]; exists {
+			return
+		}
+		if len(paths) >= limit {
+			truncated = true
+			return
+		}
+		seen[path] = struct{}{}
+		paths = append(paths, path)
+	}
+	for _, file := range files {
+		if _, isDirectory := directoryBases[strings.TrimSuffix(file, "/")]; isDirectory {
+			continue
+		}
+		add(file)
+	}
+	for _, dir := range dirs {
+		add(dir)
+	}
+	return paths, truncated
 }
 
 // gitIgnores reports whether dir is itself excluded by the repo's ignore
@@ -1097,18 +1192,219 @@ func gitLsFiles(dir string) (files []string, isRepo bool) {
 	return files, true
 }
 
-// walkFiles enumerates files under dir when it isn't a git repo. It skips the
-// same heavy directories as the git-repo crawler and stops at a depth, count,
-// and time budget so a huge tree can't hang the request. ok is always true:
-// the handler already verified dir exists and is a directory, and unreadable
-// subdirectories are silently skipped rather than failing the whole listing.
-func walkFiles(dir string) (files []string, truncated, ok bool) {
+type directoryWalkNode struct {
+	abs, rel string
+	depth    int
+}
+
+// listGitDirectories supplements git's file list with nested and empty
+// directories. Ignore checks are batched once per breadth-first level under a
+// shared deadline. Parents of git-listed files are retained even when an
+// ignore rule matches the directory, because tracked files remain valid.
+func listGitDirectories(dir string, files []string, limit int) (dirs []string, truncated, ok bool) {
+	if limit <= 0 {
+		return nil, true, true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), findFilesWalkBudget)
+	defer cancel()
+
+	// This set is only an ignore-rule exception list. Directories are added to
+	// results by the filesystem walk, so deleted tracked paths cannot fabricate
+	// directory suggestions and no per-file os.Stat calls are needed.
+	mustKeep := make(map[string]struct{}, min(findFilesMaxCandidates, len(files)))
+	parentsTruncated := false
+	for _, file := range files {
+		parent := file
+		var ancestors []string
+		for {
+			i := strings.LastIndexByte(parent, '/')
+			if i < 0 {
+				break
+			}
+			parent = parent[:i]
+			if parent == "" {
+				break
+			}
+			ancestors = append(ancestors, parent)
+		}
+		// Root-first insertion ensures an ignored tracked subtree can at least
+		// be reached when this auxiliary set itself hits its memory bound.
+		for i := len(ancestors) - 1; i >= 0; i-- {
+			parent := ancestors[i]
+			if !crawlPathAllowed(parent) {
+				continue
+			}
+			if _, exists := mustKeep[parent]; exists {
+				continue
+			}
+			if len(mustKeep) >= findFilesMaxCandidates {
+				parentsTruncated = true
+				break
+			}
+			mustKeep[parent] = struct{}{}
+		}
+		if parentsTruncated {
+			break
+		}
+	}
+
+	seen := make(map[string]struct{}, limit)
+	add := func(rel string) bool {
+		if _, exists := seen[rel]; exists {
+			return true
+		}
+		if len(seen) >= limit {
+			return false
+		}
+		seen[rel] = struct{}{}
+		return true
+	}
+
+	frontier := []directoryWalkNode{{abs: dir}}
+	for len(frontier) > 0 {
+		if ctx.Err() != nil {
+			truncated = true
+			break
+		}
+		remaining := limit - len(seen)
+		if remaining <= 0 {
+			truncated = true
+			break
+		}
+		var candidates []directoryWalkNode
+		levelTruncated := false
+	collectLevel:
+		for _, node := range frontier {
+			entries, err := os.ReadDir(node.abs)
+			if err != nil {
+				continue
+			}
+			// The containing repository cannot check ignore rules for paths
+			// inside a submodule or nested worktree (`git check-ignore` exits
+			// 128). Offer the repository directory itself, then let an explicit
+			// trailing-slash query re-root there and enumerate its contents.
+			if node.rel != "" && hasGitMarker(entries) {
+				continue
+			}
+			for _, entry := range entries {
+				if ctx.Err() != nil {
+					levelTruncated = true
+					break collectLevel
+				}
+				name := entry.Name()
+				if !entry.IsDir() || node.depth >= findFilesWalkDepth {
+					continue
+				}
+				if _, skip := crawlSkipNames[name]; skip {
+					continue
+				}
+				rel := name
+				if node.rel != "" {
+					rel = node.rel + "/" + name
+				}
+				if len(candidates) >= findFilesMaxCandidates {
+					levelTruncated = true
+					break collectLevel
+				}
+				candidates = append(candidates, directoryWalkNode{
+					abs: filepath.Join(node.abs, name), rel: rel, depth: node.depth + 1,
+				})
+			}
+		}
+		if len(candidates) == 0 {
+			truncated = truncated || levelTruncated
+			break
+		}
+
+		paths := make([]string, len(candidates))
+		for i, candidate := range candidates {
+			paths[i] = candidate.rel + "/"
+		}
+		ignored, checkOK := gitCheckIgnored(ctx, dir, paths)
+		if !checkOK {
+			return nil, true, false
+		}
+		frontier = frontier[:0]
+		for _, candidate := range candidates {
+			_, required := mustKeep[candidate.rel]
+			if _, isIgnored := ignored[candidate.rel+"/"]; isIgnored && !required {
+				continue
+			}
+			if !add(candidate.rel) {
+				levelTruncated = true
+				break
+			}
+			frontier = append(frontier, candidate)
+		}
+		if levelTruncated {
+			truncated = true
+			break
+		}
+	}
+
+	dirs = make([]string, 0, len(seen))
+	for rel := range seen {
+		dirs = append(dirs, rel+"/")
+	}
+	sort.Strings(dirs)
+	return dirs, truncated || parentsTruncated, true
+}
+
+func hasGitMarker(entries []os.DirEntry) bool {
+	for _, entry := range entries {
+		if entry.Name() == ".git" {
+			return true
+		}
+	}
+	return false
+}
+
+func crawlPathAllowed(rel string) bool {
+	for _, name := range strings.Split(rel, "/") {
+		if _, skip := crawlSkipNames[name]; skip {
+			return false
+		}
+	}
+	return true
+}
+
+// gitCheckIgnored returns the supplied repo-relative directory paths ignored
+// by Git. Exit status 1 means none matched; other failures abort this listing
+// so an incomplete result is not cached.
+func gitCheckIgnored(ctx context.Context, dir string, paths []string) (map[string]struct{}, bool) {
+	cmd := exec.CommandContext(ctx, "git", "check-ignore", "--stdin", "-z")
+	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(strings.Join(paths, "\x00") + "\x00")
+	out, err := cmd.Output()
+	if err != nil {
+		if exit, isExit := err.(*exec.ExitError); !isExit || exit.ExitCode() != 1 || ctx.Err() != nil {
+			return nil, false
+		}
+	}
+	ignored := make(map[string]struct{})
+	for _, path := range strings.Split(strings.TrimRight(string(out), "\x00"), "\x00") {
+		if path != "" {
+			ignored[path] = struct{}{}
+		}
+	}
+	return ignored, true
+}
+
+// walkPaths enumerates files and optional directories when dir isn't a git
+// repo. It skips heavy directories and stops at a depth, count, and time budget.
+func walkPaths(dir string, includeDirs bool) (paths []string, truncated, ok bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), findFilesWalkBudget)
 	defer cancel()
 
 	var walk func(abs, rel string, depth int)
 	walk = func(abs, rel string, depth int) {
-		if truncated || ctx.Err() != nil {
+		if truncated {
+			return
+		}
+		if ctx.Err() != nil {
+			if includeDirs {
+				truncated = true
+			}
 			return
 		}
 		entries, err := os.ReadDir(abs)
@@ -1117,6 +1413,9 @@ func walkFiles(dir string) (files []string, truncated, ok bool) {
 		}
 		for _, entry := range entries {
 			if ctx.Err() != nil {
+				if includeDirs {
+					truncated = true
+				}
 				return
 			}
 			name := entry.Name()
@@ -1131,21 +1430,26 @@ func walkFiles(dir string) (files []string, truncated, ok bool) {
 				if depth >= findFilesWalkDepth {
 					continue
 				}
+				if includeDirs {
+					paths = append(paths, childRel+"/")
+					if len(paths) >= findFilesMaxCandidates {
+						truncated = true
+						return
+					}
+				}
 				walk(filepath.Join(abs, name), childRel, depth+1)
 				continue
 			}
 			if !entry.Type().IsRegular() {
 				continue
 			}
-			files = append(files, childRel)
-			if len(files) >= findFilesMaxCandidates {
+			paths = append(paths, childRel)
+			if len(paths) >= findFilesMaxCandidates {
 				truncated = true
 				return
 			}
 		}
 	}
-	// A readable top-level dir was already verified by the handler (os.Stat),
-	// so treat the walk as successful even if some subdirs are unreadable.
 	walk(dir, "", 0)
-	return files, truncated, true
+	return paths, truncated, true
 }

@@ -3734,7 +3734,14 @@ diffs-container {
 }
 
 .file-completion-item {
-  display: block;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.file-completion-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
 }
 
 .file-completion-item .slash-command-name {
