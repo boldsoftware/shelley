@@ -700,12 +700,14 @@ class ApiService {
   // (no snippets), then "only" for git-grep hits alone — each match then
   // carries `line`/`snippet`/`snippet_matched_indexes` and no path highlights
   // — so name matches render immediately while grep catches up. `signal` lets
-  // callers abort superseded requests while the user types.
+  // callers abort superseded requests while the user types. `includeDirs` adds
+  // folders to name results (is_dir=true, with a trailing slash in path);
+  // file-only callers such as the editor's finder keep the existing default.
   async findFiles(
     dir: string,
     query: string,
     signal?: AbortSignal,
-    opts?: { content?: "skip" | "only" },
+    opts?: { content?: "skip" | "only"; includeDirs?: boolean },
   ): Promise<{
     dir: string;
     search_dir: string;
@@ -713,6 +715,7 @@ class ApiService {
     match_query: string;
     matches: Array<{
       path: string;
+      is_dir?: boolean;
       matched_indexes?: number[];
       line?: number;
       snippet?: string;
@@ -724,6 +727,7 @@ class ApiService {
     const params = new URLSearchParams({ dir });
     if (query) params.set("q", query);
     if (opts?.content) params.set("content", opts.content);
+    if (opts?.includeDirs) params.set("include_dirs", "true");
     const response = await fetch(`${this.baseUrl}/find-files?${params.toString()}`, { signal });
     if (!response.ok) {
       throw await responseError(response, "Failed to find files");

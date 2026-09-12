@@ -191,6 +191,16 @@ fresh reset event.
 
 ### Files & directories
 
+- `GET /api/find-files?dir=&q=&content=skip&include_dirs=true` — fuzzy name
+  search. `dir` is absolute; `q` is optional. `include_dirs` is an optional
+  boolean (default false); enabling it includes nested and empty folders in
+  name results. Invalid or repeated `include_dirs` values return 400.
+  Results contain `search_dir` and `matches`; paths are relative to
+  `search_dir`. Folder matches have `is_dir: true` and a trailing `/` in
+  `path`; file matches omit `is_dir`. `content=only` always returns file-content
+  hits, never folders. An explicit existing directory path without a trailing
+  slash offers that folder itself when `include_dirs` is true; a trailing
+  slash browses inside it. File-only callers retain their existing behavior.
 - `GET /api/list-directory?path=` — directory listing.
 - `POST /api/create-directory` — `mkdir -p`.
 - `POST /api/write-file` — write a file.

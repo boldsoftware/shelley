@@ -103,7 +103,7 @@
           ref="fileMenuRef"
           class="slash-command-menu file-completion-menu"
           role="listbox"
-          aria-label="Files"
+          aria-label="Files and folders"
           data-testid="file-completion-menu"
         >
           <div
@@ -111,7 +111,10 @@
             class="file-completion-status"
             role="status"
           >
-            {{ fileError || (fileLoading ? "Searching files…" : "No matching files") }}
+            {{
+              fileError ||
+              (fileLoading ? "Searching files and folders…" : "No matching files or folders")
+            }}
           </div>
           <button
             v-for="(item, index) in fileMatches"
@@ -121,11 +124,30 @@
             :class="`slash-command-item file-completion-item${index === fileSelected ? ' selected' : ''}`"
             role="option"
             :aria-selected="index === fileSelected"
+            :aria-label="item.is_dir ? `${item.path} (folder)` : item.path"
+            :data-kind="item.is_dir ? 'folder' : 'file'"
             :title="item.path"
             @mousedown.prevent
             @mouseenter="fileSelected = index"
             @click="chooseFile(index)"
           >
+            <svg
+              class="file-completion-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              aria-hidden="true"
+            >
+              <path
+                v-if="item.is_dir"
+                d="M3 7V5a2 2 0 0 1 2-2h5l3 3h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
+              />
+              <path
+                v-else
+                d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm0 0v6h6"
+              />
+            </svg>
             <span class="slash-command-name">{{ item.path }}</span>
           </button>
         </div>

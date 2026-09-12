@@ -66,7 +66,7 @@ export function useFileCompletion(options: {
             cwd,
             query,
             controller.signal,
-            { content: "skip" },
+            { content: "skip", includeDirs: true },
           );
           if (!stale) result.value = response;
         } catch (err) {

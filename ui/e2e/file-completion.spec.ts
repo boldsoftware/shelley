@@ -62,7 +62,7 @@ test.describe("@ filename completion", () => {
       const menu = menuFor(page);
       await expect(menu).toBeVisible({ timeout: 10000 });
       await expect(menu).toHaveAttribute("role", "listbox");
-      await expect(menu).toHaveAttribute("aria-label", "Files");
+      await expect(menu).toHaveAttribute("aria-label", "Files and folders");
       await expect(menu.getByRole("option", { name: "src/alpha.ts", exact: true })).toBeVisible();
 
       await input.press("Enter");
@@ -266,7 +266,7 @@ test.describe("@ filename completion", () => {
       const menu = menuFor(page);
 
       await setComposer(input, "echo: tab @none");
-      await expect(menu.getByRole("status")).toHaveText("No matching files", {
+      await expect(menu.getByRole("status")).toHaveText("No matching files or folders", {
         timeout: 10000,
       });
       await expect(menu.getByRole("option")).toHaveCount(0);
@@ -275,7 +275,7 @@ test.describe("@ filename completion", () => {
       await expect(input).toHaveValue("echo: tab @none");
 
       await setComposer(input, "echo: newline @none");
-      await expect(menu.getByRole("status")).toHaveText("No matching files", {
+      await expect(menu.getByRole("status")).toHaveText("No matching files or folders", {
         timeout: 10000,
       });
       await input.press("Shift+Enter");
@@ -372,6 +372,78 @@ test.describe("@ filename completion", () => {
         releaseUpdate();
         await updateSettled;
       }
+    });
+  });
+});
+
+test.describe("@ folder completion", () => {
+  test("lists files and empty folders together and inserts the folder with Tab", async ({
+    page,
+    request,
+  }) => {
+    await withTempDir("shelley-folder-completion-", async (cwd) => {
+      mkdirSync(join(cwd, "My Notes"));
+      writeFileSync(join(cwd, "My Notes.md"), "file contents must not be attached\n");
+      const input = await openConversation(page, request, cwd);
+      const contentRequests: string[] = [];
+      page.on("request", (req) => {
+        if (/\/api\/(read-file|upload)(?:\?|$)/.test(req.url())) contentRequests.push(req.url());
+      });
+      await setComposer(input, 'Read @"My Notes');
+      const menu = menuFor(page);
+      const folder = menu.getByRole("option", { name: "My Notes/ (folder)", exact: true });
+      await expect(folder).toBeVisible();
+      await expect(folder).toHaveAttribute("data-kind", "folder");
+      await expect(menu.getByRole("option", { name: "My Notes.md", exact: true })).toBeVisible();
+      // Hover changes the highlight without taking focus from the textarea.
+      await folder.hover();
+      await input.press("Tab");
+      await expect(input).toHaveValue(`Read ${JSON.stringify(join(cwd, "My Notes") + "/")} `);
+      await expect(page.getByTestId("message-attachments")).toHaveCount(0);
+      expect(contentRequests).toEqual([]);
+    });
+  });
+
+  test("a trailing slash browses nested folders and mouse insertion preserves text", async ({
+    page,
+    request,
+  }) => {
+    await withTempDir("shelley-folder-nested-", async (cwd) => {
+      mkdirSync(join(cwd, "docs", "Final Notes"), { recursive: true });
+      writeFileSync(join(cwd, "docs", "readme.md"), "readme\n");
+      const input = await openConversation(page, request, cwd);
+      const draft = "Compare @./docs/ with another folder";
+      await setComposer(input, draft, "Compare @./docs/".length);
+      const menu = menuFor(page);
+      await expect(menu.getByRole("option", { name: "readme.md", exact: true })).toBeVisible();
+      await menu.getByRole("option", { name: "Final Notes/ (folder)", exact: true }).click();
+      const expectedPrefix = `Compare ${JSON.stringify(join(cwd, "docs", "Final Notes") + "/")}`;
+      await expect(input).toHaveValue(expectedPrefix + " with another folder");
+      await expect(input).toBeFocused();
+      expect(await input.evaluate((el) => (el as HTMLTextAreaElement).selectionStart)).toBe(
+        expectedPrefix.length,
+      );
+    });
+  });
+
+  test("an exact absolute folder path offers the folder itself outside the cwd", async ({
+    page,
+    request,
+  }) => {
+    await withTempDir("shelley-folder-cwd-", async (cwd) => {
+      await withTempDir("shelley-folder-elsewhere-", async (elsewhere) => {
+        const target = join(elsewhere, "Empty Folder");
+        mkdirSync(target);
+        const input = await openConversation(page, request, cwd);
+        await setComposer(input, `Inspect @${JSON.stringify(target)}`);
+        const folder = menuFor(page).getByRole("option", {
+          name: "Empty Folder/ (folder)",
+          exact: true,
+        });
+        await expect(folder).toBeVisible();
+        await input.press("Enter");
+        await expect(input).toHaveValue(`Inspect ${JSON.stringify(target + "/")} `);
+      });
     });
   });
 });

@@ -27,6 +27,7 @@ function harness(t: TestContext) {
       enabled: () => enabled.value,
       findFiles: (dir, query, signal, opts) => {
         assert.equal(opts?.content, "skip");
+        assert.equal(opts?.includeDirs, true);
         return new Promise<Response>((resolve, reject) => {
           requests.push({ cwd: dir, query, signal, resolve, reject });
         });
@@ -159,4 +160,19 @@ test("blur, missing cwd, disabled composer, and disposal cancel pending work", (
   h.scope.stop();
   t.mock.timers.tick(120);
   assert.equal(h.requests.length, 1);
+});
+
+test("folders insert a quoted reference with a trailing slash and preserve surrounding text", async (t) => {
+  const h = harness(t);
+  h.message.value = "Read @notes, please";
+  h.completion.updateSelection(11, 11);
+  t.mock.timers.tick(120);
+  const folder = response("My Notes/", "/elsewhere");
+  folder.matches[0].is_dir = true;
+  h.requests[0].resolve(folder);
+  await Promise.resolve();
+  assert.equal(h.completion.matches.value[0].is_dir, true);
+  const replacement = h.completion.choose(0)!;
+  assert.equal(replacement.text, 'Read "/elsewhere/My Notes/", please');
+  assert.equal(replacement.text.slice(replacement.cursor), ", please");
 });
