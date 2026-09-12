@@ -108,6 +108,62 @@ func TestGatewaySourceLabels(t *testing.T) {
 	}
 }
 
+func TestAnthropicThinkingBindingSources(t *testing.T) {
+	gateway := Build(models.All(), []Source{Gateway("https://gw.example.com", "", "", "")}, &http.Client{}, nil)
+	gatewayModel := findBuilt(gateway, "claude-opus-4.6")
+	if gatewayModel == nil {
+		t.Fatal("gateway did not build claude-opus-4.6")
+	}
+	gatewayService, ok := gatewayModel.Service.(*ant.Service)
+	if !ok || !gatewayService.EnableThinkingBinding {
+		t.Fatalf("gateway Anthropic service = %#v, want explicit binding support", gatewayService)
+	}
+
+	env := Build(models.All(), []Source{Env("key", "", "", "")}, &http.Client{}, nil)
+	envModel := findBuilt(env, "claude-opus-4.6")
+	if envModel == nil {
+		t.Fatal("env source did not build claude-opus-4.6")
+	}
+	envService, ok := envModel.Service.(*ant.Service)
+	if !ok || !envService.EnableThinkingBinding {
+		t.Fatalf("native Anthropic service = %#v, want binding support", envService)
+	}
+
+	integration := &LLMIntegrationConfig{
+		Name: "llm", Host: "llm.int.exe.xyz", URL: "https://llm.int.exe.xyz",
+		Models: []IntegrationModel{{
+			ID: "anthropic/claude-opus-4-6", Provider: "anthropic",
+			NativeID: "claude-opus-4-6", APIs: []string{"anthropic_messages"},
+		}},
+	}
+	built := Build(models.All(), []Source{LLMIntegration(integration, "")}, &http.Client{}, nil)
+	integrationModel := findBuilt(built, "claude-opus-4.6")
+	if integrationModel == nil {
+		t.Fatal("catalog integration did not build claude-opus-4.6")
+	}
+	integrationService, ok := integrationModel.Service.(*ant.Service)
+	if !ok || !integrationService.EnableThinkingBinding {
+		t.Fatalf("catalog integration service = %#v, want explicit binding support", integrationService)
+	}
+
+	proxy := &LLMIntegrationConfig{
+		Name: "proxy", Host: "proxy.int.exe.xyz", URL: "https://proxy.int.exe.xyz",
+		Models: []IntegrationModel{{
+			ID: "fireworks/claude-opus-4-6", Provider: "fireworks",
+			NativeID: "claude-opus-4-6", APIs: []string{"anthropic_messages"},
+		}},
+	}
+	built = Build(models.All(), []Source{LLMIntegration(proxy, "")}, &http.Client{}, nil)
+	proxyModel := findBuilt(built, "claude-opus-4-6")
+	if proxyModel == nil {
+		t.Fatal("third-party integration did not build claude-opus-4-6")
+	}
+	proxyService, ok := proxyModel.Service.(*ant.Service)
+	if !ok || proxyService.EnableThinkingBinding {
+		t.Fatalf("third-party Anthropic-compatible service = %#v, want binding disabled", proxyService)
+	}
+}
+
 func TestLLMIntegrationSourceLabelsAndFiltering(t *testing.T) {
 	integ := &LLMIntegrationConfig{
 		Name: "llm", Host: "llm.int.exe.xyz", URL: "https://llm.int.exe.xyz",

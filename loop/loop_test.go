@@ -334,6 +334,9 @@ func TestLoopWithTools(t *testing.T) {
 func TestGetHistory(t *testing.T) {
 	initialHistory := []llm.Message{
 		{Role: llm.MessageRoleUser, Content: []llm.Content{{Type: llm.ContentTypeText, Text: "Hello"}}},
+		{Role: llm.MessageRoleAssistant, Origin: &llm.MessageOrigin{
+			Provider: "anthropic", Transport: "anthropic-messages:https://api.anthropic.com/v1/messages", Model: "claude-opus-4-6",
+		}},
 	}
 
 	loop := NewLoop(Config{
@@ -343,8 +346,8 @@ func TestGetHistory(t *testing.T) {
 	})
 
 	history := loop.GetHistory()
-	if len(history) != 1 {
-		t.Errorf("expected history length 1, got %d", len(history))
+	if len(history) != 2 {
+		t.Errorf("expected history length 2, got %d", len(history))
 	}
 
 	// Modify returned slice to ensure it's a copy
@@ -354,6 +357,13 @@ func TestGetHistory(t *testing.T) {
 	original := loop.GetHistory()
 	if original[0].Content[0].Text != "Hello" {
 		t.Error("GetHistory should return a copy, not the original slice")
+	}
+	if original[1].Origin == nil || original[1].Origin.Model != "claude-opus-4-6" {
+		t.Fatal("GetHistory lost message origin")
+	}
+	history[1].Origin.Model = "changed"
+	if original := loop.GetHistory(); original[1].Origin.Model != "claude-opus-4-6" {
+		t.Fatal("GetHistory leaked origin pointer")
 	}
 }
 

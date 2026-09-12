@@ -340,12 +340,13 @@ func buildIntegrationService(catalog []models.Model, model IntegrationModel, bas
 	switch apiType {
 	case models.APITypeAnthropicMessages:
 		return apiType, &ant.Service{
-			APIKey:          "implicit",
-			URL:             baseURL + "/v1/messages",
-			Model:           modelName,
-			HTTPC:           httpc,
-			ThinkingLevel:   llm.ThinkingLevelMedium,
-			SupportsImages_: supportsImages,
+			APIKey:                "implicit",
+			URL:                   baseURL + "/v1/messages",
+			Model:                 modelName,
+			HTTPC:                 httpc,
+			ThinkingLevel:         llm.ThinkingLevelMedium,
+			SupportsImages_:       supportsImages,
+			EnableThinkingBinding: model.Provider == "anthropic",
 		}, true
 	case models.APITypeOpenAIResponses:
 		return apiType, &oai.ResponsesService{

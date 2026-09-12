@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -361,6 +362,7 @@ func TestResponseToMessage(t *testing.T) {
 		response      Response
 		wantRole      MessageRole
 		wantEndOfTurn bool
+		wantOrigin    *MessageOrigin
 	}{
 		{
 			name: "tool use stop reason",
@@ -389,6 +391,25 @@ func TestResponseToMessage(t *testing.T) {
 			wantRole:      MessageRoleAssistant,
 			wantEndOfTurn: true,
 		},
+		{
+			name: "origin",
+			response: Response{
+				Role:       MessageRoleAssistant,
+				StopReason: StopReasonEndTurn,
+				Origin: &MessageOrigin{
+					Provider:  "anthropic",
+					Transport: "anthropic-messages:https://api.anthropic.com/v1/messages",
+					Model:     "claude-opus-5",
+				},
+			},
+			wantRole:      MessageRoleAssistant,
+			wantEndOfTurn: true,
+			wantOrigin: &MessageOrigin{
+				Provider:  "anthropic",
+				Transport: "anthropic-messages:https://api.anthropic.com/v1/messages",
+				Model:     "claude-opus-5",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -401,6 +422,10 @@ func TestResponseToMessage(t *testing.T) {
 
 			if message.EndOfTurn != tt.wantEndOfTurn {
 				t.Errorf("ToMessage().EndOfTurn = %v, want %v", message.EndOfTurn, tt.wantEndOfTurn)
+			}
+
+			if !reflect.DeepEqual(message.Origin, tt.wantOrigin) {
+				t.Errorf("ToMessage().Origin = %+v, want %+v", message.Origin, tt.wantOrigin)
 			}
 		})
 	}

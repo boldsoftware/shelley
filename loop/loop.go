@@ -229,6 +229,10 @@ func (l *Loop) GetHistory() []llm.Message {
 			ToolUse: msg.ToolUse, // This is a pointer, but we won't modify it in tests
 			Content: make([]llm.Content, len(msg.Content)),
 		}
+		if msg.Origin != nil {
+			origin := *msg.Origin
+			historyCopy[i].Origin = &origin
+		}
 		// Copy content slice
 		copy(historyCopy[i].Content, msg.Content)
 	}

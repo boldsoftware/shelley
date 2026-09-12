@@ -243,6 +243,9 @@ type Message struct {
 	ToolUse   *ToolUse    `json:"ToolUse,omitempty"` // use to control whether/which tool to use
 	EndOfTurn bool        `json:"EndOfTurn"`         // true if this message completes the agent's turn (no tool calls to make)
 
+	// Origin identifies the provider request that produced an assistant message.
+	Origin *MessageOrigin `json:"Origin,omitempty"`
+
 	// ExcludedFromContext indicates this message should be stored but not sent back to the LLM.
 	// Used for truncated responses we want to keep for cost tracking but that would confuse the LLM.
 	ExcludedFromContext bool `json:"ExcludedFromContext,omitempty"`
@@ -262,6 +265,21 @@ type Message struct {
 	// provider gave no reason.
 	RefusalCategory    string `json:"RefusalCategory,omitempty"`
 	RefusalExplanation string `json:"RefusalExplanation,omitempty"`
+}
+
+// MessageOrigin identifies the provider, transport, and model for a message.
+type MessageOrigin struct {
+	Provider  string `json:"Provider"`
+	Transport string `json:"Transport"`
+	Model     string `json:"Model"`
+}
+
+func (o *MessageOrigin) Matches(other MessageOrigin) bool {
+	return o.Known() && o.Provider == other.Provider && o.Transport == other.Transport && o.Model == other.Model
+}
+
+func (o *MessageOrigin) Known() bool {
+	return o != nil && o.Provider != "" && o.Transport != "" && o.Model != ""
 }
 
 // ToolUse represents a tool use in the message content.
@@ -630,6 +648,7 @@ type Response struct {
 	Type         string
 	Role         MessageRole
 	Model        string
+	Origin       *MessageOrigin
 	Content      []Content
 	StopReason   StopReason
 	StopSequence *string
@@ -657,6 +676,7 @@ type RefusalDetails struct {
 func (m *Response) ToMessage() Message {
 	return Message{
 		Role:    m.Role,
+		Origin:  m.Origin,
 		Content: m.Content,
 		// End of turn unless there are client tools to call (ToolUse) or the
 		// server paused mid-turn to run a server-side tool (Pause).

@@ -1896,6 +1896,13 @@ func (db *DB) ForkConversation(ctx context.Context, sourceConversationID string,
 		if err != nil {
 			return fmt.Errorf("failed to create forked conversation: %w", err)
 		}
+		conversation, err = q.UpdateConversationTags(ctx, generated.UpdateConversationTagsParams{
+			Tags:           source.Tags,
+			ConversationID: conversationID,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to copy conversation tags: %w", err)
+		}
 		// Copy the generation active at the fork point, renumbered to
 		// generation 1 in the fork. The new conversation keeps CreateConversation's
 		// default current_generation of 1.
