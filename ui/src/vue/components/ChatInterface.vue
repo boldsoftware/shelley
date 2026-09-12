@@ -347,6 +347,11 @@
       :draft-seed="draftSeed"
       :initial-rows="messageInputInitialRows"
       :conversation-id="conversationId"
+      :cwd="
+        !conversationId || currentConversation?.is_draft
+          ? selectedCwd
+          : currentConversation?.cwd || selectedCwd
+      "
       :lazy-draft-id="lazyDraftId"
       :model-options="readyModels"
       :current-model-id="selectedModel"
