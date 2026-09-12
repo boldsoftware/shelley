@@ -3153,6 +3153,10 @@ body {
   transform: rotate(-90deg);
 }
 
+.send-split-main .compact-send-icon {
+  transform: none;
+}
+
 .send-split-divider {
   width: 1px;
   background: rgba(255, 255, 255, 0.3);

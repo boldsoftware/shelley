@@ -873,3 +873,71 @@ func TestFilterWhen(t *testing.T) {
 		t.Errorf("ExeDev=true: got %v, want [always on-exe]", skillNames(got))
 	}
 }
+
+func TestToPromptXMLUsesPerSkillActivation(t *testing.T) {
+	xml := ToPromptXML([]Skill{{
+		Name:        "remote-skill",
+		Description: "Loaded from an integration.",
+		Activate:    "curl -fsS https://remote.int.example/",
+	}})
+	if !strings.Contains(xml, "<activate>curl -fsS https://remote.int.example/</activate>") {
+		t.Fatalf("remote activation missing from XML: %s", xml)
+	}
+}
+
+func TestListAllWithIntegrationsPrecedence(t *testing.T) {
+	t.Run("integration beats builtin", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		root := t.TempDir()
+		got := ListAllWithIntegrations(root, root, []Skill{{Name: "schedule", Description: "Integration schedule."}})
+		for _, skill := range got {
+			if skill.Name == "schedule" {
+				if skill.Description != "Integration schedule." {
+					t.Fatalf("schedule description = %q", skill.Description)
+				}
+				return
+			}
+		}
+		t.Fatal("integration schedule skill missing")
+	})
+
+	t.Run("filesystem beats integration", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		root := t.TempDir()
+		dir := filepath.Join(root, ".skills", "same-name")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: same-name\ndescription: Filesystem version.\n---\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		got := ListAllWithIntegrations(root, root, []Skill{{Name: "same-name", Description: "Integration version."}})
+		for _, skill := range got {
+			if skill.Name == "same-name" {
+				if skill.Description != "Filesystem version." {
+					t.Fatalf("same-name description = %q", skill.Description)
+				}
+				return
+			}
+		}
+		t.Fatal("filesystem skill missing")
+	})
+
+	t.Run("malformed filesystem suppresses integration and builtin", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		root := t.TempDir()
+		dir := filepath.Join(root, ".skills", "schedule")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		got := ListAllWithIntegrations(root, root, []Skill{{Name: "schedule", Description: "Integration schedule."}})
+		for _, skill := range got {
+			if skill.Name == "schedule" {
+				t.Fatalf("malformed filesystem claim did not suppress schedule: %+v", skill)
+			}
+		}
+	})
+}

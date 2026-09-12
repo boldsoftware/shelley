@@ -28,8 +28,30 @@ type Skill struct {
 	When          string            `json:"when,omitempty"`
 	AllowedTools  string            `json:"allowed_tools,omitempty"`
 	Metadata      map[string]string `json:"metadata,omitempty"`
-	Path          string            `json:"path"`           // Path to SKILL.md file (empty for built-in skills)
-	Body          string            `json:"body,omitempty"` // Full markdown body (set for built-in skills)
+	Path          string            `json:"path"`               // Path to SKILL.md file (empty for non-filesystem skills)
+	Body          string            `json:"body,omitempty"`     // Full markdown body (set for built-in skills)
+	Activate      string            `json:"activate,omitempty"` // Command that prints the full skill for activation
+	Source        string            `json:"source,omitempty"`   // Filesystem path, built-in path, or integration root URL
+	Origin        string            `json:"origin,omitempty"`   // File, Integration, or Built into Shelley
+}
+
+// ActivationCommand returns the command agents should run to load the skill.
+func (s Skill) ActivationCommand() string {
+	if s.Activate != "" {
+		return s.Activate
+	}
+	return "shelley skill cat " + s.Name
+}
+
+// SourceLocation returns the location shown in system-prompt metadata.
+func (s Skill) SourceLocation() string {
+	if s.Source != "" {
+		return s.Source
+	}
+	if s.Path != "" {
+		return s.Path
+	}
+	return "skills/builtin/" + s.Name + "/SKILL.md"
 }
 
 // Discover finds all skills in the given directories.
@@ -141,7 +163,19 @@ func Parse(path string) (Skill, error) {
 		return Skill{}, err
 	}
 
-	frontmatter, err := parseFrontmatter(string(content))
+	skill, err := ParseContent(string(content))
+	if err != nil {
+		return Skill{}, err
+	}
+	skill.Path = path
+	skill.Source = path
+	skill.Origin = "File"
+	return skill, nil
+}
+
+// ParseContent parses SKILL.md content without reading from the filesystem.
+func ParseContent(content string) (Skill, error) {
+	frontmatter, err := parseFrontmatter(content)
 	if err != nil {
 		return Skill{}, err
 	}
@@ -164,7 +198,7 @@ func Parse(path string) (Skill, error) {
 	skill := Skill{
 		Name:        name,
 		Description: description,
-		Path:        path,
+		Activate:    "shelley skill cat " + name,
 	}
 
 	if license, ok := frontmatter["license"].(string); ok {
@@ -341,8 +375,8 @@ func ToPromptXML(skills []Skill) string {
 		sb.WriteString("<description>")
 		sb.WriteString(html.EscapeString(skill.Description))
 		sb.WriteString("</description>\n")
-		sb.WriteString("<activate>shelley skill cat ")
-		sb.WriteString(html.EscapeString(skill.Name))
+		sb.WriteString("<activate>")
+		sb.WriteString(html.EscapeString(skill.ActivationCommand()))
 		sb.WriteString("</activate>\n")
 		sb.WriteString("</skill>\n")
 	}
@@ -501,14 +535,16 @@ func DiscoverInTree(workingDir, gitRoot string) ([]Skill, map[string]bool) {
 	return skills, allNames
 }
 
-// ListAll returns all available skills (built-in + filesystem), deduplicated by name.
-//
-// Filesystem skills take priority over built-in skills with the same name.
-// An empty SKILL.md on the filesystem suppresses the corresponding built-in
-// skill entirely — this is the mechanism for users to disable built-in skills.
-//
-// If gitRoot is empty, it is computed from workingDir.
+// ListAll returns all available filesystem and built-in skills, deduplicated by name.
 func ListAll(workingDir, gitRoot string) []Skill {
+	return ListAllWithIntegrations(workingDir, gitRoot, nil)
+}
+
+// ListAllWithIntegrations merges filesystem, integration-discovered, and
+// built-in skills. Filesystem claims win even when their SKILL.md is malformed
+// or empty, followed by integrations, then built-ins. Within each source,
+// first-seen wins.
+func ListAllWithIntegrations(workingDir, gitRoot string, integrationSkills []Skill) []Skill {
 	if gitRoot == "" {
 		gitRoot = findGitRoot(workingDir)
 	}
@@ -546,9 +582,17 @@ func ListAll(workingDir, gitRoot string) []Skill {
 		fsNames[s.Name] = true
 	}
 
-	for _, s := range BuiltinSkills() {
-		if !fsNames[s.Name] {
+	for _, s := range integrationSkills {
+		if !fsNames[s.Name] && !seen[s.Name] {
 			all = append(all, s)
+			seen[s.Name] = true
+		}
+	}
+
+	for _, s := range BuiltinSkills() {
+		if !fsNames[s.Name] && !seen[s.Name] {
+			all = append(all, s)
+			seen[s.Name] = true
 		}
 	}
 

@@ -59,6 +59,9 @@ func BuiltinSkills() []Skill {
 			Description: description,
 			When:        when,
 			Body:        body,
+			Activate:    "shelley skill cat " + name,
+			Source:      "skills/" + path,
+			Origin:      "Built into Shelley",
 		})
 		return nil
 	})

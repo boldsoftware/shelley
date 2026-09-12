@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"shelley.exe.dev/exeenv"
+	"shelley.exe.dev/skills"
 )
 
 func TestSystemPromptRequiresPublicVMServiceLinks(t *testing.T) {
@@ -1121,5 +1122,36 @@ func TestHookHeadersEmptyReturnsNil(t *testing.T) {
 	onlySecrets.Set("Authorization", "Bearer z")
 	if HookHeaders(onlySecrets) != nil {
 		t.Errorf("expected nil when only auth secrets present")
+	}
+}
+
+func TestIntegrationSkillSnapshotIncludedInTopLevelAndSubagentPrompts(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	workingDir := t.TempDir()
+	integrationSkills := []skills.Skill{{
+		Name:        "remote-release",
+		Description: "Check a release from the startup snapshot.",
+		Activate:    "curl -fsS https://remote-release.int.example.test/",
+		Source:      "https://remote-release.int.example.test/",
+	}}
+
+	topLevel, topSkills, err := generateSystemPromptWithIntegrationSkills(workingDir, integrationSkills)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subagent, subSkills, err := generateSubagentSystemPromptWithIntegrationSkills(workingDir, "parent-id", integrationSkills)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, prompt := range map[string]string{"top-level": topLevel, "subagent": subagent} {
+		if !strings.Contains(prompt, "<name>remote-release</name>") || !strings.Contains(prompt, "<activate>curl -fsS https://remote-release.int.example.test/</activate>") {
+			t.Errorf("%s prompt missing integration skill:\n%s", name, prompt)
+		}
+	}
+	if len(topSkills) == 0 || topSkills[0].Name != "remote-release" {
+		t.Fatalf("top-level prompt skills = %+v", topSkills)
+	}
+	if len(subSkills) == 0 || subSkills[0].Name != "remote-release" {
+		t.Fatalf("subagent prompt skills = %+v", subSkills)
 	}
 }

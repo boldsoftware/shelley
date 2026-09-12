@@ -271,12 +271,33 @@
               type="submit"
               :disabled="!canSubmit"
               class="send-split-main"
-              :aria-label="autoQueue ? 'Queue message' : t('sendMessage')"
+              :aria-label="
+                autoQueue
+                  ? 'Queue message'
+                  : preferCompactAndSend
+                    ? 'Compact and send'
+                    : t('sendMessage')
+              "
               data-testid="send-button"
             >
               <div v-if="isDisabled || submitting" class="flex items-center justify-center">
                 <div class="spinner spinner-small message-send-spinner-white"></div>
               </div>
+              <svg
+                v-else-if="preferCompactAndSend"
+                class="compact-send-icon"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+              >
+                <polyline points="4 14 10 14 10 20" />
+                <polyline points="20 10 14 10 14 4" />
+                <line x1="14" y1="10" x2="21" y2="3" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
               <svg v-else fill="currentColor" viewBox="0 0 24 24" width="18" height="18">
                 <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
               </svg>
@@ -295,6 +316,18 @@
               </svg>
             </button>
             <div v-if="showQueueMenu && (canQueue || autoQueue || canCompact)" class="queue-menu">
+              <button
+                v-if="preferCompactAndSend"
+                type="button"
+                class="queue-menu-item"
+                data-testid="send-option"
+                @click="handleSelectSend"
+              >
+                <svg fill="currentColor" viewBox="0 0 24 24" width="16" height="16">
+                  <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
+                </svg>
+                Send
+              </button>
               <button
                 v-if="canQueue || autoQueue"
                 type="button"
@@ -328,7 +361,7 @@
               <!-- Compact the conversation, then queue this message to run once
                    compaction finishes. -->
               <button
-                v-if="canCompact"
+                v-if="canCompact && !preferCompactAndSend"
                 type="button"
                 class="queue-menu-item"
                 data-testid="compact-and-send-option"
@@ -379,6 +412,7 @@ import { useFileCompletion } from "../composables/fileCompletion";
 import { useI18n } from "../composables/i18n";
 import type { Locale } from "../../i18n/types";
 import { pickPlaceholderHint } from "../../utils/placeholderHints";
+import type { ContextUsageLevel } from "../../utils/contextUsage";
 import { SLASH_COMMANDS, slashCommandsForConversation } from "../../utils/slashCommands";
 import {
   composerDispatch,
@@ -461,6 +495,8 @@ const props = withDefaults(
     canQueue?: boolean;
     /** Auto-queue instead of sending (e.g. when distilling) */
     autoQueue?: boolean;
+    /** Context usage level; "" means plain Send. */
+    compactSendLevel?: ContextUsageLevel;
     disabled?: boolean;
     autoFocus?: boolean;
     injectedText?: string;
@@ -501,6 +537,7 @@ const props = withDefaults(
     showQueueOption: false,
     canQueue: false,
     autoQueue: false,
+    compactSendLevel: "",
     disabled: false,
     autoFocus: false,
     initialRows: 1,
@@ -522,6 +559,7 @@ const hasQueueHandler = computed(() => props.onQueue !== undefined);
 // The "Compact and send" option is available whenever a compaction handler is
 // wired and we're not already mid-compaction (autoQueue signals distilling).
 const canCompact = computed(() => props.onCompact !== undefined && !props.autoQueue);
+const sendSelectedLevel = ref<ContextUsageLevel>("");
 
 const message = ref(props.draftSeed?.value ?? "");
 // setMessage mirrors the React controlled-value path: surfaces every change via
@@ -927,6 +965,15 @@ watch(fileSelected, async () => {
   fileMenuRef.value?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
 });
 
+const isCommand = computed(() => /^[!/]/.test(message.value.trimStart()));
+const preferCompactAndSend = computed(
+  () =>
+    canCompact.value &&
+    hasQueueHandler.value &&
+    !isCommand.value &&
+    props.compactSendLevel !== "" &&
+    sendSelectedLevel.value !== props.compactSendLevel,
+);
 const slashQuery = computed(() => {
   const match = message.value.match(/^\/[a-zA-Z0-9_-]*$/);
   return match ? match[0].slice(1).toLowerCase() : null;
@@ -1114,11 +1161,18 @@ watch(composerSession, () => {
   submissionGeneration++;
   submitting.value = false;
 });
+watch([composerSession, () => props.compactSendLevel], () => {
+  sendSelectedLevel.value = "";
+});
 
 async function handleSubmit(e: Event) {
   e.preventDefault();
   if (hasContent.value && !props.disabled && !submitting.value && uploadsInProgress.value === 0) {
     if (isListening.value) stopListening();
+    if (preferCompactAndSend.value) {
+      await handleCompactAndSend();
+      return;
+    }
 
     // Auto-queue when distilling or when explicitly requested.
     const intent: ComposerSubmissionIntent = props.autoQueue ? "auto-queue" : "send";
@@ -1179,6 +1233,11 @@ async function handleQueueMessage() {
       guardComposerClear(origin, composerOrigin, () => setMessage(messageToQueue));
     }
   }
+}
+
+async function handleSelectSend() {
+  sendSelectedLevel.value = props.compactSendLevel;
+  await handleSendNow();
 }
 
 /** Compact the conversation, then queue the composed message so it runs once

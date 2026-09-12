@@ -122,6 +122,7 @@ type ConversationManager struct {
 	recordTurnStartMessage turnStartRecordFunc
 	logger                 *slog.Logger
 	toolSetConfig          claudetool.ToolSetConfig
+	integrationSkills      []skills.Skill
 	toolSet                *claudetool.ToolSet // created per-conversation when loop starts
 
 	subpub *subpub.SubPub[StreamResponse]
@@ -1790,7 +1791,7 @@ func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generat
 	if cm.userEmail != "" {
 		opts = append(opts, WithUserEmail(cm.userEmail))
 	}
-	systemPrompt, promptSkills, err := generateSystemPrompt(cm.cwd, opts...)
+	systemPrompt, promptSkills, err := generateSystemPromptWithIntegrationSkills(cm.cwd, cm.integrationSkills, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate system prompt: %w", err)
 	}
@@ -1880,16 +1881,19 @@ func systemPromptDisplayData(cfg claudetool.ToolSetConfig, promptSkills []skills
 
 	skillDescs := make([]skillDesc, 0, len(promptSkills))
 	for _, skill := range promptSkills {
-		sourcePath := skill.Path
-		origin := "File"
-		if sourcePath == "" {
-			sourcePath = "skills/builtin/" + skill.Name + "/SKILL.md"
-			origin = "Built into Shelley"
+		sourcePath := skill.SourceLocation()
+		origin := skill.Origin
+		if origin == "" {
+			if skill.Path != "" {
+				origin = "File"
+			} else {
+				origin = "Built into Shelley"
+			}
 		}
 		skillDescs = append(skillDescs, skillDesc{
 			Name:          skill.Name,
 			Description:   skill.Description,
-			Activate:      "shelley skill cat " + skill.Name,
+			Activate:      skill.ActivationCommand(),
 			SourcePath:    sourcePath,
 			Origin:        origin,
 			License:       skill.License,
@@ -1914,7 +1918,7 @@ func (cm *ConversationManager) systemPromptDisplayData(promptSkills []skills.Ski
 }
 
 func (cm *ConversationManager) createSubagentSystemPrompt(ctx context.Context, parentConversationID string) (*generated.Message, error) {
-	systemPrompt, promptSkills, err := generateSubagentSystemPrompt(cm.cwd, parentConversationID)
+	systemPrompt, promptSkills, err := generateSubagentSystemPromptWithIntegrationSkills(cm.cwd, parentConversationID, cm.integrationSkills)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate subagent system prompt: %w", err)
 	}

@@ -26,6 +26,16 @@ func TestFlagReflectionEmojiFaviconRegistered(t *testing.T) {
 	}
 }
 
+func TestFlagCompactSendThresholdsRegisteredOff(t *testing.T) {
+	f, ok := featureflags.Lookup("compact-send-thresholds")
+	if !ok {
+		t.Fatal("compact-send-thresholds not registered")
+	}
+	if f.Default != false {
+		t.Fatalf("default = %v, want false", f.Default)
+	}
+}
+
 func TestPatchStrategyFlagsRegisteredOff(t *testing.T) {
 	for _, name := range []string{"patch-simple", "patch-openai-raw"} {
 		flag, ok := featureflags.Lookup(name)

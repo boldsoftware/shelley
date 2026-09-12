@@ -194,3 +194,31 @@ func TestHydrateSystemPromptDisplayDataRespectsToolOverrides(t *testing.T) {
 		t.Fatalf("display data should include enabled shell tool: %+v", displayData.Tools)
 	}
 }
+
+func TestSystemPromptDisplayDataUsesIntegrationSkillMetadata(t *testing.T) {
+	t.Parallel()
+	displayData := systemPromptDisplayData(claudetool.ToolSetConfig{DisableAllTools: true}, []skills.Skill{{
+		Name:        "remote-skill",
+		Description: "Remote.",
+		Activate:    "curl -fsS https://remote.int.example/",
+		Source:      "https://remote.int.example/",
+		Origin:      "Integration",
+	}})
+	encoded, err := json.Marshal(displayData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Skills []struct {
+			Activate   string `json:"activate"`
+			SourcePath string `json:"source_path"`
+			Origin     string `json:"origin"`
+		} `json:"skills"`
+	}
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Skills) != 1 || got.Skills[0].Activate != "curl -fsS https://remote.int.example/" || got.Skills[0].SourcePath != "https://remote.int.example/" || got.Skills[0].Origin != "Integration" {
+		t.Fatalf("integration skill metadata = %+v", got.Skills)
+	}
+}

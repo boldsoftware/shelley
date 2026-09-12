@@ -41,6 +41,14 @@ var FlagPerformanceHUD = featureflags.Register(featureflags.Flag{
 	Default:     false,
 })
 
+// FlagCompactSendThresholds defaults the composer to Compact and send once
+// the context reaches 200k tokens.
+var FlagCompactSendThresholds = featureflags.Register(featureflags.Flag{
+	Name:        "compact-send-thresholds",
+	Description: "Default the composer to Compact and send once the context reaches 200k tokens.",
+	Default:     false,
+})
+
 // FlagPatchSimple switches the patch tool from its full nested patches schema
 // to a simplified path-and-edits replacement schema.
 var FlagPatchSimple = featureflags.Register(featureflags.Flag{

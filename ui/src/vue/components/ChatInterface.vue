@@ -341,6 +341,7 @@
       :show-queue-option="!!conversationId"
       :can-queue="canQueue"
       :auto-queue="autoQueue"
+      :compact-send-level="compactSendLevel"
       :disabled="sending || loading"
       :auto-focus="true"
       :injected-text="messageInputInjectedText"
@@ -492,6 +493,7 @@ import {
   isVisibleConversationMessage,
 } from "../../utils/conversationView";
 import { SLASH_COMMANDS } from "../../utils/slashCommands";
+import { contextUsageLevel } from "../../utils/contextUsage";
 import {
   btwAnchor,
   btwExchangesByAnchor,
@@ -625,6 +627,7 @@ watch(conversationViewMode, () => {
   primeTailFirstMount();
 });
 const toolPillsEnabled = useFeatureFlag("tool-pills");
+const compactSendThresholdsEnabled = useFeatureFlag("compact-send-thresholds");
 const {
   hasUpdate,
   versionInfo,
@@ -1424,6 +1427,11 @@ const selectedModelInfo = computed(() => models.value.find((m) => m.id === selec
 // 0 when the model's context window is unknown: the readout then shows the
 // count alone rather than a made-up denominator.
 const maxContextTokens = computed(() => selectedModelInfo.value?.max_context_tokens || 0);
+const compactSendLevel = computed(() => {
+  if (!compactSendThresholdsEnabled.value) return "";
+  const level = contextUsageLevel(contextWindowSize.value, maxContextTokens.value);
+  return level === "warn" ? "" : level;
+});
 
 // Content type constants mirror llm/llm.go.
 const LLM_TYPE_TEXT = 2;
