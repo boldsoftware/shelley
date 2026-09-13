@@ -1,7 +1,10 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -388,8 +391,61 @@ func TestCombineGitFilesAndDirectories(t *testing.T) {
 	}
 
 	paths, truncated = combineGitFilesAndDirectories([]string{"a", "b"}, []string{"c/"}, 2)
-	if !slices.Equal(paths, []string{"a", "b"}) || !truncated {
-		t.Fatalf("bounded paths=%v truncated=%v", paths, truncated)
+	if !slices.Equal(paths, []string{"a", "c/"}) || !truncated {
+		t.Fatalf("fair bounded paths=%v truncated=%v", paths, truncated)
+	}
+
+	// A saturated Git file listing must yield borrowed capacity when directory
+	// candidates arrive, rather than consuming all 50k slots before them.
+	files := make([]string, findFilesMaxCandidates)
+	for i := range files {
+		files[i] = fmt.Sprintf("file-%05d", i)
+	}
+	paths, truncated = combineGitFilesAndDirectories(files, []string{"folder/"}, findFilesMaxCandidates)
+	if len(paths) != findFilesMaxCandidates || !slices.Contains(paths, "folder/") || !truncated {
+		t.Fatalf("saturated paths=%d hasFolder=%v truncated=%v", len(paths), slices.Contains(paths, "folder/"), truncated)
+	}
+
+	dirs := make([]string, findFilesMaxCandidates)
+	for i := range dirs {
+		dirs[i] = fmt.Sprintf("folder-%05d/", i)
+	}
+	paths, truncated = combineGitFilesAndDirectories(files, dirs, findFilesMaxCandidates)
+	dirCount := 0
+	for _, path := range paths {
+		if strings.HasSuffix(path, "/") {
+			dirCount++
+		}
+	}
+	if len(paths) != findFilesMaxCandidates || dirCount != findFilesMaxCandidates/2 || !truncated {
+		t.Fatalf("fair saturation paths=%d dirs=%d truncated=%v", len(paths), dirCount, truncated)
+	}
+}
+
+func TestWalkPathsCandidateSaturationKeepsDirectories(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for i := 0; i < 5; i++ {
+		writeFile(t, filepath.Join(dir, fmt.Sprintf("a-file-%d", i)), "x\n")
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "z-folder", "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	paths, truncated, err := walkPaths(context.Background(), dir, true, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 4 || !slices.Contains(paths, "z-folder/") || !slices.Contains(paths, "z-folder/nested/") || !truncated {
+		t.Fatalf("paths=%v truncated=%v", paths, truncated)
+	}
+
+	filesOnly, _, err := walkPaths(context.Background(), dir, false, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(filesOnly, []string{"a-file-0", "a-file-1", "a-file-2", "a-file-3"}) {
+		t.Fatalf("file-only traversal changed: %v", filesOnly)
 	}
 }
 
@@ -405,9 +461,9 @@ func TestListGitDirectoriesSmallRemainingBudget(t *testing.T) {
 		if err := os.Mkdir(filepath.Join(dir, "zzz-visible"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		dirs, _, ok := listGitDirectories(dir, nil, 1)
-		if !ok || len(dirs) != 1 || dirs[0] != "zzz-visible/" {
-			t.Fatalf("dirs=%v ok=%v, want visible directory", dirs, ok)
+		dirs, _, err := listGitDirectories(context.Background(), dir, nil, 1)
+		if err != nil || len(dirs) != 1 || dirs[0] != "zzz-visible/" {
+			t.Fatalf("dirs=%v err=%v, want visible directory", dirs, err)
 		}
 	})
 
@@ -416,11 +472,22 @@ func TestListGitDirectoriesSmallRemainingBudget(t *testing.T) {
 		mustGitInit(t, dir)
 		writeFile(t, filepath.Join(dir, ".gitignore"), "ignored/\n")
 		writeFile(t, filepath.Join(dir, "ignored", "nested", "tracked.txt"), "x\n")
-		dirs, _, ok := listGitDirectories(dir, []string{"ignored/nested/tracked.txt"}, 1)
-		if !ok || len(dirs) != 1 || dirs[0] != "ignored/" {
-			t.Fatalf("dirs=%v ok=%v, want tracked ignored ancestor", dirs, ok)
+		dirs, _, err := listGitDirectories(context.Background(), dir, []string{"ignored/nested/tracked.txt"}, 1)
+		if err != nil || len(dirs) != 1 || dirs[0] != "ignored/" {
+			t.Fatalf("dirs=%v err=%v, want tracked ignored ancestor", dirs, err)
 		}
 	})
+}
+
+func TestListGitDirectoriesCancellation(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	dirs, _, err := listGitDirectories(ctx, t.TempDir(), nil, findFilesMaxCandidates)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("dirs=%v err=%v, want context cancellation", dirs, err)
+	}
 }
 
 func TestFindFilesDirectoryWalkBoundsAndSymlinks(t *testing.T) {

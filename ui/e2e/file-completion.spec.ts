@@ -299,6 +299,68 @@ test.describe("@ filename completion", () => {
     });
   });
 
+  test("preserves a colon immediately after a completed token", async ({ page, request }) => {
+    await withTempDir("shelley-completion-colon-", async (cwd) => {
+      writeFileSync(join(cwd, "README.md"), "example\n");
+      const input = await openConversation(page, request, cwd);
+      const text = "Read @README: please";
+      await setComposer(input, text, text.indexOf(":"));
+      await expect(
+        menuFor(page).getByRole("option", { name: "README.md", exact: true }),
+      ).toBeVisible({ timeout: 10000 });
+      await input.press("Enter");
+      await expect(input).toHaveValue(`Read ${JSON.stringify(join(cwd, "README.md"))}: please`);
+    });
+  });
+
+  test("a reopened draft uses its saved cwd, not the browser's last directory", async ({
+    page,
+    request,
+  }) => {
+    await withTempDir("shelley-completion-reopened-draft-", async (root) => {
+      const draftCwd = join(root, "draft");
+      const otherCwd = join(root, "other");
+      mkdirSync(draftCwd);
+      mkdirSync(otherCwd);
+      writeFileSync(join(draftCwd, "draft-target.md"), "example\n");
+      const response = await request.post("/api/conversations/draft", {
+        data: { draft: "unfinished draft", model: "predictable", cwd: draftCwd },
+      });
+      expect(response.status()).toBe(201);
+      const draft = (await response.json()) as { conversation_id: string };
+      await page.addInitScript(
+        (cwd) => localStorage.setItem("shelley_selected_cwd", cwd),
+        otherCwd,
+      );
+      await page.goto(`/c/${draft.conversation_id}`);
+      const input = page.getByTestId("message-input");
+      await expect(input).toHaveValue("unfinished draft", { timeout: 30000 });
+      const search = page.waitForRequest((candidate) => {
+        const url = new URL(candidate.url());
+        return url.pathname === "/api/find-files" && url.searchParams.get("q") === "draft-target";
+      });
+      await setComposer(input, "echo: Review @draft-target");
+      expect(new URL((await search).url()).searchParams.get("dir")).toBe(draftCwd);
+      await expect(
+        menuFor(page).getByRole("option", { name: "draft-target.md", exact: true }),
+      ).toBeVisible({ timeout: 10000 });
+      await input.press("Enter");
+      await expect(input).toHaveValue(
+        `echo: Review ${JSON.stringify(join(draftCwd, "draft-target.md"))} `,
+      );
+
+      // Promoting the restored draft must use the same cwd as completion.
+      const sent = page.waitForRequest(
+        (candidate) =>
+          candidate.method() === "POST" &&
+          new URL(candidate.url()).pathname === `/api/conversation/${draft.conversation_id}/chat`,
+      );
+      await input.press("Control+Enter");
+      expect((await sent).postDataJSON().cwd).toBe(draftCwd);
+      await expect(input).toHaveValue("");
+    });
+  });
+
   test("a draft cwd pick reaches completion before its persistence echo", async ({
     page,
     request,

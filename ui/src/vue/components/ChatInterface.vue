@@ -873,6 +873,24 @@ function setSelectedModel(model: string) {
 
 const selectedCwd = ref<string>("");
 const cwdInitialized = ref(false);
+// A reopened draft owns its cwd, even when this browser last used another
+// directory. Seed the local picker state so completion and promotion agree.
+// Watching only these fields leaves an optimistic pick intact while its
+// persistence request is in flight (unrelated draft echoes must not reset it).
+watch(
+  [
+    () => props.conversationId,
+    () => props.currentConversation?.is_draft,
+    () => props.currentConversation?.cwd,
+  ],
+  ([id, isDraft, cwd]) => {
+    if (id && isDraft && cwd) {
+      selectedCwd.value = cwd;
+      cwdInitialized.value = true;
+    }
+  },
+  { immediate: true },
+);
 function setSelectedCwd(cwd: string) {
   selectedCwd.value = cwd;
   localStorage.setItem("shelley_selected_cwd", cwd);
@@ -3460,7 +3478,8 @@ watch(
   },
 );
 
-// Initialize CWD: localStorage > mostRecentCwd > server default.
+// Initialize a new conversation's CWD: localStorage > mostRecentCwd > server default.
+// Reopened drafts are initialized from their stored cwd above.
 watch(
   [() => props.mostRecentCwd, cwdInitialized],
   () => {
