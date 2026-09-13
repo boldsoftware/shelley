@@ -3518,6 +3518,29 @@ body {
   white-space: nowrap;
 }
 
+.file-completion-item {
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.file-completion-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+}
+
+.file-completion-item .slash-command-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-completion-status {
+  padding: 8px 10px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
 .slash-command-description {
   min-width: 0;
   overflow: hidden;

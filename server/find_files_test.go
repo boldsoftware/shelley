@@ -2,7 +2,9 @@ package server
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -319,9 +321,12 @@ func TestFindFilesCacheNoPoisonOnFailure(t *testing.T) {
 	t.Parallel()
 	c := newFileListCache()
 
-	files, _ := c.get("/some/dir", func() ([]string, bool, bool) {
-		return nil, false, false // ok=false: must not be cached
+	files, _, err := c.get(context.Background(), "/some/dir", func(context.Context) ([]string, bool, error) {
+		return nil, false, errors.New("listing failed")
 	})
+	if err == nil {
+		t.Fatal("expected listing error")
+	}
 	if len(files) != 0 {
 		t.Fatalf("expected empty result from failed load, got %v", files)
 	}
@@ -329,14 +334,81 @@ func TestFindFilesCacheNoPoisonOnFailure(t *testing.T) {
 		t.Fatalf("failed load should not be cached")
 	}
 
-	files, _ = c.get("/some/dir", func() ([]string, bool, bool) {
-		return []string{"a.go", "b.go"}, false, true
+	files, _, err = c.get(context.Background(), "/some/dir", func(context.Context) ([]string, bool, error) {
+		return []string{"a.go", "b.go"}, false, nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(files) != 2 {
 		t.Fatalf("expected 2 files after successful load, got %v", files)
 	}
 	if _, ok := c.entries["/some/dir"]; !ok {
 		t.Fatalf("successful load should be cached")
+	}
+}
+
+func TestFileListCacheCancellationDoesNotCache(t *testing.T) {
+	t.Parallel()
+	c := newFileListCache()
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	done := make(chan error, 1)
+
+	go func() {
+		_, _, err := c.get(ctx, "/cancelled", func(ctx context.Context) ([]string, bool, error) {
+			close(started)
+			<-ctx.Done()
+			return []string{"partial.txt"}, true, nil
+		})
+		done <- err
+	}()
+	<-started
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("err=%v, want context cancellation", err)
+	}
+	if _, ok := c.entries["/cancelled"]; ok {
+		t.Fatal("cancelled partial listing was cached")
+	}
+
+	// Cancellation wins over an otherwise valid cache hit too: superseded HTTP
+	// requests must stop rather than continue fuzzy matching stale work.
+	_, _, err := c.get(context.Background(), "/cached", func(context.Context) ([]string, bool, error) {
+		return []string{"complete.txt"}, false, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancelled, stop := context.WithCancel(context.Background())
+	stop()
+	files, _, err := c.get(cancelled, "/cached", func(context.Context) ([]string, bool, error) {
+		t.Fatal("cache hit unexpectedly loaded")
+		return nil, false, nil
+	})
+	if !errors.Is(err, context.Canceled) || files != nil {
+		t.Fatalf("files=%v err=%v, want cancelled cache hit", files, err)
+	}
+}
+
+func TestFindFilesCancelledRequestDoesNotPopulateCache(t *testing.T) {
+	t.Parallel()
+	h := NewTestHarness(t)
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "file.txt"), "x\n")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	u := "/api/find-files?content=skip&dir=" + url.QueryEscape(dir)
+	req := httptest.NewRequest(http.MethodGet, u, nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	h.server.handleFindFiles(w, req)
+
+	if w.Body.Len() != 0 {
+		t.Fatalf("cancelled request wrote a partial response: %s", w.Body.String())
+	}
+	if len(h.server.fileListCache.entries) != 0 {
+		t.Fatalf("cancelled request populated cache: %+v", h.server.fileListCache.entries)
 	}
 }
 
@@ -346,7 +418,12 @@ func TestFileListCacheEviction(t *testing.T) {
 	c := newFileListCache()
 	for i := 0; i < fileListCacheMaxDirs*2; i++ {
 		dir := fmt.Sprintf("/dir/%d", i)
-		c.get(dir, func() ([]string, bool, bool) { return []string{"x"}, false, true })
+		_, _, err := c.get(context.Background(), dir, func(context.Context) ([]string, bool, error) {
+			return []string{"x"}, false, nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	if len(c.entries) > fileListCacheMaxDirs {
 		t.Errorf("cache exceeded cap: %d > %d", len(c.entries), fileListCacheMaxDirs)
@@ -366,7 +443,12 @@ func TestFileListCacheFileCap(t *testing.T) {
 	}
 	for i := 0; i < 10; i++ {
 		dir := fmt.Sprintf("/big/%d", i)
-		c.get(dir, func() ([]string, bool, bool) { return big, false, true })
+		_, _, err := c.get(context.Background(), dir, func(context.Context) ([]string, bool, error) {
+			return big, false, nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	if c.files > fileListCacheMaxFiles {
 		t.Errorf("cache retained %d files, cap is %d", c.files, fileListCacheMaxFiles)
@@ -389,7 +471,12 @@ func TestFileListCacheFileCap(t *testing.T) {
 		// One directory bigger than the whole cap must still be served: it's
 		// what the user is looking at.
 		huge := make([]string, fileListCacheMaxFiles+1)
-		got, _ := c.get("/huge", func() ([]string, bool, bool) { return huge, false, true })
+		got, _, err := c.get(context.Background(), "/huge", func(context.Context) ([]string, bool, error) {
+			return huge, false, nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(got) != len(huge) {
 			t.Fatalf("got %d files, want %d", len(got), len(huge))
 		}
