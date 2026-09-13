@@ -11,7 +11,7 @@ export interface FileToken {
  * A selection, email address, or escaped @ is not a completion request. */
 export function fileTokenAt(text: string, cursor: number, selectionEnd = cursor): FileToken | null {
   if (cursor !== selectionEnd || cursor < 0 || cursor > text.length) return null;
-  const tokens = /(?:^|\s)@(?:"((?:\\.|[^"\n\\])*)"?|([^\s"@,;!?()[\]{}]*))/g;
+  const tokens = /(?:^|\s)@(?:"((?:\\.|[^"\n\\])*)"?|([^\s"@,:;!?()[\]{}]*))/g;
   for (const match of text.matchAll(tokens)) {
     const start = match.index! + match[0].indexOf("@");
     const end = match.index! + match[0].length;

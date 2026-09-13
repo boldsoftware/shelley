@@ -56,13 +56,16 @@ test("inserted paths are always quoted, escaped and rooted at search_dir", () =>
 });
 
 test("completion preserves trailing prose punctuation; quotes allow it in filenames", () => {
-  const text = "Compare @READ, please";
-  const token = fileTokenAt(text, 13)!;
-  assert.equal(token.end, 13);
-  assert.equal(
-    insertFilePath(text, token, "/work", "README.md").text,
-    'Compare "/work/README.md", please',
-  );
-  const query = '@"file (copy), final.md"';
-  assert.equal(fileTokenAt(query, query.length)?.query, "file (copy), final.md");
+  for (const punctuation of [",", ":", ";", "!", "?", "(", ")", "[", "]", "{", "}"]) {
+    const text = `Compare @READ${punctuation} please`;
+    const token = fileTokenAt(text, 13)!;
+    assert.equal(token.end, 13);
+    assert.equal(
+      insertFilePath(text, token, "/work", "README.md").text,
+      `Compare "/work/README.md"${punctuation} please`,
+    );
+    assert.equal(fileTokenAt(text, 14), null);
+  }
+  const query = '@"file (copy), final:notes.md"';
+  assert.equal(fileTokenAt(query, query.length)?.query, "file (copy), final:notes.md");
 });
