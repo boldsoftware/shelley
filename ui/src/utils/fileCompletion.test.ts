@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fileTokenAt, insertFilePath } from "./fileCompletion";
+import { fileTokenAt, insertFilePath, relativeFileMatch, relativeFilePath } from "./fileCompletion";
 
 test("@ starts a query at a token boundary, including empty and multiline queries", () => {
   assert.deepEqual(fileTokenAt("@", 1), { start: 0, end: 1, query: "" });
@@ -16,8 +16,8 @@ test("only query text before the cursor is searched; the entire token is replace
   const text = "Compare @README-old with @other";
   const token = fileTokenAt(text, 12)!;
   assert.deepEqual(token, { start: 8, end: 19, query: "REA" });
-  const replacement = insertFilePath(text, token, "/work", "README.md");
-  assert.equal(replacement.text, 'Compare "/work/README.md" with @other');
+  const replacement = insertFilePath(text, token, "README.md");
+  assert.equal(replacement.text, "Compare @README.md with @other");
   assert.equal(replacement.text.slice(replacement.cursor), " with @other");
 });
 
@@ -31,28 +31,38 @@ test("quoted queries handle spaces, closing quotes, escaped quotes and backslash
   const middle = '@"My Notes" then continue';
   const token = fileTokenAt(middle, 5)!;
   assert.deepEqual(token, { start: 0, end: 11, query: "My " });
-  assert.equal(
-    insertFilePath(middle, token, "/notes", "My Notes.md").text,
-    '"/notes/My Notes.md" then continue',
-  );
+  assert.equal(insertFilePath(middle, token, "My Notes.md").text, '@"My Notes.md" then continue');
 });
 
-test("inserted paths are always quoted, escaped and rooted at search_dir", () => {
+test("inserted references stay relative and are quoted only when required", () => {
   const token = fileTokenAt("@", 1)!;
-  for (const path of [
-    "file.txt",
-    "My Notes.md",
-    'quote".md',
-    "back\\slash",
-    "line\nbreak.md",
-    "日本語.md",
-  ]) {
-    const result = insertFilePath("@", token, "/elsewhere/", path);
-    assert.equal(JSON.parse(result.text.trimEnd()), `/elsewhere/${path}`);
+  assert.equal(insertFilePath("@", token, "file.txt").text, "@file.txt ");
+  assert.equal(insertFilePath("@", token, "src/file.ts").text, "@src/file.ts ");
+  assert.equal(insertFilePath("@", token, "日本語.md").text, "@日本語.md ");
+  for (const path of ["My Notes.md", 'quote".md', "file,name.md", "line\nbreak.md"]) {
+    const result = insertFilePath("@", token, path);
+    assert.equal(result.text, `@${JSON.stringify(path)} `);
     assert.equal(result.cursor, result.text.length);
-    assert.ok(result.text.endsWith(" "));
   }
-  assert.equal(insertFilePath("@", token, "/", "root.txt").text, '"/root.txt" ');
+});
+
+test("search results are shown relative to the conversation cwd", () => {
+  assert.equal(relativeFilePath("/work", "/work", "src/main.ts"), "src/main.ts");
+  assert.equal(relativeFilePath("/work", "/work/docs", "guide.md"), "docs/guide.md");
+  assert.equal(relativeFilePath("/work/project", "/work/shared", "notes.md"), "../shared/notes.md");
+  assert.equal(relativeFilePath("/work", "/work", "docs/"), "docs/");
+  assert.equal(relativeFilePath("/work", "/work", "weird\\name.txt"), "weird\\name.txt");
+  assert.deepEqual(
+    relativeFileMatch("/work", "/work/docs", { path: "guide.md", matched_indexes: [0, 1] }),
+    { path: "docs/guide.md", matched_indexes: [5, 6] },
+  );
+  assert.deepEqual(
+    relativeFileMatch("/work/project", "/work", {
+      path: "project/README.md",
+      matched_indexes: [8, 9, 10],
+    }),
+    { path: "README.md", matched_indexes: [0, 1, 2] },
+  );
 });
 
 test("completion preserves trailing prose punctuation; quotes allow it in filenames", () => {
@@ -61,8 +71,8 @@ test("completion preserves trailing prose punctuation; quotes allow it in filena
     const token = fileTokenAt(text, 13)!;
     assert.equal(token.end, 13);
     assert.equal(
-      insertFilePath(text, token, "/work", "README.md").text,
-      `Compare "/work/README.md"${punctuation} please`,
+      insertFilePath(text, token, "README.md").text,
+      `Compare @README.md${punctuation} please`,
     );
     assert.equal(fileTokenAt(text, 14), null);
   }

@@ -1,6 +1,18 @@
 import { computed, onScopeDispose, ref, watch, type Ref } from "vue";
 import { api } from "../../services/api";
-import { fileTokenAt, insertFilePath } from "../../utils/fileCompletion";
+import { mergeContentMatches } from "../../utils/fileSearch";
+import {
+  fileTokenAt,
+  insertFilePath,
+  relativeFileMatch,
+  type FileToken,
+} from "../../utils/fileCompletion";
+
+const MAX_ROWS = 20;
+
+function tokenKeyFor(text: string, token: FileToken, session: string | null, cwd: string) {
+  return JSON.stringify([session, cwd, token.start, text.slice(token.start, token.end)]);
+}
 
 /** Debounce name-only searches and invalidate them on every token/session change.
  * Aborting saves work; the cleanup flag also rejects responses already in flight. */
@@ -13,9 +25,10 @@ export function useFileCompletion(options: {
 }) {
   const selection = ref({ start: 0, end: 0 });
   const focused = ref(false);
-  const dismissed = ref<string | null>(null);
+  const dismissed = ref<string[]>([]);
   const selected = ref(0);
   const loading = ref(false);
+  const grepPending = ref(false);
   const error = ref("");
   const result = ref<Awaited<ReturnType<typeof api.findFiles>> | null>(null);
   const token = computed(() =>
@@ -30,23 +43,26 @@ export function useFileCompletion(options: {
   // within it must not undo Escape; editing it starts a fresh completion.
   const tokenKey = computed(() =>
     token.value
-      ? JSON.stringify([
-          options.session(),
-          options.cwd(),
-          token.value.start,
-          options.message.value.slice(token.value.start, token.value.end),
-        ])
+      ? tokenKeyFor(options.message.value, token.value, options.session(), options.cwd())
       : null,
   );
   watch(
     tokenKey,
-    () => {
-      dismissed.value = null;
+    (value) => {
+      dismissed.value = value && dismissed.value.includes(value) ? [value] : [];
     },
     { flush: "sync" },
   );
-  const visible = computed(() => key.value !== null && tokenKey.value !== dismissed.value);
-  const matches = computed(() => result.value?.matches.slice(0, 20) ?? []);
+  const visible = computed(
+    () => key.value !== null && !dismissed.value.includes(tokenKey.value ?? ""),
+  );
+  const matches = computed(() => {
+    const response = result.value;
+    if (!response) return [];
+    return response.matches
+      .slice(0, MAX_ROWS)
+      .map((match) => relativeFileMatch(options.cwd(), response.search_dir, match));
+  });
 
   watch(
     () => (visible.value ? key.value : null),
@@ -55,24 +71,53 @@ export function useFileCompletion(options: {
       selected.value = 0;
       error.value = "";
       loading.value = value !== null;
+      grepPending.value = false;
       if (value === null) return;
       const controller = new AbortController();
       let stale = false;
       const cwd = options.cwd();
       const query = token.value!.query;
       const timer = setTimeout(async () => {
+        const findFiles = options.findFiles ?? api.findFiles.bind(api);
+        const namePromise = findFiles(cwd, query, controller.signal, {
+          content: "skip",
+          includeDirs: true,
+        });
+        const contentPromise = query
+          ? findFiles(cwd, query, controller.signal, { content: "only" })
+          : null;
+        grepPending.value = contentPromise !== null;
+        contentPromise?.catch(() => {});
+        let nameApplied = false;
         try {
-          const response = await (options.findFiles ?? api.findFiles.bind(api))(
-            cwd,
-            query,
-            controller.signal,
-            { content: "skip", includeDirs: true },
-          );
-          if (!stale) result.value = response;
+          const response = await namePromise;
+          if (!stale) {
+            result.value = response;
+            nameApplied = true;
+          }
         } catch (err) {
-          if (!stale) error.value = err instanceof Error ? err.message : String(err);
+          if (!stale) {
+            error.value = err instanceof Error ? err.message : String(err);
+            controller.abort();
+          }
         } finally {
           if (!stale) loading.value = false;
+        }
+        if (contentPromise) {
+          try {
+            const content = await contentPromise;
+            if (!stale && nameApplied && result.value?.search_dir === content.search_dir) {
+              result.value = {
+                ...result.value,
+                matches: mergeContentMatches(result.value.matches, content.matches, MAX_ROWS)
+                  .matches,
+              };
+            }
+          } catch {
+            // Content search is best-effort; keep the faster name results.
+          } finally {
+            if (!stale) grepPending.value = false;
+          }
         }
       }, 120);
       onCleanup(() => {
@@ -91,24 +136,34 @@ export function useFileCompletion(options: {
   }
 
   function dismiss() {
-    dismissed.value = tokenKey.value;
+    if (tokenKey.value) dismissed.value = [tokenKey.value];
   }
 
   function choose(index: number) {
     const match = matches.value[index];
     if (!visible.value || !match || !result.value || !token.value) return null;
-    const replacement = insertFilePath(
-      options.message.value,
-      token.value,
-      result.value.search_dir,
-      match.path,
-    );
-    dismiss();
+    const replacement = insertFilePath(options.message.value, token.value, match.path);
+    const nextToken = fileTokenAt(replacement.text, replacement.cursor);
+    dismissed.value = [
+      tokenKey.value,
+      nextToken ? tokenKeyFor(replacement.text, nextToken, options.session(), options.cwd()) : null,
+    ].filter((value): value is string => value !== null);
     return replacement;
   }
 
   onScopeDispose(() => {
     focused.value = false;
   });
-  return { visible, matches, selected, loading, error, focused, updateSelection, dismiss, choose };
+  return {
+    visible,
+    matches,
+    selected,
+    loading,
+    grepPending,
+    error,
+    focused,
+    updateSelection,
+    dismiss,
+    choose,
+  };
 }

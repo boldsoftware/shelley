@@ -90,25 +90,13 @@
           </svg>
           <span class="grp-main">
             <span class="grp-path" :title="hit.path">
-              <template
-                v-for="(seg, si) in highlightSegments(hit.path, hit.matched_indexes)"
-                :key="si"
-              >
-                <mark v-if="seg.hit" class="grp-hit">{{ seg.text }}</mark>
-                <template v-else>{{ seg.text }}</template>
-              </template>
+              <HighlightedText :text="hit.path" :positions="hit.matched_indexes" />
             </span>
             <!-- Content match: the grep excerpt that earned this file its row
                  (or bolstered a name match), with the matched term marked. -->
             <span v-if="hit.snippet" class="ff-snippet" :title="hit.snippet">
               <span class="ff-snippet-line">{{ hit.line }}:</span>
-              <template
-                v-for="(seg, si) in highlightSegments(hit.snippet, hit.snippet_matched_indexes)"
-                :key="si"
-              >
-                <mark v-if="seg.hit" class="grp-hit">{{ seg.text }}</mark>
-                <template v-else>{{ seg.text }}</template>
-              </template>
+              <HighlightedText :text="hit.snippet" :positions="hit.snippet_matched_indexes" />
             </span>
           </span>
         </button>
@@ -142,6 +130,8 @@ import Modal from "./Modal.vue";
 import DirectoryPickerModal from "./DirectoryPickerModal.vue";
 import { api } from "../../services/api";
 import { isImeComposing } from "../../utils/imeComposing";
+import { mergeContentMatches } from "../../utils/fileSearch";
+import HighlightedText from "./HighlightedText.vue";
 import { tildifyPath } from "../../utils/tildify";
 
 interface FileMatch {
@@ -189,34 +179,6 @@ const displayDir = computed(() => tildifyPath(dir.value));
 // directory; that's the case the user needs told about.
 const scopeDir = computed(() => (searchDir.value === dir.value ? null : searchDir.value));
 
-// Split a path/snippet into highlighted/plain segments using the
-// server-provided rune offsets. Contiguous matched indexes are coalesced into
-// one <mark>. The offsets count Unicode code points (Go runes), while JS
-// String.slice counts UTF-16 code units — an astral character (an emoji in a
-// matched content line, say) before the match would shift every highlight if
-// we sliced the string directly — so segment over Array.from(text), whose
-// elements are whole code points.
-function highlightSegments(text: string, positions?: number[]): { text: string; hit: boolean }[] {
-  if (!positions || positions.length === 0) return [{ text, hit: false }];
-  const chars = Array.from(text);
-  const sorted = [...positions].sort((a, b) => a - b);
-  const out: { text: string; hit: boolean }[] = [];
-  let cursor = 0;
-  let i = 0;
-  while (i < sorted.length) {
-    let j = i;
-    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++;
-    const start = sorted[i];
-    const end = sorted[j] + 1;
-    if (start > cursor) out.push({ text: chars.slice(cursor, start).join(""), hit: false });
-    out.push({ text: chars.slice(start, end).join(""), hit: true });
-    cursor = end;
-    i = j + 1;
-  }
-  if (cursor < chars.length) out.push({ text: chars.slice(cursor).join(""), hit: false });
-  return out;
-}
-
 // The list never grows past this many rows: name matches first (the server
 // already caps those), then appended content hits up to the cap.
 const MAX_ROWS = 100;
@@ -235,25 +197,9 @@ function applyContentMatches(res: {
   // rooted in different trees. Joining such content paths against the name
   // phase's search_dir would emit wrong absolute paths; drop them instead.
   if (res.search_dir !== searchDir.value) return;
-  const byPath = new Map(matches.value.map((m) => [m.path, m]));
-  const appended: FileMatch[] = [];
-  let capped = false;
-  for (const hit of res.matches) {
-    const existing = byPath.get(hit.path);
-    if (existing) {
-      existing.line = hit.line;
-      existing.snippet = hit.snippet;
-      existing.snippet_matched_indexes = hit.snippet_matched_indexes;
-    } else if (matches.value.length + appended.length >= MAX_ROWS) {
-      // Past the cap new rows are dropped, but later hits can still attach
-      // snippets to rows already on screen, so keep scanning.
-      capped = true;
-    } else {
-      appended.push(hit);
-    }
-  }
-  if (appended.length > 0) matches.value = [...matches.value, ...appended];
-  if (capped || res.truncated) truncated.value = true;
+  const merged = mergeContentMatches(matches.value, res.matches, MAX_ROWS);
+  matches.value = merged.matches;
+  if (merged.capped || res.truncated) truncated.value = true;
 }
 
 // Two-phase search: a fast name-only request and a slower git-grep content

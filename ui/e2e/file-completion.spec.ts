@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { createConversationViaAPI, withTempDir } from "./helpers";
 
 const menuFor = (page: Page) => page.getByTestId("file-completion-menu");
@@ -48,7 +49,7 @@ function findFilesResponse(searchDir: string, query: string, paths: string[]) {
 }
 
 test.describe("@ filename completion", () => {
-  test("shows an accessible file menu and inserts an absolute JSON string", async ({
+  test("shows an accessible file menu and inserts a relative reference", async ({
     page,
     request,
   }) => {
@@ -61,16 +62,36 @@ test.describe("@ filename completion", () => {
 
       const menu = menuFor(page);
       await expect(menu).toBeVisible({ timeout: 10000 });
-      await expect(menu).toHaveAttribute("role", "listbox");
-      await expect(menu).toHaveAttribute("aria-label", "Files and folders");
-      await expect(menu.getByRole("option", { name: "src/alpha.ts", exact: true })).toBeVisible();
+      const listbox = menu.getByRole("listbox");
+      await expect(listbox).toHaveAttribute("aria-label", "Files and folders");
+      const alpha = menu.getByRole("option", { name: "src/alpha.ts", exact: true });
+      await expect(alpha).toBeVisible();
+      await expect(alpha.locator(".grp-path mark")).toHaveText("alpha");
 
       await input.press("Enter");
-      const expected = `Open ${JSON.stringify(join(cwd, "src", "alpha.ts"))} `;
-      await expect(input).toHaveValue(expected);
-      expect(await input.inputValue()).not.toContain("@");
+      await expect(input).toHaveValue("Open @src/alpha.ts ");
       await expect(menu).toHaveCount(0);
       await expect(page.getByTestId("message-attachments")).toHaveCount(0);
+    });
+  });
+
+  test("finds files by content and shows the matching line", async ({ page, request }) => {
+    await withTempDir("shelley-completion-grep-", async (cwd) => {
+      execSync("git init", { cwd });
+      writeFileSync(join(cwd, "recipes.txt"), "secret ingredient: cardamom\n");
+      writeFileSync(join(cwd, "shopping-list.txt"), "eggs and flour\n");
+
+      const input = await openConversation(page, request, cwd);
+      await setComposer(input, "Use @cardamom");
+
+      const option = menuFor(page).getByRole("option", { name: "recipes.txt", exact: true });
+      await expect(option).toBeVisible({ timeout: 10000 });
+      const snippet = option.locator(".ff-snippet");
+      await expect(snippet).toContainText("secret ingredient: cardamom");
+      await expect(snippet.locator("mark")).toHaveText("cardamom");
+
+      await option.click();
+      await expect(input).toHaveValue("Use @recipes.txt ");
     });
   });
 
@@ -96,7 +117,7 @@ test.describe("@ filename completion", () => {
       await expect(option).toBeVisible({ timeout: 10000 });
       await input.press("Tab");
 
-      await expect(input).toHaveValue(`Read ${JSON.stringify(join(cwd, "My Document.md"))} `);
+      await expect(input).toHaveValue('Read @"My Document.md" ');
       await expect(page.getByTestId("message-attachments")).toHaveCount(0);
     });
   });
@@ -116,9 +137,10 @@ test.describe("@ filename completion", () => {
       await option.click();
       await expect(input).toBeFocused();
 
-      await expect(input).toHaveValue(`before ${JSON.stringify(join(cwd, "alpha.md"))} after`);
+      await expect(input).toHaveValue("before @alpha.md after");
+      await expect(menuFor(page)).toHaveCount(0);
       expect(await input.evaluate((el) => (el as HTMLTextAreaElement).selectionStart)).toBe(
-        `before ${JSON.stringify(join(cwd, "alpha.md"))}`.length,
+        "before @alpha.md".length,
       );
     });
   });
@@ -166,14 +188,14 @@ test.describe("@ filename completion", () => {
 
       await input.press("ArrowUp");
       await input.press("Enter");
-      await expect(input).toHaveValue(`${JSON.stringify(join(searchDir, "third.txt"))} `);
+      await expect(input).toHaveValue('@"re-rooted scope/third.txt" ');
 
       await setComposer(input, "@pick");
       await expect(menuFor(page).getByRole("option")).toHaveCount(3);
       await input.press("ArrowUp");
       await input.press("ArrowDown");
       await input.press("Tab");
-      await expect(input).toHaveValue(`${JSON.stringify(join(searchDir, "first.txt"))} `);
+      await expect(input).toHaveValue('@"re-rooted scope/first.txt" ');
     });
   });
 
@@ -309,7 +331,8 @@ test.describe("@ filename completion", () => {
         menuFor(page).getByRole("option", { name: "README.md", exact: true }),
       ).toBeVisible({ timeout: 10000 });
       await input.press("Enter");
-      await expect(input).toHaveValue(`Read ${JSON.stringify(join(cwd, "README.md"))}: please`);
+      await expect(input).toHaveValue("Read @README.md: please");
+      await expect(menuFor(page)).toHaveCount(0);
     });
   });
 
@@ -345,9 +368,7 @@ test.describe("@ filename completion", () => {
         menuFor(page).getByRole("option", { name: "draft-target.md", exact: true }),
       ).toBeVisible({ timeout: 10000 });
       await input.press("Enter");
-      await expect(input).toHaveValue(
-        `echo: Review ${JSON.stringify(join(draftCwd, "draft-target.md"))} `,
-      );
+      await expect(input).toHaveValue("echo: Review @draft-target.md ");
 
       // Promoting the restored draft must use the same cwd as completion.
       const sent = page.waitForRequest(
@@ -460,7 +481,7 @@ test.describe("@ folder completion", () => {
       // Hover changes the highlight without taking focus from the textarea.
       await folder.hover();
       await input.press("Tab");
-      await expect(input).toHaveValue(`Read ${JSON.stringify(join(cwd, "My Notes") + "/")} `);
+      await expect(input).toHaveValue('Read @"My Notes/" ');
       await expect(page.getByTestId("message-attachments")).toHaveCount(0);
       expect(contentRequests).toEqual([]);
     });
@@ -477,9 +498,9 @@ test.describe("@ folder completion", () => {
       const draft = "Compare @./docs/ with another folder";
       await setComposer(input, draft, "Compare @./docs/".length);
       const menu = menuFor(page);
-      await expect(menu.getByRole("option", { name: "readme.md", exact: true })).toBeVisible();
-      await menu.getByRole("option", { name: "Final Notes/ (folder)", exact: true }).click();
-      const expectedPrefix = `Compare ${JSON.stringify(join(cwd, "docs", "Final Notes") + "/")}`;
+      await expect(menu.getByRole("option", { name: "docs/readme.md", exact: true })).toBeVisible();
+      await menu.getByRole("option", { name: "docs/Final Notes/ (folder)", exact: true }).click();
+      const expectedPrefix = 'Compare @"docs/Final Notes/"';
       await expect(input).toHaveValue(expectedPrefix + " with another folder");
       await expect(input).toBeFocused();
       expect(await input.evaluate((el) => (el as HTMLTextAreaElement).selectionStart)).toBe(
@@ -498,13 +519,14 @@ test.describe("@ folder completion", () => {
         mkdirSync(target);
         const input = await openConversation(page, request, cwd);
         await setComposer(input, `Inspect @${JSON.stringify(target)}`);
+        const relativeTarget = relative(cwd, target) + "/";
         const folder = menuFor(page).getByRole("option", {
-          name: "Empty Folder/ (folder)",
+          name: `${relativeTarget} (folder)`,
           exact: true,
         });
         await expect(folder).toBeVisible();
         await input.press("Enter");
-        await expect(input).toHaveValue(`Inspect ${JSON.stringify(target + "/")} `);
+        await expect(input).toHaveValue(`Inspect @${JSON.stringify(relativeTarget)} `);
       });
     });
   });

@@ -1,4 +1,4 @@
-// @ completion only inserts a quoted path; it never reads or attaches a file.
+// @ completion inserts a relative path reference; it never reads or attaches a file.
 export interface FileToken {
   start: number;
   end: number;
@@ -27,9 +27,54 @@ export function fileTokenAt(text: string, cursor: number, selectionEnd = cursor)
   return null;
 }
 
-export function insertFilePath(text: string, token: FileToken, searchDir: string, path: string) {
-  const absolutePath = `${searchDir.replace(/\/$/, "")}/${path}`;
-  const inserted = JSON.stringify(absolutePath) + (token.end === text.length ? " " : "");
+function splitPath(value: string) {
+  const parts: string[] = [];
+  for (const part of value.split("/")) {
+    if (!part || part === ".") continue;
+    if (part === ".." && parts.length && parts.at(-1) !== "..") parts.pop();
+    else parts.push(part);
+  }
+  return parts;
+}
+
+/** Resolve a search result against searchDir, then display it relative to cwd. */
+export function relativeFilePath(cwd: string, searchDir: string, path: string) {
+  const isDirectory = path.endsWith("/");
+  const base = splitPath(cwd);
+  const target = splitPath(`${searchDir}/${path}`);
+  let common = 0;
+  while (common < base.length && base[common] === target[common]) common++;
+  const relative = [
+    ...Array.from({ length: base.length - common }, () => ".."),
+    ...target.slice(common),
+  ].join("/");
+  return (relative || ".") + (isDirectory ? "/" : "");
+}
+
+export function relativeFileMatch<T extends { path: string; matched_indexes?: number[] }>(
+  cwd: string,
+  searchDir: string,
+  match: T,
+): T {
+  const path = relativeFilePath(cwd, searchDir, match.path);
+  const offset = Array.from(path).length - Array.from(match.path).length;
+  return {
+    ...match,
+    path,
+    matched_indexes: match.matched_indexes
+      ?.map((index) => index + offset)
+      .filter((index) => index >= 0),
+  };
+}
+
+function referenceForPath(path: string) {
+  // Quote only characters that would end or split an @ token.
+  if (!/[\s"@,:;!?()[\]{}]/.test(path)) return `@${path}`;
+  return `@${JSON.stringify(path)}`;
+}
+
+export function insertFilePath(text: string, token: FileToken, path: string) {
+  const inserted = referenceForPath(path) + (token.end === text.length ? " " : "");
   return {
     text: text.slice(0, token.start) + inserted + text.slice(token.end),
     cursor: token.start + inserted.length,

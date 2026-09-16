@@ -105,57 +105,80 @@
       <div class="textarea-wrapper">
         <div
           v-if="showFileMenu"
-          :id="fileMenuId"
           ref="fileMenuRef"
           class="slash-command-menu file-completion-menu"
-          role="listbox"
-          aria-label="Files and folders"
           data-testid="file-completion-menu"
         >
           <div
-            v-if="fileLoading || fileError || !fileMatches.length"
+            v-if="fileError || (fileLoading && !fileMatches.length)"
             class="file-completion-status"
             role="status"
           >
-            {{
-              fileError ||
-              (fileLoading ? "Searching files and folders…" : "No matching files or folders")
-            }}
+            {{ fileError || "Searching files and folders…" }}
           </div>
-          <button
-            v-for="(item, index) in fileMatches"
-            :id="`${fileMenuId}-${index}`"
-            :key="item.path"
-            type="button"
-            :class="`slash-command-item file-completion-item${index === fileSelected ? ' selected' : ''}`"
-            role="option"
-            :aria-selected="index === fileSelected"
-            :aria-label="item.is_dir ? `${item.path} (folder)` : item.path"
-            :data-kind="item.is_dir ? 'folder' : 'file'"
-            :title="item.path"
-            @mousedown.prevent
-            @mouseenter="fileSelected = index"
-            @click="chooseFile(index)"
+          <div
+            :id="fileMenuId"
+            class="file-completion-list"
+            role="listbox"
+            aria-label="Files and folders"
           >
-            <svg
-              class="file-completion-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              aria-hidden="true"
+            <button
+              v-for="(item, index) in fileMatches"
+              :id="`${fileMenuId}-${index}`"
+              :key="item.path"
+              type="button"
+              :class="`file-completion-item grp-row${index === fileSelected ? ' grp-row-active' : ''}`"
+              role="option"
+              :aria-selected="index === fileSelected"
+              :aria-label="item.is_dir ? `${item.path} (folder)` : item.path"
+              :data-kind="item.is_dir ? 'folder' : 'file'"
+              :title="item.path"
+              @mousedown.prevent
+              @mouseenter="fileSelected = index"
+              @click="chooseFile(index)"
             >
-              <path
-                v-if="item.is_dir"
-                d="M3 7V5a2 2 0 0 1 2-2h5l3 3h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
-              />
-              <path
-                v-else
-                d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm0 0v6h6"
-              />
-            </svg>
-            <span class="slash-command-name">{{ item.path }}</span>
-          </button>
+              <svg
+                class="grp-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                aria-hidden="true"
+              >
+                <path
+                  v-if="item.is_dir"
+                  d="M3 7V5a2 2 0 0 1 2-2h5l3 3h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
+                />
+                <path
+                  v-else
+                  d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm0 0v6h6"
+                />
+              </svg>
+              <span class="grp-main">
+                <span class="grp-path">
+                  <HighlightedText :text="item.path" :positions="item.matched_indexes" />
+                </span>
+                <span v-if="item.snippet" class="ff-snippet" :title="item.snippet">
+                  <span class="ff-snippet-line">{{ item.line }}:</span>
+                  <HighlightedText :text="item.snippet" :positions="item.snippet_matched_indexes" />
+                </span>
+              </span>
+            </button>
+          </div>
+          <div
+            v-if="fileGrepPending && !fileLoading && !fileError"
+            class="ff-grep-pending file-completion-grep-pending"
+            role="status"
+          >
+            Searching file contents…
+          </div>
+          <div
+            v-else-if="!fileLoading && !fileMatches.length && !fileError"
+            class="file-completion-status"
+            role="status"
+          >
+            No matching files or folders
+          </div>
         </div>
         <div
           v-if="showSlashMenu"
@@ -457,6 +480,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from "v
 import { useFileCompletion } from "../composables/fileCompletion";
 import { useI18n } from "../composables/i18n";
 import { pickPlaceholderHint } from "../../utils/placeholderHints";
+import HighlightedText from "./HighlightedText.vue";
 import type { ContextUsageLevel } from "../../utils/contextUsage";
 import { SLASH_COMMANDS, slashCommandsForConversation } from "../../utils/slashCommands";
 import {
@@ -883,6 +907,7 @@ const {
   matches: fileMatches,
   selected: fileSelected,
   loading: fileLoading,
+  grepPending: fileGrepPending,
   error: fileError,
   focused: fileFocused,
   updateSelection: updateFileSelection,
@@ -1267,14 +1292,14 @@ function handleKeyDown(e: KeyboardEvent) {
       return;
     }
     if (
-      (fileLoading.value || fileMatches.value.length > 0) &&
+      (fileLoading.value || fileGrepPending.value || fileMatches.value.length > 0) &&
       !e.shiftKey &&
       !e.ctrlKey &&
       !e.metaKey &&
       (e.key === "Enter" || e.key === "Tab")
     ) {
-      // Don't accidentally send while results are loading; settled empty/error
-      // searches leave normal typing, submission and focus navigation alone.
+      // Don't accidentally send while either search phase is loading; settled
+      // empty/error searches leave normal typing, submission and focus navigation alone.
       e.preventDefault();
       void chooseFile(fileSelected.value);
       return;
