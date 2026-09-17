@@ -27,7 +27,7 @@
        use the `:on-send` / `:on-queue` function props. -->
 <template>
   <div
-    :class="`message-input-container ${isDraggingOver ? 'drag-over' : ''} ${isShellMode ? 'shell-mode' : ''} ${showSlashMenu ? 'slash-menu-open' : ''}`"
+    :class="`message-input-container ${isDraggingOver ? 'drag-over' : ''} ${isShellMode ? 'shell-mode' : ''} ${showSlashMenu || showFileMenu ? 'slash-menu-open' : ''}`"
     @dragover="handleDragOver"
     @dragenter="handleDragEnter"
     @dragleave="handleDragLeave"
@@ -104,6 +104,60 @@
       </div>
       <div class="textarea-wrapper">
         <div
+          v-if="showFileMenu"
+          :id="fileMenuId"
+          ref="fileMenuRef"
+          class="slash-command-menu file-completion-menu"
+          role="listbox"
+          aria-label="Files and folders"
+          data-testid="file-completion-menu"
+        >
+          <div
+            v-if="fileLoading || fileError || !fileMatches.length"
+            class="file-completion-status"
+            role="status"
+          >
+            {{
+              fileError ||
+              (fileLoading ? "Searching files and folders…" : "No matching files or folders")
+            }}
+          </div>
+          <button
+            v-for="(item, index) in fileMatches"
+            :id="`${fileMenuId}-${index}`"
+            :key="item.path"
+            type="button"
+            :class="`slash-command-item file-completion-item${index === fileSelected ? ' selected' : ''}`"
+            role="option"
+            :aria-selected="index === fileSelected"
+            :aria-label="item.is_dir ? `${item.path} (folder)` : item.path"
+            :data-kind="item.is_dir ? 'folder' : 'file'"
+            :title="item.path"
+            @mousedown.prevent
+            @mouseenter="fileSelected = index"
+            @click="chooseFile(index)"
+          >
+            <svg
+              class="file-completion-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              aria-hidden="true"
+            >
+              <path
+                v-if="item.is_dir"
+                d="M3 7V5a2 2 0 0 1 2-2h5l3 3h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
+              />
+              <path
+                v-else
+                d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm0 0v6h6"
+              />
+            </svg>
+            <span class="slash-command-name">{{ item.path }}</span>
+          </button>
+        </div>
+        <div
           v-if="showSlashMenu"
           ref="slashMenuRef"
           class="slash-command-menu"
@@ -177,7 +231,16 @@
           :rows="initialRows ?? 1"
           aria-label="Message input"
           data-testid="message-input"
+          :aria-autocomplete="showFileMenu ? 'list' : undefined"
+          :aria-controls="showFileMenu ? fileMenuId : undefined"
+          :aria-activedescendant="
+            showFileMenu && fileMatches.length ? `${fileMenuId}-${fileSelected}` : undefined
+          "
           @input="onTextareaInput"
+          @select="syncFileSelection"
+          @click="syncFileSelection"
+          @keyup="syncFileSelection"
+          @blur="fileFocused = false"
           @keydown="handleKeyDown"
           @paste="handlePaste"
           @focus="onTextareaFocus"
@@ -390,7 +453,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from "vue";
+import { useFileCompletion } from "../composables/fileCompletion";
 import { useI18n } from "../composables/i18n";
 import { pickPlaceholderHint } from "../../utils/placeholderHints";
 import type { ContextUsageLevel } from "../../utils/contextUsage";
@@ -474,6 +538,8 @@ const props = withDefaults(
     /** Currently selected model id; the levels offered for "/model <level>"
      * (no model argument) are the ones this model accepts. */
     currentModelId?: string;
+    /** Working directory for server-side @ filename completion. */
+    cwd?: string;
     /** Child conversations cannot start nested BTW readers. */
     isChildConversation?: boolean;
   }>(),
@@ -808,6 +874,56 @@ const preferCompactAndSend = computed(
     props.compactSendLevel !== "" &&
     sendSelectedLevel.value !== props.compactSendLevel,
 );
+
+// --- @ filename autocomplete --------------------------------------------
+const fileMenuId = useId();
+const fileMenuRef = ref<HTMLDivElement | null>(null);
+const {
+  visible: showFileMenu,
+  matches: fileMatches,
+  selected: fileSelected,
+  loading: fileLoading,
+  error: fileError,
+  focused: fileFocused,
+  updateSelection: updateFileSelection,
+  dismiss: dismissFiles,
+  choose: completeFile,
+} = useFileCompletion({
+  message,
+  cwd: () => props.cwd ?? "",
+  session: composerSession,
+  enabled: () => !isDisabled.value && !isShellMode.value,
+});
+
+function syncFileSelection() {
+  const textarea = textareaRef.value;
+  if (textarea) updateFileSelection(textarea.selectionStart, textarea.selectionEnd);
+}
+
+async function chooseFile(index: number) {
+  const replacement = completeFile(index);
+  if (!replacement) return;
+  setMessage(replacement.text);
+  await nextTick();
+  textareaRef.value?.focus();
+  textareaRef.value?.setSelectionRange(replacement.cursor, replacement.cursor);
+  syncFileSelection();
+}
+
+function onFileMenuOutside(e: MouseEvent) {
+  if (fileMenuRef.value?.contains(e.target as Node) || e.target === textareaRef.value) return;
+  dismissFiles();
+}
+
+watch(showFileMenu, (open) => {
+  if (open) document.addEventListener("mousedown", onFileMenuOutside);
+  else document.removeEventListener("mousedown", onFileMenuOutside);
+});
+watch(fileSelected, async () => {
+  await nextTick();
+  fileMenuRef.value?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+});
+
 const slashQuery = computed(() => {
   const match = message.value.match(/^\/[a-zA-Z0-9_-]*$/);
   return match ? match[0].slice(1).toLowerCase() : null;
@@ -1123,9 +1239,12 @@ async function handleSendNow() {
 
 function onTextareaInput(e: Event) {
   setMessage((e.target as HTMLTextAreaElement).value);
+  syncFileSelection();
 }
 
 function onTextareaFocus() {
+  fileFocused.value = true;
+  syncFileSelection();
   // Scroll to bottom after keyboard animation settles
   requestAnimationFrame(() => requestAnimationFrame(() => emit("focus")));
 }
@@ -1133,6 +1252,34 @@ function onTextareaFocus() {
 function handleKeyDown(e: KeyboardEvent) {
   // Don't submit while IME is composing.
   if (isImeComposing(e)) return;
+  if (showFileMenu.value) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      dismissFiles();
+      return;
+    }
+    if (fileMatches.value.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      e.preventDefault();
+      fileSelected.value =
+        (fileSelected.value + (e.key === "ArrowDown" ? 1 : -1) + fileMatches.value.length) %
+        fileMatches.value.length;
+      return;
+    }
+    if (
+      (fileLoading.value || fileMatches.value.length > 0) &&
+      !e.shiftKey &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      (e.key === "Enter" || e.key === "Tab")
+    ) {
+      // Don't accidentally send while results are loading; settled empty/error
+      // searches leave normal typing, submission and focus navigation alone.
+      e.preventDefault();
+      void chooseFile(fileSelected.value);
+      return;
+    }
+  }
   if (showSlashMenu.value) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -1249,6 +1396,7 @@ onUnmounted(() => {
   }
   document.removeEventListener("mousedown", onQueueMenuOutside);
   document.removeEventListener("mousedown", onSlashMenuOutside);
+  document.removeEventListener("mousedown", onFileMenuOutside);
   attachments.value.forEach((a) => {
     if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
   });
