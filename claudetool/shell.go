@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -202,7 +201,7 @@ func (s *ShellTool) run(ctx context.Context, req shellInput) llm.ToolOut {
 		// independent of the BashTool struct beyond the LLM provider.
 		bt := &BashTool{LLMProvider: s.LLMProvider, ModelID: s.ModelID}
 		if err := bt.checkAndInstallMissingTools(ctx, req.Command); err != nil {
-			slog.DebugContext(ctx, "failed to auto-install missing tools", "error", err)
+			return llm.ErrorfToolOut("automatic tool installation failed: %w", err)
 		}
 	}
 

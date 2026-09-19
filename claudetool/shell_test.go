@@ -62,6 +62,23 @@ func TestShellQuickCommand(t *testing.T) {
 	}
 }
 
+func TestShellJITInstallFailureIsToolError(t *testing.T) {
+	const command = "shelley-definitely-missing-shell-command"
+	autoInstallMu.Lock()
+	delete(doNotAttemptToolInstall, command)
+	autoInstallMu.Unlock()
+
+	s := newTestShell(t)
+	s.EnableJITInstall = true
+	_, _, err := runShell(t, s, `{"command":"`+command+`"}`, 10*time.Second)
+	if err == nil {
+		t.Fatal("expected missing command installation to return a tool error")
+	}
+	if got := err.Error(); !strings.Contains(got, "automatic tool installation failed") || !strings.Contains(got, command) {
+		t.Fatalf("error = %q, want explicit installation failure for %s", got, command)
+	}
+}
+
 func TestShellYieldsOnLongCommand(t *testing.T) {
 	s := newTestShell(t)
 	s.DefaultYield = 500 * time.Millisecond
