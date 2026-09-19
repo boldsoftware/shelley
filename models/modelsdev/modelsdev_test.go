@@ -23,6 +23,8 @@ func TestLookupImageSupport(t *testing.T) {
 
 		// Hosts that carry an explicit "api" field in models.dev.
 		{"fireworks text-only", "https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/glm-5p2", true, false},
+		{"fireworks glm-5p3 text", "https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/glm-5p3", true, false},
+		{"fireworks glm-5p3-flash vision", "https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/glm-5p3-flash", true, true},
 		{"fireworks vision", "https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/kimi-k3", true, true},
 
 		// The original bug: a custom model pointed at opencode.ai/zen. The
@@ -119,6 +121,8 @@ func TestLookupReasoningSupport(t *testing.T) {
 		{"https://api.openai.com/v1", "gpt-5.4", true, true},
 		{"https://api.openai.com/v1", "gpt-4o", false, true},
 		{"https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/gpt-oss-120b", true, true},
+		{"https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/glm-5p3", true, true},
+		{"https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/glm-5p3-flash", true, true},
 		{"https://generativelanguage.googleapis.com", "gemini-3-flash-preview", true, true},
 		{"https://made-up.example.com", "x", false, false},
 	}
@@ -203,6 +207,24 @@ func TestLookupReasoningCapabilities(t *testing.T) {
 			found: true,
 			want:  ReasoningCapabilities{Supported: true},
 		},
+		{
+			name:     "fireworks glm-5p3 effort levels",
+			endpoint: "https://api.fireworks.ai/inference/v1",
+			model:    "accounts/fireworks/models/glm-5p3",
+			found:    true,
+			want: ReasoningCapabilities{Supported: true, Levels: []llm.ThinkingLevel{
+				llm.ThinkingLevelLow, llm.ThinkingLevelHigh, llm.ThinkingLevelMax,
+			}},
+		},
+		{
+			name:     "fireworks glm-5p3-flash effort levels",
+			endpoint: "https://api.fireworks.ai/inference/v1",
+			model:    "accounts/fireworks/models/glm-5p3-flash",
+			found:    true,
+			want: ReasoningCapabilities{Supported: true, Levels: []llm.ThinkingLevel{
+				llm.ThinkingLevelLow, llm.ThinkingLevelHigh, llm.ThinkingLevelMax,
+			}},
+		},
 		{name: "unknown", endpoint: "https://made-up.example", model: "unknown"},
 	}
 	for _, tt := range tests {
@@ -249,6 +271,8 @@ func TestLookupCost(t *testing.T) {
 		{"openai undated", "", "gpt-5.3-codex", true, Cost{Input: 1.75, Output: 14, CacheRead: 0.175}},
 		{"astra via gateway", "https://llm.int.exe.xyz/v1/responses", "gpt-6-astra", true, Cost{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}},
 		{"fireworks full path", "", "accounts/fireworks/models/kimi-k2p6", true, Cost{Input: 0.95, Output: 4, CacheRead: 0.16}},
+		{"fireworks glm-5p3", "", "accounts/fireworks/models/glm-5p3", true, Cost{Input: 1.4, Output: 4.4, CacheRead: 0.26}},
+		{"fireworks glm-5p3-flash", "", "accounts/fireworks/models/glm-5p3-flash", true, Cost{Input: 0.15, Output: 0.5, CacheRead: 0.03}},
 		{"unknown model", "", "predictable-v1", false, Cost{}},
 	}
 	for _, tc := range cases {

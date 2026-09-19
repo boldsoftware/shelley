@@ -293,10 +293,16 @@ func All() []Model {
 			Build: antSvc(ant.Claude46Opus),
 		},
 		{
-			ID: "glm-5.2-fireworks", Provider: ProviderFireworks,
-			Description: "GLM-5.2 on Fireworks", APIModelName: oai.GLM52Fireworks.ModelName,
+			ID: "glm-5.3-fireworks", Provider: ProviderFireworks,
+			Description: "GLM-5.3 on Fireworks", APIModelName: oai.GLM53Fireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
-			Build: oaiChatSvc(oai.GLM52Fireworks, "fireworks"),
+			Build: oaiChatSvc(oai.GLM53Fireworks, "fireworks"),
+		},
+		{
+			ID: "glm-5.3-flash-fireworks", Provider: ProviderFireworks,
+			Description: "GLM-5.3 Flash on Fireworks", APIModelName: oai.GLM53FlashFireworks.ModelName,
+			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
+			Build: oaiChatSvc(oai.GLM53FlashFireworks, "fireworks"),
 		},
 		{
 			ID: "gemini-3.1-pro", Provider: ProviderGemini,
@@ -417,6 +423,12 @@ func All() []Model {
 			Description: "DeepSeek V4 Flash 0731 on Fireworks", APIModelName: oai.DeepseekV4FlashFireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
 			Build: oaiChatSvc(oai.DeepseekV4FlashFireworks, "fireworks"),
+		},
+		{
+			ID: "glm-5.2-fireworks", Provider: ProviderFireworks,
+			Description: "GLM-5.2 on Fireworks", APIModelName: oai.GLM52Fireworks.ModelName,
+			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
+			Build: oaiChatSvc(oai.GLM52Fireworks, "fireworks"),
 		},
 		{
 			ID: "predictable", Provider: ProviderBuiltIn,

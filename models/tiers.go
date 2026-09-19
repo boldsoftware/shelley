@@ -51,6 +51,8 @@ var shadowPairs = []shadowPair{
 	{Better: "kimi-k2.7-code-fireworks", Worse: "kimi-k2.6-fireworks"},
 	{Better: "kimi-k3-fireworks", Worse: "kimi-k2.7-code-fireworks"},
 	{Better: "kimi-k3-fireworks", Worse: "kimi-k2.6-fireworks"},
+	{Better: "glm-5.3-fireworks", Worse: "glm-5.2-fireworks"},
+	{Better: "deepseek-v4.1-flash-fireworks", Worse: "deepseek-v4-pro-fireworks"}, // per DeepSeek, 4.1 Flash is both stronger and cheaper than V4 Pro
 
 	// Arguable / cross-family supersessions. We still encode them so the
 	// default list stays lean; the reasoning is noted inline.
@@ -68,10 +70,10 @@ var shadowPairs = []shadowPair{
 	{Better: "glm-5.2-fireworks", Worse: "kimi-k2.7-code-fireworks"}, // different families; glm costs a bit more; kimi-k3 costs far more, so it doesn't shadow glm
 	{Better: "glm-5.2-fireworks", Worse: "deepseek-v4-flash-0731-fireworks"},
 	// V4.1 Flash is the same price as 0731 Flash with vision, a newer base and a
-	// much larger output limit, so it supersedes it outright. glm-5.2 shadows it
-	// for the same reason it shadows 0731.
+	// much larger output limit, so it supersedes it outright. Nothing shadows it:
+	// glm-5.3 is a different family at a different price point, so both stay in
+	// the default list.
 	{Better: "deepseek-v4.1-flash-fireworks", Worse: "deepseek-v4-flash-0731-fireworks"},
-	{Better: "glm-5.2-fireworks", Worse: "deepseek-v4.1-flash-fireworks"},
 	{Better: "gpt-5.6-luna", Worse: "claude-haiku-4.5"},
 	{Better: "gpt-5.6-luna", Worse: "gpt-5.3-codex"},
 }

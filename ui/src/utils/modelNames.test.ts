@@ -48,6 +48,8 @@ eq("codex-mini-latest", "codex-mini-latest");
 // Other families
 eq("glm-5.2-fireworks", "GLM 5.2");
 eq("glm-5p2", "GLM 5.2");
+eq("glm-5.3-fireworks", "GLM 5.3");
+eq("glm-5.3-flash-fireworks", "GLM 5.3 Flash");
 eq("deepseek-v4-pro-fireworks", "DeepSeek V4 Pro");
 eq("deepseek-v4-flash-0731-fireworks", "DeepSeek V4 Flash 0731");
 // Dot-versioned family token: "v4.1" must survive as a version, not veto.
