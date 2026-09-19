@@ -29,6 +29,7 @@ import (
 
 // VersionChecker checks for new versions of Shelley from GitHub releases.
 type VersionChecker struct {
+	upgradeMu   sync.Mutex // Protects binary replacement across manual and automatic upgrades.
 	mu          sync.Mutex
 	lastCheck   time.Time
 	cachedInfo  *VersionInfo
@@ -512,6 +513,11 @@ func parseMinorVersion(tag string) int {
 
 // DoUpgrade downloads and applies the update with checksum verification.
 func (vc *VersionChecker) DoUpgrade(ctx context.Context) error {
+	if !vc.upgradeMu.TryLock() {
+		return fmt.Errorf("upgrade already in progress")
+	}
+	defer vc.upgradeMu.Unlock()
+
 	if vc.skipCheck {
 		return fmt.Errorf("version checking is disabled")
 	}

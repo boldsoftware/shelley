@@ -3,15 +3,89 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestDoUpgradeRejectsConcurrentRequests(t *testing.T) {
+	for _, blockAt := range []string{"checksums", "binary"} {
+		t.Run(blockAt, func(t *testing.T) {
+			t.Parallel()
+			entered := make(chan struct{})
+			release := make(chan struct{})
+			unblock := sync.OnceFunc(func() { close(release) })
+			var checksumRequests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/checksums":
+					if checksumRequests.Add(1) > 1 {
+						http.Error(w, "checksum unavailable", http.StatusServiceUnavailable)
+						return
+					}
+					if blockAt == "checksums" {
+						close(entered)
+						<-release
+					}
+					fmt.Fprintf(w, "%s  shelley_%s_%s\n", strings.Repeat("0", 64), runtime.GOOS, runtime.GOARCH)
+				case "/binary":
+					if blockAt == "binary" {
+						close(entered)
+						<-release
+					}
+					// Never reach selfupdate.Apply or replace the test executable.
+					http.Error(w, "download unavailable", http.StatusServiceUnavailable)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			defer unblock()
+
+			info := &VersionInfo{
+				HasUpdate:   true,
+				DownloadURL: server.URL + "/binary",
+				ReleaseInfo: &ReleaseInfo{ChecksumsURL: server.URL + "/checksums"},
+			}
+			vc := &VersionChecker{lastCheck: time.Now(), cachedInfo: info}
+			done := make(chan error, 1)
+			go func() { done <- vc.DoUpgrade(t.Context()) }()
+			<-entered
+
+			// Checking version information must remain available during an upgrade.
+			if got, err := vc.Check(t.Context(), false); err != nil || got != info {
+				t.Fatalf("Check during upgrade = %v, %v; want cached info", got, err)
+			}
+			if err := vc.DoUpgrade(t.Context()); err == nil || err.Error() != "upgrade already in progress" {
+				t.Errorf("concurrent DoUpgrade = %v; want upgrade already in progress", err)
+			}
+			if got := checksumRequests.Load(); got != 1 {
+				t.Errorf("checksum requests during upgrade = %d; want 1", got)
+			}
+
+			unblock()
+			if err := <-done; err == nil || !strings.Contains(err.Error(), "download returned status 503") {
+				t.Fatalf("first DoUpgrade = %v; want download failure", err)
+			}
+			// A failed attempt must release the guard so a later request can retry.
+			if err := vc.DoUpgrade(t.Context()); err == nil || !strings.Contains(err.Error(), "failed to fetch checksum") {
+				t.Errorf("retry DoUpgrade = %v; want checksum failure", err)
+			}
+			if got := checksumRequests.Load(); got != 2 {
+				t.Errorf("checksum requests after retry = %d; want 2", got)
+			}
+		})
+	}
+}
 
 func TestExtractSHAFromTag(t *testing.T) {
 	t.Parallel()
