@@ -795,6 +795,30 @@ func maxOutputTokens(endpoint, modelName string, configured int) int {
 	return min(cmp.Or(configured, limit), limit)
 }
 
+// isFireworksBaseURL reports whether the given base URL points at the
+// Fireworks OpenAI-compatible API.
+func isFireworksBaseURL(baseURL string) bool {
+	return endpointHostMatches(baseURL, "fireworks.ai")
+}
+
+// isFireworksModel reports whether a model is hosted on Fireworks, matched by
+// its API model name. The request URL alone is not enough: gateway-routed
+// requests (e.g. the exe.dev LLM gateway) carry the gateway's host, not
+// fireworks.ai.
+func isFireworksModel(model Model) bool {
+	return strings.HasPrefix(strings.ToLower(model.ModelName), "accounts/fireworks/models/")
+}
+
+// forwardsReasoningContent reports whether assistant reasoning_content should
+// be sent back on subsequent turns. Fireworks mirrors DeepSeek's extension
+// for interleaved reasoning, including tool turns. Requests that reach
+// Fireworks — directly, through a gateway URL, or by provider/model identity
+// — preserve it; other providers may reject the extension, so it is stripped
+// there.
+func forwardsReasoningContent(baseURL, providerName string, model Model) bool {
+	return isDeepSeekBaseURL(baseURL) || isFireworksBaseURL(baseURL) || isFireworksModel(model) || strings.EqualFold(providerName, "fireworks")
+}
+
 // fromLLMMessage converts llm.Message to OpenAI ChatCompletionMessage format
 func fromLLMMessage(msg llm.Message) []openai.ChatCompletionMessage {
 	// For OpenAI, we need to handle tool results differently than regular messages
@@ -1398,27 +1422,28 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 		allMessages = append(allMessages, msgs...)
 	}
 
-	// reasoning_content is a DeepSeek-specific extension to the OpenAI chat
-	// completions API. Other providers (OpenAI, Fireworks, Together, etc.) do
-	// not recognize it and may reject or silently mishandle the field. So we
-	// only forward it when talking to DeepSeek. For DeepSeek with thinking
-	// mode (the default for deepseek-v4-pro), assistant messages that include
-	// tool_calls must carry a reasoning_content field on subsequent turns or
-	// the API returns HTTP 400. If we have a real thinking block we use it
-	// (so the model can continue its prior CoT). Otherwise — e.g. for
-	// assistant turns replayed from history persisted before this fix — we
-	// inject a single-space placeholder so the request remains well-formed.
+	// reasoning_content is an extension to the OpenAI chat completions API
+	// understood by DeepSeek and Fireworks' OpenAI-compatible reasoning models;
+	// other providers (OpenAI, Together, etc.) reject or silently mishandle it,
+	// so strip it for them. DeepSeek additionally requires assistant messages
+	// with tool_calls to carry a reasoning_content field on subsequent turns
+	// (thinking mode is the default for deepseek-v4-pro) or the API returns
+	// HTTP 400: use the real thinking block when present so the model can
+	// continue its prior CoT, else a single-space placeholder (e.g. assistant
+	// turns replayed from history persisted before this fix). Fireworks takes
+	// the same field for interleaved reasoning but does not require the
+	// placeholder.
 	// See https://api-docs.deepseek.com/guides/thinking_mode#tool-calls
-	if isDeepSeekBaseURL(baseURL) {
+	if !forwardsReasoningContent(baseURL, s.ProviderName, model) {
+		for i := range allMessages {
+			allMessages[i].ReasoningContent = ""
+		}
+	} else if isDeepSeekBaseURL(baseURL) {
 		for i := range allMessages {
 			m := &allMessages[i]
 			if m.Role == "assistant" && len(m.ToolCalls) > 0 && m.ReasoningContent == "" {
 				m.ReasoningContent = " "
 			}
-		}
-	} else {
-		for i := range allMessages {
-			allMessages[i].ReasoningContent = ""
 		}
 	}
 

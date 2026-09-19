@@ -2019,6 +2019,66 @@ func TestServiceDoNonDeepSeekStripsReasoningContent(t *testing.T) {
 	}
 }
 
+func TestServiceDoFireworksRoundTripsReasoningContent(t *testing.T) {
+	// Fireworks mirrors DeepSeek's reasoning_content extension for its
+	// OpenAI-compatible reasoning models: assistant thinking must survive
+	// tool turns. Direct Fireworks URLs AND gateway-routed Fireworks models
+	// (whose URL is the gateway's, not fireworks.ai) both preserve it.
+	for _, tt := range []struct {
+		name     string
+		modelURL string
+		model    Model
+	}{
+		{name: "direct fireworks url", modelURL: "https://api.fireworks.ai/inference/v1", model: modelForTest("accounts/fireworks/models/deepseek-v4-pro")},
+		{name: "fireworks model via gateway url", modelURL: "https://gateway.example.com/_/gateway/openai/v1", model: modelForTest("accounts/fireworks/models/deepseek-v4-pro")},
+		{name: "fireworks provider name", modelURL: "https://anything.example/v1", model: modelForTest("custom-fw-model")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotBody []byte
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotBody, _ = io.ReadAll(r.Body)
+				resp := openai.ChatCompletionResponse{ID: "x", Choices: []openai.ChatCompletionChoice{{
+					Message: openai.ChatCompletionMessage{Role: "assistant", Content: "ok"}, FinishReason: "stop",
+				}}}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(resp)
+			}))
+			defer server.Close()
+
+			u, _ := url.Parse(server.URL)
+			httpc := &http.Client{Transport: rewriteHostTransport{addr: u.Host}}
+			svc := &Service{
+				APIKey:   "k",
+				Model:    tt.model,
+				ModelURL: tt.modelURL,
+				HTTPC:    httpc,
+			}
+			if tt.name == "fireworks provider name" {
+				svc.ProviderName = "fireworks"
+			}
+
+			req := &llm.Request{
+				Messages: []llm.Message{
+					{Role: llm.MessageRoleAssistant, Content: []llm.Content{
+						{Type: llm.ContentTypeThinking, Thinking: "I should call the weather tool."},
+						{Type: llm.ContentTypeToolUse, ID: "call_1", ToolName: "get_weather", ToolInput: []byte(`{"city":"Paris"}`)},
+					}},
+					{Role: llm.MessageRoleUser, Content: []llm.Content{{
+						Type: llm.ContentTypeToolResult, ToolUseID: "call_1",
+						ToolResult: []llm.Content{{Type: llm.ContentTypeText, Text: "sunny"}},
+					}}},
+				},
+			}
+			if _, err := svc.Do(t.Context(), req); err != nil {
+				t.Fatalf("Do() error = %v", err)
+			}
+			if !strings.Contains(string(gotBody), `"reasoning_content":"I should call the weather tool."`) {
+				t.Errorf("expected real reasoning_content in request body, got: %s", gotBody)
+			}
+		})
+	}
+}
+
 func TestServiceSupportedReasoningLevels(t *testing.T) {
 	tests := []struct {
 		name  string
