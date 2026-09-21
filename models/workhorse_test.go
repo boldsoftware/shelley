@@ -85,6 +85,33 @@ func TestWorkhorseModel(t *testing.T) {
 	}
 }
 
+func TestWorkhorseModelStaysOnConversationGateway(t *testing.T) {
+	conversation := Built{
+		ID: "gpt-5.6-terra@priyanka", Provider: ProviderOpenAI,
+		Source: "priyanka gateway", BaseURL: "https://priyanka.example",
+	}
+	otherGateway := Built{
+		ID: "gpt-5.7-luna@chelsea", Provider: ProviderOpenAI, ReleaseDate: "2026-08-15",
+		Source: "chelsea gateway", BaseURL: "https://chelsea.example",
+	}
+	sameGateway := Built{
+		ID: "gpt-5.6-luna@priyanka", Provider: ProviderOpenAI, ReleaseDate: "2026-07-09",
+		Source: "priyanka gateway", BaseURL: "https://priyanka.example",
+	}
+
+	manager := newWorkhorseManager(t, conversation, otherGateway, sameGateway)
+	if got := manager.workhorseModel(conversation.ID); got != sameGateway.ID {
+		t.Fatalf("workhorseModel(%q) = %q, want same-gateway %q", conversation.ID, got, sameGateway.ID)
+	}
+
+	// Without a same-gateway workhorse, stay on the conversation model rather
+	// than crossing to another gateway's newer model.
+	manager = newWorkhorseManager(t, conversation, otherGateway)
+	if got := manager.workhorseModel(conversation.ID); got != conversation.ID {
+		t.Fatalf("workhorseModel(%q) = %q, want conversation model rather than cross-gateway fallback", conversation.ID, got)
+	}
+}
+
 func TestGetWorkhorseServiceUsesSelectedPrimary(t *testing.T) {
 	workhorse := &optionalRecordingService{recordingService: &recordingService{
 		provider:          "anthropic",

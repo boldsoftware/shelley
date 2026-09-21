@@ -105,7 +105,11 @@ func (m *Manager) workhorseModel(conversationModelID string) string {
 	bestDate := ""
 	for _, modelID := range m.GetAvailableModels() {
 		candidate := m.GetModelInfo(modelID)
-		if candidate == nil || candidate.Provider != info.Provider || !matchesWorkhorseFamily(modelID, family) {
+		if candidate == nil ||
+			candidate.Provider != info.Provider ||
+			candidate.BaseURL != info.BaseURL ||
+			candidate.Source != info.Source ||
+			!matchesWorkhorseFamily(modelID, family) {
 			continue
 		}
 		if bestID == "" || candidate.ReleaseDate > bestDate {
