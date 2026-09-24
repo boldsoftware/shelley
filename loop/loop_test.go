@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -2575,7 +2576,9 @@ func (p *pauseLLMService) Do(ctx context.Context, req *llm.Request) (*llm.Respon
 				{Type: llm.ContentTypeServerToolUse, ID: "srv_1", ToolName: "web_search", ToolInput: json.RawMessage(`{"query":"x"}`)},
 			},
 			StopReason: llm.StopReasonPause,
-			Usage:      llm.Usage{InputTokens: 10, OutputTokens: 5},
+			Model:      "test-model",
+			URL:        "https://example.com/v1/messages",
+			Usage:      llm.Usage{InputTokens: 10, CacheCreationInputTokens: 3, CacheReadInputTokens: 4, OutputTokens: 5, CostUSD: 0.25},
 			StartTime:  &start,
 			EndTime:    &end,
 		}, nil
@@ -2592,7 +2595,9 @@ func (p *pauseLLMService) Do(ctx context.Context, req *llm.Request) (*llm.Respon
 			{Type: llm.ContentTypeText, Text: "The answer is 42."},
 		},
 		StopReason: llm.StopReasonEndTurn,
-		Usage:      llm.Usage{InputTokens: 20, OutputTokens: 8},
+		Model:      "test-model",
+		URL:        "https://example.com/v1/messages",
+		Usage:      llm.Usage{InputTokens: 20, CacheCreationInputTokens: 6, CacheReadInputTokens: 7, OutputTokens: 8, CostUSD: 0.5},
 		StartTime:  &start,
 		EndTime:    &end,
 	}, nil
@@ -2615,7 +2620,7 @@ func TestLoopResolvesPauseTurn(t *testing.T) {
 		return nil
 	}
 
-	svc := &pauseLLMService{firstStart: time.Now()}
+	svc := &pauseLLMService{firstStart: time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)}
 	loop := NewLoop(Config{
 		LLM:           svc,
 		History:       []llm.Message{},
@@ -2687,10 +2692,75 @@ func TestLoopResolvesPauseTurn(t *testing.T) {
 			if u.StartTime == nil || !u.StartTime.Equal(svc.firstStart) {
 				t.Errorf("merged StartTime = %v, want first leg start %v", u.StartTime, svc.firstStart)
 			}
+			firstEnd := svc.firstStart.Add(time.Second)
+			secondStart := svc.firstStart.Add(2 * time.Second)
+			secondEnd := svc.firstStart.Add(3 * time.Second)
+			want := llm.Usage{
+				InputTokens: 30, CacheCreationInputTokens: 9, CacheReadInputTokens: 11,
+				OutputTokens: 13, CostUSD: 0.75, Model: "test-model", URL: "https://example.com/v1/messages",
+				StartTime: &svc.firstStart, EndTime: &secondEnd,
+				Requests: []llm.RequestUsage{
+					{InputTokens: 10, CacheCreationInputTokens: 3, CacheReadInputTokens: 4, OutputTokens: 5,
+						CostUSD: 0.25, StartTime: &svc.firstStart, EndTime: &firstEnd},
+					{InputTokens: 20, CacheCreationInputTokens: 6, CacheReadInputTokens: 7, OutputTokens: 8,
+						CostUSD: 0.5, StartTime: &secondStart, EndTime: &secondEnd},
+				},
+			}
+			if !reflect.DeepEqual(u, want) {
+				t.Errorf("recorded usage = %+v, want %+v", u, want)
+			}
 		}
 	}
 	if !found {
 		t.Errorf("expected summed usage input=30 output=13 in %+v", recordedUsage)
+	}
+}
+
+func TestResolvePausedTurnRepeatedPauses(t *testing.T) {
+	responses := make([]llm.Response, 3)
+	var wantRequests []llm.RequestUsage
+	for i := range responses {
+		start := time.Date(2026, 6, 1, 12, 0, i*2, 0, time.UTC)
+		end := start.Add(time.Second)
+		responses[i] = llm.Response{
+			Role: llm.MessageRoleAssistant, StopReason: llm.StopReasonPause,
+			Content:   []llm.Content{llm.StringContent(fmt.Sprintf("leg %d", i))},
+			Usage:     llm.Usage{InputTokens: uint64(i + 1), CostUSD: 0.25},
+			StartTime: &start, EndTime: &end,
+		}
+		wantRequests = append(wantRequests, responses[i].RequestUsage())
+	}
+	responses[2].StopReason = llm.StopReasonEndTurn
+	next := 1
+	send := func(req *llm.Request) (*llm.Response, error) {
+		if next >= len(responses) {
+			t.Fatal("unexpected continuation")
+		}
+		if got := len(req.Messages[len(req.Messages)-1].Content); got != next {
+			t.Errorf("continuation content length = %d, want %d", got, next)
+		}
+		resp := &responses[next]
+		next++
+		return resp, nil
+	}
+	loop := NewLoop(Config{})
+	got, err := loop.resolvePausedTurn(t.Context(), send, &llm.Request{}, &responses[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next != 3 || len(got.Content) != 3 || got.StopReason != llm.StopReasonEndTurn {
+		t.Fatalf("resolved response = %+v; next = %d", got, next)
+	}
+	u := got.UsageWithMeta()
+	if u.InputTokens != 6 || u.CostUSD != 0.75 || !reflect.DeepEqual(u.Requests, wantRequests) ||
+		!u.StartTime.Equal(*responses[0].StartTime) || !u.EndTime.Equal(*responses[2].EndTime) {
+		t.Errorf("resolved usage = %+v, requests = %+v", u, u.Requests)
+	}
+	// Merging must not change the provider's responses.
+	for i, resp := range responses {
+		if resp.Usage.InputTokens != uint64(i+1) || resp.Usage.CostUSD != 0.25 || len(resp.Usage.Requests) != 0 {
+			t.Errorf("response %d was mutated: %+v", i, resp)
+		}
 	}
 }
 

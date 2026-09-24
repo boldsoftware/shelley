@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -137,7 +138,7 @@ func TestToLLMUsage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := toLLMUsage(tt.u)
-			if got != tt.want {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("toLLMUsage() = %+v, want %+v", got, tt.want)
 			}
 		})

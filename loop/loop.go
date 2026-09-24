@@ -607,8 +607,10 @@ func (l *Loop) resolvePausedTurn(
 	// backing array.
 	merged := append([]llm.Content(nil), resp.Content...)
 	// Accumulate usage across the whole pause chain, starting with the initial
-	// paused response's usage.
+	// paused response's usage. Keep each request's usage and timing alongside
+	// the totals so merging messages does not hide provider calls.
 	totalUsage := resp.Usage
+	requests := []llm.RequestUsage{resp.RequestUsage()}
 	// Preserve the start time of the first (paused) leg so the merged turn
 	// reflects the full wall-clock duration, not just the last continuation.
 	startTime := resp.StartTime
@@ -629,6 +631,7 @@ func (l *Loop) resolvePausedTurn(
 			return nil, err
 		}
 		totalUsage.Add(next.Usage)
+		requests = append(requests, next.RequestUsage())
 		merged = append(merged, next.Content...)
 		resp = next
 	}
@@ -638,6 +641,7 @@ func (l *Loop) resolvePausedTurn(
 	// (initial paused response + every continuation) so billing is not lost.
 	resolved := *resp
 	resolved.Content = merged
+	totalUsage.Requests = requests
 	resolved.Usage = totalUsage
 	resolved.StartTime = startTime // EndTime stays at the final continuation
 	return &resolved, nil

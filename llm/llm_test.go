@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // mockService implements Service interface for testing
@@ -161,8 +162,50 @@ func TestUsageAdd(t *testing.T) {
 		CostUSD:                  0.03, // 0.01 + 0.02
 	}
 
-	if u1 != expected {
+	if !reflect.DeepEqual(u1, expected) {
 		t.Errorf("Usage.Add() resulted in %v, want %v", u1, expected)
+	}
+}
+
+func TestUsageRequestBreakdown(t *testing.T) {
+	start := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	end := start.Add(time.Second)
+	single := Usage{
+		InputTokens: 100, CacheCreationInputTokens: 20, CacheReadInputTokens: 30,
+		OutputTokens: 40, CostUSD: 0.25, StartTime: &start, EndTime: &end,
+	}
+	want := []RequestUsage{{
+		InputTokens: 100, CacheCreationInputTokens: 20, CacheReadInputTokens: 30,
+		OutputTokens: 40, CostUSD: 0.25, StartTime: &start, EndTime: &end,
+	}}
+	for _, requests := range [][]RequestUsage{nil, {}, want} {
+		u := single
+		u.Requests = requests
+		if got := u.RequestBreakdown(); !reflect.DeepEqual(got, want) {
+			t.Errorf("RequestBreakdown(%+v) = %+v, want %+v", u, got, want)
+		}
+	}
+	// The request list is authoritative, not an addition to the totals.
+	single.Requests = append(want, RequestUsage{InputTokens: 50, CostUSD: 0.5})
+	if got := single.RequestBreakdown(); !reflect.DeepEqual(got, single.Requests) {
+		t.Errorf("RequestBreakdown() = %+v, want %+v", got, single.Requests)
+	}
+}
+
+func TestUsageIsZero(t *testing.T) {
+	empty := Usage{Requests: []RequestUsage{}}
+	if !empty.IsZero() {
+		t.Fatal("empty usage is not zero")
+	}
+	for _, u := range []Usage{
+		{InputTokens: 1}, {CacheCreationInputTokens: 1}, {CacheReadInputTokens: 1},
+		{OutputTokens: 1}, {CostUSD: 1}, {Model: "m"}, {URL: "u"},
+		{StartTime: new(time.Time)}, {EndTime: new(time.Time)},
+		{Requests: []RequestUsage{{}}},
+	} {
+		if u.IsZero() {
+			t.Errorf("IsZero(%+v) = true", u)
+		}
 	}
 }
 

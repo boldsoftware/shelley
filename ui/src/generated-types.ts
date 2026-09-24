@@ -23,6 +23,16 @@ export interface Conversation {
   turn_interrupted: boolean;
 }
 
+export interface RequestUsage {
+  input_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  start_time?: string | null;
+  end_time?: string | null;
+}
+
 export interface Usage {
   input_tokens: number;
   cache_creation_input_tokens: number;
@@ -33,6 +43,7 @@ export interface Usage {
   url?: string;
   start_time?: string | null;
   end_time?: string | null;
+  requests?: RequestUsage[] | null;
 }
 
 export interface ApiMessageForTS {

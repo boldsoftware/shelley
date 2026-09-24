@@ -695,6 +695,19 @@ func (m *Response) UsageWithMeta() Usage {
 	return u
 }
 
+// RequestUsage returns the usage and timing for this provider response.
+func (m *Response) RequestUsage() RequestUsage {
+	return RequestUsage{
+		InputTokens:              m.Usage.InputTokens,
+		CacheCreationInputTokens: m.Usage.CacheCreationInputTokens,
+		CacheReadInputTokens:     m.Usage.CacheReadInputTokens,
+		OutputTokens:             m.Usage.OutputTokens,
+		CostUSD:                  m.Usage.CostUSD,
+		StartTime:                m.StartTime,
+		EndTime:                  m.EndTime,
+	}
+}
+
 func CostUSDFromResponse(headers http.Header) float64 {
 	h := headers.Get("Exedev-Gateway-Cost")
 	if h == "" {
@@ -725,6 +738,38 @@ type Usage struct {
 	URL       string     `json:"url,omitempty"`
 	StartTime *time.Time `json:"start_time,omitempty"`
 	EndTime   *time.Time `json:"end_time,omitempty"`
+	// Requests preserves the per-request breakdown when one stored assistant
+	// message combines multiple provider responses, such as pause_turn
+	// continuations. Empty means the aggregate fields describe one request.
+	Requests []RequestUsage `json:"requests,omitempty"`
+}
+
+// RequestUsage is one provider request within an aggregated Usage record.
+type RequestUsage struct {
+	InputTokens              uint64     `json:"input_tokens"`
+	CacheCreationInputTokens uint64     `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     uint64     `json:"cache_read_input_tokens"`
+	OutputTokens             uint64     `json:"output_tokens"`
+	CostUSD                  float64    `json:"cost_usd"`
+	StartTime                *time.Time `json:"start_time,omitempty"`
+	EndTime                  *time.Time `json:"end_time,omitempty"`
+}
+
+// RequestBreakdown returns the individual requests represented by u. Ordinary
+// usage records return their aggregate fields as one request.
+func (u Usage) RequestBreakdown() []RequestUsage {
+	if len(u.Requests) > 0 {
+		return u.Requests
+	}
+	return []RequestUsage{{
+		InputTokens:              u.InputTokens,
+		CacheCreationInputTokens: u.CacheCreationInputTokens,
+		CacheReadInputTokens:     u.CacheReadInputTokens,
+		OutputTokens:             u.OutputTokens,
+		CostUSD:                  u.CostUSD,
+		StartTime:                u.StartTime,
+		EndTime:                  u.EndTime,
+	}}
 }
 
 // PurposedUsage is the usage of one indirect LLM call (compaction,
@@ -735,6 +780,7 @@ type PurposedUsage struct {
 	Usage
 }
 
+// Add sums the token and cost totals, leaving metadata and Requests unchanged.
 func (u *Usage) Add(other Usage) {
 	u.InputTokens += other.InputTokens
 	u.CacheCreationInputTokens += other.CacheCreationInputTokens
@@ -764,7 +810,9 @@ func (u *Usage) ContextWindowUsed() uint64 {
 }
 
 func (u *Usage) IsZero() bool {
-	return *u == Usage{}
+	return u.InputTokens == 0 && u.CacheCreationInputTokens == 0 && u.CacheReadInputTokens == 0 &&
+		u.OutputTokens == 0 && u.CostUSD == 0 && u.Model == "" && u.URL == "" &&
+		u.StartTime == nil && u.EndTime == nil && len(u.Requests) == 0
 }
 
 func (u *Usage) Attr() slog.Attr {
