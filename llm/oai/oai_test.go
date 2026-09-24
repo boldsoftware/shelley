@@ -24,6 +24,16 @@ func modelForTest(name string) Model {
 	return model
 }
 
+func requireResponseTiming(t *testing.T, resp *llm.Response) {
+	t.Helper()
+	if resp.StartTime == nil || resp.EndTime == nil {
+		t.Fatalf("response timing = %v–%v, want both timestamps", resp.StartTime, resp.EndTime)
+	}
+	if resp.StartTime.IsZero() || resp.EndTime.IsZero() || resp.EndTime.Before(*resp.StartTime) {
+		t.Fatalf("invalid response timing %v–%v", *resp.StartTime, *resp.EndTime)
+	}
+}
+
 func TestToRoleFromString(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1355,6 +1365,7 @@ func TestServiceDo(t *testing.T) {
 	if resp.Usage.OutputTokens != 20 {
 		t.Errorf("resp.Usage.OutputTokens = %d, expected 20", resp.Usage.OutputTokens)
 	}
+	requireResponseTiming(t, resp)
 }
 
 // TestServiceDoStreamUsageCacheWrite checks that a streamed Chat Completions
@@ -2286,5 +2297,40 @@ func TestServiceReasoningEffort(t *testing.T) {
 				t.Errorf("reasoning_effort = %q, want %q", gotEffort, tt.wantEffort)
 			}
 		})
+	}
+}
+
+func TestServiceDoPreservesStartTimeAcrossRetries(t *testing.T) {
+	firstRequest := make(chan time.Time, 1)
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			firstRequest <- time.Now()
+			http.Error(w, "temporary failure", http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(openai.ChatCompletionResponse{
+			Choices: []openai.ChatCompletionChoice{{
+				Message:      openai.ChatCompletionMessage{Role: "assistant", Content: "ok"},
+				FinishReason: "stop",
+			}},
+		})
+	}))
+	defer server.Close()
+
+	resp, err := (&Service{
+		APIKey:   "test-key",
+		Model:    GPT41,
+		ModelURL: server.URL + "/v1",
+		Backoff:  []time.Duration{0},
+	}).Do(t.Context(), &llm.Request{Messages: []llm.Message{{Role: llm.MessageRoleUser}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireResponseTiming(t, resp)
+	if first := <-firstRequest; resp.StartTime.After(first) {
+		t.Fatalf("response StartTime %v is after first request %v", *resp.StartTime, first)
 	}
 }

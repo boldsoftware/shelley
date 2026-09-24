@@ -662,6 +662,7 @@ func (s *ResponsesService) MaxImageBytes() int {
 
 // Do sends a request to OpenAI using the Responses API.
 func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error) {
+	startTime := time.Now()
 	var err error
 	ir, err = llm.PrepareRequestCitations(ctx, ir, "openai-responses", s.adaptCitation)
 	if err != nil {
@@ -826,7 +827,7 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 	}
 
 	// retry loop
-	retryStart := time.Now()
+	retryStart := startTime
 	var errs error            // accumulated errors across all attempts
 	var lastErrSummary string // short description of the most recent attempt failure
 	var lastErrStatus int     // HTTP status of the most recent attempt failure, 0 if none
@@ -1024,6 +1025,9 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 		}
 
 		result := s.toLLMResponseFromResponses(&resp, httpResp.Header)
+		endTime := time.Now()
+		result.StartTime = &startTime
+		result.EndTime = &endTime
 		result.URL = fullURL
 		result.Origin = &origin
 		return result, nil

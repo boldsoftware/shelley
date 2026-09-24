@@ -1451,6 +1451,7 @@ func (s *Service) SupportedReasoningLevels() []llm.ThinkingLevel {
 
 // Do sends a request to OpenAI using the go-openai package.
 func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error) {
+	startTime := time.Now()
 	var err error
 	ir, err = llm.PrepareRequestCitations(ctx, ir, "openai-chat", adaptCitation)
 	if err != nil {
@@ -1601,7 +1602,7 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 	}
 
 	// retry loop
-	retryStart := time.Now()
+	retryStart := startTime
 	var errs error            // accumulated errors across all attempts
 	var lastErrSummary string // short description of the most recent attempt failure
 	for attempts := 0; ; attempts++ {
@@ -1650,6 +1651,9 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 
 		// Handle successful response
 		if err == nil {
+			endTime := time.Now()
+			result.StartTime = &startTime
+			result.EndTime = &endTime
 			// Record the endpoint actually used. baseURL omits the
 			// OpenAIURL fallback (the go-openai client applies it
 			// internally), so apply it here to avoid recording a

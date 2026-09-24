@@ -846,6 +846,7 @@ func TestResponsesServiceDo(t *testing.T) {
 	if resp.Usage.ContextWindowUsed() != 30 {
 		t.Errorf("resp.Usage.ContextWindowUsed() = %d, expected 30", resp.Usage.ContextWindowUsed())
 	}
+	requireResponseTiming(t, resp)
 }
 
 func TestResponsesServiceDoConsumesPlainTextStream(t *testing.T) {
@@ -2014,5 +2015,42 @@ func TestParseResponsesSSETimestamps(t *testing.T) {
 	}
 	if len(deltas) != 1 || deltas[0].Type != "text" || deltas[0].Text != "hello" || deltas[0].Index != 0 {
 		t.Fatalf("deltas = %+v", deltas)
+	}
+}
+
+func TestResponsesServiceDoPreservesStartTimeAcrossRetries(t *testing.T) {
+	firstRequest := make(chan time.Time, 1)
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			firstRequest <- time.Now()
+			http.Error(w, "temporary failure", http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(responsesResponse{
+			Status: "completed",
+			Output: []responsesOutputItem{{
+				Type:    "message",
+				Role:    "assistant",
+				Content: []responsesContent{{Type: "output_text", Text: "ok"}},
+			}},
+		})
+	}))
+	defer server.Close()
+
+	resp, err := (&ResponsesService{
+		APIKey:   "test-key",
+		Model:    GPT41,
+		ModelURL: server.URL,
+		Backoff:  []time.Duration{0},
+	}).Do(t.Context(), &llm.Request{Messages: []llm.Message{{Role: llm.MessageRoleUser}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireResponseTiming(t, resp)
+	if first := <-firstRequest; resp.StartTime.After(first) {
+		t.Fatalf("response StartTime %v is after first request %v", *resp.StartTime, first)
 	}
 }
