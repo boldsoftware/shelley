@@ -455,14 +455,18 @@ SELECT
   CAST(COALESCE(je.value ->> 'model', '') AS TEXT) AS model_name,
   CAST(COALESCE(je.value ->> 'url', '') AS TEXT) AS llm_api_url,
   COUNT(*) AS llm_calls,
-  CAST(COALESCE(SUM(je.value ->> 'input_tokens'), 0) AS INTEGER) AS input_tokens,
-  CAST(COALESCE(SUM(je.value ->> 'cache_creation_input_tokens'), 0) AS INTEGER) AS cache_creation_input_tokens,
-  CAST(COALESCE(SUM(je.value ->> 'cache_read_input_tokens'), 0) AS INTEGER) AS cache_read_input_tokens,
-  CAST(COALESCE(SUM(je.value ->> 'output_tokens'), 0) AS INTEGER) AS output_tokens,
-  CAST(COALESCE(SUM(je.value ->> 'cost_usd'), 0) AS REAL) AS cost_usd
+  CAST(COALESCE(SUM(request.value ->> 'input_tokens'), 0) AS INTEGER) AS input_tokens,
+  CAST(COALESCE(SUM(request.value ->> 'cache_creation_input_tokens'), 0) AS INTEGER) AS cache_creation_input_tokens,
+  CAST(COALESCE(SUM(request.value ->> 'cache_read_input_tokens'), 0) AS INTEGER) AS cache_read_input_tokens,
+  CAST(COALESCE(SUM(request.value ->> 'output_tokens'), 0) AS INTEGER) AS output_tokens,
+  CAST(COALESCE(SUM(request.value ->> 'cost_usd'), 0) AS REAL) AS cost_usd
 FROM descendants d
 CROSS JOIN messages m INDEXED BY idx_messages_conversation_id
 CROSS JOIN json_each(m.other_usage_data) je
+CROSS JOIN json_each(CASE
+  WHEN json_array_length(je.value -> 'requests') > 0 THEN je.value -> 'requests'
+  ELSE json_array(json(je.value))
+END) request
 WHERE m.conversation_id = d.conversation_id
   AND m.other_usage_data IS NOT NULL
 GROUP BY je.value ->> 'model', je.value ->> 'url'
@@ -530,13 +534,17 @@ SELECT
   m.model_name,
   m.llm_api_url,
   COUNT(*) AS llm_calls,
-  CAST(COALESCE(SUM(m.usage_data ->> 'input_tokens'), 0) AS INTEGER) AS input_tokens,
-  CAST(COALESCE(SUM(m.usage_data ->> 'cache_creation_input_tokens'), 0) AS INTEGER) AS cache_creation_input_tokens,
-  CAST(COALESCE(SUM(m.usage_data ->> 'cache_read_input_tokens'), 0) AS INTEGER) AS cache_read_input_tokens,
-  CAST(COALESCE(SUM(m.usage_data ->> 'output_tokens'), 0) AS INTEGER) AS output_tokens,
-  CAST(COALESCE(SUM(m.usage_data ->> 'cost_usd'), 0) AS REAL) AS cost_usd
+  CAST(COALESCE(SUM(request.value ->> 'input_tokens'), 0) AS INTEGER) AS input_tokens,
+  CAST(COALESCE(SUM(request.value ->> 'cache_creation_input_tokens'), 0) AS INTEGER) AS cache_creation_input_tokens,
+  CAST(COALESCE(SUM(request.value ->> 'cache_read_input_tokens'), 0) AS INTEGER) AS cache_read_input_tokens,
+  CAST(COALESCE(SUM(request.value ->> 'output_tokens'), 0) AS INTEGER) AS output_tokens,
+  CAST(COALESCE(SUM(request.value ->> 'cost_usd'), 0) AS REAL) AS cost_usd
 FROM descendants d
 CROSS JOIN messages m INDEXED BY idx_messages_conv_type_seq
+CROSS JOIN json_each(CASE
+  WHEN json_array_length(m.usage_data -> 'requests') > 0 THEN m.usage_data -> 'requests'
+  ELSE json_array(json(m.usage_data))
+END) request
 WHERE m.conversation_id = d.conversation_id
   AND m.type = 'agent' AND m.usage_data IS NOT NULL
 GROUP BY m.model_name, m.llm_api_url
@@ -556,6 +564,7 @@ type GetSubagentUsageRow struct {
 // Aggregate LLM usage across all descendant conversations (subagents,
 // recursively), grouped by model. Powers the "plus $X for subagents" line
 // in the token-cost graph; the parent's own usage is not included.
+// Expand paused turns before counting calls; older usage is one request.
 // CROSS JOIN keeps the small descendants set outermost. A regular JOIN lets
 // SQLite start from every agent message, which makes this query scan the full
 // messages table even when the conversation has no subagents.

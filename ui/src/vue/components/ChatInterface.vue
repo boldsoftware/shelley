@@ -559,6 +559,7 @@ import {
 } from "../../utils/perf";
 import {
   aggregateOtherUsage,
+  buildRequestUsageEntries,
   type OtherUsageEntry,
   type OtherUsageRow,
   type UsageEntry,
@@ -1630,8 +1631,8 @@ const usageWanted = ref(false);
 
 // Per-LLM-call usage entries (in order) for the token cost graph in the
 // context usage popup. Includes every generation: the graph shows cumulative
-// conversation cost, not just the live context window. All-zero records
-// (e.g. error placeholders) are skipped.
+// conversation cost, not just the live context window. Legacy all-zero
+// records (e.g. error placeholders) are skipped.
 //
 // The same single walk also collects "other" (indirect) LLM usage —
 // compaction summarization, LLM-backed tools, slug generation, … — from any
@@ -1663,23 +1664,16 @@ const usageData = computed<{ entries: UsageEntry[]; otherRows: OtherUsageRow[] }
     // after this call so the call itself stays in its own turn.
     const endsTurn = !!m.end_of_turn;
     const u = parseUsage(m);
-    if (
-      u &&
-      (u.input_tokens || 0) +
-        (u.cache_creation_input_tokens || 0) +
-        (u.cache_read_input_tokens || 0) +
-        (u.output_tokens || 0) >
-        0
-    ) {
-      out.push({
-        ...u,
+    if (u) {
+      const entries = buildRequestUsageEntries(u, {
         snippet: messageSnippet(m),
         generation: m.generation,
         timestamp: Date.parse(m.created_at) || 0,
         startsTurn: nextStartsTurn,
         turnStartTimestamp: nextStartsTurn && turnStartTs ? turnStartTs : undefined,
       });
-      nextStartsTurn = false;
+      out.push(...entries);
+      if (entries.length) nextStartsTurn = false;
     }
     if (endsTurn) {
       nextStartsTurn = true;

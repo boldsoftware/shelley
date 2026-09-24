@@ -90,3 +90,58 @@ func TestRequestUsageRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestSubagentRequestUsageShapes(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		usage    string
+		calls    int64
+		input    int64
+		reported float64
+	}{
+		{"legacy", `{"input_tokens":30,"cost_usd":0.75}`, 1, 30, 0.75},
+		{"empty", `{"input_tokens":30,"cost_usd":0.75,"requests":[]}`, 1, 30, 0.75},
+		{"null", `{"input_tokens":30,"cost_usd":0.75,"requests":null}`, 1, 30, 0.75},
+		// Deliberately different aggregate fields prove the breakdown is
+		// authoritative, not added to (or replaced by) the message totals.
+		{"requests", `{"input_tokens":999,"cost_usd":999,"requests":[{"input_tokens":10,"cost_usd":0.25},{"input_tokens":20,"cost_usd":0.5}]}`, 2, 30, 0.75},
+		{"zero requests", `{"requests":[{},{}]}`, 2, 0, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			database := setupTestDB(t)
+			defer database.Close()
+			ctx := t.Context()
+			parent, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			child, err := database.CreateSubagentConversation(ctx, "child", parent.ConversationID, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := database.CreateMessage(ctx, CreateMessageParams{
+				ConversationID: child.ConversationID, Type: MessageTypeAgent,
+				UsageData:      json.RawMessage(test.usage),
+				OtherUsageData: json.RawMessage("[" + test.usage + "]"),
+			}); err != nil {
+				t.Fatal(err)
+			}
+			direct, err := database.GetSubagentUsage(ctx, parent.ConversationID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(direct) != 1 || direct[0].LlmCalls != test.calls ||
+				direct[0].InputTokens != test.input || direct[0].CostUsd != test.reported {
+				t.Errorf("direct usage = %+v", direct)
+			}
+			indirect, err := database.GetSubagentOtherUsage(ctx, parent.ConversationID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(indirect) != 1 || indirect[0].LlmCalls != test.calls ||
+				indirect[0].InputTokens != test.input || indirect[0].CostUsd != test.reported {
+				t.Errorf("indirect usage = %+v", indirect)
+			}
+		})
+	}
+}

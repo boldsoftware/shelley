@@ -5,19 +5,16 @@
 // When no model in the conversation has known pricing, the series falls back
 // to raw token counts (weighted=false) so the graph still shows something.
 
-export interface UsageEntry {
-  input_tokens: number;
-  cache_creation_input_tokens: number;
-  cache_read_input_tokens: number;
-  output_tokens: number;
-  cost_usd: number;
+import type { RequestUsage, Usage } from "../generated-types";
+
+export interface UsageEntry extends RequestUsage {
   model?: string;
   url?: string;
   /** Short excerpt of the message this call produced (for hover context). */
   snippet?: string;
   /** Conversation generation this call belongs to (increments on compaction). */
   generation?: number;
-  /** ms since epoch of the message, for the time x-axis. */
+  /** ms since epoch of request completion (message creation for old records). */
   timestamp?: number;
   /** True when this call begins a new turn (first call, or first call after a
    *  user message / end-of-turn). Idle time before it is collapsed into a
@@ -28,6 +25,51 @@ export interface UsageEntry {
    *  completion, so without an anchor the first call of each turn would have
    *  zero duration on the time x-axis. */
   turnStartTimestamp?: number;
+}
+
+/** Empty/missing breakdowns describe one request, as in older stored usage. */
+export function requestBreakdown<T extends Partial<Usage>>(usage: T): (T | RequestUsage)[] {
+  return usage.requests?.length ? usage.requests : [usage];
+}
+
+/** Expand one stored assistant message into graph points without counting
+ *  its aggregate totals again. Only the first request can start a turn. */
+export function buildRequestUsageEntries(
+  usage: Usage,
+  context: Pick<
+    UsageEntry,
+    "snippet" | "generation" | "timestamp" | "startsTurn" | "turnStartTimestamp"
+  >,
+): UsageEntry[] {
+  // Legacy all-zero rows include error placeholders. Explicit requests and
+  // provider-reported cost still count, even when no tokens were reported.
+  if (
+    !usage.requests?.length &&
+    !usage.input_tokens &&
+    !usage.cache_creation_input_tokens &&
+    !usage.cache_read_input_tokens &&
+    !usage.output_tokens &&
+    !usage.cost_usd
+  )
+    return [];
+  return requestBreakdown(usage).map((request, i) => ({
+    input_tokens: request.input_tokens,
+    cache_creation_input_tokens: request.cache_creation_input_tokens,
+    cache_read_input_tokens: request.cache_read_input_tokens,
+    output_tokens: request.output_tokens,
+    cost_usd: request.cost_usd,
+    start_time: request.start_time,
+    end_time: request.end_time,
+    model: usage.model,
+    url: usage.url,
+    ...context,
+    timestamp: Date.parse(request.end_time || "") || context.timestamp,
+    startsTurn: i === 0 && context.startsTurn,
+    turnStartTimestamp:
+      i === 0 && context.startsTurn
+        ? context.turnStartTimestamp || Date.parse(request.start_time || "") || undefined
+        : undefined,
+  }));
 }
 
 /** models.dev pricing, USD per million tokens. */
@@ -264,15 +306,8 @@ export function buildTokenCostStack(
 /** One raw "other" (indirect) LLM usage entry as stored in a message's
  *  other_usage_data JSON: a usage_data-shaped record plus the purpose that
  *  incurred it (compaction, keyword_search, slug, …). */
-export interface OtherUsageEntry {
+export interface OtherUsageEntry extends Partial<Usage> {
   purpose: string;
-  input_tokens?: number;
-  cache_creation_input_tokens?: number;
-  cache_read_input_tokens?: number;
-  output_tokens?: number;
-  cost_usd?: number;
-  model?: string;
-  url?: string;
 }
 
 /** One aggregated row of "other" (indirect) LLM usage — compaction
@@ -293,7 +328,7 @@ export interface OtherUsageRow {
 }
 
 /** Aggregate raw other-usage entries into rows keyed by (purpose, model,
- *  url), summing token counts and reported cost and counting entries as
+ *  url), summing token counts and reported cost and counting requests as
  *  llm_calls. Rows come out in first-seen order. */
 export function aggregateOtherUsage(entries: OtherUsageEntry[]): OtherUsageRow[] {
   const byKey = new Map<string, OtherUsageRow>();
@@ -317,12 +352,14 @@ export function aggregateOtherUsage(entries: OtherUsageEntry[]): OtherUsageRow[]
       };
       byKey.set(key, row);
     }
-    row.llm_calls++;
-    row.input_tokens += e.input_tokens || 0;
-    row.cache_creation_input_tokens += e.cache_creation_input_tokens || 0;
-    row.cache_read_input_tokens += e.cache_read_input_tokens || 0;
-    row.output_tokens += e.output_tokens || 0;
-    row.cost_usd += e.cost_usd || 0;
+    for (const request of requestBreakdown(e)) {
+      row.llm_calls++;
+      row.input_tokens += request.input_tokens || 0;
+      row.cache_creation_input_tokens += request.cache_creation_input_tokens || 0;
+      row.cache_read_input_tokens += request.cache_read_input_tokens || 0;
+      row.output_tokens += request.output_tokens || 0;
+      row.cost_usd += request.cost_usd || 0;
+    }
   }
   return [...byKey.values()];
 }
