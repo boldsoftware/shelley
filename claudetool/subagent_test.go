@@ -279,6 +279,13 @@ func TestSubagentTool_ModelOverride(t *testing.T) {
 		}
 	}
 
+	if !strings.Contains(schemaStr, "specific model") {
+		t.Errorf("expected model selection guidance in schema, got %s", schemaStr)
+	}
+	if !strings.Contains(schemaStr, "specific effort level") {
+		t.Errorf("expected effort selection guidance in schema, got %s", schemaStr)
+	}
+
 	// Override model
 	input := subagentInput{Slug: "test", Prompt: "do something", Model: "claude-haiku-4.5"}
 	inputJSON, _ := json.Marshal(input)

@@ -114,7 +114,7 @@ func (s *SubagentTool) subagentInputSchema() string {
 		modelProp = fmt.Sprintf(`,
     "model": {
       "type": "string",
-      "description": "LLM model for the subagent. Defaults to the parent conversation's model.",
+      "description": "LLM model for the subagent. Defaults to the parent conversation's model. Only provide the \"model\" parameter when the user requests a specific model; otherwise omit it.",
       "enum": [%s]
     }`, strings.Join(enumItems, ", "))
 	}
@@ -127,7 +127,7 @@ func (s *SubagentTool) subagentInputSchema() string {
 	reasoningProp := fmt.Sprintf(`,
     "reasoning": {
       "type": "string",
-      "description": "Reasoning/thinking effort level for the subagent. If omitted, the subagent inherits the parent conversation's reasoning level.",
+      "description": "Reasoning/thinking effort level for the subagent. If omitted, the subagent inherits the parent conversation's reasoning level. Only provide the \"reasoning\" parameter when the user requests a specific effort level; otherwise omit it.",
       "enum": [%s]
     }`, strings.Join(reasoningEnum, ", "))
 

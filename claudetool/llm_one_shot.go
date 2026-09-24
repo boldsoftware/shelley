@@ -48,7 +48,31 @@ The prompt is read from files (to handle large inputs cleanly). prompt_files
 is a list of paths: text files are concatenated in order, and image files
 (png, jpeg, gif, webp, heic) are attached as images. Attaching images requires a
 vision-capable model.
-Short results are returned inline; long results are written to a file.`
+Short results are returned inline; long results are written to a file.
+
+Only provide the "model" parameter when the user requests a specific model;
+otherwise omit it so the conversation's current model is used.`
+
+// llmOneShotDescription appends a vision nudge when the conversation's
+// current model cannot take images.
+func (t *LLMOneShotTool) llmOneShotDescription() string {
+	base := llmOneShotDescription
+	if t.currentModelLacksVision() {
+		base += `
+
+The current model does not support vision. For tasks requiring vision, ask the
+user to pick a vision-capable submodel.`
+	}
+	return base
+}
+
+func (t *LLMOneShotTool) currentModelLacksVision() bool {
+	if t.LLMProvider == nil || t.ModelID == "" {
+		return false
+	}
+	svc, err := t.LLMProvider.GetService(t.ModelID)
+	return err == nil && !svc.SupportsImages()
+}
 
 // llmOneShotInputSchema builds the JSON schema, including model enum when models are available.
 func (t *LLMOneShotTool) llmOneShotInputSchema() string {
@@ -61,7 +85,7 @@ func (t *LLMOneShotTool) llmOneShotInputSchema() string {
 		modelProp = fmt.Sprintf(`,
     "model": {
       "type": "string",
-      "description": "LLM model to use. Defaults to the conversation's current model.",
+      "description": "LLM model to use. Defaults to the conversation's current model. Only provide the \"model\" parameter when the user requests a specific model; otherwise omit it.",
       "enum": [%s]
     }`, strings.Join(enumItems, ", "))
 	}
@@ -113,7 +137,7 @@ type llmOneShotInput struct {
 func (t *LLMOneShotTool) Tool() *llm.Tool {
 	return &llm.Tool{
 		Name:        llmOneShotName,
-		Description: llmOneShotDescription,
+		Description: t.llmOneShotDescription(),
 		InputSchema: llm.MustSchema(t.llmOneShotInputSchema()),
 		Run:         llm.RunJSON(t.run),
 	}
