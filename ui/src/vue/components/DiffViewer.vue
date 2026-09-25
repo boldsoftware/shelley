@@ -377,6 +377,7 @@
               :tour="tourResponse"
               :commit-message="selectedTourCommitMessage"
               :expanded-anchors="expandedTourAnchors"
+              :cwd="cwd"
               @expand-change="setTourExpanded"
               @active-anchor-change="handleTourActiveAnchor"
               @open-comment="openTourComment"

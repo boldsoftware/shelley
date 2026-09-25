@@ -679,6 +679,18 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Optional `oldPath` names the file on the left side when it was renamed
+	// in the selected commit; without it a renamed file reads as entirely added.
+	oldPath := filePath
+	if p := r.URL.Query().Get("oldPath"); p != "" {
+		cleanOld := filepath.Clean(p)
+		if strings.HasPrefix(cleanOld, "..") || filepath.IsAbs(cleanOld) {
+			http.Error(w, "invalid oldPath", http.StatusBadRequest)
+			return
+		}
+		oldPath = cleanOld
+	}
+
 	// Left side: state before the selected commit (or HEAD for working changes)
 	var baseRef string
 	if diffID == "working" {
@@ -691,7 +703,7 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 	if baseRef == emptyTreeHash {
 		oldContent = ""
 	} else {
-		oldCmd := exec.Command("git", "show", baseRef+":"+filePath)
+		oldCmd := exec.Command("git", "show", baseRef+":"+oldPath)
 		oldCmd.Dir = gitRoot
 		oldOutput, _ := oldCmd.Output()
 		oldContent = string(oldOutput)

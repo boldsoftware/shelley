@@ -72,9 +72,11 @@
           :theme-type="themeType"
           :side-by-side="sideBySide"
           :overflow="isMobile ? 'wrap' : 'scroll'"
+          :load-file="cwd ? loadFile : undefined"
           @update:expanded="emit('expand-change', tourEntryAnchor(position), $event)"
           @comment="emit('open-comment', $event)"
           @line-comment="emit('open-comment', $event)"
+          @layout-change="releaseNavigation"
         />
       </template>
     </article>
@@ -100,8 +102,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import type { ThemeTypes } from "@pierre/diffs";
+import { api } from "../../services/api";
 import type { GitTourEntry, GitTourHeaderEntry, GitTourResponse } from "../../services/api";
-import type { GitCommitMessage } from "../../types";
+import type { GitCommitMessage, GitFileDiff } from "../../types";
 import { isDarkModeActive } from "../../services/theme";
 import { useSideBySidePreference } from "../composables/diffViewPreference";
 import type { TourCommentTarget } from "../composables/tourComments";
@@ -113,6 +116,9 @@ const props = defineProps<{
   tour: GitTourResponse;
   commitMessage: GitCommitMessage | null;
   expandedAnchors: Set<string>;
+  // Repository directory the tour was loaded from; needed to fetch whole-file
+  // contents for the chunks' full-file mode.
+  cwd?: string;
 }>();
 const emit = defineEmits<{
   (e: "open-comment", target: TourCommentTarget): void;
@@ -125,6 +131,35 @@ const isMobile = ref(window.innerWidth < 768);
 const { sideBySidePreference, setSideBySidePreference } = useSideBySidePreference();
 const sideBySide = computed(() => !isMobile.value && sideBySidePreference.value);
 const shortHash = computed(() => props.tour.hash.slice(0, 8));
+
+// Whole-file contents at the toured commit, shared by every chunk of the same
+// file so expanding a second chunk does not refetch. Keyed by both paths since
+// a rename changes the left-hand side.
+const fileContentsCache = new Map<string, Promise<GitFileDiff>>();
+watch([() => props.tour.hash, () => props.cwd], () => fileContentsCache.clear());
+
+function loadFile(oldPath: string | null, newPath: string | null): Promise<GitFileDiff> {
+  const cwd = props.cwd ?? "";
+  const path = newPath ?? oldPath ?? "";
+  const key = `${oldPath ?? ""}\0${newPath ?? ""}`;
+  let pending = fileContentsCache.get(key);
+  if (!pending) {
+    pending = api
+      .getGitFileDiff(
+        props.tour.hash,
+        path,
+        cwd,
+        "self",
+        oldPath && oldPath !== path ? oldPath : undefined,
+      )
+      .catch((error: unknown) => {
+        fileContentsCache.delete(key);
+        throw error;
+      });
+    fileContentsCache.set(key, pending);
+  }
+  return pending;
+}
 const viewRef = ref<HTMLElement | null>(null);
 const documentRef = ref<HTMLElement | null>(null);
 const selectionPrompt = ref<{
@@ -181,6 +216,13 @@ watch(
   },
   { flush: "sync" },
 );
+
+// A chunk swapping between its patch and the full file keeps its own changed
+// line in place; without this the resize handler would drag the last
+// table-of-contents jump back to the top instead.
+function releaseNavigation() {
+  navigationTarget = null;
+}
 
 function handleTourResize() {
   alignNavigationTarget();

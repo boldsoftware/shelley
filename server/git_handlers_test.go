@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1753,5 +1754,82 @@ func TestHandleGitGraphMarksTours(t *testing.T) {
 	}
 	if tours[base] {
 		t.Errorf("base commit %s was marked as having a tour", base)
+	}
+}
+
+// TestHandleGitFileDiff_OldPath covers the optional oldPath query parameter,
+// which the commit tour uses to expand a renamed-and-modified file: the left
+// side must come from the pre-rename path so the file does not render as
+// entirely added.
+func TestHandleGitFileDiff_OldPath(t *testing.T) {
+	t.Parallel()
+	h := NewTestHarness(t)
+
+	tempDir := t.TempDir()
+	run := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = tempDir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v failed: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+
+	run("git", "init")
+	run("git", "config", "user.name", "Test")
+	run("git", "config", "user.email", "test@test.com")
+
+	os.WriteFile(filepath.Join(tempDir, "old.txt"), []byte("one\ntwo\n"), 0o644)
+	run("git", "add", "old.txt")
+	run("git", "commit", "-m", "base\n\nPrompt: test")
+
+	run("git", "mv", "old.txt", "new.txt")
+	os.WriteFile(filepath.Join(tempDir, "new.txt"), []byte("one\ntwo\nthree\n"), 0o644)
+	run("git", "add", "new.txt")
+	run("git", "commit", "-m", "rename and edit\n\nPrompt: test")
+	head := run("git", "rev-parse", "HEAD")
+
+	get := func(query string) GitFileDiff {
+		t.Helper()
+		req := httptest.NewRequest("GET", fmt.Sprintf("/api/git/file-diff/%s/new.txt?cwd=%s&to=self%s", head, tempDir, query), nil)
+		w := httptest.NewRecorder()
+		h.server.handleGitFileDiff(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var fd GitFileDiff
+		if err := json.Unmarshal(w.Body.Bytes(), &fd); err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		return fd
+	}
+
+	// Without oldPath the pre-rename content is unavailable (existing behavior).
+	fd := get("")
+	if fd.OldContent != "" || fd.NewContent != "one\ntwo\nthree\n" {
+		t.Errorf("without oldPath: got old=%q new=%q", fd.OldContent, fd.NewContent)
+	}
+
+	fd = get("&oldPath=old.txt")
+	if fd.OldContent != "one\ntwo\n" {
+		t.Errorf("with oldPath: old content = %q, want %q", fd.OldContent, "one\ntwo\n")
+	}
+	if fd.NewContent != "one\ntwo\nthree\n" {
+		t.Errorf("with oldPath: new content = %q, want %q", fd.NewContent, "one\ntwo\nthree\n")
+	}
+	if fd.Path != "new.txt" {
+		t.Errorf("with oldPath: path = %q, want new.txt", fd.Path)
+	}
+
+	// oldPath is subject to the same traversal checks as the main path.
+	for _, bad := range []string{"../etc/passwd", "/etc/passwd"} {
+		req := httptest.NewRequest("GET", fmt.Sprintf("/api/git/file-diff/%s/new.txt?cwd=%s&to=self&oldPath=%s", head, tempDir, url.QueryEscape(bad)), nil)
+		w := httptest.NewRecorder()
+		h.server.handleGitFileDiff(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("oldPath=%q: expected 400, got %d", bad, w.Code)
+		}
 	}
 }

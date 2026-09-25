@@ -122,6 +122,11 @@ export function useFileDiffInstance(
         teardown();
         return;
       }
+      // A replaced host element (e.g. re-keyed by the caller) needs a fresh
+      // instance: the old <diffs-container> left with the old host, and a new
+      // FileDiff also starts without a render cache, so it draws the new
+      // fileDiff synchronously instead of first repainting the previous one.
+      if (instance && container && container.parentElement !== host) teardown();
       if (!instance) {
         mount(inputs);
         return;

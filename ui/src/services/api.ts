@@ -705,15 +705,21 @@ class ApiService {
     return response.json();
   }
 
+  // `oldPath` names the left-hand file when the commit renamed it; without it
+  // a renamed file comes back with empty old content.
   async getGitFileDiff(
     diffId: string,
     filePath: string,
     cwd: string,
     to?: string,
+    oldPath?: string,
   ): Promise<GitFileDiff> {
     const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
+    const oldPathParam = oldPath ? `&oldPath=${encodeURIComponent(oldPath)}` : "";
+    // Encode per segment so names containing '#', '?' or '%' survive the URL.
+    const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
     const response = await fetch(
-      `${this.baseUrl}/git/file-diff/${diffId}/${filePath}?cwd=${encodeURIComponent(cwd)}${toParam}`,
+      `${this.baseUrl}/git/file-diff/${diffId}/${encodedPath}?cwd=${encodeURIComponent(cwd)}${toParam}${oldPathParam}`,
     );
     if (!response.ok) {
       throw new Error(`Failed to get file diff: ${response.statusText}`);
