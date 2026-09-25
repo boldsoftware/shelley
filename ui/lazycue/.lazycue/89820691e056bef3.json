@@ -1,0 +1,85 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new, wait for the message input (data-testid \"message-input\") to be visible, and click it so the textarea has keyboard focus (the @ file-completion menu only opens for a focused textarea). An @ only starts a file token at the start of the text or after whitespace, and the token ends at an unquoted space. Fill the message input with \"email foo@delta\", wait about 1 second, and assert selector \"[data-testid='file-completion-menu']\" matches 0 elements (no menu: the @ follows a letter). Fill it with \"prefix@delta\", wait about 1 second, and assert the same selector matches 0 elements. Fill it with \"@delta\": now the file-completion menu (data-testid \"file-completion-menu\") appears with an element with role \"option\" and aria-label \"delta.md\". Finally fill it with \"look @delta later\" (the caret ends up after \"later\", outside the token), wait about 1 second, and assert the menu selector matches 0 elements.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "email foo@delta"
+    },
+    {
+      "action": "sleep",
+      "timeout": "1s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='file-completion-menu']",
+      "count": 0
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "prefix@delta"
+    },
+    {
+      "action": "sleep",
+      "timeout": "1s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='file-completion-menu']",
+      "count": 0
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "@delta"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='file-completion-menu']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='option'][aria-label='delta.md']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "look @delta later"
+    },
+    {
+      "action": "sleep",
+      "timeout": "1s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='file-completion-menu']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-09-25T04:51:16.97859255Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 29059,
+    "output_tokens": 1438,
+    "estimated_cost_usd": 0.10874700000000001,
+    "mode": "generated"
+  }
+}

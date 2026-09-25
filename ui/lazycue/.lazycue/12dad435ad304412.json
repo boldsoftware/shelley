@@ -1,0 +1,94 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. Type \"Hello\" into the message input (data-testid \"message-input\") and click the send button (data-testid \"send-button\"); wait for the reply \"Hello! I'm Shelley, your AI assistant. How can I help you today?\" to appear and for the URL to contain \"/c/\". Click the message input so the textarea has keyboard focus, then fill it with the text \"Open @alpha\". The file-completion menu (data-testid \"file-completion-menu\") should appear. Inside it, the element with role \"listbox\" has aria-label \"Files and folders\", and an element with role \"option\" and aria-label \"src/alpha.ts\" (the match, as a path relative to the conversation's working directory) should be visible; within that option the element matching \".grp-path mark\" has text \"alpha\" (the highlighted part of the match). Press the Enter key. The token is replaced by the completed reference plus a trailing space (Enter completes; it does not send): eval \"(function(){var v=document.querySelector('[data-testid=\\\"message-input\\\"]').value;return v==='Open @src/alpha.ts '?'pass':'fail:'+JSON.stringify(v);})()\" expecting \"pass\". The menu is gone (selector \"[data-testid='file-completion-menu']\" matches 0 elements) and nothing was attached (selector \"[data-testid='message-attachments']\" matches 0 elements).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Hello"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "Hello! I'm Shelley, your AI assistant. How can I help you today?",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Open @alpha"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='file-completion-menu']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='listbox'][aria-label='Files and folders']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='option'][aria-label='src/alpha.ts']"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[role='option'][aria-label='src/alpha.ts'] .grp-path mark",
+      "text": "alpha"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='Open @src/alpha.ts '?'pass':'fail:'+JSON.stringify(v);})()",
+      "expect": "pass"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='file-completion-menu']",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='message-attachments']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-09-25T04:50:20.88156489Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 29671,
+    "output_tokens": 1686,
+    "estimated_cost_usd": 0.11430299999999999,
+    "mode": "generated"
+  }
+}

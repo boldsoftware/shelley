@@ -1,0 +1,57 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new, wait for the message input (data-testid \"message-input\") to be visible, and click it so the textarea has keyboard focus (the @ file-completion menu only opens for a focused textarea). Put the draft \"before @gammaray after\" into the message input with the caret at offset 11 (right after \"@gam\", in the middle of the text) using one eval step: \"(function(){var el=document.querySelector('[data-testid=\\\"message-input\\\"]');el.focus();Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set.call(el,'before @gammaray after');el.setSelectionRange(11,11);el.dispatchEvent(new Event('input',{bubbles:true}));return 'set';})()\" expecting \"set\". The file-completion menu (data-testid \"file-completion-menu\") should show an element with role \"option\" and aria-label \"gamma.md\" (the query is the token text up to the caret, \"gam\"). Click that option. Only the @-token is replaced and the surrounding text is untouched, the textarea keeps focus, and the caret sits right after the inserted path (offset 16, with no trailing space inserted because text already follows): eval \"(function(){var el=document.querySelector('[data-testid=\\\"message-input\\\"]');return el.value==='before @gamma.md after'\u0026\u0026document.activeElement===el\u0026\u0026el.selectionStart===16?'pass':'fail:'+JSON.stringify(el.value)+' caret='+el.selectionStart+' focused='+(document.activeElement===el);})()\" expecting \"pass\". The menu is gone (selector \"[data-testid='file-completion-menu']\" matches 0 elements).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');el.focus();Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set.call(el,'before @gammaray after');el.setSelectionRange(11,11);el.dispatchEvent(new Event('input',{bubbles:true}));return 'set';})()",
+      "expect": "set"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='file-completion-menu']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='file-completion-menu'] [role='option'][aria-label='gamma.md']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='file-completion-menu'] [role='option'][aria-label='gamma.md']"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');return el.value==='before @gamma.md after'\u0026\u0026document.activeElement===el\u0026\u0026el.selectionStart===16?'pass':'fail:'+JSON.stringify(el.value)+' caret='+el.selectionStart+' focused='+(document.activeElement===el);})()",
+      "expect": "pass"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='file-completion-menu']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-09-25T04:50:22.916920145Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 40385,
+    "output_tokens": 1748,
+    "estimated_cost_usd": 0.147375,
+    "mode": "generated"
+  }
+}

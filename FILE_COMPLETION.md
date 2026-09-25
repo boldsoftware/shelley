@@ -45,6 +45,8 @@ Errors and empty results leave normal keyboard input available.
 ## Tests
 
 The regular UI unit suite (`pnpm test` from `ui/`) includes token parsing,
-insertion, quoting, cancellation, and stale-response tests. After building
-Shelley, run `pnpm exec playwright test e2e/file-completion.spec.ts` from `ui/`
-for end-to-end keyboard/mouse, draft-directory, and no-result/error checks.
+insertion, quoting, cancellation, and stale-response tests. The end-to-end
+keyboard/mouse, folder, content-search, and no-result checks are LazyCue
+browser tests (`TestNewPageFileCompletion*` in `test/lazycue_test.go`); after
+building the UI, run `LAZYCUE_INTEGRATION=1 go test ./test/ -run
+TestNewPageFileCompletion -count=1` from `shelley/`.

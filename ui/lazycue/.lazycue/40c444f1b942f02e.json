@@ -1,0 +1,123 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new, wait for the message input (data-testid \"message-input\") to be visible, and click it so the textarea has keyboard focus (the @ file-completion menu only opens for a focused textarea). Fill the message input with \"echo: newline @zzznomatch\". The file-completion menu (data-testid \"file-completion-menu\") appears; once both searches settle (allow up to 15 seconds) the element with role \"status\" inside it has the exact text \"No matching files or folders\" and the menu contains 0 elements with role \"option\". A settled empty menu must leave the normal composer keys alone. Press Enter while holding Shift (press_key \"Enter\" with modifiers \"Shift\"): a newline is inserted, so eval \"(function(){var v=document.querySelector('[data-testid=\\\"message-input\\\"]').value;return v==='echo: newline @zzznomatch'+String.fromCharCode(10)?'pass':'fail:'+JSON.stringify(v);})()\" expecting \"pass\". Fill the message input with \"echo: tab @zzznomatch\" and wait for the menu's role \"status\" element to read \"No matching files or folders\" again. Press the Tab key: focus leaves the textarea and its text is unchanged, so eval \"(function(){var el=document.querySelector('[data-testid=\\\"message-input\\\"]');return document.activeElement!==el\u0026\u0026el.value==='echo: tab @zzznomatch'?'pass':'fail:'+JSON.stringify(el.value)+' focused='+(document.activeElement===el);})()\" expecting \"pass\". Click the message input to focus it again, fill it with \"echo: sent @zzznomatch\", and wait for the \"No matching files or folders\" status once more. Press Enter while holding Control (press_key \"Enter\" with modifiers \"Control\"): that sends the message rather than completing anything. Wait (up to 30 seconds) for the agent's echoed reply: eval \"Array.from(document.querySelectorAll('.message-agent')).some(function(el){return el.textContent.indexOf('sent @zzznomatch')\u003e=0;})?'replied':'waiting'\" expecting \"replied\" with timeout \"30s\". The textarea is then empty: eval \"document.querySelector('[data-testid=\\\"message-input\\\"]').value===''?'empty':'not empty'\" expecting \"empty\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo: newline @zzznomatch"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"file-completion-menu\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_text",
+      "text": "No matching files or folders",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"status\"]",
+      "text": "No matching files or folders"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "Enter",
+      "modifiers": "Shift"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='echo: newline @zzznomatch'+String.fromCharCode(10)?'pass':'fail:'+JSON.stringify(v);})()",
+      "expect": "pass"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo: tab @zzznomatch"
+    },
+    {
+      "action": "wait_text",
+      "text": "No matching files or folders",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"status\"]",
+      "text": "No matching files or folders"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');return document.activeElement!==el\u0026\u0026el.value==='echo: tab @zzznomatch'?'pass':'fail:'+JSON.stringify(el.value)+' focused='+(document.activeElement===el);})()",
+      "expect": "pass"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo: sent @zzznomatch"
+    },
+    {
+      "action": "wait_text",
+      "text": "No matching files or folders",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"status\"]",
+      "text": "No matching files or folders"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.message-agent')).some(function(el){return el.textContent.indexOf('sent @zzznomatch')\u003e=0;})?'replied':'waiting'",
+      "expect": "replied",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value===''?'empty':'not empty'",
+      "expect": "empty"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-09-25T05:07:59.469321193Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 91876,
+    "output_tokens": 3366,
+    "estimated_cost_usd": 0.32611799999999996,
+    "mode": "generated"
+  }
+}

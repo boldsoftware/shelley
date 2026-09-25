@@ -1,0 +1,52 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new, wait for the message input (data-testid \"message-input\") to be visible, and click it so the textarea has keyboard focus (the @ file-completion menu only opens for a focused textarea). An empty folder named \"Empty Folder\" lives in a directory \"elsewhere\" that is a SIBLING of the conversation's working directory, i.e. outside it. Put the text Inspect @\"\u003cabsolute path of that folder\u003e\" into the message input with the caret at the end, computing the path from the page's default working directory, using one eval step: \"(function(){var cwd=window.__SHELLEY_INIT__.default_cwd;var target=cwd.replace(/\\/[^\\/]+$/,'')+'/elsewhere/Empty Folder';var el=document.querySelector('[data-testid=\\\"message-input\\\"]');el.focus();Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set.call(el,'Inspect @\\\"'+target+'\\\"');el.setSelectionRange(el.value.length,el.value.length);el.dispatchEvent(new Event('input',{bubbles:true}));return 'set';})()\" expecting \"set\". An exact absolute folder path offers the folder itself, shown relative to the working directory: the file-completion menu (data-testid \"file-completion-menu\") shows an element with role \"option\" and aria-label \"../elsewhere/Empty Folder/ (folder)\". Press the Enter key. The token becomes that quoted relative path plus a trailing space: eval \"(function(){var v=document.querySelector('[data-testid=\\\"message-input\\\"]').value;return v==='Inspect @\\\"../elsewhere/Empty Folder/\\\" '?'pass':'fail:'+JSON.stringify(v);})()\" expecting \"pass\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var cwd=window.__SHELLEY_INIT__.default_cwd;var target=cwd.replace(/\\/[^\\/]+$/,'')+'/elsewhere/Empty Folder';var el=document.querySelector('[data-testid=\"message-input\"]');el.focus();Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set.call(el,'Inspect @\"'+target+'\"');el.setSelectionRange(el.value.length,el.value.length);el.dispatchEvent(new Event('input',{bubbles:true}));return 'set';})()",
+      "expect": "set"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"file-completion-menu\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"option\"][aria-label=\"../elsewhere/Empty Folder/ (folder)\"]"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='Inspect @\"../elsewhere/Empty Folder/\" '?'pass':'fail:'+JSON.stringify(v);})()",
+      "expect": "pass"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-09-25T04:50:19.792891249Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 30374,
+    "output_tokens": 1609,
+    "estimated_cost_usd": 0.115257,
+    "mode": "generated"
+  }
+}

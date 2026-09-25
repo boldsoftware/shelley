@@ -1,0 +1,56 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new, wait for the message input (data-testid \"message-input\") to be visible, and click it so the textarea has keyboard focus (the @ file-completion menu only opens for a focused textarea). Put the draft \"Compare @./docs/ with another folder\" into the message input with the caret at offset 16 (right after \"@./docs/\") using one eval step: \"(function(){var el=document.querySelector('[data-testid=\\\"message-input\\\"]');el.focus();Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set.call(el,'Compare @./docs/ with another folder');el.setSelectionRange(16,16);el.dispatchEvent(new Event('input',{bubbles:true}));return 'set';})()\" expecting \"set\". A token ending in a slash browses that folder: the file-completion menu (data-testid \"file-completion-menu\") shows an element with role \"option\" and aria-label \"docs/guide.md\" and one with aria-label \"docs/Final Notes/ (folder)\". Click the folder option. The token is replaced by the quoted folder path, the text after it is preserved, the textarea keeps focus, and the caret sits right after the closing quote (offset 28): eval \"(function(){var el=document.querySelector('[data-testid=\\\"message-input\\\"]');return el.value==='Compare @\\\"docs/Final Notes/\\\" with another folder'\u0026\u0026document.activeElement===el\u0026\u0026el.selectionStart===28?'pass':'fail:'+JSON.stringify(el.value)+' caret='+el.selectionStart+' focused='+(document.activeElement===el);})()\" expecting \"pass\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');el.focus();Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set.call(el,'Compare @./docs/ with another folder');el.setSelectionRange(16,16);el.dispatchEvent(new Event('input',{bubbles:true}));return 'set';})()",
+      "expect": "set"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"file-completion-menu\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"][aria-label=\"docs/guide.md\"]"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"][aria-label=\"docs/Final Notes/ (folder)\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"][aria-label=\"docs/Final Notes/ (folder)\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');return el.value==='Compare @\"docs/Final Notes/\" with another folder'\u0026\u0026document.activeElement===el\u0026\u0026el.selectionStart===28?'pass':'fail:'+JSON.stringify(el.value)+' caret='+el.selectionStart+' focused='+(document.activeElement===el);})()",
+      "expect": "pass"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-09-25T04:51:35.902397166Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 44612,
+    "output_tokens": 1727,
+    "estimated_cost_usd": 0.15974100000000002,
+    "mode": "generated"
+  }
+}

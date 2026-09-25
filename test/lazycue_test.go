@@ -54,21 +54,32 @@ func TestMain(m *testing.M) {
 	}
 	cacheDir := filepath.Join(pkgDir, "..", "ui", "lazycue", ".lazycue")
 
-	// Run from an empty temp dir, not the package dir. Conversations created
+	// Run from a small temp dir, not the package dir. Conversations created
 	// with an empty cwd fall back to os.Getwd(), and system-prompt generation
 	// then walks the surrounding git repo (guidance-file + skills walks).
 	// Inside a large monorepo checkout that walk is capped at 2s but still
 	// costs hundreds of ms per conversation and floods go test's testlog,
 	// slowing every LazyCue test for no coverage benefit.
+	//
+	// The working directory is tmp/cwd, which holds the @ file-completion
+	// fixture (see setupCompletionFixture); tmp/elsewhere is a directory
+	// outside it. Putting the fixture in the default cwd (rather than a
+	// separate directory selected per test) keeps every conversation in one
+	// place: /new inherits the newest conversation's cwd, so a different
+	// directory would leak into all later tests.
 	tmp, err := os.MkdirTemp("", "shelley-test-cwd-")
 	if err != nil {
 		panic(err)
 	}
-	if err := os.Chdir(tmp); err != nil {
+	cwd := filepath.Join(tmp, "cwd")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
 		panic(err)
 	}
-	// Note: os.Exit below skips deferred calls; remove the (empty) dir
-	// explicitly on each exit path.
+	if err := os.Chdir(cwd); err != nil {
+		panic(err)
+	}
+	// Note: os.Exit below skips deferred calls; remove tmp explicitly on
+	// each exit path.
 
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		// Tests below all skip; run them so `go test` reports them as skipped.
@@ -87,6 +98,9 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	defer os.RemoveAll(diffFixtureDir)
+	if err := setupCompletionFixture(cwd, filepath.Join(tmp, "elsewhere")); err != nil {
+		panic(err)
+	}
 
 	app = lazycue.New(lazycue.Options{
 		BaseURL:     ts.URL,
@@ -623,6 +637,126 @@ func setupDiffFixtureRepo(dir string) error {
 	}
 	if err := write("untracked_added.txt", "fresh\nuntracked\nlines\n"); err != nil {
 		return err
+	}
+	return nil
+}
+
+// --- @ file completion (replaces ui/e2e/file-completion.spec.ts, which
+// flaked on loaded CI shards: the menu never opened for a textarea that was
+// focused before the conversation had finished loading). Typing an "@token" at
+// the caret in the composer opens a menu (data-testid "file-completion-menu")
+// listing files and folders under the conversation's working directory,
+// matched by name and by content (git grep). Choosing an entry (Enter, Tab or a
+// click) replaces the token with the path relative to that directory, quoted
+// when it contains spaces, and adds NO attachment. The working directory is
+// the server's default cwd, which TestMain fills with the fixture tree (see
+// setupCompletionFixture), so the descriptions embed no paths. Descriptions
+// that need a caret in the middle of the text set the value and selection in
+// one eval step, since "fill" leaves the caret at the end.
+//
+// Not ported from the Playwright spec: cases that intercepted /api/find-files
+// (a superseded slow query racing a fresh one, a 503 error state, arrow keys
+// against a re-rooted search_dir) and the two draft-cwd persistence cases,
+// which need per-request assertions LazyCue has no primitive for. ---
+
+// completionPreamble opens /new and focuses the composer. Every completion
+// description but one starts with it; the shared wording keeps the
+// agent-generated openings alike.
+const completionPreamble = `Navigate to /new, wait for the message input (data-testid "message-input") to be visible, and click it so the textarea has keyboard focus (the @ file-completion menu only opens for a focused textarea). `
+
+func completionTest(t *testing.T, description string) {
+	t.Helper()
+	lazyTest(t, completionPreamble+description)
+}
+
+// Completion must work inside an existing conversation, not only in the /new
+// draft the other tests use, so this one sends a message first.
+func TestNewPageFileCompletionInsertsRelativePath(t *testing.T) {
+	lazyTest(t, `Navigate to /new. Type "Hello" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"); wait for the reply "Hello! I'm Shelley, your AI assistant. How can I help you today?" to appear and for the URL to contain "/c/". Click the message input so the textarea has keyboard focus, then fill it with the text "Open @alpha". The file-completion menu (data-testid "file-completion-menu") should appear. Inside it, the element with role "listbox" has aria-label "Files and folders", and an element with role "option" and aria-label "src/alpha.ts" (the match, as a path relative to the conversation's working directory) should be visible; within that option the element matching ".grp-path mark" has text "alpha" (the highlighted part of the match). Press the Enter key. The token is replaced by the completed reference plus a trailing space (Enter completes; it does not send): eval "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='Open @src/alpha.ts '?'pass':'fail:'+JSON.stringify(v);})()" expecting "pass". The menu is gone (selector "[data-testid='file-completion-menu']" matches 0 elements) and nothing was attached (selector "[data-testid='message-attachments']" matches 0 elements).`)
+}
+
+func TestNewPageFileCompletionContentSearch(t *testing.T) {
+	completionTest(t, `Fill the message input with the text "Use @cardamom". No file NAME matches, but the file recipes.txt CONTAINS that word, so the file-completion menu (data-testid "file-completion-menu") should show an element with role "option" and aria-label "recipes.txt" (allow up to 15 seconds; content search follows the name search). Within that option the ".ff-snippet" element contains the text "secret ingredient: cardamom" and its "mark" descendant has text "cardamom". Click that option. The token is replaced: eval "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='Use @recipes.txt '?'pass':'fail:'+JSON.stringify(v);})()" expecting "pass".`)
+}
+
+func TestNewPageFileCompletionQuotedQueryWithSpaces(t *testing.T) {
+	completionTest(t, `Fill the message input with the text Read @"My Doc (an opening double quote after the @ lets the query contain spaces; there is no closing quote). The file-completion menu (data-testid "file-completion-menu") should show an element with role "option" and aria-label "My Document.md". Press the Tab key. Because the path contains a space, the completed reference is wrapped in double quotes, followed by a trailing space: eval "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='Read @\"My Document.md\" '?'pass':'fail:'+JSON.stringify(v);})()" expecting "pass". Nothing was attached (selector "[data-testid='message-attachments']" matches 0 elements).`)
+}
+
+func TestNewPageFileCompletionMiddleCaret(t *testing.T) {
+	completionTest(t, `Put the draft "before @gammaray after" into the message input with the caret at offset 11 (right after "@gam", in the middle of the text) using one eval step: "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');el.focus();Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set.call(el,'before @gammaray after');el.setSelectionRange(11,11);el.dispatchEvent(new Event('input',{bubbles:true}));return 'set';})()" expecting "set". The file-completion menu (data-testid "file-completion-menu") should show an element with role "option" and aria-label "gamma.md" (the query is the token text up to the caret, "gam"). Click that option. Only the @-token is replaced and the surrounding text is untouched, the textarea keeps focus, and the caret sits right after the inserted path (offset 16, with no trailing space inserted because text already follows): eval "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');return el.value==='before @gamma.md after'&&document.activeElement===el&&el.selectionStart===16?'pass':'fail:'+JSON.stringify(el.value)+' caret='+el.selectionStart+' focused='+(document.activeElement===el);})()" expecting "pass". The menu is gone (selector "[data-testid='file-completion-menu']" matches 0 elements).`)
+}
+
+func TestNewPageFileCompletionTokenBoundaries(t *testing.T) {
+	completionTest(t, `An @ only starts a file token at the start of the text or after whitespace, and the token ends at an unquoted space. Fill the message input with "email foo@delta", wait about 1 second, and assert selector "[data-testid='file-completion-menu']" matches 0 elements (no menu: the @ follows a letter). Fill it with "prefix@delta", wait about 1 second, and assert the same selector matches 0 elements. Fill it with "@delta": now the file-completion menu (data-testid "file-completion-menu") appears with an element with role "option" and aria-label "delta.md". Finally fill it with "look @delta later" (the caret ends up after "later", outside the token), wait about 1 second, and assert the menu selector matches 0 elements.`)
+}
+
+func TestNewPageFileCompletionEscapeDismisses(t *testing.T) {
+	completionTest(t, `Fill the message input with "@delta". The file-completion menu (data-testid "file-completion-menu") should appear with an element with role "option" and aria-label "delta.md". Press the Escape key. The menu closes (selector "[data-testid='file-completion-menu']" matches 0 elements) but the textarea keeps focus and its text is unchanged: eval "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');return document.activeElement===el&&el.value==='@delta'?'pass':'fail:'+JSON.stringify(el.value)+' focused='+(document.activeElement===el);})()" expecting "pass". Then press Enter while holding Shift (press_key "Enter" with modifiers "Shift"): with the menu dismissed, Shift+Enter inserts a newline as usual instead of completing anything, so eval "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='@delta'+String.fromCharCode(10)?'pass':'fail:'+JSON.stringify(v);})()" expecting "pass".`)
+}
+
+func TestNewPageFileCompletionArrowKeysWrap(t *testing.T) {
+	completionTest(t, `Fill the message input with "@My". The file-completion menu (data-testid "file-completion-menu") shows exactly 3 elements with role "option" (the files My Document.md and My Notes.md and the folder My Notes/), and the first option has aria-selected "true". Press the ArrowUp key: the highlight wraps around to the LAST option, so the third option has aria-selected "true" and the first has aria-selected "false". Press the ArrowDown key: it wraps back to the first option (aria-selected "true"). Press the ArrowDown key once more: the second option is highlighted. Remember its path with an eval step: "(function(){var opts=document.querySelectorAll('[data-testid=\"file-completion-menu\"] [role=\"option\"]');var el=document.querySelector('[data-testid=\"file-completion-menu\"] [role=\"option\"][aria-selected=\"true\"]');window.__picked=el.getAttribute('title');return el===opts[1]?'second':'other';})()" expecting "second". Press the Enter key. The highlighted entry is inserted; every candidate here contains a space, so it is double-quoted and followed by a space: eval "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='@\"'+window.__picked+'\" '?'pass':'fail:'+JSON.stringify(v)+' picked='+window.__picked;})()" expecting "pass".`)
+}
+
+func TestNewPageFileCompletionNoMatches(t *testing.T) {
+	completionTest(t, `Fill the message input with "echo: newline @zzznomatch". The file-completion menu (data-testid "file-completion-menu") appears; once both searches settle (allow up to 15 seconds) the element with role "status" inside it has the exact text "No matching files or folders" and the menu contains 0 elements with role "option". A settled empty menu must leave the normal composer keys alone. Press Enter while holding Shift (press_key "Enter" with modifiers "Shift"): a newline is inserted, so eval "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='echo: newline @zzznomatch'+String.fromCharCode(10)?'pass':'fail:'+JSON.stringify(v);})()" expecting "pass". Fill the message input with "echo: tab @zzznomatch" and wait for the menu's role "status" element to read "No matching files or folders" again. Press the Tab key: focus leaves the textarea and its text is unchanged, so eval "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');return document.activeElement!==el&&el.value==='echo: tab @zzznomatch'?'pass':'fail:'+JSON.stringify(el.value)+' focused='+(document.activeElement===el);})()" expecting "pass". Click the message input to focus it again, fill it with "echo: sent @zzznomatch", and wait for the "No matching files or folders" status once more. Press Enter while holding Control (press_key "Enter" with modifiers "Control"): that sends the message rather than completing anything. Wait (up to 30 seconds) for the agent's echoed reply: eval "Array.from(document.querySelectorAll('.message-agent')).some(function(el){return el.textContent.indexOf('sent @zzznomatch')>=0;})?'replied':'waiting'" expecting "replied" with timeout "30s". The textarea is then empty: eval "document.querySelector('[data-testid=\"message-input\"]').value===''?'empty':'not empty'" expecting "empty".`)
+}
+
+func TestNewPageFileCompletionPreservesColon(t *testing.T) {
+	completionTest(t, `Put the text "Read @README: please" into the message input with the caret at offset 12 (immediately before the colon) using one eval step: "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');el.focus();Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set.call(el,'Read @README: please');el.setSelectionRange(12,12);el.dispatchEvent(new Event('input',{bubbles:true}));return 'set';})()" expecting "set". The file-completion menu (data-testid "file-completion-menu") should show an element with role "option" and aria-label "README.md". Press the Enter key. The token is completed and the colon directly after it is preserved, with no space inserted between them: eval "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='Read @README.md: please'?'pass':'fail:'+JSON.stringify(v);})()" expecting "pass". The menu is gone (selector "[data-testid='file-completion-menu']" matches 0 elements).`)
+}
+
+func TestNewPageFileCompletionHoverThenTab(t *testing.T) {
+	completionTest(t, `First install a recorder for file-content requests with an eval step: "(function(){window.__contentRequests=[];var o=window.fetch;window.fetch=function(u,opt){var s=(typeof u==='string')?u:u.url;if(/\/api\/(read-file|upload)(\?|$)/.test(s)){window.__contentRequests.push(s);}return o.apply(this,arguments);};return 'armed';})()" expecting "armed". Fill the message input with the text Read @"My Notes (opening quote, no closing quote). The file-completion menu (data-testid "file-completion-menu") lists files and folders together: an element with role "option" and aria-label "My Notes/ (folder)" whose data-kind attribute is "folder", and an element with role "option" and aria-label "My Notes.md" whose data-kind attribute is "file"; exactly one of them has aria-selected "true". Hovering an option highlights it without taking focus from the textarea. Take the option that is NOT highlighted, remember its title attribute (its path) and dispatch a mouseenter event on it, in one eval step: "(function(){var el=document.querySelector('[data-testid=\"file-completion-menu\"] [role=\"option\"][aria-selected=\"false\"]');window.__hovered=el.getAttribute('title');el.dispatchEvent(new MouseEvent('mouseenter'));return 'hovered';})()" expecting "hovered". Afterwards that option is the highlighted one and the textarea is still the active element: eval "(function(){var opts=Array.from(document.querySelectorAll('[data-testid=\"file-completion-menu\"] [role=\"option\"]'));var el=opts.find(function(o){return o.getAttribute('title')===window.__hovered;});return el&&el.getAttribute('aria-selected')==='true'&&document.activeElement===document.querySelector('[data-testid=\"message-input\"]')?'pass':'fail';})()" expecting "pass". Press the Tab key. The hovered entry is inserted; both candidates contain a space, so it is double-quoted and followed by a space (a folder keeps its trailing slash inside the quotes): eval "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='Read @\"'+window.__hovered+'\" '?'pass':'fail:'+JSON.stringify(v)+' hovered='+window.__hovered;})()" expecting "pass". Choosing an entry attaches nothing and reads no file: selector "[data-testid='message-attachments']" matches 0 elements, and eval "String(window.__contentRequests.length)" expecting "0".`)
+}
+
+func TestNewPageFileCompletionBrowsesNestedFolder(t *testing.T) {
+	completionTest(t, `Put the draft "Compare @./docs/ with another folder" into the message input with the caret at offset 16 (right after "@./docs/") using one eval step: "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');el.focus();Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set.call(el,'Compare @./docs/ with another folder');el.setSelectionRange(16,16);el.dispatchEvent(new Event('input',{bubbles:true}));return 'set';})()" expecting "set". A token ending in a slash browses that folder: the file-completion menu (data-testid "file-completion-menu") shows an element with role "option" and aria-label "docs/guide.md" and one with aria-label "docs/Final Notes/ (folder)". Click the folder option. The token is replaced by the quoted folder path, the text after it is preserved, the textarea keeps focus, and the caret sits right after the closing quote (offset 28): eval "(function(){var el=document.querySelector('[data-testid=\"message-input\"]');return el.value==='Compare @\"docs/Final Notes/\" with another folder'&&document.activeElement===el&&el.selectionStart===28?'pass':'fail:'+JSON.stringify(el.value)+' caret='+el.selectionStart+' focused='+(document.activeElement===el);})()" expecting "pass".`)
+}
+
+func TestNewPageFileCompletionAbsolutePathOutsideCwd(t *testing.T) {
+	completionTest(t, `An empty folder named "Empty Folder" lives in a directory "elsewhere" that is a SIBLING of the conversation's working directory, i.e. outside it. Put the text Inspect @"<absolute path of that folder>" into the message input with the caret at the end, computing the path from the page's default working directory, using one eval step: "(function(){var cwd=window.__SHELLEY_INIT__.default_cwd;var target=cwd.replace(/\/[^\/]+$/,'')+'/elsewhere/Empty Folder';var el=document.querySelector('[data-testid=\"message-input\"]');el.focus();Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set.call(el,'Inspect @\"'+target+'\"');el.setSelectionRange(el.value.length,el.value.length);el.dispatchEvent(new Event('input',{bubbles:true}));return 'set';})()" expecting "set". An exact absolute folder path offers the folder itself, shown relative to the working directory: the file-completion menu (data-testid "file-completion-menu") shows an element with role "option" and aria-label "../elsewhere/Empty Folder/ (folder)". Press the Enter key. The token becomes that quoted relative path plus a trailing space: eval "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='Inspect @\"../elsewhere/Empty Folder/\" '?'pass':'fail:'+JSON.stringify(v);})()" expecting "pass".`)
+}
+
+// setupCompletionFixture fills cwd (the server's default working directory)
+// with the completion fixture: a git repo, so content search works via
+// `git grep --untracked`, holding files and folders whose names are chosen so
+// each completion query in the tests above matches exactly the entries that
+// test asserts on; plus an empty folder under elsewhere, a sibling directory
+// outside cwd. Other tests run in cwd too and may drop files there (a bash
+// tool's output, a patched test.txt, a demo image); keep query words unlikely
+// to match such names.
+func setupCompletionFixture(cwd, elsewhere string) error {
+	for _, d := range []string{
+		filepath.Join(cwd, "src"),
+		filepath.Join(cwd, "My Notes"),
+		filepath.Join(cwd, "docs", "Final Notes"),
+		filepath.Join(elsewhere, "Empty Folder"),
+	} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			return err
+		}
+	}
+	cmd := exec.Command("git", "init", "-q")
+	cmd.Dir = cwd
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git init: %w\n%s", err, out)
+	}
+	for name, content := range map[string]string{
+		"src/alpha.ts":      "export const alpha = 1;\n",
+		"gamma.md":          "gamma\n",
+		"delta.md":          "delta\n",
+		"README.md":         "example\n",
+		"My Document.md":    "notes\n",
+		"My Notes.md":       "file contents must not be attached\n",
+		"docs/guide.md":     "guide\n",
+		"recipes.txt":       "secret ingredient: cardamom\n",
+		"shopping-list.txt": "eggs and flour\n",
+	} {
+		if err := os.WriteFile(filepath.Join(cwd, name), []byte(content), 0o644); err != nil {
+			return err
+		}
 	}
 	return nil
 }
