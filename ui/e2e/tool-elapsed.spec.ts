@@ -38,7 +38,7 @@ test("expanded running tools show a live elapsed time and stop on completion", a
   await expect(tool).toHaveAttribute("data-testid", "tool-call-completed", { timeout: 10000 });
   await expect(elapsed).toHaveCount(0);
   await tool.locator(".bash-tool-header").click();
-  await expect(tool.locator(".bash-tool-time")).toContainText(/(?:ms|s)$/);
+  await expect(tool.locator(".bash-tool-time")).toHaveCount(0);
 });
 
 test("subagent tools and their running requests show elapsed time", async ({ page, request }) => {

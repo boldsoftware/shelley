@@ -21,7 +21,11 @@
   />
 
   <!-- Fallback: running state -->
-  <div v-else-if="!hasResult" class="message message-tool" data-testid="tool-call-running">
+  <div
+    v-else-if="!hasResult && !toolInterrupted"
+    class="message message-tool"
+    data-testid="tool-call-running"
+  >
     <div class="message-content">
       <div class="tool-running">
         <div class="tool-running-header">
@@ -152,6 +156,7 @@ const props = defineProps<{
   toolStartTime?: string | null;
   toolEndTime?: string | null;
   hasResult?: boolean;
+  toolInterrupted?: boolean;
   display?: unknown;
   onCommentTextChange?: (text: string) => void;
   toolUseId?: string;
@@ -208,6 +213,7 @@ const TOOL_COMPONENTS: Record<string, any> = {
 };
 
 const executionTime = computed(() => {
+  if (props.toolInterrupted) return "";
   if (props.hasResult && props.toolStartTime && props.toolEndTime) {
     const diffMs = new Date(props.toolEndTime).getTime() - new Date(props.toolStartTime).getTime();
     return diffMs < 1000 ? `${diffMs}ms` : `${(diffMs / 1000).toFixed(1)}s`;
@@ -220,7 +226,7 @@ const toolComponent = computed(() => TOOL_COMPONENTS[props.toolName] || null);
 const toolComponentProps = computed<Record<string, unknown>>(() => {
   const base: Record<string, unknown> = {
     toolInput: props.toolInput,
-    isRunning: !props.hasResult,
+    isRunning: !props.hasResult && !props.toolInterrupted,
     toolResult: props.toolResult,
     hasError: props.toolError,
     executionTime: executionTime.value,

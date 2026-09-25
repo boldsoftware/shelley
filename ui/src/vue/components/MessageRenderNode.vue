@@ -45,6 +45,7 @@
     :tool-start-time="node.item.toolStartTime"
     :tool-end-time="node.item.toolEndTime"
     :has-result="node.item.hasResult"
+    :tool-interrupted="node.item.toolInterrupted"
     :display="node.item.display"
     :on-comment-text-change="onCommentTextChange"
     :tool-use-id="node.item.toolUseId"

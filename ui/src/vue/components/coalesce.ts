@@ -6,6 +6,7 @@ import {
   distillStatus,
   isCompactionCarried,
 } from "../../types";
+import { isCancelledToolResult } from "../utils/toolStatus";
 
 export interface CoalescedItem {
   type: "message" | "tool";
@@ -27,10 +28,14 @@ export interface CoalescedItem {
   toolStartTime?: string | null;
   toolEndTime?: string | null;
   hasResult?: boolean;
+  toolInterrupted?: boolean;
   display?: unknown;
 }
 
-export function coalesceMessages(messages: Message[]): CoalescedItem[] {
+export function coalesceMessages(
+  messages: Message[],
+  interruptedGeneration?: number,
+): CoalescedItem[] {
   if (messages.length === 0) return [];
 
   const items: CoalescedItem[] = [];
@@ -67,7 +72,13 @@ export function coalesceMessages(messages: Message[]): CoalescedItem[] {
   }
   const toolResultMap: Record<
     string,
-    { result: LLMContent[]; error: boolean; startTime: string | null; endTime: string | null }
+    {
+      result: LLMContent[];
+      error: boolean;
+      startTime: string | null;
+      endTime: string | null;
+      interrupted: boolean;
+    }
   > = {};
   const displayDataMap: Record<string, unknown> = {};
 
@@ -78,6 +89,10 @@ export function coalesceMessages(messages: Message[]): CoalescedItem[] {
         const llmData =
           typeof message.llm_data === "string" ? JSON.parse(message.llm_data) : message.llm_data;
         if (llmData && llmData.Content && Array.isArray(llmData.Content)) {
+          const userData =
+            typeof message.user_data === "string"
+              ? JSON.parse(message.user_data)
+              : message.user_data;
           llmData.Content.forEach((content: LLMContent) => {
             if (content && content.Type === 6 && content.ToolUseID) {
               toolResultMap[content.ToolUseID] = {
@@ -85,6 +100,12 @@ export function coalesceMessages(messages: Message[]): CoalescedItem[] {
                 error: content.ToolError || false,
                 startTime: content.ToolUseStartTime || null,
                 endTime: content.ToolUseEndTime || null,
+                interrupted:
+                  userData?.interrupted_tool_result === true ||
+                  (content.ToolError === true &&
+                    (content.ToolResult || []).some(
+                      (result) => result.Type === 2 && isCancelledToolResult(result.Text || ""),
+                    )),
               };
               if (content.Display) {
                 displayDataMap[content.ToolUseID] = content.Display;
@@ -202,6 +223,7 @@ export function coalesceMessages(messages: Message[]): CoalescedItem[] {
             const serverResult = toolUse.ID ? serverToolResults[toolUse.ID] : undefined;
             const displayData = toolUse.ID ? displayDataMap[toolUse.ID] : undefined;
             const isServerSideToolUse = toolUse.Type === 7;
+            const hasResult = !!resultData || !!serverResult || wasTruncated || isServerSideToolUse;
             items.push({
               type: "tool",
               generation: message.generation,
@@ -221,7 +243,12 @@ export function coalesceMessages(messages: Message[]): CoalescedItem[] {
               toolInvokedAt: message.created_at,
               toolStartTime: resultData?.startTime,
               toolEndTime: resultData?.endTime,
-              hasResult: !!resultData || !!serverResult || wasTruncated || isServerSideToolUse,
+              hasResult,
+              toolInterrupted:
+                !!resultData?.interrupted ||
+                (!hasResult &&
+                  interruptedGeneration !== undefined &&
+                  message.generation === interruptedGeneration),
               display: displayData,
             });
           });

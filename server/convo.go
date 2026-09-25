@@ -883,6 +883,9 @@ func (cm *ConversationManager) acceptUserMessage(ctx context.Context, service ll
 	cm.mu.Lock()
 	hadLoop := cm.loop != nil
 	cm.mu.Unlock()
+	if _, err := cm.recordInterruptedToolResults(ctx); err != nil {
+		return false, "", fmt.Errorf("failed to record interrupted tool results: %w", err)
+	}
 	if err := cm.ensureLoopLocked(service, modelID); err != nil {
 		return false, "", err
 	}
@@ -1242,10 +1245,8 @@ func (cm *ConversationManager) ContinueInterruptedTurn(ctx context.Context, defa
 	return cm.resumeInterruptedTurn(ctx, interruptedResumeMarked, nil, cm.currentModelResolver(defaultModelID, serviceForModel), nil)
 }
 
-// resumeInterruptedTurn adds no user message and mutates no history row: the
-// persisted messages are the request, and loop.insertMissingToolResults patches
-// any dangling tool_use block in memory while building it. retryMu serializes
-// this against retry/continue affordances.
+// resumeInterruptedTurn persists results for orphaned tool calls before loading
+// the request. retryMu serializes it against retry/continue affordances.
 func (cm *ConversationManager) resumeInterruptedTurn(ctx context.Context, validation interruptedResumeValidation, upgradeResume *db.UpgradeResume, resolveService func() (llm.Service, string, error), beforeResume func() error) (returnErr error) {
 	if validation == interruptedResumeWorking && upgradeResume == nil {
 		return fmt.Errorf("upgrade resume token is required")
@@ -1258,12 +1259,11 @@ func (cm *ConversationManager) resumeInterruptedTurn(ctx context.Context, valida
 	defer cm.loopLifecycleMu.Unlock()
 	cm.waitForLoopTeardownLocked()
 	if validation == interruptedResumeWorking {
-		resume := *upgradeResume
 		defer func() {
 			if returnErr == nil || errors.Is(returnErr, errInterruptedTurnNotApplicable) {
 				return
 			}
-			if err := cm.recoverFailedUpgradeResume(ctx, resume); err != nil {
+			if err := cm.recoverFailedUpgradeResume(ctx, *upgradeResume); err != nil {
 				returnErr = errors.Join(returnErr, fmt.Errorf("failed to preserve interrupted turn for manual recovery: %w", err))
 			}
 		}()
@@ -1322,6 +1322,17 @@ func (cm *ConversationManager) resumeInterruptedTurn(ctx context.Context, valida
 	if service == nil {
 		return fmt.Errorf("llm service is required")
 	}
+	if validation != interruptedResumeTrusted {
+		result, err := cm.recordInterruptedToolResults(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to record interrupted tool results: %w", err)
+		}
+		if validation == interruptedResumeWorking && result != nil {
+			// Our result advances the turn version; later user input still
+			// invalidates recovery because it gets a different sequence.
+			upgradeResume.MaxUserSequenceID = result.SequenceID
+		}
+	}
 	if err := cm.ensureLoopLocked(service, modelID); err != nil {
 		return fmt.Errorf("failed to build loop before resuming: %w", err)
 	}
@@ -1372,6 +1383,19 @@ func (cm *ConversationManager) resumeInterruptedTurn(ctx context.Context, valida
 	logger.Info("resuming interrupted turn", "model", modelID)
 	loopInstance.Retry()
 	return nil
+}
+
+func (cm *ConversationManager) recordInterruptedToolResults(ctx context.Context) (*generated.Message, error) {
+	result, err := cm.db.RecordInterruptedToolResults(ctx, cm.conversationID)
+	if err != nil {
+		return nil, err
+	}
+	if result != nil {
+		cm.publishStream(result.SequenceID, StreamResponse{
+			Messages: toAPIMessages([]generated.Message{*result}),
+		})
+	}
+	return result, nil
 }
 
 // HasQueuedMessages reports whether durable queued user work already reserves

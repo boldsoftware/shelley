@@ -140,6 +140,66 @@ function serverToolUse(id: string): LLMContent {
   check("tool only -> tool item only", items.length === 1 && items[0].type === "tool", items);
 }
 
+// --- A restart interruption resolves dangling tool calls ---
+{
+  const items = coalesceMessages([agentMessage([toolUse("interrupted")])], 1);
+  check(
+    "interrupted tool call is marked, not running",
+    items.length === 1 && items[0].type === "tool" && items[0].toolInterrupted === true,
+    items,
+  );
+  const resolved = coalesceMessages([agentMessage([toolUse("other")])], 2);
+  check(
+    "older-generation tool call is not marked",
+    resolved[0].toolInterrupted === false,
+    resolved,
+  );
+  const resultMessage = {
+    ...agentMessage([]),
+    type: "user",
+    user_data: JSON.stringify({ interrupted_tool_result: true }),
+    llm_data: JSON.stringify({
+      Content: [
+        {
+          Type: 6,
+          ToolUseID: "interrupted",
+          ToolError: true,
+          ToolResult: [{ Type: 2, Text: "Interrupted" }],
+        },
+      ],
+    }),
+  } as Message;
+  const reloaded = coalesceMessages([agentMessage([toolUse("interrupted")]), resultMessage]);
+  check(
+    "interrupted tool stays marked after reload without interrupted state",
+    reloaded[0].type === "tool" &&
+      reloaded[0].hasResult === true &&
+      reloaded[0].toolInterrupted === true &&
+      reloaded[0].toolResult?.[0]?.Text === "Interrupted",
+    reloaded,
+  );
+  const cancelled = {
+    ...resultMessage,
+    user_data: undefined,
+    llm_data: JSON.stringify({
+      Content: [
+        {
+          Type: 6,
+          ToolUseID: "interrupted",
+          ToolError: true,
+          ToolResult: [{ Type: 2, Text: "signal: terminated\n\nTool execution cancelled by user" }],
+        },
+      ],
+    }),
+  } as Message;
+  const stopped = coalesceMessages([agentMessage([toolUse("interrupted")]), cancelled]);
+  check(
+    "Stop leaves a durable interrupted label",
+    stopped[0].toolInterrupted === true && stopped[0].hasResult === true,
+    stopped,
+  );
+}
+
 // --- Text written after the tool calls renders after them ---
 {
   // A provider running server-side web_search returns ONE assistant message

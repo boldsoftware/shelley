@@ -57,6 +57,7 @@ test.describe('Conversation Cancellation', () => {
     await cancelledTool.locator('.bash-tool-header').click();
     await expect(cancelledTool.locator('.bash-tool-label').filter({ hasText: 'Output' })).toContainText('Output (cancelled):');
     await expect(cancelledTool.locator('.bash-tool-label').filter({ hasText: 'Output' })).not.toContainText('exit code');
+    await expect(cancelledTool.locator('.bash-tool-time')).toHaveCount(0);
 
     // Verify we see the [Operation cancelled] message in the chat messages
     // (scoped to .messages-container so the conversation drawer preview row,
@@ -81,6 +82,7 @@ test.describe('Conversation Cancellation', () => {
     await expect(cancelledTool.locator('.bash-tool-details')).toHaveCount(0);
     await cancelledTool.locator('.bash-tool-header').click();
     await expect(cancelledTool.locator('.bash-tool-label').filter({ hasText: 'Output' })).toContainText('Output (cancelled):');
+    await expect(cancelledTool.locator('.bash-tool-time')).toHaveCount(0);
     await expect(page.locator('.messages-container').locator('text=/\\[Operation cancelled\\]/i')).toBeVisible();
 
     // Verify we can continue the conversation after cancellation

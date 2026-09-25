@@ -506,6 +506,88 @@ func TestFailedUpgradeResumeBecomesManualInterruption(t *testing.T) {
 	}
 }
 
+func TestUpgradeResumeFailureAfterInterruptedResult(t *testing.T) {
+	t.Parallel()
+	for _, newerInput := range []bool{false, true} {
+		name := "recover_interrupted_turn"
+		if newerInput {
+			name = "preserve_newer_input"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			srv, database, service := newTestServer(t)
+			defer stopActiveConversationLoops(srv)
+			ctx := t.Context()
+			convID := seedInterruptedConversation(t, database, nil)
+			if _, err := database.CreateMessage(ctx, db.CreateMessageParams{
+				ConversationID: convID,
+				Type:           db.MessageTypeAgent,
+				LLMData: llm.Message{
+					Role:    llm.MessageRoleAssistant,
+					Content: []llm.Content{{Type: llm.ContentTypeToolUse, ID: "toolu_recovery", ToolName: "bash"}},
+				},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			resume := reserveUpgradeResume(t, database, convID)
+			manager, err := srv.getOrCreateConversationManager(ctx, convID, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			setupErr := errors.New("loop setup failed after recording interrupted result")
+			var resultSequence int64
+			manager.decorateService = func(llm.Service) (llm.Service, error) {
+				latest, err := database.GetLatestActionableMessage(ctx, convID)
+				if err != nil {
+					return nil, err
+				}
+				var message llm.Message
+				if latest.LlmData == nil {
+					return nil, errors.New("missing interrupted result")
+				}
+				if err := json.Unmarshal([]byte(*latest.LlmData), &message); err != nil {
+					return nil, err
+				}
+				if len(message.Content) != 1 || message.Content[0].ToolUseID != "toolu_recovery" ||
+					!message.Content[0].ToolError || latest.SequenceID <= resume.MaxUserSequenceID {
+					return nil, errors.New("interrupted result was not persisted before setup")
+				}
+				resultSequence = latest.SequenceID
+				if newerInput {
+					if _, err := database.CreateMessage(ctx, db.CreateMessageParams{
+						ConversationID: convID,
+						Type:           db.MessageTypeUser,
+						LLMData:        llm.UserStringMessage("newer input"),
+						MarkAgentStart: true,
+					}); err != nil {
+						return nil, err
+					}
+				}
+				return nil, setupErr
+			}
+			err = manager.ResumeInterruptedTurnAfterUpgrade(ctx, resume, "predictable",
+				func(string) (llm.Service, error) { return service, nil }, resumeWarningText)
+			if !errors.Is(err, setupErr) {
+				t.Fatalf("resume error = %v, want %v", err, setupErr)
+			}
+			if resultSequence == 0 {
+				t.Fatal("setup hook never observed the interrupted result")
+			}
+			conversation, err := database.GetConversationByID(ctx, convID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if conversation.AgentWorking != newerInput || conversation.TurnInterrupted == newerInput {
+				t.Fatalf("working=%v interrupted=%v, want %v/%v",
+					conversation.AgentWorking, conversation.TurnInterrupted, newerInput, !newerInput)
+			}
+			if manager.IsAgentWorking() != newerInput {
+				t.Fatalf("manager working=%v, want %v", manager.IsAgentWorking(), newerInput)
+			}
+		})
+	}
+}
+
 // TestResumeAfterUpgradeSkips covers startup classification: conversations that
 // are not working, managed children, and conversations whose turn already
 // finished are not reserved for automatic resume and have stale working state
@@ -592,5 +674,58 @@ func TestResumeAfterUpgradeSkips(t *testing.T) {
 				t.Errorf("skipped state working=%v interrupted=%v, want false/false", conv.AgentWorking, conv.TurnInterrupted)
 			}
 		})
+	}
+}
+
+// An upgrade restart mid-tool resumes automatically without ever showing the
+// interrupted state, so it must persist the orphaned call's result itself.
+func TestResumeAfterUpgradePersistsInterruptedToolResult(t *testing.T) {
+	t.Parallel()
+	srv, database, predictableService := newTestServer(t)
+	defer stopActiveConversationLoops(srv)
+	convID := seedInterruptedConversation(t, database, nil)
+	if _, err := database.CreateMessage(t.Context(), db.CreateMessageParams{
+		ConversationID: convID,
+		Type:           db.MessageTypeAgent,
+		LLMData: llm.Message{
+			Role:    llm.MessageRoleAssistant,
+			Content: []llm.Content{{Type: llm.ContentTypeToolUse, ID: "toolu_upgrade", ToolName: "bash"}},
+		},
+	}); err != nil {
+		t.Fatalf("create tool call: %v", err)
+	}
+	resume := reserveUpgradeResume(t, database, convID)
+	manager, err := srv.getOrCreateConversationManager(context.Background(), convID, "")
+	if err != nil {
+		t.Fatalf("get conversation manager: %v", err)
+	}
+	if err := manager.ResumeInterruptedTurnAfterUpgrade(
+		context.Background(),
+		resume,
+		"predictable",
+		func(string) (llm.Service, error) { return predictableService, nil },
+		resumeWarningText,
+	); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+
+	var found int
+	for _, message := range listMessages(t, database, convID) {
+		if message.UserData == nil || message.LlmData == nil {
+			continue
+		}
+		var data llm.Message
+		if err := json.Unmarshal([]byte(*message.LlmData), &data); err != nil {
+			t.Fatal(err)
+		}
+		for _, content := range data.Content {
+			if content.Type == llm.ContentTypeToolResult && content.ToolUseID == "toolu_upgrade" &&
+				content.ToolError && len(content.ToolResult) == 1 && content.ToolResult[0].Text == "Interrupted" {
+				found++
+			}
+		}
+	}
+	if found != 1 {
+		t.Fatalf("persisted interrupted results = %d, want 1", found)
 	}
 }

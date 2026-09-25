@@ -1746,7 +1746,12 @@ const welcomeParts = computed(() =>
 );
 
 const coalescedItems = computed(() => {
-  const items = perfWrap("chat.coalesceMessages", () => coalesceMessages(messages.value))();
+  const items = perfWrap("chat.coalesceMessages", () =>
+    coalesceMessages(
+      messages.value,
+      conversationInterrupted.value ? props.currentConversation?.current_generation : undefined,
+    ),
+  )();
   if (conversationViewMode.value === "all") return items;
   return items.filter(
     (item) =>
