@@ -3540,7 +3540,9 @@ diffs-container {
 }
 
 /* Inline media recording takeover */
-/* Detached controls retain the same recorder while another chat is selected. */
+/* Detached controls retain the same recorder while another chat is selected.
+   At 32rem the card always lands in the icon-only tier below: it is a compact
+   reminder, not the primary control surface. */
 .recording-floating {
   position: fixed;
   z-index: 30;
@@ -3574,24 +3576,6 @@ diffs-container {
   background: var(--bg-hover);
 }
 
-.recording-floating .recording-panel {
-  height: auto;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.recording-floating .recording-panel-main {
-  flex-basis: 100%;
-}
-
-.recording-floating .recording-actions {
-  margin-left: auto;
-}
-
-.recording-floating .recording-preserved-text {
-  max-width: 8rem;
-}
-
 .recording-panel {
   display: flex;
   align-items: center;
@@ -3603,15 +3587,16 @@ diffs-container {
   border: 1.5px solid var(--border);
   border-radius: 4px;
   background: var(--bg-base);
+  container: recording-panel / inline-size;
 }
 
 .recording-panel-main {
   display: flex;
   flex: 1 1 auto;
-  flex-direction: row;
   align-items: center;
   gap: 0.375rem;
   min-width: 0;
+  overflow: hidden;
 }
 
 .recording-preview {
@@ -3675,6 +3660,7 @@ diffs-container {
   color: var(--text-secondary);
   font-size: 0.875rem;
   line-height: 1.25rem;
+  white-space: nowrap;
 }
 
 .recording-status-dot {
@@ -3726,14 +3712,25 @@ diffs-container {
   }
 }
 
-.recording-preserved-text {
+.recording-status-label,
+.recording-timer {
+  flex: 0 0 auto;
+}
+
+.recording-preserved-text,
+.recording-error {
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: min(24rem, 45vw);
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The draft reminder shrinks four times faster than an error message. */
+.recording-preserved-text {
+  flex-shrink: 4;
+  max-width: 24rem;
   color: var(--text-primary);
   font: inherit;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .recording-preserved-text::before {
@@ -3749,12 +3746,7 @@ diffs-container {
 }
 
 .recording-error {
-  min-width: 0;
-  overflow: hidden;
   color: var(--error-text);
-  font-size: 0.875rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .recording-actions {
@@ -3775,12 +3767,6 @@ diffs-container {
   white-space: nowrap;
 }
 
-.recording-screen-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
 .recording-stop-btn {
   background: #dc2626;
   border-color: #dc2626;
@@ -3792,20 +3778,30 @@ diffs-container {
   border-color: #b91c1c;
 }
 
-@media (max-width: 640px) {
-  .recording-floating {
-    top: calc(5.5rem + env(safe-area-inset-top, 0px));
-    bottom: auto;
+/* The panel is a container so the controls degrade by panel width, not
+   viewport width: a narrow window or an open sidebar shrinks the composer
+   without crossing any viewport breakpoint. Only the draft text and an error
+   message shrink; each tier removes fixed-width parts so they keep a few rem
+   of room. Thresholds are budgeted for the longest locale (French). */
+/* The pulsing dot, timer and Stop button already say "recording". */
+@container recording-panel (width < 55rem) {
+  .recording-status[data-state="preroll"] .recording-status-label,
+  .recording-status[data-state="recording"] .recording-status-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
   }
+}
 
-  .recording-panel {
-    height: 42px;
-    flex-direction: row;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.2rem 0.25rem;
+@container recording-panel (width < 47rem) {
+  .recording-screen-btn .recording-action-label {
+    display: none;
   }
+}
 
+@container recording-panel (width < 34rem) {
   .recording-panel-main {
     gap: 0.25rem;
   }
@@ -3818,22 +3814,7 @@ diffs-container {
     display: none;
   }
 
-  .recording-status[data-state="preroll"] .recording-status-label,
-  .recording-status[data-state="recording"] .recording-status-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
-
-  .recording-preserved-text {
-    max-width: 36vw;
-  }
-
   .recording-actions {
-    flex-wrap: nowrap;
     gap: 0.2rem;
   }
 
@@ -3848,9 +3829,25 @@ diffs-container {
   .recording-action-label {
     display: none;
   }
+}
 
-  .recording-screen-btn {
-    margin-right: 0;
+@container recording-panel (width < 20rem) {
+  .recording-waveform {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .recording-floating {
+    top: calc(5.5rem + env(safe-area-inset-top, 0px));
+    bottom: auto;
+  }
+
+  /* The panel's own box cannot query itself, so this stays on the viewport. */
+  .recording-panel {
+    height: 42px;
+    gap: 0.25rem;
+    padding: 0.2rem 0.25rem;
   }
 }
 

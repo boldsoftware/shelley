@@ -1500,6 +1500,52 @@ test.describe("media recording composer", () => {
     expect(await page.evaluate(() => window.__recordingMock.stoppedTracks)).toBeGreaterThan(0);
   });
 
+  test("fits the recording controls in a narrow desktop composer", async ({ page }) => {
+    await page.setViewportSize({ width: 660, height: 800 });
+    await page.goto("/new");
+    const input = page.getByTestId("message-input");
+    await expect(input).toBeVisible({ timeout: 30_000 });
+    await input.fill("Keep this long note with the recording so the status has to truncate.");
+    await page.getByTestId("voice-button").click();
+    await expect(page.locator(".recording-status")).toHaveAttribute("data-state", "recording");
+
+    const box = async (selector: string) => {
+      const rect = await page.locator(selector).boundingBox();
+      if (!rect) throw new Error(`${selector} has no box`);
+      return { left: rect.x, right: rect.x + rect.width, width: rect.width };
+    };
+    const panel = await box(".recording-panel");
+    const main = await box(".recording-panel-main");
+    const waveform = await box('[data-testid="recording-waveform"]');
+    const preserved = await box('[data-testid="recording-preserved-text"]');
+    const timer = await box('[data-testid="recording-timer"]');
+    const screen = await box('[data-testid="recording-screen-button"]');
+    const cancel = await box('[data-testid="recording-cancel-button"]');
+    expect(waveform.left).toBeGreaterThan(panel.left);
+    expect(waveform.right).toBeLessThanOrEqual(preserved.left);
+    expect(preserved.width).toBeGreaterThan(40);
+    expect(preserved.right).toBeLessThanOrEqual(timer.left);
+    expect(timer.width).toBeGreaterThan(30);
+    expect(timer.right).toBeLessThanOrEqual(main.right);
+    expect(main.right).toBeLessThanOrEqual(screen.left);
+    expect(cancel.right).toBeLessThan(panel.right);
+    // The secondary action goes icon-only before the primary ones do.
+    await expect(
+      page.getByTestId("recording-screen-button").locator(".recording-action-label"),
+    ).toBeHidden();
+    await expect(
+      page.getByTestId("recording-stop-button").locator(".recording-action-label"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("recording-cancel-button").locator(".recording-action-label"),
+    ).toBeVisible();
+
+    await page.getByTestId("recording-cancel-button").click();
+    await expect(input).toHaveValue(
+      "Keep this long note with the recording so the status has to truncate.",
+    );
+  });
+
   test("discards microphone capture and submits screen recording for transcription", async ({
     page,
   }) => {

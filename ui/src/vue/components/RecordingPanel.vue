@@ -98,10 +98,14 @@
         v-if="state === 'error'"
         type="button"
         class="btn btn-primary"
+        :aria-label="t('retry')"
         data-testid="recording-retry-button"
         @click="retry"
       >
-        {{ t("retry") }}
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M5.6 9A7 7 0 0 1 18.4 9M18.4 15A7 7 0 0 1 5.6 15" />
+        </svg>
+        <span class="recording-action-label">{{ t("retry") }}</span>
       </button>
       <button
         type="button"
