@@ -70,6 +70,45 @@ func TestReflectionEmojiFallback(t *testing.T) {
 	}
 }
 
+func TestHandleIntegrationsIn(t *testing.T) {
+	env, err := exeenv.New("https", "example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name       string
+		upstream   int
+		body       string
+		wantStatus int
+		wantBody   string
+	}{
+		{"attached", http.StatusOK, `{"integrations":[{"name":"llm","type":"llm","comment":"models","team":true,"help":"curl the service"}]}`, http.StatusOK, "{\"integrations\":[{\"name\":\"llm\",\"type\":\"llm\",\"comment\":\"models\",\"help\":\"curl the service\",\"team\":true,\"url\":\"https://llm.team.example.test\"}]}\n"},
+		{"empty", http.StatusOK, `{"integrations":[]}`, http.StatusOK, "{\"integrations\":[]}\n"},
+		{"detached", http.StatusForbidden, ``, http.StatusServiceUnavailable, "Reflection integration is not attached to this VM\n"},
+		{"upstream error", http.StatusInternalServerError, ``, http.StatusBadGateway, "Reflection integration is unavailable\n"},
+		{"bad response", http.StatusOK, `{`, http.StatusBadGateway, "Invalid reflection integration response\n"},
+		{"missing list", http.StatusOK, `{}`, http.StatusBadGateway, "Invalid reflection integration response\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodGet || req.URL.String() != env.ReflectionURL()+"/integrations" {
+					t.Fatalf("unexpected reflection request %s %s", req.Method, req.URL)
+				}
+				return &http.Response{
+					StatusCode: tc.upstream,
+					Body:       io.NopCloser(strings.NewReader(tc.body)),
+					Header:     make(http.Header),
+				}, nil
+			})}
+			rec := httptest.NewRecorder()
+			handleIntegrationsIn(rec, httptest.NewRequest(http.MethodGet, "/api/integrations", nil), env, client)
+			if rec.Code != tc.wantStatus || rec.Body.String() != tc.wantBody {
+				t.Fatalf("got %d %q, want %d %q", rec.Code, rec.Body.String(), tc.wantStatus, tc.wantBody)
+			}
+		})
+	}
+}
+
 func TestIndexUsesReflectionEmojiDespiteStaleFalseOverride(t *testing.T) {
 	srv, database, _ := newTestServer(t)
 	srv.reflectionEmoji = func(context.Context) string { return "🧪" }

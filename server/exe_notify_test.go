@@ -1,9 +1,12 @@
 package server
 
 import (
+	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -179,5 +182,155 @@ func TestWithExeNotifyHook(t *testing.T) {
 				t.Fatalf("withExeNotifyHook = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestHandleTestExeNotifyDisabledInTests(t *testing.T) {
+	old := setReflectionHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		t.Fatalf("test handler must not reach the network: %s", req.URL)
+		return nil, nil
+	})})
+	t.Cleanup(func() { setReflectionHTTPClient(old) })
+
+	rec := httptest.NewRecorder()
+	(&Server{}).handleTestExeNotify(rec, httptest.NewRequest(http.MethodPost, "/api/integrations/notify/test",
+		strings.NewReader(`{"message":"Hello"}`)))
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleTestExeNotifyFreshAvailabilityAfterCachedFalse(t *testing.T) {
+	env, err := exeenv.New("https", "example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newExeNotifyTestServer(t)
+	s.exeNotifyOnce.Do(func() { s.exeNotifyDetected = false })
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.String() {
+		case env.ReflectionURL() + "/integrations":
+			return testHTTPResponse(http.StatusOK, `{"integrations":[{"name":"notify","type":"notify"}]}`), nil
+		case env.IntegrationURL("notify", false) + "/":
+			var body map[string]string
+			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if req.Method != http.MethodPost || req.Header.Get("Content-Type") != "application/json" ||
+				body["title"] != "Shelley test" || body["body"] != "Hello" || len(body) != 2 {
+				t.Fatalf("notification request = method %s body %#v", req.Method, body)
+			}
+			return testHTTPResponse(http.StatusNoContent, ""), nil
+		default:
+			t.Fatalf("unexpected request %s", req.URL)
+			return nil, nil
+		}
+	})}
+	rec := httptest.NewRecorder()
+	s.handleTestExeNotifyIn(rec, httptest.NewRequest(http.MethodPost, "/api/integrations/notify/test",
+		strings.NewReader(`{"message":"Hello"}`)), env, client)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleTestExeNotifyRejectsInvalidMessage(t *testing.T) {
+	env, err := exeenv.New("https", "example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newExeNotifyTestServer(t)
+	client := notifyTestClient(t, env, http.StatusNoContent)
+	rec := httptest.NewRecorder()
+	s.handleTestExeNotifyIn(rec, httptest.NewRequest(http.MethodPost, "/api/integrations/notify/test",
+		strings.NewReader(`{"message":"   "}`)), env, client)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleTestExeNotifyGatewayRejection(t *testing.T) {
+	env, err := exeenv.New("https", "example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newExeNotifyTestServer(t)
+	client := notifyTestClient(t, env, http.StatusForbidden)
+	rec := httptest.NewRecorder()
+	s.handleTestExeNotifyIn(rec, httptest.NewRequest(http.MethodPost, "/api/integrations/notify/test",
+		strings.NewReader(`{"message":"Hello"}`)), env, client)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleTestExeNotifyUnavailableAndPredictable(t *testing.T) {
+	env, err := exeenv.New("https", "example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run("no attach", func(t *testing.T) {
+		s := newExeNotifyTestServer(t)
+		client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() != env.ReflectionURL()+"/integrations" {
+				t.Fatalf("unexpected request %s", req.URL)
+			}
+			return testHTTPResponse(http.StatusOK, `{"integrations":[]}`), nil
+		})}
+		rec := httptest.NewRecorder()
+		s.handleTestExeNotifyIn(rec, httptest.NewRequest(http.MethodPost, "/api/integrations/notify/test",
+			strings.NewReader(`{"message":"Hello"}`)), env, client)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("reflection error", func(t *testing.T) {
+		s := newExeNotifyTestServer(t)
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, errors.New("unavailable")
+		})}
+		rec := httptest.NewRecorder()
+		s.handleTestExeNotifyIn(rec, httptest.NewRequest(http.MethodPost, "/api/integrations/notify/test",
+			strings.NewReader(`{"message":"Hello"}`)), env, client)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("predictable", func(t *testing.T) {
+		s := newExeNotifyTestServer(t)
+		s.predictableOnly = true
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			t.Fatal("predictable mode queried notify")
+			return nil, nil
+		})}
+		rec := httptest.NewRecorder()
+		s.handleTestExeNotifyIn(rec, httptest.NewRequest(http.MethodPost, "/api/integrations/notify/test",
+			strings.NewReader(`{"message":"Hello"}`)), env, client)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func notifyTestClient(t *testing.T, env exeenv.Environment, gatewayStatus int) *http.Client {
+	t.Helper()
+	return &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.String() {
+		case env.ReflectionURL() + "/integrations":
+			return testHTTPResponse(http.StatusOK, `{"integrations":[{"name":"notify","type":"notify"}]}`), nil
+		case env.IntegrationURL("notify", false) + "/":
+			return testHTTPResponse(gatewayStatus, ""), nil
+		default:
+			t.Fatalf("unexpected request %s", req.URL)
+			return nil, nil
+		}
+	})}
+}
+
+func testHTTPResponse(status int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Header:     make(http.Header),
 	}
 }

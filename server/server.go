@@ -560,6 +560,9 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/notification-channels", http.HandlerFunc(s.handleNotificationChannels))
 	mux.Handle("/api/notification-channels/", http.HandlerFunc(s.handleNotificationChannel))
 	mux.Handle("/api/notification-channel-types", http.HandlerFunc(s.handleNotificationChannelTypes))
+	mux.HandleFunc("GET /api/integrations", handleIntegrations)
+	mux.HandleFunc("POST /api/integrations/notify/test", s.handleTestExeNotify)
+	mux.HandleFunc("POST /api/integrations/slack/test", s.handleTestSlack)
 
 	// Models API (dynamic list refresh)
 	mux.Handle("POST /api/models/refresh", compressionHandler(http.HandlerFunc(s.handleModelRefresh)))

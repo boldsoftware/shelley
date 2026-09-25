@@ -9034,6 +9034,263 @@ button.tour-visibility-control:focus-visible,
   border-radius: 0.375rem;
 }
 
+/* VM integrations: a compact list first, account details only on selection. */
+.modal.integrations-modal {
+  max-width: 44rem;
+}
+.integrations-status,
+.integrations-note {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.integrations-status {
+  padding: 1rem 0;
+}
+.integrations-tabs {
+  display: flex;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.5rem;
+}
+.integrations-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 0.25rem;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.integrations-tabs button.active {
+  border-bottom-color: var(--primary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.integrations-tabs span {
+  color: var(--text-tertiary);
+  font-size: 0.8rem;
+}
+.integrations-table-scroll {
+  overflow-x: auto;
+}
+.integrations-table,
+.integrations-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.integrations-table {
+  table-layout: fixed;
+}
+.integrations-table th,
+.integrations-table td,
+.integrations-detail-table th,
+.integrations-detail-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.7rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+.integrations-table thead th {
+  color: var(--text-tertiary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.integrations-table th:nth-child(1) {
+  width: 40%;
+}
+.integrations-table th:nth-child(2) {
+  width: 30%;
+}
+.integrations-table th:nth-child(3) {
+  width: 30%;
+}
+.integrations-table tbody tr:hover {
+  background: var(--bg-secondary);
+}
+.integrations-name-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.integrations-name-btn span {
+  color: var(--text-tertiary);
+}
+
+.integrations-detail-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.65rem 0;
+}
+.integrations-detail-head strong {
+  font-size: 1.05rem;
+}
+.integrations-detail-head span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+.integrations-detail-head a {
+  margin-left: auto;
+  font-size: 0.8rem;
+}
+.integrations-detail-table th {
+  width: 10rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.integrations-detail-table td {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.integrations-models {
+  margin: 0.65rem 0 1rem;
+}
+.integrations-comment {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.integrations-models-head {
+  margin-bottom: 0.6rem;
+}
+.integrations-providers-table {
+  table-layout: fixed;
+}
+.integrations-providers-table th {
+  width: auto;
+}
+.integrations-providers-table th:first-child {
+  width: 28%;
+}
+.integrations-providers-table th:nth-child(2) {
+  width: 32%;
+}
+.integrations-providers-table thead th {
+  color: var(--text-tertiary);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.integrations-gh-repo {
+  padding-top: 0.5rem;
+}
+.integrations-gh-table {
+  table-layout: fixed;
+}
+.integrations-gh-table th:first-child {
+  width: 65%;
+  overflow-wrap: anywhere;
+}
+.integrations-gh-table thead th {
+  color: var(--text-tertiary);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.integrations-notify {
+  padding: 0.75rem 0 0.25rem;
+}
+.integrations-notify p {
+  color: var(--text-secondary);
+  margin: 0.4rem 0 1rem;
+}
+.integrations-notify-form label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.integrations-notify-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+.integrations-notify-controls input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+}
+.integrations-notify-controls .p-button {
+  flex-shrink: 0;
+}
+.integrations-models .p-button {
+  margin-top: 0.75rem;
+}
+.integrations-advanced,
+.integrations-guide {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+}
+.integrations-advanced summary,
+.integrations-guide summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.integrations-advanced summary:hover,
+.integrations-guide summary:hover {
+  color: var(--text-primary);
+}
+.integrations-copy-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0;
+}
+.integrations-copy-line code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.integrations-copy-line .p-button {
+  flex-shrink: 0;
+}
+.integrations-guide {
+  padding: 0.5rem 0;
+}
+.integrations-guide pre {
+  max-height: 15rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 0.6rem;
+  background: var(--bg-secondary);
+  border-radius: 0.3rem;
+}
+.integrations-modal .modal-footer {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+}
+.integrations-modal .modal-footer a {
+  white-space: nowrap;
+}
+@media (max-width: 520px) {
+  .integrations-detail-table th {
+    width: 7rem;
+  }
+  .integrations-notify-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .integrations-copy-line {
+    flex-wrap: wrap;
+  }
+}
+
 .models-empty {
   padding: 2rem;
   text-align: center;

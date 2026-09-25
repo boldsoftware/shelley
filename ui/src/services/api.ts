@@ -52,6 +52,31 @@ export interface AvailableModel {
   supports_images?: boolean;
 }
 
+export interface AttachedIntegration {
+  name: string;
+  type: string;
+  comment?: string;
+  help?: string;
+  team?: boolean;
+  url: string;
+  details?: {
+    repositories?: { name: string; url: string; clone_command: string }[];
+    model_counts?: {
+      provider: string;
+      mode?: string;
+      chat?: number;
+      embeddings?: number;
+      transcription?: number;
+      other?: number;
+    }[];
+    models_error?: string;
+  };
+}
+
+export interface IntegrationsResponse {
+  integrations: AttachedIntegration[];
+}
+
 export interface GitTourHeaderEntry {
   header: string;
 }
@@ -131,6 +156,46 @@ class ApiService {
       throw new Error(`Failed to get models: ${response.statusText}`);
     }
     return response.json();
+  }
+
+  async getIntegrations(): Promise<IntegrationsResponse> {
+    const response = await fetch(`${this.baseUrl}/integrations`);
+    if (!response.ok) {
+      throw await responseError(response, "Failed to load integrations");
+    }
+    return response.json();
+  }
+
+  async getIntegrationDetails(name: string, team: boolean): Promise<AttachedIntegration> {
+    const params = new URLSearchParams({ details: name, team: String(team) });
+    const response = await fetch(`${this.baseUrl}/integrations?${params}`);
+    if (!response.ok) {
+      throw await responseError(response, "Failed to load integration details");
+    }
+    const body: IntegrationsResponse = await response.json();
+    return body.integrations[0];
+  }
+
+  async sendTestNotification(message: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/integrations/notify/test`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify({ message }),
+    });
+    if (!response.ok) {
+      throw await responseError(response, "Could not send test notification");
+    }
+  }
+
+  async sendSlackTest(name: string, team: boolean, message: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/integrations/slack/test`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify({ name, team, message }),
+    });
+    if (!response.ok) {
+      throw await responseError(response, "Could not send Slack test message");
+    }
   }
 
   async refreshModels(): Promise<AvailableModel[]> {

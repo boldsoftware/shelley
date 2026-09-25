@@ -251,6 +251,57 @@ export interface TranslationKeys {
   addOne: string;
   edit: string;
 
+  // Integrations Modal
+  slackDestination: string;
+  slackWebhookTestDescription: string;
+  slackTestIntegration: string;
+  slackBotTestError: string;
+  slackMessageSent: string;
+  vmIntegrations: string;
+  viewIntegrationsAvailable: string;
+  refresh: string;
+  attached: string;
+  loadingIntegrations: string;
+  noIntegrationsAttached: string;
+  integrationName: string;
+  integrationType: string;
+  integrationScope: string;
+  team: string;
+  personal: string;
+  manageOnExeDev: string;
+  loadingIntegrationDetails: string;
+  whatVmGets: string;
+  provider: string;
+  accessVia: string;
+  exeDevManaged: string;
+  availableModels: string;
+  noProvidersEnabled: string;
+  browseModelsInShelley: string;
+  repository: string;
+  copyCloneCommand: string;
+  copy: string;
+  copied: string;
+  testPushNotification: string;
+  testPushNotificationDescription: string;
+  testMessage: string;
+  sending: string;
+  sendTestNotification: string;
+  testAccepted: string;
+  comment: string;
+  connectionAndCli: string;
+  copyEndpoint: string;
+  copyEditCommand: string;
+  cliEditOptions: string;
+  howToUseIt: string;
+  copyGuide: string;
+  integrationAccountNote: string;
+  allIntegrations: string;
+  defaultTestMessage: string;
+  modelChat: string;
+  modelEmbeddings: string;
+  modelTranscription: string;
+  modelOther: string;
+
   // Diff Viewer
   noFiles: string;
   chooseFile: string;

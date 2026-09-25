@@ -1,15 +1,19 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"shelley.exe.dev/db/generated"
+	"shelley.exe.dev/exeenv"
 	"shelley.exe.dev/server/notifications"
 )
 
@@ -24,6 +28,69 @@ const exeNotifySettingKey = "exe_notify"
 // iOS app registers as an end-of-turn hook, so auto-configuring it here
 // collapses with the iOS registration into a single hook (one push).
 const exeNotifyGatewayURL = "https://notify.int.exe.xyz/"
+
+func (s *Server) handleTestExeNotify(w http.ResponseWriter, r *http.Request) {
+	if !isExeDev() || testing.Testing() {
+		http.Error(w, "Notify integration is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	env, err := exeenv.Current()
+	if err != nil {
+		http.Error(w, "Cannot determine exe.dev environment", http.StatusInternalServerError)
+		return
+	}
+	s.handleTestExeNotifyIn(w, r, env, reflectionHTTPClient())
+}
+
+func (s *Server) handleTestExeNotifyIn(w http.ResponseWriter, r *http.Request, env exeenv.Environment, client *http.Client) {
+	if s.predictableOnly {
+		http.Error(w, "Notify integration is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	availabilityCtx, availabilityCancel := context.WithTimeout(r.Context(), 2*time.Second)
+	available, err := hasNotifyIntegration(availabilityCtx, client, env)
+	availabilityCancel()
+	if err != nil || !available {
+		http.Error(w, "Notify integration is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	var input struct {
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input); err != nil {
+		http.Error(w, "Invalid test message", http.StatusBadRequest)
+		return
+	}
+	message := strings.TrimSpace(input.Message)
+	if message == "" || utf8.RuneCountInString(message) > 200 {
+		http.Error(w, "Test message must be 1–200 characters", http.StatusBadRequest)
+		return
+	}
+	body, err := json.Marshal(map[string]string{"title": "Shelley test", "body": message})
+	if err != nil {
+		http.Error(w, "Cannot prepare notification", http.StatusInternalServerError)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, env.IntegrationURL("notify", false)+"/", bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, "Cannot prepare notification", http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "Notification gateway is unavailable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		http.Error(w, "Notification gateway rejected the test", http.StatusBadGateway)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
 type NotificationChannelAPI struct {
 	ChannelID   string `json:"channel_id"`

@@ -23,6 +23,7 @@
          (e: "open-terminal"): void                           // onOpenTerminal
          (e: "open-file-finder"): void                       // onOpenFileFinder
          (e: "open-models-modal"): void                       // onOpenModelsModal
+         (e: "open-integrations-modal"): void                 // onOpenIntegrationsModal
          (e: "open-notifications-modal"): void                // onOpenNotificationsModal
          (e: "open-feature-flags-modal"): void                // onOpenFeatureFlagsModal
          (e: "next-conversation"): void                       // onNextConversation
@@ -168,6 +169,7 @@ const emit = defineEmits<{
   (e: "open-terminal"): void;
   (e: "open-file-finder"): void;
   (e: "open-models-modal"): void;
+  (e: "open-integrations-modal"): void;
   (e: "open-notifications-modal"): void;
   (e: "open-feature-flags-modal"): void;
   (e: "next-conversation"): void;
@@ -476,6 +478,21 @@ const actionItems = computed<CommandItem[]>(() => {
       "custom",
     ],
   });
+
+  if (window.__SHELLEY_INIT__?.is_exe_dev) {
+    items.push({
+      id: "vm-integrations",
+      type: "action",
+      title: t("vmIntegrations"),
+      subtitle: t("viewIntegrationsAvailable"),
+      icon: ICON_COG,
+      action: () => {
+        emit("open-integrations-modal");
+        emit("close");
+      },
+      keywords: ["integration", "attach", "credential", "permission", "exe.dev", "vm"],
+    });
+  }
 
   items.push({
     id: "notification-settings",
