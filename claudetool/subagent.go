@@ -114,7 +114,7 @@ func (s *SubagentTool) subagentInputSchema() string {
 		modelProp = fmt.Sprintf(`,
     "model": {
       "type": "string",
-      "description": "LLM model for the subagent. Defaults to the parent conversation's model.",
+      "description": "Optional. LLM model for the subagent. Omit to use the parent conversation's model; set only when the user asks for a specific model.",
       "enum": [%s]
     }`, strings.Join(enumItems, ", "))
 	}

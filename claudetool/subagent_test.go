@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -277,6 +278,18 @@ func TestSubagentTool_ModelOverride(t *testing.T) {
 		if strings.Contains(llmTool.Description, model.ID) {
 			t.Errorf("description duplicates model %q from schema", model.ID)
 		}
+	}
+
+	// The model parameter must stay optional so subagents inherit the parent's
+	// model by default.
+	var schema struct {
+		Required []string `json:"required"`
+	}
+	if err := json.Unmarshal(llmTool.InputSchema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(schema.Required, "model") {
+		t.Errorf("model must not be required, got required=%v", schema.Required)
 	}
 
 	// Override model
