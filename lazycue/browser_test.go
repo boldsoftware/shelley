@@ -185,3 +185,118 @@ func TestBlockingStepsHonorTheirTimeout(t *testing.T) {
 		})
 	}
 }
+
+// TestPressKeyNamedKeys proves press_key sends named keys (Enter, Tab, Escape,
+// arrows, function keys) as single key presses with the matching
+// KeyboardEvent.key, applies "modifiers", and still types single characters.
+// Previously the key name was handed to chromedp verbatim, which typed its
+// letters one by one ("Enter" -> E, n, t, e, r), so no cached script could
+// exercise Enter/Tab/Escape handling.
+func TestPressKeyNamedKeys(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	url := serveHTML(t, `<!doctype html><html><body>
+<textarea id="t"></textarea>
+<script>
+window.log = [];
+document.addEventListener('keydown', function (e) {
+  window.log.push((e.shiftKey ? 'Shift+' : '') + (e.ctrlKey ? 'Control+' : '') + (e.altKey ? 'Alt+' : '') + e.key);
+});
+</script>
+</body></html>`)
+
+	steps := []Step{
+		{Action: ActionNavigate, URL: url},
+		{Action: ActionClick, Selector: "#t"},
+		{Action: ActionPressKey, Key: "Enter"},
+		{Action: ActionPressKey, Key: "Tab"},
+		{Action: ActionPressKey, Key: "Escape"},
+		{Action: ActionPressKey, Key: "ArrowUp"},
+		{Action: ActionPressKey, Key: "F5"},
+		{Action: ActionPressKey, Key: "Enter", Modifiers: "Shift"},
+		{Action: ActionPressKey, Key: "a", Modifiers: "Control"},
+		{Action: ActionPressKey, Key: "Space", Modifiers: "Alt"},
+		{Action: ActionPressKey, Key: "x"},
+		{Action: ActionPressKey, Key: "!"},
+		{
+			Action:     ActionEval,
+			Expression: `window.log.join(' ')`,
+			Expect:     "Enter Tab Escape ArrowUp F5 Shift+Enter Control+a Alt+  x Shift+!",
+		},
+	}
+	results, err := br.ExecuteSteps(context.Background(), url, steps)
+	if err != nil {
+		t.Fatalf("ExecuteSteps returned error: %v", err)
+	}
+	for _, r := range results {
+		if !r.Pass {
+			t.Errorf("%s: %s", r.Summary, r.Error)
+		}
+	}
+}
+
+// TestPressKeyTypesLikeAKeyboard: a page that handles Enter on keydown and
+// calls preventDefault() must not also receive a newline (chromedp's KeyEvent
+// sends Enter as keyDown + a separate "char" event + keyUp, and Chrome inserts
+// the char event's text regardless of the prevented keydown); an unprevented
+// Enter still inserts one; Control/Alt/Meta chords type nothing; plain
+// characters and Space type themselves.
+func TestPressKeyTypesLikeAKeyboard(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	url := serveHTML(t, `<!doctype html><html><body>
+<textarea id="t"></textarea>
+<script>
+window.enters = 0;
+document.getElementById('t').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) { e.preventDefault(); window.enters++; }
+});
+</script>
+</body></html>`)
+
+	value := `JSON.stringify(document.getElementById('t').value)`
+	steps := []Step{
+		{Action: ActionNavigate, URL: url},
+		{Action: ActionClick, Selector: "#t"},
+		{Action: ActionFill, Selector: "#t", Value: "abc"},
+		{Action: ActionPressKey, Key: "Enter"},
+		{Action: ActionEval, Expression: `window.enters + ':' + ` + value, Expect: `1:"abc"`},
+		{Action: ActionPressKey, Key: "Enter", Modifiers: "Shift"},
+		{Action: ActionEval, Expression: value, Expect: `"abc\n"`},
+		{Action: ActionPressKey, Key: "Enter", Modifiers: "Control"},
+		{Action: ActionPressKey, Key: "Space", Modifiers: "Alt"},
+		{Action: ActionPressKey, Key: "Space", Modifiers: "Meta"},
+		{Action: ActionPressKey, Key: "d", Modifiers: "Control"},
+		{Action: ActionEval, Expression: value, Expect: `"abc\n"`},
+		{Action: ActionPressKey, Key: "d"},
+		{Action: ActionPressKey, Key: "Space"},
+		{Action: ActionPressKey, Key: "E"},
+		{Action: ActionEval, Expression: value, Expect: `"abc\nd E"`},
+	}
+	results, err := br.ExecuteSteps(context.Background(), url, steps)
+	if err != nil {
+		t.Fatalf("ExecuteSteps returned error: %v", err)
+	}
+	for _, r := range results {
+		if !r.Pass {
+			t.Errorf("%s: %s", r.Summary, r.Error)
+		}
+	}
+}
+
+func TestPressKeyRejectsUnknownKeysAndModifiers(t *testing.T) {
+	for _, tc := range []struct{ key, mods string }{
+		{"Enter", "Hyper"},
+		{"Return", ""}, // not a KeyboardEvent.key name
+		{"enter", ""},  // names are case-sensitive
+		{"Shift+Enter", ""},
+		{"", ""},
+	} {
+		if _, err := pressKey(tc.key, tc.mods); err == nil {
+			t.Errorf("pressKey(%q, %q): expected an error", tc.key, tc.mods)
+		}
+	}
+	for _, name := range []string{"Enter", "Tab", "Escape", "Backspace", "Delete", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Insert", "F1", "F12", "Space", "a", "Z", "1", "@", "é"} {
+		if _, err := pressKey(name, "Shift+Control"); err != nil {
+			t.Errorf("pressKey(%q): %v", name, err)
+		}
+	}
+}

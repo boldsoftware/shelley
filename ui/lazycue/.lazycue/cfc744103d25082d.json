@@ -1,7 +1,7 @@
 {
   "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
   "description": "Navigate to /new. Type \"Hello\" into the message input (data-testid \"message-input\"), then press the Enter key to send it (without clicking the send button). Wait for the agent's reply text \"Hello! I'm Shelley, your AI assistant. How can I help you today?\" to appear on the page.",
-  "version": 1,
+  "version": 2,
   "steps": [
     {
       "action": "navigate",
@@ -18,6 +18,10 @@
       "value": "Hello"
     },
     {
+      "action": "click",
+      "selector": "[data-testid='message-input']"
+    },
+    {
       "action": "press_key",
       "key": "Enter"
     },
@@ -28,13 +32,12 @@
     }
   ],
   "metadata": {
-    "created_at": "2026-06-09T23:50:44.894323943Z",
-    "hostname": "phil-lazy-playwright",
+    "created_at": "2026-09-25T03:56:48.620441271Z",
+    "hostname": "phil-dev",
     "model": "claude-sonnet-4-6",
-    "input_tokens": 16623,
-    "output_tokens": 912,
-    "estimated_cost_usd": 0.063549,
-    "git_sha": "fd9dd6cf135ef1f880b5e4caf42958d35fa6b341",
-    "mode": "generated"
+    "input_tokens": 26013,
+    "output_tokens": 920,
+    "estimated_cost_usd": 0.091839,
+    "mode": "healed"
   }
 }

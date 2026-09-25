@@ -74,6 +74,9 @@ func StepSummary(s Step) string {
 	case ActionClick:
 		return "click " + s.Selector
 	case ActionPressKey:
+		if s.Modifiers != "" {
+			return "press_key " + s.Modifiers + "+" + s.Key
+		}
 		return "press_key " + s.Key
 	case ActionScreenshot:
 		return "screenshot"

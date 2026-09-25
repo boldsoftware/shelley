@@ -3,13 +3,18 @@ package lazycue
 import (
 	"context"
 	"fmt"
+	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/kb"
 )
 
 // defaultStepTimeout is the polling ceiling for steps that don't set an
@@ -288,7 +293,11 @@ func (b *Browser) executeStepErr(ctx context.Context, baseURL string, step Step)
 		return runBounded(chromedp.Click(step.Selector, chromedp.ByQuery))
 
 	case ActionPressKey:
-		return runBounded(chromedp.KeyEvent(step.Key))
+		action, err := pressKey(step.Key, step.Modifiers)
+		if err != nil {
+			return err
+		}
+		return runBounded(action)
 
 	case ActionScreenshot:
 		// Just take a screenshot, ignore the bytes (used for side effects in agent)
@@ -531,4 +540,102 @@ func parseTimeout(s string, def time.Duration) time.Duration {
 		return def
 	}
 	return d
+}
+
+// keyNames maps the names a press_key step may use to chromedp key
+// definitions: every multi-character KeyboardEvent.key value chromedp knows
+// ("Enter", "Tab", "Escape", "ArrowUp", "F5", "Insert", ...) plus "Space" for
+// the space bar, whose KeyboardEvent.key is " ". chromedp.KeyEvent types its
+// argument rune by rune, so "Enter" passed through verbatim would type the
+// letters E, n, t, e, r.
+var keyNames = func() map[string]rune {
+	names := map[string]rune{"Space": ' '}
+	runes := make([]rune, 0, len(kb.Keys))
+	for r := range kb.Keys {
+		runes = append(runes, r)
+	}
+	slices.Sort(runes) // deterministic winner when two runes share a name
+	for _, r := range runes {
+		name := kb.Keys[r].Key
+		if _, dup := names[name]; !dup && utf8.RuneCountInString(name) > 1 {
+			names[name] = r
+		}
+	}
+	return names
+}()
+
+var keyModifiers = map[string]input.Modifier{
+	"Shift":   input.ModifierShift,
+	"Control": input.ModifierCtrl,
+	"Ctrl":    input.ModifierCtrl,
+	"Alt":     input.ModifierAlt,
+	"Meta":    input.ModifierMeta,
+	"Cmd":     input.ModifierMeta,
+}
+
+// parseKeyModifiers parses a press_key "modifiers" field such as "Shift" or
+// "Control+Alt".
+func parseKeyModifiers(modifiers string) (input.Modifier, error) {
+	var mods input.Modifier
+	for _, name := range strings.FieldsFunc(modifiers, func(r rune) bool { return r == '+' || r == ',' || r == ' ' }) {
+		m, ok := keyModifiers[name]
+		if !ok {
+			return 0, fmt.Errorf("press_key: unknown modifier %q", name)
+		}
+		mods |= m
+	}
+	return mods, nil
+}
+
+// pressKey builds the action for a press_key step: a key name from keyNames or
+// a single character, dispatched the way a physical keyboard (and Playwright)
+// would — one keyDown carrying the key's text, then one keyUp. That matters
+// for Enter: chromedp.KeyEvent would add a separate "char" event, which Chrome
+// turns into a newline even when the page preventDefault()ed the keydown, so
+// an app's Enter handler would fire AND a newline would land in the textarea.
+// Control/Alt/Meta chords carry no text, since they don't type.
+func pressKey(key, modifiers string) (chromedp.Action, error) {
+	mods, err := parseKeyModifiers(modifiers)
+	if err != nil {
+		return nil, err
+	}
+	r, ok := keyNames[key]
+	if !ok {
+		rs := []rune(key)
+		if len(rs) != 1 {
+			return nil, fmt.Errorf("press_key: unknown key %q (use a KeyboardEvent.key name such as Enter, Tab, Escape, ArrowDown or F5, or a single character)", key)
+		}
+		r = rs[0]
+	}
+	def, ok := kb.Keys[r]
+	if !ok {
+		// A character chromedp has no key definition for: type it.
+		return chromedp.KeyEvent(string(r), chromedp.KeyModifiers(mods)), nil
+	}
+	if def.Shift {
+		mods |= input.ModifierShift
+	}
+	down := &input.DispatchKeyEventParams{
+		Type:                  input.KeyDown,
+		Key:                   def.Key,
+		Code:                  def.Code,
+		NativeVirtualKeyCode:  def.Native,
+		WindowsVirtualKeyCode: def.Windows,
+		Modifiers:             mods,
+	}
+	if runtime.GOOS == "darwin" {
+		down.NativeVirtualKeyCode = 0 // as kb.Encode does
+	}
+	if mods&(input.ModifierCtrl|input.ModifierAlt|input.ModifierMeta) == 0 {
+		down.Text, down.UnmodifiedText = def.Text, def.Unmodified
+	}
+	up := *down
+	up.Type = input.KeyUp
+	up.Text, up.UnmodifiedText = "", ""
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		if err := down.Do(ctx); err != nil {
+			return err
+		}
+		return up.Do(ctx)
+	}), nil
 }

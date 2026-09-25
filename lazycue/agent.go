@@ -167,7 +167,7 @@ Available DSL actions:
 - wait_text_gone: {"action": "wait_text_gone", "text": "...", "timeout": "10s"} - Wait for text to disappear
 - fill: {"action": "fill", "selector": "...", "value": "..."} - Fill input/textarea (React compatible)
 - click: {"action": "click", "selector": "..."} - Click element
-- press_key: {"action": "press_key", "key": "Enter"} - Press keyboard key
+- press_key: {"action": "press_key", "key": "Enter", "modifiers": "Shift"} - Press one key on the focused element. "key" is a KeyboardEvent.key name (Enter, Tab, Escape, Backspace, Delete, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown, F1-F12, Insert), "Space", or a single character. Optional modifiers: Shift, Control, Alt, Meta (combine with "+"). Focus the target first (e.g. click it); fill does not focus.
 - screenshot: {"action": "screenshot"} - Take screenshot
 - eval: {"action": "eval", "expression": "...", "expect": "..."} - Evaluate JS; if "expect" is set, assert the stringified result equals it. The run_steps result echoes the evaluated value back to you ("=> <value>"), so use eval WITHOUT expect to probe page state (selectors, scrollHeight, classes, etc.) while developing the test.
 - assert_visible: {"action": "assert_visible", "selector": "..."} - Assert element is visible
