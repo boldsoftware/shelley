@@ -20,11 +20,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { highlightCode, normalizeCodeLanguage } from "../../services/markdownHighlight";
-import {
-  addCodeBlockHeaders,
-  codeBlockText,
-  setCodeBlockCopied,
-} from "../../utils/codeBlockCopy";
+import { addCodeBlockHeaders, codeBlockText, setCodeBlockCopied } from "../../utils/codeBlockCopy";
 import { applyHighlightTokens } from "../../utils/codeHighlight";
 import { COMMENT_ICON } from "../../utils/icons";
 import { localhostLinkOptionsFromInit } from "../../utils/linkify";
@@ -59,6 +55,9 @@ const props = defineProps<{
   // short-lived revisions makes fenced blocks alternate between plain text and
   // tokens, so callers can defer tokenization until their text is stable.
   deferCodeHighlighting?: boolean;
+  // Repository files are untrusted: their raw HTML must not be able to reuse
+  // Shelley UI class names (e.g. diff-viewer-overlay) to spoof the editor.
+  filePreview?: boolean;
 }>();
 
 const containerRef = ref<HTMLDivElement | null>(null);
@@ -77,8 +76,8 @@ onBeforeUnmount(() => {
 });
 
 const html = computed(
-  perfWrap("markdown.render", () =>
-    renderMarkdownToSafeHTML(
+  perfWrap("markdown.render", () => {
+    const rendered = renderMarkdownToSafeHTML(
       props.text,
       props.messageId,
       props.cacheOwner && props.runKey !== undefined
@@ -90,8 +89,32 @@ const html = computed(
           }
         : undefined,
       props.rewriteLocalhostLinks ? localhostLinkOptionsFromInit() : undefined,
-    ),
-  ),
+    );
+    if (!props.filePreview) return rendered;
+
+    // The shared renderer already strips executable HTML. In file preview,
+    // also discard file-authored CSS classes: otherwise a raw div with an
+    // app class such as "diff-viewer-overlay" could cover the modal. Keep
+    // only fenced code's language class for syntax highlighting.
+    const inert = document.createElement("template");
+    inert.innerHTML = rendered;
+    for (const el of inert.content.querySelectorAll("*")) {
+      for (const attr of [...el.attributes]) {
+        if (attr.name.startsWith("data-") || attr.name.startsWith("aria-")) {
+          el.removeAttribute(attr.name);
+        }
+      }
+      const language = el.matches("pre > code")
+        ? [...el.classList].find(
+            (name) =>
+              name.startsWith("language-") && normalizeCodeLanguage(name.slice(9)) !== undefined,
+          )
+        : undefined;
+      if (language) el.className = language;
+      else el.removeAttribute("class");
+    }
+    return inert.innerHTML;
+  }),
 );
 
 // Images inside a link are excluded throughout: there the image is the link's
@@ -108,7 +131,7 @@ function isCommentable(img: HTMLImageElement): boolean {
 // below. The wrapper is what the badge positions against, matching
 // CommentableImage.vue's markup so both get the same affordance.
 watch(
-  [html, containerRef],
+  [html, containerRef, () => props.deferCodeHighlighting],
   () => {
     // Cancel before the null guard: if the container vanished, stale
     // registrations would otherwise pin the detached subtree via the

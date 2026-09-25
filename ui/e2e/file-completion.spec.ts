@@ -15,11 +15,18 @@ async function openConversation(
   await page.goto(`/c/${slug}`);
   const input = page.getByTestId("message-input");
   await expect(input).toBeVisible({ timeout: 30000 });
+  // The composer is visible while messages hydrate, but cannot receive focus yet.
+  await expect(page.locator(".messages-container").getByRole("article")).toHaveCount(2, {
+    timeout: 30000,
+  });
+  await expect(input).toBeEnabled();
   return input;
 }
 
 async function setComposer(input: Locator, value: string, caret = value.length): Promise<void> {
+  await expect(input).toBeEnabled({ timeout: 30000 });
   await input.focus();
+  await expect(input).toBeFocused();
   await input.evaluate(
     (element, next) => {
       const textarea = element as HTMLTextAreaElement;

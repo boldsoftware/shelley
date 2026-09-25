@@ -201,6 +201,7 @@
 
       <EditableFileModal
         v-if="editorFilePath"
+        :key="editorFilePath"
         :is-open="!!editorFilePath"
         :path="editorFilePath"
         :title="`Edit ${tildifyPath(editorFilePath)}`"
@@ -797,7 +798,9 @@ const isMac = navigator.platform.toUpperCase().includes("MAC");
 function handleKeyDown(e: KeyboardEvent) {
   const recordingMode = comboMatches(e, MENU_COMBOS.recordAudio)
     ? "microphone"
-    : comboMatches(e, MENU_COMBOS.recordScreen) ? "screen" : null;
+    : comboMatches(e, MENU_COMBOS.recordScreen)
+      ? "screen"
+      : null;
   if (recordingMode) {
     if (e.defaultPrevented || isImeComposing(e)) return;
     e.preventDefault();

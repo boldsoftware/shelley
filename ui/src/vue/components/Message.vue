@@ -226,6 +226,7 @@
     <MessageInfoModal v-if="showInfoModal" :message="message" @close="showInfoModal = false" />
     <EditableFileModal
       v-if="distillationFile"
+      :key="distillationFile"
       :is-open="showDistillationEditor"
       :path="distillationFile"
       title="Edit distillation"
