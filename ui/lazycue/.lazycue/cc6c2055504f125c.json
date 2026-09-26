@@ -1,0 +1,145 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new, wait for the message input (data-testid \"message-input\") to be visible, and click it so the textarea has keyboard focus (the @ file-completion menu only opens for a focused textarea). Fill the message input with \"@My\". The file-completion menu (data-testid \"file-completion-menu\") shows exactly 3 elements with role \"option\" (the files My Document.md and My Notes.md and the folder My Notes/), and the first option has aria-selected \"true\". Press the ArrowUp key: the highlight wraps around to the LAST option, so the third option has aria-selected \"true\" and the first has aria-selected \"false\". Press the ArrowDown key: it wraps back to the first option (aria-selected \"true\"). Press the ArrowDown key once more: the second option is highlighted. Typing lazily promotes the new conversation to a draft about 600ms after typing pauses; wait (up to 10 seconds) for the URL to contain \"/c/\" (the promotion has happened) and then sleep about 1 second: the second option must STILL be the highlighted one (aria-selected \"true\") — the promotion must not reset the highlight to the first entry. Remember its path with an eval step: \"(function(){var opts=document.querySelectorAll('[data-testid=\\\"file-completion-menu\\\"] [role=\\\"option\\\"]');var el=document.querySelector('[data-testid=\\\"file-completion-menu\\\"] [role=\\\"option\\\"][aria-selected=\\\"true\\\"]');window.__picked=el.getAttribute('title');return el===opts[1]?'second':'other';})()\" expecting \"second\". Press the Enter key. The highlighted entry is inserted; every candidate here contains a space, so it is double-quoted and followed by a space: eval \"(function(){var v=document.querySelector('[data-testid=\\\"message-input\\\"]').value;return v==='@\\\"'+window.__picked+'\\\" '?'pass':'fail:'+JSON.stringify(v)+' picked='+window.__picked;})()\" expecting \"pass\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "@My"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"file-completion-menu\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]",
+      "count": 3
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]:nth-child(1)",
+      "attribute": "aria-selected",
+      "value": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]:nth-child(2)",
+      "attribute": "aria-selected",
+      "value": "false"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]:nth-child(3)",
+      "attribute": "aria-selected",
+      "value": "false"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowUp"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]:nth-child(1)",
+      "attribute": "aria-selected",
+      "value": "false"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]:nth-child(3)",
+      "attribute": "aria-selected",
+      "value": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]:nth-child(1)",
+      "attribute": "aria-selected",
+      "value": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]:nth-child(3)",
+      "attribute": "aria-selected",
+      "value": "false"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]:nth-child(2)",
+      "attribute": "aria-selected",
+      "value": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]:nth-child(1)",
+      "attribute": "aria-selected",
+      "value": "false"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "10s"
+    },
+    {
+      "action": "sleep",
+      "timeout": "1s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]:nth-child(2)",
+      "attribute": "aria-selected",
+      "value": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"file-completion-menu\"] [role=\"option\"]:nth-child(1)",
+      "attribute": "aria-selected",
+      "value": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var opts=document.querySelectorAll('[data-testid=\"file-completion-menu\"] [role=\"option\"]');var el=document.querySelector('[data-testid=\"file-completion-menu\"] [role=\"option\"][aria-selected=\"true\"]');window.__picked=el.getAttribute('title');return el===opts[1]?'second':'other';})()",
+      "expect": "second"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var v=document.querySelector('[data-testid=\"message-input\"]').value;return v==='@\"'+window.__picked+'\" '?'pass':'fail:'+JSON.stringify(v)+' picked='+window.__picked;})()",
+      "expect": "pass"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-09-26T00:19:30.892178246Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 35836,
+    "output_tokens": 2794,
+    "estimated_cost_usd": 0.149418,
+    "mode": "generated"
+  }
+}

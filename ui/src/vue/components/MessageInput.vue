@@ -1012,6 +1012,18 @@ const preferCompactAndSend = computed(
 // --- @ filename autocomplete --------------------------------------------
 const fileMenuId = useId();
 const fileMenuRef = ref<HTMLDivElement | null>(null);
+// useFileCompletion keys its results on the session and reacts synchronously,
+// so it must not observe the session mid-update. conversationId and
+// lazyDraftId are separate props that Vue patches one at a time: promoting a
+// new conversation to a draft goes (null, null) -> (id, null) -> (id, id), and
+// the middle state's session is the id. Fed composerSession() directly, the
+// completion would reset its highlight and re-fetch on every draft creation —
+// i.e. under the user's arrow keys, ~600ms after typing pauses. A batched watcher only
+// sees the settled value, which is unchanged (null) for that transition.
+const completionSession = ref(composerSession());
+watch(composerSession, (session) => {
+  completionSession.value = session;
+});
 const {
   visible: showFileMenu,
   matches: fileMatches,
@@ -1026,7 +1038,7 @@ const {
 } = useFileCompletion({
   message,
   cwd: () => props.cwd ?? "",
-  session: composerSession,
+  session: () => completionSession.value,
   enabled: () => !isDisabled.value && !isShellMode.value,
 });
 
