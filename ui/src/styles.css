@@ -5941,17 +5941,13 @@ svg {
   text-decoration-line: none;
 }
 
-/* direction: rtl ellipsizes the root, keeping the leaf directory visible.
-   On the inner span, not the button: an rtl flex container would also flip the
-   order of its children. */
+/* Ellipsizes the root, keeping the leaf directory visible. See the
+   ".ellipsis-start" group rule at the bottom of this file. */
 .status-readout-cwd-path {
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  direction: rtl;
-  text-align: left;
-  unicode-bidi: plaintext;
 }
 
 .status-readout-sep {
@@ -15725,4 +15721,48 @@ kbd {
   .codicon-notebook-state-executing.codicon-modifier-spin {
     animation-duration: 1.5s !important;
   }
+}
+
+/* Head-eliding paths and file names: when a path overflows, clip the leading
+   directories and keep the informative tail visible ("…/shelley/ui/src").
+   direction: rtl moves the ellipsis to the left; apply to the inner span only —
+   an rtl flex *container* would also flip the order of its children. Do NOT add
+   unicode-bidi: plaintext: it derives the line direction from the content
+   (LTR for paths), which puts the ellipsis back on the right. Instead the
+   ::before rule injects a left-to-right mark so leading neutral characters
+   ("/", "~") order correctly instead of drifting to the visual right.
+   Prose (previews, commit subjects) deliberately clips the tail instead and
+   must not be added here. */
+.tool-command,
+.conversation-item .conversation-cwd,
+.bash-tool-cwd,
+.patch-tool-filename,
+.screenshot-tool-filename,
+.directory-picker-shortcut-path,
+.agents-md-header-path,
+.tour-file-name-stem,
+.diff-tree-label,
+.diff-viewer-file-list-name,
+.grp-path,
+.ff-dir-path,
+.ff-scope-path,
+.status-readout-cwd-path {
+  direction: rtl;
+  text-align: left;
+}
+.tool-command::before,
+.conversation-item .conversation-cwd::before,
+.bash-tool-cwd::before,
+.patch-tool-filename::before,
+.screenshot-tool-filename::before,
+.directory-picker-shortcut-path::before,
+.agents-md-header-path::before,
+.tour-file-name-stem::before,
+.diff-tree-label::before,
+.diff-viewer-file-list-name::before,
+.grp-path::before,
+.ff-dir-path::before,
+.ff-scope-path::before,
+.status-readout-cwd-path::before {
+  content: "\200E";
 }
