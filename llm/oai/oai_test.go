@@ -2072,7 +2072,9 @@ func TestServiceDoReplaysReasoningContent(t *testing.T) {
 	}
 }
 
-func TestServiceDoReasoningContentReplayAddsToolCallPlaceholder(t *testing.T) {
+func TestServiceDoReasoningContentReplayDoesNotAddPlaceholder(t *testing.T) {
+	// The empty reasoning_content placeholder is a DeepSeek quirk; other
+	// providers with reasoning_content replay must not receive it.
 	var gotBody []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotBody, _ = io.ReadAll(r.Body)
@@ -2099,8 +2101,8 @@ func TestServiceDoReasoningContentReplayAddsToolCallPlaceholder(t *testing.T) {
 	if _, err := svc.Do(t.Context(), req); err != nil {
 		t.Fatalf("Do() error = %v", err)
 	}
-	if !strings.Contains(string(gotBody), `"reasoning_content":" "`) {
-		t.Fatalf("reasoning replay placeholder missing: %s", gotBody)
+	if strings.Contains(string(gotBody), `"reasoning_content"`) {
+		t.Fatalf("non-DeepSeek replay added reasoning_content placeholder: %s", gotBody)
 	}
 }
 

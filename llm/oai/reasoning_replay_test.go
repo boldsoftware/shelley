@@ -58,7 +58,7 @@ func TestResolveReasoningReplay(t *testing.T) {
 	}
 }
 
-func TestServiceDoAutoReasoningReplayPlaceholder(t *testing.T) {
+func TestServiceDoAutoReasoningReplayNoPlaceholder(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		endpoint string
@@ -67,7 +67,7 @@ func TestServiceDoAutoReasoningReplayPlaceholder(t *testing.T) {
 	}{
 		{
 			name: "Moonshot native metadata", endpoint: "https://api.moonshot.ai/v1",
-			model: "kimi-k3", want: true,
+			model: "kimi-k3", want: false, // placeholder is DeepSeek-only
 		},
 		{
 			name: "OpenRouter exact slug does not inherit native metadata", endpoint: "https://openrouter.ai/api/v1",

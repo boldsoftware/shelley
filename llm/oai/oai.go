@@ -1502,7 +1502,9 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 		if !replayReasoningContent {
 			m.ReasoningContent = ""
 		}
-		if (replayReasoningContent || deepSeek) && m.Role == "assistant" && len(m.ToolCalls) > 0 && m.ReasoningContent == "" {
+		// DeepSeek rejects assistant messages that have tool_calls but no
+		// reasoning_content, so pad it with a space. Other providers get nothing.
+		if deepSeek && m.Role == "assistant" && len(m.ToolCalls) > 0 && m.ReasoningContent == "" {
 			m.ReasoningContent = " "
 		}
 	}
