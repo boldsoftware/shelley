@@ -551,11 +551,17 @@ func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) 
 	var actions []chromedp.Action
 
 	if input.Selector != "" {
-		// Take screenshot of specific element
+		// Take screenshot of specific element. ByQueryAll matters: chromedp's
+		// default query option (BySearch) matches nodes by full-text search, so
+		// a selector like "body" also matches invisible <style> text containing
+		// the string, which NodeVisible then waits on forever until the context
+		// deadline. ByQueryAll resolves the selector via DOM.querySelectorAll,
+		// which only matches elements. (Screenshot appends NodeVisible itself,
+		// so it always waits for the matched element to be visible.)
 		actions = append(
 			actions,
-			chromedp.WaitReady(input.Selector),
-			chromedp.Screenshot(input.Selector, &buf, chromedp.NodeVisible),
+			chromedp.WaitReady(input.Selector, chromedp.ByQueryAll),
+			chromedp.Screenshot(input.Selector, &buf, chromedp.ByQueryAll),
 		)
 	} else {
 		// Take full page screenshot
