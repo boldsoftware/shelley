@@ -298,6 +298,7 @@
 
     <!-- Terminal Panel -->
     <TerminalPanel
+      ref="terminalPanelRef"
       :terminals="ephemeralTerminals"
       :conversation-id="conversationId"
       :model="selectedModel"
@@ -533,7 +534,10 @@ import { useVersionChecker } from "../composables/versionChecker";
 import { provideToolProgress } from "../composables/toolProgress";
 import { closeImageComment, useImageCommentTarget } from "../composables/imageComment";
 import { isImeComposing } from "../../utils/imeComposing";
-import { focusMessageInputIfUnfocused } from "../../utils/focusMessageInput";
+import {
+  focusMessageInput,
+  focusMessageInputIfUnfocused,
+} from "../../utils/focusMessageInput";
 import { buildMessageQuote } from "../../utils/messageQuote";
 import { hasMultipleUsers } from "../../utils/messageAuthors";
 import { tildifyPath } from "../../utils/tildify";
@@ -588,6 +592,7 @@ import {
   type ThinkingLevel,
 } from "./thinkingLevel";
 import { SELECTED_MODEL_KEY, pickReadyModel, storedSelectedModel } from "./selectedModel";
+import { visibleTerminals } from "./terminalHelpers";
 
 import MessageInput from "./MessageInput.vue";
 import type { RecordingDestination, RecordingMode } from "./recordingDestination";
@@ -603,7 +608,7 @@ import AgentsMdEditorModal from "./AgentsMdEditorModal.vue";
 import TerminalPanel from "./TerminalPanel.vue";
 import VersionChecker from "./VersionChecker.vue";
 import ChatOverflowMenu from "./ChatOverflowMenu.vue";
-import { matchChatInterfaceAction } from "../../utils/menuShortcuts";
+import { isInsideTerminal, matchChatInterfaceAction } from "../../utils/menuShortcuts";
 import ChunkHost from "./ChunkHost.vue";
 import { chunkMountKey } from "./chunkMount";
 import QueuedGhostMessage from "./QueuedGhostMessage.vue";
@@ -1050,6 +1055,7 @@ const terminalAutoFocusId = ref<string | null>(null);
 // ---- refs to DOM ----
 const chatRootRef = ref<HTMLDivElement | null>(null);
 const messagesContainerRef = ref<HTMLDivElement | null>(null);
+const terminalPanelRef = ref<InstanceType<typeof TerminalPanel> | null>(null);
 const messagesListRef = ref<HTMLDivElement | null>(null);
 const bottomSentinelRef = ref<HTMLDivElement | null>(null);
 
@@ -3363,12 +3369,20 @@ function openInAppTerminal() {
   terminalAutoFocusId.value = terminal.id;
   setTimeout(() => scrollToBottom(), 100);
 }
-// Focus an already-open terminal if there is one, otherwise open a new one.
-// Used by the Ctrl+` shortcut: a repeat press should bring you back to the
-// existing shell rather than spawning another. Setting terminalAutoFocusId lets
-// TerminalPanel un-minimize, activate that tab, and focus its xterm.
-function focusOrOpenTerminal() {
-  const existing = props.ephemeralTerminals;
+// Ctrl+` should always do something visible (VS Code-style toggle): focus the
+// shell when it isn't focused, hide the panel when it is (returning focus to
+// the message input), and open a new terminal when none exists.
+function toggleTerminal(e: KeyboardEvent) {
+  if (isInsideTerminal(e)) {
+    terminalPanelRef.value?.toggleMinimized();
+    focusMessageInput();
+    return;
+  }
+  // Only consider terminals actually reachable in this panel's tab list
+  // (global + this conversation's). Hydrated terminals scoped to other
+  // conversations exist in the app-wide list but render no xterm here, so
+  // focusing one would silently do nothing.
+  const existing = visibleTerminals(props.ephemeralTerminals, props.conversationId ?? null);
   if (existing.length > 0) {
     // Reset to null first so re-focusing the terminal that's already in
     // autoFocusId still fires TerminalPanel's watcher (it watches the value,
@@ -3396,23 +3410,20 @@ async function archiveFromMenu() {
 
 // Keyboard shortcuts for the overflow-menu actions this component owns. Each
 // case invokes the same handler as the corresponding menu click (Terminal is
-// the one deliberate exception: the shortcut re-focuses an existing terminal
-// rather than always opening a new one), and is gated by the same availability
+// the one deliberate exception: the shortcut toggles — it minimizes the panel
+// when the shell has focus rather than opening another), and is gated by the same availability
 // the menu uses (see the ChatOverflowMenu props bound in the template) so a
 // shortcut never fires for a hidden item. The palette (Cmd/Ctrl+K) and file
 // finder (Cmd/Ctrl+P) are handled in App.vue, which owns those modals.
 // See utils/menuShortcuts.ts for the combos.
 function handleMenuShortcut(e: KeyboardEvent) {
-  // Don't hijack keystrokes while typing in a field.
-  const target = e.target as HTMLElement | null;
-  if (
-    target &&
-    (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
-  ) {
-    return;
-  }
   const action = matchChatInterfaceAction(e);
   if (!action) return;
+  // Inside an open terminal the shell owns the keyboard, so don't hijack
+  // anything there — except the terminal shortcut itself, which just
+  // re-focuses the existing shell. Everywhere else (including text fields,
+  // since none of these combos type text) shortcuts work.
+  if (action !== "terminal" && isInsideTerminal(e)) return;
   switch (action) {
     case "diffs":
       if (!hasCwd.value) return;
@@ -3423,7 +3434,7 @@ function handleMenuShortcut(e: KeyboardEvent) {
       showGitGraph.value = true;
       break;
     case "terminal":
-      focusOrOpenTerminal();
+      toggleTerminal(e);
       break;
     case "archive":
       if (

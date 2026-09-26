@@ -107,3 +107,11 @@ export function matchChatInterfaceAction(e: KeyboardEvent): MenuActionId | null 
   }
   return null;
 }
+
+/** True when the event originated inside an open xterm terminal. The shell
+ * owns its keyboard there (Ctrl+M is Enter, Ctrl+K is kill-line, Ctrl+B is a
+ * tmux prefix), so global shortcuts must never hijack it. */
+export function isInsideTerminal(e: KeyboardEvent): boolean {
+  const target = e.target as HTMLElement | null;
+  return !!target?.closest(".xterm");
+}

@@ -246,7 +246,7 @@ import { computed, onMounted, onUnmounted, provide, ref, watch } from "vue";
 import ChatInterface from "./components/ChatInterface.vue";
 import type { RecordingMode } from "./components/recordingDestination";
 import { isImeComposing } from "../utils/imeComposing";
-import { comboMatches, MENU_COMBOS } from "../utils/menuShortcuts";
+import { comboMatches, isInsideTerminal, MENU_COMBOS } from "../utils/menuShortcuts";
 import ConversationDrawer from "./components/ConversationDrawer.vue";
 import CommandPalette from "./components/CommandPalette.vue";
 import ModelsModal from "./components/ModelsModal.vue";
@@ -820,6 +820,9 @@ function clearChord() {
 const isMac = navigator.platform.toUpperCase().includes("MAC");
 
 function handleKeyDown(e: KeyboardEvent) {
+  // Inside an xterm terminal the shell owns the keyboard (Ctrl+M is Enter,
+  // Ctrl+K is kill-line) — never hijack anything there.
+  if (isInsideTerminal(e)) return;
   const recordingMode = comboMatches(e, MENU_COMBOS.recordAudio)
     ? "microphone"
     : comboMatches(e, MENU_COMBOS.recordScreen)
@@ -832,6 +835,9 @@ function handleKeyDown(e: KeyboardEvent) {
     if (!e.repeat) beginRecording(recordingMode);
     return;
   }
+  // Respect keys another component already handled (e.g. Monaco chords on
+  // Ctrl+K and Alt+Arrow to move lines) and IME composition.
+  if (e.defaultPrevented || isImeComposing(e)) return;
 
   if (chordPending) {
     clearChord();
