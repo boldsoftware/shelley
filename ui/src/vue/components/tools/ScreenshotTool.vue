@@ -13,7 +13,7 @@
     <div class="screenshot-tool-header" @click="isExpanded = !isExpanded">
       <div class="screenshot-tool-summary">
         <span class="screenshot-tool-emoji" :class="{ running: isRunning }">📷</span>
-        <span class="screenshot-tool-filename" :title="filename">{{ filename }}</span>
+        <span class="screenshot-tool-filename ellipsis-start" :title="filename">{{ filename }}</span>
       </div>
       <button
         class="screenshot-tool-toggle"

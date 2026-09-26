@@ -7,7 +7,7 @@
     <div class="tool-header" @click="isExpanded = !isExpanded">
       <div class="tool-summary">
         <span class="tool-emoji" :class="{ running: isRunning }">📂</span>
-        <span class="tool-command">cd {{ path || "..." }}</span>
+        <span class="tool-command ellipsis-start">cd {{ path || "..." }}</span>
       </div>
       <button
         class="tool-toggle"

@@ -23,7 +23,7 @@
         <div class="diff-viewer-header">
           <div class="diff-viewer-header-row">
             <span class="agents-md-header-title">{{ title || "Edit file" }}</span>
-            <code class="agents-md-header-path">{{ resolvedPath }}</code>
+            <code class="agents-md-header-path ellipsis-start">{{ resolvedPath }}</code>
             <span
               v-if="saveStatus !== 'idle'"
               :class="`agents-md-save-status agents-md-save-${saveStatus}`"

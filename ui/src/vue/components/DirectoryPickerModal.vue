@@ -76,7 +76,7 @@
             />
           </svg>
           <span>{{ shortcut.label }}</span>
-          <span class="directory-picker-shortcut-path">{{ shortcut.path }}</span>
+          <span class="directory-picker-shortcut-path ellipsis-start">{{ shortcut.path }}</span>
         </button>
       </div>
 

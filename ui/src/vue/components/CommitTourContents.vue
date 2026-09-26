@@ -48,7 +48,7 @@
                     />
                   </svg>
                 </span>
-                <span class="diff-tree-label">{{ row.label }}</span>
+                <span class="diff-tree-label ellipsis-start">{{ row.label }}</span>
               </div>
               <button
                 v-else-if="row.kind === 'file'"
@@ -70,7 +70,7 @@
                   </svg>
                 </span>
                 <span class="tour-file-name" aria-hidden="true">
-                  <span class="tour-file-name-stem">{{ row.filenameStem }}</span>
+                  <span class="tour-file-name-stem ellipsis-start">{{ row.filenameStem }}</span>
                   <span v-if="row.filenameSuffix" class="tour-file-name-suffix">{{
                     row.filenameSuffix
                   }}</span>

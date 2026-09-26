@@ -9,7 +9,7 @@
       <div class="tool-summary">
         <span class="tool-emoji" :class="{ running: isRunning }">🤖</span>
         <span class="tool-name">llm_one_shot</span>
-        <span class="tool-command">{{ summary }}</span>
+        <span class="tool-command ellipsis-start">{{ summary }}</span>
       </div>
       <button
         class="tool-toggle"

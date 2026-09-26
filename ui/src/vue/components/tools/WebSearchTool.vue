@@ -13,7 +13,7 @@
     >
       <div class="tool-summary">
         <span class="tool-emoji" :class="{ running: isRunning }">🔍</span>
-        <span class="tool-command" :title="hasQueries ? queryPreview : undefined">
+        <span class="tool-command ellipsis-start" :title="hasQueries ? queryPreview : undefined">
           Web Search<span v-if="hasQueries">: </span
           ><span v-if="hasQueries" class="web-search-query-preview">{{ queryPreview }}</span>
         </span>

@@ -177,7 +177,7 @@
                 />
               </svg>
               <span class="grp-main">
-                <span class="grp-path">
+                <span class="grp-path ellipsis-start">
                   <HighlightedText :text="item.path" :positions="item.matched_indexes" />
                 </span>
                 <span v-if="item.snippet" class="ff-snippet" :title="item.snippet">

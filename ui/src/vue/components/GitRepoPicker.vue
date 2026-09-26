@@ -52,7 +52,7 @@
             />
           </svg>
           <span class="grp-main">
-            <span class="grp-path" :title="hit.repo.path">
+            <span class="grp-path ellipsis-start" :title="hit.repo.path">
               <template
                 v-for="(seg, si) in highlightSegments(
                   displayPath(hit.repo.path, home),

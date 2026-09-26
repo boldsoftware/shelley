@@ -8,7 +8,7 @@
       <div :class="['tool-summary', { 'generic-tool-summary--complete': isComplete }]">
         <span class="tool-emoji" :class="{ running: isRunning }">⚙️</span>
         <span class="generic-tool-copy">
-          <span class="tool-command">{{ toolName }}</span>
+          <span class="tool-command ellipsis-start">{{ toolName }}</span>
           <GenericToolWarning v-if="isComplete" :tool-name="toolName" />
         </span>
       </div>

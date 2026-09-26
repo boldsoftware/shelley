@@ -13,7 +13,8 @@
           language="shellscript"
           :title="command"
         />
-        <span v-if="displayData?.workingDir" class="bash-tool-cwd" :title="displayData.workingDir">
+        <span v-if="summaryTruncated" class="bash-tool-summary-ellipsis">...</span>
+        <span v-if="displayData?.workingDir" class="bash-tool-cwd ellipsis-start" :title="displayData.workingDir">
           in {{ displayData.workingDir }}
         </span>
       </div>
