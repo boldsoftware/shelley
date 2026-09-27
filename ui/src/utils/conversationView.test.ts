@@ -69,3 +69,19 @@ assert.equal(
 );
 
 console.log("conversationView tests passed");
+
+// Conversation-to-conversation messages use the LLM user role, not a human author.
+for (const relationship of ["subagent", "parent"]) {
+  const fromConversation = message({
+    type: "user",
+    user_data: JSON.stringify({
+      sender_conversation_id: "child",
+      sender_slug: "audit-symmetric",
+      sender_relationship: relationship,
+    }),
+    llm_data: JSON.stringify({ Content: [{ Type: 2, Text: "Symmetric early leads saved" }] }),
+  });
+  assert.equal(isHumanUserMessage(fromConversation), false);
+  assert.equal(isVisibleConversationMessage(fromConversation, "end-of-turn"), false);
+  assert.equal(isVisibleConversationMessage(fromConversation, "all"), true);
+}

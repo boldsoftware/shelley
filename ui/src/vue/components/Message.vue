@@ -388,7 +388,7 @@ const conversationSource = computed(() =>
     : null,
 );
 const authorEmail = computed(() =>
-  isUser.value && !isDistilledUser.value && showUserEmails?.value
+  isUser.value && !isDistilledUser.value && !conversationSource.value && showUserEmails?.value
     ? props.message.user_email || null
     : null,
 );
