@@ -514,6 +514,10 @@ function onTabClick(id: string) {
   if (minimized.value) minimized.value = false;
 }
 
+// Exposed for the Ctrl+` toggle in ChatInterface: when the shell already has
+// focus, the shortcut hides the panel rather than re-focusing it.
+defineExpose({ toggleMinimized });
+
 // Refit the active terminal once un-minimizing has updated the DOM.
 const wasMinimizedRef = { current: minimized.value };
 watch(
