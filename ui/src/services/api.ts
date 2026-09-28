@@ -38,6 +38,14 @@ async function responseError(response: Response, prefix: string): Promise<ApiErr
   return new ApiError(`${prefix}: ${detail}`, response.status);
 }
 
+export interface SkillDescriptor {
+  name: string;
+  description: string;
+  activate: string;
+  source_path?: string;
+  origin?: string;
+}
+
 export interface AvailableModel {
   id: string;
   display_name?: string;
@@ -829,6 +837,18 @@ class ApiService {
       const data = await response.json().catch(() => ({}));
       throw new Error(data.error || `Failed to create worktree: ${response.statusText}`);
     }
+    return response.json();
+  }
+
+  async getSkills(
+    cwd: string,
+    conversationId: string | null,
+    signal?: AbortSignal,
+  ): Promise<{ skills: SkillDescriptor[] }> {
+    const params = new URLSearchParams({ cwd });
+    if (conversationId) params.set("conversation_id", conversationId);
+    const response = await fetch(`${this.baseUrl}/skills?${params}`, { signal });
+    if (!response.ok) throw await responseError(response, "Failed to load skills");
     return response.json();
   }
 

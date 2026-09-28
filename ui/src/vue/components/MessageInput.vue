@@ -28,7 +28,7 @@
        use the `:on-send` / `:on-queue` function props. -->
 <template>
   <div
-    :class="`message-input-container ${isDraggingOver ? 'drag-over' : ''} ${isShellMode ? 'shell-mode' : ''} ${showSlashMenu || showFileMenu ? 'slash-menu-open' : ''}`"
+    :class="`message-input-container ${isDraggingOver ? 'drag-over' : ''} ${isShellMode ? 'shell-mode' : ''} ${showSlashMenu || showFileMenu || showSkillMenu ? 'slash-menu-open' : ''}`"
     @dragover="handleDragOver"
     @dragenter="handleDragEnter"
     @dragleave="handleDragLeave"
@@ -131,6 +131,52 @@
         </div>
       </div>
       <div class="textarea-wrapper">
+        <div
+          v-if="showSkillMenu"
+          ref="skillMenuRef"
+          class="slash-command-menu skill-completion-menu"
+          data-testid="skill-picker"
+        >
+          <div class="file-completion-status">
+            Skills · Select to add editable instructions, not send
+          </div>
+          <div v-if="skillLoading || skillError" class="file-completion-status" role="status">
+            {{ skillError || "Loading skills…" }}
+          </div>
+          <div :id="skillMenuId" role="listbox" aria-label="Skills">
+            <button
+              v-for="(item, index) in skillMatches"
+              :id="`${skillMenuId}-${index}`"
+              :key="item.name"
+              type="button"
+              tabindex="-1"
+              :class="[
+                'slash-command-item',
+                'skill-completion-item',
+                { selected: index === skillSelected },
+              ]"
+              role="option"
+              :aria-selected="index === skillSelected"
+              :aria-label="`${item.name}: ${item.description}${item.source_path || item.origin ? ` (${item.source_path || item.origin})` : ''}`"
+              @mousedown.prevent
+              @mouseenter="skillSelected = index"
+              @click="chooseSkill(index)"
+            >
+              <span class="slash-command-name">{{ item.name }}</span>
+              <span class="slash-command-description">{{ item.description }}</span>
+              <span v-if="item.source_path || item.origin" class="skill-completion-source">
+                {{ [item.origin, item.source_path].filter(Boolean).join(" · ") }}
+              </span>
+            </button>
+          </div>
+          <div
+            v-if="!skillLoading && !skillError && !skillMatches.length"
+            class="file-completion-status"
+            role="status"
+          >
+            No matching skills
+          </div>
+        </div>
         <div
           v-if="showFileMenu"
           ref="fileMenuRef"
@@ -282,16 +328,23 @@
           :rows="initialRows ?? 1"
           aria-label="Message input"
           data-testid="message-input"
-          :aria-autocomplete="showFileMenu ? 'list' : undefined"
-          :aria-controls="showFileMenu ? fileMenuId : undefined"
+          :aria-autocomplete="showSkillMenu || showFileMenu ? 'list' : undefined"
+          :aria-controls="showSkillMenu ? skillMenuId : showFileMenu ? fileMenuId : undefined"
           :aria-activedescendant="
-            showFileMenu && fileMatches.length ? `${fileMenuId}-${fileSelected}` : undefined
+            showSkillMenu && skillMatches.length
+              ? `${skillMenuId}-${skillSelected}`
+              : showFileMenu && fileMatches.length
+                ? `${fileMenuId}-${fileSelected}`
+                : undefined
           "
           @input="onTextareaInput"
           @select="syncFileSelection"
           @click="syncFileSelection"
           @keyup="syncFileSelection"
-          @blur="fileFocused = false"
+          @blur="
+            fileFocused = false;
+            skillFocused = false;
+          "
           @keydown="handleKeyDown"
           @paste="handlePaste"
           @focus="onTextareaFocus"
@@ -505,8 +558,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, shallowReactive, shallowRef, useId, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+  shallowReactive,
+  shallowRef,
+  useId,
+  watch,
+} from "vue";
 import { useFileCompletion } from "../composables/fileCompletion";
+import { useSkillCompletion } from "../composables/skillCompletion";
 import { useI18n } from "../composables/i18n";
 import { pickPlaceholderHint } from "../../utils/placeholderHints";
 import HighlightedText from "./HighlightedText.vue";
@@ -520,7 +584,11 @@ import {
 } from "./composerDispatch";
 import { isImeComposing } from "../../utils/imeComposing";
 import RecordingPanel from "./RecordingPanel.vue";
-import type { RecordingDestination, RecordingMode, RecordingPreparation } from "./recordingDestination";
+import type {
+  RecordingDestination,
+  RecordingMode,
+  RecordingPreparation,
+} from "./recordingDestination";
 import { focusMessageInputIfUnfocused } from "../../utils/focusMessageInput";
 import { menuShortcutLabel } from "../../utils/menuShortcuts";
 import {
@@ -1082,6 +1150,73 @@ const completionSession = ref(composerSession());
 watch(composerSession, (session) => {
   completionSession.value = session;
 });
+const skillMenuId = useId();
+const skillMenuRef = ref<HTMLDivElement | null>(null);
+const {
+  active: activeSkillCommand,
+  visible: showSkillMenu,
+  matches: skillMatches,
+  selected: skillSelected,
+  loading: skillLoading,
+  error: skillError,
+  focused: skillFocused,
+  updateSelection: updateSkillSelection,
+  dismiss: dismissSkills,
+  reopen: reopenSkills,
+  choose: completeSkill,
+} = useSkillCompletion({
+  message,
+  cwd: () => props.cwd ?? "",
+  session: () => completionSession.value,
+  conversationId: () => props.conversationId ?? null,
+  enabled: () => !isDisabled.value && !isShellMode.value,
+});
+
+async function chooseSkill(index: number) {
+  const replacement = completeSkill(index);
+  if (!replacement) return;
+  setMessage(replacement.text);
+  await nextTick();
+  textareaRef.value?.focus();
+  textareaRef.value?.setSelectionRange(replacement.cursor, replacement.cursor);
+  syncFileSelection();
+}
+
+// All send paths (including buttons, queue, and compact) consume the picker
+// instead of dispatching its command or executing activation instructions.
+function interceptSkillSubmission() {
+  if (!activeSkillCommand.value) {
+    // A restored draft or selected text may put the caret outside the token.
+    // A standalone /skills command still opens the picker, never dispatches.
+    if (isDisabled.value || !/^\/skills(?:[ \t]+[^\r\n]*)?$/.test(message.value.trim())) return false;
+    const cursor = message.value.trimEnd().length;
+    textareaRef.value?.setSelectionRange(cursor, cursor);
+    updateSkillSelection(cursor, cursor);
+    reopenSkills();
+    textareaRef.value?.focus();
+    return true;
+  }
+  if (showSkillMenu.value) void chooseSkill(skillSelected.value);
+  else {
+    reopenSkills();
+    textareaRef.value?.focus();
+  }
+  return true;
+}
+
+function onSkillMenuOutside(e: MouseEvent) {
+  if (skillMenuRef.value?.contains(e.target as Node) || e.target === textareaRef.value) return;
+  dismissSkills();
+}
+watch(showSkillMenu, (open) => {
+  if (open) document.addEventListener("mousedown", onSkillMenuOutside);
+  else document.removeEventListener("mousedown", onSkillMenuOutside);
+});
+watch(skillSelected, async () => {
+  await nextTick();
+  skillMenuRef.value?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+});
+
 const {
   visible: showFileMenu,
   matches: fileMatches,
@@ -1097,12 +1232,15 @@ const {
   message,
   cwd: () => props.cwd ?? "",
   session: () => completionSession.value,
-  enabled: () => !isDisabled.value && !isShellMode.value,
+  enabled: () => !isDisabled.value && !isShellMode.value && !showSkillMenu.value,
 });
 
 function syncFileSelection() {
   const textarea = textareaRef.value;
-  if (textarea) updateFileSelection(textarea.selectionStart, textarea.selectionEnd);
+  if (textarea) {
+    updateFileSelection(textarea.selectionStart, textarea.selectionEnd);
+    updateSkillSelection(textarea.selectionStart, textarea.selectionEnd);
+  }
 }
 
 async function chooseFile(index: number) {
@@ -1222,6 +1360,7 @@ const modelArgSuggestions = computed<ModelArgOption[]>(() => {
 const showModelArgMenu = computed(
   () =>
     modelArgContext.value !== null &&
+    !showSkillMenu.value &&
     !slashMenuDismissed.value &&
     modelArgSuggestions.value.length > 0 &&
     !isDisabled.value,
@@ -1272,6 +1411,15 @@ watch(message, (value) => {
 async function chooseSlashCommand(index: number) {
   const item = slashSuggestions.value[index];
   if (!item) return;
+  if (item.command === SLASH_COMMANDS.SKILLS.command) {
+    setMessage(`${item.command} `);
+    await nextTick();
+    textareaRef.value?.focus();
+    textareaRef.value?.setSelectionRange(message.value.length, message.value.length);
+    syncFileSelection();
+    reopenSkills();
+    return;
+  }
   if (!item.takesArgs) {
     const origin = composerOrigin();
     setMessage("");
@@ -1322,6 +1470,7 @@ watch([composerSession, () => props.compactSendLevel], () => {
 
 async function handleSubmit(e: Event) {
   e.preventDefault();
+  if (interceptSkillSubmission()) return;
   if (hasContent.value && !props.disabled && !submitting.value && uploadsInProgress.value === 0) {
     if (preferCompactAndSend.value) {
       await handleCompactAndSend();
@@ -1369,6 +1518,7 @@ async function handleSubmit(e: Event) {
 }
 
 async function handleQueueMessage() {
+  if (interceptSkillSubmission()) return;
   const dispatch = composerDispatch(message.value, { intent: "queue" });
   if (dispatch.route === "btw") {
     await handleSendNow();
@@ -1397,6 +1547,7 @@ async function handleSelectSend() {
 /** Compact the conversation, then queue the composed message so it runs once
  * compaction completes. Kicks off compaction and queues in one gesture. */
 async function handleCompactAndSend() {
+  if (interceptSkillSubmission()) return;
   const dispatch = composerDispatch(message.value, { intent: "compact-and-send" });
   if (dispatch.route === "btw") {
     await handleSendNow();
@@ -1422,6 +1573,7 @@ async function handleCompactAndSend() {
 
 /** Send now (bypass auto-queue) — used from the dropdown during distill mode */
 async function handleSendNow() {
+  if (interceptSkillSubmission()) return;
   if (hasContent.value && !props.disabled && !submitting.value && uploadsInProgress.value === 0) {
     const dispatch = composerDispatch(message.value, { intent: "send-now" });
     const composed = composeMessageWithAttachments(message.value);
@@ -1450,6 +1602,7 @@ function onTextareaInput(e: Event) {
 
 function onTextareaFocus() {
   fileFocused.value = true;
+  skillFocused.value = true;
   syncFileSelection();
   // Scroll to bottom after keyboard animation settles
   requestAnimationFrame(() => requestAnimationFrame(() => emit("focus")));
@@ -1458,6 +1611,30 @@ function onTextareaFocus() {
 function handleKeyDown(e: KeyboardEvent) {
   // Don't submit while IME is composing.
   if (isImeComposing(e)) return;
+  syncFileSelection();
+  if (showSkillMenu.value) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      dismissSkills();
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (skillMatches.value.length) {
+        skillSelected.value =
+          (skillSelected.value + (e.key === "ArrowDown" ? 1 : -1) + skillMatches.value.length) %
+          skillMatches.value.length;
+      }
+      return;
+    }
+    if ((e.key === "Enter" && !e.shiftKey) || (e.key === "Tab" && !e.shiftKey)) {
+      // Loading, empty, and error states must never fall through to sending.
+      e.preventDefault();
+      void chooseSkill(skillSelected.value);
+      return;
+    }
+  }
   if (showFileMenu.value) {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -1605,6 +1782,7 @@ onUnmounted(() => {
   document.removeEventListener("mousedown", onQueueMenuOutside);
   document.removeEventListener("mousedown", onSlashMenuOutside);
   document.removeEventListener("mousedown", onFileMenuOutside);
+  document.removeEventListener("mousedown", onSkillMenuOutside);
   for (const session of sessions) clearAttachments(session);
 });
 </script>
