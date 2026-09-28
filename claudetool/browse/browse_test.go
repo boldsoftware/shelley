@@ -348,6 +348,52 @@ func TestScreenshotRunGatesOnImageSupport(t *testing.T) {
 	})
 }
 
+// TestScreenshotSelectorTextTrapRegression verifies that a CSS selector whose
+// string also appears as page text (e.g. inside a <style> block) does not hang
+// the screenshot. chromedp's default query option (BySearch) matches nodes by
+// full-text search; the invisible <style> text node then never satisfies
+// NodeVisible, and the query retried until the context deadline. ByQueryAll
+// resolves selectors via DOM.querySelectorAll, which only matches elements.
+func TestScreenshotSelectorTextTrapRegression(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser screenshot test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+
+	tools := NewBrowseTools(ctx, 0)
+	t.Cleanup(func() { tools.Close() })
+
+	// The <style> block deliberately contains both selector strings, so the
+	// full-text search trap would match its invisible text nodes.
+	page := `<!doctype html><html><head><style>body{background:#fff}.drawer{color:red}</style></head><body><div class="drawer">hello</div></body></html>`
+	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(page))
+
+	tool := tools.CombinedTool()
+	nav := tool.Run(ctx, []byte(`{"action": "navigate", "url": "`+dataURL+`"}`))
+	if nav.Error != nil {
+		if browserUnavailable(nav.Error.Error()) {
+			t.Skip("Browser automation not available in this environment")
+		}
+		t.Fatalf("navigate: %v", nav.Error)
+	}
+
+	sctx := llm.WithLLMService(ctx, limitedService{})
+	for _, sel := range []string{"body", ".drawer"} {
+		out := tools.screenshotRun(sctx, screenshotInput{Selector: sel, Timeout: "20s"})
+		if out.Error != nil {
+			if browserUnavailable(out.Error.Error()) {
+				t.Skip("Browser automation not available in this environment")
+			}
+			t.Fatalf("screenshot with selector %q: %v", sel, out.Error)
+		}
+		if !hasImageContent(out.LLMContent) {
+			t.Fatalf("screenshot with selector %q: expected image content, got %+v", sel, out.LLMContent)
+		}
+	}
+}
+
 func TestReadImageTool(t *testing.T) {
 	ctx := t.Context()
 	browseTools := NewBrowseTools(ctx, 0)
