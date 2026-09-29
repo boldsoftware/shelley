@@ -1,3 +1,30 @@
+/* Nerd Font icons (powerline separators, devicons, Font Awesome, Material,
+   etc.) live in the Unicode Private Use Areas, which no ordinary monospace
+   font covers. Without a font that has them, xterm renders tofu — and if the
+   browser finds a glyph elsewhere, it is usually the wrong width and bleeds
+   into neighbouring cells. Ship the symbols-only Nerd Font as a fallback so
+   icons render for every user regardless of what they have installed.
+
+   SymbolsNerdFontMono is the official symbols-only build from
+   https://github.com/ryanoasis/nerd-fonts (v3.4.0, NerdFontsSymbolsOnly.zip),
+   converted with:
+     pyftsubset SymbolsNerdFontMono-Regular.ttf --unicodes='*' \
+       --flavor=woff2 --no-hinting --output-file=SymbolsNerdFontMono.woff2
+   License: MIT (Copyright (c) 2014 Ryan L McIntyre).
+
+   unicode-range keeps it out of the way of real text: browsers only fetch
+   the font when a page actually renders an icon codepoint. */
+@font-face {
+  font-family: "Symbols Nerd Font Mono";
+  src: url("/SymbolsNerdFontMono.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+23FB-23FE, U+2630, U+2665, U+26A1, U+276C-2771, U+2B58, U+E000-F8FF, U+F0000-FFFFD,
+    U+100000-10FFFD;
+}
+
 /* CSS Reset and Base Styles */
 * {
   box-sizing: border-box;
@@ -43,7 +70,7 @@ body {
        heavy on macOS. ui-monospace / SFMono-Regular pick the proper regular
        weight. */
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, "Cascadia Code", "Roboto Mono",
-    Consolas, "Courier New", monospace;
+    Consolas, "Courier New", monospace, "Symbols Nerd Font Mono";
   --primary: #2563eb;
   --primary-dark: #1d4ed8;
   --bg-base: #ffffff;

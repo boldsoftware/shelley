@@ -71,7 +71,12 @@ onMounted(() => {
   const xterm = new Terminal({
     cursorBlink: true,
     fontSize: 14,
-    fontFamily: 'Consolas, "Liberation Mono", Menlo, Courier, monospace',
+    // "Symbols Nerd Font Mono" is appended so Private Use Area icon glyphs
+    // (powerline, devicons, Font Awesome…) render as real icons at one cell
+    // wide instead of tofu or a wrong-width system fallback. The family is
+    // declared in src/styles.css, which is also where the font is documented.
+    fontFamily:
+      'Consolas, "Liberation Mono", Menlo, Courier, monospace, "Symbols Nerd Font Mono"',
     theme: getTerminalTheme(props.isDark),
     scrollback: 10000,
     // Kitty keyboard protocol — clients opt in via `CSI = u` so this is safe to leave on.
