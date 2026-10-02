@@ -155,8 +155,8 @@ func TestSubagentTool_Run(t *testing.T) {
 	if displayData.Slug != "test-task" {
 		t.Errorf("expected slug 'test-task', got %q", displayData.Slug)
 	}
-	if !runner.lastWait {
-		t.Fatal("subagents should wait by default")
+	if runner.lastWait {
+		t.Fatal("subagents should not wait by default")
 	}
 }
 

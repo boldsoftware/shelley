@@ -488,7 +488,7 @@ func (s *Server) resumeCommitTourSubagent(ctx context.Context, job *commitTourJo
 		runner.endWait(manager, job.childID, true)
 		return fmt.Errorf("resume commit tour worker: %w", err)
 	}
-	done, err := runner.waitForIdle(ctx, manager, job.childID, time.Now().Add(commitTourTimeout))
+	done, err := runner.waitForIdle(ctx, manager, time.Now().Add(commitTourTimeout), func() bool { return false })
 	runner.endWait(manager, job.childID, true)
 	if err != nil {
 		return err

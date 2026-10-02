@@ -180,6 +180,14 @@ func (l *Loop) QueueUserMessage(message llm.Message) {
 	l.QueueMessages(message)
 }
 
+// HasQueuedMessages reports whether messages are waiting in the loop's queue
+// (typically a user message sent while a turn was in flight).
+func (l *Loop) HasQueuedMessages() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.messageQueue) > 0
+}
+
 // QueueMessages atomically appends one or more messages to the loop's queue
 // in order, then wakes the loop. The messages can be of any role; this is
 // useful for splicing in a synthetic tool_use / tool_result pair that must

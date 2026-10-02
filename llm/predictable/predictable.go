@@ -67,7 +67,8 @@ func requestMentions(req *llm.Request, needle string) bool {
 //   - "echo: <text>" - echoes the text back
 //   - "bash: <command>" - triggers bash tool with command
 //   - "think: <thoughts>" - returns response with extended thinking content
-//   - "subagent: <slug> <prompt>" - triggers subagent tool
+//   - "subagent: <slug> <prompt>" - triggers subagent tool (wait=false)
+//   - "subagent-wait: <slug> <prompt>" - same, with wait=true
 //   - "change_dir: <path>" - triggers change_dir tool
 //   - "delay: <seconds>" - delays response by specified seconds
 //   - "fail <error>" - emits a retry warning and returns a failure
@@ -269,15 +270,18 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 			return s.makeScreenshotToolResponse(selector, inputTokens), nil
 		}
 
-		if rest, ok := strings.CutPrefix(inputText, "subagent: "); ok {
-			// Format: "subagent: <slug> <prompt>"
-			parts := strings.SplitN(rest, " ", 2)
-			slug := parts[0]
-			prompt := "do the task"
-			if len(parts) > 1 {
-				prompt = parts[1]
+		// Format: "subagent: <slug> <prompt>" (wait=false, the default) or
+		// "subagent-wait: <slug> <prompt>" (wait=true, blocks the turn).
+		for prefix, wait := range map[string]bool{"subagent: ": false, "subagent-wait: ": true} {
+			if rest, ok := strings.CutPrefix(inputText, prefix); ok {
+				parts := strings.SplitN(rest, " ", 2)
+				slug := parts[0]
+				prompt := "do the task"
+				if len(parts) > 1 {
+					prompt = parts[1]
+				}
+				return s.makeSubagentToolResponse(slug, prompt, wait, inputTokens), nil
 			}
-			return s.makeSubagentToolResponse(slug, prompt, inputTokens), nil
 		}
 
 		if text, ok := strings.CutPrefix(inputText, "markdown: "); ok {
@@ -810,10 +814,13 @@ func (s *Service) makeChangeDirToolResponse(path string, inputTokens uint64) *ll
 	}
 }
 
-func (s *Service) makeSubagentToolResponse(slug, prompt string, inputTokens uint64) *llm.Response {
+func (s *Service) makeSubagentToolResponse(slug, prompt string, wait bool, inputTokens uint64) *llm.Response {
 	toolInputData := map[string]any{
 		"slug":   slug,
 		"prompt": prompt,
+	}
+	if wait {
+		toolInputData["wait"] = true
 	}
 	toolInputBytes, _ := json.Marshal(toolInputData)
 	toolInput := json.RawMessage(toolInputBytes)

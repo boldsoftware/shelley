@@ -1016,6 +1016,9 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		}
 		manager := NewConversationManager(conversationID, s.db, s.logger, managerConfig, s.integrationSkills, recordMessage, recordTurnStart, recordBatch, onStateChange, s.streamPub)
 		manager.onTurnStartRejected = func() { go manager.drainPendingMessages(s) }
+		manager.recordDrainedQueued = func(ctx context.Context, queuedID string, msg llm.Message, userEmail string, userData json.RawMessage) error {
+			return s.recordDrainedQueuedMessage(ctx, conversationID, queuedID, msg, userEmail, userData)
+		}
 		manager.userEmail = userEmail
 		manager.serverPort = s.listenPort
 		manager.btwReader = btwReader
@@ -1087,6 +1090,9 @@ func (s *Server) getOrCreateSubagentConversationManager(ctx context.Context, con
 		subagentConfig.SubagentDepth++
 		manager := NewConversationManager(conversationID, s.db, s.logger, subagentConfig, s.integrationSkills, recordMessage, recordTurnStart, recordBatch, onStateChange, s.streamPub)
 		manager.onTurnStartRejected = func() { go manager.drainPendingMessages(s) }
+		manager.recordDrainedQueued = func(ctx context.Context, queuedID string, msg llm.Message, userEmail string, userData json.RawMessage) error {
+			return s.recordDrainedQueuedMessage(ctx, conversationID, queuedID, msg, userEmail, userData)
+		}
 		manager.serverPort = s.listenPort
 		manager.onDone = func() { s.dispatchSubagentDone(conversationID) }
 		// See getOrCreateConversationManager for why we don't hold s.mu here.

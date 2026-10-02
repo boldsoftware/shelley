@@ -127,6 +127,10 @@ type ConversationManager struct {
 	// recordMessageBatch persists several messages in one Tx (consecutive
 	// sequence ids). Used by mid-turn injection of subagent-done pairs.
 	recordMessageBatch messageBatchRecordFunc
+	// recordDrainedQueued persists a queued user message as a real row and
+	// removes it from queued_messages in one Tx (Server.recordDrainedQueuedMessage).
+	// Used by mid-turn injection of user messages.
+	recordDrainedQueued drainedQueuedRecordFunc
 	// recordTurnStartMessage records the user message that begins a turn,
 	// folding the agent_working=true flip and timestamp bump into the INSERT Tx
 	// (see Server.recordTurnStartMessage). The turn must not run unless this
@@ -312,6 +316,8 @@ type ConversationManager struct {
 // messageBatchRecordFunc persists a batch of messages atomically (one Tx,
 // consecutive sequence ids). See Server.recordMessages.
 type messageBatchRecordFunc func(ctx context.Context, msgs []recordMessageInput) error
+
+type drainedQueuedRecordFunc func(ctx context.Context, queuedID string, msg llm.Message, userEmail string, userData json.RawMessage) error
 
 // NewConversationManager constructs a manager with dependencies but defers hydration until needed.
 type turnStartRecordFunc func(context.Context, llm.Message, llm.Usage, []llm.PurposedUsage) (*generated.Message, error)
@@ -1640,6 +1646,25 @@ func (cm *ConversationManager) EnqueueSubagentDone(s *Server, modelID, subagentC
 	})
 }
 
+// HasPendingUserMessage reports whether a user message is waiting for this
+// conversation's agent, sent while it was busy. There are two arrival paths:
+// the composer's plain Send (queue:false) goes straight into the running
+// loop's messageQueue via AcceptUserMessage, and the explicit Queue option
+// (queue:true) lands in pendingBatches. Both count.
+func (cm *ConversationManager) HasPendingUserMessage() bool {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if cm.loop != nil && cm.loop.HasQueuedMessages() {
+		return true
+	}
+	for _, b := range cm.pendingBatches {
+		if b.Kind == pendingBatchUser {
+			return true
+		}
+	}
+	return false
+}
+
 // DropPendingSubagentDone removes any queued (not-yet-injected/drained)
 // subagent-done batches for the given subagent conversation from this
 // (parent) manager's pending queue, returning how many were dropped. Used
@@ -1666,17 +1691,26 @@ func (cm *ConversationManager) DropPendingSubagentDone(subagentConversationID st
 	return dropped
 }
 
-// takeInjectableSubagentDone extracts all queued subagent-done batches,
-// persists their synthetic tool_use/tool_result pairs, and returns the
+// takeInjectable extracts ALL queued batches — user messages and
+// subagent-done pairs alike, in FIFO order — persists them, and returns the
 // messages for mid-turn splicing into the running loop (see
 // loop.Config.InjectMessages). Returning nil leaves the turn untouched.
 //
+// User messages are injected mid-turn so a user typing while the agent is
+// busy (most painfully: blocked in a long wait=true subagent poll, or a
+// many-round tool loop) is heard at the next LLM round instead of when the
+// turn happens to end. A user batch is persisted exactly as the end-of-turn
+// drain would (recordDrainedQueued: real immutable row + atomic removal from
+// queued_messages). A user batch whose persist fails stays queued for the
+// drain path to retry, since nothing was fed.
+//
 // Persisting BEFORE returning keeps DB sequence order identical to the
-// in-memory splice point: the pair lands between the tool round that just
-// finished and the assistant response that reacts to it. Each pair goes in
-// one Tx (consecutive sequence ids) for the same reason processBatch does. A
-// batch whose persist fails is dropped, not fed — a half-written pair would
-// corrupt history — mirroring processBatch's no-retry policy.
+// in-memory splice point: the messages land between the tool round that just
+// finished and the assistant response that reacts to them. Each subagent-done
+// pair goes in one Tx (consecutive sequence ids) for the same reason
+// processBatch does. A pair whose persist fails is dropped, not fed — a
+// half-written pair would corrupt history — mirroring processBatch's no-retry
+// policy.
 //
 // While distilling or cancelling, injection is skipped entirely (the
 // conversation is being rewritten / the user is taking over); distillation
@@ -1689,7 +1723,7 @@ func (cm *ConversationManager) DropPendingSubagentDone(subagentConversationID st
 // the OLD generation after the compaction snapshot was taken and thus be
 // absent from the new generation's context (visible in the transcript, not
 // re-fed) — an accepted, pre-existing loss mode of the drain path too.
-func (cm *ConversationManager) takeInjectableSubagentDone(ctx context.Context, generation uint64) []llm.Message {
+func (cm *ConversationManager) takeInjectable(ctx context.Context, generation uint64) []llm.Message {
 	// This callback runs inside a loop goroutine. Never wait for an in-progress
 	// teardown here: cancellation is waiting for this goroutine to exit. Taking
 	// the lifecycle lock only long enough to validate/persist makes the winner
@@ -1700,40 +1734,81 @@ func (cm *ConversationManager) takeInjectableSubagentDone(ctx context.Context, g
 
 	cm.mu.Lock()
 	if cm.loopTearingDown || cm.loop == nil || cm.loopGeneration != generation ||
-		cm.distilling || cm.cancelling || len(cm.pendingBatches) == 0 || cm.recordMessageBatch == nil {
+		cm.distilling || cm.cancelling || len(cm.pendingBatches) == 0 ||
+		cm.recordMessageBatch == nil || cm.recordDrainedQueued == nil {
 		cm.mu.Unlock()
 		return nil
 	}
-	var taken []pendingBatch
-	kept := cm.pendingBatches[:0]
-	for _, b := range cm.pendingBatches {
-		if b.Kind == pendingBatchSubagentDone {
-			taken = append(taken, b)
-		} else {
-			kept = append(kept, b)
-		}
-	}
-	cm.pendingBatches = kept
+	taken := cm.pendingBatches
+	cm.pendingBatches = nil
 	recordBatch := cm.recordMessageBatch
+	recordDrained := cm.recordDrainedQueued
 	cm.mu.Unlock()
 
+	// WithoutCancel: ctx is the loop's context; a concurrent cancellation
+	// must not abort an insert halfway and silently eat a message. Recorded
+	// rows remain valid history either way — hydration picks them up even
+	// if the turn dies before the next LLM round sends them.
+	bg := context.WithoutCancel(ctx)
+
 	var out []llm.Message
+	var requeue []pendingBatch
 	for _, b := range taken {
-		inputs := make([]recordMessageInput, 0, len(b.Messages))
-		for _, msg := range b.Messages {
-			inputs = append(inputs, recordMessageInput{message: msg})
+		switch b.Kind {
+		case pendingBatchUser:
+			if b.TranscriptionReady {
+				// Audit pair + transcript must persist atomically and only
+				// the transcript is fed; leave that to processBatch.
+				requeue = append(requeue, b)
+				continue
+			}
+			failed := false
+			for i, msg := range b.Messages {
+				queuedID := ""
+				if i < len(b.MessageIDs) {
+					queuedID = b.MessageIDs[i]
+				}
+				wrapped, err := messageWithSenderProvenance(msg, b.UserData)
+				if err == nil {
+					err = recordDrained(bg, queuedID, msg, b.UserEmail, b.UserData)
+				}
+				if err != nil {
+					cm.logger.Error("Failed to record injected user message; leaving queued", "error", err)
+					// Keep the not-yet-recorded remainder for the drain path.
+					requeue = append(requeue, pendingBatch{
+						Kind:       b.Kind,
+						Messages:   b.Messages[i:],
+						MessageIDs: b.MessageIDs[min(i, len(b.MessageIDs)):],
+						ModelID:    b.ModelID,
+						UserEmail:  b.UserEmail,
+						UserData:   b.UserData,
+					})
+					failed = true
+					break
+				}
+				out = append(out, wrapped)
+			}
+			if !failed {
+				cm.logger.Info("Injected user message mid-turn", "count", len(b.Messages))
+			}
+		case pendingBatchSubagentDone:
+			inputs := make([]recordMessageInput, 0, len(b.Messages))
+			for _, msg := range b.Messages {
+				inputs = append(inputs, recordMessageInput{message: msg})
+			}
+			if err := recordBatch(bg, inputs); err != nil {
+				cm.logger.Error("Failed to record injected subagent-done messages", "error", err)
+				continue
+			}
+			cm.logger.Info("Injected subagent-done notification mid-turn",
+				"subagent", b.SubagentConversationID)
+			out = append(out, b.Messages...)
 		}
-		// WithoutCancel: ctx is the loop's context; a concurrent cancellation
-		// must not abort the insert halfway and silently eat the notification.
-		// The recorded pair remains valid history either way — hydration picks
-		// it up even if the turn dies before the next LLM round sends it.
-		if err := recordBatch(context.WithoutCancel(ctx), inputs); err != nil {
-			cm.logger.Error("Failed to record injected subagent-done messages", "error", err)
-			continue
-		}
-		cm.logger.Info("Injected subagent-done notification mid-turn",
-			"subagent", b.SubagentConversationID)
-		out = append(out, b.Messages...)
+	}
+	if len(requeue) > 0 {
+		cm.mu.Lock()
+		cm.pendingBatches = append(requeue, cm.pendingBatches...)
+		cm.mu.Unlock()
 	}
 	return out
 }
@@ -2810,7 +2885,7 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 		OnStreamDelta: sf.Push,
 		OnStreamDone:  sf.Flush,
 		InjectMessages: func(ctx context.Context) []llm.Message {
-			return cm.takeInjectableSubagentDone(ctx, generation)
+			return cm.takeInjectable(ctx, generation)
 		},
 	})
 

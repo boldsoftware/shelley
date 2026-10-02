@@ -169,7 +169,18 @@ func (r *SubagentRunner) RunSubagent(ctx context.Context, conversationID, prompt
 		return fmt.Sprintf("Subagent started processing. Conversation ID: %s", conversationID), nil
 	}
 
-	// wait=true. Register a synchronous-waiter slot on the subagent manager
+	// wait=true. A blocking wait must not deafen the parent: if the user
+	// sends the parent a message while we poll, stop waiting so the parent's
+	// loop reaches its next LLM round (where takeInjectable delivers the
+	// user's message). The subagent keeps running and its completion arrives
+	// asynchronously, exactly as on a deadline hit.
+	interrupted := r.parentUserMessagePending(ctx, conversationID)
+	interruptedResult := func() (string, error) {
+		r.endWait(manager, conversationID, false)
+		return "[Wait interrupted: the user sent you a new message. The subagent is still running; you will be notified when it finishes. Do not re-poll it with wait=true.]", nil
+	}
+
+	// Register a synchronous-waiter slot on the subagent manager
 	// BEFORE doing anything that could trigger a working→idle transition. The
 	// slot suppresses the subagent's async onDone notification: while it is
 	// held, this tool call is responsible for delivering the response. It
@@ -180,10 +191,13 @@ func (r *SubagentRunner) RunSubagent(ctx context.Context, conversationID, prompt
 	// Let any in-flight turn finish on its own before we send (no cancel).
 	if manager.IsAgentWorking() {
 		s.logger.Info("Subagent is working; waiting for its current turn to finish before sending", "conversationID", conversationID)
-		done, err := r.waitForIdle(ctx, manager, conversationID, deadline)
+		done, err := r.waitForIdle(ctx, manager, deadline, interrupted)
 		if err != nil {
 			r.endWait(manager, conversationID, false)
 			return "", err
+		}
+		if !done && interrupted() {
+			return interruptedResult()
 		}
 		if !done {
 			// Deadline hit while the current turn was still running. Return a
@@ -231,14 +245,15 @@ func (r *SubagentRunner) RunSubagent(ctx context.Context, conversationID, prompt
 
 	// Wait for the agent to finish (or timeout). waitForResponse owns the
 	// synchronous-waiter slot registered above and releases it on every exit.
-	return r.waitForResponse(ctx, manager, conversationID, modelID, llmService, deadline)
+	return r.waitForResponse(ctx, manager, conversationID, modelID, llmService, deadline, interrupted, interruptedResult)
 }
 
 // waitForIdle blocks until the subagent's current turn finishes (returns
-// done=true), the deadline passes (done=false), or ctx is cancelled (err).
+// done=true), the deadline passes or interrupted() reports true (done=false),
+// or ctx is cancelled (err).
 // It does not send anything; it only waits for an in-flight turn to end so a
 // follow-up can be sent without interrupting work.
-func (r *SubagentRunner) waitForIdle(ctx context.Context, manager *ConversationManager, conversationID string, deadline time.Time) (done bool, err error) {
+func (r *SubagentRunner) waitForIdle(ctx context.Context, manager *ConversationManager, deadline time.Time, interrupted func() bool) (done bool, err error) {
 	pollInterval := 500 * time.Millisecond
 	for {
 		select {
@@ -249,7 +264,7 @@ func (r *SubagentRunner) waitForIdle(ctx context.Context, manager *ConversationM
 		if !manager.IsAgentWorking() {
 			return true, nil
 		}
-		if time.Now().After(deadline) {
+		if time.Now().After(deadline) || interrupted() {
 			return false, nil
 		}
 		select {
@@ -257,6 +272,30 @@ func (r *SubagentRunner) waitForIdle(ctx context.Context, manager *ConversationM
 			return false, ctx.Err()
 		case <-time.After(pollInterval):
 		}
+	}
+}
+
+// parentUserMessagePending returns a predicate reporting whether the
+// subagent's parent conversation has a user message queued (typed while the
+// parent was busy). Blocking subagent waits poll it to yield to the user.
+// Resolution of the parent is deferred and cached; an unresolvable parent
+// (or none) yields a predicate that is always false.
+func (r *SubagentRunner) parentUserMessagePending(ctx context.Context, subagentConversationID string) func() bool {
+	s := r.server
+	var parent *ConversationManager
+	resolved := false
+	return func() bool {
+		if !resolved {
+			resolved = true
+			conv, err := s.db.GetConversationByID(ctx, subagentConversationID)
+			if err != nil || conv.ParentConversationID == nil {
+				return false
+			}
+			s.mu.Lock()
+			parent = s.activeConversations[*conv.ParentConversationID]
+			s.mu.Unlock()
+		}
+		return parent != nil && parent.HasPendingUserMessage()
 	}
 }
 
@@ -272,7 +311,7 @@ func (r *SubagentRunner) endWait(manager *ConversationManager, conversationID st
 	}
 }
 
-func (r *SubagentRunner) waitForResponse(ctx context.Context, manager *ConversationManager, conversationID, modelID string, llmService llm.Service, deadline time.Time) (string, error) {
+func (r *SubagentRunner) waitForResponse(ctx context.Context, manager *ConversationManager, conversationID, modelID string, llmService llm.Service, deadline time.Time, interrupted func() bool, interruptedResult func() (string, error)) (string, error) {
 	s := r.server
 
 	pollInterval := 500 * time.Millisecond
@@ -294,6 +333,9 @@ func (r *SubagentRunner) waitForResponse(ctx context.Context, manager *Conversat
 			// normally now that the slot is freed.
 			r.endWait(manager, conversationID, false)
 			return r.generateProgressSummary(ctx, conversationID, modelID, llmService)
+		}
+		if interrupted() {
+			return interruptedResult()
 		}
 
 		// Check if agent is still working
