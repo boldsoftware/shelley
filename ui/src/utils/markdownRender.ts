@@ -6,6 +6,7 @@
 import { Marked } from "marked";
 import DOMPurify from "dompurify";
 import { rewriteLocalhostLink, type LocalhostLinkOptions } from "./linkify";
+import * as markdownMath from "./markdownMath";
 
 // Maximum size (in characters of the data: URI) we are willing to inline.
 // Keeps the DOM and persisted payloads from ballooning when a model emits a
@@ -243,7 +244,9 @@ export function renderMarkdownToSafeHTML(
   const cached = cacheKey ? runs?.get(cacheKey.runKey) : undefined;
   if (cached !== undefined) return cached;
 
-  const raw = buildMarked(messageId, localhostLinks).parse(text, { async: false }) as string;
+  const raw = buildMarked(messageId, localhostLinks)
+    .use(markdownMath.createMathExtension())
+    .parse(text, { async: false }) as string;
   const root = DOMPurify.sanitize(raw, { ...SANITIZE_OPTS, RETURN_DOM: true }) as HTMLElement;
   linkifyCodeSpans(root, localhostLinks);
   const html = root.innerHTML;
