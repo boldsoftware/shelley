@@ -522,6 +522,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/conversations/distill-new-generation", http.HandlerFunc(s.handleDistillNewGeneration)) // Small response
 	mux.Handle("/api/conversation/", http.StripPrefix("/api/conversation", s.conversationMux()))
 	mux.Handle("/api/conversation-by-slug/", compressionHandler(http.HandlerFunc(s.handleConversationBySlug)))
+	mux.Handle("/api/skills", compressionHandler(http.HandlerFunc(s.handleSkills)))
 	mux.Handle("/api/validate-cwd", http.HandlerFunc(s.handleValidateCwd)) // Small response
 	mux.Handle("POST /api/model-costs", http.HandlerFunc(s.handleModelCosts))
 	mux.Handle("/api/list-directory", compressionHandler(http.HandlerFunc(s.handleListDirectory)))

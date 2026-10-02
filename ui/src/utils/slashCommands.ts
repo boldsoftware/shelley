@@ -5,6 +5,11 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS = {
+  SKILLS: {
+    command: "/skills",
+    description: "adds skill instructions to your draft",
+    takesArgs: true,
+  },
   BTW: {
     command: "/btw",
     description: "asks a one-off side question",

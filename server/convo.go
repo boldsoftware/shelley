@@ -2396,11 +2396,7 @@ func systemPromptDisplayData(cfg claudetool.ToolSetConfig, promptSkills []skills
 		ServerSide  bool            `json:"server_side,omitempty"`
 	}
 	type skillDesc struct {
-		Name          string            `json:"name"`
-		Description   string            `json:"description"`
-		Activate      string            `json:"activate"`
-		SourcePath    string            `json:"source_path"`
-		Origin        string            `json:"origin"`
+		SkillCatalogEntry
 		License       string            `json:"license,omitempty"`
 		Compatibility string            `json:"compatibility,omitempty"`
 		When          string            `json:"when,omitempty"`
@@ -2437,26 +2433,13 @@ func systemPromptDisplayData(cfg claudetool.ToolSetConfig, promptSkills []skills
 
 	skillDescs := make([]skillDesc, 0, len(promptSkills))
 	for _, skill := range promptSkills {
-		sourcePath := skill.SourceLocation()
-		origin := skill.Origin
-		if origin == "" {
-			if skill.Path != "" {
-				origin = "File"
-			} else {
-				origin = "Built into Shelley"
-			}
-		}
 		skillDescs = append(skillDescs, skillDesc{
-			Name:          skill.Name,
-			Description:   skill.Description,
-			Activate:      skill.ActivationCommand(),
-			SourcePath:    sourcePath,
-			Origin:        origin,
-			License:       skill.License,
-			Compatibility: skill.Compatibility,
-			When:          skill.When,
-			AllowedTools:  skill.AllowedTools,
-			Metadata:      skill.Metadata,
+			SkillCatalogEntry: skillCatalogEntry(skill),
+			License:           skill.License,
+			Compatibility:     skill.Compatibility,
+			When:              skill.When,
+			AllowedTools:      skill.AllowedTools,
+			Metadata:          skill.Metadata,
 		})
 	}
 

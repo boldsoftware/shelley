@@ -4041,6 +4041,24 @@ diffs-container {
   white-space: nowrap;
 }
 
+/* Skill descriptions and sources wrap instead of widening a mobile composer. */
+.skill-completion-item {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.skill-completion-item .slash-command-name,
+.skill-completion-item .slash-command-description,
+.skill-completion-source {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.skill-completion-source {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
 .message-input-container.shell-mode .message-textarea::placeholder {
   font-family: inherit;
 }

@@ -17,3 +17,10 @@ assert(
 assert(!commands(true).includes(SLASH_COMMANDS.BTW.command), "child conversations omit /btw");
 assert(!commands(true).includes(SLASH_COMMANDS.TOUR.command), "child conversations omit /tour");
 assert(commands(true).includes(SLASH_COMMANDS.FORK.command), "child conversations retain commands");
+
+assert(
+  commands(false).includes(SLASH_COMMANDS.SKILLS.command),
+  "top-level conversations offer /skills",
+);
+assert(commands(true).includes(SLASH_COMMANDS.SKILLS.command), "child conversations offer /skills");
+assert(SLASH_COMMANDS.SKILLS.takesArgs, "/skills opens an argument picker instead of dispatching");
