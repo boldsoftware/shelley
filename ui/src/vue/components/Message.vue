@@ -389,7 +389,7 @@ const sender = computed(() =>
 // Background job notices carry raw command output: show it verbatim.
 const isBackgroundJobNotice = computed(() => !!sender.value && "backgroundJobId" in sender.value);
 const authorEmail = computed(() =>
-  isUser.value && !isDistilledUser.value && showUserEmails?.value
+  isUser.value && !isDistilledUser.value && !conversationSource.value && showUserEmails?.value
     ? props.message.user_email || null
     : null,
 );

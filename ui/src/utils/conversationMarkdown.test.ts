@@ -138,6 +138,29 @@ function check(name: string, cond: boolean, detail = "") {
   check("fence escapes backticks", md.includes("````"), md);
 }
 
+// --- Agent-to-agent messages must never masquerade as human input. ---
+for (const relationship of ["subagent", "parent"]) {
+  const messages = [
+    msg({
+      type: "user",
+      user_data: JSON.stringify({
+        sender_conversation_id: "child",
+        sender_slug: "audit-symmetric",
+        sender_relationship: relationship,
+      }),
+      llm_data: llm([{ Type: 2, Text: "Symmetric early leads saved" }]),
+    }),
+  ];
+  const md = conversationToMarkdown(conversation, messages);
+  const label = relationship === "subagent" ? "Subagent" : "Parent conversation";
+  check(
+    `${relationship} attributed in export`,
+    md.includes(`## ${label}: audit-symmetric`) &&
+      md.includes("Symmetric early leads saved") &&
+      !md.includes("## User"),
+  );
+}
+
 console.log(`\nconversationToMarkdown Tests: ${passed} passed, ${failed} failed\n`);
 if (failures.length > 0) {
   for (const f of failures) console.log(f);
