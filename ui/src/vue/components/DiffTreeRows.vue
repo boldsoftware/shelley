@@ -20,7 +20,7 @@
       @click="emit('toggle', row.pathsCovered)"
     >
       <span class="diff-tree-icon" v-html="row.isOpen ? CHEVRON_OPEN : CHEVRON_CLOSED" />
-      <span class="diff-tree-label">{{ row.label }}</span>
+      <span class="diff-tree-label ellipsis-start">{{ row.label }}</span>
     </button>
     <button
       v-else
@@ -34,7 +34,7 @@
       @click="emit('select', row.realPath)"
     >
       <span class="diff-tree-icon" v-html="FILE_ICON" />
-      <span class="diff-tree-label">{{ row.label }}</span>
+      <span class="diff-tree-label ellipsis-start">{{ row.label }}</span>
       <span v-if="row.decoration" class="diff-tree-decoration" :title="row.decorationTitle">{{
         row.decoration
       }}</span>

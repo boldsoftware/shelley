@@ -21,7 +21,7 @@
       <div class="tool-summary">
         <span class="tool-emoji" :class="{ running: isRunning }">⚡</span>
         <span class="tool-name">subagent</span>
-        <span class="tool-command" :title="prompt">{{ commandText }}</span>
+        <span class="tool-command ellipsis-start" :title="prompt">{{ commandText }}</span>
       </div>
       <button
         class="tool-toggle"

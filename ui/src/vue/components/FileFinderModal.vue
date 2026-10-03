@@ -40,7 +40,7 @@
             d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
           />
         </svg>
-        <span class="ff-dir-path">{{ displayDir }}</span>
+        <span class="ff-dir-path ellipsis-start">{{ displayDir }}</span>
       </button>
     </template>
 
@@ -59,7 +59,7 @@
       <!-- Shown only when the query re-rooted the search, so it's clear the
            paths below aren't relative to the directory in the header chip. -->
       <div v-if="scopeDir" class="ff-scope">
-        Searching <code class="ff-scope-path">{{ tildifyPath(scopeDir) }}</code>
+        Searching <code class="ff-scope-path ellipsis-start">{{ tildifyPath(scopeDir) }}</code>
       </div>
 
       <div v-if="error" class="grp-error">{{ error }}</div>
@@ -89,7 +89,7 @@
             />
           </svg>
           <span class="grp-main">
-            <span class="grp-path" :title="hit.path">
+            <span class="grp-path ellipsis-start" :title="hit.path">
               <HighlightedText :text="hit.path" :positions="hit.matched_indexes" />
             </span>
             <!-- Content match: the grep excerpt that earned this file its row

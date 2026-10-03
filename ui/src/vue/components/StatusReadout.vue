@@ -28,7 +28,7 @@
         :aria-label="cwdAriaLabel"
         @click="onChangeConversationCwd?.()"
       >
-        <span class="status-readout-cwd-path status-readout-affordance">{{
+        <span class="ellipsis-start status-readout-cwd-path status-readout-affordance">{{
           tildifyPath(cwd)
         }}</span>
       </button>

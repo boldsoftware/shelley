@@ -201,7 +201,7 @@
         <span class="conversation-date">{{ ctx.formatDate(conversation.updated_at) }}</span>
         <span
           v-if="conversation.cwd && ctx.groupBy.value !== 'cwd'"
-          class="conversation-cwd"
+          class="conversation-cwd ellipsis-start"
           :title="conversation.cwd"
         >
           {{ ctx.formatCwdForDisplay(conversation.cwd) }}

@@ -24,7 +24,7 @@
     <div class="patch-tool-header" @click="isExpanded = !isExpanded">
       <div class="patch-tool-summary">
         <span class="patch-tool-emoji" :class="{ running: isRunning }">🖋️</span>
-        <span class="patch-tool-filename" :title="filename">{{ filename }}</span>
+        <span class="patch-tool-filename ellipsis-start" :title="filename">{{ filename }}</span>
       </div>
       <div class="patch-tool-header-controls">
         <button
