@@ -45,6 +45,7 @@
     "emoji-picker-element": "^1.29.1",
     "idb": "^8.0.3",
     "jszip": "^3.10.1",
+    "katex": "^0.18.9",
     "marked": "^17.0.3",
     "monaco-editor": "^0.44.0",
     "monaco-vim": "^0.4.4",

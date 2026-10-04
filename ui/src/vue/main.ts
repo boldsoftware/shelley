@@ -9,6 +9,7 @@ import { ShelleyPreset } from "./theme/shelley-preset";
 
 import "primeicons/primeicons.css";
 import "@xterm/xterm/css/xterm.css";
+import "katex/dist/katex.min.css";
 
 import { initializeTheme } from "../services/theme";
 import { initializeNotifications } from "../services/notifications";
