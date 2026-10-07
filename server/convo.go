@@ -1738,18 +1738,23 @@ func (cm *ConversationManager) mcpServerInfos(ctx context.Context) ([]MCPServerI
 }
 
 func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generated.Message, error) {
-	var opts []SystemPromptOption
-	if cm.userEmail != "" {
-		opts = append(opts, WithUserEmail(cm.userEmail))
-	}
-	if servers, err := cm.mcpServerInfos(ctx); err != nil {
-		cm.logger.Warn("failed to list MCP servers for system prompt", "error", err)
-	} else if len(servers) > 0 {
-		opts = append(opts, WithMCPServers(servers))
-	}
-	systemPrompt, promptSkills, err := generateSystemPromptWithIntegrationSkills(cm.cwd, cm.integrationSkills.Skills(ctx), opts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate system prompt: %w", err)
+	systemPrompt := cm.conversationOptions.SystemPrompt
+	var promptSkills []skills.Skill
+	if systemPrompt == "" {
+		var opts []SystemPromptOption
+		if cm.userEmail != "" {
+			opts = append(opts, WithUserEmail(cm.userEmail))
+		}
+		if servers, err := cm.mcpServerInfos(ctx); err != nil {
+			cm.logger.Warn("failed to list MCP servers for system prompt", "error", err)
+		} else if len(servers) > 0 {
+			opts = append(opts, WithMCPServers(servers))
+		}
+		var err error
+		systemPrompt, promptSkills, err = generateSystemPromptWithIntegrationSkills(cm.cwd, cm.integrationSkills.Skills(ctx), opts...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate system prompt: %w", err)
+		}
 	}
 
 	if systemPrompt == "" {

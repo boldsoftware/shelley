@@ -55,12 +55,12 @@ type UserChat interface {
 
 // MessageUserInput is the message_user tool's input.
 type MessageUserInput struct {
-	Text string `json:"text"`
+	Text string `json:"text,omitempty"`
 	// ReplyTo is Shelley's sequence_id, not the external chat's message ID.
-	ReplyTo     int64    `json:"reply_to"`
-	Reaction    string   `json:"reaction"`
-	Attachments []string `json:"attachments"`
-	EndTurn     bool     `json:"end_turn"`
+	ReplyTo     int64    `json:"reply_to,omitempty"`
+	Reaction    string   `json:"reaction,omitempty"`
+	Attachments []string `json:"attachments,omitempty"`
+	EndTurn     bool     `json:"end_turn,omitempty"`
 }
 
 // MessageUserDisplay is the Display of a successful message_user call. It is

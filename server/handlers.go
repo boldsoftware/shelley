@@ -1022,8 +1022,8 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	if req.ConversationOptions != nil &&
-		(req.ConversationOptions.Kind != "" || req.ConversationOptions.ParentPointer != nil || req.ConversationOptions.CommitTour != nil) {
-		http.Error(w, "kind, parent_pointer, and commit_tour are internal conversation options", http.StatusBadRequest)
+		(req.ConversationOptions.Kind != "" || req.ConversationOptions.ParentPointer != nil || req.ConversationOptions.CommitTour != nil || req.ConversationOptions.SystemPrompt != "") {
+		http.Error(w, "kind, parent_pointer, commit_tour, and system_prompt are internal conversation options", http.StatusBadRequest)
 		return
 	}
 
@@ -4083,8 +4083,8 @@ func validateModelReasoningLevel(model *ModelInfo, level string) string {
 }
 
 func validateConversationOptions(opts db.ConversationOptions) string {
-	if opts.Kind != "" || opts.ParentPointer != nil || opts.CommitTour != nil {
-		return "kind, parent_pointer, and commit_tour are internal conversation options"
+	if opts.Kind != "" || opts.ParentPointer != nil || opts.CommitTour != nil || opts.SystemPrompt != "" {
+		return "kind, parent_pointer, commit_tour, and system_prompt are internal conversation options"
 	}
 	for name, v := range opts.ToolOverrides {
 		if v != "on" && v != "off" {

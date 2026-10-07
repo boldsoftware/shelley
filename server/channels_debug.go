@@ -298,15 +298,15 @@ func (s *Server) handleDebugChannelsList(w http.ResponseWriter, r *http.Request)
 
 // handleDebugChannelReceive serves POST /api/debug/channels/{chat}/receive
 // {"text": "..."}: the phone writes on the debug chat, which delivers the
-// text to the chat's conversation as exed delivers a text.
+// text to the chat's conversation as exed delivers a text. The body may set
+// the conversation fields exed sends (system_prompt, first_reaction,
+// first_reply) too.
 func (s *Server) handleDebugChannelReceive(w http.ResponseWriter, r *http.Request) {
 	chatID := debugChatID(w, r)
 	if chatID == "" {
 		return
 	}
-	var req struct {
-		Text string `json:"text"`
-	}
+	var req channelEvent
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil || strings.TrimSpace(req.Text) == "" {
 		http.Error(w, "text is required", http.StatusBadRequest)
 		return
@@ -319,11 +319,14 @@ func (s *Server) handleDebugChannelReceive(w http.ResponseWriter, r *http.Reques
 	d.mu.Unlock()
 
 	err := s.receiveChannelEvent(r.Context(), s.debugChannelEndpoint(chatID), channelEvent{
-		Type:   "message",
-		ID:     ev.MessageID,
-		ChatID: chatID,
-		Sender: "debug",
-		Text:   req.Text,
+		Type:          "message",
+		ID:            ev.MessageID,
+		ChatID:        chatID,
+		Sender:        "debug",
+		Text:          req.Text,
+		SystemPrompt:  req.SystemPrompt,
+		FirstReaction: req.FirstReaction,
+		FirstReply:    req.FirstReply,
 	})
 	if err != nil {
 		d.mu.Lock()

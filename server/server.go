@@ -1566,8 +1566,9 @@ func (s *Server) publishConversationState(state ConversationState) {
 		isSubagent := convErr == nil && isManagedChild(*conv)
 		// Honor an explicit per-conversation opt-out: conversations created
 		// with disable_notifications suppress all end-of-turn notifications
-		// (push, email, discord, ntfy) and hooks, same as subagents.
-		notifyDisabled := convErr == nil && db.ParseConversationOptions(conv.ConversationOptions).DisableNotifications
+		// (push, email, discord, ntfy) and hooks, same as subagents. So do
+		// channel conversations, which the user follows in the chat.
+		notifyDisabled := convErr == nil && (db.ParseConversationOptions(conv.ConversationOptions).DisableNotifications || conv.ExternalConversationID != nil)
 		suppressNotify := isSubagent || notifyDisabled
 		if !suppressNotify {
 			// Work still running for this conversation will wake it again when

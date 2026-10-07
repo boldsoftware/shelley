@@ -303,6 +303,9 @@ type ConversationOptions struct {
 	// discord, ntfy) for this conversation. Useful for cron-style or
 	// self-invoked conversations that shouldn't ping the user.
 	DisableNotifications bool `json:"disable_notifications,omitempty"`
+	// SystemPrompt, if set, is the conversation's system prompt in place of
+	// the generated one.
+	SystemPrompt string `json:"system_prompt,omitempty"`
 	// CompactNudgeTokens is the context size at which the agent is first told
 	// the size of its context while the compact_in_place tool is enabled.
 	// Zero means the default (160k).

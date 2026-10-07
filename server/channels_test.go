@@ -12,10 +12,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -260,7 +262,7 @@ func TestChannelMessageInjectsAfterCurrentTool(t *testing.T) {
 			}))
 			t.Cleanup(endpoint.Close)
 			t.Cleanup(releaseTool)
-			conv, err := server.channelConversation(t.Context(), endpoint.URL, "chat-tool")
+			conv, err := server.channelConversation(t.Context(), endpoint.URL, "chat-tool", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1065,4 +1067,228 @@ func TestWebChatRoundTrip(t *testing.T) {
 		}
 	}
 	t.Fatalf("stream ended without the reply: %v", scanner.Err())
+}
+
+// turnRecordingService is the predictable model, recording the requests of
+// agent turns (which offer tools, unlike slug generation).
+type turnRecordingService struct {
+	llm.Service
+	mu    sync.Mutex
+	turns []*llm.Request
+}
+
+func (s *turnRecordingService) Do(ctx context.Context, request *llm.Request) (*llm.Response, error) {
+	if len(request.Tools) > 0 {
+		s.mu.Lock()
+		s.turns = append(s.turns, request)
+		s.mu.Unlock()
+	}
+	return s.Service.Do(ctx, request)
+}
+
+// The message that starts a chat's conversation configures it: its system
+// prompt replaces Shelley's, and its first reply answers it in place of the
+// agent. A later message's are ignored. The user follows the conversation
+// in the chat, so it sends no notifications.
+func TestChannelFirstMessageConfiguresConversation(t *testing.T) {
+	t.Parallel()
+	server, database, h, _ := debugChannelTestServer(t)
+	model := &turnRecordingService{Service: predictable.NewService()}
+	server.llmManager = &testLLMManager{service: model}
+	const chat = "debug-first"
+	const welcome = "You made it! I’m Shelley."
+	receive := func(body map[string]string) string {
+		t.Helper()
+		w := postJSON(t, h, "/api/debug/channels/"+chat+"/receive", body)
+		if w.Code != http.StatusOK {
+			t.Fatalf("receive: status %d: %s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			MessageID string `json:"message_id"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatal(err)
+		}
+		return resp.MessageID
+	}
+	hey := map[string]string{"text": "Hey", "system_prompt": "You are texting.", "first_reaction": "❤️", "first_reply": welcome}
+
+	heyID := receive(hey)
+	server.channelDebug.mu.Lock()
+	evs := slices.Clone(server.channelDebug.chats[chat].Events)
+	server.channelDebug.mu.Unlock()
+	if len(evs) != 3 || evs[1].Kind != "react" || evs[1].Text != "love" || evs[1].MessageID != heyID || evs[2].Kind != "out" || evs[2].Text != welcome || evs[2].ReplyTo != "" {
+		t.Fatalf("chat events = %+v", evs)
+	}
+	conv, err := conversationByExternalID(t, database, chat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conv.AgentWorking {
+		t.Fatal("agent working after the first reply")
+	}
+	if opts := db.ParseConversationOptions(conv.ConversationOptions); opts.SystemPrompt != "You are texting." {
+		t.Fatalf("options = %+v", opts)
+	}
+	notified := &recordingChannel{}
+	server.RegisterNotificationChannel(notified)
+	server.publishConversationState(ConversationState{ConversationID: conv.ConversationID, Model: "predictable"})
+	if notified.count() != 0 {
+		t.Fatal("channel conversation notified")
+	}
+
+	hey["system_prompt"] = "Ignored."
+	receive(hey)
+	waitFor(t, 5*time.Second, func() bool {
+		c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
+		return err == nil && !c.AgentWorking
+	})
+	model.mu.Lock()
+	turns := slices.Clone(model.turns)
+	model.mu.Unlock()
+	if len(turns) != 1 {
+		t.Fatalf("agent turns = %d, want 1: the second message's", len(turns))
+	}
+	req := turns[0]
+	if len(req.System) == 0 || req.System[0].Text != "You are texting." {
+		t.Fatalf("system = %+v", req.System)
+	}
+	// The agent sees the first reply as its own message_user call.
+	var history []string
+	for _, m := range req.Messages {
+		role := strings.ToLower(strings.TrimPrefix(m.Role.String(), "MessageRole"))
+		for _, c := range m.Content {
+			switch c.Type {
+			case llm.ContentTypeText:
+				history = append(history, role+" "+c.Text)
+			case llm.ContentTypeToolUse:
+				history = append(history, role+" "+c.ToolName+" "+string(c.ToolInput))
+			case llm.ContentTypeToolResult:
+				history = append(history, fmt.Sprintf("%s result error=%v %s", role, c.ToolError, c.ToolResult[0].Text))
+			}
+		}
+	}
+	// The second message's sequence_id depends on when the slug lands.
+	if n := len(history); n > 0 {
+		history[n-1] = regexp.MustCompile(`sequence_id="\d+"`).ReplaceAllString(history[n-1], `sequence_id="N"`)
+	}
+	want := []string{
+		"user <external_message sequence_id=\"2\">\nHey\n</external_message>",
+		`assistant message_user {"reply_to":2,"reaction":"❤️"}`,
+		`user result error=false Reacted ❤️ to the user's message "Hey".`,
+		`assistant message_user {"text":"You made it! I’m Shelley.","end_turn":true}`,
+		"user result error=false Sent.",
+		"user <external_message sequence_id=\"N\">\nHey\n</external_message>",
+	}
+	if got := strings.Join(history, "\n"); got != strings.Join(want, "\n") {
+		t.Fatalf("history:\n%s\nwant:\n%s", got, strings.Join(want, "\n"))
+	}
+
+	// A new generation starts the context afresh, not the conversation.
+	if _, err := server.startNewGeneration(t.Context(), conv.ConversationID); err != nil {
+		t.Fatal(err)
+	}
+	receive(hey)
+	waitFor(t, 5*time.Second, func() bool {
+		c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
+		return err == nil && !c.AgentWorking
+	})
+	model.mu.Lock()
+	turns = slices.Clone(model.turns)
+	model.mu.Unlock()
+	if len(turns) != 2 || turns[1].System[0].Text != "You are texting." {
+		t.Fatalf("agent turns = %d, want 2 under the conversation's system prompt", len(turns))
+	}
+}
+
+// A first reply goes out once, even if the delivery's caller gives up on
+// it: the message is recorded, so a retry would not bring it back.
+func TestChannelFirstReplyOutlivesTheDelivery(t *testing.T) {
+	t.Parallel()
+	server, database, _ := channelTestServer(t, nil)
+	got := make(chan struct{})
+	release := make(chan struct{})
+	var sends atomic.Int32
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if sends.Add(1) == 1 {
+			close(got)
+			<-release
+		}
+		fmt.Fprint(w, `{"message_id":"out-1"}`)
+	}))
+	t.Cleanup(endpoint.Close)
+	ctx, cancel := context.WithCancel(t.Context())
+	go func() {
+		<-got
+		cancel()
+		close(release)
+	}()
+	ev := channelEvent{Type: "message", ID: "in-1", ChatID: "chat-gone", Text: "Hey", FirstReply: "Welcome"}
+	if err := server.receiveChannelEvent(ctx, endpoint.URL, ev); err != nil {
+		t.Fatal(err)
+	}
+	conv, err := conversationByExternalID(t, database, "chat-gone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &compactTestConversation{t: t, database: database, id: conv.ConversationID}
+	if _, r := c.lastMessageUserResult(); r.ToolError {
+		t.Fatalf("result = %+v", r)
+	}
+	if err := server.receiveChannelEvent(t.Context(), endpoint.URL, ev); err != nil {
+		t.Fatal(err)
+	}
+	if n := sends.Load(); n != 1 {
+		t.Fatalf("sends = %d after a retry, want 1", n)
+	}
+}
+
+// A first reply the chat refuses is recorded as the agent's failed call,
+// and the turn ends: no agent is there to try again.
+func TestChannelFirstReplyRefused(t *testing.T) {
+	t.Parallel()
+	_, database, h, _ := debugChannelTestServer(t)
+	const chat = "debug-refused"
+	if w := postJSON(t, h, "/api/debug/channels/"+chat+"/refuse", map[string]string{"code": "line_paused"}); w.Code != http.StatusNoContent {
+		t.Fatalf("refuse: status %d", w.Code)
+	}
+	if w := postJSON(t, h, "/api/debug/channels/"+chat+"/receive", map[string]string{"text": "Hey", "first_reply": "Welcome"}); w.Code != http.StatusOK {
+		t.Fatalf("receive: status %d: %s", w.Code, w.Body.String())
+	}
+	conv, err := conversationByExternalID(t, database, chat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conv.AgentWorking {
+		t.Fatal("agent working after the first reply")
+	}
+	c := &compactTestConversation{t: t, database: database, id: conv.ConversationID}
+	if _, r := c.lastMessageUserResult(); !r.ToolError || !strings.Contains(r.ToolResult[0].Text, "line_paused") || !messageUserDisplay(t, r).ChatFailed {
+		t.Fatalf("result = %+v", r)
+	}
+}
+
+// A web chat takes a first reply too, kept in the conversation, and like
+// any chat it notifies no one.
+func TestWebChatFirstReply(t *testing.T) {
+	t.Parallel()
+	server, database, _ := channelTestServer(t, nil)
+	ev := channelEvent{Type: "message", ID: "m1", ChatID: "web-first", Web: true, Text: "Hey", FirstReaction: "❤️", FirstReply: "Welcome"}
+	if err := server.receiveChannelEvent(t.Context(), "", ev); err != nil {
+		t.Fatal(err)
+	}
+	conv, err := conversationByExternalID(t, database, ev.ChatID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &compactTestConversation{t: t, database: database, id: conv.ConversationID}
+	if _, r := c.lastMessageUserResult(); r.ToolError || r.ToolResult[0].Text != "Sent." {
+		t.Fatalf("result = %+v", r)
+	}
+	notified := &recordingChannel{}
+	server.RegisterNotificationChannel(notified)
+	server.publishConversationState(ConversationState{ConversationID: conv.ConversationID, Model: "predictable"})
+	if notified.count() != 0 {
+		t.Fatal("web chat notified")
+	}
 }

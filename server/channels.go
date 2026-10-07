@@ -11,6 +11,9 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
+
+	"github.com/google/uuid"
 
 	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/db"
@@ -26,7 +29,8 @@ import (
 // (external_conversation_id) and the endpoint its replies go to
 // (external_endpoint); each delivered message records the channel's id for
 // it (external_message_id). The agent answers with message_user, whose
-// messages and reactions go to the chat (see channelChat).
+// messages and reactions go to the chat (see channelChat). The user
+// follows the conversation in the chat, so it sends no notifications.
 //
 // An endpoint speaks the exe.dev messages gateway's API: POST /send
 // {"text":"...","reply_to":"<message_id>"} answers {"message_id":"..."}, POST /react
@@ -59,6 +63,14 @@ type channelEvent struct {
 	// exed recorded it and answered; replies are refused until they write
 	// again.
 	OptOut bool `json:"opt_out"`
+	// SystemPrompt, if set, is the system prompt of the conversation the
+	// message starts, in place of Shelley's.
+	SystemPrompt string `json:"system_prompt"`
+	// FirstReaction and FirstReply, if either is set, answer a message that
+	// starts the conversation in place of the agent: a reaction to it and a
+	// message. On a later message they are ignored.
+	FirstReaction string `json:"first_reaction"`
+	FirstReply    string `json:"first_reply"`
 }
 
 // handleChannelMessage serves POST /api/channels/messages: exed delivers an
@@ -138,7 +150,7 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	}
 	defer unlock()
 
-	conv, err := s.channelConversation(ctx, endpoint, ev.ChatID)
+	conv, err := s.channelConversation(ctx, endpoint, ev.ChatID, ev.SystemPrompt)
 	if err != nil {
 		return err
 	}
@@ -180,6 +192,15 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	if hasQueued || manager.IsAgentWorking() || manager.IsDistilling() {
 		return manager.InjectMessage(ctx, s, modelID, message)
 	}
+	if ev.FirstReaction != "" || ev.FirstReply != "" {
+		answered, err := manager.answerFirstMessage(ctx, message, ev.FirstReaction, ev.FirstReply)
+		if answered {
+			s.generateSlugAsync(conversationID, ev.Text, modelID)
+		}
+		if answered || err != nil {
+			return err
+		}
+	}
 	first, err := manager.AcceptUserMessage(ctx, service, modelID, message)
 	if errors.Is(err, errQueuedMessagesPending) {
 		return manager.InjectMessage(ctx, s, modelID, message)
@@ -191,6 +212,103 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 		s.generateSlugAsync(conversationID, ev.Text, modelID)
 	}
 	return nil
+}
+
+// answerFirstMessage records message, from the chat, as the conversation's
+// first, and answers it in place of the agent with message_user calls,
+// recorded as the agent's: one reacting to it with reaction, then one
+// sending reply as a plain message rather than a reply to it, each if set.
+// It reports false, doing nothing, if the conversation has begun, in any
+// generation. Like a turn start, it holds the loop lifecycle, here across
+// the chat's calls.
+func (cm *ConversationManager) answerFirstMessage(ctx context.Context, message llm.Message, reaction, reply string) (bool, error) {
+	cm.loopLifecycleMu.Lock()
+	defer cm.loopLifecycleMu.Unlock()
+	cm.waitForLoopTeardownLocked()
+	if err := cm.Hydrate(ctx); err != nil {
+		return false, err
+	}
+	cm.mu.Lock()
+	begun := cm.hasConversationEvents || cm.loop != nil
+	cm.mu.Unlock()
+	var userMessages int64
+	err := cm.db.Queries(ctx, func(q *generated.Queries) (err error) {
+		userMessages, err = q.CountMessagesByType(ctx, generated.CountMessagesByTypeParams{ConversationID: cm.conversationID, Type: string(db.MessageTypeUser)})
+		return err
+	})
+	if err != nil {
+		return false, err
+	}
+	if begun || userMessages > 0 {
+		return false, nil
+	}
+
+	// A turn, as AcceptUserMessage starts one, that the agent sits out.
+	cm.syncAgentWorking(true)
+	created, err := cm.recordTurnStartMessage(ctx, message, llm.Usage{}, nil)
+	if err != nil {
+		cm.SetAgentWorking(false)
+		return false, fmt.Errorf("record user message: %w", err)
+	}
+	cm.mu.Lock()
+	cm.hasConversationEvents = true
+	cm.lastActivity = time.Now()
+	cm.mu.Unlock()
+	// The message is in; the reply is owed even if the delivery's caller
+	// gives up, since its retry will find the message delivered.
+	ctx = context.WithoutCancel(ctx)
+
+	var calls []claudetool.MessageUserInput
+	if reaction != "" {
+		calls = append(calls, claudetool.MessageUserInput{ReplyTo: created.SequenceID, Reaction: reaction})
+	}
+	if reply != "" {
+		calls = append(calls, claudetool.MessageUserInput{Text: reply})
+	}
+	calls[len(calls)-1].EndTurn = true
+	tool := claudetool.MessageUserTool(cm.userMessageFinder(), cm.userChat, claudetool.NewMutableWorkingDir(cm.Cwd()))
+	record := func(m llm.Message) error {
+		err := cm.recordMessage(ctx, m, llm.Usage{}, nil)
+		if err != nil {
+			cm.SetAgentWorking(false)
+		}
+		return err
+	}
+	// What the loop records for each call, then for the turn's end.
+	for _, in := range calls {
+		input, err := json.Marshal(in)
+		if err != nil {
+			cm.SetAgentWorking(false)
+			return true, err
+		}
+		call := llm.Content{ID: "first_reply_" + uuid.NewString(), Type: llm.ContentTypeToolUse, ToolName: claudetool.MessageUserName, ToolInput: input}
+		if err := record(llm.Message{Role: llm.MessageRoleAssistant, Content: []llm.Content{call}}); err != nil {
+			return true, err
+		}
+		start := time.Now()
+		out := tool.Run(ctx, input)
+		end := time.Now()
+		result := llm.Content{
+			Type:             llm.ContentTypeToolResult,
+			ToolUseID:        call.ID,
+			ToolResult:       out.LLMContent,
+			ToolUseStartTime: &start,
+			ToolUseEndTime:   &end,
+			Display:          out.Display,
+		}
+		if out.Error != nil {
+			cm.logger.Warn("First reply failed", "error", out.Error)
+			result.ToolError = true
+			result.ToolResult = llm.TextContent(out.Error.Error())
+		}
+		if err := record(llm.Message{Role: llm.MessageRoleUser, Content: []llm.Content{result}}); err != nil {
+			return true, err
+		}
+	}
+	if err := record(llm.Message{Role: llm.MessageRoleAssistant, EndOfTurn: true, ExcludedFromContext: true}); err != nil {
+		return true, err
+	}
+	return true, nil
 }
 
 // channelChatLock serializes deliveries to one chat; refs counts holders
@@ -251,10 +369,11 @@ func (s *Server) recoverChannelQueues(ctx context.Context) {
 }
 
 // channelConversation returns the conversation of the external chat chatID,
-// creating it, with the default model and message_user, on the chat's
-// first message. It creates none if the model is unavailable, so failing
-// deliveries leave no empty conversations.
-func (s *Server) channelConversation(ctx context.Context, endpoint, chatID string) (*generated.Conversation, error) {
+// creating it on the chat's first message with the default model,
+// message_user, and systemPrompt if set. It creates none
+// if the model is unavailable, so failing deliveries leave no empty
+// conversations.
+func (s *Server) channelConversation(ctx context.Context, endpoint, chatID, systemPrompt string) (*generated.Conversation, error) {
 	var conv generated.Conversation
 	err := s.db.Queries(ctx, func(q *generated.Queries) (err error) {
 		conv, err = q.GetConversationByExternalID(ctx, &chatID)
@@ -268,7 +387,10 @@ func (s *Server) channelConversation(ctx context.Context, endpoint, chatID strin
 		return nil, fmt.Errorf("model %s: %w", modelID, err)
 	}
 	// The agent answers the chat with message_user.
-	opts := db.ConversationOptions{ToolOverrides: map[string]string{claudetool.MessageUserName: "on"}}
+	opts := db.ConversationOptions{
+		ToolOverrides: map[string]string{claudetool.MessageUserName: "on"},
+		SystemPrompt:  systemPrompt,
+	}
 	return s.db.CreateChannelConversation(ctx, chatID, endpoint, modelID, opts)
 }
 
