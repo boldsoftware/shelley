@@ -4434,6 +4434,7 @@ diffs-container {
 }
 
 .modal-title {
+  margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
 }
@@ -5653,77 +5654,259 @@ svg {
   position: relative;
 }
 
-/* Advanced settings gear button + popover */
-.advanced-settings-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
+/* Tools and profiles modals (ToolsModal.vue, ProfilesModal.vue) */
+.settings-modal-error {
+  flex: 1;
+  min-width: 0;
+  color: var(--error-text);
+  font-size: var(--font-size-12);
+  white-space: pre-wrap;
 }
 
-.advanced-settings-trigger {
+.profiles-error {
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--error-border);
+  border-radius: 0.375rem;
+  background: var(--error-bg);
+  color: var(--error-text);
+  font-size: var(--font-size-13);
+  white-space: pre-wrap;
+}
+
+.profiles-list {
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.profiles-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.profiles-item-head {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.profiles-item-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.profiles-badge {
+  padding: 0 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-11);
+}
+
+.profiles-badge-current {
+  border-color: var(--blue-text);
+  color: var(--blue-text);
+}
+
+.profiles-item-summary {
+  margin-top: 0.15rem;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+  overflow-wrap: anywhere;
+}
+
+.profiles-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  margin-left: -0.5rem;
+}
+
+/* A filled button lines up with the text, where text buttons' labels do. */
+.profiles-item-actions.profiles-item-confirm {
+  margin-left: 0;
+  gap: 0.25rem;
+}
+
+.profiles-name {
+  flex: 1;
+  min-width: 10rem;
+  padding: 0.35rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 0.25rem;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
-  padding: 0;
-}
-
-.advanced-settings-trigger:hover:not(:disabled) {
-  background: var(--bg-secondary);
+  background: var(--bg-base);
   color: var(--text-primary);
-  border-color: var(--blue-text);
+  font-size: var(--font-size-13);
 }
 
-.advanced-settings-trigger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.profiles-hint {
+  margin: 0.5rem 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
 }
 
-.advanced-settings-trigger.active {
-  color: var(--blue-text, #3b82f6);
-  border-color: var(--blue-text, #3b82f6);
+.profiles-section + .profiles-section {
+  margin-top: 1.25rem;
 }
 
-.advanced-settings-popover {
-  position: absolute;
-  bottom: 100%;
-  /* Gear trigger sits on the left of the status bar, so open the popover
-     rightward from its left edge. Anchoring to the right overflowed off the
-     left viewport edge and got clipped. */
-  left: 0;
-  /* Kept in sync with POPOVER_GAP in ChatStatusContent.vue, which subtracts it
-     from the room above the gear when it caps max-height. */
-  margin-bottom: 4px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
-  padding: 0.5rem 0.75rem;
-  min-width: min(520px, calc(100vw - 1rem));
-  max-width: min(680px, calc(100vw - 1rem));
-  max-height: 70vh;
+/* Headings styled by .advanced-settings-header, or inside one. */
+.profiles-section-title {
+  margin-top: 0;
+  font: inherit;
+}
+
+.profiles-model {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+}
+
+.profiles-model .model-picker {
+  width: auto;
+  min-width: min(16rem, 100%);
+}
+
+/* System prompt template editor (SystemPromptEditor.vue): a highlighted <pre>
+   under a transparent textarea, stacked in one grid cell so they wrap and
+   grow alike; the box around them scrolls. */
+.prompt-editor-scroll {
+  max-height: 50vh;
   overflow-y: auto;
-  overflow-x: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: var(--bg-base);
+}
+
+.prompt-editor-scroll:focus-within {
+  border-color: var(--primary);
+  outline: 1px solid var(--primary);
+}
+
+.prompt-editor-stack {
+  display: grid;
+  --tpl-muted: var(--text-tertiary);
+  --tpl-keyword: var(--primary);
+  --tpl-field: var(--blue-text);
+  --tpl-string: var(--success-text);
+}
+
+.prompt-editor-layer {
+  grid-area: 1 / 1;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 12rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-12);
+  line-height: 1.5;
+  letter-spacing: normal;
+  font-variant-ligatures: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+  color: var(--text-primary);
+}
+
+.prompt-editor-input {
+  height: 100%;
+  overflow: hidden;
+  resize: none;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--text-primary);
+  outline: none;
+}
+
+.tpl-action {
+  border-radius: 0.2rem;
+  background: color-mix(in srgb, var(--blue-text) 10%, transparent);
+}
+
+.tpl-delim,
+.tpl-comment {
+  color: var(--tpl-muted);
+}
+
+.tpl-keyword {
+  color: var(--tpl-keyword);
+}
+
+.tpl-field {
+  color: var(--tpl-field);
+}
+
+.tpl-string {
+  color: var(--tpl-string);
+}
+
+.tpl-error {
+  background: var(--error-bg);
+  color: inherit;
+  text-decoration: wavy underline var(--error-text);
+  text-decoration-skip-ink: none;
+}
+
+.prompt-editor-problem {
+  display: block;
+  margin-top: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--error-text);
+  font-size: var(--font-size-12);
+  text-align: left;
+  cursor: pointer;
+}
+
+.prompt-editor-var {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--blue-text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-12);
+  cursor: pointer;
+}
+
+.profiles-vars {
+  margin-top: 0.5rem;
+  font-size: var(--font-size-12);
+  color: var(--text-secondary);
+}
+
+.profiles-vars summary {
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.profiles-vars dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0.5rem 0 0;
+}
+
+.profiles-vars dd {
+  margin: 0;
 }
 
 @media (max-width: 640px) {
-  .advanced-settings-popover {
-    position: fixed;
-    inset: 3rem 0.5rem auto 0.5rem;
-    margin: 0;
-    min-width: 0;
-    max-width: none;
-    max-height: calc(100vh - 4rem);
+  .profiles-vars dl {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
+  .profiles-vars dd {
+    margin-bottom: 0.4rem;
+  }
+}
+
+/* Tools modal (ToolsModal.vue) */
+@media (max-width: 640px) {
   .tool-override-summary {
     display: none;
   }
@@ -11898,11 +12081,9 @@ kbd {
   color: var(--text-secondary);
 }
 
-/* Customized pill for an actual model/reasoning switch, and the one-line
-   notice for a tool enabled mid-conversation (unlike the multi-line /model
-   output). Override the base .message column flex so they lay out inline. */
-.message.msg-modelchange-switch,
-.message.msg-modelchange-tool {
+/* Customized pill for a settings change (unlike the multi-line /model
+   output). Override the base .message column flex so it lays out inline. */
+.message.msg-modelchange-switch {
   flex-flow: row wrap;
   align-items: center;
   justify-content: center;
@@ -11938,13 +12119,19 @@ kbd {
   font-size: 0.9rem;
 }
 
-.msg-modelchange-reasoning {
+.msg-modelchange-group {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.35em;
 }
 
-.msg-modelchange-reasoning-label {
+.msg-modelchange-tool-off {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+}
+
+.msg-modelchange-label {
   color: var(--text-secondary);
   font-size: var(--font-size-12);
   text-transform: uppercase;
@@ -15760,50 +15947,62 @@ kbd {
   }
 }
 
-/* Let the overlay grow to its widest option (PrimeVue only guarantees
-   min-width:100% of the trigger) so long model names aren't clipped, while
-   staying within the viewport. */
+/* One width, whatever the panel holds at the moment, so it doesn't jump as
+   a choice in it shows or hides a line; long model names are cut short.
+   PrimeVue widens it to the trigger if that is wider. */
 .p-select-overlay.model-picker-panel {
-  width: max-content;
-  /* min-width has to yield to the viewport too, not just max-width: it wins over
-     max-width in CSS, so a flat 16rem floor overflows a narrow screen however
-     tight the cap is. */
-  min-width: min(16rem, 92vw);
-  max-width: min(22rem, 92vw);
+  width: min(22rem, 92vw);
   /* size="small" only shrinks the trigger label; PrimeVue has no overlay
      font-size token, so match the compact status-bar scale here (options
      inherit). */
   font-size: var(--font-size-13);
+  /* The sections around the list take what they need, and the list gives way
+     to fit them on the screen above the composer's trigger; where even that
+     isn't enough, the whole panel scrolls. */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 13rem);
+  overflow-y: auto;
+}
+.p-select-overlay.model-picker-panel .p-select-list-container {
+  min-height: 6rem;
+}
+/* On a phone, or a screen too short for it to fit above or below its trigger,
+   the panel is a sheet across the bottom of the screen, centered and no wider
+   than a phone's on a wide one; PrimeVue's placement is inline style, hence
+   !important. */
+@media (max-width: 767px), (max-height: 500px) {
+  .p-select-overlay.model-picker-panel {
+    position: fixed !important;
+    inset: auto 0 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 40rem !important;
+    margin-inline: auto;
+    max-height: 85dvh;
+    padding-bottom: env(safe-area-inset-bottom);
+    border-radius: 0.75rem 0.75rem 0 0;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25);
+  }
 }
 
 /* Option markup: name (+ source sub-label only in multi-source installs),
-   a check mark on the current selection, and a "not ready" badge. */
+   a check mark on the current selection, and a "not ready" badge. The
+   wrapper fills the option (whose padding is zeroed in statusPickerDt), so it
+   takes every pointer pick. */
+.p-select-overlay.model-picker-panel .model-picker-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0.375rem 0.75rem;
+}
 .p-select-overlay.model-picker-panel .model-picker-option-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
   min-width: 0;
-}
-.p-select-overlay.model-picker-panel
-  .p-select-option:has(.model-picker-option-recent):not([data-p-selected="true"]):not(
-    [data-p-focused="true"]
-  ):not(:hover) {
-  background: color-mix(in srgb, var(--blue-bg) 35%, var(--bg-tertiary));
-}
-.dark
-  .p-select-overlay.model-picker-panel
-  .p-select-option:has(.model-picker-option-recent):not([data-p-selected="true"]):not(
-    [data-p-focused="true"]
-  ):not(:hover) {
-  background: color-mix(in srgb, var(--blue-bg) 65%, var(--bg-base));
-}
-.p-select-overlay.model-picker-panel
-  .p-select-option:has(.model-picker-option-recent):not([data-p-selected="true"]):not(
-    [data-p-focused="true"]
-  ):not(:hover)
-  .model-picker-option-name {
-  color: color-mix(in srgb, var(--blue-text) 30%, var(--text-primary));
 }
 .p-select-overlay.model-picker-panel .model-picker-option-name {
   overflow: hidden;
@@ -15852,28 +16051,11 @@ kbd {
   display: none;
 }
 .p-select-overlay.model-picker-panel .model-picker-group-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.75rem 0.1875rem;
-  color: var(--text-secondary);
-  font-size: var(--font-size-11);
-}
-.p-select-overlay.model-picker-panel .model-picker-group-label::after {
-  display: none;
-}
-.p-select-overlay.model-picker-panel
-  .p-select-option-group:has(.model-picker-group-label)
-  + .p-select-option {
-  border-top: 1px solid var(--border);
+  margin: 0;
+  padding: 0.25rem 0.75rem 0;
 }
 .p-select-overlay.model-picker-panel .model-picker-group-divider {
   display: block;
-  height: 1px;
-  background: var(--border);
-}
-
-.p-select-overlay.model-picker-panel .model-picker-divider {
   height: 1px;
   background: var(--border);
 }
@@ -15886,7 +16068,7 @@ kbd {
   width: 100%;
   padding: 0.375rem 0.75rem;
   border: none;
-  background: var(--bg-secondary);
+  background: none;
   color: var(--text-secondary);
   font-size: var(--font-size-12);
   text-align: left;
@@ -15904,24 +16086,45 @@ kbd {
   transform: rotate(180deg);
 }
 
-/* Inline reasoning-effort row: label + pill radiogroup. Selecting a pill
-   keeps the popover open (it's a secondary adjustment, not a commit). */
-.p-select-overlay.model-picker-panel .model-picker-effort {
+/* Sections: Reasoning effort, Tools, and Profile below the list, under
+   headings like Model's above it and Recent's in it, which in turn are like
+   the profile editor's. */
+.p-select-overlay.model-picker-panel .model-picker-section {
   padding: 0.5rem 0.75rem;
-  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
 }
-.p-select-overlay.model-picker-panel .model-picker-effort-label {
-  display: block;
-  font-size: var(--font-size-11);
-  color: var(--text-secondary);
+.p-select-overlay.model-picker-panel .model-picker-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   margin-bottom: 0.375rem;
+  color: var(--text-secondary);
+  font-size: var(--font-size-11);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
-.p-select-overlay.model-picker-panel .model-picker-effort-pills {
+.p-select-overlay.model-picker-panel .model-picker-header {
+  margin: 0;
+  padding: 0.5rem 0.75rem 0;
+}
+.p-select-overlay.model-picker-panel .model-picker-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.p-select-overlay.model-picker-panel .model-picker-section-text {
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+  overflow-wrap: anywhere;
+}
+.p-select-overlay.model-picker-panel :is(.model-picker-effort-pills, .model-picker-profile-pills) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
 }
-.p-select-overlay.model-picker-panel .model-picker-effort-pill {
+.p-select-overlay.model-picker-panel :is(.model-picker-effort-pill, .model-picker-profile-pill) {
   padding: 0.1875rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 9999px;
@@ -15935,51 +16138,86 @@ kbd {
     border-color 0.12s ease,
     background 0.12s ease;
 }
-.p-select-overlay.model-picker-panel .model-picker-effort-pill:hover {
+.p-select-overlay.model-picker-panel
+  :is(.model-picker-effort-pill, .model-picker-profile-pill):hover {
   color: var(--text-primary);
   border-color: var(--text-secondary);
 }
-.p-select-overlay.model-picker-panel .model-picker-effort-pill.active {
+.p-select-overlay.model-picker-panel
+  :is(.model-picker-effort-pill, .model-picker-profile-pill).active {
   color: var(--blue-text);
   border-color: var(--blue-text);
   background: color-mix(in srgb, var(--blue-text) 10%, transparent);
 }
 
-/* Footer: "Manage models…" text action + icon-only refresh. */
-.p-select-overlay.model-picker-panel .model-picker-footer-row {
-  display: flex;
-  align-items: stretch;
-  background: var(--bg-secondary);
-}
-.p-select-overlay.model-picker-panel .model-picker-manage {
-  flex: 1;
-  padding: 0.5rem 0.75rem;
+/* Text actions: Manage…, Edit…, and the profile's Update/Save as new…/
+   Revert, which appear once the settings have moved off their profile. */
+.p-select-overlay.model-picker-panel .model-picker-link {
+  padding: 0;
   border: none;
-  background: transparent;
+  background: none;
   color: var(--blue-text);
-  font-size: var(--font-size-12);
-  text-align: left;
+  font-size: var(--font-size-11);
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
   cursor: pointer;
 }
-.p-select-overlay.model-picker-panel .model-picker-manage:hover {
-  background: var(--bg-tertiary);
+.prompt-editor-var:hover,
+.p-select-overlay.model-picker-panel .model-picker-link:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
-.p-select-overlay.model-picker-panel .model-picker-refresh {
+.p-select-overlay.model-picker-panel .model-picker-profile-pill.active.modified {
+  border-style: dashed;
+  font-style: italic;
+}
+.p-select-overlay.model-picker-panel .model-picker-profile-changed {
+  margin-top: 0.5rem;
+}
+.p-select-overlay.model-picker-panel :is(.model-picker-profile-actions, .model-picker-profile-new) {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  padding: 0 0.75rem;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.25rem;
+}
+.p-select-overlay.model-picker-panel .model-picker-profile-name {
+  flex: 1;
+  min-width: 8rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: var(--font-size-12);
+}
+.p-select-overlay.model-picker-panel .model-picker-profile-error {
+  margin-top: 0.375rem;
+  color: var(--error-text);
+  font-size: var(--font-size-11);
+}
+/* Icon buttons (refresh, close): small marks, with a hit area grown to
+   something a finger can find. */
+.p-select-overlay.model-picker-panel .model-picker-icon {
+  display: flex;
+  padding: 0.25rem;
+  margin: -0.25rem;
   border: none;
-  background: transparent;
+  background: none;
   color: var(--text-secondary);
   cursor: pointer;
 }
-.p-select-overlay.model-picker-panel .model-picker-refresh:hover:not(:disabled) {
-  background: var(--bg-tertiary);
+.p-select-overlay.model-picker-panel .model-picker-icon:hover:not(:disabled) {
   color: var(--text-primary);
 }
-.p-select-overlay.model-picker-panel .model-picker-refresh:disabled {
+.p-select-overlay.model-picker-panel :is(.model-picker-link, .model-picker-icon):disabled {
   opacity: 0.6;
   cursor: default;
+}
+.p-select-overlay.model-picker-panel .model-picker-icon svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
 }
 .p-select-overlay.model-picker-panel .model-picker-refresh-icon.spinning {
   animation: spin 1s linear infinite;
@@ -16002,7 +16240,7 @@ kbd {
   border: 1px solid var(--border);
   border-radius: 0.375rem;
 }
-.p-select-overlay.model-picker-panel .p-select-filter:focus {
+.p-select-overlay.model-picker-panel :is(.p-select-filter, .model-picker-profile-name):focus {
   outline: none;
   border-color: var(--blue-text);
 }

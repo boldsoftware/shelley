@@ -52,7 +52,7 @@ func TestPromoteDraftAppliesRequestThinkingLevel(t *testing.T) {
 	chatReq := ChatRequest{
 		Message:             "hello",
 		Model:               "predictable",
-		ConversationOptions: &db.ConversationOptions{ThinkingLevel: "high"},
+		ConversationOptions: &ChatOptions{ConversationOptions: db.ConversationOptions{ThinkingLevel: "high"}},
 	}
 	body, _ := json.Marshal(chatReq)
 	promoteAndCheck(t, server, database, id, body, "high")

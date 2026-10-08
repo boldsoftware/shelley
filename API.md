@@ -85,6 +85,11 @@ Unless noted, results exclude **archived** conversations.
   `xhigh`, or `max`; the server also validates it against the selected model's
   advertised levels. Tool override values are `on` or `off`. With
   `disable_all_tools`, an explicit `on` override re-enables that tool.
+  The conversation starts from the settings of the profile named by
+  `conversation_options.profile`, or the default profile (see Profiles
+  below). A non-empty `model` overrides the profile's, as do the
+  `thinking_level`, `tool_overrides`, `compact_nudge_tokens`, and
+  `system_prompt` options where present, even as `""`, `{}`, or `0`.
 - `POST /api/conversations/distill-new-generation` — compact the current
   conversation into the next generation of the same conversation. The
   optional `method` field (`default` or `compact`) is accepted for
@@ -142,6 +147,31 @@ Unless noted, results exclude **archived** conversations.
 - `POST /api/conversation/<id>/archive` / `unarchive`.
 - `POST /api/conversation/<id>/hooks` — register an end-of-turn webhook.
 - `POST /api/conversation/<id>/tags` — replace the conversation's tag list.
+- `GET /api/conversation/<id>/settings` — the settings later turns use, and
+  the profile they came from (a label; either may have changed since):
+  ```json
+  {"profile": "Research", "model": "claude-opus-5.5", "thinking_level": "high",
+   "tool_overrides": {"browser": "off"}, "compact_nudge_tokens": 200000,
+   "system_prompt": ""}
+  ```
+- `POST /api/conversation/<id>/settings` — change them. The body has the same
+  fields; those left out keep their values, and `profile`, if present, first
+  replaces all of them with that profile's. `"model": ""` means the server's
+  default. When `thinking_level` is left out, a model that lacks the level
+  rounds it to one it has; an explicit level the model lacks is a `400`, as
+  are unknown fields. Responds with the settings now in effect. Unless only
+  the profile label changes, a running turn is stopped first, and queued
+  messages then go out on the new settings (those the turn had already taken
+  in end with it, as with Stop); `409` if another turn starts before the
+  change lands.
+  Changes record a `modelchange` message saying what changed (`profile_to`,
+  `from`/`to`, `reasoning_to`, `tools_on`/`tools_off`, `compact_nudge_tokens`,
+  `system_prompt_changed`, `text`, and the settings before, `previous`), just
+  after a new `system` message if the template or the tools changed. A fork
+  from before the change gets the settings before it. `409` if the
+  conversation is archived or a draft (a draft's settings travel with its
+  first message), for a custom `system_prompt` in a subagent, or for anything
+  but the model and reasoning in a btw reader.
 - `GET /api/conversation/<id>/subagents` — direct child conversations. Clients
   can recurse through this endpoint when they need the complete descendant
   tree (for example, aggregate usage reporting).
@@ -279,6 +309,39 @@ fresh reset event.
 - `POST /api/custom-models-test` — test a custom model config.
 - `GET/POST/PUT/DELETE /api/notification-channels[/<id>]`,
   `GET /api/notification-channel-types` — notification CRUD.
+
+### Profiles
+
+A profile is a named set of conversation settings: `model` (`""` means the
+server's default model), `thinking_level` (`""` means the model's default),
+`tool_overrides`, `compact_nudge_tokens` (`0` means the default), and
+`system_prompt`, a Go [text/template](https://pkg.go.dev/text/template)
+(`""` means Shelley's built-in prompt, which changes with Shelley). Exactly
+one profile is the default; new conversations start from it unless they name
+another. A conversation records the profile it came from in
+`conversation_options.profile`, and keeps its settings when the profile
+changes later.
+
+- `GET /api/profiles` — all profiles, default first:
+  `[{"name", "default", "model", "thinking_level", "tool_overrides",
+  "compact_nudge_tokens", "system_prompt"}]`.
+- `POST /api/profiles` — create one: `name` (trimmed; up to 64 bytes, no
+  `/` or control characters, not `.` or `..`) and the settings fields (unknown ones are a `400`); `409` if
+  the name is taken.
+- `PUT /api/profiles/<name>` — replace a profile's settings; the body has
+  only the settings fields. Profiles can't be renamed.
+- `POST /api/profiles/<name>/default` — make it the default profile.
+- `DELETE /api/profiles/<name>` — `409` for the default profile.
+- `GET /api/system-prompt` — the built-in template and the variables a
+  template can use: `{"template", "variables": [{"name", "description"}]}`.
+  Templates are rendered with `missingkey=error` and checked on save, with
+  every optional variable both set and unset (outside a git repository,
+  `.GitInfo` is nil); a template that fails is a `400` saying where and why,
+  e.g. `Invalid system_prompt: line 2: unknown variable .Nope`.
+- `POST /api/system-prompt/check` — check a template as a save would:
+  `{"template"}` → `{"error": null}` or
+  `{"error": {"line", "column", "message"}}`, the line and the column (in
+  characters) counted from 1 and left out when unknown.
 
 ### Shell
 

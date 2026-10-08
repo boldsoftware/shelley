@@ -13,10 +13,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
 	"time"
+	"unicode/utf8"
 
 	"shelley.exe.dev/exeenv"
 	"shelley.exe.dev/skills"
@@ -41,6 +43,137 @@ type SystemPromptData struct {
 	Skills           []skills.Skill
 	UserEmail        string          // The exe.dev auth email of the user, if known
 	MCPServers       []MCPServerInfo // Registered MCP servers, for the mcp skill
+
+	template string // the template to render, "" for the built-in one
+}
+
+// SystemPromptVariable documents a field of SystemPromptData for people
+// writing their own system prompt templates.
+type SystemPromptVariable struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// systemPromptVariables are the fields a system prompt template can use.
+var systemPromptVariables = []SystemPromptVariable{
+	{".WorkingDirectory", "The conversation's working directory."},
+	{".UserEmail", "The user's exe.dev email; empty if unknown."},
+	{".GitInfo.Root", "The git repository root. .GitInfo is nil outside a repository."},
+	{".IsExeDev", "Whether Shelley runs on an exe.dev VM."},
+	{".Hostname", "On exe.dev, the VM's public hostname (vmname.exe.xyz)."},
+	{".DefaultPort", "On exe.dev, the port served at the hostname; 0 if unknown."},
+	{".IsSudoAvailable", "Whether passwordless sudo works."},
+	{".Codebase.InjectFiles", "Paths of the root guidance files (AGENTS.md, CLAUDE.md, …). .Codebase is nil if they couldn't be read."},
+	{".Codebase.InjectFileContents", "Map from guidance file path to its contents."},
+	{".Codebase.SubdirGuidanceSummary", "A list of the guidance files in subdirectories."},
+	{".SkillsXML", "The available skills, as an XML block."},
+	{".Skills", "The available skills: .Name, .Description, .Activate, …"},
+	{".MCPServersXML", "The registered MCP servers, as an XML block."},
+}
+
+// validateSystemPromptTemplate reports why tmpl can't be rendered, by
+// rendering it against data with every optional part absent, and present:
+// outside a git repository, say, GitInfo is nil.
+func validateSystemPromptTemplate(tmpl string) *TemplateProblem {
+	for _, data := range []*SystemPromptData{{template: tmpl}, {
+		WorkingDirectory: "/home/user/project",
+		GitInfo:          &GitInfo{Root: "/home/user/project"},
+		Codebase: &CodebaseInfo{
+			InjectFiles:         []string{"/home/user/project/AGENTS.md"},
+			InjectFileContents:  map[string]string{"/home/user/project/AGENTS.md": "guidance"},
+			SubdirGuidanceFiles: []string{"/home/user/project/ui/AGENTS.md"},
+		},
+		IsExeDev:        true,
+		IsSudoAvailable: true,
+		Hostname:        "vm.exe.xyz",
+		DefaultPort:     8000,
+		SkillsXML:       "<available_skills></available_skills>",
+		Skills:          []skills.Skill{{Name: "skill", Description: "A skill."}},
+		UserEmail:       "user@example.com",
+		MCPServers:      []MCPServerInfo{{Name: "server", Description: "An MCP server."}},
+		template:        tmpl,
+	}} {
+		if _, err := renderSystemPrompt(data); err != nil {
+			return err.(*TemplateProblem)
+		}
+	}
+	return nil
+}
+
+// renderSystemPrompt renders data's template. Its errors are
+// *TemplateProblem.
+func renderSystemPrompt(data *SystemPromptData) (string, error) {
+	text := data.template
+	if text == "" {
+		text = systemPromptTemplate
+	}
+	tmpl, err := template.New("system_prompt").Option("missingkey=error").Parse(text)
+	if err != nil {
+		return "", templateProblemOf(text, err)
+	}
+	var buf strings.Builder
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", templateProblemOf(text, err)
+	}
+	return collapseBlankLines(buf.String()), nil
+}
+
+// TemplateProblem is why a system prompt template can't be rendered, and
+// where: a line, and within it a column in characters, both counted from
+// 1, and 0 if unknown.
+type TemplateProblem struct {
+	Line    int    `json:"line,omitempty"`
+	Column  int    `json:"column,omitempty"`
+	Message string `json:"message"`
+}
+
+func (p *TemplateProblem) Error() string {
+	if p.Line == 0 {
+		return p.Message
+	}
+	return fmt.Sprintf("line %d: %s", p.Line, p.Message)
+}
+
+var (
+	// template: system_prompt:49:2: executing "sub" at <.X>: detail
+	// (49:2 is a line and a 0-based byte offset in it).
+	templateErrorRe = regexp.MustCompile(`(?s)^template: system_prompt:(\d+)(?::(\d+))?: (.*)$`)
+	templateExecRe  = regexp.MustCompile(`(?s)^executing ".*?" at <(.*?)>: (.*)$`)
+)
+
+// templateProblemOf says what err, from parsing or executing the system
+// prompt template text, means for the person who wrote it.
+func templateProblemOf(text string, err error) *TemplateProblem {
+	m := templateErrorRe.FindStringSubmatch(err.Error())
+	if m == nil {
+		return &TemplateProblem{Message: err.Error()}
+	}
+	p := &TemplateProblem{Message: m[3]}
+	p.Line, _ = strconv.Atoi(m[1])
+	if m[2] != "" {
+		offset, _ := strconv.Atoi(m[2])
+		if lines := strings.Split(text, "\n"); p.Line >= 1 && p.Line <= len(lines) && offset <= len(lines[p.Line-1]) {
+			p.Column = 1 + utf8.RuneCountInString(lines[p.Line-1][:offset])
+		}
+	}
+	if m := templateExecRe.FindStringSubmatch(p.Message); m != nil {
+		expr, detail := m[1], m[2]
+		switch {
+		case strings.HasPrefix(detail, "can't evaluate field "):
+			p.Message = "unknown variable " + expr
+		case strings.HasPrefix(detail, "nil pointer evaluating "):
+			parent := expr
+			if i := strings.LastIndex(expr, "."); i > 0 {
+				parent = expr[:i]
+			}
+			p.Message = fmt.Sprintf("%s can be missing; use it inside {{if %s}}…{{end}}", parent, parent)
+		default:
+			p.Message = expr + ": " + detail
+		}
+	} else if p.Message == "unexpected EOF" {
+		p.Message = "the template ends before a }} or {{end}}"
+	}
+	return p
 }
 
 // MCPServerInfo is a registered MCP server, named in the system prompt so the
@@ -118,6 +251,14 @@ func WithUserEmail(email string) SystemPromptOption {
 	}
 }
 
+// WithTemplate renders tmpl instead of the built-in template; "" keeps the
+// built-in one.
+func WithTemplate(tmpl string) SystemPromptOption {
+	return func(d *SystemPromptData) {
+		d.template = tmpl
+	}
+}
+
 // WithMCPServers lists the registered MCP servers in the system prompt.
 func WithMCPServers(servers []MCPServerInfo) SystemPromptOption {
 	return func(d *SystemPromptData) {
@@ -146,18 +287,10 @@ func generateSystemPromptWithIntegrationSkills(workingDir string, integrationSki
 		opt(data)
 	}
 
-	tmpl, err := template.New("system_prompt").Parse(systemPromptTemplate)
+	prompt, err := renderSystemPrompt(data)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to parse template: %w", err)
+		return "", nil, err
 	}
-
-	var buf strings.Builder
-	err = tmpl.Execute(&buf, data)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to execute template: %w", err)
-	}
-
-	prompt := collapseBlankLines(buf.String())
 	prompt, err = runHook(hookSystemPrompt, prompt)
 	if err != nil {
 		return "", nil, err

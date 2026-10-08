@@ -114,3 +114,9 @@ type NotificationChannel struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
+
+type Profile struct {
+	Name      string `json:"name"`
+	IsDefault bool   `json:"is_default"`
+	Settings  string `json:"settings"`
+}

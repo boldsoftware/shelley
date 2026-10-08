@@ -53,8 +53,8 @@
 
     <template v-if="selectedModel">
       <span class="status-readout-sep" aria-hidden="true">·</span>
-      <!-- Switching model rebuilds the conversation's loop, which cancels a
-           running turn (ApplyModelSettings -> CancelConversation). Disable the
+      <!-- Changing settings rebuilds the conversation's loop, which cancels a
+           running turn (ApplySettings -> CancelConversation). Disable the
            picker while the agent works rather than silently killing the turn the
            user is watching, and say why two ways: the tooltip has to hang off
            this wrapper (PrimeVue gives a disabled control pointer-events: none,
@@ -78,6 +78,7 @@
           :thinking-level="thinkingLevel"
           :disabled="agentWorking"
           :refreshing="refreshingModels"
+          :knob="knob"
           @select-model="onSwitchConversationModel"
           @select-combination="onSwitchConversationCombination"
           @thinking-change="onSwitchConversationThinkingLevel"
@@ -96,6 +97,7 @@ import type { OtherUsageRow, UsageEntry } from "../../utils/tokenCostGraph";
 import { tildifyPath } from "../../utils/tildify";
 import { useI18n } from "../composables/i18n";
 import type { ThinkingLevel } from "./thinkingLevel";
+import type { SettingsKnob } from "../composables/profiles";
 import ContextUsageBar from "./ContextUsageBar.vue";
 import ModelPicker from "./ModelPicker.vue";
 
@@ -126,6 +128,7 @@ const props = defineProps<{
   onSwitchConversationThinkingLevel: (level: ThinkingLevel) => void;
   onManageModels: () => void;
   onRefreshModels: () => void;
+  knob?: SettingsKnob;
 }>();
 
 const { t } = useI18n();

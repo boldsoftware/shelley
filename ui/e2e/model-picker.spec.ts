@@ -4,10 +4,10 @@ import { testWorkingDirectory } from "./helpers";
 // The unified model + effort picker (ChatStatusContent -> ModelPicker.vue) is
 // built on PrimeVue <Select>. It renders on the new-conversation screen. Here
 // we exercise the PrimeVue-specific open/select behavior, the inline
-// reasoning-effort pill row, the pinned "Manage models…" footer action, and
+// reasoning-effort pill row, the Model heading's "Manage…" action, and
 // persistence of the chosen model + effort to localStorage.
 test.describe("Model picker (PrimeVue)", () => {
-  test("opens, lists models, selecting one persists, footer opens manage modal", async ({
+  test("opens, lists models, selecting one persists, Manage… opens manage modal", async ({
     page,
   }) => {
     test.setTimeout(60000);
@@ -23,34 +23,49 @@ test.describe("Model picker (PrimeVue)", () => {
     const panel = page.locator(".model-picker-panel");
     await expect(panel).toBeVisible();
 
-    // At least one model is offered and the footer actions are present.
+    // At least one model is offered and the heading's actions are present.
     const options = panel.locator(".p-select-option");
     expect(await options.count()).toBeGreaterThanOrEqual(1);
-    const manageBtn = panel.getByRole("button", { name: "Manage models…" });
+    const manageBtn = panel.getByRole("button", { name: "Manage Models" });
     await expect(manageBtn).toBeVisible();
     await expect(panel.getByRole("button", { name: "Refresh" })).toBeVisible();
+
+    // On a phone it is a sheet across the bottom of the screen.
+    const viewport = page.viewportSize()!;
+    if (viewport.width < 768) {
+      const box = (await panel.boundingBox())!;
+      expect(box.x).toBe(0);
+      expect(box.width).toBe(viewport.width);
+      expect(Math.round(box.y + box.height)).toBe(viewport.height);
+    }
 
     // In a single-source install, no source sub-labels are rendered.
     await expect(panel.locator(".model-picker-option-source")).toHaveCount(0);
 
     // Pick the first model -> its label shows in the trigger and the raw model
-    // id (not the pretty label) persists to localStorage.
+    // id (not the pretty label) persists to localStorage. The panel stays
+    // open, as for every choice in it.
     const firstName = (await options
       .first()
       .locator(".model-picker-option-name")
       .textContent())!.trim();
     await options.first().click();
-    await expect(panel).toBeHidden();
     await expect(picker.locator(".model-picker-value-name")).toHaveText(firstName);
     expect(await page.evaluate(() => localStorage.getItem("shelley_selected_model"))).toBe(
       "predictable",
     );
+    await expect(panel).toBeVisible();
+    // Close hands focus back to the trigger.
+    await panel.getByRole("button", { name: "Close" }).click();
+    await expect(panel).toBeHidden();
+    await expect(picker.locator(".p-select-label")).toBeFocused();
 
-    // The footer action opens the manage-models modal.
+    // Manage… opens the manage-models modal, closing the panel.
     await picker.click();
     await expect(panel).toBeVisible();
-    await panel.getByRole("button", { name: "Manage models…" }).click();
+    await panel.getByRole("button", { name: "Manage Models" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(panel).toBeHidden();
   });
 
   test("keeps model and directory inline when they fit, then wraps when needed", async ({
@@ -72,7 +87,7 @@ test.describe("Model picker (PrimeVue)", () => {
     let tops = await fieldTops();
     expect(Math.abs(tops.model - tops.cwd)).toBeLessThan(2);
 
-    await page.setViewportSize({ width: 320, height: 700 });
+    await page.setViewportSize({ width: 260, height: 700 });
     tops = await fieldTops();
     expect(Math.abs(tops.model - tops.cwd)).toBeGreaterThan(2);
   });
@@ -88,6 +103,34 @@ test.describe("Model picker (PrimeVue)", () => {
     const searchbox = page.locator(".model-picker-panel").getByRole("searchbox");
     await expect(searchbox).toBeVisible();
     await expect(searchbox).not.toBeFocused();
+  });
+
+  test("keyboard focus follows a pick made with the pointer", async ({ page }) => {
+    // A second model, so there is a row to pick other than the selected one.
+    await page.route("**/api/models", async (route) => {
+      const models = await (await route.fetch()).json();
+      const twin = { ...models[0], id: "predictable-twin", display_name: "Predictable Twin" };
+      await route.fulfill({ json: [...models, twin] });
+    });
+    // Desktop, where the search has focus from the start.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/new");
+    const picker = page.locator(".model-picker.p-select");
+    await picker.click();
+    const panel = page.locator(".model-picker-panel");
+    const twin = panel.locator(".p-select-option", { hasText: "Predictable Twin" });
+    await expect(twin).toBeVisible();
+    await expect(panel.getByRole("searchbox")).toBeFocused();
+
+    // Keyboard on the selected row, then the pointer on the other: Enter
+    // keeps the pointer's pick.
+    await page.keyboard.press("ArrowDown");
+    await expect(panel.locator(".p-select-option.p-focus")).not.toContainText("Twin");
+    await twin.click();
+    await expect(twin).toHaveClass(/p-focus/);
+    await page.keyboard.press("Enter");
+    await expect(panel).toBeHidden();
+    await expect(picker.locator(".model-picker-value-name")).toHaveText("Predictable Twin");
   });
 
   test("effort pills select a level, persist it, and keep the popover open", async ({ page }) => {
@@ -176,7 +219,11 @@ test.describe("Model picker (PrimeVue)", () => {
       });
     });
 
-    await page.addInitScript(() => localStorage.setItem("shelley.thinkingLevel.v2", "high"));
+    // The composer has taken on the default profile already; its picks stand.
+    await page.addInitScript(() => {
+      localStorage.setItem("shelley.thinkingLevel.v2", "high");
+      localStorage.setItem("shelley.profileApplied", "Default");
+    });
     await page.goto("/new");
     const picker = page.locator(".model-picker.p-select");
     await expect(picker).toBeVisible({ timeout: 10000 });
@@ -192,19 +239,19 @@ test.describe("Model picker (PrimeVue)", () => {
 
     await panel.locator(".model-picker-effort-pill").filter({ hasText: /^low$/ }).click();
 
+    // Recent combinations are taken as the panel opens.
+    await expect(panel.locator(".model-picker-group-label")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await picker.click();
     await expect(panel.locator(".model-picker-group-label")).toHaveText("Recent");
     await expect(panel.locator(".model-picker-group-divider")).toBeVisible();
     await expect(recentRow.locator(".model-picker-option-name")).toHaveText("predictable");
     await expect(recentRow.locator(".model-picker-option-effort")).toHaveText("high");
-    await expect(recentRow.locator(".model-picker-option-recent")).toBeVisible();
-    await expect(modelRow.locator(".model-picker-option-recent")).toHaveCount(0);
     await expect(recentRow.locator(".model-picker-option-check")).toHaveCount(0);
-    await expect(panel.locator(".p-select-option-group").first()).toHaveCSS(
-      "background-color",
-      "rgba(0, 0, 0, 0)",
-    );
-    await expect(recentRow).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-    await expect(recentRow).toHaveCSS("border-top-width", "1px");
+    // A heading, not a highlight, sets them apart; the highlight is the
+    // selected model's, where the keyboard starts.
+    await expect(recentRow).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(modelRow).toHaveClass(/p-focus/);
     const nameBox = await recentRow.locator(".model-picker-option-name").boundingBox();
     const effortPill = recentRow.locator(".model-picker-option-effort");
     const effortBox = await effortPill.boundingBox();
@@ -221,8 +268,16 @@ test.describe("Model picker (PrimeVue)", () => {
     await panel.getByRole("searchbox").fill("");
     await expect(panel.locator(".model-picker-group-label")).toBeVisible();
 
+    // Picking one keeps it where it is; the model's check and the reasoning
+    // pill show the choice.
     await recentRow.click();
-    await expect(panel).toBeHidden();
     await expect(picker.locator(".model-picker-value-effort")).toHaveText("· high");
+    await expect(recentRow.locator(".model-picker-option-check")).toHaveCount(0);
+    await expect(modelRow.locator(".model-picker-option-check")).toBeVisible();
+    await expect(panel.getByRole("radio", { name: "high", exact: true })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(panel).toBeVisible();
   });
 });

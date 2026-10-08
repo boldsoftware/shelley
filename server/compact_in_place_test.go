@@ -860,7 +860,7 @@ func (c *compactTestConversation) toolEnabledMarkers() int {
 	n := 0
 	for _, m := range listMessages(c.t, c.database, c.id) {
 		if m.Type == string(db.MessageTypeModelChange) && m.UserData != nil &&
-			strings.Contains(*m.UserData, `"tool_enabled":"compact_in_place"`) {
+			strings.Contains(*m.UserData, `"tools_on":["compact_in_place"]`) {
 			n++
 		}
 	}
@@ -934,6 +934,19 @@ func TestEnableCompactInPlaceMidConversation(t *testing.T) {
 	}
 	if n := c.toolEnabledMarkers(); n != 1 {
 		t.Fatalf("%d markers after enabling twice, want 1", n)
+	}
+
+	// Choosing the nudge yourself brings nudges back.
+	manager, err := c.srv.getOrCreateConversationManager(t.Context(), c.id, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nudge := 50_000
+	if _, err := c.srv.changeSettings(t.Context(), manager, SettingsChange{CompactNudgeTokens: &nudge}); err != nil {
+		t.Fatal(err)
+	}
+	if opts := c.options(); opts.DisableCompactNudges || opts.CompactNudgeTokens != nudge {
+		t.Fatalf("options after choosing the nudge: %+v", opts)
 	}
 }
 

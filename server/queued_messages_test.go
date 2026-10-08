@@ -467,3 +467,43 @@ func TestDrainWithoutLoopFeedsQueuedMessageOnce(t *testing.T) {
 		t.Fatalf("queued array not emptied: %+v", q)
 	}
 }
+
+// A settings change interrupts the turn under way, but messages queued behind
+// it are kept and go out on the new settings.
+func TestSettingsChangeKeepsQueue(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		server, database, ps := newTestServer(t)
+		defer stopActiveConversationLoops(server)
+		conversation, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		conversationID := conversation.ConversationID
+		sendChat(t, server, conversationID, "delay: 60", false)
+		synctest.Wait()
+		sendChat(t, server, conversationID, "echo: after the switch", true)
+		synctest.Wait()
+
+		request := httptest.NewRequest(http.MethodPost, "/api/conversation/"+conversationID+"/settings",
+			strings.NewReader(`{"tool_overrides":{"bash":"off"}}`))
+		response := httptest.NewRecorder()
+		server.handleConversationSettings(response, request, conversationID)
+		if response.Code != http.StatusOK {
+			t.Fatalf("settings = %d: %s", response.Code, response.Body.String())
+		}
+		synctest.Wait()
+		if !userMessageRowExists(t, database, conversationID, "after the switch") {
+			t.Fatal("queued message was dropped")
+		}
+		if got := queuedMessages(t, database, conversationID); len(got) != 0 {
+			t.Fatalf("queue after settings change = %#v", got)
+		}
+		req := ps.GetRecentRequests()
+		for _, tool := range req[len(req)-1].Tools {
+			if tool.Name == "bash" {
+				t.Fatal("queued message went out with the old tools")
+			}
+		}
+	})
+}

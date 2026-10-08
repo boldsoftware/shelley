@@ -48,10 +48,12 @@ func (h *TestHarness) NewConversation(msg, cwd string) *TestHarness {
 	h.t.Helper()
 
 	chatReq := ChatRequest{
-		Message:             msg,
-		Model:               "predictable",
-		Cwd:                 cwd,
-		ConversationOptions: h.convOpts,
+		Message: msg,
+		Model:   "predictable",
+		Cwd:     cwd,
+	}
+	if h.convOpts != nil {
+		chatReq.ConversationOptions = &ChatOptions{ConversationOptions: *h.convOpts}
 	}
 	chatBody, _ := json.Marshal(chatReq)
 

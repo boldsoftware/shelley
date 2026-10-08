@@ -425,6 +425,28 @@
       />
     </Teleport>
 
+    <ToolsModal
+      :is-open="showToolsModal"
+      :tools="availableTools"
+      :tool-overrides="settingsInEffect.settings.tool_overrides"
+      :compact-nudge-tokens="settingsInEffect.settings.compact_nudge_tokens"
+      :apply-label="conversationLive ? 'Apply to this conversation' : 'Apply'"
+      :on-apply="applyTools"
+      :locked="conversationLive && agentWorking"
+      @close="showToolsModal = false"
+    />
+    <ProfilesModal
+      :is-open="showProfilesModal"
+      :models="models"
+      :tools="availableTools"
+      :current="settingsInEffect.profile"
+      :modified="knob.changes.length > 0"
+      :on-use="useProfile"
+      :on-saved="onProfileSaved"
+      :locked="conversationLive && agentWorking"
+      @close="showProfilesModal = false"
+    />
+
     <!-- Directory Picker Modal -->
     <DirectoryPickerModal
       :is-open="showDirectoryPicker"
@@ -524,6 +546,9 @@ import {
   type Usage,
   type LLMContent,
   type DiskSpaceStatus,
+  type Profile,
+  type Settings,
+  type SettingsChange,
   isDistillStatusMessage,
   distillStatus,
   parseQueuedMessages,
@@ -537,7 +562,7 @@ import {
   COMPACT_IN_PLACE_TOOL,
   DEFAULT_COMPACT_NUDGE_TOKENS,
 } from "./autoCompaction";
-import { api, ApiError } from "../../services/api";
+import { api, ApiError, profilesApi } from "../../services/api";
 import { btwStore } from "../../services/btwStore";
 import { messageStore } from "../../services/messageStore";
 import { cacheDiag } from "../../services/cacheDiag";
@@ -560,6 +585,13 @@ import {
 import { useMarkdownMode } from "../composables/markdownMode";
 import { useConversationView } from "../composables/conversationView";
 import { useI18n } from "../composables/i18n";
+import {
+  settingsDifferences,
+  reloadProfiles,
+  settingsOf,
+  useProfiles,
+  type SettingsKnob,
+} from "../composables/profiles";
 import { useDraftAutosave } from "../composables/draftAutosave";
 import { useFeatureFlag } from "../composables/featureFlags";
 import { useVersionChecker } from "../composables/versionChecker";
@@ -624,7 +656,12 @@ import {
   storedThinkingLevel,
   type ThinkingLevel,
 } from "./thinkingLevel";
-import { SELECTED_MODEL_KEY, pickReadyModel, storedSelectedModel } from "./selectedModel";
+import {
+  SELECTED_MODEL_KEY,
+  pickReadyModel,
+  serverDefaultModel,
+  storedSelectedModel,
+} from "./selectedModel";
 import { RefusalContinueKey } from "./refusalContinue";
 
 import MessageInput from "./MessageInput.vue";
@@ -633,6 +670,8 @@ import ConversationTOC from "./ConversationTOC.vue";
 import ModelBar from "./ModelBar.vue";
 import SystemPromptView from "./SystemPromptView.vue";
 import DirectoryPickerModal from "./DirectoryPickerModal.vue";
+import ProfilesModal from "./ProfilesModal.vue";
+import ToolsModal from "./ToolsModal.vue";
 import MessageSelectionToolbar from "./MessageSelectionToolbar.vue";
 import DiffViewer from "./DiffViewer.vue";
 import type { ReviewConversationStart } from "./useReviewRecording";
@@ -718,17 +757,18 @@ const props = withDefaults(
 
 const { t } = useI18n();
 const { markdownMode } = useMarkdownMode();
-// The tool overrides this conversation was started with, plus any turned on
-// since (the Compact in Place button).
-const conversationToolOverrides = computed<Record<string, string>>(() => {
-  const raw = props.currentConversation?.conversation_options;
-  if (!raw) return {};
+// The open conversation's options: its settings (as of the last change) and
+// the profile they came from.
+const conversationOptions = computed<Partial<Settings> & { profile?: string }>(() => {
   try {
-    return JSON.parse(raw)?.tool_overrides ?? {};
+    return JSON.parse(props.currentConversation?.conversation_options || "{}") ?? {};
   } catch {
     return {};
   }
 });
+const conversationToolOverrides = computed<Record<string, string>>(
+  () => conversationOptions.value.tool_overrides ?? {},
+);
 // With the message_user tool on, the agent chats through it, and the view has
 // its own (brief) default.
 const messageUserEnabled = computed(
@@ -935,32 +975,31 @@ function putDraftModel(draftId: string, model: string) {
       if (modelPutsInFlight === 0) modelPutDraftId = null;
     });
 }
-// Changing the model or reasoning level of a conversation that is already under
-// way. Both are server state at this point: they are baked into the agent loop
-// at build time, and conversation_options are locked once a conversation is
-// promoted (see the send path's `promoting` guard) — so a purely local change
-// would silently do nothing. /model already does the whole job for both:
-// validates the argument, rebuilds the loop, records a modelchange marker in the
-// log, and broadcasts the updated conversation, which the currentConversation
-// watch applies. So route through it rather than duplicating any of that, and
-// don't apply locally first: a rejected switch would visibly snap back.
-async function sendModelCommand(arg: string) {
+// Changing the settings of a conversation that is already under way: they are
+// server state, baked into the agent loop. The server validates, rebuilds the
+// loop, records a marker in the log, and broadcasts the updated conversation,
+// which the currentConversation watches apply — so nothing is applied locally
+// first, and a rejected change doesn't visibly snap back.
+async function updateConversationSettings(change: SettingsChange) {
   const id = props.conversationId;
   if (!id) return;
-  try {
-    await api.sendMessage(id, { message: `/model ${arg}`, model: selectedModel.value });
-  } catch (err) {
-    console.error("Failed to run /model:", err);
-    error.value = err instanceof Error ? err.message : "Failed to change model settings";
-  }
+  await api.updateConversationSettings(id, change);
+}
+function changeConversationSettings(change: SettingsChange) {
+  updateConversationSettings(change).catch((err) => {
+    error.value = err instanceof Error ? err.message : "Failed to change settings";
+  });
+}
+
+// The open conversation's reasoning level, as the pills name it.
+function conversationLevel(): ThinkingLevel {
+  return (settingsInEffect.value.settings.thinking_level || "default") as ThinkingLevel;
 }
 
 function switchConversationModel(model: string) {
-  if (model === selectedModel.value) return;
-  const rounded = thinkingLevelForModel(model, thinkingLevel.value);
-  const arg =
-    rounded !== "default" && rounded !== thinkingLevel.value ? `${model} ${rounded}` : model;
-  return sendModelCommand(arg);
+  if (model === settingsInEffect.value.settings.model) return;
+  // The server rounds the reasoning level to one the model has.
+  changeConversationSettings({ model });
 }
 
 function switchConversationCombination(
@@ -970,28 +1009,17 @@ function switchConversationCombination(
   if (level === null) {
     return switchConversationModel(model);
   }
-  if (model === selectedModel.value && level === thinkingLevel.value) return;
-  return sendModelCommand(`${model} ${level}`);
+  if (model === settingsInEffect.value.settings.model && level === conversationLevel()) return;
+  changeConversationSettings({ model, thinking_level: level });
 }
 
 // Reasoning pills in the status readout's picker. Same policy as the model
-// above: don't touch local state, let the server's echo drive the pill, so a
-// rejected level doesn't leave the UI (and the stored default) claiming a
-// setting the conversation doesn't have.
-//
-// The "auto" sentinel is the exception. It means "defer to the model's own
-// default", which has no /model spelling ("default" there selects the default
-// MODEL), so it can only be applied locally. It's only offered when the model's
-// concrete default is unknown, in which case there's no level to send anyway.
+// above: the server's echo drives the pill.
 function switchConversationThinkingLevel(level: ThinkingLevel) {
   // The pills are radios and re-emit on a click on the current one; without this
   // guard that rebuilds the agent loop and appends a marker for a no-op.
-  if (level === thinkingLevel.value) return;
-  if (level === "default") {
-    setThinkingLevel(level);
-    return;
-  }
-  void sendModelCommand(level);
+  if (level === conversationLevel()) return;
+  changeConversationSettings({ thinking_level: level === "default" ? "" : level });
 }
 
 // Model pick from the composer's picker (new/draft conversations), where the
@@ -1107,8 +1135,8 @@ const toolProgress = ref<Record<string, ToolProgress>>({});
 provideToolProgress(toolProgress);
 const streamingText = ref("");
 const streamingThinking = ref("");
-const showAdvancedSettings = ref(false);
-const advancedSettingsRef = ref<HTMLDivElement | null>(null);
+const showToolsModal = ref(false);
+const showProfilesModal = ref(false);
 const availableTools = ref<Array<{ name: string; summary: string; default_on: boolean }>>([]);
 
 const showScrollToBottom = ref(false);
@@ -1515,10 +1543,7 @@ const toolOverrides = ref<Record<string, "on" | "off">>(
     return {};
   })(),
 );
-function setToolOverride(name: string, value: "default" | "on" | "off") {
-  const next = { ...toolOverrides.value };
-  if (value === "default") delete next[name];
-  else next[name] = value;
+function setToolOverrides(next: Record<string, "on" | "off">) {
   toolOverrides.value = next;
   try {
     if (Object.keys(next).length === 0) localStorage.removeItem(TOOL_OVERRIDES_KEY);
@@ -1527,15 +1552,6 @@ function setToolOverride(name: string, value: "default" | "on" | "off") {
     /* ignore */
   }
 }
-function resetToolOverrides() {
-  toolOverrides.value = {};
-  try {
-    localStorage.removeItem(TOOL_OVERRIDES_KEY);
-  } catch {
-    /* ignore */
-  }
-}
-const toolOverrideCount = computed(() => Object.keys(toolOverrides.value).length);
 
 // ---- auto compaction nudge threshold (persisted) ----
 const COMPACT_NUDGE_KEY = "shelley.compactNudgeTokens";
@@ -1551,7 +1567,142 @@ function setCompactNudgeTokens(tokens: number) {
   }
 }
 
-const toolOverrideList = computed(() => availableTools.value);
+// ---- profiles, and the settings knob ----
+// The composer's settings are the persisted picks above, started from a
+// profile; a conversation's are server state. The knob (the model picker,
+// plus the tools and profiles modals) shows and changes whichever is in
+// effect.
+const { profiles } = useProfiles();
+onMounted(() =>
+  reloadProfiles().catch((err) => {
+    error.value = err instanceof Error ? err.message : String(err);
+  }),
+);
+// The profile picked in the composer, unless that's the default: then ""
+// follows whichever profile is the default.
+const PROFILE_KEY = "shelley.profile";
+const storedProfile = ref(localStorage.getItem(PROFILE_KEY) || "");
+// The profile whose settings the composer took last; the picks made since
+// survive a reload.
+const APPLIED_PROFILE_KEY = "shelley.profileApplied";
+const appliedProfile = ref(localStorage.getItem(APPLIED_PROFILE_KEY) || "");
+const composerProfile = computed(
+  () =>
+    profiles.value.find((p) => p.name === storedProfile.value) ??
+    profiles.value.find((p) => p.default),
+);
+function applyComposerProfile(p: Profile) {
+  appliedProfile.value = p.name;
+  localStorage.setItem(APPLIED_PROFILE_KEY, p.name);
+  // The server's default model when the profile names none.
+  setSelectedCombination(p.model || serverDefaultModel(), null);
+  const model = selectedModel.value;
+  setThinkingLevel(thinkingLevelForModel(model, (p.thinking_level || "default") as ThinkingLevel));
+  setToolOverrides({ ...p.tool_overrides });
+  setCompactNudgeTokens(p.compact_nudge_tokens || DEFAULT_COMPACT_NUDGE_TOKENS);
+}
+function selectComposerProfile(name: string) {
+  const p = profiles.value.find((candidate) => candidate.name === name);
+  if (!p) return;
+  storedProfile.value = p.default ? "" : name;
+  localStorage.setItem(PROFILE_KEY, storedProfile.value);
+  applyComposerProfile(p);
+}
+
+// Whether the status bar shows a conversation under way rather than the
+// composer (see ChatStatusContent), including while it loads.
+const conversationLive = computed(
+  () => !!props.conversationId && !props.currentConversation?.is_draft,
+);
+// What the composer shows: the settings a new conversation starts with.
+const composerSettings = computed<Settings>(() => ({
+  model: selectedModel.value,
+  thinking_level: thinkingLevel.value === "default" ? "" : thinkingLevel.value,
+  tool_overrides: toolOverrides.value,
+  // The picker can't leave it unset; 0 is what a profile stores for that.
+  compact_nudge_tokens:
+    compactNudgeTokens.value === DEFAULT_COMPACT_NUDGE_TOKENS ? 0 : compactNudgeTokens.value,
+  system_prompt: composerProfile.value?.system_prompt || "",
+}));
+const settingsInEffect = computed<{ profile: string; settings: Settings }>(() => {
+  const conv = props.currentConversation;
+  if (conversationLive.value) {
+    const opts = conversationOptions.value;
+    return {
+      profile: opts.profile || "",
+      settings: {
+        model: conv?.model || "",
+        thinking_level: opts.thinking_level || "",
+        tool_overrides: opts.tool_overrides || {},
+        compact_nudge_tokens: opts.compact_nudge_tokens || 0,
+        system_prompt: opts.system_prompt || "",
+      },
+    };
+  }
+  return { profile: composerProfile.value?.name || "", settings: composerSettings.value };
+});
+// The composer takes on its profile's settings when that becomes another
+// one: on first load, when its profile is deleted, or when it follows the
+// default and another is made the default.
+watch([composerProfile, () => conversationLive.value], ([p, live]) => {
+  if (!p || live || p.name === appliedProfile.value) return;
+  applyComposerProfile(p);
+});
+// A conversation's model shows in the picker while it's open (see the
+// conversation watch below); back in the composer, its own pick returns.
+watch(
+  () => conversationLive.value,
+  (live) => {
+    if (!live) selectedModel.value = pickReadyModel(models.value, storedSelectedModel());
+  },
+);
+// Switches whichever settings are in effect to the named profile's.
+async function useProfile(name: string) {
+  if (conversationLive.value) await updateConversationSettings({ profile: name });
+  else selectComposerProfile(name);
+}
+async function applyTools(overrides: Record<string, "on" | "off">, nudge: number) {
+  if (conversationLive.value) {
+    await updateConversationSettings({ tool_overrides: overrides, compact_nudge_tokens: nudge });
+    return;
+  }
+  setToolOverrides(overrides);
+  setCompactNudgeTokens(nudge);
+}
+// The composer takes on an edit to its profile; a conversation under way
+// keeps its settings until switched to the profile again.
+function onProfileSaved(name: string) {
+  const p = composerProfile.value;
+  if (!conversationLive.value && p?.name === name) applyComposerProfile(p);
+}
+const knob = computed<SettingsKnob>(() => {
+  const { profile, settings } = settingsInEffect.value;
+  const p = profiles.value.find((candidate) => candidate.name === profile);
+  return {
+    profiles: profiles.value,
+    profile,
+    changes: p ? settingsDifferences(p, settings, models.value, availableTools.value) : [],
+    toolChanges: settingsDifferences(
+      { ...settings, tool_overrides: {}, compact_nudge_tokens: 0 },
+      settings,
+      models.value,
+      availableTools.value,
+    ),
+    selectProfile: useProfile,
+    updateProfile: async () => {
+      await profilesApi.update(profile, settingsOf(settings, p));
+      await reloadProfiles();
+    },
+    saveAsProfile: async (name) => {
+      await profilesApi.create(name, settingsOf(settings, p));
+      await reloadProfiles();
+      // The settings are now this profile's; this only relabels them.
+      await useProfile(name);
+    },
+    configureTools: () => (showToolsModal.value = true),
+    editProfiles: () => (showProfilesModal.value = true),
+  };
+});
 
 // ---- per-conversation localStorage helpers ----
 function msgCountKey(): string | null {
@@ -1812,23 +1963,17 @@ const otherUsageRows = computed<OtherUsageRow[]>(() => usageData.value.otherRows
 watch(
   selectedModelInfo,
   (model) => {
-    if (!model) return;
+    // A conversation under way has its own level.
+    if (!model || conversationLive.value) return;
     const rounded = thinkingLevelForModel(model.id, thinkingLevel.value);
     if (rounded !== thinkingLevel.value) setThinkingLevel(rounded);
   },
   { immediate: true },
 );
 
-const conversationThinkingLevel = computed<string | null>(() => {
-  const raw = props.currentConversation?.conversation_options;
-  if (!raw) return null;
-  try {
-    const opts = JSON.parse(raw);
-    return opts?.thinking_level || null;
-  } catch {
-    return null;
-  }
-});
+const conversationThinkingLevel = computed<string | null>(
+  () => conversationOptions.value.thinking_level || null,
+);
 
 // Whether this conversation has the compact_in_place tool on: it was started
 // with it, or the Compact in Place button enabled it.
@@ -2925,23 +3070,19 @@ const queuedGhosts = computed(() => {
   return parseQueuedMessages(props.currentConversation?.queued_messages);
 });
 
-// Build the conversation_options bundle from the current composer selection
-// (tool overrides, thinking level). "default" omits the
-// thinking override so the model's configured/provider default applies. Used
-// when promoting an autosaved draft on
+// Build the conversation_options bundle from the composer's settings: its
+// profile (for the system prompt), and what the composer shows for the rest,
+// which override the profile's. Used when promoting an autosaved draft on
 // first send — the draft is created (via POST /draft autosave) without
 // options, so the selection only reaches the server on the promoting chat
 // request.
-function buildConversationOptions(): ChatRequest["conversation_options"] | undefined {
-  const hasOverrides = Object.keys(toolOverrides.value).length > 0;
-  const explicitThinking = thinkingLevel.value === "default" ? undefined : thinkingLevel.value;
-  const hasThinking = explicitThinking !== undefined;
-  if (!hasOverrides && !hasThinking) return undefined;
-  const autoCompaction = toolOverrides.value[COMPACT_IN_PLACE_TOOL] === "on";
+function buildConversationOptions(): ChatRequest["conversation_options"] {
+  const { thinking_level, tool_overrides, compact_nudge_tokens } = composerSettings.value;
   return {
-    ...(hasOverrides ? { tool_overrides: { ...toolOverrides.value } } : {}),
-    ...(explicitThinking ? { thinking_level: explicitThinking } : {}),
-    ...(autoCompaction ? { compact_nudge_tokens: compactNudgeTokens.value } : {}),
+    profile: composerProfile.value?.name,
+    thinking_level,
+    tool_overrides: { ...tool_overrides },
+    compact_nudge_tokens,
   };
 }
 
@@ -3987,10 +4128,9 @@ const statusContentProps = computed(() => {
     selectedModel: selectedModel.value,
     sending: sending.value,
     refreshingModels: refreshingModels.value,
-    thinkingLevel: thinkingLevel.value,
-    toolOverrides: toolOverrides.value,
-    toolOverrideList: toolOverrideList.value,
-    toolOverrideCount: toolOverrideCount.value,
+    // A conversation's level is the server's; "" is its model's default.
+    thinkingLevel: conversationLive.value ? conversationLevel() : thinkingLevel.value,
+    knob: knob.value,
     cwdError: cwdError.value,
     onUnarchive: handleUnarchive,
     onClearError: () => (error.value = null),
@@ -4004,7 +4144,7 @@ const statusContentProps = computed(() => {
     onSelectCombination: setSelectedCombination,
     // The status readout's inline picker only renders for a conversation that
     // already exists, where the model and reasoning level are server state (see
-    // sendModelCommand); the composer's picker only renders before the first
+    // updateConversationSettings); the composer's picker only renders before the first
     // send, where they are not. Separate handlers, not shared ones.
     onSwitchConversationModel: switchConversationModel,
     onSwitchConversationCombination: switchConversationCombination,
@@ -4012,10 +4152,6 @@ const statusContentProps = computed(() => {
     onManageModels: () => props.onOpenModelsModal?.(),
     onRefreshModels: handleRefreshModels,
     onThinkingChange: setThinkingLevel,
-    onSetToolOverride: setToolOverride,
-    onResetToolOverrides: resetToolOverrides,
-    compactNudgeTokens: compactNudgeTokens.value,
-    onSetCompactNudgeTokens: setCompactNudgeTokens,
     onOpenDirectoryPicker: () => (showDirectoryPicker.value = true),
     onUsageNeeded: () => (usageWanted.value = true),
   };
@@ -4030,6 +4166,9 @@ const statusContentProps = computed(() => {
 // Server-driven: applyModel, not setSelectedModel — echoing a row back into a
 // PUT would loop, and while our own picker PUTs are in flight the row is
 // stale, so applying it would revert the pick (see modelPutsInFlight).
+//
+// A conversation under way only shows its model: the composer's pick, in
+// localStorage, stays for the next new conversation.
 watch(
   () => [props.currentConversation?.conversation_id, props.currentConversation?.model] as const,
   () => {
@@ -4037,7 +4176,8 @@ watch(
     if (modelPutsInFlight > 0 && props.currentConversation.conversation_id === modelPutDraftId) {
       return;
     }
-    applyModel(props.currentConversation.model);
+    if (conversationLive.value) selectedModel.value = props.currentConversation.model;
+    else applyModel(props.currentConversation.model);
   },
 );
 
@@ -4048,9 +4188,13 @@ watch(
 // composer last chose locally, i.e. the switch the user just made wouldn't
 // appear. Only follows a conversation that actually recorded a level: a null
 // means "never set", which must not clobber the local default.
+//
+// Only for drafts: a conversation under way shows its level from
+// settingsInEffect, leaving the composer's for the next new conversation.
 watch(
   () => [props.currentConversation?.conversation_id, conversationThinkingLevel.value] as const,
   ([, level]) => {
+    if (conversationLive.value) return;
     if (!level || level === thinkingLevel.value) return;
     if (!THINKING_LEVELS.some((l) => l.value === level)) return;
     setThinkingLevel(level as ThinkingLevel);
@@ -4064,7 +4208,6 @@ watch(
   (id) => {
     if (id === null) {
       cwdInitialized.value = false;
-      showAdvancedSettings.value = false;
     }
   },
 );
@@ -4153,7 +4296,9 @@ watch(
 watch(
   readyModelIds,
   (ready) => {
-    if (!selectedModel.value) return;
+    // A conversation under way keeps its model; the server names the
+    // problem if it's gone.
+    if (!selectedModel.value || conversationLive.value) return;
     if (ready.includes(selectedModel.value)) return;
     // Prefer the server's default (or any ready model) over showing nothing,
     // so a mere catalog reshuffle doesn't strand the composer.
@@ -4168,17 +4313,6 @@ onMounted(() => {
     .getTools()
     .then((r) => (availableTools.value = r.tools))
     .catch(() => {});
-});
-
-// Close advanced settings popover on outside click.
-function onAdvancedSettingsOutside(e: MouseEvent) {
-  if (advancedSettingsRef.value && !advancedSettingsRef.value.contains(e.target as Node)) {
-    showAdvancedSettings.value = false;
-  }
-}
-watch(showAdvancedSettings, (open) => {
-  document.removeEventListener("mousedown", onAdvancedSettingsOutside);
-  if (open) document.addEventListener("mousedown", onAdvancedSettingsOutside);
 });
 
 // Generation bump -> reset context window state.
@@ -5167,7 +5301,6 @@ onUnmounted(() => {
   document.removeEventListener("visibilitychange", handleVisibilityChange);
   document.removeEventListener("keydown", handleScrollKeyDown);
   document.removeEventListener("keydown", handleMenuShortcut);
-  document.removeEventListener("mousedown", onAdvancedSettingsOutside);
   mobileMq.removeEventListener("change", onMobileChange);
   if (loadingProgressDelay) clearTimeout(loadingProgressDelay);
   if (highlightTimeout) clearTimeout(highlightTimeout);

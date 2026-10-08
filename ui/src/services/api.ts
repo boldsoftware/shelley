@@ -11,6 +11,12 @@ import {
   GitFileDiff,
   VersionInfo,
   CommitInfo,
+  ConversationSettings,
+  Profile,
+  Settings,
+  SettingsChange,
+  SystemPromptInfo,
+  TemplateProblem,
 } from "../types";
 
 // Extract a useful error message from a failed fetch response. Prefers the
@@ -967,6 +973,21 @@ class ApiService {
     return response.json();
   }
 
+  // Changes an existing conversation's settings (see SettingsChange). The
+  // server records a marker and broadcasts the updated conversation.
+  async updateConversationSettings(
+    conversationId: string,
+    change: SettingsChange,
+  ): Promise<ConversationSettings> {
+    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/settings`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify(change),
+    });
+    if (!response.ok) throw await responseError(response, "Failed to change settings");
+    return response.json();
+  }
+
   async updateConversationTags(conversationId: string, tags: string[]): Promise<Conversation> {
     const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/tags`, {
       method: "POST",
@@ -1409,6 +1430,64 @@ export const mcpServersApi = {
   async tools(name: string, signal: AbortSignal): Promise<McpTool[]> {
     const response = await mcpFetch(`${mcpPath(name)}/tools`, "Failed to list tools", { signal });
     return ((await response.json()) as { tools: McpTool[] }).tools;
+  },
+};
+
+async function profilesFetch(path: string, failure: string, init?: RequestInit) {
+  const response = await fetch(`/api${path}`, init);
+  if (!response.ok) throw await responseError(response, failure);
+  return response;
+}
+
+export const profilesApi = {
+  async list(): Promise<Profile[]> {
+    return (await profilesFetch("/profiles", "Failed to load profiles")).json();
+  },
+  async create(name: string, settings: Settings): Promise<Profile> {
+    const response = await profilesFetch("/profiles", "Failed to save profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, ...settings }),
+    });
+    return response.json();
+  },
+  async update(name: string, settings: Settings): Promise<Profile> {
+    const response = await profilesFetch(
+      `/profiles/${encodeURIComponent(name)}`,
+      "Failed to save profile",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      },
+    );
+    return response.json();
+  },
+  async makeDefault(name: string): Promise<Profile> {
+    const response = await profilesFetch(
+      `/profiles/${encodeURIComponent(name)}/default`,
+      "Failed to change the default profile",
+      { method: "POST" },
+    );
+    return response.json();
+  },
+  async remove(name: string): Promise<void> {
+    await profilesFetch(`/profiles/${encodeURIComponent(name)}`, "Failed to delete profile", {
+      method: "DELETE",
+    });
+  },
+  async systemPrompt(): Promise<SystemPromptInfo> {
+    return (await profilesFetch("/system-prompt", "Failed to load the system prompt")).json();
+  },
+  /** Why template can't be rendered, or null if it can. */
+  async checkSystemPrompt(template: string, signal: AbortSignal): Promise<TemplateProblem | null> {
+    const response = await profilesFetch("/system-prompt/check", "Failed to check the template", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ template }),
+      signal,
+    });
+    return ((await response.json()) as { error: TemplateProblem | null }).error;
   },
 };
 

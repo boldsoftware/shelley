@@ -138,6 +138,10 @@ type ConversationManager struct {
 	// into this conversation. When true, queued messages should NOT be drained
 	// immediately — they must wait until distillation finishes.
 	distilling bool
+	// changingSettings holds queued messages back, from both the drain and
+	// the running turn, while ApplySettings interrupts the turn, so they go
+	// out on the new settings.
+	changingSettings bool
 	// distillSetupDone is non-nil while generation setup is creating the first
 	// status/system messages. QueueMessage waits on it so user messages cannot
 	// appear before the distillation status.
@@ -152,19 +156,16 @@ type ConversationManager struct {
 	drainRequested bool
 	drainDone      chan struct{}
 
-	// modelSettingsMu serializes model/reasoning changes with manual resume.
-	// Both operations rebuild the loop, and model changes persist before that
-	// rebuild, so sharing this lock prevents resume from selecting the old model
-	// while a concurrent /model request is between those two steps.
+	// modelSettingsMu serializes settings changes (ApplySettings,
+	// SetThinkingLevel, EnableCompactInPlace) with each other and with manual
+	// resume. Settings persist before the loop rebuild, so sharing this lock
+	// prevents resume from selecting the old model while a concurrent change
+	// is between those two steps, and keeps one change from writing back
+	// another's field.
 	modelSettingsMu sync.Mutex
 	// retryMu serializes RetryLastLLMRequest so concurrent retry POSTs don't
 	// produce duplicate LLM calls or double-broadcast user_data updates.
 	retryMu sync.Mutex
-	// thinkingMu serializes SetThinkingLevel so concurrent calls can't leave
-	// the in-memory conversationOptions / loop level inconsistent with the
-	// persisted value (an earlier call's in-memory assignment racing a later
-	// call's DB write).
-	thinkingMu sync.Mutex
 	// lastRetriedErrorMessageID dedupes retry double-clicks WITHOUT mutating the
 	// error message row (which would reintroduce the immutability violation).
 	// Guarded by cm.mu. Once a retry kicks off for a given bottom error message,
@@ -299,9 +300,9 @@ func (cm *ConversationManager) RegisterEndOfTurnHook(ctx context.Context, hook d
 // (SubagentTool.ParentReasoning), which only reaches here with a concrete
 // level, never "".
 //
-// thinkingMu serializes the whole DB-write-then-apply sequence so concurrent
-// calls can't persist one level while an earlier call's in-memory assignment
-// leaves conversationOptions / the loop pinned to a stale level.
+// modelSettingsMu serializes the whole DB-write-then-apply sequence so
+// concurrent calls can't persist one level while an earlier call's in-memory
+// assignment leaves conversationOptions / the loop pinned to a stale level.
 func (cm *ConversationManager) SetThinkingLevel(ctx context.Context, reasoning string) error {
 	if reasoning == "" {
 		return nil
@@ -310,8 +311,8 @@ func (cm *ConversationManager) SetThinkingLevel(ctx context.Context, reasoning s
 		return err
 	}
 
-	cm.thinkingMu.Lock()
-	defer cm.thinkingMu.Unlock()
+	cm.modelSettingsMu.Lock()
+	defer cm.modelSettingsMu.Unlock()
 
 	cm.mu.Lock()
 	if cm.conversationOptions.ThinkingLevel == reasoning {
@@ -566,9 +567,7 @@ func (cm *ConversationManager) Hydrate(ctx context.Context) error {
 		var err error
 		if cm.role == roleBtwReader {
 			systemMsg, err = cm.recreateBtwReaderSystemPrompt(ctx)
-		} else if cm.role != roleTopLevel {
-			systemMsg, err = cm.createSubagentSystemPrompt(ctx)
-		} else if conversation.UserInitiated {
+		} else if cm.role != roleTopLevel || conversation.UserInitiated {
 			systemMsg, err = cm.createSystemPrompt(ctx)
 		}
 		if err != nil {
@@ -831,10 +830,10 @@ var errNotRefusal = fmt.Errorf("latest message is not a refusal; nothing to cont
 // model. The refusal error row is never mutated; like a retry it is excluded
 // from context, so the new model sees the same request that was refused.
 //
-// ch carries the model switch to apply before continuing; service/modelID name
-// the model to build the loop with (must match ch.NewModel when a switch is
-// requested). retryMu serializes this against concurrent retries/continues.
-func (cm *ConversationManager) ContinueAfterRefusal(ctx context.Context, ch ModelSettingsChange, service llm.Service, modelID string) error {
+// service/modelID name the model to switch to and build the loop with;
+// models name them in the marker. retryMu serializes this against
+// concurrent retries/continues.
+func (cm *ConversationManager) ContinueAfterRefusal(ctx context.Context, models []ModelInfo, switchModel func(ConversationSettings) (ConversationSettings, error), service llm.Service, modelID string) error {
 	if service == nil {
 		return fmt.Errorf("llm service is required")
 	}
@@ -878,13 +877,10 @@ func (cm *ConversationManager) ContinueAfterRefusal(ctx context.Context, ch Mode
 		return errNotRefusal
 	}
 
-	// Apply the model/reasoning switch first (records the modelchange marker and
-	// resets the loop so the next build uses the new settings). Skip when the
-	// change is a no-op so we don't record an empty marker.
-	if ch.NewModel != "" || ch.ReasoningSet {
-		if err := cm.ApplyModelSettings(ctx, ch); err != nil {
-			return fmt.Errorf("failed to switch model before continuing: %w", err)
-		}
+	// Switch models first (records the modelchange marker and resets the loop
+	// so the next build uses the new model); a no-op if already on it.
+	if _, err := cm.ApplySettings(ctx, models, switchModel); err != nil {
+		return fmt.Errorf("failed to switch model before continuing: %w", err)
 	}
 
 	// Rebuild the loop against the new model and re-fire the refused request.
@@ -1323,7 +1319,7 @@ func (cm *ConversationManager) takeInjectable(ctx context.Context, generation ui
 
 	cm.mu.Lock()
 	stale := cm.loopTearingDown || cm.loop == nil || cm.loopGeneration != generation ||
-		cm.distilling || cm.cancelling
+		cm.distilling || cm.cancelling || cm.changingSettings
 	compacted := !stale && cm.compactedGeneration == generation
 	if compacted {
 		cm.compactedGeneration = 0
@@ -1548,9 +1544,9 @@ func (cm *ConversationManager) drainPendingMessagesOwned(s *Server) {
 		// runDistillNewGeneration drains again once SetDistilling(false)
 		// returns.
 		cm.mu.Lock()
-		distilling := cm.distilling
+		held := cm.distilling || cm.changingSettings
 		cm.mu.Unlock()
-		if distilling {
+		if held {
 			return
 		}
 		queued, err := cm.db.GetQueuedMessages(ctx, cm.conversationID)
@@ -1601,8 +1597,10 @@ func (cm *ConversationManager) feedQueued(ctx context.Context, s *Server, queued
 		if err := cm.Hydrate(ctx); err != nil {
 			return false, fmt.Errorf("failed to hydrate: %w", err)
 		}
+		// The conversation's model wins: a settings change may have
+		// replaced the one the messages were queued with.
 		modelID := cm.GetModel()
-		if i := slices.IndexFunc(queued, func(qm db.QueuedMessage) bool { return qm.Model != "" }); i >= 0 {
+		if i := slices.IndexFunc(queued, func(qm db.QueuedMessage) bool { return qm.Model != "" }); modelID == "" && i >= 0 {
 			modelID = queued[i].Model
 		}
 		svc, err := s.llmManager.GetService(modelID)
@@ -1738,41 +1736,62 @@ func (cm *ConversationManager) mcpServerInfos(ctx context.Context) ([]MCPServerI
 }
 
 func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generated.Message, error) {
-	systemPrompt := cm.conversationOptions.SystemPrompt
-	var promptSkills []skills.Skill
-	if systemPrompt == "" {
-		var opts []SystemPromptOption
-		if cm.userEmail != "" {
-			opts = append(opts, WithUserEmail(cm.userEmail))
-		}
-		if servers, err := cm.mcpServerInfos(ctx); err != nil {
-			cm.logger.Warn("failed to list MCP servers for system prompt", "error", err)
-		} else if len(servers) > 0 {
-			opts = append(opts, WithMCPServers(servers))
-		}
-		var err error
-		systemPrompt, promptSkills, err = generateSystemPromptWithIntegrationSkills(cm.cwd, cm.integrationSkills.Skills(ctx), opts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate system prompt: %w", err)
-		}
+	cm.mu.Lock()
+	opts := cm.conversationOptions
+	cm.mu.Unlock()
+	prompt, err := cm.renderSystemPrompt(ctx, opts)
+	if err != nil {
+		return nil, err
 	}
+	return cm.storeSystemPrompt(ctx, prompt)
+}
 
-	if systemPrompt == "" {
+// renderedSystemPrompt is a system prompt ready to store: its text and the
+// tools and skills shown with it.
+type renderedSystemPrompt struct {
+	text    string
+	display map[string]any
+}
+
+// renderSystemPrompt renders the system prompt the conversation would have
+// with opts, without storing it.
+func (cm *ConversationManager) renderSystemPrompt(ctx context.Context, opts db.ConversationOptions) (renderedSystemPrompt, error) {
+	if cm.role != roleTopLevel {
+		return cm.renderSubagentSystemPrompt(ctx, opts)
+	}
+	var promptOpts []SystemPromptOption
+	if cm.userEmail != "" {
+		promptOpts = append(promptOpts, WithUserEmail(cm.userEmail))
+	}
+	if servers, err := cm.mcpServerInfos(ctx); err != nil {
+		cm.logger.Warn("failed to list MCP servers for system prompt", "error", err)
+	} else if len(servers) > 0 {
+		promptOpts = append(promptOpts, WithMCPServers(servers))
+	}
+	promptOpts = append(promptOpts, WithTemplate(opts.SystemPrompt))
+	text, promptSkills, err := generateSystemPromptWithIntegrationSkills(cm.cwd, cm.integrationSkills.Skills(ctx), promptOpts...)
+	if err != nil {
+		return renderedSystemPrompt{}, fmt.Errorf("failed to generate system prompt: %w", err)
+	}
+	return renderedSystemPrompt{text, cm.systemPromptDisplayData(opts, promptSkills)}, nil
+}
+
+// storeSystemPrompt stores prompt as the conversation's system message. It
+// stores nothing, and returns nil, for an empty prompt.
+func (cm *ConversationManager) storeSystemPrompt(ctx context.Context, prompt renderedSystemPrompt) (*generated.Message, error) {
+	if prompt.text == "" {
 		cm.logger.Info("Skipping empty system prompt generation")
 		return nil, nil
 	}
-
-	systemMessage := llm.Message{
-		Role:    llm.MessageRoleUser,
-		Content: []llm.Content{{Type: llm.ContentTypeText, Text: systemPrompt}},
-	}
-
 	created, err := cm.db.CreateMessage(ctx, db.CreateMessageParams{
 		ConversationID: cm.conversationID,
 		Type:           db.MessageTypeSystem,
-		LLMData:        systemMessage,
-		UsageData:      llm.Usage{},
-		DisplayData:    cm.systemPromptDisplayData(promptSkills),
+		LLMData: llm.Message{
+			Role:    llm.MessageRoleUser,
+			Content: []llm.Content{{Type: llm.ContentTypeText, Text: prompt.text}},
+		},
+		UsageData:   llm.Usage{},
+		DisplayData: prompt.display,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to store system prompt: %w", err)
@@ -1783,7 +1802,7 @@ func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generat
 	// the timestamp would reorder the conversation list every time a stream
 	// connects to a brand-new conversation.
 
-	cm.logger.Info("Stored system prompt", "length", len(systemPrompt))
+	cm.logger.Info("Stored system prompt", "length", len(prompt.text))
 	return created, nil
 }
 
@@ -1871,17 +1890,19 @@ func systemPromptDisplayData(cfg claudetool.ToolSetConfig, promptSkills []skills
 	}
 }
 
-func (cm *ConversationManager) systemPromptDisplayData(promptSkills []skills.Skill) map[string]any {
+func (cm *ConversationManager) systemPromptDisplayData(opts db.ConversationOptions, promptSkills []skills.Skill) map[string]any {
 	cfg := cm.toolSetConfig
-	cfg.ToolOverrides = cm.conversationOptions.ToolOverrides
-	cfg.DisableAllTools = cm.conversationOptions.DisableAllTools
+	cfg.ToolOverrides = opts.ToolOverrides
+	cfg.DisableAllTools = opts.DisableAllTools
 	cfg.InPlaceCompactor = inPlaceCompactor{cm: cm}
 	cfg.UserMessageFinder = cm.userMessageFinder()
 	cfg.UserChat = cm.userChat
 	return systemPromptDisplayData(cfg, promptSkills)
 }
 
-func (cm *ConversationManager) createSubagentSystemPrompt(ctx context.Context) (*generated.Message, error) {
+// renderSubagentSystemPrompt is renderSystemPrompt for subagents and
+// internal workers.
+func (cm *ConversationManager) renderSubagentSystemPrompt(ctx context.Context, opts db.ConversationOptions) (renderedSystemPrompt, error) {
 	// Only subagents use MCP tools; internal workers (commit tours,
 	// transcriptions) don't, and notifyMCPServersChanged skips them too.
 	var mcpServers []MCPServerInfo
@@ -1892,34 +1913,11 @@ func (cm *ConversationManager) createSubagentSystemPrompt(ctx context.Context) (
 			mcpServers = servers
 		}
 	}
-	systemPrompt, promptSkills, err := generateSubagentSystemPromptWithIntegrationSkills(cm.cwd, cm.role == roleSubagent, cm.integrationSkills.Skills(ctx), mcpServers)
+	text, promptSkills, err := generateSubagentSystemPromptWithIntegrationSkills(cm.cwd, cm.role == roleSubagent, cm.integrationSkills.Skills(ctx), mcpServers)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate subagent system prompt: %w", err)
+		return renderedSystemPrompt{}, fmt.Errorf("failed to generate subagent system prompt: %w", err)
 	}
-
-	if systemPrompt == "" {
-		cm.logger.Info("Skipping empty subagent system prompt generation")
-		return nil, nil
-	}
-
-	systemMessage := llm.Message{
-		Role:    llm.MessageRoleUser,
-		Content: []llm.Content{{Type: llm.ContentTypeText, Text: systemPrompt}},
-	}
-
-	created, err := cm.db.CreateMessage(ctx, db.CreateMessageParams{
-		ConversationID: cm.conversationID,
-		Type:           db.MessageTypeSystem,
-		LLMData:        systemMessage,
-		UsageData:      llm.Usage{},
-		DisplayData:    cm.systemPromptDisplayData(promptSkills),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to store subagent system prompt: %w", err)
-	}
-
-	cm.logger.Info("Stored subagent system prompt", "length", len(systemPrompt))
-	return created, nil
+	return renderedSystemPrompt{text, cm.systemPromptDisplayData(opts, promptSkills)}, nil
 }
 
 func subagentPromptCacheKey(system []llm.SystemContent, modelID string) string {
@@ -2126,12 +2124,15 @@ func (cm *ConversationManager) serviceForLoop(service llm.Service) (llm.Service,
 
 func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID string) error {
 	cm.mu.Lock()
-	if cm.loop != nil {
-		existingModel := cm.modelID
+	// cm.modelID is the conversation's model once hydrated, even without a
+	// loop: a caller that resolved its model before a settings change must
+	// not build the loop on the old one.
+	if existingModel := cm.modelID; existingModel != "" && modelID != "" && existingModel != modelID {
 		cm.mu.Unlock()
-		if existingModel != "" && modelID != "" && existingModel != modelID {
-			return fmt.Errorf("%w: conversation already uses model %s; requested %s", errConversationModelMismatch, existingModel, modelID)
-		}
+		return fmt.Errorf("%w: conversation already uses model %s; requested %s", errConversationModelMismatch, existingModel, modelID)
+	}
+	if cm.loop != nil {
+		cm.mu.Unlock()
 		return nil
 	}
 
@@ -2614,28 +2615,20 @@ type ModelChangeUserData struct {
 	// the model didn't change; the UI falls back to From/To.
 	FromDisplay string `json:"from_display,omitempty"`
 	ToDisplay   string `json:"to_display,omitempty"`
-	// ToolEnabled names a tool enabled mid-conversation (see
-	// EnableCompactInPlace); the model and reasoning are unchanged then.
-	ToolEnabled string `json:"tool_enabled,omitempty"`
-	Text        string `json:"text"`
-}
-
-// ModelSettingsChange describes a requested change to a conversation's model
-// and/or reasoning level. An empty NewModel leaves the model unchanged;
-// ReasoningSet gates the reasoning change (NewReasoning may legitimately be ""
-// to mean "use the service default").
-type ModelSettingsChange struct {
-	OldModel string
-	NewModel string // "" = model unchanged
-	// OldModelDisplay/NewModelDisplay are optional human-friendly model names
-	// (e.g. "Claude Opus 4.8") recorded into the marker for display. Empty is
-	// fine; the marker then shows the raw id.
-	OldModelDisplay string
-	NewModelDisplay string
-
-	ReasoningSet bool   // whether reasoning is being changed
-	OldReasoning string // user-facing name ("" means service default)
-	NewReasoning string // user-facing name ("" means service default)
+	// ProfileTo is set when the conversation switched profiles (see
+	// ApplySettings).
+	ProfileTo string `json:"profile_to,omitempty"`
+	// ToolsOn/ToolsOff list the tools a settings change turned on and off.
+	ToolsOn  []string `json:"tools_on,omitempty"`
+	ToolsOff []string `json:"tools_off,omitempty"`
+	// CompactNudgeTokens is the new compaction nudge threshold, if it changed.
+	CompactNudgeTokens int `json:"compact_nudge_tokens,omitempty"`
+	// SystemPromptChanged means a new system prompt follows the marker.
+	SystemPromptChanged bool `json:"system_prompt_changed,omitempty"`
+	// Previous are the settings before the change, which a fork from before
+	// the marker goes back to (see applyForkPointModelState).
+	Previous *ConversationSettings `json:"previous,omitempty"`
+	Text     string                `json:"text"`
 }
 
 // GetThinkingLevel returns the conversation's current user-facing reasoning
@@ -2644,109 +2637,6 @@ func (cm *ConversationManager) GetThinkingLevel() string {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 	return cm.conversationOptions.ThinkingLevel
-}
-
-// ApplyModelSettings changes the model and/or reasoning level the conversation
-// uses for subsequent turns. It persists the new settings, drops the in-memory
-// loop so the next turn rehydrates from the DB with the new model's service and
-// thinking level, and records a user-visible modelchange marker so the log
-// shows exactly where the change happened. Both the model and the reasoning
-// level are baked into the loop at build time, so any change requires a loop
-// rebuild.
-func (cm *ConversationManager) ApplyModelSettings(ctx context.Context, ch ModelSettingsChange) error {
-	cm.modelSettingsMu.Lock()
-	defer cm.modelSettingsMu.Unlock()
-
-	// Persist the reasoning level into the conversation options and mirror it
-	// in memory. The loop reset below marks the manager unhydrated, so the next
-	// turn re-reads options from the DB anyway; the in-memory update keeps state
-	// consistent for any reader that runs before rehydration.
-	if ch.ReasoningSet {
-		cm.mu.Lock()
-		opts := cm.conversationOptions
-		opts.ThinkingLevel = ch.NewReasoning
-		cm.conversationOptions = opts
-		cm.mu.Unlock()
-		if err := cm.db.UpdateConversationOptions(ctx, cm.conversationID, opts); err != nil {
-			return fmt.Errorf("failed to persist reasoning level: %w", err)
-		}
-	}
-
-	// Persist the new model. ForceUpdateConversationModel overwrites the
-	// existing value (unlike UpdateConversationModel, which only sets a NULL
-	// model).
-	if ch.NewModel != "" {
-		if err := cm.db.ForceUpdateConversationModel(ctx, cm.conversationID, ch.NewModel); err != nil {
-			return fmt.Errorf("failed to persist model switch: %w", err)
-		}
-	}
-
-	// Drop the loop pinned to the old settings so the next user message rebuilds
-	// it via ensureLoop. When a turn is active we must go through
-	// CancelConversation, not a bare ResetLoop: cancelling records the
-	// end-of-turn marker and clears the (persisted) agent_working flag, so the
-	// thinking indicator doesn't get stuck on. ResetLoop alone would leave
-	// agent_working=true until the next completed turn.
-	if cm.IsAgentWorking() {
-		if err := cm.CancelConversation(ctx); err != nil {
-			return fmt.Errorf("failed to cancel active turn before model change: %w", err)
-		}
-		// CancelConversation early-returns without clearing the flag when there
-		// is no in-memory loop (e.g. a hydrated manager with a stale persisted
-		// agent_working=true). Clear it defensively so the change never leaves
-		// the thinking indicator stuck on.
-		if cm.IsAgentWorking() {
-			cm.SetAgentWorking(false)
-		}
-	} else {
-		cm.ResetLoop()
-	}
-	return cm.recordModelChangeMarker(ctx, buildModelChangeUserData(ch))
-}
-
-// buildModelChangeUserData assembles the marker payload (structured fields plus
-// a human-readable one-line summary) for an applied model/reasoning change.
-func buildModelChangeUserData(ch ModelSettingsChange) ModelChangeUserData {
-	ud := ModelChangeUserData{
-		From:        ch.OldModel,
-		To:          ch.NewModel,
-		FromDisplay: ch.OldModelDisplay,
-		ToDisplay:   ch.NewModelDisplay,
-	}
-
-	// Prefer the human-friendly name in the summary sentence, falling back to
-	// the raw id when no display name is known.
-	oldName := ch.OldModel
-	if ch.OldModelDisplay != "" {
-		oldName = ch.OldModelDisplay
-	}
-	newName := ch.NewModel
-	if ch.NewModelDisplay != "" {
-		newName = ch.NewModelDisplay
-	}
-
-	var parts []string
-	if ch.NewModel != "" {
-		if ch.OldModel == "" {
-			parts = append(parts, fmt.Sprintf("Model set to %s", newName))
-		} else {
-			parts = append(parts, fmt.Sprintf("model changed from %s to %s", oldName, newName))
-		}
-	}
-	if ch.ReasoningSet {
-		ud.ReasoningFrom = reasoningDisplayName(ch.OldReasoning)
-		ud.ReasoningTo = reasoningDisplayName(ch.NewReasoning)
-		parts = append(parts, fmt.Sprintf("reasoning changed from %s to %s", ud.ReasoningFrom, ud.ReasoningTo))
-	}
-
-	summary := strings.Join(parts, "; ")
-	if summary != "" {
-		// Capitalize the first letter for a clean sentence when the model part
-		// (which is already capitalized) is absent.
-		summary = strings.ToUpper(summary[:1]) + summary[1:] + "."
-	}
-	ud.Text = summary
-	return ud
 }
 
 // reasoningDisplayName maps a stored reasoning level to a user-facing name,

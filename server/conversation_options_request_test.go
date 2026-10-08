@@ -24,9 +24,6 @@ const optionsWithCommitTour = `{
 	}
 }`
 
-// Only channel events set a conversation's system prompt.
-const optionsWithSystemPrompt = `{"system_prompt":"You are a pirate."}`
-
 func TestClientInternalConversationOptionsAreRejected(t *testing.T) {
 	tests := []struct {
 		name string
@@ -64,7 +61,7 @@ func TestClientInternalConversationOptionsAreRejected(t *testing.T) {
 			},
 		},
 	}
-	for _, options := range []string{optionsWithInternalFields, optionsWithCommitTour, optionsWithSystemPrompt} {
+	for _, options := range []string{optionsWithInternalFields, optionsWithCommitTour} {
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
 				server, database, _ := newTestServer(t)

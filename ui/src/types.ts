@@ -134,14 +134,54 @@ export interface ChatRequest {
   message: string;
   model?: string;
   cwd?: string;
-  conversation_options?: {
-    tool_overrides?: Record<string, "on" | "off">;
+  /** Settings start from the profile (the default one if absent); those
+   *  present override it. The model goes in `model` above. */
+  conversation_options?: Omit<SettingsChange, "model"> & {
     disable_all_tools?: boolean;
-    thinking_level?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
     disable_notifications?: boolean;
-    compact_nudge_tokens?: number;
   };
   queue?: boolean;
+}
+
+/** A conversation's adjustable settings; see Settings in server/settings.go. */
+export interface Settings {
+  /** "" in a profile means the server's default model. */
+  model: string;
+  /** "" means the model's default. */
+  thinking_level: string;
+  tool_overrides: Record<string, "on" | "off">;
+  /** 0 means the default. */
+  compact_nudge_tokens: number;
+  /** A Go text/template; "" means the built-in one. */
+  system_prompt: string;
+}
+
+/** A named Settings. Exactly one is the default. */
+export interface Profile extends Settings {
+  name: string;
+  default: boolean;
+}
+
+/** GET /api/conversation/<id>/settings: the settings and the profile they
+ *  came from, a label. */
+export interface ConversationSettings extends Settings {
+  profile: string;
+}
+
+/** The body of POST /api/conversation/<id>/settings: absent fields keep their
+ *  values; profile first replaces them all with the profile's. */
+export type SettingsChange = Partial<ConversationSettings>;
+
+export interface SystemPromptInfo {
+  template: string;
+  variables: { name: string; description: string }[];
+}
+/** Why a system prompt template can't be rendered; column is 0-based. */
+// Lines and columns (in characters) count from 1; left out when unknown.
+export interface TemplateProblem {
+  line?: number;
+  column?: number;
+  message: string;
 }
 // Notification event types
 export type NotificationEventType = "agent_done" | "agent_error";

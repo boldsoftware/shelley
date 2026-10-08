@@ -55,7 +55,9 @@ func compactedContext(logger logWarner, rows []generated.Message) (history []con
 			continue
 		}
 		if row.Type == string(db.MessageTypeSystem) {
-			system = append(system, msg)
+			// A settings change renders a new system prompt (see
+			// ApplySettings); the latest one is in effect.
+			system = []llm.Message{msg}
 			continue
 		}
 		history = append(history, contextItem{from: row.SequenceID, to: row.SequenceID, source: row, message: msg})

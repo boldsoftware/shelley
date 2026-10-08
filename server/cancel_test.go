@@ -873,14 +873,16 @@ func TestCancelSlowLoopWaitsForOrderedFinalization(t *testing.T) {
 	applyDone := make(chan error, 1)
 	go func() {
 		close(applyStarted)
-		applyDone <- manager.ApplyModelSettings(t.Context(), ModelSettingsChange{
-			OldModel: "predictable", NewModel: "predictable",
+		_, err := manager.ApplySettings(t.Context(), nil, func(cur ConversationSettings) (ConversationSettings, error) {
+			cur.ThinkingLevel = "high"
+			return cur, nil
 		})
+		applyDone <- err
 	}()
 	<-applyStarted
 	select {
 	case err := <-applyDone:
-		t.Fatalf("ApplyModelSettings crossed cancellation boundary: %v", err)
+		t.Fatalf("ApplySettings crossed cancellation boundary: %v", err)
 	default:
 	}
 
@@ -899,7 +901,7 @@ func TestCancelSlowLoopWaitsForOrderedFinalization(t *testing.T) {
 		t.Fatalf("second cancel status = %d: %s", result.code, result.body)
 	}
 	if err := <-applyDone; err != nil {
-		t.Fatalf("ApplyModelSettings: %v", err)
+		t.Fatalf("ApplySettings: %v", err)
 	}
 	manager.mu.Lock()
 	staleLoop := manager.loop
@@ -916,7 +918,7 @@ func TestCancelSlowLoopWaitsForOrderedFinalization(t *testing.T) {
 		t.Fatalf("transcript length = %d, want at least 5: %+v", len(transcript), transcript)
 	}
 	// Tail order: assistant tool_use → tool results → end-of-turn → model-change
-	// marker. The marker landing AFTER end-of-turn is the ApplyModelSettings
+	// marker. The marker landing AFTER end-of-turn is the ApplySettings
 	// contract this test defends.
 	tail := transcript[len(transcript)-4:]
 	assistant, results, endTurn, marker := tail[0], tail[1], tail[2], tail[3]
@@ -932,7 +934,7 @@ func TestCancelSlowLoopWaitsForOrderedFinalization(t *testing.T) {
 	if !endTurn.EndOfTurn || !strings.Contains(endTurn.Content[0].Text, "Operation cancelled") {
 		t.Fatalf("expected end-of-turn after results, got: %+v", endTurn)
 	}
-	if marker.EndOfTurn || len(marker.Content) == 0 || !strings.Contains(marker.Content[0].Text, "predictable") {
+	if marker.EndOfTurn || len(marker.Content) == 0 || !strings.Contains(marker.Content[0].Text, "Reasoning") {
 		t.Fatalf("expected model-change marker last, got: %+v", marker)
 	}
 	// Exactly one end-of-turn despite the double cancel.

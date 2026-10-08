@@ -938,7 +938,7 @@ test.describe("Status readout controls", () => {
   // conversation that already exists, conversation_options are locked server-side
   // (the send path stops resending them once promoted), so a purely local change
   // is a silent no-op that survives until the page is reloaded and then vanishes.
-  // Both have to go through /model.
+  // Both have to go through the server (POST /settings).
   test("reasoning pill persists server-side", async ({ page, request }) => {
     test.setTimeout(60000);
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -978,13 +978,13 @@ test.describe("Status readout controls", () => {
       "true",
     );
 
-    // Re-clicking the pill that is already selected must not fire another
-    // /model: the pills are radios and re-emit on such a click, and each command
+    // Re-clicking the pill that is already selected must not change settings
+    // again: the pills are radios and re-emit on such a click, and each command
     // rebuilds the agent loop and appends a marker to the log.
     const markersBefore = await page.locator('[data-testid="message-modelchange"]').count();
     const sent: string[] = [];
     page.on("request", (r) => {
-      if (r.url().includes("/chat")) sent.push(r.postData() || "");
+      if (r.url().includes("/settings")) sent.push(r.postData() || "");
     });
     await chosenPill.click();
     await page.waitForTimeout(1000);
@@ -1011,7 +1011,7 @@ test.describe("Status readout controls", () => {
     await expect(panel).toBeVisible();
     const sent: string[] = [];
     page.on("request", (r) => {
-      if (r.url().includes("/chat")) sent.push(r.postData() || "");
+      if (r.url().includes("/settings")) sent.push(r.postData() || "");
     });
     expect(
       (
@@ -1090,194 +1090,5 @@ test.describe("Status readout controls", () => {
       .locator(".status-readout-cwd-path")
       .evaluate((el) => getComputedStyle(el).textDecorationLine);
     expect(underline, "a disabled segment must not look clickable").toBe("none");
-  });
-});
-
-// The Advanced Settings popover (the gear beside the model picker on a new
-// conversation) opens upward from a trigger that sits in the bottom status bar,
-// and it is tall: one row per tool. Nothing about `bottom: 100%` knows how much
-// room is actually above the gear, so on a short window — a laptop with a
-// half-height browser, a phone in landscape — the list ran off the top of the
-// screen and the first tools were unreachable (measured top = -7 at 900x380).
-// The horizontal edges have the same problem from the other direction: the gear
-// sits mid-bar, so a fixed left/right anchor overflows one side or the other.
-test.describe("Advanced settings popover", () => {
-  // Widths and heights that bracket the interesting cases: a roomy desktop, the
-  // narrow desktop widths where the horizontal clamp does the work, short
-  // windows where the vertical clamp does, and the mobile breakpoint (<= 640px)
-  // where CSS pins the popover with position: fixed instead. The short ones are
-  // the regression: before the vertical clamp, 1280x360 put the top of the list
-  // 13px above the top of the screen and 900x380 put it 7px above.
-  for (const [width, height] of [
-    [1280, 800],
-    [900, 800],
-    [700, 700],
-    [1280, 360],
-    [900, 380],
-    // Shorter than the popover's minimum height, where it gives up on sitting
-    // above the gear and overlaps the status bar rather than going off-screen.
-    [900, 180],
-    [640, 700],
-    [390, 844],
-  ] as const) {
-    test(`stays on screen at ${width}x${height}`, async ({ page }) => {
-      await page.setViewportSize({ width, height });
-      // The gear only exists on a new/draft conversation. "/new" asks for that
-      // view explicitly; "/" auto-selects the most recent conversation, which
-      // in a shared-database suite run is whatever another spec just created.
-      await page.goto("/new");
-      const trigger = page.locator(".advanced-settings-trigger");
-      await expect(trigger).toBeVisible({ timeout: 30000 });
-      await trigger.click();
-
-      const popover = page.locator(".advanced-settings-popover");
-      await expect(popover).toBeVisible();
-
-      const margin = 8;
-      await expect
-        .poll(async () => {
-          const box = await popover.boundingBox();
-          if (!box) return -Infinity;
-          return Math.min(
-            box.x - margin,
-            width - margin - box.x - box.width,
-            box.y - margin,
-            height - margin - box.y - box.height,
-          );
-        }, "popover runs outside the viewport")
-        .toBeGreaterThanOrEqual(0);
-
-      const box = (await popover.boundingBox())!;
-      expect(box, "popover has no box").not.toBeNull();
-      // Not merely on-screen: inset by the margin the positioning code works
-      // to. A popover flush against an edge is the shape of an off-by-a-few in
-      // the clamp — `>= 0` waved through a version that sat 4px high because
-      // it forgot the popover's own margin-bottom.
-      expect(box.x, "popover runs off the left edge").toBeGreaterThanOrEqual(margin);
-      expect(box.x + box.width, "popover runs off the right edge").toBeLessThanOrEqual(
-        width - margin,
-      );
-      expect(box.y, "popover runs off the top edge").toBeGreaterThanOrEqual(margin);
-      expect(box.y + box.height, "popover runs off the bottom edge").toBeLessThanOrEqual(height);
-
-      // Whatever doesn't fit has to be reachable, which is the point of
-      // capping the height rather than letting the list overflow. Two distinct
-      // failures to guard, hence two checks: content that scrolls nowhere
-      // because it isn't clipped-and-scrollable at all, and content that a
-      // pointer can't scroll even though script can (setting scrollTop works
-      // under overflow: hidden, so the reachability check below passes there).
-      // Playwright's toBeVisible() covers neither: a row scrolled out of an
-      // ancestor's overflow still counts as visible to it.
-      const overflow = await popover.evaluate(async (el) => {
-        el.scrollTop = el.scrollHeight;
-        await new Promise((r) => requestAnimationFrame(r));
-        const last = el.querySelector(".tool-override-row:last-child")!.getBoundingClientRect();
-        const box = el.getBoundingClientRect();
-        return {
-          overflows: el.scrollHeight > el.clientHeight,
-          overflowY: getComputedStyle(el).overflowY,
-          lastRowInside: last.bottom <= box.bottom + 1 && last.top >= box.top - 1,
-        };
-      });
-      expect(overflow.lastRowInside, "the end of the tool list cannot be scrolled into view").toBe(
-        true,
-      );
-      if (overflow.overflows) {
-        expect(
-          ["auto", "scroll"],
-          "the tool list overflows but the user cannot scroll it",
-        ).toContain(overflow.overflowY);
-      }
-    });
-  }
-
-  // Exercise fractional anchor positions and fractional panel widths separately:
-  // rounding the offset or measuring offsetWidth can each cross the margin.
-  for (const [panelWidth, anchorFraction] of [
-    [560, 0.125],
-    [560.375, 0.875],
-  ]) {
-    test(`keeps the viewport inset with a ${panelWidth}px panel and ${anchorFraction}px anchor`, async ({
-      page,
-    }) => {
-      const width = 900;
-      const margin = 8;
-      await page.setViewportSize({ width, height: 800 });
-      await page.goto("/new");
-      await page.addStyleTag({
-        content: `.advanced-settings-popover { width: ${panelWidth}px; min-width: ${panelWidth}px; max-width: ${panelWidth}px; }`,
-      });
-
-      const trigger = page.locator(".advanced-settings-trigger");
-      await expect(trigger).toBeVisible({ timeout: 30000 });
-      const fraction = await page.locator(".advanced-settings-wrapper").evaluate((el, target) => {
-        const left = el.getBoundingClientRect().left;
-        const shift = (target - (left - Math.floor(left)) + 1) % 1;
-        (el as HTMLElement).style.left = `${shift}px`;
-        const shiftedLeft = el.getBoundingClientRect().left;
-        return shiftedLeft - Math.floor(shiftedLeft);
-      }, anchorFraction);
-      expect(fraction).toBeCloseTo(anchorFraction, 3);
-
-      await trigger.click();
-      const popover = page.locator(".advanced-settings-popover");
-      await expect(popover).toBeVisible();
-      await expect
-        .poll(async () => {
-          const box = await popover.boundingBox();
-          return box ? width - margin - box.x - box.width : -Infinity;
-        }, "fractional geometry put the popover past the right margin")
-        .toBeGreaterThanOrEqual(0);
-    });
-  }
-
-  // Resizing while it is open has to re-run the same clamp, and it has to do so
-  // against the post-resize layout. The status bar sits at the bottom of a flex
-  // column, so the gear's position is only settled after the resize relayouts;
-  // measuring on the resize event itself read the old position and left the
-  // popover 25px off the top here.
-  test("re-clamps when the window shrinks while open", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto("/new");
-    const trigger = page.locator(".advanced-settings-trigger");
-    await expect(trigger).toBeVisible({ timeout: 30000 });
-    await trigger.click();
-    const popover = page.locator(".advanced-settings-popover");
-    await expect(popover).toBeVisible();
-
-    await page.setViewportSize({ width: 900, height: 320 });
-    await expect(async () => {
-      const box = (await popover.boundingBox())!;
-      expect(box.x).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width).toBeLessThanOrEqual(900);
-      expect(box.y).toBeGreaterThanOrEqual(0);
-      expect(box.y + box.height).toBeLessThanOrEqual(320);
-    }).toPass({ timeout: 5000 });
-  });
-
-  // Crossing the 640px breakpoint hands positioning back to CSS, which pins the
-  // popover with position: fixed. The JS has to leave nothing behind when it
-  // does: on a short desktop window it writes an inline `bottom`, and that
-  // would fight the fixed placement if it outlived the handoff.
-  test("hands off cleanly to the mobile breakpoint", async ({ page }) => {
-    await page.setViewportSize({ width: 900, height: 180 });
-    await page.goto("/new");
-    const trigger = page.locator(".advanced-settings-trigger");
-    await expect(trigger).toBeVisible({ timeout: 30000 });
-    await trigger.click();
-    const popover = page.locator(".advanced-settings-popover");
-    await expect(popover).toBeVisible();
-    // The regime that writes `bottom`: too short to sit above the gear.
-    expect(await popover.evaluate((el) => (el as HTMLElement).style.bottom)).not.toBe("");
-
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expect(async () => {
-      const styled = await popover.evaluate((el) => ({
-        inline: el.getAttribute("style") || "",
-        position: getComputedStyle(el).position,
-      }));
-      expect(styled.inline, "inline placement outlived the handoff to CSS").toBe("");
-      expect(styled.position).toBe("fixed");
-    }).toPass({ timeout: 5000 });
   });
 });

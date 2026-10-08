@@ -16,9 +16,11 @@ test.describe("Compact in Place without the tool", () => {
     await page.locator(".context-usage-label").click();
     await page.getByTestId("compact-in-place-button").click();
 
-    await expect(page.getByTestId("message-modelchange")).toContainText(
+    await expect(page.getByTestId("message-modelchange")).toHaveAttribute(
+      "aria-label",
       "Enabled the compact_in_place tool.",
     );
+    await expect(page.getByTestId("message-modelchange")).toContainText("+compact_in_place");
     await expect(page.getByText("Compact your context in place.")).toBeVisible();
 
     const body = await (await request.get(`/api/conversation/${conversationId}`)).json();

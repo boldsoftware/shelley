@@ -1013,3 +1013,25 @@ func TestBtwReaderCannotBeForked(t *testing.T) {
 		t.Fatalf("fork BTW status=%d body=%s", w.Code, w.Body.String())
 	}
 }
+
+// A /btw reader can change its model and reasoning, as /model does, but not
+// its fixed tools and prompt.
+func TestBtwChangesOnlyModelSettings(t *testing.T) {
+	server, database, held, parent := newBtwTest(t)
+	reader := postBtw(t, server, parent.ConversationID, "echo: settings", false)
+	releaseAndWaitIdle(t, server, reader.ConversationID, held.waitCall(t, "echo: settings"))
+	manager, err := server.getOrCreateConversationManager(t.Context(), reader.ConversationID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	high := "high"
+	if _, err := server.changeSettings(t.Context(), manager, SettingsChange{ThinkingLevel: &high}); err != nil {
+		t.Fatalf("changing reasoning: %v", err)
+	}
+	if _, err := server.changeSettings(t.Context(), manager, SettingsChange{ToolOverrides: map[string]string{"bash": "off"}}); !errors.Is(err, errSettingsUnavailable) {
+		t.Fatalf("changing tools: got %v, want errSettingsUnavailable", err)
+	}
+	if got := btwSystemData(t, database, reader.ConversationID, 1); got == "" {
+		t.Fatal("reader lost its system prompt")
+	}
+}

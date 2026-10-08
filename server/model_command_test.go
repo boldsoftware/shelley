@@ -468,8 +468,8 @@ func TestModelCommandReasoningOnly(t *testing.T) {
 	if ud.To != "" {
 		t.Fatalf("reasoning-only change must not record a model switch, got To=%q", ud.To)
 	}
-	if ud.ReasoningFrom != "default" || ud.ReasoningTo != "high" {
-		t.Fatalf("expected reasoning default->high, got %q->%q", ud.ReasoningFrom, ud.ReasoningTo)
+	if ud.ReasoningFrom != "model's default" || ud.ReasoningTo != "high" {
+		t.Fatalf("expected reasoning model's default->high, got %q->%q", ud.ReasoningFrom, ud.ReasoningTo)
 	}
 
 	// Next turn must send ThinkingLevelHigh to the model. We check that SOME

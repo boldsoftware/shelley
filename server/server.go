@@ -568,6 +568,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/custom-models-test", s.handleTestModel)
 
 	s.registerMCPRoutes(api, mux)
+	s.registerProfileRoutes(api)
 
 	// Notification channels API
 	api.HandleFunc("GET /api/notification-channels", s.handleListNotificationChannels)

@@ -9,6 +9,11 @@ export function storedSelectedModel(): string | undefined {
   return localStorage.getItem(SELECTED_MODEL_KEY) || undefined;
 }
 
+/** The model the server uses when none is named, as a profile's "" model. */
+export function serverDefaultModel(): string {
+  return window.__SHELLEY_INIT__?.default_model || "";
+}
+
 // pickReadyModel resolves the model to start with: the caller's preference if
 // it is ready, else the server's default if that is ready, else any ready
 // model. "" when the catalog serves nothing ready — deliberately no invented
@@ -17,7 +22,6 @@ export function storedSelectedModel(): string | undefined {
 export function pickReadyModel(models: Pick<Model, "id" | "ready">[], preferred?: string): string {
   const ready = (id?: string) => !!id && models.some((m) => m.id === id && m.ready);
   if (ready(preferred)) return preferred as string;
-  const serverDefault = window.__SHELLEY_INIT__?.default_model;
-  if (ready(serverDefault)) return serverDefault as string;
+  if (ready(serverDefaultModel())) return serverDefaultModel();
   return models.find((m) => m.ready)?.id || "";
 }

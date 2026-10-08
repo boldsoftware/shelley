@@ -28,7 +28,8 @@ export const statusPickerDt = {
   list: { padding: "0.25rem 0", gap: "0" },
   option: {
     color: "var(--text-primary)",
-    padding: "0.375rem 0.75rem",
+    // ModelPicker's option wrapper pads itself, to take the whole option.
+    padding: "0",
     borderRadius: "0",
     focusBackground: "var(--bg-tertiary)",
     focusColor: "var(--text-primary)",

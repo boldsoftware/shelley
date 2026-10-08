@@ -1087,7 +1087,7 @@ func (s *turnRecordingService) Do(ctx context.Context, request *llm.Request) (*l
 }
 
 // The message that starts a chat's conversation configures it: its system
-// prompt replaces Shelley's, and its first reply answers it in place of the
+// prompt becomes the conversation's custom one, and its first reply answers it in place of the
 // agent. A later message's are ignored. The user follows the conversation
 // in the chat, so it sends no notifications.
 func TestChannelFirstMessageConfiguresConversation(t *testing.T) {
@@ -1112,6 +1112,14 @@ func TestChannelFirstMessageConfiguresConversation(t *testing.T) {
 		return resp.MessageID
 	}
 	hey := map[string]string{"text": "Hey", "system_prompt": "You are texting.", "first_reaction": "❤️", "first_reply": welcome}
+
+	// The system prompt is a template; one that can't render starts nothing.
+	if w := postJSON(t, h, "/api/debug/channels/debug-bad/receive", map[string]string{"text": "Hey", "system_prompt": "{{.Nope}}"}); w.Code == http.StatusOK {
+		t.Fatalf("bad template: status %d", w.Code)
+	}
+	if _, err := conversationByExternalID(t, database, "debug-bad"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("conversation for a bad template: %v", err)
+	}
 
 	heyID := receive(hey)
 	server.channelDebug.mu.Lock()
@@ -1150,7 +1158,7 @@ func TestChannelFirstMessageConfiguresConversation(t *testing.T) {
 		t.Fatalf("agent turns = %d, want 1: the second message's", len(turns))
 	}
 	req := turns[0]
-	if len(req.System) == 0 || req.System[0].Text != "You are texting." {
+	if len(req.System) == 0 || req.System[0].Text != "You are texting.\n" {
 		t.Fatalf("system = %+v", req.System)
 	}
 	// The agent sees the first reply as its own message_user call.
@@ -1196,7 +1204,7 @@ func TestChannelFirstMessageConfiguresConversation(t *testing.T) {
 	model.mu.Lock()
 	turns = slices.Clone(model.turns)
 	model.mu.Unlock()
-	if len(turns) != 2 || turns[1].System[0].Text != "You are texting." {
+	if len(turns) != 2 || turns[1].System[0].Text != "You are texting.\n" {
 		t.Fatalf("agent turns = %d, want 2 under the conversation's system prompt", len(turns))
 	}
 }

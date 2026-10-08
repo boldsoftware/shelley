@@ -63,8 +63,9 @@ type channelEvent struct {
 	// exed recorded it and answered; replies are refused until they write
 	// again.
 	OptOut bool `json:"opt_out"`
-	// SystemPrompt, if set, is the system prompt of the conversation the
-	// message starts, in place of Shelley's.
+	// SystemPrompt, if set, is the custom system prompt of the conversation
+	// the message starts: a template, like a profile's (see
+	// ConversationOptions.SystemPrompt).
 	SystemPrompt string `json:"system_prompt"`
 	// FirstReaction and FirstReply, if either is set, answer a message that
 	// starts the conversation in place of the agent: a reaction to it and a
@@ -371,8 +372,8 @@ func (s *Server) recoverChannelQueues(ctx context.Context) {
 // channelConversation returns the conversation of the external chat chatID,
 // creating it on the chat's first message with the default model,
 // message_user, and systemPrompt if set. It creates none
-// if the model is unavailable, so failing deliveries leave no empty
-// conversations.
+// if the model is unavailable or systemPrompt isn't a valid template, so
+// failing deliveries leave no empty conversations.
 func (s *Server) channelConversation(ctx context.Context, endpoint, chatID, systemPrompt string) (*generated.Conversation, error) {
 	var conv generated.Conversation
 	err := s.db.Queries(ctx, func(q *generated.Queries) (err error) {
@@ -385,6 +386,9 @@ func (s *Server) channelConversation(ctx context.Context, endpoint, chatID, syst
 	modelID := s.effectiveDefaultModel(s.getModelList())
 	if _, err := s.llmManager.GetService(modelID); err != nil {
 		return nil, fmt.Errorf("model %s: %w", modelID, err)
+	}
+	if err := validateSystemPromptTemplate(systemPrompt); err != nil {
+		return nil, fmt.Errorf("system_prompt: %w", err)
 	}
 	// The agent answers the chat with message_user.
 	opts := db.ConversationOptions{

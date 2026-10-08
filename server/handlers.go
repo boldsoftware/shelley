@@ -923,6 +923,12 @@ func (s *Server) registerConversationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/conversation/{id}/enable-compact-in-place", func(w http.ResponseWriter, r *http.Request) {
 		s.handleEnableCompactInPlace(w, r, r.PathValue("id"))
 	})
+	mux.HandleFunc("GET /api/conversation/{id}/settings", func(w http.ResponseWriter, r *http.Request) {
+		s.handleGetConversationSettings(w, r, r.PathValue("id"))
+	})
+	mux.HandleFunc("POST /api/conversation/{id}/settings", func(w http.ResponseWriter, r *http.Request) {
+		s.handleConversationSettings(w, r, r.PathValue("id"))
+	})
 }
 
 // handleGetConversation handles GET /conversation/<id>
@@ -998,12 +1004,12 @@ func derefString(p *string) string {
 
 // ChatRequest represents a chat message from the user
 type ChatRequest struct {
-	Message              string                  `json:"message"`
-	Model                string                  `json:"model,omitempty"`
-	Cwd                  string                  `json:"cwd,omitempty"`
-	ConversationOptions  *db.ConversationOptions `json:"conversation_options,omitempty"`
-	Queue                bool                    `json:"queue,omitempty"`
-	SenderConversationID string                  `json:"sender_conversation_id,omitempty"`
+	Message              string       `json:"message"`
+	Model                string       `json:"model,omitempty"`
+	Cwd                  string       `json:"cwd,omitempty"`
+	ConversationOptions  *ChatOptions `json:"conversation_options,omitempty"`
+	Queue                bool         `json:"queue,omitempty"`
+	SenderConversationID string       `json:"sender_conversation_id,omitempty"`
 }
 
 // handleChatConversation handles POST /conversation/<id>/chat
@@ -1022,8 +1028,8 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	if req.ConversationOptions != nil &&
-		(req.ConversationOptions.Kind != "" || req.ConversationOptions.ParentPointer != nil || req.ConversationOptions.CommitTour != nil || req.ConversationOptions.SystemPrompt != "") {
-		http.Error(w, "kind, parent_pointer, commit_tour, and system_prompt are internal conversation options", http.StatusBadRequest)
+		(req.ConversationOptions.Kind != "" || req.ConversationOptions.ParentPointer != nil || req.ConversationOptions.CommitTour != nil) {
+		http.Error(w, "kind, parent_pointer, and commit_tour are internal conversation options", http.StatusBadRequest)
 		return
 	}
 
@@ -1208,26 +1214,50 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		// tool overrides) only travels with the promoting
 		// chat request, so without this the selection is dropped and reasoning
 		// is silently disabled for adaptive models.
-		conversationOptions := req.ConversationOptions
-		if conversationOptions != nil {
-			if msg := validateConversationOptions(*conversationOptions); msg != "" {
+		// Like a new conversation, the draft starts from a profile; see
+		// newConversationSettings. The draft's own model and settings count
+		// as set, where set, and the request's override them.
+		stored := db.ParseConversationOptions(existing.ConversationOptions)
+		change := storedSettingsChange(derefString(existing.Model), stored)
+		conversationOptions := stored
+		if req.ConversationOptions != nil {
+			conversationOptions = req.ConversationOptions.ConversationOptions
+			if msg := validateConversationOptions(conversationOptions); msg != "" {
 				http.Error(w, msg, http.StatusBadRequest)
 				return
 			}
-			if msg := validateModelReasoningLevel(findModelInfo(modelID, s.getModelList()), conversationOptions.ThinkingLevel); msg != "" {
-				http.Error(w, msg, http.StatusBadRequest)
-				return
-			}
+			change = change.overlay(req.ConversationOptions.Change)
 		}
+		if req.Model != "" {
+			change.Model = &req.Model
+		}
+		modelList := s.getModelList()
+		settings, err := s.newConversationSettings(ctx, change, modelList)
+		var invalid invalidSettings
+		if errors.As(err, &invalid) {
+			http.Error(w, invalid.Error(), http.StatusBadRequest)
+			return
+		}
+		if err != nil {
+			s.internalError(w, "Failed to resolve profile", err, "conversationID", conversationID)
+			return
+		}
+		settings.applyTo(&conversationOptions)
 		var cwdOverride, modelOverride *string
+		if settings.Model != modelID {
+			if llmService, err = s.llmManager.GetService(settings.Model); err != nil {
+				http.Error(w, unsupportedModelMessage(settings.Model, modelList), http.StatusBadRequest)
+				return
+			}
+			modelID = settings.Model
+		}
 		if req.Cwd != "" {
 			cwdOverride = &req.Cwd
 		}
-		if req.Model != "" {
-			// req.Model was already validated against the LLM manager above.
-			modelOverride = &req.Model
+		if modelID != derefString(existing.Model) {
+			modelOverride = &modelID
 		}
-		promoted, err := s.db.PromoteDraft(ctx, conversationID, cwdOverride, modelOverride, conversationOptions)
+		promoted, err := s.db.PromoteDraft(ctx, conversationID, cwdOverride, modelOverride, &conversationOptions)
 		switch {
 		case errors.Is(err, db.ErrConversationNotDraft):
 			// A concurrent send won the promote race; its overrides stand and
@@ -1449,16 +1479,37 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get LLM service for the requested model
-	modelID := req.Model
-	if modelID == "" {
-		modelID = s.effectiveDefaultModel(s.getModelList())
+	var convOpts db.ConversationOptions
+	var change SettingsChange
+	if req.ConversationOptions != nil {
+		convOpts, change = req.ConversationOptions.ConversationOptions, req.ConversationOptions.Change
+		if msg := validateConversationOptions(convOpts); msg != "" {
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
 	}
+	if req.Model != "" {
+		change.Model = &req.Model
+	}
+	modelList := s.getModelList()
+	settings, err := s.newConversationSettings(ctx, change, modelList)
+	var invalid invalidSettings
+	if errors.As(err, &invalid) {
+		http.Error(w, invalid.Error(), http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		s.internalError(w, "Failed to resolve profile", err)
+		return
+	}
+	settings.applyTo(&convOpts)
+	modelID := settings.Model
 
+	// Get LLM service for the requested model
 	llmService, err := s.llmManager.GetService(modelID)
 	if err != nil {
 		s.logger.Error("Unsupported model requested", "model", modelID, "error", err)
-		http.Error(w, unsupportedModelMessage(modelID, s.getModelList()), http.StatusBadRequest)
+		http.Error(w, unsupportedModelMessage(modelID, modelList), http.StatusBadRequest)
 		return
 	}
 
@@ -1466,18 +1517,6 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 	var cwdPtr *string
 	if req.Cwd != "" {
 		cwdPtr = &req.Cwd
-	}
-	var convOpts db.ConversationOptions
-	if req.ConversationOptions != nil {
-		convOpts = *req.ConversationOptions
-		if msg := validateConversationOptions(convOpts); msg != "" {
-			http.Error(w, msg, http.StatusBadRequest)
-			return
-		}
-		if msg := validateModelReasoningLevel(findModelInfo(modelID, s.getModelList()), convOpts.ThinkingLevel); msg != "" {
-			http.Error(w, msg, http.StatusBadRequest)
-			return
-		}
 	}
 
 	conversation, err := s.db.CreateConversation(ctx, nil, true, cwdPtr, &modelID, convOpts)
@@ -1883,17 +1922,10 @@ func (s *Server) handleContinueConversation(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Build the model-switch delta (empty when already on the target model, in
-	// which case ContinueAfterRefusal just re-fires without a modelchange marker).
-	currentReasoning := manager.GetThinkingLevel()
-	ch := ModelSettingsChange{OldModel: currentModel, OldReasoning: currentReasoning}
-	if newModel != currentModel {
-		ch.NewModel = newModel
-		ch.OldModelDisplay = modelDisplayName(currentModel, modelList)
-		ch.NewModelDisplay = modelDisplayName(newModel, modelList)
+	switchModel := func(cur ConversationSettings) (ConversationSettings, error) {
+		return s.resolveSettings(ctx, cur, SettingsChange{Model: &newModel}, modelList)
 	}
-
-	if err := manager.ContinueAfterRefusal(ctx, ch, llmService, newModel); err != nil {
+	if err := manager.ContinueAfterRefusal(ctx, modelList, switchModel, llmService, newModel); err != nil {
 		if errors.Is(err, errNotRefusal) {
 			w.WriteHeader(http.StatusAccepted)
 			json.NewEncoder(w).Encode(map[string]string{"status": "not_applicable"})
@@ -2616,54 +2648,31 @@ func (s *Server) handleModelCommand(ctx context.Context, w http.ResponseWriter, 
 		}
 	}
 
-	// Validate the chosen model is present, ready, and constructible.
-	if modelSet {
-		if _, err := s.llmManager.GetService(newModel); err != nil || !isReadyModel(newModel, modelList) {
-			return reply(fmt.Sprintf("Unknown or unavailable model %q.\n\n%s", newModel, modelCommandStatus(currentModel, currentReasoning, modelList)))
-		}
-	}
-
-	// Validate/reset reasoning against the model that will be active after this
-	// command. A model switch with no explicit level falls back to that model's
-	// default when the current level is unavailable.
-	targetModel := currentModel
-	if modelSet {
-		targetModel = newModel
-	}
-	targetInfo := findModelInfo(targetModel, modelList)
-	if reasoningSet {
-		if msg := validateModelReasoningLevel(targetInfo, newReasoning); msg != "" {
-			return reply(msg)
-		}
-	} else if modelSet {
-		if rounded, changed := roundModelReasoningLevel(targetInfo, currentReasoning); changed {
-			reasoningSet = true
-			newReasoning = rounded
-		}
-	}
-
-	// Reduce to the actual deltas: ignore no-op changes.
-	ch := ModelSettingsChange{OldModel: currentModel, OldReasoning: currentReasoning}
-	if modelSet && newModel != currentModel {
-		ch.NewModel = newModel
-		ch.OldModelDisplay = modelDisplayName(currentModel, modelList)
-		ch.NewModelDisplay = modelDisplayName(newModel, modelList)
-	}
-	if reasoningSet && newReasoning != currentReasoning {
-		ch.ReasoningSet = true
-		ch.NewReasoning = newReasoning
-	}
-
-	if ch.NewModel == "" && !ch.ReasoningSet {
+	if (!modelSet || newModel == currentModel) && (!reasoningSet || newReasoning == currentReasoning) {
 		return reply(fmt.Sprintf("Already using model %s with reasoning %s.", currentModel, reasoningDisplayName(currentReasoning)))
 	}
-
-	if err := manager.ApplyModelSettings(ctx, ch); err != nil {
+	var change SettingsChange
+	if modelSet {
+		change.Model = &newModel
+	}
+	if reasoningSet {
+		change.ThinkingLevel = &newReasoning
+	}
+	// changeSettings validates the model and level, and rounds the level to
+	// one a newly picked model has.
+	_, err := s.changeSettings(ctx, manager, change)
+	var invalid invalidSettings
+	switch {
+	case errors.As(err, &invalid):
+		return reply(fmt.Sprintf("%s\n\n%s", err, modelCommandStatus(currentModel, currentReasoning, modelList)))
+	case errors.Is(err, errSettingsUnavailable), errors.Is(err, errAgentWorking):
+		return reply(err.Error())
+	case err != nil:
 		s.internalError(w, "Failed to apply model settings", err, "conversationID", conversationID)
 		return true
 	}
-	// ApplyModelSettings already broadcast the updated conversation (carrying
-	// the new model) alongside the modelchange marker, so the composer follows
+	// ApplySettings already broadcast the updated conversation (carrying the
+	// new model) alongside the modelchange marker, so the composer follows
 	// without an extra notify here.
 	writeModelCommandAccepted(w)
 	return true
@@ -3871,11 +3880,13 @@ func (s *Server) applyForkPointModelState(ctx context.Context, sourceID, forkID 
 	// Walk markers after the cutoff in order; the FIRST model "from" and the
 	// FIRST reasoning "from" we encounter are the values in effect at the fork
 	// point (each marker's pre-state). Later markers only reflect changes the
-	// fork should not inherit.
+	// fork should not inherit. Markers that carry the previous settings
+	// whole (see ApplySettings) give the rest of them too.
 	var modelAtFork string
 	var haveModel bool
 	var reasoningAtFork string
 	var haveReasoning bool
+	var settingsAtFork *ConversationSettings
 	for _, m := range msgs {
 		if m.SequenceID <= cutoff || m.Type != string(db.MessageTypeModelChange) || m.UserData == nil {
 			continue
@@ -3883,6 +3894,16 @@ func (s *Server) applyForkPointModelState(ctx context.Context, sourceID, forkID 
 		var ud ModelChangeUserData
 		if err := json.Unmarshal([]byte(*m.UserData), &ud); err != nil {
 			continue // informational markers / malformed payloads carry no state
+		}
+		if ud.Previous != nil {
+			settingsAtFork = ud.Previous
+			if !haveModel {
+				modelAtFork, haveModel = ud.Previous.Model, true
+			}
+			if !haveReasoning {
+				reasoningAtFork, haveReasoning = ud.Previous.ThinkingLevel, true
+			}
+			break
 		}
 		if !haveModel && ud.To != "" {
 			// ud.From may be "" (first-ever model set); that's still the
@@ -3907,15 +3928,18 @@ func (s *Server) applyForkPointModelState(ctx context.Context, sourceID, forkID 
 			return fmt.Errorf("set fork model: %w", err)
 		}
 	}
-	if haveReasoning {
-		fork, err := s.db.GetConversationByID(ctx, forkID)
+	if haveReasoning || settingsAtFork != nil {
+		_, _, err := s.db.ModifyConversationOptions(ctx, forkID, func(o *db.ConversationOptions) bool {
+			if settingsAtFork != nil {
+				settingsAtFork.applyTo(o)
+			}
+			if haveReasoning {
+				o.ThinkingLevel = reasoningAtFork
+			}
+			return true
+		})
 		if err != nil {
-			return fmt.Errorf("reload fork: %w", err)
-		}
-		opts := db.ParseConversationOptions(fork.ConversationOptions)
-		opts.ThinkingLevel = reasoningAtFork
-		if err := s.db.UpdateConversationOptions(ctx, forkID, opts); err != nil {
-			return fmt.Errorf("set fork reasoning: %w", err)
+			return fmt.Errorf("set fork settings: %w", err)
 		}
 	}
 	return nil
@@ -4081,8 +4105,11 @@ func validateModelReasoningLevel(model *ModelInfo, level string) string {
 }
 
 func validateConversationOptions(opts db.ConversationOptions) string {
-	if opts.Kind != "" || opts.ParentPointer != nil || opts.CommitTour != nil || opts.SystemPrompt != "" {
-		return "kind, parent_pointer, commit_tour, and system_prompt are internal conversation options"
+	if opts.Kind != "" || opts.ParentPointer != nil || opts.CommitTour != nil {
+		return "kind, parent_pointer, and commit_tour are internal conversation options"
+	}
+	if err := validateSystemPromptTemplate(opts.SystemPrompt); err != nil {
+		return "Invalid system_prompt: " + err.Error()
 	}
 	for name, v := range opts.ToolOverrides {
 		if v != "on" && v != "off" {
@@ -4127,20 +4154,19 @@ func (s *Server) handleCreateDraft(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	modelID := req.Model
-	if modelID == "" {
-		modelID = s.effectiveDefaultModel(s.getModelList())
-	}
 	// A draft is autosaved composer text, not a turn, so it must not require a
 	// usable model. Rejecting it would discard what the user typed and wedge
 	// the client's draft autosave in a retry loop while they are off fixing
 	// their model setup. An EXPLICIT model is still validated (that's a real
-	// client error); an empty/defaulted one is left to the promoting send.
+	// client error); an empty one stays unset, for the promoting send to
+	// resolve from the profile.
+	var modelPtr *string
 	if req.Model != "" {
-		if _, err := s.llmManager.GetService(modelID); err != nil {
-			http.Error(w, unsupportedModelMessage(modelID, s.getModelList()), http.StatusBadRequest)
+		if _, err := s.llmManager.GetService(req.Model); err != nil {
+			http.Error(w, unsupportedModelMessage(req.Model, s.getModelList()), http.StatusBadRequest)
 			return
 		}
+		modelPtr = &req.Model
 	}
 	var cwdPtr *string
 	if req.Cwd != "" {
@@ -4153,12 +4179,14 @@ func (s *Server) handleCreateDraft(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
-		if msg := validateModelReasoningLevel(findModelInfo(modelID, s.getModelList()), convOpts.ThinkingLevel); msg != "" {
-			http.Error(w, msg, http.StatusBadRequest)
-			return
+		if modelPtr != nil {
+			if msg := validateModelReasoningLevel(findModelInfo(*modelPtr, s.getModelList()), convOpts.ThinkingLevel); msg != "" {
+				http.Error(w, msg, http.StatusBadRequest)
+				return
+			}
 		}
 	}
-	conv, err := s.db.CreateDraftConversation(ctx, cwdPtr, &modelID, convOpts, req.Draft)
+	conv, err := s.db.CreateDraftConversation(ctx, cwdPtr, modelPtr, convOpts, req.Draft)
 	if err != nil {
 		s.internalError(w, "Failed to create draft", err)
 		return

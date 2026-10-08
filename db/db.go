@@ -303,9 +303,6 @@ type ConversationOptions struct {
 	// discord, ntfy) for this conversation. Useful for cron-style or
 	// self-invoked conversations that shouldn't ping the user.
 	DisableNotifications bool `json:"disable_notifications,omitempty"`
-	// SystemPrompt, if set, is the conversation's system prompt in place of
-	// the generated one.
-	SystemPrompt string `json:"system_prompt,omitempty"`
 	// CompactNudgeTokens is the context size at which the agent is first told
 	// the size of its context while the compact_in_place tool is enabled.
 	// Zero means the default (250k).
@@ -315,6 +312,13 @@ type ConversationOptions struct {
 	// tool mid-conversation (the Compact in Place button): they asked for a
 	// compaction, not for an agent that watches its context.
 	DisableCompactNudges bool `json:"disable_compact_nudges,omitempty"`
+	// Profile names the profile the settings were last taken from. It is a
+	// label: the settings themselves are stored here and in the model column.
+	Profile string `json:"profile,omitempty"`
+	// SystemPrompt is the text/template the system prompt is rendered from,
+	// set by a profile, the user, or a channel's first message. Empty means
+	// the built-in one.
+	SystemPrompt string `json:"system_prompt,omitempty"`
 }
 
 // ParseConversationOptions parses a JSON string into ConversationOptions.

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"slices"
 	"strconv"
@@ -132,21 +133,25 @@ func (cm *ConversationManager) EnableCompactInPlace(ctx context.Context) error {
 		// Its loop has a fixed toolset; see ensureLoop.
 		return errCompactInPlaceUnavailable
 	}
-	// Serializes with ApplyModelSettings, which writes back the in-memory
+	// Serializes with ApplySettings, which writes back the in-memory
 	// options it read.
 	cm.modelSettingsMu.Lock()
 	defer cm.modelSettingsMu.Unlock()
+	var previous ConversationSettings
 	err := cm.resetLoopAfter(true, func() error {
 		if cm.IsAgentWorking() {
 			return errAgentWorking
 		}
+		conv, err := cm.db.GetConversationByID(ctx, cm.conversationID)
+		if err != nil {
+			return err
+		}
+		previous = conversationSettings(*conv)
 		opts, changed, err := cm.db.ModifyConversationOptions(ctx, cm.conversationID, func(o *db.ConversationOptions) bool {
 			if claudetool.IsToolEnabled(claudetool.CompactInPlaceName, o.ToolOverrides, o.DisableAllTools) {
 				return false
 			}
-			if o.ToolOverrides == nil {
-				o.ToolOverrides = map[string]string{}
-			}
+			o.ToolOverrides = maps.Clone(orEmpty(o.ToolOverrides))
 			o.ToolOverrides[claudetool.CompactInPlaceName] = "on"
 			o.DisableCompactNudges = true
 			return true
@@ -172,8 +177,9 @@ func (cm *ConversationManager) EnableCompactInPlace(ctx context.Context) error {
 	// nothing to do. So don't fail the caller: the cost is a log that doesn't
 	// show where the tool appeared.
 	if err := cm.recordModelChangeMarker(ctx, ModelChangeUserData{
-		ToolEnabled: claudetool.CompactInPlaceName,
-		Text:        "Enabled the compact_in_place tool.",
+		ToolsOn:  []string{claudetool.CompactInPlaceName},
+		Previous: &previous,
+		Text:     "Enabled the compact_in_place tool.",
 	}); err != nil {
 		cm.logger.Error("compact_in_place enabled, but its marker was not recorded",
 			"conversationID", cm.conversationID, "error", err)
