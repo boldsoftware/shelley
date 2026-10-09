@@ -465,6 +465,41 @@ class ApiService {
     return body ? (JSON.parse(body) as ChatAcceptedResponse) : {};
   }
 
+  // Exchanges a browser WebRTC offer for a GPT-Live session. The server holds
+  // the API key; the browser then talks to OpenAI directly.
+  async createLiveSession(
+    conversationId: string,
+    sdp: string,
+    signal: AbortSignal,
+  ): Promise<{ session: { id: string }; transport: { sdp: string } }> {
+    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/live-session`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify({ sdp }),
+      signal,
+    });
+    if (!response.ok) throw await responseError(response, "Failed to start live session");
+    return response.json();
+  }
+
+  // Only a Live delegation calls this endpoint. The server's small model
+  // turns that delegation's voice context into a Shelley task.
+  async sendLiveMessage(
+    conversationId: string,
+    id: string,
+    transcript: string,
+    voiceContext: string,
+    offsetMs: number,
+  ): Promise<{ status: "accepted" | "queued"; message: string; task: string }> {
+    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/live-message`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify({ id, transcript, voice_context: voiceContext, offset_ms: offsetMs }),
+    });
+    if (!response.ok) throw await responseError(response, "Failed to deliver speech to Shelley");
+    return response.json();
+  }
+
   async listBtwReaders(conversationId: string): Promise<BtwReaderDescriptor[]> {
     const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/btw`);
     if (!response.ok) throw await responseError(response, "Failed to load BTW readers");

@@ -49,6 +49,15 @@
       </div>
 
       <div class="header-actions">
+        <LiveVoice
+          v-if="!isMobile"
+          :conversation-id="conversationId"
+          :disabled="
+            !conversationId || !!currentConversation?.is_draft || !!currentConversation?.archived
+          "
+          :messages="messages"
+          :send-message="sendLiveTask"
+        />
         <!-- Overflow menu (PrimeVue Popover + Select) -->
         <ChatOverflowMenu
           :has-cwd="hasCwd"
@@ -405,6 +414,12 @@
       <template v-if="statusSlotInline" #status>
         <ChatStatusContent v-bind="statusContentProps" />
         <span :id="`${tocTargetId}-mobile`" class="status-navigation" />
+        <LiveVoice
+          :conversation-id="conversationId"
+          :disabled="!conversationId || !!currentConversation?.archived"
+          :messages="messages"
+          :send-message="sendLiveTask"
+        />
       </template>
     </MessageInput>
 
@@ -681,6 +696,7 @@ import AgentsMdEditorModal from "./AgentsMdEditorModal.vue";
 import TerminalPanel from "./TerminalPanel.vue";
 import VersionChecker from "./VersionChecker.vue";
 import ChatOverflowMenu from "./ChatOverflowMenu.vue";
+import LiveVoice from "./LiveVoice.vue";
 import { matchChatInterfaceAction } from "../../utils/menuShortcuts";
 import ChunkHost from "./ChunkHost.vue";
 import { chunkMountKey } from "./chunkMount";
@@ -3015,6 +3031,17 @@ async function queueMessageTo(conversationId: string, model: string, message: st
     const index = pendingQueuedMessages.indexOf(pending);
     if (index !== -1) pendingQueuedMessages.splice(index, 1);
   }
+}
+
+// Only a GPT-Live client delegation enters Shelley, with its voice context.
+async function sendLiveTask(
+  id: string,
+  transcript: string,
+  voiceContext: string,
+  offsetMs: number,
+  conversationId: string,
+) {
+  return api.sendLiveMessage(conversationId, id, transcript, voiceContext, offsetMs);
 }
 
 const sendingQueuedNow = ref<string | null>(null);
