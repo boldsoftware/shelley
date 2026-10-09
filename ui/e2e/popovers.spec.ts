@@ -823,8 +823,10 @@ test.describe("Status readout controls", () => {
     await page.goto(`/c/${slug}`);
 
     const cwdSegment = page.locator(".status-readout-cwd:visible").first();
+    const cwdPath = cwdSegment.locator(".status-readout-cwd-path");
     await expect(cwdSegment).toBeVisible({ timeout: 30000 });
-    await expect(cwdSegment).toHaveText(testWorkingDirectory());
+    await expect(cwdPath).toBeVisible();
+    await expect(cwdPath).toHaveText(testWorkingDirectory());
 
     // The readout opens the same picker the composer's cwd chip does.
     await cwdSegment.click();
@@ -844,7 +846,7 @@ test.describe("Status readout controls", () => {
     const expectedLabel = e2eDir.startsWith(homeDir + "/")
       ? "~" + e2eDir.slice(homeDir.length)
       : e2eDir;
-    await expect(cwdSegment).toHaveText(expectedLabel, { timeout: 15000 });
+    await expect(cwdPath).toHaveText(expectedLabel, { timeout: 15000 });
 
     // And the conversation really moved, for the next turn's tools...
     await expect(async () => {

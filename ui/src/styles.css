@@ -548,6 +548,12 @@ body {
 
 /* Keep all phone header controls touch-sized, without sacrificing the title. */
 @media (max-width: 767px) {
+  .message-textarea:placeholder-shown {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
   .header .btn-icon,
   .header .btn-new {
     width: var(--header-action-size, 2.25rem);
@@ -6569,6 +6575,12 @@ svg {
   unicode-bidi: plaintext;
 }
 
+.status-readout-cwd-leaf {
+  display: none;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .status-readout-sep {
   flex-shrink: 0;
   opacity: 0.5;
@@ -6843,6 +6855,7 @@ svg {
 
   .message-input-container {
     padding: 0.5rem 0.75rem;
+    padding-top: 4px;
     padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
     border-top: 1px solid var(--border);
   }
@@ -6862,6 +6875,378 @@ svg {
   .message-send-btn,
   .send-split-btn {
     margin-bottom: 0;
+  }
+}
+
+/* Compact mobile composer: status and actions above the input. */
+@media (max-width: 767px) {
+  .message-input-form {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(36px, auto) auto;
+    align-items: center;
+    gap: 4px;
+    row-gap: 8px;
+  }
+
+  .textarea-wrapper {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .message-attachments {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .message-input-form:has(.message-attachments) .textarea-wrapper {
+    grid-row: 3;
+  }
+
+  .message-textarea {
+    padding-right: 1rem;
+  }
+
+  .message-controls-row {
+    display: contents;
+    width: auto;
+  }
+
+  .message-controls-status-slot {
+    position: relative;
+    grid-column: 1;
+    grid-row: 1;
+    width: calc(100% - 172px);
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    overflow: visible;
+  }
+
+  .message-controls-status-slot .status-bar-active {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .message-controls-status-slot .status-readout {
+    order: 2;
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    height: 34px;
+    margin: 0;
+    gap: 3px;
+    align-items: center;
+    overflow: hidden;
+    font-size: var(--font-size-11);
+    line-height: 19px;
+    color: var(--text-tertiary);
+    transform: translateY(1px);
+  }
+
+  .message-controls-status-slot .animated-working {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-width: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .message-controls-status-slot .status-ready {
+    position: relative;
+    order: 1;
+    display: flex;
+    flex: 0 0 24px;
+    width: 24px;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    color: transparent;
+    transform: translateY(1px);
+  }
+
+  .message-controls-status-slot .status-ready::before {
+    content: "";
+    position: absolute;
+    top: 13px;
+    left: 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+  }
+
+  .message-controls-status-slot .status-stop-button {
+    order: 1;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    width: 24px;
+    height: 24px;
+    justify-content: center;
+    margin: 0;
+    padding: 4px;
+    transform: translateY(1px);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .message-controls-status-slot .status-stop-button {
+      animation: mobile-stop-working-pulse 2.8s ease-in-out infinite;
+    }
+  }
+
+  .message-controls-status-slot .status-stop-label {
+    display: none;
+    white-space: nowrap;
+  }
+
+  @keyframes mobile-stop-working-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 var(--error-border);
+    }
+    50% {
+      box-shadow: 0 0 0 3px transparent;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .message-controls-status-slot .status-stop-button {
+      animation: none;
+      box-shadow: 0 0 0 1px var(--error-border);
+    }
+  }
+
+  .message-controls-status-slot .status-readout-cwd {
+    order: 5;
+    position: static;
+    display: flex;
+    flex: 0 1 auto;
+    width: auto;
+    max-width: 72px;
+    height: 34px;
+    margin: 0;
+    overflow: hidden;
+    align-items: center;
+    justify-content: flex-end;
+    font-size: var(--font-size-11);
+  }
+
+  .message-controls-status-slot .status-readout-cwd::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 11px;
+    height: 11px;
+    margin-right: 3px;
+    background: var(--text-tertiary);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 6h6l2 2h10v10H3z' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 6h6l2 2h10v10H3z' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+
+  .message-controls-status-slot .status-readout-cwd + .status-readout-sep {
+    display: block;
+    order: 4;
+    flex: 0 0 auto;
+    margin-left: 2px;
+  }
+
+  .message-controls-status-slot .context-usage-root {
+    order: 1;
+    flex: 0 0 auto;
+    margin-left: 0;
+  }
+
+  .message-controls-status-slot .status-readout-sep {
+    order: 2;
+    flex-shrink: 0;
+  }
+
+  .message-controls-status-slot .status-readout-model {
+    order: 3;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .message-controls-status-slot .status-readout-cwd-path {
+    display: none;
+    min-width: 0;
+  }
+
+  .message-controls-status-slot .status-readout-cwd-leaf {
+    display: inline;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .message-controls-status-slot .status-navigation {
+    display: contents;
+    width: auto;
+    min-width: 0;
+  }
+
+  .message-controls-status-slot .toc-button,
+  .message-attach-btn,
+  .message-record {
+    position: absolute;
+    top: 1px;
+    width: 34px;
+    height: 34px;
+    margin: 0;
+  }
+
+  .message-controls-status-slot .toc-button {
+    left: auto;
+    right: -38px;
+    transform: none;
+  }
+
+  .message-attach-btn {
+    left: auto;
+    right: 96px;
+    transform: none;
+  }
+
+  .message-record {
+    left: auto;
+    right: 58px;
+    transform: none;
+  }
+
+  .message-voice-btn {
+    width: 34px;
+    height: 34px;
+    margin: 0;
+  }
+
+  .message-send-wrapper {
+    position: absolute;
+    top: 0;
+    left: auto;
+    right: 0;
+    transform: none;
+    margin: 0;
+  }
+
+  .send-split-btn {
+    width: 54px;
+    height: 36px;
+    border-radius: 12px;
+  }
+
+  .send-split-main {
+    width: 32px;
+    height: 36px;
+  }
+
+  .send-split-divider {
+    height: 24px;
+  }
+
+  .send-split-chevron {
+    width: 21px;
+    height: 36px;
+  }
+
+  .message-send-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  /* New conversations have full model/cwd setup fields, not the compact
+     active-conversation readout. Keep those fields in normal flow. */
+  .message-input-form:is(
+    :has(.status-bar-new-conversation),
+    :not(:has(.message-controls-status-slot))
+  ) {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 0.375rem;
+  }
+
+  .message-input-form:is(
+      :has(.status-bar-new-conversation),
+      :not(:has(.message-controls-status-slot))
+    )
+    .textarea-wrapper {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .message-input-form:is(
+      :has(.status-bar-new-conversation),
+      :not(:has(.message-controls-status-slot))
+    )
+    .message-controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 100%;
+    gap: 0.25rem;
+  }
+
+  .message-input-form:has(.status-bar-new-conversation) .message-controls-row {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .message-input-form:has(.status-bar-new-conversation) .message-controls-status-slot {
+    position: static;
+    display: flex;
+    flex: 1 1 100%;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .message-input-form:is(
+      :has(.status-bar-new-conversation),
+      :not(:has(.message-controls-status-slot))
+    )
+    .message-attach-btn,
+  .message-input-form:is(
+      :has(.status-bar-new-conversation),
+      :not(:has(.message-controls-status-slot))
+    )
+    .message-record {
+    position: static;
+    width: 36px;
+    height: 36px;
+  }
+
+  .message-input-form:is(
+      :has(.status-bar-new-conversation),
+      :not(:has(.message-controls-status-slot))
+    )
+    .message-voice-btn {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+  }
+
+  .message-input-form:is(
+      :has(.status-bar-new-conversation),
+      :not(:has(.message-controls-status-slot))
+    )
+    .message-send-wrapper {
+    position: static;
+    margin: 0;
   }
 }
 

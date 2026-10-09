@@ -77,6 +77,8 @@ test.describe("Model picker (PrimeVue)", () => {
     await page.addInitScript(() => localStorage.setItem("shelley_selected_cwd", "/tmp/e2e-dir"));
     await page.setViewportSize({ width: 412, height: 915 });
     await page.goto("/new");
+    await expect(page.locator(".status-field-model")).toBeVisible();
+    await expect(page.locator(".status-field-cwd")).toBeVisible();
 
     const fieldTops = () =>
       page.evaluate(() => ({

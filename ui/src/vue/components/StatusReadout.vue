@@ -31,8 +31,13 @@
         <span class="status-readout-cwd-path status-readout-affordance">{{
           tildifyPath(cwd)
         }}</span>
+        <span class="status-readout-cwd-leaf status-readout-affordance" aria-hidden="true">{{
+          cwdLeaf
+        }}</span>
       </button>
-      <span class="status-readout-sep hide-on-mobile" aria-hidden="true">·</span>
+      <span class="status-readout-sep status-readout-sep-cwd hide-on-mobile" aria-hidden="true"
+        >·</span
+      >
     </template>
 
     <ContextUsageBar
@@ -52,7 +57,7 @@
     />
 
     <template v-if="selectedModel">
-      <span class="status-readout-sep" aria-hidden="true">·</span>
+      <span class="status-readout-sep status-readout-sep-model" aria-hidden="true">·</span>
       <!-- Changing settings rebuilds the conversation's loop, which cancels a
            running turn (ApplySettings -> CancelConversation). Disable the
            picker while the agent works rather than silently killing the turn the
@@ -132,6 +137,11 @@ const props = defineProps<{
 }>();
 
 const { t } = useI18n();
+
+const cwdLeaf = computed(() => {
+  const normalized = props.cwd?.replace(/[\\/]+$/, "");
+  return normalized?.split(/[\\/]/).pop() || normalized || "";
+});
 
 // Undefined rather than "" when idle: v-tooltip treats an empty string as a
 // tooltip to render, and the ModelPicker prop is optional.

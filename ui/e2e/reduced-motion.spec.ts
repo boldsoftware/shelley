@@ -25,6 +25,24 @@ function readServedStylesheets(): string[] {
 }
 
 test.describe('reduced motion', () => {
+  test('mobile Stop pulse only animates when motion is allowed', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.setContent(
+      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+        '<div class="message-controls-status-slot"><button class="status-stop-button">Stop</button></div>',
+    );
+    await page.addStyleTag({ content: readServedStylesheets().join('\n') });
+    const animationName = () =>
+      page.locator('.status-stop-button').evaluate((el) => getComputedStyle(el).animationName);
+
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect.poll(animationName).toBe('none');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await expect.poll(animationName).toBe('mobile-stop-working-pulse');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect.poll(animationName).toBe('none');
+  });
+
   test('every infinite animation still animates under reduce', async ({ page }) => {
     // Ask the browser rather than parsing CSS ourselves. An earlier regex
     // version of this test had two silent false negatives (it anchored on the

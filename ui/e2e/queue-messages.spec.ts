@@ -169,7 +169,7 @@ test.describe('Queue Messages', () => {
     await queueMessage(page, 'echo: second queued message');
     await expect(page.getByTestId('queued-badge')).toHaveCount(2, { timeout: 10000 });
 
-    const stopButton = page.getByRole('button', { name: 'Stop' });
+    const stopButton = page.getByRole('button', { name: 'Stop', exact: true });
     const [cancelResp] = await Promise.all([
       page.waitForResponse((resp) => resp.url().includes('/cancel') && resp.status() === 200, {
         timeout: 10000,
@@ -192,7 +192,7 @@ test.describe('Queue Messages', () => {
 
     const messageInput = page.getByTestId('message-input');
     await messageInput.fill('keep this draft');
-    await page.getByRole('button', { name: 'Stop' }).tap();
+    await page.getByRole('button', { name: 'Stop', exact: true }).tap();
 
     await expect(messageInput).toHaveValue('keep this draft');
     await expect(page.getByTestId('queued-badge')).toHaveCount(0, { timeout: 10000 });
@@ -222,7 +222,7 @@ test.describe('Queue Messages', () => {
     void queueMessage(page, 'echo: pending steering');
     await queueStarted;
 
-    await page.getByRole('button', { name: 'Stop' }).tap();
+    await page.getByRole('button', { name: 'Stop', exact: true }).tap();
     await expect(page.getByTestId('message-input')).toHaveValue('echo: pending steering');
 
     releaseQueue?.();
