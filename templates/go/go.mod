@@ -1,6 +1,6 @@
 module srv.exe.dev
 
-go 1.27.1
+go 1.27.2
 
 require modernc.org/sqlite v1.58.0
 
