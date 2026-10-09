@@ -33,6 +33,7 @@ import DiffTreeRows from "./DiffTreeRows.vue";
 import {
   buildTree,
   flatten,
+  matchTreePaths,
   statusLetter,
   subtreeHasMatch,
   type DiffFileTreeEntry,
@@ -97,24 +98,10 @@ function toggle(paths: string[]) {
   expanded.value = next;
 }
 
-// Search: case-insensitive substring match on the basename.
+// Search: case-insensitive substring match on the full path (see
+// matchTreePaths).
 const query = ref("");
-const matchedPaths = computed<Set<string> | null>(() => {
-  const q = query.value.trim().toLowerCase();
-  if (!q) return null;
-  const m = new Set<string>();
-  const walk = (d: DirNode) => {
-    for (const c of d.children) {
-      if (c.kind === "file") {
-        if (c.name.toLowerCase().includes(q)) m.add(c.path);
-      } else {
-        walk(c);
-      }
-    }
-  };
-  walk(tree.value);
-  return m;
-});
+const matchedPaths = computed(() => matchTreePaths(tree.value, query.value));
 
 // When searching, force-expand every ancestor so matches are visible.
 const effectiveExpanded = computed<Set<string>>(() => {

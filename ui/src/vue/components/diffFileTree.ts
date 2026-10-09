@@ -153,6 +153,38 @@ export function statusLetter(s: DiffFileTreeEntry["status"]): StatusInfo | null 
   }
 }
 
+// Lowercase and drop spaces around "/" (see matchTreePaths).
+const normalizeSearch = (s: string) => s.toLowerCase().replace(/\s*\/\s*/g, "/");
+
+// Search: case-insensitive substring match against each file's full tree
+// path (segments joined with "/"), so a query hits directory names as well
+// as basenames ("doc" finds docs/content/vm-backups.md) and can span a
+// separator ("content/vm"). The synthetic commit-messages folder is not part
+// of the searchable path; otherwise "message" or "com" would list every
+// commit. Spaces around "/" are dropped on both sides so the folded-directory
+// label as displayed ("docs / content") matches, as does a commit subject
+// containing " / ". Returns null for a blank query (no filtering), otherwise
+// the set of matching file path keys.
+export function matchTreePaths(tree: DirNode, query: string): Set<string> | null {
+  const q = normalizeSearch(query.trim());
+  if (!q) return null;
+  const m = new Set<string>();
+  const walk = (d: DirNode, prefix: string) => {
+    for (const c of d.children) {
+      const full = prefix ? `${prefix}/${c.name}` : c.name;
+      if (c.kind === "file") {
+        if (normalizeSearch(full).includes(q)) m.add(c.path);
+      } else if (d === tree && c.name === COMMIT_MESSAGES_DIR) {
+        walk(c, "");
+      } else {
+        walk(c, full);
+      }
+    }
+  };
+  walk(tree, "");
+  return m;
+}
+
 export function subtreeHasMatch(node: Node, matchedPaths: Set<string>): boolean {
   if (node.kind === "file") return matchedPaths.has(node.path);
   for (const c of node.children) if (subtreeHasMatch(c, matchedPaths)) return true;
