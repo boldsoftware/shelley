@@ -4,7 +4,7 @@
      time. Either way the comment names the git blob, so the agent can
      retrieve the file with `git cat-file blob`. -->
 <template>
-  <article class="commit-tour-media">
+  <article v-show="visible" class="commit-tour-media">
     <div class="commit-tour-media-header">
       <span class="commit-tour-media-kind">{{ video ? "Video" : "Image" }}</span>
       <code :title="entry.name">{{ entry.name }}</code>
@@ -50,12 +50,19 @@ import { isVideoMedia } from "./commitTourContents";
 const props = defineProps<{
   entry: GitTourMediaEntry;
   src: string;
+  visible: boolean;
 }>();
 const emit = defineEmits<{
   (e: "comment", target: TourCommentTarget): void;
 }>();
 
 const videoRef = ref<HTMLVideoElement | null>(null);
+watch(
+  () => props.visible,
+  (visible) => {
+    if (!visible) videoRef.value?.pause();
+  },
+);
 const failed = ref(false);
 // The view reuses this component by position, so a new tour can hand it
 // different media.

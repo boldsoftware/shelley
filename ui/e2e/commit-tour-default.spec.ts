@@ -8,6 +8,7 @@ import {
   createConversationViaAPI,
   git,
   initGitRepo,
+  makePNG,
   withTempDir,
 } from "./helpers";
 
@@ -675,5 +676,89 @@ test.describe("Commit tour defaults", () => {
       await expect(restoredRows.nth(5).locator(".tour-visibility-icon circle")).toHaveCount(1);
       await expect(restoredRows.nth(6).locator(".tour-visibility-icon circle")).toHaveCount(1);
     });
+  });
+});
+
+test("tour sections collapse independently and navigation reveals their changes", async ({
+  page,
+  request,
+}) => {
+  await withTempDir("shelley-tour-collapse-", async (tempDir) => {
+    const repo = join(tempDir, "repo");
+    mkdirSync(repo);
+    initGitRepo(repo);
+    for (const file of ["first.txt", "second.txt"]) writeFileSync(join(repo, file), "before\n");
+    git(repo, "add", ".");
+    git(repo, "commit", "-m", "Base commit");
+    for (const file of ["first.txt", "second.txt"]) writeFileSync(join(repo, file), "after\n");
+    git(repo, "commit", "-am", "Two sections");
+    const scaffold = JSON.parse(
+      execFileSync(shelleyBin, ["tour", "scaffold", "-C", repo, "HEAD"], { encoding: "utf8" }),
+    );
+    expect(scaffold.chunks).toHaveLength(2);
+    const shot = join(tempDir, "shot.png");
+    writeFileSync(shot, makePNG(200, 100));
+    const tourPath = join(tempDir, "tour.json");
+    writeFileSync(
+      tourPath,
+      JSON.stringify({
+        ...scaffold,
+        chunks: [
+          { header: "## First section" },
+          { media: shot, comment: "First section preview." },
+          { ...scaffold.chunks[0], comment: "First explanation." },
+          { header: "## Second section" },
+          { ...scaffold.chunks[1], comment: "Second explanation." },
+        ],
+      }),
+    );
+    execFileSync(shelleyBin, ["tour", "attach", "-C", repo, "HEAD", tourPath]);
+    const slug = await createConversationViaAPI(request, "Hello", { cwd: repo });
+    const overlay = await openDiffViewer(page, slug);
+    const view = overlay.locator(".commit-tour-view");
+    const first = view.locator(".commit-tour-chunk").nth(0);
+    const second = view.locator(".commit-tour-chunk").nth(1);
+    const media = view.locator(".commit-tour-media");
+    await expect(first).toBeVisible();
+    await expect(second).toBeVisible();
+    await expect(media).toBeVisible();
+    await first.getByRole("button", { name: "Show full first.txt", exact: true }).click();
+    await expect(
+      first.getByRole("button", { name: "Show changes only in first.txt", exact: true }),
+    ).toBeVisible();
+    await expect(
+      view.getByRole("button", { name: "Collapse First section", exact: true }),
+    ).toBeVisible();
+    await view.getByRole("button", { name: "Collapse First section", exact: true }).click();
+    await expect(first).toBeHidden();
+    await expect(media).toBeHidden();
+    await expect(second).toBeVisible();
+    const expand = view.getByRole("button", { name: "Expand First section", exact: true });
+    await expect(expand).toHaveAttribute("aria-expanded", "false");
+    await expand.focus();
+    await page.keyboard.press("Enter");
+    await expect(first).toBeVisible();
+    await expect(media).toBeVisible();
+    await expect(
+      first.getByRole("button", { name: "Show changes only in first.txt", exact: true }),
+    ).toBeVisible();
+    await view.getByRole("button", { name: "Collapse First section", exact: true }).click();
+    await view.getByRole("button", { name: "Collapse Second section", exact: true }).click();
+    await expect(first).toBeHidden();
+    await expect(second).toBeHidden();
+    const contents = overlay.getByRole("navigation", { name: "Tour contents" });
+    await contents.getByRole("button", { name: /^first.txt ·/ }).click();
+    await expect(first).toBeVisible();
+    await expect(media).toBeVisible();
+    await expect(second).toBeHidden();
+    await contents.getByRole("button", { name: "Second section", exact: true }).click();
+    await expect(second).toBeVisible();
+
+    await page.setViewportSize({ width: 393, height: 851 });
+    await view.getByRole("button", { name: "Collapse First section", exact: true }).click();
+    await expect(first).toBeHidden();
+    await expect(second).toBeVisible();
+    await view.getByRole("button", { name: "Expand First section", exact: true }).click();
+    await expect(first).toBeVisible();
   });
 });

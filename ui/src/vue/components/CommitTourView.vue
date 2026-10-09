@@ -89,17 +89,28 @@
       />
 
       <template v-for="(entry, position) in tour.tour.chunks" :key="entryKey(entry, position)">
-        <MarkdownContent
+        <div
           v-if="isHeaderEntry(entry)"
           :id="tourEntryAnchor(position)"
           class="commit-tour-section-heading"
           :data-tour-anchor="tourEntryAnchor(position)"
           :data-review="sections[position]"
           data-review-item
-          :text="entry.header"
-        />
+        >
+          <button
+            type="button"
+            class="commit-tour-section-toggle"
+            :aria-label="`${collapsedSections.has(position) ? 'Expand' : 'Collapse'} ${sections[position]}`"
+            :aria-expanded="!collapsedSections.has(position)"
+            @click="toggleSection(position)"
+          >
+            <ToolChevron :expanded="!collapsedSections.has(position)" />
+          </button>
+          <MarkdownContent :text="entry.header" />
+        </div>
         <CommitTourMedia
           v-else-if="isMediaEntry(entry)"
+          :visible="!collapsedSections.has(sectionPositions[position])"
           :id="tourEntryAnchor(position)"
           :data-tour-anchor="tourEntryAnchor(position)"
           :data-review="sections[position] ? `${sections[position]} › ${entry.name}` : entry.name"
@@ -110,6 +121,7 @@
         />
         <CommitTourChunk
           v-else
+          v-show="!collapsedSections.has(sectionPositions[position])"
           :id="tourEntryAnchor(position)"
           :data-tour-anchor="tourEntryAnchor(position)"
           :entry="entry"
@@ -158,6 +170,7 @@ import CommitTourChunk from "./CommitTourChunk.vue";
 import CommitTourItems from "./CommitTourItems.vue";
 import CommitTourMedia from "./CommitTourMedia.vue";
 import MarkdownContent from "./MarkdownContent.vue";
+import ToolChevron from "./tools/ToolChevron.vue";
 import {
   TOUR_DECISIONS_ANCHOR,
   TOUR_OVERVIEW_ANCHOR,
@@ -187,6 +200,21 @@ const isMobile = ref(window.innerWidth < 768);
 const { sideBySidePreference, setSideBySidePreference } = useSideBySidePreference();
 const sideBySide = computed(() => !isMobile.value && sideBySidePreference.value);
 const shortHash = computed(() => props.tour.hash.slice(0, 8));
+const collapsedSections = ref(new Set<number>());
+const sectionPositions = computed(() => {
+  let current = -1;
+  return props.tour.tour.chunks.map((entry, position) => {
+    if (isHeaderEntry(entry)) current = position;
+    return current;
+  });
+});
+
+function toggleSection(position: number) {
+  releaseNavigation();
+  if (collapsedSections.value.has(position)) collapsedSections.value.delete(position);
+  else collapsedSections.value.add(position);
+  nextTick(scheduleActiveAnchor);
+}
 
 // Whole-file contents at the toured commit, shared by every chunk of the same
 // file so expanding a second chunk does not refetch. Keyed by both paths since
@@ -367,7 +395,9 @@ function updateActiveAnchor() {
   const view = viewRef.value;
   if (!view) return;
 
-  const anchors = Array.from(view.querySelectorAll<HTMLElement>("[data-tour-anchor]"));
+  const anchors = Array.from(view.querySelectorAll<HTMLElement>("[data-tour-anchor]")).filter(
+    (anchor) => anchor.getClientRects().length > 0,
+  );
   if (anchors.length === 0) return;
 
   const activationTop = view.getBoundingClientRect().top + 24;
@@ -394,7 +424,14 @@ function scheduleActiveAnchor() {
   scrollFrame = requestAnimationFrame(updateActiveAnchor);
 }
 
-function scrollToAnchor(anchor: string) {
+async function scrollToAnchor(anchor: string) {
+  const position = props.tour.tour.chunks.findIndex(
+    (_, position) => tourEntryAnchor(position) === anchor,
+  );
+  if (position >= 0 && collapsedSections.value.delete(sectionPositions.value[position])) {
+    releaseNavigation();
+    await nextTick();
+  }
   navigationTarget = viewRef.value?.querySelector<HTMLElement>(`#${anchor}`) ?? null;
   const view = viewRef.value;
   if (view) {
@@ -411,6 +448,7 @@ function scrollToAnchor(anchor: string) {
 watch(
   () => props.tour,
   () => {
+    collapsedSections.value.clear();
     activeAnchor = "";
     navigationTarget = null;
     nextTick(scheduleActiveAnchor);
@@ -602,17 +640,44 @@ onUnmounted(() => {
 }
 
 .commit-tour-introduction :deep(.markdown-content > :first-child),
-.commit-tour-section-heading :deep(> :first-child) {
+.commit-tour-section-heading :deep(.markdown-content > :first-child) {
   margin-top: 0;
 }
 
 .commit-tour-introduction :deep(.markdown-content > :last-child),
-.commit-tour-section-heading :deep(> :last-child) {
+.commit-tour-section-heading :deep(.markdown-content > :last-child) {
   margin-bottom: 0;
 }
 
 .commit-tour-section-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
   margin-top: 0.75rem;
+}
+
+.commit-tour-section-heading :deep(.markdown-content) {
+  min-width: 0;
+}
+
+.commit-tour-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.commit-tour-section-toggle:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 @media (max-width: 767px) {
