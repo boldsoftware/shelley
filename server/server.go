@@ -338,7 +338,6 @@ type Server struct {
 	activeConversations map[string]*ConversationManager
 	// Serialize fallback delivery with Stop so a late completion cannot
 	// restart a parent whose queue was just cleared.
-	completionMu             sync.Mutex
 	stoppedParents           map[string]bool // guarded by mu
 	stoppingParents          map[string]bool // guarded by mu; a send during Stop must not reopen the fence
 	mu                       sync.Mutex
@@ -1178,21 +1177,6 @@ func (s *Server) recordMessage(ctx context.Context, conversationID string, messa
 	_, err = s.insertMessages(ctx, conversationID, []db.CreateMessageParams{params})
 	if err != nil {
 		return err
-	}
-	// A final message_parent(end_turn=true) wrote an excluded end marker
-	// after delivering the report. Only a regular final reply (or visible
-	// error) needs a separate completion notice for its parent.
-	if params.MarkAgentDone && !params.ExcludedFromContext && messageText(message) != "[Operation cancelled]" {
-		kind := "regular_final"
-		if params.Type == db.MessageTypeError {
-			kind = "error"
-		}
-		s.mu.Lock()
-		manager := s.activeConversations[conversationID]
-		s.mu.Unlock()
-		if manager != nil && manager.role == roleSubagent {
-			go s.notifySubagentCompletion(conversationID, kind)
-		}
 	}
 	return nil
 }

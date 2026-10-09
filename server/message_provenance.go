@@ -27,9 +27,6 @@ type senderMessageUserData struct {
 	SenderConversationID string             `json:"sender_conversation_id"`
 	SenderSlug           string             `json:"sender_slug"`
 	SenderRelationship   senderRelationship `json:"sender_relationship"`
-	// CompletionKind distinguishes a fallback turn-end notice from a
-	// message_parent report so it can be counted from persisted messages.
-	CompletionKind string `json:"completion_kind,omitempty"`
 	// Text duplicates the final user message because the FTS trigger searches
 	// user_data instead of llm_data whenever user_data is present.
 	Text string `json:"Text"`

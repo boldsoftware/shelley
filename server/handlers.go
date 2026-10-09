@@ -1607,8 +1607,7 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 // handleCancelConversation handles POST /conversation/<id>/cancel
 func (s *Server) handleCancelConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
 	ctx := r.Context()
-	s.completionMu.Lock()
-	// Take the fence before looking up the manager: a completion arriving
+	// Take the fence before looking up the manager: a report arriving
 	// first is cleared by Stop; one arriving later sees the stopped parent.
 	s.mu.Lock()
 	s.stoppedParents[conversationID] = true
@@ -1621,7 +1620,6 @@ func (s *Server) handleCancelConversation(w http.ResponseWriter, r *http.Request
 		s.stoppedParents[conversationID] = true
 		delete(s.stoppingParents, conversationID)
 		s.mu.Unlock()
-		s.completionMu.Unlock()
 	}()
 
 	s.mu.Lock()
