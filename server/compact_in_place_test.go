@@ -400,7 +400,7 @@ func TestCompactInPlaceNudge(t *testing.T) {
 }
 
 func TestContextNudger(t *testing.T) {
-	n := newContextNudger(0, 170_000)
+	n := newContextNudger(0, 260_000)
 	if _, ok := n.take(); ok {
 		t.Fatal("a fresh nudger repeats the level the conversation already had")
 	}
@@ -409,12 +409,13 @@ func TestContextNudger(t *testing.T) {
 		tokens uint64
 		want   string
 	}{
-		{200_000, ""},
-		{212_000, "Context is 210k."},
-		{230_000, ""},
+		{290_000, ""},
+		{302_000, "Context is 300k."},
+		{320_000, ""},
 		{90_000, ""}, // compacted: re-arms
-		{163_000, "Context is 160k."},
-		{320_000, "Context is 320k."},
+		{249_000, ""},
+		{253_000, "Context is 250k."},
+		{410_000, "Context is 410k."},
 	} {
 		observe(step.tokens)
 		if got, _ := n.take(); got != step.want {

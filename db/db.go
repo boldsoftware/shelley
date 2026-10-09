@@ -308,7 +308,7 @@ type ConversationOptions struct {
 	SystemPrompt string `json:"system_prompt,omitempty"`
 	// CompactNudgeTokens is the context size at which the agent is first told
 	// the size of its context while the compact_in_place tool is enabled.
-	// Zero means the default (160k).
+	// Zero means the default (250k).
 	CompactNudgeTokens int `json:"compact_nudge_tokens,omitempty"`
 	// DisableCompactNudges keeps the agent from being told its context size
 	// even though compact_in_place is enabled. Set when the user enables the
