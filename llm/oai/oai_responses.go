@@ -1031,6 +1031,9 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 		result := s.toLLMResponseFromResponses(&resp, httpResp.Header)
 		result.URL = fullURL
 		result.Origin = &origin
+		endTime := time.Now()
+		result.StartTime = &retryStart
+		result.EndTime = &endTime
 		return result, nil
 	}
 }

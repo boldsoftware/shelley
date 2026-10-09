@@ -1638,6 +1638,9 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			// relative "/chat/completions" path.
 			result.URL = cmp.Or(s.ModelURL, model.URL, OpenAIURL) + "/chat/completions"
 			result.Origin = &origin
+			endTime := time.Now()
+			result.StartTime = &retryStart
+			result.EndTime = &endTime
 			return result, nil
 		}
 
