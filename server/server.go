@@ -383,10 +383,6 @@ type Server struct {
 	transcriber       recordingTranscriber
 	transcriptionMu   sync.Mutex
 	transcriptionJobs map[string]transcriptionJob
-	liveSessionURL    string
-	liveSessionKey    string
-	liveSessionClient *http.Client
-	liveMessages      liveMessages
 	// reflectionEmoji fetches the VM emoji for the favicon. Tests replace it to
 	// cover reflection-present and standalone behavior without ambient metadata.
 	reflectionEmoji           func(context.Context) string
@@ -428,7 +424,6 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	if logger == nil {
 		logger = slog.Default()
 	}
-	liveURL := liveSessionEndpoint()
 	s := &Server{
 		db:                      database,
 		llmManager:              llmManager,
@@ -450,9 +445,6 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		mediaRun:                runMediaCommand,
 		transcriber:             newOpenAIRecordingTranscriber(llmManager, predictableOnly),
 		transcriptionJobs:       make(map[string]transcriptionJob),
-		liveSessionURL:          liveURL,
-		liveSessionKey:          liveSessionAPIKey(liveURL),
-		liveSessionClient:       &http.Client{Timeout: 25 * time.Second},
 		channelClient:           &http.Client{Timeout: 30 * time.Second},
 		channelChatLocks:        make(map[string]*channelChatLock),
 		reflectionEmoji:         cachedReflectionEmoji,

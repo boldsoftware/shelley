@@ -851,12 +851,6 @@ func (s *Server) registerConversationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/conversation/{id}/chat", func(w http.ResponseWriter, r *http.Request) {
 		s.handleChatConversation(w, r, r.PathValue("id"))
 	})
-	mux.HandleFunc("POST /api/conversation/{id}/live-session", func(w http.ResponseWriter, r *http.Request) {
-		s.handleLiveSession(w, r, r.PathValue("id"))
-	})
-	mux.HandleFunc("POST /api/conversation/{id}/live-message", func(w http.ResponseWriter, r *http.Request) {
-		s.handleLiveMessage(w, r, r.PathValue("id"))
-	})
 	mux.HandleFunc("POST /api/conversation/{id}/hooks", func(w http.ResponseWriter, r *http.Request) {
 		s.handleRegisterConversationHook(w, r, r.PathValue("id"))
 	})
