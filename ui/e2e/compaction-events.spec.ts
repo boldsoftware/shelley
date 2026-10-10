@@ -111,7 +111,9 @@ for (const width of [390, 1280]) {
     const toc = page.locator(".toc-popover");
     const entry = toc.locator(".toc-entry-compaction");
     await expect(entry).toHaveCount(1);
-    await expect(entry).toHaveAccessibleName("Compacted context");
+    await expect(entry).toHaveAccessibleName("System notice: Compacted context");
+    await expect(entry).toHaveClass(/toc-category-notice/);
+    await expect(entry.locator(".toc-entry-icon")).toHaveText("🗜️");
     await expect(toc.locator(".toc-entry-user")).toHaveCount(1);
     await expect(toc).not.toContainText("Context is 170k.");
     await entry.click();
