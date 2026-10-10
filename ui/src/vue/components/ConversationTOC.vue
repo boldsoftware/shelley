@@ -48,18 +48,16 @@
       <button
         v-for="entry in entries"
         :key="entry.id"
-        :class="`toc-entry toc-entry-${entry.kind}${entry.thumbnails?.length ? ' toc-entry-with-thumbnail' : ''}${activeId === entry.id ? ' toc-entry-active' : ''}`"
+        :class="`toc-entry toc-entry-${entry.kind} toc-category-${entry.category}${entry.thumbnails?.length ? ' toc-entry-with-thumbnail' : ''}${activeId === entry.id ? ' toc-entry-active' : ''}`"
+        :aria-label="`${TOC_CATEGORIES[entry.category].label}: ${entry.label}`"
         @click="handleGoto(entry)"
       >
-        <span
-          v-if="entry.kind !== 'gen' && entry.kind !== 'image'"
-          class="toc-entry-icon"
-          aria-hidden="true"
-        >
+        <span v-if="entry.kind !== 'gen'" class="toc-entry-icon" aria-hidden="true">
           <template v-if="entry.kind === 'top'">↑</template>
           <template v-if="entry.kind === 'bottom'">↓</template>
-          <template v-if="entry.kind === 'user'">•</template>
-          <template v-if="entry.kind === 'eot'">✓</template>
+          <template v-if="entry.kind === 'user' || entry.kind === 'eot' || entry.kind === 'image'">
+            {{ TOC_CATEGORIES[entry.category].icon }}
+          </template>
         </span>
         <span v-if="entry.thumbnails?.length" class="toc-entry-thumbnail-wrap" aria-hidden="true">
           <img
@@ -85,6 +83,12 @@ import Popover from "primevue/popover";
 import { isCompactionCarried, type Message, type LLMMessage, type LLMContent } from "../../types";
 import { perfCount, perfWrap } from "../../utils/perf";
 import { replaceLocationFragment } from "../../utils/locationFragment";
+import {
+  TOC_CATEGORIES,
+  messageTOCCategory,
+  toolTOCCategory,
+  type TOCCategory,
+} from "../../utils/conversationTOCCategory";
 import { chunkMountKey } from "./chunkMount";
 
 interface TOCThumbnail {
@@ -95,6 +99,7 @@ interface TOCThumbnail {
 interface TOCEntry {
   id: string;
   kind: "top" | "user" | "eot" | "image" | "gen" | "bottom";
+  category: TOCCategory;
   label: string;
   messageId?: string;
   toolUseId?: string;
@@ -272,7 +277,7 @@ function buildEntries(
   thumbnailsByTarget: Map<string, TOCThumbnail[]>,
 ): TOCEntry[] {
   const entries: TOCEntry[] = [];
-  entries.push({ id: "top", kind: "top", label: "Top of conversation" });
+  entries.push({ id: "top", kind: "top", category: "notice", label: "Top of conversation" });
 
   const toolResultsById = new Map<string, LLMContent>();
   for (const message of messages) {
@@ -290,6 +295,7 @@ function buildEntries(
         entries.push({
           id: `gen-${m.generation}`,
           kind: "gen",
+          category: "notice",
           label: `New generation (${m.generation})`,
           generation: m.generation,
         });
@@ -309,6 +315,7 @@ function buildEntries(
       entries.push({
         id: fragmentForMessage(m.message_id),
         kind: "user",
+        category: messageTOCCategory(m, content),
         label: text,
         messageId: m.message_id,
         sourceMessageId: m.message_id,
@@ -319,6 +326,7 @@ function buildEntries(
       entries.push({
         id: fragmentForMessage(m.message_id),
         kind: "eot",
+        category: messageTOCCategory(m, content),
         label: text,
         messageId: m.message_id,
         sourceMessageId: m.message_id,
@@ -331,6 +339,7 @@ function buildEntries(
       entries.push({
         id: fragmentForMessage(m.message_id),
         kind: "image",
+        category: messageTOCCategory(m, content),
         label: imageLabel(messageThumbnails, text || "Image"),
         messageId: m.message_id,
         sourceMessageId: m.message_id,
@@ -352,6 +361,7 @@ function buildEntries(
       entries.push({
         id: fragmentForToolUse(item.ID),
         kind: "image",
+        category: toolTOCCategory(item),
         label: imageLabel(toolThumbnails, "Image"),
         toolUseId: item.ID,
         sourceMessageId: m.message_id,
@@ -360,7 +370,7 @@ function buildEntries(
     }
   }
 
-  entries.push({ id: "bottom", kind: "bottom", label: "End of conversation" });
+  entries.push({ id: "bottom", kind: "bottom", category: "notice", label: "End of conversation" });
   return entries;
 }
 

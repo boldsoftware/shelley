@@ -5391,12 +5391,28 @@ svg {
    + inline top/left, flipped to fit the viewport), so unlike the old
    hand-rolled version we must NOT set position/bottom/right here. */
 .toc-popover.p-popover {
+  --toc-user: #7e22ce;
+  --toc-reply: #004467;
+  --toc-progress: #006084;
+  --toc-subagent: #217c9f;
+  --toc-tool-result: #b45309;
+  --toc-background: #ce971e;
+  --toc-notice: #64748b;
   width: min(28rem, calc(100vw - 2rem));
   background: var(--bg-base);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
   overflow: hidden;
+}
+.dark .toc-popover.p-popover {
+  --toc-user: #c084fc;
+  --toc-reply: #38bdf8;
+  --toc-progress: #7dd3fc;
+  --toc-subagent: #bae6fd;
+  --toc-tool-result: #fcd34d;
+  --toc-background: #fef3c7;
+  --toc-notice: #8392a7;
 }
 /* Popover has no placement prop: it always aligns below the target unless it
    would overflow the viewport (then it adds .p-popover-flipped and positions
@@ -5438,6 +5454,7 @@ svg {
   overscroll-behavior: contain;
 }
 .toc-entry {
+  --toc-color: var(--toc-notice);
   box-sizing: border-box;
   height: 30px;
   display: flex;
@@ -5449,13 +5466,32 @@ svg {
   border: none;
   text-align: left;
   cursor: pointer;
-  color: var(--text-primary);
+  color: var(--toc-color);
   font-size: var(--font-size-13);
   line-height: 1.35;
   font-family: inherit;
 }
-.toc-entry:hover {
-  background: var(--bg-hover);
+.toc-category-user {
+  --toc-color: var(--toc-user);
+}
+.toc-category-reply {
+  --toc-color: var(--toc-reply);
+}
+.toc-category-progress {
+  --toc-color: var(--toc-progress);
+}
+.toc-category-subagent {
+  --toc-color: var(--toc-subagent);
+}
+.toc-category-tool-result {
+  --toc-color: var(--toc-tool-result);
+}
+.toc-category-background {
+  --toc-color: var(--toc-background);
+}
+.toc-entry:hover,
+.toc-entry-active {
+  background: var(--bg-secondary);
 }
 .toc-entry-with-thumbnail {
   height: 38px;
@@ -5475,7 +5511,7 @@ svg {
   height: 100%;
   object-fit: cover;
   object-position: top center;
-  border: 1px solid var(--border);
+  border: 1px solid var(--toc-color);
   border-radius: 0.25rem;
   background: var(--bg-secondary);
 }
@@ -5493,20 +5529,10 @@ svg {
   line-height: 0.875rem;
   text-align: center;
 }
-.toc-entry:hover .toc-entry-thumbnail,
-.toc-entry-active .toc-entry-thumbnail {
-  border-color: var(--blue-text, #3b82f6);
-}
-.toc-entry-active {
-  background: var(--bg-hover);
-}
-.toc-entry-active .toc-entry-icon {
-  color: var(--blue-text, #3b82f6);
-}
 .toc-entry-icon {
   flex: 0 0 1.25rem;
   text-align: center;
-  color: var(--text-secondary);
+  color: inherit;
   font-size: var(--font-size-14);
   line-height: 1.2;
   padding-top: 0.0625rem;
@@ -5520,13 +5546,13 @@ svg {
 }
 .toc-entry-top .toc-entry-label,
 .toc-entry-bottom .toc-entry-label {
-  color: var(--text-secondary);
+  color: var(--toc-color);
   font-style: italic;
 }
 .toc-entry-gen {
   align-items: center;
   gap: 0.5rem;
-  color: var(--text-secondary);
+  color: var(--toc-notice);
 }
 .toc-entry-gen .toc-entry-label {
   flex: 0 0 auto;
