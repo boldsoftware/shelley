@@ -269,6 +269,7 @@ export interface GitDiffInfo {
   filesCount: number;
   additions: number;
   deletions: number;
+  statsLoaded?: boolean;
   // True when this commit has a guided tour git note.
   hasTour?: boolean;
   // Decorating refs (branches, tags, HEAD), like git log --decorate.

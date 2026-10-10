@@ -77,6 +77,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   (e: "change", selectedDiff: string, selectedTo: "working" | "self"): void;
+  (e: "open"): void;
 }>();
 
 const open = ref(false);
@@ -220,7 +221,7 @@ function renderCommitRow(d: GitDiffInfo, idx: number): VNode {
             h(
               "span",
               { class: "commit-picker-row-stats" },
-              `${d.filesCount} files \u00b7 ${stats}`,
+              d.statsLoaded === false ? "Loading stats..." : `${d.filesCount} files \u00b7 ${stats}`,
             ),
           ]),
         ]),
@@ -340,6 +341,7 @@ const wasOpen = ref(false);
 watch(open, (isOpen) => {
   detach();
   if (isOpen) {
+    emit("open");
     document.addEventListener("mousedown", onDocDown);
     document.addEventListener("keydown", onKey, true);
     nextTick(() => {

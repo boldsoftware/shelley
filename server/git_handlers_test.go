@@ -1625,6 +1625,77 @@ func TestHandleGitDiffFiles_FilenamesWithSpaces(t *testing.T) {
 	}
 }
 
+func TestHandleGitDiffFiles_BatchedStats(t *testing.T) {
+	t.Parallel()
+	h := NewTestHarness(t)
+	repo := t.TempDir()
+	run := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repo
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v failed: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(repo, path), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	run("git", "init")
+	run("git", "config", "user.name", "Test")
+	run("git", "config", "user.email", "test@example.com")
+	write("numeric.txt", "same\nold\n")
+	write("has\ttab\nand newline.txt", "one\n")
+	if err := os.WriteFile(filepath.Join(repo, "binary.bin"), []byte{0, 1}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("git", "add", ".")
+	run("git", "commit", "-m", "base\n\nPrompt: test")
+
+	write("numeric.txt", "same\nnew\nextra\n")
+	write("has\ttab\nand newline.txt", "one\ntwo\n")
+	if err := os.WriteFile(filepath.Join(repo, "binary.bin"), []byte{0, 2}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("git", "add", ".")
+	run("git", "commit", "-m", "change\n\nPrompt: test")
+	head := run("git", "rev-parse", "HEAD")
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/git/diffs/%s/files?cwd=%s&to=self", head, repo), nil)
+	w := httptest.NewRecorder()
+	h.server.handleGitDiffFiles(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var files []GitFileInfo
+	if err := json.Unmarshal(w.Body.Bytes(), &files); err != nil {
+		t.Fatal(err)
+	}
+	byPath := make(map[string]GitFileInfo, len(files))
+	for _, file := range files {
+		byPath[file.Path] = file
+	}
+	for path, want := range map[string]numstat{
+		"numeric.txt":               {additions: 2, deletions: 1},
+		"has\ttab\nand newline.txt": {additions: 1, deletions: 0},
+		"binary.bin":                {},
+	} {
+		got, ok := byPath[path]
+		if !ok {
+			t.Errorf("%q missing from %+v", path, files)
+			continue
+		}
+		if got.Additions != want.additions || got.Deletions != want.deletions {
+			t.Errorf("%q stats = +%d/-%d, want +%d/-%d", path, got.Additions, got.Deletions, want.additions, want.deletions)
+		}
+	}
+}
+
 // TestHandleGitDiffFiles_RenamedFile verifies that a committed rename is listed
 // under the new path. The --name-status rename line is "R100\told\tnew"; the
 // old whitespace-splitting parser produced a bogus status and the wrong path.
@@ -1671,6 +1742,9 @@ func TestHandleGitDiffFiles_RenamedFile(t *testing.T) {
 	}
 	if files[0].Path != "new name.txt" {
 		t.Errorf("expected renamed file path \"new name.txt\", got %q", files[0].Path)
+	}
+	if files[0].Additions != 0 || files[0].Deletions != 0 {
+		t.Errorf("rename stats = +%d/-%d, want +0/-0", files[0].Additions, files[0].Deletions)
 	}
 }
 
@@ -1734,26 +1808,39 @@ func TestParseNameStatusZ(t *testing.T) {
 	}
 }
 
-// TestParseNumstatZ covers the per-file numstat parser, including binary files
-// (which report "-") and paths containing spaces.
+// TestParseNumstatZ covers batched NUL-separated numstat parsing, including
+// binary files, unusual paths, and rename/copy old/new path records.
 func TestParseNumstatZ(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name           string
-		in             string
-		wantAdd, wantD int
+		name string
+		in   string
+		want map[string]numstat
 	}{
-		{"empty", "", 0, 0},
-		{"simple", "3\t1\tfile.txt\x00", 3, 1},
-		{"space in path", "2\t0\tmy file.txt\x00", 2, 0},
-		{"binary", "-\t-\timage.png\x00", 0, 0},
-		{"zero changes", "0\t0\tempty.txt\x00", 0, 0},
+		{"empty", "", map[string]numstat{}},
+		{"multiple unusual paths", "3\t1\tfile.txt\x002\t0\thas\ttab\nand newline.txt\x00", map[string]numstat{
+			"file.txt":                  {additions: 3, deletions: 1},
+			"has\ttab\nand newline.txt": {additions: 2},
+		}},
+		{"binary", "-\t-\timage.png\x00", map[string]numstat{"image.png": {}}},
+		{"rename uses destination", "1\t2\t\x00old name.txt\x00new\tname.txt\x00", map[string]numstat{
+			"new\tname.txt": {additions: 1, deletions: 2},
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			add, del := parseNumstatZ(tc.in)
-			if add != tc.wantAdd || del != tc.wantD {
-				t.Errorf("parseNumstatZ(%q) = (%d, %d), want (%d, %d)", tc.in, add, del, tc.wantAdd, tc.wantD)
+			got, err := parseNumstatZ(tc.in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("parseNumstatZ(%q) = %+v, want %+v", tc.in, got, tc.want)
+			}
+			for path, want := range tc.want {
+				stat, ok := got[path]
+				if !ok || stat != want {
+					t.Errorf("parseNumstatZ(%q)[%q] = %+v (present: %v), want %+v", tc.in, path, stat, ok, want)
+				}
 			}
 		})
 	}

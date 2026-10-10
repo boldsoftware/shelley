@@ -58,6 +58,7 @@
               :selected-to="selectedTo"
               :is-mobile="isMobile"
               @change="onCommitChange"
+              @open="loadCommitStats"
             />
             <div v-if="diffView === 'files'" class="diff-viewer-file-selector-wrapper">
               <select
@@ -164,6 +165,7 @@
                   :selected-to="selectedTo"
                   :is-mobile="isMobile"
                   @change="onCommitChange"
+                  @open="loadCommitStats"
                 />
               </div>
               <div v-if="diffView === 'files'" class="diff-viewer-selector-group">
@@ -717,6 +719,9 @@ const tourError = ref<string | null>(null);
 const files = ref<GitFileInfo[]>([]);
 const selectedFile = ref<string | null>(null);
 let pendingInitialFile: string | undefined;
+let loadDiffsRequestId = 0;
+let loadFilesRequestId = 0;
+let loadFileDiffRequestId = 0;
 const fileDiff = ref<GitFileDiff | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -1019,7 +1024,12 @@ const dirTooltip = computed(() =>
 );
 
 function requestClose() {
-  if (!recordingLocked.value) emit("close");
+  if (!recordingLocked.value) {
+    loadDiffsRequestId++;
+    loadFilesRequestId++;
+    loadFileDiffRequestId++;
+    emit("close");
+  }
 }
 
 // The worker's conversation replaces this one underneath, so leave first;
@@ -1137,6 +1147,9 @@ watch(
       pendingInitialFile = props.initialFile;
       loadDiffs();
     } else if (!props.isOpen) {
+      loadDiffsRequestId++;
+      loadFilesRequestId++;
+      loadFileDiffRequestId++;
       fileDiff.value = null;
       selectedFile.value = null;
       files.value = [];
@@ -1176,12 +1189,23 @@ watch([selectedDiff, selectedFile, selectedTo, () => props.cwd], () => {
 // --- Create the Monaco diff editor ONCE per isOpen+monacoLoaded change. ---
 // Recreating on file switch / viewport flip leaks monaco keybinding
 // contributions, so model swaps + option updates happen in separate watchers.
+const editorHost = document.createElement("div");
+editorHost.style.width = "100%";
+editorHost.style.height = "100%";
+
 function createEditor() {
   if (!props.isOpen || !monacoLoaded.value || !editorContainerRef.value || !monacoMod) return;
-  if (diffEditor) return;
+  if (editorHost.parentElement !== editorContainerRef.value) {
+    editorContainerRef.value.appendChild(editorHost);
+  }
+  if (diffEditor) {
+    commentsCleanup?.();
+    commentsCleanup = attachComments(diffEditor.getModifiedEditor(), editorContainerRef.value);
+    return;
+  }
   const monaco = monacoMod;
   const initMobile = isMobileVal;
-  diffEditor = monaco.editor.createDiffEditor(editorContainerRef.value, {
+  diffEditor = monaco.editor.createDiffEditor(editorHost, {
     theme: isDarkModeActive() ? "vs-dark" : "vs",
     readOnly: true,
     dragAndDrop: false,
@@ -1267,8 +1291,13 @@ watch(
   () => {
     if (props.isOpen && monacoLoaded.value) {
       nextTick(() => createEditor());
-    } else {
-      disposeEditor();
+    } else if (diffEditor) {
+      commentsCleanup?.();
+      commentsCleanup = null;
+      const model = diffEditor.getModel();
+      diffEditor.setModel(null);
+      model?.original.dispose();
+      model?.modified.dispose();
     }
   },
   { immediate: true, flush: "post" },
@@ -1375,51 +1404,80 @@ watch(
 
 // --- Data loaders ---
 async function loadDiffs() {
+  const requestId = ++loadDiffsRequestId;
+  const cwd = props.cwd;
+  const initialCommit = props.initialCommit;
   try {
     loading.value = true;
     error.value = null;
-    const response = await api.getGitDiffs(props.cwd, props.initialCommit);
+    const response = await api.getGitDiffs(cwd, initialCommit, false);
+    if (requestId !== loadDiffsRequestId) return;
     diffs.value = response.diffs;
     gitRoot.value = response.gitRoot;
 
-    const selection = defaultDiffSelection(response.diffs, props.initialCommit);
+    const selection = defaultDiffSelection(response.diffs, initialCommit);
     if (selection) {
       selectedDiff.value = selection.selectedDiff;
       selectedTo.value = selection.selectedTo;
     }
   } catch (err) {
+    if (requestId !== loadDiffsRequestId) return;
     const errStr = String(err);
     if (errStr.toLowerCase().includes("not a git repository")) {
-      error.value = `Not a git repository: ${props.cwd}`;
+      error.value = `Not a git repository: ${cwd}`;
     } else {
       error.value = `Failed to load diffs: ${errStr}`;
     }
   } finally {
-    loading.value = false;
+    if (requestId === loadDiffsRequestId) loading.value = false;
   }
 }
 
-let loadFilesRequestId = 0;
+let commitStatsRequestId: number | null = null;
+async function loadCommitStats() {
+  const requestId = loadDiffsRequestId;
+  if (
+    commitStatsRequestId === requestId ||
+    !diffs.value.some((diff) => diff.statsLoaded === false)
+  ) return;
+  commitStatsRequestId = requestId;
+  try {
+    const response = await api.getGitDiffs(props.cwd, props.initialCommit);
+    if (requestId !== loadDiffsRequestId) return;
+    const byId = new Map(response.diffs.map((diff) => [diff.id, diff]));
+    diffs.value = diffs.value.map((diff) => {
+      const full = byId.get(diff.id);
+      return full ? { ...diff, filesCount: full.filesCount, additions: full.additions,
+        deletions: full.deletions, statsLoaded: full.statsLoaded } : diff;
+    });
+  } catch (err) {
+    if (requestId === loadDiffsRequestId) error.value = `Failed to load commit stats: ${err}`;
+  } finally {
+    if (commitStatsRequestId === requestId) commitStatsRequestId = null;
+  }
+}
+
 async function loadFiles(diffId: string) {
   const requestId = ++loadFilesRequestId;
+  const cwd = props.cwd;
+  const toArg = diffId === "working" ? undefined : selectedTo.value;
+  const initial = pendingInitialFile;
+  pendingInitialFile = undefined;
+  const filesPromise = api.getGitDiffFiles(diffId, cwd, toArg);
+  const messagesPromise =
+    diffId === "working"
+      ? Promise.resolve<GitCommitMessage[]>([])
+      : api.getGitCommitMessages(cwd, diffId, toArg).catch(() => []);
+
+  loadFileDiffRequestId++;
+  selectedFile.value = null;
+  fileDiff.value = null;
   try {
     loading.value = true;
     error.value = null;
-    const toArg = diffId === "working" ? undefined : selectedTo.value;
-    const filesData = await api.getGitDiffFiles(diffId, props.cwd, toArg);
-
-    let msgs: GitCommitMessage[] = [];
-    if (diffId !== "working") {
-      try {
-        msgs = await api.getGitCommitMessages(props.cwd, diffId, toArg);
-      } catch {
-        msgs = [];
-      }
-    }
-    // A newer selection's load supersedes this one; don't overwrite its state.
+    const msgs = await messagesPromise;
     if (requestId !== loadFilesRequestId) return;
     commitMessages.value = msgs;
-
     const commitFileEntries: GitFileInfo[] = msgs.map((msg) => ({
       path: COMMIT_MSG_PREFIX + msg.hash,
       status: "added" as const,
@@ -1427,19 +1485,20 @@ async function loadFiles(diffId: string) {
       deletions: 0,
       isGenerated: false,
     }));
-
-    const allFiles = [...commitFileEntries, ...(filesData || [])];
-    files.value = allFiles;
-    const initial = pendingInitialFile;
-    pendingInitialFile = undefined;
-    if (initial && allFiles.some((f) => f.path === initial)) {
-      selectedFile.value = initial;
-    } else if (allFiles.length > 0) {
-      selectedFile.value = allFiles[0].path;
-    } else {
-      selectedFile.value = null;
-      fileDiff.value = null;
+    const pickFrom = (list: GitFileInfo[]) => {
+      if (initial && list.some((file) => file.path === initial)) return initial;
+      return list.length > 0 ? list[0].path : null;
+    };
+    if (commitFileEntries.length > 0 && (!initial || isCommitMessageFile(initial))) {
+      files.value = commitFileEntries;
+      selectedFile.value = pickFrom(commitFileEntries);
     }
+
+    const realFiles = (await filesPromise) || [];
+    if (requestId !== loadFilesRequestId) return;
+    const allFiles = [...commitFileEntries, ...realFiles];
+    files.value = allFiles;
+    if (!selectedFile.value) selectedFile.value = pickFrom(allFiles);
   } catch (err) {
     if (requestId !== loadFilesRequestId) return;
     error.value = `Failed to load files: ${err}`;
@@ -1449,6 +1508,9 @@ async function loadFiles(diffId: string) {
 }
 
 async function loadFileDiff(diffId: string, filePath: string) {
+  const requestId = ++loadFileDiffRequestId;
+  const cwd = props.cwd;
+  const toArg = diffId === "working" ? undefined : selectedTo.value;
   try {
     loading.value = true;
     error.value = null;
@@ -1456,19 +1518,21 @@ async function loadFileDiff(diffId: string, filePath: string) {
       const hash = commitHashFromPath(filePath);
       const msg = commitMessages.value.find((m) => m.hash === hash);
       if (msg) {
+        if (requestId !== loadFileDiffRequestId) return;
         fileDiff.value = { path: filePath, oldContent: "", newContent: formatCommitMessage(msg) };
-      } else {
+      } else if (requestId === loadFileDiffRequestId) {
         error.value = "Commit message not found";
       }
       return;
     }
-    const toArg = diffId === "working" ? undefined : selectedTo.value;
-    const diffData = await api.getGitFileDiff(diffId, filePath, props.cwd, toArg);
+    const diffData = await api.getGitFileDiff(diffId, filePath, cwd, toArg);
+    if (requestId !== loadFileDiffRequestId) return;
     fileDiff.value = diffData;
   } catch (err) {
+    if (requestId !== loadFileDiffRequestId) return;
     error.value = `Failed to load file diff: ${err}`;
   } finally {
-    loading.value = false;
+    if (requestId === loadFileDiffRequestId) loading.value = false;
   }
 }
 
@@ -1977,6 +2041,15 @@ function onDirSelect(path: string) {
 
 // --- Lifecycle ---
 onMounted(() => {
+  const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 2000));
+  idle(() => {
+    loadMonaco()
+      .then((monaco) => {
+        monacoMod = monaco;
+        monacoLoaded.value = true;
+      })
+      .catch(() => {});
+  });
   tourContentsResizeObserver = new ResizeObserver(revealActiveTourContents);
   if (tourContentsScrollRef.value) tourContentsResizeObserver.observe(tourContentsScrollRef.value);
   window.addEventListener("resize", handleResize);

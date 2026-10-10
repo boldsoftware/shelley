@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"shelley.exe.dev/committour"
@@ -19,13 +20,14 @@ import (
 
 // GitDiffInfo represents a commit or working changes
 type GitDiffInfo struct {
-	ID         string    `json:"id"`
-	Message    string    `json:"message"`
-	Author     string    `json:"author"`
-	Timestamp  time.Time `json:"timestamp"`
-	FilesCount int       `json:"filesCount"`
-	Additions  int       `json:"additions"`
-	Deletions  int       `json:"deletions"`
+	ID          string    `json:"id"`
+	Message     string    `json:"message"`
+	Author      string    `json:"author"`
+	Timestamp   time.Time `json:"timestamp"`
+	FilesCount  int       `json:"filesCount"`
+	Additions   int       `json:"additions"`
+	Deletions   int       `json:"deletions"`
+	StatsLoaded bool      `json:"statsLoaded"`
 	// Refs is the list of decorating refs on this commit (branches, tags),
 	// e.g. "main", "HEAD", "origin/main", "v1.2.3". Empty for working changes
 	// and for commits with no refs pointing at them.
@@ -184,7 +186,7 @@ func untrackedGitFiles(gitRoot string) []GitFileInfo {
 // gitLogDiffs lists up to limit commits from startRef (or HEAD when empty)
 // with per-commit diffstats in a single git invocation. Merge commits report
 // their first-parent diffstat. mergeBase, if non-empty, marks the matching commit.
-func gitLogDiffs(gitRoot string, limit int, mergeBase, startRef string) []GitDiffInfo {
+func gitLogDiffs(gitRoot string, limit int, mergeBase, startRef string, includeStats bool) []GitDiffInfo {
 	// %x01 starts each commit record so numstat lines can't be confused
 	// with headers. --topo-order guarantees descendants of the merge-base
 	// print before it, so the sidebar's slice down to the merge-base
@@ -192,9 +194,14 @@ func gitLogDiffs(gitRoot string, limit int, mergeBase, startRef string) []GitDif
 	// like "HEAD -> main, origin/main, tag: v1.2".
 	args := []string{
 		"log", "-n", strconv.Itoa(limit),
-		"--topo-order", "--numstat", "--diff-merges=first-parent",
+		"--topo-order",
 		"--no-show-signature", // log.showSignature=true would corrupt parsing
 		"--pretty=format:%x01%H%x00%s%x00%an%x00%at%x00%D",
+	}
+	if includeStats {
+		args = append(args, "--numstat", "--diff-merges=first-parent")
+	} else {
+		args = append(args, "--no-patch")
 	}
 	if startRef != "" {
 		args = append(args, startRef)
@@ -230,6 +237,7 @@ func gitLogDiffs(gitRoot string, limit int, mergeBase, startRef string) []GitDif
 			FilesCount:  filesCount,
 			Additions:   additions,
 			Deletions:   deletions,
+			StatsLoaded: includeStats,
 			Refs:        parseDecorations(parts[4]),
 			IsMergeBase: mergeBase != "" && parts[0] == mergeBase,
 		})
@@ -282,26 +290,37 @@ func (s *Server) handleGitDiffs(w http.ResponseWriter, r *http.Request) {
 
 	var diffs []GitDiffInfo
 
-	// Working changes
-	workingStatCmd := exec.Command("git", "diff", "HEAD", "--numstat")
-	workingStatCmd.Dir = gitRoot
-	workingStatOutput, _ := workingStatCmd.Output()
-	workingAdditions, workingDeletions, workingFilesCount := parseDiffStat(string(workingStatOutput))
-	for _, file := range untrackedGitFiles(gitRoot) {
-		workingAdditions += file.Additions
-		workingDeletions += file.Deletions
-		workingFilesCount++
-	}
-
-	diffs = append(diffs, GitDiffInfo{
-		ID:         "working",
-		Message:    "Working Changes",
-		Author:     "",
-		Timestamp:  time.Now(),
-		FilesCount: workingFilesCount,
-		Additions:  workingAdditions,
-		Deletions:  workingDeletions,
-	})
+	// Working changes and tour notes are independent of the commit walk.
+	var working GitDiffInfo
+	var tours map[string]bool
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		workingStatCmd := exec.Command("git", "diff", "HEAD", "--numstat")
+		workingStatCmd.Dir = gitRoot
+		workingStatOutput, _ := workingStatCmd.Output()
+		additions, deletions, filesCount := parseDiffStat(string(workingStatOutput))
+		for _, file := range untrackedGitFiles(gitRoot) {
+			additions += file.Additions
+			deletions += file.Deletions
+			filesCount++
+		}
+		working = GitDiffInfo{
+			ID:          "working",
+			Message:     "Working Changes",
+			Timestamp:   time.Now(),
+			FilesCount:  filesCount,
+			Additions:   additions,
+			Deletions:   deletions,
+			StatsLoaded: true,
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		// hasTour is decoration; a notes lookup failure must not break the diff list.
+		tours, _ = committour.ListNotes(gitRoot)
+	}()
 
 	// Compute the merge-base with the configured upstream, if any. Failures
 	// are non-fatal: many local-only branches have no upstream.
@@ -331,7 +350,8 @@ func (s *Server) handleGitDiffs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	commits := gitLogDiffs(gitRoot, limit, mergeBase, "HEAD")
+	includeStats := r.URL.Query().Get("stats") != "false"
+	commits := gitLogDiffs(gitRoot, limit, mergeBase, "HEAD", includeStats)
 	if requestedCommit != "" {
 		found := false
 		for _, commit := range commits {
@@ -341,7 +361,7 @@ func (s *Server) handleGitDiffs(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !found {
-			requested := gitLogDiffs(gitRoot, 1, "", requestedCommit)
+			requested := gitLogDiffs(gitRoot, 1, "", requestedCommit, includeStats)
 			if len(requested) != 1 {
 				http.Error(w, "failed to read commit", http.StatusInternalServerError)
 				return
@@ -349,8 +369,8 @@ func (s *Server) handleGitDiffs(w http.ResponseWriter, r *http.Request) {
 			commits = append(requested, commits...)
 		}
 	}
-	// hasTour is decoration; a notes lookup failure must not break the diff list.
-	tours, _ := committour.ListNotes(gitRoot)
+	wg.Wait()
+	diffs = append(diffs, working)
 	for i := range commits {
 		commits[i].HasTour = tours[commits[i].ID]
 	}
@@ -485,18 +505,70 @@ func parseNameStatusZ(s string) []nameStatusEntry {
 	return entries
 }
 
-// parseNumstatZ parses the additions/deletions from a single-file
-// `git diff --numstat -z` invocation. The numeric prefix is tab-separated
-// ("<adds>\t<dels>\t<path>"); binary files report "-" for both counts, which
-// yields zeros here.
-func parseNumstatZ(s string) (additions, deletions int) {
-	// The adds/dels are separated from each other (and the path) by tabs.
-	fields := strings.SplitN(s, "\t", 3)
-	if len(fields) >= 2 {
-		additions, _ = strconv.Atoi(strings.TrimSpace(fields[0]))
-		deletions, _ = strconv.Atoi(strings.TrimSpace(fields[1]))
+type numstat struct {
+	additions int
+	deletions int
+}
+
+// parseNumstatZ parses `git diff --numstat -z` output by current path.
+// Renames and copies encode an empty pathname followed by old and new paths;
+// use the new path to match the file list from --name-status.
+func parseNumstatZ(s string) (map[string]numstat, error) {
+	output := []byte(s)
+	stats := make(map[string]numstat)
+	for len(output) > 0 {
+		addEnd := bytes.IndexByte(output, '\t')
+		if addEnd < 0 {
+			return nil, errors.New("malformed numstat additions")
+		}
+		delEnd := bytes.IndexByte(output[addEnd+1:], '\t')
+		if delEnd < 0 {
+			return nil, errors.New("malformed numstat deletions")
+		}
+		delEnd += addEnd + 1
+
+		parseCount := func(field []byte) (int, error) {
+			if string(field) == "-" {
+				return 0, nil
+			}
+			return strconv.Atoi(string(field))
+		}
+		additions, err := parseCount(output[:addEnd])
+		if err != nil {
+			return nil, err
+		}
+		deletions, err := parseCount(output[addEnd+1 : delEnd])
+		if err != nil {
+			return nil, err
+		}
+		output = output[delEnd+1:]
+
+		var path []byte
+		if len(output) > 0 && output[0] == 0 {
+			// Rename/copy: <adds>\t<dels>\t\0<old>\0<new>\0
+			output = output[1:]
+			oldEnd := bytes.IndexByte(output, 0)
+			if oldEnd < 0 {
+				return nil, errors.New("malformed numstat old path")
+			}
+			output = output[oldEnd+1:]
+			newEnd := bytes.IndexByte(output, 0)
+			if newEnd < 0 {
+				return nil, errors.New("malformed numstat new path")
+			}
+			path = output[:newEnd]
+			output = output[newEnd+1:]
+		} else {
+			pathEnd := bytes.IndexByte(output, 0)
+			if pathEnd < 0 {
+				return nil, errors.New("malformed numstat path")
+			}
+			path = output[:pathEnd]
+			output = output[pathEnd+1:]
+		}
+		stats[string(path)] = numstat{additions: additions, deletions: deletions}
 	}
-	return additions, deletions
+	return stats, nil
 }
 
 // handleGitDiffFiles returns the files changed in a specific diff
@@ -560,9 +632,33 @@ func (s *Server) handleGitDiffFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	cmd.Dir = gitRoot
 
-	output, err := cmd.Output()
-	if err != nil {
+	statArgs := []string{"diff", statBaseArg}
+	if statHeadArg != "" {
+		statArgs = append(statArgs, statHeadArg)
+	}
+	statArgs = append(statArgs, "--numstat", "-z")
+	statCmd := exec.Command("git", statArgs...)
+	statCmd.Dir = gitRoot
+
+	var output, statOutput []byte
+	var statusErr, statErr error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		output, statusErr = cmd.Output()
+	}()
+	go func() {
+		defer wg.Done()
+		statOutput, statErr = statCmd.Output()
+	}()
+	wg.Wait()
+	if statusErr != nil {
 		http.Error(w, "failed to get diff files", http.StatusInternalServerError)
+		return
+	}
+	if statErr != nil {
+		http.Error(w, "failed to get diff stats", http.StatusInternalServerError)
 		return
 	}
 
@@ -572,6 +668,11 @@ func (s *Server) handleGitDiffFiles(w http.ResponseWriter, r *http.Request) {
 	// -z (rather than splitting on whitespace) is what makes filenames with
 	// spaces or tabs come through intact.
 	statusEntries := parseNameStatusZ(string(output))
+	stats, err := parseNumstatZ(string(statOutput))
+	if err != nil {
+		http.Error(w, "failed to parse diff stats", http.StatusInternalServerError)
+		return
+	}
 	var files []GitFileInfo
 
 	for _, e := range statusEntries {
@@ -591,17 +692,11 @@ func (s *Server) handleGitDiffFiles(w http.ResponseWriter, r *http.Request) {
 
 		path := e.path
 
-		// Get additions/deletions for this file.
-		// statHeadArg empty means compare statBaseArg to working tree.
-		statArgs := []string{"diff", statBaseArg}
-		if statHeadArg != "" {
-			statArgs = append(statArgs, statHeadArg)
+		stat, ok := stats[path]
+		if !ok {
+			http.Error(w, "missing diff stats for file", http.StatusInternalServerError)
+			return
 		}
-		statArgs = append(statArgs, "--numstat", "-z", "--", path)
-		statCmd := exec.Command("git", statArgs...)
-		statCmd.Dir = gitRoot
-		statOutput, _ := statCmd.Output()
-		additions, deletions := parseNumstatZ(string(statOutput))
 
 		// Check if file is autogenerated based on path.
 		// For Go files, we could also check content, but that requires reading the file
@@ -620,8 +715,8 @@ func (s *Server) handleGitDiffFiles(w http.ResponseWriter, r *http.Request) {
 		files = append(files, GitFileInfo{
 			Path:        path,
 			Status:      status,
-			Additions:   additions,
-			Deletions:   deletions,
+			Additions:   stat.additions,
+			Deletions:   stat.deletions,
 			IsGenerated: isGenerated,
 		})
 	}

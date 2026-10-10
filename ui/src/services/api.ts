@@ -726,9 +726,11 @@ class ApiService {
   async getGitDiffs(
     cwd: string,
     commit?: string,
+    includeStats = true,
   ): Promise<{ diffs: GitDiffInfo[]; gitRoot: string }> {
     const params = new URLSearchParams({ cwd });
     if (commit) params.set("commit", commit);
+    if (!includeStats) params.set("stats", "false");
     const response = await fetch(`${this.baseUrl}/git/diffs?${params}`);
     if (!response.ok) {
       const text = await response.text();
