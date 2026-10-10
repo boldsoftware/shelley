@@ -69,6 +69,33 @@ func (f oneMessage) FindUserMessageBySequence(_ context.Context, sequenceID int6
 	return f.UserMessage, f.SequenceID == sequenceID, nil
 }
 
+func TestMessageUserStripsChatCitations(t *testing.T) {
+	for _, tt := range []struct {
+		name, text, want string
+	}{
+		{"cited prose", " \ue203It works.\ue204 \ue200cite\ue202turn0search0\ue201 ", "It works."},
+		{"plain text", "Résumé 👍", "Résumé 👍"},
+		{"citations only", " \ue200cite\ue202turn0search0\ue201 ", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			chat := &fakeChat{}
+			out := runMessageUser(t.Context(), noMessages{}, chat, t.TempDir(), MessageUserInput{Text: tt.text, EndTurn: true})
+			if tt.want == "" {
+				if out.Error == nil || len(chat.sent) != 0 || out.EndTurn {
+					t.Fatalf("empty message: %+v, sent %q", out, chat.sent)
+				}
+				return
+			}
+			if out.Error != nil || !out.EndTurn {
+				t.Fatalf("send: %+v", out)
+			}
+			if want := []string{"send " + tt.want + " reply-to "}; !slices.Equal(chat.sent, want) {
+				t.Fatalf("sent %q, want %q", chat.sent, want)
+			}
+		})
+	}
+}
+
 // The chat gets the message, then the reaction. A refused message is an
 // error, so the agent learns it was not delivered; a reaction refused after
 // its message went out leaves the call standing, with a note.

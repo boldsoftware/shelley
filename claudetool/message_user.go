@@ -139,6 +139,9 @@ func MessageUserTool(finder UserMessageFinder, chat UserChat, wd *MutableWorking
 }
 
 func runMessageUser(ctx context.Context, finder UserMessageFinder, chat UserChat, cwd string, in MessageUserInput) llm.ToolOut {
+	if chat != nil {
+		in.Text = llm.StripInlineCitationMarkers(in.Text)
+	}
 	in.Text = strings.TrimSpace(in.Text)
 	in.Reaction = strings.TrimSpace(in.Reaction)
 	if in.Text == "" && in.Reaction == "" && len(in.Attachments) == 0 {
