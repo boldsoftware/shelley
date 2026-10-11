@@ -109,7 +109,9 @@ func TestChatServiceEnforcesReasoningOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(request.Messages) != 1 || request.Messages[0].ReasoningContent != " " || len(request.Messages[0].ToolCalls) != 1 {
+	// The empty reasoning_content placeholder is DeepSeek-only; cross-origin
+	// reasoning is simply dropped for everyone else.
+	if len(request.Messages) != 1 || request.Messages[0].ReasoningContent != "" || len(request.Messages[0].ToolCalls) != 1 {
 		t.Fatalf("chat messages = %+v", request.Messages)
 	}
 	if response.Origin == nil || !response.Origin.Matches(service.messageOrigin(service.Model)) {
