@@ -1,5 +1,6 @@
 import type { LLMContent, Message } from "../types";
 import { isDistillStatusMessage } from "../types";
+import { conversationMessageSource } from "./messageSource";
 import type { ConversationViewMode } from "../services/settings";
 
 const LLM_TYPE_TOOL_RESULT = 6;
@@ -14,7 +15,7 @@ export function isHumanUserMessage(message: Message): boolean {
   const cached = humanUserCache.get(message.message_id);
   if (cached !== undefined) return cached;
 
-  let human = true;
+  let human = !conversationMessageSource(message.user_data);
   if (message.user_data) {
     try {
       const userData =

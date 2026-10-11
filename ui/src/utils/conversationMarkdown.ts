@@ -3,6 +3,7 @@
 // llm_data structure the chat UI renders and flattens it into headings,
 // prose, thinking blocks, and fenced tool-call / tool-result sections.
 import { Conversation, Message, LLMContent } from "../types";
+import { conversationMessageSource } from "./messageSource";
 
 // Content type constants mirror llm/llm.go (see Message.tsx getContentType).
 const TYPE_TEXT = 2;
@@ -127,7 +128,12 @@ function renderMessage(message: Message, opts: Required<ConversationMarkdownOpti
   const isUser = message.type === "user" && !hasToolResult;
 
   if (isUser) {
-    out.push("## User");
+    const sender = conversationMessageSource(message.user_data);
+    out.push(
+      sender
+        ? `## ${sender.relationship === "subagent" ? "Subagent" : "Parent conversation"}: ${sender.slug || sender.conversationId}`
+        : "## User",
+    );
     out.push("");
   } else if (message.type === "agent") {
     // Only add an Assistant heading when there's something visible to show.

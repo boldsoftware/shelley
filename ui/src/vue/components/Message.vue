@@ -447,7 +447,7 @@ const mcpNotice = computed(() =>
   isUser.value && !isDistilledUser.value ? mcpNoticeSource(props.message.user_data) : null,
 );
 const authorEmail = computed(() =>
-  isUser.value && !isDistilledUser.value && showUserEmails?.value
+  isUser.value && !isDistilledUser.value && !conversationSource.value && showUserEmails?.value
     ? props.message.user_email || null
     : null,
 );
