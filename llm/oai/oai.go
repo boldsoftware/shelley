@@ -540,6 +540,9 @@ var (
 // Service provides chat completions.
 // Fields should not be altered concurrently with calling any method on Service.
 type Service struct {
+	// ReasoningOverride is advertised for this model at this endpoint; nil uses models.dev.
+	ReasoningOverride *modelsdev.ReasoningCapabilities
+
 	HTTPC        *http.Client    // defaults to http.DefaultClient if nil
 	APIKey       string          // optional, if not set will try to load from env var
 	Model        Model           // defaults to DefaultModel if zero value
@@ -1361,6 +1364,9 @@ func (s *Service) Provider() string { return s.ProviderName }
 // emitted and the provider applies its own default (often not "off" for
 // reasoning models), which Shelley cannot name — so it returns "".
 func (s *Service) DefaultReasoningLevel() string {
+	if effort, ok := overrideReasoningEffort(s.ReasoningOverride, &llm.Request{}, s.ThinkingLevel, s.ReasoningEffort); ok {
+		return defaultReasoningLevel(effort)
+	}
 	if s.ReasoningEffort != "" {
 		return s.ReasoningEffort
 	}
@@ -1387,8 +1393,17 @@ func (s *Service) MaxImageBytes() int {
 	return 20 * 1024 * 1024
 }
 
-func modelReasoningCapabilities(endpoint string, model Model) (modelsdev.ReasoningCapabilities, bool) {
-	return modelsdev.LookupReasoningCapabilities(cmp.Or(endpoint, model.URL), model.ModelName)
+// defaultReasoningLevel translates the wire spelling to the canonical API/UI
+// name. Provider-verbatim values otherwise remain untouched.
+func defaultReasoningLevel(effort string) string {
+	if effort == "none" {
+		return "off"
+	}
+	return effort
+}
+
+func modelReasoningCapabilities(override *modelsdev.ReasoningCapabilities, endpoint string, model Model) (modelsdev.ReasoningCapabilities, bool) {
+	return override.Lookup(cmp.Or(endpoint, model.URL), model.ModelName)
 }
 
 func advertisedReasoningLevels(caps modelsdev.ReasoningCapabilities, found bool) []llm.ThinkingLevel {
@@ -1416,18 +1431,23 @@ func clampKnownReasoningEffort(effort string, levels []llm.ThinkingLevel) string
 	return effortForThinkingLevel(llm.ClampThinkingLevel(level, levels))
 }
 
-// SupportsReasoning reports the models.dev capability when known. Unknown
-// models retain the historical default of supporting reasoning controls.
+// SetReasoningOverride configures endpoint controls before the service is used.
+func (s *Service) SetReasoningOverride(caps *modelsdev.ReasoningCapabilities) {
+	s.ReasoningOverride = caps
+}
+
+// SupportsReasoning uses endpoint metadata before models.dev. Unknown models
+// retain the historical default of supporting reasoning controls.
 func (s *Service) SupportsReasoning() bool {
-	caps, found := modelReasoningCapabilities(s.ModelURL, cmp.Or(s.Model, DefaultModel))
+	caps, found := modelReasoningCapabilities(s.ReasoningOverride, s.ModelURL, cmp.Or(s.Model, DefaultModel))
 	return !found || caps.Supported
 }
 
-// SupportedReasoningLevels advertises exact effort levels from models.dev.
+// SupportedReasoningLevels advertises endpoint effort levels before models.dev.
 // Nil means the model has no exact effort metadata and callers use the
 // historical provider fallback.
 func (s *Service) SupportedReasoningLevels() []llm.ThinkingLevel {
-	caps, found := modelReasoningCapabilities(s.ModelURL, cmp.Or(s.Model, DefaultModel))
+	caps, found := modelReasoningCapabilities(s.ReasoningOverride, s.ModelURL, cmp.Or(s.Model, DefaultModel))
 	return advertisedReasoningLevels(caps, found)
 }
 
@@ -1558,6 +1578,9 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 				req.ReasoningEffort = "high"
 			}
 		}
+	}
+	if effort, ok := overrideReasoningEffort(s.ReasoningOverride, ir, s.ThinkingLevel, s.ReasoningEffort); ok {
+		req.ReasoningEffort = effort
 	}
 	// Construct the full URL for logging and debugging
 	fullURL := baseURL + "/chat/completions"

@@ -125,7 +125,8 @@ type DefaultReasoner interface {
 	// replicate the per-model effort clamping some request builders apply
 	// (e.g. chat backends downgrading "xhigh"->"high"). That only diverges
 	// when a service-level default is itself set to a clamped level, which
-	// does not happen for the shipped defaults (all "medium").
+	// does not happen for the shipped defaults (all "medium"). Explicit endpoint
+	// controls instead report the effective value after their overrides.
 	DefaultReasoningLevel() string
 }
 
