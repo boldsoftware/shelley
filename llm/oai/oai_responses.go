@@ -21,12 +21,16 @@ import (
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/imageutil"
 	"shelley.exe.dev/llm/llmhttp"
+	"shelley.exe.dev/models/modelsdev"
 )
 
 // ResponsesService provides chat completions using the OpenAI Responses API.
 // This API is required for models like gpt-5.3-codex.
 // Fields should not be altered concurrently with calling any method on ResponsesService.
 type ResponsesService struct {
+	// ReasoningOverride is advertised for this model at this endpoint; nil uses models.dev.
+	ReasoningOverride *modelsdev.ReasoningCapabilities
+
 	HTTPC         *http.Client      // defaults to http.DefaultClient if nil
 	APIKey        string            // optional, if not set will try to load from env var
 	Model         Model             // defaults to DefaultModel if zero value
@@ -621,6 +625,9 @@ func (s *ResponsesService) Provider() string { return s.ProviderName }
 // neither is set, no reasoning field is emitted and the provider applies its
 // own default (which Shelley cannot name), so it returns "".
 func (s *ResponsesService) DefaultReasoningLevel() string {
+	if effort, ok := overrideReasoningEffort(s.ReasoningOverride, &llm.Request{}, s.ThinkingLevel, s.ReasoningEffort); ok {
+		return defaultReasoningLevel(effort)
+	}
 	if s.ReasoningEffort != "" {
 		return s.ReasoningEffort
 	}
@@ -632,18 +639,23 @@ func (s *ResponsesService) DefaultReasoningLevel() string {
 
 func (s *ResponsesService) SupportsServerSideWebSearch() bool { return true }
 
-// SupportsReasoning reports the models.dev capability when known. Unknown
-// models retain the historical default of supporting reasoning controls.
+// SetReasoningOverride configures endpoint controls before the service is used.
+func (s *ResponsesService) SetReasoningOverride(caps *modelsdev.ReasoningCapabilities) {
+	s.ReasoningOverride = caps
+}
+
+// SupportsReasoning uses endpoint metadata before models.dev. Unknown models
+// retain the historical default of supporting reasoning controls.
 func (s *ResponsesService) SupportsReasoning() bool {
-	caps, found := modelReasoningCapabilities(s.ModelURL, cmp.Or(s.Model, DefaultModel))
+	caps, found := modelReasoningCapabilities(s.ReasoningOverride, s.ModelURL, cmp.Or(s.Model, DefaultModel))
 	return !found || caps.Supported
 }
 
-// SupportedReasoningLevels advertises exact effort levels from models.dev.
+// SupportedReasoningLevels advertises endpoint effort levels before models.dev.
 // Nil means the model has no exact effort metadata and callers use the
 // historical provider fallback.
 func (s *ResponsesService) SupportedReasoningLevels() []llm.ThinkingLevel {
-	caps, found := modelReasoningCapabilities(s.ModelURL, cmp.Or(s.Model, DefaultModel))
+	caps, found := modelReasoningCapabilities(s.ReasoningOverride, s.ModelURL, cmp.Or(s.Model, DefaultModel))
 	return advertisedReasoningLevels(caps, found)
 }
 
@@ -783,6 +795,9 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 				effort = "xhigh"
 			}
 		}
+	}
+	if explicit, ok := overrideReasoningEffort(s.ReasoningOverride, ir, s.ThinkingLevel, s.ReasoningEffort); ok {
+		effort = explicit
 	}
 	if effort != "" {
 		req.Reasoning = &responsesReasoning{Effort: effort}

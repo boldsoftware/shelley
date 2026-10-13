@@ -65,8 +65,8 @@ func (m *interleavedMetadata) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ReasoningCapabilities describes the reasoning controls models.dev records
-// for a model. Levels is empty when the model supports reasoning but its
+// ReasoningCapabilities describes the controls for a (model, endpoint) pair.
+// Levels is empty when the model supports reasoning but its
 // reasoning_options do not contain an explicit effort list.
 type ReasoningCapabilities struct {
 	Supported bool
