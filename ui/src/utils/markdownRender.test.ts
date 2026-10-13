@@ -73,6 +73,94 @@ assert(
   "raw script tags are stripped by sanitization",
 );
 
+// ---- Obsidian open links retain their URI without allowing arbitrary schemes ----
+
+for (const url of [
+  "obsidian://open?vault=Notes&file=Folder%2FMy%20note.md",
+  "obsidian://open?path=%2FUsers%2Fme%2FNotes%2FMy%20note.md",
+  "obsidian://open?vault=Notes&file=My%20note%23Heading",
+  "obsidian://open?vault=My%20Notes&file=Note%23%5EBlock",
+  "OBSIDIAN://open?vault=Notes&file=Note",
+]) {
+  for (const markdown of [
+    `[Note](${url})`,
+    `<${url}>`,
+    `<a href="${url}" onclick="evil()">Note</a>`,
+  ]) {
+    const root = JSDOM.fragment(renderMarkdownToSafeHTML(markdown));
+    const link = root.querySelector("a");
+    assert(link?.getAttribute("href") === url, `Obsidian URI preserved: ${markdown}`);
+    assert(
+      link?.getAttribute("target") === "_blank" &&
+        link?.getAttribute("rel") === "noopener noreferrer" &&
+        !link?.hasAttribute("onclick"),
+      "Obsidian links keep standard link protections and strip event handlers",
+    );
+  }
+}
+
+for (const url of [
+  "javascript:evil()",
+  "JaVaScRiPt:evil()",
+  "java&#x09;script:evil()",
+  "javascript:obsidian://open?vault=Notes",
+  "vbscript:evil()",
+  "data:text/html,evil",
+  "file:///tmp/note.md",
+  "unknown://open",
+  "obsidian://new?vault=Notes&file=Note",
+  "obsidian://daily?vault=Notes",
+  "obsidian://advanced-uri?vault=Notes&commandid=evil",
+  "obsidian://vault/Notes/Note",
+  "obsidian:///tmp/note.md",
+  "obsidian://open",
+  "obsidian://open.evil?vault=Notes",
+  "obsidian://open@evil?vault=Notes",
+  "obsidian-evil://open?vault=Notes",
+]) {
+  const root = JSDOM.fragment(renderMarkdownToSafeHTML(`<a href="${url}">Note</a>`));
+  assert(root.querySelector("a")?.hasAttribute("href") === false, `URI blocked: ${url}`);
+}
+
+for (const url of [
+  "http://example.com",
+  "https://example.com",
+  "ftp://example.com",
+  "ftps://example.com",
+  "mailto:me@example.com",
+  "tel:123",
+  "callto:123",
+  "sms:123",
+  "cid:note",
+  "xmpp:me@example.com",
+  "matrix:roomid/room",
+  "//example.com",
+  "/note",
+  "./note",
+  "../note",
+  "#note",
+]) {
+  const root = JSDOM.fragment(renderMarkdownToSafeHTML(`[Note](${url})`));
+  assert(root.querySelector("a")?.getAttribute("href") === url, `Existing URI allowed: ${url}`);
+}
+
+for (const markdown of [
+  "![Note](obsidian://open?vault=Notes&file=Note)",
+  '<img src="obsidian://open?vault=Notes&file=Note">',
+]) {
+  assert(
+    !JSDOM.fragment(renderMarkdownToSafeHTML(markdown, "msg-1")).querySelector("img"),
+    "Obsidian URIs are not loaded as images",
+  );
+}
+
+{
+  const url = "obsidian://open?vault=Notes&file=Note";
+  const root = JSDOM.fragment(renderMarkdownToSafeHTML(url));
+  assert(!root.querySelector("a"), "bare Obsidian URLs are not linkified");
+  assert(root.textContent?.trim() === url, "bare Obsidian URLs stay literal");
+}
+
 // ---- Standalone inline-code URLs are links, not commands or code blocks ----
 
 for (const url of [
@@ -107,6 +195,7 @@ for (const code of [
   "javascript:alert(1)",
   "data:text/html,<script>alert(1)</script>",
   "file:///tmp/example.txt",
+  "obsidian://open?vault=Notes&file=Note",
   "ftp://example.com/file",
   "//example.com/path",
   "https://",

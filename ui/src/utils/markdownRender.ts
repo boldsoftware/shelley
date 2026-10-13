@@ -155,6 +155,9 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
 });
 
 const SANITIZE_OPTS = {
+  // DOMPurify 3.3.1's URI policy, extended only for Obsidian's open action.
+  ALLOWED_URI_REGEXP:
+    /^(?:obsidian:\/\/open\?|(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i,
   ALLOWED_TAGS: [
     "p",
     "br",
