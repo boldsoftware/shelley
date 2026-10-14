@@ -459,12 +459,25 @@
               type="submit"
               :disabled="!canSubmit"
               class="send-split-main"
-              :aria-label="t('sendMessage')"
+              :aria-label="queueArmed ? 'Queue after agent finishes' : t('sendMessage')"
               data-testid="send-button"
+              @click="handleSendClick"
             >
               <div v-if="isDisabled || submitting" class="flex items-center justify-center">
                 <div class="spinner spinner-small message-send-spinner-white"></div>
               </div>
+              <svg
+                v-else-if="queueArmed"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
               <svg v-else fill="currentColor" viewBox="0 0 24 24" width="18" height="18">
                 <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
               </svg>
@@ -502,6 +515,7 @@
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
                 Queue after agent finishes
+                <span class="overflow-menu-shortcut"><kbd>{{ queueShortcut }}</kbd></span>
               </button>
             </div>
           </div>
@@ -1087,6 +1101,29 @@ function isModEvent(e: KeyboardEvent) {
   return e.metaKey || e.ctrlKey;
 }
 
+const altHeld = ref(false);
+const queueShortcut = /Mac|iPhone|iPad|iPod/i.test(navigator.platform) ? "\u2325\u21a9" : "Alt+Enter";
+const canQueueNow = computed(() => props.canQueue && hasQueueHandler.value);
+const queueArmed = computed(() => altHeld.value && canQueueNow.value);
+
+function isAltEvent(e: KeyboardEvent | MouseEvent) {
+  return e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+}
+
+function trackAlt(e: KeyboardEvent) {
+  altHeld.value = isAltEvent(e);
+}
+
+function clearAlt() {
+  altHeld.value = false;
+}
+
+function handleSendClick(e: MouseEvent) {
+  if (!isAltEvent(e) || !canQueueNow.value) return;
+  e.preventDefault();
+  void handleQueueMessage();
+}
+
 // --- @ filename autocomplete --------------------------------------------
 const fileMenuId = useId();
 const fileMenuRef = ref<HTMLDivElement | null>(null);
@@ -1491,6 +1528,7 @@ async function handleSubmit(e: Event) {
 }
 
 async function handleQueueMessage() {
+  if (!canSubmit.value) return;
   if (interceptSkillSubmission()) return;
   const dispatch = composerDispatch(message.value, { intent: "queue" });
   if (openTerminalIfRequested(dispatch)) return;
@@ -1701,6 +1739,20 @@ function handleKeyDown(e: KeyboardEvent) {
     textareaRef.value?.blur();
     return;
   }
+  if (e.key === "Enter" && e.altKey && e.shiftKey && !isModEvent(e)) {
+    e.preventDefault();
+    const textarea = textareaRef.value!;
+    textarea.setRangeText("\n", textarea.selectionStart, textarea.selectionEnd, "end");
+    setMessage(textarea.value);
+    syncFileSelection();
+    return;
+  }
+  if (e.key === "Enter" && isAltEvent(e)) {
+    e.preventDefault();
+    if (canQueueNow.value) void handleQueueMessage();
+    else void handleSubmit(e);
+    return;
+  }
   if (e.key === "Enter" && !e.shiftKey) {
     // On mobile, let Enter create newlines since there's a send button.
     const isMobile = "ontouchstart" in window;
@@ -1737,6 +1789,9 @@ function handleViewportResize() {
 }
 
 onMounted(() => {
+  window.addEventListener("keydown", trackAlt);
+  window.addEventListener("keyup", trackAlt);
+  window.addEventListener("blur", clearAlt);
   window.addEventListener("resize", handleResize);
   if (typeof window !== "undefined" && window.visualViewport) {
     window.visualViewport.addEventListener("resize", handleViewportResize);
@@ -1744,6 +1799,9 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener("keydown", trackAlt);
+  window.removeEventListener("keyup", trackAlt);
+  window.removeEventListener("blur", clearAlt);
   disposed = true;
   const sessions = new Set(attachmentSessions.values());
   if (recordingSubmission.value) sessions.add(recordingSubmission.value.attachmentSession);
