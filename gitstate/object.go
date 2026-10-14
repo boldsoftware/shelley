@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -141,32 +142,78 @@ func readPackedObject(commonDir, hash string, depth int) (byte, []byte, error) {
 // lookupPackOffset finds the pack offset of want (a 20-byte SHA-1) in a v2
 // pack index, returning (offset, found, error).
 func lookupPackOffset(idxPath string, want []byte) (uint64, bool, error) {
-	data, err := os.ReadFile(idxPath)
+	if len(want) != 20 {
+		return 0, false, errors.New("unsupported pack index hash length")
+	}
+	f, err := os.Open(idxPath)
 	if err != nil {
 		return 0, false, err
 	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return 0, false, err
+	}
+	var header [8 + 256*4]byte
+	if _, err := f.ReadAt(header[:], 0); err != nil {
+		return 0, false, err
+	}
 	// v2 idx: 4-byte magic 0xff744f63, 4-byte version (2).
-	if len(data) < 8 || !bytes.Equal(data[:4], []byte{0xff, 0x74, 0x4f, 0x63}) ||
-		binary.BigEndian.Uint32(data[4:8]) != 2 {
+	if binary.BigEndian.Uint32(header[:4]) != 0xff744f63 ||
+		binary.BigEndian.Uint32(header[4:8]) != 2 {
 		return 0, false, errors.New("unsupported pack index format")
 	}
-	fanout := data[8 : 8+256*4]
-	total := binary.BigEndian.Uint32(fanout[255*4:])
-	lo := uint32(0)
-	if want[0] > 0 {
-		lo = binary.BigEndian.Uint32(fanout[(int(want[0])-1)*4:])
+	fanout := header[8:]
+	total := int64(binary.BigEndian.Uint32(fanout[255*4:]))
+	prev := int64(0)
+	for i := 0; i < 256; i++ {
+		n := int64(binary.BigEndian.Uint32(fanout[i*4:]))
+		if n < prev || n > total {
+			return 0, false, errors.New("invalid pack index fanout")
+		}
+		prev = n
 	}
-	hi := binary.BigEndian.Uint32(fanout[int(want[0])*4:])
-	namesStart := 8 + 256*4
-	if int(total)*20 > len(data)-namesStart {
+	lo := int64(0)
+	if want[0] > 0 {
+		lo = int64(binary.BigEndian.Uint32(fanout[(int(want[0])-1)*4:]))
+	}
+	hi := int64(binary.BigEndian.Uint32(fanout[int(want[0])*4:]))
+	const namesStart = 8 + 256*4
+	off4Start := namesStart + total*24 // names + crc32
+	off8Start := off4Start + total*4
+	tableEnd := info.Size() - 40 // exclude pack and index SHA-1 checksums
+	if off8Start > tableEnd || (tableEnd-off8Start)%8 != 0 {
 		return 0, false, errors.New("truncated pack index")
 	}
+	var name [20]byte
 	for lo < hi {
-		mid := (lo + hi) / 2
-		off := namesStart + int(mid)*20
-		switch bytes.Compare(data[off:off+20], want) {
+		mid := lo + (hi-lo)/2
+		if _, err := f.ReadAt(name[:], namesStart+mid*20); err != nil {
+			return 0, false, err
+		}
+		switch bytes.Compare(name[:], want) {
 		case 0:
-			return packOffsetAt(data, total, mid)
+			var offset [8]byte
+			if _, err := f.ReadAt(offset[:4], off4Start+mid*4); err != nil {
+				return 0, false, err
+			}
+			o := binary.BigEndian.Uint32(offset[:4])
+			if o&0x80000000 == 0 {
+				return uint64(o), true, nil
+			}
+			// MSB set: index into the 8-byte large-offset table.
+			pos := off8Start + int64(o&0x7fffffff)*8
+			if pos+8 > tableEnd {
+				return 0, false, errors.New("bad large offset")
+			}
+			if _, err := f.ReadAt(offset[:], pos); err != nil {
+				return 0, false, err
+			}
+			large := binary.BigEndian.Uint64(offset[:])
+			if large > math.MaxInt64 {
+				return 0, false, errors.New("pack offset exceeds seek range")
+			}
+			return large, true, nil
 		case -1:
 			lo = mid + 1
 		default:
@@ -174,25 +221,6 @@ func lookupPackOffset(idxPath string, want []byte) (uint64, bool, error) {
 		}
 	}
 	return 0, false, nil
-}
-
-func packOffsetAt(data []byte, total, idx uint32) (uint64, bool, error) {
-	namesStart := 8 + 256*4
-	off4Start := namesStart + int(total)*20 + int(total)*4 // names + crc32
-	if off4Start+int(idx)*4+4 > len(data) {
-		return 0, false, errors.New("truncated pack index offset table")
-	}
-	o := binary.BigEndian.Uint32(data[off4Start+int(idx)*4:])
-	if o&0x80000000 == 0 {
-		return uint64(o), true, nil
-	}
-	// MSB set: index into the 8-byte large-offset table.
-	off8Start := off4Start + int(total)*4
-	big := o & 0x7fffffff
-	if off8Start+int(big)*8+8 > len(data) {
-		return 0, false, errors.New("bad large offset")
-	}
-	return binary.BigEndian.Uint64(data[off8Start+int(big)*8:]), true, nil
 }
 
 // readPackEntry reads the object at the given offset in an open packfile,
