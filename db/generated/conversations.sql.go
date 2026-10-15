@@ -594,6 +594,12 @@ FROM descendants d
 CROSS JOIN messages m INDEXED BY idx_messages_conv_type_seq
 WHERE m.conversation_id = d.conversation_id
   AND m.type = 'agent' AND m.usage_data IS NOT NULL
+  -- Synthetic end-of-turn markers have usage_data but no tokens or cost.
+  AND (m.usage_data ->> 'input_tokens' > 0
+    OR m.usage_data ->> 'cache_creation_input_tokens' > 0
+    OR m.usage_data ->> 'cache_read_input_tokens' > 0
+    OR m.usage_data ->> 'output_tokens' > 0
+    OR m.usage_data ->> 'cost_usd' > 0)
 GROUP BY m.model_name, m.llm_api_url
 `
 

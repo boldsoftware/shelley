@@ -133,6 +133,13 @@ func TestSubagentUsageHandler(t *testing.T) {
 	// Provider-reported cost remains available for an unpriced model.
 	addUsage(child.ConversationID, "mystery-model", "https://a.example/v1", 100, 200, 300, 400, 0.125)
 
+	// A turn-ending tool's synthetic completion marker is not an LLM call.
+	if err := srv.recordMessage(ctx, child.ConversationID, llm.Message{
+		Role: llm.MessageRoleAssistant, EndOfTurn: true, ExcludedFromContext: true,
+	}, llm.Usage{}, nil); err != nil {
+		t.Fatal(err)
+	}
+
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/conversation/"+parent.ConversationID+"/subagent-usage", nil)
 	srv.handleSubagentUsage(w, req, parent.ConversationID)
