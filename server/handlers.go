@@ -1569,7 +1569,18 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 			modelID = hookResult.Model
 			llmService = newService
 			if err := s.db.ForceUpdateConversationModel(ctx, conversationID, modelID); err != nil {
-				s.logger.Error("Failed to update model from hook", "error", err)
+				s.internalError(w, "Failed to update model from hook", err)
+				return
+			}
+			if _, _, err := s.db.ModifyConversationOptions(ctx, conversationID, func(o *db.ConversationOptions) bool {
+				if o.Profile == "" || o.SettingsEdited {
+					return false
+				}
+				o.SettingsEdited = true
+				return true
+			}); err != nil {
+				s.internalError(w, "Failed to save hook model override", err)
+				return
 			}
 		}
 	}

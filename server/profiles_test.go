@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -511,6 +512,62 @@ func TestDefaultNudgeSpelledOutIsTheProfiles(t *testing.T) {
 	}
 	if db.ParseConversationOptions(conv.ConversationOptions).SettingsEdited {
 		t.Fatal("the default nudge, spelled differently, edited the profile's settings")
+	}
+}
+
+func TestNewConversationHookOverridesProfileModel(t *testing.T) {
+	t.Parallel()
+	e := newProfileEnv(t)
+	defer stopActiveConversationLoops(e.srv)
+	hook := "#!/bin/sh\ncat >/dev/null\necho '{\"model\":\"model-b\"}'\n"
+	if err := os.WriteFile(filepath.Join(e.srv.hooksDir, hookNewConversation), []byte(hook), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var created struct {
+		ConversationID string `json:"conversation_id"`
+	}
+	body := e.want(201, "POST", "/api/conversations/new", `{"message":"echo: hello"}`)
+	if err := json.Unmarshal([]byte(body), &created); err != nil {
+		t.Fatal(err)
+	}
+	e.waitTurn(created.ConversationID, 0)
+	conv, err := e.database.GetConversationByID(t.Context(), created.ConversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := conversationSettings(*conv); got.Model != "model-b" || !got.Edited {
+		t.Fatalf("hook model was not retained: %+v", got)
+	}
+}
+
+func TestDistillNewGenerationOverridesProfileModel(t *testing.T) {
+	t.Parallel()
+	e := newProfileEnv(t)
+	defer stopActiveConversationLoops(e.srv)
+	var created struct {
+		ConversationID string `json:"conversation_id"`
+	}
+	body := e.want(201, "POST", "/api/conversations/new", `{"message":"echo: hello"}`)
+	if err := json.Unmarshal([]byte(body), &created); err != nil {
+		t.Fatal(err)
+	}
+	id := created.ConversationID
+	e.waitTurn(id, 0)
+	manager, err := e.srv.getOrCreateConversationManager(t.Context(), id, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.want(201, "POST", "/api/conversations/distill-new-generation", fmt.Sprintf(`{"source_conversation_id":%q,"model":"model-b"}`, id))
+	waitFor(t, 10*time.Second, func() bool { return !manager.IsDistilling() })
+	before := len(listMessages(t, e.database, id))
+	e.want(202, "POST", "/api/conversation/"+id+"/chat", `{"message":"echo: next"}`)
+	e.waitTurn(id, before)
+	conv, err := e.database.GetConversationByID(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := conversationSettings(*conv); got.Model != "model-b" || !got.Edited || manager.GetModel() != "model-b" {
+		t.Fatalf("distill model was not retained: %+v, running model %q", got, manager.GetModel())
 	}
 }
 
