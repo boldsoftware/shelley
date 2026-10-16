@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -163,41 +165,80 @@ func TestExecTerminal_WorkingDirectory(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/exec-ws?cmd=pwd&cwd=/tmp"
-
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-
-	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	wd, err := os.Getwd()
 	if err != nil {
-		t.Fatalf("Failed to dial websocket: %v", err)
-	}
-	defer conn.Close(websocket.StatusNormalClosure, "test done")
-
-	// Send init message
-	initMsg := ExecMessage{Type: "init", Cols: 80, Rows: 24}
-	if err := wsjson.Write(ctx, conn, initMsg); err != nil {
-		t.Fatalf("Failed to write init message: %v", err)
+		t.Fatalf("Failed to get working directory: %v", err)
 	}
 
-	// Read messages
-	var output strings.Builder
+	for _, tc := range []struct {
+		name     string
+		cwdParam []string
+		want     string
+	}{
+		{
+			name:     "existing",
+			cwdParam: []string{"/tmp"},
+			want:     "/tmp",
+		},
+		{
+			name:     "omitted",
+			cwdParam: nil,
+			want:     wd,
+		},
+		{
+			name:     "empty",
+			cwdParam: []string{""},
+			want:     wd,
+		},
+		{
+			name:     "nonexistent",
+			cwdParam: []string{filepath.Join(t.TempDir(), "does-not-exist")},
+			want:     wd,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wsURL := url.URL{
+				Scheme:   "ws",
+				Host:     server.Listener.Addr().String(),
+				Path:     "/api/exec-ws",
+				RawQuery: url.Values{"cmd": {"pwd"}, "cwd": tc.cwdParam}.Encode(),
+			}
 
-	for {
-		var msg ExecMessage
-		err := wsjson.Read(ctx, conn, &msg)
-		if err != nil {
-			break
-		}
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
 
-		if msg.Type == "output" {
-			data, _ := base64.StdEncoding.DecodeString(msg.Data)
-			output.Write(data)
-		}
-	}
+			conn, _, err := websocket.Dial(ctx, wsURL.String(), nil)
+			if err != nil {
+				t.Fatalf("Failed to dial websocket: %v", err)
+			}
+			defer conn.Close(websocket.StatusNormalClosure, "test done")
 
-	if !strings.Contains(output.String(), "/tmp") {
-		t.Errorf("Expected output to contain '/tmp', got: %q", output.String())
+			// Send init message
+			initMsg := ExecMessage{Type: "init", Cols: 80, Rows: 24}
+			if err := wsjson.Write(ctx, conn, initMsg); err != nil {
+				t.Fatalf("Failed to write init message: %v", err)
+			}
+
+			// Read messages
+			var output strings.Builder
+
+			for {
+				var msg ExecMessage
+				err := wsjson.Read(ctx, conn, &msg)
+				if err != nil {
+					break
+				}
+
+				if msg.Type == "output" {
+					data, _ := base64.StdEncoding.DecodeString(msg.Data)
+					output.Write(data)
+				}
+			}
+
+			if got := strings.TrimSpace(output.String()); got != tc.want {
+				t.Errorf("Expected working directory %q, got: %q", tc.want, got)
+			}
+		})
 	}
 }
 
