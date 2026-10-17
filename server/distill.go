@@ -304,7 +304,14 @@ func (s *Server) handleDistillNewGeneration(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	if sourceConv.Model == nil || *sourceConv.Model != modelID {
-		if err := s.db.ForceUpdateConversationModel(ctx, req.SourceConversationID, modelID); err != nil {
+		_, err := manager.ApplySettings(ctx, s.getModelList(), func(cur ConversationSettings) (ConversationSettings, error) {
+			if req.Model != "" && cur.Model != modelID && cur.Profile != "" {
+				cur.Edited = true
+			}
+			cur.Model = modelID
+			return cur, nil
+		})
+		if err != nil {
 			s.internalError(w, "Failed to update model for new generation", err)
 			return
 		}
