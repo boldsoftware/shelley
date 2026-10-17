@@ -127,7 +127,7 @@ func gitFingerprint(gitDir string) string {
 	}
 	// Ref isn't loose; look it up in packed-refs.
 	if data, err := os.ReadFile(filepath.Join(commonDir, "packed-refs")); err == nil {
-		for _, l := range strings.Split(string(data), "\n") {
+		for l := range strings.SplitSeq(string(data), "\n") {
 			l = strings.TrimSpace(l)
 			if l == "" || strings.HasPrefix(l, "#") || strings.HasPrefix(l, "^") {
 				continue

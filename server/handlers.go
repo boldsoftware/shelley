@@ -799,25 +799,31 @@ func (s *Server) conversationListWithStateInternal(ctx context.Context, limit, o
 func (s *Server) decorateConversations(conversations []db.ConversationListItem) []ConversationWithState {
 	now := time.Now()
 	result := make([]ConversationWithState, len(conversations))
+	gitEntries := make(map[string]conversationListGitCacheEntry)
 	for i, item := range conversations {
 		conv := item.Conversation
 		cws := ConversationWithState{ConversationListItem: item, Working: conv.AgentWorking}
 		if conv.Cwd != nil {
-			entry, ok := s.conversationListGitCache.get(*conv.Cwd, now)
+			cwd := *conv.Cwd
+			entry, ok := gitEntries[cwd]
 			if !ok {
-				gs := gitstate.GetGitState(*conv.Cwd)
-				entry = conversationListGitCacheEntry{
-					state:     gs,
-					expiresAt: now.Add(conversationListGitCacheTTL),
-				}
-				if gs.IsRepo {
-					entry.worktree = getGitWorktreeRoot(gs.Worktree)
-					if gitDir, err := resolveGitDir(gs.Worktree); err == nil {
-						entry.gitDir = gitDir
-						entry.fingerprint = gitFingerprint(gitDir)
+				entry, ok = s.conversationListGitCache.get(cwd, now)
+				if !ok {
+					gs := gitstate.GetGitState(cwd)
+					entry = conversationListGitCacheEntry{
+						state:     gs,
+						expiresAt: now.Add(conversationListGitCacheTTL),
 					}
+					if gs.IsRepo {
+						entry.worktree = getGitWorktreeRoot(gs.Worktree)
+						if gitDir, err := resolveGitDir(gs.Worktree); err == nil {
+							entry.gitDir = gitDir
+							entry.fingerprint = gitFingerprint(gitDir)
+						}
+					}
+					s.conversationListGitCache.set(cwd, entry)
 				}
-				s.conversationListGitCache.set(*conv.Cwd, entry)
+				gitEntries[cwd] = entry
 			}
 			if entry.state.IsRepo {
 				cws.GitRepoRoot = entry.state.Worktree
