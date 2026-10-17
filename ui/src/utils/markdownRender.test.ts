@@ -6,6 +6,7 @@
 // same way ansi.test.ts does.
 import { JSDOM } from "jsdom";
 import DOMPurify from "dompurify";
+import { coalesceContent } from "./coalesceContent";
 
 const dom = new JSDOM("");
 const g = globalThis as Record<string, unknown>;
@@ -72,6 +73,28 @@ assert(
     !renderMarkdownToSafeHTML("<script>alert(1)</script>hello").includes("<script>"),
   "raw script tags are stripped by sanitization",
 );
+
+// ---- Cited text ending at a closing code fence, without a newline ----
+
+{
+  const [item] = coalesceContent([
+    {
+      ID: "",
+      Type: 2,
+      Text: "```\ncode\n```",
+      Citations: [{ url: "https://example.com", title: "Source" }],
+    },
+  ]);
+  const root = JSDOM.fragment(renderMarkdownToSafeHTML(item.markdownText));
+  assert(
+    root.querySelector("pre > code")?.textContent === "code\n",
+    "citation HTML does not become part of the code block",
+  );
+  assert(
+    root.querySelector(".citation-refs > a.citation-ref")?.closest("pre, code") === null,
+    "citation renders as a real link outside the code block",
+  );
+}
 
 // ---- Obsidian open links retain their URI without allowing arbitrary schemes ----
 
