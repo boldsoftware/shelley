@@ -348,9 +348,11 @@
               :aria-label="
                 autoQueue
                   ? 'Queue message'
-                  : compactSendArmed
-                    ? 'Compact and send'
-                    : t('sendMessage')
+                  : queueArmed
+                    ? 'Queue after agent finishes'
+                    : compactSendArmed
+                      ? 'Compact and send'
+                      : t('sendMessage')
               "
               data-testid="send-button"
               @click="handleSendClick"
@@ -358,6 +360,18 @@
               <div v-if="isDisabled || submitting" class="flex items-center justify-center">
                 <div class="spinner spinner-small message-send-spinner-white"></div>
               </div>
+              <svg
+                v-else-if="queueArmed"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
               <svg
                 v-else-if="compactSendArmed"
                 class="compact-send-icon"
@@ -431,6 +445,9 @@
                     <polyline points="12 6 12 12 16 14" />
                   </svg>
                   Queue after agent finishes
+                  <span class="overflow-menu-shortcut"
+                    ><kbd>{{ queueShortcut }}</kbd></span
+                  >
                 </template>
               </button>
               <!-- Compact the conversation, then queue this message to run once
@@ -1063,23 +1080,39 @@ const preferCompactAndSend = computed(
 );
 
 // Mod+Enter (⌘ on mac, Ctrl elsewhere) and mod+click on Send both compact and
-// send. While the mod is held the send button previews that, so track it from
-// every key event's modifier state (not e.key: Meta keyup reports metaKey=false
-// already, and the mod may be released while another key has focus).
+// send; Alt+Enter (⌥↵ / Alt+Enter) queues the message to run after the current
+// turn instead of interrupting it, falling back to an ordinary send while the
+// agent is idle (nothing to wait for). Shift+Enter alone keeps its newline.
+// While a modifier is held the send button previews what it will do, so track
+// them from every key event's modifier state (not e.key: Meta keyup reports
+// metaKey=false already, and the mod may be released while another key has
+// focus).
 const modHeld = ref(false);
+const altHeld = ref(false);
 const compactSendShortcut = isMac ? "\u2318\u21a9" : "Ctrl+Enter";
+const queueShortcut = isMac ? "\u2325\u21a9" : "Alt+Enter";
 function isModEvent(e: KeyboardEvent | MouseEvent) {
   return e.metaKey || e.ctrlKey;
 }
+// Bare Alt: AltGr reports as Ctrl+Alt on Windows/Linux layouts, and Cmd/Ctrl
+// combinations keep their existing meanings.
+function isAltEvent(e: KeyboardEvent | MouseEvent) {
+  return e.altKey && !e.ctrlKey && !e.metaKey;
+}
 function trackMod(e: KeyboardEvent) {
   modHeld.value = isModEvent(e);
+  altHeld.value = isAltEvent(e);
 }
 function clearMod() {
   modHeld.value = false;
+  altHeld.value = false;
 }
-// What the send button will do right now: threshold-driven or mod-held.
+const canQueueNow = computed(() => props.canQueue && hasQueueHandler.value);
+// What the send button will do right now: threshold-driven, or modifier-held.
+const queueArmed = computed(() => altHeld.value && canQueueNow.value);
 const compactSendArmed = computed(
-  () => preferCompactAndSend.value || (modHeld.value && canCompactAndSend.value),
+  () =>
+    preferCompactAndSend.value || (modHeld.value && !altHeld.value && canCompactAndSend.value),
 );
 
 // --- @ filename autocomplete --------------------------------------------
@@ -1335,10 +1368,18 @@ watch([composerSession, () => props.compactSendLevel], () => {
   sendSelectedLevel.value = "";
 });
 
-// Mod+click on the send button compacts and sends; the form submit event
-// carries no modifier state, so intercept the click.
+// Alt+click on the send button queues, mirroring Alt+Enter; mod+click compacts
+// and sends. The form submit event carries no modifier state, so intercept the
+// click.
 function handleSendClick(e: MouseEvent) {
-  if (!isModEvent(e) || !canCompactAndSend.value || !canSubmit.value) return;
+  if (!canSubmit.value) return;
+  if (isAltEvent(e)) {
+    if (!canQueueNow.value) return;
+    e.preventDefault();
+    void handleQueueMessage();
+    return;
+  }
+  if (!isModEvent(e) || !canCompactAndSend.value) return;
   e.preventDefault();
   void handleCompactAndSend();
 }
@@ -1586,6 +1627,16 @@ function handleKeyDown(e: KeyboardEvent) {
   // Escape blurs the textarea so follow-up shortcuts work.
   if (e.key === "Escape") {
     textareaRef.value?.blur();
+    return;
+  }
+  // Alt+Enter queues the composed message for after the current turn. Queueing
+  // only exists while the agent is working, so this falls back to an ordinary
+  // send when nothing is running — the same thing the send button's plain arrow
+  // promises in that state.
+  if (e.key === "Enter" && isAltEvent(e)) {
+    e.preventDefault();
+    if (canQueueNow.value) void handleQueueMessage();
+    else void handleSubmit(e);
     return;
   }
   if (e.key === "Enter" && !e.shiftKey) {
