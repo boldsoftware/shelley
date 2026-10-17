@@ -184,7 +184,7 @@ func (t *TerminalSessions) Spawn(command, cwd, conversationID string, closeOnExi
 	if command == "" {
 		return nil, nil, errors.New("terminals: empty command")
 	}
-	if cwd == "" {
+	if info, err := os.Stat(cwd); err != nil || !info.IsDir() {
 		if wd, err := os.Getwd(); err == nil {
 			cwd = wd
 		} else {
