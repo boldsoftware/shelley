@@ -2,6 +2,7 @@ package predictable
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -498,7 +499,7 @@ func (s *Service) makeBashToolResponse(command string, background bool, inputTok
 		Content: []llm.Content{
 			{Type: llm.ContentTypeText, Text: responseText},
 			{
-				ID:        fmt.Sprintf("tool_%d", time.Now().UnixNano()%1000),
+				ID:        "tool_bash_" + rand.Text(),
 				Type:      llm.ContentTypeToolUse,
 				ToolName:  "bash",
 				ToolInput: toolInput,
