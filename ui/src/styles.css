@@ -5432,8 +5432,7 @@ svg {
 .toc-category-background {
   --toc-color: var(--toc-background);
 }
-.toc-entry:hover,
-.toc-entry-active {
+.toc-entry:hover {
   background: var(--bg-secondary);
 }
 .toc-entry-with-thumbnail {
