@@ -6,7 +6,7 @@
      the DrawerCtx inject. Mirrors renderConversationItem in the React source. -->
 <template>
   <div
-    :class="`conversation-item ${isActive ? 'active' : ''}${isNew ? ' conversation-item-enter' : ''}`"
+    :class="`conversation-item ${isActive ? 'active' : ''}${isRunning ? ' running' : ''}${isNew ? ' conversation-item-enter' : ''}`"
     :data-conversation-id="conversation.conversation_id"
     style="cursor: pointer"
     @click="onRowClick"
@@ -318,10 +318,7 @@
         </div>
       </div>
 
-      <div
-        v-if="convState.git_commit"
-        :class="`conversation-git drawer-git-info ${isActive ? 'drawer-git-info-active' : ''}`"
-      >
+      <div v-if="convState.git_commit" class="conversation-git drawer-git-info">
         <button
           type="button"
           v-tooltip.top="
@@ -388,7 +385,7 @@
   >
     <template v-for="sub in conversationSubagents" :key="sub.conversation_id">
       <div
-        :class="`conversation-item subagent-item drawer-subagent-item-style ${sub.conversation_id === ctx.currentConversationId.value ? 'active' : ''}${ctx.seenIds.value !== null && !ctx.seenIds.value.has(sub.conversation_id) ? ' conversation-item-enter' : ''}`"
+        :class="`conversation-item subagent-item drawer-subagent-item-style ${sub.conversation_id === ctx.currentConversationId.value ? 'active' : ''}${sub.working || sub.running_background_jobs > 0 ? ' running' : ''}${ctx.seenIds.value !== null && !ctx.seenIds.value.has(sub.conversation_id) ? ' conversation-item-enter' : ''}`"
         @click="onSubClick($event, sub)"
         @auxclick="ctx.handleAuxClick($event, sub)"
       >
@@ -577,6 +574,13 @@ const runningSubagentCount = computed(
     conversationSubagents.value.filter(
       (agent) => agent.working || agent.running_background_jobs > 0,
     ).length,
+);
+const isRunning = computed(
+  () =>
+    !isDraft.value &&
+    (convState.value.working ||
+      convState.value.running_background_jobs > 0 ||
+      runningSubagentCount.value > 0),
 );
 function taskTooltip(count: number): string {
   return `${count} task${count === 1 ? "" : "s"} running`;
@@ -892,10 +896,5 @@ const DeleteButton = defineComponent({
 .conversation-running-work + .conversation-participant-badge,
 .conversation-running-work + .subagent-count-badge {
   margin-left: 0;
-}
-
-.conversation-item.active .conversation-running-work {
-  background: rgba(255, 255, 255, 0.15);
-  color: white;
 }
 </style>

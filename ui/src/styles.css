@@ -449,17 +449,6 @@ body {
   opacity: 0.7;
 }
 
-.conversation-item.active .btn-icon-sm {
-  color: rgba(255, 255, 255, 0.8);
-  opacity: 0.7;
-}
-
-.conversation-item.active .btn-icon-sm:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  opacity: 1;
-}
-
 .btn-icon-sm.btn-danger:hover {
   background: var(--red-600);
   color: white;
@@ -1070,7 +1059,20 @@ body {
 }
 
 .drawer-subagent-list {
+  position: relative;
   margin-left: 1.5rem;
+}
+
+.drawer-subagent-list::before {
+  content: "";
+  position: absolute;
+  left: -0.75rem;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--text-tertiary);
+  pointer-events: none;
 }
 
 .background-jobs-empty,
@@ -1156,16 +1158,6 @@ body {
 
 .dark .conversation-participant-badge:hover {
   background: var(--gray-600);
-}
-
-.conversation-item.active .conversation-participant-badge {
-  background: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.conversation-item.active .conversation-participant-badge:hover {
-  background: rgba(255, 255, 255, 0.25);
-  color: white;
 }
 
 /* Snippet shown in place of the preview for FTS search results.
@@ -1499,7 +1491,9 @@ body {
   text-align: left;
   padding: 0.75rem;
   border-radius: 0.5rem;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.375rem;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
   transition: background-color 0.2s;
   display: flex;
   flex-direction: row;
@@ -1507,13 +1501,12 @@ body {
   gap: 0.25rem;
 }
 
-.conversation-item:hover {
-  background: var(--bg-tertiary);
+.conversation-item.running {
+  background: var(--blue-bg);
 }
 
 .conversation-item.active {
-  background: var(--primary);
-  color: white;
+  box-shadow: inset 0 0 0 1px var(--text-secondary);
 }
 
 /* Pinned draft entry that represents the not-yet-created new conversation.
@@ -1540,10 +1533,6 @@ body {
   margin-top: 0.125rem;
 }
 
-.conversation-item.active .conversation-preview {
-  color: rgba(255, 255, 255, 0.8);
-}
-
 .conversation-item .conversation-meta {
   display: flex;
   align-items: center;
@@ -1555,10 +1544,6 @@ body {
 
 .conversation-item .conversation-date {
   flex-shrink: 0;
-}
-
-.conversation-item.active .conversation-meta {
-  color: rgba(255, 255, 255, 0.8);
 }
 
 .conversation-item .conversation-cwd {
@@ -1599,11 +1584,6 @@ body {
   height: 12px;
 }
 
-.conversation-item.active .conversation-terminal-count {
-  background: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.8);
-}
-
 .subagent-count-badge {
   display: inline-flex;
   align-items: center;
@@ -1611,7 +1591,7 @@ body {
   font-size: var(--font-size-12);
   padding: 0 0.25rem;
   border-radius: 0.25rem;
-  background: var(--bg-tertiary);
+  background: var(--bg-base);
   color: var(--text-secondary);
   border: none;
   cursor: pointer;
@@ -1628,16 +1608,6 @@ body {
 
 .dark .subagent-count-badge:hover {
   background: var(--gray-600);
-}
-
-.conversation-item.active .subagent-count-badge {
-  background: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.conversation-item.active .subagent-count-badge:hover {
-  background: rgba(255, 255, 255, 0.25);
-  color: white;
 }
 
 /* Messages */
@@ -13953,11 +13923,7 @@ kbd {
   color: inherit;
 }
 
-/* "Working" mark shared by the drawer rows, subagent badges, and the live
-   subagent strips/chips: a subtle, non-animated hollow ring in the current
-   text color. Tracks the foreground so it stays legible on both the default
-   and selected (var(--primary)) backgrounds without re-using the same hue as
-   the row fill. */
+/* Shared ring edge; drawer circles also use the theme's blue fill. */
 .working-indicator {
   width: 7px;
   height: 7px;
@@ -13969,11 +13935,16 @@ kbd {
   flex-shrink: 0;
 }
 
+.conversation-item .working-indicator {
+  display: inline-block;
+  align-self: center;
+  background-color: var(--link-color);
+}
+
 .drawer-working-indicator {
   width: 8px;
   height: 8px;
-  align-self: flex-start;
-  margin-top: 0.35rem;
+  transform: translateX(8px);
 }
 
 .drawer-interrupted-indicator {
@@ -13996,10 +13967,6 @@ kbd {
   height: 7px;
   border-radius: 1px;
   background: currentColor;
-}
-
-.conversation-item.active .drawer-interrupted-indicator {
-  color: currentColor;
 }
 
 .drawer-subagent-count-badge-text {
@@ -14061,29 +14028,8 @@ kbd {
 
 .drawer-actions-trigger.btn-icon-sm:focus-visible,
 .drawer-git-copy:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--link-color);
   outline-offset: 2px;
-}
-
-.dark .drawer-actions-trigger.btn-icon-sm:focus-visible,
-.conversation-item.active .drawer-actions-trigger.btn-icon-sm:focus-visible,
-.conversation-item.active .drawer-git-copy:focus-visible {
-  outline-color: white;
-}
-
-.conversation-item.active .drawer-actions-trigger.btn-icon-sm {
-  background: transparent;
-  color: rgba(255, 255, 255, 0.9);
-  box-shadow: none;
-  opacity: 1;
-}
-
-.conversation-item.active .drawer-actions-trigger.btn-icon-sm:hover,
-.conversation-item.active .drawer-actions-trigger.btn-icon-sm[aria-expanded="true"],
-.conversation-item.active .drawer-git-copy:not(.drawer-git-copy-copied):hover {
-  background: transparent;
-  color: white;
-  box-shadow: none;
 }
 
 .drawer-actions-row-offset {
@@ -14145,18 +14091,10 @@ kbd {
   background: var(--gray-700);
 }
 
-.conversation-item.active .drawer-delete-confirm {
-  background: rgba(255, 255, 255, 0.15);
-}
-
 .drawer-delete-confirm-label {
   font-size: var(--font-size-12);
   color: var(--text-secondary);
   white-space: nowrap;
-}
-
-.conversation-item.active .drawer-delete-confirm-label {
-  color: rgba(255, 255, 255, 0.9);
 }
 
 .drawer-delete-confirm .btn-icon-sm {
@@ -14178,10 +14116,6 @@ kbd {
   font-size: var(--font-size-12);
   line-height: 1.2;
   color: var(--text-secondary);
-}
-
-.drawer-git-info-active {
-  color: rgba(255, 255, 255, 0.7);
 }
 
 .drawer-git-copy {
@@ -14213,7 +14147,6 @@ kbd {
   cursor: pointer;
   font-size: var(--font-size-14);
   padding-left: 0.5rem;
-  border-left: 2px solid var(--border-color);
 }
 
 .drawer-subagent-date {
@@ -15995,10 +15928,6 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.conversation-item.active .conversation-tag {
-  color: rgba(255, 255, 255, 0.85);
 }
 
 .conversation-tag-hash {
