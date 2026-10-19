@@ -184,6 +184,13 @@ func runServe(global GlobalConfig, args []string) {
 
 	logger := setupLogging(global.Debug)
 
+	dbLock, err := lockServerDatabase(global.DBPath)
+	if err != nil {
+		logger.Error("Failed to acquire database ownership", "error", err)
+		os.Exit(1)
+	}
+	defer dbLock.Close()
+
 	database := setupDatabase(global.DBPath, logger)
 	defer database.Close()
 
