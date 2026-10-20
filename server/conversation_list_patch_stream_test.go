@@ -319,7 +319,7 @@ func TestConversationListPatchStreamCurrentHashSendsHeartbeatNotReset(t *testing
 		t.Fatal("expected an immediate heartbeat")
 	}
 	var first StreamResponse
-	body := strings.TrimSpace(rec.getString())
+	body, _, _ := strings.Cut(strings.TrimSpace(rec.getString()), "\n\n")
 	if err := json.Unmarshal([]byte(strings.TrimPrefix(body, "data: ")), &first); err != nil {
 		t.Fatalf("decode first event: %v; body=%q", err, body)
 	}
