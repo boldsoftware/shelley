@@ -81,49 +81,6 @@ func newSubagentDoneFixture(t *testing.T, subResponse string) *subagentDoneFixtu
 	}
 }
 
-// Ending a turn does not wake the parent, whether the parent delegated the
-// turn or the user drove the child directly; only message_parent does. A
-// subagent can end many turns (waiting on background jobs, chatting with the
-// user), and each wake would re-read the parent's whole context.
-func TestSubagentTurnEndDoesNotWakeParent(t *testing.T) {
-	server, database, held, parent := newBtwTest(t)
-	ctx := t.Context()
-	child, err := database.CreateSubagentConversation(ctx, "quiet-child", parent.ConversationID, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := NewSubagentRunner(server).RunSubagent(ctx, child.ConversationID, "echo: delegated turn", "predictable", ""); err != nil {
-		t.Fatal(err)
-	}
-	releaseAndWaitIdle(t, server, child.ConversationID, held.waitCall(t, "echo: delegated turn"))
-	response := postBtwChat(t, server, child.ConversationID,
-		ChatRequest{Message: "echo: manual child turn", Model: "predictable"})
-	if response.Code != 202 {
-		t.Fatalf("manual child turn status=%d body=%s", response.Code, response.Body.String())
-	}
-	releaseAndWaitIdle(t, server, child.ConversationID, held.waitCall(t, "echo: manual child turn"))
-
-	// An explicit report is the parent's first wake.
-	if err := NewSubagentRunner(server).MessageParent(ctx, child.ConversationID, "explicit report"); err != nil {
-		t.Fatal(err)
-	}
-	wrapped := `<subagent_message conversation_id="` + child.ConversationID + `" slug="quiet-child">` +
-		"\nexplicit report\n</subagent_message>"
-	releaseAndWaitIdle(t, server, parent.ConversationID, held.waitCall(t, wrapped))
-	for _, m := range listMessages(t, database, parent.ConversationID) {
-		if m.Type != string(db.MessageTypeUser) || m.UserData == nil {
-			continue
-		}
-		data, ok, err := parseSenderMessageUserData([]byte(*m.UserData))
-		if err != nil || !ok {
-			continue
-		}
-		if data.Text != "explicit report" {
-			t.Fatalf("child turn end woke the parent with %q", data.Text)
-		}
-	}
-}
-
 // Cleanup must never evict a conversation manager whose agent is mid-turn
 // (agentWorking=true). Tool calls — e.g. a shell command that runs
 // for many minutes — do not Touch the manager, so lastActivity goes

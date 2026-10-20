@@ -1217,6 +1217,16 @@ func (s *Server) recordMessage(ctx context.Context, conversationID string, messa
 	if err != nil {
 		return err
 	}
+	// A delegated subagent's turn just ended. If the parent started it and
+	// the subagent did not report, report for it (see reportUnreportedTurnEnd).
+	if params.MarkAgentDone {
+		s.mu.Lock()
+		manager := s.activeConversations[conversationID]
+		s.mu.Unlock()
+		if manager != nil && manager.role == roleSubagent {
+			s.reportUnreportedTurnEnd(ctx, manager, message, params.Type)
+		}
+	}
 	return nil
 }
 

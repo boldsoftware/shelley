@@ -139,6 +139,10 @@ type ConversationManager struct {
 	// This is explicitly managed and broadcast to subscribers when it changes.
 	agentWorking bool
 
+	// delegatedTurn is what a delegated subagent's parent is owed for the
+	// turn in progress; see Server.reportUnreportedTurnEnd. Guarded by mu.
+	delegatedTurn delegatedTurnState
+
 	// idleCompactionVersion invalidates callbacks even when Stop loses a race
 	// with the timer. Both fields are guarded by mu.
 	idleCompactionTimer   *time.Timer
@@ -428,6 +432,102 @@ func (cm *ConversationManager) setAgentWorking(working, persist bool) {
 			Model:          modelID,
 		})
 	}
+}
+
+// delegatedTurnState is a delegated subagent's current turn as its parent
+// sees it: whether the parent sent the turn's prompt (RunSubagent, or the
+// parent's CLI chat), and what the subagent has sent back with
+// message_parent so far. A parent-started turn that ends without a final
+// report is reported for the subagent (see Server.reportUnreportedTurnEnd).
+type delegatedTurnState struct {
+	parentStarted   bool
+	progressReports int
+	finalReported   bool
+}
+
+// startsParentTurn reports whether a message sent with ctx comes from the
+// parent conversation: the subagent tool, or the parent's CLI chat.
+func startsParentTurn(ctx context.Context) bool {
+	if isParentDelegation(ctx) {
+		return true
+	}
+	sender, ok := turnUserDataFromContext(ctx).(senderMessageUserData)
+	return ok && sender.SenderRelationship == senderRelationshipParent
+}
+
+// fromHuman reports whether a message sent with ctx was typed by a user
+// rather than sent by a conversation or a machine notice (background job,
+// MCP change).
+func fromHuman(ctx context.Context) bool {
+	return turnUserDataFromContext(ctx) == nil || liveDeliveryIDFromContext(ctx) != ""
+}
+
+// noteTurnStart records who started the turn a message begins, or, when it
+// joins a running turn, that the parent is now waiting on it.
+func (cm *ConversationManager) noteTurnStart(ctx context.Context, newTurn bool) {
+	if cm.role != roleSubagent {
+		return
+	}
+	parent := startsParentTurn(ctx)
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	switch {
+	case newTurn:
+		cm.delegatedTurn = delegatedTurnState{parentStarted: parent}
+	case parent:
+		cm.delegatedTurn.parentStarted = true
+	}
+}
+
+// noteQueuedMessage is noteTurnStart for a queued message: the parent's
+// message joins the running turn, or starts one when the drain takes it; a
+// user's starts a new turn unless one is running, in which case it waits for
+// the turn to end and the state to reset. Machine notices (a background job
+// exiting) resume the turn they interrupted and leave the state alone.
+func (cm *ConversationManager) noteQueuedMessage(ctx context.Context) {
+	if cm.role != roleSubagent {
+		return
+	}
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	switch {
+	case startsParentTurn(ctx):
+		cm.delegatedTurn.parentStarted = true
+	case fromHuman(ctx) && !cm.agentWorking:
+		cm.delegatedTurn = delegatedTurnState{}
+	}
+}
+
+// noteMessageParent records a message_parent call in the current turn.
+func (cm *ConversationManager) noteMessageParent(final bool) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if final {
+		cm.delegatedTurn.finalReported = true
+	} else {
+		cm.delegatedTurn.progressReports++
+	}
+}
+
+// delegatedTurnFinalReported reports whether the current turn sent its
+// final report.
+func (cm *ConversationManager) delegatedTurnFinalReported() bool {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	return cm.delegatedTurn.finalReported
+}
+
+// endDelegatedTurn returns the turn's state at its end and, unless the turn
+// is only paused (waiting on a background job whose exit resumes it),
+// resets it for the next turn.
+func (cm *ConversationManager) endDelegatedTurn(paused bool) delegatedTurnState {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	state := cm.delegatedTurn
+	if !paused {
+		cm.delegatedTurn = delegatedTurnState{}
+	}
+	return state
 }
 
 // idle returns a channel that is closed once the agent is not working:
@@ -735,6 +835,7 @@ func (cm *ConversationManager) acceptUserMessage(ctx context.Context, service ll
 	cm.hasConversationEvents = true
 	cm.lastActivity = time.Now()
 	cm.mu.Unlock()
+	cm.noteTurnStart(ctx, !wasWorking)
 	loopInstance.QueueUserMessage(modelMessage)
 
 	return isFirst, created.MessageID, nil
@@ -1307,9 +1408,10 @@ func (cm *ConversationManager) queueMessage(ctx context.Context, s *Server, mode
 	if _, err := s.db.AppendQueuedMessage(ctx, cm.conversationID, qm); err != nil {
 		return fmt.Errorf("failed to append queued message: %w", err)
 	}
-	if turnUserDataFromContext(ctx) == nil || liveDeliveryIDFromContext(ctx) != "" {
+	if fromHuman(ctx) {
 		s.resumeParentCompletions(cm.conversationID)
 	}
+	cm.noteQueuedMessage(ctx)
 	cm.Touch()
 
 	// Broadcast the updated conversation (with the new queued_messages array)

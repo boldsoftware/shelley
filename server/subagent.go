@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"unicode/utf8"
 
 	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/db"
@@ -123,6 +125,10 @@ func (r *SubagentRunner) RunSubagent(ctx context.Context, conversationID, prompt
 		s.resumeParentCompletions(*conv.ParentConversationID)
 	}
 
+	// The subagent's manager marks the turn this message starts or joins as
+	// the parent's, so an unreported turn end is reported for it.
+	ctx = contextWithParentDelegation(ctx)
+
 	// A busy subagent receives the message at its current turn's next LLM
 	// round, without interrupting the turn (see InjectMessage).
 	if manager.IsAgentWorking() {
@@ -160,12 +166,126 @@ func (s *Server) inheritedSubagentModel(ctx context.Context, conversationID stri
 }
 
 // MessageParent implements claudetool.ParentMessenger.
-func (r *SubagentRunner) MessageParent(ctx context.Context, conversationID, text string) error {
-	conv, err := r.server.db.GetConversationByID(ctx, conversationID)
+func (r *SubagentRunner) MessageParent(ctx context.Context, conversationID, text string, final bool) error {
+	s := r.server
+	conv, err := s.db.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return fmt.Errorf("load conversation: %w", err)
 	}
-	return r.server.messageParent(ctx, *conv, text)
+	if err := s.messageParent(ctx, *conv, text); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	manager := s.activeConversations[conversationID]
+	s.mu.Unlock()
+	if manager != nil {
+		manager.noteMessageParent(final)
+	}
+	return nil
+}
+
+// parentDelegationContextKey marks a message RunSubagent sends to a subagent.
+type parentDelegationContextKey struct{}
+
+func contextWithParentDelegation(ctx context.Context) context.Context {
+	return context.WithValue(ctx, parentDelegationContextKey{}, true)
+}
+
+func isParentDelegation(ctx context.Context) bool {
+	delegated, _ := ctx.Value(parentDelegationContextKey{}).(bool)
+	return delegated
+}
+
+// turnEndReportLimit caps the reply a turn-end report carries; the parent
+// can read the rest in the subagent's conversation.
+const turnEndReportLimit = 4000
+
+// reportUnreportedTurnEnd sends a delegated subagent's parent the final
+// report the subagent owed it but did not send: the turn the parent started
+// ended with a plain reply (or an error) instead of
+// message_parent(end_turn=true). Without it the parent is never woken. The
+// report goes through messageParent, as message_parent's would.
+//
+// Not reported: a turn the user drove in the subagent's conversation, a
+// turn that sent its final report, a turn only paused for a background job
+// (its exit notice resumes the turn; the report comes when that one ends),
+// a cancelled turn, and a turn whose parent was stopped.
+func (s *Server) reportUnreportedTurnEnd(ctx context.Context, manager *ConversationManager, end llm.Message, kind db.MessageType) {
+	ctx = context.WithoutCancel(ctx)
+	conversationID := manager.conversationID
+	// An excluded end-of-turn row is a marker, not a reply: the one
+	// message_parent(end_turn=true) writes after its report, or the raw
+	// response recorded before a refusal or truncation error row, which
+	// ends the turn next and is reported then.
+	if end.ExcludedFromContext {
+		if manager.delegatedTurnFinalReported() {
+			manager.endDelegatedTurn(false)
+		}
+		return
+	}
+	cancelled := messageText(end) == "[Operation cancelled]"
+	paused := false
+	if !cancelled {
+		jobs, err := s.runningBackgroundJobsOf(ctx, conversationID)
+		if err != nil {
+			s.logger.Error("Failed to list a subagent's background jobs at turn end", "conversationID", conversationID, "error", err)
+		}
+		paused = len(jobs) > 0
+	}
+	state := manager.endDelegatedTurn(paused)
+	if cancelled || paused || !state.parentStarted || state.finalReported {
+		return
+	}
+	conv, err := s.db.GetConversationByID(ctx, conversationID)
+	if err != nil {
+		s.logger.Error("Failed to load a subagent at turn end", "conversationID", conversationID, "error", err)
+		return
+	}
+	if !isDelegatedSubagent(*conv) {
+		return
+	}
+	parentID := *conv.ParentConversationID
+	s.mu.Lock()
+	stopped := s.stoppedParents[parentID]
+	s.mu.Unlock()
+	if stopped {
+		s.logger.Info("Subagent turn ended without a report; its parent is stopped", "conversationID", conversationID, "parentID", parentID)
+		return
+	}
+	text := turnEndReport(derefString(conv.Slug), end, kind, state)
+	if err := s.messageParent(ctx, *conv, text); err != nil {
+		s.logger.Error("Failed to report a subagent's turn end to its parent", "conversationID", conversationID, "parentID", parentID, "error", err)
+		return
+	}
+	s.logger.Info("Reported a subagent's unreported turn end to its parent", "conversationID", conversationID, "parentID", parentID, "kind", kind)
+}
+
+// turnEndReport is the report sent for a delegated turn that ended without
+// one: a line saying so, then the subagent's last reply or error.
+func turnEndReport(slug string, end llm.Message, kind db.MessageType, state delegatedTurnState) string {
+	var b strings.Builder
+	switch {
+	case kind == db.MessageTypeError:
+		fmt.Fprintf(&b, "[Subagent %q ended its turn with an error and no final report; the error follows.]", slug)
+	case state.progressReports > 0:
+		fmt.Fprintf(&b, "[Subagent %q ended its turn without a final report; its last message_parent was a progress report. Its last reply follows.]", slug)
+	default:
+		fmt.Fprintf(&b, "[Subagent %q ended its turn without a final report; its last reply follows.]", slug)
+	}
+	text := strings.TrimSpace(messageText(end))
+	if text == "" {
+		text = "(the reply has no text; inspect the subagent's conversation)"
+	}
+	if len(text) > turnEndReportLimit {
+		cut := turnEndReportLimit
+		for cut > 0 && !utf8.RuneStart(text[cut]) {
+			cut--
+		}
+		text = text[:cut] + fmt.Sprintf("\n[... truncated; %d more characters in the subagent's conversation]", utf8.RuneCountInString(text[cut:]))
+	}
+	b.WriteString("\n")
+	b.WriteString(text)
+	return b.String()
 }
 
 // isDelegatedSubagent reports whether conv is a subagent created by the

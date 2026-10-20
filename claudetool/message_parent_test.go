@@ -8,7 +8,7 @@ import (
 
 type parentMessengerFunc func(context.Context, string, string) error
 
-func (f parentMessengerFunc) MessageParent(ctx context.Context, conversationID, text string) error {
+func (f parentMessengerFunc) MessageParent(ctx context.Context, conversationID, text string, final bool) error {
 	return f(ctx, conversationID, text)
 }
 

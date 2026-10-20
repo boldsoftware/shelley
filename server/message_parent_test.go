@@ -156,7 +156,7 @@ func TestResumedParentAcceptsChildReportsAfterStop(t *testing.T) {
 	}
 	releaseAndWaitIdle(t, server, parent.ConversationID, held.waitCall(t, "echo: resume parent"))
 
-	if err := NewSubagentRunner(server).MessageParent(t.Context(), child.ConversationID, "resumed report"); err != nil {
+	if err := NewSubagentRunner(server).MessageParent(t.Context(), child.ConversationID, "resumed report", true); err != nil {
 		t.Fatalf("child report rejected after parent resumed: %v", err)
 	}
 	wrapped := `<subagent_message conversation_id="` + child.ConversationID + `" slug="resumed-child">` +
@@ -186,7 +186,7 @@ func TestQueuedParentWorkReopensChildReportsAfterStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	releaseAndWaitIdle(t, server, parent.ConversationID, held.waitCall(t, "echo: queued restart"))
-	if err := NewSubagentRunner(server).MessageParent(t.Context(), child.ConversationID, "queued report"); err != nil {
+	if err := NewSubagentRunner(server).MessageParent(t.Context(), child.ConversationID, "queued report", true); err != nil {
 		t.Fatalf("parent rejected report after queued user work: %v", err)
 	}
 	wrapped := `<subagent_message conversation_id="` + child.ConversationID + `" slug="queue-child">` +
@@ -241,7 +241,7 @@ func TestMessageParentDoesNotRestartStoppedParent(t *testing.T) {
 		t.Fatal(err)
 	}
 	cancelConversation(t, server, parent.ConversationID)
-	if err := NewSubagentRunner(server).MessageParent(t.Context(), child.ConversationID, "late report"); err == nil {
+	if err := NewSubagentRunner(server).MessageParent(t.Context(), child.ConversationID, "late report", true); err == nil {
 		t.Fatal("message_parent accepted a report after parent Stop")
 	}
 	conv, err := database.GetConversationByID(t.Context(), parent.ConversationID)

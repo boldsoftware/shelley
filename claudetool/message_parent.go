@@ -15,8 +15,9 @@ const messageParentName = "message_parent"
 type ParentMessenger interface {
 	// MessageParent queues text in the parent of conversationID, attributed
 	// to that subagent. A busy parent sees it at its next LLM request; an
-	// idle parent starts a turn.
-	MessageParent(ctx context.Context, conversationID, text string) error
+	// idle parent starts a turn. final marks the subagent's final report
+	// (end_turn=true), as opposed to a progress report.
+	MessageParent(ctx context.Context, conversationID, text string, final bool) error
 }
 
 // MessageParentTool lets a subagent send progress or a final report.
@@ -61,7 +62,7 @@ func (t *MessageParentTool) run(ctx context.Context, input json.RawMessage) llm.
 	if req.EndTurn == nil {
 		return llm.ErrorfToolOut("end_turn is required")
 	}
-	if err := t.Messenger.MessageParent(ctx, t.ConversationID, req.Text); err != nil {
+	if err := t.Messenger.MessageParent(ctx, t.ConversationID, req.Text, *req.EndTurn); err != nil {
 		return llm.ErrorfToolOut("message parent: %w", err)
 	}
 	return llm.ToolOut{LLMContent: llm.TextContent("Sent to parent."), EndTurn: *req.EndTurn}
