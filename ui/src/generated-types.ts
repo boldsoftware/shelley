@@ -136,6 +136,7 @@ export interface ConversationWithStateForTS {
   working: boolean;
   git_repo_root?: string;
   git_worktree_root?: string;
+  git_branch?: string;
   git_commit?: string;
   git_subject?: string;
   subagent_count: number;

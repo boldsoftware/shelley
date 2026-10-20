@@ -822,6 +822,7 @@ func (s *Server) decorateConversations(conversations []db.ConversationListItem) 
 			if entry.state.IsRepo {
 				cws.GitRepoRoot = entry.state.Worktree
 				cws.GitWorktreeRoot = entry.worktree
+				cws.GitBranch = entry.state.Branch
 				cws.GitCommit = entry.state.Commit
 				cws.GitSubject = entry.state.Subject
 			}
