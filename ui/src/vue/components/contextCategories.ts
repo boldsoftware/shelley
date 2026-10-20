@@ -1,7 +1,7 @@
 // Display categories for the context graph: which of the reconstructed
 // per-call parts (see contextComposition.ts) share a color and legend row,
 // plus the stacked layers the graph draws from them.
-import { formatTokenCount } from "../../utils/tokenCostGraph";
+import { formatTokenCount, type ModelCost } from "../../utils/tokenCostGraph";
 import type { Composition, Point } from "./contextComposition";
 
 export type ContextCategory = { key: string; label: string; color: string };
@@ -76,6 +76,19 @@ export function contextCategories(points: Point[]): ContextCategory[] {
  *  reasoning together. */
 export function categoryTokens(point: Point, key: string): number {
   return compositionTokens(point.parts, key);
+}
+
+/** What re-writing a cold cache would cost at this call: the context (or one
+ *  category of it) at the model's cache-write price. Null when unpriced. */
+export function rewarmUsd(
+  point: Point,
+  costs: Record<string, ModelCost | null | undefined>,
+  key?: string,
+): number | null {
+  const cost = point.model ? costs[point.model] : null;
+  if (!cost) return null;
+  const tokens = key === undefined ? point.total : categoryTokens(point, key);
+  return (tokens * cost.cache_write) / 1e6;
 }
 
 function compositionTokens(parts: Composition, key: string): number {

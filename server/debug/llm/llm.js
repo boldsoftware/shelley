@@ -279,7 +279,10 @@ function detailHead(d) {
     ? [
         h(
           "a",
-          { href: `/c/${encodeURIComponent(d.conversation_id)}`, target: "_blank" },
+          {
+            href: `/c/${encodeURIComponent(d.conversation_id)}`,
+            target: "_blank",
+          },
           slug || d.conversation_id,
         ),
         " ",
@@ -312,6 +315,7 @@ function detailHead(d) {
       fact("Started", fmtTime(d.start)),
       fact("First byte", d.ttfb_ms ? fmtMs(d.ttfb_ms) : "—"),
       fact(d.done ? "Total" : "Elapsed", durationText(d)),
+      ...timingFacts(d),
       fact("Shelley request id", h("code", {}, d.request_id || "—")),
     ),
     d.error && h("div", { class: "errbox" }, d.error),
@@ -486,7 +490,7 @@ function lazyDetails({ cls = "node", path, open }, summary, fill) {
 // restore reapplies the user's open/close choices after a re-render.
 function restore(box) {
   const seen = new Set();
-  for (let again = true; again; ) {
+  for (let again = true; again;) {
     again = false;
     for (const el of box.querySelectorAll("details[data-path]")) {
       const path = el.dataset.path;
@@ -518,7 +522,11 @@ function container(key, value, { open, root, depth, path, badge }) {
   }
   const json = JSON.stringify(value);
   return lazyDetails(
-    { cls: `node${root ? " root" : ""}`, path, open: open ?? (depth < 8 && json.length <= 160) },
+    {
+      cls: `node${root ? " root" : ""}`,
+      path,
+      open: open ?? (depth < 8 && json.length <= 160),
+    },
     [
       keyLabel(key),
       badge && h("span", { class: "badge" }, badge),
@@ -576,9 +584,21 @@ function longString(key, s, path, open) {
 
 // ---- server-sent events ----
 
+// parseSSE splits an event stream into events. Each event's end is the UTF-8
+// byte offset just past it, for matching against response_timeline.
 function parseSSE(text) {
   const events = [];
-  for (const block of text.split(/\r?\n\r?\n/)) {
+  const enc = new TextEncoder();
+  const sep = /\r?\n\r?\n|$/g;
+  let start = 0;
+  let bytes = 0;
+  while (start < text.length) {
+    sep.lastIndex = start;
+    const m = sep.exec(text);
+    const block = text.slice(start, m.index);
+    const stop = m.index + m[0].length;
+    bytes += enc.encode(text.slice(start, stop)).length;
+    start = stop;
     if (!block.trim()) continue;
     let name = "";
     const data = [];
@@ -596,9 +616,78 @@ function parseSSE(text) {
       name: name || (typeof json?.type === "string" ? json.type : "") || json?.object || "data",
       raw,
       json,
+      end: bytes,
     });
   }
   return events;
+}
+
+// outputTokens returns the output token count reported by a usage-bearing
+// event, across Anthropic, OpenAI chat completions, and OpenAI Responses.
+function outputTokens(j) {
+  const u = j?.usage ?? j?.response?.usage ?? j?.message?.usage;
+  const n = u?.output_tokens ?? u?.completion_tokens;
+  return typeof n === "number" ? n : null;
+}
+
+// streamTiming derives TTFT, time between tokens (TBT), and output tokens
+// per second (TPS) from a streamed response and its arrival timeline. Times
+// are ms since the request started. Tokens are streamed text deltas. TPS is
+// measured from the first response byte rather than the first delta because
+// hidden reasoning is counted in output tokens but streams no deltas.
+const timingCache = { key: "", value: null };
+function streamTiming(d) {
+  const tl = d.response_timeline;
+  const ct = d.response_header?.["Content-Type"]?.[0] || "";
+  if (!tl?.length || !ct.startsWith("text/event-stream")) return null;
+  const key = `${d.id}:${d.response_bytes}:${d.done}`;
+  if (timingCache.key === key) return timingCache.value;
+  const times = [];
+  let tokens = null;
+  let i = 0;
+  for (const ev of parseSSE(d.response_body || "")) {
+    while (i < tl.length - 1 && tl[i][0] < ev.end) i++;
+    if (tl[i][0] < ev.end) break; // not arrived yet (or past a truncation)
+    if (deltaText(ev)) times.push(tl[i][1]);
+    tokens = outputTokens(ev.json) ?? tokens;
+  }
+  let value = null;
+  if (times.length) {
+    const first = times[0];
+    const last = times.at(-1);
+    let maxGap = 0;
+    for (let k = 1; k < times.length; k++) maxGap = Math.max(maxGap, times[k] - times[k - 1]);
+    value = {
+      ttft: first,
+      deltas: times.length,
+      tbt: times.length > 1 ? (last - first) / (times.length - 1) : null,
+      maxGap,
+      tokens,
+      tps: tokens != null && last > d.ttfb_ms ? (tokens * 1000) / (last - d.ttfb_ms) : null,
+    };
+  }
+  timingCache.key = key;
+  timingCache.value = value;
+  return value;
+}
+
+function timingFacts(d) {
+  const t = streamTiming(d);
+  if (!t) return [];
+  const ms = (v) => (v < 10 ? `${v.toFixed(1)} ms` : fmtMs(Math.round(v)));
+  return [
+    fact("TTFT", fmtMs(t.ttft)),
+    fact(
+      "TBT",
+      t.tbt == null ? "—" : `${ms(t.tbt)} avg, ${fmtMs(t.maxGap)} max`,
+      h("span", { class: "muted" }, ` (${plural(t.deltas, "delta")})`),
+    ),
+    fact(
+      "TPS",
+      t.tps == null ? "—" : `${t.tps.toFixed(1)} tok/s`,
+      t.tokens != null && h("span", { class: "muted" }, ` (${plural(t.tokens, "output token")})`),
+    ),
+  ];
 }
 
 // deltaText extracts the streamed text fragment from a delta event, across

@@ -1,5 +1,5 @@
 import type { Message } from "../../types";
-import { contextCategories, promptGrowth } from "./contextCategories";
+import { contextCategories, promptGrowth, rewarmUsd } from "./contextCategories";
 import { contextCompositionPoints } from "./contextComposition";
 
 let failed = 0;
@@ -85,6 +85,23 @@ assert(Math.abs(sum - 150) <= 5, `after parts sum to the reported total: ${sum}`
   assert(label(1) === "text", `after a long reply and a short result: ${label(1)}`);
   assert(label(2) === "bash · file read", `after a long result, not its own reply: ${label(2)}`);
   assert(promptGrowth(points, 0, cats) === null, "the first call has nothing to grow from");
+}
+
+{
+  // Rewarming a cold cache re-writes the whole context at the cache-write price.
+  const points = contextCompositionPoints([
+    msg("user", [{ Type: 2, Text: big }]),
+    msg("agent", [{ Type: 2, Text: "ok" }], {
+      usage_data: JSON.stringify({ input_tokens: 2_000_000, model: "m1" }),
+    }),
+  ]);
+  const [point] = points;
+  assert(point.model === "m1", `point model = ${point.model}`);
+  const costs = { m1: { input: 3, output: 15, cache_read: 0.3, cache_write: 3.75 } };
+  assert(rewarmUsd(point, costs) === 7.5, `rewarm = ${rewarmUsd(point, costs)}`);
+  const user = rewarmUsd(point, costs, "text");
+  assert(user === 7.5, `text rewarm = ${user}`);
+  assert(rewarmUsd(point, {}) === null, "unpriced model has no rewarm cost");
 }
 
 if (failed) process.exit(1);

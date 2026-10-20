@@ -13009,7 +13009,7 @@ kbd {
 .context-legend {
   margin-top: 4px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: 1px 12px;
 }
 
@@ -13024,6 +13024,12 @@ kbd {
 .context-legend-tokens {
   min-width: 42px;
   text-align: right;
+}
+
+.context-legend-rewarm {
+  min-width: 42px;
+  text-align: right;
+  opacity: 0.7;
 }
 
 .context-legend-item {

@@ -319,8 +319,9 @@ func TestConversationListPatchStreamCurrentHashSendsHeartbeatNotReset(t *testing
 		t.Fatal("expected an immediate heartbeat")
 	}
 	var first StreamResponse
-	body, _, _ := strings.Cut(strings.TrimSpace(rec.getString()), "\n\n")
-	if err := json.Unmarshal([]byte(strings.TrimPrefix(body, "data: ")), &first); err != nil {
+	body := rec.getString()
+	frame, _, _ := strings.Cut(body, "\n\n")
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(frame, "data: ")), &first); err != nil {
 		t.Fatalf("decode first event: %v; body=%q", err, body)
 	}
 	if !first.Heartbeat || first.ConversationListPatch != nil {

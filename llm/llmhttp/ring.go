@@ -64,6 +64,11 @@ type Exchange struct {
 	ResponseHeader    http.Header `json:"response_header,omitempty"`
 	RequestBody       string      `json:"request_body,omitempty"`
 	ResponseBody      string      `json:"response_body,omitempty"`
+	// ResponseTimeline records when the captured response body arrived, as
+	// [end byte offset, ms since Start] pairs, at most one per millisecond.
+	// The debug page maps streamed events onto it to derive TTFT, the time
+	// between tokens, and tokens per second. Filled in only by Get.
+	ResponseTimeline [][2]int64 `json:"response_timeline,omitempty"`
 }
 
 // exchange is the live record behind an Exchange; it is guarded by Ring.mu.
@@ -98,7 +103,7 @@ func (r *Ring) List() []Exchange {
 	out := make([]Exchange, len(r.entries))
 	for i, e := range r.entries {
 		x := e.snapshot()
-		x.RequestHeader, x.ResponseHeader = nil, nil
+		x.RequestHeader, x.ResponseHeader, x.ResponseTimeline = nil, nil, nil
 		out[len(out)-1-i] = x
 	}
 	return out
@@ -114,6 +119,7 @@ func (r *Ring) Get(id int64) (Exchange, bool) {
 	}
 	e := r.entries[i]
 	x, req, resp := e.snapshot(), e.requestBody, e.responseBody
+	x.ResponseTimeline = slices.Clone(e.ResponseTimeline) // its last pair is updated in place
 	r.mu.Unlock()
 	x.RequestBody, x.ResponseBody = string(req), string(resp) // copy outside the lock
 	return x, true
@@ -190,7 +196,7 @@ func (r *Ring) trimLocked() {
 	for len(r.entries)-n > 1 && (len(r.entries)-n > r.maxEntries || r.bytes > r.maxBytes) {
 		e := r.entries[n]
 		r.bytes -= len(e.requestBody) + len(e.responseBody)
-		e.requestBody, e.responseBody, e.evicted = nil, nil, true
+		e.requestBody, e.responseBody, e.ResponseTimeline, e.evicted = nil, nil, nil, true
 		n++
 	}
 	r.entries = slices.Delete(r.entries, 0, n)
@@ -215,6 +221,9 @@ func (b *captureBody) Read(p []byte) (int, error) {
 	e.responseBody = append(e.responseBody, p[:keep]...)
 	e.ResponseTruncated = e.ResponseTruncated || keep < n
 	b.ring.bytes += keep
+	if keep > 0 {
+		e.recordArrival(time.Now())
+	}
 	if err != nil {
 		if !errors.Is(err, io.EOF) {
 			e.Error = err.Error()
@@ -224,6 +233,17 @@ func (b *captureBody) Read(p []byte) (int, error) {
 	}
 	b.ring.trimLocked()
 	return n, err
+}
+
+// recordArrival notes that the response body captured so far had arrived by
+// now, merging arrivals within the same millisecond.
+func (e *exchange) recordArrival(now time.Time) {
+	p := [2]int64{int64(len(e.responseBody)), now.Sub(e.Start).Milliseconds()}
+	if n := len(e.ResponseTimeline); n > 0 && e.ResponseTimeline[n-1][1] == p[1] {
+		e.ResponseTimeline[n-1] = p
+		return
+	}
+	e.ResponseTimeline = append(e.ResponseTimeline, p)
 }
 
 func (b *captureBody) Close() error {

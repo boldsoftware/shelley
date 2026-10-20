@@ -260,3 +260,49 @@ func TestRingRecordsIdleTimeout(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// TestRingRecordsResponseTimeline checks that the arrival of each streamed
+// chunk is recorded against its end offset in the captured body.
+func TestRingRecordsResponseTimeline(t *testing.T) {
+	next := make(chan bool)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("data: 1\n\n"))
+		w.(http.Flusher).Flush()
+		<-next
+		w.Write([]byte("data: 22\n\n"))
+	}))
+	defer server.Close()
+
+	ring := NewRing(10, 1<<20)
+	client := &http.Client{Transport: &Transport{Log: ring}}
+	resp, err := client.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	buf := make([]byte, 9)
+	if _, err := io.ReadFull(resp.Body, buf); err != nil {
+		t.Fatal(err)
+	}
+	id := ring.List()[0].ID
+	if d, _ := ring.Get(id); len(d.ResponseTimeline) != 1 || d.ResponseTimeline[0][0] != 9 {
+		t.Fatalf("after first chunk, timeline = %v", d.ResponseTimeline)
+	}
+	close(next)
+	if _, err := io.ReadAll(resp.Body); err != nil {
+		t.Fatal(err)
+	}
+	d, _ := ring.Get(id)
+	tl := d.ResponseTimeline
+	if len(tl) == 0 || tl[len(tl)-1][0] != int64(d.ResponseBytes) || d.ResponseBytes != 19 {
+		t.Fatalf("timeline = %v, response bytes = %d", tl, d.ResponseBytes)
+	}
+	for i := 1; i < len(tl); i++ {
+		if tl[i][0] <= tl[i-1][0] || tl[i][1] <= tl[i-1][1] {
+			t.Errorf("timeline not increasing: %v", tl)
+		}
+	}
+	if l := ring.List(); l[0].ResponseTimeline != nil {
+		t.Errorf("List includes timeline: %v", l[0].ResponseTimeline)
+	}
+}

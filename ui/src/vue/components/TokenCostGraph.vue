@@ -159,9 +159,12 @@
           v-if="showsContext && legendPoint"
           :categories="categories"
           :point="legendPoint"
+          :costs="costs"
         />
         <div v-if="showsContext && legendPoint" class="token-cost-graph-note">
-          The context mix is estimated from message contents.
+          The context mix is estimated from message contents.<template v-if="legendRewarm !== null">
+            Rewarming a cold cache here costs {{ formatUsd(legendRewarm) }}.</template
+          >
         </div>
         <div v-if="hasSubagents && paneViews.length > 0" class="token-cost-graph-note">
           Graphs show the main conversation only.
@@ -347,6 +350,7 @@ import {
   contextLayers,
   contextSegmentStarts,
   promptGrowth,
+  rewarmUsd,
 } from "./contextCategories";
 import { contextCompositionPoints, type Point } from "./contextComposition";
 
@@ -942,6 +946,12 @@ const legendPoint = computed<Point | null>(() => {
   const i = ctxHoverIndex.value;
   return ctxPoints.value[i ?? ctxPoints.value.length - 1] ?? null;
 });
+
+// Cache-write price of the legend's whole context: what a cache miss there
+// would cost to rewarm.
+const legendRewarm = computed(() =>
+  legendPoint.value ? rewarmUsd(legendPoint.value, costs.value) : null,
+);
 
 // "call 169, $1.61, cumulative $47.05, context 174k", then the snippet:
 // "(bash)". Each graph that is on adds its figure. Time mode adds the time.

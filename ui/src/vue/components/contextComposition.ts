@@ -22,6 +22,8 @@ export type Point = {
   /** parts as the call was sent: without its own response, which only the
    *  next call reads. */
   prompt: Composition;
+  /** The model that served the call, which prices a rewarm. */
+  model?: string;
 };
 type Attribution = { key: string; detail?: string };
 type CommandInvocation = { name: string; args: string[] };
@@ -137,6 +139,7 @@ export function contextCompositionPoints(messages: Message[]): Point[] {
       parts: estimated > 0 ? { ...context.parts } : generationHasMedia ? {} : { assistant: total },
       toolBreakdown: copyToolBreakdown(context.toolBreakdown),
       prompt: estimated > 0 ? prompt : {},
+      model: usage?.model,
     });
   }
 

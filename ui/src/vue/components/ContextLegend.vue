@@ -13,7 +13,7 @@
         type="button"
         class="token-cost-legend-row context-legend-row"
         v-tooltip.focus.top="categoryHint(category.key, point)"
-        :aria-label="`${category.label}: ${formatTokenCount(categoryTokens(point, category.key))}. ${categoryHint(category.key, point)}`"
+        :aria-label="`${category.label}: ${formatTokenCount(categoryTokens(point, category.key))}${rewarmLabel(category.key)}. ${categoryHint(category.key, point)}`"
         @mouseenter="showTooltipOnHover"
         @mouseleave="hideTooltipOnHover"
       >
@@ -22,17 +22,34 @@
         <span class="token-cost-legend-tokens context-legend-tokens">{{
           formatTokenCount(categoryTokens(point, category.key))
         }}</span>
+        <span v-if="rewarm(category.key) !== null" class="context-legend-rewarm">{{
+          formatUsd(rewarm(category.key)!)
+        }}</span>
       </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { formatTokenCount } from "../../utils/tokenCostGraph";
-import { categoryHint, categoryTokens, type ContextCategory } from "./contextCategories";
+import { formatTokenCount, formatUsd, type ModelCost } from "../../utils/tokenCostGraph";
+import { categoryHint, categoryTokens, rewarmUsd, type ContextCategory } from "./contextCategories";
 import type { Point } from "./contextComposition";
 
-defineProps<{ categories: ContextCategory[]; point: Point }>();
+const props = defineProps<{
+  categories: ContextCategory[];
+  point: Point;
+  /** Pricing by model; with it, each row shows its cache-write (rewarm) cost. */
+  costs?: Record<string, ModelCost | null | undefined>;
+}>();
+
+function rewarm(key: string): number | null {
+  return props.costs ? rewarmUsd(props.point, props.costs, key) : null;
+}
+
+function rewarmLabel(key: string): string {
+  const usd = rewarm(key);
+  return usd === null ? "" : `, ${formatUsd(usd)} to rewarm`;
+}
 
 // The tooltip directive opens on focus; hover borrows that path.
 function dispatchTooltipFocus(target: EventTarget | null, type: "focus" | "blur") {

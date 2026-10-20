@@ -589,8 +589,8 @@ test.describe("conversation drawer startup and app bar", () => {
 
     // Copy addresses the serialized query rather than delete-button chrome.
     await editor.focus();
-    await page.keyboard.press("Control+A");
-    await page.keyboard.press("Control+C");
+    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.press("ControlOrMeta+C");
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(committed);
     await page.keyboard.press("ArrowRight");
 
@@ -630,7 +630,7 @@ test.describe("conversation drawer startup and app bar", () => {
     await page.locator(".drawer-search-clear").click();
     await editor.click();
     await page.evaluate(() => navigator.clipboard.writeText("alpha\nbeta"));
-    await page.keyboard.press("Control+V");
+    await page.keyboard.press("ControlOrMeta+V");
     await expectQuery(editor, "alpha beta");
     await expect(editor.locator("p")).toHaveCount(1);
 
@@ -1244,7 +1244,7 @@ test.describe("mobile drawer swipe", () => {
     await stubConversationList(page, [first]);
     await page.goto("/new");
 
-    await page.keyboard.press("Control+Shift+D");
+    await page.keyboard.press("ControlOrMeta+Shift+D");
     await expect(page.locator(".diff-viewer-overlay")).toBeVisible();
 
     await swipe(page, ".diff-viewer-header", { x: 180, y: 100 }, { x: 256, y: 104 });
