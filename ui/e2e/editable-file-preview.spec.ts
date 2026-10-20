@@ -46,8 +46,26 @@ test.describe("Markdown file editor preview", () => {
         "| --- | --- |",
         "| Preview | Ready |",
         "",
+        "Wrapped paragraph",
+        "continues here.",
+        "",
+        "Hard break with spaces.  ",
+        "Next line.",
+        "",
+        "Hard break with backslash.\\",
+        "Next line.",
+        "",
+        "Hard break with HTML.<br>Next line.",
+        "",
+        "Single token: `here_is-a_piece-of-code`.",
+        "",
+        "Words: `here is a piece of code`.",
+        "",
+        `Oversized: \`${"long_token-".repeat(40)}\`.`,
+        "",
         "```js",
         "window.__previewExecuted = true;",
+        "// Code stays on its own line.",
         "```",
         "",
         '<img src="/missing-image" onerror="window.__previewExecuted = true">',
@@ -73,7 +91,20 @@ test.describe("Markdown file editor preview", () => {
     await expect(preview).toBeFocused();
     await expect(preview.getByRole("heading", { name: "Release notes" })).toBeVisible();
     await expect(preview.getByRole("table").getByRole("cell", { name: "Ready" })).toBeVisible();
-    await expect(preview.locator("pre code")).toContainText("window.__previewExecuted = true;");
+    const wrapped = preview.locator("p").filter({ hasText: "Wrapped paragraph" });
+    await expect(wrapped).toHaveText("Wrapped paragraph continues here.");
+    await expect(wrapped.locator("br")).toHaveCount(0);
+    for (const kind of ["spaces", "backslash", "HTML"]) {
+      await expect(
+        preview
+          .locator("p")
+          .filter({ hasText: `Hard break with ${kind}.` })
+          .locator("br"),
+      ).toHaveCount(1);
+    }
+    expect(await preview.locator("pre code").textContent()).toBe(
+      "window.__previewExecuted = true;\n// Code stays on its own line.\n",
+    );
     await expect(preview.locator("script, iframe, img, [onerror], [onload]")).toHaveCount(0);
     await expect(preview.locator(".diff-viewer-overlay")).toHaveCount(0);
     await expect(preview).toContainText("spoofed overlay");
@@ -84,6 +115,35 @@ test.describe("Markdown file editor preview", () => {
     expect(
       await page.evaluate(() => (window as unknown as Record<string, unknown>).__previewExecuted),
     ).toBe(false);
+
+    const codeLayout = await preview.locator("p > code").evaluateAll((codes) =>
+      codes.map((code, index) => {
+        const paragraph = code.parentElement!;
+        paragraph.style.width = index === 1 ? "120px" : "250px";
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        return {
+          lines: range.getClientRects().length,
+          display: getComputedStyle(code).display,
+          belowPrefix:
+            code.getBoundingClientRect().top - paragraph.getBoundingClientRect().top >
+            parseFloat(getComputedStyle(paragraph).lineHeight) / 2,
+          overflow: paragraph.scrollWidth > paragraph.clientWidth,
+        };
+      }),
+    );
+    expect(codeLayout[0]).toMatchObject({ lines: 1, belowPrefix: true });
+    expect(codeLayout[1].display).toBe("inline");
+    expect(codeLayout[1].lines).toBeGreaterThan(1);
+    expect(codeLayout[2].lines).toBeGreaterThan(1);
+    expect(codeLayout.every((code) => !code.overflow)).toBe(true);
+
+    // Split keeps the existing source-line breaks; full Preview alone reflows.
+    await modal.getByRole("button", { name: "Split view" }).click();
+    await expect(wrapped.locator("br")).toHaveCount(1);
+    await expect(preview.locator("p > code").first()).toHaveCSS("display", "inline");
+    await previewButton.click();
+    await expect(wrapped.locator("br")).toHaveCount(0);
 
     // Return to Monaco, change the file, and preview again. No save/reload
     // should be necessary to see the current editor buffer.

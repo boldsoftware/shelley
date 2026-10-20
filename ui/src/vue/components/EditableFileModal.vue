@@ -146,6 +146,7 @@
                 <MarkdownContent
                   v-if="previewText"
                   :text="previewText"
+                  :reflow="mode === 'preview'"
                   :defer-code-highlighting="mode === 'split'"
                   file-preview
                 />

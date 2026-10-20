@@ -9088,6 +9088,13 @@ button.tour-visibility-control:focus-visible,
   overflow-wrap: anywhere;
 }
 
+/* Keep single code tokens intact when they fit; oversized tokens still wrap. */
+.file-preview-document code.inline-code-token {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .file-editor-split {
   display: flex;
 }
