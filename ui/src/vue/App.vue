@@ -104,6 +104,7 @@
         :can-record-screen="chatInterfaceRef?.canRecordScreen ?? false"
         @record="beginRecording"
         @close="onCommandPaletteClose"
+        @error="error = $event"
         @new-conversation="
           () => {
             startNewConversation();

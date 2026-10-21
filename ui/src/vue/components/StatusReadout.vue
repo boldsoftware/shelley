@@ -37,7 +37,7 @@
         }}</span>
       </button>
       <span
-        v-if="branchLabel"
+        v-if="showGitBranch && branchLabel"
         class="status-readout-branch"
         v-tooltip.top="`${gitRepoRoot}\n${branchLabel}`"
       >
@@ -109,6 +109,7 @@ import type { Message, Model } from "../../types";
 import type { OtherUsageRow, UsageEntry } from "../../utils/tokenCostGraph";
 import { tildifyPath } from "../../utils/tildify";
 import { useI18n } from "../composables/i18n";
+import { useGitBranchSetting } from "../composables/gitBranchSetting";
 import type { ThinkingLevel } from "./thinkingLevel";
 import type { SettingsKnob } from "../composables/profiles";
 import ContextUsageBar from "./ContextUsageBar.vue";
@@ -149,6 +150,7 @@ const props = defineProps<{
 }>();
 
 const { t } = useI18n();
+const { showGitBranch } = useGitBranchSetting();
 
 const branchLabel = computed(
   () => props.gitBranch || (props.gitCommit ? `detached@${props.gitCommit}` : ""),

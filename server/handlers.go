@@ -619,6 +619,12 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		s.logger.Error("Failed to resolve transcription models", "error", transcriptionErr)
 	}
 
+	showGitBranch, err := s.db.GetSetting(r.Context(), "show_git_branch")
+	if err != nil {
+		s.internalError(w, "Failed to get Git branch setting", err)
+		return
+	}
+
 	// Note: AGENTS.md content is NOT embedded in init data. It is fetched fresh
 	// via /api/user-agents-md when the editor modal opens so that reopening
 	// after a save shows current disk state, not stale page-load content.
@@ -630,6 +636,7 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		"home_dir":            homeDir,
 		"user_agents_md_path": userAgentsMdPath,
 		"user_email":          strings.TrimSpace(r.Header.Get("X-ExeDev-Email")),
+		"show_git_branch":     showGitBranch == "true",
 		// is_exe_dev lets the UI pick exe.dev-specific setup advice even when
 		// model_setup_hint is absent (the catalog can empty AFTER page load, via
 		// a detached integration plus Refresh).
@@ -3665,6 +3672,7 @@ func (s *Server) handleSetSetting(w http.ResponseWriter, r *http.Request) {
 	allowedKeys := map[string]bool{
 		"auto_upgrade":      true,
 		exeNotifySettingKey: true,
+		"show_git_branch":   true,
 	}
 	if !allowedKeys[req.Key] {
 		http.Error(w, fmt.Sprintf("Invalid setting key: %s", req.Key), http.StatusBadRequest)
