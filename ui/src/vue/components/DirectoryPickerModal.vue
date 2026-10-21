@@ -2,7 +2,8 @@
      inline mkdir. Uses the shared Modal (PrimeVue Dialog) with the #footer
      slot for the New Folder / Cancel / Select row; the directory-picker-*
      content class contract and the "New folder name" sr-only label are
-     preserved. Uses api.listDirectory/createDirectory. -->
+     preserved. Favorites use the existing settings API and share the
+     navigation pane with Browse. -->
 <template>
   <Modal
     :is-open="isOpen"
@@ -11,14 +12,28 @@
     @close="emit('close')"
   >
     <div class="directory-picker-body">
-      <div class="directory-picker-input-container">
+      <div class="directory-picker-input-container flex items-center space-x-2">
         <input
           ref="inputRef"
           type="text"
           v-model="inputPath"
           class="directory-picker-input"
           placeholder="/path/to/directory"
+          @input="pickerView = 'Browse'"
           @keydown="handleInputKeyDown"
+        />
+        <Button
+          text
+          size="small"
+          :severity="currentIsFavorite ? 'warn' : 'secondary'"
+          :icon="currentIsFavorite ? 'pi pi-star-fill' : 'pi pi-star'"
+          :disabled="
+            loading || !!error || !!filterPrefix || !displayDir || !favorites || favoritesBusy
+          "
+          :aria-label="currentFavoriteLabel"
+          :aria-pressed="currentIsFavorite"
+          v-tooltip.top="currentFavoriteLabel"
+          @click="toggleFavorite(displayDir!.path)"
         />
       </div>
 
@@ -39,7 +54,20 @@
         </span>
       </div>
 
-      <div v-if="directoryShortcuts.length" class="directory-picker-shortcuts">
+      <SelectButton
+        v-model="pickerView"
+        :options="['Browse', 'Favorites']"
+        :allow-empty="false"
+        size="small"
+        fluid
+        class="directory-picker-view"
+        aria-label="Directory source"
+      />
+
+      <div
+        v-if="pickerView === 'Browse' && directoryShortcuts.length"
+        class="directory-picker-shortcuts"
+      >
         <button
           v-for="shortcut in directoryShortcuts"
           :key="shortcut.path"
@@ -81,13 +109,20 @@
       </div>
 
       <div v-if="error" class="directory-picker-error">{{ error }}</div>
+      <div v-if="favoriteError" class="directory-picker-error" role="alert">
+        {{ favoriteError }}
+        <Button v-if="!favorites" label="Retry" text size="small" @click="refreshFavorites" />
+      </div>
 
-      <div v-if="loading" class="directory-picker-loading">
+      <div
+        v-if="pickerView === 'Browse' ? loading : !favorites && !favoriteError"
+        class="directory-picker-loading"
+      >
         <div class="spinner spinner-small"></div>
         <span>Loading...</span>
       </div>
 
-      <div v-if="!loading && !error" class="directory-picker-list">
+      <div v-if="pickerView === 'Browse' && !loading && !error" class="directory-picker-list">
         <button
           v-if="showParent"
           class="directory-picker-entry directory-picker-entry-parent"
@@ -205,12 +240,47 @@
           {{ filterPrefix ? "No matching directories" : "No subdirectories" }}
         </div>
       </div>
+
+      <div v-if="pickerView === 'Favorites' && favorites" class="directory-picker-list">
+        <div
+          v-for="path in sortedFavorites"
+          :key="path"
+          class="directory-picker-entry"
+          :class="{ 'directory-picker-favorite-current': !error && displayDir?.path === path }"
+        >
+          <button
+            class="directory-picker-favorite-link flex flex-1 items-center space-x-2 truncate text-sm"
+            :title="path"
+            :aria-current="!error && displayDir?.path === path ? 'location' : undefined"
+            @click="pickFavorite(path)"
+          >
+            <i class="pi pi-folder directory-picker-icon" aria-hidden="true" />
+            <span class="flex flex-col truncate">
+              <span class="truncate">{{ favoriteName(path) }}</span>
+              <span class="text-xs text-secondary truncate">{{ tildifyPath(path) }}</span>
+            </span>
+          </button>
+          <Button
+            text
+            size="small"
+            severity="warn"
+            icon="pi pi-star-fill"
+            :disabled="favoritesBusy"
+            :aria-label="`Remove ${tildifyPath(path)} from favorites`"
+            v-tooltip.top="'Remove from favorites'"
+            @click="toggleFavorite(path)"
+          />
+        </div>
+        <div v-if="!favorites.length" class="directory-picker-empty">
+          No favorites yet. Star a directory to save it here.
+        </div>
+      </div>
     </div>
 
     <!-- Footer -->
     <template #footer>
       <button
-        v-if="!isCreating && !loading && !error"
+        v-if="pickerView === 'Browse' && !isCreating && !loading && !error"
         class="btn directory-picker-new-btn"
         v-tooltip.top="'Create new folder'"
         @click="handleStartCreate"
@@ -232,7 +302,7 @@
       </button>
       <div class="directory-picker-footer-spacer"></div>
       <Button label="Cancel" text severity="secondary" @click="emit('close')" />
-      <Button label="Select" :disabled="loading || !!error" @click="handleSelect" />
+      <Button label="Select" :disabled="loading || !!error || !displayDir" @click="handleSelect" />
     </template>
   </Modal>
 </template>
@@ -241,8 +311,10 @@
 import { computed, nextTick, ref, useId, watch } from "vue";
 import { api } from "../../services/api";
 import Button from "primevue/button";
+import SelectButton from "primevue/selectbutton";
 import Modal from "./Modal.vue";
 import { isImeComposing } from "../../utils/imeComposing";
+import { tildifyPath } from "../../utils/tildify";
 
 interface DirectoryEntry {
   name: string;
@@ -273,6 +345,13 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: "close"): void; (e: "select", path: string): void }>();
 
 const createInputId = useId();
+const viewStorageKey = "shelley_directory_picker_view";
+const pickerView = ref("Browse");
+const favorites = ref<string[] | null>(null);
+const favoritesBusy = ref(false);
+const favoriteError = ref<string | null>(null);
+
+watch(pickerView, (view) => localStorage.setItem(viewStorageKey, view));
 
 const inputPath = ref(
   props.initialPath
@@ -297,6 +376,64 @@ const displayDir = ref<CachedDirectory | null>(null);
 const filterPrefix = ref("");
 let loadSequence = 0;
 
+function favoriteName(path: string): string {
+  return path === "/" ? "/" : path.slice(path.lastIndexOf("/") + 1);
+}
+
+const sortedFavorites = computed(() =>
+  [...(favorites.value ?? [])].sort(
+    (a, b) => favoriteName(a).localeCompare(favoriteName(b)) || a.localeCompare(b),
+  ),
+);
+const currentIsFavorite = computed(
+  () => !!displayDir.value && !!favorites.value?.includes(displayDir.value.path),
+);
+const currentFavoriteLabel = computed(
+  () =>
+    `${currentIsFavorite.value ? "Remove" : "Add"} ${tildifyPath(displayDir.value?.path) ?? "current directory"} ${currentIsFavorite.value ? "from" : "to"} favorites`,
+);
+
+async function refreshFavorites() {
+  // Serialize reads and saves when the picker is quickly closed and reopened.
+  if (favoritesBusy.value) return;
+  favoritesBusy.value = true;
+  favorites.value = null;
+  favoriteError.value = null;
+  try {
+    const settings = await api.getSettings();
+    favorites.value = JSON.parse(settings.directory_favorites ?? "[]");
+  } catch (err) {
+    favoriteError.value = String(err);
+  } finally {
+    favoritesBusy.value = false;
+  }
+}
+
+async function toggleFavorite(path: string) {
+  if (!favorites.value || favoritesBusy.value) return;
+  const next = favorites.value.includes(path)
+    ? favorites.value.filter((favorite) => favorite !== path)
+    : [...favorites.value, path];
+  favoritesBusy.value = true;
+  favoriteError.value = null;
+  try {
+    await api.setSetting("directory_favorites", JSON.stringify(next));
+    favorites.value = next;
+  } catch (err) {
+    favoriteError.value = String(err);
+  } finally {
+    favoritesBusy.value = false;
+  }
+}
+
+function pickFavorite(path: string) {
+  // Recheck saved folders, which may have disappeared since they were browsed.
+  cache.delete(path);
+  const previous = inputPath.value;
+  goToDirectory(path);
+  if (inputPath.value === previous) refreshDirectory();
+}
+
 function parseInputPath(path: string): { dirPath: string; prefix: string } {
   if (!path) return { dirPath: "", prefix: "" };
   if (path.endsWith("/")) return { dirPath: path.slice(0, -1) || "/", prefix: "" };
@@ -307,6 +444,11 @@ function parseInputPath(path: string): { dirPath: string; prefix: string } {
 }
 
 async function loadDirectory(path: string): Promise<CachedDirectory> {
+  if (path && !path.startsWith("/")) {
+    const cwd = window.__SHELLEY_INIT__?.default_cwd;
+    if (!cwd) throw new Error("Server working directory is unavailable");
+    path = `${cwd}/${path}`;
+  }
   const normalizedPath = path || "/";
   const cached = cache.get(normalizedPath);
   if (cached) return cached;
@@ -393,9 +535,8 @@ function handleInputKeyDown(e: KeyboardEvent) {
 }
 
 function handleSelect() {
-  const { dirPath } = parseInputPath(inputPath.value);
-  const selectedPath = inputPath.value.endsWith("/") ? (dirPath === "/" ? "/" : dirPath) : dirPath;
-  emit("select", selectedPath || displayDir.value?.path || "");
+  if (loading.value || error.value || !displayDir.value) return;
+  emit("select", displayDir.value.path);
   emit("close");
 }
 
@@ -456,40 +597,41 @@ function handleCreateKeyDown(e: KeyboardEvent) {
   }
 }
 
+function refreshDirectory() {
+  const requestSequence = ++loadSequence;
+  if (!props.isOpen) {
+    loading.value = false;
+    return;
+  }
+  const { dirPath, prefix } = parseInputPath(inputPath.value);
+  filterPrefix.value = prefix;
+  loading.value = true;
+  error.value = null;
+  loadDirectory(dirPath)
+    .then((dir) => {
+      if (requestSequence !== loadSequence) return;
+      displayDir.value = dir;
+    })
+    .catch((err) => {
+      if (requestSequence !== loadSequence) return;
+      error.value = err instanceof Error ? err.message : "Failed to load directory";
+    })
+    .finally(() => {
+      if (requestSequence === loadSequence) loading.value = false;
+    });
+}
+
 // Update display when input changes (while open).
-watch(
-  [() => props.isOpen, inputPath],
-  ([open]) => {
-    const requestSequence = ++loadSequence;
-    if (!open) {
-      loading.value = false;
-      return;
-    }
-    const { dirPath, prefix } = parseInputPath(inputPath.value);
-    filterPrefix.value = prefix;
-    loading.value = true;
-    error.value = null;
-    loadDirectory(dirPath)
-      .then((dir) => {
-        if (requestSequence !== loadSequence) return;
-        displayDir.value = dir;
-      })
-      .catch((err) => {
-        if (requestSequence !== loadSequence) return;
-        error.value = err instanceof Error ? err.message : "Failed to load directory";
-      })
-      .finally(() => {
-        if (requestSequence === loadSequence) loading.value = false;
-      });
-  },
-  { immediate: true },
-);
+watch([() => props.isOpen, inputPath], refreshDirectory, { immediate: true });
 
 // Initialize + focus when modal opens.
 watch(
   () => props.isOpen,
   (open) => {
     if (open) {
+      pickerView.value =
+        localStorage.getItem(viewStorageKey) === "Favorites" ? "Favorites" : "Browse";
+      void refreshFavorites();
       if (!props.initialPath) {
         inputPath.value = "";
       } else {
@@ -518,3 +660,17 @@ watch(isCreating, (creating) => {
   if (creating) nextTick(() => newDirInputRef.value?.focus());
 });
 </script>
+
+<style scoped>
+.directory-picker-view {
+  margin-bottom: 0.75rem;
+}
+
+.directory-picker-favorite-current {
+  background: var(--bg-secondary);
+}
+
+.directory-picker-favorite-link {
+  text-align: left;
+}
+</style>
