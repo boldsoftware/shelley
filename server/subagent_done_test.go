@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -223,6 +225,210 @@ func TestSubagentReplyAfterFinalReportStaysPut(t *testing.T) {
 	if got := subagentTexts(t, database, parent.ConversationID); !slices.Equal(got, []string{"all done", "second"}) {
 		t.Fatalf("parent heard %q, want only the two reports", got)
 	}
+}
+
+// A delegated turn that ends with an error — a failed request, a truncated
+// response, a refusal — reports the error to the parent as a reply would be,
+// and keeps its error row.
+func TestSubagentErrorReachesParent(t *testing.T) {
+	for _, tc := range []struct {
+		prompt    string
+		errorType llm.ErrorType
+		want      string // what the parent must be told
+	}{
+		{"error: boom", llm.ErrorTypeLLMRequest, "boom"},
+		{"maxTokens", llm.ErrorTypeTruncation, "truncated"},
+		{"refusal", llm.ErrorTypeRefusal, "declined"},
+	} {
+		t.Run(tc.prompt, func(t *testing.T) {
+			server, database, held, parent := newBtwTest(t)
+			ctx := t.Context()
+			child, err := database.CreateSubagentConversation(ctx, "quiet-child", parent.ConversationID, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := NewSubagentRunner(server).RunSubagent(ctx, child.ConversationID, tc.prompt, "predictable", ""); err != nil {
+				t.Fatal(err)
+			}
+			held.waitCall(t, tc.prompt).Release()
+			errorRow := waitForErrorRow(t, database, child.ConversationID)
+			if errorRow.ErrorType != tc.errorType {
+				t.Fatalf("child error row = %+v, want %s", errorRow, tc.errorType)
+			}
+			report := "Ended with an error: " + strings.TrimSpace(messageText(errorRow))
+			if !strings.Contains(report, tc.want) {
+				t.Fatalf("report %q does not say %q", report, tc.want)
+			}
+			releaseAndWaitIdle(t, server, parent.ConversationID, held.waitCall(t, subagentMessage(child, report)))
+			if got := subagentTexts(t, database, parent.ConversationID); !slices.Equal(got, []string{report}) {
+				t.Fatalf("parent heard %q, want only the error", got)
+			}
+			waitForReportEnd(t, database, child.ConversationID)
+			if server.IsAgentWorking(child.ConversationID) {
+				t.Fatal("child is still working")
+			}
+			reports, warnings := childReports(t, database, child.ConversationID)
+			if reports != 1 || len(warnings) != 1 || !strings.Contains(warnings[0], "message_parent(end_turn=true)") {
+				t.Fatalf("child made %d reports with warnings %q, want one of each", reports, warnings)
+			}
+		})
+	}
+}
+
+// After a final report, a turn the parent didn't ask for (here a background
+// job's notice) that ends with an error stays put, like one that ends with
+// a reply.
+func TestSubagentErrorAfterFinalReportStaysPut(t *testing.T) {
+	server, database, held, parent := newBtwTest(t)
+	ctx := t.Context()
+	child, err := database.CreateSubagentConversation(ctx, "quiet-child", parent.ConversationID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := NewSubagentRunner(server)
+	report := func(text string) {
+		t.Helper()
+		prompt := "message_parent_final: " + text
+		if _, err := runner.RunSubagent(ctx, child.ConversationID, prompt, "predictable", ""); err != nil {
+			t.Fatal(err)
+		}
+		releaseAndWaitIdle(t, server, child.ConversationID, held.waitCall(t, prompt))
+		releaseAndWaitIdle(t, server, parent.ConversationID, held.waitCall(t, subagentMessage(child, text)))
+	}
+	report("all done")
+
+	job := testBackgroundJob(t, child.ConversationID)
+	if err := server.recordBackgroundJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	held.Service = failingLLMService{held.Service, backgroundJobNotice(job)}
+	if err := server.reportBackgroundJobExit(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	held.waitCall(t, backgroundJobNotice(job)).Release()
+	waitForErrorRow(t, database, child.ConversationID)
+
+	// The next report is the parent's next wake.
+	report("second")
+	if got := subagentTexts(t, database, parent.ConversationID); !slices.Equal(got, []string{"all done", "second"}) {
+		t.Fatalf("parent heard %q, want only the two reports", got)
+	}
+	if reports, warnings := childReports(t, database, child.ConversationID); reports != 2 || len(warnings) != 0 {
+		t.Fatalf("child made %d reports with warnings %q, want just the two real ones", reports, warnings)
+	}
+}
+
+// A child whose parent was stopped keeps its error to itself and ends its
+// turn cleanly.
+func TestSubagentErrorWithStoppedParentStaysPut(t *testing.T) {
+	server, database, held, parent := newBtwTest(t)
+	ctx := t.Context()
+	child, err := database.CreateSubagentConversation(ctx, "quiet-child", parent.ConversationID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := NewSubagentRunner(server)
+	if _, err := runner.RunSubagent(ctx, child.ConversationID, "error: boom", "predictable", ""); err != nil {
+		t.Fatal(err)
+	}
+	call := held.waitCall(t, "error: boom")
+	server.mu.Lock()
+	server.stoppedParents[parent.ConversationID] = true
+	server.mu.Unlock()
+	call.Release()
+	waitForErrorRow(t, database, child.ConversationID)
+	conv, err := database.GetConversationByID(ctx, parent.ConversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conv.AgentWorking || conv.QueuedMessages != "[]" {
+		t.Fatalf("stopped parent restarted: working=%v queued=%s", conv.AgentWorking, conv.QueuedMessages)
+	}
+
+	// New delegated work reopens the parent; its report is the parent's first wake.
+	if _, err := runner.RunSubagent(ctx, child.ConversationID, "message_parent_final: later", "predictable", ""); err != nil {
+		t.Fatal(err)
+	}
+	releaseAndWaitIdle(t, server, child.ConversationID, held.waitCall(t, "message_parent_final: later"))
+	releaseAndWaitIdle(t, server, parent.ConversationID, held.waitCall(t, subagentMessage(child, "later")))
+	if got := subagentTexts(t, database, parent.ConversationID); !slices.Equal(got, []string{"later"}) {
+		t.Fatalf("parent heard %q, want only the later report", got)
+	}
+	if reports, warnings := childReports(t, database, child.ConversationID); reports != 1 || len(warnings) != 0 {
+		t.Fatalf("child made %d reports with warnings %q, want just the real one", reports, warnings)
+	}
+}
+
+// failingLLMService fails the request whose last user text is prompt.
+type failingLLMService struct {
+	llm.Service
+	prompt string
+}
+
+func (s failingLLMService) Do(ctx context.Context, request *llm.Request) (*llm.Response, error) {
+	if lastRequestUserText(request) == s.prompt {
+		return nil, errors.New("boom")
+	}
+	return s.Service.Do(ctx, request)
+}
+
+// waitForErrorRow waits for the conversation's one error row and returns it.
+func waitForErrorRow(t *testing.T, database *db.DB, conversationID string) llm.Message {
+	t.Helper()
+	var rows []llm.Message
+	waitFor(t, 5*time.Second, func() bool {
+		rows = nil
+		for _, m := range listMessages(t, database, conversationID) {
+			if m.Type != string(db.MessageTypeError) {
+				continue
+			}
+			msg, err := convertToLLMMessage(m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rows = append(rows, msg)
+		}
+		return len(rows) > 0
+	})
+	if len(rows) != 1 {
+		t.Fatalf("child has %d error rows, want 1", len(rows))
+	}
+	return rows[0]
+}
+
+// waitForReportEnd waits for the end-of-turn marker that follows a report's
+// tool result. An error row ends the turn before its report runs.
+func waitForReportEnd(t *testing.T, database *db.DB, conversationID string) {
+	t.Helper()
+	waitFor(t, 5*time.Second, func() bool {
+		msgs := listMessages(t, database, conversationID)
+		last := msgs[len(msgs)-1]
+		msg, err := convertToLLMMessage(last)
+		return err == nil && last.Type == string(db.MessageTypeAgent) && msg.EndOfTurn && msg.ExcludedFromContext
+	})
+}
+
+// childReports counts the conversation's message_parent calls and returns
+// its warnings.
+func childReports(t *testing.T, database *db.DB, conversationID string) (reports int, warnings []string) {
+	t.Helper()
+	for _, m := range listMessages(t, database, conversationID) {
+		switch m.Type {
+		case string(db.MessageTypeWarning):
+			warnings = append(warnings, derefString(m.UserData))
+		case string(db.MessageTypeAgent):
+			msg, err := convertToLLMMessage(m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, c := range msg.Content {
+				if c.Type == llm.ContentTypeToolUse && c.ToolName == "message_parent" {
+					reports++
+				}
+			}
+		}
+	}
+	return reports, warnings
 }
 
 func testBackgroundJob(t *testing.T, conversationID string) claudetool.BackgroundJob {

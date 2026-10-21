@@ -522,3 +522,63 @@ func TestRunRewriteFinalReply(t *testing.T) {
 		})
 	}
 }
+
+// An error that ends the turn — a failed request, a truncated response, a
+// refusal — is offered to RewriteFinalReply too, once its row is recorded.
+func TestRunRewriteFinalError(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		service   *runTestService
+		errorType llm.ErrorType
+		wantErr   bool
+	}{
+		{"request failed", &runTestService{failure: errors.New("boom")}, llm.ErrorTypeLLMRequest, true},
+		{"truncated", &runTestService{response: &llm.Response{Role: llm.MessageRoleAssistant, StopReason: llm.StopReasonMaxTokens, Content: llm.TextContent("partial")}}, llm.ErrorTypeTruncation, false},
+		{"refused", &runTestService{response: &llm.Response{Role: llm.MessageRoleAssistant, StopReason: llm.StopReasonRefusal}}, llm.ErrorTypeRefusal, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var offered, recorded []llm.Message
+			runs := 0
+			err := Run(t.Context(), RunConfig{
+				LLM:      tc.service,
+				Messages: []llm.Message{llm.UserStringMessage("start")},
+				Tools: []*llm.Tool{{Name: "report", Run: func(context.Context, json.RawMessage) llm.ToolOut {
+					runs++
+					return llm.ToolOut{LLMContent: llm.TextContent("sent"), EndTurn: true}
+				}}},
+				Hooks: Hooks{
+					RewriteFinalReply: func(_ context.Context, reply llm.Message) (llm.Message, bool) {
+						offered = append(offered, reply)
+						return llm.Message{Role: llm.MessageRoleAssistant, Content: []llm.Content{
+							{Type: llm.ContentTypeToolUse, ID: "r", ToolName: "report", ToolInput: json.RawMessage(`{}`)},
+						}}, true
+					},
+					OnResponse: func(_ context.Context, response Response) error {
+						recorded = append(recorded, response.Message)
+						return nil
+					},
+				},
+			})
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("error = %v, want error %v", err, tc.wantErr)
+			}
+			if len(offered) != 1 || offered[0].ErrorType != tc.errorType || runs != 1 {
+				t.Fatalf("offered %+v and ran the tool %d times, want the %s error offered once and reported", offered, runs, tc.errorType)
+			}
+			// The error row stays, followed by the report and the tool's end of turn.
+			if n := len(recorded); n < 3 {
+				t.Fatalf("recorded %d messages, want at least 3", n)
+			}
+			errorRow, report, marker := recorded[len(recorded)-3], recorded[len(recorded)-2], recorded[len(recorded)-1]
+			if errorRow.ErrorType != tc.errorType || !errorRow.EndOfTurn {
+				t.Fatalf("error row = %+v, want %s ending the turn", errorRow, tc.errorType)
+			}
+			if report.ErrorType != llm.ErrorTypeNone || report.EndOfTurn || report.Content[0].Type != llm.ContentTypeToolUse {
+				t.Fatalf("report = %+v, want the rewritten tool call", report)
+			}
+			if !marker.EndOfTurn || !marker.ExcludedFromContext {
+				t.Fatalf("last row = %+v, want the tool's end-of-turn marker", marker)
+			}
+		})
+	}
+}

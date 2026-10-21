@@ -46,7 +46,8 @@ type Hooks struct {
 	OnWarning           func(context.Context, string) error
 	// RewriteFinalReply may turn a reply that would end the turn into tool
 	// calls, which then run as if the model had made them. It is consulted
-	// at most once per turn.
+	// at most once per turn. A turn that ends with an error offers the
+	// error message, once it is recorded.
 	RewriteFinalReply func(context.Context, llm.Message) (llm.Message, bool)
 }
 
@@ -216,9 +217,6 @@ func (l *RunConfig) run(ctx context.Context) error {
 				return fmt.Errorf("LLM request failed: %w", err)
 			}
 
-			// Persist genuine failures even if the run context expired. This
-			// terminal row clears the durable agent-working state and provides the
-			// user-visible error and Retry affordance.
 			errorMessage := llm.Message{
 				Role: llm.MessageRoleAssistant,
 				Content: []llm.Content{
@@ -231,7 +229,7 @@ func (l *RunConfig) run(ctx context.Context) error {
 				ErrorType:      llm.ErrorTypeLLMRequest,
 				ErrorRetryable: IsRetryableLLMError(err),
 			}
-			l.emitResponse(context.WithoutCancel(ctx), errorMessage, llm.Usage{}, "failed to record error message")
+			l.failTurn(ctx, errorMessage, &messages, &rewritten)
 			return fmt.Errorf("LLM request failed: %w", err)
 		}
 
@@ -241,7 +239,8 @@ func (l *RunConfig) run(ctx context.Context) error {
 		// should not be added to history normally (they get special handling)
 		if resp.StopReason == llm.StopReasonMaxTokens {
 			l.Logger.Warn("LLM response truncated due to max tokens")
-			return l.handleMaxTokensTruncation(ctx, resp)
+			l.failTurn(ctx, l.truncationError(ctx, resp), &messages, &rewritten)
+			return nil
 		}
 
 		// Handle refusals BEFORE adding to history. On stop_reason=refusal the
@@ -252,7 +251,8 @@ func (l *RunConfig) run(ctx context.Context) error {
 		// endless string of blank turns. Surface it as a visible error instead.
 		if resp.StopReason == llm.StopReasonRefusal {
 			l.Logger.Warn("LLM declined to continue (stop_reason=refusal)")
-			return l.handleRefusal(ctx, resp)
+			l.failTurn(ctx, l.refusalError(ctx, resp), &messages, &rewritten)
+			return nil
 		}
 
 		// Retain the exact provider-visible prefix for an idle cache refresh.
@@ -431,10 +431,33 @@ func (l *RunConfig) retryWarningHook(ctx context.Context) func(llm.RetryEvent) {
 	}
 }
 
-// handleMaxTokensTruncation handles the case where the LLM response was truncated
-// due to hitting the maximum output token limit. It records the truncated message
-// for cost tracking (excluded from context) and an error message for the user.
-func (l *RunConfig) handleMaxTokensTruncation(ctx context.Context, resp *llm.Response) error {
+// failTurn records the error message that ends the turn. If
+// RewriteFinalReply turns it into tool calls, they run as the model's own: a
+// delegated subagent reports the error to its parent as it would a reply.
+func (l *RunConfig) failTurn(ctx context.Context, errorMessage llm.Message, messages *[]llm.Message, rewritten *bool) {
+	// Persist genuine failures even if the run context expired. This
+	// terminal row clears the durable agent-working state and provides the
+	// user-visible error and Retry affordance.
+	l.emitResponse(context.WithoutCancel(ctx), errorMessage, llm.Usage{}, "failed to record error message")
+	if *rewritten || l.Hooks.RewriteFinalReply == nil {
+		return
+	}
+	report, ok := l.Hooks.RewriteFinalReply(ctx, errorMessage)
+	if !ok {
+		return
+	}
+	*rewritten = true
+	if err := l.emitResponse(context.WithoutCancel(ctx), report, llm.Usage{}, "failed to record error report"); err != nil {
+		return
+	}
+	*messages = append(*messages, report)
+	l.executeToolCalls(ctx, report.Content, messages)
+}
+
+// truncationError records a response truncated at the maximum output token
+// limit for cost tracking (excluded from context) and returns the error
+// message for the user.
+func (l *RunConfig) truncationError(ctx context.Context, resp *llm.Response) llm.Message {
 	// Record the truncated message for cost tracking, but mark it as excluded from context.
 	// This preserves billing information without confusing the LLM on future turns.
 	truncatedMessage := resp.ToMessage()
@@ -442,8 +465,8 @@ func (l *RunConfig) handleMaxTokensTruncation(ctx context.Context, resp *llm.Res
 
 	l.emitResponse(ctx, truncatedMessage, resp.UsageWithMeta(), "failed to record truncated message")
 
-	// Record a truncation error message with EndOfTurn=true to properly signal end of turn.
-	errorMessage := llm.Message{
+	// The truncation error message has EndOfTurn=true to properly signal end of turn.
+	return llm.Message{
 		Role: llm.MessageRoleAssistant,
 		Content: []llm.Content{
 			{
@@ -457,19 +480,17 @@ func (l *RunConfig) handleMaxTokensTruncation(ctx context.Context, resp *llm.Res
 		EndOfTurn: true,
 		ErrorType: llm.ErrorTypeTruncation,
 	}
-	l.emitResponse(ctx, errorMessage, llm.Usage{}, "failed to record truncation error message")
-	return nil
 }
 
-// handleRefusal handles a stop_reason=refusal response: the model declined to
+// refusalError handles a stop_reason=refusal response: the model declined to
 // continue. Such responses usually carry no visible content (just a thinking
 // block, or nothing), so recording them normally leaves a blank agent bubble
 // and, because the empty response ends up in history, every follow-up
 // "continue" replays the same context and refuses again. We instead record the
-// raw response excluded from context (for cost tracking) and record a visible,
+// raw response excluded from context (for cost tracking) and return a visible,
 // non-retryable error message that ends the turn. Neither is added to the live
 // context history, matching the cold-start rehydration path.
-func (l *RunConfig) handleRefusal(ctx context.Context, resp *llm.Response) error {
+func (l *RunConfig) refusalError(ctx context.Context, resp *llm.Response) llm.Message {
 	// Record the raw refusal for cost tracking, but keep it out of context so it
 	// doesn't poison future turns (an empty/near-empty assistant turn biases the
 	// model toward refusing again, and empty content blocks can wedge replay).
@@ -495,7 +516,7 @@ func (l *RunConfig) handleRefusal(ctx context.Context, resp *llm.Response) error
 		}
 	}
 
-	// Record a visible refusal notice with EndOfTurn=true. Marked non-retryable:
+	// The visible refusal notice has EndOfTurn=true. Marked non-retryable:
 	// re-running the identical request just refuses again, so the UI should not
 	// offer a Retry button. Rephrasing the request is what actually helps.
 	//
@@ -512,7 +533,7 @@ func (l *RunConfig) handleRefusal(ctx context.Context, resp *llm.Response) error
 	if refusalModel == "" {
 		refusalModel = resp.Model
 	}
-	errorMessage := llm.Message{
+	return llm.Message{
 		Role: llm.MessageRoleAssistant,
 		Content: []llm.Content{
 			{
@@ -527,9 +548,6 @@ func (l *RunConfig) handleRefusal(ctx context.Context, resp *llm.Response) error
 		RefusalCategory:    refusalCategory,
 		RefusalExplanation: refusalExplanation,
 	}
-
-	l.emitResponse(ctx, errorMessage, llm.Usage{}, "failed to record refusal error message")
-	return nil
 }
 
 func (l *RunConfig) findTool(name string) *llm.Tool {
