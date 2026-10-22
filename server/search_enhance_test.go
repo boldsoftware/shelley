@@ -3,12 +3,57 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"shelley.exe.dev/db"
+	"shelley.exe.dev/models"
 )
+
+func TestEnhanceSearchWithoutExeDevEmail(t *testing.T) {
+	srv, _, ps := newTestServer(t)
+	held := newHeldLLMService()
+	registry, err := models.NewManager(&models.Config{Models: []models.Built{
+		{ID: "other", Service: ps},
+		{ID: "local-default", Service: held},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.llmManager = registry
+	srv.predictableOnly = false
+	srv.defaultModel = "local-default"
+	t.Cleanup(func() {
+		srv.searchChatMu.Lock()
+		defer srv.searchChatMu.Unlock()
+		stopActiveConversationLoops(srv)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/conversations/search/enhance", strings.NewReader(`{"q":"font"}`))
+	req.Header.Set("X-Shelley-Request", "1")
+	w := httptest.NewRecorder()
+	srv.handleEnhanceSearch(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var response struct {
+		Conversation ConversationWithState `json:"conversation"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if model := response.Conversation.Model; model == nil || *model != "local-default" {
+		t.Fatalf("search model = %v, want local-default", model)
+	}
+	message, err := searchInitialMessage("font", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	held.waitCall(t, message)
+}
 
 func TestSearchChatReusesConversation(t *testing.T) {
 	srv, database, _ := newTestServer(t)

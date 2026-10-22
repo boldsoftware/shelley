@@ -36,10 +36,6 @@ func (s *Server) handleEnhanceSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	email := strings.TrimSpace(r.Header.Get("X-ExeDev-Email"))
-	if email == "" {
-		http.Error(w, "Open through exe.dev to select your model", http.StatusUnauthorized)
-		return
-	}
 	var input struct {
 		Q        string        `json:"q"`
 		Archived bool          `json:"archived"`
@@ -49,14 +45,20 @@ func (s *Server) handleEnhanceSearch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Provide a search query and up to 200 normal-search matches", http.StatusBadRequest)
 		return
 	}
-	baseModel, err := s.db.SearchEnhancementModel(r.Context(), email)
-	if errors.Is(err, sql.ErrNoRows) {
-		http.Error(w, "Start a normal conversation before using Ask Shelley", http.StatusBadRequest)
-		return
-	}
-	if err != nil {
-		s.internalError(w, "Select search model", err)
-		return
+	var baseModel string
+	if email == "" {
+		baseModel = s.effectiveDefaultModel(s.getModelList())
+	} else {
+		var err error
+		baseModel, err = s.db.SearchEnhancementModel(r.Context(), email)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Start a normal conversation before using Ask Shelley", http.StatusBadRequest)
+			return
+		}
+		if err != nil {
+			s.internalError(w, "Select search model", err)
+			return
+		}
 	}
 	registry, ok := s.llmManager.(*models.Manager)
 	if !ok {
