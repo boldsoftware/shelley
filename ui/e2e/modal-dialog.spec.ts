@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import path, { dirname } from "node:path";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { createConversationViaAPI } from "./helpers";
+import { createConversationViaAPI, directoryControl } from "./helpers";
 
 const e2eDir = dirname(fileURLToPath(import.meta.url));
 
@@ -140,7 +140,7 @@ test.describe("Command palette home-directory action", () => {
     await search.fill("home directory");
     await page.getByText("New Conversation in Home Directory", { exact: true }).click();
 
-    await expect(page.locator(".status-field-cwd .status-chip")).toHaveText("~");
+    await expect(await directoryControl(page)).toContainText("~");
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("shelley_selected_cwd")))
       .toBe(homeDir);
@@ -161,10 +161,10 @@ test.describe("Directory picker modal (shared Modal consumer)", () => {
     await page.evaluate((cwd) => localStorage.setItem("shelley_selected_cwd", cwd), absoluteCwd);
     await page.reload();
 
-    const chip = page.locator(".status-field-cwd .status-chip");
-    await expect(chip).toHaveText("~/exe");
+    const chip = await directoryControl(page);
+    await expect(chip).toContainText("~/exe");
 
-    await chip.click();
+    await (await directoryControl(page)).click();
     const panel = page.locator(".modal.directory-picker-modal");
     await expect(panel.locator(".directory-picker-input")).toHaveValue(`${absoluteCwd}/`);
 
@@ -213,9 +213,9 @@ test.describe("Directory picker modal (shared Modal consumer)", () => {
     await page.goto("/new");
     await page.waitForLoadState("domcontentloaded");
 
-    const chip = page.locator(".status-field-cwd .status-chip");
+    const chip = await directoryControl(page);
     await expect(chip).toBeVisible();
-    await chip.click();
+    await (await directoryControl(page)).click();
 
     const panel = page.locator(".modal.directory-picker-modal");
     await expect(panel).toBeVisible();
@@ -246,7 +246,7 @@ test.describe("Directory picker modal (shared Modal consumer)", () => {
     await expect(panel).toHaveCount(0);
 
     // Reopen and close via the footer Cancel button.
-    await chip.click();
+    await (await directoryControl(page)).click();
     await expect(panel).toBeVisible();
     await footer.getByRole("button", { name: "Cancel" }).click();
     await expect(panel).toHaveCount(0);
@@ -267,7 +267,7 @@ test.describe("Directory picker modal (shared Modal consumer)", () => {
 
       await page.goto("/new");
       await page.waitForLoadState("domcontentloaded");
-      await page.locator(".status-field-cwd .status-chip").click();
+      await (await directoryControl(page)).click();
 
       const panel = page.locator(".modal.directory-picker-modal");
       await expect(panel).toBeVisible();

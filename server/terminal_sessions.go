@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"shelley.exe.dev/dtach"
 	"shelley.exe.dev/exescroll"
@@ -63,6 +66,7 @@ type TerminalSessions struct {
 	spawner          SpawnerFunc
 	exeScrollCommand func(args ...string) *exec.Cmd
 	waitForPID       func(path string, max time.Duration) (int, error)
+	probe            func(path string) (bytes, inodes uint64, err error)
 	mu               sync.Mutex
 	sessions         map[string]*TerminalSession
 	// attachMu serializes attachOrSpawn for the duration of socket-stat /
@@ -88,6 +92,7 @@ func NewTerminalSessions(dir string, logger *slog.Logger) (*TerminalSessions, er
 		return exec.Command(ts.exe, append([]string{"exe-scroll"}, args...)...)
 	}
 	ts.waitForPID = waitForPIDFile
+	ts.probe = diskFree
 	ts.scan()
 	return ts, nil
 }
@@ -191,11 +196,54 @@ func terminalCwd(cwd string) string {
 	return "/"
 }
 
+// errTerminalDiskFull reports that the disk is too full to record a
+// persistent session.
+var errTerminalDiskFull = errors.New("terminals: disk full")
+
+// Below these, Spawn refuses with errTerminalDiskFull. A session needs only
+// a few tiny files, but each failing write surfaces as a confusing timeout
+// or partial cleanup error.
+const (
+	terminalMinFreeBytes  = 1 << 20
+	terminalMinFreeInodes = 64
+)
+
+// diskFree reports the space and inodes available to unprivileged users on
+// the filesystem holding path. Filesystems that allocate inodes dynamically
+// report none in total; their inodes count as unlimited.
+func diskFree(path string) (bytes, inodes uint64, err error) {
+	var stat unix.Statfs_t
+	if err := unix.Statfs(path, &stat); err != nil {
+		return 0, 0, fmt.Errorf("statfs %q: %w", path, err)
+	}
+	inodes = math.MaxUint64
+	if stat.Files > 0 {
+		inodes = stat.Ffree
+	}
+	return stat.Bavail * uint64(stat.Bsize), inodes, nil
+}
+
+// diskFull reports whether the sessions directory's filesystem is out of
+// space or inodes. Until Spawn creates the directory, its parent stands in.
+// A failed probe reports false and lets Spawn fail on its own terms.
+func (t *TerminalSessions) diskFull() bool {
+	path := t.dir
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		path = filepath.Dir(path)
+	}
+	bytes, inodes, err := t.probe(path)
+	return err == nil && (bytes < terminalMinFreeBytes || inodes < terminalMinFreeInodes)
+}
+
 // Spawn launches a new persistent session and immediately attaches to it.
 // Production sessions use exe-scroll; tests can set a legacy dtach spawner.
+// It fails with errTerminalDiskFull when the disk is too full to persist.
 func (t *TerminalSessions) Spawn(command, cwd, conversationID string, closeOnExit bool, cols, rows uint16, extraEnv []string) (*TerminalSession, terminalClient, error) {
 	if command == "" {
 		return nil, nil, errors.New("terminals: empty command")
+	}
+	if t.diskFull() {
+		return nil, nil, errTerminalDiskFull
 	}
 	cwd = terminalCwd(cwd)
 	if err := os.MkdirAll(t.dir, 0o700); err != nil {

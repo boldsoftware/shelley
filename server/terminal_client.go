@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"golang.org/x/sys/unix"
 
 	"shelley.exe.dev/dtach"
 	"shelley.exe.dev/exescroll"
@@ -152,6 +153,176 @@ func (c *exeScrollPTYClient) Close() error {
 		case <-c.waitDone:
 		case <-time.After(2 * time.Second):
 		}
+	})
+	return err
+}
+
+// directPTYClient runs a command on a PTY owned by this process, writing
+// nothing to disk. It serves when the disk is too full for a persistent
+// session; the command is hung up when the client closes.
+type directPTYClient struct {
+	pty       *os.File // pollable, so Close interrupts Read and Write
+	cmd       *exec.Cmd
+	waitDone  chan struct{}
+	closed    chan struct{}
+	closeOnce sync.Once
+	exited    bool
+
+	// SendInput queues input for writeInput, as a terminal emulator does:
+	// a command that stops reading must not block the caller, which also
+	// has to notice the browser going away.
+	inputMu    sync.Mutex
+	input      [][]byte
+	inputReady chan struct{} // capacity 1: input is queued
+}
+
+func startDirectPTY(command, cwd string, cols, rows uint16, extraEnv []string) (*directPTYClient, error) {
+	cmd := exec.Command("bash", "--login", "-c", command)
+	cmd.Dir = cwd
+	cmd.Env = terminalEnvironment(extraEnv)
+	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: cols, Rows: rows})
+	if err != nil {
+		return nil, fmt.Errorf("terminals: start %q: %w", command, err)
+	}
+	pollable, err := pollableFile(ptmx)
+	if err != nil {
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		_ = cmd.Wait()
+		return nil, fmt.Errorf("terminals: start %q: %w", command, err)
+	}
+	client := &directPTYClient{
+		pty:        pollable,
+		cmd:        cmd,
+		waitDone:   make(chan struct{}),
+		closed:     make(chan struct{}),
+		inputReady: make(chan struct{}, 1),
+	}
+	go func() {
+		_ = cmd.Wait()
+		close(client.waitDone)
+	}()
+	go client.writeInput()
+	return client, nil
+}
+
+// pollableFile replaces f with a non-blocking duplicate registered with the
+// runtime poller. creack/pty calls File.Fd, which leaves its files blocking:
+// a Read on them ignores Close.
+func pollableFile(f *os.File) (*os.File, error) {
+	defer f.Close()
+	raw, err := f.SyscallConn()
+	if err != nil {
+		return nil, err
+	}
+	var fd int
+	var dupErr error
+	if err := raw.Control(func(old uintptr) {
+		fd, dupErr = unix.FcntlInt(old, unix.F_DUPFD_CLOEXEC, 0)
+	}); err != nil {
+		return nil, err
+	}
+	if dupErr != nil {
+		return nil, fmt.Errorf("dup pty: %w", dupErr)
+	}
+	if err := unix.SetNonblock(fd, true); err != nil {
+		_ = unix.Close(fd)
+		return nil, fmt.Errorf("pty nonblock: %w", err)
+	}
+	return os.NewFile(uintptr(fd), f.Name()), nil
+}
+
+func (c *directPTYClient) Recv() (terminalMessage, error) {
+	if c.exited {
+		return terminalMessage{}, io.EOF
+	}
+	buf := make([]byte, 32*1024)
+	n, err := c.pty.Read(buf)
+	if n > 0 {
+		return terminalMessage{kind: terminalOutput, data: buf[:n]}, nil
+	}
+	if errors.Is(err, os.ErrClosed) {
+		return terminalMessage{}, err
+	}
+	// Reads fail with EIO once nothing holds the terminal open. Like an
+	// exe-scroll session, that waits for background jobs using it too.
+	select {
+	case <-c.waitDone:
+	case <-c.closed:
+		return terminalMessage{}, os.ErrClosed
+	}
+	c.exited = true
+	code := c.cmd.ProcessState.ExitCode()
+	if status, ok := c.cmd.ProcessState.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+		code = 128 + int(status.Signal())
+	}
+	return terminalMessage{kind: terminalExit, exitCode: code}, nil
+}
+
+func (c *directPTYClient) SendInput(data []byte) error {
+	c.inputMu.Lock()
+	select {
+	case <-c.closed:
+		c.inputMu.Unlock()
+		return os.ErrClosed
+	default:
+	}
+	c.input = append(c.input, data)
+	c.inputMu.Unlock()
+	select {
+	case c.inputReady <- struct{}{}:
+	default:
+	}
+	return nil
+}
+
+// writeInput feeds queued input to the PTY until the client closes or the
+// terminal goes away.
+func (c *directPTYClient) writeInput() {
+	for {
+		select {
+		case <-c.closed:
+			return
+		case <-c.inputReady:
+		}
+		c.inputMu.Lock()
+		queued := c.input
+		c.input = nil
+		c.inputMu.Unlock()
+		for _, data := range queued {
+			if _, err := c.pty.Write(data); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func (c *directPTYClient) SendResize(cols, rows uint16) error {
+	raw, err := c.pty.SyscallConn()
+	if err != nil {
+		return err
+	}
+	// Not pty.Setsize: it calls File.Fd, which makes the PTY blocking again.
+	var ioctlErr error
+	if err := raw.Control(func(fd uintptr) {
+		ioctlErr = unix.IoctlSetWinsize(int(fd), unix.TIOCSWINSZ, &unix.Winsize{Row: rows, Col: cols})
+	}); err != nil {
+		return err
+	}
+	return ioctlErr
+}
+
+func (c *directPTYClient) Close() error {
+	var err error
+	// Closing the master hangs up the terminal, as closing a window does:
+	// the kernel sends SIGHUP to the session leader and, once it exits, to
+	// the foreground job.
+	c.closeOnce.Do(func() {
+		close(c.closed)
+		err = c.pty.Close()
+		// The command may outlive the client; don't keep its unread input.
+		c.inputMu.Lock()
+		c.input = nil
+		c.inputMu.Unlock()
 	})
 	return err
 }

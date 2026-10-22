@@ -7,6 +7,7 @@ import {
   callXLayout,
   countConfirmedUnpricedCalls,
   deltaBars,
+  effectiveCost,
   generationBoundary,
   formatDuration,
   formatTokenCount,
@@ -683,6 +684,63 @@ assert(formatDuration(11_100_000) === "3h 05m", "formatDuration hours");
     edge.startsWith("M10.0,") && !edge.includes("M9"),
     "stackedAreaPaths: slabs stay in the plot",
   );
+}
+
+// Context-size pricing tiers: a call whose prompt exceeds the threshold bills
+// the whole call at the tier rate; a call below it stays at the base rate.
+{
+  const haikuTiered = {
+    input: 0.1,
+    output: 0.5,
+    cache_read: 0.01,
+    cache_write: 0.125,
+    tiers: [{ context: 100_000, input: 0.5, output: 2.5, cache_read: 0.05, cache_write: 0.625 }],
+  };
+  // effectiveCost picks base below/at the threshold and the tier above it.
+  assert(effectiveCost(haikuTiered, 50_000).input === 0.1, "effectiveCost: base below threshold");
+  assert(effectiveCost(haikuTiered, 100_000).input === 0.1, "effectiveCost: base at threshold");
+  assert(effectiveCost(haikuTiered, 100_001).input === 0.5, "effectiveCost: tier above threshold");
+  assert(
+    effectiveCost({ input: 1, output: 2, cache_read: 0, cache_write: 0 }, 9e9).input === 1,
+    "effectiveCost: flat pricing ignores prompt size",
+  );
+
+  const entries = [
+    // Prompt 60k (< 100k): base rate. input 60k @ $0.1/M = $0.006, output $0.025.
+    entry({ model: "claude-haiku-5-5", input_tokens: 60_000, output_tokens: 50_000 }),
+    // Prompt 150k (> 100k): tier rate. input 150k @ $0.5/M = $0.075, output $0.125.
+    entry({ model: "claude-haiku-5-5", input_tokens: 150_000, output_tokens: 50_000 }),
+  ];
+  const s = buildTokenCostStack(entries, { "claude-haiku-5-5": haikuTiered });
+  const inputRow = s.perModel[0].rows.find((t) => t.band.key === "input_tokens")!;
+  assert(approx(inputRow.cost, 0.006 + 0.075), "tier: input cost sums base + tier calls");
+  // The two input calls priced at different rates -> "mixed rates".
+  assert(inputRow.unitUsdPerMtok === null, "tier: straddling calls report mixed input rate");
+  const outRow = s.perModel[0].rows.find((t) => t.band.key === "output_tokens")!;
+  assert(approx(outRow.cost, 0.025 + 0.125), "tier: output cost sums base + tier calls");
+  assert(outRow.unitUsdPerMtok === null, "tier: mixed output rate");
+  // Per-call delta: call 2 (tiered) costs more than call 1 (base) despite fewer
+  // extra output tokens, because the whole prompt reprices.
+  assert(approx(s.maxDelta, 0.075 + 0.125), "tier: priciest call uses tier rate");
+}
+
+// A tiered model whose every call stays below the threshold keeps a single
+// (base) rate rather than reporting "mixed rates".
+{
+  const haikuTiered = {
+    input: 0.1,
+    output: 0.5,
+    cache_read: 0.01,
+    cache_write: 0.125,
+    tiers: [{ context: 100_000, input: 0.5, output: 2.5, cache_read: 0.05, cache_write: 0.625 }],
+  };
+  const entries = [
+    entry({ model: "claude-haiku-5-5", input_tokens: 30_000, output_tokens: 10_000 }),
+  ];
+  const s = buildTokenCostStack(entries, { "claude-haiku-5-5": haikuTiered });
+  const inputRow = s.perModel[0].rows.find((t) => t.band.key === "input_tokens")!;
+  assert(inputRow.unitUsdPerMtok === 0.1, "tier: all-below-threshold keeps base rate");
+  assert(approx(inputRow.cost, 0.003), "tier: below-threshold cost uses base rate");
 }
 
 // Formatting.

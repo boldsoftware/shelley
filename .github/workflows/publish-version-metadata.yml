@@ -27,6 +27,8 @@ jobs:
           fetch-depth: 0
 
       - name: Generate version metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python3 scripts/generate-version-metadata.py _site
 
       - name: Upload artifact

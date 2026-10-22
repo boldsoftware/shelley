@@ -48,7 +48,7 @@
           </div>
         </div>
         <span
-          v-if="convState.working"
+          v-if="ctx.workingIds.value.has(conversation.conversation_id)"
           class="working-indicator drawer-working-indicator"
           :title="ctx.t('agentIsWorking')"
         />
@@ -401,7 +401,7 @@
               </div>
             </div>
             <span
-              v-if="sub.working"
+              v-if="ctx.workingIds.value.has(sub.conversation_id)"
               class="working-indicator"
               :title="ctx.t('subagentIsWorking')"
             />
@@ -574,9 +574,8 @@ const terminalCount = computed(
 );
 const runningSubagentCount = computed(
   () =>
-    conversationSubagents.value.filter(
-      (agent) => agent.working || agent.running_background_jobs > 0,
-    ).length,
+    conversationSubagents.value.filter((agent) => ctx.workingIds.value.has(agent.conversation_id))
+      .length,
 );
 function taskTooltip(count: number): string {
   return `${count} task${count === 1 ? "" : "s"} running`;

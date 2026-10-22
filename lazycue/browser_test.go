@@ -264,6 +264,77 @@ document.addEventListener('keydown', function (e) {
 	}
 }
 
+// TestHoverMovesTheMouse: hover puts the real mouse pointer over the element,
+// so both pointer events (mouseenter, which tooltips listen for) and CSS :hover
+// apply, and leaves without clicking.
+func TestHoverMovesTheMouse(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	url := serveHTML(t, `<!doctype html><html><head><style>
+#b { width: 20px; height: 20px; margin-top: 2000px; }
+#b:hover { width: 30px; }
+</style></head><body>
+<button id="b"></button>
+<script>
+window.log = [];
+const b = document.getElementById('b');
+b.addEventListener('mouseenter', function () { window.log.push('enter'); });
+b.addEventListener('click', function () { window.log.push('click'); });
+</script>
+</body></html>`)
+
+	steps := []Step{
+		{Action: ActionNavigate, URL: url},
+		{Action: ActionHover, Selector: "#b"},
+		{Action: ActionEval, Expression: `window.log.join(' ') + ' ' + document.getElementById('b').getBoundingClientRect().width`, Expect: "enter 30"},
+	}
+	results, err := br.ExecuteSteps(context.Background(), url, steps)
+	if err != nil {
+		t.Fatalf("ExecuteSteps returned error: %v", err)
+	}
+	for _, r := range results {
+		if !r.Pass {
+			t.Errorf("%s: %s", r.Summary, r.Error)
+		}
+	}
+}
+
+// TestHoverAtOffset: with x and y set, hover puts the pointer that many CSS
+// pixels from the element's top-left corner, like Playwright's
+// hover({position}), so a test can probe a button's edges.
+func TestHoverAtOffset(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	url := serveHTML(t, `<!doctype html><html><head><style>
+#b { width: 28px; height: 28px; margin: 40px; border: 0; padding: 0; }
+</style></head><body>
+<button id="b"></button>
+<script>
+window.at = [];
+const b = document.getElementById('b');
+b.addEventListener('mousemove', function (e) {
+  const r = b.getBoundingClientRect();
+  window.at.push((e.clientX - r.left) + ',' + (e.clientY - r.top));
+});
+</script>
+</body></html>`)
+
+	x2, y2, x26, y26 := 2.0, 2.0, 26.0, 26.0
+	steps := []Step{
+		{Action: ActionNavigate, URL: url},
+		{Action: ActionHover, Selector: "#b", X: &x2, Y: &y2},
+		{Action: ActionHover, Selector: "#b", X: &x26, Y: &y26},
+		{Action: ActionEval, Expression: `window.at.join(' ')`, Expect: "2,2 26,26"},
+	}
+	results, err := br.ExecuteSteps(context.Background(), url, steps)
+	if err != nil {
+		t.Fatalf("ExecuteSteps returned error: %v", err)
+	}
+	for _, r := range results {
+		if !r.Pass {
+			t.Errorf("%s: %s (%s)", r.Summary, r.Error, r.Output)
+		}
+	}
+}
+
 // TestPressKeyTypesLikeAKeyboard: a page that handles Enter on keydown and
 // calls preventDefault() must not also receive a newline (chromedp's KeyEvent
 // sends Enter as keyDown + a separate "char" event + keyUp, and Chrome inserts

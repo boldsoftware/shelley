@@ -83,16 +83,97 @@ type Cost struct {
 	Output     float64 `json:"output"`
 	CacheRead  float64 `json:"cache_read"`
 	CacheWrite float64 `json:"cache_write"`
-	// Tiers marks where pricing changes; a "context" tier records the prompt
-	// size above which the model bills at a higher rate.
-	Tiers []costTier `json:"tiers"`
+	// Tiers records context-size pricing cliffs: once a request's prompt
+	// exceeds a tier's Context threshold, the whole request bills at that
+	// tier's (higher) prices. Sorted ascending by Context; nil when the model
+	// has flat pricing. See AtContext for how a prompt size selects a tier.
+	Tiers []CostTier `json:"tiers,omitempty"`
 }
 
-type costTier struct {
-	Tier struct {
-		Type string `json:"type"`
-		Size int    `json:"size"`
-	} `json:"tier"`
+// CostTier is the pricing that applies once a request's prompt (context) grows
+// past Context tokens. Prices are USD per million tokens, mirroring Cost; a
+// zero field means the tier doesn't price that token type (same convention as
+// the base rates). models.dev also records non-"context" tiers (e.g. by
+// output length); those are dropped on decode, so every CostTier here is a
+// context cliff.
+type CostTier struct {
+	Context    int     `json:"context"`
+	Input      float64 `json:"input"`
+	Output     float64 `json:"output"`
+	CacheRead  float64 `json:"cache_read"`
+	CacheWrite float64 `json:"cache_write"`
+}
+
+// UnmarshalJSON reads the models.dev tier shape, where the per-token prices sit
+// at the top level and the threshold is nested under a "tier" object, e.g.
+// {"input":0.5,...,"tier":{"type":"context","size":100000}}. Only "context"
+// tiers carry a threshold here; others leave Context at 0 and are filtered out
+// by Cost.UnmarshalJSON. Note this is asymmetric with the default marshaling
+// (a flat "context" field, for the TS client): a Go marshal->unmarshal round
+// trip would drop the tier. That never happens — Shelley only decodes the
+// snapshot and encodes to the client — but keep it in mind before relying on
+// one.
+func (t *CostTier) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Input      float64 `json:"input"`
+		Output     float64 `json:"output"`
+		CacheRead  float64 `json:"cache_read"`
+		CacheWrite float64 `json:"cache_write"`
+		Tier       struct {
+			Type string `json:"type"`
+			Size int    `json:"size"`
+		} `json:"tier"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*t = CostTier{Input: raw.Input, Output: raw.Output, CacheRead: raw.CacheRead, CacheWrite: raw.CacheWrite}
+	if raw.Tier.Type == "context" {
+		t.Context = raw.Tier.Size
+	}
+	return nil
+}
+
+// UnmarshalJSON decodes a Cost, then keeps only usable context tiers (positive
+// threshold) and sorts them ascending so AtContext can walk them in order.
+func (c *Cost) UnmarshalJSON(data []byte) error {
+	type rawCost Cost // shed the method set to avoid recursing
+	var r rawCost
+	if err := json.Unmarshal(data, &r); err != nil {
+		return err
+	}
+	*c = Cost(r)
+	kept := c.Tiers[:0]
+	for _, t := range c.Tiers {
+		if t.Context > 0 {
+			kept = append(kept, t)
+		}
+	}
+	if len(kept) == 0 {
+		c.Tiers = nil
+		return nil
+	}
+	sort.Slice(kept, func(i, j int) bool { return kept[i].Context < kept[j].Context })
+	c.Tiers = kept
+	return nil
+}
+
+// AtContext returns the per-token prices that apply to a request whose prompt
+// is promptTokens long. With no tiers it returns the base rates unchanged;
+// otherwise it picks the highest tier whose threshold the prompt exceeds.
+// Anthropic-style: crossing the threshold reprices the entire request, not
+// just the tokens past it. The returned Cost carries no Tiers.
+func (c Cost) AtContext(promptTokens int) Cost {
+	rates := Cost{Input: c.Input, Output: c.Output, CacheRead: c.CacheRead, CacheWrite: c.CacheWrite}
+	for _, t := range c.Tiers { // ascending by Context
+		if promptTokens > t.Context {
+			rates.Input = t.Input
+			rates.Output = t.Output
+			rates.CacheRead = t.CacheRead
+			rates.CacheWrite = t.CacheWrite
+		}
+	}
+	return rates
 }
 
 func (c Cost) isZero() bool {
@@ -355,8 +436,8 @@ func LookupContextLimit(endpoint, modelName string) (int, bool) {
 	}
 	limit := m.Limit.Context
 	for _, t := range m.Cost.Tiers {
-		if t.Tier.Type == "context" && t.Tier.Size > 0 && t.Tier.Size < limit {
-			limit = t.Tier.Size
+		if t.Context > 0 && t.Context < limit {
+			limit = t.Context
 		}
 	}
 	return limit, true

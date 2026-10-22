@@ -1,11 +1,131 @@
 package gitstate
 
 import (
+	"encoding/binary"
+	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// packIndexFixture encodes sorted SHA-1s with offsets and checksum space.
+func packIndexFixture(hashes [][20]byte, offsets []uint64) []byte {
+	data := make([]byte, 1032+28*len(hashes))
+	binary.BigEndian.PutUint32(data[:4], 0xff744f63)
+	binary.BigEndian.PutUint32(data[4:8], 2)
+	n := 0
+	for bucket := 0; bucket < 256; bucket++ {
+		for n < len(hashes) && int(hashes[n][0]) <= bucket {
+			n++
+		}
+		binary.BigEndian.PutUint32(data[8+bucket*4:], uint32(n))
+	}
+	off4Start := 1032 + 24*len(hashes)
+	large := uint32(0)
+	for i, hash := range hashes {
+		copy(data[1032+i*20:], hash[:])
+		offset := offsets[i]
+		if offset >= 0x80000000 {
+			binary.BigEndian.PutUint32(data[off4Start+i*4:], 0x80000000|large)
+			data = binary.BigEndian.AppendUint64(data, offset)
+			large++
+		} else {
+			binary.BigEndian.PutUint32(data[off4Start+i*4:], uint32(offset))
+		}
+	}
+	return append(data, make([]byte, 40)...)
+}
+
+func TestLookupPackOffset(t *testing.T) {
+	hashes := [][20]byte{{0: 0, 19: 1}, {0: 128, 19: 1}, {0: 128, 19: 3}, {0: 255, 19: 1}}
+	offsets := []uint64{12, 1 << 32, math.MaxInt64, 80}
+	missing := hashes[1]
+	missing[19] = 2 // Between the two IDs in bucket 128.
+	offsetsStart := 1032 + 24*len(hashes)
+	largeOffsetsStart := offsetsStart + 4*len(hashes)
+	tests := []struct {
+		name   string
+		want   []byte
+		edit   func([]byte) []byte
+		offset uint64
+		found  bool
+		err    bool
+	}{
+		{name: "first bucket", want: hashes[0][:], offset: 12, found: true},
+		{name: "last bucket", want: hashes[3][:], offset: 80, found: true},
+		{name: "large offset", want: hashes[1][:], offset: 1 << 32, found: true},
+		{name: "max seek offset", want: hashes[2][:], offset: math.MaxInt64, found: true},
+		{name: "missing in bucket", want: missing[:]},
+		{name: "empty bucket", want: append([]byte{64}, make([]byte, 19)...)},
+		{name: "empty index", want: hashes[0][:], edit: func([]byte) []byte { return packIndexFixture(nil, nil) }},
+		{name: "wrong hash length", want: hashes[0][:19], err: true},
+		{name: "short header", want: hashes[0][:], edit: func(d []byte) []byte { return d[:1031] }, err: true},
+		{name: "bad magic", want: hashes[0][:], edit: func(d []byte) []byte { d[0] = 0; return d }, err: true},
+		{name: "bad version", want: hashes[0][:], edit: func(d []byte) []byte { d[7] = 3; return d }, err: true},
+		{name: "unordered fanout", want: hashes[0][:], edit: func(d []byte) []byte {
+			binary.BigEndian.PutUint32(d[8+129*4:], 1)
+			return d
+		}, err: true},
+		{name: "truncated offset table", want: hashes[3][:], edit: func(d []byte) []byte { return d[:largeOffsetsStart+40-1] }, err: true},
+		{name: "incomplete index", want: hashes[0][:], edit: func(d []byte) []byte { return d[:len(d)-1] }, err: true},
+		{name: "large offset in checksum", want: hashes[1][:], edit: func(d []byte) []byte {
+			binary.BigEndian.PutUint32(d[offsetsStart+4:], 0x80000002)
+			return d
+		}, err: true},
+		{name: "offset past seek range", want: hashes[1][:], edit: func(d []byte) []byte {
+			binary.BigEndian.PutUint64(d[largeOffsetsStart:], uint64(math.MaxInt64)+1)
+			return d
+		}, err: true},
+	}
+	path := filepath.Join(t.TempDir(), "test.idx")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := packIndexFixture(hashes, offsets)
+			if tt.edit != nil {
+				data = tt.edit(data)
+			}
+			if err := os.WriteFile(path, data, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			offset, found, err := lookupPackOffset(path, tt.want)
+			if (err != nil) != tt.err || found != tt.found || offset != tt.offset {
+				t.Fatalf("got (%d, %t, %v), want (%d, %t, error=%t)", offset, found, err, tt.offset, tt.found, tt.err)
+			}
+		})
+	}
+	if _, _, err := lookupPackOffset(path+".missing", hashes[0][:]); err == nil {
+		t.Fatal("expected missing index error")
+	}
+}
+
+func BenchmarkLookupPackOffset(b *testing.B) {
+	for _, count := range []int{256, 16384} {
+		b.Run(fmt.Sprint(count), func(b *testing.B) {
+			hashes := make([][20]byte, count)
+			offsets := make([]uint64, count)
+			for i := range hashes {
+				hashes[i][0] = byte(i * 256 / count)
+				binary.BigEndian.PutUint32(hashes[i][16:], uint32(i))
+				offsets[i] = uint64(i + 12)
+			}
+			path := filepath.Join(b.TempDir(), "bench.idx")
+			if err := os.WriteFile(path, packIndexFixture(hashes, offsets), 0o600); err != nil {
+				b.Fatal(err)
+			}
+			want := hashes[count/2][:]
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				offset, found, err := lookupPackOffset(path, want)
+				if err != nil || !found || offset != offsets[count/2] {
+					b.Fatalf("lookup = (%d, %t, %v)", offset, found, err)
+				}
+			}
+		})
+	}
+}
 
 // buildDeltaRepo creates a repo whose commits are large and nearly identical so
 // that `git repack` stores most commit objects as deltas. useOfsDelta selects

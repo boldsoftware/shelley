@@ -4,8 +4,10 @@
 // the whole context is sent again at the cache-write price instead of the
 // cache-read price, often 10x more.
 import {
+  effectiveCost,
   formatDuration,
   formatTokenCount,
+  promptSize,
   TOKEN_BANDS,
   type DeltaBar,
   type ModelCost,
@@ -30,9 +32,10 @@ export function callCostParts(
   entry: UsageEntry,
   cost: ModelCost | null | undefined,
 ): CallCostPart[] {
+  const rates = cost ? effectiveCost(cost, promptSize(entry)) : null;
   const parts = TOKEN_BANDS.map((band, b) => {
     const tokens = entry[band.key] || 0;
-    return { band: b, tokens, usd: cost ? (tokens * cost[band.costKey]) / 1e6 : null };
+    return { band: b, tokens, usd: rates ? (tokens * rates[band.costKey]) / 1e6 : null };
   }).filter((part) => part.tokens > 0);
   const total = parts.reduce((sum, part) => sum + (part.usd ?? 0), 0);
   return parts
@@ -59,9 +62,6 @@ export type PromptReading =
   /** added: tokens new since the previous call; the rest were sent before. */
   | { kind: "miss"; added: number; gapMs: number | null; switched: boolean }
   | { kind: "new"; added: number; switched: boolean };
-
-const promptTokens = (e: UsageEntry) =>
-  e.input_tokens + e.cache_creation_input_tokens + e.cache_read_input_tokens;
 
 /** Bars whose call, the one drawn and hovered, missed the cache. A miss
  *  sharing a bar with a costlier call isn't marked: hovering couldn't show
@@ -94,8 +94,8 @@ export function readPrompts(entries: UsageEntry[]): PromptReading[] {
     if (compacted) return { kind: "compaction" };
     if (!base) return { kind: "switch" };
     const fresh = e.input_tokens + e.cache_creation_input_tokens;
-    const basePrompt = promptTokens(base);
-    if (promptTokens(e) < basePrompt) {
+    const basePrompt = promptSize(base);
+    if (promptSize(e) < basePrompt) {
       // Prompts only shrink at compactions, so base's usage sums several
       // requests (a turn resumed after a pause): it's no measure of the
       // prompt base sent. Only a mostly uncached prompt is a miss.
@@ -107,7 +107,7 @@ export function readPrompts(entries: UsageEntry[]): PromptReading[] {
     // sent before and should have come from the cache. A known blind spot:
     // a paused turn whose first request missed sums a rewrite with a
     // read-back, so it looks like growth, and reads as new input.
-    const added = Math.min(fresh, promptTokens(e) - basePrompt);
+    const added = Math.min(fresh, promptSize(e) - basePrompt);
     const resent = fresh - added;
     if (resent >= MISS_FLOOR && (resent > added || resent >= basePrompt * MISS_SHARE)) {
       return { kind: "miss", added, gapMs: switched ? null : gapMs(prev, e), switched };
@@ -150,9 +150,10 @@ export function callNote(
     return `Cache miss${when}: ${still} of ${tokens(fresh + cached)} prompt tokens were still cached${alsoNew}.`;
   }
   if (!cost) return "";
+  const rates = effectiveCost(cost, promptSize(e));
   const freshUsd =
-    (e.input_tokens * cost.input + e.cache_creation_input_tokens * cost.cache_write) / 1e6;
-  const others = [cached * cost.cache_read, e.output_tokens * cost.output].map((n) => n / 1e6);
+    (e.input_tokens * rates.input + e.cache_creation_input_tokens * rates.cache_write) / 1e6;
+  const others = [cached * rates.cache_read, e.output_tokens * rates.output].map((n) => n / 1e6);
   if (freshUsd <= 0 || others.some((usd) => usd > freshUsd)) return "";
   // A shared prefix may be cached already, even for a first call.
   const notYet = `${tokens(fresh)} prompt tokens weren't cached yet.`;

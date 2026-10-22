@@ -806,25 +806,31 @@ func (s *Server) conversationListWithStateInternal(ctx context.Context, limit, o
 func (s *Server) decorateConversations(conversations []db.ConversationListItem) []ConversationWithState {
 	now := time.Now()
 	result := make([]ConversationWithState, len(conversations))
+	gitEntries := make(map[string]conversationListGitCacheEntry)
 	for i, item := range conversations {
 		conv := item.Conversation
 		cws := ConversationWithState{ConversationListItem: item, Working: conv.AgentWorking}
 		if conv.Cwd != nil {
-			entry, ok := s.conversationListGitCache.get(*conv.Cwd, now)
+			cwd := *conv.Cwd
+			entry, ok := gitEntries[cwd]
 			if !ok {
-				gs := gitstate.GetGitState(*conv.Cwd)
-				entry = conversationListGitCacheEntry{
-					state:     gs,
-					expiresAt: now.Add(conversationListGitCacheTTL),
-				}
-				if gs.IsRepo {
-					entry.worktree = getGitWorktreeRoot(gs.Worktree)
-					if gitDir, err := resolveGitDir(gs.Worktree); err == nil {
-						entry.gitDir = gitDir
-						entry.fingerprint = gitFingerprint(gitDir)
+				entry, ok = s.conversationListGitCache.get(cwd, now)
+				if !ok {
+					gs := gitstate.GetGitState(cwd)
+					entry = conversationListGitCacheEntry{
+						state:     gs,
+						expiresAt: now.Add(conversationListGitCacheTTL),
 					}
+					if gs.IsRepo {
+						entry.worktree = getGitWorktreeRoot(gs.Worktree)
+						if gitDir, err := resolveGitDir(gs.Worktree); err == nil {
+							entry.gitDir = gitDir
+							entry.fingerprint = gitFingerprint(gitDir)
+						}
+					}
+					s.conversationListGitCache.set(cwd, entry)
 				}
-				s.conversationListGitCache.set(*conv.Cwd, entry)
+				gitEntries[cwd] = entry
 			}
 			if entry.state.IsRepo {
 				cws.GitRepoRoot = entry.state.Worktree
@@ -1577,7 +1583,18 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 			modelID = hookResult.Model
 			llmService = newService
 			if err := s.db.ForceUpdateConversationModel(ctx, conversationID, modelID); err != nil {
-				s.logger.Error("Failed to update model from hook", "error", err)
+				s.internalError(w, "Failed to update model from hook", err)
+				return
+			}
+			if _, _, err := s.db.ModifyConversationOptions(ctx, conversationID, func(o *db.ConversationOptions) bool {
+				if o.Profile == "" || o.SettingsEdited {
+					return false
+				}
+				o.SettingsEdited = true
+				return true
+			}); err != nil {
+				s.internalError(w, "Failed to save hook model override", err)
+				return
 			}
 		}
 	}
@@ -3444,11 +3461,11 @@ func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 			f.Flush()
 		}
 
-		// Exit after a short delay to allow response to be sent
+		// Restart after a short delay to allow the response to be sent
 		go func() {
 			time.Sleep(100 * time.Millisecond)
-			s.logger.Info("Exiting Shelley after upgrade")
-			os.Exit(0)
+			s.logger.Info("Restarting Shelley after upgrade")
+			s.restartAfterUpgrade()
 		}()
 	} else {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Upgrade complete. Restart to apply."})
@@ -3485,16 +3502,16 @@ func (s *Server) handleUpgradeHeadlessShell(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	downloadURL := findHeadlessShellURL(info.ReleaseInfo)
-	if downloadURL == "" {
+	hs, ok := findHeadlessShell(info.ReleaseInfo)
+	if !ok {
 		http.Error(w, fmt.Sprintf("No headless-shell download for %s/%s", runtime.GOOS, runtime.GOARCH), http.StatusBadRequest)
 		return
 	}
 
-	s.logger.Info("Upgrading headless-shell", "url", downloadURL, "from", info.HeadlessShellCurrent, "to", info.HeadlessShellLatest)
+	s.logger.Info("Upgrading headless-shell", "url", hs.URL, "from", info.HeadlessShellCurrent, "to", info.HeadlessShellLatest)
 
 	// Download the tarball
-	req, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", hs.URL, nil)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create request: %v", err), http.StatusInternalServerError)
 		return
@@ -3550,7 +3567,17 @@ func (s *Server) handleUpgradeHeadlessShell(w http.ResponseWriter, r *http.Reque
 		http.Error(w, fmt.Sprintf("Extracted binary failed --version: %v", err), http.StatusInternalServerError)
 		return
 	}
-	newVersion := strings.TrimSpace(string(versionOutput))
+	newVersion := info.HeadlessShellLatest
+	if binVersion := strings.TrimSpace(string(versionOutput)); !isHeadlessShellRelease(newVersion, binVersion) {
+		s.logger.Error("Downloaded headless-shell is the wrong version", "version", binVersion, "want", newVersion)
+		http.Error(w, fmt.Sprintf("Downloaded headless-shell is %s, want %s", binVersion, newVersion), http.StatusInternalServerError)
+		return
+	}
+	if err := recordHeadlessShellVersion(extractedBin, newVersion); err != nil {
+		s.logger.Error("Failed to record headless-shell version", "error", err)
+		http.Error(w, fmt.Sprintf("Failed to record version: %v", err), http.StatusInternalServerError)
+		return
+	}
 	s.logger.Info("New headless-shell version verified", "version", newVersion)
 
 	// Replace the install dir using sudo: backup -> move new -> cleanup

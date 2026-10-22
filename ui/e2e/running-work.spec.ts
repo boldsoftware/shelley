@@ -129,6 +129,7 @@ test.describe("running work", () => {
   });
 
   test("keeps a subagent visible while its background task runs", async ({ page, request }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
     const { conversationId, slug } = await createConversationViaAPIWithDetails(
       request,
       "subagent: backgroundhelper bash-bg: printf agent-ready; tail -f /dev/null",
@@ -145,10 +146,13 @@ test.describe("running work", () => {
             if (!subagentId) return false;
             const response = await request.get(`/api/conversation/${subagentId}`);
             const { conversation } = await response.json();
+            const parent = await (
+              await request.get(`/api/conversation/${conversationId}`)
+            ).json();
             const jobs = await (
               await request.get(`/api/conversation/${subagentId}/background-jobs`)
             ).json();
-            return !conversation.agent_working && jobs.length === 1;
+            return !parent.conversation.agent_working && !conversation.agent_working && jobs.length === 1;
           },
           { timeout: 30000 },
         )
@@ -172,6 +176,25 @@ test.describe("running work", () => {
         )
         .toBeLessThanOrEqual(1);
       await expect(toggle.locator(".running-work-more")).toHaveCount(0);
+      const working = page.getByTestId("agent-thinking");
+      const parentDot = page.locator(
+        `[data-conversation-id="${conversationId}"] .drawer-working-indicator`,
+      );
+      const favicon = page.locator('link[rel="icon"]');
+      await expect(working).toBeVisible();
+      await expect(parentDot).toBeVisible();
+      await expect(favicon).toHaveAttribute("href", /opacity%3D%220\.35%22/);
+      await expect(page.locator(".status-ready")).toHaveCount(0);
+      await expect(page.locator(".status-stop-button")).toHaveCount(0);
+      await expect(page.locator(".status-readout-model")).toBeEnabled();
+      await page.setViewportSize({ width: 390, height: 800 });
+      await expect(page.locator(".status-bar-active > .working-indicator")).toBeHidden();
+      await page.getByRole("button", { name: "More options", exact: true }).click();
+      const model = page.locator(".model-picker-menu");
+      await expect(model).toHaveClass(/p-disabled/);
+      await expect(model).toHaveCSS("opacity", "0.5");
+      await page.keyboard.press("Escape");
+      await page.setViewportSize({ width: 1280, height: 800 });
       await toggle.click();
       const group = strip.getByRole("group", { name: "Work by backgroundhelper" });
       const row = group.locator(".running-work-agent");
@@ -221,10 +244,17 @@ test.describe("running work", () => {
         timeout: 15000,
       });
       await expect(toggle).toContainText("1 task");
+      await expect(working).toBeVisible();
+      await expect(parentDot).toBeVisible();
+      await expect(favicon).toHaveAttribute("href", /opacity%3D%220\.35%22/);
       const parentJob = strip.getByTestId("background-job").filter({ hasText: "parent-ready" });
       await expect(parentJob.locator(".running-command-time")).toContainText("Running");
       await stopWork(request, [conversationId]);
       await expect(toggle).toContainText("No running work");
+      await expect(working).toHaveCount(0);
+      await expect(parentDot).toHaveCount(0);
+      await expect(page.locator(".status-ready")).toBeVisible();
+      await expect(favicon).not.toHaveAttribute("href", /opacity%3D%220\.35%22/);
       await toggle.click();
       await expect(strip).toHaveCount(0);
     } finally {

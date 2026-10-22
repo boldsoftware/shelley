@@ -25,7 +25,7 @@ function readServedStylesheets(): string[] {
 }
 
 test.describe('reduced motion', () => {
-  test('mobile Stop pulse only animates when motion is allowed', async ({ page }) => {
+  test('mobile Stop stays static regardless of motion preference', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.setContent(
       '<meta name="viewport" content="width=device-width, initial-scale=1">' +
@@ -38,7 +38,7 @@ test.describe('reduced motion', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await expect.poll(animationName).toBe('none');
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await expect.poll(animationName).toBe('mobile-stop-working-pulse');
+    await expect.poll(animationName).toBe('none');
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await expect.poll(animationName).toBe('none');
   });

@@ -11,15 +11,18 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/fynelabs/selfupdate"
@@ -75,16 +78,23 @@ type CommitInfo struct {
 
 // ReleaseInfo represents release metadata.
 type ReleaseInfo struct {
-	TagName              string            `json:"tag_name"`
-	Version              string            `json:"version"`
-	Commit               string            `json:"commit"`
-	CommitFull           string            `json:"commit_full"`
-	CommitTime           string            `json:"commit_time"`
-	PublishedAt          string            `json:"published_at"`
-	DownloadURLs         map[string]string `json:"download_urls"`
-	ChecksumsURL         string            `json:"checksums_url"`
-	HeadlessShellVersion string            `json:"headless_shell_version,omitempty"`
-	HeadlessShellURLs    map[string]string `json:"headless_shell_urls,omitempty"`
+	TagName      string            `json:"tag_name"`
+	Version      string            `json:"version"`
+	Commit       string            `json:"commit"`
+	CommitFull   string            `json:"commit_full"`
+	CommitTime   string            `json:"commit_time"`
+	PublishedAt  string            `json:"published_at"`
+	DownloadURLs map[string]string `json:"download_urls"`
+	ChecksumsURL string            `json:"checksums_url"`
+	// HeadlessShells is the headless-shell build to install, by platform
+	// (e.g. "linux_amd64").
+	HeadlessShells map[string]HeadlessShellBuild `json:"headless_shells,omitempty"`
+}
+
+// HeadlessShellBuild is a headless-shell release's build for one platform.
+type HeadlessShellBuild struct {
+	Version string `json:"version"` // e.g. "Chromium 156.0.8078.48.p1"
+	URL     string `json:"url"`
 }
 
 // StaticCommitInfo represents a commit from commits.json.
@@ -93,11 +103,10 @@ type StaticCommitInfo struct {
 	Subject string `json:"subject"`
 }
 
-const (
-	// staticMetadataURL is the base URL for version metadata on GitHub Pages.
-	// This avoids GitHub API rate limits.
-	staticMetadataURL = "https://boldsoftware.github.io/shelley"
-)
+// staticMetadataURL is the base URL for version metadata on GitHub Pages.
+// This avoids GitHub API rate limits. It is a var so builds can point it
+// elsewhere with -ldflags -X.
+var staticMetadataURL = "https://boldsoftware.github.io/shelley"
 
 // NewVersionChecker creates a new version checker.
 func NewVersionChecker() *VersionChecker {
@@ -161,7 +170,7 @@ func customCommits(dir string) []CommitInfo {
 // before any release-metadata fetch.
 func baseVersionInfo() *VersionInfo {
 	currentInfo := version.GetInfo()
-	execPath, _ := os.Executable()
+	execPath, _ := upgradeTarget()
 	info := &VersionInfo{
 		CurrentVersion:      currentInfo.Version,
 		CurrentTag:          currentInfo.Tag,
@@ -235,9 +244,9 @@ func (vc *VersionChecker) fetchVersionInfo(ctx context.Context) (*VersionInfo, e
 	info.HasUpdate = vc.isNewerMinor(info.CurrentTag, latestRelease.TagName)
 
 	// Headless shell version info
-	info.HeadlessShellCurrent = getLocalHeadlessShellVersion(ctx)
-	if latestRelease.HeadlessShellVersion != "" && info.HeadlessShellCurrent != "" {
-		info.HeadlessShellLatest = latestRelease.HeadlessShellVersion
+	info.HeadlessShellCurrent = getLocalHeadlessShellVersion(ctx, headlessShellPath)
+	if hs, ok := findHeadlessShell(latestRelease); ok && info.HeadlessShellCurrent != "" {
+		info.HeadlessShellLatest = hs.Version
 		info.HeadlessShellUpdate = headlessShellHasUpdate(info.HeadlessShellCurrent, info.HeadlessShellLatest)
 	}
 
@@ -381,52 +390,111 @@ func extractSHAFromTag(tag string) string {
 
 const headlessShellPath = "/headless-shell/headless-shell"
 
-// getLocalHeadlessShellVersion runs headless-shell --version and returns the output.
-// Returns empty string if the binary doesn't exist or fails.
-func getLocalHeadlessShellVersion(ctx context.Context) string {
-	cmd := exec.CommandContext(ctx, headlessShellPath, "--version")
-	out, err := cmd.Output()
+// headlessShellVersionFile, beside the binary, records the version of the
+// headless-shell release installed there and the sha256 of its binary.
+// Releases can add a patch level such as the ".p1" in
+// "Chromium 156.0.8078.48.p1", which the binary's --version doesn't print.
+const headlessShellVersionFile = "headless-shell-version.txt"
+
+// getLocalHeadlessShellVersion returns the version of the headless-shell at
+// bin: the version recorded beside it if bin is the binary it was recorded
+// for, else what bin --version prints. Returns empty string if the binary
+// doesn't exist or fails.
+func getLocalHeadlessShellVersion(ctx context.Context, bin string) string {
+	out, err := exec.CommandContext(ctx, bin, "--version").Output()
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	version := strings.TrimSpace(string(out))
+	recorded, err := os.ReadFile(filepath.Join(filepath.Dir(bin), headlessShellVersionFile))
+	if errors.Is(err, fs.ErrNotExist) {
+		return version
+	}
+	if err != nil {
+		slog.Warn("Failed to read recorded headless-shell version", "error", err)
+		return version
+	}
+	sum, err := headlessShellSHA256(bin)
+	if err != nil {
+		slog.Warn("Failed to hash headless-shell", "error", err)
+		return version
+	}
+	release, recordedSum, _ := strings.Cut(strings.TrimSpace(string(recorded)), "\n")
+	if recordedSum != "sha256 "+sum {
+		return version
+	}
+	return release
 }
 
-// headlessShellHasUpdate compares two version strings like "Chromium 141.0.7390.55"
-// and returns true if latest is newer than current.
+// recordHeadlessShellVersion records release as the version of the
+// headless-shell binary bin.
+func recordHeadlessShellVersion(bin, release string) error {
+	sum, err := headlessShellSHA256(bin)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(filepath.Dir(bin), headlessShellVersionFile), []byte(release+"\nsha256 "+sum+"\n"), 0o644)
+}
+
+func headlessShellSHA256(bin string) (string, error) {
+	f, err := os.Open(bin)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// isHeadlessShellRelease reports whether release is the version of a
+// headless-shell release whose binary prints version: version itself, or
+// version with a patch level.
+func isHeadlessShellRelease(release, version string) bool {
+	r, ok := parseHeadlessShellVersion(release)
+	v, vok := parseHeadlessShellVersion(version)
+	return ok && vok && slices.Equal(r[:4], v[:4])
+}
+
+// parseHeadlessShellVersion parses a version like "Chromium 141.0.7390.55"
+// or "Chromium 156.0.8078.48.p1" into its four numbers and its patch level,
+// which is 0 when there is none.
+func parseHeadlessShellVersion(s string) ([5]uint64, bool) {
+	var v [5]uint64
+	parts := strings.Split(strings.TrimPrefix(s, "Chromium "), ".")
+	if len(parts) == 5 {
+		p, ok := strings.CutPrefix(parts[4], "p")
+		if !ok {
+			return v, false
+		}
+		parts[4] = p
+	} else if len(parts) != 4 {
+		return v, false
+	}
+	for i, p := range parts {
+		n, err := strconv.ParseUint(p, 10, 64)
+		if err != nil {
+			return v, false
+		}
+		v[i] = n
+	}
+	return v, true
+}
+
+// headlessShellHasUpdate reports whether latest is a newer headless-shell
+// version than current, comparing their patch levels as well.
 func headlessShellHasUpdate(current, latest string) bool {
-	currentVer := strings.TrimPrefix(current, "Chromium ")
-	latestVer := strings.TrimPrefix(latest, "Chromium ")
-	if currentVer == "" || latestVer == "" {
-		return false
-	}
-
-	currentParts := strings.Split(currentVer, ".")
-	latestParts := strings.Split(latestVer, ".")
-
-	for i := 0; i < len(currentParts) && i < len(latestParts); i++ {
-		c, err1 := strconv.Atoi(currentParts[i])
-		l, err2 := strconv.Atoi(latestParts[i])
-		if err1 != nil || err2 != nil {
-			return false
-		}
-		if l > c {
-			return true
-		}
-		if l < c {
-			return false
-		}
-	}
-	return false
+	c, ok := parseHeadlessShellVersion(current)
+	l, lok := parseHeadlessShellVersion(latest)
+	return ok && lok && slices.Compare(l[:], c[:]) > 0
 }
 
-// findHeadlessShellURL finds the headless-shell download URL for the current platform.
-func findHeadlessShellURL(release *ReleaseInfo) string {
-	key := fmt.Sprintf("%s_%s", runtime.GOOS, runtime.GOARCH)
-	if url, ok := release.HeadlessShellURLs[key]; ok {
-		return url
-	}
-	return ""
+// findHeadlessShell finds the headless-shell build for the current platform.
+func findHeadlessShell(release *ReleaseInfo) (HeadlessShellBuild, bool) {
+	hs, ok := release.HeadlessShells[runtime.GOOS+"_"+runtime.GOARCH]
+	return hs, ok
 }
 
 // fetchLatestRelease fetches the latest release info from GitHub Pages.
@@ -538,6 +606,11 @@ func (vc *VersionChecker) DoUpgrade(ctx context.Context) error {
 		return fmt.Errorf("no release info available")
 	}
 
+	target, err := upgradeTarget()
+	if err != nil {
+		return fmt.Errorf("failed to find executable: %w", err)
+	}
+
 	// Find and download checksums.txt
 	expectedChecksum, err := vc.fetchExpectedChecksum(ctx, info.ReleaseInfo)
 	if err != nil {
@@ -570,7 +643,7 @@ func (vc *VersionChecker) DoUpgrade(ctx context.Context) error {
 	}
 
 	// Apply the update
-	err = selfupdate.Apply(bytes.NewReader(binaryData), selfupdate.Options{})
+	err = selfupdate.Apply(bytes.NewReader(binaryData), selfupdate.Options{TargetPath: target})
 	if err == nil {
 		return nil
 	}
@@ -585,7 +658,7 @@ func (vc *VersionChecker) DoUpgrade(ctx context.Context) error {
 	}
 
 	// Fall back to sudo-based upgrade
-	return vc.doSudoUpgrade(binaryData)
+	return vc.doSudoUpgrade(target, binaryData)
 }
 
 // isPermissionError checks if the error is related to file permissions.
@@ -593,12 +666,16 @@ func isPermissionError(err error) bool {
 	return errors.Is(err, fs.ErrPermission) || errors.Is(err, os.ErrPermission)
 }
 
-// doSudoUpgrade performs the upgrade using sudo when the binary isn't writable.
-func (vc *VersionChecker) doSudoUpgrade(binaryData []byte) error {
-	// Get the path to the current executable
-	exePath, err := os.Executable()
+// doSudoUpgrade replaces exePath with binaryData using sudo, for when the
+// binary isn't writable. It sticks to commands and flags that macOS has too.
+func (vc *VersionChecker) doSudoUpgrade(exePath string, binaryData []byte) error {
+	fi, err := os.Stat(exePath)
 	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
+		return fmt.Errorf("failed to stat executable: %w", err)
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return fmt.Errorf("failed to read owner of %s", exePath)
 	}
 
 	// Write the new binary to a temp file
@@ -634,13 +711,13 @@ func (vc *VersionChecker) doSudoUpgrade(binaryData []byte) error {
 	}
 
 	// Copy ownership and permissions from original
-	cmd = exec.Command("sudo", "chown", "--reference="+exePath, newPath)
+	cmd = exec.Command("sudo", "chown", fmt.Sprintf("%d:%d", st.Uid, st.Gid), newPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		exec.Command("sudo", "rm", "-f", newPath).Run()
 		return fmt.Errorf("failed to set ownership: %w: %s", err, output)
 	}
 
-	cmd = exec.Command("sudo", "chmod", "--reference="+exePath, newPath)
+	cmd = exec.Command("sudo", "chmod", fmt.Sprintf("%o", fi.Mode().Perm()), newPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		exec.Command("sudo", "rm", "-f", newPath).Run()
 		return fmt.Errorf("failed to set permissions: %w: %s", err, output)

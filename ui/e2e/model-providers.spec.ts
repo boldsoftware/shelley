@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openModelPicker } from "./helpers";
 
 test("shared add dialog, endpoint presets, and provider failure recovery", async ({ page }) => {
   const accountID = "account-1";
@@ -85,9 +86,7 @@ test("shared add dialog, endpoint presets, and provider failure recovery", async
   });
 
   await page.goto("/new");
-  const picker = page.locator(".model-picker.p-select");
-  await expect(picker).toBeVisible();
-  await picker.click();
+  await openModelPicker(page);
   const panel = page.locator(".model-picker-panel");
   await panel.getByRole("button", { name: "Manage Models" }).click();
 
@@ -174,7 +173,7 @@ test("provider Connect cannot be dismissed while saving", async ({ page }) => {
   });
 
   await page.goto("/new");
-  await page.locator(".model-picker.p-select").click();
+  await openModelPicker(page);
   await page.getByRole("button", { name: "Manage Models", exact: true }).click();
   await page.getByRole("button", { name: "+ Add Models", exact: true }).click();
   const form = page.getByTestId("model-provider-form");

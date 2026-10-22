@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
 import type { Message, Model } from "../src/types";
 
+test.use({ viewport: { width: 1280, height: 900 } });
+
 // Usage carries native model names and endpoints, not the picker's suffixed IDs.
 // Mixed integrations can contribute to the same model's cost breakdown.
-for (const width of [393, 1280]) {
+for (const width of [768, 1280]) {
   test(`hides only zero cache writes for ChatGPT subscription models (${width}px)`, async ({
     page,
     request,

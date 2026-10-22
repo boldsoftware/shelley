@@ -244,9 +244,9 @@ func TestGetSubagentOtherUsage(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// Two entries for the same model on one child message + one on a
-	// grandchild message aggregate into a single row; a different model gets
-	// its own row. The parent's own entries must NOT be counted.
+	// The query now returns one row per entry (pricing/tiering happens later in
+	// the handler); descendant entries come through individually while the
+	// parent's own entry must NOT be counted.
 	add(child.ConversationID, []llm.PurposedUsage{
 		{Purpose: "keyword_search", Usage: llm.Usage{InputTokens: 100, CacheReadInputTokens: 7, OutputTokens: 10, CostUSD: 0.01, Model: "m1", URL: "u1"}},
 		{Purpose: "llm_one_shot", Usage: llm.Usage{InputTokens: 50, OutputTokens: 5, CostUSD: 0.005, Model: "m1", URL: "u1"}},
@@ -254,8 +254,8 @@ func TestGetSubagentOtherUsage(t *testing.T) {
 	add(grandchild.ConversationID, []llm.PurposedUsage{
 		{Purpose: "subagent_progress", Usage: llm.Usage{InputTokens: 30, OutputTokens: 3, CostUSD: 0.003, Model: "m1", URL: "u1"}},
 		{Purpose: "keyword_search", Usage: llm.Usage{InputTokens: 9, OutputTokens: 1, Model: "m2", URL: "u2"}},
-		// No model/URL (omitempty drops them from the JSON): must aggregate
-		// as empty strings, not fail scanning NULL.
+		// No model/URL (omitempty drops them from the JSON): must scan as empty
+		// strings, not fail scanning NULL.
 		{Purpose: "tool_install", Usage: llm.Usage{InputTokens: 4, OutputTokens: 2}},
 	})
 	add(parent.ConversationID, []llm.PurposedUsage{
@@ -266,24 +266,41 @@ func TestGetSubagentOtherUsage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 3 {
-		t.Fatalf("got %d rows, want 3: %+v", len(rows), rows)
+	// 5 descendant entries (2 child + 3 grandchild), one row each; parent excluded.
+	if len(rows) != 5 {
+		t.Fatalf("got %d rows, want 5: %+v", len(rows), rows)
 	}
-	byModel := map[string]int{}
-	for i, r := range rows {
-		byModel[r.ModelName] = i
+	var m1Calls, totalInput int64
+	var m1Cost float64
+	var sawM2, sawNoModel bool
+	for _, r := range rows {
+		totalInput += r.InputTokens
+		switch r.ModelName {
+		case "m1":
+			if r.LlmApiUrl != "u1" {
+				t.Errorf("m1 row url = %q, want u1", r.LlmApiUrl)
+			}
+			m1Calls++
+			m1Cost += r.CostUsd
+		case "m2":
+			sawM2 = true
+			if r.LlmApiUrl != "u2" || r.InputTokens != 9 || r.OutputTokens != 1 {
+				t.Errorf("m2 row = %+v", r)
+			}
+		case "":
+			sawNoModel = true
+			// The entry with no model/URL scans as empty strings, not NULL.
+			if r.LlmApiUrl != "" || r.InputTokens != 4 || r.OutputTokens != 2 {
+				t.Errorf("no-model row = %+v", r)
+			}
+		default:
+			t.Errorf("unexpected model %q in row %+v", r.ModelName, r)
+		}
 	}
-	m1 := rows[byModel["m1"]]
-	if m1.LlmApiUrl != "u1" || m1.LlmCalls != 3 || m1.InputTokens != 180 || m1.CacheReadInputTokens != 7 ||
-		m1.OutputTokens != 18 || m1.CostUsd < 0.0179 || m1.CostUsd > 0.0181 {
-		t.Errorf("m1 row = %+v", m1)
+	if m1Calls != 3 || m1Cost < 0.0179 || m1Cost > 0.0181 {
+		t.Errorf("m1 rows = %d calls, cost %v; want 3 calls, ~0.018", m1Calls, m1Cost)
 	}
-	m2 := rows[byModel["m2"]]
-	if m2.LlmApiUrl != "u2" || m2.LlmCalls != 1 || m2.InputTokens != 9 {
-		t.Errorf("m2 row = %+v", m2)
-	}
-	noModel := rows[byModel[""]]
-	if noModel.LlmApiUrl != "" || noModel.LlmCalls != 1 || noModel.InputTokens != 4 || noModel.OutputTokens != 2 {
-		t.Errorf("no-model row = %+v", noModel)
+	if totalInput != 193 || !sawM2 || !sawNoModel {
+		t.Errorf("rows = %+v; want total input 193 with m2 and no-model entries", rows)
 	}
 }

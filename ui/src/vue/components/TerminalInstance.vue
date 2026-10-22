@@ -40,8 +40,8 @@ const emit = defineEmits<{
   // register/unregister: id, the terminal, and its fit callback
   (e: "register", id: string, handle: TerminalHandle, fit: () => void): void;
   (e: "unregister", id: string): void;
-  // attached: id, termId, server-persisted exit policy
-  (e: "attached", id: string, termId: string, closeOnExit: boolean): void;
+  // attached: id, termId (null without a persistent session), exit policy
+  (e: "attached", id: string, termId: string | null, closeOnExit: boolean): void;
   // title-change: id, the window title the program set (null when cleared)
   (e: "title-change", id: string, title: string | null): void;
 }>();
@@ -99,6 +99,14 @@ onMounted(async () => {
   }
   ro = new ResizeObserver(fitAndNotifyServer);
   ro.observe(containerRef.value);
+  // An unpersisted terminal's command ended with the websocket of the
+  // instance that ran it; connecting again would run it a second time.
+  if (props.term.unpersisted) {
+    openError.value = "This terminal ended when its connection closed.";
+    settled = true;
+    emit("status-change", props.term.id, "exited", null);
+    return;
+  }
   await connect();
 });
 
@@ -194,6 +202,11 @@ async function connect(size?: { cols: number; rows: number }, focus = false) {
         sessionId = msg.term_id;
         emit("attached", props.term.id, msg.term_id, msg.close_on_exit);
         syncView(); // a switch before now had no session to reopen
+      } else if (msg.type === "unpersisted") {
+        v.write(
+          "\x1b[33mThe disk is full, so this terminal ends if this page reloads or disconnects.\x1b[0m\r\n",
+        );
+        emit("attached", props.term.id, null, props.term.closeOnExit);
       } else if (msg.type === "exit") {
         const code = parseInt(msg.data, 10) || 0;
         const color = code === 0 ? "32" : "31";
@@ -243,7 +256,7 @@ onUnmounted(() => {
 // that hasn't attached yet catches up on "attached", and one that has ended
 // keeps its view. A view that failed to open tries the new renderer.
 function syncView() {
-  if (openError.value && viewRenderer !== props.renderer) {
+  if (openError.value && viewRenderer !== props.renderer && !props.term.unpersisted) {
     openError.value = null;
     settled = false;
     void connect();

@@ -52,13 +52,12 @@ After a successful build, offer the user both options:
    curl -s "$SHELLEY_URL/version-check" | jq -r .executable_path
    ```
 
-   (`SHELLEY_URL` is set in your environment; typically the path is `/usr/local/bin/shelley`.) You cannot copy over a running binary ("Text file busy"), so install side-by-side and rename:
+   (`SHELLEY_URL` is set in your environment; typically the path is `/usr/local/bin/shelley`.) You cannot copy over a running binary ("Text file busy"), so install side-by-side and rename. Copying the installed binary first gives `$DEST.new` its owner and mode; the second copy keeps them and replaces the contents (this works on macOS too):
 
    ```
    DEST=$(curl -s "$SHELLEY_URL/version-check" | jq -r .executable_path)
+   sudo cp -p "$DEST" "$DEST.new"
    sudo cp ~/.config/shelley/shelley-customization/bin/shelley "$DEST.new"
-   sudo chown --reference="$DEST" "$DEST.new"
-   sudo chmod --reference="$DEST" "$DEST.new"
    sudo mv "$DEST.new" "$DEST"
    ```
 

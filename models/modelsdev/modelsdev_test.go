@@ -3,6 +3,7 @@ package modelsdev
 import (
 	"encoding/json"
 	"reflect"
+	"sort"
 	"testing"
 
 	"shelley.exe.dev/llm"
@@ -439,6 +440,67 @@ func TestLookupCost(t *testing.T) {
 				t.Errorf("LookupCost(%q, %q) = %+v, want %+v", tc.endpoint, tc.model, c, tc.want)
 			}
 		})
+	}
+}
+
+func TestLookupCostTiers(t *testing.T) {
+	// Haiku 5.5 reprices 5x once the prompt exceeds 100k tokens.
+	c, found := LookupCost("https://api.anthropic.com/v1/messages", "claude-haiku-5-5")
+	if !found {
+		t.Fatal("LookupCost(haiku-5-5) not found")
+	}
+	want := []CostTier{{Context: 100000, Input: 0.5, Output: 2.5, CacheRead: 0.05, CacheWrite: 0.625}}
+	if !reflect.DeepEqual(c.Tiers, want) {
+		t.Fatalf("haiku-5-5 tiers = %+v, want %+v", c.Tiers, want)
+	}
+	// A flat-priced model carries no tiers.
+	if c, _ := LookupCost("", "claude-haiku-4-5"); c.Tiers != nil {
+		t.Errorf("claude-haiku-4-5 tiers = %+v, want nil", c.Tiers)
+	}
+}
+
+func TestCostAtContext(t *testing.T) {
+	base := Cost{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125}
+	tiered := base
+	tiered.Tiers = []CostTier{{Context: 100000, Input: 0.5, Output: 2.5, CacheRead: 0.05, CacheWrite: 0.625}}
+	cases := []struct {
+		name   string
+		cost   Cost
+		prompt int
+		want   Cost
+	}{
+		{"flat pricing ignores prompt size", base, 500000, base},
+		{"below threshold uses base", tiered, 50000, base},
+		{"at threshold uses base", tiered, 100000, base},
+		{"above threshold uses tier", tiered, 100001, Cost{Input: 0.5, Output: 2.5, CacheRead: 0.05, CacheWrite: 0.625}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.cost.AtContext(tc.prompt)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("AtContext(%d) = %+v, want %+v", tc.prompt, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCostAtContextMultipleTiers(t *testing.T) {
+	// Decode order shouldn't matter: tiers sort ascending, so the highest
+	// crossed threshold wins.
+	c := Cost{Input: 1, Output: 2}
+	c.Tiers = []CostTier{
+		{Context: 400000, Input: 4, Output: 8},
+		{Context: 200000, Input: 2, Output: 4},
+	}
+	sort.Slice(c.Tiers, func(i, j int) bool { return c.Tiers[i].Context < c.Tiers[j].Context })
+	if got := c.AtContext(100000); got.Input != 1 {
+		t.Errorf("AtContext(100000).Input = %v, want 1", got.Input)
+	}
+	if got := c.AtContext(250000); got.Input != 2 {
+		t.Errorf("AtContext(250000).Input = %v, want 2", got.Input)
+	}
+	if got := c.AtContext(500000); got.Input != 4 {
+		t.Errorf("AtContext(500000).Input = %v, want 4", got.Input)
 	}
 }
 

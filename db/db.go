@@ -1184,7 +1184,7 @@ const (
 // content (via the messages_fts FTS5 virtual table) and slug substring across
 // top-level conversations in the requested archive state. Slug matches come
 // first, then results are ordered by updated_at DESC.
-// Queries shorter than three non-space characters search slugs only.
+// Message terms shorter than three characters match whole tokens, not prefixes.
 // Each FTS hit comes with a Snippet drawn from the best-ranking message;
 // slug-only matches have an empty snippet.
 // The query is the raw user input; this function handles tokenisation and
@@ -1195,18 +1195,17 @@ func (db *DB) SearchConversationsFTS(ctx context.Context, query string, archived
 		return nil, nil
 	}
 
-	// Build an FTS5 MATCH expression: each token becomes a quoted prefix
-	// term, all AND'd together. Escape embedded double quotes by doubling.
+	// Quote terms and AND them together, allowing prefixes only for longer terms.
+	// Escape embedded double quotes by doubling.
 	ftsParts := make([]string, 0, len(fields))
 	for _, f := range fields {
-		ftsParts = append(ftsParts, `"`+strings.ReplaceAll(f, `"`, `""`)+`"*`)
+		part := `"` + strings.ReplaceAll(f, `"`, `""`) + `"`
+		if utf8.RuneCountInString(f) >= 3 {
+			part += "*"
+		}
+		ftsParts = append(ftsParts, part)
 	}
 	ftsMatch := strings.Join(ftsParts, " AND ")
-	if utf8.RuneCountInString(strings.Join(fields, "")) < 3 {
-		// An empty FTS phrase matches nothing, avoiding broad prefix scans
-		// while retaining slug matches in the requested archive state.
-		ftsMatch = `""`
-	}
 
 	// Escape LIKE wildcards (%, _) and the escape char itself in the slug
 	// pattern so typing a literal % doesn't match every conversation.
@@ -2488,8 +2487,9 @@ func (db *DB) CreateSubagentConversation(ctx context.Context, slug, parentID str
 	return &conversation, err
 }
 
-// GetSubagentUsage aggregates LLM usage across all descendant conversations
-// of parentID (recursively), grouped by model.
+// GetSubagentUsage returns per-call LLM usage across all descendant
+// conversations of parentID (recursively), one row per call so the caller can
+// price each by its context-size tier.
 func (db *DB) GetSubagentUsage(ctx context.Context, parentID string) ([]generated.GetSubagentUsageRow, error) {
 	var rows []generated.GetSubagentUsageRow
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
@@ -2501,9 +2501,9 @@ func (db *DB) GetSubagentUsage(ctx context.Context, parentID string) ([]generate
 	return rows, err
 }
 
-// GetSubagentOtherUsage aggregates indirect LLM usage (other_usage_data
-// entries) across all descendant conversations of parentID (recursively),
-// grouped by model.
+// GetSubagentOtherUsage returns per-entry indirect LLM usage (other_usage_data
+// entries) across all descendant conversations of parentID (recursively), one
+// row per entry so the caller can price each by its context-size tier.
 func (db *DB) GetSubagentOtherUsage(ctx context.Context, parentID string) ([]generated.GetSubagentOtherUsageRow, error) {
 	var rows []generated.GetSubagentOtherUsageRow
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
@@ -2777,6 +2777,14 @@ func (db *DB) SetSetting(ctx context.Context, key, value string) error {
 			Key:   key,
 			Value: value,
 		})
+	})
+}
+
+// DeleteSetting removes the setting for key, if any.
+func (db *DB) DeleteSetting(ctx context.Context, key string) error {
+	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		_, err := generated.New(tx.Conn()).DeleteSetting(ctx, key)
+		return err
 	})
 }
 

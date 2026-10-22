@@ -12,9 +12,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/cdproto/page"
+	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/chromedp/chromedp/kb"
@@ -457,6 +459,11 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, baseURL string, st
 	case ActionClick:
 		return runBounded(chromedp.Click(step.Selector, chromedp.ByQuery))
 
+	case ActionHover:
+		return runBounded(chromedp.QueryAfter(step.Selector, func(ctx context.Context, _ cdpruntime.ExecutionContextID, nodes ...*cdp.Node) error {
+			return mouseMoveToNode(ctx, nodes[0], step.X, step.Y)
+		}, chromedp.ByQuery, chromedp.NodeVisible))
+
 	case ActionPressKey:
 		action, err := pressKey(step.Key, step.Modifiers)
 		if err != nil {
@@ -750,6 +757,36 @@ func parseKeyModifiers(modifiers string) (input.Modifier, error) {
 		mods |= m
 	}
 	return mods, nil
+}
+
+// mouseMoveToNode moves the mouse pointer over n, scrolling it into view
+// first: chromedp.MouseClickNode without the press and release. The pointer
+// lands x,y CSS pixels from n's top-left corner when both are set, else at its
+// center.
+func mouseMoveToNode(ctx context.Context, n *cdp.Node, x, y *float64) error {
+	if (x == nil) != (y == nil) {
+		return fmt.Errorf("hover: set both x and y, or neither")
+	}
+	if err := dom.ScrollIntoViewIfNeeded().WithNodeID(n.NodeID).Do(ctx); err != nil {
+		return err
+	}
+	quads, err := dom.GetContentQuads().WithNodeID(n.NodeID).Do(ctx)
+	if err != nil {
+		return err
+	}
+	if len(quads) == 0 || len(quads[0]) != 8 {
+		return chromedp.ErrInvalidDimensions
+	}
+	q := quads[0]
+	if x != nil {
+		return input.DispatchMouseEvent(input.MouseMoved, q[0]+*x, q[1]+*y).Do(ctx)
+	}
+	var cx, cy float64
+	for i := 0; i < 8; i += 2 {
+		cx += q[i] / 4
+		cy += q[i+1] / 4
+	}
+	return input.DispatchMouseEvent(input.MouseMoved, cx, cy).Do(ctx)
 }
 
 // pressKey builds the action for a press_key step: a key name from keyNames or

@@ -5,6 +5,7 @@ import {
   createConversationViaAPI,
   createConversationViaAPIWithDetails,
   testWorkingDirectory,
+  openModelPicker,
 } from "./helpers";
 
 // A small directory that is certain to exist on the machine running the suite,
@@ -171,6 +172,7 @@ test.describe("Message action bar", () => {
 });
 
 test.describe("Context usage popup", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
   test("toggles from the usage label and closes on outside click", async ({ page, request }) => {
     test.setTimeout(60000);
     const slug = await createConversationViaAPI(request, "echo context usage");
@@ -763,12 +765,23 @@ test.describe("Context usage popup", () => {
   // default `min-width: auto` anywhere in that chain floors the whole subtree at
   // its content width and silently disables the ellipsis, which looks like a
   // truncated model name with no "…".
-  test("ellipsizes the model name instead of overflowing when narrow", async ({
+  test("ellipsizes the model name instead of overflowing in a narrow desktop pane", async ({
     page,
     request,
   }) => {
     test.setTimeout(60000);
-    await page.setViewportSize({ width: 360, height: 760 });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.route("**/api/models", async (route) => {
+      const response = await route.fetch();
+      const models = await response.json();
+      await route.fulfill({
+        response,
+        json: models.map((model: object) => ({
+          ...model,
+          display_name: "Predictable model with a very long display name",
+        })),
+      });
+    });
     const slug = await createConversationViaAPI(request, "echo narrow readout", {
       cwd: testWorkingDirectory(),
     });
@@ -776,11 +789,9 @@ test.describe("Context usage popup", () => {
     const input = page.getByTestId("message-input");
     await expect(input).toBeVisible({ timeout: 30000 });
 
-    // Squeeze the bar the way the tightest real layout does: while the agent
-    // works, the working indicator and Stop button share the row.
-    await input.fill("bash: sleep 5");
-    await page.getByTestId("send-button").click();
-    await expect(page.getByTestId("agent-thinking")).toBeVisible({ timeout: 20000 });
+    await page.locator(".main-content").evaluate((el) => {
+      el.style.maxWidth = "320px";
+    });
     await expect(page.locator(".context-usage-label")).toBeVisible();
 
     // Measures the visible instance: ChatStatusContent is in the DOM twice (the
@@ -844,7 +855,9 @@ test.describe("Context usage popup", () => {
     // This viewport is narrow enough that the fixture model's name cannot fit.
     // If a future fixture model has a very short name this is the assertion to
     // revisit (narrow the viewport further) — the ones above are the invariant.
-    expect(m.over, `"${m.full}" fits at 360px, so this no longer proves anything`).toBe(true);
+    expect(m.over, `"${m.full}" fits in the narrow pane, so this no longer proves anything`).toBe(
+      true,
+    );
   });
 
   // ContextUsageBar isn't remounted on a conversation switch, but the usage
@@ -1030,9 +1043,7 @@ test.describe("Status readout controls", () => {
       cwd: testWorkingDirectory(),
     });
     await page.goto(`/c/${slug}`);
-    const trigger = page.locator(".model-picker-inline .p-select-label");
-    await expect(trigger).toBeVisible({ timeout: 30000 });
-    await trigger.click();
+    await openModelPicker(page);
 
     const panel = page.locator(".model-picker-panel");
     await expect(panel).toBeVisible();

@@ -1,7 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { createConversationViaAPIWithDetails, git, initGitRepo, withTempDir } from "./helpers";
+import {
+  createConversationViaAPIWithDetails,
+  directoryControl,
+  git,
+  initGitRepo,
+  withTempDir,
+} from "./helpers";
 
 async function startNewConversation(page: Page) {
   const header = page.locator(".header");
@@ -19,9 +25,9 @@ async function startNewConversation(page: Page) {
 }
 
 async function sendAndExpectCwd(page: Page, cwd: string) {
-  await expect(page.locator(".status-bar-new-conversation .status-field-cwd button")).toHaveText(
-    cwd,
-  );
+  const control = await directoryControl(page);
+  await expect(control).toContainText(cwd);
+  await page.keyboard.press("Escape");
   await sendAndExpectSavedCwd(page, "echo: new conversation directory", cwd);
 }
 
@@ -84,7 +90,6 @@ for (const location of [
   });
 }
 
-
 test("an explicitly selected worktree stays selected", async ({ page }) => {
   await withTempDir("shelley-new-cwd-", async (dir) => {
     const repo = join(dir, "repo");
@@ -95,7 +100,7 @@ test("an explicitly selected worktree stays selected", async ({ page }) => {
     git(repo, "worktree", "add", "-b", "feature", worktree);
     await page.addInitScript((cwd) => localStorage.setItem("shelley_selected_cwd", cwd), repo);
     await page.goto("/new");
-    await page.locator(".status-bar-new-conversation .status-field-cwd button").click();
+    await (await directoryControl(page)).click();
     const dialog = page.getByRole("dialog", { name: "Select Directory" });
     await dialog.locator(".directory-picker-input").fill(worktree + "/");
     await expect(dialog.locator(".directory-picker-current-path")).toHaveText(worktree);

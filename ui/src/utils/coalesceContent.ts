@@ -175,6 +175,11 @@ export function coalesceContent(blocks: LLMContent[]): CoalescedItem[] {
         }
         refs.push(cit);
       }
+      // Citation HTML on a closing fence's line would make it part of the code.
+      const lastLine = text.slice(text.lastIndexOf("\n") + 1);
+      if (refs.length > 0 && /^ {0,3}(?:`{3,}|~{3,})[ \t]*$/.test(lastLine)) {
+        runMd.push("\n");
+      }
       runMd.push(markerHTML(refs));
     } else {
       flush();

@@ -110,11 +110,11 @@ func TestSearchConversationsFTSShortQueries(t *testing.T) {
 	defer db.Close()
 	ctx := t.Context()
 
-	active, err := db.CreateConversation(ctx, stringPtr("pelican-猫咪"), true, nil, nil, ConversationOptions{})
+	active, err := db.CreateConversation(ctx, stringPtr("pelican-猫咪-jq-r"), true, nil, nil, ConversationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	archived, err := db.CreateConversation(ctx, stringPtr("pelican-猫咪-archived"), true, nil, nil, ConversationOptions{})
+	archived, err := db.CreateConversation(ctx, stringPtr("pelican-猫咪-jq-r-archived"), true, nil, nil, ConversationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,13 +128,26 @@ func TestSearchConversationsFTSShortQueries(t *testing.T) {
 	if _, err := db.CreateMessage(ctx, CreateMessageParams{
 		ConversationID: messageOnly.ConversationID,
 		Type:           MessageTypeAgent,
-		LLMData:        map[string]any{"Content": []any{map[string]any{"Type": 2, "Text": "A pelican 猫咪 nearby"}}},
+		LLMData:        map[string]any{"Content": []any{map[string]any{"Type": 2, "Text": "A pelican 猫咪 nearby; use jq and R"}}},
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	for _, query := range []string{"p", "pe", "猫", "猫咪"} {
-		t.Run(query, func(t *testing.T) {
+	for _, tc := range []struct {
+		query       string
+		matchesBody bool
+	}{
+		{"p", false},
+		{"pe", false},
+		{"猫", false},
+		{"猫咪", true},
+		{"j", false},
+		{"jq", true},
+		{"JQ", true},
+		{"r", true},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			query := tc.query
 			results, err := db.SearchConversationsFTS(ctx, query, false, 50, 0)
 			if err != nil {
 				t.Fatal(err)
@@ -142,14 +155,21 @@ func TestSearchConversationsFTSShortQueries(t *testing.T) {
 			got := make([]string, len(results))
 			for i, result := range results {
 				got[i] = result.ConversationID
-				if result.Snippet != "" {
-					t.Errorf("short query returned a message snippet: %q", result.Snippet)
+				if result.ConversationID == active.ConversationID && result.Snippet != "" {
+					t.Errorf("slug-only match returned a message snippet: %q", result.Snippet)
 				}
 			}
-			if want := []string{active.ConversationID}; !slices.Equal(got, want) {
+			want := []string{active.ConversationID}
+			if tc.matchesBody {
+				want = append(want, messageOnly.ConversationID)
+			}
+			if !slices.Equal(got, want) {
 				t.Fatalf("got %v, want %v", got, want)
 			}
-			page, err := db.SearchConversationsFTS(ctx, query, false, 1, 1)
+			if tc.matchesBody && (!strings.Contains(results[1].Snippet, SnippetMarkStart) || results[1].SnippetMessageID == "") {
+				t.Fatalf("message match missing highlighted snippet or message ID: %#v", results[1])
+			}
+			page, err := db.SearchConversationsFTS(ctx, query, false, 1, int64(len(want)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -172,6 +192,30 @@ func TestSearchConversationsFTSShortQueries(t *testing.T) {
 	}
 	if len(results) != 2 || results[1].ConversationID != messageOnly.ConversationID || results[1].Snippet == "" {
 		t.Fatalf("three-character prefix did not search messages: %#v", results)
+	}
+
+	for _, tc := range []struct {
+		query string
+		match bool
+	}{
+		{"jq r", true},
+		{"JQ peli", true},
+		{"j peli", false},
+		{"j q", false},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			results, err := db.SearchConversationsFTS(ctx, tc.query, false, 50, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.match {
+				if len(results) != 1 || results[0].ConversationID != messageOnly.ConversationID || results[0].Snippet == "" {
+					t.Fatalf("expected message-only match: %#v", results)
+				}
+			} else if len(results) != 0 {
+				t.Fatalf("short terms matched message prefixes: %#v", results)
+			}
+		})
 	}
 }
 

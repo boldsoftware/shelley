@@ -1,5 +1,83 @@
 import { test, expect } from "@playwright/test";
-import { createConversationViaAPI, installServerLinks, testWorkingDirectory } from "./helpers";
+import {
+  createConversationViaAPI,
+  createConversationViaAPIWithDetails,
+  installServerLinks,
+  openModelPicker,
+  testWorkingDirectory,
+} from "./helpers";
+
+test("mobile New is a plain plus immediately left of Call", async ({ page, request }) => {
+  const slug = await createConversationViaAPI(request, "echo header controls");
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`/c/${slug}`);
+    const plus = page
+      .locator(".header")
+      .getByRole("button", { name: "New Conversation", exact: true });
+    const call = page.getByTestId("live-call-header");
+    await expect(plus).toBeVisible();
+    await expect(call).toBeVisible();
+    const plusBox = (await plus.boundingBox())!;
+    const callBox = (await call.boundingBox())!;
+    if (width < 768) {
+      expect(plusBox.x + plusBox.width).toBeLessThanOrEqual(callBox.x);
+      expect(callBox.x - plusBox.x - plusBox.width).toBeLessThan(8);
+      await expect(plus).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(plus.locator("svg")).toHaveCSS("width", "22px");
+    } else {
+      expect(callBox.x + callBox.width).toBeLessThanOrEqual(plusBox.x);
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page
+    .locator(".header")
+    .getByRole("button", { name: "New Conversation", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/new$/);
+});
+
+test("mobile model row matches Directory and saves live reasoning settings", async ({
+  page,
+  request,
+}) => {
+  const { slug, conversationId } = await createConversationViaAPIWithDetails(
+    request,
+    "echo mobile model",
+  );
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto(`/c/${slug}`);
+  const model = await openModelPicker(page);
+  await expect(model).not.toHaveClass(/p-disabled/);
+  await expect(model.locator("svg.chat-menu-icon")).toBeVisible();
+  const directory = page
+    .locator(".chat-overflow-popover")
+    .getByRole("button", { name: /^Directory\b/ });
+  const modelBox = (await model.boundingBox())!;
+  const directoryBox = (await directory.boundingBox())!;
+  expect(modelBox.height).toBe(directoryBox.height);
+  expect(modelBox.x).toBe(directoryBox.x);
+  expect(modelBox.width).toBe(directoryBox.width);
+  expect(modelBox.y + modelBox.height).toBeLessThanOrEqual(directoryBox.y);
+  await page
+    .locator(".model-picker-panel")
+    .getByRole("radio", { name: "high", exact: true })
+    .click();
+  await expect
+    .poll(async () => {
+      const { conversation } = await (
+        await request.get(`/api/conversation/${conversationId}`)
+      ).json();
+      return JSON.parse(conversation.conversation_options).thinking_level;
+    })
+    .toBe("high");
+  await expect(page.locator(".model-picker-panel")).toBeVisible();
+  await page.reload();
+  await openModelPicker(page);
+  await expect(
+    page.locator(".model-picker-panel").getByRole("radio", { name: "high", exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
+});
 
 for (const width of [393, 1280]) {
   test(`menu follows the requested four groups at ${width}px`, async ({ page, request }) => {
@@ -26,15 +104,15 @@ for (const width of [393, 1280]) {
         }),
     );
     expect(rows).toEqual([
-      // Phones keep New and the workspace tools here, leaving the header to
-      // Open VM, Call and More options.
-      ...(width < 768 ? ["New Conversation", "Diffs", "Git Graph", "Terminal"] : []),
+      // Phones keep workspace tools here, beside the header's New and Call controls.
+      ...(width < 768 ? ["Diffs", "Git Graph", "Terminal"] : []),
       "Command menu",
       "Manage on exe.dev",
+      ...(width < 768 ? ["vm.example"] : []),
       "Documentation",
       "separator",
       "Edit File…",
-      ...(width < 768 ? ["Directory"] : []),
+      ...(width < 768 ? ["Model", "Directory"] : []),
       "Export Conversation",
       "Archive Conversation",
       "separator",
@@ -68,7 +146,7 @@ test.describe("Overflow menu (PrimeVue)", () => {
     await page.goto("/new");
     await trigger.tap();
     await expect(popover).toBeVisible();
-    await expect(directory).toHaveCount(0);
+    await expect(directory).toBeVisible();
 
     await page.goto(`/c/${slug}`);
 
@@ -209,7 +287,7 @@ test.describe("Overflow menu (PrimeVue)", () => {
       const action = popover.getByRole("button", { name: /Change Language/ });
       await expect(action).toHaveClass("overflow-menu-item");
       await expect(action).toContainText("English");
-      await expect(popover.getByRole("combobox")).toHaveCount(0);
+      await expect(action.getByRole("combobox")).toHaveCount(0);
       const rowHeight = await action.evaluate((el) => el.getBoundingClientRect().height);
       expect(rowHeight).toBeLessThanOrEqual(48);
       await action.click();

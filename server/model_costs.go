@@ -75,40 +75,64 @@ func (s *Server) handleSubagentUsage(w http.ResponseWriter, r *http.Request, con
 	}
 	resp.UnpricedModels = []string{}
 	resp.PerModel = []perModelUsage{}
-	type modelKey struct {
-		model string
-		url   string
+	// Each call is priced by the context-size tier its own prompt lands in, so
+	// calls of one (model, url) that crossed a tier split into separate rows,
+	// one per effective rate. The UI groups them back under the model and shows
+	// "mixed rates" per band when they differ, while the totals stay exact.
+	type bucketKey struct {
+		model, url                           string
+		priced                               bool
+		input, output, cacheRead, cacheWrite float64
 	}
-	perModel := make(map[modelKey]*perModelUsage)
-	fold := func(model, url string, llmCalls, in, cacheWrite, cacheRead, out int64, costUsd float64) {
-		resp.LLMCalls += llmCalls
+	buckets := make(map[bucketKey]*perModelUsage)
+	seenUnpriced := make(map[string]bool)
+	fold := func(model, url string, in, cacheWrite, cacheRead, out int64, costUsd float64) {
+		resp.LLMCalls++
 		resp.ReportedUsd += costUsd
 
-		key := modelKey{model: model, url: url}
-		row := perModel[key]
+		cost, found := modelsdev.LookupCost(url, model)
+		var rates modelsdev.Cost
+		if found {
+			// The prompt is everything sent to the model: fresh input plus the
+			// cached prefix it reused. AtContext reprices the whole call when
+			// that exceeds a tier threshold.
+			rates = cost.AtContext(int(in + cacheWrite + cacheRead))
+		}
+		key := bucketKey{
+			model: model, url: url, priced: found,
+			input: rates.Input, output: rates.Output,
+			cacheRead: rates.CacheRead, cacheWrite: rates.CacheWrite,
+		}
+		row := buckets[key]
 		if row == nil {
 			row = &perModelUsage{Model: model, URL: url}
-			perModel[key] = row
+			if found {
+				effective := rates // flat rates for this tier; no nested Tiers
+				row.Cost = &effective
+			}
+			buckets[key] = row
 		}
-		row.LLMCalls += llmCalls
+		row.LLMCalls++
 		row.InputTokens += in
 		row.CacheCreationInputTokens += cacheWrite
 		row.CacheReadInputTokens += cacheRead
 		row.OutputTokens += out
 		row.ReportedUsd += costUsd
 
-		if c, found := modelsdev.LookupCost(url, model); found {
-			row.Cost = &c
-			estimatedUsd := float64(in)*c.Input/1e6 +
-				float64(cacheWrite)*c.CacheWrite/1e6 +
-				float64(cacheRead)*c.CacheRead/1e6 +
-				float64(out)*c.Output/1e6
+		if found {
+			estimatedUsd := float64(in)*rates.Input/1e6 +
+				float64(cacheWrite)*rates.CacheWrite/1e6 +
+				float64(cacheRead)*rates.CacheRead/1e6 +
+				float64(out)*rates.Output/1e6
 			row.EstimatedUsd += estimatedUsd
 			resp.EstimatedUsd += estimatedUsd
 		} else {
 			resp.UnpricedReportedUsd += costUsd
-			resp.UnpricedModels = append(resp.UnpricedModels, model)
-			resp.UnpricedCalls += llmCalls
+			resp.UnpricedCalls++
+			if !seenUnpriced[model] {
+				seenUnpriced[model] = true
+				resp.UnpricedModels = append(resp.UnpricedModels, model)
+			}
 		}
 	}
 	for _, row := range rows {
@@ -119,20 +143,34 @@ func (s *Server) handleSubagentUsage(w http.ResponseWriter, r *http.Request, con
 		if row.LlmApiUrl != nil {
 			url = *row.LlmApiUrl
 		}
-		fold(model, url, row.LlmCalls, row.InputTokens, row.CacheCreationInputTokens, row.CacheReadInputTokens, row.OutputTokens, row.CostUsd)
+		fold(model, url, row.InputTokens, row.CacheCreationInputTokens, row.CacheReadInputTokens, row.OutputTokens, row.CostUsd)
 	}
 	for _, row := range otherRows {
-		fold(row.ModelName, row.LlmApiUrl, row.LlmCalls, row.InputTokens, row.CacheCreationInputTokens, row.CacheReadInputTokens, row.OutputTokens, row.CostUsd)
+		fold(row.ModelName, row.LlmApiUrl, row.InputTokens, row.CacheCreationInputTokens, row.CacheReadInputTokens, row.OutputTokens, row.CostUsd)
 	}
-	for _, row := range perModel {
+	for _, row := range buckets {
 		resp.PerModel = append(resp.PerModel, *row)
 	}
 	sort.Slice(resp.PerModel, func(i, j int) bool {
-		if resp.PerModel[i].Model != resp.PerModel[j].Model {
-			return resp.PerModel[i].Model < resp.PerModel[j].Model
+		a, b := resp.PerModel[i], resp.PerModel[j]
+		if a.Model != b.Model {
+			return a.Model < b.Model
 		}
-		return resp.PerModel[i].URL < resp.PerModel[j].URL
+		if a.URL != b.URL {
+			return a.URL < b.URL
+		}
+		// Within a model+url, order tiers by input rate (base first).
+		return costInput(a.Cost) < costInput(b.Cost)
 	})
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// costInput is a nil-safe accessor for a row's effective input rate, used only
+// to order a model's tier rows deterministically (base rate first).
+func costInput(c *modelsdev.Cost) float64 {
+	if c == nil {
+		return 0
+	}
+	return c.Input
 }

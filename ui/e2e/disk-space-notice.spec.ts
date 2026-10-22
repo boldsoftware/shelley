@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 const lowStatus = {
   episode_id: 7,
@@ -10,23 +10,36 @@ const lowStatus = {
   total_bytes: 79_000_000_000,
 };
 
-test.describe("Disk space notice", () => {
-  test("shows stream status and dismisses the current episode", async ({ page }) => {
-    await page.route("**/api/stream2", async (route) => {
+// mockStream answers every /api/stream2 connection with status(). The mocked
+// body ends right away, so the client reconnects about a second later, and
+// once it knows the conversation list hash the URL gains a query string; both
+// must hit the mock, or the real server's status replaces the one under test.
+async function mockStream(page: Page, status: () => object) {
+  await page.route(
+    (url) => url.pathname === "/api/stream2",
+    async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
-        body: `data: ${JSON.stringify({ disk_space_status: lowStatus })}\n\n`,
+        body: `data: ${JSON.stringify({ disk_space_status: status() })}\n\n`,
       });
-    });
+    },
+  );
+}
+
+test.describe("Disk space notice", () => {
+  test("shows stream status and dismisses the current episode", async ({ page }) => {
+    let current = lowStatus;
+    await mockStream(page, () => current);
 
     let dismissedEpisode: number | undefined;
     await page.route("**/api/disk-space/dismiss", async (route) => {
       dismissedEpisode = route.request().postDataJSON().episode_id;
+      current = { ...lowStatus, revision: 4, dismissed: true };
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ ...lowStatus, revision: 4, dismissed: true }),
+        body: JSON.stringify(current),
       });
     });
 
@@ -55,13 +68,7 @@ test.describe("Disk space notice", () => {
         },
       });
     });
-    await page.route("**/api/stream2", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "text/event-stream",
-        body: `data: ${JSON.stringify({ disk_space_status: lowStatus })}\n\n`,
-      });
-    });
+    await mockStream(page, () => lowStatus);
 
     await page.goto("/");
 
@@ -74,15 +81,7 @@ test.describe("Disk space notice", () => {
   });
 
   test("announces critical status as an alert", async ({ page }) => {
-    await page.route("**/api/stream2", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "text/event-stream",
-        body: `data: ${JSON.stringify({
-          disk_space_status: { ...lowStatus, critical: true, available_bytes: 400_000_000 },
-        })}\n\n`,
-      });
-    });
+    await mockStream(page, () => ({ ...lowStatus, critical: true, available_bytes: 400_000_000 }));
 
     await page.goto("/");
 

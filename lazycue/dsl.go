@@ -19,6 +19,10 @@ type Step struct {
 	Key        string `json:"key,omitempty"`
 	Modifiers  string `json:"modifiers,omitempty"`
 	Count      int    `json:"count,omitempty"`
+	// X and Y are a hover step's pointer offset in CSS pixels from the
+	// element's top-left corner; unset means its center.
+	X *float64 `json:"x,omitempty"`
+	Y *float64 `json:"y,omitempty"`
 	// Tab names the browser tab the step acts on; empty is the tab the browser
 	// started with. A navigate step to a name not yet open opens that tab.
 	Tab string `json:"tab,omitempty"`
@@ -33,6 +37,7 @@ const (
 	ActionWaitTextGone       = "wait_text_gone"
 	ActionFill               = "fill"
 	ActionClick              = "click"
+	ActionHover              = "hover"
 	ActionPressKey           = "press_key"
 	ActionScreenshot         = "screenshot"
 	ActionEval               = "eval"
@@ -87,6 +92,11 @@ func stepSummary(s Step) string {
 		return "fill " + s.Selector + " " + truncateArg(s.Value, 30)
 	case ActionClick:
 		return "click " + s.Selector
+	case ActionHover:
+		if s.X != nil && s.Y != nil {
+			return fmt.Sprintf("hover %s at %g,%g", s.Selector, *s.X, *s.Y)
+		}
+		return "hover " + s.Selector
 	case ActionPressKey:
 		if s.Modifiers != "" {
 			return "press_key " + s.Modifiers + "+" + s.Key

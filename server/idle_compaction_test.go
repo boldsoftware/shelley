@@ -34,6 +34,7 @@ func newIdlePolicyHarness(t *testing.T, opts db.ConversationOptions) (*TestHarne
 	opts.ToolOverrides = map[string]string{claudetool.CompactInPlaceName: "on"}
 	h.convOpts = &opts
 	h.server.piDistillKeepRecentTokens = 1
+	h.server.idleCompactionMinTokens = 1
 	h.NewConversation("echo: keep the garden plan", "")
 	synctest.Wait()
 	h.Chat("echo: rosemary arrives tomorrow")
@@ -251,6 +252,21 @@ func TestIdleCompactionNothingToCompactIsOneShotNoOp(t *testing.T) {
 			requireIdleCompactions(t, h, compactions+1)
 		})
 	})
+	t.Run("below the size threshold", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			h, cm := newIdleCompactionHarness(t)
+			defer stopActiveConversationLoops(h.server)
+			cm.idleCompactionMinTokens = defaultIdleCompactionMinTokens
+			compactions := idleCompactions(t, h)
+			before := len(listMessages(t, h.db, h.convID))
+			<-time.After(3 * time.Minute)
+			synctest.Wait()
+			requireIdleCompactions(t, h, compactions)
+			if got := len(listMessages(t, h.db, h.convID)); got != before {
+				t.Fatalf("small context wrote %d extra messages", got-before)
+			}
+		})
+	})
 }
 
 func TestIdleCompactionRequiresEnabledPolicyAndTopLevel(t *testing.T) {
@@ -260,6 +276,7 @@ func TestIdleCompactionRequiresEnabledPolicyAndTopLevel(t *testing.T) {
 				h := NewTestHarness(t)
 				defer stopActiveConversationLoops(h.server)
 				h.server.piDistillKeepRecentTokens = 1
+				h.server.idleCompactionMinTokens = 1
 				opts := db.ConversationOptions{DisableNotifications: true, ToolOverrides: map[string]string{claudetool.CompactInPlaceName: "on"}}
 				conv, err := h.db.CreateConversation(t.Context(), nil, true, nil, nil, opts)
 				if err != nil {

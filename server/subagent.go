@@ -219,11 +219,16 @@ var messageParentTool = (&claudetool.MessageParentTool{}).Tool()
 // it: nothing has been reported since the parent's last prompt, and nothing
 // queued or still running can wake the subagent again. A grandchild's report
 // is queued just after the grandchild goes idle; a turn ending in that gap
-// reports early, and the parent hears twice.
+// reports early, and the parent hears twice. The reply may be the error
+// (failed request, truncation, refusal) that ended the turn; it is reported
+// as such.
 func (s *Server) reportUnreportedReply(ctx context.Context, cm *ConversationManager, reply llm.Message) (llm.Message, bool) {
 	text := strings.TrimSpace(messageText(reply))
 	if text == "" || slices.ContainsFunc(reply.Content, func(c llm.Content) bool { return c.Type == llm.ContentTypeToolUse }) {
 		return reply, false
+	}
+	if reply.ErrorType != llm.ErrorTypeNone {
+		text = "Ended with an error: " + text
 	}
 	conv, err := s.db.GetConversationByID(ctx, cm.conversationID)
 	if err != nil {
@@ -269,9 +274,7 @@ func (s *Server) reportUnreportedReply(ctx context.Context, cm *ConversationMana
 	}
 	// Short ID: some OpenAI-compatible APIs cap tool call IDs at 40 bytes.
 	call := llm.Content{ID: "reported_" + rand.Text(), Type: llm.ContentTypeToolUse, ToolName: messageParentTool.Name, ToolInput: input}
-	report := reply
-	report.EndOfTurn = false
-	report.Content = nil
+	report := llm.Message{Role: reply.Role, Origin: reply.Origin}
 	for _, c := range reply.Content {
 		if c.Type != llm.ContentTypeText {
 			report.Content = append(report.Content, c)

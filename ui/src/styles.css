@@ -571,6 +571,25 @@ body {
     width: var(--header-action-size, 2.25rem);
     height: var(--header-action-size, 2.25rem);
   }
+
+  .header .btn-new {
+    background: transparent;
+    color: var(--text-primary);
+    border-radius: 0.25rem;
+  }
+
+  .header .btn-new svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .header .live-call-trigger {
+    order: 1;
+  }
+
+  .header .chat-overflow-menu-wrapper {
+    order: 2;
+  }
 }
 
 /* Small phones still keep a readable conversation title beside the tools. */
@@ -1070,7 +1089,19 @@ body {
 }
 
 .drawer-subagent-list {
+  position: relative;
   margin-left: 1.5rem;
+}
+
+.drawer-subagent-list::before {
+  content: "";
+  position: absolute;
+  left: -0.75rem;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
 }
 
 .background-jobs-empty,
@@ -1500,7 +1531,7 @@ body {
   text-align: left;
   padding: 0.75rem;
   border-radius: 0.5rem;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.375rem;
   transition: background-color 0.2s;
   display: flex;
   flex-direction: row;
@@ -1509,7 +1540,7 @@ body {
 }
 
 .conversation-item:hover {
-  background: var(--bg-tertiary);
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
 }
 
 .conversation-item.active {
@@ -6588,7 +6619,8 @@ svg {
   color: white;
 }
 
-.status-stop-button:disabled {
+.status-stop-button:disabled,
+.overflow-menu-panel .model-picker-menu.p-disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -6729,16 +6761,18 @@ svg {
     padding-top: calc(0.375rem + env(safe-area-inset-top, 0px));
   }
 
-  /* Hide standalone status bar on mobile — content is shown inline in controls row.
-     Exceptions: archived conversations have no MessageInput, new conversations
-     do not use the slot, and interrupted turns need the full-width prompt. */
+  /* Mobile uses inline controls; archived and interrupted turns need the full bar. */
   .status-bar:not(.status-bar-archived):not(.status-bar-new):not(.status-bar-interrupted) {
     display: none;
   }
 
   .hide-on-mobile,
-  .header .chat-workspace-actions button.chat-workspace-action,
-  .header .chat-workspace-divider {
+  .header .chat-workspace-actions,
+  .message-controls-status-slot .status-ready,
+  .message-controls-status-slot .working-indicator,
+  .status-readout,
+  .chat-context-popup.p-popover,
+  .status-bar-new:has(.status-bar-new-conversation) {
     display: none;
   }
 
@@ -6857,23 +6891,6 @@ svg {
     gap: 4px;
   }
 
-  .message-controls-status-slot .status-readout {
-    order: 2;
-    display: flex;
-    flex: 1 1 auto;
-    min-width: 0;
-    width: auto;
-    height: 34px;
-    margin: 0;
-    gap: 3px;
-    align-items: center;
-    overflow: hidden;
-    font-size: var(--font-size-11);
-    line-height: 19px;
-    color: var(--text-tertiary);
-    transform: translateY(1px);
-  }
-
   .message-controls-status-slot .animated-working {
     position: absolute;
     width: 1px;
@@ -6882,31 +6899,6 @@ svg {
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
-  }
-
-  .message-controls-status-slot .status-ready {
-    position: relative;
-    order: 1;
-    display: flex;
-    flex: 0 0 24px;
-    width: 24px;
-    height: 34px;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    color: transparent;
-    transform: translateY(1px);
-  }
-
-  .message-controls-status-slot .status-ready::before {
-    content: "";
-    position: absolute;
-    top: 13px;
-    left: 8px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--text-tertiary);
   }
 
   .message-controls-status-slot .status-stop-button {
@@ -6921,103 +6913,13 @@ svg {
     transform: translateY(1px);
   }
 
-  @media (prefers-reduced-motion: no-preference) {
-    .message-controls-status-slot .status-stop-button {
-      animation: mobile-stop-working-pulse 2.8s ease-in-out infinite;
-    }
+  .message-controls-status-slot .status-stop-button svg {
+    width: 14px;
+    height: 14px;
   }
 
   .message-controls-status-slot .status-stop-label {
     display: none;
-    white-space: nowrap;
-  }
-
-  @keyframes mobile-stop-working-pulse {
-    0%,
-    100% {
-      box-shadow: 0 0 0 0 var(--error-border);
-    }
-    50% {
-      box-shadow: 0 0 0 3px transparent;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .message-controls-status-slot .status-stop-button {
-      animation: none;
-      box-shadow: 0 0 0 1px var(--error-border);
-    }
-  }
-
-  .message-controls-status-slot .status-readout-cwd,
-  .message-controls-status-slot .status-readout-branch {
-    order: 5;
-  }
-
-  .message-controls-status-slot .status-readout-cwd {
-    position: static;
-    display: flex;
-    flex: 0 3 auto;
-    width: auto;
-    min-width: calc(14px + 1ch);
-    max-width: 72px;
-    height: 34px;
-    margin: 0;
-    overflow: hidden;
-    align-items: center;
-    justify-content: flex-end;
-    font-size: var(--font-size-11);
-  }
-
-  .message-controls-status-slot .status-readout-cwd::before {
-    content: "";
-    flex: 0 0 auto;
-    width: 11px;
-    height: 11px;
-    margin-right: 3px;
-    background: var(--text-tertiary);
-    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 6h6l2 2h10v10H3z' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E")
-      center / contain no-repeat;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 6h6l2 2h10v10H3z' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E")
-      center / contain no-repeat;
-  }
-
-  .message-controls-status-slot .status-readout-sep.status-readout-sep-cwd {
-    display: block;
-    order: 4;
-    flex: 0 0 auto;
-    margin-left: 2px;
-  }
-
-  .message-controls-status-slot .context-usage-root {
-    order: 1;
-    flex: 0 0 auto;
-    margin-left: 0;
-  }
-
-  .message-controls-status-slot .status-readout-sep {
-    order: 2;
-    flex-shrink: 0;
-  }
-
-  .message-controls-status-slot .status-readout-model {
-    order: 3;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .message-controls-status-slot .status-readout-cwd-path {
-    display: none;
-    min-width: 0;
-  }
-
-  .message-controls-status-slot .status-readout-cwd-leaf {
-    display: inline;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -9103,6 +9005,13 @@ button.tour-visibility-control:focus-visible,
 .file-preview-document .markdown-content {
   max-width: 72ch;
   margin: 0 auto;
+  overflow-wrap: anywhere;
+}
+
+/* Keep single code tokens intact when they fit; oversized tokens still wrap. */
+.file-preview-document code.inline-code-token {
+  display: inline-block;
+  max-width: 100%;
   overflow-wrap: anywhere;
 }
 
@@ -13967,11 +13876,7 @@ kbd {
   color: inherit;
 }
 
-/* "Working" mark shared by the drawer rows, subagent badges, and the live
-   subagent strips/chips: a subtle, non-animated hollow ring in the current
-   text color. Tracks the foreground so it stays legible on both the default
-   and selected (var(--primary)) backgrounds without re-using the same hue as
-   the row fill. */
+/* Drawer dots match the running-work strip; other working marks stay rings. */
 .working-indicator {
   width: 7px;
   height: 7px;
@@ -13983,11 +13888,24 @@ kbd {
   flex-shrink: 0;
 }
 
+.conversation-item .working-indicator {
+  display: inline-block;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border: 0;
+  background-color: var(--primary);
+  color: var(--primary);
+  opacity: 1;
+}
+
+.conversation-item.active .working-indicator {
+  background-color: white;
+  color: white;
+}
+
 .drawer-working-indicator {
-  width: 8px;
-  height: 8px;
-  align-self: flex-start;
-  margin-top: 0.35rem;
+  transform: translateX(8px);
 }
 
 .drawer-interrupted-indicator {
@@ -14195,7 +14113,7 @@ kbd {
 }
 
 .drawer-git-info-active {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .drawer-git-copy {
@@ -14227,7 +14145,6 @@ kbd {
   cursor: pointer;
   font-size: var(--font-size-14);
   padding-left: 0.5rem;
-  border-left: 2px solid var(--border-color);
 }
 
 .drawer-subagent-date {
@@ -16319,6 +16236,20 @@ kbd {
 .overflow-menu-panel .overflow-menu-item:hover {
   background: var(--bg-hover);
 }
+.overflow-menu-panel .p-select.model-picker-menu {
+  border-radius: 0;
+  box-shadow: none;
+  line-height: normal;
+}
+
+.overflow-menu-panel .model-picker-menu .p-select-label {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
 .overflow-menu-cwd {
   flex: 1;
   width: 0;
@@ -16510,7 +16441,8 @@ kbd {
 /* No chevron: the segment reads as text, and the dot separators already imply
    the readout is a row of distinct things. Hidden in CSS with the rest of the
    inline chrome rather than via a pt style, so it's all in one place. */
-.p-select.model-picker-inline .p-select-dropdown {
+.p-select.model-picker-inline .p-select-dropdown,
+.overflow-menu-panel .model-picker-menu .p-select-dropdown {
   display: none;
 }
 

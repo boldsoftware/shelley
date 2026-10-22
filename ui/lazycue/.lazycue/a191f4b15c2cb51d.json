@@ -1,0 +1,264 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Conversations are listed newest-first. Below, ACTIVE means the selector \".conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]\" and INACTIVE means \".conversation-item:not(.active) .drawer-conversation-header-row button[aria-label=Actions]\" (the first row that is not the current conversation).\nCreate two conversations: navigate to /new, wait for the message input (data-testid \"message-input\") to be visible, fill it with \"echo: inactive row actions menu\", click the send button (data-testid \"send-button\") and wait for the URL to contain \"/c/\". Then do the same with \"echo: row actions menu\"; that conversation is now the current one.\nOpen the conversation drawer by clicking the button with aria-label \"Open conversations\" and wait for \".conversation-item.active\" to be visible. Wait for every row to settle: eval \"document.querySelectorAll('.drawer-working-indicator').length\" expecting \"0\", with that step's \"timeout\" set to \"30s\"; selector \".conversation-item-enter\" matches 0 elements, and the drawer has finished sliding in: eval \"String(document.querySelector('.drawer').getAnimations({subtree:true}).length)\" expecting \"0\".\nThe row has no inline action buttons: eval \"Array.from(document.querySelectorAll('.conversation-item.active button')).filter(function(b){var n=(b.getAttribute('aria-label')||b.textContent).trim();return n==='Rename'||n==='Edit tags'||n==='Archive';}).length\" expecting \"0\". ACTIVE and its svg are visible, and so is the chat header's overflow button \".chat-overflow-menu-wrapper button[aria-label='More options']\". Both draw the same icon: eval \"(function(){var a=document.querySelector('.conversation-item.active .drawer-conversation-header-row button[aria-label=Actions] svg path');var b=document.querySelector('.chat-overflow-menu-wrapper button[aria-label=\\\"More options\\\"] svg path');return a\u0026\u0026b\u0026\u0026a.getAttribute('d')===b.getAttribute('d')?'same':'differ';})()\" expecting \"same\". INACTIVE is visible. Both buttons are unadorned 28px squares: eval \"['.conversation-item.active','.conversation-item:not(.active)'].map(function(r){var s=getComputedStyle(document.querySelector(r+' .drawer-conversation-header-row button[aria-label=Actions]'));return [s.opacity,s.backgroundColor,parseFloat(s.borderWidth),s.boxShadow,parseFloat(s.width),parseFloat(s.height),parseFloat(s.borderRadius)].join('|');}).join(' ; ')\" expecting \"1|rgba(0, 0, 0, 0)|0|none|28|28|0 ; 1|rgba(0, 0, 0, 0)|0|none|28|28|0\".\nHovering does not move INACTIVE. Record its box: eval \"(function(){var el=document.querySelector('.conversation-item:not(.active) .drawer-conversation-header-row button[aria-label=Actions]');el.scrollIntoView({block:'nearest'});var r=el.getBoundingClientRect();window.__box=[r.x,r.y,r.width,r.height].join(',');return 'noted';})()\" expecting \"noted\". Hover INACTIVE at its top-left corner, x 2 and y 2. Its tooltip reads exactly \"Actions\": eval \"(function(){var t=document.querySelector('.p-tooltip-text');return t?t.textContent.trim():'none';})()\" expecting \"Actions\". The box is unchanged: eval \"(function(){var r=document.querySelector('.conversation-item:not(.active) .drawer-conversation-header-row button[aria-label=Actions]').getBoundingClientRect();var b=[r.x,r.y,r.width,r.height].join(',');return b===window.__box?'same':'moved '+window.__box+' -\u003e '+b;})()\" expecting \"same\". Hover INACTIVE at its bottom-right corner, x 26 and y 26, and run that same box eval again, expecting \"same\".\nKeyboard focus shows a white ring on the active row: eval \"document.querySelector('.conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]').focus(),'focused'\" expecting \"focused\", press Tab, then press Tab with the Shift modifier. ACTIVE has focus again: eval \"document.activeElement===document.querySelector('.conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]')?'yes':'no'\" expecting \"yes\". Its ring: eval \"(function(){var s=getComputedStyle(document.activeElement);return s.outlineColor+' '+(parseFloat(s.outlineWidth)\u003e=2);})()\" expecting \"rgb(255, 255, 255) true\". Selector \".conversation-item.active .conversation-meta button[aria-label=Actions]\" matches 0 elements.\nHover \".conversation-item.active\", then click ACTIVE. The menu \"[data-testid=conversation-actions-menu]\" becomes visible and ACTIVE has attribute aria-expanded \"true\". Its items, in order: eval \"Array.from(document.querySelectorAll('[data-testid=conversation-actions-menu] [role=menuitem]')).map(function(e){return e.textContent.trim();}).join('|')\" expecting \"Archive|Rename|Edit tags\". The menu list has focus: eval \"document.activeElement===document.querySelector('[data-testid=conversation-actions-menu] [role=menu]')?'yes':'no'\" expecting \"yes\". Press ArrowDown; the list then has a non-empty aria-activedescendant: eval \"document.querySelector('[data-testid=conversation-actions-menu] [role=menu]').getAttribute('aria-activedescendant')?'set':'unset'\" expecting \"set\". The menu opens below the button: eval \"(function(){var t=document.querySelector('.conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]').getBoundingClientRect();var m=document.querySelector('[data-testid=conversation-actions-menu]').getBoundingClientRect();return m.top\u003et.top+t.height/2?'below':'above';})()\" expecting \"below\".\nPress Escape: the menu is hidden and ACTIVE has attribute aria-expanded \"false\".\nRemember the row: eval \"(function(){var id=document.querySelector('.conversation-item.active').getAttribute('data-conversation-id');if(!id)return 'no id';sessionStorage.setItem('rowActionsId',id);return 'kept';})()\" expecting \"kept\". Click ACTIVE, wait for the menu to be visible, and click its Archive item \"[data-testid=conversation-actions-menu] [role=menuitem][aria-label=Archive]\". The row leaves the list: eval \"document.querySelector('.conversation-item[data-conversation-id=\\\"'+sessionStorage.getItem('rowActionsId')+'\\\"]')?'present':'gone'\" expecting \"gone\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=message-input]",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=message-input]",
+      "value": "echo: inactive row actions menu"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=send-button]"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "15s"
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=message-input]",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=message-input]",
+      "value": "echo: row actions menu"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=send-button]"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open conversations']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item.active",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.drawer-working-indicator').length",
+      "expect": "0",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item-enter",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "String(document.querySelector('.drawer').getAnimations({subtree:true}).length)",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.conversation-item.active button')).filter(function(b){var n=(b.getAttribute('aria-label')||b.textContent).trim();return n==='Rename'||n==='Edit tags'||n==='Archive';}).length",
+      "expect": "0"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item.active .drawer-conversation-header-row button[aria-label=Actions] svg"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-overflow-menu-wrapper button[aria-label='More options']"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var a=document.querySelector('.conversation-item.active .drawer-conversation-header-row button[aria-label=Actions] svg path');var b=document.querySelector('.chat-overflow-menu-wrapper button[aria-label=\"More options\"] svg path');return a\u0026\u0026b\u0026\u0026a.getAttribute('d')===b.getAttribute('d')?'same':'differ';})()",
+      "expect": "same"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item:not(.active) .drawer-conversation-header-row button[aria-label=Actions]"
+    },
+    {
+      "action": "eval",
+      "expression": "['.conversation-item.active','.conversation-item:not(.active)'].map(function(r){var s=getComputedStyle(document.querySelector(r+' .drawer-conversation-header-row button[aria-label=Actions]'));return [s.opacity,s.backgroundColor,parseFloat(s.borderWidth),s.boxShadow,parseFloat(s.width),parseFloat(s.height),parseFloat(s.borderRadius)].join('|');}).join(' ; ')",
+      "expect": "1|rgba(0, 0, 0, 0)|0|none|28|28|0 ; 1|rgba(0, 0, 0, 0)|0|none|28|28|0"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var el=document.querySelector('.conversation-item:not(.active) .drawer-conversation-header-row button[aria-label=Actions]');el.scrollIntoView({block:'nearest'});var r=el.getBoundingClientRect();window.__box=[r.x,r.y,r.width,r.height].join(',');return 'noted';})()",
+      "expect": "noted"
+    },
+    {
+      "action": "hover",
+      "selector": ".conversation-item:not(.active) .drawer-conversation-header-row button[aria-label=Actions]",
+      "x": 2,
+      "y": 2
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var t=document.querySelector('.p-tooltip-text');return t?t.textContent.trim():'none';})()",
+      "expect": "Actions"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var r=document.querySelector('.conversation-item:not(.active) .drawer-conversation-header-row button[aria-label=Actions]').getBoundingClientRect();var b=[r.x,r.y,r.width,r.height].join(',');return b===window.__box?'same':'moved '+window.__box+' -\u003e '+b;})()",
+      "expect": "same"
+    },
+    {
+      "action": "hover",
+      "selector": ".conversation-item:not(.active) .drawer-conversation-header-row button[aria-label=Actions]",
+      "x": 26,
+      "y": 26
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var r=document.querySelector('.conversation-item:not(.active) .drawer-conversation-header-row button[aria-label=Actions]').getBoundingClientRect();var b=[r.x,r.y,r.width,r.height].join(',');return b===window.__box?'same':'moved '+window.__box+' -\u003e '+b;})()",
+      "expect": "same"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]').focus(),'focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab",
+      "modifiers": "Shift"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement===document.querySelector('.conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]')?'yes':'no'",
+      "expect": "yes"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var s=getComputedStyle(document.activeElement);return s.outlineColor+' '+(parseFloat(s.outlineWidth)\u003e=2);})()",
+      "expect": "rgb(255, 255, 255) true"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item.active .conversation-meta button[aria-label=Actions]",
+      "count": 0
+    },
+    {
+      "action": "hover",
+      "selector": ".conversation-item.active"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=conversation-actions-menu]",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]",
+      "attribute": "aria-expanded",
+      "value": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('[data-testid=conversation-actions-menu] [role=menuitem]')).map(function(e){return e.textContent.trim();}).join('|')",
+      "expect": "Archive|Rename|Edit tags"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement===document.querySelector('[data-testid=conversation-actions-menu] [role=menu]')?'yes':'no'",
+      "expect": "yes"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=conversation-actions-menu] [role=menu]').getAttribute('aria-activedescendant')?'set':'unset'",
+      "expect": "set"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var t=document.querySelector('.conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]').getBoundingClientRect();var m=document.querySelector('[data-testid=conversation-actions-menu]').getBoundingClientRect();return m.top\u003et.top+t.height/2?'below':'above';})()",
+      "expect": "below"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=conversation-actions-menu]",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var id=document.querySelector('.conversation-item.active').getAttribute('data-conversation-id');if(!id)return 'no id';sessionStorage.setItem('rowActionsId',id);return 'kept';})()",
+      "expect": "kept"
+    },
+    {
+      "action": "hover",
+      "selector": ".conversation-item.active"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=conversation-actions-menu]",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=conversation-actions-menu] [role=menuitem][aria-label=Archive]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"'+sessionStorage.getItem('rowActionsId')+'\"]')?'present':'gone'",
+      "expect": "gone"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-10-20T21:57:14.219986868Z",
+    "hostname": "phil-exe-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 70397,
+    "output_tokens": 6080,
+    "estimated_cost_usd": 0.30239099999999997,
+    "mode": "generated"
+  }
+}

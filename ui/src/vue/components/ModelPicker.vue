@@ -64,14 +64,16 @@
     @hide="onHide"
   >
     <template #value>
-      <span class="model-picker-value">
-        <span :class="['model-picker-value-name', { 'status-readout-affordance': inline }]">{{
-          triggerLabel || selectedLabel
-        }}</span>
-        <span v-if="effortText && !inline && !triggerLabel" class="model-picker-value-effort"
-          >· {{ effortText }}</span
-        >
-      </span>
+      <slot name="value" :label="selectedLabel">
+        <span class="model-picker-value">
+          <span :class="['model-picker-value-name', { 'status-readout-affordance': inline }]">{{
+            triggerLabel || selectedLabel
+          }}</span>
+          <span v-if="effortText && !inline && !triggerLabel" class="model-picker-value-effort"
+            >· {{ effortText }}</span
+          >
+        </span>
+      </slot>
     </template>
     <template v-if="catalogActions || keepsOpen" #header>
       <div class="model-picker-section-head model-picker-header" @click.stop>

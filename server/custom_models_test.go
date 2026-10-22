@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,87 @@ import (
 	"shelley.exe.dev/llm/ant"
 	"shelley.exe.dev/llm/oai"
 )
+
+func TestCustomModelAPIKeyRedaction(t *testing.T) {
+	h := NewTestHarness(t)
+	mux := http.NewServeMux()
+	h.server.RegisterRoutes(mux)
+	const originalKey = "secret-original-provider-key"
+	const replacementKey = "secret-replacement-provider-key"
+	modelID := ""
+	for _, step := range []struct {
+		name, method, suffix, key, storedKey string
+		status                               int
+	}{
+		{"create", http.MethodPost, "", originalKey, originalKey, http.StatusCreated},
+		{"list", http.MethodGet, "", "", originalKey, http.StatusOK},
+		{"get", http.MethodGet, "", "", originalKey, http.StatusOK},
+		{"update preserves key", http.MethodPut, "", "", originalKey, http.StatusOK},
+		{"update replaces key", http.MethodPut, "", replacementKey, replacementKey, http.StatusOK},
+		{"duplicate", http.MethodPost, "/duplicate", "", replacementKey, http.StatusCreated},
+	} {
+		t.Run(step.name, func(t *testing.T) {
+			path := "/api/custom-models"
+			if step.name != "create" && step.name != "list" {
+				path += "/" + modelID
+			}
+			path += step.suffix
+			body, err := json.Marshal(CreateModelRequest{
+				DisplayName: "Secret model", ProviderType: "openai",
+				Endpoint: "https://example.test/v1", APIKey: step.key, ModelName: "test-model",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, httptest.NewRequest(step.method, path, bytes.NewReader(body)))
+			if rec.Code != step.status {
+				t.Fatalf("status = %d, want %d", rec.Code, step.status)
+			}
+			for _, forbidden := range []string{`"api_key"`, originalKey, replacementKey} {
+				if strings.Contains(rec.Body.String(), forbidden) {
+					t.Fatal("response exposes an API key field or secret")
+				}
+			}
+			var response ModelAPI
+			if step.name == "list" {
+				var list []ModelAPI
+				if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+					t.Fatal(err)
+				}
+				if len(list) != 1 {
+					t.Fatalf("got %d models, want 1", len(list))
+				}
+				response = list[0]
+			} else if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if !response.HasAPIKey {
+				t.Fatal("has_api_key = false for a stored key")
+			}
+			if response.ModelID == "" {
+				t.Fatal("missing model ID")
+			}
+			if step.name == "create" {
+				modelID = response.ModelID
+			}
+			stored, err := h.db.GetModel(t.Context(), response.ModelID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stored.ApiKey != step.storedKey {
+				t.Fatal("stored API key was not preserved or replaced as requested")
+			}
+		})
+	}
+}
+
+func TestToModelAPIWithoutKey(t *testing.T) {
+	model := toModelAPI(generated.Model{})
+	if model.HasAPIKey {
+		t.Fatal("has_api_key = true for an empty key")
+	}
+}
 
 func TestValidReasoningMapAcceptsMax(t *testing.T) {
 	if err := validReasoningMap(`{"max":"max"}`); err != nil {
@@ -439,6 +521,9 @@ func TestCustomModelTestMaxOutputTokenPresence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var got map[string]any
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("Authorization") != "Bearer saved-key" {
+					t.Error("test request did not use the stored API key")
+				}
 				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 					t.Errorf("decode upstream request: %v", err)
 				}

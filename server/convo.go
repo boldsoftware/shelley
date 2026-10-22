@@ -230,6 +230,9 @@ type ConversationManager struct {
 	// keepRecentTokens is the budget of the recent part compact_in_place
 	// leaves as it is.
 	keepRecentTokens int
+	// idleCompactionMinTokens is the estimated context size below which idle
+	// compaction is skipped.
+	idleCompactionMinTokens int
 }
 
 // NewConversationManager constructs a manager with dependencies but defers hydration until needed.

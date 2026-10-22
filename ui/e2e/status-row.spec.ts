@@ -45,10 +45,8 @@ test("status branch is opt-in, persists, and follows the cwd worktree", async ({
       await expect(page.locator(".p-tooltip-text")).toContainText(worktree);
 
       await page.setViewportSize({ width: 390, height: 800 });
-      await expect(branch).toBeVisible();
-      await expect(branch).toHaveText(name);
-
-      await expect(page.locator(".status-ready:visible")).toBeVisible();
+      await expect(page.locator(".status-readout-branch")).toBeHidden();
+      await page.setViewportSize({ width: 1280, height: 800 });
       await page.getByTestId("message-input").fill("bash: git checkout --detach");
       await page.getByTestId("send-button").click();
       await expect(branch).toHaveText(
@@ -126,12 +124,11 @@ test("TOC shares the compact status row across desktop and mobile", async ({ pag
           const textRect = text.offsetWidth > 0 ? rect(".animated-working") : null;
           return {
             toc: rect(".toc-button"),
-            cwd: rect(".status-readout-cwd"),
-            model: rect(".status-readout-model"),
+            model: window.innerWidth >= 768 ? rect(".status-readout-model") : null,
             status: textRect,
             stop: rect(".status-stop-button"),
             row: rect(".status-bar-active"),
-            tokens: rect(".context-usage-label-tokens"),
+            tokens: window.innerWidth >= 768 ? rect(".context-usage-label-tokens") : null,
             input: rect(".message-textarea"),
             send: rect(".message-send-wrapper"),
             text: [...text.querySelectorAll('span[aria-hidden="true"]')]
@@ -141,25 +138,26 @@ test("TOC shares the compact status row across desktop and mobile", async ({ pag
           };
         });
         expect(geometry.toc.left).toBeGreaterThanOrEqual(
-          width <= 767 ? geometry.cwd.right : geometry.model.right,
+          width <= 767 ? geometry.stop.right : geometry.model!.right,
         );
+        const anchor = width <= 767 ? geometry.stop : geometry.tokens!;
         expect(
-          Math.abs(
-            (geometry.toc.top + geometry.toc.bottom - geometry.model.top - geometry.model.bottom) /
-              2,
-          ),
+          Math.abs((geometry.toc.top + geometry.toc.bottom - anchor.top - anchor.bottom) / 2),
         ).toBeLessThan(2);
         expect(geometry.toc.right).toBeLessThanOrEqual(width);
         expect(geometry.row.overflow).toBe(false);
-        expect(geometry.tokens.overflow).toBe(false);
         if (width <= 767) {
           expect(geometry.status!.right - geometry.status!.left).toBe(1);
           expect(geometry.status!.bottom - geometry.status!.top).toBe(1);
-          expect(geometry.stop.right).toBeLessThanOrEqual(geometry.tokens.left);
+          await expect(page.locator(".context-usage-label")).toBeHidden();
+          await expect(page.locator(".chat-context-popup")).toBeHidden();
           expect(geometry.stop.right - geometry.stop.left).toBe(24);
           expect(geometry.send.bottom).toBeLessThanOrEqual(geometry.input.top);
-          expect(geometry.cwd.left - geometry.model.right).toBeLessThan(16);
+          await expect(page.locator(".status-readout-cwd")).toBeHidden();
+          await expect(page.locator(".status-readout-model")).toBeHidden();
+          await expect(page.locator(".status-stop-button")).toHaveCSS("animation-name", "none");
         } else {
+          expect(geometry.tokens!.overflow).toBe(false);
           expect(geometry.status).not.toBeNull();
           expect(geometry.status!.bottom - geometry.status!.top).toBeLessThan(24);
           expect(geometry.status!.right).toBeLessThanOrEqual(geometry.stop.left);
@@ -173,6 +171,18 @@ test("TOC shares the compact status row across desktop and mobile", async ({ pag
       await toc.click();
       await expect(page.locator(".toc-popover")).toBeVisible();
       await page.keyboard.press("Escape");
+      if (width === 390) {
+        await page.getByRole("button", { name: "More options", exact: true }).click();
+        const model = page.locator(".model-picker-menu");
+        await expect(model).toHaveClass(/p-disabled/);
+        await expect(model).toHaveCSS("opacity", "0.5");
+        await expect(model.getByRole("combobox")).toHaveAttribute("aria-disabled", "true");
+        await expect(model.getByRole("combobox")).toHaveAttribute(
+          "aria-description",
+          /switch models/,
+        );
+        await page.keyboard.press("Escape");
+      }
     }
     // A narrow conversation pane on a desktop must shorten the label too.
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -186,34 +196,16 @@ test("TOC shares the compact status row across desktop and mobile", async ({ pag
     await expect(page.getByTestId("agent-thinking")).toBeHidden();
     await expect(toc).toBeVisible();
     await page.setViewportSize({ width: 390, height: 800 });
-    await expect(page.locator(".status-ready")).toBeVisible();
-    await expect(page.locator(".status-readout-cwd-leaf")).toBeVisible();
+    await expect(page.locator(".status-ready")).toBeHidden();
+    await expect(page.locator(".status-stop-button")).toHaveCount(0);
+    await expect(page.locator(".context-usage-label")).toBeHidden();
+    await expect(page.locator(".status-readout-cwd-leaf")).toBeHidden();
     await expect(page.locator(".status-readout-cwd-path")).toBeHidden();
     for (const dark of [false, true]) {
       await page.emulateMedia({ colorScheme: dark ? "dark" : "light" });
       await expect(page.locator("html")).toHaveClass(dark ? /dark/ : /^(?!.*\bdark\b).*$/);
-      const dot = await page.locator(".status-ready").evaluate((el) => {
-        const style = getComputedStyle(el, "::before");
-        return {
-          width: style.width,
-          height: style.height,
-          left: style.left,
-          top: style.top,
-          position: style.position,
-          background: style.backgroundColor,
-          opacity: style.opacity,
-        };
-      });
-      expect(dot).toEqual({
-        width: "8px",
-        height: "8px",
-        left: "8px",
-        top: "13px",
-        position: "absolute",
-        background: dark ? "rgb(107, 114, 128)" : "rgb(156, 163, 175)",
-        opacity: "1",
-      });
-      await expect(page.locator(".status-readout-sep-cwd")).toBeVisible();
+      await expect(page.locator(".status-ready")).toBeHidden();
+      await expect(page.locator(".status-readout-sep-cwd")).toBeHidden();
     }
     expect((await request.post(`/api/conversation/${conversationId}/archive`)).ok()).toBe(true);
     await page.reload();
@@ -239,7 +231,9 @@ test("mobile composer keeps attachments and wrapped errors above the input", asy
     route.fulfill({ json: { path: "/tmp/composer-layout.txt" } }),
   );
   await page.goto(`/c/${slug}`);
-  await expect(page.locator(".status-ready")).toBeVisible();
+  await expect(page.getByTestId("message-input")).toBeVisible();
+  await expect(page.locator(".context-usage-label")).toBeHidden();
+  await expect(page.locator(".status-ready")).toBeHidden();
 
   for (const count of [1, 5]) {
     await page.locator('input[type="file"]').setInputFiles(
@@ -304,6 +298,32 @@ test("mobile composer keeps attachments and wrapped errors above the input", asy
     }).toPass();
   }
   await page.locator(".message-controls-status-slot .status-button-text").click();
-  await expect(page.locator(".status-ready")).toBeVisible();
+  await expect(page.getByTestId("message-input")).toBeVisible();
+  await expect(page.locator(".context-usage-label")).toBeHidden();
+  await expect(page.locator(".status-ready")).toBeHidden();
   await expect(page.getByTestId("message-input")).toHaveValue("keep my draft");
+});
+
+test("context count and usage graphs stay desktop-only", async ({ page, request }) => {
+  const { slug } = await createConversationViaAPIWithDetails(request, "echo desktop usage");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/c/${slug}`);
+  const count = page.locator(".context-usage-label");
+  await expect(count).toBeVisible();
+  await count.click();
+  const popup = page.locator(".chat-context-popup");
+  await expect(popup).toBeVisible();
+  await expect(popup.locator(".token-cost-graph-svg")).toBeVisible();
+  for (const width of [767, 390, 320]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(count).toBeHidden();
+    await expect(popup).toBeHidden();
+    await expect(
+      page.getByRole("button", { name: "Conversation table of contents", exact: true }),
+    ).toBeVisible();
+  }
+  await page.setViewportSize({ width: 768, height: 800 });
+  await expect(count).toBeVisible();
+  await count.click();
+  await expect(popup).toBeVisible();
 });

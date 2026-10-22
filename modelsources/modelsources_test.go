@@ -119,7 +119,7 @@ func TestEnvSourceLabels(t *testing.T) {
 	for _, tt := range []struct {
 		id, want string
 	}{
-		{"claude-opus-4.6", "$ANTHROPIC_API_KEY"},
+		{"claude-opus-5.5", "$ANTHROPIC_API_KEY"},
 		{"gpt-5.5", "$OPENAI_API_KEY"},
 		{"gemini-3.8-flash", "$GEMINI_API_KEY"},
 		{"kimi-k3-fireworks", "$FIREWORKS_API_KEY"},
@@ -144,8 +144,8 @@ func TestEnvSourceLabels(t *testing.T) {
 func TestGatewaySourceLabels(t *testing.T) {
 	// Plain gateway.
 	bs := Build(models.All(), []Source{Gateway("https://gw.example.com", "", "", "")}, &http.Client{}, nil)
-	if b := findBuilt(bs, "claude-opus-4.6"); b == nil || b.Source != "exe.dev gateway" {
-		t.Errorf("claude-opus-4.6 with plain gateway: %+v", b)
+	if b := findBuilt(bs, "claude-opus-5.5"); b == nil || b.Source != "exe.dev gateway" {
+		t.Errorf("claude-opus-5.5 with plain gateway: %+v", b)
 	}
 	if b := findBuilt(bs, "gemini-3.8-flash"); b != nil {
 		t.Errorf("gemini-3.8-flash should not be built by gateway, got %+v", b)
@@ -156,8 +156,8 @@ func TestGatewaySourceLabels(t *testing.T) {
 
 	// Gateway with explicit anthropic key: provider label switches.
 	bs = Build(models.All(), []Source{Gateway("https://gw.example.com", "real-key", "", "")}, &http.Client{}, nil)
-	if b := findBuilt(bs, "claude-opus-4.6"); b == nil || b.Source != "$ANTHROPIC_API_KEY" {
-		t.Errorf("claude-opus-4.6 with explicit anthropic key: %+v", b)
+	if b := findBuilt(bs, "claude-opus-5.5"); b == nil || b.Source != "$ANTHROPIC_API_KEY" {
+		t.Errorf("claude-opus-5.5 with explicit anthropic key: %+v", b)
 	}
 	if b := findBuilt(bs, "gpt-5.5"); b == nil || b.Source != "exe.dev gateway" {
 		t.Errorf("gpt-5.5 should still be gateway: %+v", b)
@@ -166,9 +166,9 @@ func TestGatewaySourceLabels(t *testing.T) {
 
 func TestAnthropicThinkingBindingSources(t *testing.T) {
 	gateway := Build(models.All(), []Source{Gateway("https://gw.example.com", "", "", "")}, &http.Client{}, nil)
-	gatewayModel := findBuilt(gateway, "claude-opus-4.6")
+	gatewayModel := findBuilt(gateway, "claude-opus-5.5")
 	if gatewayModel == nil {
-		t.Fatal("gateway did not build claude-opus-4.6")
+		t.Fatal("gateway did not build claude-opus-5.5")
 	}
 	gatewayService, ok := gatewayModel.Service.(*ant.Service)
 	if !ok || !gatewayService.EnableThinkingBinding {
@@ -176,9 +176,9 @@ func TestAnthropicThinkingBindingSources(t *testing.T) {
 	}
 
 	env := Build(models.All(), []Source{Env("key", "", "", "")}, &http.Client{}, nil)
-	envModel := findBuilt(env, "claude-opus-4.6")
+	envModel := findBuilt(env, "claude-opus-5.5")
 	if envModel == nil {
-		t.Fatal("env source did not build claude-opus-4.6")
+		t.Fatal("env source did not build claude-opus-5.5")
 	}
 	envService, ok := envModel.Service.(*ant.Service)
 	if !ok || !envService.EnableThinkingBinding {
@@ -188,14 +188,14 @@ func TestAnthropicThinkingBindingSources(t *testing.T) {
 	integration := &LLMIntegrationConfig{
 		Name: "llm", Host: "llm.int.exe.xyz", URL: "https://llm.int.exe.xyz",
 		Models: []IntegrationModel{{
-			ID: "anthropic/claude-opus-4-6", Provider: "anthropic",
-			NativeID: "claude-opus-4-6", APIs: []string{"anthropic_messages"},
+			ID: "anthropic/claude-opus-5-5", Provider: "anthropic",
+			NativeID: "claude-opus-5-5", APIs: []string{"anthropic_messages"},
 		}},
 	}
 	built := Build(models.All(), []Source{LLMIntegration(integration, "")}, &http.Client{}, nil)
-	integrationModel := findBuilt(built, "claude-opus-4.6")
+	integrationModel := findBuilt(built, "claude-opus-5.5")
 	if integrationModel == nil {
-		t.Fatal("catalog integration did not build claude-opus-4.6")
+		t.Fatal("catalog integration did not build claude-opus-5.5")
 	}
 	integrationService, ok := integrationModel.Service.(*ant.Service)
 	if !ok || !integrationService.EnableThinkingBinding {
@@ -205,14 +205,14 @@ func TestAnthropicThinkingBindingSources(t *testing.T) {
 	proxy := &LLMIntegrationConfig{
 		Name: "proxy", Host: "proxy.int.exe.xyz", URL: "https://proxy.int.exe.xyz",
 		Models: []IntegrationModel{{
-			ID: "fireworks/claude-opus-4-6", Provider: "fireworks",
-			NativeID: "claude-opus-4-6", APIs: []string{"anthropic_messages"},
+			ID: "fireworks/claude-opus-5-5", Provider: "fireworks",
+			NativeID: "claude-opus-5-5", APIs: []string{"anthropic_messages"},
 		}},
 	}
 	built = Build(models.All(), []Source{LLMIntegration(proxy, "")}, &http.Client{}, nil)
-	proxyModel := findBuilt(built, "claude-opus-4-6")
+	proxyModel := findBuilt(built, "claude-opus-5-5")
 	if proxyModel == nil {
-		t.Fatal("third-party integration did not build claude-opus-4-6")
+		t.Fatal("third-party integration did not build claude-opus-5-5")
 	}
 	proxyService, ok := proxyModel.Service.(*ant.Service)
 	if !ok || proxyService.EnableThinkingBinding {
@@ -230,7 +230,6 @@ func TestLLMIntegrationSourceLabelsAndFiltering(t *testing.T) {
 			{ID: "openai/gpt-6-luna", Provider: "openai", NativeID: "gpt-6-luna", APIs: []string{"openai_chat", "openai_responses"}},
 			{ID: "anthropic/claude-opus-4-8", Provider: "anthropic", NativeID: "claude-opus-4-8", APIs: []string{"anthropic_messages"}},
 			{ID: "anthropic/claude-opus-4-7", Provider: "anthropic", NativeID: "claude-opus-4-7", APIs: []string{"anthropic_messages"}},
-			{ID: "anthropic/claude-opus-4-6", Provider: "anthropic", NativeID: "claude-opus-4-6", APIs: []string{"anthropic_messages"}},
 			{ID: "anthropic/claude-sonnet-4-6", Provider: "anthropic", NativeID: "claude-sonnet-4-6", APIs: []string{"anthropic_messages"}},
 			{ID: "openai/gpt-5.6-sol", Provider: "openai", NativeID: "gpt-5.6-sol", APIs: []string{"openai_chat", "openai_responses"}},
 			{ID: "openai/gpt-5.6-terra", Provider: "openai", NativeID: "gpt-5.6-terra", APIs: []string{"openai_chat", "openai_responses"}},
@@ -252,7 +251,6 @@ func TestLLMIntegrationSourceLabelsAndFiltering(t *testing.T) {
 		"gpt-6-luna",
 		"claude-opus-4.8",
 		"claude-opus-4.7",
-		"claude-opus-4.6",
 		"claude-sonnet-4.6",
 		"gpt-5.6-sol",
 		"gpt-5.6-terra",
@@ -687,7 +685,7 @@ func TestLLMIntegrationCatalogAndDynamicImageCapabilities(t *testing.T) {
 		"schema_version": 1,
 		"models": [
 			{"id":"anthropic/image","provider":"anthropic","native_id":"claude-opus-4-7","apis":["anthropic_messages"],"architecture":{"input_modalities":["text","image"]}},
-			{"id":"anthropic/text","provider":"anthropic","native_id":"claude-opus-4-6","apis":["anthropic_messages"]},
+			{"id":"anthropic/text","provider":"anthropic","native_id":"claude-opus-5-5","apis":["anthropic_messages"]},
 			{"id":"openai/responses-image","provider":"openai","native_id":"gpt-5.6-sol","apis":["openai_responses"],"architecture":{"input_modalities":["text","image"]}},
 			{"id":"openai/responses-text","provider":"openai","native_id":"gpt-5.5","apis":["openai_responses"]},
 			{"id":"openai/chat-image","provider":"openai","native_id":"gpt-4o","apis":["openai_chat"],"architecture":{"input_modalities":["image","text"]}},
@@ -709,7 +707,7 @@ func TestLLMIntegrationCatalogAndDynamicImageCapabilities(t *testing.T) {
 		want bool
 	}{
 		{"claude-opus-4.7", true},
-		{"claude-opus-4.6", true},
+		{"claude-opus-5.5", true},
 		{"gpt-5.6-sol", true},
 		{"gpt-5.5", true},
 		{"chat-image", true},
@@ -1111,7 +1109,7 @@ func TestBuiltBaseURLResolution(t *testing.T) {
 	for _, tt := range []struct {
 		id, want string
 	}{
-		{"claude-opus-4.6", "https://api.anthropic.com"},
+		{"claude-opus-5.5", "https://api.anthropic.com"},
 		{"gpt-5.5", "https://api.openai.com"},
 		{"kimi-k3-fireworks", "https://api.fireworks.ai/inference"},
 		{"gemini-3.8-flash", "https://generativelanguage.googleapis.com"},
@@ -1149,7 +1147,7 @@ func TestBuiltAPITypePopulated(t *testing.T) {
 		id   string
 		want models.APIType
 	}{
-		{"claude-opus-4.6", models.APITypeAnthropicMessages},
+		{"claude-opus-5.5", models.APITypeAnthropicMessages},
 		{"gpt-5.5", models.APITypeOpenAIResponses},
 		{"kimi-k3-fireworks", models.APITypeOpenAIChat},
 		{"gemini-3.8-flash", models.APITypeGemini},

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	lazycue "github.com/boldsoftware/shelley/lazycue"
@@ -32,20 +33,26 @@ import (
 // LAZYCUE_INTEGRATION is set (the dedicated CI step sets it); they skip cleanly
 // when no browser is available.
 //
-// TestMain boots one in-process predictable-mode Shelley server shared by all
-// the tests, then (when artifacts are requested) writes an aggregate HTML
-// report and JSON cache-stats summary. Optional env vars, set by CI to feed the
-// reporting scripts:
+// TestMain boots one in-process predictable-mode Shelley server shared by the
+// tests (lazyTestIsolated ones get their own), then (when artifacts are
+// requested) writes an aggregate HTML report and JSON cache-stats summary.
+// Optional env vars, set by CI to feed the reporting scripts:
 //
 //	LAZYCUE_ARTIFACT_DIR  write per-step screenshots + an HTML report here
 //	LAZYCUE_VIDEO_DIR     render an MP4 per test (prompt + captioned screenshots) here
 //	LAZYCUE_SUMMARY       write a machine-readable JSON cache-stats summary here
 
 // app is the shared harness. Its BaseURL is filled in by TestMain once the
-// server is listening.
+// server is listening. appOpts keeps the options so lazyTestIsolated can build
+// a harness for a server of its own; those harnesses are collected in
+// isolatedApps for the report.
 var (
 	app          *lazycue.Harness
 	recordingApp *lazycue.Harness
+	appOpts      lazycue.Options
+
+	isolatedMu   sync.Mutex
+	isolatedApps []*lazycue.Harness
 )
 
 func TestMain(m *testing.M) {
@@ -116,6 +123,7 @@ func TestMain(m *testing.M) {
 		ArtifactDir: os.Getenv("LAZYCUE_ARTIFACT_DIR"),
 		VideoDir:    os.Getenv("LAZYCUE_VIDEO_DIR"),
 	}
+	appOpts = opts
 	app = lazycue.New(opts)
 	opts.InitScript = string(recordingMock)
 	recordingApp = lazycue.New(opts)
@@ -125,16 +133,16 @@ func TestMain(m *testing.M) {
 	// Render per-test MP4s (out of the per-test hot path; concurrent). Do this
 	// before WriteReport/WriteSummary so the report embeds the videos and the
 	// summary records their paths. Best-effort.
-	if err := app.RenderVideos(); err != nil {
-		slog.Warn("lazycue: render videos", "error", err)
+	results := app.Results()
+	results = append(results, recordingApp.Results()...)
+	for _, h := range isolatedApps {
+		results = append(results, h.Results()...)
 	}
-	if err := recordingApp.RenderVideos(); err != nil {
-		slog.Warn("lazycue: render recording videos", "error", err)
+	if err := lazycue.RenderVideos(appOpts.VideoDir, results); err != nil {
+		slog.Warn("lazycue: render videos", "error", err)
 	}
 
 	// Emit the reporting artifacts CI surfaces (HTML report + JSON summary).
-	results := app.Results()
-	results = append(results, recordingApp.Results()...)
 	if dir := os.Getenv("LAZYCUE_ARTIFACT_DIR"); dir != "" && len(results) > 0 {
 		if err := lazycue.WriteReport(dir, results); err != nil {
 			slog.Warn("lazycue: write report", "error", err)
@@ -158,8 +166,8 @@ func lazyTest(t *testing.T, description string) {
 	// Each lazycue run gets its own browser and its own conversation(s), so
 	// the tests are independent; run them in parallel to cut suite wall time.
 	// CI bounds concurrency with -parallel (browser instances are ~1 CPU
-	// each). Tests that assert against the SHARED conversation list (ordering
-	// or adjacency of other tests' conversations) must use lazyTestSerial.
+	// each). Tests that depend on the conversation list (its order, or where
+	// its rows sit) must use lazyTestIsolated.
 	t.Parallel()
 	app.Test(t, description)
 }
@@ -173,16 +181,27 @@ func lazyRecordingTest(t *testing.T, description string) {
 	recordingApp.Test(t, description)
 }
 
-// lazyTestSerial is lazyTest without t.Parallel, for descriptions that make
-// assumptions about the global conversation list (e.g. "the conversation
-// immediately below"). Go runs all serial tests before releasing the paused
-// parallel ones, so a serial test never overlaps another lazycue test.
-func lazyTestSerial(t *testing.T, description string) {
+// lazyTestIsolated is lazyTest against a fresh server of its own, for
+// descriptions that depend on the conversation list (e.g. "the conversation
+// immediately below", or a row's position). On the shared server another
+// test's new conversation lands at the top of the list mid-run. Running such
+// tests serially instead would add their whole duration to the suite's wall
+// time, because Go runs every serial test before releasing the parallel ones.
+func lazyTestIsolated(t *testing.T, description string) {
 	t.Helper()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run the LazyCue browser integration tests")
 	}
-	app.Test(t, description)
+	t.Parallel()
+	ts, cleanup := startPredictableServer()
+	t.Cleanup(cleanup)
+	opts := appOpts
+	opts.BaseURL = ts.URL
+	h := lazycue.New(opts)
+	isolatedMu.Lock()
+	isolatedApps = append(isolatedApps, h)
+	isolatedMu.Unlock()
+	h.Test(t, description)
 }
 
 func TestNewPageSmoke(t *testing.T) {
@@ -658,7 +677,7 @@ func TestNewPageQueueDrains(t *testing.T) {
 // deterministic. ---
 
 func TestArchiveSelectsConversationBelow(t *testing.T) {
-	lazyTestSerial(t, `This test verifies that archiving the current conversation selects the one immediately below it in the list. Conversations are listed newest-first.
+	lazyTestIsolated(t, `This test verifies that archiving the current conversation selects the one immediately below it in the list. Conversations are listed newest-first.
 Step A — create conversation "alpha": navigate to /new, wait for the message input (data-testid "message-input") to be visible, fill it with "echo: alpha", and click the send button (data-testid "send-button"). Wait for the echoed text "alpha" to appear and for the URL to contain "/c/". Then run an eval step with expression "sessionStorage.setItem('alphaUrl', location.pathname)".
 Step B — create conversation "bravo": navigate to /new again, wait for the message input (data-testid "message-input") to be visible, fill it with "echo: bravo", and click the send button (data-testid "send-button"). Wait for the echoed text "bravo" to appear and for the URL to contain "/c/". Then run an eval step with expression "sessionStorage.setItem('bravoUrl', location.pathname)".
 Now "bravo" is the current conversation and is at the TOP of the list, with "alpha" immediately below it.
@@ -911,6 +930,32 @@ func TestNewPageModelMenuEnterCompletesHighlighted(t *testing.T) {
 // generation started (compaction ran) and the queued echo eventually drained.
 func TestNewPageCompactAndSend(t *testing.T) {
 	lazyTest(t, `Navigate to /new. Type "Hello" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"); wait for the reply "Hello! I'm Shelley, your AI assistant. How can I help you today?" to appear and for the URL to contain "/c/". Then type "echo: compacted hello" into the message input (data-testid "message-input"). Click the split-button chevron (data-testid "send-options-button") to open the send-options menu, and wait for the "Compact and send" option (data-testid "compact-and-send-option") to be visible. Click it. Compaction runs into a new generation: wait (up to 30 seconds) for the text "New generation started" to appear on the page. After compaction finishes, the queued message drains: wait (up to 30 seconds) for the echoed text "compacted hello" to appear on the page.`)
+}
+
+// --- Conversation row actions menu ---
+//
+// Each drawer row has one "Actions" button (the same three dots as the chat
+// header's overflow menu) in its header row instead of inline Rename/Edit
+// tags/Archive buttons. It must sit still: always visible, no background,
+// border, shadow or radius, and the same 28px box whether or not it is hovered
+// (hover used to make it wiggle). It shows a white focus ring on the active
+// row, opens a keyboard-navigable menu below itself, closes on Escape, and
+// its Archive item archives the conversation.
+//
+// Isolated, because it reads the geometry of rows in the conversation list: on
+// the shared server a conversation created by a concurrent test lands at the
+// top, pushes these rows down mid-assertion, and the scroll that follows
+// closes the open menu.
+func TestNewPageConversationRowActionsMenu(t *testing.T) {
+	lazyTestIsolated(t, `Conversations are listed newest-first. Below, ACTIVE means the selector ".conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]" and INACTIVE means ".conversation-item:not(.active) .drawer-conversation-header-row button[aria-label=Actions]" (the first row that is not the current conversation).
+Create two conversations: navigate to /new, wait for the message input (data-testid "message-input") to be visible, fill it with "echo: inactive row actions menu", click the send button (data-testid "send-button") and wait for the URL to contain "/c/". Then do the same with "echo: row actions menu"; that conversation is now the current one.
+Open the conversation drawer by clicking the button with aria-label "Open conversations" and wait for ".conversation-item.active" to be visible. Wait for every row to settle: eval "document.querySelectorAll('.drawer-working-indicator').length" expecting "0", with that step's "timeout" set to "30s"; selector ".conversation-item-enter" matches 0 elements, and the drawer has finished sliding in: eval "String(document.querySelector('.drawer').getAnimations({subtree:true}).length)" expecting "0".
+The row has no inline action buttons: eval "Array.from(document.querySelectorAll('.conversation-item.active button')).filter(function(b){var n=(b.getAttribute('aria-label')||b.textContent).trim();return n==='Rename'||n==='Edit tags'||n==='Archive';}).length" expecting "0". ACTIVE and its svg are visible, and so is the chat header's overflow button ".chat-overflow-menu-wrapper button[aria-label='More options']". Both draw the same icon: eval "(function(){var a=document.querySelector('.conversation-item.active .drawer-conversation-header-row button[aria-label=Actions] svg path');var b=document.querySelector('.chat-overflow-menu-wrapper button[aria-label=\"More options\"] svg path');return a&&b&&a.getAttribute('d')===b.getAttribute('d')?'same':'differ';})()" expecting "same". INACTIVE is visible. Both buttons are unadorned 28px squares: eval "['.conversation-item.active','.conversation-item:not(.active)'].map(function(r){var s=getComputedStyle(document.querySelector(r+' .drawer-conversation-header-row button[aria-label=Actions]'));return [s.opacity,s.backgroundColor,parseFloat(s.borderWidth),s.boxShadow,parseFloat(s.width),parseFloat(s.height),parseFloat(s.borderRadius)].join('|');}).join(' ; ')" expecting "1|rgba(0, 0, 0, 0)|0|none|28|28|0 ; 1|rgba(0, 0, 0, 0)|0|none|28|28|0".
+Hovering does not move INACTIVE. Record its box: eval "(function(){var el=document.querySelector('.conversation-item:not(.active) .drawer-conversation-header-row button[aria-label=Actions]');el.scrollIntoView({block:'nearest'});var r=el.getBoundingClientRect();window.__box=[r.x,r.y,r.width,r.height].join(',');return 'noted';})()" expecting "noted". Hover INACTIVE at its top-left corner, x 2 and y 2. Its tooltip reads exactly "Actions": eval "(function(){var t=document.querySelector('.p-tooltip-text');return t?t.textContent.trim():'none';})()" expecting "Actions". The box is unchanged: eval "(function(){var r=document.querySelector('.conversation-item:not(.active) .drawer-conversation-header-row button[aria-label=Actions]').getBoundingClientRect();var b=[r.x,r.y,r.width,r.height].join(',');return b===window.__box?'same':'moved '+window.__box+' -> '+b;})()" expecting "same". Hover INACTIVE at its bottom-right corner, x 26 and y 26, and run that same box eval again, expecting "same".
+Keyboard focus shows a white ring on the active row: eval "document.querySelector('.conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]').focus(),'focused'" expecting "focused", press Tab, then press Tab with the Shift modifier. ACTIVE has focus again: eval "document.activeElement===document.querySelector('.conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]')?'yes':'no'" expecting "yes". Its ring: eval "(function(){var s=getComputedStyle(document.activeElement);return s.outlineColor+' '+(parseFloat(s.outlineWidth)>=2);})()" expecting "rgb(255, 255, 255) true". Selector ".conversation-item.active .conversation-meta button[aria-label=Actions]" matches 0 elements.
+Hover ".conversation-item.active", then click ACTIVE. The menu "[data-testid=conversation-actions-menu]" becomes visible and ACTIVE has attribute aria-expanded "true". Its items, in order: eval "Array.from(document.querySelectorAll('[data-testid=conversation-actions-menu] [role=menuitem]')).map(function(e){return e.textContent.trim();}).join('|')" expecting "Archive|Rename|Edit tags". The menu list has focus: eval "document.activeElement===document.querySelector('[data-testid=conversation-actions-menu] [role=menu]')?'yes':'no'" expecting "yes". Press ArrowDown; the list then has a non-empty aria-activedescendant: eval "document.querySelector('[data-testid=conversation-actions-menu] [role=menu]').getAttribute('aria-activedescendant')?'set':'unset'" expecting "set". The menu opens below the button: eval "(function(){var t=document.querySelector('.conversation-item.active .drawer-conversation-header-row button[aria-label=Actions]').getBoundingClientRect();var m=document.querySelector('[data-testid=conversation-actions-menu]').getBoundingClientRect();return m.top>t.top+t.height/2?'below':'above';})()" expecting "below".
+Press Escape: the menu is hidden and ACTIVE has attribute aria-expanded "false".
+Remember the row: eval "(function(){var id=document.querySelector('.conversation-item.active').getAttribute('data-conversation-id');if(!id)return 'no id';sessionStorage.setItem('rowActionsId',id);return 'kept';})()" expecting "kept". Click ACTIVE, wait for the menu to be visible, and click its Archive item "[data-testid=conversation-actions-menu] [role=menuitem][aria-label=Archive]". The row leaves the list: eval "document.querySelector('.conversation-item[data-conversation-id=\"'+sessionStorage.getItem('rowActionsId')+'\"]')?'present':'gone'" expecting "gone".`)
 }
 
 // startPredictableServer boots a Shelley server in predictable mode backed by a

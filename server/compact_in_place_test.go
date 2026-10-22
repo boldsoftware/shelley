@@ -567,10 +567,10 @@ func TestBuildCompactionKeepsCallsWithOutputs(t *testing.T) {
 	_, err := buildCompaction(items, 20_000, claudetool.CompactInPlaceInput{Collapse: []claudetool.CompactCollapse{
 		col("3", "6", "n"), col("2", "3", "n"), col("4", "4", ""),
 	}})
-	want := "3 problems. Nothing was compacted; fix them and send the whole request again:\n" +
+	want := "3 problems:\n" +
 		"- collapse 3-6: unknown id; use ids from the index\n" +
 		"- collapse 2-3: unknown id; use ids from the index\n" +
-		"- collapse 4-4: note is empty"
+		"- collapse 4-4: note is empty\n\n" + compactRetryGuidance
 	if err == nil || err.Error() != want {
 		t.Fatalf("got %v", err)
 	}
@@ -605,9 +605,9 @@ func TestBuildCompactionOrphans(t *testing.T) {
 		return claudetool.CompactCollapse{From: from, To: to, Note: "n"}
 	}
 	_, err = buildCompaction(items, 20_000, claudetool.CompactInPlaceInput{Collapse: []claudetool.CompactCollapse{col("2", "4"), col("6", "7")}})
-	want := "2 problems. Nothing was compacted; fix them and send the whole request again:\n" +
+	want := "2 problems:\n" +
 		"- collapse 2-4: 4 is a tool call without its output; end the range before it\n" +
-		"- collapse 6-7: 6 is a tool output without its call; start the range after it"
+		"- collapse 6-7: 6 is a tool output without its call; start the range after it\n\n" + compactRetryGuidance
 	if err == nil || err.Error() != want {
 		t.Fatalf("got %v", err)
 	}
@@ -627,6 +627,66 @@ func TestBuildCompactionOrphans(t *testing.T) {
 		if _, err := applyInPlaceCompaction(items, c, "c1", 9); err != nil {
 			t.Fatalf("collapse %s-%s: %v", r.From, r.To, err)
 		}
+	}
+}
+
+func TestCompactIndexReadabilityGuidance(t *testing.T) {
+	index, err := compactIndex([]contextItem{
+		textItem(1, llm.MessageRoleAssistant, "Finished the benchmark."),
+		textItem(2, llm.MessageRoleAssistant, "Next task."),
+	}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"readable sentences or bullets with normal whitespace",
+		"words, numbers, and units clearly separated",
+		"not by removing spaces or joining words",
+	} {
+		if !strings.Contains(index, want) {
+			t.Errorf("index missing %q", want)
+		}
+	}
+}
+
+func TestBuildCompactionRetryPreservesNotes(t *testing.T) {
+	const note = "Repeated push: everything up to date.\nIndex size 256: 12,906 ns → 6,237 ns."
+	items := []contextItem{
+		textItem(1, llm.MessageRoleAssistant, strings.Repeat(note+"\n", 20)),
+		textItem(2, llm.MessageRoleAssistant, "Next task."),
+	}
+	for _, trim := range [][]claudetool.IndexID{nil, {"missing"}} {
+		t.Run(fmt.Sprintf("trim=%v", trim), func(t *testing.T) {
+			in := claudetool.CompactInPlaceInput{
+				Trim: trim,
+				Collapse: []claudetool.CompactCollapse{
+					{From: "missing", To: "1", Note: note},
+				},
+			}
+			_, err := buildCompaction(items, 1, in)
+			if err == nil {
+				t.Fatal("invalid IDs accepted")
+			}
+			for _, want := range []string{
+				"fix only the reported problems",
+				"Preserve existing notes verbatim",
+				"unless a note itself is invalid",
+				"Do not shorten notes to fix IDs or ranges",
+			} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("retry error missing %q: %v", want, err)
+				}
+			}
+			in.Trim = nil
+			in.Collapse[0].From = "1"
+			c, err := buildCompaction(items, 1, in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(c.Squishes) != 1 || c.Squishes[0].Summary != note {
+				t.Fatalf("corrected request did not preserve note: %+v", c)
+			}
+		})
 	}
 }
 
@@ -863,7 +923,7 @@ func TestBuildCompaction(t *testing.T) {
 		Trim:     []claudetool.IndexID{"nope"},
 		Collapse: []claudetool.CompactCollapse{col("99", "2"), col("2", "4")},
 	})
-	want := "3 problems. Nothing was compacted; fix them and send the whole request again:\n" +
+	want := "3 problems:\n" +
 		"- trim nope: unknown id; use ids from the index\n" +
 		"- collapse 99-2: unknown id; use ids from the index\n" +
 		"- collapse 2-4: covers ~"

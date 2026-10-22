@@ -409,6 +409,12 @@ type Server struct {
 	// with the primary Shelley. Set by `serve --banner`.
 	Banner string
 
+	// SocketActivated records that the listener came from systemd socket
+	// activation. After an upgrade, such a server exits and lets systemd
+	// start the new binary; any other replaces itself in place. Set by
+	// `serve -systemd-activation`.
+	SocketActivated bool
+
 	// hooksDir is the directory searched for user hook scripts
 	// (end-of-turn, new-conversation). Defaults to
 	// $HOME/.config/shelley/hooks; tests override it to a per-test
@@ -421,6 +427,11 @@ type Server struct {
 	// to force summarization, or a collapsible compact_in_place index, without
 	// a giant transcript.
 	piDistillKeepRecentTokens int
+
+	// idleCompactionMinTokens overrides the context size below which idle
+	// compaction is not worth a turn (see idleCompactionMinTokens). Zero
+	// means defaultIdleCompactionMinTokens. Tests set it to 1.
+	idleCompactionMinTokens int
 
 	// IndexedDB cache encryption master secret — see cache_key.go.
 	// Lives on the Server (not a package-global) so tests with
@@ -1075,6 +1086,7 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		manager.serverPort = s.listenPort
 		manager.serverSocket = s.socketPath
 		manager.keepRecentTokens = s.keepRecentTokens()
+		manager.idleCompactionMinTokens = s.idleCompactionMinTokensOrDefault()
 		switch role {
 		case roleSubagent:
 			manager.rewriteFinalReply = func(ctx context.Context, reply llm.Message) (llm.Message, bool) {
@@ -1825,7 +1837,8 @@ func (s *Server) tcpHandler(mux http.Handler) http.Handler {
 	return h
 }
 
-// StartWithListeners starts the HTTP server on the given TCP listener and optionally
+// StartWithListeners starts the HTTP server on the given web listener (usually
+// TCP, possibly a socket-activated Unix socket) and optionally
 // also on a Unix socket. The TCP listener gets full middleware (CSRF, requireHeader, logger).
 // The Unix socket listener gets only the logger middleware (no CSRF, no requireHeader)
 // since it is local and trusted.
@@ -1880,8 +1893,15 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	// Start auto-upgrade routine
 	go s.autoUpgradeRoutine()
 
-	// Get actual port from listener
-	actualPort := tcpListener.Addr().(*net.TCPAddr).Port
+	// Get actual port from listener. A launcher may hand us a Unix socket
+	// instead (via socket activation) so the web UI is reachable only through
+	// it; there is no port then, and SHELLEY_PORT/SHELLEY_URL go unset.
+	var actualPort int
+	listenURL := "unix:" + tcpListener.Addr().String()
+	if addr, ok := tcpListener.Addr().(*net.TCPAddr); ok {
+		actualPort = addr.Port
+		listenURL = fmt.Sprintf("http://localhost:%d", actualPort)
+	}
 	s.listenPort = actualPort
 
 	// Recover before requests or resumed turns can report the same jobs.
@@ -1892,7 +1912,7 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	// Start TCP server in goroutine
 	serverErrCh := make(chan error, 2)
 	go func() {
-		s.logger.Info("Server starting", "port", actualPort, "url", fmt.Sprintf("http://localhost:%d", actualPort))
+		s.logger.Info("Server starting", "port", actualPort, "url", listenURL)
 		if err := tcpServer.Serve(tcpListener); err != nil && err != http.ErrServerClosed {
 			serverErrCh <- err
 		}
@@ -2096,9 +2116,8 @@ func (s *Server) performUpgradeAndRestart(ctx context.Context, versionInfo *Vers
 
 	s.logger.Info("Auto-upgrade complete, restarting")
 
-	// Exit to trigger restart (systemd will restart us)
 	time.Sleep(100 * time.Millisecond)
-	os.Exit(0)
+	s.restartAfterUpgrade()
 }
 
 // listenSocket listens on the Unix socket at socketPath, made absolute, or

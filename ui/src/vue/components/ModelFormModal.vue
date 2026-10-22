@@ -107,7 +107,7 @@
         <InputText
           v-model="form.api_key"
           type="password"
-          :placeholder="t('enterApiKey')"
+          :placeholder="editModel?.has_api_key ? t('providerApiKeyKeepExisting') : t('enterApiKey')"
           fluid
           :dt="inputFieldDt"
           autocomplete="off"
@@ -242,11 +242,11 @@
           type="button"
           severity="secondary"
           :label="testing ? t('testingButton') : t('testButton')"
-          :disabled="testing || (!form.api_key && !editModel) || !form.model_name"
+          :disabled="testing || !hasApiKey || !form.model_name"
           :title="
             !form.model_name
               ? 'Enter model name to test'
-              : !form.api_key && !editModel
+              : !hasApiKey
                 ? 'Enter API key to test'
                 : ''
           "
@@ -255,7 +255,7 @@
         <Button
           type="button"
           :label="editModel ? t('save') : t('addModel')"
-          :disabled="!form.display_name || !form.api_key || !form.model_name"
+          :disabled="!form.display_name || !hasApiKey || !form.model_name"
           @click="handleSave"
         />
       </div>
@@ -332,6 +332,7 @@ const reasoningReplayOptions = computed(() => [
 ]);
 
 const form = reactive<FormData>({ ...emptyForm });
+const hasApiKey = computed(() => !!form.api_key || !!props.editModel?.has_api_key);
 const endpointPresets = computed(() => endpointPresetsFor(form.provider_type));
 
 const error = ref<string | null>(null);
@@ -404,7 +405,7 @@ watch(
         display_name: m.display_name,
         provider_type: m.provider_type,
         endpoint: m.endpoint,
-        api_key: m.api_key,
+        api_key: "",
         model_name: m.model_name,
         max_tokens: m.max_tokens,
         reasoning_effort: m.reasoning_effort || "",
@@ -439,7 +440,7 @@ async function handleTest() {
     testResult.value = { success: false, message: t("modelNameRequired") };
     return;
   }
-  if (!form.api_key && !props.editModel) {
+  if (!hasApiKey.value) {
     testResult.value = { success: false, message: t("apiKeyRequired") };
     return;
   }
@@ -470,7 +471,7 @@ async function handleTest() {
 }
 
 async function handleSave() {
-  if (!form.display_name || !form.api_key || !form.model_name) {
+  if (!form.display_name || !hasApiKey.value || !form.model_name) {
     error.value = "Display name, API key, and model name are required";
     return;
   }

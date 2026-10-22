@@ -85,6 +85,25 @@ const steady = entry({
     "parts skip types costing under 1% of the call",
   );
 }
+// Context-size pricing tiers: callCostParts prices the whole call at the tier
+// rate once the prompt crosses the threshold.
+{
+  const haikuTiered = {
+    input: 0.1,
+    output: 0.5,
+    cache_read: 0.01,
+    cache_write: 0.125,
+    tiers: [{ context: 100_000, input: 0.5, output: 2.5, cache_read: 0.05, cache_write: 0.625 }],
+  };
+  // Prompt 60k (< 100k): base rate. Output 50k @ $0.5/M = $0.025.
+  const below = callCostParts(entry({ input_tokens: 60_000, output_tokens: 50_000 }), haikuTiered);
+  const belowOut = below.find((p) => TOKEN_BANDS[p.band].label === "Output")!;
+  assert(Math.abs(belowOut.usd! - 0.025) < 1e-9, `below-threshold output ${belowOut.usd}`);
+  // Prompt 150k (> 100k): tier rate. Output 50k @ $2.5/M = $0.125 (5x).
+  const above = callCostParts(entry({ input_tokens: 150_000, output_tokens: 50_000 }), haikuTiered);
+  const aboveOut = above.find((p) => TOKEN_BANDS[p.band].label === "Output")!;
+  assert(Math.abs(aboveOut.usd! - 0.125) < 1e-9, `above-threshold output ${aboveOut.usd}`);
+}
 {
   const parts = callCostParts(entry({ cache_read_input_tokens: 100, output_tokens: 4_000 }), null);
   eq(

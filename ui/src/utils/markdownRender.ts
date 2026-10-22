@@ -249,6 +249,7 @@ export function renderMarkdownToSafeHTML(
   messageId?: string,
   cacheKey?: MarkdownCacheKey,
   localhostLinks?: LocalhostLinkOptions,
+  reflow = false,
 ): string {
   let runs = cacheKey ? cache.get(cacheKey.owner) : undefined;
   const cached = cacheKey ? runs?.get(cacheKey.runKey) : undefined;
@@ -256,7 +257,7 @@ export function renderMarkdownToSafeHTML(
 
   const raw = buildMarked(messageId, localhostLinks)
     .use(markdownMath.createMathExtension())
-    .parse(text, { async: false }) as string;
+    .parse(text, { async: false, breaks: !reflow }) as string;
   const root = DOMPurify.sanitize(raw, { ...SANITIZE_OPTS, RETURN_DOM: true }) as HTMLElement;
   linkifyCodeSpans(root, localhostLinks);
   const html = root.innerHTML;

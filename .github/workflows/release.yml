@@ -117,6 +117,7 @@ jobs:
         run: |
           python3 scripts/extract-headless-shell.py dist/headless-shell
           gh release create "${{ steps.headless.outputs.tag }}" \
+            --latest=false \
             --title "headless-shell ${{ steps.headless.outputs.version }}" \
             --notes "Chromium headless-shell ${{ steps.headless.outputs.version }} extracted from chromedp/headless-shell:stable" \
             dist/headless-shell/headless-shell-linux-*.tar.gz \

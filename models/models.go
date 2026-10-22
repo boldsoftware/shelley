@@ -340,12 +340,6 @@ func All() []Model {
 			Build: oaiResponsesSvc(oai.GPT55),
 		},
 		{
-			ID: "claude-opus-4.6", Provider: ProviderAnthropic,
-			Description: "Claude Opus 4.6", APIModelName: ant.Claude46Opus,
-			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.Claude46Opus),
-		},
-		{
 			ID: "glm-5.3-fireworks", Provider: ProviderFireworks,
 			Description: "GLM-5.3 on Fireworks", APIModelName: oai.GLM53Fireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,

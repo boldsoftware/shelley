@@ -607,6 +607,7 @@ import Button from "primevue/button";
 import DatePicker from "primevue/datepicker";
 import Popover from "primevue/popover";
 import { DrawerCtxKey, type GroupBy, parseTags } from "./conversationDrawerShared";
+import { workingConversationIds } from "../../utils/workingConversations";
 import type { EphemeralTerminal } from "./terminalTypes";
 import {
   UNTAGGED_TERM,
@@ -1897,6 +1898,7 @@ provide(DrawerCtxKey, {
     return counts;
   }),
   subagentsByParent,
+  workingIds: computed(() => workingConversationIds(props.conversations)),
   expandedSubagents,
   seenIds,
   copiedConvId,

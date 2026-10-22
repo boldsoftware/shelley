@@ -42,14 +42,52 @@ export interface ModelCost {
   output: number;
   cache_read: number;
   cache_write: number;
+  /** Context-size pricing cliffs (ascending by context); absent for flat
+   *  pricing. Once a call's prompt exceeds a tier's threshold, the whole call
+   *  bills at that tier's rates. See effectiveCost. */
+  tiers?: CostTier[];
 }
+
+/** The rates that replace the base rates once a call's prompt exceeds
+ *  `context` tokens. Same USD-per-Mtok shape as ModelCost. */
+export interface CostTier {
+  context: number;
+  input: number;
+  output: number;
+  cache_read: number;
+  cache_write: number;
+}
+
+/** The prompt (context) size a pricing tier is measured against: every token
+ *  sent up, i.e. fresh input plus cache writes and reads. Output isn't part of
+ *  the context window. */
+export function promptSize(e: UsageEntry): number {
+  return e.input_tokens + e.cache_creation_input_tokens + e.cache_read_input_tokens;
+}
+
+/** The per-token rates that apply to a call whose prompt is promptTokens long,
+ *  picking the highest tier the prompt exceeds. Flat-priced models (no tiers)
+ *  return their base rates unchanged. Anthropic-style: crossing a threshold
+ *  reprices the entire call, not just the tokens past it. */
+export function effectiveCost(cost: ModelCost, promptTokens: number): ModelCost {
+  let rates = cost;
+  for (const t of cost.tiers ?? []) {
+    // tiers are sorted ascending, so the last one we clear is the dearest.
+    if (promptTokens > t.context) rates = t;
+  }
+  return rates;
+}
+
+/** The USD-per-Mtok price fields shared by ModelCost and CostTier; excludes
+ *  the tier threshold so band lookups like cost[band.costKey] stay numeric. */
+export type PriceKey = "input" | "output" | "cache_read" | "cache_write";
 
 export interface TokenBand {
   key: keyof Pick<
     UsageEntry,
     "input_tokens" | "cache_creation_input_tokens" | "cache_read_input_tokens" | "output_tokens"
   >;
-  costKey: keyof ModelCost;
+  costKey: PriceKey;
   label: string;
   /** Base hue/saturation/lightness; per-model shades derive from this. */
   hsl: [number, number, number];
@@ -91,8 +129,16 @@ export function segmentColor(bandIndex: number, modelIndex: number): string {
 export interface ModelUsage {
   model: string;
   priced: boolean;
-  /** Per-band tokens, unit price (USD/Mtok), cost, and segment color. */
-  rows: { band: TokenBand; tokens: number; unitUsdPerMtok: number; cost: number; color: string }[];
+  /** Per-band tokens, unit price (USD/Mtok), cost, and segment color.
+   *  unitUsdPerMtok is null when a tiered model served calls at more than one
+   *  rate for this band ("mixed rates"); the cost still totals them exactly. */
+  rows: {
+    band: TokenBand;
+    tokens: number;
+    unitUsdPerMtok: number | null;
+    cost: number;
+    color: string;
+  }[];
   totalCost: number;
   /** Provider-reported cost sum (gateway header); fallback when unpriced. */
   reportedUsd: number;
@@ -221,6 +267,10 @@ export function buildTokenCostStack(
 
   const segments: StackSegment[] = [];
   const perModel: ModelUsage[] = [];
+  // Per (model, band) running record of the rate charged so far, so a band
+  // served at two tiers reports "mixed rates" rather than a single price.
+  // undefined = no priced tokens seen yet; null = seen more than one rate.
+  const seenRate: (number | null | undefined)[][] = [];
   for (const [model, mi] of modelIndex) {
     const cost = costs[model];
     perModel.push({
@@ -236,6 +286,7 @@ export function buildTokenCostStack(
       totalCost: 0,
       reportedUsd: 0,
     });
+    seenRate[mi] = TOKEN_BANDS.map(() => undefined);
     TOKEN_BANDS.forEach((band, b) => {
       segments.push({ model, band, color: segmentColor(b, mi) });
     });
@@ -252,16 +303,30 @@ export function buildTokenCostStack(
     const model = e.model || "unknown model";
     const mi = modelIndex.get(model)!;
     const cost = costs[model];
+    // Pick the tier this call's prompt lands in; flat-priced models keep their
+    // base rates. Output isn't part of the context size the tier measures.
+    const rates = cost ? effectiveCost(cost, promptSize(e)) : null;
     const mu = perModel[mi];
     reportedCostUsd += e.cost_usd || 0;
     mu.reportedUsd += e.cost_usd || 0;
     call.fill(0);
     TOKEN_BANDS.forEach((band, b) => {
       const tokens = e[band.key] || 0;
-      const usd = cost ? tokens * (cost[band.costKey] / 1e6) : 0;
+      const rate = rates ? rates[band.costKey] : 0;
+      const usd = rates ? tokens * (rate / 1e6) : 0;
       mu.rows[b].tokens += tokens;
       mu.rows[b].cost += usd;
       mu.totalCost += usd;
+      if (rates && tokens > 0) {
+        const prev = seenRate[mi][b];
+        if (prev === undefined) {
+          seenRate[mi][b] = rate;
+          mu.rows[b].unitUsdPerMtok = rate;
+        } else if (prev !== null && prev !== rate) {
+          seenRate[mi][b] = null;
+          mu.rows[b].unitUsdPerMtok = null;
+        }
+      }
       const v = weighted ? usd : tokens;
       running[mi * TOKEN_BANDS.length + b] += v;
       call[mi * TOKEN_BANDS.length + b] = v;
@@ -417,6 +482,12 @@ export function buildOtherUsageBreakdown(
       byPurpose.set(row.purpose, p);
     }
     const cost = costs[row.model];
+    // These rows are already summed across calls (by purpose, model, url), so
+    // we can't tell which calls crossed a context-size pricing tier; the
+    // estimate uses base rates. A tiered model's indirect usage (e.g.
+    // compaction of a long context) is therefore undercounted here, though
+    // reported_usd still carries the gateway's exact charge. Tiering this would
+    // mean pricing each raw OtherUsageEntry before aggregateOtherUsage folds it.
     for (const band of TOKEN_BANDS) {
       const tokens = row[band.key] || 0;
       p.tokens += tokens;

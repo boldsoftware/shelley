@@ -1,12 +1,17 @@
-import {
+import type { MenuActionId } from "./menuShortcuts";
+
+Object.defineProperty(globalThis, "navigator", {
+  value: { platform: "Linux x86_64" },
+});
+
+const {
   MENU_COMBOS,
   CHAT_INTERFACE_ACTIONS,
   menuShortcutLabel,
   comboMatches,
   matchChatInterfaceAction,
   isMac,
-  type MenuActionId,
-} from "./menuShortcuts";
+} = await import("./menuShortcuts");
 
 let passed = 0;
 let failed = 0;
@@ -18,9 +23,8 @@ function assert(cond: boolean, msg: string) {
   }
 }
 
-// These tests run in Node (no `navigator`), so isMac === false: labels use the
-// "Ctrl+..." form and "mod" combos match Ctrl.
-assert(isMac === false, "isMac is false under Node");
+// The explicit non-Mac fixture makes labels and modifiers independent of the host.
+assert(isMac === false, "isMac is false for the non-Mac fixture");
 
 // Every action has a combo, and combos are unique by (mod, alt, shift, code).
 const ids: MenuActionId[] = [

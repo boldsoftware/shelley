@@ -10,7 +10,7 @@ func TestAssignTiers(t *testing.T) {
 		}
 	})
 	t.Run("opus 5.5 shadows older Opus and Sonnet 5", func(t *testing.T) {
-		ids := []string{"claude-opus-5.5", "claude-opus-5", "claude-opus-4.8", "claude-opus-4.7", "claude-opus-4.6", "claude-sonnet-5"}
+		ids := []string{"claude-opus-5.5", "claude-opus-5", "claude-opus-4.8", "claude-opus-4.7", "claude-sonnet-5"}
 		tiers := AssignTiers(ids)
 		if tiers["claude-opus-5.5"] != Tier1 {
 			t.Errorf("opus-5.5 tier = %d, want %d", tiers["claude-opus-5.5"], Tier1)
@@ -19,6 +19,12 @@ func TestAssignTiers(t *testing.T) {
 			if tiers[id] != Tier2 {
 				t.Errorf("%s tier = %d, want %d", id, tiers[id], Tier2)
 			}
+		}
+	})
+	t.Run("opus 4.7 shadows opus 4.5", func(t *testing.T) {
+		tiers := AssignTiers([]string{"claude-opus-4.7", "claude-opus-4.5"})
+		if tiers["claude-opus-4.7"] != Tier1 || tiers["claude-opus-4.5"] != Tier2 {
+			t.Fatalf("tiers = %v", tiers)
 		}
 	})
 

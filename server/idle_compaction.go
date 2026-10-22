@@ -13,6 +13,17 @@ import (
 	"shelley.exe.dev/llm"
 )
 
+// defaultIdleCompactionMinTokens is the estimated context size below which an
+// idle compaction turn is not worth its cost.
+const defaultIdleCompactionMinTokens = 50_000
+
+func (s *Server) idleCompactionMinTokensOrDefault() int {
+	if s.idleCompactionMinTokens > 0 {
+		return s.idleCompactionMinTokens
+	}
+	return defaultIdleCompactionMinTokens
+}
+
 // maxIdleCompactionMinutes keeps the minute settings within time.Duration.
 const maxIdleCompactionMinutes = int(math.MaxInt64 / time.Minute)
 
@@ -273,7 +284,8 @@ func (s *Server) claimIdleCompaction(ctx context.Context, cm *ConversationManage
 	if live {
 		return false, nil
 	}
-	// Everything in the recent part is kept as is: nothing to compact.
+	// A small context is not worth a turn, and everything in the recent part
+	// is kept as is: nothing to compact.
 	items, _, err := cm.loadContext(ctx)
 	if err != nil {
 		return false, err
@@ -282,7 +294,7 @@ func (s *Server) claimIdleCompaction(ctx context.Context, cm *ConversationManage
 	if err != nil {
 		return false, err
 	}
-	if recentStart(view, cm.keepRecentTokens) == 0 {
+	if itemTokens(view) < cm.idleCompactionMinTokens || recentStart(view, cm.keepRecentTokens) == 0 {
 		return false, nil
 	}
 	cm.mu.Lock()

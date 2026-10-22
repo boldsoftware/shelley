@@ -54,12 +54,13 @@
        the running-work counts and readout stay mounted (an open popover
        included) as the turn starts and ends; a job exiting starts one. -->
   <div
-    v-else-if="conversationId && (agentWorking || interrupted || !currentConversation?.is_draft)"
+    v-else-if="conversationId && (working || interrupted || !currentConversation?.is_draft)"
     class="status-bar-active"
   >
-    <template v-if="agentWorking">
+    <template v-if="working">
       <AnimatedWorkingStatus data-testid="agent-thinking" />
       <button
+        v-if="agentWorking"
         :disabled="cancelling"
         class="status-stop-button"
         v-tooltip.top="'Stop'"
@@ -71,6 +72,7 @@
         </svg>
         <span class="status-stop-label">{{ cancelling ? "Cancelling..." : "Stop" }}</span>
       </button>
+      <span v-else class="working-indicator" title="Background work running" aria-hidden="true" />
     </template>
     <div
       v-else-if="interrupted"
@@ -151,6 +153,7 @@ const props = defineProps<{
   streamStatus: "connected" | "reconnecting" | "disconnected";
   error: string | null;
   agentWorking: boolean;
+  working: boolean;
   interrupted: boolean;
   resumingInterrupted: boolean;
   cancelling: boolean;

@@ -67,7 +67,7 @@ for (const viewport of [
       const gitGraph = toolbar.getByRole("button", { name: "Git Graph", exact: true });
       const terminal = toolbar.getByRole("button", { name: "Terminal", exact: true });
       const divider = toolbar.locator(".chat-workspace-divider");
-      const vm = header.getByRole("link", { name: "vm.example", exact: true });
+      const vm = header.getByRole("link", { name: "vm.example", exact: true, includeHidden: true });
       const newConversation = header.getByRole("button", { name: "New Conversation", exact: true });
       const call = header.getByTestId("live-call-header");
       const more = header.getByRole("button", { name: "More options", exact: true });
@@ -98,14 +98,15 @@ for (const viewport of [
       const titleBounds = await header.locator(".header-title").boundingBox();
       expect(titleBounds!.width).toBeGreaterThanOrEqual(mobile ? 96 : 32);
       if (mobile) {
-        for (const button of [diffs, gitGraph, terminal, newConversation]) {
+        for (const button of [diffs, gitGraph, terminal, vm]) {
           await expect(button).toBeHidden();
         }
         await expect(call).toHaveAttribute("aria-label", "Start voice conversation");
       }
+      await expect(newConversation).toBeVisible();
       let previousRight = 0;
       for (const control of mobile
-        ? [vm, call, more]
+        ? [newConversation, call, more]
         : [diffs, gitGraph, terminal, vm, call, newConversation, more]) {
         await expect(control).toBeInViewport();
         const bounds = (await control.boundingBox())!;
@@ -113,8 +114,8 @@ for (const viewport of [
         expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
         previousRight = bounds.x + bounds.width;
       }
-      const vmBounds = (await vm.boundingBox())!;
       if (!mobile) {
+        const vmBounds = (await vm.boundingBox())!;
         const terminalBounds = (await terminal.boundingBox())!;
         const dividerBounds = (await divider.boundingBox())!;
         expect(dividerBounds.x).toBeGreaterThanOrEqual(terminalBounds.x + terminalBounds.width);
@@ -130,9 +131,11 @@ for (const viewport of [
           expect(bounds.height).toBeGreaterThanOrEqual(minimumSize);
         }
       }
-      const vmPopup = await expectLinkPopup(page, vm, links[1].url);
-      expect(await vmPopup.evaluate(() => window.opener === null)).toBe(true);
-      await vmPopup.close();
+      if (!mobile) {
+        const vmPopup = await expectLinkPopup(page, vm, links[1].url);
+        expect(await vmPopup.evaluate(() => window.opener === null)).toBe(true);
+        await vmPopup.close();
+      }
 
       await more.click();
       const menu = page.locator(".chat-overflow-popover");
@@ -146,12 +149,12 @@ for (const viewport of [
         await expect(menu.getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();
       }
       for (const name of mobile
-        ? ["vm.example"]
+        ? ["New Conversation"]
         : ["Diffs", "Git Graph", "Terminal", "vm.example", "New Conversation"]) {
         await expect(menu.getByRole("button", { name: new RegExp(`^${name}`) })).toHaveCount(0);
       }
       if (mobile) {
-        for (const name of ["New Conversation", "Diffs", "Git Graph", "Terminal"]) {
+        for (const name of ["Diffs", "Git Graph", "Terminal", "vm.example"]) {
           await expect(menu.getByRole("button", { name, exact: true })).toBeVisible();
         }
       }
@@ -167,7 +170,7 @@ for (const viewport of [
       await expect(language).toBeInViewport();
       await page.keyboard.press("Escape");
 
-      for (const link of [links[0], links[2]]) {
+      for (const link of mobile ? links : [links[0], links[2]]) {
         await more.click();
         const action = menu.getByRole("button", { name: link.title, exact: true });
         const popup = await expectLinkPopup(page, action, link.url);
@@ -251,12 +254,7 @@ for (const viewport of [
       await editor.getByRole("button", { name: "Close (Esc)", exact: true }).click();
       await expect(editor).toBeHidden();
 
-      if (mobile) {
-        await more.click();
-        await menu.getByRole("button", { name: "New Conversation", exact: true }).click();
-      } else {
-        await newConversation.click();
-      }
+      await newConversation.click();
       await expect(page).toHaveURL(/\/new$/);
       await expect(page.getByTestId("message-input")).toBeVisible();
       if (!mobile) {
@@ -264,7 +262,8 @@ for (const viewport of [
         await expect(gitGraph).toBeVisible();
         await expect(terminal).toBeVisible();
       }
-      await expect(vm).toBeVisible();
+      if (mobile) await expect(vm).toBeHidden();
+      else await expect(vm).toBeVisible();
     });
   });
 

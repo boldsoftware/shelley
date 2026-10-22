@@ -18,6 +18,7 @@ import {
   SystemPromptInfo,
   TemplateProblem,
 } from "../types";
+import type { CostTier } from "../utils/tokenCostGraph";
 
 export type LiveConversationSettings = Pick<ChatRequest, "model" | "cwd" | "conversation_options">;
 
@@ -1112,9 +1113,25 @@ class ApiService {
     });
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(text || response.statusText);
+      throw new ApiError(text || response.statusText, response.status);
     }
     return response.json();
+  }
+
+  async getVersion(): Promise<{ tag?: string }> {
+    // A hard deadline, kept through the body. AbortSignal.timeout() isn't
+    // available in every browser we support.
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 5000);
+    try {
+      const response = await fetch("/version", { signal: ctl.signal });
+      if (!response.ok) {
+        throw await responseError(response, "Failed to get version");
+      }
+      return await response.json();
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async upgradeHeadlessShell(): Promise<{ status: string; message: string; version: string }> {
@@ -1242,11 +1259,16 @@ export const faviconEmojiApi = {
 };
 
 // models.dev pricing, USD per million tokens. null = model known but unpriced.
+// Mirrors ModelCost in utils/tokenCostGraph; stays structurally compatible so
+// the fetched costs feed the cost-graph math directly.
 export interface ModelCostDTO {
   input: number;
   output: number;
   cache_read: number;
   cache_write: number;
+  // Context-size pricing cliffs (ascending by context); absent for flat
+  // pricing. See effectiveCost in utils/tokenCostGraph.
+  tiers?: CostTier[];
 }
 
 // Module-level cache so reopening the context popup doesn't refetch.
@@ -1275,6 +1297,11 @@ export const modelCostsApi = {
 };
 
 // Descendant direct and indirect usage grouped by (model, endpoint).
+// One (model, endpoint, effective-rate) aggregate of subagent usage. A model
+// whose calls crossed a context-size pricing tier yields more than one row —
+// one per rate — each carrying that tier's flat rates in `cost` (no nested
+// tiers). The UI regroups rows by model and shows "mixed rates" where they
+// differ; estimated_usd is already tier-accurate.
 export interface SubagentModelUsageDTO {
   model: string;
   url: string;
@@ -1316,7 +1343,7 @@ export interface CustomModel {
   display_name: string;
   provider_type: "anthropic" | "openai" | "openai-responses" | "gemini";
   endpoint: string;
-  api_key: string;
+  has_api_key: boolean;
   model_name: string;
   max_tokens: number;
   reasoning_effort: string; // Legacy provider-verbatim default

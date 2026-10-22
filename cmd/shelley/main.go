@@ -177,13 +177,23 @@ func runServe(global GlobalConfig, args []string) {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	port := fs.String("port", "9000", "Port to listen on")
 	portFile := fs.String("port-file", "", "Write the actual listening port to this file (useful with --port 0)")
-	systemdActivation := fs.Bool("systemd-activation", false, "Use systemd socket activation (listen on fd from systemd)")
+	systemdActivation := fs.Bool("systemd-activation", false, "Use systemd socket activation (listen on fd 3; TCP or Unix socket)")
 	requireHeader := fs.String("require-header", "", "Require this header on all API requests (e.g., X-Exedev-Userid)")
 	socketPath := fs.String("socket", client.DefaultSocketPath(), "Path to Unix socket for local CLI client access (set to 'none' to disable)")
 	banner := fs.String("banner", "", "If set, shows this text in a banner at the top of the UI (useful for marking demo instances)")
 	fs.Parse(args)
 
 	logger := setupLogging(global.Debug)
+	if err := server.ReapInheritedChildren(); err != nil {
+		logger.Error("Failed to reap processes left by the previous binary", "error", err)
+	}
+
+	dbLock, err := lockServerDatabase(global.DBPath)
+	if err != nil {
+		logger.Error("Failed to acquire database ownership", "error", err)
+		os.Exit(1)
+	}
+	defer dbLock.Close()
 
 	database := setupDatabase(global.DBPath, logger)
 	defer database.Close()
@@ -221,6 +231,7 @@ func runServe(global GlobalConfig, args []string) {
 	svr.SetModelRefresher(llmConfig.RefreshBuiltModels)
 	svr.SetModelProviderManager(providerManager)
 	svr.Banner = *banner
+	svr.SocketActivated = *systemdActivation
 
 	// Load notification channels from DB.
 	svr.ReloadNotificationChannels()

@@ -20,4 +20,7 @@ export interface EphemeralTerminal {
   // "attached". When reconnecting to a known session, set this up front so the
   // websocket re-attaches rather than spawning a new session.
   termId?: string;
+  // unpersisted is set when the server ran the command without a persistent
+  // session (the disk is full). It ends with its websocket and has no termId.
+  unpersisted?: boolean;
 }

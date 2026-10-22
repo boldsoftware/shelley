@@ -2053,7 +2053,6 @@ func TestLiveAnthropicModels(t *testing.T) {
 		{"Haiku 5.5", Claude55Haiku},
 		{"Sonnet 4.6", Claude46Sonnet},
 		{"Opus 4.5", Claude45Opus},
-		{"Opus 4.6", Claude46Opus},
 		// Adaptive-thinking models (thinking.type=adaptive + output_config.effort).
 		{"Opus 4.7", Claude47Opus},
 		{"Opus 4.8", Claude48Opus},

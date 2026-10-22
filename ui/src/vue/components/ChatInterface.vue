@@ -52,7 +52,7 @@
         <!-- Overflow menu (PrimeVue Popover + Select) -->
         <ChatOverflowMenu
           :has-cwd="hasCwd"
-          :show-directory="statusSlotInline"
+          :show-directory="isMobile"
           :cwd="currentConversation?.cwd || selectedCwd"
           :links="links"
           :can-archive="
@@ -73,8 +73,59 @@
           @edit-file="props.onOpenFileFinder?.()"
           @open-mcp-servers="props.onOpenMcpServersModal?.()"
           @check-version="openVersionModal"
-          @new-conversation="onNewConversationClick"
         >
+          <template #models="{ hide }">
+            <ModelPicker
+              v-if="isMobile"
+              class="overflow-menu-item model-picker-menu"
+              :models="models"
+              :selected-model="selectedModel"
+              :thinking-level="statusContentProps.thinkingLevel"
+              :disabled="conversationWorking || sending"
+              :disabled-reason="conversationWorking ? t('modelSwitchBusy') : undefined"
+              :refreshing="refreshingModels"
+              :knob="knob"
+              append-to-body
+              @select-model="
+                conversationLive ? switchConversationModel($event) : setSelectedModel($event)
+              "
+              @select-combination="
+                (model, level) =>
+                  conversationLive
+                    ? switchConversationCombination(model, level)
+                    : setSelectedCombination(model, level)
+              "
+              @thinking-change="
+                conversationLive
+                  ? switchConversationThinkingLevel($event)
+                  : setThinkingLevel($event)
+              "
+              @manage-models="hide(); props.onOpenModelsModal?.()"
+              @refresh-models="handleRefreshModels"
+            >
+              <template #value="{ label }">
+                <svg
+                  class="chat-menu-icon"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 3v3M3 11v6m18-6v6M9 18h6"
+                  />
+                  <rect x="5" y="6" width="14" height="15" rx="3" />
+                  <circle cx="9" cy="12" r="1" fill="currentColor" stroke="none" />
+                  <circle cx="15" cy="12" r="1" fill="currentColor" stroke="none" />
+                </svg>
+                {{ t("model") }}
+                <span class="overflow-menu-cwd" :title="label">{{ label }}</span>
+              </template>
+            </ModelPicker>
+          </template>
           <button
             type="button"
             class="btn-icon live-call-trigger"
@@ -94,7 +145,7 @@
             </svg>
           </button>
           <button
-            class="btn-new hide-on-mobile"
+            class="btn-new"
             :aria-label="t('newConversation')"
             @click="onNewConversationClick"
           >
@@ -641,6 +692,7 @@ import {
   reconcileComposerDraft,
 } from "../../services/draftCache";
 import { setFaviconStatus } from "../../services/favicon";
+import { workingConversationIds } from "../../utils/workingConversations";
 import {
   modelSetupHintKeys,
   canSendWithModel,
@@ -740,6 +792,7 @@ import { ConversationsListKey } from "../composables/subagentLive";
 import type { RecordingMode, RecordingPreparation } from "./recordingDestination";
 import ConversationTOC from "./ConversationTOC.vue";
 import ModelBar from "./ModelBar.vue";
+import ModelPicker from "./ModelPicker.vue";
 import SystemPromptView from "./SystemPromptView.vue";
 import DirectoryPickerModal from "./DirectoryPickerModal.vue";
 import ProfilesModal from "./ProfilesModal.vue";
@@ -816,7 +869,7 @@ const props = withDefaults(
     setEphemeralTerminals: (
       next: EphemeralTerminal[] | ((prev: EphemeralTerminal[]) => EphemeralTerminal[]),
     ) => void;
-    onTerminalAttached?: (id: string, termId: string, closeOnExit: boolean) => void;
+    onTerminalAttached?: (id: string, termId: string | null, closeOnExit: boolean) => void;
     onTerminalScopeChange?: (id: string, conversationId: string | null) => void;
     onTerminalClose?: (id: string) => void;
     navigateUserMessageTrigger?: number;
@@ -1285,6 +1338,12 @@ const diffCommentText = ref("");
 const imageCommentTarget = useImageCommentTarget();
 const markdownDoc = useMarkdownDoc();
 const agentWorking = ref(false);
+const conversationWorking = computed(
+  () =>
+    agentWorking.value ||
+    (!!props.conversationId &&
+      workingConversationIds(conversations.value).has(props.conversationId)),
+);
 const resumingInterrupted = ref(false);
 const cancelling = ref(false);
 const contextWindowSize = ref(0);
@@ -4405,6 +4464,7 @@ const statusContentProps = computed(() => {
     streamStatus: props.streamStatus,
     error: error.value,
     agentWorking: agentWorking.value,
+    working: conversationWorking.value,
     interrupted: conversationInterrupted.value,
     resumingInterrupted: resumingInterrupted.value,
     cancelling: cancelling.value,
@@ -4648,7 +4708,7 @@ mobileMq.addEventListener("change", onMobileChange);
 
 // Favicon working indicator.
 watch(
-  agentWorking,
+  conversationWorking,
   (working) => {
     // The completion notification is best-effort: a sleeping/backgrounded tab
     // can miss it. The conversation's authoritative working state is also

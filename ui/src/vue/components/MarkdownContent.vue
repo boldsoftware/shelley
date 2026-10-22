@@ -60,6 +60,8 @@ const props = defineProps<{
   // Repository files are untrusted: their raw HTML must not be able to reuse
   // Shelley UI class names (e.g. diff-viewer-overlay) to spoof the editor.
   filePreview?: boolean;
+  // Reflow source-wrapped prose only in the file editor's uncached full Preview.
+  reflow?: boolean;
 }>();
 
 const containerRef = ref<HTMLDivElement | null>(null);
@@ -91,6 +93,7 @@ const html = computed(
           }
         : undefined,
       props.rewriteLocalhostLinks ? localhostLinkOptionsFromInit() : undefined,
+      props.reflow,
     );
 
     // The shared renderer already strips executable HTML. In file preview,
@@ -114,6 +117,14 @@ const html = computed(
         : undefined;
       if (language) el.className = language;
       else el.removeAttribute("class");
+      if (
+        props.reflow &&
+        el.tagName === "CODE" &&
+        !el.closest("pre") &&
+        /^\S+$/.test(el.textContent ?? "")
+      ) {
+        el.classList.add("inline-code-token");
+      }
     }
     markdownMath.renderMath(mathNodes);
     return inert.innerHTML;

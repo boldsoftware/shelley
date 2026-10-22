@@ -131,6 +131,7 @@ test.describe("conversation drawer startup and app bar", () => {
 
     await page.goto("/new");
     const row = page.locator('[data-conversation-id="parent"]');
+    await expect(row.locator(".drawer-working-indicator")).toBeVisible();
     const runningWork = row.getByTestId("conversation-running-work");
     await expect(runningWork).toHaveText("1");
     await expect(runningWork).toHaveAttribute("title", "1 task running");

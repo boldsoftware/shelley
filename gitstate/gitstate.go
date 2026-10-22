@@ -186,14 +186,14 @@ func resolveRef(gitDir, commonDir, ref string) (string, bool) {
 		}
 	}
 	if data, err := os.ReadFile(filepath.Join(commonDir, "packed-refs")); err == nil {
-		for _, l := range strings.Split(string(data), "\n") {
+		for l := range strings.SplitSeq(string(data), "\n") {
 			l = strings.TrimSpace(l)
 			if l == "" || l[0] == '#' || l[0] == '^' {
 				continue
 			}
 			if sp := strings.IndexByte(l, ' '); sp > 0 && l[sp+1:] == ref {
 				if h := l[:sp]; isHexHash(h) {
-					return h, true
+					return strings.Clone(h), true
 				}
 			}
 		}

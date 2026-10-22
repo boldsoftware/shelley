@@ -509,24 +509,21 @@ WITH RECURSIVE descendants(conversation_id) AS (
 SELECT
   CAST(COALESCE(je.value ->> 'model', '') AS TEXT) AS model_name,
   CAST(COALESCE(je.value ->> 'url', '') AS TEXT) AS llm_api_url,
-  COUNT(*) AS llm_calls,
-  CAST(COALESCE(SUM(je.value ->> 'input_tokens'), 0) AS INTEGER) AS input_tokens,
-  CAST(COALESCE(SUM(je.value ->> 'cache_creation_input_tokens'), 0) AS INTEGER) AS cache_creation_input_tokens,
-  CAST(COALESCE(SUM(je.value ->> 'cache_read_input_tokens'), 0) AS INTEGER) AS cache_read_input_tokens,
-  CAST(COALESCE(SUM(je.value ->> 'output_tokens'), 0) AS INTEGER) AS output_tokens,
-  CAST(COALESCE(SUM(je.value ->> 'cost_usd'), 0) AS REAL) AS cost_usd
+  CAST(COALESCE(je.value ->> 'input_tokens', 0) AS INTEGER) AS input_tokens,
+  CAST(COALESCE(je.value ->> 'cache_creation_input_tokens', 0) AS INTEGER) AS cache_creation_input_tokens,
+  CAST(COALESCE(je.value ->> 'cache_read_input_tokens', 0) AS INTEGER) AS cache_read_input_tokens,
+  CAST(COALESCE(je.value ->> 'output_tokens', 0) AS INTEGER) AS output_tokens,
+  CAST(COALESCE(je.value ->> 'cost_usd', 0) AS REAL) AS cost_usd
 FROM descendants d
 CROSS JOIN messages m INDEXED BY idx_messages_conversation_id
 CROSS JOIN json_each(m.other_usage_data) je
 WHERE m.conversation_id = d.conversation_id
   AND m.other_usage_data IS NOT NULL
-GROUP BY je.value ->> 'model', je.value ->> 'url'
 `
 
 type GetSubagentOtherUsageRow struct {
 	ModelName                string  `json:"model_name"`
 	LlmApiUrl                string  `json:"llm_api_url"`
-	LlmCalls                 int64   `json:"llm_calls"`
 	InputTokens              int64   `json:"input_tokens"`
 	CacheCreationInputTokens int64   `json:"cache_creation_input_tokens"`
 	CacheReadInputTokens     int64   `json:"cache_read_input_tokens"`
@@ -534,14 +531,13 @@ type GetSubagentOtherUsageRow struct {
 	CostUsd                  float64 `json:"cost_usd"`
 }
 
-// Aggregate indirect LLM usage (messages.other_usage_data entries) across all
-// descendant conversations (subagents, recursively), grouped by model.
-// Folded into handleSubagentUsage's totals alongside GetSubagentUsage; the
-// parent's own indirect usage rides on its own messages instead.
+// Per-entry indirect LLM usage (messages.other_usage_data entries) across all
+// descendant conversations (subagents, recursively). Folded into
+// handleSubagentUsage's totals alongside GetSubagentUsage; the parent's own
+// indirect usage rides on its own messages instead. Returned one row per
+// entry (not aggregated) so each can be priced by its context-size tier.
 // Keep descendants outermost here too, before expanding each matching
 // message's JSON. See GetSubagentUsage above.
-// Group by the JSON expressions, not the aliases: bare model_name/llm_api_url
-// would resolve to the messages table's own columns (NULL here).
 func (q *Queries) GetSubagentOtherUsage(ctx context.Context, parentConversationID *string) ([]GetSubagentOtherUsageRow, error) {
 	rows, err := q.db.QueryContext(ctx, getSubagentOtherUsage, parentConversationID)
 	if err != nil {
@@ -554,7 +550,6 @@ func (q *Queries) GetSubagentOtherUsage(ctx context.Context, parentConversationI
 		if err := rows.Scan(
 			&i.ModelName,
 			&i.LlmApiUrl,
-			&i.LlmCalls,
 			&i.InputTokens,
 			&i.CacheCreationInputTokens,
 			&i.CacheReadInputTokens,
@@ -584,12 +579,11 @@ WITH RECURSIVE descendants(conversation_id) AS (
 SELECT
   m.model_name,
   m.llm_api_url,
-  COUNT(*) AS llm_calls,
-  CAST(COALESCE(SUM(m.usage_data ->> 'input_tokens'), 0) AS INTEGER) AS input_tokens,
-  CAST(COALESCE(SUM(m.usage_data ->> 'cache_creation_input_tokens'), 0) AS INTEGER) AS cache_creation_input_tokens,
-  CAST(COALESCE(SUM(m.usage_data ->> 'cache_read_input_tokens'), 0) AS INTEGER) AS cache_read_input_tokens,
-  CAST(COALESCE(SUM(m.usage_data ->> 'output_tokens'), 0) AS INTEGER) AS output_tokens,
-  CAST(COALESCE(SUM(m.usage_data ->> 'cost_usd'), 0) AS REAL) AS cost_usd
+  CAST(COALESCE(m.usage_data ->> 'input_tokens', 0) AS INTEGER) AS input_tokens,
+  CAST(COALESCE(m.usage_data ->> 'cache_creation_input_tokens', 0) AS INTEGER) AS cache_creation_input_tokens,
+  CAST(COALESCE(m.usage_data ->> 'cache_read_input_tokens', 0) AS INTEGER) AS cache_read_input_tokens,
+  CAST(COALESCE(m.usage_data ->> 'output_tokens', 0) AS INTEGER) AS output_tokens,
+  CAST(COALESCE(m.usage_data ->> 'cost_usd', 0) AS REAL) AS cost_usd
 FROM descendants d
 CROSS JOIN messages m INDEXED BY idx_messages_conv_type_seq
 WHERE m.conversation_id = d.conversation_id
@@ -600,13 +594,11 @@ WHERE m.conversation_id = d.conversation_id
     OR m.usage_data ->> 'cache_read_input_tokens' > 0
     OR m.usage_data ->> 'output_tokens' > 0
     OR m.usage_data ->> 'cost_usd' > 0)
-GROUP BY m.model_name, m.llm_api_url
 `
 
 type GetSubagentUsageRow struct {
 	ModelName                *string `json:"model_name"`
 	LlmApiUrl                *string `json:"llm_api_url"`
-	LlmCalls                 int64   `json:"llm_calls"`
 	InputTokens              int64   `json:"input_tokens"`
 	CacheCreationInputTokens int64   `json:"cache_creation_input_tokens"`
 	CacheReadInputTokens     int64   `json:"cache_read_input_tokens"`
@@ -614,9 +606,11 @@ type GetSubagentUsageRow struct {
 	CostUsd                  float64 `json:"cost_usd"`
 }
 
-// Aggregate LLM usage across all descendant conversations (subagents,
-// recursively), grouped by model. Powers the "plus $X for subagents" line
-// in the token-cost graph; the parent's own usage is not included.
+// Per-call LLM usage across all descendant conversations (subagents,
+// recursively). Powers the "plus $X for subagents" line in the token-cost
+// graph; the parent's own usage is not included. Returned one row per call
+// (not aggregated) so handleSubagentUsage can price each call by the
+// context-size tier its prompt lands in before summing.
 // CROSS JOIN keeps the small descendants set outermost. A regular JOIN lets
 // SQLite start from every agent message, which makes this query scan the full
 // messages table even when the conversation has no subagents.
@@ -632,7 +626,6 @@ func (q *Queries) GetSubagentUsage(ctx context.Context, parentConversationID *st
 		if err := rows.Scan(
 			&i.ModelName,
 			&i.LlmApiUrl,
-			&i.LlmCalls,
 			&i.InputTokens,
 			&i.CacheCreationInputTokens,
 			&i.CacheReadInputTokens,

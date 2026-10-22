@@ -157,15 +157,7 @@
               class="version-btn version-btn-primary"
               @click="handleUpgradeAndRestart"
             >
-              {{
-                upgrading
-                  ? versionInfo.running_under_systemd
-                    ? "Upgrading Shelley & Restarting..."
-                    : "Upgrading Shelley & Killing..."
-                  : versionInfo.running_under_systemd
-                    ? "Upgrade Shelley & Restart"
-                    : "Upgrade & Kill Shelley Server"
-              }}
+              {{ upgrading ? "Upgrading Shelley & Restarting..." : "Upgrade Shelley & Restart" }}
             </button>
           </div>
         </template>
@@ -205,7 +197,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
-import { api } from "../../services/api";
+import { api, ApiError } from "../../services/api";
 import { prettyModelLabels } from "../../utils/modelNames";
 import type { VersionInfo, CommitInfo, Model } from "../../types";
 import Modal from "./Modal.vue";
@@ -318,15 +310,36 @@ async function loadCommits(currentTag: string, latestTag: string) {
 async function handleUpgradeAndRestart() {
   upgrading.value = true;
   upgradeError.value = null;
+  const oldTag = props.versionInfo?.current_tag;
   try {
     await api.upgrade(true);
   } catch (err) {
-    // Connection drop is expected when server restarts, treat as success.
+    if (err instanceof ApiError) {
+      upgradeError.value = err.message;
+      upgrading.value = false;
+      return;
+    }
+    // A dropped connection means the server is already restarting.
     console.log("Upgrade response failed (expected during restart):", err);
   }
-  setTimeout(() => {
-    window.location.reload();
-  }, 2000);
+  // Reload once the new binary answers; until it binds its port, a reload
+  // would land on the browser's connection error page.
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const { tag } = await api.getVersion();
+      if (tag && tag !== oldTag) {
+        window.location.reload();
+        return;
+      }
+    } catch {
+      // Still restarting.
+    }
+  }
+  upgradeError.value =
+    "Shelley didn't come back with the new version. Check its logs, then reload.";
+  upgrading.value = false;
 }
 
 // For customized builds, "upgrade" means starting a Shelley conversation that

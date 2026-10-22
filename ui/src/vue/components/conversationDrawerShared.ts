@@ -67,6 +67,7 @@ export interface DrawerCtx {
   // when a conversation has more than one.
   terminalCounts: ComputedRef<Record<string, number>>;
   subagentsByParent: ComputedRef<Record<string, ConversationWithState[]>>;
+  workingIds: ComputedRef<Set<string>>;
   expandedSubagents: Ref<Set<string>>;
   seenIds: Ref<Set<string> | null>;
   copiedConvId: Ref<string | null>;

@@ -7,15 +7,32 @@ Generates release.json, commits.json, and index.html.
 import json
 import subprocess
 import sys
+import time
+import urllib.parse
 from pathlib import Path
 
 
-def get_headless_shell_release() -> tuple[str, str]:
-    """Find the newest headless-shell release from its git tags.
+# The headless-shell release to advertise instead of the newest one, on the
+# platforms it has a build for. Chromium releases, and so the
+# chromedp/headless-shell builds the release workflow publishes, still trust
+# the compromised eMudhra intermediates
+# (https://emudhra.we-have-a-problem.com). This release is Chromium
+# 156.0.8078.48 for linux/amd64 with their blocklist (chromium da63b94c4ee2)
+# applied. Remove the pin once a chromedp build has the blocklist.
+HEADLESS_SHELL_PIN = "headless-shell/v156.0.8078.48.p1"
 
-    Returns (version_string, tag) like ('Chromium 147.0.7727.24', 'headless-shell/v147.0.7727.24').
-    Shelley releases far outnumber headless-shell releases, so this must not
-    depend on how recently the headless-shell release was published.
+HEADLESS_SHELL_PLATFORMS = ("linux_amd64", "linux_arm64")
+RELEASES_URL = "https://github.com/boldsoftware/shelley/releases/download"
+
+
+def get_headless_shells() -> tuple[str, dict[str, dict[str, str]]]:
+    """Choose a headless-shell build for each platform.
+
+    Each platform gets the pinned release's build if it has one, else the
+    newest release's that has one. Returns the pinned (or newest) release
+    with builds and {platform: {"version": "Chromium 147.0.7727.24", "url": ...}}.
+    Shelley releases far outnumber headless-shell releases, so this goes by
+    git tags rather than by recent releases.
     """
     tags = subprocess.check_output(
         ["git", "tag", "--list", "headless-shell/v*", "--sort=-version:refname"],
@@ -24,8 +41,50 @@ def get_headless_shell_release() -> tuple[str, str]:
     if not tags:
         print("ERROR: no headless-shell/v* tags found", file=sys.stderr)
         sys.exit(1)
-    tag = tags[0]
-    return f"Chromium {tag.removeprefix('headless-shell/v')}", tag
+    if HEADLESS_SHELL_PIN:
+        if HEADLESS_SHELL_PIN not in tags:
+            print(f"ERROR: pinned tag {HEADLESS_SHELL_PIN} not found", file=sys.stderr)
+            sys.exit(1)
+        tags.remove(HEADLESS_SHELL_PIN)
+        tags.insert(0, HEADLESS_SHELL_PIN)
+    builds = {}
+    first = None
+    for tag in tags:
+        assets = release_assets(tag)
+        for platform in HEADLESS_SHELL_PLATFORMS:
+            name = f"headless-shell-{platform.replace('_', '-')}.tar.gz"
+            if platform not in builds and name in assets:
+                builds[platform] = {
+                    "version": f"Chromium {tag.removeprefix('headless-shell/v')}",
+                    "url": f"{RELEASES_URL}/{tag}/{name}",
+                }
+        if tag == HEADLESS_SHELL_PIN and not builds:
+            print(f"ERROR: pinned release {HEADLESS_SHELL_PIN} has no headless-shell builds", file=sys.stderr)
+            sys.exit(1)
+        first = first or (tag if builds else None)
+        if len(builds) == len(HEADLESS_SHELL_PLATFORMS):
+            return first, builds
+    print(f"ERROR: no headless-shell build for {set(HEADLESS_SHELL_PLATFORMS) - set(builds)}", file=sys.stderr)
+    sys.exit(1)
+
+
+def release_assets(tag: str) -> list[str]:
+    """Names of the uploaded assets of tag's GitHub release; none if it has
+    no release or is a prerelease."""
+    for attempt in range(3):
+        result = subprocess.run(
+            ["gh", "api", f"repos/boldsoftware/shelley/releases/tags/{urllib.parse.quote(tag, safe='')}",
+             "--jq", 'select(.prerelease | not) | .assets[] | select(.state == "uploaded") | .name'],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return result.stdout.split()
+        if "HTTP 404" in result.stderr:
+            return []
+        time.sleep(10 * (attempt + 1))
+    print(f"ERROR: release {tag}: {result.stderr.strip()}", file=sys.stderr)
+    sys.exit(1)
 
 
 def generate_release_json(output_dir: Path) -> None:
@@ -76,14 +135,17 @@ def generate_release_json(output_dir: Path) -> None:
         "checksums_url": f"{base_url}/checksums.txt",
     }
 
-    hs_version, hs_tag = get_headless_shell_release()
-    hs_base = f"https://github.com/boldsoftware/shelley/releases/download/{hs_tag}"
+    hs_tag, hs_builds = get_headless_shells()
+    release_info["headless_shells"] = hs_builds
+    # Shelley before headless_shells reads one version for every platform:
+    # the pinned (or newest) release, with only the builds it has.
+    hs_version = f"Chromium {hs_tag.removeprefix('headless-shell/v')}"
     release_info["headless_shell_version"] = hs_version
     release_info["headless_shell_urls"] = {
-        "linux_amd64": f"{hs_base}/headless-shell-linux-amd64.tar.gz",
-        "linux_arm64": f"{hs_base}/headless-shell-linux-arm64.tar.gz",
+        platform: build["url"] for platform, build in hs_builds.items() if build["version"] == hs_version
     }
-    print(f"  headless-shell: {hs_version} ({hs_tag})")
+    for platform, build in hs_builds.items():
+        print(f"  headless-shell {platform}: {build['version']}")
 
     output_path = output_dir / "release.json"
     with open(output_path, "w") as f:

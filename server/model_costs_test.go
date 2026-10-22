@@ -173,8 +173,11 @@ func TestSubagentUsageHandler(t *testing.T) {
 	if res.LLMCalls != 6 {
 		t.Errorf("llm_calls = %d, want 6 (parent excluded, grandchild included)", res.LLMCalls)
 	}
-	if math.Abs(res.EstimatedUSD-115.75) > 1e-9 {
-		t.Errorf("estimated_usd = %v, want 115.75", res.EstimatedUSD)
+	// gpt-5.5 sent a 1M-token prompt, past its 272k context tier, so it bills at
+	// the tier rate (input 10, output 45) = $55 rather than the $35 base. Total:
+	// opus 73.5 + gpt 55 + qwen 3.05 + qwen 4.2 = 135.75.
+	if math.Abs(res.EstimatedUSD-135.75) > 1e-9 {
+		t.Errorf("estimated_usd = %v, want 135.75", res.EstimatedUSD)
 	}
 	if math.Abs(res.ReportedUSD-4.875) > 1e-9 {
 		t.Errorf("reported_usd = %v, want 4.875", res.ReportedUSD)
@@ -199,11 +202,14 @@ func TestSubagentUsageHandler(t *testing.T) {
 		math.Abs(opus.EstimatedUSD-73.5) > 1e-9 || opus.ReportedUSD != 2 || opus.Cost == nil {
 		t.Errorf("per_model[0] = %+v, want merged priced opus usage", opus)
 	}
+	// The prompt (1M input) crossed gpt-5.5's 272k context tier, so this row
+	// carries the tier's effective rates and its cost reflects them.
 	gpt := res.PerModel[1]
 	if gpt.Model != "gpt-5.5-2026-04-23" || gpt.URL != gptURL || gpt.LLMCalls != 1 ||
 		gpt.InputTokens != 1_000_000 || gpt.OutputTokens != 1_000_000 ||
-		math.Abs(gpt.EstimatedUSD-35) > 1e-9 || gpt.ReportedUSD != 2 || gpt.Cost == nil {
-		t.Errorf("per_model[1] = %+v, want gpt usage", gpt)
+		math.Abs(gpt.EstimatedUSD-55) > 1e-9 || gpt.ReportedUSD != 2 || gpt.Cost == nil ||
+		gpt.Cost.Input != 10 || gpt.Cost.Output != 45 {
+		t.Errorf("per_model[1] = %+v, want tiered gpt usage", gpt)
 	}
 	mystery := res.PerModel[2]
 	if mystery.Model != "mystery-model" || mystery.URL != "https://a.example/v1" ||
@@ -255,5 +261,82 @@ func TestSubagentUsageHandler(t *testing.T) {
 	}
 	if string(res2.PerModel) != "[]" {
 		t.Errorf("leaf per_model = %s, want []", res2.PerModel)
+	}
+}
+
+// TestSubagentUsageContextTiers verifies that a subagent's calls on a
+// context-tiered model are priced by the tier each call's own prompt lands in:
+// calls that straddle the threshold split into a base row and a tier row whose
+// costs sum to the exact total (not the understated base-rate total).
+func TestSubagentUsageContextTiers(t *testing.T) {
+	t.Parallel()
+	srv, database, _ := newTestServer(t)
+	ctx := t.Context()
+
+	parent, err := database.CreateConversation(ctx, nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := database.CreateSubagentConversation(ctx, "sub-tiers", parent.ConversationID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// claude-haiku-5-5 bills 5x once a prompt exceeds 100k tokens.
+	const haikuURL = "https://api.anthropic.com/v1/messages"
+	addUsage := func(in, out int64) {
+		t.Helper()
+		if _, err := database.CreateMessage(ctx, db.CreateMessageParams{
+			ConversationID: child.ConversationID,
+			Type:           db.MessageTypeAgent,
+			UsageData: map[string]any{
+				"input_tokens": in, "output_tokens": out, "cost_usd": 0,
+			},
+			ModelName: "claude-haiku-5-5",
+			LLMAPIURL: haikuURL,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addUsage(60_000, 10_000)  // below the 100k cliff: base rate
+	addUsage(150_000, 10_000) // above: tier rate (5x)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/conversation/"+parent.ConversationID+"/subagent-usage", nil)
+	srv.handleSubagentUsage(w, req, parent.ConversationID)
+	if w.Code != 200 {
+		t.Fatalf("status %d: %s", w.Code, w.Body.String())
+	}
+	type perModelRow struct {
+		Model        string          `json:"model"`
+		LLMCalls     int64           `json:"llm_calls"`
+		InputTokens  int64           `json:"input_tokens"`
+		OutputTokens int64           `json:"output_tokens"`
+		EstimatedUSD float64         `json:"estimated_usd"`
+		Cost         *modelsdev.Cost `json:"cost"`
+	}
+	var res struct {
+		EstimatedUSD float64       `json:"estimated_usd"`
+		PerModel     []perModelRow `json:"per_model"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	// Base: 60k*0.1 + 10k*0.5 = 0.011. Tier: 150k*0.5 + 10k*2.5 = 0.100.
+	// Total 0.111, well above the base-rate-only 0.031.
+	if math.Abs(res.EstimatedUSD-0.111) > 1e-9 {
+		t.Errorf("estimated_usd = %v, want 0.111 (base-rate-only would be 0.031)", res.EstimatedUSD)
+	}
+	if len(res.PerModel) != 2 {
+		t.Fatalf("per_model = %+v, want 2 rows (base + tier)", res.PerModel)
+	}
+	base, tier := res.PerModel[0], res.PerModel[1] // sorted base rate first
+	if base.Cost == nil || base.Cost.Input != 0.1 || base.InputTokens != 60_000 ||
+		math.Abs(base.EstimatedUSD-0.011) > 1e-9 {
+		t.Errorf("base row = %+v, want 60k @ base rate = $0.011", base)
+	}
+	if tier.Cost == nil || tier.Cost.Input != 0.5 || tier.InputTokens != 150_000 ||
+		math.Abs(tier.EstimatedUSD-0.100) > 1e-9 {
+		t.Errorf("tier row = %+v, want 150k @ tier rate = $0.100", tier)
 	}
 }

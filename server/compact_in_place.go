@@ -369,9 +369,9 @@ func buildCompaction(history []contextItem, keepRecentTokens int, in claudetool.
 	switch len(problems) {
 	case 0:
 	case 1:
-		return c, fmt.Errorf("%s. Nothing was compacted; fix this and send the whole request again", problems[0])
+		return c, fmt.Errorf("%s. %s", problems[0], compactRetryGuidance)
 	default:
-		return c, fmt.Errorf("%d problems. Nothing was compacted; fix them and send the whole request again:\n- %s", len(problems), strings.Join(problems, "\n- "))
+		return c, fmt.Errorf("%d problems:\n- %s\n\n%s", len(problems), strings.Join(problems, "\n- "), compactRetryGuidance)
 	}
 	// Squishes apply in order, each to the view the previous ones left; they
 	// are disjoint, so order them as they appear.
@@ -569,10 +569,15 @@ func itemTokens(items []contextItem) int {
 	return n
 }
 
+const compactRetryGuidance = `Nothing was compacted; fix only the reported problems and send the whole request again. Preserve existing notes verbatim unless a note itself is invalid or a corrected range changes what it must summarize. Do not shorten notes to fix IDs or ranges.`
+
 const compactIndexGuidance = `Look for dead ends, out-of-date tool outputs (superseded file reads, old
 build and test logs), side quests and finished subprojects. Collapse each into
 a short note that keeps what still matters: decisions, findings, paths,
-commands, ids. Trim tool outputs you no longer need. Big tool inputs and
+commands, ids. Write readable sentences or bullets with normal whitespace.
+Keep words, numbers, and units clearly separated. Shorten by dropping obsolete
+details, not by removing spaces or joining words.
+Trim tool outputs you no longer need. Big tool inputs and
 outputs are most of the context, so focus there. Compacting only a little is
 fine; when unsure, leave it. Originals stay retrievable by conversation_id and
 sequence_id (see the previous-conversations skill).

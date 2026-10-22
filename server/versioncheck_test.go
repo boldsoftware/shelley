@@ -2,17 +2,22 @@ package server
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -288,6 +293,33 @@ func TestVersionCheckerCache(t *testing.T) {
 	})
 }
 
+func TestFindHeadlessShell(t *testing.T) {
+	t.Parallel()
+	platform := runtime.GOOS + "_" + runtime.GOARCH
+	// The shape scripts/generate-version-metadata.py writes.
+	metadata := fmt.Sprintf(`{
+		"tag_name": "v0.10.0",
+		"headless_shells": {
+			%q: {"version": "Chromium 156.0.8078.48.p1", "url": "https://example.com/headless-shell.tar.gz"},
+			"plan9_mips": {"version": "Chromium 157.0.8103.6", "url": "https://example.com/other.tar.gz"}
+		},
+		"headless_shell_version": "Chromium 1.0.0.0",
+		"headless_shell_urls": {%[1]q: "https://example.com/legacy.tar.gz"}
+	}`, platform)
+	var release ReleaseInfo
+	if err := json.Unmarshal([]byte(metadata), &release); err != nil {
+		t.Fatal(err)
+	}
+	want := HeadlessShellBuild{Version: "Chromium 156.0.8078.48.p1", URL: "https://example.com/headless-shell.tar.gz"}
+	if got, ok := findHeadlessShell(&release); !ok || got != want {
+		t.Errorf("findHeadlessShell() = %+v, %v; want %+v, true", got, ok, want)
+	}
+	delete(release.HeadlessShells, platform)
+	if got, ok := findHeadlessShell(&release); ok {
+		t.Errorf("findHeadlessShell() without a build for %s = %+v, want none", platform, got)
+	}
+}
+
 func TestFindDownloadURL(t *testing.T) {
 	t.Parallel()
 	platform := runtime.GOOS + "_" + runtime.GOARCH
@@ -398,6 +430,18 @@ func TestHeadlessShellHasUpdate(t *testing.T) {
 		{"newer patch", "Chromium 141.0.7390.55", "Chromium 141.0.7390.56", true},
 		{"numeric not lexicographic", "Chromium 999.0.0.0", "Chromium 1001.0.0.0", true},
 		{"numeric not lexicographic reverse", "Chromium 1001.0.0.0", "Chromium 999.0.0.0", false},
+		{"patch level over the same version", "Chromium 156.0.8078.48", "Chromium 156.0.8078.48.p1", true},
+		{"patch level over an older version", "Chromium 156.0.8078.36", "Chromium 156.0.8078.48.p1", true},
+		{"same patch level", "Chromium 156.0.8078.48.p1", "Chromium 156.0.8078.48.p1", false},
+		{"same version without the patch level", "Chromium 156.0.8078.48.p1", "Chromium 156.0.8078.48", false},
+		{"newer patch level", "Chromium 156.0.8078.48.p1", "Chromium 156.0.8078.48.p2", true},
+		{"patch level numeric not lexicographic", "Chromium 156.0.8078.48.p2", "Chromium 156.0.8078.48.p10", true},
+		{"newer version without a patch level", "Chromium 156.0.8078.48.p1", "Chromium 156.0.8078.60", true},
+		{"malformed patch level", "Chromium 156.0.8078.48", "Chromium 156.0.8078.48.x1", false},
+		{"three parts", "Chromium 156.0.8078", "Chromium 156.0.8078.48", false},
+		{"five numeric parts", "Chromium 156.0.8078.48", "Chromium 156.0.8078.48.1", false},
+		{"empty patch level", "Chromium 156.0.8078.48", "Chromium 156.0.8078.48.p", false},
+		{"uppercase patch level", "Chromium 156.0.8078.48", "Chromium 156.0.8078.48.P1", false},
 		{"empty current", "", "Chromium 141.0.7390.55", false},
 		{"empty latest", "Chromium 141.0.7390.55", "", false},
 		{"both empty", "", "", false},
@@ -411,6 +455,92 @@ func TestHeadlessShellHasUpdate(t *testing.T) {
 					tt.current, tt.latest, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestLocalHeadlessShellVersion(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	const version = "Chromium 156.0.8078.48"
+	const release = "Chromium 156.0.8078.48.p1"
+	tests := []struct {
+		name   string
+		record func(t *testing.T, bin string)
+		want   string
+	}{
+		{"no recorded version", func(t *testing.T, bin string) {}, version},
+		{"recorded", func(t *testing.T, bin string) {
+			if err := recordHeadlessShellVersion(bin, release); err != nil {
+				t.Fatal(err)
+			}
+		}, release},
+		{"recorded for another binary of the same version", func(t *testing.T, bin string) {
+			if err := recordHeadlessShellVersion(bin, release); err != nil {
+				t.Fatal(err)
+			}
+			writeFakeHeadlessShell(t, bin, "# unpatched\necho '"+version+"'")
+		}, version},
+		{"garbage", func(t *testing.T, bin string) {
+			if err := os.WriteFile(filepath.Join(filepath.Dir(bin), headlessShellVersionFile), []byte(release+"\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}, version},
+		{"binary fails", func(t *testing.T, bin string) {
+			if err := recordHeadlessShellVersion(bin, release); err != nil {
+				t.Fatal(err)
+			}
+			writeFakeHeadlessShell(t, bin, "exit 1")
+		}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			bin := filepath.Join(t.TempDir(), "headless-shell")
+			writeFakeHeadlessShell(t, bin, "echo '"+version+"'")
+			tt.record(t, bin)
+			got := getLocalHeadlessShellVersion(ctx, bin)
+			if got != tt.want {
+				t.Errorf("getLocalHeadlessShellVersion() = %q, want %q", got, tt.want)
+			}
+			if tt.want == release && headlessShellHasUpdate(got, release) {
+				t.Errorf("an update to the recorded %s is still offered", release)
+			}
+		})
+	}
+	if got := getLocalHeadlessShellVersion(ctx, filepath.Join(t.TempDir(), "headless-shell")); got != "" {
+		t.Errorf("getLocalHeadlessShellVersion(missing) = %q, want \"\"", got)
+	}
+}
+
+func TestIsHeadlessShellRelease(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		release, version string
+		want             bool
+	}{
+		{"Chromium 156.0.8078.48", "Chromium 156.0.8078.48", true},
+		{"Chromium 156.0.8078.48.p1", "Chromium 156.0.8078.48", true},
+		{"Chromium 156.0.8078.60.p1", "Chromium 156.0.8078.48", false},
+		{"Chromium 156.0.8078.4", "Chromium 156.0.8078.48", false},
+		{"Chromium 156.0.8078.48.p1", "HeadlessChrome", false},
+	}
+	for _, tt := range tests {
+		if got := isHeadlessShellRelease(tt.release, tt.version); got != tt.want {
+			t.Errorf("isHeadlessShellRelease(%q, %q) = %v, want %v", tt.release, tt.version, got, tt.want)
+		}
+	}
+}
+
+// writeFakeHeadlessShell writes a shell script with body to bin.
+func writeFakeHeadlessShell(t *testing.T, bin, body string) {
+	t.Helper()
+	// A process forked while bin is open for writing keeps it open until it
+	// execs, and running bin meanwhile fails with ETXTBSY
+	// (https://go.dev/issue/22315). ForkLock keeps forks out until it's closed.
+	syscall.ForkLock.RLock()
+	defer syscall.ForkLock.RUnlock()
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -455,5 +585,74 @@ func TestIsPermissionError(t *testing.T) {
 				t.Errorf("isPermissionError(%v) = %v, want %v", tt.err, result, tt.expected)
 			}
 		})
+	}
+}
+
+// TestDoUpgradeFallsBackToSudo upgrades a binary in a root-owned directory,
+// like /usr/local/bin, and checks that the sudo fallback keeps its owner and
+// mode using only commands and flags macOS has too.
+func TestDoUpgradeFallsBackToSudo(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can write the directory, so nothing falls back to sudo")
+	}
+	if !isSudoAvailable() {
+		t.Skip("needs passwordless sudo")
+	}
+	dir := filepath.Join(t.TempDir(), "bin")
+	exe := filepath.Join(dir, "shelley")
+	old := filepath.Join(t.TempDir(), "old")
+	if err := os.WriteFile(old, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { exec.Command("sudo", "rm", "-rf", dir).Run() })
+	for _, args := range [][]string{{"mkdir", dir}, {"cp", old, exe}, {"chown", "1:1", exe}, {"chmod", "745", exe}} {
+		if out, err := exec.Command("sudo", args...).CombinedOutput(); err != nil {
+			t.Fatalf("sudo %v: %v: %s", args, err, out)
+		}
+	}
+
+	newBinary := []byte("new")
+	asset := fmt.Sprintf("shelley_%s_%s", runtime.GOOS, runtime.GOARCH)
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("GET /release.json", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(ReleaseInfo{
+			TagName:      "v0.2.0",
+			DownloadURLs: map[string]string{runtime.GOOS + "_" + runtime.GOARCH: srv.URL + "/" + asset},
+			ChecksumsURL: srv.URL + "/checksums.txt",
+		})
+	})
+	mux.HandleFunc("GET /checksums.txt", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "%x  %s\n", sha256.Sum256(newBinary), asset)
+	})
+	mux.HandleFunc("GET /"+asset, func(w http.ResponseWriter, r *http.Request) { w.Write(newBinary) })
+
+	t.Setenv("SHELLEY_VERSION_OVERRIDE", "v0.1.0")
+	oldURL, oldExe, oldErr := staticMetadataURL, startupExecutable, startupExecutableErr
+	staticMetadataURL, startupExecutable, startupExecutableErr = srv.URL, exe, nil
+	t.Cleanup(func() { staticMetadataURL, startupExecutable, startupExecutableErr = oldURL, oldExe, oldErr })
+
+	if err := (&VersionChecker{}).DoUpgrade(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := os.ReadFile(exe); err != nil || string(got) != "new" {
+		t.Fatalf("contents = %q, %v; want %q", got, err, "new")
+	}
+	fi, err := os.Stat(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := fi.Sys().(*syscall.Stat_t)
+	if st.Uid != 1 || st.Gid != 1 || fi.Mode().Perm() != 0o745 {
+		t.Errorf("owner %d:%d mode %o; want 1:1 745", st.Uid, st.Gid, fi.Mode().Perm())
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("left behind %v; want only shelley", entries)
 	}
 }

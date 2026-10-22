@@ -475,9 +475,16 @@ function setEphemeralTerminals(
   ephemeralTerminals.value = typeof next === "function" ? next(ephemeralTerminals.value) : next;
 }
 
-function handleTerminalAttached(id: string, termId: string, closeOnExit: boolean) {
+// termId is null for a terminal the server ran without a persistent session.
+function handleTerminalAttached(id: string, termId: string | null, closeOnExit: boolean) {
   setEphemeralTerminals((prev) =>
-    prev.map((tm) => (tm.id === id ? { ...tm, termId, closeOnExit } : tm)),
+    prev.map((tm) =>
+      tm.id !== id
+        ? tm
+        : termId === null
+          ? { ...tm, unpersisted: true }
+          : { ...tm, termId, closeOnExit },
+    ),
   );
 }
 

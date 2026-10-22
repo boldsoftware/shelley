@@ -19,7 +19,8 @@ import (
 
 // ExecMessage is the message format for terminal websocket communication.
 // Server -> client uses TermID in an "attached" message so the browser can
-// remember the persistent session id across reloads.
+// remember the persistent session id across reloads. A terminal started
+// without a persistent session (the disk is full) gets "unpersisted" instead.
 type ExecMessage struct {
 	Type        string `json:"type"`
 	Data        string `json:"data,omitempty"`
@@ -101,12 +102,26 @@ func (s *Server) handleExecWS(w http.ResponseWriter, r *http.Request) {
 	cwd = terminalCwd(cwd)
 	extraEnv := buildTerminalEnv(conversationID, slug, model, userEmail, cwd, s.listenPort, s.socketPath)
 	sess, dc, err := s.attachOrSpawn(termID, cmd, cwd, conversationID, closeOnExit, cols, rows, extraEnv)
+	if errors.Is(err, errTerminalDiskFull) {
+		// A terminal is how users free up space, so run one that needs no
+		// disk. It has no session id: it lasts as long as this websocket.
+		s.logger.Warn("disk full; running terminal without a persistent session", "command", cmd, "cwd", cwd)
+		dc, err = startDirectPTY(cmd, cwd, cols, rows, extraEnv)
+	}
 	if err != nil {
 		wsjson.Write(ctx, conn, ExecMessage{Type: "error", Data: err.Error()})
 		conn.Close(websocket.StatusInternalError, "attach failed")
 		return
 	}
 	defer dc.Close()
+
+	if sess == nil {
+		if err := wsjson.Write(ctx, conn, ExecMessage{Type: "unpersisted"}); err != nil {
+			return
+		}
+		s.bridgeWS(ctx, conn, dc, "")
+		return
+	}
 
 	// Tell the client which session it ended up on (especially important if it
 	// was just spawned).
@@ -164,6 +179,7 @@ func (s *Server) attachOrSpawn(termID, cmd, cwd, conversationID string, closeOnE
 }
 
 // bridgeWS shuttles bytes between the browser websocket and a terminal session.
+// termID is empty for a terminal with no persistent session.
 func (s *Server) bridgeWS(ctx context.Context, conn *websocket.Conn, client terminalClient, termID string) {
 	var exited bool
 
@@ -199,12 +215,14 @@ func (s *Server) bridgeWS(ctx context.Context, conn *websocket.Conn, client term
 
 	go func() {
 		<-terminalDone
-		if exited {
-			s.terminals.Forget(termID)
-			conn.Close(websocket.StatusNormalClosure, "process exited")
-		} else {
+		if !exited {
 			conn.Close(websocket.StatusGoingAway, "detached")
+			return
 		}
+		if termID != "" {
+			s.terminals.Forget(termID)
+		}
+		conn.Close(websocket.StatusNormalClosure, "process exited")
 	}()
 
 	for {

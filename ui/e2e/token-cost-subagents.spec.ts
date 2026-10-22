@@ -1,6 +1,8 @@
 import { expect, test, type Page, type APIRequestContext } from "@playwright/test";
 import type { Message } from "../src/types";
 
+test.use({ viewport: { width: 1280, height: 900 } });
+
 const price = { input: 2, output: 8, cache_read: 0.2, cache_write: 2.5 };
 const reviewer = {
   model: "review-model",
@@ -76,7 +78,7 @@ async function openSpend(
   return page.locator(".chat-context-popup");
 }
 
-for (const width of [393, 1280]) {
+for (const width of [768, 1280]) {
   test(`per-model main and sub-agent spend with subtotals (${width}px)`, async ({
     page,
     request,
@@ -302,7 +304,7 @@ test("keeps a tall breakdown above its toggle on short desktop viewports", async
   await expect(popup).toBeHidden();
 });
 
-for (const width of [393, 1280]) {
+for (const width of [768, 1280]) {
   test(`aligns shared model usage in one table (${width}px)`, async ({ page, request }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.route("**/api/conversation/*/subagent-usage", (route) =>

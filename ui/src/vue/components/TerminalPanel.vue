@@ -258,9 +258,10 @@ const emit = defineEmits<{
   (e: "insert-into-input", text: string): void;
   (e: "auto-focus-consumed"): void;
   (e: "active-terminal-exited"): void;
-  (e: "attached", id: string, termId: string, closeOnExit: boolean): void;
+  // termId is null for a terminal without a persistent session.
+  (e: "attached", id: string, termId: string | null, closeOnExit: boolean): void;
   // scope-change: terminal id, new owner (null for global). Emitted only after
-  // the server has accepted the change.
+  // the server has accepted the change, or at once for an unpersisted terminal.
   (e: "scope-change", id: string, conversationId: string | null): void;
   (e: "scope-error", message: string): void;
   (e: "new-terminal"): void;
@@ -320,12 +321,17 @@ function scopeTooltip(t: EphemeralTerminal): string {
 
 async function toggleScope(t: EphemeralTerminal) {
   if (scopeDisabled(t)) return;
+  const next = t.conversationId === null ? (props.conversationId ?? null) : null;
+  // An unpersisted terminal's scope exists only in this page.
+  if (t.unpersisted) {
+    emit("scope-change", t.id, next);
+    return;
+  }
   // Without a server-side session there is nothing to persist against yet.
   if (!t.termId) {
     emit("scope-error", "This terminal is still starting up.");
     return;
   }
-  const next = t.conversationId === null ? (props.conversationId ?? null) : null;
   scopePending.value = new Set(scopePending.value).add(t.id);
   try {
     const res = await fetch(`/api/terminals/${encodeURIComponent(t.termId)}/scope`, {

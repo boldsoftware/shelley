@@ -6,6 +6,28 @@ import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { hermeticGitEnvironment } from "../scripts/git-test-env";
 
+export async function openModelPicker(page: Page): Promise<Locator> {
+  await expect(page.locator(".header")).toBeVisible();
+  if (
+    page.viewportSize()!.width < 768 &&
+    !(await page.locator(".chat-overflow-popover").isVisible())
+  ) {
+    await page.getByRole("button", { name: "More options", exact: true }).click();
+  }
+  const picker = page.locator(".model-picker.p-select:visible");
+  await picker.click();
+  return picker;
+}
+
+export async function directoryControl(page: Page): Promise<Locator> {
+  await expect(page.locator(".header")).toBeVisible();
+  if (page.viewportSize()!.width >= 768) return page.locator(".status-field-cwd .status-chip");
+  if (!(await page.locator(".chat-overflow-popover").isVisible())) {
+    await page.getByRole("button", { name: "More options", exact: true }).click();
+  }
+  return page.locator(".chat-overflow-popover").getByRole("button", { name: /^Directory\b/ });
+}
+
 export async function openWorkspaceTool(page: Page, name: string): Promise<void> {
   // Phones keep workspace tools in the overflow menu, so the toolbar is
   // empty there.
