@@ -152,7 +152,7 @@ test.describe("Command palette home-directory action", () => {
 // create form whose local Escape must cancel create mode without closing the
 // dialog (it stopPropagation()s before the shared modal Escape stack sees it).
 test.describe("Directory picker modal (shared Modal consumer)", () => {
-  test("saves favorites independently of selection and remembers the picker view", async ({
+  test("saves favorites, remembers the view, and selects on double-click", async ({
     page,
     request,
   }) => {
@@ -197,14 +197,37 @@ test.describe("Directory picker modal (shared Modal consumer)", () => {
       await favorite.click();
       await expect(panel.locator(".directory-picker-current-path")).toHaveText(homeDir);
       expect(await page.evaluate(() => localStorage.getItem("shelley_selected_cwd"))).toBe(e2eDir);
-      await panel.getByRole("button", { name: "Select", exact: true }).click();
+
+      const homeListing = (url: URL) =>
+        url.pathname === "/api/list-directory" && url.searchParams.get("path") === homeDir;
+      await page.route(homeListing, (route) =>
+        route.fulfill({ json: { error: "Favorite directory no longer exists" } }),
+      );
+      await favorite.dblclick();
+      await expect(panel.locator(".directory-picker-error")).toHaveText(
+        "Favorite directory no longer exists",
+      );
+      await expect(panel).toBeVisible();
+      expect(await page.evaluate(() => localStorage.getItem("shelley_selected_cwd"))).toBe(e2eDir);
+
+      await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+      await page.unroute(homeListing);
+      await chip.click();
+      await favorite.dblclick();
+      await expect(panel).toHaveCount(0);
       await expect(chip).toHaveText("~");
+      expect(await page.evaluate(() => localStorage.getItem("shelley_selected_cwd"))).toBe(homeDir);
 
       await chip.click();
       await list.getByRole("button", { name: "Remove ~ from favorites", exact: true }).click();
       await expect(list).toContainText("No favorites yet");
       const cleared = await (await request.get("/settings")).json();
       expect(JSON.parse(cleared.directory_favorites)).toEqual([]);
+
+      await panel.locator(".directory-picker-input").fill(`${e2eDir}/`);
+      await panel.getByRole("button", { name: "Select", exact: true }).click();
+      await expect(panel).toHaveCount(0);
+      expect(await page.evaluate(() => localStorage.getItem("shelley_selected_cwd"))).toBe(e2eDir);
     } finally {
       await request.post("/settings", {
         headers,

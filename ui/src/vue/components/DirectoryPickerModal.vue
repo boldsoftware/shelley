@@ -253,6 +253,7 @@
             :title="path"
             :aria-current="!error && displayDir?.path === path ? 'location' : undefined"
             @click="pickFavorite(path)"
+            @dblclick="refreshDirectory(true)"
           >
             <i class="pi pi-folder directory-picker-icon" aria-hidden="true" />
             <span class="flex flex-col truncate">
@@ -597,7 +598,7 @@ function handleCreateKeyDown(e: KeyboardEvent) {
   }
 }
 
-function refreshDirectory() {
+function refreshDirectory(selectOnLoad = false) {
   const requestSequence = ++loadSequence;
   if (!props.isOpen) {
     loading.value = false;
@@ -617,12 +618,14 @@ function refreshDirectory() {
       error.value = err instanceof Error ? err.message : "Failed to load directory";
     })
     .finally(() => {
-      if (requestSequence === loadSequence) loading.value = false;
+      if (requestSequence !== loadSequence) return;
+      loading.value = false;
+      if (selectOnLoad) handleSelect();
     });
 }
 
 // Update display when input changes (while open).
-watch([() => props.isOpen, inputPath], refreshDirectory, { immediate: true });
+watch([() => props.isOpen, inputPath], () => refreshDirectory(), { immediate: true });
 
 // Initialize + focus when modal opens.
 watch(
