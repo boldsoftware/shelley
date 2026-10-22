@@ -20,6 +20,32 @@ const e2eDir = dirname(fileURLToPath(import.meta.url));
 // across the hand-rolled and PrimeVue implementations.
 
 test.describe("Conversation TOC popover", () => {
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`only highlights the hovered row (${colorScheme})`, async ({ page, request }) => {
+      await page.emulateMedia({ colorScheme });
+      const slug = await createConversationViaAPI(request, "echo TOC hover");
+      await page.goto(`/c/${slug}`);
+      await page.locator(".toc-button").click();
+
+      const popover = page.locator(".toc-popover");
+      const active = popover.locator(".toc-entry-active");
+      const prompt = popover.locator(".toc-entry-user").first();
+      await expect(active).toHaveCount(1);
+      await expect(prompt).not.toHaveClass(/toc-entry-active/);
+      await expect(active).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+
+      await active.hover();
+      await expect(active).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await prompt.hover();
+      await expect(prompt).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(active).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+
+      await popover.locator(".toc-popover-title").hover();
+      await expect(prompt).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(active).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    });
+  }
+
   test("opens from the nav button, lists entries, and dismisses", async ({ page, request }) => {
     test.setTimeout(60000);
     const slug = await createConversationViaAPI(request, "echo table of contents");
