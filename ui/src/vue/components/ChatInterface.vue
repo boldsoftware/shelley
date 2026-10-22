@@ -506,7 +506,7 @@
     <DirectoryPickerModal
       :is-open="showDirectoryPicker"
       :initial-path="currentConversation?.cwd || selectedCwd"
-      @close="showDirectoryPicker = false"
+      @close="closeDirectoryPicker"
       @select="applyPickedCwd"
     />
 
@@ -1236,6 +1236,11 @@ function setSelectedCwd(cwd: string) {
 
 const cwdError = ref<string | null>(null);
 const showDirectoryPicker = ref(false);
+
+function closeDirectoryPicker() {
+  showDirectoryPicker.value = false;
+  nextTick(() => messageInputRef.value?.focus());
+}
 
 // Directory pick from the picker modal. How it applies depends on whether the
 // conversation exists yet — the same split as the model picker: a draft's cwd is

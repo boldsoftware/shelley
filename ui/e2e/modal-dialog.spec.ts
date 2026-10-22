@@ -171,6 +171,7 @@ test.describe("Directory picker modal (shared Modal consumer)", () => {
 
       const chip = page.locator(".status-field-cwd .status-chip");
       const panel = page.locator(".modal.directory-picker-modal");
+      const prompt = page.getByTestId("message-input");
       await chip.click();
       await panel
         .locator(".directory-picker-input")
@@ -183,6 +184,7 @@ test.describe("Directory picker modal (shared Modal consumer)", () => {
       expect(JSON.parse(saved.directory_favorites)).toEqual([homeDir]);
       await panel.getByRole("button", { name: "Favorites", exact: true }).click();
       await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(prompt).toBeFocused();
       await page.reload();
       await chip.click();
       await expect(panel.getByRole("button", { name: "Favorites", exact: true })).toHaveAttribute(
@@ -211,12 +213,18 @@ test.describe("Directory picker modal (shared Modal consumer)", () => {
       expect(await page.evaluate(() => localStorage.getItem("shelley_selected_cwd"))).toBe(e2eDir);
 
       await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(prompt).toBeFocused();
       await page.unroute(homeListing);
       await chip.click();
       await favorite.dblclick();
       await expect(panel).toHaveCount(0);
+      await expect(prompt).toBeFocused();
       await expect(chip).toHaveText("~");
       expect(await page.evaluate(() => localStorage.getItem("shelley_selected_cwd"))).toBe(homeDir);
+
+      await chip.click();
+      await panel.getByRole("button", { name: "Select", exact: true }).click();
+      await expect(prompt).toBeFocused();
 
       await chip.click();
       await list.getByRole("button", { name: "Remove ~ from favorites", exact: true }).click();
@@ -227,6 +235,7 @@ test.describe("Directory picker modal (shared Modal consumer)", () => {
       await panel.locator(".directory-picker-input").fill(`${e2eDir}/`);
       await panel.getByRole("button", { name: "Select", exact: true }).click();
       await expect(panel).toHaveCount(0);
+      await expect(prompt).toBeFocused();
       expect(await page.evaluate(() => localStorage.getItem("shelley_selected_cwd"))).toBe(e2eDir);
     } finally {
       await request.post("/settings", {
@@ -328,12 +337,14 @@ test.describe("Directory picker modal (shared Modal consumer)", () => {
     // A second Escape (now routed to the modal Escape stack) closes it.
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
+    await expect(page.getByTestId("message-input")).toBeFocused();
 
     // Reopen and close via the footer Cancel button.
     await chip.click();
     await expect(panel).toBeVisible();
     await footer.getByRole("button", { name: "Cancel" }).click();
     await expect(panel).toHaveCount(0);
+    await expect(page.getByTestId("message-input")).toBeFocused();
   });
 
   test("caps rendering of huge directories and filters within them", async ({ page }) => {
