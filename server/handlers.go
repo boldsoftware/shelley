@@ -3677,8 +3677,9 @@ func (s *Server) handleSetSetting(w http.ResponseWriter, r *http.Request) {
 
 	// Only allow known setting keys
 	allowedKeys := map[string]bool{
-		"auto_upgrade":      true,
-		exeNotifySettingKey: true,
+		"auto_upgrade":        true,
+		"directory_favorites": true,
+		exeNotifySettingKey:   true,
 	}
 	if !allowedKeys[req.Key] {
 		http.Error(w, fmt.Sprintf("Invalid setting key: %s", req.Key), http.StatusBadRequest)

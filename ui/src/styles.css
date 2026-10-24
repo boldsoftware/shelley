@@ -332,9 +332,9 @@ body {
 /* Bare-element reset for legacy native <button>s. Wrapped in :where() so it has
    ZERO specificity: it still resets plain <button>s but loses to the .btn-*
    design-system classes (otherwise the reset would strip their chrome). The
-   :not(.p-button) keeps it from touching PrimeVue <Button>s at all — styles.css
-   is unlayered and would otherwise beat PrimeVue's layered .p-button rules. */
-:where(button:not(.p-button)) {
+   :not exclusions keep it from touching PrimeVue buttons — styles.css is
+   unlayered and would otherwise beat PrimeVue's layered control styles. */
+:where(button:not(.p-button):not(.p-togglebutton)) {
   font-family: inherit;
   cursor: pointer;
   border: none;

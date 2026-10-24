@@ -618,7 +618,12 @@ const canRecordAudio = computed(
 );
 const canRecordScreen = computed(() => canRecordAudio.value && screenRecordingAvailable);
 
-defineExpose({ canRecordAudio, canRecordScreen, beginRecording });
+defineExpose({
+  canRecordAudio,
+  canRecordScreen,
+  beginRecording,
+  focus: () => textareaRef.value?.focus(),
+});
 
 function beginRecording(mode: RecordingMode) {
   if (!(mode === "screen" ? canRecordScreen.value : canRecordAudio.value)) return;
