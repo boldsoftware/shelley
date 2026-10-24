@@ -14,10 +14,14 @@ export function createMathExtension(): marked.MarkedExtension {
         name: "math",
         level: "block",
         start(source) {
-          return source.search(/^ {0,3}\$\$/m);
+          return source.search(/^ {0,3}(?:\$\$|\\\[)/m);
         },
         tokenizer(source) {
-          const match = /^ {0,3}\$\$((?:\\[\s\S]|[^\\$]|\$(?!\$))*)\$\$[ \t]*(?:\n|$)/.exec(source);
+          const match = (
+            source.trimStart().startsWith("\\[")
+              ? /^ {0,3}\\\[((?:\\(?!\])[\s\S]|[^\\])*)\\\][ \t]*(?:\n|$)/
+              : /^ {0,3}\$\$((?:\\[\s\S]|[^\\$]|\$(?!\$))*)\$\$[ \t]*(?:\n|$)/
+          ).exec(source);
           if (match) {
             return { type: "math", raw: match[0], text: match[1], displayMode: true };
           }
@@ -33,15 +37,20 @@ export function createMathExtension(): marked.MarkedExtension {
         name: "math",
         level: "inline",
         start(source) {
-          return source.indexOf("$");
+          return source.search(/\$|\\[([]/);
         },
         tokenizer(source) {
           if (this.lexer.state.inRawBlock || this.lexer.state.inLink) return;
-          const displayMode = source.startsWith("$$");
+          const displayMode = source.startsWith("$$") || source.startsWith("\\[");
+          // Consume escaped backslashes in pairs, so \\) and \\] do not close math.
           const match = (
-            displayMode
-              ? /^\$\$((?:\\[\s\S]|[^\\$]|\$(?!\$))*)\$\$/
-              : /^\$(?!\s)((?:\\[^\n]|[^\\$`\n])+?)(?<!\s)\$(?![\d$])/
+            source.startsWith("\\")
+              ? displayMode
+                ? /^\\\[((?:\\(?!\])[\s\S]|[^\\])*)\\\]/
+                : /^\\\(((?:\\(?!\))[\s\S]|[^\\])*)\\\)/
+              : displayMode
+                ? /^\$\$((?:\\[\s\S]|[^\\$]|\$(?!\$))*)\$\$/
+                : /^\$(?!\s)((?:\\[^\n]|[^\\$`\n])+?)(?<!\s)\$(?![\d$])/
           ).exec(source);
           if (match) return { type: "math", raw: match[0], text: match[1], displayMode };
           if (displayMode) return { type: "text", raw: source, text: source };
