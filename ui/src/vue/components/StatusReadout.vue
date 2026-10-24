@@ -1,8 +1,9 @@
-<!-- Right-hand status-bar readout: "~/dir · 15k · model-name".
+<!-- Right-hand status-bar readout: "~/dir ⎇ branch · 15k · model-name".
 
      Three segments, dot-separated, sharing one type style (set here, inherited
      by the segments, so they can't drift apart the way they did when each
-     declared its own). All three are controls with distinct destinations: the
+     declared its own). The branch is read-only metadata beside the cwd.
+     All three segments have controls with distinct destinations: the
      cwd opens the directory picker, the token count opens the context/cost
      popup, the model name opens the model picker. None of them can look like a
      control in the usual way — they have to read as one line of plain text — so
@@ -35,6 +36,14 @@
           cwdLeaf
         }}</span>
       </button>
+      <span
+        v-if="showGitBranch && branchLabel"
+        class="status-readout-branch"
+        v-tooltip.top="`${gitRepoRoot}\n${branchLabel}`"
+      >
+        <WorkspaceActionIcon action="gitGraph" />
+        <span class="truncate">{{ branchLabel }}</span>
+      </span>
       <span class="status-readout-sep status-readout-sep-cwd hide-on-mobile" aria-hidden="true"
         >·</span
       >
@@ -98,13 +107,18 @@ import type { Message, Model } from "../../types";
 import type { OtherUsageRow, UsageEntry } from "../../utils/tokenCostGraph";
 import { tildifyPath } from "../../utils/tildify";
 import { useI18n } from "../composables/i18n";
+import { useGitBranchSetting } from "../composables/gitBranchSetting";
 import type { ThinkingLevel } from "./thinkingLevel";
 import type { SettingsKnob } from "../composables/profiles";
 import ContextUsageBar from "./ContextUsageBar.vue";
 import ModelPicker from "./ModelPicker.vue";
+import WorkspaceActionIcon from "./WorkspaceActionIcon.vue";
 
 const props = defineProps<{
   cwd?: string;
+  gitBranch?: string;
+  gitCommit?: string;
+  gitRepoRoot?: string;
   conversationId?: string | null;
   contextWindowSize: number;
   maxContextTokens: number;
@@ -132,6 +146,11 @@ const props = defineProps<{
 }>();
 
 const { t } = useI18n();
+const { showGitBranch } = useGitBranchSetting();
+
+const branchLabel = computed(
+  () => props.gitBranch || (props.gitCommit ? `detached@${props.gitCommit}` : ""),
+);
 
 const cwdLeaf = computed(() => {
   const normalized = props.cwd?.replace(/[\\/]+$/, "");

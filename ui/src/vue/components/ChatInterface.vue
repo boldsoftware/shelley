@@ -663,6 +663,7 @@ import {
   type Message,
   type Model,
   type Conversation,
+  type ConversationWithState,
   type ChatRequest,
   type BtwExchange,
   type ToolProgress,
@@ -840,7 +841,7 @@ const props = withDefaults(
     onNewConversation: () => Promise<boolean>;
     onSelectConversation?: (conversation: Conversation) => void;
     onArchiveConversation?: (conversationId: string) => Promise<void>;
-    currentConversation?: Conversation;
+    currentConversation?: ConversationWithState;
     conversations: Conversation[];
     onConversationUpdate?: (conversation: Conversation) => void;
     onMessageSent?: (conversationId: string) => void;

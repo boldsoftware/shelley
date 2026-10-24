@@ -1287,7 +1287,8 @@ body {
   cursor: pointer;
 }
 
-.group-by-menu-icon {
+.group-by-menu-icon,
+.status-readout-branch svg {
   width: 0.875rem;
   height: 0.875rem;
   flex-shrink: 0;
@@ -6493,7 +6494,7 @@ svg {
   background: var(--bg-secondary);
 }
 
-/* Right-hand status readout: "~/dir · 15k · model-name", dot-separated. One
+/* Right-hand status readout: "~/dir ⎇ branch · 15k · model-name", dot-separated. One
    type style for every segment (the cwd used to be mono at a different size,
    which read as three unrelated widgets sitting next to each other) — set
    here on the container and inherited, so the segments can't drift apart.
@@ -6579,6 +6580,14 @@ svg {
   display: none;
   min-width: 0;
   overflow: hidden;
+}
+
+.status-readout-branch {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  /* Keep the icon, gap, and an ellipsis visible under width pressure. */
+  min-width: calc(0.875rem + 0.25rem + 1ch);
 }
 
 .status-readout-sep {
