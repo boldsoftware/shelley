@@ -34,12 +34,12 @@ func specReviewRecording() *reviewRecording {
 		StartedAt:  "2026-09-29T20:14:03.120Z",
 		DurationMS: 192340,
 		Events: []reviewEvent{
-			{MS: 0, Type: "view", Where: "Tour · a8a26e6a shelley/ui: don't navigate back…", Mode: "tour", Commit: "a8a26e6a"},
-			{MS: 0, Type: "on_screen", Items: []string{"Overview", "The fix › shelley/ui/src/vue/App.vue new 790–798"}},
-			{MS: 3500, Type: "pointer", Where: "The fix › shelley/ui/src/vue/App.vue new 795", File: "shelley/ui/src/vue/App.vue", Side: "new", Line: 795, Text: "    currentConversationId.value = sourceConversationId;"},
+			{MS: 0, Type: "view", Where: "Files · a8a26e6a shelley/ui: don't navigate back… · shelley/ui/src/vue/App.vue", Mode: "files", Commit: "a8a26e6a", File: "shelley/ui/src/vue/App.vue"},
+			{MS: 0, Type: "on_screen", Items: []string{"shelley/ui/src/vue/App.vue (new 770–820, old 770–818)"}},
+			{MS: 3500, Type: "pointer", Where: "Files › shelley/ui/src/vue/App.vue new 795", File: "shelley/ui/src/vue/App.vue", Side: "new", Line: 795, Text: "    currentConversationId.value = sourceConversationId;"},
 			{MS: 5000, Type: "pointer_leave"},
-			{MS: 6000, Type: "selection", Where: "shelley/ui/src/vue/App.vue new 794–795", File: "shelley/ui/src/vue/App.vue", Text: "currentConversationId.value = …"},
-			{MS: 8000, Type: "click", Where: "Files tab"},
+			{MS: 6000, Type: "selection", Where: "Files › shelley/ui/src/vue/App.vue new 794–795", File: "shelley/ui/src/vue/App.vue", Text: "currentConversationId.value = …"},
+			{MS: 8000, Type: "click", Where: "Next file"},
 			{MS: 192340, Type: "stop"},
 		},
 	}
@@ -62,13 +62,13 @@ Repository: /home/exedev/repo
 Recorded: 2026-09-29T20:14:03.120Z · 3m12s
 Times are from the start of the audio. "said" lines are speech (whisper word timings); indented lines are what the page showed at that moment.
 
-00:00.0    view: Tour · a8a26e6a shelley/ui: don't navigate back…
-00:00.0    on screen: Overview; The fix › shelley/ui/src/vue/App.vue new 790–798
+00:00.0    view: Files · a8a26e6a shelley/ui: don't navigate back… · shelley/ui/src/vue/App.vue
+00:00.0    on screen: shelley/ui/src/vue/App.vue (new 770–820, old 770–818)
 00:02.4  said: "So the first thing I'm looking at is"
-00:03.5    pointer: The fix › shelley/ui/src/vue/App.vue new 795 — ` + "`currentConversationId.value = sourceConversationId;`" + `
+00:03.5    pointer: Files › shelley/ui/src/vue/App.vue new 795 — ` + "`currentConversationId.value = sourceConversationId;`" + `
 00:03.9  said: "this line which should just go away"
-00:06.0    selected: shelley/ui/src/vue/App.vue new 794–795 — "currentConversationId.value = …"
-00:08.0    clicked: Files tab
+00:06.0    selected: Files › shelley/ui/src/vue/App.vue new 794–795 — "currentConversationId.value = …"
+00:08.0    clicked: Next file
 `
 	if got != want {
 		t.Fatalf("timeline:\n%s\nwant:\n%s", got, want)

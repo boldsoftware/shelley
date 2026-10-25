@@ -23,7 +23,6 @@
     <MessageComponent
       :message="node.item.message"
       :on-open-diff-viewer="onOpenDiffViewer"
-      :can-request-tour="canRequestTour"
       :on-comment-text-change="onCommentTextChange"
       :on-fork="conversationId ? onFork : undefined"
     />
@@ -58,7 +57,6 @@
       :node="child"
       :conversation-id="conversationId"
       :on-open-diff-viewer="onOpenDiffViewer"
-      :can-request-tour="canRequestTour"
       :on-comment-text-change="onCommentTextChange"
       :on-fork="onFork"
     />
@@ -76,8 +74,7 @@ import BtwInline from "./BtwInline.vue";
 defineProps<{
   node: RenderNode;
   conversationId: string | null;
-  onOpenDiffViewer: (commit: string, cwd?: string, openOnFiles?: boolean) => void;
-  canRequestTour: boolean;
+  onOpenDiffViewer: (commit: string, cwd?: string) => void;
   onCommentTextChange: (text: string) => void;
   onFork: (messageId: string) => void;
 }>();

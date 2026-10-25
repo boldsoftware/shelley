@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"shelley.exe.dev/committour"
+	"shelley.exe.dev/commitnotes"
 )
 
 func runHighlights(args []string) {
@@ -34,7 +34,7 @@ func runHighlights(args []string) {
 		if len(rest) != 1 {
 			usage("<commit>")
 		}
-		h, err := committour.HighlightsScaffold(*dir, rest[0])
+		h, err := commitnotes.HighlightsScaffold(*dir, rest[0])
 		if err != nil {
 			fail(err)
 		}
@@ -52,16 +52,16 @@ func runHighlights(args []string) {
 		if err != nil {
 			fail(err)
 		}
-		h, err := committour.ParseHighlights(data)
+		h, err := commitnotes.ParseHighlights(data)
 		if err != nil {
 			fail(err)
 		}
 		// Resolve the commit once: HEAD may move while attaching.
-		hash, err := committour.CommitHash(*dir, rest[0])
+		hash, err := commitnotes.CommitHash(*dir, rest[0])
 		if err != nil {
 			fail(err)
 		}
-		if err := committour.VerifyHighlights(*dir, hash, h); err != nil {
+		if err := commitnotes.VerifyHighlights(*dir, hash, h); err != nil {
 			fail(err)
 		}
 		if args[0] == "verify" {
@@ -77,7 +77,7 @@ func runHighlights(args []string) {
 		if err := enc.Encode(h); err != nil {
 			fail(err)
 		}
-		if err := committour.WriteHighlights(*dir, hash, note.Bytes()); err != nil {
+		if err := commitnotes.WriteHighlights(*dir, hash, note.Bytes()); err != nil {
 			fail(err)
 		}
 		fmt.Printf("attached highlights note to %s\n", rest[0])
@@ -86,7 +86,7 @@ func runHighlights(args []string) {
 		if len(rest) != 1 {
 			usage("<commit>")
 		}
-		data, err := committour.ReadHighlights(*dir, rest[0])
+		data, err := commitnotes.ReadHighlights(*dir, rest[0])
 		if err != nil {
 			fail(err)
 		}

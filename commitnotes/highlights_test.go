@@ -1,7 +1,6 @@
-package committour
+package commitnotes
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -144,32 +143,5 @@ func TestParseHighlights(t *testing.T) {
 		if _, err := ParseHighlights([]byte(bad)); err == nil {
 			t.Errorf("ParseHighlights(%s) succeeded", bad)
 		}
-	}
-}
-
-func TestHighlightsNotesAreSeparateFromTours(t *testing.T) {
-	dir, git := gitRepo(t)
-	write(t, dir, "a.txt", []byte("a\n"))
-	hash := commit(t, git, "first")
-
-	if _, err := ReadHighlights(dir, hash); !errors.Is(err, ErrNoNote) {
-		t.Fatalf("ReadHighlights error = %v", err)
-	}
-	payload := []byte(`{"version":1,"files":["a.txt"],"highlights":[]}`)
-	if err := WriteHighlights(dir, hash, payload); err != nil {
-		t.Fatal(err)
-	}
-	got, err := ReadHighlights(dir, hash)
-	if err != nil || strings.TrimSpace(string(got)) != string(payload) {
-		t.Fatalf("ReadHighlights = %q, %v", got, err)
-	}
-	if notes, err := ListHighlights(dir); err != nil || !notes[hash] || len(notes) != 1 {
-		t.Fatalf("ListHighlights = %v, %v", notes, err)
-	}
-	if notes, err := ListNotes(dir); err != nil || len(notes) != 0 {
-		t.Fatalf("highlights leaked into tour notes: %v, %v", notes, err)
-	}
-	if _, err := ReadNote(dir, hash); !errors.Is(err, ErrNoNote) {
-		t.Fatalf("ReadNote error = %v", err)
 	}
 }

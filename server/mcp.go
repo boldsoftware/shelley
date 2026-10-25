@@ -42,7 +42,7 @@ func mcpServerChangeNotice(action, name string) string {
 // their model can still run `shelley mcp list`, and conversations created after
 // the change list the new set in their system prompt (an existing
 // conversation's system prompt is written once and not regenerated). Internal
-// children (btw readers, commit tours, transcriptions) are skipped: a foreign
+// children (btw readers, transcriptions) are skipped: a foreign
 // user message would corrupt their fixed flow. It runs in its own goroutine,
 // off the request path.
 func (s *Server) notifyMCPServersChanged(ctx context.Context, action, name string) {

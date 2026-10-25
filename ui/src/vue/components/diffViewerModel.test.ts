@@ -27,16 +27,6 @@ function diff(overrides: Partial<GitDiffInfo>): GitDiffInfo {
   };
 }
 
-run("a clean working tree defaults to the top commit tour", () => {
-  const selection = defaultDiffSelection([
-    diff({ id: "working", message: "Working Changes", filesCount: 0, additions: 0 }),
-    diff({ id: "top", message: "Top commit", hasTour: true }),
-    diff({ id: "oldest-local", message: "Oldest local" }),
-    diff({ id: "merge-base", message: "Merge base", isMergeBase: true }),
-  ]);
-  assertEqual(selection, { selectedDiff: "top", selectedTo: "self" }, "selection");
-});
-
 run("a clean working tree defaults to top commit highlights", () => {
   const selection = defaultDiffSelection([
     diff({ id: "working", message: "Working Changes", filesCount: 0, additions: 0 }),
@@ -49,7 +39,7 @@ run("a clean working tree defaults to top commit highlights", () => {
 run("working changes keep the through-working-tree branch default", () => {
   const selection = defaultDiffSelection([
     diff({ id: "working", message: "Working Changes", filesCount: 1 }),
-    diff({ id: "top", message: "Top commit", hasTour: true }),
+    diff({ id: "top", message: "Top commit", hasHighlights: true }),
     diff({ id: "oldest-local", message: "Oldest local" }),
     diff({ id: "merge-base", message: "Merge base", isMergeBase: true }),
   ]);
@@ -60,7 +50,7 @@ run("an explicit commit remains authoritative", () => {
   const selection = defaultDiffSelection(
     [
       diff({ id: "working", message: "Working Changes", filesCount: 0 }),
-      diff({ id: "top", message: "Top commit", hasTour: true }),
+      diff({ id: "top", message: "Top commit", hasHighlights: true }),
       diff({ id: "chosen", message: "Chosen commit" }),
     ],
     "chos",

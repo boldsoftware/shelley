@@ -629,10 +629,7 @@ func TestSubagentSystemPromptAsksForMessageParent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	worker, err := database.CreateCommitTourWorker(ctx, parent.ConversationID, t.TempDir(), "predictable", commitTourWorkerOptions())
-	if err != nil {
-		t.Fatal(err)
-	}
+	worker := createWorker(t, database, parent.ConversationID)
 	defer stopActiveConversationLoops(server)
 
 	for _, tc := range []struct {
@@ -640,7 +637,7 @@ func TestSubagentSystemPromptAsksForMessageParent(t *testing.T) {
 		want       bool
 	}{
 		{sub.ConversationID, "echo: subagent work", true},
-		{worker.ConversationID, "echo: worker work", false},
+		{worker, "echo: worker work", false},
 	} {
 		if _, err := NewSubagentRunner(server).RunSubagent(ctx, tc.id, tc.prompt, "predictable", ""); err != nil {
 			t.Fatal(err)
@@ -660,9 +657,16 @@ func TestSubagentSystemPromptAsksForMessageParent(t *testing.T) {
 	}
 }
 
-func commitTourWorkerOptions() db.ConversationOptions {
-	return db.ConversationOptions{
-		Kind:       db.CommitTourKind,
-		CommitTour: &db.CommitTourRequest{Commit: "0123456789abcdef", State: "building", RequestedAt: time.Now().UTC()},
+// createWorker creates an internal worker child of parentID (a child whose
+// options carry a kind, here transcription) and returns its id.
+func createWorker(t *testing.T, database *db.DB, parentID string) string {
+	t.Helper()
+	worker, err := database.CreateSubagentConversation(t.Context(), "transcription", parentID, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
+	if err := database.UpdateConversationOptions(t.Context(), worker.ConversationID, db.ConversationOptions{Kind: transcriptionKind}); err != nil {
+		t.Fatal(err)
+	}
+	return worker.ConversationID
 }

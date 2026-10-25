@@ -1,4 +1,4 @@
-package committour
+package commitnotes
 
 import (
 	"bytes"
@@ -11,8 +11,8 @@ import (
 )
 
 // Highlights is a lightweight reviewer's guide to a commit, stored as a git
-// note in its own ref: the changed files ordered most important first, and
-// short comments pinned to the lines worth a reviewer's attention.
+// note: the changed files ordered most important first, and short comments
+// pinned to the lines worth a reviewer's attention.
 type Highlights struct {
 	Version    int         `json:"version"`
 	Files      []string    `json:"files"`
@@ -138,7 +138,7 @@ func VerifyHighlights(dir, commit string, h *Highlights) error {
 		}
 		lines, ok := lineCounts[f.path]
 		if !ok {
-			data, err := gitOutput(dir, "", nil, "cat-file", "blob", hash+":"+f.path)
+			data, err := gitOutput(dir, "cat-file", "blob", hash+":"+f.path)
 			if err != nil {
 				return fmt.Errorf("highlights[%d]: %w", i, err)
 			}
@@ -166,7 +166,7 @@ func ReadHighlights(dir, commit string) ([]byte, error) {
 
 // WriteHighlights stores data as commit's highlights note.
 func WriteHighlights(dir, commit string, data []byte) error {
-	return writeNote(dir, highlightsNotesRef, commit, data, nil)
+	return writeNote(dir, highlightsNotesRef, commit, data)
 }
 
 // ListHighlights returns the set of commits with highlights notes.
@@ -184,7 +184,7 @@ type changedFile struct {
 // shows.
 func changedFiles(dir, hash string) ([]changedFile, error) {
 	out, err := gitOutput(
-		dir, "", nil,
+		dir,
 		"-c", "log.showRoot=true",
 		"show", hash,
 		"--format=", "--no-color", "--no-show-signature", "--name-status", "-z",

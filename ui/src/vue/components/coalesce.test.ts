@@ -257,53 +257,6 @@ function serverToolUse(id: string): LLMContent {
   );
 }
 
-// --- Tour request rows ---
-{
-  const gitinfo = (userData: Record<string, unknown>): Message => {
-    seq++;
-    return {
-      message_id: `g${seq}`,
-      conversation_id: "c1",
-      sequence_id: seq,
-      type: "gitinfo",
-      generation: 1,
-      user_data: JSON.stringify(userData),
-    } as unknown as Message;
-  };
-  const full = "abcdef0123456789abcdef0123456789abcdef01";
-  const other = "1111111111111111111111111111111111111111";
-  const strip = gitinfo({ commit: "abcdef0", worktree: "/repo", subject: "s" });
-  const request = (commit: string) => gitinfo({ commit, worktree: "/repo", tour_request: true });
-  const ids = (items: ReturnType<typeof coalesceMessages>) =>
-    items.map((i) => i.message?.message_id);
-
-  const same = request(full);
-  check(
-    "tour request for the strip's commit is hidden",
-    !ids(
-      coalesceMessages([agentMessage([text("x")]), strip, agentMessage([text("y")]), same]),
-    ).includes(same.message_id),
-  );
-
-  const afterGit = request(other);
-  check(
-    "settled tour request directly under a git row is hidden",
-    !ids(coalesceMessages([strip, afterGit])).includes(afterGit.message_id),
-  );
-  check(
-    "building tour request directly under a git row stays visible",
-    ids(coalesceMessages([strip, afterGit], undefined, new Set([other]))).includes(
-      afterGit.message_id,
-    ),
-  );
-
-  const apart = request(other);
-  check(
-    "tour request after other chat stays visible",
-    ids(coalesceMessages([strip, agentMessage([text("chat")]), apart])).includes(apart.message_id),
-  );
-}
-
 // --- Slug markers are dropped entirely ---
 {
   // A slug marker records the cost of the LLM call that named the conversation.
@@ -377,6 +330,31 @@ function serverToolUse(id: string): LLMContent {
   check(
     "stored model input remains unchanged",
     JSON.parse(original.llm_data!).Content[0].Text === originalText,
+  );
+}
+
+{
+  // Older Shelleys recorded a gitinfo marker when a commit tour was
+  // requested. Tours are gone, so the marker is meaningless and must not
+  // render as a second git strip.
+  const gitinfo = (userData: Record<string, unknown>): Message => {
+    seq++;
+    return {
+      message_id: `g${seq}`,
+      conversation_id: "c1",
+      sequence_id: seq,
+      type: "gitinfo",
+      generation: 1,
+      user_data: JSON.stringify(userData),
+    } as unknown as Message;
+  };
+  const strip = gitinfo({ commit: "abcdef0", worktree: "/repo", subject: "s" });
+  const marker = gitinfo({ commit: "abcdef0", worktree: "/repo", tour_request: true });
+  const projected = coalesceMessages([strip, marker]);
+  check(
+    "legacy tour request markers are dropped",
+    projected.length === 1 && projected[0].message === strip,
+    projected,
   );
 }
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"shelley.exe.dev/committour"
+	"shelley.exe.dev/commitnotes"
 )
 
 func TestHandleGitHighlights(t *testing.T) {
@@ -49,7 +49,7 @@ func TestHandleGitHighlights(t *testing.T) {
 
 	// A note that no longer matches the commit is treated as absent.
 	stale := []byte(`{"version":1,"files":["test.txt"],"highlights":[{"file":"test.txt","line":9,"comment":"gone"}]}`)
-	if err := committour.WriteHighlights(dir, hash, stale); err != nil {
+	if err := commitnotes.WriteHighlights(dir, hash, stale); err != nil {
 		t.Fatal(err)
 	}
 	if w := request(hash); w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "line 9 is outside") {
@@ -57,7 +57,7 @@ func TestHandleGitHighlights(t *testing.T) {
 	}
 
 	note := []byte(`{"version":1,"files":["test.txt"],"highlights":[{"file":"test.txt","line":1,"comment":"the greeting"}]}`)
-	if err := committour.WriteHighlights(dir, hash, note); err != nil {
+	if err := commitnotes.WriteHighlights(dir, hash, note); err != nil {
 		t.Fatal(err)
 	}
 	w := request(hash[:8])
@@ -69,10 +69,10 @@ func TestHandleGitHighlights(t *testing.T) {
 		t.Fatal(err)
 	}
 	if response.Hash != hash || len(response.Highlights.Highlights) != 1 ||
-		response.Highlights.Highlights[0] != (committour.Highlight{File: "test.txt", Line: 1, Comment: "the greeting"}) {
+		response.Highlights.Highlights[0] != (commitnotes.Highlight{File: "test.txt", Line: 1, Comment: "the greeting"}) {
 		t.Fatalf("response = %s", w.Body.String())
 	}
-	if d := diffs()[hash]; !d.HasHighlights || d.HasTour {
+	if d := diffs()[hash]; !d.HasHighlights {
 		t.Fatalf("diff decorations = %+v", d)
 	}
 }

@@ -262,7 +262,6 @@
                 :chunk="chunk"
                 :conversation-id="conversationId"
                 :on-open-diff-viewer="handleOpenDiffViewer"
-                :can-request-tour="canRequestTour"
                 :on-comment-text-change="setDiffCommentText"
                 :on-fork="forkHandler"
               />
@@ -535,8 +534,6 @@
       :is-open="showGitGraph"
       :covered="showDiffViewer"
       :can-open-diff="true"
-      :conversation-id="conversationId"
-      :can-request-tour="canRequestTour"
       @close="
         showGitGraph = false;
         focusMessageInputIfUnfocused();
@@ -575,7 +572,6 @@
       :is-open="showDiffViewer"
       :initial-commit="diffViewerInitialCommit"
       :initial-file="diffViewerInitialFile"
-      :open-on-files="diffViewerOpenOnFiles"
       :recording-conversation-id="
         currentConversation && !currentConversation.archived && !currentConversation.is_draft
           ? (conversationId ?? undefined)
@@ -583,7 +579,6 @@
       "
       :start-review-conversation="startReviewConversation"
       :follow-review-conversation="followReviewConversation"
-      :tour-conversation-id="canRequestTour ? (conversationId ?? undefined) : undefined"
       @close="onDiffViewerClose"
       @comment-text-change="(text) => (diffCommentText = text)"
       @cwd-change="(cwd) => (diffViewerCwd = cwd)"
@@ -698,15 +693,6 @@ import {
 } from "../../utils/conversationView";
 import { SLASH_COMMANDS } from "../../utils/slashCommands";
 import { replaceLocationFragment } from "../../utils/locationFragment";
-import {
-  announceCommitTourRequest,
-  applyCommitTourStatus,
-  commitTourStatusKey,
-  loadCommitTourStatus,
-  subscribeCommitTourRequests,
-  subscribeCommitTourStatus,
-  type CommitTourRequest,
-} from "../../services/commitTourStatus";
 import {
   btwAnchor,
   btwExchangesByAnchor,
@@ -982,15 +968,6 @@ const lastMessageId = computed(() => {
   return null;
 });
 provide("lastMessageId", lastMessageId);
-
-// Tours are built by subagents, which only started top-level conversations
-// can spawn (server/commit_tour_request.go).
-const canRequestTour = computed(
-  () =>
-    !!props.currentConversation &&
-    !props.currentConversation.parent_conversation_id &&
-    !props.currentConversation.is_draft,
-);
 
 // When more than one distinct human user (by exe.dev email) has participated in
 // a conversation, descendant Message components show each user message's author
@@ -1305,7 +1282,6 @@ const showAgentsMdEditor = ref(false);
 const diffViewerInitialCommit = ref<string | undefined>(undefined);
 const diffViewerCwd = ref<string | undefined>(undefined);
 const diffViewerInitialFile = ref<string | undefined>(undefined);
-const diffViewerOpenOnFiles = ref(false);
 const diffCommentText = ref("");
 // The image being annotated, if any (module state so any image in the message
 // tree can open the view without prop drilling).
@@ -2274,7 +2250,6 @@ const allCoalescedItems = computed(() =>
     coalesceMessages(
       messages.value,
       conversationInterrupted.value ? props.currentConversation?.current_generation : undefined,
-      buildingTours.value,
     ),
   )(),
 );
@@ -3653,14 +3628,11 @@ async function sendMessage(message: string, skills: string[] = []) {
   const transcriptionCommand =
     trimmedMessage === SLASH_COMMANDS.TRANSCRIPTION.command ||
     trimmedMessage.startsWith(`${SLASH_COMMANDS.TRANSCRIPTION.command} `);
-  const tourCommand =
-    trimmedMessage === SLASH_COMMANDS.TOUR.command ||
-    trimmedMessage.startsWith(`${SLASH_COMMANDS.TOUR.command} `);
   const dispatch = composerDispatch(message, {
     isChildConversation: !!props.currentConversation?.parent_conversation_id,
   });
   rejectSkillsOnCommand(trimmedMessage, skills);
-  if (dispatch.route === "queue" && !transcriptionCommand && !tourCommand) {
+  if (dispatch.route === "queue" && !transcriptionCommand) {
     await queueMessage(trimmedMessage, skills);
     return;
   }
@@ -3726,46 +3698,6 @@ async function sendMessage(message: string, skills: string[] = []) {
     } catch (err) {
       error.value = err instanceof Error ? err.message : "Failed to start BTW";
       throw err;
-    }
-    return;
-  }
-
-  if (tourCommand) {
-    if (!props.conversationId || props.currentConversation?.is_draft) {
-      const err = new Error("Start a conversation before requesting a tour.");
-      error.value = err.message;
-      throw err;
-    }
-    if (props.currentConversation?.parent_conversation_id) {
-      const err = new Error("Commit tours can only be requested from top-level conversations.");
-      error.value = err.message;
-      throw err;
-    }
-    try {
-      sending.value = true;
-      error.value = null;
-      const accepted = await api.sendMessage(props.conversationId, {
-        message: trimmedMessage,
-        model: selectedModel.value,
-      });
-      const cwd =
-        trimmedMessage.split("\n")[1]?.trim() ||
-        props.currentConversation?.cwd ||
-        selectedCwd.value;
-      if (accepted.tour && cwd) {
-        applyCommitTourStatus(cwd, accepted.tour.hash, accepted.tour);
-        if (accepted.tour.status === "present") {
-          handleOpenDiffViewer(accepted.tour.hash, cwd);
-        } else if (accepted.tour.status === "building") {
-          announceCommitTourRequest(cwd, accepted.tour.hash);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to run /tour:", err);
-      error.value = err instanceof Error ? err.message : "Failed to request tour";
-      throw err;
-    } finally {
-      sending.value = false;
     }
     return;
   }
@@ -4038,54 +3970,10 @@ async function handleUnarchive() {
   }
 }
 
-function handleOpenDiffViewer(commit: string, cwd?: string, openOnFiles = false) {
+function handleOpenDiffViewer(commit: string, cwd?: string) {
   diffViewerInitialCommit.value = commit;
-  diffViewerOpenOnFiles.value = openOnFiles;
   diffViewerCwd.value = cwd;
   showDiffViewer.value = true;
-}
-
-// Tours requested from this tab are watched until they settle so chat keeps their rows visible.
-const activeTourRequests = new Map<string, () => void>();
-const buildingTours = ref<ReadonlySet<string>>(new Set());
-let unsubscribeTourRequests: (() => void) | null = null;
-function setTourBuilding(hash: string, building: boolean) {
-  if (buildingTours.value.has(hash) === building) return;
-  const next = new Set(buildingTours.value);
-  if (building) next.add(hash);
-  else next.delete(hash);
-  buildingTours.value = next;
-}
-function watchRequestedTour({ cwd, hash }: CommitTourRequest) {
-  const key = commitTourStatusKey(cwd, hash);
-  if (activeTourRequests.has(key)) return;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let unsubscribe = () => {};
-  let stopped = false;
-  const stop = () => {
-    stopped = true;
-    if (timer) clearTimeout(timer);
-    unsubscribe();
-    activeTourRequests.delete(key);
-  };
-  activeTourRequests.set(key, stop);
-  unsubscribe = subscribeCommitTourStatus(cwd, hash, (status) => {
-    setTourBuilding(hash, status.status === "building");
-    if (status.status === "building") return;
-    stop();
-  });
-  // A cached settled status is replayed during subscribe, before unsubscribe is assigned.
-  if (stopped) unsubscribe();
-  const poll = async () => {
-    try {
-      await loadCommitTourStatus(cwd, hash, true);
-    } catch (error) {
-      console.error("Failed to check commit tour:", error);
-    } finally {
-      if (activeTourRequests.has(key)) timer = setTimeout(() => void poll(), 2_000);
-    }
-  };
-  if (activeTourRequests.has(key)) timer = setTimeout(() => void poll(), 2_000);
 }
 
 function handleMessageComment(messageId: string, snippet: string) {
@@ -4427,7 +4315,6 @@ function onDiffViewerClose() {
   showDiffViewer.value = false;
   diffViewerInitialCommit.value = undefined;
   diffViewerInitialFile.value = undefined;
-  diffViewerOpenOnFiles.value = false;
   diffViewerCwd.value = undefined;
   if (!showGitGraph.value) focusMessageInputIfUnfocused();
 }
@@ -5671,13 +5558,11 @@ onMounted(() => {
     const cwdParam = params.get("cwd") || undefined;
     diffViewerInitialCommit.value = commit;
     diffViewerInitialFile.value = params.get("file") || undefined;
-    diffViewerOpenOnFiles.value = params.get("view") === "files";
     diffViewerCwd.value = cwdParam;
     showDiffViewer.value = true;
     params.delete("diff");
     params.delete("cwd");
     params.delete("file");
-    params.delete("view");
     const qs = params.toString();
     window.history.replaceState(
       {},
@@ -5693,12 +5578,9 @@ onMounted(() => {
   document.addEventListener("keydown", handleScrollKeyDown);
   document.addEventListener("keydown", handleTerminalShortcut, true);
   document.addEventListener("keydown", handleMenuShortcut);
-  unsubscribeTourRequests = subscribeCommitTourRequests(watchRequestedTour);
 });
 
 onUnmounted(() => {
-  unsubscribeTourRequests?.();
-  for (const stop of activeTourRequests.values()) stop();
   teardownSubscriptions();
   stopBottomPin();
   tailSweepToken++; // cancel any in-flight background mount sweep

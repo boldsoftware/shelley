@@ -124,7 +124,7 @@ test("groups model and system prompt into one context card", async ({ page, requ
   // Integration skills may precede built-ins (and have URL sources). Select a
   // known built-in rather than depending on the runner's integrations/order.
   const skillCard = card.locator(".system-prompt-skill-item").filter({
-    has: page.locator(".system-prompt-card-name", { hasText: /^commit-tour$/ }),
+    has: page.locator(".system-prompt-card-name", { hasText: /^commit-highlights$/ }),
   });
   await skillCard.locator(".system-prompt-card-summary").click();
   await expect(skillCard.locator(".system-prompt-card-detail")).toBeVisible();

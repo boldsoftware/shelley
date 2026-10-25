@@ -37,9 +37,7 @@ func TestSubagentToolDescriptionListsSubagents(t *testing.T) {
 	ctx := t.Context()
 	// Workers and the source of a distill are children too, but not
 	// subagents the agent can address.
-	if _, err := f.database.CreateCommitTourWorker(ctx, f.parentID, t.TempDir(), "predictable", commitTourWorkerOptions()); err != nil {
-		t.Fatal(err)
-	}
+	createWorker(t, f.database, f.parentID)
 	distilled, err := f.database.CreateConversation(ctx, strPtr("distilled-prev"), true, nil, nil, db.ConversationOptions{})
 	if err != nil {
 		t.Fatal(err)

@@ -982,58 +982,6 @@ func (q *Queries) ListChannelConversationsWithQueuedMessages(ctx context.Context
 	return items, nil
 }
 
-const listCommitTourWorkers = `-- name: ListCommitTourWorkers :many
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint FROM conversations
-WHERE parent_conversation_id IS NOT NULL
-  AND user_initiated = FALSE
-  AND conversation_options LIKE '%"kind":"commit-tour"%'
-ORDER BY created_at ASC, rowid ASC
-`
-
-// Specialized child conversations durably tracking requested commit tours.
-func (q *Queries) ListCommitTourWorkers(ctx context.Context) ([]Conversation, error) {
-	rows, err := q.db.QueryContext(ctx, listCommitTourWorkers)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Conversation{}
-	for rows.Next() {
-		var i Conversation
-		if err := rows.Scan(
-			&i.ConversationID,
-			&i.Slug,
-			&i.UserInitiated,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Cwd,
-			&i.Archived,
-			&i.ParentConversationID,
-			&i.Model,
-			&i.ConversationOptions,
-			&i.CurrentGeneration,
-			&i.AgentWorking,
-			&i.Tags,
-			&i.IsDraft,
-			&i.Draft,
-			&i.QueuedMessages,
-			&i.TurnInterrupted,
-			&i.ExternalConversationID,
-			&i.ExternalEndpoint,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listConversations = `-- name: ListConversations :many
 SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint,
   -- preview_packed: locate the newest agent message that actually contains a

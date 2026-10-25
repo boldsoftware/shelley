@@ -678,6 +678,50 @@ func TestConversationDeletionWithUserInitiatedChildKeepsGenericForeignKeyFailure
 	}
 }
 
+// Shelleys that had commit tours left hidden tour workers under the
+// conversations that requested them. Deleting such a parent still deletes them.
+func TestConversationDeletionDeletesLegacyCommitTourWorkers(t *testing.T) {
+	server, database, _ := newTestServer(t)
+	ctx := t.Context()
+	parent, err := database.CreateConversation(ctx, nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker, err := database.CreateSubagentConversation(ctx, "tour-abc1234-worker", parent.ConversationID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The options exactly as an older Shelley stored them.
+	legacy := `{"kind":"commit-tour","commit_tour":{"repository":"/repo/.git","worktree":"/repo",` +
+		`"commit":"abc1234abc1234abc1234abc1234abc1234abc12","state":"complete","requested_at":"2026-10-01T00:00:00Z"}}`
+	if err := database.WithTx(ctx, func(q *generated.Queries) error {
+		return q.UpdateConversationOptions(ctx, generated.UpdateConversationOptionsParams{
+			ConversationID:      worker.ConversationID,
+			ConversationOptions: legacy,
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.CreateMessage(ctx, db.CreateMessageParams{
+		ConversationID: worker.ConversationID,
+		Type:           db.MessageTypeAgent,
+		LLMData:        llm.Message{Role: llm.MessageRoleAssistant, Content: []llm.Content{llm.StringContent("tour built")}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	w := httptest.NewRecorder()
+	server.handleDeleteConversation(w, httptest.NewRequest(http.MethodDelete, "/", nil), parent.ConversationID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete status=%d body=%s", w.Code, w.Body.String())
+	}
+	for _, id := range []string{parent.ConversationID, worker.ConversationID} {
+		if _, err := database.GetConversationByID(ctx, id); err == nil {
+			t.Fatalf("%s survived its parent's deletion", id)
+		}
+	}
+}
+
 func TestBtwParentDeletionWithUserInitiatedLineageRetainsGenericFailure(t *testing.T) {
 	server, database, held, parent := newBtwTest(t)
 	ctx := t.Context()

@@ -672,27 +672,24 @@ func TestResumeAfterUpgradeSkips(t *testing.T) {
 			},
 		},
 		{
-			name: "commit tour worker",
+			name: "internal worker",
 			seed: func(t *testing.T, database *db.DB) string {
 				parent := seedInterruptedConversation(t, database, nil)
-				worker, err := database.CreateCommitTourWorker(t.Context(), parent, "/tmp", "predictable", db.ConversationOptions{
-					Kind:       db.CommitTourKind,
-					CommitTour: &db.CommitTourRequest{Commit: "0123456789abcdef", State: "building", RequestedAt: time.Now().UTC()},
-				})
-				if err != nil {
-					t.Fatalf("CreateCommitTourWorker: %v", err)
+				worker := createWorker(t, database, parent)
+				if err := database.UpdateConversationModel(t.Context(), worker, "predictable"); err != nil {
+					t.Fatalf("UpdateConversationModel: %v", err)
 				}
 				if _, err := database.CreateMessage(t.Context(), db.CreateMessageParams{
-					ConversationID: worker.ConversationID,
+					ConversationID: worker,
 					Type:           db.MessageTypeUser,
-					LLMData:        llm.UserStringMessage("tour"),
+					LLMData:        llm.UserStringMessage("transcribe"),
 				}); err != nil {
 					t.Fatalf("CreateMessage: %v", err)
 				}
-				if err := database.SetConversationAgentWorking(t.Context(), worker.ConversationID, true); err != nil {
+				if err := database.SetConversationAgentWorking(t.Context(), worker, true); err != nil {
 					t.Fatalf("SetConversationAgentWorking: %v", err)
 				}
-				return worker.ConversationID
+				return worker
 			},
 		},
 		{

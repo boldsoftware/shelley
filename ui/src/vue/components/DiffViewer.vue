@@ -60,7 +60,7 @@
               @change="onCommitChange"
               @open="loadCommitStats"
             />
-            <div v-if="diffView === 'files'" class="diff-viewer-file-selector-wrapper">
+            <div class="diff-viewer-file-selector-wrapper">
               <select
                 :value="selectedFile || ''"
                 class="diff-viewer-select"
@@ -168,7 +168,7 @@
                   @open="loadCommitStats"
                 />
               </div>
-              <div v-if="diffView === 'files'" class="diff-viewer-selector-group">
+              <div class="diff-viewer-selector-group">
                 <label class="diff-viewer-selector-label">Commit messages and changed files</label>
                 <div class="diff-viewer-file-selector-wrapper">
                   <select
@@ -207,65 +207,63 @@
           </div>
 
           <div class="diff-viewer-controls-row">
-            <template v-if="diffView === 'files'">
-              <div class="diff-viewer-nav-buttons">
-                <button
-                  v-tooltip.top="'Previous file (<)'"
-                  class="diff-viewer-nav-btn"
-                  :disabled="!hasPrevFile"
-                  aria-label="Previous file (<)"
-                  @click="goToPreviousFile"
-                >
-                  <span v-html="PREV_FILE_ICON" />
-                </button>
-                <button
-                  v-tooltip.top="'Previous change (,)'"
-                  class="diff-viewer-nav-btn"
-                  :disabled="!fileDiff"
-                  aria-label="Previous change (,)"
-                  @click="goToPreviousChange"
-                >
-                  <span v-html="PREV_CHANGE_ICON" />
-                </button>
-                <button
-                  v-tooltip.top="'Next change (.)'"
-                  class="diff-viewer-nav-btn"
-                  :disabled="!fileDiff"
-                  aria-label="Next change (.)"
-                  @click="goToNextChange"
-                >
-                  <span v-html="NEXT_CHANGE_ICON" />
-                </button>
-                <button
-                  v-tooltip.top="'Next file (>)'"
-                  class="diff-viewer-nav-btn"
-                  :disabled="!hasNextFile"
-                  aria-label="Next file (>)"
-                  @click="goToNextFile()"
-                >
-                  <span v-html="NEXT_FILE_ICON" />
-                </button>
-              </div>
-              <div class="diff-viewer-mode-toggle">
-                <button
-                  v-tooltip.top="'Comment mode'"
-                  :class="`diff-viewer-mode-btn ${mode === 'comment' ? 'active' : ''}`"
-                  aria-label="Comment mode"
-                  @click="mode = 'comment'"
-                >
-                  💬
-                </button>
-                <button
-                  v-tooltip.top="'Edit mode'"
-                  :class="`diff-viewer-mode-btn ${mode === 'edit' ? 'active' : ''}`"
-                  aria-label="Edit mode"
-                  @click="mode = 'edit'"
-                >
-                  ✏️
-                </button>
-              </div>
-              <VimToggle :enabled="vimEnabled" @change="setVimEnabled" />
-            </template>
+            <div class="diff-viewer-nav-buttons">
+              <button
+                v-tooltip.top="'Previous file (<)'"
+                class="diff-viewer-nav-btn"
+                :disabled="!hasPrevFile"
+                aria-label="Previous file (<)"
+                @click="goToPreviousFile"
+              >
+                <span v-html="PREV_FILE_ICON" />
+              </button>
+              <button
+                v-tooltip.top="'Previous change (,)'"
+                class="diff-viewer-nav-btn"
+                :disabled="!fileDiff"
+                aria-label="Previous change (,)"
+                @click="goToPreviousChange"
+              >
+                <span v-html="PREV_CHANGE_ICON" />
+              </button>
+              <button
+                v-tooltip.top="'Next change (.)'"
+                class="diff-viewer-nav-btn"
+                :disabled="!fileDiff"
+                aria-label="Next change (.)"
+                @click="goToNextChange"
+              >
+                <span v-html="NEXT_CHANGE_ICON" />
+              </button>
+              <button
+                v-tooltip.top="'Next file (>)'"
+                class="diff-viewer-nav-btn"
+                :disabled="!hasNextFile"
+                aria-label="Next file (>)"
+                @click="goToNextFile()"
+              >
+                <span v-html="NEXT_FILE_ICON" />
+              </button>
+            </div>
+            <div class="diff-viewer-mode-toggle">
+              <button
+                v-tooltip.top="'Comment mode'"
+                :class="`diff-viewer-mode-btn ${mode === 'comment' ? 'active' : ''}`"
+                aria-label="Comment mode"
+                @click="mode = 'comment'"
+              >
+                💬
+              </button>
+              <button
+                v-tooltip.top="'Edit mode'"
+                :class="`diff-viewer-mode-btn ${mode === 'edit' ? 'active' : ''}`"
+                aria-label="Edit mode"
+                @click="mode = 'edit'"
+              >
+                ✏️
+              </button>
+            </div>
+            <VimToggle :enabled="vimEnabled" @change="setVimEnabled" />
             <ReviewRecordButton
               v-if="canRecord || review.phase.value !== 'idle'"
               :phase="review.phase.value"
@@ -308,56 +306,9 @@
         @dismiss="review.dismissError"
       />
 
-      <div
-        v-if="
-          isOpen &&
-          tourCommit &&
-          (tourAvailable || tourBuildVisible || tourBuilding || canBuildTour)
-        "
-        class="diff-viewer-view-switcher"
-        role="group"
-        aria-label="Diff view"
-      >
-        <button
-          v-if="tourAvailable || tourBuildVisible || tourBuilding"
-          type="button"
-          :class="['diff-viewer-view-btn', { active: diffView === 'tour' }]"
-          :aria-pressed="diffView === 'tour'"
-          @click="diffView = 'tour'"
-        >
-          <span
-            v-if="tourBuilding || tourLoading"
-            class="spinner spinner-small"
-            aria-hidden="true"
-          />
-          {{ tourBuilding ? "Building tour" : "Tour" }}
-        </button>
-        <button v-else type="button" class="diff-viewer-view-btn" @click="buildTour">
-          Build tour
-        </button>
-        <button
-          type="button"
-          :class="['diff-viewer-view-btn', { active: diffView === 'files' }]"
-          :aria-pressed="diffView === 'files'"
-          @click="diffView = 'files'"
-        >
-          Files
-        </button>
-      </div>
-
-      <CommitTourAction
-        v-show="false"
-        v-if="isOpen && tourCommit && !tourAvailable"
-        ref="tourActionRef"
-        :cwd="cwd"
-        :hash="tourCommit.id"
-        :conversation-id="tourConversationId ?? null"
-        @status="updateTourBuildStatus"
-        @present="markTour"
-      />
       <!-- Error banner -->
-      <div v-if="error && diffView === 'files'" class="diff-viewer-error">{{ error }}</div>
-      <div v-else-if="highlightsError && diffView === 'files'" class="diff-viewer-error">
+      <div v-if="error" class="diff-viewer-error">{{ error }}</div>
+      <div v-else-if="highlightsError" class="diff-viewer-error">
         {{ highlightsError }}
       </div>
 
@@ -405,7 +356,6 @@
                         :class="['working-changes-status', d.filesCount === 0 ? 'clean' : 'dirty']"
                         >{{ workingChangesStatus(d).label }}</span
                       >
-                      <span v-if="d.hasTour" class="commit-picker-tour-badge">tour</span>
                       <span v-if="d.hasHighlights" class="commit-picker-highlights-badge"
                         >highlights</span
                       >
@@ -431,85 +381,33 @@
           </div>
           <div
             class="diff-viewer-sidebar-section diff-viewer-sidebar-files"
-            :data-review="diffView === 'tour' ? 'Tour contents' : 'Changed files'"
+            data-review="Changed files"
           >
-            <template v-if="diffView === 'tour'">
-              <div class="diff-viewer-sidebar-label"><span>Table of Contents</span></div>
-              <div ref="tourContentsScrollRef" class="diff-viewer-sidebar-tour-scroll">
-                <div v-if="tourLoading" class="diff-viewer-file-list-empty">Loading tour...</div>
-                <div v-else-if="tourError" class="diff-viewer-file-list-empty">
-                  Tour unavailable
-                </div>
-                <CommitTourContents
-                  v-else-if="tourContents.length > 0"
-                  :items="tourContents"
-                  :active-anchor="activeTourAnchor"
-                  :expanded-anchors="expandedTourAnchors"
-                  @select="scrollToTourAnchor"
-                  @expand-change="setTourExpanded"
-                />
-                <div v-else class="diff-viewer-file-list-empty">
-                  {{ tourBuilding ? "Tour is being built" : "No tour sections" }}
-                </div>
-              </div>
-            </template>
-            <template v-else>
-              <div class="diff-viewer-sidebar-label">
-                <span>{{
-                  highlights
-                    ? "Commit Messages and Files by Importance"
-                    : "Commit Messages and Files"
-                }}</span>
-                <span v-if="fileIndexIndicator" class="diff-viewer-file-index">{{
-                  fileIndexIndicator
-                }}</span>
-              </div>
-              <div class="diff-viewer-sidebar-files-scroll">
-                <div class="diff-viewer-file-list" aria-label="Files">
-                  <div v-if="files.length === 0" class="diff-viewer-file-list-empty">No files</div>
-                  <div v-else class="diff-viewer-file-tree-wrap">
-                    <DiffFileTree
-                      :entries="treeEntries"
-                      :selected-real-path="selectedFile"
-                      :ordered="!!highlights"
-                      @select="selectSidebarFile"
-                    />
-                  </div>
+            <div class="diff-viewer-sidebar-label">
+              <span>{{
+                highlights ? "Commit Messages and Files by Importance" : "Commit Messages and Files"
+              }}</span>
+              <span v-if="fileIndexIndicator" class="diff-viewer-file-index">{{
+                fileIndexIndicator
+              }}</span>
+            </div>
+            <div class="diff-viewer-sidebar-files-scroll">
+              <div class="diff-viewer-file-list" aria-label="Files">
+                <div v-if="files.length === 0" class="diff-viewer-file-list-empty">No files</div>
+                <div v-else class="diff-viewer-file-tree-wrap">
+                  <DiffFileTree
+                    :entries="treeEntries"
+                    :selected-real-path="selectedFile"
+                    :ordered="!!highlights"
+                    @select="selectSidebarFile"
+                  />
                 </div>
               </div>
-            </template>
+            </div>
           </div>
         </aside>
         <div ref="mainRef" class="diff-viewer-main">
-          <div v-if="diffView === 'tour'" class="diff-viewer-tour-pane">
-            <CommitTourView
-              v-if="tourCommit"
-              ref="tourViewRef"
-              :tour="tourResponse ?? pendingTour"
-              :commit-message="selectedTourCommitMessage"
-              :expanded-anchors="expandedTourAnchors"
-              :cwd="cwd"
-              @expand-change="setTourExpanded"
-              @active-anchor-change="handleTourActiveAnchor"
-              @open-comment="openTourComment"
-            >
-              <template #building>
-                <p v-if="tourError" class="diff-viewer-tour-error">{{ tourError }}</p>
-                <CommitTourBuildProgress
-                  v-else-if="tourBuildVisible && tourBuildStatus"
-                  :status="tourBuildStatus"
-                  :can-retry="!!tourConversationId"
-                  @retry="retryTour"
-                />
-
-                <div v-else-if="tourLoading || tourRequesting" class="diff-viewer-loading">
-                  <span class="spinner spinner-small" aria-hidden="true" />
-                  <span>{{ tourRequesting ? "Starting tour build…" : "Loading tour…" }}</span>
-                </div>
-              </template>
-            </CommitTourView>
-          </div>
-          <div v-show="diffView === 'files'" class="diff-viewer-files-pane" data-review="Files">
+          <div class="diff-viewer-files-pane" data-review="Files">
             <div v-if="loading && !fileDiff" class="diff-viewer-loading">
               <div class="spinner"></div>
               <span>Loading...</span>
@@ -550,7 +448,7 @@
       </div>
 
       <!-- Mobile floating nav buttons -->
-      <div v-if="isMobile && diffView === 'files'" class="diff-viewer-mobile-nav">
+      <div v-if="isMobile" class="diff-viewer-mobile-nav">
         <button
           v-tooltip.top="
             mode === 'comment' ? 'Comment mode (tap to switch)' : 'Edit mode (tap to switch)'
@@ -603,16 +501,7 @@
 
       <!-- Comment dialog -->
       <CommentDialog
-        v-if="tourCommentTarget"
-        :key="`tour-${tourCommentDialogOpens}`"
-        v-model:text="tourCommentText"
-        :where="tourCommentTarget.where"
-        :quoted="tourCommentTarget.selectedText"
-        @submit="handleAddTourComment"
-        @cancel="tourCommentTarget = null"
-      />
-      <CommentDialog
-        v-else-if="showCommentDialog"
+        v-if="showCommentDialog"
         :key="commentDialogOpens"
         v-model:text="commentText"
         :where="lineCommentLabel(showCommentDialog, true)"
@@ -640,10 +529,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import type * as Monaco from "monaco-editor";
-import { api, type GitTourResponse, type GitTourBuildStatus } from "../../services/api";
+import { api } from "../../services/api";
 import { loadMonaco } from "../../services/monaco";
 import { isDarkModeActive } from "../../services/theme";
-import { buildTourCommentBlock, type TourCommentTarget } from "../composables/tourComments";
 import { useVimEnabled, useMonacoVim } from "../composables/monacoVim";
 import {
   highlightQuote,
@@ -653,15 +541,11 @@ import {
 } from "../composables/monacoComments";
 import VimToggle from "./VimToggle.vue";
 import CommentDialog from "./CommentDialog.vue";
-import CommitTourView from "./CommitTourView.vue";
-import CommitTourContents from "./CommitTourContents.vue";
 import CommitPicker from "./CommitPicker.vue";
 import RangeToggle from "./RangeToggle.vue";
 import DirectoryPickerModal from "./DirectoryPickerModal.vue";
 import DiffFileTree from "./DiffFileTree.vue";
 import ReviewRecordButton from "./ReviewRecordButton.vue";
-import CommitTourAction from "./CommitTourAction.vue";
-import CommitTourBuildProgress from "./CommitTourBuildProgress.vue";
 import ReviewRecordingBar from "./ReviewRecordingBar.vue";
 import ReviewRecordingStatus from "./ReviewRecordingStatus.vue";
 import {
@@ -683,7 +567,6 @@ import {
   type DiffFileTreeEntry,
 } from "./diffFileTree";
 import { highlightsByFile, orderByHighlights, showHighlights } from "./commitHighlights";
-import { buildTourContents } from "./commitTourContents";
 import { defaultDiffSelection, workingChangesStatus } from "./diffViewerModel";
 import type {
   CommitHighlights,
@@ -700,17 +583,12 @@ const props = defineProps<{
   // File to select once initialCommit's file list loads (e.g. from the git
   // graph diffstat). Consumed on the first load only.
   initialFile?: string;
-  // Stay on Files for initialCommit even when it has a tour or one is building
-  // (implied by initialFile).
-  openOnFiles?: boolean;
   // Conversation that receives narrated review recordings. Without one, each
   // recording starts a conversation (startReviewConversation), shown once the
   // recording is sent (followReviewConversation); with neither, no Record.
   recordingConversationId?: string;
   startReviewConversation?: () => ReviewConversationStart;
   followReviewConversation?: () => (conversationId: string) => void;
-  // Conversation that builds tours on request; none hides Build tour.
-  tourConversationId?: string;
 }>();
 const emit = defineEmits<{
   (e: "close"): void;
@@ -763,17 +641,6 @@ const gitRoot = ref<string | null>(null);
 const showDirPicker = ref(false);
 const selectedDiff = ref<string | null>(null);
 const selectedTo = ref<"working" | "self">("working");
-const diffView = ref<"tour" | "files">("files");
-const tourResponse = ref<GitTourResponse | null>(null);
-const tourBuildStatus = ref<GitTourBuildStatus | null>(null);
-const tourActionRef = ref<InstanceType<typeof CommitTourAction> | null>(null);
-const tourViewRef = ref<{ scrollToAnchor: (anchor: string) => void } | null>(null);
-const tourContentsScrollRef = ref<HTMLElement | null>(null);
-const activeTourAnchor = ref<string | null>(null);
-const expandedTourAnchors = ref(new Set<string>());
-let tourContentsResizeObserver: ResizeObserver | null = null;
-const tourLoading = ref(false);
-const tourError = ref<string | null>(null);
 const files = ref<GitFileInfo[]>([]);
 const selectedFile = ref<string | null>(null);
 // Highlights for the selected single commit, if it has any; they order
@@ -783,7 +650,6 @@ const highlights = ref<CommitHighlights | null>(null);
 const highlightsError = ref<string | null>(null);
 const highlightsByPath = computed(() => highlightsByFile(highlights.value));
 let pendingInitialFile: string | undefined;
-let filesCommit: string | undefined;
 let loadDiffsRequestId = 0;
 let loadFilesRequestId = 0;
 let loadFileDiffRequestId = 0;
@@ -795,22 +661,9 @@ const currentChangeIndex = ref(-1);
 const saveStatus = ref<"idle" | "saving" | "saved" | "error">("idle");
 const mode = ref<ViewMode>("comment");
 const commitMessages = ref<GitCommitMessage[]>([]);
-const selectedTourCommitMessage = computed(() => {
-  const hash = tourResponse.value?.hash ?? selectedDiff.value;
-  return hash ? (commitMessages.value.find((message) => message.hash === hash) ?? null) : null;
-});
 const amendStatus = ref<"idle" | "saving" | "saved" | "error">("idle");
 const showKeyboardHint = ref(false);
 const isMobile = ref(window.innerWidth < 768);
-const tourCommentTarget = ref<TourCommentTarget | null>(null);
-const tourCommentText = ref("");
-const tourCommentDialogOpens = ref(0);
-// Switching between Tour and Files closes any pending tour comment dialog.
-watch(diffView, (view) => {
-  tourCommentTarget.value = null;
-  tourCommentText.value = "";
-  if (view === "tour") showKeyboardHint.value = false;
-});
 const [vimEnabledRef, setVimEnabledFn] = useVimEnabled();
 const vimEnabled = vimEnabledRef;
 function setVimEnabled(v: boolean) {
@@ -835,94 +688,6 @@ function setLayout(v: "header" | "sidebar") {
     // ignore
   }
 }
-
-// Tours cover a single commit, not a range through the working tree.
-const tourCommit = computed(() =>
-  selectedDiff.value && selectedDiff.value !== "working" && selectedTo.value === "self"
-    ? diffs.value.find((diff) => diff.id === selectedDiff.value)
-    : undefined,
-);
-const tourAvailable = computed(() => !!tourCommit.value?.hasTour);
-const tourBuildVisible = computed(
-  () =>
-    !tourResponse.value &&
-    tourBuildStatus.value?.hash === tourCommit.value?.id &&
-    (tourBuildStatus.value?.status === "building" ||
-      tourBuildStatus.value?.status === "failed" ||
-      (tourBuildStatus.value?.status === "present" &&
-        !!tourBuildStatus.value?.worker_conversation_id)),
-);
-const tourRequesting = ref(false);
-const tourBuilding = computed(
-  () =>
-    tourRequesting.value ||
-    (tourBuildVisible.value && tourBuildStatus.value?.status === "building"),
-);
-const canBuildTour = computed(
-  () =>
-    !!props.tourConversationId &&
-    tourBuildStatus.value?.hash === tourCommit.value?.id &&
-    tourBuildStatus.value?.status === "absent",
-);
-const pendingTour = computed<GitTourResponse>(() => ({
-  hash: tourCommit.value!.id,
-  tour: { version: 1, chunks: [] },
-}));
-
-function updateTourBuildStatus(status: GitTourBuildStatus | null) {
-  const initial = tourBuildStatus.value === null;
-  tourBuildStatus.value =
-    status?.status === "present" && status.hash === tourBuildStatus.value?.hash
-      ? { ...tourBuildStatus.value, ...status }
-      : status;
-  if (
-    initial &&
-    status?.status === "building" &&
-    tourBuildVisible.value &&
-    !(filesCommit && status.hash.startsWith(filesCommit)) &&
-    !recordingLocked.value
-  ) {
-    diffView.value = "tour";
-  }
-}
-
-function buildTour() {
-  diffView.value = "tour";
-  retryTour();
-}
-
-async function retryTour() {
-  if (!props.tourConversationId || !tourActionRef.value) return;
-  tourRequesting.value = true;
-  try {
-    await tourActionRef.value.request(props.tourConversationId);
-  } finally {
-    tourRequesting.value = false;
-  }
-}
-
-function markTour(hash: string) {
-  const diff = diffs.value.find((d) => d.id === hash);
-  if (diff) diff.hasTour = true;
-}
-
-const tourSelectionKey = computed(() =>
-  props.isOpen && tourAvailable.value && selectedDiff.value
-    ? `${props.cwd}\n${selectedDiff.value}`
-    : "",
-);
-
-// Leaving a commit whose tour is building has no tour key change to reset the view.
-watch(
-  () =>
-    diffView.value === "tour" &&
-    !tourAvailable.value &&
-    !tourBuildVisible.value &&
-    !tourRequesting.value,
-  (stranded) => {
-    if (stranded) diffView.value = "files";
-  },
-);
 
 // The vim adapter attaches to the modified (right-hand) code editor.
 // Must be shallowRef, not ref: a deep reactive proxy over Monaco's internal
@@ -1023,9 +788,6 @@ function monacoEditors(): Array<[Monaco.editor.ICodeEditor, ReviewSide]> {
 const reviewContext: ReviewContext = {
   view() {
     const commit = commitLabel(selectedDiff.value);
-    if (diffView.value === "tour") {
-      return { where: `Tour · ${commit}`, mode: "tour", commit: selectedDiff.value ?? undefined };
-    }
     const file = selectedFile.value ? reviewFileLabel(selectedFile.value) : undefined;
     return {
       where: ["Files", commit, file].filter(Boolean).join(" · "),
@@ -1035,7 +797,7 @@ const reviewContext: ReviewContext = {
     };
   },
   pointAt(x, y, element) {
-    if (diffView.value !== "files" || !selectedFile.value) return undefined;
+    if (!selectedFile.value) return undefined;
     const file = reviewFileLabel(selectedFile.value);
     for (const [editor, side] of monacoEditors()) {
       if (!editor.getDomNode()?.contains(element)) continue;
@@ -1053,7 +815,7 @@ const reviewContext: ReviewContext = {
     return undefined;
   },
   selection() {
-    if (diffView.value !== "files" || !selectedFile.value) return undefined;
+    if (!selectedFile.value) return undefined;
     const file = reviewFileLabel(selectedFile.value);
     for (const [editor, side] of monacoEditors()) {
       const selection = editor.getSelection();
@@ -1075,7 +837,6 @@ const reviewContext: ReviewContext = {
     return undefined;
   },
   onScreen() {
-    if (diffView.value !== "files") return undefined;
     if (!selectedFile.value || !fileDiff.value) return [];
     const spans = monacoEditors().flatMap(([editor, side]) => {
       const ranges = editor.getVisibleRanges();
@@ -1108,46 +869,6 @@ const startsConversation = computed(() =>
   recordingLocked.value ? review.startsConversation.value : !props.recordingConversationId,
 );
 
-// After recordingLocked: the immediate run may read it.
-let tourRequestId = 0;
-watch(
-  tourSelectionKey,
-  async (key) => {
-    const requestId = ++tourRequestId;
-    tourResponse.value = null;
-    activeTourAnchor.value = null;
-    expandedTourAnchors.value = new Set();
-    tourError.value = null;
-    tourLoading.value = false;
-    tourCommentTarget.value = null;
-    tourCommentText.value = "";
-    if (!key || !selectedDiff.value) {
-      diffView.value = "files";
-      return;
-    }
-
-    // A tour landing mid-recording (selection is locked then) waits for a
-    // click rather than yanking the view out from under the narration. A tour
-    // built while the viewer is open leaves the user on whichever tab they chose.
-    const builtHere =
-      tourBuildStatus.value?.hash === selectedDiff.value &&
-      !!tourBuildStatus.value?.worker_conversation_id;
-    const wantsFiles = !!filesCommit && selectedDiff.value.startsWith(filesCommit);
-    if (!recordingLocked.value && !builtHere && !wantsFiles) diffView.value = "tour";
-    tourLoading.value = true;
-    try {
-      const response = await api.getGitTour(props.cwd, selectedDiff.value);
-      if (requestId !== tourRequestId) return;
-      tourResponse.value = response;
-    } catch (err) {
-      if (requestId !== tourRequestId) return;
-      tourError.value = `Failed to load commit tour: ${String(err)}`;
-    } finally {
-      if (requestId === tourRequestId) tourLoading.value = false;
-    }
-  },
-  { immediate: true },
-);
 const closeTooltip = computed(() =>
   recordingLocked.value ? "Stop recording to close" : "Close (Esc)",
 );
@@ -1244,14 +965,8 @@ watch(
 );
 
 // Show keyboard hint toast on first open (desktop only).
-watch([() => props.isOpen, isMobile, fileDiff, diffView], () => {
-  if (
-    props.isOpen &&
-    diffView.value === "files" &&
-    !isMobile.value &&
-    !hasShownKeyboardHint &&
-    fileDiff.value
-  ) {
+watch([() => props.isOpen, isMobile, fileDiff], () => {
+  if (props.isOpen && !isMobile.value && !hasShownKeyboardHint && fileDiff.value) {
     hasShownKeyboardHint = true;
     showKeyboardHint.value = true;
   }
@@ -1274,7 +989,6 @@ watch(
   () => {
     if (props.isOpen && props.cwd) {
       pendingInitialFile = props.initialFile;
-      filesCommit = props.openOnFiles || props.initialFile ? props.initialCommit : undefined;
       loadDiffs();
     } else if (!props.isOpen) {
       loadDiffsRequestId++;
@@ -1286,13 +1000,10 @@ watch(
       highlights.value = null;
       highlightsError.value = null;
       selectedDiff.value = null;
-      tourBuildStatus.value = null;
       selectedTo.value = "working";
       diffs.value = [];
       error.value = null;
       resetComments();
-      tourCommentTarget.value = null;
-      tourCommentText.value = "";
       commitMessages.value = [];
       amendStatus.value = "idle";
       if (amendTimeout) {
@@ -1894,12 +1605,10 @@ function handleKeyDown(e: KeyboardEvent) {
     // If Monaco's find widget is open, let Monaco close it.
     const findWidget = editorContainerRef.value?.querySelector(".find-widget.visible");
     if (findWidget) return;
-    // If a nested overlay (commit/dir picker, or the image annotation view a
-    // tour screenshot opened) is open, let it handle Escape.
+    // If a nested commit/dir picker is open, let it handle Escape.
     if (
       document.querySelector(".commit-picker-popover") ||
-      document.querySelector(".commit-picker-modal") ||
-      document.querySelector(".image-comment-overlay")
+      document.querySelector(".commit-picker-modal")
     ) {
       return;
     }
@@ -1915,16 +1624,13 @@ function handleKeyDown(e: KeyboardEvent) {
     ) {
       return;
     }
-    if (tourCommentTarget.value) {
-      tourCommentTarget.value = null;
-    } else if (showCommentDialog.value) {
+    if (showCommentDialog.value) {
       showCommentDialog.value = null;
     } else {
       requestClose();
     }
     return;
   }
-  if (diffView.value === "tour") return;
   if ((e.ctrlKey || e.metaKey) && e.key === "s") {
     e.preventDefault();
     saveImmediately();
@@ -1955,7 +1661,7 @@ function handleKeyDown(e: KeyboardEvent) {
     return;
   }
   // Comment mode navigation (only when comment dialogs are closed).
-  if (mode.value === "comment" && !showCommentDialog.value && !tourCommentTarget.value) {
+  if (mode.value === "comment" && !showCommentDialog.value) {
     if (e.key === ".") {
       e.preventDefault();
       goToNextChange();
@@ -2038,61 +1744,8 @@ const navOrder = computed(() =>
 );
 watch(navOrder, (v) => (navOrderRef.value = v), { immediate: true });
 
-const tourContents = computed(() =>
-  tourResponse.value
-    ? buildTourContents(tourResponse.value.tour, selectedTourCommitMessage.value !== null)
-    : [],
-);
-
-function scrollToTourAnchor(anchor: string) {
-  tourViewRef.value?.scrollToAnchor(anchor);
-}
-
-function setTourExpanded(anchor: string, expanded: boolean) {
-  if (expanded) expandedTourAnchors.value.add(anchor);
-  else expandedTourAnchors.value.delete(anchor);
-}
-
-function handleTourActiveAnchor(anchor: string) {
-  activeTourAnchor.value = anchor;
-  nextTick(revealActiveTourContents);
-}
-
-function revealActiveTourContents() {
-  const container = tourContentsScrollRef.value;
-  const anchor = activeTourAnchor.value;
-  if (!container || !anchor) return;
-  const button = Array.from(container.querySelectorAll<HTMLElement>("[data-tour-target]")).find(
-    (element) => element.dataset.tourTarget === anchor,
-  );
-  if (!button) return;
-
-  const containerRect = container.getBoundingClientRect();
-  const buttonRect = button.getBoundingClientRect();
-  const edgePadding = 4;
-  if (buttonRect.top < containerRect.top + edgePadding) {
-    container.scrollTop -= containerRect.top + edgePadding - buttonRect.top;
-  } else if (buttonRect.bottom > containerRect.bottom - edgePadding) {
-    container.scrollTop += buttonRect.bottom - containerRect.bottom + edgePadding;
-  }
-}
-
-watch(tourContentsScrollRef, (container) => {
-  tourContentsResizeObserver?.disconnect();
-  if (container) tourContentsResizeObserver?.observe(container);
-});
-watch(layout, () => nextTick(revealActiveTourContents), { flush: "post" });
-
 // Title for the sidebar layout's header.
 const currentTitleText = computed<string | null>(() => {
-  if (diffView.value === "tour") {
-    return (
-      tourResponse.value?.tour.title ||
-      selectedTourCommitMessage.value?.subject ||
-      selectedDiff.value?.slice(0, 8) ||
-      null
-    );
-  }
   const sf = selectedFile.value;
   if (!sf) return null;
   if (isCommitMessageFile(sf)) {
@@ -2104,10 +1757,6 @@ const currentTitleText = computed<string | null>(() => {
   return sf;
 });
 const currentTitleTooltip = computed<string | null>(() => {
-  if (diffView.value === "tour") {
-    const commit = diffs.value.find((diff) => diff.id === selectedDiff.value);
-    return commit ? `${commit.id}\n\n${commit.message}` : selectedDiff.value;
-  }
   const sf = selectedFile.value;
   if (!sf) return null;
   if (isCommitMessageFile(sf)) {
@@ -2217,21 +1866,6 @@ function onCommitListClick(d: GitDiffInfo) {
 // --- Event handlers from child components ---
 function selectSidebarFile(path: string) {
   selectedFile.value = path;
-  diffView.value = "files";
-}
-
-function openTourComment(target: TourCommentTarget) {
-  resetComments();
-  tourCommentTarget.value = target;
-  tourCommentText.value = "";
-  tourCommentDialogOpens.value++;
-}
-
-function handleAddTourComment() {
-  if (!tourCommentTarget.value || !tourCommentText.value.trim()) return;
-  emitComment(buildTourCommentBlock(tourCommentTarget.value, tourCommentText.value));
-  tourCommentTarget.value = null;
-  tourCommentText.value = "";
 }
 
 function onCommitChange(diff: string, to: "working" | "self") {
@@ -2254,12 +1888,9 @@ onMounted(() => {
       })
       .catch(() => {});
   });
-  tourContentsResizeObserver = new ResizeObserver(revealActiveTourContents);
-  if (tourContentsScrollRef.value) tourContentsResizeObserver.observe(tourContentsScrollRef.value);
   window.addEventListener("resize", handleResize);
 });
 onUnmounted(() => {
-  tourContentsResizeObserver?.disconnect();
   window.removeEventListener("resize", handleResize);
   window.removeEventListener("keydown", handleKeyDown, true);
   themeObserver?.disconnect();

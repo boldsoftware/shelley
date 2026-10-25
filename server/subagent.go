@@ -186,7 +186,7 @@ func (r *SubagentRunner) MessageParent(ctx context.Context, conversationID, text
 
 // isDelegatedSubagent reports whether conv is a subagent created by the
 // subagent tool, as opposed to a /btw reader or an internal worker
-// (transcription, commit tour).
+// (transcription).
 func isDelegatedSubagent(conv generated.Conversation) bool {
 	return conversationRoleOf(conv) == roleSubagent
 }
@@ -380,9 +380,8 @@ func (s *Server) cancelSubagentTree(ctx context.Context, parentID string) {
 			if !isManagedChild(child) {
 				continue
 			}
-			kind := db.ParseConversationOptions(child.ConversationOptions).Kind
-			if isBtwReader(child) || kind == commitTourKind {
-				// Detached work is independent of parent-turn cancellation. Do not
+			if isBtwReader(child) {
+				// A BTW is detached from parent-turn cancellation. Do not
 				// cancel it or traverse through it.
 				continue
 			}

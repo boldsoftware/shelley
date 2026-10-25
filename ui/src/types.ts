@@ -288,8 +288,6 @@ export interface GitDiffInfo {
   additions: number;
   deletions: number;
   statsLoaded?: boolean;
-  // True when this commit has a guided tour git note.
-  hasTour?: boolean;
   // True when this commit has a highlights git note (see CommitHighlights).
   hasHighlights?: boolean;
   // Decorating refs (branches, tags, HEAD), like git log --decorate.
@@ -337,8 +335,6 @@ export interface GitGraphCommit {
   timestamp: number;
   refs: string[];
   isHead: boolean;
-  // True when this commit has a guided tour git note.
-  hasTour?: boolean;
   // True if this commit is the merge-base with @{upstream}.
   isMergeBase?: boolean;
 }

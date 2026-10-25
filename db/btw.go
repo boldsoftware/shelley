@@ -46,13 +46,11 @@ func scrubManagedBtwOptions(raw string) (string, bool, error) {
 	}
 	_, hasKind := options["kind"]
 	_, hasPointer := options["parent_pointer"]
-	_, hasCommitTour := options["commit_tour"]
-	if !hasKind && !hasPointer && !hasCommitTour {
+	if !hasKind && !hasPointer {
 		return raw, false, nil
 	}
 	delete(options, "kind")
 	delete(options, "parent_pointer")
-	delete(options, "commit_tour")
 	scrubbed, err := json.Marshal(options)
 	return string(scrubbed), true, err
 }
@@ -234,14 +232,20 @@ type btwDeletionChildren struct {
 	readers []string
 }
 
+// legacyCommitTourKind marks the hidden workers that Shelleys with commit
+// tours created under the conversation that requested a tour. Nothing creates
+// them any more, but existing ones still belong to that conversation.
+const legacyCommitTourKind = "commit-tour"
+
+func isLegacyCommitTourWorker(conversation generated.Conversation) bool {
+	return conversation.ParentConversationID != nil && !conversation.UserInitiated &&
+		ParseConversationOptions(conversation.ConversationOptions).Kind == legacyCommitTourKind
+}
+
 func classifyBtwDeletionChildren(children []generated.Conversation) btwDeletionChildren {
 	var result btwDeletionChildren
 	for _, child := range children {
-		if _, ok := ManagedBtwReaderIdentity(child); ok {
-			result.readers = append(result.readers, child.ConversationID)
-			continue
-		}
-		if _, ok := ManagedCommitTourRequest(child); ok {
+		if _, ok := ManagedBtwReaderIdentity(child); ok || isLegacyCommitTourWorker(child) {
 			result.readers = append(result.readers, child.ConversationID)
 		}
 	}
@@ -261,9 +265,10 @@ func loadBtwDeletionChildren(ctx context.Context, q *generated.Queries, conversa
 	return classifyBtwDeletionChildren(children), true, nil
 }
 
-// PlanConversationDeletion returns the direct managed detached children owned
-// by conversationID. Every other child remains attached so the generic
-// foreign-key deletion behavior is unchanged.
+// PlanConversationDeletion returns the direct managed detached children (BTW
+// readers and legacy commit-tour workers) owned by conversationID. Every other
+// child remains attached so the generic foreign-key deletion behavior is
+// unchanged.
 func (db *DB) PlanConversationDeletion(ctx context.Context, conversationID string) ([]string, error) {
 	var readers []string
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {

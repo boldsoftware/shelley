@@ -131,19 +131,6 @@
                     merge-base
                   </span>
                 </span>
-                <a
-                  v-if="c.hasTour"
-                  v-tooltip.top="'Open guided commit tour'"
-                  :class="`git-graph-tour-link${!canOpenDiff ? ' git-graph-tour-link-disabled' : ''}`"
-                  data-testid="git-graph-tour-link"
-                  :href="canOpenDiff ? diffHref(c.hash) : undefined"
-                  :aria-disabled="!canOpenDiff"
-                  :tabindex="canOpenDiff ? undefined : -1"
-                  :aria-label="`Tour: open guided tour for ${c.subject}`"
-                  @click.stop="onOpenCommitClick($event, c.hash)"
-                >
-                  tour
-                </a>
                 <span class="git-graph-subject">{{ c.subject }}</span>
               </span>
               <span class="git-graph-author">{{ c.author }}</span>
@@ -219,16 +206,8 @@
                 :tabindex="canOpenDiff ? undefined : -1"
                 @click="onOpenCommitClick($event, selectedCommit.hash)"
               >
-                {{ selectedCommit.hasTour ? "Open tour →" : "Open diff →" }}
+                Open diff →
               </a>
-              <CommitTourAction
-                v-if="isOpen && cwd"
-                :cwd="cwd"
-                :hash="selectedCommit.hash"
-                :conversation-id="canRequestTour ? conversationId : null"
-                @open="canOpenDiff && emit('open-diff', $event, cwd)"
-                @present="markTour"
-              />
 
               <a
                 v-if="data?.githubBase"
@@ -326,7 +305,6 @@
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { api } from "../../services/api";
 import type { GitGraphResponse, GitCommitDetail } from "../../types";
-import CommitTourAction from "./CommitTourAction.vue";
 import GitRepoPicker from "./GitRepoPicker.vue";
 import RefBadge from "./gitGraph/RefBadge.vue";
 import CopyButton from "./gitGraph/CopyButton.vue";
@@ -364,8 +342,6 @@ const props = withDefaults(
     // Mirrors the presence of React's optional onOpenDiff callback, which
     // gates whether "Open diff" is enabled.
     canOpenDiff?: boolean;
-    conversationId?: string | null;
-    canRequestTour?: boolean;
   }>(),
   { covered: false },
 );
@@ -637,11 +613,6 @@ onUnmounted(() => {
 });
 
 const selectedCommit = computed(() => commits.value.find((c) => c.hash === selected.value) || null);
-
-function markTour(hash: string) {
-  const commit = commits.value.find((c) => c.hash === hash);
-  if (commit) commit.hasTour = true;
-}
 
 // Scroll the selected row into view (React effect on [selected]).
 const rowRefs = new Map<string, HTMLElement>();

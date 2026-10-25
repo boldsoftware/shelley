@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"shelley.exe.dev/committour"
+	"shelley.exe.dev/commitnotes"
 )
 
 func TestHighlightsCLI(t *testing.T) {
@@ -55,7 +55,7 @@ func TestHighlightsCLI(t *testing.T) {
 		return string(out)
 	}
 
-	var scaffold committour.Highlights
+	var scaffold commitnotes.Highlights
 	if err := json.Unmarshal([]byte(run(0, "highlights", "scaffold", "-C", repo, "HEAD")), &scaffold); err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestHighlightsCLI(t *testing.T) {
 	}
 
 	file := filepath.Join(tempDir, "highlights.json")
-	writeJSON := func(h committour.Highlights) {
+	writeJSON := func(h commitnotes.Highlights) {
 		t.Helper()
 		data, err := json.Marshal(h)
 		if err != nil {
@@ -74,22 +74,22 @@ func TestHighlightsCLI(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	writeJSON(committour.Highlights{Version: 1, Files: []string{"b.txt"}})
+	writeJSON(commitnotes.Highlights{Version: 1, Files: []string{"b.txt"}})
 	if out := run(1, "highlights", "attach", "-C", repo, "HEAD", file); !strings.Contains(out, `files is missing "a.txt"`) {
 		t.Fatalf("attach of incomplete highlights = %q", out)
 	}
 	run(1, "highlights", "show", "-C", repo, "HEAD")
 
-	want := committour.Highlights{
+	want := commitnotes.Highlights{
 		Version:    1,
 		Files:      []string{"b.txt", "a.txt"},
-		Highlights: []committour.Highlight{{File: "b.txt", Line: 2, Comment: "a -> b && c < d"}},
+		Highlights: []commitnotes.Highlight{{File: "b.txt", Line: 2, Comment: "a -> b && c < d"}},
 	}
 	writeJSON(want)
 	run(0, "highlights", "verify", "-C", repo, "HEAD", file)
 	run(1, "highlights", "show", "-C", repo, "HEAD")
 	run(0, "highlights", "attach", "-C", repo, "HEAD", file)
-	got, err := committour.ParseHighlights([]byte(run(0, "highlights", "show", "-C", repo, "HEAD")))
+	got, err := commitnotes.ParseHighlights([]byte(run(0, "highlights", "show", "-C", repo, "HEAD")))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1035,8 +1035,8 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	if req.ConversationOptions != nil &&
-		(req.ConversationOptions.Kind != "" || req.ConversationOptions.ParentPointer != nil || req.ConversationOptions.CommitTour != nil) {
-		http.Error(w, "kind, parent_pointer, and commit_tour are internal conversation options", http.StatusBadRequest)
+		(req.ConversationOptions.Kind != "" || req.ConversationOptions.ParentPointer != nil) {
+		http.Error(w, "kind and parent_pointer are internal conversation options", http.StatusBadRequest)
 		return
 	}
 
@@ -1129,14 +1129,6 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	// carrier here. Both the immediate-send (recordTurnStartMessage) and queued
 	// (QueueMessage) paths read it off this ctx.
 	ctx = contextWithUserEmail(ctx, userEmail)
-
-	commitTourReasoning := db.ParseConversationOptions(existing.ConversationOptions).ThinkingLevel
-	if commitTourReasoning == "" {
-		commitTourReasoning = llm.ServiceDefaultReasoningLevel(llmService)
-	}
-	if s.handleCommitTourCommand(ctx, w, *existing, modelID, commitTourReasoning, req.Message) {
-		return
-	}
 
 	// Built-in /transcription is durable queued user input backed by a hidden
 	// child. Reject bad commands before any side effect (draft promotion or
@@ -4184,8 +4176,8 @@ func validateModelReasoningLevel(model *ModelInfo, level string) string {
 }
 
 func validateConversationOptions(opts db.ConversationOptions) string {
-	if opts.Kind != "" || opts.ParentPointer != nil || opts.CommitTour != nil {
-		return "kind, parent_pointer, and commit_tour are internal conversation options"
+	if opts.Kind != "" || opts.ParentPointer != nil {
+		return "kind and parent_pointer are internal conversation options"
 	}
 	if err := validateSystemPromptTemplate(opts.SystemPrompt); err != nil {
 		return "Invalid system_prompt: " + err.Error()

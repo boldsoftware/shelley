@@ -15,11 +15,6 @@ export const SLASH_COMMANDS = {
     description: "asks a one-off side question",
     takesArgs: true,
   },
-  TOUR: {
-    command: "/tour",
-    description: "builds a guided commit tour",
-    takesArgs: true,
-  },
   TRANSCRIPTION: {
     command: "/transcription",
     description: "transcribes an uploaded recording",
@@ -69,8 +64,6 @@ export const SLASH_COMMANDS = {
 
 export function slashCommandsForConversation(isChildConversation: boolean): SlashCommand[] {
   return Object.values(SLASH_COMMANDS).filter(
-    (item) =>
-      !isChildConversation ||
-      (item.command !== SLASH_COMMANDS.BTW.command && item.command !== SLASH_COMMANDS.TOUR.command),
+    (item) => !isChildConversation || item.command !== SLASH_COMMANDS.BTW.command,
   );
 }

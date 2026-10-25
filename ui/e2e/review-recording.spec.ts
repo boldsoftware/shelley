@@ -1,54 +1,29 @@
 import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
-import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import {
   openWorkspaceTool,
   createConversationViaAPI,
   createConversationViaAPIWithDetails,
+  git,
+  initGitRepo,
   installTranscriptionAvailability,
   withTempDir,
 } from "./helpers";
 
-const shelleyBin = resolve(fileURLToPath(new URL("../../bin/shelley", import.meta.url)));
-
-function git(cwd: string, ...args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
-}
-
-// A paragraph too long to quote whole, so pointing at it quotes a sentence.
-const INTRO = [
-  "One rename, so every caller now reads the new name instead of the old one.",
-  "The old name value20 said nothing about what the number was for, and readers kept asking about it in review.",
-  "Pointing at this sentence should pin it rather than the opening of the paragraph.",
-];
-
-// A repository whose HEAD commit has a tour: a heading, then one chunk.
-function tourRepo(dir: string): string {
+// A repository whose HEAD commit renames one line of a file taller than the
+// editor, so only part of it is ever on screen.
+function reviewRepo(dir: string): string {
   const repo = join(dir, "repo");
   mkdirSync(join(repo, "src"), { recursive: true });
-  git(repo, "init");
-  git(repo, "config", "user.name", "Review Test");
-  git(repo, "config", "user.email", "review@example.com");
-  const lines = Array.from({ length: 40 }, (_, index) => `const value${index + 1} = ${index + 1};`);
+  initGitRepo(repo);
+  const lines = Array.from({ length: 80 }, (_, index) => `const value${index + 1} = ${index + 1};`);
   writeFileSync(join(repo, "src", "app.ts"), lines.join("\n") + "\n");
   git(repo, "add", ".");
-  git(repo, "commit", "-m", "Base\n\nPrompt: review recording base");
+  git(repo, "commit", "-m", "Base");
   lines[19] = "const renamedValue = 20;";
   writeFileSync(join(repo, "src", "app.ts"), lines.join("\n") + "\n");
-  git(repo, "commit", "-am", "Rename value20\n\nPrompt: review recording rename");
-  const scaffold = JSON.parse(
-    execFileSync(shelleyBin, ["tour", "scaffold", "-C", repo, "HEAD"], { encoding: "utf8" }),
-  );
-  const tour = {
-    ...scaffold,
-    title: "Rename value20",
-    intro: INTRO.join(" "),
-    chunks: [{ header: "## The rename" }, { ...scaffold.chunks[0], comment: "The new name." }],
-  };
-  writeFileSync(join(dir, "tour.json"), JSON.stringify(tour));
-  execFileSync(shelleyBin, ["tour", "attach", "-C", repo, "HEAD", join(dir, "tour.json")]);
+  git(repo, "commit", "-am", "Rename value20");
   return repo;
 }
 
@@ -117,18 +92,25 @@ async function installMicrophone(page: Page, transcription = true) {
   });
 }
 
-async function openTour(page: Page, slug: string, viewport = { width: 1500, height: 900 }) {
+// The viewer opens a clean tree at its top commit, on the commit message.
+async function waitForCommit(overlay: Locator) {
+  await expect(
+    overlay.locator(".editor.modified .view-line", { hasText: "Rename value20" }),
+  ).toBeVisible({ timeout: 30_000 });
+}
+
+async function openDiffs(page: Page, slug: string, viewport = { width: 1500, height: 900 }) {
   await page.setViewportSize(viewport);
   await page.goto(`/c/${slug}`);
   await expect(page.getByTestId("message-input")).toBeVisible({ timeout: 30000 });
   await openWorkspaceTool(page, "Diffs");
   const overlay = page.locator(".diff-viewer-overlay");
-  await expect(overlay.locator(".commit-tour-view")).toBeVisible({ timeout: 30000 });
+  await waitForCommit(overlay);
   return overlay;
 }
 
-const switcherTop = async (overlay: Locator) =>
-  (await overlay.locator(".diff-viewer-view-switcher").boundingBox())?.y;
+const contentTop = async (overlay: Locator) =>
+  (await overlay.locator(".diff-viewer-content").boundingBox())?.y;
 
 // The live status takes over the header's selector area instead of adding a
 // strip, so nothing below the header moves.
@@ -136,30 +118,18 @@ async function expectInHeader(overlay: Locator, top: number | undefined) {
   await expect(
     overlay.locator(".diff-viewer-header").getByTestId("review-recording-status"),
   ).toBeVisible();
-  expect(await switcherTop(overlay)).toBe(top);
+  expect(await contentTop(overlay)).toBe(top);
 }
 
-// Viewport center of the first occurrence of word in locator's text.
-async function wordCenter(locator: Locator, word: string) {
-  return locator.evaluate((element, word) => {
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const at = node.textContent!.indexOf(word);
-      if (at < 0) continue;
-      const range = document.createRange();
-      range.setStart(node, at);
-      range.setEnd(node, at + word.length);
-      const rect = range.getBoundingClientRect();
-      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-    }
-    throw new Error(`no "${word}" in ${element.textContent}`);
-  }, word);
-}
+// With nothing pointed at, the status names what is on screen: the one-line
+// commit message, which has no old side.
+const COMMIT_MESSAGE_ON_SCREEN = /^commit message [0-9a-f]{8} \(new 1\)$/;
 
-function diffRow(page: Page, text: string) {
-  return page.locator('[data-review-file="src/app.ts"] diffs-container [data-line]', {
-    hasText: text,
-  });
+// Comment on the first line of the commit message on screen.
+async function commentOnCommitMessage(page: Page, overlay: Locator, text: string) {
+  await overlay.locator(".editor.modified .view-line", { hasText: "Rename value20" }).click();
+  await page.locator(".diff-viewer-comment-input").fill(text);
+  await page.getByRole("button", { name: "Add Comment", exact: true }).click();
 }
 
 interface Chat {
@@ -172,21 +142,25 @@ test.describe("Narrated review recording", () => {
     request,
   }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const slug = await createConversationViaAPI(request, "Hello", { cwd: tourRepo(dir) });
+      const repo = reviewRepo(dir);
+      const hash = git(repo, "rev-parse", "HEAD");
+      const slug = await createConversationViaAPI(request, "Hello", { cwd: repo });
       await installMicrophone(page);
       const chats: Chat[] = [];
       await page.route("**/api/conversation/*/chat", async (route: Route) => {
         chats.push(route.request().postDataJSON() as Chat);
         await route.fulfill({ status: 202, contentType: "application/json", body: "{}" });
       });
-      const overlay = await openTour(page, slug);
+      await page.addInitScript(() => localStorage.setItem("diff-viewer-layout", "sidebar"));
+      const overlay = await openDiffs(page, slug);
       const status = overlay.getByTestId("review-recording-status");
-      const top = await switcherTop(overlay);
+      const where = overlay.getByTestId("review-recording-where");
+      const said = overlay.getByTestId("review-recording-said");
+      const top = await contentTop(overlay);
 
       await overlay.getByTestId("review-record-start").click();
       await expect(overlay.getByTestId("review-record-stop")).toBeVisible();
-      // With nothing pointed at, the status names what is on screen.
-      await expect(overlay.getByTestId("review-recording-where")).toHaveText("Commit message");
+      await expect(where).toHaveText(COMMIT_MESSAGE_ON_SCREEN);
       await expectInHeader(overlay, top);
       await expect(overlay.getByTestId("review-recording-bar")).toHaveCount(0);
 
@@ -195,35 +169,35 @@ test.describe("Narrated review recording", () => {
       await page.keyboard.press("Escape");
       await expect(overlay).toBeVisible();
 
-      // Over a long paragraph, the sentence under the pointer is what counts.
-      const intro = overlay.locator(".commit-tour-introduction p");
-      const point = await wordCenter(intro, "pin");
-      await page.mouse.move(point.x, point.y);
-      await expect(overlay.getByTestId("review-recording-where")).toHaveText(/Intro$/);
-      await expect(overlay.getByTestId("review-recording-said")).toHaveText(INTRO[2]);
+      // Controls outside the editor are named by their region and label.
+      await overlay.getByRole("button", { name: "Next file (>)" }).hover();
+      await expect(where).toHaveText(/^Toolbar.*Next file \(>\)"$/);
+      const file = overlay.getByRole("treeitem", { name: /app\.ts/ });
+      await file.hover();
+      await expect(where).toHaveText(/^Changed files.*"app\.ts"$/);
+      await file.click();
+      const line = overlay.locator(".editor.modified .view-line", { hasText: "renamedValue" });
+      await expect(line).toBeVisible();
 
-      await diffRow(page, "renamedValue").last().hover();
-      await expect(overlay.getByTestId("review-recording-where")).toHaveText(
-        /The rename.*src\/app\.ts.*new 20$/,
-      );
+      // In the editor, the line under the pointer is what counts.
+      await line.hover();
+      await expect(where).toHaveText(/^Files.*src\/app\.ts new 20$/);
+      await expect(said).toHaveText("const renamedValue = 20;");
 
-      // Drag-select within the row; locator positions retry if it re-renders.
-      // The diff renders plain first and swaps in the highlighted spans when
-      // the worker returns; a drag across that swap loses its anchor, so wait.
-      const row = diffRow(page, "renamedValue").last();
-      await expect(row.locator('span[style*="--diffs-token"]').first()).toBeAttached();
-      await row.hover({ position: { x: 8, y: 8 } });
+      await line.hover({ position: { x: 2, y: 8 } });
       await page.mouse.down();
-      await row.hover({ position: { x: 120, y: 8 } });
+      await line.hover({ position: { x: 160, y: 8 } });
       await page.mouse.up();
       await expect(status).toContainText("Selected");
+      await expect(where).toHaveText(/^Files.*src\/app\.ts new 20$/);
+      await expect(said).toHaveCount(0);
 
       await overlay.getByTestId("review-record-stop").click();
       await expect(overlay.getByTestId("review-recording-sent")).toBeVisible();
       await expect(overlay.locator(".diff-viewer-close")).toBeEnabled();
-      // Once sent, the selectors are back.
+      // Once sent, the header is back.
       await expect(status).toHaveCount(0);
-      await expect(overlay.locator(".diff-viewer-selectors-row")).not.toHaveAttribute("inert");
+      await expect(overlay.locator(".diff-viewer-header-title")).not.toHaveAttribute("inert");
 
       expect(chats).toHaveLength(1);
       const audioPath = chats[0].message.replace(/^\/transcription /, "");
@@ -239,47 +213,76 @@ test.describe("Narrated review recording", () => {
       expect(events.map((event) => event.ms)).toEqual(
         [...events.map((e) => e.ms)].sort((a, b) => a - b),
       );
-      expect(events[0]).toMatchObject({ ms: 0, type: "view", mode: "tour" });
+      const commit = `${hash.slice(0, 8)} Rename value20`;
+      expect(events[0]).toMatchObject({
+        ms: 0,
+        type: "view",
+        where: `Files · ${commit} · commit message ${hash.slice(0, 8)}`,
+        mode: "files",
+        commit: hash,
+      });
       expect(events.at(-1)?.type).toBe("stop");
       expect(events).toContainEqual(
-        expect.objectContaining({ type: "pointer", where: "Tour › Intro", text: INTRO[2] }),
+        expect.objectContaining({ type: "pointer", where: 'Toolbar › "Next file (>)"' }),
       );
       expect(events).toContainEqual(
-        expect.objectContaining({ type: "pointer", file: "src/app.ts", side: "new", line: 20 }),
+        expect.objectContaining({ type: "pointer", where: 'Changed files › "app.ts"' }),
+      );
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: "view",
+          where: `Files · ${commit} · src/app.ts`,
+          mode: "files",
+          commit: hash,
+          file: "src/app.ts",
+        }),
+      );
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: "pointer",
+          where: "Files › src/app.ts new 20",
+          file: "src/app.ts",
+          side: "new",
+          line: 20,
+          text: "const renamedValue = 20;",
+        }),
       );
       expect(events).toContainEqual(
         expect.objectContaining({
           type: "selection",
+          where: "Files › src/app.ts new 20",
           file: "src/app.ts",
+          side: "new",
           line: 20,
+          end_line: 20,
           text: expect.stringContaining("renamed"),
         }),
       );
       expect(events).toContainEqual(
         expect.objectContaining({
           type: "on_screen",
-          items: expect.arrayContaining([
-            expect.stringMatching(/src\/app\.ts.*\(old \d+–\d+, new \d+–\d+\)/),
-          ]),
+          items: [expect.stringMatching(/^src\/app\.ts \(new 1–\d+, old 1–\d+\)$/)],
         }),
       );
-      // Stopping is not part of the review.
-      expect(events.filter((event) => event.type === "click")).toEqual([]);
+      // The file pick is the only click: stopping is not part of the review.
+      expect(events.filter((event) => event.type === "click")).toEqual([
+        expect.objectContaining({ where: 'Changed files › "app.ts"' }),
+      ]);
     });
   });
 
   test("offers no narrated review without transcription", async ({ page, request }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const slug = await createConversationViaAPI(request, "Hello", { cwd: tourRepo(dir) });
+      const slug = await createConversationViaAPI(request, "Hello", { cwd: reviewRepo(dir) });
       await installMicrophone(page, false);
-      const overlay = await openTour(page, slug);
+      const overlay = await openDiffs(page, slug);
       await expect(overlay.getByTestId("review-record-start")).toHaveCount(0);
     });
   });
 
   test("cancelling throws the recording away", async ({ page, request }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const slug = await createConversationViaAPI(request, "Hello", { cwd: tourRepo(dir) });
+      const slug = await createConversationViaAPI(request, "Hello", { cwd: reviewRepo(dir) });
       await installMicrophone(page);
       let uploads = 0;
       page.on("request", (req) => {
@@ -290,7 +293,7 @@ test.describe("Narrated review recording", () => {
         chats.push(route.request().postDataJSON() as Chat);
         await route.fulfill({ status: 202, contentType: "application/json", body: "{}" });
       });
-      let overlay = await openTour(page, slug);
+      let overlay = await openDiffs(page, slug);
       const close = overlay.locator(".diff-viewer-close");
       const start = overlay.getByTestId("review-record-start");
       const stop = overlay.getByTestId("review-record-stop");
@@ -337,54 +340,22 @@ test.describe("Narrated review recording", () => {
 
       // Nothing was left behind to offer as unsent.
       await page.reload();
-      overlay = await openTour(page, slug);
+      overlay = await openDiffs(page, slug);
       await expect(overlay.getByTestId("review-record-start")).toBeVisible();
       await expect(overlay.getByTestId("review-recording-bar")).toHaveCount(0);
     });
   });
 
-  test("a building tour opens in place beside the recording", async ({ page, request }) => {
-    await withTempDir("shelley-review-rec-", async (dir) => {
-      const repo = tourRepo(dir);
-      writeFileSync(join(repo, "src", "next.ts"), "export const next = 1;\n");
-      git(repo, "add", ".");
-      git(repo, "commit", "-m", "Untoured follow-up");
-      const hash = git(repo, "rev-parse", "HEAD");
-      const slug = await createConversationViaAPI(request, "Hello", { cwd: repo });
-      await installMicrophone(page);
-      await page.route("**/api/git/tour/status?*", (route) =>
-        route.fulfill({
-          contentType: "application/json",
-          body: JSON.stringify({ status: "building", hash, worker_slug: "tour-worker" }),
-        }),
-      );
-      await page.setViewportSize({ width: 1500, height: 900 });
-      await page.goto(`/c/${slug}?diff=${hash}&cwd=${encodeURIComponent(repo)}`);
-      const overlay = page.locator(".diff-viewer-overlay");
-      const building = overlay
-        .locator(".diff-viewer-view-switcher")
-        .getByRole("button", { name: "Building tour" });
-      await expect(building).toBeVisible({ timeout: 30_000 });
-      await overlay.getByTestId("review-record-start").click();
-      await expect(overlay.getByTestId("review-record-stop")).toBeVisible();
-
-      // The build opens in the viewer's own Tour tab: no worker conversation,
-      // no navigation away, and the recording keeps running.
-      await building.click();
-      await expect(overlay.getByTestId("tour-build-progress")).toBeVisible();
-      await expect(page).toHaveURL(new RegExp(`/c/${slug}`));
-      await expect(overlay.getByTestId("review-record-stop")).toBeVisible();
-    });
-  });
-
   test("shows the live status in the mobile header", async ({ page, request }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const slug = await createConversationViaAPI(request, "Hello", { cwd: tourRepo(dir) });
+      const slug = await createConversationViaAPI(request, "Hello", { cwd: reviewRepo(dir) });
       await installMicrophone(page);
-      const overlay = await openTour(page, slug, { width: 390, height: 844 });
-      const top = await switcherTop(overlay);
+      const overlay = await openDiffs(page, slug, { width: 390, height: 844 });
+      const top = await contentTop(overlay);
       await overlay.getByTestId("review-record-start").click();
-      await expect(overlay.getByTestId("review-recording-where")).toHaveText("Commit message");
+      await expect(overlay.getByTestId("review-recording-where")).toHaveText(
+        COMMIT_MESSAGE_ON_SCREEN,
+      );
       await expectInHeader(overlay, top);
       // The pickers are covered rather than squeezed, and cannot be reached.
       await expect(overlay.locator(".diff-viewer-mobile-selectors")).toHaveAttribute("inert", "");
@@ -393,7 +364,7 @@ test.describe("Narrated review recording", () => {
 
   test("outside a conversation, a recording starts one of its own", async ({ page, request }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const repo = tourRepo(dir);
+      const repo = reviewRepo(dir);
       const hash = git(repo, "rev-parse", "HEAD");
       await installMicrophone(page);
       const drafts: Array<Record<string, unknown>> = [];
@@ -416,7 +387,7 @@ test.describe("Narrated review recording", () => {
       const url = `/new?diff=${hash}&cwd=${encodeURIComponent(repo)}`;
       await page.goto(url);
       const overlay = page.locator(".diff-viewer-overlay");
-      await expect(overlay.locator(".commit-tour-view")).toBeVisible({ timeout: 30_000 });
+      await waitForCommit(overlay);
       const start = overlay.getByTestId("review-record-start");
       await start.hover();
       await expect(page.locator(".p-tooltip")).toHaveText(
@@ -471,7 +442,7 @@ test.describe("Narrated review recording", () => {
     page,
   }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const repo = tourRepo(dir);
+      const repo = reviewRepo(dir);
       const hash = git(repo, "rev-parse", "HEAD");
       await installMicrophone(page);
       const drafts: Array<Record<string, unknown>> = [];
@@ -490,15 +461,12 @@ test.describe("Narrated review recording", () => {
       await page.setViewportSize({ width: 1500, height: 900 });
       await page.goto(`/new?diff=${hash}&cwd=${encodeURIComponent(repo)}`);
       const overlay = page.locator(".diff-viewer-overlay");
-      await expect(overlay.locator(".commit-tour-view")).toBeVisible({ timeout: 30_000 });
+      await waitForCommit(overlay);
       await overlay.getByTestId("review-record-start").click();
       await expect(overlay.getByTestId("review-record-stop")).toBeVisible();
 
       // The comment lands in the composer, which saves it as the page's draft.
-      await overlay.locator(".commit-tour-chunk-header").first().hover();
-      await overlay.getByRole("button", { name: /^Comment on .* chunk$/ }).click();
-      await page.locator(".diff-viewer-comment-input").fill("Keep the old name.");
-      await page.getByRole("button", { name: "Add Comment", exact: true }).click();
+      await commentOnCommitMessage(page, overlay, "Keep the old name.");
       const input = page.getByTestId("message-input");
       await expect(input).toHaveValue(/Keep the old name\.\n*$/);
       await expect(page).toHaveURL(/\/c\/[^/?]+$/);
@@ -529,7 +497,7 @@ test.describe("Narrated review recording", () => {
 
   test("a reload mid-recording still sends it to the draft a comment made", async ({ page }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const repo = tourRepo(dir);
+      const repo = reviewRepo(dir);
       const hash = git(repo, "rev-parse", "HEAD");
       await installMicrophone(page);
       const drafts: string[] = [];
@@ -549,13 +517,10 @@ test.describe("Narrated review recording", () => {
       await page.setViewportSize({ width: 1500, height: 900 });
       await page.goto(`/new?diff=${hash}&cwd=${encodeURIComponent(repo)}`);
       const overlay = page.locator(".diff-viewer-overlay");
-      await expect(overlay.locator(".commit-tour-view")).toBeVisible({ timeout: 30_000 });
+      await waitForCommit(overlay);
       await overlay.getByTestId("review-record-start").click();
       await expect(overlay.getByTestId("review-record-stop")).toBeVisible();
-      await overlay.locator(".commit-tour-chunk-header").first().hover();
-      await overlay.getByRole("button", { name: /^Comment on .* chunk$/ }).click();
-      await page.locator(".diff-viewer-comment-input").fill("Keep the old name.");
-      await page.getByRole("button", { name: "Add Comment", exact: true }).click();
+      await commentOnCommitMessage(page, overlay, "Keep the old name.");
       await expect(page).toHaveURL(/\/c\/[^/?]+$/);
       expect(drafts).toHaveLength(1);
       const draftId = drafts[0]!;
@@ -595,7 +560,7 @@ test.describe("Narrated review recording", () => {
     request,
   }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const repo = tourRepo(dir);
+      const repo = reviewRepo(dir);
       const hash = git(repo, "rev-parse", "HEAD");
       const live = await createConversationViaAPIWithDetails(request, "Hello", { cwd: repo });
       await installMicrophone(page);
@@ -612,7 +577,7 @@ test.describe("Narrated review recording", () => {
       await page.setViewportSize({ width: 1500, height: 900 });
       await page.goto(`/new?diff=${hash}&cwd=${encodeURIComponent(repo)}`);
       const overlay = page.locator(".diff-viewer-overlay");
-      await expect(overlay.locator(".commit-tour-view")).toBeVisible({ timeout: 30_000 });
+      await waitForCommit(overlay);
       await overlay.getByTestId("review-record-start").click();
       await page.waitForFunction(
         () =>
@@ -639,7 +604,7 @@ test.describe("Narrated review recording", () => {
 
   test("a recording whose draft was deleted starts another", async ({ page, request }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const repo = tourRepo(dir);
+      const repo = reviewRepo(dir);
       const hash = git(repo, "rev-parse", "HEAD");
       await installMicrophone(page);
       const drafts: string[] = [];
@@ -659,7 +624,7 @@ test.describe("Narrated review recording", () => {
       await page.setViewportSize({ width: 1500, height: 900 });
       await page.goto(`/new?diff=${hash}&cwd=${encodeURIComponent(repo)}`);
       const overlay = page.locator(".diff-viewer-overlay");
-      await expect(overlay.locator(".commit-tour-view")).toBeVisible({ timeout: 30_000 });
+      await waitForCommit(overlay);
       await overlay.getByTestId("review-record-start").click();
       await page.waitForFunction(
         () =>
@@ -691,7 +656,7 @@ test.describe("Narrated review recording", () => {
 
   test("a recording on an archived conversation starts a new one", async ({ page, request }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const repo = tourRepo(dir);
+      const repo = reviewRepo(dir);
       const hash = git(repo, "rev-parse", "HEAD");
       const archived = await createConversationViaAPIWithDetails(request, "Hello", { cwd: repo });
       const response = await request.post(`/api/conversation/${archived.conversationId}/archive`);
@@ -708,7 +673,7 @@ test.describe("Narrated review recording", () => {
       await page.setViewportSize({ width: 1500, height: 900 });
       await page.goto(`/c/${archived.slug}?diff=${hash}&cwd=${encodeURIComponent(repo)}`);
       const overlay = page.locator(".diff-viewer-overlay");
-      await expect(overlay.locator(".commit-tour-view")).toBeVisible({ timeout: 30_000 });
+      await waitForCommit(overlay);
       const start = overlay.getByTestId("review-record-start");
       await start.hover();
       await expect(page.locator(".p-tooltip")).toHaveText(
@@ -738,7 +703,7 @@ test.describe("Narrated review recording", () => {
     request,
   }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const repo = tourRepo(dir);
+      const repo = reviewRepo(dir);
       const hash = git(repo, "rev-parse", "HEAD");
       const created = await request.post("/api/conversations/draft", {
         data: { draft: "Written elsewhere.", model: "predictable", cwd: repo },
@@ -761,7 +726,7 @@ test.describe("Narrated review recording", () => {
       const url = `/c/${draftId}?diff=${hash}&cwd=${encodeURIComponent(repo)}`;
       await page.goto(url);
       const overlay = page.locator(".diff-viewer-overlay");
-      await expect(overlay.locator(".commit-tour-view")).toBeVisible({ timeout: 30_000 });
+      await waitForCommit(overlay);
       await overlay.getByTestId("review-record-start").click();
       await page.waitForFunction(
         () =>
@@ -788,7 +753,7 @@ test.describe("Narrated review recording", () => {
 
   test("discarding a recording deletes the empty draft it made", async ({ page, request }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const repo = tourRepo(dir);
+      const repo = reviewRepo(dir);
       const hash = git(repo, "rev-parse", "HEAD");
       const archived = await createConversationViaAPIWithDetails(request, "Hello", { cwd: repo });
       const response = await request.post(`/api/conversation/${archived.conversationId}/archive`);
@@ -803,7 +768,7 @@ test.describe("Narrated review recording", () => {
       await page.setViewportSize({ width: 1500, height: 900 });
       await page.goto(`/c/${archived.slug}?diff=${hash}&cwd=${encodeURIComponent(repo)}`);
       const overlay = page.locator(".diff-viewer-overlay");
-      await expect(overlay.locator(".commit-tour-view")).toBeVisible({ timeout: 30_000 });
+      await waitForCommit(overlay);
       await overlay.getByTestId("review-record-start").click();
       await page.waitForFunction(
         () =>
@@ -834,7 +799,7 @@ test.describe("Narrated review recording", () => {
     request,
   }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
-      const slug = await createConversationViaAPI(request, "Hello", { cwd: tourRepo(dir) });
+      const slug = await createConversationViaAPI(request, "Hello", { cwd: reviewRepo(dir) });
       await installMicrophone(page);
       let uploads = 0;
       page.on("request", (req) => {
@@ -851,7 +816,7 @@ test.describe("Narrated review recording", () => {
         await route.fulfill({ status: 202, contentType: "application/json", body: "{}" });
       });
 
-      let overlay = await openTour(page, slug);
+      let overlay = await openDiffs(page, slug);
       await overlay.getByTestId("review-record-start").click();
       await expect(overlay.getByTestId("review-record-stop")).toBeVisible();
       await page.waitForFunction(
@@ -864,14 +829,14 @@ test.describe("Narrated review recording", () => {
       expect(uploads).toBe(2);
 
       await page.reload();
-      overlay = await openTour(page, slug);
+      overlay = await openDiffs(page, slug);
       await expect(overlay.getByTestId("review-recording-pending")).toContainText(
         "Unsent recording",
       );
 
       // A new recording leaves the unsent one in place, waiting its turn.
       accept = true;
-      const top = await switcherTop(overlay);
+      const top = await contentTop(overlay);
       await overlay.getByTestId("review-record-start").click();
       await expectInHeader(overlay, top);
       await expect(overlay.getByTestId("review-recording-send")).toBeDisabled();
@@ -890,7 +855,7 @@ test.describe("Narrated review recording", () => {
         expect(chat.message).toMatch(/^\/transcription \/.*review-.*\.webm$/);
 
       await page.reload();
-      overlay = await openTour(page, slug);
+      overlay = await openDiffs(page, slug);
       await expect(overlay.getByTestId("review-recording-bar")).toHaveCount(0);
     });
   });

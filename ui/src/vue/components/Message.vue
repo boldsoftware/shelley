@@ -40,7 +40,6 @@
     v-else-if="message.type === 'gitinfo'"
     :message="message"
     :on-open-diff-viewer="onOpenDiffViewer"
-    :can-request-tour="canRequestTour"
   />
 
   <!-- error message -->
@@ -290,8 +289,7 @@ interface ToolDisplay {
 
 const props = defineProps<{
   message: MessageType;
-  onOpenDiffViewer?: (commit: string, cwd?: string, openOnFiles?: boolean) => void;
-  canRequestTour?: boolean;
+  onOpenDiffViewer?: (commit: string, cwd?: string) => void;
   onCommentTextChange?: (text: string) => void;
   // onFork forks the conversation, copying messages up to and including this
   // one into a new conversation and navigating to it.

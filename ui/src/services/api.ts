@@ -114,62 +114,9 @@ export interface IntegrationsResponse {
   integrations: AttachedIntegration[];
 }
 
-export interface GitTourHeaderEntry {
-  header: string;
-}
-
-export interface GitTourPatchEntry {
-  patch: string;
-  comment?: string;
-  trivial?: boolean;
-}
-
-/** A screenshot or recording, stored in the repository as a git blob. */
-export interface GitTourMediaEntry {
-  blob: string;
-  mime: string;
-  name: string;
-  comment?: string;
-}
-
-export type GitTourEntry = GitTourHeaderEntry | GitTourPatchEntry | GitTourMediaEntry;
-
-/** A key design decision or a question for the reader. */
-export interface GitTourItem {
-  title: string;
-  body?: string;
-}
-
-export interface GitTour {
-  version: 1;
-  title?: string;
-  intro?: string;
-  decisions?: GitTourItem[];
-  questions?: GitTourItem[];
-  chunks: GitTourEntry[];
-}
-
-export type GitTourBuildState = "absent" | "building" | "present" | "failed";
-
-export interface GitTourBuildStatus {
-  status: GitTourBuildState;
-  hash: string;
-  repository?: string;
-  worker_conversation_id?: string;
-  worker_slug?: string;
-  error?: string;
-  progress?: { step: string; at: string }[];
-}
-
-export interface GitTourResponse {
-  hash: string;
-  tour: GitTour;
-}
-
 export interface ChatAcceptedResponse {
   status?: string;
   btw?: BtwReaderDescriptor;
-  tour?: GitTourBuildStatus;
 }
 
 export interface BtwSummaryReceipt {
@@ -808,40 +755,6 @@ class ApiService {
     return response.json();
   }
 
-  async getGitTourStatus(cwd: string, hash: string): Promise<GitTourBuildStatus> {
-    const params = new URLSearchParams({ cwd, hash });
-    const response = await fetch(`${this.baseUrl}/git/tour/status?${params}`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to check commit tour status");
-    }
-    return response.json();
-  }
-
-  async requestGitTour(
-    conversationId: string,
-    cwd: string,
-    hash: string,
-  ): Promise<GitTourBuildStatus> {
-    const accepted = await this.sendMessage(conversationId, {
-      message: `/tour ${hash}\n${cwd}`,
-    });
-    if (!accepted.tour) throw new Error("Commit tour request returned no status");
-    return accepted.tour;
-  }
-
-  gitTourMediaURL(cwd: string, blob: string): string {
-    return `${this.baseUrl}/git/tour/media?${new URLSearchParams({ cwd, blob })}`;
-  }
-
-  async getGitTour(cwd: string, hash: string): Promise<GitTourResponse> {
-    const params = new URLSearchParams({ cwd, hash });
-    const response = await fetch(`${this.baseUrl}/git/tour?${params}`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get commit tour");
-    }
-    return response.json();
-  }
-
   // Null when the commit has no highlights, or they no longer match it.
   async getGitHighlights(cwd: string, hash: string): Promise<CommitHighlights | null> {
     const params = new URLSearchParams({ cwd, hash });
@@ -890,21 +803,17 @@ class ApiService {
     return response.json();
   }
 
-  // `oldPath` names the left-hand file when the commit renamed it; without it
-  // a renamed file comes back with empty old content.
   async getGitFileDiff(
     diffId: string,
     filePath: string,
     cwd: string,
     to?: string,
-    oldPath?: string,
   ): Promise<GitFileDiff> {
     const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
-    const oldPathParam = oldPath ? `&oldPath=${encodeURIComponent(oldPath)}` : "";
     // Encode per segment so names containing '#', '?' or '%' survive the URL.
     const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
     const response = await fetch(
-      `${this.baseUrl}/git/file-diff/${diffId}/${encodedPath}?cwd=${encodeURIComponent(cwd)}${toParam}${oldPathParam}`,
+      `${this.baseUrl}/git/file-diff/${diffId}/${encodedPath}?cwd=${encodeURIComponent(cwd)}${toParam}`,
     );
     if (!response.ok) {
       throw await responseError(response, "Failed to get file diff");

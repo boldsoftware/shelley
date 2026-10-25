@@ -43,7 +43,7 @@ export function defaultDiffSelection(
   const commits = diffs.filter((diff) => diff.id !== "working");
   const topCommit = commits[0];
 
-  if (working?.filesCount === 0 && (topCommit?.hasTour || topCommit?.hasHighlights)) {
+  if (working?.filesCount === 0 && topCommit?.hasHighlights) {
     return { selectedDiff: topCommit.id, selectedTo: "self" };
   }
 

@@ -291,20 +291,10 @@ type BtwParentPointer struct {
 	SequenceID int64 `json:"sequence_id"`
 }
 
-type CommitTourRequest struct {
-	Repository  string    `json:"repository"`
-	Worktree    string    `json:"worktree"`
-	Commit      string    `json:"commit"`
-	State       string    `json:"state"`
-	Error       string    `json:"error,omitempty"`
-	RequestedAt time.Time `json:"requested_at"`
-}
-
 type ConversationOptions struct {
 	// Kind identifies specialized child conversations. Empty is a normal chat.
-	Kind          string             `json:"kind,omitempty"`
-	ParentPointer *BtwParentPointer  `json:"parent_pointer,omitempty"`
-	CommitTour    *CommitTourRequest `json:"commit_tour,omitempty"`
+	Kind          string            `json:"kind,omitempty"`
+	ParentPointer *BtwParentPointer `json:"parent_pointer,omitempty"`
 	// ToolOverrides maps tool name to "on" or "off". Tools not listed use their default.
 	ToolOverrides map[string]string `json:"tool_overrides,omitempty"`
 	// DisableAllTools disables every tool by default; ToolOverrides with "on" re-enable individual tools.
@@ -1527,7 +1517,7 @@ func LatestTurnEndedWithAgent(messages []generated.Message, currentGeneration in
 // upgradeResumable reports whether an upgrade restart resumes the
 // conversation's interrupted turn: top-level conversations and delegated
 // subagents. Other children are owned by their parent (BTW readers) or by
-// their own recovery (transcription and commit-tour workers).
+// their own recovery (transcription workers).
 func upgradeResumable(conversation generated.Conversation) bool {
 	if conversation.ParentConversationID == nil {
 		return true

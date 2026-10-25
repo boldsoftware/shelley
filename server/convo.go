@@ -39,7 +39,7 @@ const (
 	roleSubagent
 	// roleBtwReader is a /btw side discussion of its parent.
 	roleBtwReader
-	// roleWorker is an internal child such as a commit tour.
+	// roleWorker is an internal child such as a transcription worker.
 	roleWorker
 )
 
@@ -1969,8 +1969,8 @@ func (cm *ConversationManager) systemPromptDisplayData(opts db.ConversationOptio
 // internal workers.
 func (cm *ConversationManager) renderSubagentSystemPrompt(ctx context.Context, opts db.ConversationOptions) (renderedSystemPrompt, error) {
 	// Only subagents use MCP tools and exe-dev integrations; internal
-	// workers (commit tours, transcriptions) don't, and
-	// notifyMCPServersChanged skips them too.
+	// workers (transcriptions) don't, and notifyMCPServersChanged skips them
+	// too.
 	var mcpServers []MCPServerInfo
 	var exeDev []ExeDevIntegrationInfo
 	if cm.role == roleSubagent {

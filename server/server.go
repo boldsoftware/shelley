@@ -400,14 +400,7 @@ type Server struct {
 	liveCalls         liveCalls
 	// reflectionEmoji fetches the VM emoji for the favicon. Tests replace it to
 	// cover reflection-present and standalone behavior without ambient metadata.
-	reflectionEmoji           func(context.Context) string
-	commitTourMu              sync.Mutex
-	commitTourJobs            map[string]*commitTourJob
-	commitTourRun             commitTourRunner
-	commitTourRecoverySlots   chan struct{}
-	commitTourRecoveryMu      sync.Mutex
-	commitTourRecoveryRunning bool
-	commitTourRecoveryPending bool
+	reflectionEmoji func(context.Context) string
 
 	// Banner, when non-empty, is shown in a full-width bar at the top of
 	// the UI. Useful for marking demo instances so they're not confused
@@ -457,34 +450,32 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	}
 	liveURL := liveSessionEndpoint()
 	s := &Server{
-		db:                      database,
-		llmManager:              llmManager,
-		toolSetConfig:           toolSetConfig,
-		activeConversations:     make(map[string]*ConversationManager),
-		stoppedParents:          make(map[string]bool),
-		stoppingParents:         make(map[string]bool),
-		deletingConversations:   make(map[string]bool),
-		logger:                  logger,
-		predictableOnly:         predictableOnly,
-		defaultModel:            defaultModel,
-		requireHeader:           requireHeader,
-		versionChecker:          NewVersionChecker(),
-		notifDispatcher:         notifications.NewDispatcher(logger),
-		shutdownCh:              make(chan struct{}),
-		hooksDir:                defaultHooksDir(),
-		exitDelay:               500 * time.Millisecond,
-		exitProcess:             os.Exit,
-		mediaRun:                runMediaCommand,
-		transcriber:             newOpenAIRecordingTranscriber(llmManager, predictableOnly),
-		transcriptionJobs:       make(map[string]transcriptionJob),
-		liveSessionURL:          liveURL,
-		liveSessionKey:          liveSessionAPIKey(liveURL),
-		liveSessionClient:       &http.Client{Timeout: 25 * time.Second},
-		channelClient:           &http.Client{Timeout: 30 * time.Second},
-		channelChatLocks:        make(map[string]*channelChatLock),
-		reflectionEmoji:         cachedReflectionEmoji,
-		commitTourJobs:          make(map[string]*commitTourJob),
-		commitTourRecoverySlots: make(chan struct{}, 2),
+		db:                    database,
+		llmManager:            llmManager,
+		toolSetConfig:         toolSetConfig,
+		activeConversations:   make(map[string]*ConversationManager),
+		stoppedParents:        make(map[string]bool),
+		stoppingParents:       make(map[string]bool),
+		deletingConversations: make(map[string]bool),
+		logger:                logger,
+		predictableOnly:       predictableOnly,
+		defaultModel:          defaultModel,
+		requireHeader:         requireHeader,
+		versionChecker:        NewVersionChecker(),
+		notifDispatcher:       notifications.NewDispatcher(logger),
+		shutdownCh:            make(chan struct{}),
+		hooksDir:              defaultHooksDir(),
+		exitDelay:             500 * time.Millisecond,
+		exitProcess:           os.Exit,
+		mediaRun:              runMediaCommand,
+		transcriber:           newOpenAIRecordingTranscriber(llmManager, predictableOnly),
+		transcriptionJobs:     make(map[string]transcriptionJob),
+		liveSessionURL:        liveURL,
+		liveSessionKey:        liveSessionAPIKey(liveURL),
+		liveSessionClient:     &http.Client{Timeout: 25 * time.Second},
+		channelClient:         &http.Client{Timeout: 30 * time.Second},
+		channelChatLocks:      make(map[string]*channelChatLock),
+		reflectionEmoji:       cachedReflectionEmoji,
 	}
 
 	s.mcp = mcp.NewManager(database, s.mcpLoginURL)
@@ -583,10 +574,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/create-directory", s.handleCreateDirectory)
 	api.Handle("GET /api/git/repos", compressionHandler(http.HandlerFunc(s.handleGitRepos)))
 	api.Handle("GET /api/git/diffs", compressionHandler(http.HandlerFunc(s.handleGitDiffs)))
-	api.Handle("GET /api/git/tour", compressionHandler(http.HandlerFunc(s.handleGitTour)))
 	api.Handle("GET /api/git/highlights", compressionHandler(http.HandlerFunc(s.handleGitHighlights)))
-	api.Handle("GET /api/git/tour/status", compressionHandler(http.HandlerFunc(s.handleCommitTourStatus)))
-	api.HandleFunc("GET /api/git/tour/media", s.handleGitTourMedia) // Already-compressed images and video
 	api.Handle("GET /api/git/graph", compressionHandler(http.HandlerFunc(s.handleGitGraph)))
 	api.Handle("GET /api/git/commit-detail", compressionHandler(http.HandlerFunc(s.handleGitCommitDetail)))
 	api.Handle("GET /api/git/diffs/", compressionHandler(http.HandlerFunc(s.handleGitDiffFiles)))
@@ -1988,7 +1976,6 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	// Recover durable queued transcription workers independently of browser
 	// connections and request lifetimes.
 	go s.recoverQueuedTranscriptions(context.Background())
-	go s.recoverCommitTourWorkers(context.Background())
 
 	// Wait for shutdown signal or server error
 	quit := make(chan os.Signal, 1)

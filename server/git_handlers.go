@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"shelley.exe.dev/committour"
+	"shelley.exe.dev/commitnotes"
 )
 
 // GitDiffInfo represents a commit or working changes
@@ -34,7 +34,6 @@ type GitDiffInfo struct {
 	Refs []string `json:"refs,omitempty"`
 	// IsMergeBase indicates the commit is the merge-base with @{upstream}.
 	IsMergeBase   bool `json:"isMergeBase,omitempty"`
-	HasTour       bool `json:"hasTour,omitempty"`
 	HasHighlights bool `json:"hasHighlights,omitempty"`
 }
 
@@ -269,15 +268,9 @@ func (s *Server) handleGitDiffs(w http.ResponseWriter, r *http.Request) {
 
 	requestedCommit := ""
 	if ref := r.URL.Query().Get("commit"); ref != "" {
-		if len(ref) < 4 || len(ref) > 64 {
+		if !validCommitHash(ref) {
 			http.Error(w, "invalid commit", http.StatusBadRequest)
 			return
-		}
-		for _, c := range ref {
-			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-				http.Error(w, "invalid commit", http.StatusBadRequest)
-				return
-			}
 		}
 		cmd := exec.Command("git", "rev-parse", "--verify", ref+"^{commit}")
 		cmd.Dir = gitRoot
@@ -293,9 +286,9 @@ func (s *Server) handleGitDiffs(w http.ResponseWriter, r *http.Request) {
 
 	// Working changes and notes are independent of the commit walk.
 	var working GitDiffInfo
-	var tours, highlights map[string]bool
+	var highlights map[string]bool
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(2)
 	go func() {
 		defer wg.Done()
 		workingStatCmd := exec.Command("git", "diff", "HEAD", "--numstat")
@@ -320,11 +313,7 @@ func (s *Server) handleGitDiffs(w http.ResponseWriter, r *http.Request) {
 	// Notes are decoration; a lookup failure must not break the diff list.
 	go func() {
 		defer wg.Done()
-		tours, _ = committour.ListNotes(gitRoot)
-	}()
-	go func() {
-		defer wg.Done()
-		highlights, _ = committour.ListHighlights(gitRoot)
+		highlights, _ = commitnotes.ListHighlights(gitRoot)
 	}()
 
 	// Compute the merge-base with the configured upstream, if any. Failures
@@ -377,7 +366,6 @@ func (s *Server) handleGitDiffs(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 	diffs = append(diffs, working)
 	for i := range commits {
-		commits[i].HasTour = tours[commits[i].ID]
 		commits[i].HasHighlights = highlights[commits[i].ID]
 	}
 	diffs = append(diffs, commits...)
@@ -389,78 +377,51 @@ func (s *Server) handleGitDiffs(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-type GitTourResponse struct {
-	Hash string          `json:"hash"`
-	Tour json.RawMessage `json:"tour"`
+// validCommitHash reports whether hash is a full or abbreviated hex commit
+// hash, so it can't be mistaken for an option or a ref expression.
+func validCommitHash(hash string) bool {
+	if len(hash) < 4 || len(hash) > 64 {
+		return false
+	}
+	for _, c := range hash {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
 
-// handleGitTour returns a commit's verified guided tour.
-func (s *Server) handleGitTour(w http.ResponseWriter, r *http.Request) {
-	cwd := r.URL.Query().Get("cwd")
-	hash := r.URL.Query().Get("hash")
-	if cwd == "" || hash == "" {
-		http.Error(w, "cwd and hash are required", http.StatusBadRequest)
-		return
-	}
-	target, err := resolveCommitTourTarget(cwd, hash)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	resolved, err := verifiedCommitTour(target)
-	if errors.Is(err, errNoVerifiedCommitTour) {
-		writeGitTourNotFound(w)
-		return
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if r.Method == http.MethodHead {
-		w.Header().Set("Content-Type", "application/json")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(GitTourResponse{Hash: target.Hash, Tour: resolved})
+// commitTarget is a commit in the git worktree containing a directory.
+type commitTarget struct {
+	Worktree string
+	Hash     string // full commit hash
 }
 
-// handleGitTourMedia serves an image or recording embedded in a tour. Blobs
-// are content-addressed, so responses are immutable.
-func (s *Server) handleGitTourMedia(w http.ResponseWriter, r *http.Request) {
-	cwd := r.URL.Query().Get("cwd")
-	blob := r.URL.Query().Get("blob")
-	if cwd == "" || blob == "" {
-		http.Error(w, "cwd and blob are required", http.StatusBadRequest)
-		return
+// resolveCommitTarget resolves hash, which may be abbreviated, in the git
+// worktree containing cwd.
+func resolveCommitTarget(cwd, hash string) (commitTarget, error) {
+	if !validCommitHash(hash) {
+		return commitTarget{}, errors.New("invalid commit hash")
 	}
-	gitRoot, err := getGitRoot(cwd)
+	if fi, err := os.Stat(cwd); err != nil || !fi.IsDir() {
+		return commitTarget{}, errors.New("invalid working directory")
+	}
+	worktree, err := getGitRoot(cwd)
 	if err != nil {
-		http.Error(w, "not a git repository", http.StatusBadRequest)
-		return
+		return commitTarget{}, errors.New("not a git repository")
 	}
-	data, mime, err := committour.ReadMedia(gitRoot, blob)
-	switch {
-	case errors.Is(err, committour.ErrNoMedia):
-		http.Error(w, "no such tour media", http.StatusNotFound)
-		return
-	case errors.Is(err, committour.ErrInvalidMedia):
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	case err != nil:
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	cmd := exec.Command("git", "rev-parse", "--verify", hash+"^{commit}")
+	cmd.Dir = worktree
+	out, err := cmd.Output()
+	if err != nil {
+		return commitTarget{}, errors.New("failed to read commit")
 	}
-	w.Header().Set("Content-Type", mime)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
-	w.Header().Set("ETag", `"`+blob+`"`)
-	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
+	return commitTarget{Worktree: worktree, Hash: strings.TrimSpace(string(out))}, nil
 }
 
 type GitHighlightsResponse struct {
-	Hash       string                 `json:"hash"`
-	Highlights *committour.Highlights `json:"highlights"`
+	Hash       string                  `json:"hash"`
+	Highlights *commitnotes.Highlights `json:"highlights"`
 }
 
 // handleGitHighlights returns a commit's highlights: its files ordered by
@@ -473,13 +434,13 @@ func (s *Server) handleGitHighlights(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cwd and hash are required", http.StatusBadRequest)
 		return
 	}
-	target, err := resolveCommitTourTarget(cwd, hash)
+	target, err := resolveCommitTarget(cwd, hash)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	note, err := committour.ReadHighlights(target.Worktree, target.Hash)
-	if errors.Is(err, committour.ErrNoNote) {
+	note, err := commitnotes.ReadHighlights(target.Worktree, target.Hash)
+	if errors.Is(err, commitnotes.ErrNoNote) {
 		http.Error(w, "no highlights", http.StatusNotFound)
 		return
 	}
@@ -487,9 +448,9 @@ func (s *Server) handleGitHighlights(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	highlights, err := committour.ParseHighlights(note)
+	highlights, err := commitnotes.ParseHighlights(note)
 	if err == nil {
-		err = committour.VerifyHighlights(target.Worktree, target.Hash, highlights)
+		err = commitnotes.VerifyHighlights(target.Worktree, target.Hash, highlights)
 	}
 	if err != nil {
 		http.Error(w, "invalid highlights: "+err.Error(), http.StatusNotFound)
@@ -497,12 +458,6 @@ func (s *Server) handleGitHighlights(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(GitHighlightsResponse{Hash: target.Hash, Highlights: highlights})
-}
-
-func writeGitTourNotFound(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotFound)
-	json.NewEncoder(w).Encode(map[string]string{"error": "no tour"})
 }
 
 // nameStatusEntry is one record from `git diff --name-status -z`: a status code
@@ -836,18 +791,6 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Optional `oldPath` names the file on the left side when it was renamed
-	// in the selected commit; without it a renamed file reads as entirely added.
-	oldPath := filePath
-	if p := r.URL.Query().Get("oldPath"); p != "" {
-		cleanOld := filepath.Clean(p)
-		if strings.HasPrefix(cleanOld, "..") || filepath.IsAbs(cleanOld) {
-			http.Error(w, "invalid oldPath", http.StatusBadRequest)
-			return
-		}
-		oldPath = cleanOld
-	}
-
 	// Left side: state before the selected commit (or HEAD for working changes)
 	var baseRef string
 	if diffID == "working" {
@@ -860,7 +803,7 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 	if baseRef == emptyTreeHash {
 		oldContent = ""
 	} else {
-		oldCmd := exec.Command("git", "show", baseRef+":"+oldPath)
+		oldCmd := exec.Command("git", "show", baseRef+":"+filePath)
 		oldCmd.Dir = gitRoot
 		oldOutput, _ := oldCmd.Output()
 		oldContent = string(oldOutput)
@@ -1177,7 +1120,6 @@ type GitGraphCommit struct {
 	Timestamp int64    `json:"timestamp"`
 	Refs      []string `json:"refs"`
 	IsHead    bool     `json:"isHead"`
-	HasTour   bool     `json:"hasTour,omitempty"`
 	// IsMergeBase indicates the commit is the merge-base with @{upstream}.
 	IsMergeBase bool `json:"isMergeBase,omitempty"`
 }
@@ -1239,9 +1181,6 @@ func (s *Server) handleGitGraph(w http.ResponseWriter, r *http.Request) {
 		mergeBase = strings.TrimSpace(string(out))
 	}
 
-	// Tour presence is decoration; a notes lookup failure must not break the graph.
-	tours, _ := committour.ListNotes(gitRoot)
-
 	var commits []GitGraphCommit
 	lines := strings.Split(strings.TrimRight(string(output), "\n"), "\n")
 	for _, line := range lines {
@@ -1294,7 +1233,6 @@ func (s *Server) handleGitGraph(w http.ResponseWriter, r *http.Request) {
 			Timestamp:   ts,
 			Refs:        refs,
 			IsHead:      isHead,
-			HasTour:     tours[hash],
 			IsMergeBase: mergeBase != "" && hash == mergeBase,
 		})
 	}

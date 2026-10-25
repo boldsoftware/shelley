@@ -37,7 +37,7 @@ await run("assembles audio and events in order, per session", async () => {
   await store.appendChunk("a", 0, bytes("hello "), 1000);
   await store.appendChunk("b", 0, bytes("other"), 1000);
   await store.appendEvents("a", 1, [{ ms: 5, type: "stop" }]);
-  await store.appendEvents("a", 0, [{ ms: 0, type: "view", where: "Tour" }]);
+  await store.appendEvents("a", 0, [{ ms: 0, type: "view", where: "Files" }]);
   assertEqual(await (await store.audio("a", "audio/webm")).text(), "hello world", "audio");
   assertEqual((await store.audio("a", "audio/webm")).type, "audio/webm", "mime");
   assertEqual(

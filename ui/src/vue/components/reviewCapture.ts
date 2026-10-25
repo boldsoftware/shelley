@@ -1,10 +1,9 @@
 // Timestamped capture of what a reviewer sees, points at, and selects while
 // narrating a recording. Times are milliseconds from the audio start (t0), so
 // the server can interleave them with word timings. The DOM is described via
-// `data-review` labels (outermost to innermost form a breadcrumb), Pierre diff
-// rows (data-line inside the diff's shadow root), and nearby block text.
-// Content the DOM cannot describe (Monaco's virtualized editor) is supplied
-// by the ReviewContext hooks.
+// `data-review` labels (outermost to innermost form a breadcrumb) and nearby
+// block text. Content the DOM cannot describe (Monaco's virtualized editor,
+// what is on screen) is supplied by the ReviewContext hooks.
 
 export type ReviewSide = "old" | "new";
 
@@ -27,7 +26,6 @@ export interface ReviewView {
 export type ReviewEvent = { ms: number; type: string } & Partial<ReviewTarget> &
   Partial<ReviewView> & {
     items?: string[];
-    scroll_top?: number;
     open?: boolean;
     state?: string;
   };
@@ -35,9 +33,9 @@ export type ReviewEvent = { ms: number; type: string } & Partial<ReviewTarget> &
 export interface ReviewContext {
   view(): ReviewView;
   // undefined defers to DOM resolution; null means "nothing there".
-  pointAt?(x: number, y: number, element: Element): ReviewTarget | null | undefined;
-  selection?(): ReviewTarget | null | undefined;
-  onScreen?(): string[] | undefined;
+  pointAt(x: number, y: number, element: Element): ReviewTarget | null | undefined;
+  selection(): ReviewTarget | null | undefined;
+  onScreen(): string[];
 }
 
 export interface ReviewCaptureState {
@@ -64,7 +62,7 @@ export function collapse(text: string | null | undefined, limit = POINTER_TEXT_L
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
 }
 
-// Parent across shadow boundaries.
+// Parent across shadow boundaries; Monaco's context menu is in a shadow root.
 function composedParent(node: Node): Node | null {
   if (node.parentNode instanceof ShadowRoot) return node.parentNode.host;
   return node.parentNode;
@@ -91,37 +89,6 @@ export function breadcrumb(node: Node | null): string[] {
       labels.unshift(current.dataset.review);
   }
   return labels;
-}
-
-interface DiffRow {
-  row: Element;
-  file?: string;
-  side: ReviewSide;
-  line: number;
-}
-
-// A Pierre diff row (code line or its gutter number) containing node.
-function diffRow(node: Node | null): DiffRow | null {
-  const row = composedClosest(node, "[data-line],[data-column-number]");
-  if (!row || !(row.getRootNode() instanceof ShadowRoot)) return null;
-  const line = Number(row.getAttribute("data-line") ?? row.getAttribute("data-column-number"));
-  if (!Number.isFinite(line)) return null;
-  const type = row.getAttribute("data-line-type") ?? "";
-  const code = row.closest("code");
-  let side: ReviewSide = "new";
-  if (code?.hasAttribute("data-deletions") || type === "change-deletion") side = "old";
-  const file = (composedClosest(row, "[data-review-file]") as HTMLElement | null)?.dataset
-    .reviewFile;
-  return { row, file, side, line };
-}
-
-// The code text of a gutter or content row, found by its line index.
-function diffRowText(row: DiffRow): string {
-  if (row.row.hasAttribute("data-line")) return row.row.textContent ?? "";
-  const index = row.row.getAttribute("data-line-index");
-  const code = row.row.closest("code");
-  const content = index ? code?.querySelector(`[data-line][data-line-index="${index}"]`) : null;
-  return content?.textContent ?? "";
 }
 
 function joinWhere(labels: string[], leaf?: string): string {
@@ -232,20 +199,6 @@ export function pointedText(block: Element, caret: Caret | null): string {
 export function describeNode(node: Node | null, caret: Caret | null = null): ReviewTarget | null {
   if (!node) return null;
   const labels = breadcrumb(node);
-  const row = diffRow(node);
-  if (row) {
-    return {
-      where: joinWhere(labels, `${row.side} ${row.line}`),
-      file: row.file,
-      side: row.side,
-      line: row.line,
-      text: collapse(diffRowText(row)),
-    };
-  }
-  // Inside a diff but off its rows (padding, separators): the whole code
-  // block's text says nothing about where the pointer is.
-  if (node.getRootNode() instanceof ShadowRoot)
-    return labels.length ? { where: joinWhere(labels) } : null;
   const control = composedClosest(node, "button,a,select,[role=option],[role=treeitem]");
   if (control) return { where: joinWhere(labels, `"${elementLabel(control)}"`) };
   // Text outside any block element still says what the pointer is on.
@@ -270,152 +223,14 @@ export function elementAt(x: number, y: number): Element | null {
   return element;
 }
 
-// The diffs' shadow roots, where tour code lives.
-function shadowRoots(root: Element): ShadowRoot[] {
-  return Array.from(root.querySelectorAll("diffs-container"))
-    .map((element) => element.shadowRoot)
-    .filter((shadow): shadow is ShadowRoot => !!shadow);
-}
-
-type ComposedSelection = Selection & {
-  getComposedRanges?: (options: { shadowRoots: ShadowRoot[] }) => StaticRange[];
-};
-type ShadowSelectionRoot = ShadowRoot & { getSelection?: () => Selection | null };
-
-// The DOM selection within root, including selections inside diff shadow
-// roots. Returns null when nothing (non-whitespace) is selected there.
+// The DOM selection within root, or null when nothing (non-whitespace) is
+// selected there.
 export function describeSelection(root: Element): ReviewTarget | null {
-  // Chrome retargets a selection inside a shadow root to its host, so the
-  // document selection looks collapsed even when text is selected.
-  const selection = window.getSelection() as ComposedSelection | null;
-  if (!selection || selection.rangeCount === 0) return null;
-  const roots = shadowRoots(root);
-  let text = selection.toString();
-  let start: Node | null = selection.anchorNode;
-  let end: Node | null = selection.focusNode;
-  // Safari 17–18.1 shipped a variadic getComposedRanges that rejects this
-  // form; the anchor and focus nodes then stand in.
-  try {
-    const [range] = selection.getComposedRanges?.({ shadowRoots: roots }) ?? [];
-    if (range) {
-      start = range.startContainer;
-      end = range.endContainer;
-    }
-  } catch {
-    // Keep anchorNode/focusNode.
-  }
-  if (!text.trim()) {
-    for (const shadow of roots as ShadowSelectionRoot[]) {
-      const inner = shadow.getSelection?.();
-      if (inner && !inner.isCollapsed && inner.toString().trim()) {
-        text = inner.toString();
-        start = inner.anchorNode;
-        end = inner.focusNode;
-        break;
-      }
-    }
-  }
-  if (!text.trim() || !composedContains(root, start)) return null;
-  const clipped = clipSelection(text);
-  const labels = breadcrumb(start);
-  const first = diffRow(start);
-  const last = diffRow(end);
-  if (first) {
-    const lines =
-      last && last.side === first.side && last.file === first.file
-        ? [Math.min(first.line, last.line), Math.max(first.line, last.line)]
-        : [first.line, first.line];
-    const span = lines[0] === lines[1] ? `${lines[0]}` : `${lines[0]}–${lines[1]}`;
-    return {
-      where: joinWhere(labels, `${first.side} ${span}`),
-      file: first.file,
-      side: first.side,
-      line: lines[0],
-      end_line: lines[1],
-      text: clipped,
-    };
-  }
-  return { where: joinWhere(labels), text: clipped };
-}
-
-function intersectsViewport(rect: DOMRect, top: number, bottom: number): boolean {
-  return rect.bottom > top && rect.top < bottom && rect.height > 0;
-}
-
-// First/last row of a code column that intersects [top, bottom].
-function visibleRowSpan(rows: Element[], top: number, bottom: number): [number, number] | null {
-  let low = 0;
-  let high = rows.length;
-  while (low < high) {
-    const mid = (low + high) >> 1;
-    if (rows[mid].getBoundingClientRect().bottom <= top) low = mid + 1;
-    else high = mid;
-  }
-  let last = -1;
-  for (let index = low; index < rows.length; index++) {
-    if (rows[index].getBoundingClientRect().top >= bottom) break;
-    last = index;
-  }
-  if (last < low) return null;
-  const lineOf = (row: Element) => Number(row.getAttribute("data-line"));
-  return [lineOf(rows[low]), lineOf(rows[last])];
-}
-
-function visibleDiffLines(item: Element, top: number, bottom: number): string {
-  const spans: string[] = [];
-  for (const host of item.querySelectorAll("diffs-container")) {
-    for (const code of host.shadowRoot?.querySelectorAll("code") ?? []) {
-      const rows = Array.from(code.querySelectorAll("[data-line]"));
-      // Split columns hold one side; a unified column interleaves both.
-      const sides: Array<[ReviewSide, Element[]]> = code.hasAttribute("data-deletions")
-        ? [["old", rows]]
-        : code.hasAttribute("data-additions")
-          ? [["new", rows]]
-          : [
-              [
-                "new",
-                rows.filter((row) => row.getAttribute("data-line-type") !== "change-deletion"),
-              ],
-              [
-                "old",
-                rows.filter((row) => row.getAttribute("data-line-type") === "change-deletion"),
-              ],
-            ];
-      for (const [side, sideRows] of sides) {
-        const span = visibleRowSpan(sideRows, top, bottom);
-        if (span) spans.push(`${side} ${span[0] === span[1] ? span[0] : `${span[0]}–${span[1]}`}`);
-      }
-    }
-  }
-  return spans.join(", ");
-}
-
-// Labels of the `[data-review-item]` regions intersecting the viewport of
-// root, with visible diff line ranges appended. A region is left out when a
-// visible region inside it (whose label extends its label) already names it,
-// and a leading crumb shared by every region (e.g. "Tour") is dropped.
-export function describeOnScreen(root: Element): string[] {
-  const bounds = root.getBoundingClientRect();
-  const top = Math.max(bounds.top, 0);
-  const bottom = Math.min(bounds.bottom, window.innerHeight);
-  const skip = breadcrumb(root).length;
-  const visible: Array<{ crumbs: string[]; lines: string }> = [];
-  for (const item of root.querySelectorAll<HTMLElement>("[data-review-item]")) {
-    if (!intersectsViewport(item.getBoundingClientRect(), top, bottom)) continue;
-    visible.push({
-      crumbs: breadcrumb(item).slice(skip),
-      lines: visibleDiffLines(item, top, bottom),
-    });
-  }
-  const labels = visible.map(({ crumbs }) => crumbs.join(" › "));
-  const first = visible[0]?.crumbs[0];
-  const shared = visible.every(({ crumbs }) => crumbs.length > 1 && crumbs[0] === first) ? 1 : 0;
-  return visible
-    .filter((_, index) => !labels.some((other) => other.startsWith(`${labels[index]} › `)))
-    .map(({ crumbs, lines }) => {
-      const label = crumbs.slice(shared).join(" › ");
-      return lines ? `${label} (${lines})` : label;
-    });
+  const selection = window.getSelection();
+  const start = selection?.anchorNode ?? null;
+  const text = selection?.toString() ?? "";
+  if (!text.trim() || !root.contains(start)) return null;
+  return { where: joinWhere(breadcrumb(start)), text: clipSelection(text) };
 }
 
 function openDialogs(): string[] {
@@ -490,18 +305,13 @@ export function startReviewCapture(options: {
   }
 
   function checkScreen() {
-    const items = context.onScreen?.() ?? describeOnScreen(root);
+    const items = context.onScreen();
     const key = JSON.stringify(items);
     if (key === screenKey) return;
     screenKey = key;
     state.screen = items[0] ?? "";
     publish();
-    const scroller = root.querySelector<HTMLElement>("[data-review-scroll]");
-    record({
-      type: "on_screen",
-      items,
-      scroll_top: scroller ? Math.round(scroller.scrollTop) : undefined,
-    });
+    record({ type: "on_screen", items });
   }
 
   function checkPointer() {
@@ -517,7 +327,7 @@ export function startReviewCapture(options: {
       onPointerLeave();
       return;
     }
-    const provided = context.pointAt?.(x, y, element);
+    const provided = context.pointAt(x, y, element);
     const target = provided === undefined ? describeNode(element, caretAt(x, y)) : provided;
     const key = targetKey(target);
     if (key === pointerKey) return;
@@ -530,7 +340,7 @@ export function startReviewCapture(options: {
 
   function checkSelection() {
     selectionTimer = null;
-    const provided = context.selection?.();
+    const provided = context.selection();
     const target = provided === undefined ? describeSelection(root) : provided;
     const key = targetKey(target);
     if (key === selectionKey) return;
@@ -598,7 +408,7 @@ export function startReviewCapture(options: {
       pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 5;
     pointerDown = null;
     if (!(element instanceof Element) || dragged || ignored(event)) return;
-    const provided = context.pointAt?.(event.clientX, event.clientY, element);
+    const provided = context.pointAt(event.clientX, event.clientY, element);
     const target =
       provided === undefined
         ? describeNode(element, caretAt(event.clientX, event.clientY))
@@ -638,7 +448,7 @@ export function startReviewCapture(options: {
   window.addEventListener("blur", onBlur);
   window.addEventListener("focus", onFocus);
   // Backstop for changes without DOM events: Monaco selections and scrolls,
-  // lazily rendered diffs, keyboard navigation, dialogs.
+  // keyboard navigation, dialogs.
   const poll = window.setInterval(() => {
     checkView();
     checkScreen();
