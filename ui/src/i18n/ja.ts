@@ -20,7 +20,6 @@ export const ja: TranslationKeys = {
   newConversation: "新しい会話",
   moreOptions: "その他のオプション",
   actions: "操作",
-  conversations: "会話",
 
   // Overflow Menu
   diffs: "差分",

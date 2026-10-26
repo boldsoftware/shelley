@@ -20,7 +20,6 @@ export const vi: TranslationKeys = {
   newConversation: "Hội thoại mới",
   moreOptions: "Tùy chọn khác",
   actions: "Thao tác",
-  conversations: "Lịch sử",
 
   // Overflow Menu
   diffs: "Thay đổi",

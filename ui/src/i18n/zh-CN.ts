@@ -20,7 +20,6 @@ export const zhCN: TranslationKeys = {
   newConversation: "新建对话",
   moreOptions: "更多选项",
   actions: "操作",
-  conversations: "对话",
 
   // Overflow Menu
   diffs: "差异对比",

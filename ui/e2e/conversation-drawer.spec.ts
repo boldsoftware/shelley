@@ -723,7 +723,8 @@ test.describe("conversation drawer startup and app bar", () => {
     await addUserFilter.click();
     await expectQuery(editor, "user:");
     await expect(userPanel).toBeVisible();
-    await page.locator(".drawer-title").click();
+    // Click empty header space (left of the actions) to dismiss the panel.
+    await page.locator(".drawer-header").click({ position: { x: 24, y: 24 } });
     await expect(userPanel).toHaveCount(0);
     await addUserFilter.click();
     await expect(userPanel).toBeVisible();
@@ -1186,7 +1187,7 @@ test.describe("conversation drawer startup and app bar", () => {
     await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
   });
 
-  test("starts expanded for multiple conversations with aligned app-bar titles", async ({
+  test("starts expanded with an untitled header aligned to the app bar", async ({
     page,
   }) => {
     await stubConversationList(page, [conversation("first"), conversation("second")]);
@@ -1195,44 +1196,30 @@ test.describe("conversation drawer startup and app bar", () => {
 
     const drawer = page.locator(".drawer");
     await expect(drawer).not.toHaveClass(/collapsed/);
-    await expect(page.locator(".drawer-title")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
+    await expect(drawer.locator(".drawer-title")).toHaveCount(0);
+    await expect(drawer.getByText("Conversations", { exact: true })).toHaveCount(0);
 
     const metrics = await page.evaluate(() => {
-      function inspect(selector: string) {
+      function rect(selector: string) {
         const element = document.querySelector<HTMLElement>(selector);
         if (!element) throw new Error(`Missing ${selector}`);
-        const rect = element.getBoundingClientRect();
-        const style = getComputedStyle(element);
-        return {
-          top: rect.top,
-          bottom: rect.bottom,
-          fontFamily: style.fontFamily,
-          fontSize: style.fontSize,
-          fontWeight: style.fontWeight,
-          lineHeight: style.lineHeight,
-          letterSpacing: style.letterSpacing,
-          margin: style.margin,
-        };
+        return element.getBoundingClientRect();
       }
       return {
-        drawerHeader: inspect(".drawer-header"),
-        chatHeader: inspect(".header"),
-        drawerTitle: inspect(".drawer-title"),
-        chatTitle: inspect(".header-title"),
+        drawerHeader: rect(".drawer-header"),
+        drawerActions: rect(".drawer-header-actions"),
+        chatHeader: rect(".header"),
       };
     });
 
     expect(metrics.drawerHeader.top).toBe(metrics.chatHeader.top);
     expect(metrics.drawerHeader.bottom).toBe(metrics.chatHeader.bottom);
-    expect(metrics.drawerTitle.top).toBe(metrics.chatTitle.top);
-    expect(metrics.drawerTitle.bottom).toBe(metrics.chatTitle.bottom);
-    expect(metrics.drawerTitle.fontFamily).toBe(metrics.chatTitle.fontFamily);
-    expect(metrics.drawerTitle.fontSize).toBe(metrics.chatTitle.fontSize);
-    expect(metrics.drawerTitle.fontWeight).toBe(metrics.chatTitle.fontWeight);
-    expect(metrics.drawerTitle.lineHeight).toBe(metrics.chatTitle.lineHeight);
-    expect(metrics.drawerTitle.letterSpacing).toBe(metrics.chatTitle.letterSpacing);
-    expect(metrics.drawerTitle.margin).toBe("0px");
-    expect(metrics.chatTitle.margin).toBe("0px");
+    // Actions stay pinned to the right edge (inside the header's 1rem padding).
+    expect(metrics.drawerHeader.right - metrics.drawerActions.right).toBe(16);
+
+    await page.getByRole("button", { name: "View Archived" }).click();
+    await expect(drawer.locator(".drawer-title")).toHaveText("Archived");
   });
 
   test("manual collapse survives reload with a single conversation", async ({ page }) => {

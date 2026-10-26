@@ -20,7 +20,6 @@ export const en: TranslationKeys = {
   newConversation: "New Conversation",
   moreOptions: "More options",
   actions: "Actions",
-  conversations: "Conversations",
 
   // Overflow Menu
   diffs: "Diffs",

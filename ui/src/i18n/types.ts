@@ -20,7 +20,6 @@ export interface TranslationKeys {
   newConversation: string;
   moreOptions: string;
   actions: string;
-  conversations: string;
 
   // Overflow Menu
   diffs: string;

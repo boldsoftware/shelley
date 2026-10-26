@@ -20,7 +20,6 @@ export const ru: TranslationKeys = {
   newConversation: "Новый диалог",
   moreOptions: "Ещё",
   actions: "Действия",
-  conversations: "Диалоги",
 
   // Overflow Menu
   diffs: "Изменения",
