@@ -124,6 +124,8 @@ func TestChannelImageReplies(t *testing.T) {
 						w.Header().Set("Content-Length", "100")
 					}
 					fmt.Fprint(w, `{"message_id":"outgoing-image"}`)
+				case "/typing":
+					fmt.Fprint(w, `{"ok":true}`)
 				default:
 					t.Errorf("unexpected gateway request: %s", r.URL.Path)
 					http.NotFound(w, r)

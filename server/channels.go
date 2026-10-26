@@ -204,6 +204,9 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 			return err
 		}
 	}
+	if conv.ExternalEndpoint != nil {
+		s.showChannelTyping(ctx, conversationID)
+	}
 	first, err := manager.AcceptUserMessage(ctx, service, modelID, message)
 	if err != nil {
 		return err
@@ -424,6 +427,16 @@ func (s *Server) channelMessageDelivered(ctx context.Context, conversationID, id
 	return n != 0, err
 }
 
+// showChannelTyping shows the typing indicator in the external chat that
+// conversationID is bound to, until the next message sent there clears it.
+// It is best-effort: a failure is logged.
+func (s *Server) showChannelTyping(ctx context.Context, conversationID string) {
+	var answer struct{}
+	if err := s.callChannel(ctx, conversationID, "/typing", struct{}{}, &answer); err != nil {
+		s.logger.Warn("Failed to show channel typing indicator", "conversationID", conversationID, "error", err)
+	}
+}
+
 // channelSendError is an endpoint's refusal to send. The messages gateway
 // refuses with 403 opted_out, 409 no_chat, 429 rate_limited or unanswered,
 // and 503 line_paused or chat_critical; its message says what to do.
@@ -529,13 +542,21 @@ func (e *channelSendError) refused() bool {
 var errChannelMaybeDelivered = errors.New("it may have been delivered anyway")
 
 // channelChat is the claudetool.UserChat of a conversation bound to an
-// external chat: message_user's messages go to the chat.
+// external chat: message_user's messages go to the chat, unless they answer
+// a message typed in Shelley's UI (see answersChat).
 type channelChat struct {
 	s              *Server
 	conversationID string
 }
 
 func (c channelChat) Send(ctx context.Context, text string, attachments []claudetool.MessageUserAttachment, target claudetool.UserMessage) error {
+	ok, err := c.answersChat(ctx, target)
+	if err != nil {
+		return fmt.Errorf("nothing was sent: %w", err)
+	}
+	if !ok {
+		return nil
+	}
 	var ids []string
 	for _, attachment := range attachments {
 		id, err := c.uploadAttachment(ctx, attachment)
@@ -544,8 +565,23 @@ func (c channelChat) Send(ctx context.Context, text string, attachments []claude
 		}
 		ids = append(ids, id)
 	}
-	_, err := c.s.sendChannelMessage(ctx, c.conversationID, text, target.ExternalID, ids)
+	_, err = c.s.sendChannelMessage(ctx, c.conversationID, text, target.ExternalID, ids)
 	return chatDeliveryError(err)
+}
+
+// answersChat reports whether a message replying to target, or if target
+// is zero to the user's latest message, answers a message from the chat
+// rather than one typed in Shelley's UI, which is answered there only. The
+// chat began the conversation, so before any message it is the chat's.
+func (c channelChat) answersChat(ctx context.Context, target claudetool.UserMessage) (bool, error) {
+	if target.SequenceID != 0 {
+		return target.ExternalID != "", nil
+	}
+	typed, err := c.s.db.ListTypedUserMessages(ctx, c.conversationID)
+	if err != nil {
+		return false, err
+	}
+	return len(typed) == 0 || typed[0].ExternalMessageID != nil, nil
 }
 
 // React reacts to target in the chat, as a tapback if emoji is one. A

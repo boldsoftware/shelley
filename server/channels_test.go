@@ -386,6 +386,10 @@ func TestChannelMessageInjectsAfterCurrentTool(t *testing.T) {
 			var once sync.Once
 			releaseTool := func() { once.Do(func() { close(release) }) }
 			endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/typing" {
+					fmt.Fprint(w, `{"ok":true}`)
+					return
+				}
 				if r.URL.Path != "/send" {
 					t.Errorf("unexpected request: %s", r.URL.Path)
 				}
