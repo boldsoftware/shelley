@@ -1,5 +1,5 @@
 <!-- compact_in_place tool: "index" lists the context, "compact" records an
-     in-place compaction. The header says which; the body shows the output. -->
+     in-place compaction, "skip" one that compacts nothing. The header says which; the body shows the output. -->
 <template>
   <div class="tool" :data-testid="isComplete ? 'tool-call-completed' : 'tool-call-running'">
     <div class="tool-header" @click="isExpanded = !isExpanded">
@@ -60,6 +60,7 @@ const resultText = computed(
 );
 
 const summary = computed(() => {
+  if (input.value.action === "skip") return "compact: skip";
   if (input.value.action !== "compact") return "compact: index";
   if (isComplete.value && !props.hasError) return resultText.value.split(";")[0];
   const collapse = input.value.collapse?.length ?? 0;

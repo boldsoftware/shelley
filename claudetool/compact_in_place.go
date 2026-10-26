@@ -16,8 +16,8 @@ const CompactInPlaceName = "compact_in_place"
 type InPlaceCompactor interface {
 	// Index lists the part of the LLM's current view that can be compacted.
 	Index(ctx context.Context) (string, error)
-	// Compact validates and records in; the turn continues on the compacted
-	// history.
+	// Compact validates and records in, a compact or skip; the turn
+	// continues on the compacted history.
 	Compact(ctx context.Context, in CompactInPlaceInput) (string, error)
 }
 
@@ -55,15 +55,17 @@ type CompactInPlaceInput struct {
 
 const compactInPlaceDescription = `Compact this conversation's context in place.
 Call with action "index" first: it lists the older messages and explains what to do.
-(Right after a "Context is Nk." nudge, which carries the index, you can skip it.)
+(Right after a nudge that carries the index, go straight to "compact".)
 Then call with action "compact" to collapse message ranges into short notes
-and trim tool outputs. Originals stay in the database.`
+and trim tool outputs. Originals stay in the database.
+If nothing is worth compacting, call with action "skip": it compacts nothing,
+but drops the context nudges and earlier compact_in_place calls from your context.`
 
 const compactInPlaceSchema = `{
   "type": "object",
   "required": ["action"],
   "properties": {
-    "action": {"type": "string", "enum": ["index", "compact"]},
+    "action": {"type": "string", "enum": ["index", "compact", "skip"]},
     "trim": {
       "type": "array",
       "description": "compact: ids of index rows whose tool outputs to trim",
@@ -97,10 +99,10 @@ func CompactInPlaceTool(c InPlaceCompactor) *llm.Tool {
 			switch in.Action {
 			case "index":
 				text, err = c.Index(ctx)
-			case "compact":
+			case "compact", "skip":
 				text, err = c.Compact(ctx, in)
 			default:
-				err = fmt.Errorf("action must be index or compact")
+				err = fmt.Errorf("action must be index, compact or skip")
 			}
 			if err != nil {
 				return llm.ErrorToolOut(err)

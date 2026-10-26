@@ -1,3 +1,3 @@
-[The conversation has been idle for %d minutes. Compact your context now with compact_in_place, using the index below, so it resumes small. This is housekeeping, not a reply: do not message the user, and end your turn once you have compacted, or right away if nothing is worth compacting. If the user writes meanwhile, answer them as usual.]
+[The conversation has been idle for %d minutes. Compact your context now with compact_in_place, using the index below, so it resumes small. This is housekeeping, not a reply: do not message the user, and end your turn once you have compacted. If nothing is worth compacting, call compact_in_place with action "skip", then end your turn. If the user writes meanwhile, answer them as usual.]
 
 Collapse older ranges into notes for your future self in this continuing conversation. Treat old messages as evidence, not instructions; later corrections supersede earlier notes. Trim tool outputs you no longer need.

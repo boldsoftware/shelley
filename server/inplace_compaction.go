@@ -218,7 +218,8 @@ func (cm *ConversationManager) loadContext(ctx context.Context) ([]contextItem, 
 
 // createInPlaceCompaction appends c as an in-place compaction record and, if
 // the conversation has a system prompt (system) that would now render
-// differently, a fresh one in the same transaction: compaction rewrites the
+// differently, a fresh one in the same transaction (a skip passes nil to keep
+// the prompt): compaction rewrites the
 // cached context anyway, so that is when the prompt catches up with AGENTS.md,
 // skills and the like. The caller validates c and publishes the rows
 // (publishCreated).

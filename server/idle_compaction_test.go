@@ -642,3 +642,31 @@ func TestCacheWarmConnectionChangesDuringRequests(t *testing.T) {
 		})
 	}
 }
+
+// TestIdleCompactionSkip: an agent with nothing to compact skips, which
+// still drops the nudge and its index. Kept, they would grow the context by
+// the index every idle cycle.
+func TestIdleCompactionSkip(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, _ := newIdlePolicyHarness(t, db.ConversationOptions{IdleCompactionMinutes: 3, IdleCompactionPrompt: "Keep everything."})
+		defer stopActiveConversationLoops(h.server)
+		for i, msg := range []string{"echo: basil sprouted", "echo: mint spreads"} {
+			<-time.After(3 * time.Minute)
+			synctest.Wait()
+			requireIdleCompactions(t, h, i+1)
+			h.Chat(msg)
+			synctest.Wait()
+			got := requestDump(h.llm.GetLastRequest())
+			if strings.Contains(got, "has been idle") || strings.Contains(got, "## Index") {
+				t.Fatalf("skipped idle turn left its nudge in context:\n%s", got)
+			}
+			// Each skip hides the call before it; only its own stays.
+			if n := strings.Count(got, `"ToolName":"compact_in_place"`); n != 1 {
+				t.Fatalf("%d compact_in_place calls in context, want 1:\n%s", n, got)
+			}
+			if !strings.Contains(got, "rosemary arrives tomorrow") || !strings.Contains(got, msg) {
+				t.Fatalf("context lost the conversation:\n%s", got)
+			}
+		}
+	})
+}

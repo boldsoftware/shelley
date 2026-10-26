@@ -905,11 +905,12 @@ func TestBuildCompaction(t *testing.T) {
 		return claudetool.CompactCollapse{From: from, To: to, Note: "n"}
 	}
 	for want, in := range map[string]claudetool.CompactInPlaceInput{
-		"nothing to compact": {},
-		"recent part":        {Collapse: []claudetool.CompactCollapse{col("9", "10")}},
-		"at most":            {Collapse: []claudetool.CompactCollapse{col("2", "4")}},
-		"overlaps":           {Collapse: []claudetool.CompactCollapse{col("8", "9"), col("9", "9")}},
-		"note is empty":      {Collapse: []claudetool.CompactCollapse{{From: "8", To: "9"}}},
+		"nothing to compact":    {},
+		"skip compacts nothing": {Action: "skip", Trim: []claudetool.IndexID{"8"}},
+		"recent part":           {Collapse: []claudetool.CompactCollapse{col("9", "10")}},
+		"at most":               {Collapse: []claudetool.CompactCollapse{col("2", "4")}},
+		"overlaps":              {Collapse: []claudetool.CompactCollapse{col("8", "9"), col("9", "9")}},
+		"note is empty":         {Collapse: []claudetool.CompactCollapse{{From: "8", To: "9"}}},
 		// The user's messages may only be collapsed on their own.
 		"collapse 5-8: covers 6, which can only be collapsed on its own; collapse e.g. 5, 8 instead":             {Collapse: []claudetool.CompactCollapse{col("5", "8")}},
 		"collapse 6-7: covers 6, which can only be collapsed on its own; collapse each of those rows on its own": {Collapse: []claudetool.CompactCollapse{col("6", "7")}},
@@ -1252,5 +1253,57 @@ func TestCompactRequestEndpoint(t *testing.T) {
 	c.seqWith(`Compact your context in place.\n\nkeep the plan`)
 	if !hasTool(c.agentRequest(), claudetool.CompactInPlaceName) {
 		t.Fatal("compact_in_place not offered to the agent")
+	}
+}
+
+// TestCompactSkip: skip compacts nothing and keeps the system prompt, so the
+// cache survives; it drops the evidence of compacting, and with none there
+// is nothing to record.
+func TestCompactSkip(t *testing.T) {
+	t.Parallel()
+	c := newCompactTestConversation(t, db.ConversationOptions{ToolOverrides: map[string]string{claudetool.CompactInPlaceName: "on"}})
+	dir := t.TempDir()
+	if err := c.database.UpdateConversationCwd(t.Context(), c.id, dir); err != nil {
+		t.Fatal(err)
+	}
+	c.turn("hello")
+	c.turn("bash: echo FIRST_OUTPUT")
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("FRESH_GUIDANCE"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rows := func(typ db.MessageType) int {
+		n := 0
+		for _, m := range listMessages(t, c.database, c.id) {
+			if m.Type == string(typ) {
+				n++
+			}
+		}
+		return n
+	}
+	skip := func() string {
+		t.Helper()
+		c.turn(`compact_in_place: {"action":"skip"}`)
+		out, isErr := c.lastToolOutput()
+		if isErr {
+			t.Fatalf("skip: %s", out)
+		}
+		return out
+	}
+
+	if out := skip(); rows(db.MessageTypeInPlaceCompaction) != 0 || !strings.Contains(out, "Nothing to skip") {
+		t.Fatalf("skip with nothing to drop recorded a compaction: %q", out)
+	}
+	c.turn(`compact_in_place: {"action":"index"}`)
+	skip()
+	if n := rows(db.MessageTypeInPlaceCompaction); n != 1 {
+		t.Fatalf("compactions = %d, want 1", n)
+	}
+	c.turn("echo: AFTER")
+	req := requestDump(c.ps.GetLastRequest())
+	if strings.Contains(req, `"ToolInput":{"action":"index"}`) || strings.Contains(req, "## Index") {
+		t.Fatalf("skip kept the earlier compact_in_place call:\n%s", req)
+	}
+	if rows(db.MessageTypeSystem) != 1 || strings.Contains(c.ps.GetLastRequest().System[0].Text, "FRESH_GUIDANCE") {
+		t.Fatal("skip refreshed the system prompt")
 	}
 }

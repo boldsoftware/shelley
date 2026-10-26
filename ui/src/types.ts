@@ -459,6 +459,19 @@ export function cwdChange(message: Message): { from: string; to: string } | null
   }
 }
 
+// compactsSomething reports whether an in-place compaction record collapses
+// or trims anything; a skip only drops context nudges and earlier calls.
+export function compactsSomething(message: Message): boolean {
+  try {
+    const c =
+      (typeof message.user_data === "string" ? JSON.parse(message.user_data) : message.user_data) ||
+      {};
+    return Boolean(c.squishes?.length || c.trims?.length);
+  } catch {
+    return true;
+  }
+}
+
 // A context-size nudge (see recordContextNudge): the size line and the
 // compact_in_place index sent with it; null if the message isn't one. Like cwd
 // changes, the agent reads it but the user didn't type it, so it renders as a

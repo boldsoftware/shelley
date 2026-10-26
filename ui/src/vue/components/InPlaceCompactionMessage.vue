@@ -7,7 +7,8 @@
   >
     <summary class="message message-gitinfo msg-distill-container msg-compaction-event-header">
       <span class="msg-compaction-event-label">
-        Compacted context<span v-if="counts"> · {{ counts }}</span>
+        <template v-if="counts">Compacted context · {{ counts }}</template>
+        <template v-else>Compaction skipped</template>
       </span>
       <ToolChevron :expanded="false" />
     </summary>

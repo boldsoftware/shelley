@@ -148,6 +148,7 @@
 import { computed, inject, nextTick, onUnmounted, ref, watch } from "vue";
 import Popover from "primevue/popover";
 import {
+  compactsSomething,
   contextNudge,
   isCompactionCarried,
   type Message,
@@ -402,6 +403,8 @@ function buildEntries(
     }
 
     if (m.type === "inplacecompaction") {
+      // A skip compacts nothing; it is not a landmark.
+      if (!compactsSomething(m)) continue;
       entries.push({
         id: fragmentForMessage(m.message_id),
         kind: "compaction",

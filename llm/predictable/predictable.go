@@ -187,6 +187,9 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 	}
 
 	if id, ok := idleNudgeFirstRow(req); ok {
+		if strings.Contains(req.Messages[len(req.Messages)-1].Content[0].Text, "Keep everything.") {
+			return s.makeToolResponse("compact_in_place", json.RawMessage(`{"action":"skip"}`), inputTokens), nil
+		}
 		input, _ := json.Marshal(map[string]any{"action": "compact", "collapse": []map[string]string{{"from": id, "to": id, "note": "IDLE NOTE"}}})
 		return s.makeToolResponse("compact_in_place", input, inputTokens), nil
 	}
@@ -1300,7 +1303,7 @@ var idleIndexRow = regexp.MustCompile("(?m)^id {2,}role.*\n(\\S+) ")
 
 // idleNudgeFirstRow returns the first row id of the compact_in_place index in
 // an idle compaction nudge ending req, which predictable answers by
-// collapsing that row.
+// collapsing that row, or skips when the nudge says "Keep everything.".
 func idleNudgeFirstRow(req *llm.Request) (string, bool) {
 	if len(req.Messages) == 0 {
 		return "", false

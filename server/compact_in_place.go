@@ -93,6 +93,15 @@ func (cm *ConversationManager) compactMidTurn(ctx context.Context, generation ui
 		c.HiddenSequenceIDs, c.HiddenToolUseIDs = compactionEvidence(after)
 		after, err = applyInPlaceCompaction(items, c, cm.conversationID, 0)
 	}
+	if err == nil && in.Action == "skip" && len(c.HiddenSequenceIDs)+len(c.HiddenToolUseIDs) == 0 {
+		cm.loopLifecycleMu.Unlock()
+		return "Nothing to skip: no context nudges or earlier compact_in_place calls in context.", nil
+	}
+	if in.Action == "skip" {
+		// Keep the prompt, and most of the cache with it: dropping the
+		// evidence touches only the history since the last nudge or call.
+		system = nil
+	}
 	var created []generated.Message
 	if err == nil {
 		created, err = cm.createInPlaceCompaction(context.WithoutCancel(ctx), c, system)
@@ -108,6 +117,9 @@ func (cm *ConversationManager) compactMidTurn(ctx context.Context, generation ui
 	}
 	if err := cm.publishCreated(ctx, created...); err != nil {
 		return "", err
+	}
+	if in.Action == "skip" {
+		return fmt.Sprintf("Skipped; history ~%d -> ~%d tokens.", itemTokens(items), itemTokens(after)), nil
 	}
 	return fmt.Sprintf("Compacted: %d collapsed, %d trimmed; history ~%d -> ~%d tokens.",
 		len(c.Squishes), len(c.Trims), itemTokens(items), itemTokens(after)), nil
@@ -273,8 +285,15 @@ func compactionEvidence(items []contextItem) (seqs []int64, toolUseIDs []string)
 // every problem at once.
 func buildCompaction(history []contextItem, keepRecentTokens int, in claudetool.CompactInPlaceInput) (db.InPlaceCompaction, error) {
 	var c db.InPlaceCompaction
+	if in.Action == "skip" {
+		// Compacting nothing still drops the evidence (see compactMidTurn).
+		if len(in.Trim) > 0 || len(in.Collapse) > 0 {
+			return c, fmt.Errorf("skip compacts nothing: leave out trim and collapse")
+		}
+		return c, nil
+	}
 	if len(in.Trim) == 0 && len(in.Collapse) == 0 {
-		return c, fmt.Errorf("nothing to compact: give trim and/or collapse")
+		return c, fmt.Errorf("nothing to compact: give trim and/or collapse, or skip")
 	}
 	items, err := compactionView(history)
 	if err != nil {

@@ -191,9 +191,9 @@ for (const { name, data, headline } of [
     headline: "Compacted context · 1 tool output",
   },
   {
-    name: "housekeeping without summaries",
+    name: "skips",
     data: { hidden_sequence_ids: [21] },
-    headline: "Compacted context",
+    headline: "Compaction skipped",
   },
 ]) {
   test(`compaction event handles ${name} on mobile`, async ({ page, request }) => {
