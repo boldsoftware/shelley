@@ -62,6 +62,23 @@ func TestGPT61SolInBuiltInCatalog(t *testing.T) {
 	t.Fatal("GPT-6.1 Sol not in built-in catalog")
 }
 
+func TestGPT61TerraInBuiltInCatalog(t *testing.T) {
+	for _, m := range All() {
+		if m.ID != "gpt-6.1-terra" {
+			continue
+		}
+		if m.APIModelName != "gpt-6.1-terra" || m.Description != "GPT-6.1 Terra" || m.APIType != APITypeOpenAIResponses || m.Build == nil {
+			t.Fatalf("GPT-6.1 Terra = %+v", m)
+		}
+		svc, ok := m.Build("", "", nil).(*oai.ResponsesService)
+		if !ok || svc.Model != oai.GPT61Terra || svc.MaxTokens != 128000 {
+			t.Fatalf("GPT-6.1 Terra service = %+v", svc)
+		}
+		return
+	}
+	t.Fatal("GPT-6.1 Terra not in built-in catalog")
+}
+
 func TestSonnet55InBuiltInCatalog(t *testing.T) {
 	var found bool
 	for _, m := range All() {

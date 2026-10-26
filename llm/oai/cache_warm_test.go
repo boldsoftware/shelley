@@ -101,6 +101,7 @@ func TestPrewarmSupport(t *testing.T) {
 		want     bool
 	}{
 		{"gpt-6.1-sol", "openai", true},
+		{"gpt-6.1-terra", "openai", true},
 		{"gpt-6-luna", "openai", true},
 		{"gpt-5.6-terra", "openai", true},
 		{"gpt-5.4", "openai", false},

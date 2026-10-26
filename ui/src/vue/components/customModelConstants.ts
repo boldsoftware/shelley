@@ -71,6 +71,7 @@ export const DEFAULT_MODELS: Record<ProviderType, { name: string; model_name: st
   "openai-responses": [
     { name: "GPT-6 Astra", model_name: "gpt-6-astra" },
     { name: "GPT-6.1 Sol", model_name: "gpt-6.1-sol" },
+    { name: "GPT-6.1 Terra", model_name: "gpt-6.1-terra" },
     { name: "GPT-6 Sol", model_name: "gpt-6-sol" },
     { name: "GPT-6 Luna", model_name: "gpt-6-luna" },
     { name: "GPT-5.5", model_name: "gpt-5.5" },
