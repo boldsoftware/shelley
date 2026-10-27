@@ -17,11 +17,117 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"testing/synctest"
 	"time"
 )
+
+func TestDoUpgradeRejectsConcurrentRequests(t *testing.T) {
+	for _, stage := range []string{"checksums", "binary"} {
+		for _, failDownload := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/fail=%t", stage, failDownload), func(t *testing.T) {
+				target := filepath.Join(t.TempDir(), "shelley")
+				if err := os.WriteFile(target, []byte("original"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				oldExe, oldErr := startupExecutable, startupExecutableErr
+				startupExecutable, startupExecutableErr = target, nil
+				t.Cleanup(func() { startupExecutable, startupExecutableErr = oldExe, oldErr })
+
+				entered, release := make(chan struct{}), make(chan struct{})
+				unblock := sync.OnceFunc(func() { close(release) })
+				var checksums atomic.Int32
+				binary := []byte("updated")
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					switch r.URL.Path {
+					case "/checksums":
+						if checksums.Add(1) != 1 {
+							http.Error(w, "checksum unavailable", http.StatusServiceUnavailable)
+							return
+						}
+						if stage == "checksums" {
+							close(entered)
+							<-release
+						}
+						fmt.Fprintf(w, "%x  shelley_%s_%s\n", sha256.Sum256(binary), runtime.GOOS, runtime.GOARCH)
+					case "/binary":
+						if stage == "binary" {
+							close(entered)
+							<-release
+						}
+						if failDownload {
+							http.Error(w, "download unavailable", http.StatusServiceUnavailable)
+							return
+						}
+						w.Write(binary)
+					default:
+						http.NotFound(w, r)
+					}
+				}))
+				defer srv.Close()
+				defer unblock()
+				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+				defer cancel()
+				info := &VersionInfo{
+					HasUpdate: true, DownloadURL: srv.URL + "/binary",
+					ReleaseInfo: &ReleaseInfo{ChecksumsURL: srv.URL + "/checksums"},
+				}
+				vc := &VersionChecker{lastCheck: time.Now(), cachedInfo: info}
+				done := make(chan struct{})
+				var upgradeErr error
+				go func() {
+					upgradeErr = vc.DoUpgrade(ctx)
+					close(done)
+				}()
+				defer func() {
+					unblock()
+					<-done
+				}()
+				select {
+				case <-entered:
+				case <-ctx.Done():
+					t.Fatal("first upgrade never reached " + stage)
+				}
+				if got, err := vc.Check(ctx, false); err != nil || got != info {
+					t.Fatalf("version check during upgrade = %v, %v; want cached info", got, err)
+				}
+				rejected := make(chan error, 1)
+				go func() { rejected <- vc.DoUpgrade(ctx) }()
+				select {
+				case err := <-rejected:
+					if err == nil || err.Error() != "upgrade already in progress" {
+						t.Errorf("overlapping upgrade = %v; want upgrade already in progress", err)
+					}
+				case <-ctx.Done():
+					t.Fatal("overlapping upgrade did not return promptly")
+				}
+				if got := checksums.Load(); got != 1 {
+					t.Errorf("checksum requests = %d; want 1", got)
+				}
+				unblock()
+				<-done
+				wantContents := "updated"
+				if failDownload {
+					wantContents = "original"
+					if upgradeErr == nil || !strings.Contains(upgradeErr.Error(), "download returned status 503") {
+						t.Errorf("first upgrade = %v; want download failure", upgradeErr)
+					}
+				} else if upgradeErr != nil {
+					t.Errorf("first upgrade: %v", upgradeErr)
+				}
+				if got, err := os.ReadFile(target); err != nil || string(got) != wantContents {
+					t.Errorf("binary after upgrade = %q, %v; want %q", got, err, wantContents)
+				}
+				if err := vc.DoUpgrade(ctx); err == nil || !strings.Contains(err.Error(), "failed to fetch checksum") {
+					t.Errorf("later upgrade = %v; want checksum failure, not a held lock", err)
+				}
+			})
+		}
+	}
+}
 
 func TestExtractSHAFromTag(t *testing.T) {
 	t.Parallel()
