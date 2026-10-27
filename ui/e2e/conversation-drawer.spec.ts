@@ -12,6 +12,34 @@ test.use({
   hasTouch: false,
 });
 
+for (const width of [390, 1280]) {
+  test(`drawer header starts a new conversation at ${width}px`, async ({ page, request }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const { slug } = await createConversationViaAPIWithDetails(request, "echo: drawer new");
+    await page.goto(`/c/${slug}`);
+    if (width < 768) {
+      await page.getByRole("button", { name: "Open conversations", exact: true }).click();
+    }
+
+    const actions = page.locator(".drawer-header-actions");
+    const labels = [
+      "Search conversations...",
+      "Group conversations",
+      "New Conversation",
+      width < 768 ? "Close conversations" : "Collapse sidebar",
+    ];
+    const buttons = actions.getByRole("button");
+    await expect(buttons).toHaveCount(labels.length);
+    for (const [index, label] of labels.entries()) {
+      await expect(buttons.nth(index)).toHaveAccessibleName(label);
+    }
+    await actions.getByRole("button", { name: "New Conversation", exact: true }).click();
+    await expect(page).toHaveURL(/\/new$/);
+    await expect(page.getByTestId("message-input")).toBeEmpty();
+    if (width < 768) await expect(page.locator(".drawer")).not.toHaveClass(/\bopen\b/);
+  });
+}
+
 test("right-clicking a conversation row opens its actions at the pointer", async ({
   page,
   request,

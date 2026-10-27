@@ -110,13 +110,14 @@
             </button>
           </div>
         </div>
-        <!-- New conversation button - mobile only -->
+        <!-- New conversation button -->
         <Button
           v-if="!showArchived"
-          class="btn-icon hide-on-desktop"
+          class="btn-icon"
           text
           severity="secondary"
           :aria-label="t('newConversation')"
+          v-tooltip.top="t('newConversation')"
           @click="onNewConversationClick"
         >
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
