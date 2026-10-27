@@ -52,13 +52,13 @@ func (d *discord) Send(ctx context.Context, event notifications.Event) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.webhookURL, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("create discord request: %w", err)
+		return fmt.Errorf("create discord request failed")
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := d.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("send discord webhook: %w", err)
+		return fmt.Errorf("send discord webhook failed")
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)

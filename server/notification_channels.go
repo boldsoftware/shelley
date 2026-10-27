@@ -93,11 +93,12 @@ func (s *Server) handleTestExeNotifyIn(w http.ResponseWriter, r *http.Request, e
 }
 
 type NotificationChannelAPI struct {
-	ChannelID   string `json:"channel_id"`
-	ChannelType string `json:"channel_type"`
-	DisplayName string `json:"display_name"`
-	Enabled     bool   `json:"enabled"`
-	Config      any    `json:"config"`
+	ChannelID         string   `json:"channel_id"`
+	ChannelType       string   `json:"channel_type"`
+	DisplayName       string   `json:"display_name"`
+	Enabled           bool     `json:"enabled"`
+	Config            any      `json:"config"`
+	ConfiguredSecrets []string `json:"configured_secrets"`
 }
 
 type CreateNotificationChannelRequest struct {
@@ -135,7 +136,7 @@ var channelTypeInfo = map[string]ChannelTypeInfo{
 		Type:  "discord",
 		Label: "Discord Webhook",
 		ConfigFields: []ConfigField{
-			{Name: "webhook_url", Label: "Webhook URL", Type: "string", Required: true, Placeholder: "https://discord.com/api/webhooks/..."},
+			{Name: "webhook_url", Label: "Webhook URL", Type: "password", Required: true, Placeholder: "https://discord.com/api/webhooks/..."},
 		},
 	},
 	"email": {
@@ -160,18 +161,65 @@ var channelTypeInfo = map[string]ChannelTypeInfo{
 	},
 }
 
-func toNotificationChannelAPI(ch generated.NotificationChannel) NotificationChannelAPI {
-	var config any
-	if err := json.Unmarshal([]byte(ch.Config), &config); err != nil {
-		config = map[string]any{}
+func notificationConfig(raw []byte, channelType string) (map[string]any, error) {
+	var config map[string]any
+	if err := json.Unmarshal(raw, &config); err != nil || config == nil {
+		return nil, fmt.Errorf("configuration must be a JSON object")
+	}
+	for _, field := range channelTypeInfo[channelType].ConfigFields {
+		if field.Type != "password" {
+			continue
+		}
+		if value, exists := config[field.Name]; exists {
+			if _, ok := value.(string); !ok {
+				return nil, fmt.Errorf("%s must be a string", field.Name)
+			}
+		}
+	}
+	return config, nil
+}
+
+func toNotificationChannelAPI(ch generated.NotificationChannel) (NotificationChannelAPI, error) {
+	config, err := notificationConfig([]byte(ch.Config), ch.ChannelType)
+	if err != nil {
+		return NotificationChannelAPI{}, err
+	}
+	secrets := []string{}
+	for _, field := range channelTypeInfo[ch.ChannelType].ConfigFields {
+		if field.Type != "password" {
+			continue
+		}
+		if value, _ := config[field.Name].(string); value != "" {
+			secrets = append(secrets, field.Name)
+		}
+		delete(config, field.Name)
 	}
 	return NotificationChannelAPI{
-		ChannelID:   ch.ChannelID,
-		ChannelType: ch.ChannelType,
-		DisplayName: ch.DisplayName,
-		Enabled:     ch.Enabled != 0,
-		Config:      config,
+		ChannelID: ch.ChannelID, ChannelType: ch.ChannelType,
+		DisplayName: ch.DisplayName, Enabled: ch.Enabled != 0,
+		Config: config, ConfiguredSecrets: secrets,
+	}, nil
+}
+
+func writeNotificationChannel(w http.ResponseWriter, ch generated.NotificationChannel, status int) {
+	response, err := toNotificationChannelAPI(ch)
+	if err != nil {
+		http.Error(w, "Invalid stored notification configuration", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(response)
+}
+
+func (s *Server) validateNotificationConfig(config map[string]any, channelType string) error {
+	validation := make(map[string]any, len(config)+1)
+	for k, v := range config {
+		validation[k] = v
+	}
+	validation["type"] = channelType
+	_, err := notifications.CreateFromConfig(validation, s.logger)
+	return err
 }
 
 func (s *Server) handleListNotificationChannels(w http.ResponseWriter, r *http.Request) {
@@ -183,7 +231,11 @@ func (s *Server) handleListNotificationChannels(w http.ResponseWriter, r *http.R
 
 	apiChannels := make([]NotificationChannelAPI, len(channels))
 	for i, ch := range channels {
-		apiChannels[i] = toNotificationChannelAPI(ch)
+		apiChannels[i], err = toNotificationChannelAPI(ch)
+		if err != nil {
+			http.Error(w, "Invalid stored notification configuration", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -222,15 +274,12 @@ func (s *Server) handleCreateNotificationChannel(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Validate config by attempting to create the channel
-	validationConfig := map[string]any{"type": req.ChannelType}
-	var configMap map[string]any
-	if err := json.Unmarshal(configJSON, &configMap); err == nil {
-		for k, v := range configMap {
-			validationConfig[k] = v
-		}
+	configMap, err := notificationConfig(configJSON, req.ChannelType)
+	if err != nil {
+		http.Error(w, "Invalid notification configuration: "+err.Error(), http.StatusBadRequest)
+		return
 	}
-	if _, err := notifications.CreateFromConfig(validationConfig, s.logger); err != nil {
+	if err := s.validateNotificationConfig(configMap, req.ChannelType); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -255,9 +304,7 @@ func (s *Server) handleCreateNotificationChannel(w http.ResponseWriter, r *http.
 
 	s.ReloadNotificationChannels()
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(toNotificationChannelAPI(*ch))
+	writeNotificationChannel(w, *ch, http.StatusCreated)
 }
 
 func (s *Server) handleGetNotificationChannel(w http.ResponseWriter, r *http.Request, channelID string) {
@@ -267,8 +314,7 @@ func (s *Server) handleGetNotificationChannel(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(toNotificationChannelAPI(*ch))
+	writeNotificationChannel(w, *ch, http.StatusOK)
 }
 
 func (s *Server) handleUpdateNotificationChannel(w http.ResponseWriter, r *http.Request, channelID string) {
@@ -290,16 +336,33 @@ func (s *Server) handleUpdateNotificationChannel(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Validate config by attempting to create the channel
-	validationConfig := map[string]any{"type": existing.ChannelType}
-	var configMap map[string]any
-	if err := json.Unmarshal(configJSON, &configMap); err == nil {
-		for k, v := range configMap {
-			validationConfig[k] = v
+	configMap, err := notificationConfig(configJSON, existing.ChannelType)
+	if err != nil {
+		http.Error(w, "Invalid notification configuration: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	stored, err := notificationConfig([]byte(existing.Config), existing.ChannelType)
+	if err != nil {
+		http.Error(w, "Invalid stored notification configuration", http.StatusInternalServerError)
+		return
+	}
+	for _, field := range channelTypeInfo[existing.ChannelType].ConfigFields {
+		if field.Type != "password" {
+			continue
+		}
+		if _, supplied := configMap[field.Name]; !supplied {
+			if value, exists := stored[field.Name]; exists {
+				configMap[field.Name] = value
+			}
 		}
 	}
-	if _, err := notifications.CreateFromConfig(validationConfig, s.logger); err != nil {
+	if err := s.validateNotificationConfig(configMap, existing.ChannelType); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	configJSON, err = json.Marshal(configMap)
+	if err != nil {
+		http.Error(w, "Invalid notification configuration", http.StatusBadRequest)
 		return
 	}
 
@@ -321,8 +384,7 @@ func (s *Server) handleUpdateNotificationChannel(w http.ResponseWriter, r *http.
 
 	s.ReloadNotificationChannels()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(toNotificationChannelAPI(*ch))
+	writeNotificationChannel(w, *ch, http.StatusOK)
 }
 
 func (s *Server) handleDeleteNotificationChannel(w http.ResponseWriter, r *http.Request, channelID string) {
@@ -344,20 +406,19 @@ func (s *Server) handleTestNotificationChannel(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	config := map[string]any{"type": dbCh.ChannelType}
-	var extra map[string]any
-	if err := json.Unmarshal([]byte(dbCh.Config), &extra); err == nil {
-		for k, v := range extra {
-			config[k] = v
-		}
+	config, err := notificationConfig([]byte(dbCh.Config), dbCh.ChannelType)
+	if err != nil {
+		http.Error(w, "Invalid stored notification configuration", http.StatusInternalServerError)
+		return
 	}
+	config["type"] = dbCh.ChannelType
 
 	ch, err := notifications.CreateFromConfig(config, s.logger)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
-			"message": fmt.Sprintf("Failed to create channel: %v", err),
+			"message": "Test notification failed. Check the saved channel configuration.",
 		})
 		return
 	}
@@ -379,7 +440,7 @@ func (s *Server) handleTestNotificationChannel(w http.ResponseWriter, r *http.Re
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
-			"message": fmt.Sprintf("Test failed: %v", err),
+			"message": "Test notification failed. Check the saved channel configuration.",
 		})
 		return
 	}
@@ -450,13 +511,13 @@ func (s *Server) ReloadNotificationChannels() {
 
 	var active []notifications.Channel
 	for _, dbCh := range channels {
-		config := map[string]any{"type": dbCh.ChannelType}
-		var extra map[string]any
-		if err := json.Unmarshal([]byte(dbCh.Config), &extra); err == nil {
-			for k, v := range extra {
-				config[k] = v
-			}
+		config, err := notificationConfig([]byte(dbCh.Config), dbCh.ChannelType)
+		if err != nil {
+			s.logger.Warn("Invalid stored notification configuration", "id", dbCh.ChannelID)
+			continue
 		}
+		config["type"] = dbCh.ChannelType
+
 		ch, err := notifications.CreateFromConfig(config, s.logger)
 		if err != nil {
 			s.logger.Warn("Failed to create notification channel", "id", dbCh.ChannelID, "error", err)

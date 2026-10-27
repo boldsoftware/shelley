@@ -29,7 +29,8 @@
       :id="inputId"
       :type="field.type === 'password' ? 'password' : 'text'"
       :model-value="value"
-      :placeholder="field.placeholder"
+      :placeholder="clearSaved ? '' : savedSecret ? savedPlaceholder : field.placeholder"
+      :disabled="clearSaved"
       fluid
       :dt="inputFieldDt"
       :aria-describedby="field.description ? descId : undefined"
@@ -38,6 +39,16 @@
     <span v-if="field.description" :id="descId" class="config-field-description">
       {{ field.description }}
     </span>
+    <div v-if="savedSecret && !field.required" class="form-checkbox">
+      <label>
+        <input
+          type="checkbox"
+          :checked="clearSaved"
+          @change="emit('clear', ($event.target as HTMLInputElement).checked)"
+        />
+        Clear saved credential
+      </label>
+    </div>
   </div>
 </template>
 
@@ -60,9 +71,18 @@ interface ConfigField {
 const props = defineProps<{
   field: ConfigField;
   value: string;
+  savedSecret: boolean;
+  clearSaved: boolean;
 }>();
-const emit = defineEmits<{ (e: "change", value: string): void }>();
+const emit = defineEmits<{
+  (e: "change", value: string): void;
+  (e: "clear", value: boolean): void;
+}>();
 
 const inputId = computed(() => `config-${props.field.name}`);
 const descId = computed(() => `${inputId.value}-desc`);
+const savedPlaceholder = computed(() => {
+  const credential = props.field.name === "webhook_url" ? "webhook" : props.field.name;
+  return `Leave blank to keep the saved ${credential} on the server`;
+});
 </script>

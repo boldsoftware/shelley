@@ -11,7 +11,7 @@
     :is-open="isOpen"
     :title="editingChannelId ? t('editChannel') : t('addChannel')"
     class-name="modal-wide"
-    @close="emit('close')"
+    @close="handleClose"
   >
     <div v-if="error" class="test-result error notifications-error-message">{{ error }}</div>
 
@@ -44,7 +44,10 @@
       :key="field.name"
       :field="field"
       :value="form.config[field.name] || ''"
+      :saved-secret="savedSecrets.includes(field.name)"
+      :clear-saved="clearedSecrets.includes(field.name)"
       @change="(val: string) => (form.config = { ...form.config, [field.name]: val })"
+      @clear="(val: boolean) => setClearSecret(field.name, val)"
     />
 
     <div v-if="testResult" :class="`test-result ${testResult.success ? 'success' : 'error'}`">
@@ -74,7 +77,7 @@
     :is-open="isOpen"
     :title="t('notifications')"
     class-name="modal-wide"
-    @close="emit('close')"
+    @close="handleClose"
   >
     <template v-if="channelTypes.length > 0" #title-right>
       <Button size="small" @click="handleAdd">+ {{ t("addChannel") }}</Button>
@@ -255,6 +258,8 @@ const exeNotifyEnabled = ref(true);
 const showForm = ref(false);
 const editingChannelId = ref<string | null>(null);
 const form = reactive<FormData>({ ...emptyForm, config: {} });
+const savedSecrets = ref<string[]>([]);
+const clearedSecrets = ref<string[]>([]);
 
 const testing = ref(false);
 const testResult = ref<{ success: boolean; message: string } | null>(null);
@@ -265,10 +270,23 @@ const notificationSupported = typeof Notification !== "undefined";
 
 const typeInfo = computed(() => getTypeInfo(form.channel_type));
 const configFields = computed(() => typeInfo.value?.config_fields || []);
-const canSave = computed(() => form.display_name.trim() !== "" && form.channel_type !== "");
+const canSave = computed(
+  () =>
+    form.display_name.trim() !== "" &&
+    form.channel_type !== "" &&
+    configFields.value.every(
+      (field) =>
+        field.type !== "password" ||
+        !field.required ||
+        !!form.config[field.name]?.trim() ||
+        savedSecrets.value.includes(field.name),
+    ),
+);
 
 function resetForm() {
   Object.assign(form, { channel_type: "", display_name: "", config: {} });
+  savedSecrets.value = [];
+  clearedSecrets.value = [];
 }
 
 async function loadChannels() {
@@ -307,7 +325,7 @@ function defaultConfigFor(typeName: string): Record<string, string> {
   const info = getTypeInfo(typeName);
   const config: Record<string, string> = {};
   for (const field of info?.config_fields || []) {
-    if (field.default) config[field.name] = field.default;
+    if (field.type !== "password" && field.default) config[field.name] = field.default;
   }
   return config;
 }
@@ -315,26 +333,32 @@ function defaultConfigFor(typeName: string): Record<string, string> {
 function selectType(type: string) {
   form.channel_type = type;
   form.config = defaultConfigFor(type);
+  savedSecrets.value = [];
+  clearedSecrets.value = [];
+}
+
+function setClearSecret(name: string, clear: boolean) {
+  clearedSecrets.value = clear
+    ? [...clearedSecrets.value, name]
+    : clearedSecrets.value.filter((fieldName) => fieldName !== name);
+  if (clear) form.config = { ...form.config, [name]: "" };
 }
 
 function handleEdit(ch: NotificationChannelAPI) {
-  const configStrings: Record<string, string> = {};
-  if (ch.config && typeof ch.config === "object") {
-    for (const [k, v] of Object.entries(ch.config)) {
-      configStrings[k] = String(v);
-    }
-  }
   Object.assign(form, {
     channel_type: ch.channel_type,
     display_name: ch.display_name,
-    config: configStrings,
+    config: { ...ch.config },
   });
+  savedSecrets.value = ch.configured_secrets;
+  clearedSecrets.value = [];
   editingChannelId.value = ch.channel_id;
   testResult.value = null;
   showForm.value = true;
 }
 
 function handleAdd() {
+  resetForm();
   const defaultType = channelTypes.length > 0 ? channelTypes[0].type : "";
   Object.assign(form, {
     channel_type: defaultType,
@@ -351,30 +375,43 @@ function handleCancel() {
   editingChannelId.value = null;
   resetForm();
   testResult.value = null;
+  error.value = null;
+}
+
+function handleClose() {
+  handleCancel();
+  emit("close");
 }
 
 async function handleSave() {
   try {
     error.value = null;
+    const config = { ...form.config };
+    for (const field of configFields.value) {
+      if (field.type !== "password") continue;
+      if (clearedSecrets.value.includes(field.name)) {
+        config[field.name] = "";
+      } else if (!config[field.name]) {
+        delete config[field.name];
+      }
+    }
     if (editingChannelId.value) {
       const existing = channels.value.find((c) => c.channel_id === editingChannelId.value);
+      if (!existing) throw new Error("Channel not found");
       await notificationChannelsApi.updateChannel(editingChannelId.value, {
         display_name: form.display_name,
-        enabled: existing?.enabled ?? true,
-        config: form.config,
+        enabled: existing.enabled,
+        config,
       });
     } else {
       await notificationChannelsApi.createChannel({
         channel_type: form.channel_type,
         display_name: form.display_name,
         enabled: true,
-        config: form.config,
+        config,
       });
     }
-    showForm.value = false;
-    editingChannelId.value = null;
-    resetForm();
-    testResult.value = null;
+    handleCancel();
     await loadChannels();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to save channel";
@@ -394,12 +431,10 @@ async function handleDelete(channelId: string) {
 async function handleToggleEnabled(ch: NotificationChannelAPI) {
   try {
     error.value = null;
-    const configObj: Record<string, string> =
-      ch.config && typeof ch.config === "object" ? (ch.config as Record<string, string>) : {};
     await notificationChannelsApi.updateChannel(ch.channel_id, {
       display_name: ch.display_name,
       enabled: !ch.enabled,
-      config: configObj,
+      config: ch.config,
     });
     await loadChannels();
   } catch (err) {
@@ -454,6 +489,8 @@ watch(
           .then((settings) => (exeNotifyEnabled.value = settings.exe_notify !== "false"))
           .catch(() => {});
       }
+    } else {
+      handleCancel();
     }
   },
   { immediate: true },

@@ -1709,6 +1709,7 @@ export interface NotificationChannelAPI {
   display_name: string;
   enabled: boolean;
   config: Record<string, string>;
+  configured_secrets: string[];
 }
 
 export interface CreateNotificationChannelRequest {
