@@ -36,7 +36,7 @@ func TestFindPiCutPointNeverLandsOnToolResult(t *testing.T) {
 	}
 
 	// keepRecentTokens chosen so the walk-back crosses the tool result.
-	cut := findPiCutPoint(msgs, 2500)
+	cut := findPiCutPoint(msgs, 2500, piTokenCounter)
 	if cut < 0 || cut >= len(msgs) {
 		t.Fatalf("cut out of range: %d", cut)
 	}
@@ -51,12 +51,12 @@ func TestFindPiCutPointKeepsAllWhenSmall(t *testing.T) {
 		textMsg(llm.MessageRoleAssistant, "hello"),
 	}
 	// Plenty of budget -> nothing summarized, cut at start.
-	if cut := findPiCutPoint(msgs, 20000); cut != 0 {
+	if cut := findPiCutPoint(msgs, 20000, piTokenCounter); cut != 0 {
 		t.Fatalf("expected cut=0 (keep all), got %d", cut)
 	}
 }
 
-func TestEstimatePiMessageTokensCountsImages(t *testing.T) {
+func TestTokenCounterCountsImages(t *testing.T) {
 	msg := llm.Message{
 		Role: llm.MessageRoleUser,
 		Content: []llm.Content{
@@ -77,7 +77,7 @@ func TestEstimatePiMessageTokensCountsImages(t *testing.T) {
 	}
 
 	// An image costs about the same however big its data is.
-	if got := estimatePiMessageTokens(msg); got != 2*piImageTokens {
+	if got := piTokenCounter.message(msg); got != 2*piImageTokens {
 		t.Fatalf("estimated tokens = %d, want %d", got, 2*piImageTokens)
 	}
 }
@@ -92,7 +92,7 @@ func TestFindPiCutPointKeepsHugeLastToolResultWithItsCall(t *testing.T) {
 	}
 	// The result alone fills the budget and no cut point follows it: the
 	// call stays with it and everything before is summarized.
-	if cut := findPiCutPoint(msgs, 20_000); cut != 3 {
+	if cut := findPiCutPoint(msgs, 20_000, piTokenCounter); cut != 3 {
 		t.Fatalf("cut = %d, want 3", cut)
 	}
 }
@@ -125,7 +125,38 @@ func TestFindPiCutPointExcludesImageHeavyHistory(t *testing.T) {
 	msgs = append(msgs, textMsg(llm.MessageRoleAssistant, "The pages look correct."))
 
 	// 20k tokens hold 16 screenshots: the oldest are summarized.
-	if cut := findPiCutPoint(msgs, 20_000); cut != 9 {
+	if cut := findPiCutPoint(msgs, 20_000, piTokenCounter); cut != 9 {
 		t.Fatalf("cut = %d, want 9", cut)
+	}
+}
+
+// TestTokenCounterFor: estimates follow the model's tokenizer, measured on a
+// mix of code, prose and command output.
+func TestTokenCounterFor(t *testing.T) {
+	msg := textMsg(llm.MessageRoleUser, strings.Repeat("a", 1000))
+	for model, want := range map[string]int{
+		"claude-opus-5.5":   432, // 2.32 chars/token
+		"claude-opus-4.7":   432,
+		"claude-opus-4.5":   341, // 2.94
+		"claude-sonnet-4.5": 341,
+		"gpt-5.5":           278, // 3.61
+		"gemini-3.1-pro":    250, // unmeasured: 4
+		"predictable":       250,
+		"no-such-model":     250,
+	} {
+		if got := tokenCounterFor(model).message(msg); got != want {
+			t.Errorf("%s: %d tokens, want %d", model, got, want)
+		}
+	}
+}
+
+// TestTokenCounterOverhead: the context is more than its history; the system
+// prompt and the tool definitions are sent with every request.
+func TestTokenCounterOverhead(t *testing.T) {
+	system := []llm.SystemContent{{Text: strings.Repeat("s", 400)}}
+	tools := []*llm.Tool{{Name: "bash", Description: strings.Repeat("d", 392), InputSchema: json.RawMessage(`{"type":"object"}`)}}
+	// 400 system chars, 4+392+17 tool chars, at 4 chars per token.
+	if got, want := piTokenCounter.overhead(system, tools), 100+104; got != want {
+		t.Fatalf("overhead = %d tokens, want %d", got, want)
 	}
 }

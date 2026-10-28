@@ -53,11 +53,12 @@ func (c inPlaceCompactor) Index(ctx context.Context) (string, error) {
 
 // contextIndex renders the index of the current context.
 func (cm *ConversationManager) contextIndex(ctx context.Context) (string, error) {
-	items, _, err := cm.loadContext(ctx)
+	items, system, err := cm.loadContext(ctx)
 	if err != nil {
 		return "", err
 	}
-	return compactIndex(items, cm.keepRecentTokens)
+	tc := cm.tokenCounter()
+	return compactIndex(items, tc.overhead(system, cm.tools()), cm.keepRecentTokens, tc)
 }
 
 func (c inPlaceCompactor) Compact(ctx context.Context, in claudetool.CompactInPlaceInput) (string, error) {
@@ -80,8 +81,11 @@ func (cm *ConversationManager) compactMidTurn(ctx context.Context, generation ui
 	}
 	items, system, err := cm.loadContext(ctx)
 	var c db.InPlaceCompaction
+	tc := cm.tokenCounter()
+	var overhead int
 	if err == nil {
-		c, err = buildCompaction(items, cm.keepRecentTokens, in)
+		overhead = tc.overhead(system, cm.tools())
+		c, err = buildCompaction(items, cm.keepRecentTokens, tc, in)
 	}
 	var after []contextItem
 	if err == nil {
@@ -119,10 +123,10 @@ func (cm *ConversationManager) compactMidTurn(ctx context.Context, generation ui
 		return "", err
 	}
 	if in.Action == "skip" {
-		return fmt.Sprintf("Skipped; history ~%d -> ~%d tokens.", itemTokens(items), itemTokens(after)), nil
+		return fmt.Sprintf("Skipped; context ~%d -> ~%d tokens.", overhead+tc.items(items), overhead+tc.items(after)), nil
 	}
-	return fmt.Sprintf("Compacted: %d collapsed, %d trimmed; history ~%d -> ~%d tokens.",
-		len(c.Squishes), len(c.Trims), itemTokens(items), itemTokens(after)), nil
+	return fmt.Sprintf("Compacted: %d collapsed, %d trimmed; context ~%d -> ~%d tokens.",
+		len(c.Squishes), len(c.Trims), overhead+tc.items(items), overhead+tc.items(after)), nil
 }
 
 var errCompactInPlaceUnavailable = errors.New("compact_in_place is not available in this conversation")
@@ -283,7 +287,7 @@ func compactionEvidence(items []contextItem) (seqs []int64, toolUseIDs []string)
 // buildCompaction turns the agent's request into a record, validating it
 // against the compaction view of history and its recent part. It reports
 // every problem at once.
-func buildCompaction(history []contextItem, keepRecentTokens int, in claudetool.CompactInPlaceInput) (db.InPlaceCompaction, error) {
+func buildCompaction(history []contextItem, keepRecentTokens int, tc tokenCounter, in claudetool.CompactInPlaceInput) (db.InPlaceCompaction, error) {
 	var c db.InPlaceCompaction
 	if in.Action == "skip" {
 		// Compacting nothing still drops the evidence (see compactMidTurn).
@@ -299,7 +303,7 @@ func buildCompaction(history []contextItem, keepRecentTokens int, in claudetool.
 	if err != nil {
 		return c, err
 	}
-	rows, recent := splitRows(items, recentStart(items, keepRecentTokens))
+	rows, recent := splitRows(items, recentStart(items, keepRecentTokens, tc))
 	alone, err := aloneRows(rows)
 	if err != nil {
 		return c, err
@@ -369,7 +373,7 @@ func buildCompaction(history []contextItem, keepRecentTokens int, in claudetool.
 		spans = append(spans, span{i, j})
 		tokens := 0
 		for _, row := range rows[i : j+1] {
-			tokens += itemTokens(row)
+			tokens += tc.items(row)
 		}
 		switch {
 		case strings.TrimSpace(col.Note) == "":
@@ -565,12 +569,12 @@ func compactionView(history []contextItem) ([]contextItem, error) {
 // recentStart returns the index of the first item of the recent part, which
 // is kept as is: about keepRecentTokens of the newest history, starting on a
 // message that is not a tool result.
-func recentStart(items []contextItem, keepRecentTokens int) int {
+func recentStart(items []contextItem, keepRecentTokens int, tc tokenCounter) int {
 	msgs := make([]llm.Message, len(items))
 	for i, it := range items {
 		msgs[i] = it.message
 	}
-	return findPiCutPoint(msgs, keepRecentTokens)
+	return findPiCutPoint(msgs, keepRecentTokens, tc)
 }
 
 func itemID(it contextItem) string {
@@ -578,14 +582,6 @@ func itemID(it contextItem) string {
 		return it.noteID
 	}
 	return strconv.FormatInt(it.from, 10)
-}
-
-func itemTokens(items []contextItem) int {
-	n := 0
-	for _, it := range items {
-		n += estimatePiMessageTokens(it.message)
-	}
-	return n
 }
 
 const compactRetryGuidance = `Nothing was compacted; fix only the reported problems and send the whole request again. Preserve existing notes verbatim unless a note itself is invalid or a corrected range changes what it must summarize. Do not shorten notes to fix IDs or ranges.`
@@ -609,20 +605,21 @@ and summaries from earlier compactions: they carry the task and its rules, so a
 range may not cover one unless it is just that row.`
 
 // compactIndex renders the index the agent compacts from.
-func compactIndex(history []contextItem, keepRecentTokens int) (string, error) {
+func compactIndex(history []contextItem, overhead, keepRecentTokens int, tc tokenCounter) (string, error) {
 	items, err := compactionView(history)
 	if err != nil {
 		return "", err
 	}
-	recent := recentStart(items, keepRecentTokens)
+	recent := recentStart(items, keepRecentTokens, tc)
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Index\n\n%d messages, ~%d tokens.\n", len(items), itemTokens(items))
+	fmt.Fprintf(&b, "## Index\n\nThe context is ~%d tokens: ~%d of system prompt and tools, and %d messages of ~%d tokens.\n",
+		overhead+tc.items(items), overhead, len(items), tc.items(items))
 	if recent == 0 {
 		b.WriteString("All of it is recent, so nothing can be compacted yet.\n")
 		return b.String(), nil
 	}
 	fmt.Fprintf(&b, "The recent part, from %s on (%d messages, ~%d tokens), is kept as is and not listed.\n",
-		itemID(items[recent]), len(items)-recent, itemTokens(items[recent:]))
+		itemID(items[recent]), len(items)-recent, tc.items(items[recent:]))
 	b.WriteString("\n")
 	fmt.Fprintf(&b, compactIndexGuidance, maxCollapseTokens/1000)
 	b.WriteString("\n\nOne row per message, oldest first, except that a tool call and its output\n" +
@@ -650,7 +647,7 @@ func compactIndex(history []contextItem, keepRecentTokens int) (string, error) {
 		if alone[i] {
 			role += "*"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", rowID(row), role, itemTokens(row), describeRow(row, toolNames))
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", rowID(row), role, tc.items(row), describeRow(row, toolNames, tc))
 	}
 	tw.Flush()
 	b.WriteString("```\n")
@@ -660,7 +657,7 @@ func compactIndex(history []contextItem, keepRecentTokens int) (string, error) {
 // describeRow lists a row's blocks for the index, each tool call with the
 // size of its output. toolNames maps tool_use ids seen so far to tool names,
 // so outputs without their call in the row can be named after it.
-func describeRow(row []contextItem, toolNames map[string]string) string {
+func describeRow(row []contextItem, toolNames map[string]string, tc tokenCounter) string {
 	if row[0].source == nil {
 		return "note " + quoteStart(row[0].note)
 	}
@@ -670,7 +667,7 @@ func describeRow(row []contextItem, toolNames map[string]string) string {
 			if c.Type == llm.ContentTypeToolResult {
 				outputs[c.ToolUseID] = "→ trimmed"
 				if !isTrimmedOutput(c) {
-					outputs[c.ToolUseID] = fmt.Sprintf("→ %d", estimatePiMessageTokens(llm.Message{Content: []llm.Content{c}}))
+					outputs[c.ToolUseID] = fmt.Sprintf("→ %d", tc.message(llm.Message{Content: []llm.Content{c}}))
 				}
 			}
 		}

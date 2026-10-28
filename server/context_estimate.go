@@ -3,9 +3,13 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"math"
 
 	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/llm/ant"
+	"shelley.exe.dev/llm/oai"
+	"shelley.exe.dev/models"
 )
 
 // defaultKeepRecentTokens is the default budget of recent history
@@ -25,8 +29,29 @@ func (s *Server) keepRecentTokens() int {
 // base64 data says little: a 1280x720 screenshot is ~1.2k tokens.
 const piImageTokens = 1200
 
-// estimatePiMessageTokens ports pi's character/4 heuristic for one message.
-func estimatePiMessageTokens(msg llm.Message) int {
+// tokenCounter estimates tokens from characters: it is the chars per token
+// of a model's tokenizer.
+type tokenCounter float64
+
+// piTokenCounter is pi's chars/4 heuristic, for tokenizers not measured.
+const piTokenCounter tokenCounter = 4
+
+// tokenCounterFor returns the token counter of modelID's tokenizer.
+func tokenCounterFor(modelID string) tokenCounter {
+	m := models.ByID(modelID)
+	switch {
+	case m == nil:
+		return piTokenCounter
+	case m.Provider == models.ProviderAnthropic:
+		return tokenCounter(ant.CharsPerToken(m.APIModelName))
+	case m.Provider == models.ProviderOpenAI:
+		return oai.GPTCharsPerToken
+	}
+	return piTokenCounter
+}
+
+// message estimates the tokens of msg.
+func (tc tokenCounter) message(msg llm.Message) int {
 	chars, images := 0, 0
 	for _, c := range msg.Content {
 		switch c.Type {
@@ -48,8 +73,30 @@ func estimatePiMessageTokens(msg llm.Message) int {
 			}
 		}
 	}
-	// ceil(chars / 4)
-	return (chars+3)/4 + images*piImageTokens
+	return int(math.Ceil(float64(chars)/float64(tc))) + images*piImageTokens
+}
+
+// overhead estimates the tokens every request carries besides the history:
+// the system prompt and the tool definitions.
+func (tc tokenCounter) overhead(system []llm.SystemContent, tools []*llm.Tool) int {
+	chars := 0
+	for _, sc := range system {
+		chars += len(sc.Text)
+	}
+	n := int(math.Ceil(float64(chars) / float64(tc)))
+	for _, t := range tools {
+		n += int(math.Ceil(float64(len(t.Name)+len(t.Description)+len(t.InputSchema)) / float64(tc)))
+	}
+	return n
+}
+
+// items estimates the tokens of items.
+func (tc tokenCounter) items(items []contextItem) int {
+	n := 0
+	for _, it := range items {
+		n += tc.message(it.message)
+	}
+	return n
 }
 
 // isToolResultMessage reports whether a message carries only tool_result
@@ -74,7 +121,7 @@ func isToolResultMessage(msg llm.Message) bool {
 // index of the first message to KEEP verbatim. Messages [0, cut) are
 // summarized; [cut, len) are kept. The cut never lands on a tool_result
 // message, so kept history never starts with an orphaned tool result.
-func findPiCutPoint(messages []llm.Message, keepRecentTokens int) int {
+func findPiCutPoint(messages []llm.Message, keepRecentTokens int, tc tokenCounter) int {
 	// Collect valid cut points (non-tool-result messages).
 	var cutPoints []int
 	for i, m := range messages {
@@ -90,7 +137,7 @@ func findPiCutPoint(messages []llm.Message, keepRecentTokens int) int {
 	cutIndex := cutPoints[0]
 	accumulated := 0
 	for i := len(messages) - 1; i >= 0; i-- {
-		accumulated += estimatePiMessageTokens(messages[i])
+		accumulated += tc.message(messages[i])
 		if accumulated >= keepRecentTokens {
 			// Pick the first valid cut point at or after i. If a tool
 			// result alone fills the budget there is none: keep it with
@@ -132,7 +179,7 @@ type logWarner interface {
 }
 
 // broadcastEstimatedContextSize estimates the latest generation's context
-// window usage (char/4 heuristic over context-eligible messages) and pushes it
+// window usage (system prompt, tools and context-eligible messages) and pushes it
 // to stream subscribers. Used right after /compact-debug, when no turn has
 // reported the compacted context's usage yet.
 func (s *Server) broadcastEstimatedContextSize(ctx context.Context, conversationID string) {
@@ -171,13 +218,8 @@ func (s *Server) broadcastEstimatedContextSize(ctx context.Context, conversation
 		s.logger.Error("Failed to build context for estimate", "conversationID", conversationID, "error", err)
 		return
 	}
-	var estimate int64
-	for _, sc := range system {
-		estimate += int64(estimatePiMessageTokens(llm.Message{Content: []llm.Content{{Type: llm.ContentTypeText, Text: sc.Text}}}))
-	}
-	for _, it := range items {
-		estimate += int64(estimatePiMessageTokens(it.message))
-	}
+	tc := manager.tokenCounter()
+	estimate := int64(tc.overhead(system, manager.tools()) + tc.items(items))
 	if estimate <= 0 {
 		return
 	}

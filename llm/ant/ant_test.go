@@ -3420,3 +3420,21 @@ func postRawAnthropic(t *testing.T, apiKey string, req *request) error {
 	}
 	return fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
 }
+
+func TestCharsPerToken(t *testing.T) {
+	for model, want := range map[string]float64{
+		Claude55Opus:   2.32,
+		Claude47Opus:   2.32,
+		Claude5Sonnet:  2.32,
+		ClaudeFable51:  2.32,
+		Claude55Haiku:  2.32,
+		Claude46Opus:   2.94,
+		Claude45Opus:   2.94,
+		Claude46Sonnet: 2.94,
+		Claude45Haiku:  2.94,
+	} {
+		if got := CharsPerToken(model); got != want {
+			t.Errorf("CharsPerToken(%q) = %v, want %v", model, got, want)
+		}
+	}
+}

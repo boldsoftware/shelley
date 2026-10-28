@@ -450,6 +450,21 @@ func (cm *ConversationManager) IsAgentWorking() bool {
 	return cm.agentWorking
 }
 
+// tokenCounter estimates tokens for this conversation's model.
+func (cm *ConversationManager) tokenCounter() tokenCounter {
+	return tokenCounterFor(cm.GetModel())
+}
+
+// tools returns the tool definitions of the running loop, if any.
+func (cm *ConversationManager) tools() []*llm.Tool {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if cm.toolSet == nil {
+		return nil
+	}
+	return cm.toolSet.Tools()
+}
+
 // GetModel returns the model ID used by this conversation.
 func (cm *ConversationManager) GetModel() string {
 	cm.mu.Lock()

@@ -362,11 +362,36 @@ var adaptiveThinkingMinVersion = map[string][2]int{
 // (thinking: {type: "adaptive"} + output_config: {effort: "..."}) instead of
 // the legacy manual thinking (thinking: {type: "enabled", budget_tokens: N}).
 func useAdaptiveThinking(model string) bool {
+	return atLeastVersion(model, adaptiveThinkingMinVersion)
+}
+
+// newTokenizerMinVersion maps Claude family names to the first version on
+// the tokenizer Opus 4.7 introduced, which needs ~25% more tokens for the
+// same text.
+var newTokenizerMinVersion = map[string][2]int{
+	"opus":   {4, 7},
+	"sonnet": {5, 0},
+	"haiku":  {5, 0},
+	"fable":  {0, 0},
+}
+
+// CharsPerToken is the characters per token of model's tokenizer, measured
+// on a mix of code, prose, JSON and command output.
+func CharsPerToken(model string) float64 {
+	if atLeastVersion(model, newTokenizerMinVersion) {
+		return 2.32
+	}
+	return 2.94
+}
+
+// atLeastVersion reports whether model is a Claude model at or above its
+// family's version in minVersions.
+func atLeastVersion(model string, minVersions map[string][2]int) bool {
 	family, major, minor, ok := parseClaudeModel(model)
 	if !ok {
 		return false
 	}
-	minVer, ok := adaptiveThinkingMinVersion[family]
+	minVer, ok := minVersions[family]
 	if !ok {
 		return false
 	}

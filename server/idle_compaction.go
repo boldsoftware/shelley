@@ -294,7 +294,7 @@ func (s *Server) claimIdleCompaction(ctx context.Context, cm *ConversationManage
 	if err != nil {
 		return false, err
 	}
-	if itemTokens(view) < cm.idleCompactionMinTokens || recentStart(view, cm.keepRecentTokens) == 0 {
+	if tc := cm.tokenCounter(); tc.items(view) < cm.idleCompactionMinTokens || recentStart(view, cm.keepRecentTokens, tc) == 0 {
 		return false, nil
 	}
 	cm.mu.Lock()

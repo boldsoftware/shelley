@@ -584,6 +584,10 @@ type Service struct {
 	ReasoningReplay ReasoningReplay
 }
 
+// GPTCharsPerToken is the characters per token of GPT's tokenizer, measured
+// on a mix of code, prose, JSON and command output.
+const GPTCharsPerToken = 3.61
+
 var _ llm.Service = (*Service)(nil)
 
 func (s *Service) messageOrigin(model Model) llm.MessageOrigin {
