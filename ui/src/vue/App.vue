@@ -47,7 +47,7 @@
         @toggle-collapse="toggleDrawerCollapsed"
         @select-conversation="selectConversation"
         @new-conversation="startNewConversation"
-        @archived="handleConversationArchived"
+        @removed="handleConversationRemoved"
         @unarchived="handleConversationUnarchived"
         @renamed="handleConversationRenamed"
         @pointerenter="drawerHovered = true"
@@ -540,16 +540,26 @@ function onDrawerPointerLeave() {
   drawerHovered = false;
   lingering.value = null;
 }
+// Ids listed when a request creating the composed conversation went out, while
+// any is pending (see withComposerRow).
+const creating = shallowRef<ReadonlySet<string> | null>(null);
+let pendingCreates = 0;
 provide(ComposerPreviewKey, {
   rowId: computed(() =>
     composer.value && composer.value.sent === null ? composerRowId(composer.value) : null,
   ),
   text: composerText,
+  leavable: computed(() => {
+    const row = composer.value;
+    return (
+      row?.id === null &&
+      row.sent === null &&
+      creating.value === null &&
+      !composerText.value.trim() &&
+      conversations.value.some((c) => !c.parent_conversation_id)
+    );
+  }),
 });
-// Ids listed when a request creating the composed conversation went out, while
-// any is pending (see withComposerRow).
-const creating = shallowRef<ReadonlySet<string> | null>(null);
-let pendingCreates = 0;
 const drawerConversations = computed(() => {
   const list = withComposerRow(conversations.value, composer.value, creating.value);
   return lingering.value ? withComposerRow(list, lingering.value, null) : list;
@@ -896,28 +906,32 @@ function handleMessageSent(conversationId: string) {
   if (conversationId === currentConversationId.value) messageSentTrigger.value++;
 }
 
-function handleConversationArchived(
-  conversationId: string,
-  nextConversation?: Conversation | null,
-) {
-  void messageStore.delete(conversationId);
-  btwStore.clear(conversationId);
-  if (currentConversationId.value === conversationId) {
-    if (nextConversation?.conversation_id === COMPOSER_ROW_ID) {
-      reopenLingering();
-      return;
-    }
-    if (nextConversation && nextConversation.conversation_id !== conversationId) {
-      currentConversationId.value = nextConversation.conversation_id;
-      viewedConversation.value = nextConversation;
-      return;
-    }
-    const remaining = conversations.value.filter(
-      (conv) => conv.conversation_id !== conversationId && !conv.parent_conversation_id,
-    );
-    currentConversationId.value = remaining.length > 0 ? remaining[0].conversation_id : null;
-    viewedConversation.value = remaining.length > 0 ? remaining[0] : null;
+// An archived or deleted row left the drawer; if it was open, open its neighbor.
+function handleConversationRemoved(conversationId: string, nextConversation?: Conversation | null) {
+  const wasOpen = drawerCurrentConversationId.value === conversationId;
+  if (conversationId !== COMPOSER_ROW_ID) {
+    void messageStore.delete(conversationId);
+    btwStore.clear(conversationId);
   }
+  if (!wasOpen) return;
+  if (nextConversation?.conversation_id === COMPOSER_ROW_ID) {
+    reopenLingering();
+    return;
+  }
+  const next =
+    nextConversation ??
+    conversations.value.find(
+      (conv) => conv.conversation_id !== conversationId && !conv.parent_conversation_id,
+    ) ??
+    null;
+  if (!next) {
+    startNewConversationWithCwd(null);
+    return;
+  }
+  // A deleted placeholder goes at once rather than lingering under the pointer.
+  if (conversationId === COMPOSER_ROW_ID) composer.value = null;
+  currentConversationId.value = next.conversation_id;
+  viewedConversation.value = next;
 }
 
 function handleConversationUnarchived(conversation: Conversation) {
@@ -935,13 +949,13 @@ function handleConversationRenamed(conversation: Conversation) {
 
 async function archiveFromChat(conversationId: string) {
   await api.archiveConversation(conversationId);
-  handleConversationArchived(conversationId);
+  handleConversationRemoved(conversationId);
 }
 
 async function archiveFromPalette(conversationId: string) {
   try {
     await api.archiveConversation(conversationId);
-    handleConversationArchived(conversationId);
+    handleConversationRemoved(conversationId);
   } catch (err) {
     console.error("Failed to archive conversation:", err);
   }

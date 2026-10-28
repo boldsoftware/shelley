@@ -28,6 +28,9 @@ export interface ComposerRow {
 export interface ComposerPreview {
   rowId: Readonly<Ref<string | null>>;
   text: Readonly<Ref<string>>;
+  /** The placeholder can be deleted, leaving it for another row: there is
+   * one to open, and nothing typed is saved or about to be. */
+  leavable: Readonly<Ref<boolean>>;
 }
 export const ComposerPreviewKey: InjectionKey<ComposerPreview> = Symbol("composerPreview");
 

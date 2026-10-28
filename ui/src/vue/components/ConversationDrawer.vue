@@ -26,7 +26,7 @@
          (e: "toggle-collapse"): void               // onToggleCollapse
          (e: "select-conversation", c: Conversation): void   // onSelectConversation
          (e: "new-conversation"): void              // onNewConversation
-         (e: "archived", id: string, next?: Conversation | null): void  // onConversationArchived
+         (e: "removed", id: string, next?: Conversation | null): void  // archived or deleted
          (e: "unarchived", c: Conversation): void   // onConversationUnarchived
          (e: "renamed", c: Conversation): void      // onConversationRenamed -->
 <template>
@@ -608,6 +608,7 @@ import {
   type ActiveStructuredQueryEdit,
 } from "../../utils/conversationQuery";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
+import { COMPOSER_ROW_ID } from "../../utils/composerRow";
 import ConversationRow from "./ConversationDrawerRow.vue";
 import ConversationQueryEditor from "./ConversationQueryEditor.vue";
 import Button from "primevue/button";
@@ -662,7 +663,7 @@ const emit = defineEmits<{
   (e: "toggle-collapse"): void;
   (e: "select-conversation", c: Conversation): void;
   (e: "new-conversation"): void;
-  (e: "archived", id: string, next?: Conversation | null): void;
+  (e: "removed", id: string, next?: Conversation | null): void;
   (e: "unarchived", c: Conversation): void;
   (e: "renamed", c: Conversation): void;
 }>();
@@ -1111,7 +1112,7 @@ async function handleArchive(e: MouseEvent, conversationId: string) {
   const nextConversation = neighborAfterRemoval(flatVisualOrder, conversationId);
   try {
     await api.archiveConversation(conversationId);
-    emit("archived", conversationId, nextConversation);
+    emit("removed", conversationId, nextConversation);
     if (showArchived.value) void loadArchivedConversations();
   } catch (err) {
     console.error("Failed to archive conversation:", err);
@@ -1136,11 +1137,14 @@ function handleDeleteClick(e: MouseEvent, conversationId: string) {
 async function handleConfirmDelete(e: MouseEvent, conversationId: string) {
   e.stopPropagation();
   pendingDeleteId.value = null;
+  const nextConversation = neighborAfterRemoval(flatVisualOrder, conversationId);
   try {
-    await api.deleteConversation(conversationId);
+    // The composer's placeholder has nothing saved to delete.
+    if (conversationId !== COMPOSER_ROW_ID) await api.deleteConversation(conversationId);
     archivedConversations.value = archivedConversations.value.filter(
       (c) => c.conversation_id !== conversationId,
     );
+    emit("removed", conversationId, nextConversation);
   } catch (err) {
     console.error("Failed to delete conversation:", err);
   }

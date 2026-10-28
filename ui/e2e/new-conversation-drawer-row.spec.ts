@@ -124,8 +124,6 @@ test("a new conversation is a selected draft row from the start", async ({ page,
   await startNewConversationFromHeader(page);
   await expect(activeRow(page)).toHaveAttribute("data-conversation-id", "composer");
   await expect(activeRow(page).locator(".conversation-title")).toHaveText(/^draft( \d+)?$/);
-  // Nothing is saved yet, so there is nothing to delete.
-  await expect(activeRow(page).getByRole("button", { name: /delete/i })).toHaveCount(0);
 
   // Leaving it unused leaves nothing behind, once the pointer leaves the
   // drawer: until then rows stay put under it.
@@ -159,6 +157,96 @@ test("a new conversation is a selected draft row from the start", async ({ page,
   await expect(
     page.locator(`.drawer .conversation-item[data-conversation-id="${id}"]`),
   ).toHaveCount(0);
+});
+
+// Deletes the row, asking first, the pointer still over the drawer. Returns
+// the row that was below it (or else above), which should open.
+async function deleteRow(page: Page, id: string) {
+  const ids = await page
+    .locator(".drawer .conversation-item")
+    .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-conversation-id")));
+  const row = page.locator(`.drawer .conversation-item[data-conversation-id="${id}"]`);
+  await row.getByRole("button", { name: "Delete", exact: true }).click();
+  await row.locator(".drawer-delete-confirm").getByRole("button", { name: "Delete" }).click();
+  await expect(row).toHaveCount(0);
+  return ids[ids.indexOf(id) + 1] ?? ids[ids.indexOf(id) - 1];
+}
+
+async function expectOpened(page: Page, id: string | null | undefined) {
+  await expect(page.locator(".drawer .conversation-item.active")).toHaveCount(1);
+  await expect(activeRow(page)).toHaveAttribute("data-conversation-id", id!);
+  await expect(page).toHaveURL(/\/c\//);
+}
+
+const deleteButton = (page: Page) =>
+  activeRow(page).getByRole("button", { name: "Delete", exact: true });
+
+test("deleting the draft being composed opens its neighbor", async ({ page, request }) => {
+  await createConversationViaAPIWithDetails(request, "echo: neighbor");
+
+  // Unused: the placeholder goes at once, rather than lingering.
+  await openNewConversation(page);
+  await expectOpened(page, await deleteRow(page, "composer"));
+
+  // Typed, it's about to be saved; until it is, there's nothing to delete,
+  // even emptied while the save is under way.
+  let save = () => {};
+  const saving = new Promise<void>((resolve) => (save = resolve));
+  await page.route("**/api/conversations/draft", async (route) => {
+    await saving;
+    await route.fallback();
+  });
+  await startNewConversationFromHeader(page);
+  await expect(deleteButton(page)).toBeVisible();
+  const input = page.getByTestId("message-input");
+  const requested = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith("/api/conversations/draft"),
+  );
+  const created = page.waitForResponse(
+    (r) => r.request().method() === "POST" && r.url().endsWith("/api/conversations/draft"),
+  );
+  await input.fill("never mind");
+  await expect(activeRow(page).locator(".conversation-preview")).toHaveText("never mind");
+  await expect(deleteButton(page)).toHaveCount(0);
+  await requested;
+  await input.fill("");
+  await expect(activeRow(page).locator(".conversation-preview")).toHaveText("");
+  await expect(deleteButton(page)).toHaveCount(0);
+  await input.fill("never mind");
+  save();
+
+  // Saved: the draft goes, and its text with it.
+  const { conversation_id: id } = await (await created).json();
+  await expect(activeRow(page)).toHaveAttribute("data-conversation-id", id);
+  await expectOpened(page, await deleteRow(page, id));
+  await expect(input).toHaveValue("");
+  expect((await request.get(`/api/conversation/${id}`)).status()).toBe(404);
+  await startNewConversationFromHeader(page);
+  await expect(input).toHaveValue("");
+});
+
+test("alone, a new conversation has no delete, and a deleted draft returns to it", async ({
+  page,
+}) => {
+  await page.route("**/api/conversations/snapshot", (route) =>
+    route.fulfill({ json: { conversations: [], hash: "none" } }),
+  );
+  await page.route("**/api/stream2**", (route) => route.abort());
+  await openNewConversation(page);
+  await expect(page.locator(".drawer .conversation-item")).toHaveCount(1);
+  await expect(deleteButton(page)).toHaveCount(0);
+
+  const created = page.waitForResponse(
+    (r) => r.request().method() === "POST" && r.url().endsWith("/api/conversations/draft"),
+  );
+  await page.getByTestId("message-input").fill("lonely");
+  const { conversation_id: id } = await (await created).json();
+  await expect(activeRow(page)).toHaveAttribute("data-conversation-id", id);
+  await expect(page).toHaveURL(new RegExp(`/c/${id}$`));
+  expect(await deleteRow(page, id)).toBeUndefined();
+  await expect(page).toHaveURL(/\/new$/);
+  await expect(activeRow(page)).toHaveAttribute("data-conversation-id", "composer");
+  await expect(page.getByTestId("message-input")).toHaveValue("");
 });
 
 test("a draft row keeps the sent message until the agent replies", async ({ page }) => {

@@ -306,7 +306,7 @@
             />
           </svg>
         </button>
-        <div v-if="isDraft && !isPlaceholder" class="conversation-actions drawer-actions-row">
+        <div v-if="deletable" class="conversation-actions drawer-actions-row">
           <DeleteButton :conversation-id="conversation.conversation_id" />
         </div>
       </div>
@@ -540,6 +540,10 @@ const draftText = computed(() =>
   composerPreview?.rowId.value === props.conversation.conversation_id
     ? composerPreview.text.value
     : props.conversation.draft,
+);
+
+const deletable = computed(
+  () => isDraft.value && (!isPlaceholder.value || !!composerPreview?.leavable.value),
 );
 
 const isActive = computed(
