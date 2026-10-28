@@ -502,7 +502,13 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	// only when a terminal is spawned, so most test servers leave nothing.
 	var termDir string
 	if DBPath != "" {
-		termDir = filepath.Join(filepath.Dir(DBPath), "terminals")
+		// The child's cwd is the terminal's directory, not ours: every path
+		// handed to it (socket, pid and exit files) must be absolute.
+		dbDir, err := filepath.Abs(filepath.Dir(DBPath))
+		if err != nil {
+			panic(fmt.Errorf("resolve db directory: %w", err))
+		}
+		termDir = filepath.Join(dbDir, "terminals")
 	} else {
 		termDir = filepath.Join(os.TempDir(), "shelley-terminals-"+rand.Text()[:10])
 	}
