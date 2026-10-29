@@ -116,6 +116,8 @@ export interface Workspace {
   runs: ActionRunSummary[];
   vms: ConversationVM[];
   base_vms: ProjectBaseVM[];
+  /** The project that customizes Shelley, or "". */
+  shelley_project: string;
 }
 
 export const workspaceApi = {

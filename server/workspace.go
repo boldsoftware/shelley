@@ -47,10 +47,11 @@ type workspaceState struct {
 	assistantID atomic.Pointer[string]
 }
 
-// ensureWorkspace, in workspace mode, creates the Assistant if there is
-// none yet. It returns the Assistant's id, or "" outside workspace mode,
-// and keeps it for assistantID. It runs at startup and when the workspace
-// flag changes, so requests never create the Assistant.
+// ensureWorkspace, in workspace mode, creates the Assistant (and the
+// Shelley project) if there is none yet. It returns the Assistant's id, or
+// "" outside workspace mode, and keeps it for assistantID. It runs at
+// startup and when the workspace flag changes, so requests never create
+// the Assistant.
 func (s *Server) ensureWorkspace(ctx context.Context) (id string, err error) {
 	defer func() {
 		if err == nil {
@@ -66,6 +67,10 @@ func (s *Server) ensureWorkspace(ctx context.Context) (id string, err error) {
 	if id, err := s.db.GetAssistantID(ctx); !errors.Is(err, sql.ErrNoRows) {
 		return id, err
 	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
 	// The workspace Assistant texts like the shipped Assistant profile and
 	// follows its edits until its own settings change.
 	profile := "Assistant"
@@ -75,7 +80,8 @@ func (s *Server) ensureWorkspace(ctx context.Context) (id string, err error) {
 	}
 	var opts db.ConversationOptions
 	settings.applyTo(&opts)
-	return s.db.EnsureWorkspace(ctx, settings.Model, opts)
+	return s.db.EnsureWorkspace(ctx,
+		filepath.Join(home, ".config", "shelley", "shelley-customization"), settings.Model, opts)
 }
 
 // assistantID returns the Assistant's id, or "" outside workspace mode.
@@ -115,6 +121,7 @@ func (s *Server) uiBuild() string {
 }
 
 func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
+	s.registerCustomizationRoutes(api)
 	api.HandleFunc("GET /api/workspace", s.handleWorkspace)
 	api.HandleFunc("GET /api/exe-dev-integrations", s.handleExeDevIntegrations)
 	api.HandleFunc("GET /api/github-repos", s.handleGithubRepos)
@@ -166,6 +173,16 @@ func (s *Server) handleWorkspace(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.workspaceHTTPError(w, err)
 		return
+	}
+	for i := range workspace.Projects {
+		shelley, err := s.isShelleyProject(r.Context(), &workspace.Projects[i])
+		if err != nil {
+			s.workspaceHTTPError(w, err)
+			return
+		}
+		if shelley {
+			workspace.ShelleyProject = workspace.Projects[i].Name
+		}
 	}
 	writeJSON(w, http.StatusOK, workspace)
 }

@@ -3904,11 +3904,7 @@ func (s *Server) handleExit(w http.ResponseWriter, r *http.Request) {
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}
-	go func() {
-		time.Sleep(s.exitDelay)
-		s.logger.Info("Exiting Shelley via /exit endpoint", "resume", resume, "exit_code", exitCode)
-		s.exitProcess(exitCode)
-	}()
+	s.scheduleExit(exitCode)
 }
 
 // handleGetSettings retrieves all settings

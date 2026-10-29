@@ -128,8 +128,13 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     editProject: (project: Project | null = null) => {
       projectEditor.value = { project };
     },
-    /** Whether the user has projects; true until the workspace loads. */
-    hasProjects: computed(() => !data.value || data.value.projects.length > 0),
+    /** Whether the user has projects besides Shelley's own, which is built
+     * in; true until the workspace loads. */
+    hasProjects: computed(
+      () =>
+        !data.value ||
+        data.value.projects.some((project) => project.name !== data.value?.shelley_project),
+    ),
     deleteProject: (project: Project) => {
       projectDeletion.value = project;
     },

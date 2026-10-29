@@ -338,6 +338,7 @@ import {
   type ChatRequest,
 } from "../types";
 import { api, ApiError } from "../services/api";
+import { startActivityHeartbeat } from "../services/activityHeartbeat";
 import { btwStore } from "../services/btwStore";
 import { messageStore } from "../services/messageStore";
 import {
@@ -1288,7 +1289,10 @@ watch(
 );
 
 // ---- lifecycle ----
+let stopActivityHeartbeat: (() => void) | null = null;
 onMounted(() => {
+  // Activity only matters for auto-restarting into a verified build.
+  if (workspaceMode) stopActivityHeartbeat = startActivityHeartbeat();
   // Hydrate persistent terminals from the server.
   let cancelled = false;
   fetch("/api/terminals")
@@ -1353,6 +1357,7 @@ onMounted(() => {
 let terminalsHydrationCancel: (() => void) | null = null;
 
 onUnmounted(() => {
+  stopActivityHeartbeat?.();
   terminalsHydrationCancel?.();
   globalStreamHandle?.close();
   globalStreamHandle = null;

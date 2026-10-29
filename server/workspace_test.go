@@ -339,7 +339,7 @@ func TestActionWorkspaceStartupInterruptsWithoutExecution(t *testing.T) {
 	t.Parallel()
 	s, database, _ := newTestServer(t)
 	cwd := t.TempDir()
-	if _, err := database.EnsureWorkspace(t.Context(), "predictable", db.ConversationOptions{}); err != nil {
+	if _, err := database.EnsureWorkspace(t.Context(), cwd, "predictable", db.ConversationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	conversation, err := database.CreateConversation(t.Context(), nil, true, &cwd, nil, db.ConversationOptions{})

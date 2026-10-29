@@ -38,8 +38,9 @@ build: exe-scroll ui templates
 build-custom: exe-scroll ui templates
 	@set -e; \
 	CANON="$$HOME/.config/shelley/shelley-customization"; \
-	if [ "$$(pwd -P)" != "$$(cd "$$CANON" 2>/dev/null && pwd -P)" ]; then \
-		echo "warning: building outside $$CANON; the version dialog's rebase-upgrade flow assumes that checkout" >&2; \
+	COMMON=$$(git rev-parse --path-format=absolute --git-common-dir); \
+	if [ "$$COMMON" != "$$(git -C "$$CANON" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" ]; then \
+		echo "warning: building outside $$CANON and its worktrees; the version dialog's rebase-upgrade flow assumes that checkout" >&2; \
 	fi; \
 	git fetch --tags origin main; \
 	BASE=$$(git merge-base HEAD origin/main); \

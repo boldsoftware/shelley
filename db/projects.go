@@ -87,35 +87,39 @@ func (db *DB) CreateProject(ctx context.Context, project Project, from string) (
 	if err := validateProject(&project); err != nil {
 		return nil, err
 	}
-	actions, err := json.Marshal(project.Actions)
-	if err != nil {
-		return nil, err
-	}
-	err = db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		var exists bool
-		if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM profiles WHERE name=?)", project.Name).Scan(&exists); err != nil {
-			return err
-		}
-		if exists {
-			return fmt.Errorf("%w: a profile named %q already exists", ErrConflict, project.Name)
-		}
-		result, err := tx.Exec(`INSERT INTO profiles(name,settings)
-			SELECT ?,settings FROM profiles WHERE CASE WHEN ?='' THEN is_default ELSE name=? END`, project.Name, from, from)
-		if err := rowsChanged(result, err); errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("%w: profile %q not found", ErrInvalid, from)
-		} else if err != nil {
-			return err
-		}
-		if _, err := tx.Exec("INSERT INTO profile_projects(profile,instructions,cwd,actions) VALUES(?,?,?,?)",
-			project.Name, project.Instructions, project.Cwd, string(actions)); err != nil {
-			return err
-		}
-		if err := setProjectRepos(tx, project.Name, project.Repos); err != nil {
-			return err
-		}
-		return setProjectVM(tx, project.Name, project.VM)
+	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		return createProject(tx, project, from)
 	})
 	return &project, err
+}
+
+func createProject(tx *Tx, project Project, from string) error {
+	var exists bool
+	if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM profiles WHERE name=?)", project.Name).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("%w: a profile named %q already exists", ErrConflict, project.Name)
+	}
+	result, err := tx.Exec(`INSERT INTO profiles(name,settings)
+		SELECT ?,settings FROM profiles WHERE CASE WHEN ?='' THEN is_default ELSE name=? END`, project.Name, from, from)
+	if err := rowsChanged(result, err); errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("%w: profile %q not found", ErrInvalid, from)
+	} else if err != nil {
+		return err
+	}
+	actions, err := json.Marshal(project.Actions)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec("INSERT INTO profile_projects(profile,instructions,cwd,actions) VALUES(?,?,?,?)",
+		project.Name, project.Instructions, project.Cwd, string(actions)); err != nil {
+		return err
+	}
+	if err := setProjectRepos(tx, project.Name, project.Repos); err != nil {
+		return err
+	}
+	return setProjectVM(tx, project.Name, project.VM)
 }
 
 // UpdateProject replaces the project data of profile name, and renames the
@@ -204,6 +208,17 @@ func (db *DB) GetProject(ctx context.Context, name string) (*Project, error) {
 	var project *Project
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
 		project, err = getProject(rx, "?", name)
+		return err
+	})
+	return project, err
+}
+
+// GetConversationProject returns the project of conversation conversationID, or
+// sql.ErrNoRows if it is in none.
+func (db *DB) GetConversationProject(ctx context.Context, conversationID string) (*Project, error) {
+	var project *Project
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
+		project, err = getProject(rx, "(SELECT project FROM ("+workspaceConversationQuery+" AND conversation_id=?))", conversationID)
 		return err
 	})
 	return project, err

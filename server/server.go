@@ -404,6 +404,7 @@ type Server struct {
 	workspace                workspaceState
 	conversationVMs          conversationVMState
 	baseVMSetupMu            sync.Mutex // serializes starting base VM setup conversations
+	customizations           customizationState
 	integrationSkills        *integrationSkillCache
 	listIntegrations         integrationLister
 	// fileListCache memoizes working-directory file listings for the fuzzy
@@ -514,6 +515,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		shutdownCh:            make(chan struct{}),
 		conversationVMs:       conversationVMState{cleanup: make(chan struct{}, 1), active: make(chan struct{})},
 		workspace:             workspaceState{reports: make(chan struct{}, 1)},
+		customizations:        customizationState{deps: defaultCustomizationDependencies(), kick: make(chan struct{}, 1)},
 		hooksDir:              defaultHooksDir(),
 		exitDelay:             500 * time.Millisecond,
 		exitProcess:           os.Exit,
@@ -1707,6 +1709,7 @@ func (s *Server) publishConversationState(state ConversationState) {
 	// and would just be noise for the user.
 	var notifEvent *notifications.Event
 	if !state.Working {
+		s.reconcileCustomizationsAfterTurn(state.ConversationID)
 		conv, convErr := s.db.GetConversationByID(context.Background(), state.ConversationID)
 		isSubagent := convErr == nil && isManagedChild(*conv)
 		// Honor an explicit per-conversation opt-out: conversations created
@@ -1927,6 +1930,7 @@ func (s *Server) Start(port string) error {
 func (s *Server) tcpHandler(mux http.Handler) http.Handler {
 	h := LoggerMiddleware(s.logger)(mux)
 	h = s.rememberWebOrigin(h)
+	h = s.trackUserActivity(h)
 	h = http.NewCrossOriginProtection().Handler(h)
 	if s.requireHeader != "" {
 		h = RequireHeaderMiddleware(s.requireHeader)(h)
@@ -2086,6 +2090,8 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	go s.recoverQueuedTranscriptions(context.Background())
 	s.startConversationVMCleanup()
 	s.startActionReports()
+	s.startAutoRestart()
+	s.startCustomizations()
 
 	// Wait for shutdown signal or server error
 	quit := make(chan os.Signal, 1)

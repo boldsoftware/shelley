@@ -74,16 +74,31 @@ type Workspace struct {
 	// BaseVMs are the base VMs Shelley created for projects, which deleting
 	// the project deletes.
 	BaseVMs []ProjectBaseVM `json:"base_vms"`
+	// ShelleyProject names the project that customizes Shelley, if any.
+	ShelleyProject string `json:"shelley_project"`
 }
+
+// The server adds the rules of customizing Shelley to its project's prompt.
+const shelleyProjectInstructions = `Customize, maintain, and improve Shelley, this coding agent.`
 
 // EnsureWorkspace serializes singleton creation with all other DB writes.
 // Both the assistant row and its identity are committed together, never as an
 // orphan created outside the transaction.
-func (db *DB) EnsureWorkspace(ctx context.Context, model string, opts ConversationOptions) (string, error) {
+func (db *DB) EnsureWorkspace(ctx context.Context, shelleyCwd, model string, opts ConversationOptions) (string, error) {
 	var assistantID string
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
 		err := tx.QueryRow("SELECT assistant_id FROM workspace WHERE singleton = 1").Scan(&assistantID)
 		if errors.Is(err, sql.ErrNoRows) {
+			// Shelley's own project, unless a profile has its name.
+			var taken bool
+			if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM profiles WHERE name='Shelley')").Scan(&taken); err != nil {
+				return err
+			}
+			if !taken {
+				if err := createProject(tx, Project{Name: "Shelley", Instructions: shelleyProjectInstructions, Cwd: shelleyCwd, Actions: []ProjectAction{}}, ""); err != nil {
+					return err
+				}
+			}
 			assistantID, err = GenerateConversationID()
 			if err != nil {
 				return err

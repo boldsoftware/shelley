@@ -46,12 +46,6 @@ test("root opens the pinned Assistant; explicit conversation links remain select
   await page.getByRole("button", { name: "Archived tasks", exact: true }).click();
   await expect(page.getByTestId("assistant-row")).toBeVisible();
   await expect(page.getByTestId("assistant-row").getByRole("button")).toHaveCount(0);
-  // With a project to move it into, the conversation offers the project picker.
-  const project = await request.post("/api/projects", {
-    headers: { "X-Shelley-Request": "1" },
-    data: { name: `Root ${randomUUID().slice(0, 8)}`, instructions: "", cwd: "", actions: [] },
-  });
-  expect(project.ok()).toBeTruthy();
   await page.goto(`/c/${conversation.conversationId}`);
   await expect(page.locator("h1.header-title")).not.toHaveText("Assistant");
   await expect(page).toHaveURL(new RegExp(`/c/(${conversation.slug}|${conversation.conversationId})$`));

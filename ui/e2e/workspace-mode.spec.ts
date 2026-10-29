@@ -9,12 +9,6 @@ test("workspace mode pins the Assistant and always groups by project", async ({
   page,
   request,
 }) => {
-  const name = `Workspace ${randomUUID().slice(0, 8)}`;
-  const project = await request.post("/api/projects", {
-    headers: { "X-Shelley-Request": "1" },
-    data: { name, instructions: "", cwd: testWorkingDirectory(), actions: [] },
-  });
-  expect(project.ok()).toBeTruthy();
   const on = await request.post("/feature-flags", { data: { name: "workspace", value: true } });
   expect(on.ok()).toBeTruthy();
   try {
@@ -24,7 +18,7 @@ test("workspace mode pins the Assistant and always groups by project", async ({
     await expect(page.locator("h1.header-title")).toHaveText("Assistant");
     await page.getByRole("button", { name: "Open tasks", exact: true }).click();
     await expect(page.getByTestId("assistant-row")).toBeVisible();
-    await expect(page.getByRole("region", { name, exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Shelley", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Group conversations" })).toHaveCount(0);
   } finally {
     const off = await request.delete("/feature-flags", { data: { name: "workspace" } });

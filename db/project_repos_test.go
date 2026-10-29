@@ -11,7 +11,7 @@ func TestProjectRepos(t *testing.T) {
 	database, cleanup := NewTestDB(t)
 	defer cleanup()
 	ctx := t.Context()
-	if _, err := database.EnsureWorkspace(ctx, "predictable", ConversationOptions{}); err != nil {
+	if _, err := database.EnsureWorkspace(ctx, t.TempDir(), "predictable", ConversationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	repos := []ProjectRepo{{Integration: "team-acme-api", Repository: "acme/api"}, {Integration: "acme-web", Repository: "acme/web"}}

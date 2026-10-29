@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -76,7 +77,7 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	for range 16 {
 		wg.Go(func() {
 			<-start
-			id, err := database.EnsureWorkspace(ctx, model, ConversationOptions{ThinkingLevel: "medium"})
+			id, err := database.EnsureWorkspace(ctx, cwd, model, ConversationOptions{ThinkingLevel: "medium"})
 			results <- result{id, err}
 		})
 	}
@@ -98,7 +99,7 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if workspace.AssistantID != assistantID || len(workspace.Projects) != 0 || len(workspace.Conversations) != 1 || workspace.Runs == nil {
+	if workspace.AssistantID != assistantID || len(workspace.Projects) != 1 || len(workspace.Conversations) != 1 || workspace.Runs == nil {
 		t.Fatalf("unexpected workspace: %+v", workspace)
 	}
 	// Existing conversations are in no project.
@@ -131,7 +132,7 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	if _, err := database.GetWorkspaceConversation(ctx, assistantID); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("assistant metadata outside workspace mode: %v", err)
 	}
-	if w, err := database.GetWorkspace(ctx); err != nil || w.AssistantID != "" || len(w.Projects) != 0 {
+	if w, err := database.GetWorkspace(ctx); err != nil || w.AssistantID != "" || len(w.Projects) != 1 {
 		t.Fatalf("workspace outside workspace mode: %+v %v", w, err)
 	}
 	EnableWorkspaceMode(t, database)
@@ -143,12 +144,25 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 		unchanged.ConversationOptions != active.ConversationOptions || unchanged.Archived {
 		t.Fatalf("workspace setup changed original conversation: %+v", unchanged)
 	}
+	shelley, err := database.GetProject(ctx, "Shelley")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shelley.Instructions = "Keep agent edits"
+	shelley.Actions = []ProjectAction{{ID: "custom", Label: "Configured action", Command: "make custom"}}
+	if err := database.UpdateProject(ctx, "Shelley", *shelley); err != nil {
+		t.Fatal(err)
+	}
 	newConversation, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.EnsureWorkspace(ctx, "different-model", ConversationOptions{}); err != nil {
+	if _, err := database.EnsureWorkspace(ctx, "not-a-repository", "different-model", ConversationOptions{}); err != nil {
 		t.Fatal(err)
+	}
+	shelley, _ = database.GetProject(ctx, "Shelley")
+	if shelley.Instructions != "Keep agent edits" || !reflect.DeepEqual(shelley.Actions, []ProjectAction{{ID: "custom", Label: "Configured action", Command: "make custom"}}) {
+		t.Fatal("workspace ensure overwrote project edits")
 	}
 	if _, err := database.GetWorkspaceConversation(ctx, newConversation.ConversationID); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("new conversation in a project: %v", err)

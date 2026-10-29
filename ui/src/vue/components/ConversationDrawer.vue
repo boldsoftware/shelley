@@ -205,6 +205,19 @@
       {{ rowError }}
       <button type="button" class="text-button" @click="rowError = ''">{{ t("dismiss") }}</button>
     </p>
+    <p v-if="customizations.error.value" class="error-line drawer-error" role="status">
+      Shelley build status unavailable. Reconnecting… {{ customizations.error.value }}
+    </p>
+    <p v-if="customizations.requestError.value" class="error-line drawer-error" role="alert">
+      {{ customizations.requestError.value }}
+      <button
+        type="button"
+        class="text-button"
+        @click="customizations.requestError.value = ''"
+      >
+        Dismiss
+      </button>
+    </p>
 
     <div
       v-if="groupBy === 'daily'"
@@ -560,11 +573,23 @@
             >: {{ vm.error }}
           </p>
           <template v-if="!projectGroupCollapsed(group)">
-            <ConversationRow
-              v-for="conv in group.conversations"
-              :key="conv.conversation_id"
-              :conversation="conv"
-            />
+            <template v-for="conv in group.conversations" :key="conv.conversation_id">
+              <ConversationRow :conversation="conv" />
+              <CustomizationStatus
+                v-if="customizationFor(conv.conversation_id)"
+                :state="customizationFor(conv.conversation_id)!"
+                :pending-conversation="customizations.pendingConversation.value"
+                :unavailable="!!customizations.error.value"
+                @restart="customizations.mutate(customizationFor(conv.conversation_id)!, 'restart')"
+                @verify="customizations.mutate(customizationFor(conv.conversation_id)!, 'verify')"
+                @cancel-auto-restart="
+                  customizations.mutate(
+                    customizationFor(conv.conversation_id)!,
+                    'cancelAutoRestart',
+                  )
+                "
+              />
+            </template>
           </template>
         </section>
         <p v-if="!projectGroups.length" class="text-secondary drawer-empty-state">
@@ -718,6 +743,8 @@ import { handleModifiedNavClick } from "../utils/openInNewTab";
 import { COMPOSER_ROW_ID } from "../../utils/composerRow";
 import ConversationRow from "./ConversationDrawerRow.vue";
 import ProjectVMSetup from "./ProjectVMSetup.vue";
+import CustomizationStatus from "./CustomizationStatus.vue";
+import { useCustomizations } from "../composables/customizations";
 import ConversationQueryEditor from "./ConversationQueryEditor.vue";
 import Button from "primevue/button";
 import ContextMenu from "primevue/contextmenu";
@@ -784,6 +811,11 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const workspace = useWorkspace();
+const customizations = useCustomizations();
+const customizationByConversation = computed(
+  () => new Map(customizations.entries.value.map((entry) => [entry.conversation_id, entry])),
+);
+const customizationFor = (id: string) => customizationByConversation.value.get(id);
 const rowError = ref("");
 const assistantWorking = computed(() =>
   props.conversations.some(

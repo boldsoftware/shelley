@@ -198,18 +198,34 @@ func (s *Server) beginConversationMutation(w http.ResponseWriter, r *http.Reques
 // /exit and exec-based upgrades do not pass through Serve's graceful
 // shutdown. Refuse those restarts while a command is running, and fence
 // new actions during the response flush/re-exec window.
+// A verification in progress builds in its own worktree; it is interrupted
+// (and queued to run again after the restart) rather than blocking it.
 func (s *Server) prepareRestart(ctx context.Context) error {
 	s.workspace.mu.Lock()
-	defer s.workspace.mu.Unlock()
 	running, err := s.db.HasAnyRunningAction(ctx)
+	if err == nil && running {
+		err = fmt.Errorf("%w: wait for running actions to finish before restarting Shelley", db.ErrConflict)
+	}
 	if err != nil {
+		s.workspace.mu.Unlock()
 		return err
 	}
-	if running {
-		return fmt.Errorf("%w: wait for running actions to finish before restarting Shelley", db.ErrConflict)
-	}
 	s.workspace.restarting = true
-	return nil
+	s.workspace.mu.Unlock()
+	s.customizations.mu.Lock()
+	cancel, done := s.customizations.cancelVerify, s.customizations.verifyDone
+	s.customizations.mu.Unlock()
+	if cancel == nil {
+		return nil
+	}
+	cancel()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		s.releaseRestart()
+		return ctx.Err()
+	}
 }
 
 func (s *Server) releaseRestart() {
@@ -482,6 +498,16 @@ POST $SHELLEY_API/api/conversation/ID/actions/ACTION_ID
   Starts the project's configured command in the task directory; returns a run id. GET /api/action-runs/RUN_ID reports live output/status. Never manually archive while it runs: only a successful action archives, and errors/interruption leave the task visible. Do not fire-and-forget and report success.
 `
 
+// shelleyCustomizationPrompt is how a Shelley-project conversation changes
+// Shelley; it amends the project's instructions.
+const shelleyCustomizationPrompt = `This task changes Shelley itself, in the canonical customization checkout that every Shelley task shares: coordinate with the others, and commit your changes to its custom branch. Read AGENTS.md and the customizing-shelley skill, except the skill's install and restart steps: here the server verifies, installs and restarts. Preserve upstream conversation schemas; customization persistence belongs in new tables.
+
+When the change is complete, POST $SHELLEY_API/api/conversation/ID/customization/verify with {"finished":true} if the task's work is done (no open questions, no further rounds), else {}. The server verifies the custom branch tip in a separate worktree (pnpm install, type-check, lint, make build-custom, go test ./server ./db), so only committed work counts and other tasks' uncommitted edits never affect it; while another verification runs, the task waits and the tip is verified next. Poll GET $SHELLEY_API/api/conversation/ID/customization until its status is installed or failed (output holds the verification's output); a build that succeeded in chat is not a verified one, so never claim an installed state you did not read there. GET $SHELLEY_API/api/customizations lists every task's state, without output.
+
+A verified build is installed into the live executable automatically (never a downgrade), without restarting; if installing fails, the status stays ready with the error and the install is retried after the next turn. A task keeps its build until a newer verified build containing its commits replaces it; if a newer build fails, fix it and commit. A failed build is verified again only on request or by a new commit. Never copy a binary into the live path or restart Shelley by hand.
+
+Shelley restarts into the newest installed build by itself once no task, action or verification is working and the user has left the UI alone for 30 seconds, unless the user cancels that for the build; the user can also click Restart Shelley on the installed task. Only when the user asks you to restart now, POST $SHELLEY_API/api/conversation/ID/customization/restart with {"commit":"FULL_COMMIT","artifact_sha256":"ARTIFACT_SHA256"} of the installed build. Active conversations continue after a restart. Once the build runs, every idle task whose commits it contains, whose last verification said finished and that got no user message since, is archived; the others stay.`
+
 // conversationVMPrompt tells a VM conversation (or its subagent) that its work happens on
 // the VM, which its bash and patch calls target, while its tools run here.
 // It amends what the base system prompt says about this machine and the
@@ -557,6 +583,13 @@ This %[7]s's work happens on %[1]s, in %[3]s. The agent loop and your tools run 
 func (s *Server) writeProjectPrompt(ctx context.Context, out *strings.Builder, current *db.Project, id string) error {
 	out.WriteString("<project_instructions>\n")
 	out.WriteString(current.Instructions)
+	shelley, err := s.isShelleyProject(ctx, current)
+	if err != nil {
+		return err
+	}
+	if shelley {
+		out.WriteString("\n" + shelleyCustomizationPrompt)
+	}
 	out.WriteString("\n</project_instructions>\n")
 	for _, repo := range current.Repos {
 		if current.VM != nil {

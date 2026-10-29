@@ -142,6 +142,7 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	if ev.Type != "message" || ev.OptOut || (strings.TrimSpace(ev.Text) == "" && len(ev.Attachments) == 0) {
 		return nil
 	}
+	s.noteUserActivity()
 
 	// One delivery per chat at a time, so that a chat's first messages
 	// create one conversation and a retry racing its original is seen as

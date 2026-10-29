@@ -25,6 +25,7 @@ const empty = (): Workspace => ({
   runs: [],
   vms: [],
   base_vms: [],
+  shelley_project: "",
 });
 const run = (): ActionRunSummary => ({
   id: "run",
