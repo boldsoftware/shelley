@@ -1,6 +1,8 @@
 export function focusMessageInput(): void {
   if (typeof document === "undefined") return;
-  document.querySelector<HTMLTextAreaElement>('[data-testid="message-input"]')?.focus();
+  document
+    .querySelector<HTMLTextAreaElement>('[data-testid="message-input"]')
+    ?.focus({ preventScroll: true });
 }
 
 // Restore keyboard focus to the chat message input after a modal/overlay closes.

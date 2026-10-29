@@ -45,7 +45,7 @@
         @open="drawerOpen = true"
         @close="drawerOpen = false"
         @toggle-collapse="toggleDrawerCollapsed"
-        @select-conversation="selectConversation"
+        @select-conversation="selectFromDrawer"
         @new-conversation="startNewConversation"
         @removed="handleConversationRemoved"
         @unarchived="handleConversationUnarchived"
@@ -889,6 +889,19 @@ function selectConversation(conversation: Conversation) {
   currentConversationId.value = conversation.conversation_id;
   viewedConversation.value = conversation;
   drawerOpen.value = false;
+}
+
+// Picking a conversation in the drawer focuses the composer. The clicked row
+// takes focus itself, which would make the composer's autofocus defer to it;
+// release it so focus falls back to <body>. If the composer is still disabled
+// while loading, its autoFocus watch retries.
+function selectFromDrawer(conversation: Conversation) {
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && active.closest(".conversation-item")) {
+    active.blur();
+  }
+  selectConversation(conversation);
+  focusMessageInputIfUnfocused();
 }
 
 function toggleDrawerCollapsed() {
