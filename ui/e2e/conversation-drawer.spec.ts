@@ -986,6 +986,9 @@ test.describe("conversation drawer startup and app bar", () => {
     await page.getByRole("button", { name: "Expand subagents" }).click();
     const subagentRow = page.locator(".subagent-item").filter({ hasText: "subagent" });
     await expect(subagentRow).toBeVisible();
+    // Subagent rows are keyboard-reachable links, like their parents.
+    await expect(subagentRow).toHaveAttribute("role", "link");
+    await expect(subagentRow).toHaveAttribute("tabindex", "0");
 
     await page.getByRole("button", { name: "Search conversations..." }).click();
     await page.getByRole("button", { name: "Add tag filter" }).click();

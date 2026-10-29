@@ -8,6 +8,10 @@
   <div
     :class="`conversation-item ${isActive ? 'active' : ''}${isNew ? ' conversation-item-enter' : ''}${ctx.contextMenuId.value === conversation.conversation_id ? ' context-menu-target' : ''}`"
     :data-conversation-id="conversation.conversation_id"
+    role="link"
+    tabindex="0"
+    :aria-current="isActive ? 'page' : undefined"
+    @keydown.enter.self.prevent="ctx.selectConversation(conversation)"
     style="cursor: pointer"
     @click="onRowClick"
     @auxclick="ctx.handleAuxClick($event, conversation)"
@@ -364,6 +368,10 @@
     <template v-for="sub in conversationSubagents" :key="sub.conversation_id">
       <div
         :class="`conversation-item subagent-item drawer-subagent-item-style ${sub.conversation_id === ctx.currentConversationId.value ? 'active' : ''}${ctx.seenIds.value !== null && !ctx.seenIds.value.has(sub.conversation_id) ? ' conversation-item-enter' : ''}`"
+        role="link"
+        tabindex="0"
+        :aria-current="sub.conversation_id === ctx.currentConversationId.value ? 'page' : undefined"
+        @keydown.enter.self.prevent="ctx.selectConversation(sub)"
         @click="onSubClick($event, sub)"
         @auxclick="ctx.handleAuxClick($event, sub)"
       >
