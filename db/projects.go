@@ -25,6 +25,8 @@ type Project struct {
 	Instructions string          `json:"instructions"`
 	Cwd          string          `json:"cwd"`
 	Actions      []ProjectAction `json:"actions"`
+	// Repos are the GitHub repositories attached to the project.
+	Repos []ProjectRepo `json:"repos"`
 }
 
 // ProfileNameProblem says what's wrong with a profile name, or "". Names are
@@ -56,6 +58,9 @@ func validateProject(project *Project) error {
 	}
 	if len(project.Actions) > 32 {
 		return fmt.Errorf("%w: at most 32 project actions are allowed", ErrInvalid)
+	}
+	if err := validateProjectRepos(project.Repos); err != nil {
+		return err
 	}
 	seen := map[string]bool{}
 	for _, action := range project.Actions {
@@ -95,9 +100,11 @@ func (db *DB) CreateProject(ctx context.Context, project Project, from string) (
 		} else if err != nil {
 			return err
 		}
-		_, err = tx.Exec("INSERT INTO profile_projects(profile,instructions,cwd,actions) VALUES(?,?,?,?)",
-			project.Name, project.Instructions, project.Cwd, string(actions))
-		return err
+		if _, err := tx.Exec("INSERT INTO profile_projects(profile,instructions,cwd,actions) VALUES(?,?,?,?)",
+			project.Name, project.Instructions, project.Cwd, string(actions)); err != nil {
+			return err
+		}
+		return setProjectRepos(tx, project.Name, project.Repos)
 	})
 	return &project, err
 }
@@ -117,6 +124,9 @@ func (db *DB) UpdateProject(ctx context.Context, name string, project Project) e
 		result, err := tx.Exec("UPDATE profile_projects SET instructions=?,cwd=?,actions=? WHERE profile=?",
 			project.Instructions, project.Cwd, string(actions), name)
 		if err := rowsChanged(result, err); err != nil {
+			return err
+		}
+		if err := setProjectRepos(tx, name, project.Repos); err != nil {
 			return err
 		}
 		if project.Name == name {
@@ -169,7 +179,13 @@ func scanProject(scanner rowScanner) (*Project, error) {
 
 // getProject loads the project named by the SQL expression nameExpr.
 func getProject(rx *Rx, nameExpr string, args ...any) (*Project, error) {
-	return scanProject(rx.QueryRow("SELECT "+projectColumns+" FROM profile_projects WHERE profile="+nameExpr, args...))
+	project, err := scanProject(rx.QueryRow("SELECT "+projectColumns+" FROM profile_projects WHERE profile="+nameExpr, args...))
+	if err != nil {
+		return nil, err
+	}
+	projects := []Project{*project}
+	err = attachProjectRepos(rx, projects)
+	return &projects[0], err
 }
 
 func (db *DB) GetProject(ctx context.Context, name string) (*Project, error) {
@@ -195,7 +211,10 @@ func listProjects(rx *Rx) ([]Project, error) {
 		}
 		out = append(out, *project)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, attachProjectRepos(rx, out)
 }
 
 func (db *DB) ListProjects(ctx context.Context) ([]Project, error) {

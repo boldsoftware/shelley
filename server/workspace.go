@@ -113,6 +113,7 @@ func (s *Server) uiBuild() string {
 
 func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/workspace", s.handleWorkspace)
+	api.HandleFunc("GET /api/github-repos", s.handleGithubRepos)
 	api.HandleFunc("POST /api/projects", s.handleCreateProject)
 	api.HandleFunc("PUT /api/projects/{name}", s.handleUpdateProject)
 	api.HandleFunc("DELETE /api/projects/{name}", s.handleDeleteProject)

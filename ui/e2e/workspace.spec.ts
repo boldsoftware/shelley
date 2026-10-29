@@ -27,10 +27,18 @@ test("root opens the pinned Assistant; explicit conversation links remain select
   request,
 }) => {
   const conversation = await createConversationViaAPIWithDetails(request, "Hello");
+  // The worker's earlier specs may have created projects.
+  const { projects } = (await (await request.get("/api/workspace")).json()) as {
+    projects: unknown[];
+  };
   await page.goto("/");
   await expect(page.locator("h1.header-title")).toHaveText("Assistant");
+  // The first-run state offers New Project until a project exists.
   await expect(
-    page.getByRole("heading", { name: "What would you like to get done?", exact: true }),
+    page.getByRole("heading", {
+      name: projects.length ? "What would you like to get done?" : "Start with a project",
+      exact: true,
+    }),
   ).toBeVisible();
   await openWorkspace(page);
   await expect(page.getByTestId("assistant-row")).toHaveCount(1);

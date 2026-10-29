@@ -20,6 +20,7 @@ const metadataURL = "http://169.254.169.254/"
 type Environment struct {
 	scheme  string
 	boxHost string
+	vmName  string
 }
 
 // New returns an environment for a configured scheme and box hostname.
@@ -64,15 +65,20 @@ func (r *resolver) fetch() (Environment, error) {
 		return prod, nil
 	}
 	var data struct {
+		Name          string `json:"name"`
 		ReflectionURL string `json:"reflection_url"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&data); err != nil {
 		return Environment{}, fmt.Errorf("decode VM metadata: %w", err)
 	}
-	if data.ReflectionURL == "" {
-		return prod, nil
+	env := prod
+	if data.ReflectionURL != "" {
+		if env, err = fromReflectionURL(data.ReflectionURL); err != nil {
+			return env, err
+		}
 	}
-	return fromReflectionURL(data.ReflectionURL)
+	env.vmName = data.Name
+	return env, nil
 }
 
 func fromReflectionURL(raw string) (Environment, error) {
@@ -113,6 +119,11 @@ func currentOnVM(markerPath string, r *resolver) (Environment, error) {
 		return Environment{scheme: "https", boxHost: "exe.xyz"}, nil
 	}
 	return r.current()
+}
+
+// VMName returns this VM's exe.dev name, or "" if unknown.
+func (e Environment) VMName() string {
+	return e.vmName
 }
 
 // ReflectionURL returns the reflection integration's base URL.

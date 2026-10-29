@@ -17992,6 +17992,131 @@ kbd {
   overflow-wrap: anywhere;
 }
 
+/* The Assistant's first-run state: no projects yet. */
+.first-project {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.first-project-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  min-width: min(100%, 16rem);
+  margin: 0.5rem 0 1rem;
+  padding: 1rem 2rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: var(--primary);
+  color: white;
+  font-size: var(--font-size-14);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+  transition:
+    transform 0.15s,
+    background-color 0.15s;
+}
+
+.first-project-button:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.first-project-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+/* The project editor's repository picker. */
+.project-repos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.project-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--bg-base);
+  cursor: pointer;
+}
+
+.project-choice:hover,
+.project-choice.selected {
+  border-color: var(--primary);
+  background: var(--bg-secondary);
+}
+
+.project-choice.selected {
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.project-form .project-choice > input {
+  flex: none;
+  width: auto;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  accent-color: var(--primary);
+}
+
+.project-choice > .pi {
+  margin-top: 0.2rem;
+  color: var(--text-secondary);
+}
+
+.project-choice > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.5rem;
+  min-width: 0;
+}
+
+.project-choice > span > .project-muted {
+  flex-basis: 100%;
+  line-height: 1.4;
+}
+
+.project-empty-repos {
+  margin: 0;
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.6rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.project-repo-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: var(--font-size-13);
+}
+
+.project-repo-links a {
+  color: var(--link-color);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.project-repo-links .pi {
+  font-size: var(--font-size-11);
+  vertical-align: baseline;
+}
+
 .project-section-heading h3 {
   margin: 0.75rem 0 0.25rem;
   font-size: var(--font-size-14);

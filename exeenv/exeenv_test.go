@@ -78,6 +78,9 @@ func TestMetadataEnvironment(t *testing.T) {
 				if got := env.IntegrationURL("llm", true); got != tc.want {
 					t.Errorf("IntegrationURL(llm, true) = %q, want %q", got, tc.want)
 				}
+				if got := env.VMName(); got != "my-box" {
+					t.Errorf("VMName() = %q, want my-box", got)
+				}
 			}
 			if calls != 1 {
 				t.Errorf("metadata requests = %d, want one cached success", calls)

@@ -163,14 +163,31 @@
           <!-- empty state -->
           <div v-if="conversationOptions.kind !== 'search' && messages.length === 0 && liveExchangeTurns.length === 0" class="empty-state">
             <div class="empty-state-content">
-              <template v-if="isAssistant">
+              <div v-if="isAssistant && !workspace.hasProjects.value" class="first-project">
+                <h2 class="text-primary">Start with a project</h2>
+                <p class="chat-welcome-text">
+                  A project brings together its GitHub repositories, instructions and actions. I’ll
+                  start tasks in it whenever you ask for work on it.
+                </p>
+                <button
+                  type="button"
+                  class="first-project-button"
+                  data-testid="first-project-button"
+                  @click="workspace.editProject()"
+                >
+                  <i class="pi pi-folder-plus" aria-hidden="true" />
+                  New Project
+                </button>
+                <p class="text-sm chat-secondary-text">Or just ask me something below.</p>
+              </div>
+              <template v-else-if="isAssistant">
                 <h2 class="text-primary">What would you like to get done?</h2>
                 <p class="chat-welcome-text">
                   Ask a quick question, or describe a project. I’ll answer here or start a task in
                   the right project.
                 </p>
                 <p class="text-sm chat-secondary-text">
-                  Projects keep instructions and actions together.
+                  Projects keep repositories, instructions and actions together.
                 </p>
               </template>
               <p v-else class="text-base chat-welcome-text">
@@ -650,6 +667,7 @@
 import { provideIframeVersions } from "../composables/iframeVersions";
 import ProjectHeader from "./ProjectHeader.vue";
 import ActionRunsTail from "./ActionRunsTail.vue";
+import { useWorkspace } from "../composables/workspace";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
 import {
   computed,
@@ -902,6 +920,7 @@ const props = withDefaults(
     reconnectNonce: 0,
   },
 );
+const workspace = useWorkspace();
 
 const { t } = useI18n();
 const conversations = inject(ConversationsListKey);

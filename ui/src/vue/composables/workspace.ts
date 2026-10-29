@@ -95,6 +95,8 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     editProject: (project: Project | null = null) => {
       projectEditor.value = { project };
     },
+    /** Whether the user has projects; true until the workspace loads. */
+    hasProjects: computed(() => !data.value || data.value.projects.length > 0),
     deleteProject: (project: Project) => {
       projectDeletion.value = project;
     },

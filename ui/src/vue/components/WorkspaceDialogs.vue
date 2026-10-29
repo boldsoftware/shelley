@@ -26,6 +26,7 @@
         :disabled="saving"
       />
       <p class="project-muted">{{ t("projectInstructionsHint") }}</p>
+      <ProjectRepoPicker v-model="draft.repos" :disabled="saving" />
       <label for="project-cwd">{{ t("workingDirectory") }}</label>
       <input
         id="project-cwd"
@@ -199,6 +200,7 @@
 import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
 import Modal from "./Modal.vue";
+import ProjectRepoPicker from "./ProjectRepoPicker.vue";
 import { workspaceApi, type Project } from "../../services/workspace";
 import { api } from "../../services/api";
 import type { Conversation } from "../../types";
@@ -232,7 +234,7 @@ watch(workspace.projectEditor, (editor) => {
   if (!editor) return;
   draft.value = editor.project
     ? JSON.parse(JSON.stringify(editor.project))
-    : { name: "", instructions: "", cwd: "", actions: [] };
+    : { name: "", instructions: "", cwd: "", actions: [], repos: [] };
   editingName = editor.project?.name ?? "";
   projectError.value = "";
 });

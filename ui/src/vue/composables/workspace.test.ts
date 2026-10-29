@@ -15,6 +15,7 @@ const empty = (): Workspace => ({
       instructions: "Writing\n\nBe brief",
       cwd: "/tmp",
       actions: [],
+      repos: [],
     },
   ],
   conversations: [

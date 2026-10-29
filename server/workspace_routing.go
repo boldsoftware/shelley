@@ -342,8 +342,9 @@ func (s *Server) workspaceInstructions(ctx context.Context, id string) (string, 
 }
 
 // projectCatalog lists the projects for the Assistant, which routes on what
-// people write about a project: its name and the start of its instructions.
-// Only the Assistant gets it, so a project edit changes no task's prompt.
+// people write about a project: its name, the start of its instructions, and
+// its repositories. Only the Assistant gets it, so a project edit changes no
+// task's prompt.
 func (s *Server) projectCatalog(ctx context.Context) ([]byte, error) {
 	projects, err := s.db.ListProjects(ctx)
 	if err != nil {
@@ -352,22 +353,29 @@ func (s *Server) projectCatalog(ctx context.Context) ([]byte, error) {
 	type projectSummary struct {
 		Name         string             `json:"name"`
 		Instructions string             `json:"instructions,omitempty"`
+		Repos        []string           `json:"repos,omitempty"`
 		Cwd          string             `json:"cwd"`
 		Actions      []db.ProjectAction `json:"actions"`
 	}
 	summaries := make([]projectSummary, 0, len(projects))
 	for _, project := range projects {
-		summaries = append(summaries, projectSummary{project.Name,
-			truncateRunes(strings.TrimSpace(project.Instructions), 300), project.Cwd, project.Actions})
+		var repos []string
+		for _, repo := range project.Repos {
+			repos = append(repos, repo.Repository)
+		}
+		summaries = append(summaries, projectSummary{
+			project.Name,
+			truncateRunes(strings.TrimSpace(project.Instructions), 300), repos, project.Cwd, project.Actions,
+		})
 	}
 	return json.Marshal(summaries)
 }
 
 const assistantRoutingPrompt = `You are the user's long-lived Assistant and task dispatcher, pinned above all projects. Answer quick questions, one-off research, and casual requests here. For example, answer "what's the weather today?" directly (use a real weather source).
 
-For substantive project work, code changes, multi-step deliverables, or work that deserves its own history, CREATE A TASK in the best matching existing project using the API below, rather than doing the project work in this thread. For example, "please make the signup form validate email addresses" belongs in a project for the web app. You decide using the request's meaning and the live project catalog (names, instructions, directories, actions), not keywords alone. Each project is a profile: its tasks take the profile's settings (model, effort, tools), and the project's instructions, directory, and actions.
+For substantive project work, code changes, multi-step deliverables, or work that deserves its own history, CREATE A TASK in the best matching existing project using the API below, rather than doing the project work in this thread. For example, "please make the signup form validate email addresses" belongs in a project for the web app. You decide using the request's meaning and the live project catalog (names, instructions, repositories, directories, actions), not keywords alone. Each project is a profile: its tasks take the profile's settings (model, effort, tools), and the project's instructions, directory, repositories, and actions.
 
-Before creating a task, inspect the workspace for an existing active task covering the same request; reuse it if appropriate rather than duplicating work. Every task needs a project. When no existing project is an obvious fit, create a new project for that kind of work, named and instructed so future related tasks belong there too, rather than placing the task in a catch-all. Projects are agent-maintained: keep their names, instructions (the project's AGENTS.md), directories, and actions accurate and reusable; do not create a new project for every task.
+Before creating a task, inspect the workspace for an existing active task covering the same request; reuse it if appropriate rather than duplicating work. Every task needs a project. When no existing project is an obvious fit, create a new project for that kind of work, named and instructed so future related tasks belong there too, rather than placing the task in a catch-all; the user can also create one with the New Project button. Projects are agent-maintained: keep their names, instructions (the project's AGENTS.md), repositories, directories, and actions accurate and reusable; do not create a new project for every task.
 
 Forward the full user request and all necessary context, constraints, and attachment paths to the task. Give it a short descriptive title. The task starts working immediately in its own conversation. Tell the user that you started it in one short plain-text message containing the task's full URL (see Task links below), not a markdown link or a bare path. Do not claim you completed the delegated work. Stay in the Assistant unless the user follows the task link.
 
@@ -388,8 +396,8 @@ POST $SHELLEY_API/api/conversation/ID/chat
   Body: {"message":"Follow-up instructions"}; send to an existing task only when appropriate.
 POST $SHELLEY_API/api/projects
 PUT $SHELLEY_API/api/projects/NAME
-  Complete project body: {"name":"Project name","instructions":"Project instructions (AGENTS.md-style), appended to every task's prompt","cwd":"/absolute/real/project/path","actions":[{"id":"release","label":"make release","command":"make release","archive_on_success":true,"silent":false},{"id":"test","label":"make test","command":"make test","archive_on_success":false,"silent":false}]}
-  NAME is the project's name, URL-path-escaped (e.g. my%20project). A different name in a PUT body renames the project. Names are unique among profiles, at most 64 bytes, without "/". cwd can be empty when the environment is not known yet. Use an existing directory once discovered. Instructions are additive to the task's existing prompt; their start is what you route on, so lead with what the project is for. A project is a profile (GET $SHELLEY_API/api/profiles lists them, with "project": true): its settings (model, effort, tools, base system prompt) start as a copy of the default profile's, or of the profile named by "copy_settings_from" when creating; change them with PUT $SHELLEY_API/api/profiles/NAME (the complete settings). Action ids are up to 64 letters, digits, "-" and "_". A run's result is sent to its task's agent unless the action is "silent". Keep actions deliberate and minimal: commands execute with the user's VM permissions, so do not add destructive cleanup or external side effects without authorization.
+  Complete project body: {"name":"Project name","instructions":"Project instructions (AGENTS.md-style), appended to every task's prompt","cwd":"/absolute/real/project/path","repos":[{"integration":"GITHUB_INTEGRATION","repository":"OWNER/REPO"}],"actions":[{"id":"release","label":"make release","command":"make release","archive_on_success":true,"silent":false},{"id":"test","label":"make test","command":"make test","archive_on_success":false,"silent":false}]}
+  NAME is the project's name, URL-path-escaped (e.g. my%20project). A different name in a PUT body renames the project. Names are unique among profiles, at most 64 bytes, without "/". cwd can be empty when the environment is not known yet. Use an existing directory once discovered. Instructions are additive to the task's existing prompt; their start is what you route on, so lead with what the project is for. A project is a profile (GET $SHELLEY_API/api/profiles lists them, with "project": true): its settings (model, effort, tools, base system prompt) start as a copy of the default profile's, or of the profile named by "copy_settings_from" when creating; change them with PUT $SHELLEY_API/api/profiles/NAME (the complete settings). repos are GitHub repositories this host reaches through exe.dev GitHub integrations (GET $SHELLEY_API/api/github-repos lists them, one per integration). Always send the project's current repos back unchanged unless asked to change them. Action ids are up to 64 letters, digits, "-" and "_". A run's result is sent to its task's agent unless the action is "silent". Keep actions deliberate and minimal: commands execute with the user's VM permissions, so do not add destructive cleanup or external side effects without authorization.
 PUT $SHELLEY_API/api/conversation/ID/project
   Body: {"project":"Existing project name"}; moves an idle task, not the Assistant. Unless its settings were changed, it takes the new project's at its next turn.
 DELETE $SHELLEY_API/api/projects/NAME
@@ -404,6 +412,9 @@ func writeProjectPrompt(out *strings.Builder, current *db.Project) {
 	out.WriteString("<project_instructions>\n")
 	out.WriteString(current.Instructions)
 	out.WriteString("\n</project_instructions>\n")
+	for _, repo := range current.Repos {
+		fmt.Fprintf(out, "Project repository: %s (exe.dev GitHub integration %q).\n", repo.Repository, repo.Integration)
+	}
 	if current.Cwd == "" {
 		out.WriteString("This project has no configured directory. Do not assume the initial working directory is its repository. Discover and configure the correct environment before editing files or running project commands.\n")
 	}

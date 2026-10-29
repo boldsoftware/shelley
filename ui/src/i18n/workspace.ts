@@ -40,7 +40,7 @@ export const workspaceEn: Partial<TranslationKeys> = {
   projectHasActiveConversation: "Archive or move its active task first",
   projectHasActiveConversations: "Archive or move its {count} active tasks first",
   projectFormIntro:
-    "Shared instructions and actions for every task in this project. You can also ask the Assistant to manage these.",
+    "Shared instructions, repositories and actions for every task in this project. You can also ask the Assistant to manage these.",
   projectInstructionsHint: "AGENTS.md-style instructions appended to every task in this project.",
   projectProfileHint:
     "The project is also a profile: its model, effort, tools and base system prompt are its tasks’ settings. Change them from a task’s model picker (Update profile).",

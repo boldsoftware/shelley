@@ -10,14 +10,27 @@ export interface ProjectAction {
 }
 
 /** A project: a profile (named the same, holding its conversations' settings) with
- * instructions, a directory, and actions. A conversation whose profile is a
- * project is a member of it. */
+ * instructions, a directory, actions, and repositories. A conversation
+ * whose profile is a project is in it. */
 export interface Project {
   name: string;
   /** Project instructions (AGENTS.md-style), appended to every conversation's prompt. */
   instructions: string;
   cwd: string;
   actions: ProjectAction[];
+  /** GitHub repositories attached through exe.dev GitHub integrations. */
+  repos: ProjectRepo[];
+}
+
+export interface ProjectRepo {
+  integration: string;
+  /** OWNER/REPO */
+  repository: string;
+}
+
+/** A repository this host reaches through an exe.dev GitHub integration. */
+export interface GithubRepo extends ProjectRepo {
+  team: boolean;
 }
 
 export interface WorkspaceConversation {
@@ -61,6 +74,12 @@ export interface Workspace {
 
 export const workspaceApi = {
   workspace: () => apiJSON<Workspace>("/api/workspace", "Failed to load projects"),
+  /** connect_url is "" off exe.dev, where there are no GitHub integrations. */
+  githubRepos: () =>
+    apiJSON<{ repos: GithubRepo[]; connect_url: string }>(
+      "/api/github-repos",
+      "Failed to load GitHub repositories",
+    ),
   createProject: (project: Project) =>
     apiJSON<Project>("/api/projects", "Failed to create the project", "POST", project),
   /** Replaces project name's data; a different project.name renames it. */

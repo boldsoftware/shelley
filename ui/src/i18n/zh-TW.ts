@@ -149,7 +149,7 @@ export const zhTW: TranslationKeys = {
   sendResultToAgent: "將結果傳送給代理",
   removeAction: "移除",
   editProject: "編輯專案",
-  projectFormIntro: "此專案中所有對話共用的指示和動作。",
+  projectFormIntro: "此專案中所有對話共用的指示、儲存庫和動作。",
   projectName: "名稱",
   projectInstructions: "專案指示 (AGENTS.md)",
   projectInstructionsHint: "附加到此專案每個對話的 AGENTS.md 風格指示。",

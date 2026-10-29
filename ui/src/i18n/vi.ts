@@ -152,7 +152,7 @@ export const vi: TranslationKeys = {
   sendResultToAgent: "Gửi kết quả cho tác tử",
   removeAction: "Xóa",
   editProject: "Sửa dự án",
-  projectFormIntro: "Hướng dẫn và hành động chung cho mọi cuộc trò chuyện trong dự án này.",
+  projectFormIntro: "Hướng dẫn, kho mã và hành động chung cho mọi cuộc trò chuyện trong dự án này.",
   projectName: "Tên",
   projectInstructions: "Hướng dẫn dự án (AGENTS.md)",
   projectInstructionsHint:
