@@ -141,7 +141,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import type { Conversation, Message, Model } from "../../types";
+import type { ConversationWithState, Message, Model } from "../../types";
 import type { OtherUsageRow, UsageEntry } from "../../utils/tokenCostGraph";
 import { tildifyPath } from "../../utils/tildify";
 import { useI18n } from "../composables/i18n";
@@ -152,7 +152,7 @@ import ModelPicker from "./ModelPicker.vue";
 import StatusReadout from "./StatusReadout.vue";
 
 const props = defineProps<{
-  currentConversation?: Conversation;
+  currentConversation?: ConversationWithState;
   conversationId: string | null;
   streamStatus: "connected" | "reconnecting" | "disconnected";
   error: string | null;
@@ -214,6 +214,9 @@ const cwd = computed(() => props.currentConversation?.cwd || props.selectedCwd);
 // branches). Everything here is identical between them; the branch-specific
 // bits are passed separately at each site.
 const readoutProps = computed(() => ({
+  gitBranch: props.currentConversation?.git_branch,
+  gitCommit: props.currentConversation?.git_commit,
+  gitRepoRoot: props.currentConversation?.git_repo_root,
   contextWindowSize: props.contextWindowSize,
   maxContextTokens: props.maxContextTokens,
   usageEntries: props.usageEntries,

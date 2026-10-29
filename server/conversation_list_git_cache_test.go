@@ -78,6 +78,7 @@ func TestConversationListWithStateUsesCachedGitInfo(t *testing.T) {
 		state: &gitstate.GitState{
 			IsRepo:   true,
 			Worktree: cwd,
+			Branch:   "topic",
 			Commit:   "cached",
 			Subject:  "cached subject",
 		},
@@ -92,7 +93,7 @@ func TestConversationListWithStateUsesCachedGitInfo(t *testing.T) {
 	if len(list) != 1 {
 		t.Fatalf("expected one conversation, got %d", len(list))
 	}
-	if list[0].GitCommit != "cached" || list[0].GitWorktreeRoot != "/main" {
+	if list[0].GitBranch != "topic" || list[0].GitCommit != "cached" || list[0].GitWorktreeRoot != "/main" {
 		t.Fatalf("expected cached git info, got %+v", list[0])
 	}
 }

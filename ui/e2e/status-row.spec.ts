@@ -1,9 +1,82 @@
 import { test, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createConversationViaAPIWithDetails } from "./helpers";
+import { createConversationViaAPIWithDetails, git, initGitRepo, withTempDir } from "./helpers";
+
+test("status branch is opt-in, persists, and follows the cwd worktree", async ({
+  page,
+  request,
+}) => {
+  try {
+    await withTempDir("shelley-status-branch-", async (dir) => {
+      const repo = join(dir, "repo");
+      const worktree = join(dir, "worktree");
+      const cwd = join(worktree, "nested");
+      mkdirSync(repo);
+      initGitRepo(repo);
+      git(repo, "commit", "--allow-empty", "-m", "fixture");
+      git(repo, "worktree", "add", "-b", "topic", worktree);
+      mkdirSync(cwd);
+      const { slug, conversationId } = await createConversationViaAPIWithDetails(
+        request,
+        "echo branch status",
+        { cwd },
+      );
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.goto(`/c/${slug}`);
+      const branch = page.locator(".status-readout-branch:visible");
+      await expect(page.locator(".status-ready:visible")).toBeVisible();
+      await expect(branch).toHaveCount(0);
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.locator(".command-palette-input").fill("Show Git branch in status bar");
+      await page.getByText("Show Git branch in status bar", { exact: true }).click();
+      await expect(branch).toHaveText("topic");
+      await page.reload();
+      await expect(branch).toHaveText("topic");
+
+      const name = "feature/status-bar-branch-indicator";
+      await page.getByTestId("message-input").fill(`bash: git checkout -b ${name}`);
+      await page.getByTestId("send-button").click();
+      await expect(branch).toHaveText(name);
+      await branch.hover();
+      await expect(page.locator(".p-tooltip-text")).toContainText(name);
+      await expect(page.locator(".p-tooltip-text")).toContainText(worktree);
+
+      await page.setViewportSize({ width: 390, height: 800 });
+      await expect(page.locator(".status-readout-branch")).toBeHidden();
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.getByTestId("message-input").fill("bash: git checkout --detach");
+      await page.getByTestId("send-button").click();
+      await expect(branch).toHaveText(
+        `detached@${git(worktree, "rev-parse", "--short=7", "HEAD")}`,
+      );
+      await expect(page.locator(".status-ready:visible")).toBeVisible();
+
+      const response = await request.post(`/api/conversation/${conversationId}/cwd`, {
+        data: { cwd: dir },
+      });
+      expect(response.ok()).toBe(true);
+      await expect(page.locator(".status-readout-branch")).toHaveCount(0);
+      expect(
+        (await request.post(`/api/conversation/${conversationId}/cwd`, { data: { cwd } })).ok(),
+      ).toBe(true);
+      await expect(branch).toContainText("detached@");
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.locator(".command-palette-input").fill("Hide Git branch in status bar");
+      await page.getByText("Hide Git branch in status bar", { exact: true }).click();
+      await expect(branch).toHaveCount(0);
+      await page.reload();
+      await expect(page.locator(".status-ready:visible")).toBeVisible();
+      await expect(branch).toHaveCount(0);
+    });
+  } finally {
+    expect(
+      (await request.post("/settings", { data: { key: "show_git_branch", value: "false" } })).ok(),
+    ).toBe(true);
+  }
+});
 
 test("TOC shares the compact status row across desktop and mobile", async ({ page, request }) => {
   const { slug, conversationId } = await createConversationViaAPIWithDetails(

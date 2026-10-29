@@ -127,6 +127,7 @@ import type { Locale, TranslationKeys } from "../../i18n/types";
 import { api } from "../../services/api";
 import { messageStore } from "../../services/messageStore";
 import { useMarkdownMode } from "../composables/markdownMode";
+import { useGitBranchSetting } from "../composables/gitBranchSetting";
 import { useI18n } from "../composables/i18n";
 import { tildifyPath } from "../../utils/tildify";
 import { isImeComposing } from "../../utils/imeComposing";
@@ -161,6 +162,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "record", mode: RecordingMode): void;
   (e: "close"): void;
+  (e: "error", message: string): void;
   (e: "new-conversation"): void;
   (e: "new-conversation-with-cwd", cwd: string): void;
   (e: "set-conversation-cwd", cwd: string): void;
@@ -183,6 +185,7 @@ const emit = defineEmits<{
 }>();
 
 const { markdownMode, setMarkdownMode } = useMarkdownMode();
+const { showGitBranch, setShowGitBranch } = useGitBranchSetting();
 const { t, locale, setLocale } = useI18n();
 
 const query = ref("");
@@ -190,6 +193,7 @@ const selectedIndex = ref(0);
 const searchResults = ref<ConversationWithState[]>([]);
 const isSearching = ref(false);
 const isCreatingWorktree = ref(false);
+const isSavingGitBranch = ref(false);
 const newConvGitRepoRoot = ref<string | null>(null);
 const newConvGitWorktreeRoot = ref<string | null>(null);
 const inputRef = ref<HTMLInputElement | null>(null);
@@ -550,6 +554,27 @@ const actionItems = computed<CommandItem[]>(() => {
       emit("close");
     },
     keywords: ["feature", "flag", "flags", "experiment", "toggle", "override"],
+  });
+
+  items.push({
+    id: "toggle-git-branch",
+    type: "action",
+    title: showGitBranch.value ? "Hide Git branch in status bar" : "Show Git branch in status bar",
+    subtitle: "Display the current Git branch beside the working directory",
+    icon: ICON_GRAPH,
+    action: async () => {
+      if (isSavingGitBranch.value) return;
+      isSavingGitBranch.value = true;
+      try {
+        await setShowGitBranch(!showGitBranch.value);
+      } catch (err) {
+        emit("error", err instanceof Error ? err.message : "Failed to update Git branch setting");
+      } finally {
+        isSavingGitBranch.value = false;
+        emit("close");
+      }
+    },
+    keywords: ["git", "branch", "status", "show", "hide", "toggle"],
   });
 
   const mdLabels: Record<

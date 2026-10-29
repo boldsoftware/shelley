@@ -87,6 +87,7 @@ type ConversationWithState struct {
 	Working         bool   `json:"working"`
 	GitRepoRoot     string `json:"git_repo_root,omitempty"`
 	GitWorktreeRoot string `json:"git_worktree_root,omitempty"`
+	GitBranch       string `json:"git_branch,omitempty"`
 	GitCommit       string `json:"git_commit,omitempty"`
 	GitSubject      string `json:"git_subject,omitempty"`
 	// SearchSnippet is set on hits from /api/conversations/search. Matched

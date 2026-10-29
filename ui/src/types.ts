@@ -257,6 +257,7 @@ export interface InitData {
   user_agents_md_path?: string;
   notification_channel_types?: import("./services/api").ChannelTypeInfo[];
   exe_notify_available?: boolean; // VM has an exe.dev "notify" integration (push notifications)
+  show_git_branch?: boolean;
   // model_setup_hint explains WHY models is empty, so the UI can give
   // actionable setup advice instead of guessing a model id. Absent when
   // models are available. See server/model_setup_hint.go for the tokens.
