@@ -120,15 +120,7 @@ func newConversationVMFixture(t *testing.T, command string) (*Server, *db.DB, st
 	ssh := newFakeSSH(t, s)
 	exe := &fakeExeDev{vms: map[string]string{}}
 	s.conversationVMs.exe = exe.exec
-	if err := database.BindConversationVM(t.Context(), id, db.ProjectVM{Base: "base", Integration: "exe"}); err != nil {
-		t.Fatal(err)
-	}
-	vm, err := database.GetConversationVM(t.Context(), id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	vm.Dir = cwd
-	if err := database.UpdateConversationVM(t.Context(), *vm); err != nil {
+	if err := database.BindConversationVM(t.Context(), id, db.ProjectVM{Base: "base", Integration: "exe"}, cwd); err != nil {
 		t.Fatal(err)
 	}
 	return s, database, id, cwd, ssh, exe

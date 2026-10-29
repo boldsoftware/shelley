@@ -122,6 +122,7 @@ func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
 	api.HandleFunc("PUT /api/projects/{name}", s.handleUpdateProject)
 	api.HandleFunc("DELETE /api/projects/{name}", s.handleDeleteProject)
 	api.HandleFunc("POST /api/projects/{name}/base-vm", s.handleCreateProjectBaseVM)
+	api.HandleFunc("POST /api/conversations/import", s.handleImportConversations)
 	api.HandleFunc("PUT /api/conversation/{id}/project", s.handleMoveConversation)
 	api.HandleFunc("POST /api/conversation/{id}/actions/{action_id}", s.handleRunAction)
 	api.HandleFunc("GET /api/action-runs/{id}", s.handleGetActionRun)

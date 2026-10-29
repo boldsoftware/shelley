@@ -218,15 +218,13 @@ func ConversationVMName(vm ProjectVM, conversationID string) string {
 	return vm.Base + "-" + strings.ToLower(conversationID)
 }
 
-// BindConversationVM records the VM a new conversation in a VM project will use. The conversation
-// keeps it, even if it later moves to another project.
-func (db *DB) BindConversationVM(ctx context.Context, conversationID string, vm ProjectVM) error {
-	if vm.NeedsBase() {
-		return fmt.Errorf("%w: the project has no base VM yet", ErrConflict)
-	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	return db.pool.Exec(ctx, `INSERT INTO conversation_vms(conversation_id,vm_name,base_vm,integration,shared,status,created_at,updated_at)
-		VALUES(?,?,?,?,?,?,?,?)`, conversationID, ConversationVMName(vm, conversationID), vm.Base, vm.Integration, vm.SharedVM != "", ConversationVMPending, now, now)
+// BindConversationVM records the VM a conversation in a VM project uses,
+// working in dir there. The conversation keeps it, even if it later moves to
+// another project.
+func (db *DB) BindConversationVM(ctx context.Context, conversationID string, vm ProjectVM, dir string) error {
+	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		return insertConversationVM(tx, conversationID, vm, dir)
+	})
 }
 
 const conversationVMColumns = `v.conversation_id,v.vm_name,v.base_vm,v.integration,v.shared,v.status,v.error,v.ssh_dest,v.https_url,
