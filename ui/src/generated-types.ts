@@ -84,6 +84,7 @@ export interface ApiMessageForTS {
   model_name?: string | null;
   forked_from_message_id?: string | null;
   user_email?: string | null;
+  external_message_id?: string | null;
 }
 
 export interface ConversationStateForTS {

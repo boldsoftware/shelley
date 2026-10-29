@@ -106,6 +106,7 @@ type apiMessageForTS struct {
 	ModelName           *string `json:"model_name,omitempty"`
 	ForkedFromMessageID *string `json:"forked_from_message_id,omitempty"`
 	UserEmail           *string `json:"user_email,omitempty"`
+	ExternalMessageID   *string `json:"external_message_id,omitempty"`
 }
 
 type conversationStateForTS struct {

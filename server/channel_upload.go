@@ -16,7 +16,7 @@ import (
 // maxChannelAttachmentBytes is Linq's pre-upload limit.
 const maxChannelAttachmentBytes = 100 << 20
 
-func (c channelChat) uploadAttachment(ctx context.Context, attachment claudetool.MessageUserAttachment) (string, error) {
+func (s *Server) uploadChannelAttachment(ctx context.Context, endpoint string, attachment claudetool.MessageUserAttachment) (string, error) {
 	f, err := os.Open(attachment.Path)
 	if err != nil {
 		return "", err
@@ -63,7 +63,7 @@ func (c channelChat) uploadAttachment(ctx context.Context, attachment claudetool
 		UploadURL       string            `json:"upload_url"`
 		RequiredHeaders map[string]string `json:"required_headers"`
 	}
-	if err := c.s.callChannel(ctx, c.conversationID, "/attachments", meta, &upload); err != nil {
+	if err := s.callChannelEndpoint(ctx, endpoint, "/attachments", meta, &upload); err != nil {
 		return "", err
 	}
 	if upload.AttachmentID == "" || upload.UploadURL == "" {
@@ -79,7 +79,7 @@ func (c channelChat) uploadAttachment(ctx context.Context, attachment claudetool
 	}
 	// Signed storage URLs are exact PUT destinations. Following a 302/303
 	// would turn the upload into a GET and could acknowledge missing bytes.
-	client := *c.s.channelClient
+	client := *s.channelClient
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := client.Do(req)
 	if err != nil {

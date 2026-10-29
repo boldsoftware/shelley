@@ -143,6 +143,14 @@
         >
           {{ authorEmail }}
         </div>
+        <div
+          v-if="textedFromPhone"
+          class="message-via-text"
+          data-testid="message-via-text"
+          title="Texted from your phone (iMessage, RCS, or SMS)"
+        >
+          <i class="pi pi-mobile" aria-hidden="true" /> via text
+        </div>
         <!-- One action region per content entity (thinking blocks stand alone,
              adjacent answer content stays grouped; see splitContentEntities).
              Copy is scoped to the entity; info/fork stay message-level. -->
@@ -434,6 +442,19 @@ const authorEmail = computed(() =>
   isUser.value && !isDistilledUser.value && showUserEmails?.value
     ? props.message.user_email || null
     : null,
+);
+
+// A user message texted to the workspace Assistant from the user's phone.
+const isAssistantConversation = inject<ComputedRef<boolean> | null>(
+  "isAssistantConversation",
+  null,
+);
+const textedFromPhone = computed(
+  () =>
+    !!isAssistantConversation?.value &&
+    isUser.value &&
+    !isDistilledUser.value &&
+    !!props.message.external_message_id,
 );
 
 // ---- Legacy compaction summary ----

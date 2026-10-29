@@ -70,6 +70,9 @@ type APIMessage struct {
 	// it; nil otherwise (agent/tool/system rows, or direct/unauthenticated
 	// access without the header).
 	UserEmail *string `json:"user_email,omitempty"`
+	// ExternalMessageID is the channel's id for a user message that came
+	// from an external chat, such as the user's phone.
+	ExternalMessageID *string `json:"external_message_id,omitempty"`
 }
 
 // ConversationState represents the current state of a conversation.
@@ -196,6 +199,7 @@ func toAPIMessages(messages []generated.Message) []APIMessage {
 			ModelName:           msg.ModelName,
 			ForkedFromMessageID: msg.ForkedFromMessageID,
 			UserEmail:           msg.UserEmail,
+			ExternalMessageID:   msg.ExternalMessageID,
 		}
 		apiMessages[i] = apiMsg
 	}
@@ -1151,6 +1155,8 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		}
 		if role == roleTopLevel && conversation.ExternalEndpoint != nil {
 			manager.userChat = channelChat{s: s, conversationID: conversationID}
+		} else if role == roleTopLevel && s.isAssistant(conversationID) {
+			manager.userChat = assistantChat{s: s, conversationID: conversationID}
 		}
 		manager.userEmail = userEmail
 		manager.serverPort = s.listenPort

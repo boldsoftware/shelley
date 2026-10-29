@@ -98,7 +98,7 @@ func (s *Server) handleChannelMessage(w http.ResponseWriter, r *http.Request) {
 		endpoint = ""
 	}
 	if err := s.receiveChannelEvent(r.Context(), endpoint, ev); err != nil {
-		if errors.Is(err, errInvalidChannelEvent) {
+		if errors.Is(err, errInvalidChannelEvent) || errors.Is(err, errChannelEventNoID) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -152,9 +152,17 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	}
 	defer unlock()
 
-	conv, err := s.channelConversation(ctx, endpoint, ev.ChatID, ev.SystemPrompt)
+	// With a workspace Assistant, every texted message goes to it, not to a
+	// conversation of its own chat (see assistant_channel.go).
+	conv, assistant, err := s.assistantChannelConversation(ctx, ev)
 	if err != nil {
 		return err
+	}
+	if conv == nil {
+		conv, err = s.channelConversation(ctx, endpoint, ev.ChatID, ev.SystemPrompt)
+		if err != nil {
+			return err
+		}
 	}
 	conversationID := conv.ConversationID
 	manager, err := s.getOrCreateConversationManager(ctx, conversationID, "")
@@ -182,6 +190,14 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	if err != nil {
 		return fmt.Errorf("model %s: %w", modelID, err)
 	}
+	if assistant {
+		err := s.db.RecordChannelRoute(ctx, db.ChannelRoute{ConversationID: conversationID, ExternalMessageID: ev.ID, ChatID: ev.ChatID, Endpoint: endpoint})
+		if err != nil {
+			return err
+		}
+	} else {
+		endpoint = derefString(conv.ExternalEndpoint)
+	}
 	// Fetch signed provider URLs only after deduplication, while holding the
 	// chat lock. Retries must not re-fetch URLs that may have expired.
 	ev.Text, err = s.channelMessageText(ctx, ev)
@@ -195,7 +211,7 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	if manager.IsAgentWorking() {
 		return manager.InjectMessage(ctx, s, modelID, message)
 	}
-	if ev.FirstReaction != "" || ev.FirstReply != "" {
+	if !assistant && (ev.FirstReaction != "" || ev.FirstReply != "") {
 		answered, err := manager.answerFirstMessage(ctx, message, ev.FirstReaction, ev.FirstReply)
 		if answered {
 			s.generateSlugAsync(conversationID, ev.Text, modelID)
@@ -204,8 +220,8 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 			return err
 		}
 	}
-	if conv.ExternalEndpoint != nil {
-		s.showChannelTyping(ctx, conversationID)
+	if endpoint != "" {
+		s.showChannelTyping(ctx, endpoint)
 	}
 	first, err := manager.AcceptUserMessage(ctx, service, modelID, message)
 	if err != nil {
@@ -370,6 +386,9 @@ func (s *Server) recoverChannelQueues(ctx context.Context) {
 		}
 		manager.drainQueueIfIdle(s)
 	}
+	if err := s.recoverAssistantChannelQueue(ctx); err != nil {
+		s.logger.Error("Failed to drain the workspace Assistant's channel queue", "error", err)
+	}
 }
 
 // channelConversation returns the conversation of the external chat chatID,
@@ -428,13 +447,13 @@ func (s *Server) channelMessageDelivered(ctx context.Context, conversationID, id
 	return n != 0, err
 }
 
-// showChannelTyping shows the typing indicator in the external chat that
-// conversationID is bound to, until the next message sent there clears it.
-// It is best-effort: a failure is logged.
-func (s *Server) showChannelTyping(ctx context.Context, conversationID string) {
+// showChannelTyping shows the typing indicator in the external chat of
+// endpoint, until the next message sent there clears it. It is best-effort:
+// a failure is logged.
+func (s *Server) showChannelTyping(ctx context.Context, endpoint string) {
 	var answer struct{}
-	if err := s.callChannel(ctx, conversationID, "/typing", struct{}{}, &answer); err != nil {
-		s.logger.Warn("Failed to show channel typing indicator", "conversationID", conversationID, "error", err)
+	if err := s.callChannelEndpoint(ctx, endpoint, "/typing", struct{}{}, &answer); err != nil {
+		s.logger.Warn("Failed to show channel typing indicator", "error", err)
 	}
 }
 
@@ -454,6 +473,16 @@ func (e *channelSendError) Error() string {
 // sendChannelMessage sends text to the external chat that conversationID is
 // bound to, and returns the channel's id for the sent message.
 func (s *Server) sendChannelMessage(ctx context.Context, conversationID, text, replyTo string, attachmentIDs []string) (string, error) {
+	endpoint, err := s.channelEndpoint(ctx, conversationID)
+	if err != nil {
+		return "", err
+	}
+	return s.sendChannelEndpointMessage(ctx, endpoint, text, replyTo, attachmentIDs)
+}
+
+// sendChannelEndpointMessage sends text to the external chat of endpoint,
+// and returns the channel's id for the sent message.
+func (s *Server) sendChannelEndpointMessage(ctx context.Context, endpoint, text, replyTo string, attachmentIDs []string) (string, error) {
 	var sent struct {
 		MessageID string `json:"message_id"`
 	}
@@ -464,27 +493,33 @@ func (s *Server) sendChannelMessage(ctx context.Context, conversationID, text, r
 	if replyTo != "" {
 		body["reply_to"] = replyTo
 	}
-	err := s.callChannel(ctx, conversationID, "/send", body, &sent)
+	err := s.callChannelEndpoint(ctx, endpoint, "/send", body, &sent)
 	return sent.MessageID, err
 }
 
-// callChannel POSTs body to path at the endpoint of the external chat that
-// conversationID is bound to, and decodes the answer into out. A failure
-// the endpoint may have delivered anyway wraps errChannelMaybeDelivered;
-// upload creation never delivers a message. A refusal is a *channelSendError.
-func (s *Server) callChannel(ctx context.Context, conversationID, path string, body, out any) error {
+// channelEndpoint returns the endpoint of the external chat that
+// conversationID is bound to.
+func (s *Server) channelEndpoint(ctx context.Context, conversationID string) (string, error) {
 	conv, err := s.db.GetConversationByID(ctx, conversationID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if conv.ExternalEndpoint == nil {
-		return fmt.Errorf("conversation %s is not bound to an external chat", conversationID)
+		return "", fmt.Errorf("conversation %s is not bound to an external chat", conversationID)
 	}
+	return *conv.ExternalEndpoint, nil
+}
+
+// callChannelEndpoint POSTs body to path at endpoint, an external chat's,
+// and decodes the answer into out. A failure the endpoint may have
+// delivered anyway wraps errChannelMaybeDelivered; upload creation never
+// delivers a message. A refusal is a *channelSendError.
+func (s *Server) callChannelEndpoint(ctx context.Context, endpoint, path string, body, out any) error {
 	reqBody, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, *conv.ExternalEndpoint+path, bytes.NewReader(reqBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+path, bytes.NewReader(reqBody))
 	if err != nil {
 		return err
 	}
@@ -558,15 +593,26 @@ func (c channelChat) Send(ctx context.Context, text string, attachments []claude
 	if !ok {
 		return nil
 	}
+	endpoint, err := c.s.channelEndpoint(ctx, c.conversationID)
+	if err != nil {
+		return fmt.Errorf("nothing was sent: %w", err)
+	}
+	return c.s.sendChannelChat(ctx, endpoint, text, attachments, target)
+}
+
+// sendChannelChat uploads attachments and sends them with text, replying to
+// target's external message if it has one, to the external chat of
+// endpoint.
+func (s *Server) sendChannelChat(ctx context.Context, endpoint, text string, attachments []claudetool.MessageUserAttachment, target claudetool.UserMessage) error {
 	var ids []string
 	for _, attachment := range attachments {
-		id, err := c.uploadAttachment(ctx, attachment)
+		id, err := s.uploadChannelAttachment(ctx, endpoint, attachment)
 		if err != nil {
 			return fmt.Errorf("uploading %s failed: %w; nothing was sent", attachment.Name, err)
 		}
 		ids = append(ids, id)
 	}
-	_, err = c.s.sendChannelMessage(ctx, c.conversationID, text, target.ExternalID, ids)
+	_, err := s.sendChannelEndpointMessage(ctx, endpoint, text, target.ExternalID, ids)
 	return chatDeliveryError(err)
 }
 
@@ -592,13 +638,23 @@ func (c channelChat) React(ctx context.Context, target claudetool.UserMessage, e
 	if target.ExternalID == "" {
 		return nil
 	}
+	endpoint, err := c.s.channelEndpoint(ctx, c.conversationID)
+	if err != nil {
+		return fmt.Errorf("nothing was sent: %w", err)
+	}
+	return c.s.reactChannelChat(ctx, endpoint, target, emoji)
+}
+
+// reactChannelChat reacts to target's external message in the external
+// chat of endpoint.
+func (s *Server) reactChannelChat(ctx context.Context, endpoint string, target claudetool.UserMessage, emoji string) error {
 	reaction := emoji
 	if name, ok := tapbacks[strings.TrimSuffix(emoji, "\uFE0F")]; ok {
 		reaction = name
 	}
 	var answer struct{}
 	body := map[string]string{"message_id": target.ExternalID, "reaction": reaction}
-	return chatDeliveryError(c.s.callChannel(ctx, c.conversationID, "/react", body, &answer))
+	return chatDeliveryError(s.callChannelEndpoint(ctx, endpoint, "/react", body, &answer))
 }
 
 // tapbacks names the emoji of the gateway's native reactions, without

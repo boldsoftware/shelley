@@ -1056,6 +1056,9 @@ const showUserEmails = computed(() => {
   return hasMultipleUsers(messages.value);
 });
 provide("showUserEmails", showUserEmails);
+// Only the workspace Assistant receives texted messages; web chats' messages
+// also carry external ids.
+provide("isAssistantConversation", computed(() => !!props.isAssistant));
 const loading = ref(true);
 // Run the status-bar hook once the conversation has loaded and after every
 // message. Not for drafts or archived conversations.

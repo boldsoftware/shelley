@@ -53,6 +53,12 @@ type UserChat interface {
 	React(ctx context.Context, target UserMessage, emoji string) error
 }
 
+// UserChatDescriber is a UserChat that describes itself to the agent, in
+// place of messageUserChatDescription: one that takes only some messages.
+type UserChatDescriber interface {
+	Description() string
+}
+
 // MessageUserInput is the message_user tool's input.
 type MessageUserInput struct {
 	Text string `json:"text,omitempty"`
@@ -120,7 +126,11 @@ const targetExcerptRunes = 200
 func MessageUserTool(finder UserMessageFinder, chat UserChat, wd *MutableWorkingDir) *llm.Tool {
 	description := messageUserDescription
 	if chat != nil {
-		description = strings.Replace(description, "Attach files by path.", messageUserChatDescription, 1)
+		chatDescription := messageUserChatDescription
+		if d, ok := chat.(UserChatDescriber); ok {
+			chatDescription = d.Description()
+		}
+		description = strings.Replace(description, "Attach files by path.", chatDescription, 1)
 	}
 	return &llm.Tool{
 		Name:        MessageUserName,
