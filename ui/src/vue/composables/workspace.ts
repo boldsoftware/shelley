@@ -1,12 +1,19 @@
 import { computed, inject, onUnmounted, provide, ref, shallowRef, type InjectionKey } from "vue";
-import { workspaceApi, type Project, type Workspace } from "../../services/workspace";
+import {
+  workspaceApi,
+  type ActionRunSummary,
+  type Project,
+  type Workspace,
+} from "../../services/workspace";
 import { errorMessage } from "../../utils/errorMessage";
 import { useI18n, type TranslationKeys } from "./i18n";
 
 type Translate = (key: keyof TranslationKeys) => string;
 
-/** State/transport separate from component lifecycle so refresh races are testable. */
-export function createWorkspaceState(t: Translate) {
+/** State/transport separate from component lifecycle so refresh races are testable.
+ * The server invalidates the workspace (SSE) when it changes; run cards load
+ * their own output. */
+export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRunSummary) => void) {
   const data = shallowRef<Workspace | null>(null);
   const projectsByName = computed(
     () => new Map(data.value?.projects.map((project) => [project.name, project])),
@@ -21,6 +28,7 @@ export function createWorkspaceState(t: Translate) {
   const conversationCreator = shallowRef<{ project: string } | null>(null);
   let pending: Promise<void> | null = null;
   let stopped = false;
+  let revision = 0;
   let refreshAgain = false;
   let signature = "";
 
@@ -34,13 +42,26 @@ export function createWorkspaceState(t: Translate) {
     pending = (async () => {
       do {
         refreshAgain = false;
+        const requestedRevision = revision;
         const next = await workspaceApi.workspace();
         if (stopped) return;
+        if (requestedRevision !== revision) {
+          refreshAgain = true;
+          continue;
+        }
         error.value = null;
         const nextSignature = JSON.stringify(next);
         if (nextSignature === signature) continue;
+        const previous = data.value;
         data.value = next;
         signature = nextSignature;
+        for (const run of next.runs) {
+          if (
+            run.status !== "running" &&
+            previous?.runs.some((old) => old.id === run.id && old.status === "running")
+          )
+            onRunFinished(run);
+        }
       } while (refreshAgain);
     })()
       .catch((err: unknown) => {
@@ -53,18 +74,24 @@ export function createWorkspaceState(t: Translate) {
     return pending;
   }
 
-  function dispose() {
-    stopped = true;
+  function rememberRun(run: ActionRunSummary) {
+    if (!data.value) throw new Error("Workspace has not loaded");
+    revision++;
+    data.value = { ...data.value, runs: [run, ...data.value.runs.filter((r) => r.id !== run.id)] };
+    signature = JSON.stringify(data.value);
   }
 
   return {
     data,
     error,
     refresh,
+    rememberRun,
     projectEditor,
     projectDeletion,
     conversationCreator,
-    dispose,
+    dispose: () => {
+      stopped = true;
+    },
     editProject: (project: Project | null = null) => {
       projectEditor.value = { project };
     },
@@ -100,6 +127,10 @@ export function projectDeletionPlan(
 ): ProjectDeletionPlan {
   const members = data?.conversations.filter((c) => c.project === project.name) ?? [];
   const active = members.filter((c) => !c.archived).length;
+  const ids = new Set(members.map((c) => c.conversation_id));
+  const running = data?.runs.some(
+    (run) => run.status === "running" && ids.has(run.conversation_id),
+  );
   return {
     blocker: !data
       ? t("loading")
@@ -107,7 +138,9 @@ export function projectDeletionPlan(
         ? t("projectHasActiveConversation")
         : active
           ? t("projectHasActiveConversations").replace("{count}", String(active))
-          : "",
+          : running
+            ? t("waitForRunningAction")
+            : "",
     archived: members.filter((c) => c.archived).length,
   };
 }
@@ -115,8 +148,8 @@ export function projectDeletionPlan(
 export type WorkspaceContext = ReturnType<typeof createWorkspaceState>;
 export const WorkspaceKey: InjectionKey<WorkspaceContext> = Symbol("workspace");
 
-export function createWorkspace() {
-  const workspace = createWorkspaceState(useI18n().t);
+export function createWorkspace(onRunFinished: (run: ActionRunSummary) => void) {
+  const workspace = createWorkspaceState(useI18n().t, onRunFinished);
   provide(WorkspaceKey, workspace);
   onUnmounted(workspace.dispose);
   return workspace;

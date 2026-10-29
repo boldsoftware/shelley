@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { messageSource, parseLegacyBackgroundJobNotice } from "./messageSource";
+import { messageSource, parseLegacyBackgroundJobNotice, actionReportSource } from "./messageSource";
 
 for (const relationship of ["subagent", "parent"] as const) {
   const data = {
@@ -145,3 +145,20 @@ assert.equal(
   tail,
 );
 assert.equal(parseLegacyBackgroundJobNotice("unrecognized notice\nfoo", "1a2b3c4d"), null);
+
+// Project action reports carry their run's snapshot.
+assert.deepEqual(
+  actionReportSource(
+    '{"action_run_id":"r1","action_report":"result","label":"make release","command":"make release","status":"failed","exit_code":1,"Text":"x"}',
+  ),
+  {
+    runId: "r1",
+    label: "make release",
+    command: "make release",
+    status: "failed",
+    exitCode: 1,
+  },
+);
+assert.equal(actionReportSource({ action_run_id: "" }), null);
+assert.equal(actionReportSource({ action_run_id: "r1" }), null, "only reports");
+assert.equal(actionReportSource({ background_job_id: "1" }), null);

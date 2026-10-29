@@ -1968,7 +1968,8 @@ body {
 }
 
 .message-conversation > .message-content,
-.message-queued.message-tool-card > .message-content {
+.message-queued.message-tool-card > .message-content,
+.project-action-run-tail > .message-content {
   width: 100%;
 }
 
@@ -4104,7 +4105,8 @@ diffs-container {
   user-select: none;
 }
 
-.record-menu {
+.record-menu,
+.project-action-fields > div {
   min-width: 0;
 }
 
@@ -5918,7 +5920,8 @@ svg {
 .status-bar-controls,
 .model-provider-heading,
 .model-provider-row,
-.model-provider-actions {
+.model-provider-actions,
+.project-checkbox {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -13919,6 +13922,7 @@ kbd {
 /* BrowserProfileTool styles */
 .profile-file-wrapper,
 .project-header-row,
+.project-header-actions,
 .project-picker,
 .project-section-heading {
   display: flex;
@@ -17956,7 +17960,8 @@ kbd {
   cursor: pointer;
 }
 
-.project-form > label {
+.project-form > label,
+.project-action-editor label {
   margin-top: 0.4rem;
   font-size: var(--font-size-13);
   font-weight: 500;
@@ -17992,6 +17997,34 @@ kbd {
   font-size: var(--font-size-14);
 }
 
+.project-action-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  margin: 0.4rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.project-action-editor legend {
+  padding: 0 0.35rem;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+}
+
+.project-action-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.project-action-fields label {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
 .project-form .project-command-input {
   font-family: var(--font-mono);
 }
@@ -18018,7 +18051,20 @@ kbd {
   cursor: pointer;
 }
 
+.project-action-hint {
+  margin-top: 0.35rem;
+}
+
 @media (max-width: 640px) {
+  .project-header-actions {
+    width: 100%;
+    gap: 0.35rem;
+  }
+
+  .project-action-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .project-icon-button {
     width: 2.1rem;
     height: 2.1rem;

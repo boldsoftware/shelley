@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { workspaceApi, type Workspace } from "../../services/workspace";
+import { workspaceApi, type ActionRunSummary, type Workspace } from "../../services/workspace";
 import { en } from "../../i18n/en";
 import type { TranslationKeys } from "../../i18n/types";
 import { createWorkspaceState, projectDeletionPlan } from "./workspace";
@@ -14,19 +14,36 @@ const empty = (): Workspace => ({
       name: "Blog",
       instructions: "Writing\n\nBe brief",
       cwd: "/tmp",
+      actions: [],
     },
   ],
   conversations: [
     { conversation_id: "task", project: "Blog", is_assistant: false, archived: false },
   ],
+  runs: [],
 });
+const run = (): ActionRunSummary => ({
+  id: "run",
+  conversation_id: "task",
+  project: "Blog",
+  action_id: "publish",
+  label: "Publish",
+  status: "running",
+  started_at: "2026-01-01T12:00:00Z",
+  report: "pending",
+});
+const settle = async () => {
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+};
 function harness(t: TestContext) {
-  const workspace = createWorkspaceState(translate);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const finished: ActionRunSummary[] = [];
+  const workspace = createWorkspaceState(translate, (run) => finished.push(run));
   t.after(() => workspace.dispose());
-  return { workspace };
+  return { workspace, finished };
 }
 
-test("identical snapshots preserve references", async (t) => {
+test("idle snapshots are SSE-driven and identical snapshots preserve references", async (t) => {
   const { workspace } = harness(t);
   const fetch = t.mock.method(workspaceApi, "workspace", async () => empty());
   await workspace.refresh();
@@ -35,9 +52,29 @@ test("identical snapshots preserve references", async (t) => {
   assert.equal(workspace.isAssistant(null), false);
   assert.equal(workspace.projectFor("task")?.name, "Blog");
   assert.equal(workspace.projectFor("assistant"), undefined);
+  t.mock.timers.tick(10_000);
+  await settle();
+  assert.equal(fetch.mock.callCount(), 1, "no idle polling");
   await workspace.refresh();
-  assert.equal(fetch.mock.callCount(), 2);
   assert.equal(workspace.data.value, first, "unchanged workspace does not rerender projects");
+});
+
+test("refreshes report a run's completion once, and running runs don't poll", async (t) => {
+  const { workspace, finished } = harness(t);
+  let snapshot = empty();
+  const fetch = t.mock.method(workspaceApi, "workspace", async () => structuredClone(snapshot));
+  await workspace.refresh();
+  const active = run();
+  workspace.rememberRun(active);
+  t.mock.timers.tick(10_000);
+  await settle();
+  assert.equal(fetch.mock.callCount(), 1, "no output polling");
+  snapshot = { ...empty(), runs: [{ ...active, status: "succeeded" }] };
+  await workspace.refresh();
+  assert.equal(finished.length, 1);
+  assert.equal(finished[0].status, "succeeded");
+  await workspace.refresh();
+  assert.equal(finished.length, 1);
 });
 
 test("failed refresh propagates errors, retains the last snapshot, and retry clears the error", async (t) => {
@@ -56,6 +93,28 @@ test("failed refresh propagates errors, retains the last snapshot, and retry cle
   fail = false;
   await workspace.refresh();
   assert.equal(workspace.error.value, null);
+});
+
+test("an in-flight snapshot cannot erase a newly started action", async (t) => {
+  const { workspace } = harness(t);
+  t.mock.method(workspaceApi, "workspace", async () => empty());
+  await workspace.refresh();
+  let resolve!: (value: Workspace) => void;
+  let calls = 0;
+  t.mock.method(workspaceApi, "workspace", () => {
+    calls++;
+    if (calls === 1)
+      return new Promise<Workspace>((done) => {
+        resolve = done;
+      });
+    return Promise.resolve({ ...empty(), runs: [run()] });
+  });
+  const pending = workspace.refresh();
+  workspace.rememberRun(run());
+  resolve(empty());
+  await pending;
+  assert.equal(calls, 2);
+  assert.equal(workspace.data.value?.runs[0].id, "run");
 });
 
 test("mutations during a refresh coalesce into one fresh follow-up snapshot", async (t) => {
@@ -86,7 +145,7 @@ test("mutations during a refresh coalesce into one fresh follow-up snapshot", as
   assert.equal(workspace.projectFor("task")?.name, "Renamed");
 });
 
-test("project deletion plan: active conversations block; archived ones move", () => {
+test("project deletion plan: active conversations and running actions block; archived ones move", () => {
   const data = empty();
   const blog = data.projects[0];
   assert.equal(
@@ -96,5 +155,12 @@ test("project deletion plan: active conversations block; archived ones move", ()
   assert.equal(projectDeletionPlan(null, blog, translate).blocker, en.loading);
 
   data.conversations[0].archived = true;
+  data.runs = [run()];
+  assert.equal(
+    projectDeletionPlan(data, blog, translate).blocker,
+    "Wait for its running action to finish",
+  );
+
+  data.runs = [];
   assert.deepEqual(projectDeletionPlan(data, blog, translate), { blocker: "", archived: 1 });
 });

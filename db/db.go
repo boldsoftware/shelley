@@ -720,32 +720,38 @@ func MarshalQueuedMessages(msgs []QueuedMessage) (string, error) {
 func (db *DB) mutateQueuedMessages(ctx context.Context, conversationID string, mutate func(msgs []QueuedMessage) ([]QueuedMessage, error)) (*generated.Conversation, error) {
 	var conv generated.Conversation
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		raw, err := q.GetConversationQueuedMessages(ctx, conversationID)
-		if err != nil {
+		if err := mutateQueuedMessagesTx(ctx, tx, conversationID, mutate); err != nil {
 			return err
 		}
-		msgs, err := ParseQueuedMessagesStrict(raw)
-		if err != nil {
-			return err
-		}
-		if msgs, err = mutate(msgs); err != nil {
-			return err
-		}
-		jsonStr, err := MarshalQueuedMessages(msgs)
-		if err != nil {
-			return err
-		}
-		if err := q.UpdateConversationQueuedMessages(ctx, generated.UpdateConversationQueuedMessagesParams{
-			QueuedMessages: jsonStr,
-			ConversationID: conversationID,
-		}); err != nil {
-			return err
-		}
-		conv, err = q.GetConversation(ctx, conversationID)
+		var err error
+		conv, err = generated.New(tx.Conn()).GetConversation(ctx, conversationID)
 		return err
 	})
 	return &conv, err
+}
+
+// mutateQueuedMessagesTx is mutateQueuedMessages within tx.
+func mutateQueuedMessagesTx(ctx context.Context, tx *Tx, conversationID string, mutate func(msgs []QueuedMessage) ([]QueuedMessage, error)) error {
+	q := generated.New(tx.Conn())
+	raw, err := q.GetConversationQueuedMessages(ctx, conversationID)
+	if err != nil {
+		return err
+	}
+	msgs, err := ParseQueuedMessagesStrict(raw)
+	if err != nil {
+		return err
+	}
+	if msgs, err = mutate(msgs); err != nil {
+		return err
+	}
+	jsonStr, err := MarshalQueuedMessages(msgs)
+	if err != nil {
+		return err
+	}
+	return q.UpdateConversationQueuedMessages(ctx, generated.UpdateConversationQueuedMessagesParams{
+		QueuedMessages: jsonStr,
+		ConversationID: conversationID,
+	})
 }
 
 // AppendQueuedMessage atomically appends qm to a conversation's

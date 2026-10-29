@@ -12,7 +12,7 @@ test("workspace mode pins the Assistant and always groups by project", async ({
   const name = `Workspace ${randomUUID().slice(0, 8)}`;
   const project = await request.post("/api/projects", {
     headers: { "X-Shelley-Request": "1" },
-    data: { name, instructions: "", cwd: testWorkingDirectory() },
+    data: { name, instructions: "", cwd: testWorkingDirectory(), actions: [] },
   });
   expect(project.ok()).toBeTruthy();
   const on = await request.post("/feature-flags", { data: { name: "workspace", value: true } });

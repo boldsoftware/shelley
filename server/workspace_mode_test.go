@@ -117,6 +117,13 @@ func TestAssistantMutationGuards(t *testing.T) {
 	if response := workspaceAPI(s, "PUT", "/api/conversation/"+assistantID+"/project", `{"project":"Docs"}`); response.Code != http.StatusConflict {
 		t.Errorf("Assistant move: %d %s", response.Code, response.Body.String())
 	}
+	// The Assistant has a directory, but it is not a project's task.
+	if err := s.db.UpdateConversationCwd(t.Context(), assistantID, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if response := workspaceAPI(s, "POST", "/api/conversation/"+assistantID+"/actions/release", ""); response.Code != http.StatusConflict {
+		t.Errorf("Assistant action: %d %s", response.Code, response.Body.String())
+	}
 }
 
 // The Assistant routes with the project catalog; a task gets its own

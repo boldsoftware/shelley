@@ -429,7 +429,7 @@ func (s *Server) handleConversationSettings(w http.ResponseWriter, r *http.Reque
 	case errors.As(err, &invalid):
 		http.Error(w, invalid.Error(), http.StatusBadRequest)
 		return
-	case errors.Is(err, errSettingsUnavailable), errors.Is(err, errAgentWorking):
+	case errors.Is(err, errSettingsUnavailable), errors.Is(err, errAgentWorking), errors.Is(err, db.ErrConflict):
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	case err != nil:
@@ -541,6 +541,9 @@ func (cm *ConversationManager) ApplySettings(ctx context.Context, models []Model
 	// or before the marker.
 	var recordErr error
 	err = cm.resetLoopAfter(true, func() error {
+		if err := cm.checkProjectTurn(ctx); err != nil {
+			return err
+		}
 		if cm.IsAgentWorking() {
 			// A turn started after the cancel; don't kill it unannounced.
 			return errAgentWorking

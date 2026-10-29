@@ -933,11 +933,14 @@ func (q *Queries) ListArchivedConversations(ctx context.Context, arg ListArchive
 
 const listChannelConversationsWithQueuedMessages = `-- name: ListChannelConversationsWithQueuedMessages :many
 SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint FROM conversations
-WHERE external_conversation_id IS NOT NULL AND queued_messages != '[]'
+WHERE queued_messages != '[]' AND (external_conversation_id IS NOT NULL OR EXISTS (
+    SELECT 1 FROM json_each(CASE WHEN json_valid(queued_messages) THEN queued_messages ELSE '[]' END) WHERE json_extract(value, '$.user_data.action_run_id') IS NOT NULL
+))
 ORDER BY created_at ASC
 `
 
-// Conversations bound to an external chat with queued messages. Used once
+// Conversations with queued messages nobody may be watching: those bound to
+// an external chat, and those holding a project action's report. Used once
 // at startup to drain them.
 func (q *Queries) ListChannelConversationsWithQueuedMessages(ctx context.Context) ([]Conversation, error) {
 	rows, err := q.db.QueryContext(ctx, listChannelConversationsWithQueuedMessages)

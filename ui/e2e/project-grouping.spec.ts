@@ -9,7 +9,7 @@ test("stock mode offers Group by Project without the workspace", async ({ page, 
   const name = `Stock ${randomUUID().slice(0, 8)}`;
   const project = await request.post("/api/projects", {
     headers: { "X-Shelley-Request": "1" },
-    data: { name, instructions: "", cwd: testWorkingDirectory() },
+    data: { name, instructions: "", cwd: testWorkingDirectory(), actions: [] },
   });
   expect(project.ok()).toBeTruthy();
   const created = await request.post("/api/conversations/new", {

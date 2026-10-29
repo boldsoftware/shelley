@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 
 	"shelley.exe.dev/db/generated"
 )
@@ -95,7 +97,7 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if workspace.AssistantID != assistantID || len(workspace.Projects) != 0 || len(workspace.Conversations) != 1 {
+	if workspace.AssistantID != assistantID || len(workspace.Projects) != 0 || len(workspace.Conversations) != 1 || workspace.Runs == nil {
 		t.Fatalf("unexpected workspace: %+v", workspace)
 	}
 	// Existing conversations are in no project.
@@ -161,6 +163,9 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	if err := database.MoveConversation(ctx, assistantID, "Docs"); !errors.Is(err, ErrConflict) {
 		t.Fatalf("assistant move: %v", err)
 	}
+	if _, _, _, err := database.BeginAction(ctx, assistantID, "release"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("assistant action: %v", err)
+	}
 }
 
 func TestProjectLifecycleAndValidation(t *testing.T) {
@@ -169,7 +174,7 @@ func TestProjectLifecycleAndValidation(t *testing.T) {
 	defer cleanup()
 	ctx := t.Context()
 	project, err := database.CreateProject(ctx, Project{Name: " Custom "}, "")
-	if err != nil || project.Name != "Custom" {
+	if err != nil || project.Name != "Custom" || project.Actions == nil {
 		t.Fatalf("create project: %+v %v", project, err)
 	}
 	// A project is a profile, with a copy of the default profile's settings.
@@ -228,6 +233,12 @@ func TestProjectLifecycleAndValidation(t *testing.T) {
 		{Name: " "},
 		{Name: "a/b"},
 		{Name: "Default"},
+		{Name: "Bad command", Actions: []ProjectAction{{ID: "a", Label: "Run"}}},
+		{Name: "Bad ID", Actions: []ProjectAction{{ID: "../a", Label: "Run", Command: "true"}}},
+		{Name: "Dot ID", Actions: []ProjectAction{{ID: ".", Label: "Run", Command: "true"}}},
+		{Name: "Parent ID", Actions: []ProjectAction{{ID: "..", Label: "Run", Command: "true"}}},
+		{Name: "Control ID", Actions: []ProjectAction{{ID: "push\narchive", Label: "Run", Command: "true"}}},
+		{Name: "Duplicate", Actions: []ProjectAction{{ID: "a", Label: "Run", Command: "true"}, {ID: "a", Label: "Again", Command: "true"}}},
 	} {
 		if _, err := database.CreateProject(ctx, project, ""); !errors.Is(err, ErrInvalid) && !errors.Is(err, ErrConflict) {
 			t.Fatalf("accepted invalid project %+v: %v", project, err)
@@ -235,15 +246,19 @@ func TestProjectLifecycleAndValidation(t *testing.T) {
 	}
 }
 
-func TestMoveConversationPendingWorkGuards(t *testing.T) {
+func TestActionsAtomicReservationAndCompletion(t *testing.T) {
 	t.Parallel()
 	database, cleanup := NewTestDB(t)
 	defer cleanup()
 	ctx := t.Context()
-	id := newDBTestConversation(t, database, "my-project", t.TempDir())
-	AddTestProject(t, database, "Docs")
+	cwd := t.TempDir()
+	id := newDBTestConversation(t, database, "my-project", cwd)
 	if err := database.SetConversationAgentWorking(ctx, id, true); err != nil {
 		t.Fatal(err)
+	}
+	AddTestProject(t, database, "Docs")
+	if _, _, _, err := database.BeginAction(ctx, id, "release"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("working agent action: %v", err)
 	}
 	if err := database.MoveConversation(ctx, id, "Docs"); !errors.Is(err, ErrConflict) {
 		t.Fatalf("working agent assignment: %v", err)
@@ -251,11 +266,136 @@ func TestMoveConversationPendingWorkGuards(t *testing.T) {
 	if err := database.SetConversationAgentWorking(ctx, id, false); err != nil {
 		t.Fatal(err)
 	}
+	start := make(chan struct{})
+	runs := make(chan *ActionRun, 12)
+	errs := make(chan error, 12)
+	var wg sync.WaitGroup
+	for range 12 {
+		wg.Go(func() {
+			<-start
+			run, action, actualCwd, err := database.BeginAction(ctx, id, "release")
+			if err != nil {
+				errs <- err
+				return
+			}
+			if action.Command != "make release" || actualCwd != cwd {
+				errs <- errors.New("incorrect action snapshot/cwd")
+				return
+			}
+			runs <- run
+		})
+	}
+	close(start)
+	wg.Wait()
+	close(runs)
+	close(errs)
+	if len(runs) != 1 || len(errs) != 11 {
+		t.Fatalf("reservation successes=%d errors=%d", len(runs), len(errs))
+	}
+	for err := range errs {
+		if !errors.Is(err, ErrConflict) {
+			t.Fatalf("unexpected reservation error: %v", err)
+		}
+	}
+	run := <-runs
+	if running, err := database.HasRunningAction(ctx, id); err != nil || !running {
+		t.Fatalf("running=%v err=%v", running, err)
+	}
+	if running, err := database.HasAnyRunningAction(ctx); err != nil || !running {
+		t.Fatalf("global running=%v err=%v", running, err)
+	}
+	if err := database.MoveConversation(ctx, id, "Docs"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("assignment during action: %v", err)
+	}
+	output := strings.Repeat("x", MaxActionOutput*2) + "\xff\x00tail🙂"
+	if err := database.AppendActionOutput(ctx, run.ID, output); err != nil {
+		t.Fatal(err)
+	}
+	if stored, err := database.GetActionRun(ctx, run.ID); err != nil || len(stored.Output) > MaxActionOutput ||
+		!utf8.ValidString(stored.Output) || !strings.HasSuffix(stored.Output, "tail🙂") {
+		t.Fatalf("bounded output: %+v %v", stored, err)
+	}
+	code := 7
+	if err := database.FinishAction(ctx, run.ID, &code, "exit status 7"); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := database.GetActionRun(ctx, run.ID)
+	if err != nil || stored.Status != "failed" || stored.FinishedAt == nil || stored.ExitCode == nil || *stored.ExitCode != code {
+		t.Fatalf("failed run: %+v %v", stored, err)
+	}
+	conversation, _ := database.GetConversationByID(ctx, id)
+	if conversation.Archived {
+		t.Fatal("failed action archived conversation")
+	}
+	run, _, _, err = database.BeginAction(ctx, id, "release")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code = 0
+	if err := database.FinishAction(ctx, run.ID, &code, ""); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ = database.GetActionRun(ctx, run.ID)
+	conversation, _ = database.GetConversationByID(ctx, id)
+	if stored.Status != "succeeded" || !conversation.Archived {
+		t.Fatalf("success/archive not committed together: %+v %+v", stored, conversation)
+	}
+	if _, _, _, err := database.BeginAction(ctx, id, "release"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("action on archived conversation: %v", err)
+	}
+	if running, err := database.HasAnyRunningAction(ctx); err != nil || running {
+		t.Fatalf("completed action remained globally running=%v err=%v", running, err)
+	}
+}
+
+func TestActionRestartNeverArchivesOrReruns(t *testing.T) {
+	t.Parallel()
+	database, cleanup := NewTestDB(t)
+	defer cleanup()
+	ctx := t.Context()
+	id := newDBTestConversation(t, database, "my-project", t.TempDir())
+	run, _, _, err := database.BeginAction(ctx, id, "release")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AppendActionOutput(ctx, run.ID, "working\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.InterruptActionRuns(ctx); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := database.GetActionRun(ctx, run.ID)
+	if err != nil || stored.Status != "interrupted" || stored.Output != "working\n" || stored.FinishedAt == nil || stored.ExitCode != nil {
+		t.Fatalf("interrupted run: %+v %v", stored, err)
+	}
+	code := 0
+	if err := database.FinishAction(ctx, run.ID, &code, ""); !errors.Is(err, ErrConflict) {
+		t.Fatalf("late completion accepted: %v", err)
+	}
+	if err := database.AppendActionOutput(ctx, run.ID, "late"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("late output accepted: %v", err)
+	}
+	conversation, _ := database.GetConversationByID(ctx, id)
+	if conversation.Archived {
+		t.Fatal("interrupted action archived conversation")
+	}
+	workspace, err := database.GetWorkspace(ctx)
+	if err != nil || len(workspace.Runs) != 1 {
+		t.Fatalf("interrupted action rerun: %+v %v", workspace, err)
+	}
+}
+
+func TestActionPendingWorkGuardsAndSuccessRetention(t *testing.T) {
+	t.Parallel()
+	database, cleanup := NewTestDB(t)
+	defer cleanup()
+	ctx := t.Context()
+	id := newDBTestConversation(t, database, "my-project", t.TempDir())
 	if _, err := database.AppendQueuedMessage(ctx, id, QueuedMessage{ID: "pending"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := database.MoveConversation(ctx, id, "Docs"); !errors.Is(err, ErrConflict) {
-		t.Fatalf("pending queue allowed move: %v", err)
+	if _, _, _, err := database.BeginAction(ctx, id, "release"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("pending queue allowed action: %v", err)
 	}
 	if _, err := database.ClearQueuedMessages(ctx, id); err != nil {
 		t.Fatal(err)
@@ -271,8 +411,8 @@ func TestMoveConversationPendingWorkGuards(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := database.MoveConversation(ctx, id, "Docs"); !errors.Is(err, ErrConflict) {
-		t.Fatalf("active child allowed move: %v", err)
+	if _, _, _, err := database.BeginAction(ctx, id, "release"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("active child allowed action: %v", err)
 	}
 	if err := database.SetConversationAgentWorking(ctx, "active-child", false); err != nil {
 		t.Fatal(err)
@@ -284,8 +424,8 @@ func TestMoveConversationPendingWorkGuards(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := database.MoveConversation(ctx, id, "Docs"); !errors.Is(err, ErrConflict) {
-		t.Fatalf("descendant job allowed move: %v", err)
+	if _, _, _, err := database.BeginAction(ctx, id, "release"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("descendant job allowed action: %v", err)
 	}
 	if err := database.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
 		_, err := tx.Exec("UPDATE background_jobs SET exited=TRUE,notified=TRUE WHERE job_id='job'")
@@ -293,7 +433,88 @@ func TestMoveConversationPendingWorkGuards(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := database.MoveConversation(ctx, id, "Docs"); err != nil {
+	run, _, _, err := database.BeginAction(ctx, id, "release")
+	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := database.AppendQueuedMessage(ctx, id, QueuedMessage{ID: "arrived-during-run"}); err != nil {
+		t.Fatal(err)
+	}
+	code := 0
+	if err := database.FinishAction(ctx, run.ID, &code, ""); err != nil {
+		t.Fatal(err)
+	}
+	run, err = database.GetActionRun(ctx, run.ID)
+	if err != nil || run.Status != "succeeded" || !strings.Contains(run.Output, "not archived because new work is pending") {
+		t.Fatalf("missing successful retention notice: %+v %v", run, err)
+	}
+	conversation, err := database.GetConversationByID(ctx, id)
+	if err != nil || conversation.Archived {
+		t.Fatalf("new work was archived: %+v %v", conversation, err)
+	}
+}
+
+func TestWorkspaceBoundsCompletedRunHistoryButKeepsRunning(t *testing.T) {
+	t.Parallel()
+	database, cleanup := NewTestDB(t)
+	defer cleanup()
+	ctx := t.Context()
+	quietID := newDBTestConversation(t, database, "my-project", t.TempDir())
+	quietRun, _, _, err := database.BeginAction(ctx, quietID, "release")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := 0
+	if err := database.FinishAction(ctx, quietRun.ID, &code, ""); err != nil {
+		t.Fatal(err)
+	}
+	id := newDBTestConversation(t, database, "my-project", t.TempDir())
+	var oldestID string
+	for range 25 {
+		run, _, _, err := database.BeginAction(ctx, id, "release")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if oldestID == "" {
+			oldestID = run.ID
+		}
+		code := 1
+		if err := database.FinishAction(ctx, run.ID, &code, "failed"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runningIDs := map[string]bool{}
+	for range 2 {
+		projectConversationID := newDBTestConversation(t, database, "my-project", t.TempDir())
+		run, _, _, err := database.BeginAction(ctx, projectConversationID, "release")
+		if err != nil {
+			t.Fatal(err)
+		}
+		runningIDs[run.ID] = true
+	}
+	workspace, err := database.GetWorkspace(ctx)
+	if err != nil || len(workspace.Runs) != 23 {
+		t.Fatalf("bounded workspace: runs=%d err=%v", len(workspace.Runs), err)
+	}
+	quietFound := false
+	for _, run := range workspace.Runs {
+		if run.ID == quietRun.ID {
+			quietFound = true
+		}
+		if run.Status == "running" {
+			delete(runningIDs, run.ID)
+		}
+		if run.ID == oldestID {
+			t.Fatal("old completed run remained in workspace snapshot")
+		}
+	}
+	if len(runningIDs) != 0 {
+		t.Fatalf("running runs omitted: %+v", runningIDs)
+	}
+	if !quietFound {
+		t.Fatal("recent conversation feedback disappeared behind other conversations' history")
+	}
+	if run, err := database.GetActionRun(ctx, oldestID); err != nil || run.Status != "failed" {
+		t.Fatalf("old run not retained durably: %+v %v", run, err)
 	}
 }

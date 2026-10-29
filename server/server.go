@@ -506,6 +506,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		versionChecker:        NewVersionChecker(),
 		notifDispatcher:       notifications.NewDispatcher(logger),
 		shutdownCh:            make(chan struct{}),
+		workspace:             workspaceState{reports: make(chan struct{}, 1)},
 		hooksDir:              defaultHooksDir(),
 		exitDelay:             500 * time.Millisecond,
 		exitProcess:           os.Exit,
@@ -1951,6 +1952,10 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 		s.logger.Error("Failed to recover agent_working state", "error", err)
 		return err
 	}
+	// Action runs the previous process left running ended with it.
+	if err := s.db.InterruptActionRuns(context.Background()); err != nil {
+		return fmt.Errorf("interrupt action runs: %w", err)
+	}
 
 	// Workspace mode's Assistant exists before any request needs it.
 	if _, err := s.ensureWorkspace(context.Background()); err != nil {
@@ -2054,6 +2059,7 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	// Recover durable queued transcription workers independently of browser
 	// connections and request lifetimes.
 	go s.recoverQueuedTranscriptions(context.Background())
+	s.startActionReports()
 
 	// Wait for shutdown signal or server error
 	quit := make(chan os.Signal, 1)
@@ -2063,6 +2069,11 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	case err := <-serverErrCh:
 		s.logger.Error("Server failed", "error", err)
 		close(s.shutdownCh)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if waitErr := s.waitActions(ctx); waitErr != nil {
+			s.logger.Error("Project actions did not stop", "error", waitErr)
+		}
 		return err
 	case <-quit:
 		s.logger.Info("Shutting down server")
@@ -2074,6 +2085,9 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	// Graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if err := s.waitActions(ctx); err != nil {
+		s.logger.Error("Project actions did not stop", "error", err)
+	}
 
 	// Stop active conversation loops so their tool sets (notably the browser,
 	// which spawns headless-shell + descendants) are cleaned up. Without this
@@ -2166,8 +2180,7 @@ func (s *Server) tryAutoUpgrade() {
 	timeout := time.After(1 * time.Hour)
 
 	// Check immediately first
-	if s.isServerIdle() {
-		s.performUpgradeAndRestart(ctx, versionInfo)
+	if s.isServerIdle() && s.performUpgradeAndRestart(ctx, versionInfo) {
 		return
 	}
 
@@ -2176,8 +2189,7 @@ func (s *Server) tryAutoUpgrade() {
 	for {
 		select {
 		case <-ticker.C:
-			if s.isServerIdle() {
-				s.performUpgradeAndRestart(ctx, versionInfo)
+			if s.isServerIdle() && s.performUpgradeAndRestart(ctx, versionInfo) {
 				return
 			}
 			s.logger.Debug("Auto-upgrade: server still busy, will retry")
@@ -2203,20 +2215,28 @@ func (s *Server) isServerIdle() bool {
 	return true
 }
 
-// performUpgradeAndRestart performs the upgrade and restarts the server
-func (s *Server) performUpgradeAndRestart(ctx context.Context, versionInfo *VersionInfo) {
+// performUpgradeAndRestart performs the upgrade and restarts the server. It
+// returns false, having done nothing, if the server can't restart yet (a
+// project action runs).
+func (s *Server) performUpgradeAndRestart(ctx context.Context, versionInfo *VersionInfo) bool {
+	if err := s.prepareRestart(ctx); err != nil {
+		s.logger.Info("Auto-upgrade: can't restart yet", "error", err)
+		return false
+	}
 	s.logger.Info("Auto-upgrade: starting upgrade", "current", versionInfo.CurrentTag, "latest", versionInfo.LatestTag)
 
 	err := s.versionChecker.DoUpgrade(ctx)
 	if err != nil {
+		s.releaseRestart()
 		s.logger.Error("Auto-upgrade failed", "error", err)
-		return
+		return true
 	}
 
 	s.logger.Info("Auto-upgrade complete, restarting")
 
 	time.Sleep(100 * time.Millisecond)
 	s.restartAfterUpgrade()
+	return true
 }
 
 // listenSocket listens on the Unix socket at socketPath, made absolute, or

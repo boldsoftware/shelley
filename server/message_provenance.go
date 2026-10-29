@@ -156,6 +156,10 @@ func provenanceTag(rawUserData []byte) (string, []xml.Attr, error) {
 		if err := json.Unmarshal(rawUserData, &job); err == nil && job.BackgroundJobID != "" {
 			return "background_job", []xml.Attr{{Name: xml.Name{Local: "id"}, Value: job.BackgroundJobID}}, nil
 		}
+		var action actionUserData
+		if err := json.Unmarshal(rawUserData, &action); err == nil && action.ActionRunID != "" {
+			return "project_action", []xml.Attr{{Name: xml.Name{Local: "run_id"}, Value: action.ActionRunID}}, nil
+		}
 		var mcpN mcpNoticeUserData
 		if err := json.Unmarshal(rawUserData, &mcpN); err == nil && mcpN.MCPServerChange != "" {
 			return "mcp_servers_changed", []xml.Attr{

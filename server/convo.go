@@ -604,6 +604,9 @@ func (cm *ConversationManager) acceptUserMessage(ctx context.Context, service ll
 	cm.loopLifecycleMu.Lock()
 	defer cm.loopLifecycleMu.Unlock()
 	cm.waitForLoopTeardownLocked()
+	if err := cm.checkProjectTurn(ctx); err != nil {
+		return false, "", err
+	}
 
 	if err := cm.Hydrate(ctx); err != nil {
 		return false, "", err
@@ -743,6 +746,9 @@ func (cm *ConversationManager) RetryLastLLMRequest(ctx context.Context) error {
 	cm.loopLifecycleMu.Lock()
 	defer cm.loopLifecycleMu.Unlock()
 	cm.waitForLoopTeardownLocked()
+	if err := cm.checkProjectTurn(ctx); err != nil {
+		return err
+	}
 
 	cm.mu.Lock()
 	loopInstance := cm.loop
@@ -879,6 +885,9 @@ func (cm *ConversationManager) ContinueAfterRefusal(ctx context.Context, models 
 	cm.loopLifecycleMu.Lock()
 	defer cm.loopLifecycleMu.Unlock()
 	cm.waitForLoopTeardownLocked()
+	if err := cm.checkProjectTurn(ctx); err != nil {
+		return err
+	}
 	// Turns start under this lock, so none starts from here on, but one may
 	// have started, or even run, since the checks above (a queued message
 	// draining, say). Continuing would then re-fire a request beside it, or
@@ -1013,6 +1022,9 @@ func (cm *ConversationManager) resumeInterruptedTurn(ctx context.Context, valida
 	cm.loopLifecycleMu.Lock()
 	defer cm.loopLifecycleMu.Unlock()
 	cm.waitForLoopTeardownLocked()
+	if err := cm.checkProjectTurn(ctx); err != nil {
+		return err
+	}
 	if validation == interruptedResumeWorking {
 		defer func() {
 			if returnErr == nil || errors.Is(returnErr, errInterruptedTurnNotApplicable) {
@@ -1620,6 +1632,9 @@ func (cm *ConversationManager) drainPendingMessagesOwned(s *Server) {
 // starting one from the DB if none is running. It stops at the first item that
 // fails so later items never overtake it. The caller holds loopLifecycleMu.
 func (cm *ConversationManager) feedQueued(ctx context.Context, s *Server, queued []db.QueuedMessage) error {
+	if err := cm.checkProjectTurn(ctx); err != nil {
+		return err
+	}
 	cm.mu.Lock()
 	loopInstance := cm.loop
 	warmModelID := cm.modelID

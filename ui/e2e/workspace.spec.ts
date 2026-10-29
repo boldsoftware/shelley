@@ -41,7 +41,7 @@ test("root opens the pinned Assistant; explicit conversation links remain select
   // With a project to move it into, the conversation offers the project picker.
   const project = await request.post("/api/projects", {
     headers: { "X-Shelley-Request": "1" },
-    data: { name: `Root ${randomUUID().slice(0, 8)}`, instructions: "", cwd: "" },
+    data: { name: `Root ${randomUUID().slice(0, 8)}`, instructions: "", cwd: "", actions: [] },
   });
   expect(project.ok()).toBeTruthy();
   await page.goto(`/c/${conversation.conversationId}`);
@@ -87,7 +87,7 @@ test("the Assistant's one URL is /", async ({ page, request }) => {
   await expect(page).toHaveURL(/\/$/);
 });
 
-test("project editor and task creation", async ({
+test("project editor, task creation, failed action retry, and success-only archive", async ({
   page,
 }) => {
   await page.goto("/");
@@ -116,9 +116,15 @@ test("project editor and task creation", async ({
   await expect(editor.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
     "Keep publishing tasks brief.",
   );
+  await editor.getByRole("button", { name: "Add action", exact: true }).click();
+  await editor.getByLabel("ID", { exact: true }).fill("publish");
+  await editor.getByLabel("Button label", { exact: true }).fill("Publish & archive");
   await editor
-    .getByLabel("Project instructions (AGENTS.md)", { exact: true })
-    .fill("Keep publishing tasks brief. Link the release.");
+    .getByLabel("Shell command", { exact: true })
+    .fill("printf 'publishing failed\\n'; exit 7");
+  await editor
+    .getByLabel("Archive task on success (publish/apply actions)", { exact: true })
+    .check();
   await editor.getByRole("button", { name: "Save project", exact: true }).click();
   await expect(editor).toBeHidden();
   await page.getByRole("button", { name: `New task in ${name}`, exact: true }).click();
@@ -133,11 +139,49 @@ test("project editor and task creation", async ({
   await expect(
     page.getByLabel("Task project", { exact: true }).locator("option:checked"),
   ).toHaveText(name);
+  const publish = page.getByRole("button", { name: "Publish & archive", exact: true });
+  await expect(publish).toBeEnabled();
+  await publish.click();
+  const failedRun = page.getByTestId("project-action-card").filter({ hasText: "Failed (exit 7)" });
+  await expect(failedRun.getByTestId("project-action-status")).toHaveText("Failed (exit 7)");
+  await expect(failedRun).toContainText("publishing failed");
+  await expect(page.locator("h1.header-title")).not.toContainText("archived");
+  await expect(publish).toBeEnabled();
+  // The agent gets the failure to work on, in the run's card.
+  await expect(page.getByTestId("message").getByTestId("project-action-card")).toContainText(
+    "Sent to the agent",
+  );
+
+  // A command that hangs can be stopped.
+  await page.getByRole("button", { name: "Edit task project", exact: true }).click();
+  const hang = page.getByRole("dialog", { name: "Edit project", exact: true });
+  await hang.getByLabel("Shell command", { exact: true }).fill("printf 'waiting\\n'; sleep 600");
+  await hang.getByRole("button", { name: "Save project", exact: true }).click();
+  await expect(hang).toBeHidden();
+  await publish.click();
+  const hungRun = page.getByTestId("project-action-card").filter({ hasText: "Running" });
+  await expect(hungRun).toContainText("waiting");
+  await hungRun.getByTestId("project-action-stop").click();
+  const stoppedRun = page
+    .getByTestId("project-action-card")
+    .filter({ hasText: "Stopped by the user" });
+  await expect(stoppedRun.getByTestId("project-action-status")).toHaveText("Interrupted");
+  await expect(publish).toBeEnabled();
+
   await page.getByRole("button", { name: "Edit task project", exact: true }).click();
   const edit = page.getByRole("dialog", { name: "Edit project", exact: true });
-  await expect(edit.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
-    "Keep publishing tasks brief. Link the release.",
-  );
+  await edit
+    .getByLabel("Shell command", { exact: true })
+    .fill("printf 'published successfully\\n'");
+  await edit.getByRole("button", { name: "Save project", exact: true }).click();
+  await expect(edit).toBeHidden();
+  await publish.click();
+  const successfulRun = page.getByTestId("project-action-card").filter({ hasText: "Succeeded" });
+  await expect(successfulRun.getByTestId("project-action-status")).toHaveText("Succeeded");
+  await expect(page.locator("h1.header-title")).toContainText("archived");
+  await expect(successfulRun).toContainText("published successfully");
+  await expect(failedRun).toBeVisible();
+  await expect(publish).toBeDisabled();
 });
 
 test("agent project edits arrive through workspace SSE without navigating away from Assistant", async ({
@@ -154,6 +198,7 @@ test("agent project edits arrive through workspace SSE without navigating away f
       name,
       instructions: "Created outside this tab",
       cwd: testWorkingDirectory(),
+      actions: [],
     },
   });
   expect(response.ok()).toBeTruthy();
@@ -181,7 +226,7 @@ test("project and conversation ⋯ menus: delete waits for an empty project; mov
   const project = async (name: string) => {
     const response = await request.post("/api/projects", {
       headers,
-      data: { name, instructions: "", cwd: testWorkingDirectory() },
+      data: { name, instructions: "", cwd: testWorkingDirectory(), actions: [] },
     });
     expect(response.ok()).toBeTruthy();
     return (await response.json()) as { name: string };

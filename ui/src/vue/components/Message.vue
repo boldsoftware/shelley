@@ -164,7 +164,16 @@
             :on-fork="hasForkAction ? handleFork : undefined"
           />
 
-          <template v-if="jobNotice">
+          <template v-if="actionReport">
+            <ActionRunCard
+              v-if="entityIndex === 0"
+              :run-id="actionReport.runId"
+              :report="actionReport"
+              :text="messageText"
+            />
+          </template>
+
+          <template v-else-if="jobNotice">
             <BackgroundJobNoticeCard
               v-if="entityIndex === 0"
               :source="jobNotice"
@@ -275,10 +284,11 @@ import MessageContentBlock from "./MessageContentBlock.vue";
 import CitedText from "./CitedText.vue";
 import { coalesceContent, splitContentEntities } from "../../utils/coalesceContent";
 import { perfCount } from "../../utils/perf";
-import { messageSource, mcpNoticeSource } from "../../utils/messageSource";
+import { messageSource, mcpNoticeSource, actionReportSource } from "../../utils/messageSource";
 import ConversationMessageCard from "./ConversationMessageCard.vue";
 import BackgroundJobNoticeCard from "./BackgroundJobNoticeCard.vue";
 import McpServerNoticeCard from "./McpServerNoticeCard.vue";
+import ActionRunCard from "./ActionRunCard.vue";
 import MessageDisplayData from "./MessageDisplayData.vue";
 
 interface ToolDisplay {
@@ -411,6 +421,10 @@ const jobNotice = computed(() =>
 // Messages from another conversation render as a tool card.
 const conversationSender = computed(() =>
   sender.value && "conversationId" in sender.value ? sender.value : null,
+);
+// Project action reports render as the run's card.
+const actionReport = computed(() =>
+  isUser.value && !isDistilledUser.value ? actionReportSource(props.message.user_data) : null,
 );
 // Notices that the registered MCP servers changed render as a system card.
 const mcpNotice = computed(() =>
@@ -615,7 +629,7 @@ const hasRenderableContent = computed(() => {
 
 // ---- Message container classes ----
 const messageClasses = computed(() => {
-  if (jobNotice.value || conversationSender.value) {
+  if (jobNotice.value || conversationSender.value || actionReport.value) {
     return "message message-tool message-tool-card";
   }
   if (isUser.value && !isDistilledUser.value) {

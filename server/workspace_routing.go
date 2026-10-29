@@ -86,7 +86,7 @@ func (s *Server) nameConversation(ctx context.Context, id, title string) error {
 // createProjectConversation creates a conversation in project name, or in
 // none. Until release, requests that would race a project conversation's
 // first message are refused (see allowConversationMutation).
-// Only the small creation boundary holds the workspace mutex.
+// Only the small creation/reservation boundary holds the workspace mutex.
 // Hooks may themselves use workspace APIs, so never hold it across user code.
 func (s *Server) createProjectConversation(ctx context.Context, cwd, model *string, opts db.ConversationOptions, name string) (*generated.Conversation, func(), error) {
 	s.workspace.mu.Lock()
@@ -131,7 +131,53 @@ func (s *Server) checkConversationRequest(w http.ResponseWriter, r *http.Request
 	return s.allowConversationMutation(w, r, id, operation)
 }
 
-// Caller holds workspace.mu, which guards initializing.
+// beginConversationMutation is checkConversationRequest for an operation
+// that must not overlap an action run (archive, delete, rename, cwd): until
+// the returned done is called, actions on id are refused.
+func (s *Server) beginConversationMutation(w http.ResponseWriter, r *http.Request, id, operation string) (done func(), ok bool) {
+	s.workspace.mu.Lock()
+	defer s.workspace.mu.Unlock()
+	if !s.allowConversationMutation(w, r, id, operation) {
+		return nil, false
+	}
+	if s.workspace.mutating == nil {
+		s.workspace.mutating = make(map[string]int)
+	}
+	s.workspace.mutating[id]++
+	return func() {
+		s.workspace.mu.Lock()
+		defer s.workspace.mu.Unlock()
+		if s.workspace.mutating[id]--; s.workspace.mutating[id] == 0 {
+			delete(s.workspace.mutating, id)
+		}
+	}, true
+}
+
+// /exit and exec-based upgrades do not pass through Serve's graceful
+// shutdown. Refuse those restarts while a command is running, and fence
+// new actions during the response flush/re-exec window.
+func (s *Server) prepareRestart(ctx context.Context) error {
+	s.workspace.mu.Lock()
+	defer s.workspace.mu.Unlock()
+	running, err := s.db.HasAnyRunningAction(ctx)
+	if err != nil {
+		return err
+	}
+	if running {
+		return fmt.Errorf("%w: wait for running actions to finish before restarting Shelley", db.ErrConflict)
+	}
+	s.workspace.restarting = true
+	return nil
+}
+
+func (s *Server) releaseRestart() {
+	s.workspace.mu.Lock()
+	s.workspace.restarting = false
+	s.workspace.mu.Unlock()
+}
+
+// Caller holds workspace.mu, so action start and ordinary mutations
+// cannot race past one another's preconditions.
 func (s *Server) allowConversationMutation(w http.ResponseWriter, r *http.Request, id, operation string) bool {
 	if s.workspace.initializing[id] {
 		http.Error(w, "The conversation is starting; wait for its first message to be accepted", http.StatusConflict)
@@ -140,6 +186,15 @@ func (s *Server) allowConversationMutation(w http.ResponseWriter, r *http.Reques
 	protected := operation == "archive" || operation == "delete" || operation == "rename"
 	if protected && s.isAssistant(id) {
 		http.Error(w, "The Assistant is permanent; this operation is not available", http.StatusConflict)
+		return false
+	}
+	running, err := s.db.HasRunningAction(r.Context(), id)
+	if err != nil {
+		s.internalError(w, "Failed to check running action", err)
+		return false
+	}
+	if running {
+		http.Error(w, "An action is running; wait for it to finish before continuing", http.StatusConflict)
 		return false
 	}
 	return true
@@ -158,6 +213,20 @@ func (s *Server) projectService(conversationID string, service llm.Service) (llm
 		return nil, fmt.Errorf("load workspace context: %w", err)
 	}
 	return &workspaceService{Service: service, server: s, conversationID: conversationID}, nil
+}
+
+// All model-start paths call this while holding loopLifecycleMu. Action
+// reservation uses that same lock, including starts from a late subagent or
+// background completion rather than an HTTP chat request.
+func (cm *ConversationManager) checkProjectTurn(ctx context.Context) error {
+	running, err := cm.db.HasRunningAction(ctx, cm.conversationID)
+	if err != nil {
+		return err
+	}
+	if running {
+		return fmt.Errorf("%w: an action is running", db.ErrConflict)
+	}
+	return nil
 }
 
 // workspaceService reads workspace instructions at each model request. Project
@@ -281,34 +350,35 @@ func (s *Server) projectCatalog(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("load projects: %w", err)
 	}
 	type projectSummary struct {
-		Name         string `json:"name"`
-		Instructions string `json:"instructions,omitempty"`
-		Cwd          string `json:"cwd"`
+		Name         string             `json:"name"`
+		Instructions string             `json:"instructions,omitempty"`
+		Cwd          string             `json:"cwd"`
+		Actions      []db.ProjectAction `json:"actions"`
 	}
 	summaries := make([]projectSummary, 0, len(projects))
 	for _, project := range projects {
 		summaries = append(summaries, projectSummary{project.Name,
-			truncateRunes(strings.TrimSpace(project.Instructions), 300), project.Cwd})
+			truncateRunes(strings.TrimSpace(project.Instructions), 300), project.Cwd, project.Actions})
 	}
 	return json.Marshal(summaries)
 }
 
 const assistantRoutingPrompt = `You are the user's long-lived Assistant and task dispatcher, pinned above all projects. Answer quick questions, one-off research, and casual requests here. For example, answer "what's the weather today?" directly (use a real weather source).
 
-For substantive project work, code changes, multi-step deliverables, or work that deserves its own history, CREATE A TASK in the best matching existing project using the API below, rather than doing the project work in this thread. For example, "please make the signup form validate email addresses" belongs in a project for the web app. You decide using the request's meaning and the live project catalog (names, instructions, directories), not keywords alone. Each project is a profile: its tasks take the profile's settings (model, effort, tools), and the project's instructions and directory.
+For substantive project work, code changes, multi-step deliverables, or work that deserves its own history, CREATE A TASK in the best matching existing project using the API below, rather than doing the project work in this thread. For example, "please make the signup form validate email addresses" belongs in a project for the web app. You decide using the request's meaning and the live project catalog (names, instructions, directories, actions), not keywords alone. Each project is a profile: its tasks take the profile's settings (model, effort, tools), and the project's instructions, directory, and actions.
 
-Before creating a task, inspect the workspace for an existing active task covering the same request; reuse it if appropriate rather than duplicating work. Every task needs a project. When no existing project is an obvious fit, create a new project for that kind of work, named and instructed so future related tasks belong there too, rather than placing the task in a catch-all. Projects are agent-maintained: keep their names, instructions (the project's AGENTS.md), and directories accurate and reusable; do not create a new project for every task.
+Before creating a task, inspect the workspace for an existing active task covering the same request; reuse it if appropriate rather than duplicating work. Every task needs a project. When no existing project is an obvious fit, create a new project for that kind of work, named and instructed so future related tasks belong there too, rather than placing the task in a catch-all. Projects are agent-maintained: keep their names, instructions (the project's AGENTS.md), directories, and actions accurate and reusable; do not create a new project for every task.
 
 Forward the full user request and all necessary context, constraints, and attachment paths to the task. Give it a short descriptive title. The task starts working immediately in its own conversation. Tell the user that you started it in one short plain-text message containing the task's full URL (see Task links below), not a markdown link or a bare path. Do not claim you completed the delegated work. Stay in the Assistant unless the user follows the task link.
 
-Never invent a repository path or claim a remote operation succeeded without executing it. If a project directory is empty, the task should discover the correct environment before modifying files. Ask only when genuinely blocked.
+Never invent a repository path or claim a remote operation succeeded without executing it. If a project directory is empty, the task should discover the correct environment before modifying files. Ask only when genuinely blocked. When creating or updating a project, configure its publish/apply/ship action (e.g. make release) with archive_on_success: true, so a successful finish archives the task; keep test/check actions (e.g. make test) non-archiving. Do not run a publish action just because you created a task; it is an explicit user-controlled finish operation.
 `
 
 const workspaceAPIPrompt = `
 Manage projects and tasks using bash with the LOCAL Shelley HTTP API, using the transport and SHELLEY_API base specified above, not another instance or a guessed port. Use curl -fsS -H 'X-Shelley-Request: 1' -H 'Content-Type: application/json' (plus the socket flag when specified), with JSON encoded safely (e.g. python json.dumps to a file and --data-binary @file). Treat errors as errors. Never edit Shelley's SQLite tables directly.
 
 GET $SHELLEY_API/api/workspace
-  Returns assistant_id, projects, conversations (conversation_id, project, is_assistant, archived: the tasks).
+  Returns assistant_id, projects, conversations (conversation_id, project, is_assistant, archived: the tasks), and recent action runs.
 GET $SHELLEY_API/api/conversations
   Lists active conversations/tasks, including their ids, titles (slug), and working state. GET /api/conversation/ID retrieves messages for relevant context.
 POST $SHELLEY_API/api/conversations/new
@@ -318,12 +388,14 @@ POST $SHELLEY_API/api/conversation/ID/chat
   Body: {"message":"Follow-up instructions"}; send to an existing task only when appropriate.
 POST $SHELLEY_API/api/projects
 PUT $SHELLEY_API/api/projects/NAME
-  Complete project body: {"name":"Project name","instructions":"Project instructions (AGENTS.md-style), appended to every task's prompt","cwd":"/absolute/real/project/path"}
-  NAME is the project's name, URL-path-escaped (e.g. my%20project). A different name in a PUT body renames the project. Names are unique among profiles, at most 64 bytes, without "/". cwd can be empty when the environment is not known yet. Use an existing directory once discovered. Instructions are additive to the task's existing prompt; their start is what you route on, so lead with what the project is for. A project is a profile (GET $SHELLEY_API/api/profiles lists them, with "project": true): its settings (model, effort, tools, base system prompt) start as a copy of the default profile's, or of the profile named by "copy_settings_from" when creating; change them with PUT $SHELLEY_API/api/profiles/NAME (the complete settings).
+  Complete project body: {"name":"Project name","instructions":"Project instructions (AGENTS.md-style), appended to every task's prompt","cwd":"/absolute/real/project/path","actions":[{"id":"release","label":"make release","command":"make release","archive_on_success":true,"silent":false},{"id":"test","label":"make test","command":"make test","archive_on_success":false,"silent":false}]}
+  NAME is the project's name, URL-path-escaped (e.g. my%20project). A different name in a PUT body renames the project. Names are unique among profiles, at most 64 bytes, without "/". cwd can be empty when the environment is not known yet. Use an existing directory once discovered. Instructions are additive to the task's existing prompt; their start is what you route on, so lead with what the project is for. A project is a profile (GET $SHELLEY_API/api/profiles lists them, with "project": true): its settings (model, effort, tools, base system prompt) start as a copy of the default profile's, or of the profile named by "copy_settings_from" when creating; change them with PUT $SHELLEY_API/api/profiles/NAME (the complete settings). Action ids are up to 64 letters, digits, "-" and "_". A run's result is sent to its task's agent unless the action is "silent". Keep actions deliberate and minimal: commands execute with the user's VM permissions, so do not add destructive cleanup or external side effects without authorization.
 PUT $SHELLEY_API/api/conversation/ID/project
   Body: {"project":"Existing project name"}; moves an idle task, not the Assistant. Unless its settings were changed, it takes the new project's at its next turn.
 DELETE $SHELLEY_API/api/projects/NAME
-  Deletes the project and its profile. Refused (409) while the project has active tasks. Moves archived tasks to no project. Never deletes task history or repositories.
+  Deletes the project and its profile. Refused (409) while the project has active tasks or a running action. Moves archived tasks to no project. Never deletes task history or repositories.
+POST $SHELLEY_API/api/conversation/ID/actions/ACTION_ID
+  Starts the project's configured command in the task directory; returns a run id. GET /api/action-runs/RUN_ID reports live output/status. Never manually archive while it runs: only a successful action archives, and errors/interruption leave the task visible. Do not fire-and-forget and report success.
 `
 
 // writeProjectPrompt writes a project conversation's project instructions

@@ -1,13 +1,23 @@
 import { apiJSON } from "./api";
 
+export interface ProjectAction {
+  id: string;
+  label: string;
+  command: string;
+  archive_on_success: boolean;
+  /** Don't send the run's result to the conversation's agent. */
+  silent: boolean;
+}
+
 /** A project: a profile (named the same, holding its conversations' settings) with
- * instructions and a directory. A conversation whose profile is a
+ * instructions, a directory, and actions. A conversation whose profile is a
  * project is a member of it. */
 export interface Project {
   name: string;
   /** Project instructions (AGENTS.md-style), appended to every conversation's prompt. */
   instructions: string;
   cwd: string;
+  actions: ProjectAction[];
 }
 
 export interface WorkspaceConversation {
@@ -18,10 +28,35 @@ export interface WorkspaceConversation {
   archived: boolean;
 }
 
+/** What the workspace lists of a run. */
+export interface ActionRunSummary {
+  id: string;
+  conversation_id: string;
+  project: string;
+  action_id: string;
+  label: string;
+  status: "running" | "succeeded" | "failed" | "interrupted";
+  started_at: string;
+  finished_at?: string;
+  exit_code?: number;
+  report: ReportState;
+}
+
+export interface ActionRun extends ActionRunSummary {
+  command: string;
+  output: string;
+  error: string;
+  /** Its success archived the conversation. */
+  archived: boolean;
+}
+
+export type ReportState = "pending" | "sent" | "skipped";
+
 export interface Workspace {
   assistant_id: string;
   projects: Project[];
   conversations: WorkspaceConversation[];
+  runs: ActionRunSummary[];
 }
 
 export const workspaceApi = {
@@ -55,8 +90,24 @@ export const workspaceApi = {
       `/api/conversation/${encodeURIComponent(id)}/project`,
       "Failed to move the conversation",
       "PUT",
-      {
-        project,
-      },
+      { project },
+    ),
+  run: (id: string) =>
+    apiJSON<ActionRun>(
+      `/api/action-runs/${encodeURIComponent(id)}`,
+      "Failed to load the action run",
+    ),
+  /** Kills a running command; the run ends interrupted. */
+  stopRun: (id: string) =>
+    apiJSON<void>(
+      `/api/action-runs/${encodeURIComponent(id)}/cancel`,
+      "Failed to stop the action",
+      "POST",
+    ),
+  runAction: (conversationId: string, actionId: string) =>
+    apiJSON<ActionRun>(
+      `/api/conversation/${encodeURIComponent(conversationId)}/actions/${encodeURIComponent(actionId)}`,
+      "Failed to start the action",
+      "POST",
     ),
 };

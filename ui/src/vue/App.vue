@@ -347,6 +347,7 @@ import {
 import { connectGlobalStream, type StreamStatus } from "../services/globalStream";
 import { loadCachedDraft } from "../services/draftCache";
 import { workspaceMode } from "../utils/workspaceMode";
+import { errorMessage } from "../utils/errorMessage";
 import { handleNotificationEvent } from "../services/notifications";
 import { initialDrawerCollapsed, saveDrawerCollapsedPreference } from "../utils/drawerStartup";
 import { perfCount } from "../utils/perf";
@@ -364,6 +365,7 @@ import { useFeatureFlag } from "./composables/featureFlags";
 import { useMobileDrawerSwipe } from "./composables/mobileDrawerSwipe";
 import WorkspaceDialogs from "./components/WorkspaceDialogs.vue";
 import { createWorkspace } from "./composables/workspace";
+import type { ActionRunSummary } from "../services/workspace";
 import PerfHud from "./components/PerfHud.vue";
 
 const perfHudEnabled = useFeatureFlag("performance-hud");
@@ -448,7 +450,18 @@ provide(CurrentConversationIdKey, currentConversationId);
 const viewedConversation = ref<Conversation | null>(null);
 // Loaded alongside the conversation list, and again on workspace_changed;
 // a failure shows in workspace.error.
-const workspace = createWorkspace();
+const workspace = createWorkspace((run: ActionRunSummary) => {
+  if (run.status !== "succeeded" || run.conversation_id !== currentConversationId.value) return;
+  void api
+    .getConversationBySlug(run.conversation_id)
+    .then((conversation) => {
+      if (conversation && currentConversationId.value === run.conversation_id)
+        viewedConversation.value = conversation;
+    })
+    .catch((err: unknown) => {
+      workspace.error.value = errorMessage(err);
+    });
+});
 const refreshWorkspace = () => void workspace.refresh().catch(() => {});
 const drawerOpen = ref(false);
 useMobileDrawerSwipe(drawerOpen);
@@ -1231,7 +1244,7 @@ async function handlePopState() {
     try {
       await selectAssistant();
     } catch (err) {
-      error.value = err instanceof Error ? err.message : String(err);
+      error.value = errorMessage(err);
     }
     return;
   }

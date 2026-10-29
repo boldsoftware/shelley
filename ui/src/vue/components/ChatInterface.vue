@@ -148,6 +148,7 @@
     <ProjectHeader
       :conversation-id="conversationId"
       :busy="conversationWorking || sending"
+      :archived="!!currentConversation?.archived"
       :assignable="
         !!currentConversation?.user_initiated &&
         !currentConversation.parent_conversation_id &&
@@ -169,7 +170,7 @@
                   the right project.
                 </p>
                 <p class="text-sm chat-secondary-text">
-                  Each project keeps its own instructions and working directory.
+                  Projects keep instructions and actions together.
                 </p>
               </template>
               <p v-else class="text-base chat-welcome-text">
@@ -313,6 +314,7 @@
               </div>
             </div>
           </div>
+          <ActionRunsTail :conversation-id="conversationId" :messages="messages" />
           <!-- Durable queued items render in their exact server order. Working
                and failed transcriptions get a specialized card; ready
                transcriptions are ordinary queued user-message ghosts. -->
@@ -647,6 +649,7 @@
 <script setup lang="ts">
 import { provideIframeVersions } from "../composables/iframeVersions";
 import ProjectHeader from "./ProjectHeader.vue";
+import ActionRunsTail from "./ActionRunsTail.vue";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
 import {
   computed,

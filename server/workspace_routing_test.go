@@ -17,7 +17,7 @@ func TestConversationInstructionsFollowProjectEdits(t *testing.T) {
 	t.Parallel()
 	s, database, service := newTestServer(t)
 	project, err := database.CreateProject(t.Context(), db.Project{
-		Name: "Documentation", Instructions: "Writing guides. Use short examples.",
+		Name: "Documentation", Instructions: "Writing guides. Use short examples.", Actions: []db.ProjectAction{},
 	}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -66,7 +66,7 @@ func TestConversationCreateStartsStandardConversation(t *testing.T) {
 	t.Parallel()
 	s, database, service := newTestServer(t)
 	project, err := database.CreateProject(t.Context(), db.Project{
-		Name: "Tests", Cwd: t.TempDir(), Instructions: "Include regression tests.",
+		Name: "Tests", Cwd: t.TempDir(), Instructions: "Include regression tests.", Actions: []db.ProjectAction{},
 	}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -127,6 +127,51 @@ func TestConversationCreateStartsStandardConversation(t *testing.T) {
 	}
 }
 
+func TestRunningActionMutationGuards(t *testing.T) {
+	t.Parallel()
+	s, database, _ := newTestServer(t)
+	cwd := t.TempDir()
+	project, err := database.CreateProject(t.Context(), db.Project{Name: "Actions", Cwd: cwd, Actions: []db.ProjectAction{{ID: "check", Label: "Check", Command: "true"}}}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conv, err := database.CreateConversation(t.Context(), nil, true, &cwd, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.MoveConversation(t.Context(), conv.ConversationID, project.Name); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := database.BeginAction(t.Context(), conv.ConversationID, "check"); err != nil {
+		t.Fatal(err)
+	}
+	for _, operation := range []string{"chat", "archive", "delete", "retry", "resume", "continue", "cwd", "settings"} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/", strings.NewReader(`{"message":"echo: unsafe"}`))
+		switch operation {
+		case "chat":
+			s.handleChatConversation(w, req, conv.ConversationID)
+		case "archive":
+			s.handleArchiveConversation(w, req, conv.ConversationID)
+		case "delete":
+			s.handleDeleteConversation(w, req, conv.ConversationID)
+		case "retry":
+			s.handleRetryConversation(w, req, conv.ConversationID)
+		case "resume":
+			s.handleResumeConversation(w, req, conv.ConversationID)
+		case "continue":
+			s.handleContinueConversation(w, req, conv.ConversationID)
+		case "cwd":
+			s.handleSetConversationCwd(w, req, conv.ConversationID)
+		case "settings":
+			s.handleConversationSettings(w, req, conv.ConversationID)
+		}
+		if w.Code != http.StatusConflict {
+			t.Errorf("running action %s: %d %s", operation, w.Code, w.Body.String())
+		}
+	}
+}
+
 // Until a project conversation's first message is accepted, requests on it
 // are refused; a conversation in no project is never fenced.
 func TestConversationCreationFencesProjectConversations(t *testing.T) {
@@ -134,7 +179,7 @@ func TestConversationCreationFencesProjectConversations(t *testing.T) {
 	s, database, _ := newTestServer(t)
 	cwd := t.TempDir()
 	project, err := database.CreateProject(t.Context(), db.Project{
-		Name: "Creation", Cwd: cwd,
+		Name: "Creation", Cwd: cwd, Actions: []db.ProjectAction{{ID: "finish", Label: "Finish", Command: "true", ArchiveOnSuccess: true}},
 	}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -147,6 +192,14 @@ func TestConversationCreationFencesProjectConversations(t *testing.T) {
 	conv, release, err := s.createProjectConversation(t.Context(), &cwd, nil, db.ConversationOptions{Profile: project.Name}, project.Name)
 	if err != nil {
 		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	request := httptest.NewRequest("POST", "/", nil)
+	request.SetPathValue("id", conv.ConversationID)
+	request.SetPathValue("action_id", "finish")
+	s.handleRunAction(w, request)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("action started before first message was accepted: %d %s", w.Code, w.Body.String())
 	}
 	if code := rename(conv.ConversationID); code != http.StatusConflict {
 		t.Fatalf("renamed a project conversation during creation: %d", code)
@@ -223,5 +276,57 @@ func TestOnlyProjectConversationsNotifyWorkspaceChanged(t *testing.T) {
 				t.Fatalf("project %q: %s notified %d times, want %d", name, op.name, got, want)
 			}
 		}
+	}
+}
+
+func TestActionBlocksExitAndRestartFenceBlocksLateActions(t *testing.T) {
+	t.Parallel()
+	s, database, _ := newTestServer(t)
+	cwd := t.TempDir()
+	project, err := database.CreateProject(t.Context(), db.Project{
+		Name: "Restart", Cwd: cwd, Actions: []db.ProjectAction{{ID: "finish", Label: "Finish", Command: "true"}},
+	}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conv, err := database.CreateConversation(t.Context(), nil, true, &cwd, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.MoveConversation(t.Context(), conv.ConversationID, project.Name); err != nil {
+		t.Fatal(err)
+	}
+	run, _, _, err := database.BeginAction(t.Context(), conv.ConversationID, "finish")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	s.handleExit(w, httptest.NewRequest("POST", "/exit?resume=true", nil))
+	if w.Code != http.StatusConflict {
+		t.Fatalf("exit orphaned running action command: %d %s", w.Code, w.Body.String())
+	}
+	// An upgrade with restart is refused before it upgrades anything.
+	w = httptest.NewRecorder()
+	s.handleUpgrade(w, httptest.NewRequest("POST", "/upgrade?restart=true", nil))
+	if w.Code != http.StatusConflict {
+		t.Fatalf("upgrade restart orphaned running action command: %d %s", w.Code, w.Body.String())
+	}
+	if marker, err := database.GetSetting(t.Context(), db.ResumeAfterUpgradeSettingKey); err != nil || marker != "" {
+		t.Fatal("rejected restart wrote continuation marker", marker, err)
+	}
+	code := 0
+	if err := database.FinishAction(t.Context(), run.ID, &code, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.prepareRestart(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	request := httptest.NewRequest("POST", "/", nil)
+	request.SetPathValue("id", conv.ConversationID)
+	request.SetPathValue("action_id", "finish")
+	s.handleRunAction(w, request)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("action started during delayed exit: %d %s", w.Code, w.Body.String())
 	}
 }

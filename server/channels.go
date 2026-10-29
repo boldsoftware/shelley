@@ -348,9 +348,10 @@ func (s *Server) lockChannelChat(ctx context.Context, chatID string) (func(), er
 	}
 }
 
-// recoverChannelQueues drains the queues of channel conversations at
-// startup. Nobody watches those conversations' UI, so messages left queued
-// by the previous process would otherwise wait for the chat's next message.
+// recoverChannelQueues drains, at startup, the queues of channel
+// conversations and of conversations holding a project action's report.
+// Nobody may be watching their UI, so messages left queued by the previous
+// process would otherwise wait for the conversation's next message.
 func (s *Server) recoverChannelQueues(ctx context.Context) {
 	var conversations []generated.Conversation
 	err := s.db.Queries(ctx, func(q *generated.Queries) (err error) {

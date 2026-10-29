@@ -1465,6 +1465,10 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	}
 
 	firstMessage, err := manager.AcceptUserMessage(ctx, llmService, modelID, userMessage)
+	if errors.Is(err, db.ErrConflict) {
+		s.workspaceHTTPError(w, err)
+		return
+	}
 	if errors.Is(err, errConversationModelMismatch) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1683,6 +1687,10 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 	userMessage.Content = withSkillMentions(userMessage.Content, skillNames)
 
 	firstMessage, err := manager.AcceptUserMessage(ctx, llmService, modelID, userMessage)
+	if errors.Is(err, db.ErrConflict) {
+		s.workspaceHTTPError(w, err)
+		return
+	}
 	if errors.Is(err, errConversationModelMismatch) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -3315,9 +3323,11 @@ func (s *Server) handleArchivedConversations(w http.ResponseWriter, r *http.Requ
 
 // handleArchiveConversation handles POST /conversation/<id>/archive
 func (s *Server) handleArchiveConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
-	if !s.checkConversationRequest(w, r, conversationID, "archive") {
+	done, ok := s.beginConversationMutation(w, r, conversationID, "archive")
+	if !ok {
 		return
 	}
+	defer done()
 	ctx := r.Context()
 	member, err := s.inProject(ctx, conversationID)
 	if err != nil {
@@ -3367,9 +3377,11 @@ func (s *Server) handleUnarchiveConversation(w http.ResponseWriter, r *http.Requ
 
 // handleDeleteConversation handles POST /conversation/<id>/delete
 func (s *Server) handleDeleteConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
-	if !s.checkConversationRequest(w, r, conversationID, "delete") {
+	done, ok := s.beginConversationMutation(w, r, conversationID, "delete")
+	if !ok {
 		return
 	}
+	defer done()
 	ctx := r.Context()
 	member, err := s.inProject(ctx, conversationID)
 	if err != nil {
@@ -3425,9 +3437,11 @@ type RenameRequest struct {
 
 // handleRenameConversation handles POST /conversation/<id>/rename
 func (s *Server) handleRenameConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
-	if !s.checkConversationRequest(w, r, conversationID, "rename") {
+	done, ok := s.beginConversationMutation(w, r, conversationID, "rename")
+	if !ok {
 		return
 	}
+	defer done()
 	ctx := r.Context()
 
 	var req RenameRequest
@@ -3471,9 +3485,11 @@ type SetCwdRequest struct {
 // updated but the running toolset not, or vice versa — is worse than a refused
 // one, because nothing afterwards would notice the disagreement.
 func (s *Server) handleSetConversationCwd(w http.ResponseWriter, r *http.Request, conversationID string) {
-	if !s.checkConversationRequest(w, r, conversationID, "cwd") {
+	done, ok := s.beginConversationMutation(w, r, conversationID, "cwd")
+	if !ok {
 		return
 	}
+	defer done()
 	ctx := r.Context()
 
 	var req SetCwdRequest
@@ -3650,15 +3666,23 @@ func (s *Server) handleVersionChangelog(w http.ResponseWriter, r *http.Request) 
 // handleUpgrade performs a self-update of the Shelley binary
 // If restart=true query parameter is set, it will also restart after upgrade
 func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
+	restart := r.URL.Query().Get("restart") == "true"
+	// A restart is refused (409) before upgrading, never after.
+	if restart {
+		if err := s.prepareRestart(r.Context()); err != nil {
+			s.workspaceHTTPError(w, err)
+			return
+		}
+	}
 	err := s.versionChecker.DoUpgrade(r.Context())
 	if err != nil {
+		if restart {
+			s.releaseRestart()
+		}
 		s.logger.Error("Upgrade failed", "error", err)
 		http.Error(w, fmt.Sprintf("Upgrade failed: %v", err), http.StatusInternalServerError)
 		return
 	}
-
-	// Check if restart was requested
-	restart := r.URL.Query().Get("restart") == "true"
 
 	w.Header().Set("Content-Type", "application/json")
 	if restart {
@@ -3848,11 +3872,16 @@ const restartExitCode = 1
 // handleExit exits the process, expecting systemd or similar to restart it.
 // With ?resume=true, in-flight conversations continue on the next process.
 func (s *Server) handleExit(w http.ResponseWriter, r *http.Request) {
+	if err := s.prepareRestart(r.Context()); err != nil {
+		s.workspaceHTTPError(w, err)
+		return
+	}
 	resume := r.URL.Query().Get("resume") == "true"
 	message := "Exiting..."
 	exitCode := 0
 	if resume {
 		if err := s.markResumeAfterRestart(r.Context()); err != nil {
+			s.releaseRestart()
 			s.logger.Error("Failed to mark conversations for resume after restart", "error", err)
 			http.Error(w, fmt.Sprintf("Failed to prepare conversations for restart: %v", err), http.StatusInternalServerError)
 			return

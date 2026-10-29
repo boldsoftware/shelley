@@ -32,6 +32,7 @@ func upgradeTarget() (string, error) {
 // sure to start Shelley again, so the process replaces itself: same PID,
 // terminal, arguments, and environment. Listeners are close-on-exec, and the
 // new binary binds them again. If that fails, the old binary keeps serving.
+// The caller holds the restart fence (prepareRestart).
 func (s *Server) restartAfterUpgrade() {
 	if s.SocketActivated {
 		os.Exit(0)
@@ -48,6 +49,7 @@ func (s *Server) restartAfterUpgrade() {
 		}
 	}
 	s.logger.Error("Failed to restart after upgrade; still running the old binary", "error", err)
+	s.releaseRestart()
 	// Turns in flight now carry on here, so a later, unrelated restart must
 	// not resume whatever is in flight then.
 	if err := s.db.DeleteSetting(context.Background(), db.ResumeAfterUpgradeSettingKey); err != nil {

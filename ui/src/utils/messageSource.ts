@@ -131,3 +131,28 @@ export function parseLegacyBackgroundJobNotice(
     tail: lines.slice(3).join("\n"),
   };
 }
+
+// A report of a project action run's result is a user message to the model
+// but the run's card to the reader.
+export interface ActionReportSource {
+  runId: string;
+  label: string;
+  command: string;
+  status: string;
+  exitCode: number | null;
+}
+
+export function actionReportSource(userData: unknown): ActionReportSource | null {
+  const parsed = parseUserData(userData);
+  if (!parsed) return null;
+  const { action_run_id: runId, action_report: report } = parsed;
+  if (typeof runId !== "string" || !runId || report !== "result") return null;
+  const text = (key: string) => (typeof parsed[key] === "string" ? (parsed[key] as string) : "");
+  return {
+    runId,
+    label: text("label"),
+    command: text("command"),
+    status: text("status"),
+    exitCode: typeof parsed.exit_code === "number" ? parsed.exit_code : null,
+  };
+}

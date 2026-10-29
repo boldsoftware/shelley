@@ -34,6 +34,78 @@
         :disabled="saving"
       />
       <p class="project-muted">{{ t("projectProfileHint") }}</p>
+      <div class="project-section-heading">
+        <h3>{{ t("actions") }}</h3>
+        <Button
+          :label="t('addAction')"
+          icon="pi pi-plus"
+          text
+          size="small"
+          :disabled="saving"
+          @click="addAction"
+        />
+      </div>
+      <p class="project-muted">{{ t("actionsHint") }}</p>
+      <fieldset
+        v-for="(action, index) in draft.actions"
+        :key="index"
+        class="project-action-editor"
+        :disabled="saving"
+      >
+        <legend>{{ t("actionNumber").replace("{n}", String(index + 1)) }}</legend>
+        <div class="project-action-fields">
+          <div>
+            <label :for="`action-id-${index}`">{{ t("actionId") }}</label
+            ><input
+              :id="`action-id-${index}`"
+              v-model="action.id"
+              required
+              pattern="[a-zA-Z0-9_-]+"
+              maxlength="64"
+              placeholder="publish"
+            />
+          </div>
+          <div>
+            <label :for="`action-label-${index}`">{{ t("actionButtonLabel") }}</label
+            ><input
+              :id="`action-label-${index}`"
+              v-model="action.label"
+              required
+              placeholder="Publish"
+            />
+          </div>
+        </div>
+        <label :for="`action-command-${index}`">{{ t("shellCommand") }}</label>
+        <textarea
+          :id="`action-command-${index}`"
+          v-model="action.command"
+          class="project-command-input"
+          required
+          rows="3"
+          placeholder="git push"
+        />
+        <div class="project-section-heading">
+          <label class="project-checkbox"
+            ><input v-model="action.archive_on_success" type="checkbox" />
+            {{ t("archiveOnSuccess") }}</label
+          >
+          <label class="project-checkbox"
+            ><input
+              type="checkbox"
+              :checked="!action.silent"
+              @change="action.silent = !($event.target as HTMLInputElement).checked"
+            />
+            {{ t("sendResultToAgent") }}</label
+          >
+          <Button
+            :label="t('removeAction')"
+            text
+            severity="danger"
+            size="small"
+            @click="draft.actions.splice(index, 1)"
+          />
+        </div>
+      </fieldset>
       <p v-if="projectError" class="error-line" role="alert">{{ projectError }}</p>
     </form>
     <template #footer>
@@ -160,7 +232,7 @@ watch(workspace.projectEditor, (editor) => {
   if (!editor) return;
   draft.value = editor.project
     ? JSON.parse(JSON.stringify(editor.project))
-    : { name: "", instructions: "", cwd: "" };
+    : { name: "", instructions: "", cwd: "", actions: [] };
   editingName = editor.project?.name ?? "";
   projectError.value = "";
 });
@@ -178,12 +250,24 @@ function closeCreator() {
 function closeDelete() {
   if (!saving.value) deleting.value = null;
 }
+function addAction() {
+  draft.value?.actions.push({
+    id: "",
+    label: "",
+    command: "",
+    archive_on_success: false,
+    silent: false,
+  });
+}
 async function saveProject() {
   const project = draft.value;
   if (saving.value || !project) return;
   saving.value = true;
   projectError.value = "";
   try {
+    const actions = project.actions;
+    if (new Set(actions.map((action) => action.id)).size !== actions.length)
+      throw new Error("Each action needs a unique ID.");
     const saved = { ...project, name: project.name.trim() };
     await (editingName
       ? workspaceApi.updateProject(editingName, saved)
