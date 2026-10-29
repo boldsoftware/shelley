@@ -3530,6 +3530,26 @@ diffs-container {
   flex-shrink: 0;
 }
 
+.output-iframe-tool-version {
+  font-size: var(--font-size-11);
+  font-weight: 600;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--gray-200);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.output-iframe-tool-version-jump {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--font-size-12);
+  color: var(--link-color);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .output-iframe-tool-open-btn,
 .output-iframe-tool-download-btn {
   background: none;
@@ -3549,6 +3569,7 @@ diffs-container {
   background: var(--gray-200);
 }
 
+.dark .output-iframe-tool-version,
 .dark .output-iframe-tool-open-btn:hover,
 .dark .output-iframe-tool-download-btn:hover {
   background: var(--gray-700);

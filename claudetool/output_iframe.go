@@ -32,7 +32,13 @@ Use for charts, HTML demos, SVGs, and interactive widgets. Use normal messages
 for text or simple data.
 
 HTML may include inline scripts/styles and CDN resources. Bundle small local
-assets with files; use libraries for hosted runtimes such as Excalidraw.`
+assets with files; use libraries for hosted runtimes such as Excalidraw.
+
+To change a displayed iframe, patch the file that holds the content (the HTML
+you wrote, or the bundled data file when the HTML is a shared renderer) rather
+than rewriting it, then call output_iframe again with the same path and files.
+The UI shows it as the next version. Never edit a shared renderer or skill
+template to change one output.`
 
 	outputIframeInputSchema = `
 {

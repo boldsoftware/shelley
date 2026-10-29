@@ -18,6 +18,20 @@
       <div class="output-iframe-tool-summary">
         <span class="output-iframe-tool-emoji" :class="{ running: isRunning }">✨</span>
         <span class="output-iframe-tool-title" :title="title">{{ title }}</span>
+        <span
+          v-if="version && version.total > 1"
+          class="output-iframe-tool-version"
+          :title="`Version ${version.version} of ${version.total} of ${version.path}`"
+        >
+          v{{ version.version }}<template v-if="superseded"> of {{ version.total }}</template>
+        </span>
+        <button
+          v-if="superseded"
+          class="output-iframe-tool-version-jump"
+          @click.stop="jumpToLatest"
+        >
+          updated below ↓
+        </button>
       </div>
       <div class="output-iframe-tool-actions">
         <template v-if="isComplete && !hasError && html">
@@ -117,11 +131,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from "vue";
+import { computed, inject, nextTick, ref, onMounted, onUnmounted } from "vue";
 import JSZip from "jszip";
 import type { LLMContent } from "../../../types";
 import ToolChevron from "./ToolChevron.vue";
 import RunningToolTime from "./RunningToolTime.vue";
+import { useIframeVersion } from "../../composables/iframeVersions";
+import { chunkMountKey } from "../chunkMount";
 
 interface EmbeddedFile {
   name: string;
@@ -138,6 +154,7 @@ const props = defineProps<{
   hasError?: boolean;
   executionTime?: string;
   display?: unknown;
+  toolUseId?: string;
 }>();
 
 // Script injected into iframe to report its content height
@@ -201,7 +218,35 @@ function escapeHtml(str: string): string {
 }
 
 // State
+const version = useIframeVersion(() => props.toolUseId);
+const superseded = computed(
+  () => !!version.value && version.value.latestId !== props.toolUseId,
+);
 const isExpanded = ref(true);
+
+const chunkMount = inject(chunkMountKey, null);
+
+async function jumpToLatest() {
+  const id = version.value?.latestId;
+  if (!id) return;
+  // Long conversations mount chunks lazily; make sure the target exists.
+  if (chunkMount?.revealTarget({ toolUseId: id })) await nextTick();
+  const anchor = document.querySelector<HTMLElement>(`[data-tool-use-id="${CSS.escape(id)}"]`);
+  const el = anchor?.nextElementSibling instanceof HTMLElement ? anchor.nextElementSibling : anchor;
+  if (!el) return;
+  // Cards in between can change height as they mount, so jump instantly and
+  // re-align once layout settles instead of trusting one smooth scroll.
+  el.scrollIntoView({ block: "start" });
+  window.setTimeout(() => el.isConnected && el.scrollIntoView({ block: "start" }), 300);
+  window.clearTimeout(Number(el.dataset.highlightTimer));
+  el.classList.remove("message-highlight");
+  void el.offsetWidth;
+  el.classList.add("message-highlight");
+  el.dataset.highlightTimer = String(
+    window.setTimeout(() => el.classList.remove("message-highlight"), 2200),
+  );
+}
+
 const iframeHeight = ref(300);
 const iframeRef = ref<HTMLIFrameElement | null>(null);
 

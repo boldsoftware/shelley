@@ -254,6 +254,9 @@ const toolComponentProps = computed<Record<string, unknown>>(() => {
   if (props.toolName === "subagent") {
     base.displayData = props.display;
   }
+  if (props.toolName === "output_iframe") {
+    base.toolUseId = props.toolUseId;
+  }
   if (props.toolName === MESSAGE_USER_TOOL) {
     base.resultMessageId = props.toolResultMessageId;
   }
