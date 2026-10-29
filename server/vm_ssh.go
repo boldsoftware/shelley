@@ -53,9 +53,13 @@ func (s *Server) writeVMSSHConfig(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// One block per VM; a shared VM's is ready if any of its conversations' is.
 	byName := map[string]db.ConversationVM{}
 	for _, vm := range vms {
 		if vm.ConversationArchived || vm.Status == db.ConversationVMDeleted || vm.Status == db.ConversationVMKept {
+			continue
+		}
+		if seen, ok := byName[vm.Name]; ok && (seen.Status == db.ConversationVMReady || vm.Status != db.ConversationVMReady) {
 			continue
 		}
 		byName[vm.Name] = vm
@@ -178,6 +182,8 @@ func conversationVMStatusMessage(vm db.ConversationVM) string {
 	switch {
 	case vm.Status == db.ConversationVMFailed:
 		return fmt.Sprintf("Shelley could not connect to VM %s: %s. Shelley retries at the conversation's next turn or ssh_target call.", vm.Name, vm.Error)
+	case vm.Shared:
+		return fmt.Sprintf("Shelley is connecting to the shared VM %s; retry in a few seconds.", vm.Name)
 	default:
 		return fmt.Sprintf("Shelley is still creating VM %s (a copy of %s), which takes a minute or two; retry shortly.", vm.Name, vm.Base)
 	}

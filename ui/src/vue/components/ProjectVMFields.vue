@@ -1,7 +1,7 @@
 <!-- Where a project's conversations run: their own VMs copied from a base (the
-     default for new projects in workspace mode), or this Shelley host. Part of
-     the project editor. Shown only where usable: on a host with exe.dev
-     integrations, or for a project with a VM. -->
+     default for new projects in workspace mode), this Shelley host, or one
+     shared VM. Part of the project editor. Shown only where usable: on a
+     host with exe.dev integrations, or for a project with a VM. -->
 <template>
   <template v-if="available">
   <div v-if="heading" class="project-section-heading">
@@ -46,6 +46,18 @@
       toolchains and warms caches. New {{ nouns }} wait until it is done.
     </p>
   </template>
+  <template v-if="vm && mode === 'shared'">
+    <label for="project-vm-shared">Shared VM</label>
+    <input
+      id="project-vm-shared"
+      :value="vm.shared_vm"
+      required
+      placeholder="my-vm"
+      autocomplete="off"
+      :disabled="disabled"
+      @input="update({ shared_vm: ($event.target as HTMLInputElement).value })"
+    />
+  </template>
   <template v-if="vm">
     <label for="project-vm-integration">exe.dev integration</label>
     <input
@@ -80,7 +92,7 @@ const noun = wording("conversation", "task");
 const nouns = wording("conversations", "tasks");
 const Nouns = wording("Conversations", "Tasks");
 
-export type VMMode = "host" | "own";
+export type VMMode = "host" | "own" | "shared";
 const props = defineProps<{ vm: ProjectVM | null; disabled?: boolean; heading?: boolean }>();
 const emit = defineEmits<{
   (e: "update:vm", vm: ProjectVM | null): void;
@@ -99,6 +111,12 @@ const modes: { value: VMMode; icon: string; label: string; help: string }[] = [
     label: "This Shelley host",
     help: `${Nouns} share this machine and its checkouts.`,
   },
+  {
+    value: "shared",
+    icon: "pi-users",
+    label: "One shared VM",
+    help: `Every ${noun} works on one existing VM, each in its own directory. Shelley never creates or deletes it.`,
+  },
 ];
 const integrations = ref<string[]>([]);
 // Shown for a project with a VM stays shown after picking this host, so the
@@ -107,7 +125,11 @@ const hadVM = !!props.vm;
 const available = computed(() => hadVM || integrations.value.length > 0);
 const defaultIntegration = ref("");
 const error = ref("");
-const mode = computed<VMMode>(() => (!props.vm ? "host" : "own"));
+// A shared VM is chosen explicitly, so an empty name still means shared.
+const sharedMode = ref(!!props.vm?.shared_vm);
+const mode = computed<VMMode>(() =>
+  !props.vm ? "host" : props.vm.shared_vm || sharedMode.value ? "shared" : "own",
+);
 const loaded = workspaceApi.exeDevIntegrations().then(
   (result) => {
     integrations.value = result.integrations;
@@ -127,15 +149,17 @@ function update(change: Partial<ProjectVM>) {
   if (props.vm) emit("update:vm", { ...props.vm, ...change });
 }
 function setMode(next: VMMode) {
+  sharedMode.value = next === "shared";
   const vm = props.vm;
   emit(
     "update:vm",
     next === "host"
       ? null
       : {
-          base: vm?.base ?? "",
+          base: next === "own" ? (vm?.base ?? "") : "",
+          shared_vm: "",
           integration: vm?.integration || defaultIntegration.value,
-          setup_conversation_id: vm?.setup_conversation_id ?? "",
+          setup_conversation_id: next === "own" ? (vm?.setup_conversation_id ?? "") : "",
         },
   );
 }

@@ -56,7 +56,7 @@
     </div>
     <p v-if="vm" class="project-vm project-muted" :class="`project-status-${vmTone}`" role="status">
       <i class="pi pi-server" aria-hidden="true" />
-      {{ vm.status === "deleted" ? "VM" : "Works on VM" }}
+      {{ vm.status === "deleted" ? "VM" : vm.shared ? "Works on shared VM" : "Works on VM" }}
       <span v-if="vm.status === 'deleted'">{{ vm.vm_name }}</span>
       <a
         v-else

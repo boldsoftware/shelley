@@ -182,7 +182,7 @@
         :disabled="
           !newProjectConversation.project ||
           !newProjectConversation.message.trim() ||
-          chosenProject?.vm?.base === ''
+          (chosenProject?.vm?.base === '' && !chosenProject.vm.shared_vm)
         "
       />
     </template>
@@ -318,7 +318,7 @@ watch(workspace.projectEditor, (editor) => {
         // (ProjectVMFields fills in this host's default integration);
         // otherwise on this host.
         vm: workspaceMode
-          ? { base: "", integration: "", setup_conversation_id: "" }
+          ? { base: "", shared_vm: "", integration: "", setup_conversation_id: "" }
           : null,
       };
   editingName.value = editor.project?.name ?? "";

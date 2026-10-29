@@ -1,5 +1,5 @@
 <template>
-  <p v-if="vm && !vm.base" class="project-muted project-vm-setup">
+  <p v-if="vm && !vm.base && !vm.shared_vm" class="project-muted project-vm-setup">
     <template v-if="vm.setup_conversation_id">
       <i class="pi pi-spin pi-spinner" aria-hidden="true" />
       <a :href="`/c/${vm.setup_conversation_id}`" @click="open($event, vm.setup_conversation_id)"

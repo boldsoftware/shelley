@@ -15,8 +15,8 @@ import (
 
 // Deleting a project deletes the base VMs Shelley created for it, and only
 // those: the setup conversation creates the base through handleCreateProjectBaseVM,
-// which records the VM before creating it. A base the user supplied and
-// conversation VMs (archiving deletes those) are never touched here.
+// which records the VM before creating it. A base the user supplied, a
+// shared VM, and conversation VMs (archiving deletes those) are never touched here.
 // Deletion stops a running setup conversation (and waits out a creation in flight),
 // then archives it; archived conversations keep their history, in no project. Active
 // conversations block deletion: they may hold uncommitted work on their VMs.
@@ -78,7 +78,7 @@ func (s *Server) handleCreateProjectBaseVM(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if project.VM == nil || !project.VM.NeedsBase() {
-		s.workspaceHTTPError(w, fmt.Errorf("%w: project %q needs no base VM created: its VMs are off or already have a base", db.ErrConflict, project.Name))
+		s.workspaceHTTPError(w, fmt.Errorf("%w: project %q needs no base VM created: its VMs are off, shared, or already have a base", db.ErrConflict, project.Name))
 		return
 	}
 	// Once asked, creation runs to its end, even if the caller goes away

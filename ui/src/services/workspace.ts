@@ -19,7 +19,7 @@ export interface Project {
   cwd: string;
   actions: ProjectAction[];
   /** If set, conversations run their tools and actions on exe.dev VMs: each on its
-   * own copy of base. */
+   * own copy of base, or all on shared_vm. */
   vm: ProjectVM | null;
   /** GitHub repositories attached through exe.dev GitHub integrations. */
   repos: ProjectRepo[];
@@ -37,19 +37,26 @@ export interface GithubRepo extends ProjectRepo {
 }
 
 export interface ProjectVM {
-  /** "" while a setup conversation prepares the base; saving with "" starts one. */
+  /** "" while a setup conversation prepares the base; saving with "" (and no
+   * shared_vm) starts one. */
   base: string;
+  /** An existing VM all conversations share; Shelley never creates or deletes it. */
+  shared_vm: string;
   integration: string;
   /** Read-only: the conversation preparing the base while base is "". */
   setup_conversation_id: string;
 }
 
-/** A conversation's own exe.dev VM. Subagents share their parent's VM. */
+/** A conversation's exe.dev VM: its own, or its project's shared VM. Subagents
+ * share their parent's VM. */
 export interface ConversationVM {
   conversation_id: string;
   vm_name: string;
+  /** "" for a shared VM. */
   base_vm: string;
   integration: string;
+  /** A project's shared VM: archiving the conversation leaves it alone. */
+  shared: boolean;
   /** Archiving the conversation deletes its VM: deleting (retried on error), then
    * deleted, or kept when it isn't the VM Shelley created. */
   status: "pending" | "ready" | "failed" | "deleting" | "deleted" | "kept";

@@ -156,6 +156,7 @@ test("archiving a conversation on its own VM warns that the VM is deleted", (t) 
     vm_name: "base-task",
     base_vm: "base",
     integration: "exe",
+    shared: false,
     status: "ready" as const,
     error: "",
     ssh_dest: "",
@@ -168,6 +169,12 @@ test("archiving a conversation on its own VM warns that the VM is deleted", (t) 
   assert.equal(workspace.archiveNote("other"), "");
   workspace.data.value = { ...empty(), vms: [{ ...vm, status: "deleted" }] };
   assert.equal(workspace.archiveNote("task"), "");
+  // A shared VM outlives its conversations.
+  workspace.data.value = {
+    ...empty(),
+    vms: [{ ...vm, vm_name: "hub", base_vm: "", shared: true }],
+  };
+  assert.equal(workspace.archiveNote("task"), "");
 });
 
 test("every archive route confirms deleting the conversation's own VM first", async (t) => {
@@ -177,6 +184,7 @@ test("every archive route confirms deleting the conversation's own VM first", as
     vm_name: "base-task",
     base_vm: "base",
     integration: "exe",
+    shared: false,
     status: "ready" as const,
     error: "",
     ssh_dest: "",
@@ -230,7 +238,7 @@ test("project deletion plan: active conversations block; the setup conversation 
   data.runs = [];
   const setup = {
     ...blog,
-    vm: { base: "", integration: "i", setup_conversation_id: "setup" },
+    vm: { base: "", shared_vm: "", integration: "i", setup_conversation_id: "setup" },
   };
   data.conversations.push({
     conversation_id: "setup",
@@ -250,7 +258,7 @@ test("project deletion plan: active conversations block; the setup conversation 
   data.base_vms = [];
   const own = {
     ...blog,
-    vm: { base: "mine", integration: "i", setup_conversation_id: "" },
+    vm: { base: "mine", shared_vm: "", integration: "i", setup_conversation_id: "" },
   };
   const plan = projectDeletionPlan(data, own, translate);
   assert.deepEqual([plan.deletesVMs, plan.keepsVMs, plan.setupId], [[], ["base VM mine"], ""]);

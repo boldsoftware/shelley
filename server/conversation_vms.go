@@ -29,7 +29,8 @@ import (
 
 // Conversation VMs: a project with a VM does its conversations' work on exe.dev VMs: each
 // conversation on its own VM, copied from the project's base VM, so concurrent
-// conversations never share a checkout, caches, ports, or processes. The agent loop and
+// conversations never share a checkout, caches, ports, or processes; or, with a
+// shared VM, all of its conversations on that one existing VM. The agent loop and
 // every tool stay on this host: the agent reaches the VM over SSH, which
 // Shelley configures so that `ssh VM 'command'`, scp, rsync and git just
 // work (see writeVMSSHConfig), and the conversation's working directory here is a
@@ -86,20 +87,24 @@ func (s *Server) prepareConversationVM(conversationID string) {
 }
 
 // conversationVMArchived refuses work on vm while its conversation is archived:
-// archiving deletes the VM, and drops it from the SSH configuration.
+// archiving deletes an own VM, and drops any VM from the SSH configuration.
 func conversationVMArchived(vm *db.ConversationVM) error {
-	if !vm.ConversationArchived {
+	switch {
+	case !vm.ConversationArchived:
 		return nil
+	case vm.Shared:
+		return fmt.Errorf("%w: this conversation is archived; unarchive it to continue on the shared VM %s", db.ErrConflict, vm.Name)
+	default:
+		return fmt.Errorf("%w: this conversation is archived, which deletes its VM %s; unarchive it to continue on a fresh copy of %s",
+			db.ErrConflict, vm.Name, vm.Base)
 	}
-	return fmt.Errorf("%w: this conversation is archived, which deletes its VM %s; unarchive it to continue on a fresh copy of %s",
-		db.ErrConflict, vm.Name, vm.Base)
 }
 
 // prepareConversationVMNow creates the conversation's VM if needed and starts its SSH
 // control master, recording the outcome on the conversation (and in the UI and the
 // SSH configuration). It refuses an archived conversation's VM: archiving
-// deletes the VM, and nothing may create it again until the conversation
-// is unarchived.
+// deletes an own VM, and nothing may create it again until the conversation
+// is unarchived. Shared VMs are never created or deleted.
 func (s *Server) prepareConversationVMNow(ctx context.Context, conversationID string) (*db.ConversationVM, error) {
 	vm, err := s.db.GetConversationVM(ctx, conversationID)
 	if err != nil {
@@ -138,7 +143,7 @@ func (s *Server) prepareConversationVMNow(ctx context.Context, conversationID st
 
 // connectConversationVM copies the base VM unless the conversation's VM exists, recording
 // the copy's identity, then starts the control master, waiting for a new
-// VM's SSH to come up.
+// VM's SSH to come up. A shared VM must already exist.
 func (s *Server) connectConversationVM(ctx context.Context, vm *db.ConversationVM) error {
 	dir, err := s.conversationVMDir()
 	if err != nil {
@@ -148,9 +153,12 @@ func (s *Server) connectConversationVM(ctx context.Context, vm *db.ConversationV
 	if err != nil {
 		return err
 	}
+	if found == nil && vm.Shared {
+		return fmt.Errorf("shared VM %s is not listed by integration %s; Shelley never creates it", vm.Name, vm.Integration)
+	}
 	// Only a new VM's SSH may take a while to come up.
 	deadline := time.Now()
-	if found != nil && vm.VMCreatedAt == "" {
+	if found != nil && !vm.Shared && vm.VMCreatedAt == "" {
 		// A copy cut short (e.g. by a restart) that exe.dev completed.
 		vm.VMCreatedAt = copiedVMCreatedAt(*vm, found)
 	}
@@ -198,6 +206,10 @@ func (s *Server) connectConversationVM(ctx context.Context, vm *db.ConversationV
 	config, err := s.vmSSHConfigPath()
 	if err != nil {
 		return err
+	}
+	// Another conversation's preparation already connected a shared VM.
+	if s.conversationVMMasterRunning(ctx, vm.Name) {
+		return nil
 	}
 	logPath := filepath.Join(dir, vm.Name+".log")
 	for {

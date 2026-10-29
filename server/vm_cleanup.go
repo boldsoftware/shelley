@@ -93,7 +93,7 @@ func (s *Server) cleanupConversationVMs(ctx context.Context) time.Duration {
 	next := conversationVMSweepInterval
 	for _, vm := range vms {
 		done := vm.Status == db.ConversationVMDeleted || vm.Status == db.ConversationVMKept
-		if vm.ConversationArchived && done || !vm.ConversationArchived && vm.Status != db.ConversationVMDeleting {
+		if vm.Shared || vm.ConversationArchived && done || !vm.ConversationArchived && vm.Status != db.ConversationVMDeleting {
 			continue
 		}
 		s.conversationVMs.mu.Lock()
@@ -189,8 +189,8 @@ func (s *Server) recordConversationVMCleanupError(ctx context.Context, vm db.Con
 // deleteConversationVM deletes vm if it is the VM Shelley created for its conversation. It
 // returns the resulting status and, for a kept VM, why.
 func (s *Server) deleteConversationVM(ctx context.Context, vm db.ConversationVM) (status, reason string, err error) {
-	if vm.Name == vm.Base {
-		return "", "", fmt.Errorf("refusing to delete base VM %s", vm.Name)
+	if vm.Shared || vm.Name == vm.Base {
+		return "", "", fmt.Errorf("refusing to delete base or shared VM %s", vm.Name)
 	}
 	found, err := s.findExeDevVM(ctx, vm.Integration, vm.Name)
 	created := vm.VMCreatedAt

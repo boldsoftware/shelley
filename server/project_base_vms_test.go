@@ -158,11 +158,11 @@ func TestDeleteProjectCancelsBaseVMSetup(t *testing.T) {
 	}
 }
 
-// Shelley never deletes a base it did not create.
+// Shelley never deletes a base it did not create, nor a shared VM.
 func TestDeleteProjectKeepsOtherVMs(t *testing.T) {
 	t.Parallel()
 	e, exe := newBaseVMEnv(t)
-	for _, vm := range []string{`{"base":"user-base","integration":"base-test-exe"}`} {
+	for _, vm := range []string{`{"base":"user-base","integration":"base-test-exe"}`, `{"shared_vm":"user-base","integration":"base-test-exe"}`} {
 		var c db.Project
 		if err := json.Unmarshal([]byte(e.want(201, "POST", "/api/projects", `{"name":"Mine","cwd":"/r","vm":`+vm+`}`)), &c); err != nil {
 			t.Fatal(err)

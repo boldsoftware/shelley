@@ -86,7 +86,7 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
   /** What archiving a conversation on its own VM destroys; "" for others. */
   const archiveNote = (id: string | null | undefined) => {
     const vm = vmFor(id);
-    return vm && !vm.conversation_archived && vm.status !== "deleted"
+    return vm && !vm.shared && !vm.conversation_archived && vm.status !== "deleted"
       ? `Archiving deletes VM ${vm.vm_name}; uncommitted work on it is lost.`
       : "";
   };
@@ -185,6 +185,7 @@ export function projectDeletionPlan(
   const keepsVMs: string[] = [];
   if (project.vm?.base && !deletesVMs.includes(project.vm.base))
     keepsVMs.push(`base VM ${project.vm.base}`);
+  if (project.vm?.shared_vm) keepsVMs.push(`shared VM ${project.vm.shared_vm}`);
   return {
     blocker: !data
       ? t("loading")
