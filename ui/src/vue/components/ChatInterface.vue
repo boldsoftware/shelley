@@ -58,6 +58,7 @@
           :can-archive="
             !!(conversationId && onArchiveConversation && !currentConversation?.archived && !isAssistant)
           "
+          :archive-note="workspace.archiveNote(conversationId)"
           :can-export="!!(conversationId && messages.length > 0)"
           :has-update="hasUpdate"
           :message-user="messageUserEnabled"
@@ -166,7 +167,7 @@
               <div v-if="isAssistant && !workspace.hasProjects.value" class="first-project">
                 <h2 class="text-primary">Start with a project</h2>
                 <p class="chat-welcome-text">
-                  A project brings together its GitHub repositories, instructions and actions. I’ll
+                  A project brings together its GitHub repositories, instructions and VMs. I’ll
                   start tasks in it whenever you ask for work on it.
                 </p>
                 <button
@@ -4565,7 +4566,8 @@ const statusContentProps = computed(() => {
     usageEntries: usageEntries.value,
     otherUsageRows: otherUsageRows.value,
     messages: messages.value,
-    hostname,
+    // A conversation on a VM runs its tools there.
+    hostname: workspace.vmFor(props.conversationId)?.vm_name ?? hostname,
     models: models.value,
     selectedModel: selectedModel.value,
     sending: sending.value,

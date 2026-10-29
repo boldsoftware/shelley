@@ -10,7 +10,7 @@ export interface ProjectAction {
 }
 
 /** A project: a profile (named the same, holding its conversations' settings) with
- * instructions, a directory, actions, and repositories. A conversation
+ * instructions, a directory, actions, repositories, and VMs. A conversation
  * whose profile is a project is in it. */
 export interface Project {
   name: string;
@@ -18,6 +18,9 @@ export interface Project {
   instructions: string;
   cwd: string;
   actions: ProjectAction[];
+  /** If set, conversations run their tools and actions on exe.dev VMs: each on its
+   * own copy of base. */
+  vm: ProjectVM | null;
   /** GitHub repositories attached through exe.dev GitHub integrations. */
   repos: ProjectRepo[];
 }
@@ -31,6 +34,30 @@ export interface ProjectRepo {
 /** A repository this host reaches through an exe.dev GitHub integration. */
 export interface GithubRepo extends ProjectRepo {
   team: boolean;
+}
+
+export interface ProjectVM {
+  /** The VM each conversation's own VM is copied from. */
+  base: string;
+  integration: string;
+}
+
+/** A conversation's own exe.dev VM. Subagents share their parent's VM. */
+export interface ConversationVM {
+  conversation_id: string;
+  vm_name: string;
+  base_vm: string;
+  integration: string;
+  /** Archiving the conversation deletes its VM: deleting (retried on error), then
+   * deleted, or kept when it isn't the VM Shelley created. */
+  status: "pending" | "ready" | "failed" | "deleting" | "deleted" | "kept";
+  error: string;
+  ssh_dest: string;
+  https_url: string;
+  /** The working directory on the VM: its project's when the conversation was
+   * created. */
+  dir: string;
+  conversation_archived: boolean;
 }
 
 export interface WorkspaceConversation {
@@ -70,10 +97,18 @@ export interface Workspace {
   projects: Project[];
   conversations: WorkspaceConversation[];
   runs: ActionRunSummary[];
+  vms: ConversationVM[];
 }
 
 export const workspaceApi = {
   workspace: () => apiJSON<Workspace>("/api/workspace", "Failed to load projects"),
+  /** This host's exe.dev integrations, and the one new projects' VMs use
+   * by default ("" when that is ambiguous). */
+  exeDevIntegrations: () =>
+    apiJSON<{ integrations: string[]; default: string }>(
+      "/api/exe-dev-integrations",
+      "Failed to load exe.dev integrations",
+    ),
   /** connect_url is "" off exe.dev, where there are no GitHub integrations. */
   githubRepos: () =>
     apiJSON<{ repos: GithubRepo[]; connect_url: string }>(

@@ -398,6 +398,7 @@ type Server struct {
 	conversationListStream   *conversationListStream
 	conversationListGitCache *conversationListGitCache
 	workspace                workspaceState
+	conversationVMs          conversationVMState
 	integrationSkills        *integrationSkillCache
 	listIntegrations         integrationLister
 	// fileListCache memoizes working-directory file listings for the fuzzy
@@ -506,6 +507,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		versionChecker:        NewVersionChecker(),
 		notifDispatcher:       notifications.NewDispatcher(logger),
 		shutdownCh:            make(chan struct{}),
+		conversationVMs:       conversationVMState{cleanup: make(chan struct{}, 1), active: make(chan struct{})},
 		workspace:             workspaceState{reports: make(chan struct{}, 1)},
 		hooksDir:              defaultHooksDir(),
 		exitDelay:             500 * time.Millisecond,
@@ -1116,7 +1118,14 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		}
 		onStateChange := func(state ConversationState) { s.publishConversationState(state) }
 
+		// A VM conversation, subagents included, works on the VM
+		// from a scratch directory here: bash and patch target either.
+		vm, err := s.conversationVMTools(ctx, conversation)
+		if err != nil {
+			return nil, err
+		}
 		config := s.toolSetConfig
+		config.VM = vm
 		if role != roleTopLevel {
 			// Only top-level conversations can spawn subagents.
 			config.SubagentDepth++
@@ -1131,6 +1140,7 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 			manager.resolveModelService = snapshots.GetServiceSnapshot
 		}
 		manager.role = role
+		manager.prepareConversationVM = func() { s.prepareConversationVM(conversationID) }
 		manager.onTurnStartRejected = func() { go manager.drainPendingMessages(s) }
 		manager.followProfile = func(ctx context.Context) (llm.Service, string, error) {
 			return s.followProfile(ctx, manager)
@@ -1149,9 +1159,17 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		switch role {
 		case roleTopLevel:
 			manager.decorateService = func(service llm.Service) (llm.Service, error) {
+				if vm != nil {
+					return &workspaceService{Service: service, server: s, conversationID: conversationID, vm: true}, nil
+				}
 				return s.projectService(conversationID, service)
 			}
 		case roleSubagent:
+			if vm != nil {
+				manager.decorateService = func(service llm.Service) (llm.Service, error) {
+					return &workspaceService{Service: service, server: s, conversationID: conversationID, vm: true}, nil
+				}
+			}
 			manager.rewriteFinalReply = func(ctx context.Context, reply llm.Message) (llm.Message, bool) {
 				return s.reportUnreportedReply(ctx, manager, reply)
 			}
@@ -2059,6 +2077,7 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	// Recover durable queued transcription workers independently of browser
 	// connections and request lifetimes.
 	go s.recoverQueuedTranscriptions(context.Background())
+	s.startConversationVMCleanup()
 	s.startActionReports()
 
 	// Wait for shutdown signal or server error

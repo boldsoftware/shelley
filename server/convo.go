@@ -96,9 +96,12 @@ type ConversationManager struct {
 	recordTurnStartMessage turnStartRecordFunc
 	logger                 *slog.Logger
 	toolSetConfig          claudetool.ToolSetConfig
-	integrationSkills      *integrationSkillCache
-	listIntegrations       integrationLister
-	toolSet                *claudetool.ToolSet // created per-conversation when loop starts
+	// prepareConversationVM starts preparing the VM of a VM conversation (or a
+	// subagent's parent) at each turn; see Server.prepareConversationVM.
+	prepareConversationVM func()
+	integrationSkills     *integrationSkillCache
+	listIntegrations      integrationLister
+	toolSet               *claudetool.ToolSet // created per-conversation when loop starts
 
 	subpub *subpub.SubPub[StreamResponse]
 	// streamPub mirrors per-conversation events to the server-wide /api/stream2

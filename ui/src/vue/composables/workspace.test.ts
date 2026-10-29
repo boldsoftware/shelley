@@ -15,6 +15,7 @@ const empty = (): Workspace => ({
       instructions: "Writing\n\nBe brief",
       cwd: "/tmp",
       actions: [],
+      vm: null,
       repos: [],
     },
   ],
@@ -22,6 +23,7 @@ const empty = (): Workspace => ({
     { conversation_id: "task", project: "Blog", is_assistant: false, archived: false },
   ],
   runs: [],
+  vms: [],
 });
 const run = (): ActionRunSummary => ({
   id: "run",
@@ -144,6 +146,68 @@ test("mutations during a refresh coalesce into one fresh follow-up snapshot", as
   await pending;
   assert.equal(calls, 2);
   assert.equal(workspace.projectFor("task")?.name, "Renamed");
+});
+
+test("archiving a conversation on its own VM warns that the VM is deleted", (t) => {
+  const { workspace } = harness(t);
+  const vm = {
+    conversation_id: "task",
+    vm_name: "base-task",
+    base_vm: "base",
+    integration: "exe",
+    status: "ready" as const,
+    error: "",
+    ssh_dest: "",
+    https_url: "",
+    dir: "/home/exedev/blog",
+    conversation_archived: false,
+  };
+  workspace.data.value = { ...empty(), vms: [vm] };
+  assert.match(workspace.archiveNote("task"), /deletes VM base-task; uncommitted work/);
+  assert.equal(workspace.archiveNote("other"), "");
+  workspace.data.value = { ...empty(), vms: [{ ...vm, status: "deleted" }] };
+  assert.equal(workspace.archiveNote("task"), "");
+});
+
+test("every archive route confirms deleting the conversation's own VM first", async (t) => {
+  const { workspace } = harness(t);
+  const vm = {
+    conversation_id: "task",
+    vm_name: "base-task",
+    base_vm: "base",
+    integration: "exe",
+    status: "ready" as const,
+    error: "",
+    ssh_dest: "",
+    https_url: "",
+    dir: "/home/exedev/blog",
+    conversation_archived: false,
+  };
+  workspace.data.value = { ...empty(), vms: [vm] };
+  const archived: string[] = [];
+  const archive = (id: string) => () => {
+    archived.push(id);
+  };
+  // Without a VM to delete, archiving needs no confirmation.
+  await workspace.confirmArchive("other", archive("other"));
+  assert.deepEqual(archived, ["other"]);
+  const pending = () => workspace.archiveConfirmation.value;
+  assert.equal(pending(), null);
+
+  const cancelled = workspace.confirmArchive("task", archive("task"));
+  assert.match(pending()?.note ?? "", /deletes VM base-task/);
+  workspace.answerArchive(false);
+  await cancelled;
+  assert.deepEqual(archived, ["other"]);
+  assert.equal(pending(), null);
+
+  // A second request replaces (and cancels) an unanswered one.
+  const replaced = workspace.confirmArchive("task", archive("first"));
+  const confirmed = workspace.confirmArchive("task", archive("task"));
+  await replaced;
+  workspace.answerArchive(true);
+  await confirmed;
+  assert.deepEqual(archived, ["other", "task"]);
 });
 
 test("project deletion plan: active conversations and running actions block; archived ones move", () => {

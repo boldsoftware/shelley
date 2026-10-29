@@ -70,6 +70,7 @@ type Workspace struct {
 	Projects      []Project               `json:"projects"`
 	Conversations []WorkspaceConversation `json:"conversations"`
 	Runs          []ActionRunSummary      `json:"runs"`
+	VMs           []ConversationVM        `json:"vms"`
 }
 
 // EnsureWorkspace serializes singleton creation with all other DB writes.
@@ -491,6 +492,9 @@ func (db *DB) GetWorkspace(ctx context.Context) (*Workspace, error) {
 		var err error
 		workspace.Projects, err = listProjects(rx)
 		if err != nil {
+			return err
+		}
+		if workspace.VMs, err = listConversationVMs(rx, true); err != nil {
 			return err
 		}
 		if err := func() error {

@@ -42,4 +42,20 @@ test("stock mode offers Group by Project without the workspace", async ({ page, 
   await page.reload();
   await page.getByRole("button", { name: "Open conversations", exact: true }).click();
   await expect(group.locator(`[data-conversation-id="${projectConversationId}"]`)).toBeVisible();
+
+  // New projects run on this host; a host with no exe.dev integration
+  // doesn't offer VMs at all.
+  let integrations: string[] = [];
+  await page.route("**/api/exe-dev-integrations", (route) =>
+    route.fulfill({ json: { integrations, default: integrations[0] ?? "" } }),
+  );
+  await page.getByRole("button", { name: "New project", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "New project", exact: true });
+  await expect(editor.getByLabel("Working directory", { exact: true })).toBeVisible();
+  await expect(editor.getByRole("radio", { name: /This Shelley host/ })).toHaveCount(0);
+  await editor.getByRole("button", { name: "Close modal", exact: true }).click();
+
+  integrations = ["exe"];
+  await page.getByRole("button", { name: "New project", exact: true }).click();
+  await expect(editor.getByRole("radio", { name: /This Shelley host/ })).toBeChecked();
 });

@@ -131,9 +131,14 @@
           ><kbd>{{ menuShortcutLabel("export") }}</kbd></span
         >
       </button>
-      <button v-if="canArchive" class="overflow-menu-item" @click="onArchive">
+      <button
+        v-if="canArchive"
+        class="overflow-menu-item"
+        :title="archiveNote || undefined"
+        @click="onArchive"
+      >
         <i class="pi pi-inbox chat-menu-icon" aria-hidden="true" />
-        {{ t("archiveConversation") }}
+        {{ archiveNote ? "Archive and delete VM" : t("archiveConversation") }}
         <span class="overflow-menu-shortcut hide-on-mobile"
           ><kbd>{{ menuShortcutLabel("archive") }}</kbd></span
         >
@@ -351,6 +356,8 @@ const props = defineProps<{
   cwd: string;
   links: Link[];
   canArchive: boolean;
+  /** For a conversation on its own VM: archiving deletes the VM. */
+  archiveNote: string;
   canExport: boolean;
   hasUpdate: boolean;
   // The conversation has the message_user tool: offer the brief (chat only)

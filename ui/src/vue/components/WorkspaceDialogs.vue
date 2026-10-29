@@ -14,6 +14,8 @@
         required
         maxlength="64"
         autocomplete="off"
+        :placeholder="t('projectNamePlaceholder')"
+        :autofocus="!editingName"
         :disabled="saving"
       />
       <label for="project-instructions">{{ t("projectInstructions") }}</label>
@@ -27,13 +29,20 @@
       />
       <p class="project-muted">{{ t("projectInstructionsHint") }}</p>
       <ProjectRepoPicker v-model="draft.repos" :disabled="saving" />
+      <ProjectVMFields v-model:vm="draft.vm" heading :disabled="saving" />
       <label for="project-cwd">{{ t("workingDirectory") }}</label>
       <input
         id="project-cwd"
         v-model="draft.cwd"
-        placeholder="/path/to/project"
+        :required="!!draft.vm"
+        :pattern="draft.vm ? '/.*' : undefined"
+        :placeholder="draft.vm ? `${HOME}/project` : '/path/to/project (optional)'"
+        autocomplete="off"
         :disabled="saving"
       />
+      <p class="project-muted">
+        {{ draft.vm ? t("projectCwdHintVm") : t("projectCwdHintHost") }}
+      </p>
       <p class="project-muted">{{ t("projectProfileHint") }}</p>
       <div class="project-section-heading">
         <h3>{{ t("actions") }}</h3>
@@ -46,7 +55,7 @@
           @click="addAction"
         />
       </div>
-      <p class="project-muted">{{ t("actionsHint") }}</p>
+      <p class="project-muted">{{ draft.vm ? t("actionsHintVm") : t("actionsHint") }}</p>
       <fieldset
         v-for="(action, index) in draft.actions"
         :key="index"
@@ -168,6 +177,23 @@
     </template>
   </Modal>
 
+  <Modal
+    :is-open="!!workspace.archiveConfirmation.value"
+    :title="`Archive ${noun}?`"
+    @close="workspace.answerArchive(false)"
+  >
+    <p>{{ workspace.archiveConfirmation.value?.note }}</p>
+    <template #footer>
+      <Button :label="t('cancel')" text severity="secondary" @click="workspace.answerArchive(false)" />
+      <Button
+        label="Archive and delete VM"
+        severity="danger"
+        data-testid="archive-confirm"
+        @click="workspace.answerArchive(true)"
+      />
+    </template>
+  </Modal>
+
   <Modal :is-open="!!deleting" :title="t('deleteProjectTitle')" @close="closeDelete">
     <template v-if="deletePlan">
       <p>{{ t("deleteProjectConfirm").replace("{name}", deleting?.name ?? "") }}</p>
@@ -201,12 +227,17 @@ import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
 import Modal from "./Modal.vue";
 import ProjectRepoPicker from "./ProjectRepoPicker.vue";
+import ProjectVMFields from "./ProjectVMFields.vue";
 import { workspaceApi, type Project } from "../../services/workspace";
 import { api } from "../../services/api";
 import type { Conversation } from "../../types";
 import { useWorkspace } from "../composables/workspace";
 import { useI18n } from "../composables/i18n";
 import { errorMessage } from "../../utils/errorMessage";
+import { wording } from "../../utils/workspaceMode";
+
+const noun = wording("conversation", "task");
+const Nouns = wording("Conversations", "Tasks");
 
 const { t } = useI18n();
 const emit = defineEmits<{ (e: "created", conversation: Conversation): void }>();
@@ -214,7 +245,9 @@ const workspace = useWorkspace();
 const draft = ref<Project | null>(null);
 // The name the project had when editing began, "" for a new one: renaming
 // saves to it.
-let editingName = "";
+const editingName = ref("");
+// The VM user's home.
+const HOME = "/home/exedev";
 const saving = ref(false);
 const creating = ref(false);
 const projectError = ref("");
@@ -234,8 +267,8 @@ watch(workspace.projectEditor, (editor) => {
   if (!editor) return;
   draft.value = editor.project
     ? JSON.parse(JSON.stringify(editor.project))
-    : { name: "", instructions: "", cwd: "", actions: [], repos: [] };
-  editingName = editor.project?.name ?? "";
+    : { name: "", instructions: "", cwd: "", actions: [], repos: [], vm: null };
+  editingName.value = editor.project?.name ?? "";
   projectError.value = "";
 });
 watch(workspace.conversationCreator, (creator) => {
@@ -271,8 +304,8 @@ async function saveProject() {
     if (new Set(actions.map((action) => action.id)).size !== actions.length)
       throw new Error("Each action needs a unique ID.");
     const saved = { ...project, name: project.name.trim() };
-    await (editingName
-      ? workspaceApi.updateProject(editingName, saved)
+    await (editingName.value
+      ? workspaceApi.updateProject(editingName.value, saved)
       : workspaceApi.createProject(saved));
     await workspace.refresh();
     workspace.projectEditor.value = null;

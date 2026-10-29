@@ -144,6 +144,8 @@ export const fr: TranslationKeys = {
   addAction: "Ajouter une action",
   actionsHint:
     "Les commandes s’exécutent sur le serveur, dans le répertoire de travail de la conversation. N’ajoutez que des commandes de confiance.",
+  actionsHintVm:
+    "Les commandes s’exécutent sur la VM de la conversation, dans son répertoire sur celle-ci. N’ajoutez que des commandes de confiance.",
   actionNumber: "Action {n}",
   actionId: "ID",
   actionButtonLabel: "Libellé du bouton",
@@ -160,6 +162,10 @@ export const fr: TranslationKeys = {
   projectInstructionsHint:
     "Instructions de type AGENTS.md ajoutées à chaque conversation de ce projet.",
   workingDirectory: "Répertoire de travail",
+  projectNamePlaceholder: "p. ex. Boutique",
+  projectCwdHintVm: "Où les conversations commencent, sur la VM : un chemin absolu.",
+  projectCwdHintHost:
+    "Où les conversations commencent, sur cet hôte. Vide : elles le trouvent elles-mêmes.",
   projectProfileHint:
     "Le projet est aussi un profil : son modèle, son effort, ses outils et son prompt système de base sont les réglages de ses conversations. Modifiez-les depuis le sélecteur de modèle d’une conversation (Mettre à jour le profil).",
   savingEllipsis: "Enregistrement…",

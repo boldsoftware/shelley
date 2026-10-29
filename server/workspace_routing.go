@@ -63,8 +63,9 @@ func (s *Server) prepareProjectConversation(w http.ResponseWriter, r *http.Reque
 	}
 	req.ConversationOptions.Change.Profile = &project.Name
 	// A project supplies the initial directory, not a permanent override:
-	// conversations can subsequently use their own worktrees via change_dir.
-	if project.Cwd != "" {
+	// conversations can subsequently use their own worktrees via change_dir. A VM's
+	// directory is always the project's: this host's means nothing there.
+	if project.Cwd != "" || project.VM != nil {
 		req.Cwd = project.Cwd
 	}
 	return true
@@ -91,24 +92,45 @@ func (s *Server) nameConversation(ctx context.Context, id, title string) error {
 func (s *Server) createProjectConversation(ctx context.Context, cwd, model *string, opts db.ConversationOptions, name string) (*generated.Conversation, func(), error) {
 	s.workspace.mu.Lock()
 	defer s.workspace.mu.Unlock()
+	var project *db.Project
+	var vm *db.ProjectVM
 	if name != "" {
-		project, err := s.db.GetProject(ctx, name)
+		var err error
+		project, err = s.db.GetProject(ctx, name)
 		if err != nil {
 			return nil, nil, err
 		}
 		if opts.Profile != project.Name {
 			return nil, nil, fmt.Errorf("conversation in project %q would have profile %q", project.Name, opts.Profile)
 		}
-		if project.Cwd != "" {
+		if project.Cwd != "" && project.VM == nil {
 			if err := validateConversationDirectory(project.Cwd); err != nil {
 				return nil, nil, err
 			}
+		}
+		if project.Cwd != "" {
 			cwd = &project.Cwd
 		}
+		vm = project.VM
 	}
-	conversation, err := s.db.CreateConversation(ctx, nil, true, cwd, model, opts)
+	var conversation *generated.Conversation
+	var err error
+	if vm != nil {
+		// Its VM is part of it from the start: a VM conversation never runs
+		// here.
+		conversation, err = s.db.CreateVMProjectConversation(ctx, cwd, model, opts, project)
+	} else {
+		conversation, err = s.db.CreateConversation(ctx, nil, true, cwd, model, opts)
+	}
 	if err != nil {
 		return nil, nil, err
+	}
+	if vm != nil {
+		// Moves it to its scratch directory here.
+		if _, err := s.conversationVMTools(ctx, conversation); err != nil {
+			return nil, nil, err
+		}
+		s.prepareConversationVM(conversation.ConversationID)
 	}
 	if name != "" {
 		if s.workspace.initializing == nil {
@@ -217,7 +239,9 @@ func (s *Server) projectService(conversationID string, service llm.Service) (llm
 
 // All model-start paths call this while holding loopLifecycleMu. Action
 // reservation uses that same lock, including starts from a late subagent or
-// background completion rather than an HTTP chat request.
+// background completion rather than an HTTP chat request. Archiving a conversation
+// with a VM deletes the VM, so it (and its subagents) start no turns until
+// unarchived; work queued meanwhile waits.
 func (cm *ConversationManager) checkProjectTurn(ctx context.Context) error {
 	running, err := cm.db.HasRunningAction(ctx, cm.conversationID)
 	if err != nil {
@@ -226,20 +250,44 @@ func (cm *ConversationManager) checkProjectTurn(ctx context.Context) error {
 	if running {
 		return fmt.Errorf("%w: an action is running", db.ErrConflict)
 	}
+	if cm.toolSetConfig.VM == nil {
+		return nil
+	}
+	vm, err := cm.db.GetConversationVM(ctx, cm.conversationID)
+	if err != nil {
+		return fmt.Errorf("load conversation VM: %w", err)
+	}
+	if err := conversationVMArchived(vm); err != nil {
+		return err
+	}
+	// Copies a fresh VM after unarchiving, retries a failure, and restarts
+	// a stopped SSH master.
+	cm.prepareConversationVM()
 	return nil
 }
 
 // workspaceService reads workspace instructions at each model request. Project
 // edits and newly created projects are immediately available even in the
 // long-lived Assistant and survive compaction without stale prompt copies.
+// A VM conversation's (or its subagent's) also says where its work happens.
 type workspaceService struct {
 	llm.Service
 	server         *Server
 	conversationID string
+	vm             bool
+}
+
+func (s *workspaceService) instructions(ctx context.Context) (string, error) {
+	prompt, err := s.server.workspaceInstructions(ctx, s.conversationID)
+	if err != nil || !s.vm {
+		return prompt, err
+	}
+	vm, err := s.server.conversationVMPrompt(ctx, s.conversationID)
+	return prompt + vm, err
 }
 
 func (s *workspaceService) request(ctx context.Context, request *llm.Request) (*llm.Request, error) {
-	prompt, err := s.server.workspaceInstructions(ctx, s.conversationID)
+	prompt, err := s.instructions(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -396,8 +444,8 @@ POST $SHELLEY_API/api/conversation/ID/chat
   Body: {"message":"Follow-up instructions"}; send to an existing task only when appropriate.
 POST $SHELLEY_API/api/projects
 PUT $SHELLEY_API/api/projects/NAME
-  Complete project body: {"name":"Project name","instructions":"Project instructions (AGENTS.md-style), appended to every task's prompt","cwd":"/absolute/real/project/path","repos":[{"integration":"GITHUB_INTEGRATION","repository":"OWNER/REPO"}],"actions":[{"id":"release","label":"make release","command":"make release","archive_on_success":true,"silent":false},{"id":"test","label":"make test","command":"make test","archive_on_success":false,"silent":false}]}
-  NAME is the project's name, URL-path-escaped (e.g. my%20project). A different name in a PUT body renames the project. Names are unique among profiles, at most 64 bytes, without "/". cwd can be empty when the environment is not known yet. Use an existing directory once discovered. Instructions are additive to the task's existing prompt; their start is what you route on, so lead with what the project is for. A project is a profile (GET $SHELLEY_API/api/profiles lists them, with "project": true): its settings (model, effort, tools, base system prompt) start as a copy of the default profile's, or of the profile named by "copy_settings_from" when creating; change them with PUT $SHELLEY_API/api/profiles/NAME (the complete settings). repos are GitHub repositories this host reaches through exe.dev GitHub integrations (GET $SHELLEY_API/api/github-repos lists them, one per integration). Always send the project's current repos back unchanged unless asked to change them. Action ids are up to 64 letters, digits, "-" and "_". A run's result is sent to its task's agent unless the action is "silent". Keep actions deliberate and minimal: commands execute with the user's VM permissions, so do not add destructive cleanup or external side effects without authorization.
+  Complete project body: {"name":"Project name","instructions":"Project instructions (AGENTS.md-style), appended to every task's prompt","cwd":"/absolute/real/project/path","repos":[{"integration":"GITHUB_INTEGRATION","repository":"OWNER/REPO"}],"actions":[{"id":"release","label":"make release","command":"make release","archive_on_success":true,"silent":false},{"id":"test","label":"make test","command":"make test","archive_on_success":false,"silent":false}],"vm":null}
+  NAME is the project's name, URL-path-escaped (e.g. my%20project). A different name in a PUT body renames the project. Names are unique among profiles, at most 64 bytes, without "/". cwd can be empty when the environment is not known yet. Use an existing directory once discovered. Instructions are additive to the task's existing prompt; their start is what you route on, so lead with what the project is for. A project is a profile (GET $SHELLEY_API/api/profiles lists them, with "project": true): its settings (model, effort, tools, base system prompt) start as a copy of the default profile's, or of the profile named by "copy_settings_from" when creating; change them with PUT $SHELLEY_API/api/profiles/NAME (the complete settings). vm is null (tasks run on this host), {"base":"BASE_VM","integration":"EXE_DEV_INTEGRATION"} (each new task runs its tools and actions on its own VM copied from BASE_VM); cwd is then a directory on the VM. Browser runs on this host for VM tasks; files users upload stay on this host; tasks copy them to the VM with scp. An empty integration means this host's default exe.dev integration: the only one, or the one named after this VM (an error names the choices otherwise). repos are GitHub repositories this host reaches through exe.dev GitHub integrations (GET $SHELLEY_API/api/github-repos lists them, one per integration). Always send the project's current vm and repos back unchanged unless asked to change it; omitting it turns task VMs off. Enabling or changing vm needs the user's approval: it creates VMs on their account. Archiving a task on its own VM (by any route) deletes the VM Shelley created for it, losing uncommitted work there; unarchiving continues on a fresh copy of the base. Action ids are up to 64 letters, digits, "-" and "_". A run's result is sent to its task's agent unless the action is "silent". Keep actions deliberate and minimal: commands execute with the user's VM permissions, so do not add destructive cleanup or external side effects without authorization.
 PUT $SHELLEY_API/api/conversation/ID/project
   Body: {"project":"Existing project name"}; moves an idle task, not the Assistant. Unless its settings were changed, it takes the new project's at its next turn.
 DELETE $SHELLEY_API/api/projects/NAME
@@ -405,6 +453,72 @@ DELETE $SHELLEY_API/api/projects/NAME
 POST $SHELLEY_API/api/conversation/ID/actions/ACTION_ID
   Starts the project's configured command in the task directory; returns a run id. GET /api/action-runs/RUN_ID reports live output/status. Never manually archive while it runs: only a successful action archives, and errors/interruption leave the task visible. Do not fire-and-forget and report success.
 `
+
+// conversationVMPrompt tells a VM conversation (or its subagent) that its work happens on
+// the VM, which its bash and patch calls target, while its tools run here.
+// It amends what the base system prompt says about this machine and the
+// working directory.
+func (s *Server) conversationVMPrompt(ctx context.Context, id string) (string, error) {
+	vm, err := s.db.GetConversationVM(ctx, id)
+	if err != nil {
+		return "", fmt.Errorf("load conversation VM: %w", err)
+	}
+	// Its project's actions run on the VM; one moved out of every project
+	// (e.g. by deleting its project) has none.
+	var actionList []db.ProjectAction
+	metadata, err := s.db.GetWorkspaceConversation(ctx, vm.ConversationID)
+	switch {
+	case err == nil:
+		project, err := s.db.GetProject(ctx, metadata.Project)
+		if err != nil {
+			return "", fmt.Errorf("load project: %w", err)
+		}
+		actionList = project.Actions
+	case !errors.Is(err, sql.ErrNoRows):
+		return "", fmt.Errorf("load conversation of VM %s: %w", vm.Name, err)
+	}
+	scratch, err := s.vmScratchDir(vm.ConversationID)
+	if err != nil {
+		return "", err
+	}
+	dir := vm.Dir
+	web := "its HTTPS address, which this prompt gives once the VM is ready"
+	if vm.HTTPSURL != "" {
+		web = vm.HTTPSURL
+	}
+	workspace, err := s.db.WorkspaceMode(ctx)
+	if err != nil {
+		return "", err
+	}
+	this := "conversation"
+	if workspace {
+		this = "task"
+	}
+	where := fmt.Sprintf("its own exe.dev VM %q, a copy of %q", vm.Name, vm.Base)
+	lifecycle := fmt.Sprintf("Archiving this %s deletes the VM, losing anything not pushed or published from it.", this)
+	var actions string
+	if len(actionList) > 0 {
+		labels := make([]string, len(actionList))
+		for i, action := range actionList {
+			labels[i] = action.Label
+		}
+		actions = fmt.Sprintf("\n- The project's actions (%s) run on the VM, in %s, when the user starts one; they can't start during your turn, so to run one yourself, run its command with ssh_target %q.", strings.Join(labels, ", "), dir, vm.Name)
+	}
+	return fmt.Sprintf(`
+<project_vm>
+This %[7]s's work happens on %[1]s, in %[3]s. The agent loop and your tools run on the Shelley host, so every bash and patch call says which machine with ssh_target:
+- ssh_target "%[2]s": runs over ssh on %[2]s. bash commands start in %[3]s (cd within a command to work elsewhere; change_dir moves only this host's directory), and patch paths are paths on %[2]s, relative ones resolving against %[3]s. Use it for ALL project work: reading and editing files, git, builds, tests, servers, package installs.
+- ssh_target "localhost": runs here, on the Shelley host, which runs Shelley itself and keeps its data and other projects' files. Use it only for Shelley's API, copying files to or from %[2]s, and files for read_image, output_iframe, or message_user, which always read files here. Never do project work here, even where the same path exists on this host.
+
+- Paths in the project instructions are VM paths. Read the repository's AGENTS.md (and similar guidance) on the VM before changing anything: guidance files and skills listed elsewhere in this prompt come from this host.
+- Your working directory here, %[4]s, is this %[7]s's scratch space. To look at or send a VM file, copy it here first (ssh_target "localhost": `+"`scp %[2]s:FILE %[4]s/`"+`), then use read_image, output_iframe, or a message_user attachment. Files the user uploads arrive on this host (paths in their messages); copy them over with `+"`scp FILE %[2]s:DIR/`"+`. ssh, scp and rsync to %[2]s work from this host with no keys or options.
+- The browser runs on this host. The user reaches the VM's web server on port 8000 at %[8]s, and port PORT at that address with :PORT, behind their exe.dev login, which the browser doesn't have; to browse a VM port, forward it (ssh_target "localhost": `+"`ssh -fN -L LOCALPORT:localhost:PORT %[2]s`"+`) and open http://localhost:LOCALPORT.
+- Run long commands in bash's background mode, or in tmux on the VM.%[5]s
+- While the VM is being created (a minute or two), ssh_target calls wait for it. If it can't be reached, the call's error says why: retry, or report it. Never fall back to doing the work on this host.
+%[6]s
+</project_vm>
+`, where, vm.Name, dir, scratch, actions, lifecycle, this, web), nil
+}
 
 // writeProjectPrompt writes a project conversation's project instructions
 // into out.

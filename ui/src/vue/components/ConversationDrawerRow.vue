@@ -188,10 +188,10 @@
       <div class="conversation-meta">
         <span class="conversation-date">{{ ctx.formatDate(conversation.updated_at) }}</span>
         <PathText
-          v-if="conversation.cwd && ctx.groupBy.value !== 'cwd'"
+          v-if="workingDirectory && ctx.groupBy.value !== 'cwd'"
           class="conversation-cwd"
-          :text="ctx.formatCwdForDisplay(conversation.cwd)"
-          :title="conversation.cwd"
+          :text="workingDirectory.text"
+          :title="workingDirectory.title"
         />
         <!-- Terminal count. Only shown when the conversation has more than
              one terminal pinned to it: a single terminal is the ordinary
@@ -459,6 +459,7 @@ const tagInput = ref<HTMLInputElement | null>(null);
 const actionsMenuRef = ref<InstanceType<typeof NavActionsMenu> | null>(null);
 const actionsMenuItems = computed(() => ctx.conversationActions(props.conversation));
 
+const workingDirectory = computed(() => ctx.workingDirectory(props.conversation));
 const convState = computed(() => props.conversation as ConversationWithState);
 const participantSummaries = computed(() => {
   const values =

@@ -141,6 +141,8 @@ export const upgoer5: TranslationKeys = {
   actionsAfterWorking: "Jobs can run when Shelley is done working.",
   addAction: "Add job",
   actionsHint: "Jobs run on the computer in the talk's work folder. Only add jobs you trust.",
+  actionsHintVm:
+    "Jobs run on the talk's own computer, in its work folder there. Only add jobs you trust.",
   actionNumber: "Job {n}",
   actionId: "ID",
   actionButtonLabel: "Button words",
@@ -154,6 +156,9 @@ export const upgoer5: TranslationKeys = {
   projectInstructions: "Words to follow (AGENTS.md)",
   projectInstructionsHint: "Words like in AGENTS.md, added to every talk in this work.",
   workingDirectory: "Work folder",
+  projectNamePlaceholder: "like Shop Front",
+  projectCwdHintVm: "Where talks start, on the far computer: a full path.",
+  projectCwdHintHost: "Where talks start, on this computer. Empty: they find it on their own.",
   projectProfileHint:
     "The work is also a way of doing things: its brain, how hard it thinks, its tools and its first words are what its talks use. Change them from a talk's brain picker (Update way of doing things).",
   savingEllipsis: "Keeping…",

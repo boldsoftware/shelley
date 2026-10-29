@@ -141,6 +141,7 @@ export const zhTW: TranslationKeys = {
   actionsAfterWorking: "Shelley 完成工作後即可使用動作。",
   addAction: "新增動作",
   actionsHint: "命令會在伺服器上、對話的工作目錄中執行。只新增你信任的命令。",
+  actionsHintVm: "命令會在對話的 VM 上、其在該 VM 上的目錄中執行。只新增你信任的命令。",
   actionNumber: "動作 {n}",
   actionId: "ID",
   actionButtonLabel: "按鈕文字",
@@ -154,6 +155,9 @@ export const zhTW: TranslationKeys = {
   projectInstructions: "專案指示 (AGENTS.md)",
   projectInstructionsHint: "附加到此專案每個對話的 AGENTS.md 風格指示。",
   workingDirectory: "工作目錄",
+  projectNamePlaceholder: "例如 Storefront",
+  projectCwdHintVm: "對話在 VM 上開始的位置：絕對路徑。",
+  projectCwdHintHost: "對話在此主機上開始的位置。留空：由對話自行尋找。",
   projectProfileHint:
     "專案也是一個設定檔：其模型、推理強度、工具和基礎系統提示就是其對話的設定。可在對話的模型選擇器中變更（更新設定檔）。",
   savingEllipsis: "正在儲存…",

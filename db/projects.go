@@ -25,6 +25,9 @@ type Project struct {
 	Instructions string          `json:"instructions"`
 	Cwd          string          `json:"cwd"`
 	Actions      []ProjectAction `json:"actions"`
+	// VM, if set, runs each conversation's tools and actions on its own VM; Cwd is
+	// then a directory on that VM.
+	VM *ProjectVM `json:"vm"`
 	// Repos are the GitHub repositories attached to the project.
 	Repos []ProjectRepo `json:"repos"`
 }
@@ -58,6 +61,9 @@ func validateProject(project *Project) error {
 	}
 	if len(project.Actions) > 32 {
 		return fmt.Errorf("%w: at most 32 project actions are allowed", ErrInvalid)
+	}
+	if err := validateProjectVM(project.VM, project.Cwd); err != nil {
+		return err
 	}
 	if err := validateProjectRepos(project.Repos); err != nil {
 		return err
@@ -104,7 +110,10 @@ func (db *DB) CreateProject(ctx context.Context, project Project, from string) (
 			project.Name, project.Instructions, project.Cwd, string(actions)); err != nil {
 			return err
 		}
-		return setProjectRepos(tx, project.Name, project.Repos)
+		if err := setProjectRepos(tx, project.Name, project.Repos); err != nil {
+			return err
+		}
+		return setProjectVM(tx, project.Name, project.VM)
 	})
 	return &project, err
 }
@@ -127,6 +136,9 @@ func (db *DB) UpdateProject(ctx context.Context, name string, project Project) e
 			return err
 		}
 		if err := setProjectRepos(tx, name, project.Repos); err != nil {
+			return err
+		}
+		if err := setProjectVM(tx, name, project.VM); err != nil {
 			return err
 		}
 		if project.Name == name {
@@ -184,7 +196,7 @@ func getProject(rx *Rx, nameExpr string, args ...any) (*Project, error) {
 		return nil, err
 	}
 	projects := []Project{*project}
-	err = attachProjectRepos(rx, projects)
+	err = attachProjectDetails(rx, projects)
 	return &projects[0], err
 }
 
@@ -214,7 +226,14 @@ func listProjects(rx *Rx) ([]Project, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return out, attachProjectRepos(rx, out)
+	return out, attachProjectDetails(rx, out)
+}
+
+func attachProjectDetails(rx *Rx, projects []Project) error {
+	if err := attachProjectVMs(rx, projects); err != nil {
+		return err
+	}
+	return attachProjectRepos(rx, projects)
 }
 
 func (db *DB) ListProjects(ctx context.Context) ([]Project, error) {

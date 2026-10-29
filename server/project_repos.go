@@ -3,7 +3,9 @@ package server
 import (
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
+	"strings"
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/exeenv"
@@ -56,4 +58,27 @@ func (s *Server) handleGithubRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"repos": githubReposOf(integrations), "connect_url": githubConnectURL(env)})
+}
+
+// defaultExeDevIntegration picks the exe.dev integration new projects' VMs
+// use: the only one, or else the one named after this VM (e.g. "myvm-exe"
+// on myvm); "" when that doesn't decide.
+func defaultExeDevIntegration(names []string) string {
+	if len(names) == 1 {
+		return names[0]
+	}
+	host, err := os.Hostname()
+	if err != nil {
+		return ""
+	}
+	var match string
+	for _, name := range names {
+		if name == host || strings.HasPrefix(name, host+"-") {
+			if match != "" {
+				return ""
+			}
+			match = name
+		}
+	}
+	return match
 }

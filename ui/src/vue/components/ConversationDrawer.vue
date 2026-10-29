@@ -549,6 +549,15 @@
               testid="project-actions-menu"
             />
           </div>
+          <p
+            v-for="vm in vmCleanupIssues(group.project?.name)"
+            :key="vm.conversation_id"
+            class="error-line project-vm-cleanup"
+            role="alert"
+          >
+            <a :href="`/c/${vm.conversation_id}`">{{ vm.vm_name }}</a
+            >: {{ vm.error }}
+          </p>
           <template v-if="!projectGroupCollapsed(group)">
             <ConversationRow
               v-for="conv in group.conversations"
@@ -1268,6 +1277,16 @@ function formatDate(timestamp: string): string {
 
 const formatCwdForDisplay = tildifyPath;
 
+function workingDirectory(c: Conversation): { text: string; title: string } | null {
+  const data = workspace.data.value;
+  const vm = data?.vms.find(
+    (v) => v.conversation_id === c.conversation_id || v.conversation_id === c.parent_conversation_id,
+  );
+  if (vm?.dir) return { text: `${vm.vm_name}:${tildifyPath(vm.dir)}`, title: `${vm.vm_name}:${vm.dir}` };
+  if (!c.cwd) return null;
+  return { text: formatCwdForDisplay(c.cwd) ?? c.cwd, title: c.cwd };
+}
+
 // --- Archive / unarchive / delete ---
 async function handleArchive(e: MouseEvent, conversationId: string) {
   e.stopPropagation();
@@ -1399,14 +1418,33 @@ async function handleRemoveTag(conversation: Conversation, tag: string) {
   );
 }
 
+// Archived conversations' VMs that cleanup failed to delete or deliberately kept;
+// their conversations are out of sight, so their projects show why.
+function vmCleanupIssues(project: string | undefined) {
+  const data = workspace.data.value;
+  if (!data || !project) return [];
+  const memberships = new Map(data.conversations.map((c) => [c.conversation_id, c.project]));
+  return data.vms.filter(
+    (vm) =>
+      vm.conversation_archived &&
+      vm.error &&
+      (vm.status === "deleting" || vm.status === "kept") &&
+      memberships.get(vm.conversation_id) === project,
+  );
+}
+
 // --- Row actions ---
 function conversationActions(conversation: Conversation): MenuItem[] {
   const id = conversation.conversation_id;
   if (workspace.isAssistant(id)) return [];
+  // Archiving a conversation that owns a VM deletes the VM, so it asks first.
+  const note = workspace.archiveNote(id);
   const archive: MenuItem = {
-    label: t("archive"),
+    label: note ? `${t("archive")}…` : t("archive"),
     icon: "pi pi-inbox",
-    command: ({ originalEvent }) => void handleArchive(originalEvent as MouseEvent, id),
+    class: note ? "drawer-menu-danger" : undefined,
+    command: ({ originalEvent }) =>
+      void workspace.confirmArchive(id, () => handleArchive(originalEvent as MouseEvent, id)),
   };
   // Stock Shelley lists Archive first; workspace mode sets it apart, last.
   const items: MenuItem[] = [
@@ -2255,6 +2293,7 @@ provide(DrawerCtxKey, {
   toggleTagFilter,
   formatDate,
   formatCwdForDisplay,
+  workingDirectory,
   handleModifiedClick,
   handleAuxClick,
   selectConversation: (c: Conversation) => emit("select-conversation", c),

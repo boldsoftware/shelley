@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/ui"
@@ -113,6 +114,7 @@ func (s *Server) uiBuild() string {
 
 func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/workspace", s.handleWorkspace)
+	api.HandleFunc("GET /api/exe-dev-integrations", s.handleExeDevIntegrations)
 	api.HandleFunc("GET /api/github-repos", s.handleGithubRepos)
 	api.HandleFunc("POST /api/projects", s.handleCreateProject)
 	api.HandleFunc("PUT /api/projects/{name}", s.handleUpdateProject)
@@ -127,6 +129,8 @@ func (s *Server) notifyWorkspaceChanged() {
 	if s.streamPub != nil {
 		s.streamPub.Broadcast(StreamResponse{WorkspaceChanged: true})
 	}
+	// A change may have archived a conversation with a VM to delete.
+	s.pokeConversationVMCleanup()
 }
 
 // inProject reports whether conversation id is in a project (or is the
@@ -194,11 +198,16 @@ func (s *Server) decodeProject(w http.ResponseWriter, r *http.Request) (*project
 	if !decodeStrict(w, r, &req) {
 		return nil, false
 	}
-	if req.Cwd != "" {
+	// A VM project's cwd is on its conversation VMs, checked when they run.
+	if req.Cwd != "" && req.VM == nil {
 		if err := validateConversationDirectory(req.Cwd); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return nil, false
 		}
+	}
+	if err := s.resolveProjectIntegration(r.Context(), req.VM); err != nil {
+		s.workspaceHTTPError(w, err)
+		return nil, false
 	}
 	return &req, true
 }
@@ -367,8 +376,14 @@ func (s *Server) reserveAction(ctx context.Context, manager *ConversationManager
 	if err != nil {
 		return nil, nil, "", err
 	}
-	if err := validateConversationDirectory(derefString(conversation.Cwd)); err != nil {
-		return nil, nil, "", err
+	// A VM conversation's actions run in the project's directory on the VM, checked
+	// there when the action runs.
+	if _, err := s.db.GetConversationVM(ctx, id); errors.Is(err, sql.ErrNoRows) {
+		if err := validateConversationDirectory(derefString(conversation.Cwd)); err != nil {
+			return nil, nil, "", err
+		}
+	} else if err != nil {
+		return nil, nil, "", fmt.Errorf("load conversation VM: %w", err)
 	}
 	return s.db.BeginAction(ctx, id, actionID)
 }
@@ -459,11 +474,11 @@ func (s *Server) executeAction(runID, command, cwd, userEmail string, stop <-cha
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command("/bin/sh", "-c", command)
-	cmd.Dir = cwd
-	cmd.Env = actionEnvironment(os.Environ(), buildTerminalEnv(
-		run.ConversationID, derefString(conversation.Slug), derefString(conversation.Model),
-		userEmail, cwd, s.listenPort, s.socketPath))
+	cmd, closeStdin, err := s.actionCommand(ctx, run, conversation, command, cwd, userEmail)
+	if err != nil {
+		return s.finishAction(ctx, run, nil, err.Error())
+	}
+	defer closeStdin()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.WaitDelay = actionWaitDelay
 	kill := func() {
@@ -529,11 +544,17 @@ func (s *Server) executeAction(runID, command, cwd, userEmail string, stop <-cha
 	if output.err != nil {
 		runError = fmt.Sprintf("persisting action output: %v", output.err)
 	}
-	if err := s.db.FinishAction(ctx, runID, exitCode, runError); err != nil {
+	return s.finishAction(ctx, run, exitCode, runError)
+}
+
+// finishAction records how a run ended, reports it, and lets its
+// conversation go on.
+func (s *Server) finishAction(ctx context.Context, run *db.ActionRun, exitCode *int, runError string) error {
+	if err := s.db.FinishAction(ctx, run.ID, exitCode, runError); err != nil {
 		return err
 	}
 	s.notifyWorkspaceChanged()
-	s.reportAction(ctx, runID)
+	s.reportAction(ctx, run.ID)
 	// Existing upstream producers may have queued work while the command
 	// ran. Completion releases the durable fence before draining that work.
 	s.mu.Lock()
@@ -551,6 +572,49 @@ func (s *Server) executeAction(runID, command, cwd, userEmail string, stop <-cha
 		}
 	}
 	return nil
+}
+
+// actionCommand returns the command that runs an action in cwd here, or
+// in the conversation's directory on its VM. Call closeStdin after it
+// exits: a VM action's stdin stays open while it runs, and the remote command
+// ends when it closes, so stopping or killing ssh, or this process dying,
+// ends it (see claudetool.VMJobScript).
+func (s *Server) actionCommand(ctx context.Context, run *db.ActionRun, conversation *generated.Conversation, command, cwd, userEmail string) (*exec.Cmd, func(), error) {
+	env := buildTerminalEnv(run.ConversationID, derefString(conversation.Slug), derefString(conversation.Model),
+		userEmail, cwd, s.listenPort, s.socketPath)
+	vm, err := s.db.GetConversationVM(ctx, run.ConversationID)
+	if errors.Is(err, sql.ErrNoRows) {
+		cmd := exec.Command("/bin/sh", "-c", command)
+		cmd.Dir = cwd
+		cmd.Env = actionEnvironment(os.Environ(), env)
+		return cmd, func() {}, nil
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("load conversation VM: %w", err)
+	}
+	if vm, err = s.prepareConversationVMNow(ctx, vm.ConversationID); err != nil {
+		return nil, nil, err
+	}
+	target, err := s.conversationVMTarget(vm)
+	if err != nil {
+		return nil, nil, err
+	}
+	var remoteEnv []string
+	for _, kv := range env {
+		key, _, _ := strings.Cut(kv, "=")
+		if key != "SHELLEY_PORT" && key != "SHELLEY_URL" && key != "SHELLEY_SOCKET" && key != "SHELLEY_GIT_ROOT" {
+			remoteEnv = append(remoteEnv, kv)
+		}
+	}
+	argv := target.Command(claudetool.VMJobScript, append([]string{vm.Dir, command}, remoteEnv...)...)
+	stdin, stdinWriter, err := os.Pipe()
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Env = actionEnvironment(os.Environ(), nil)
+	cmd.Stdin = stdin
+	return cmd, func() { stdin.Close(); stdinWriter.Close() }, nil
 }
 
 func actionEnvironment(inherited, shelley []string) []string {
@@ -609,7 +673,7 @@ func (cm *ConversationManager) reloadOptions(ctx context.Context) error {
 
 // checkProfileSwitch refuses a settings change that would take a
 // conversation into or out of a project by switching its profile: it
-// moves (handleMoveConversation), with its checks.
+// moves (handleMoveConversation), keeping its VM and checks.
 func (s *Server) checkProfileSwitch(ctx context.Context, conv generated.Conversation, change SettingsChange) error {
 	from := db.ParseConversationOptions(conv.ConversationOptions).Profile
 	if change.Profile == nil || *change.Profile == from {

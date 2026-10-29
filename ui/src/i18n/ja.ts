@@ -143,6 +143,8 @@ export const ja: TranslationKeys = {
   addAction: "アクションを追加",
   actionsHint:
     "コマンドはサーバー上で会話の作業ディレクトリで実行されます。信頼できるコマンドだけを追加してください。",
+  actionsHintVm:
+    "コマンドは会話の VM 上で、その VM 上の作業ディレクトリで実行されます。信頼できるコマンドだけを追加してください。",
   actionNumber: "アクション {n}",
   actionId: "ID",
   actionButtonLabel: "ボタンのラベル",
@@ -156,6 +158,9 @@ export const ja: TranslationKeys = {
   projectInstructions: "プロジェクトの指示 (AGENTS.md)",
   projectInstructionsHint: "このプロジェクトの各会話に追加される AGENTS.md 形式の指示。",
   workingDirectory: "作業ディレクトリ",
+  projectNamePlaceholder: "例: Storefront",
+  projectCwdHintVm: "VM 上で会話を開始する場所（絶対パス）。",
+  projectCwdHintHost: "このホスト上で会話を開始する場所。空の場合は会話が自分で見つけます。",
   projectProfileHint:
     "プロジェクトはプロファイルでもあります。そのモデル、労力、ツール、基本システムプロンプトが会話の設定になります。会話のモデル選択（プロファイルを更新）から変更できます。",
   savingEllipsis: "保存中…",

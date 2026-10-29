@@ -143,6 +143,8 @@ export const es: TranslationKeys = {
   addAction: "Añadir acción",
   actionsHint:
     "Los comandos se ejecutan en el servidor, en el directorio de trabajo de la conversación. Añade solo comandos de confianza.",
+  actionsHintVm:
+    "Los comandos se ejecutan en la VM de la conversación, en su directorio allí. Añade solo comandos de confianza.",
   actionNumber: "Acción {n}",
   actionId: "ID",
   actionButtonLabel: "Texto del botón",
@@ -158,6 +160,10 @@ export const es: TranslationKeys = {
   projectInstructionsHint:
     "Instrucciones al estilo de AGENTS.md que se añaden a cada conversación de este proyecto.",
   workingDirectory: "Directorio de trabajo",
+  projectNamePlaceholder: "p. ej., Tienda",
+  projectCwdHintVm: "Dónde empiezan las conversaciones, en la VM: una ruta absoluta.",
+  projectCwdHintHost:
+    "Dónde empiezan las conversaciones, en este host. Vacío: lo encuentran ellas mismas.",
   projectProfileHint:
     "El proyecto también es un perfil: su modelo, esfuerzo, herramientas y prompt de sistema base son la configuración de sus conversaciones. Cámbielos desde el selector de modelo de una conversación (Actualizar perfil).",
   savingEllipsis: "Guardando…",

@@ -142,6 +142,8 @@ export const en: TranslationKeys = {
   addAction: "Add action",
   actionsHint:
     "Commands run on the server in the conversation’s working directory. Only add commands you trust.",
+  actionsHintVm:
+    "Commands run on the conversation’s VM, in its directory there. Only add commands you trust.",
   actionNumber: "Action {n}",
   actionId: "ID",
   actionButtonLabel: "Button label",
@@ -157,6 +159,9 @@ export const en: TranslationKeys = {
   projectInstructionsHint:
     "AGENTS.md-style instructions appended to every conversation in this project.",
   workingDirectory: "Working directory",
+  projectNamePlaceholder: "e.g. Storefront",
+  projectCwdHintVm: "Where conversations start, on the VM: an absolute path.",
+  projectCwdHintHost: "Where conversations start, on this host. Empty: they find it themselves.",
   projectProfileHint:
     "The project is also a profile: its model, effort, tools and base system prompt are its conversations’ settings. Change them from a conversation’s model picker (Update profile).",
   savingEllipsis: "Saving…",

@@ -1038,15 +1038,19 @@ function handleConversationRenamed(conversation: Conversation) {
 
 async function archiveFromChat(conversationId: string) {
   if (workspace.isAssistant(conversationId)) throw new Error("Assistant cannot be archived");
-  await api.archiveConversation(conversationId);
-  handleConversationRemoved(conversationId);
+  await workspace.confirmArchive(conversationId, async () => {
+    await api.archiveConversation(conversationId);
+    handleConversationRemoved(conversationId);
+  });
 }
 
 async function archiveFromPalette(conversationId: string) {
   if (workspace.isAssistant(conversationId)) return;
   try {
-    await api.archiveConversation(conversationId);
-    handleConversationRemoved(conversationId);
+    await workspace.confirmArchive(conversationId, async () => {
+      await api.archiveConversation(conversationId);
+      handleConversationRemoved(conversationId);
+    });
   } catch (err) {
     console.error("Failed to archive conversation:", err);
   }

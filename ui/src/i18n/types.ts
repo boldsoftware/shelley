@@ -141,6 +141,7 @@ export interface TranslationKeys {
   actionsAfterWorking: string;
   addAction: string;
   actionsHint: string;
+  actionsHintVm: string;
   actionNumber: string;
   actionId: string;
   actionButtonLabel: string;
@@ -154,6 +155,9 @@ export interface TranslationKeys {
   projectInstructions: string;
   projectInstructionsHint: string;
   workingDirectory: string;
+  projectNamePlaceholder: string;
+  projectCwdHintVm: string;
+  projectCwdHintHost: string;
   projectProfileHint: string;
   savingEllipsis: string;
   saveProject: string;

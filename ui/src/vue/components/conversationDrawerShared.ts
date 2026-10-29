@@ -90,6 +90,9 @@ export interface DrawerCtx {
   toggleTagFilter: (tag: string) => void;
   formatDate: (timestamp: string) => string;
   formatCwdForDisplay: (p: string | null | undefined) => string | null;
+  // Where a conversation works: its directory, or VM:directory for one
+  // that works on a VM over ssh (its directory here is a scratch directory).
+  workingDirectory: (c: Conversation) => { text: string; title: string } | null;
   handleModifiedClick: (e: MouseEvent, conversation: Conversation) => boolean;
   handleAuxClick: (e: MouseEvent, conversation: Conversation) => void;
   selectConversation: (c: Conversation) => void;

@@ -3347,7 +3347,7 @@ func (s *Server) handleArchiveConversation(w http.ResponseWriter, r *http.Reques
 		manager.cancelIdleCompaction()
 	}
 	if member {
-		s.notifyWorkspaceChanged()
+		s.notifyWorkspaceChanged() // and delete the conversation's VM, if it has one
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -3368,7 +3368,7 @@ func (s *Server) handleUnarchiveConversation(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if member {
-		s.notifyWorkspaceChanged()
+		s.notifyWorkspaceChanged() // and stop deleting the conversation's VM, if it has one
 	}
 
 	w.Header().Set("Content-Type", "application/json")

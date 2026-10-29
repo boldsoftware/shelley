@@ -141,6 +141,7 @@ export const zhCN: TranslationKeys = {
   actionsAfterWorking: "Shelley 完成工作后即可使用操作。",
   addAction: "添加操作",
   actionsHint: "命令在服务器上、对话的工作目录中运行。只添加你信任的命令。",
+  actionsHintVm: "命令在对话的 VM 上、其在该 VM 上的目录中运行。只添加你信任的命令。",
   actionNumber: "操作 {n}",
   actionId: "ID",
   actionButtonLabel: "按钮文字",
@@ -154,6 +155,9 @@ export const zhCN: TranslationKeys = {
   projectInstructions: "项目指令 (AGENTS.md)",
   projectInstructionsHint: "附加到此项目每个对话的 AGENTS.md 风格指令。",
   workingDirectory: "工作目录",
+  projectNamePlaceholder: "例如 Storefront",
+  projectCwdHintVm: "对话在 VM 上开始的位置：绝对路径。",
+  projectCwdHintHost: "对话在此主机上开始的位置。留空：由对话自行查找。",
   projectProfileHint:
     "项目也是一个配置文件：其模型、推理强度、工具和基础系统提示就是其对话的设置。可在对话的模型选择器中更改（更新配置文件）。",
   savingEllipsis: "正在保存…",

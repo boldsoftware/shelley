@@ -54,6 +54,23 @@
         />
       </div>
     </div>
+    <p v-if="vm" class="project-vm project-muted" :class="`project-status-${vmTone}`" role="status">
+      <i class="pi pi-server" aria-hidden="true" />
+      {{ vm.status === "deleted" ? "VM" : "Works on VM" }}
+      <span v-if="vm.status === 'deleted'">{{ vm.vm_name }}</span>
+      <a
+        v-else
+        :href="vm.https_url || `https://${vm.vm_name}.exe.xyz/`"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {{ vm.vm_name }}
+        <span class="sr-only">(opens in new tab)</span>
+      </a>
+      · {{ vmLabel }}
+      <template v-if="archiveNote"> · {{ archiveNote }}</template>
+    </p>
+    <p v-if="vm?.error" class="error-line" role="alert">{{ vm.error }}</p>
     <p v-if="requestError" class="error-line" role="alert">
       {{ requestError }}
       <button
@@ -78,6 +95,7 @@ import { workspaceApi, type ProjectAction } from "../../services/workspace";
 import { useWorkspace } from "../composables/workspace";
 import { useI18n } from "../composables/i18n";
 import { errorMessage } from "../../utils/errorMessage";
+import { wording } from "../../utils/workspaceMode";
 // assignable: a top-level user conversation, which may be in no project.
 const props = defineProps<{
   conversationId: string | null;
@@ -88,6 +106,34 @@ const props = defineProps<{
 const { t } = useI18n();
 const workspace = useWorkspace();
 const project = computed(() => workspace.projectFor(props.conversationId));
+const vm = computed(() => workspace.vmFor(props.conversationId));
+const noun = wording("conversation", "task");
+const vmLabel = computed(() => {
+  const current = vm.value;
+  if (!current) return "";
+  return {
+    pending: "starting…",
+    ready: "connected",
+    failed: "unreachable; the next turn retries",
+    deleting: current.error ? "deletion failed; retrying" : `deleting (${noun} archived)…`,
+    deleted: current.conversation_archived
+      ? `deleted (${noun} archived)`
+      : `deleted; the next turn copies a fresh one from ${current.base_vm}`,
+    kept: "not deleted",
+  }[current.status];
+});
+const vmTone = computed(
+  () =>
+    ({
+      pending: "progress",
+      ready: "success",
+      failed: "danger",
+      deleting: vm.value?.error ? "danger" : "progress",
+      deleted: "neutral",
+      kept: "warning",
+    })[vm.value?.status ?? "pending"],
+);
+const archiveNote = computed(() => workspace.archiveNote(props.conversationId));
 const runs = computed(() =>
   (workspace.data.value?.runs ?? [])
     .filter((run) => run.conversation_id === props.conversationId)
@@ -98,7 +144,7 @@ function actionTitle(action: ProjectAction) {
   return [
     t("runCommand").replace("{command}", action.command),
     action.silent ? t("actionNotReported") : t("actionReportsToAgent"),
-    action.archive_on_success ? t("actionArchivesOnSuccess") : "",
+    action.archive_on_success ? `${t("actionArchivesOnSuccess")} ${archiveNote.value}` : "",
   ]
     .join(" ")
     .trim();

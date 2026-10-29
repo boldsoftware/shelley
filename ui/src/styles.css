@@ -18236,3 +18236,15 @@ kbd {
     height: 2.25rem;
   }
 }
+
+.project-vm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.25rem 0 0;
+}
+
+.project-vm-cleanup {
+  margin: 0.125rem 0.75rem;
+}

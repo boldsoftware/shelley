@@ -81,6 +81,39 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     signature = JSON.stringify(data.value);
   }
 
+  const vmFor = (id: string | null | undefined) =>
+    data.value?.vms.find((vm) => vm.conversation_id === id);
+  /** What archiving a conversation on its own VM destroys; "" for others. */
+  const archiveNote = (id: string | null | undefined) => {
+    const vm = vmFor(id);
+    return vm && !vm.conversation_archived && vm.status !== "deleted"
+      ? `Archiving deletes VM ${vm.vm_name}; uncommitted work on it is lost.`
+      : "";
+  };
+  /** The archive waiting for the user to confirm deleting its VM. */
+  const archiveConfirmation = shallowRef<{
+    note: string;
+    answer: (confirmed: boolean) => void;
+  } | null>(null);
+  /** Runs archive, which archives conversation id, once the user confirms
+   * deleting its VM if it has one: every archive route in the UI goes through
+   * here. */
+  async function confirmArchive(id: string, archive: () => Promise<void> | void) {
+    const note = archiveNote(id);
+    if (note) {
+      archiveConfirmation.value?.answer(false);
+      const confirmed = await new Promise<boolean>((answer) => {
+        archiveConfirmation.value = { note, answer };
+      });
+      if (!confirmed) return;
+    }
+    await archive();
+  }
+  function answerArchive(confirmed: boolean) {
+    const pending = archiveConfirmation.value;
+    archiveConfirmation.value = null;
+    pending?.answer(confirmed);
+  }
   return {
     data,
     error,
@@ -104,6 +137,11 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
       conversationCreator.value = { project };
     },
     isAssistant: (id: string | null | undefined) => !!id && id === data.value?.assistant_id,
+    vmFor,
+    archiveNote,
+    archiveConfirmation,
+    confirmArchive,
+    answerArchive,
     /** What deleting a project does, or why it can't yet (blocker). */
     deletionPlan: (project: Project) => projectDeletionPlan(data.value, project, t),
     projectFor: (id: string | null | undefined) => {

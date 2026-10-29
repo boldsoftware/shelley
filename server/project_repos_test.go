@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,6 +11,27 @@ import (
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/exeenv"
 )
+
+func TestDefaultExeDevIntegration(t *testing.T) {
+	host, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		names []string
+		want  string
+	}{
+		{nil, ""},
+		{[]string{"only"}, "only"},
+		{[]string{"other-exe", host + "-exe"}, host + "-exe"},
+		{[]string{"other-exe", "another-exe"}, ""},
+		{[]string{host + "-a", host + "-b"}, ""},
+	} {
+		if got := defaultExeDevIntegration(c.names); got != c.want {
+			t.Errorf("defaultExeDevIntegration(%v) = %q, want %q", c.names, got, c.want)
+		}
+	}
+}
 
 func TestProjectGithubRepos(t *testing.T) {
 	t.Parallel()

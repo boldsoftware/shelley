@@ -144,6 +144,8 @@ export const vi: TranslationKeys = {
   addAction: "Thêm hành động",
   actionsHint:
     "Lệnh chạy trên máy chủ trong thư mục làm việc của cuộc trò chuyện. Chỉ thêm lệnh bạn tin cậy.",
+  actionsHintVm:
+    "Lệnh chạy trên VM của cuộc trò chuyện, trong thư mục của nó trên đó. Chỉ thêm lệnh bạn tin cậy.",
   actionNumber: "Hành động {n}",
   actionId: "ID",
   actionButtonLabel: "Nhãn nút",
@@ -158,6 +160,9 @@ export const vi: TranslationKeys = {
   projectInstructionsHint:
     "Hướng dẫn kiểu AGENTS.md được thêm vào mọi cuộc trò chuyện trong dự án này.",
   workingDirectory: "Thư mục làm việc",
+  projectNamePlaceholder: "vd. Storefront",
+  projectCwdHintVm: "Nơi các cuộc trò chuyện bắt đầu, trên VM: một đường dẫn tuyệt đối.",
+  projectCwdHintHost: "Nơi các cuộc trò chuyện bắt đầu, trên máy này. Để trống: chúng tự tìm.",
   projectProfileHint:
     "Dự án cũng là một hồ sơ: mô hình, mức nỗ lực, công cụ và lời nhắc hệ thống cơ bản của nó là cài đặt của các cuộc trò chuyện. Thay đổi chúng từ bộ chọn mô hình của một cuộc trò chuyện (Cập nhật hồ sơ).",
   savingEllipsis: "Đang lưu…",

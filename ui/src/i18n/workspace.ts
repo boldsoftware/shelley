@@ -56,5 +56,9 @@ export const workspaceEn: Partial<TranslationKeys> = {
   actionArchivesOnSuccess: "Archives this task only when the command succeeds.",
   actionsHint:
     "Commands run on the server in the task’s working directory. Only add commands you trust.",
+  actionsHintVm:
+    "Commands run on the task’s VM, in its directory there. Only add commands you trust.",
   archiveOnSuccess: "Archive task on success (publish/apply actions)",
+  projectCwdHintVm: "Where tasks start, on the VM: an absolute path.",
+  projectCwdHintHost: "Where tasks start, on this host. Empty: they find it themselves.",
 };
