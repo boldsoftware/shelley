@@ -188,6 +188,7 @@ messageStore.markAllStale = () => {
 function newStream() {
   let reconnects = 0;
   let modelsChanged = 0;
+  let workspaceChanged = 0;
   const statuses: string[] = [];
   let staleBuilds = 0;
   const handle = connectGlobalStream({
@@ -195,6 +196,9 @@ function newStream() {
     onListPatch: () => {},
     onModelsChanged: () => {
       modelsChanged += 1;
+    },
+    onWorkspaceChanged: () => {
+      workspaceChanged += 1;
     },
     onStatusChange: (s) => statuses.push(s),
     onReconnect: () => {
@@ -209,6 +213,9 @@ function newStream() {
     statuses,
     get modelsChanged() {
       return modelsChanged;
+    },
+    get workspaceChanged() {
+      return workspaceChanged;
     },
     get reconnects() {
       return reconnects;
@@ -242,6 +249,14 @@ await run("routes global model changes", () => {
   const s = newStream();
   latest().emitMessage({ models_changed: true });
   assert(s.modelsChanged === 1, "global model change routed to App callback");
+  s.handle.close();
+});
+
+await run("routes workspace changes without a conversation event", () => {
+  reset();
+  const s = newStream();
+  latest().emitMessage({ workspace_changed: true });
+  assert(s.workspaceChanged === 1, "workspace invalidation routed to App callback");
   s.handle.close();
 });
 

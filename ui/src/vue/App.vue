@@ -31,6 +31,11 @@
         <Button label="Dismiss" text @click="error = null" />
       </div>
     </div>
+    <div v-if="workspace.error.value" class="error-banner" role="alert">
+      <span>{{ workspace.error.value }}</span>
+      <Button :label="t('retry')" text @click="refreshWorkspace" />
+    </div>
+    <WorkspaceDialogs @created="selectConversation" />
     <div v-if="banner" class="top-banner" :title="banner">{{ banner }}</div>
     <div v-if="uiUpdated" class="update-bar" role="status">
       {{ t("shelleyUpdated") }}
@@ -348,6 +353,8 @@ import {
 import { provideOpenFileEditor } from "./composables/fileEditor";
 import { useFeatureFlag } from "./composables/featureFlags";
 import { useMobileDrawerSwipe } from "./composables/mobileDrawerSwipe";
+import WorkspaceDialogs from "./components/WorkspaceDialogs.vue";
+import { createWorkspace } from "./composables/workspace";
 import PerfHud from "./components/PerfHud.vue";
 
 const perfHudEnabled = useFeatureFlag("performance-hud");
@@ -422,6 +429,10 @@ const currentConversationId = ref<string | null>(null);
 provide(ConversationsListKey, conversations);
 provide(CurrentConversationIdKey, currentConversationId);
 const viewedConversation = ref<Conversation | null>(null);
+// Loaded alongside the conversation list, and again on workspace_changed;
+// a failure shows in workspace.error.
+const workspace = createWorkspace();
+const refreshWorkspace = () => void workspace.refresh().catch(() => {});
 const drawerOpen = ref(false);
 useMobileDrawerSwipe(drawerOpen);
 watch(drawerOpen, (open) => {
@@ -1245,18 +1256,21 @@ onMounted(() => {
   };
 
   loadConversations();
+  refreshWorkspace();
 
   globalStreamHandle = connectGlobalStream({
     getHash: () => conversationListHash,
     onListPatch: handleConversationListPatch,
     onNotificationEvent: handleNotificationEvent,
     onModelsChanged: () => modelsRefreshTrigger.value++,
+    onWorkspaceChanged: refreshWorkspace,
     onStatusChange: (status) => (streamStatus.value = status),
     onResourceSnapshot: replaceResourceStatuses,
     onResourceStatus: applyResourceStatus,
     onStaleBuild: () => (uiUpdated.value = true),
     onReconnect: () => {
       reconnectNonce.value++;
+      refreshWorkspace();
     },
   });
 

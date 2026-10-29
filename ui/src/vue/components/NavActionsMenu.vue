@@ -1,6 +1,9 @@
-<!-- The sidebar's ⋯: one trigger and menu, shared by the drawer's rows. -->
+<!-- The sidebar's ⋯: one trigger and menu for conversation rows and project
+     headings. Items may nest (a submenu); a disabled item's `title` says why.
+     open() shows it anchored to the trigger, for right-clicks. -->
 <template>
   <Button
+    ref="trigger"
     class="btn-icon-sm drawer-actions-trigger"
     text
     severity="secondary"
@@ -25,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, type ComponentPublicInstance } from "vue";
 import Button from "primevue/button";
 import TieredMenu from "primevue/tieredmenu";
 import type { MenuItem } from "primevue/menuitem";
@@ -34,8 +37,15 @@ import { navMenuPt } from "./navMenu";
 
 defineProps<{ items: MenuItem[]; label: string; testid: string }>();
 
+const trigger = ref<ComponentPublicInstance | null>(null);
 const menu = ref<InstanceType<typeof TieredMenu> | null>(null);
 const isOpen = ref(false);
 
-defineExpose({ hide: () => menu.value?.hide() });
+defineExpose({
+  open(e: MouseEvent) {
+    e.preventDefault();
+    if (!isOpen.value) (trigger.value?.$el as HTMLElement).click();
+  },
+  hide: () => menu.value?.hide(),
+});
 </script>

@@ -355,6 +355,7 @@
                   {{ t("profileUpdate").replace("{name}", knob.profile) }}
                 </button>
                 <button
+                  v-if="!knob.inProject"
                   ref="saveAsNewButton"
                   class="model-picker-link"
                   type="button"

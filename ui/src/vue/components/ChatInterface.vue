@@ -145,6 +145,16 @@
       </div>
     </div>
 
+    <ProjectHeader
+      :conversation-id="conversationId"
+      :busy="conversationWorking || sending"
+      :assignable="
+        !!currentConversation?.user_initiated &&
+        !currentConversation.parent_conversation_id &&
+        !currentConversation.external_conversation_id
+      "
+    />
+
     <!-- Messages area -->
     <div class="messages-area-wrapper" :aria-busy="loading">
       <div ref="messagesContainerRef" class="messages-container scrollable">
@@ -626,6 +636,7 @@
 
 <script setup lang="ts">
 import { provideIframeVersions } from "../composables/iframeVersions";
+import ProjectHeader from "./ProjectHeader.vue";
 import {
   computed,
   inject,
@@ -2048,8 +2059,10 @@ const knob = computed<SettingsKnob>(() => {
   const { profile, settings } = settingsInEffect.value;
   const noTools = conversationNoTools.value;
   const p = profiles.value.find((candidate) => candidate.name === profile);
+  const inProject = !!p?.project && conversationLive.value;
   return {
-    profiles: profiles.value,
+    profiles: inProject ? [p] : profiles.value.filter((candidate) => !candidate.project),
+    inProject,
     profile,
     changes: p ? settingsDifferences(p, settings, models.value, availableTools.value) : [],
     // Auto compaction has its own section.

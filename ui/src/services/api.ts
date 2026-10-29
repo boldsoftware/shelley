@@ -1570,6 +1570,24 @@ async function profilesFetch(path: string, failure: string, init?: RequestInit) 
   return response;
 }
 
+/** Calls path, sending body as JSON if given, and returns the JSON reply
+ *  (undefined for 204 No Content); a failure throws "<failure>: <reason>". */
+export async function apiJSON<T>(
+  path: string,
+  failure: string,
+  method = "GET",
+  body?: unknown,
+): Promise<T> {
+  const response = await fetch(
+    path,
+    body === undefined
+      ? { method }
+      : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+  );
+  if (!response.ok) throw await responseError(response, failure);
+  return response.status === 204 ? (undefined as T) : response.json();
+}
+
 export const profilesApi = {
   async list(): Promise<Profile[]> {
     return (await profilesFetch("/profiles", "Failed to load profiles")).json();

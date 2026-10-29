@@ -176,6 +176,9 @@ export interface Profile extends Settings {
   builtin: boolean;
   /** Saved by the user rather than following shipped defaults. */
   user_edited: boolean;
+  /** A project's profile: conversations in it belong to the project, and
+   *  don't switch to or from it. */
+  project: boolean;
   /** How voice calls speak for this profile; "" for no persona. Not a
    *  setting: conversations don't copy it, and calls read it as saved. */
   voice_prompt: string;
@@ -238,6 +241,7 @@ export interface StreamResponse extends Omit<StreamResponseForTS, "messages"> {
   notification_event?: NotificationEvent;
   resource_status?: ResourceStatus;
   models_changed?: boolean;
+  workspace_changed?: boolean;
   tool_progress?: ToolProgress;
   stream_delta?: StreamDelta;
 }

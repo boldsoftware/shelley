@@ -141,6 +141,7 @@
               {{ p.user_edited ? "customized built-in" : "built-in" }}
             </span>
             <span v-if="p.default" class="profiles-badge">default</span>
+            <span v-if="p.project" class="profiles-badge">project</span>
             <span v-if="p.name === current" class="profiles-badge profiles-badge-current">
               in use
             </span>
@@ -171,7 +172,7 @@
           </template>
           <div v-else class="profiles-item-actions">
             <Button
-              v-if="p.name !== current || modified"
+              v-if="p.name === current ? modified : !p.project && !currentIsProject"
               size="small"
               text
               label="Use"
@@ -188,14 +189,14 @@
               @click="pending = { name: p.name, action: 'restore' }"
             />
             <Button
-              v-if="!p.default"
+              v-if="!p.default && !p.project"
               size="small"
               text
               label="Make default"
               @click="run(() => profilesApi.makeDefault(p.name))"
             />
             <Button
-              v-if="!p.default"
+              v-if="!p.default && !p.project"
               size="small"
               text
               severity="secondary"
@@ -259,6 +260,10 @@ const pending = ref<{ name: string; action: "delete" | "restore" } | null>(null)
 const error = ref("");
 const busy = ref(false);
 const draft = ref<Draft | null>(null);
+// A project's conversation neither leaves its project's profile nor joins another.
+const currentIsProject = computed(
+  () => !!profiles.value.find((p) => p.name === props.current)?.project,
+);
 const promptProblem = ref<TemplateProblem | null>(null);
 const generating = ref(false);
 

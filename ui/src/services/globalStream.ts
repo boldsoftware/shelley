@@ -67,6 +67,8 @@ export interface GlobalStreamOptions {
   onNotificationEvent?: (event: NotificationEvent) => void;
   /** Refresh the existing model catalog trigger after a server-side change. */
   onModelsChanged?: () => void;
+  /** Projects, conversation memberships, or action runs changed on the server. */
+  onWorkspaceChanged?: () => void;
   onStatusChange?: (status: StreamStatus) => void;
   /**
    * Called once after every successful re-establishment of the EventSource
@@ -134,6 +136,7 @@ export function connectGlobalStream({
   onListPatch,
   onNotificationEvent,
   onModelsChanged,
+  onWorkspaceChanged,
   onStatusChange,
   onReconnect,
   onResourceSnapshot,
@@ -267,6 +270,7 @@ export function connectGlobalStream({
     if (data.models_changed) {
       onModelsChanged?.();
     }
+    if (data.workspace_changed) onWorkspaceChanged?.();
     const resource = data.resource_status;
     if (resourceSnapshot && resource) {
       resourceSnapshot.push(resource);

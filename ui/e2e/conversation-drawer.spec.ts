@@ -58,7 +58,11 @@ test("right-clicking a conversation row opens its actions at the pointer", async
     });
     expect(resp.ok()).toBeTruthy();
   }
+  // The menu offers Move to project once the page has the workspace, which
+  // loads next to the conversation list.
+  const workspaceLoaded = page.waitForResponse((r) => r.url().endsWith("/api/workspace"));
   await page.goto("/new");
+  await workspaceLoaded;
   await page.getByRole("button", { name: "Search conversations..." }).click();
   await fillConversationQuery(queryEditor(page), `tag:${tag} `);
   const firstRow = page.locator(`[data-conversation-id="${first.conversationId}"]`);
@@ -72,15 +76,26 @@ test("right-clicking a conversation row opens its actions at the pointer", async
   const box = (await secondRow.locator(".conversation-preview").boundingBox())!;
   await page.mouse.click(box.x + 20, box.y + 5, { button: "right" });
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole("menuitem")).toHaveText(["Archive", "Rename", "Edit tags"]);
+  // Projects other specs on this worker's server made add Move to project.
+  const { projects } = (await (await request.get("/api/workspace")).json()) as {
+    projects: unknown[];
+  };
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    "Archive",
+    "Rename",
+    "Edit tags",
+    ...(projects.length ? ["Move to project"] : []),
+  ]);
   const menuBox = (await menu.boundingBox())!;
   expect(Math.abs(menuBox.x - (box.x + 20))).toBeLessThan(4);
   expect(Math.abs(menuBox.y - (box.y + 5))).toBeLessThan(4);
   await expect(secondRow).toHaveClass(/context-menu-target/);
   await expect(page).not.toHaveURL(new RegExp(`/c/${second.slug}$`));
 
-  // Right-clicking another row moves the one menu there.
-  await firstRow.click({ button: "right" });
+  // Right-clicking another row moves the one menu there. The open menu can
+  // cover that row's middle (rows order randomly), so click its left padding.
+  const rowEdge = { x: 4, y: (await firstRow.boundingBox())!.height / 2 };
+  await firstRow.click({ button: "right", position: rowEdge });
   await expect(menu).toHaveCount(1);
   await expect(firstRow).toHaveClass(/context-menu-target/);
   await expect(secondRow).not.toHaveClass(/context-menu-target/);
@@ -100,7 +115,7 @@ test("right-clicking a conversation row opens its actions at the pointer", async
   await secondRow.getByRole("button", { name: "Actions" }).click();
   const dotsMenu = page.getByTestId("conversation-actions-menu");
   await expect(dotsMenu).toBeVisible();
-  await firstRow.click({ button: "right" });
+  await firstRow.click({ button: "right", position: rowEdge });
   await expect(menu).toBeVisible();
   await expect(dotsMenu).toHaveCount(0);
   await page.keyboard.press("Escape");

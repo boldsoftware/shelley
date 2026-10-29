@@ -20,7 +20,11 @@ export function useProfiles() {
 /** What the model picker shows and does about the settings in effect: the
  *  composer's before the first send, the conversation's after. */
 export interface SettingsKnob {
+  /** The profiles the settings can switch to: none but its own for a
+   *  project's conversation, and no project's otherwise. */
   profiles: Profile[];
+  /** The settings are a project conversation's, which stay its project's. */
+  inProject: boolean;
   /** The profile the settings came from; "" if none. */
   profile: string;
   /** How the settings work differently from that profile's; none if they

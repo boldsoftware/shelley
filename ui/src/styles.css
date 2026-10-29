@@ -205,7 +205,9 @@ body {
 }
 
 .justify-between,
-.model-provider-heading {
+.model-provider-heading,
+.project-header-row,
+.project-section-heading {
   justify-content: space-between;
 }
 
@@ -335,7 +337,8 @@ body {
 }
 
 .text-error,
-.favicon-emoji-status.error {
+.favicon-emoji-status.error,
+.drawer-actions-menu .drawer-menu-danger :is(a, .p-tieredmenu-item-icon, .p-contextmenu-item-icon) {
   color: var(--error-text);
 }
 
@@ -2637,7 +2640,8 @@ body {
   gap: 0.75rem;
 }
 
-.tool-section {
+.tool-section,
+.project-form {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -3706,7 +3710,8 @@ diffs-container {
   cursor: not-allowed;
 }
 
-.message-send-btn svg {
+.message-send-btn svg,
+.project-chevron-collapsed {
   transform: rotate(-90deg);
 }
 
@@ -13906,7 +13911,10 @@ kbd {
 }
 
 /* BrowserProfileTool styles */
-.profile-file-wrapper {
+.profile-file-wrapper,
+.project-header-row,
+.project-picker,
+.project-section-heading {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -14377,6 +14385,22 @@ kbd {
   padding: 0;
 }
 
+/* Submenus (Move to project ▸) share the menu's surface. */
+.drawer-actions-menu .p-tieredmenu-submenu,
+.drawer-actions-menu .p-contextmenu-submenu {
+  min-width: 10.5rem;
+  padding: 0.25rem 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.drawer-actions-menu .p-tieredmenu-separator,
+.drawer-actions-menu .p-contextmenu-separator {
+  margin: 0.25rem 0;
+  border-top: 1px solid var(--border);
+}
+
 .drawer-actions-menu .p-tieredmenu-item-link,
 .drawer-actions-menu .p-contextmenu-item-link {
   padding: 0.625rem 1rem;
@@ -14387,6 +14411,21 @@ kbd {
 .drawer-actions-menu .p-tieredmenu-item-icon,
 .drawer-actions-menu .p-contextmenu-item-icon {
   margin-right: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.drawer-actions-menu [data-note]::after {
+  content: attr(data-note);
+  display: block;
+  margin-top: 0.125rem;
+  line-height: 1.2;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+}
+
+.drawer-actions-menu .p-tieredmenu-submenu-icon,
+.drawer-actions-menu .p-contextmenu-submenu-icon {
+  margin-left: auto;
   color: var(--text-secondary);
 }
 
@@ -17785,9 +17824,141 @@ kbd {
   min-height: 140px;
 }
 
-/* The drawer's inline error for a failed row action. */
+/* Projects: the drawer's project groups, a conversation's project header,
+   and the project dialogs. */
+.project-list {
+  padding-bottom: 0.5rem;
+}
+
+.project-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0 0.5rem;
+}
+
+.project-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.project-toggle > .pi {
+  font-size: var(--font-size-11);
+  transition: transform 120ms;
+}
+
+.project-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.project-heading .project-icon-button {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.project-icon-button:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
 .drawer-error {
   padding: 0 0.75rem;
+}
+
+.project-header {
+  padding: 0.5rem max(1rem, env(safe-area-inset-right)) 0.5rem max(1rem, env(safe-area-inset-left));
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-base);
+}
+
+.project-picker {
+  gap: 0.3rem;
+  flex-wrap: nowrap;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+}
+
+.project-picker select {
+  width: auto;
+  min-width: 0;
+  max-width: min(55vw, 22rem);
+  padding: 0.25rem;
+  border: 1px solid transparent;
+  border-radius: 0.3rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.project-form > label {
+  margin-top: 0.4rem;
+  font-size: var(--font-size-13);
+  font-weight: 500;
+}
+
+.project-form input:not([type="checkbox"]),
+.project-form textarea,
+.project-form select {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  color: var(--text-primary);
+  background: var(--bg-base);
+  font: inherit;
+  font-size: var(--font-size-14);
+}
+
+.project-form textarea {
+  resize: vertical;
+  min-height: 4rem;
+}
+
+.project-muted {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+  overflow-wrap: anywhere;
+}
+
+.project-section-heading h3 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: var(--font-size-14);
+}
+
+.project-form .project-command-input {
+  font-family: var(--font-mono);
+}
+
+.project-delete-effects {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
 }
 
 .error-line {
@@ -17805,4 +17976,28 @@ kbd {
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .project-icon-button {
+    width: 2.1rem;
+    height: 2.1rem;
+  }
+}
+
+/* The mobile drawer keeps finger-sized targets. */
+@media (max-width: 768px) {
+  .project-toggle {
+    padding-block: 0.5rem;
+  }
+
+  /* Lines a heading's ⋯ up with its rows'. */
+  .project-heading {
+    padding-right: 0.625rem;
+  }
+
+  .project-heading .project-icon-button {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
 }
