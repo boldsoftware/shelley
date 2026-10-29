@@ -549,6 +549,7 @@
               testid="project-actions-menu"
             />
           </div>
+          <ProjectVMSetup v-if="group.project" :vm="group.project.vm" />
           <p
             v-for="vm in vmCleanupIssues(group.project?.name)"
             :key="vm.conversation_id"
@@ -716,6 +717,7 @@ import {
 import { handleModifiedNavClick } from "../utils/openInNewTab";
 import { COMPOSER_ROW_ID } from "../../utils/composerRow";
 import ConversationRow from "./ConversationDrawerRow.vue";
+import ProjectVMSetup from "./ProjectVMSetup.vue";
 import ConversationQueryEditor from "./ConversationQueryEditor.vue";
 import Button from "primevue/button";
 import ContextMenu from "primevue/contextmenu";

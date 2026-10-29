@@ -89,11 +89,17 @@ func (s *Server) nameConversation(ctx context.Context, id, title string) error {
 // first message are refused (see allowConversationMutation).
 // Only the small creation/reservation boundary holds the workspace mutex.
 // Hooks may themselves use workspace APIs, so never hold it across user code.
-func (s *Server) createProjectConversation(ctx context.Context, cwd, model *string, opts db.ConversationOptions, name string) (*generated.Conversation, func(), error) {
+//
+// setup creates project name's base VM setup conversation, which runs here
+// while the project's VMs have no base.
+func (s *Server) createProjectConversation(ctx context.Context, cwd, model *string, opts db.ConversationOptions, name string, setup bool) (*generated.Conversation, func(), error) {
 	s.workspace.mu.Lock()
 	defer s.workspace.mu.Unlock()
 	var project *db.Project
 	var vm *db.ProjectVM
+	if err := s.projectDeleting(name); err != nil {
+		return nil, nil, err
+	}
 	if name != "" {
 		var err error
 		project, err = s.db.GetProject(ctx, name)
@@ -112,13 +118,27 @@ func (s *Server) createProjectConversation(ctx context.Context, cwd, model *stri
 			cwd = &project.Cwd
 		}
 		vm = project.VM
+		if vm != nil && vm.NeedsBase() {
+			if !setup {
+				return nil, nil, baseVMPending(project)
+			}
+			// The setup conversation runs here and creates the base.
+			dir, err := baseVMSetupCwd(project.Cwd)
+			if err != nil {
+				return nil, nil, err
+			}
+			cwd, vm = &dir, nil
+		}
+	}
+	if setup && (project == nil || project.VM == nil || !project.VM.NeedsBase()) {
+		return nil, nil, fmt.Errorf("%w: project %s no longer needs a base VM set up", db.ErrConflict, name)
 	}
 	var conversation *generated.Conversation
 	var err error
-	if vm != nil {
-		// Its VM is part of it from the start: a VM conversation never runs
-		// here.
-		conversation, err = s.db.CreateVMProjectConversation(ctx, cwd, model, opts, project)
+	if setup || vm != nil {
+		// Its VM, or its being the setup conversation, is part of it from
+		// the start: a VM conversation never runs here.
+		conversation, err = s.db.CreateVMProjectConversation(ctx, cwd, model, opts, project, setup)
 	} else {
 		conversation, err = s.db.CreateConversation(ctx, nil, true, cwd, model, opts)
 	}
@@ -352,7 +372,9 @@ func (s *Server) workspaceInstructions(ctx context.Context, id string) (string, 
 			return "", fmt.Errorf("load project: %w", err)
 		}
 		var out strings.Builder
-		writeProjectPrompt(&out, project)
+		if err := s.writeProjectPrompt(ctx, &out, project, id); err != nil {
+			return "", err
+		}
 		return out.String(), nil
 	}
 	var out strings.Builder
@@ -376,7 +398,9 @@ func (s *Server) workspaceInstructions(ctx context.Context, id string) (string, 
 		}
 		fmt.Fprintf(&out, "This conversation is a task in project %q.\n", project.Name)
 		out.WriteString("Complete the user's work in THIS task. Do not route the same request into another task. The project instructions below (the project's AGENTS.md) supplement the task's own system prompt.\n")
-		writeProjectPrompt(&out, project)
+		if err := s.writeProjectPrompt(ctx, &out, project, id); err != nil {
+			return "", err
+		}
 		fmt.Fprintf(&out, "\nCurrent conversation id: %s\n", id)
 	}
 	if s.socketPath != "" {
@@ -445,11 +469,11 @@ POST $SHELLEY_API/api/conversation/ID/chat
 POST $SHELLEY_API/api/projects
 PUT $SHELLEY_API/api/projects/NAME
   Complete project body: {"name":"Project name","instructions":"Project instructions (AGENTS.md-style), appended to every task's prompt","cwd":"/absolute/real/project/path","repos":[{"integration":"GITHUB_INTEGRATION","repository":"OWNER/REPO"}],"actions":[{"id":"release","label":"make release","command":"make release","archive_on_success":true,"silent":false},{"id":"test","label":"make test","command":"make test","archive_on_success":false,"silent":false}],"vm":null}
-  NAME is the project's name, URL-path-escaped (e.g. my%20project). A different name in a PUT body renames the project. Names are unique among profiles, at most 64 bytes, without "/". cwd can be empty when the environment is not known yet. Use an existing directory once discovered. Instructions are additive to the task's existing prompt; their start is what you route on, so lead with what the project is for. A project is a profile (GET $SHELLEY_API/api/profiles lists them, with "project": true): its settings (model, effort, tools, base system prompt) start as a copy of the default profile's, or of the profile named by "copy_settings_from" when creating; change them with PUT $SHELLEY_API/api/profiles/NAME (the complete settings). vm is null (tasks run on this host), {"base":"BASE_VM","integration":"EXE_DEV_INTEGRATION"} (each new task runs its tools and actions on its own VM copied from BASE_VM); cwd is then a directory on the VM. Browser runs on this host for VM tasks; files users upload stay on this host; tasks copy them to the VM with scp. An empty integration means this host's default exe.dev integration: the only one, or the one named after this VM (an error names the choices otherwise). repos are GitHub repositories this host reaches through exe.dev GitHub integrations (GET $SHELLEY_API/api/github-repos lists them, one per integration). Always send the project's current vm and repos back unchanged unless asked to change it; omitting it turns task VMs off. Enabling or changing vm needs the user's approval: it creates VMs on their account. Archiving a task on its own VM (by any route) deletes the VM Shelley created for it, losing uncommitted work there; unarchiving continues on a fresh copy of the base. Action ids are up to 64 letters, digits, "-" and "_". A run's result is sent to its task's agent unless the action is "silent". Keep actions deliberate and minimal: commands execute with the user's VM permissions, so do not add destructive cleanup or external side effects without authorization.
+  NAME is the project's name, URL-path-escaped (e.g. my%20project). A different name in a PUT body renames the project. Names are unique among profiles, at most 64 bytes, without "/". cwd can be empty when the environment is not known yet. Use an existing directory once discovered. Instructions are additive to the task's existing prompt; their start is what you route on, so lead with what the project is for. A project is a profile (GET $SHELLEY_API/api/profiles lists them, with "project": true): its settings (model, effort, tools, base system prompt) start as a copy of the default profile's, or of the profile named by "copy_settings_from" when creating; change them with PUT $SHELLEY_API/api/profiles/NAME (the complete settings). vm is null (tasks run on this host), {"base":"BASE_VM","integration":"EXE_DEV_INTEGRATION"} (each new task runs its tools and actions on its own VM copied from BASE_VM); cwd is then a directory on the VM. Browser runs on this host for VM tasks; files users upload stay on this host; tasks copy them to the VM with scp. An empty integration means this host's default exe.dev integration: the only one, or the one named after this VM (an error names the choices otherwise). An empty base starts a setup task in the project (vm.setup_conversation_id) that creates and prepares a base VM, cloning each repo to ~/REPO on it, then sets vm.base; until then the project refuses new tasks. repos are GitHub repositories this host reaches through exe.dev GitHub integrations (GET $SHELLEY_API/api/github-repos lists them, one per integration). Always send the project's current vm and repos back unchanged unless asked to change it; omitting it turns task VMs off (and ends a setup). Enabling or changing vm needs the user's approval: it creates VMs on their account. Archiving a task on its own VM (by any route) deletes the VM Shelley created for it, losing uncommitted work there; unarchiving continues on a fresh copy of the base. Action ids are up to 64 letters, digits, "-" and "_". A run's result is sent to its task's agent unless the action is "silent". Keep actions deliberate and minimal: commands execute with the user's VM permissions, so do not add destructive cleanup or external side effects without authorization.
 PUT $SHELLEY_API/api/conversation/ID/project
   Body: {"project":"Existing project name"}; moves an idle task, not the Assistant. Unless its settings were changed, it takes the new project's at its next turn.
 DELETE $SHELLEY_API/api/projects/NAME
-  Deletes the project and its profile. Refused (409) while the project has active tasks or a running action. Moves archived tasks to no project. Never deletes task history or repositories.
+  Deletes the project and its profile. Refused (409) while the project has active tasks (other than its base VM setup task) or a running action. Stops and archives a running setup task, deletes the base VMs Shelley created for the project (returns {"deleted_vms","kept_vms"}), and moves archived tasks to no project. It needs the user's approval when it deletes VMs. Never deletes task history, repositories, or user-supplied bases; if a VM deletion fails, the project stays (502) and can be deleted again.
 POST $SHELLEY_API/api/conversation/ID/actions/ACTION_ID
   Starts the project's configured command in the task directory; returns a run id. GET /api/action-runs/RUN_ID reports live output/status. Never manually archive while it runs: only a successful action archives, and errors/interruption leave the task visible. Do not fire-and-forget and report success.
 `
@@ -522,14 +546,26 @@ This %[7]s's work happens on %[1]s, in %[3]s. The agent loop and your tools run 
 
 // writeProjectPrompt writes a project conversation's project instructions
 // into out.
-func writeProjectPrompt(out *strings.Builder, current *db.Project) {
+func (s *Server) writeProjectPrompt(ctx context.Context, out *strings.Builder, current *db.Project, id string) error {
 	out.WriteString("<project_instructions>\n")
 	out.WriteString(current.Instructions)
 	out.WriteString("\n</project_instructions>\n")
 	for _, repo := range current.Repos {
-		fmt.Fprintf(out, "Project repository: %s (exe.dev GitHub integration %q).\n", repo.Repository, repo.Integration)
+		if current.VM != nil {
+			fmt.Fprintf(out, "Project repository: %s (exe.dev GitHub integration %q; on its VMs at ~/%s).\n", repo.Repository, repo.Integration, repo.Name())
+		} else {
+			fmt.Fprintf(out, "Project repository: %s (exe.dev GitHub integration %q).\n", repo.Repository, repo.Integration)
+		}
 	}
 	if current.Cwd == "" {
 		out.WriteString("This project has no configured directory. Do not assume the initial working directory is its repository. Discover and configure the correct environment before editing files or running project commands.\n")
 	}
+	if current.VM != nil && current.VM.SetupConversationID == id {
+		setup, err := s.baseVMSetupPrompt(ctx, current)
+		if err != nil {
+			return err
+		}
+		out.WriteString(setup)
+	}
+	return nil
 }

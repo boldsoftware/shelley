@@ -43,6 +43,7 @@ func TestProjectRepos(t *testing.T) {
 	for _, bad := range [][]ProjectRepo{
 		{{Integration: "x", Repository: "no-owner"}},
 		{{Integration: "", Repository: "a/b"}},
+		{{Integration: "x", Repository: "a/b"}, {Integration: "y", Repository: "c/b"}},
 	} {
 		got.Repos = bad
 		if err := database.UpdateProject(ctx, got.Name, *got); !errors.Is(err, ErrInvalid) {

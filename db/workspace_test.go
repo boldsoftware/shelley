@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"shelley.exe.dev/db/generated"
@@ -191,6 +192,17 @@ func TestProjectLifecycleAndValidation(t *testing.T) {
 		t.Fatalf("deleted project with an active conversation: %v", err)
 	}
 	if _, err := database.ArchiveConversation(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	// A recorded base VM must be deleted first.
+	vm := ProjectBaseVM{Project: project.Name, Name: "custom-base", Integration: "i", Status: ProjectBaseVMCreated, RequestedAt: time.Now()}
+	if err := database.RecordProjectBaseVM(ctx, vm); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.DeleteProject(ctx, project.Name); !errors.Is(err, ErrConflict) {
+		t.Fatalf("deleted project with a base VM: %v", err)
+	}
+	if err := database.ForgetProjectBaseVM(ctx, "i", "custom-base"); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.MoveConversation(ctx, id, "missing"); !errors.Is(err, sql.ErrNoRows) {

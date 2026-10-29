@@ -37,9 +37,11 @@ export interface GithubRepo extends ProjectRepo {
 }
 
 export interface ProjectVM {
-  /** The VM each conversation's own VM is copied from. */
+  /** "" while a setup conversation prepares the base; saving with "" starts one. */
   base: string;
   integration: string;
+  /** Read-only: the conversation preparing the base while base is "". */
+  setup_conversation_id: string;
 }
 
 /** A conversation's own exe.dev VM. Subagents share their parent's VM. */
@@ -66,6 +68,14 @@ export interface WorkspaceConversation {
   project: string;
   is_assistant: boolean;
   archived: boolean;
+}
+
+/** A base VM Shelley created for a project; deleting the project deletes it. */
+export interface ProjectBaseVM {
+  project: string;
+  vm_name: string;
+  integration: string;
+  status: "creating" | "created";
 }
 
 /** What the workspace lists of a run. */
@@ -98,6 +108,7 @@ export interface Workspace {
   conversations: WorkspaceConversation[];
   runs: ActionRunSummary[];
   vms: ConversationVM[];
+  base_vms: ProjectBaseVM[];
 }
 
 export const workspaceApi = {
@@ -125,8 +136,10 @@ export const workspaceApi = {
       "PUT",
       project,
     ),
+  /** Deletes the project and the base VMs Shelley created for it; VMs it
+   * found were not its own are kept, with why. */
   deleteProject: (name: string) =>
-    apiJSON<void>(
+    apiJSON<{ deleted_vms: string[]; kept_vms: { vm_name: string; reason: string }[] }>(
       `/api/projects/${encodeURIComponent(name)}`,
       "Failed to delete the project",
       "DELETE",

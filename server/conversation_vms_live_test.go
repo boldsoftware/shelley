@@ -43,7 +43,7 @@ func TestConversationVMLive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	conversation, release, err := s.createProjectConversation(t.Context(), nil, nil, db.ConversationOptions{Profile: project.Name}, project.Name)
+	conversation, release, err := s.createProjectConversation(t.Context(), nil, nil, db.ConversationOptions{Profile: project.Name}, project.Name, false)
 	if err != nil {
 		t.Fatal(err)
 	}

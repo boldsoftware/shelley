@@ -24,6 +24,7 @@ const empty = (): Workspace => ({
   ],
   runs: [],
   vms: [],
+  base_vms: [],
 });
 const run = (): ActionRunSummary => ({
   id: "run",
@@ -210,7 +211,7 @@ test("every archive route confirms deleting the conversation's own VM first", as
   assert.deepEqual(archived, ["other", "task"]);
 });
 
-test("project deletion plan: active conversations and running actions block; archived ones move", () => {
+test("project deletion plan: active conversations block; the setup conversation stops; only Shelley's VMs go", () => {
   const data = empty();
   const blog = data.projects[0];
   assert.equal(
@@ -227,5 +228,30 @@ test("project deletion plan: active conversations and running actions block; arc
   );
 
   data.runs = [];
-  assert.deepEqual(projectDeletionPlan(data, blog, translate), { blocker: "", archived: 1 });
+  const setup = {
+    ...blog,
+    vm: { base: "", integration: "i", setup_conversation_id: "setup" },
+  };
+  data.conversations.push({
+    conversation_id: "setup",
+    project: "Blog",
+    is_assistant: false,
+    archived: false,
+  });
+  data.base_vms = [{ project: "Blog", vm_name: "blog-base", integration: "i", status: "creating" }];
+  assert.deepEqual(projectDeletionPlan(data, setup, translate), {
+    blocker: "",
+    setupId: "setup",
+    archived: 1,
+    deletesVMs: ["blog-base"],
+    keepsVMs: [],
+  });
+
+  data.base_vms = [];
+  const own = {
+    ...blog,
+    vm: { base: "mine", integration: "i", setup_conversation_id: "" },
+  };
+  const plan = projectDeletionPlan(data, own, translate);
+  assert.deepEqual([plan.deletesVMs, plan.keepsVMs, plan.setupId], [[], ["base VM mine"], ""]);
 });

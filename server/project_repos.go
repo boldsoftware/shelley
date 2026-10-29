@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,7 +20,8 @@ import (
 // githubRepo is a repository this VM reaches through a GitHub integration.
 type githubRepo struct {
 	db.ProjectRepo
-	Team bool `json:"team"`
+	CloneURL string `json:"clone_url"`
+	Team     bool   `json:"team"`
 }
 
 var githubCloneURL = regexp.MustCompile(`https://github\.[^/\s]+/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?(?:\s|$)`)
@@ -33,7 +36,11 @@ func githubReposOf(integrations []reflectionIntegration) []githubRepo {
 		if m == nil {
 			continue
 		}
-		repos = append(repos, githubRepo{ProjectRepo: db.ProjectRepo{Integration: ig.Name, Repository: m[1]}, Team: ig.Team})
+		cloneURL := strings.TrimSpace(m[0])
+		if !strings.HasSuffix(cloneURL, ".git") {
+			cloneURL += ".git"
+		}
+		repos = append(repos, githubRepo{ProjectRepo: db.ProjectRepo{Integration: ig.Name, Repository: m[1]}, CloneURL: cloneURL, Team: ig.Team})
 	}
 	return repos
 }
@@ -58,6 +65,34 @@ func (s *Server) handleGithubRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"repos": githubReposOf(integrations), "connect_url": githubConnectURL(env)})
+}
+
+// projectReposPrompt tells the base VM setup conversation where to clone each of
+// the project's repositories.
+func (s *Server) projectReposPrompt(ctx context.Context, project *db.Project) (string, error) {
+	if len(project.Repos) == 0 {
+		return "The project has no repositories attached: create its directory (an empty git repository) unless its instructions say otherwise.", nil
+	}
+	_, integrations, err := s.listIntegrations(ctx)
+	if err != nil {
+		return "", fmt.Errorf("list GitHub integrations: %w", err)
+	}
+	urls := map[string]string{}
+	for _, repo := range githubReposOf(integrations) {
+		urls[repo.Integration] = repo.CloneURL
+	}
+	var out strings.Builder
+	out.WriteString("Clone each of the project's repositories into the VM user's home, ~/REPO:")
+	for _, repo := range project.Repos {
+		fmt.Fprintf(&out, "\n- %s into ~/%s through exe.dev GitHub integration %q", repo.Repository, repo.Name(), repo.Integration)
+		if u := urls[repo.Integration]; u != "" {
+			fmt.Fprintf(&out, ": git clone %s", u)
+		} else {
+			out.WriteString(" (not attached to this host now: ask the user to attach it)")
+		}
+	}
+	out.WriteString("\nGitHub integrations reach a VM through its tags or a direct attachment, and copies keep their base's tags but not direct attachments. Give the base this host's tags (`curl https://reflection.int.exe.xyz/tags`) and check every clone works there; if one needs an attachment a tag can't give, ask the user to attach that integration to a tag the base has.")
+	return out.String(), nil
 }
 
 // defaultExeDevIntegration picks the exe.dev integration new projects' VMs

@@ -43,8 +43,8 @@ test("stock mode offers Group by Project without the workspace", async ({ page, 
   await page.getByRole("button", { name: "Open conversations", exact: true }).click();
   await expect(group.locator(`[data-conversation-id="${projectConversationId}"]`)).toBeVisible();
 
-  // New projects run on this host; a host with no exe.dev integration
-  // doesn't offer VMs at all.
+  // New projects run on this host unless workspace mode is on; a host with
+  // no exe.dev integration doesn't offer VMs at all.
   let integrations: string[] = [];
   await page.route("**/api/exe-dev-integrations", (route) =>
     route.fulfill({ json: { integrations, default: integrations[0] ?? "" } }),
@@ -58,4 +58,5 @@ test("stock mode offers Group by Project without the workspace", async ({ page, 
   integrations = ["exe"];
   await page.getByRole("button", { name: "New project", exact: true }).click();
   await expect(editor.getByRole("radio", { name: /This Shelley host/ })).toBeChecked();
+  await expect(editor.getByText("Recommended")).toHaveCount(0);
 });

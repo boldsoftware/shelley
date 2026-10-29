@@ -17992,6 +17992,16 @@ kbd {
   overflow-wrap: anywhere;
 }
 
+.project-vm-setup {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.project-group > .project-vm-setup {
+  padding: 0 0.5rem 0.125rem 1.5rem;
+}
+
 /* The Assistant's first-run state: no projects yet. */
 .first-project {
   display: flex;
@@ -18086,6 +18096,15 @@ kbd {
 .project-choice > span > .project-muted {
   flex-basis: 100%;
   line-height: 1.4;
+}
+
+.project-badge {
+  padding: 0.05rem 0.45rem;
+  border-radius: 1rem;
+  background: var(--blue-bg);
+  color: var(--blue-text);
+  font-size: var(--font-size-11);
+  font-weight: 600;
 }
 
 .project-empty-repos {

@@ -189,7 +189,7 @@ func TestConversationCreationFencesProjectConversations(t *testing.T) {
 		s.handleRenameConversation(w, httptest.NewRequest("POST", "/", strings.NewReader(`{"slug":"renamed-`+id+`"}`)), id)
 		return w.Code
 	}
-	conv, release, err := s.createProjectConversation(t.Context(), &cwd, nil, db.ConversationOptions{Profile: project.Name}, project.Name)
+	conv, release, err := s.createProjectConversation(t.Context(), &cwd, nil, db.ConversationOptions{Profile: project.Name}, project.Name, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestConversationCreationFencesProjectConversations(t *testing.T) {
 	if code := rename(conv.ConversationID); code != http.StatusOK {
 		t.Fatalf("rename after creation: %d", code)
 	}
-	plain, release, err := s.createProjectConversation(t.Context(), &cwd, nil, db.ConversationOptions{}, "")
+	plain, release, err := s.createProjectConversation(t.Context(), &cwd, nil, db.ConversationOptions{}, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +249,7 @@ func TestOnlyProjectConversationsNotifyWorkspaceChanged(t *testing.T) {
 		}
 		var id string
 		if got := notifications(func() {
-			conv, release, err := s.createProjectConversation(t.Context(), &cwd, nil, db.ConversationOptions{Profile: name}, name)
+			conv, release, err := s.createProjectConversation(t.Context(), &cwd, nil, db.ConversationOptions{Profile: name}, name, false)
 			if err != nil {
 				t.Fatal(err)
 			}

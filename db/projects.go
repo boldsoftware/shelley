@@ -245,31 +245,66 @@ func (db *DB) ListProjects(ctx context.Context) ([]Project, error) {
 	return out, err
 }
 
+// CheckProjectDeletable returns the project's base VM setup conversation, if any, or
+// why the project can't be deleted: it has unarchived conversations other than that
+// setup conversation, or a running action, or its profile is the default.
+func (db *DB) CheckProjectDeletable(ctx context.Context, name string) (setupID string, err error) {
+	err = db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		setupID, err = checkProjectDeletable(rx, name)
+		return err
+	})
+	return setupID, err
+}
+
+func checkProjectDeletable(rx *Rx, name string) (string, error) {
+	var setupID string
+	if err := rx.QueryRow(`SELECT COALESCE(s.conversation_id,'') FROM profile_projects p
+		LEFT JOIN profile_vm_setups s ON s.profile=p.profile WHERE p.profile=?`, name).Scan(&setupID); err != nil {
+		return "", err
+	}
+	var active int
+	var running bool
+	if err := rx.QueryRow(`WITH members AS (`+workspaceConversationQuery+` AND project=?)
+		SELECT (SELECT COUNT(*) FROM members WHERE NOT archived AND conversation_id!=?),
+		EXISTS(SELECT 1 FROM action_runs r JOIN members t ON t.conversation_id=r.conversation_id WHERE r.status='running')`,
+		name, setupID).Scan(&active, &running); err != nil {
+		return "", err
+	}
+	switch {
+	case active == 1:
+		return "", fmt.Errorf("%w: project %q has an active conversation; archive it or move it to another project first", ErrConflict, name)
+	case active > 1:
+		return "", fmt.Errorf("%w: project %q has %d active conversations; archive them or move them to another project first", ErrConflict, name, active)
+	case running:
+		return "", fmt.Errorf("%w: project %q has a running action; wait for it to finish", ErrConflict, name)
+	}
+	return setupID, nil
+}
+
 // DeleteProject deletes a project and its profile. It must have no active
-// conversations or running action, and not be the default profile. Its archived conversations
-// keep their history, and the name as a label, outside any project.
+// conversations except its base VM setup conversation, which it archives, and no recorded
+// base VMs left (the caller deletes them first). Its archived conversations keep
+// their history, and the name as a label, outside any project.
 func (db *DB) DeleteProject(ctx context.Context, name string) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		if err := tx.QueryRow(`SELECT 1 FROM profile_projects WHERE profile=?`, name).Scan(new(int)); err != nil {
+		setupID, err := checkProjectDeletable(tx.Rx, name)
+		if err != nil {
 			return err
 		}
-		var active int
-		var running bool
-		if err := tx.QueryRow(`WITH members AS (`+workspaceConversationQuery+` AND project=?)
-			SELECT (SELECT COUNT(*) FROM members WHERE NOT archived),
-			EXISTS(SELECT 1 FROM action_runs r JOIN members t ON t.conversation_id=r.conversation_id WHERE r.status='running')`,
-			name).Scan(&active, &running); err != nil {
+		var leftover string
+		err = tx.QueryRow("SELECT vm_name FROM profile_base_vms WHERE profile=? LIMIT 1", name).Scan(&leftover)
+		if err == nil {
+			return fmt.Errorf("%w: base VM %s of the project is not deleted yet", ErrConflict, leftover)
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		switch {
-		case active == 1:
-			return fmt.Errorf("%w: project %q has an active conversation; archive it or move it to another project first", ErrConflict, name)
-		case active > 1:
-			return fmt.Errorf("%w: project %q has %d active conversations; archive them or move them to another project first", ErrConflict, name, active)
-		case running:
-			return fmt.Errorf("%w: project %q has a running action; wait for it to finish", ErrConflict, name)
+		if setupID != "" {
+			if _, err := tx.Exec("UPDATE conversations SET archived=TRUE WHERE conversation_id=?", setupID); err != nil {
+				return err
+			}
 		}
-		_, err := tx.Exec("DELETE FROM profiles WHERE name=?", name)
+		_, err = tx.Exec("DELETE FROM profiles WHERE name=?", name)
 		return err
 	})
 }

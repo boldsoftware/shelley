@@ -399,6 +399,7 @@ type Server struct {
 	conversationListGitCache *conversationListGitCache
 	workspace                workspaceState
 	conversationVMs          conversationVMState
+	baseVMSetupMu            sync.Mutex // serializes starting base VM setup conversations
 	integrationSkills        *integrationSkillCache
 	listIntegrations         integrationLister
 	// fileListCache memoizes working-directory file listings for the fuzzy

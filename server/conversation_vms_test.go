@@ -153,7 +153,7 @@ func TestProjectVMConfig(t *testing.T) {
 		t.Fatalf("project VM not persisted: %+v", found)
 	}
 
-	conversation, release, err := s.createProjectConversation(t.Context(), nil, nil, db.ConversationOptions{Profile: created.Name}, created.Name)
+	conversation, release, err := s.createProjectConversation(t.Context(), nil, nil, db.ConversationOptions{Profile: created.Name}, created.Name, false)
 	if err != nil {
 		t.Fatal(err)
 	}

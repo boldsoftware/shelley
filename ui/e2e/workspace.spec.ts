@@ -98,6 +98,11 @@ test("the Assistant's one URL is /", async ({ page, request }) => {
 test("project editor, task creation, failed action retry, and success-only archive", async ({
   page,
 }) => {
+  // A host without exe.dev integrations (as in CI): the VM choices stay
+  // until the editor closes, even after picking this host.
+  await page.route("**/api/exe-dev-integrations", (route) =>
+    route.fulfill({ json: { integrations: [], default: "" } }),
+  );
   await page.goto("/");
   await expect(page.locator("h1.header-title")).toHaveText("Assistant");
   await openWorkspace(page);
@@ -105,6 +110,13 @@ test("project editor, task creation, failed action retry, and success-only archi
   const newProject = page.getByRole("dialog", { name: "New project", exact: true });
   const name = `Publish ${randomUUID().slice(0, 8)}`;
   await newProject.getByLabel("Name", { exact: true }).fill(name);
+  // New projects default to their own VMs, in a directory named after them.
+  await expect(newProject.getByRole("radio", { name: /Their own VMs/ })).toBeChecked();
+  await expect(newProject.getByLabel("Working directory", { exact: true })).toHaveValue(
+    `/home/exedev/${name.toLowerCase().replace(" ", "-")}`,
+  );
+  await newProject.getByRole("radio", { name: /This Shelley host/ }).check();
+  await expect(newProject.getByLabel("Working directory", { exact: true })).toHaveValue("");
   await newProject
     .getByLabel("Project instructions (AGENTS.md)", { exact: true })
     .fill("Keep publishing tasks brief.");

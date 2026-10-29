@@ -39,6 +39,8 @@ type workspaceState struct {
 	// id. Actions do not start on such a conversation, as these operations
 	// checked for running actions before doing their work unlocked.
 	mutating map[string]int
+	// deleting holds the projects being deleted (handleDeleteProject).
+	deleting map[string]bool
 
 	// assistantID is the Assistant's id, "" outside workspace mode, as of
 	// the last ensureWorkspace.
@@ -119,6 +121,7 @@ func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/projects", s.handleCreateProject)
 	api.HandleFunc("PUT /api/projects/{name}", s.handleUpdateProject)
 	api.HandleFunc("DELETE /api/projects/{name}", s.handleDeleteProject)
+	api.HandleFunc("POST /api/projects/{name}/base-vm", s.handleCreateProjectBaseVM)
 	api.HandleFunc("PUT /api/conversation/{id}/project", s.handleMoveConversation)
 	api.HandleFunc("POST /api/conversation/{id}/actions/{action_id}", s.handleRunAction)
 	api.HandleFunc("GET /api/action-runs/{id}", s.handleGetActionRun)
@@ -226,8 +229,13 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 	s.writeSavedProject(w, r, created.Name, http.StatusCreated)
 }
 
-// writeSavedProject responds with the project as saved.
+// writeSavedProject starts the project's base VM setup conversation if it needs one,
+// and responds with the project as saved.
 func (s *Server) writeSavedProject(w http.ResponseWriter, r *http.Request, name string, status int) {
+	if err := s.startBaseVMSetup(r, name); err != nil {
+		s.workspaceHTTPError(w, err)
+		return
+	}
 	project, err := s.db.GetProject(r.Context(), name)
 	if err != nil {
 		s.workspaceHTTPError(w, err)
@@ -247,7 +255,14 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "copy_settings_from only applies to new projects; edit the profile's settings instead", http.StatusBadRequest)
 		return
 	}
-	if err := s.db.UpdateProject(r.Context(), r.PathValue("name"), req.Project); err != nil {
+	name := r.PathValue("name")
+	s.workspace.mu.Lock()
+	err := s.projectDeleting(name)
+	if err == nil {
+		err = s.db.UpdateProject(r.Context(), name, req.Project)
+	}
+	s.workspace.mu.Unlock()
+	if err != nil {
 		s.workspaceHTTPError(w, err)
 		return
 	}
@@ -256,15 +271,76 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDeleteProject deletes a project and its profile; see db.DeleteProject.
+// It first deletes the base VMs Shelley created for the project.
 func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
+	ctx, id := r.Context(), r.PathValue("name")
 	s.workspace.mu.Lock()
-	defer s.workspace.mu.Unlock()
-	if err := s.db.DeleteProject(r.Context(), r.PathValue("name")); err != nil {
+	err := s.projectDeleting(id)
+	var setupID string
+	if err == nil {
+		setupID, err = s.db.CheckProjectDeletable(ctx, id)
+	}
+	if err == nil {
+		if s.workspace.deleting == nil {
+			s.workspace.deleting = map[string]bool{}
+		}
+		s.workspace.deleting[id] = true
+	}
+	s.workspace.mu.Unlock()
+	if err != nil {
 		s.workspaceHTTPError(w, err)
 		return
 	}
+	defer func() {
+		s.workspace.mu.Lock()
+		delete(s.workspace.deleting, id)
+		s.workspace.mu.Unlock()
+	}()
+	if setupID != "" {
+		if err := s.stopConversationTree(ctx, setupID); err != nil {
+			s.workspaceHTTPError(w, err)
+			return
+		}
+	}
+	defer s.projectBaseVMLock(id)() // waits out a base VM creation in flight
+	vms, err := s.db.ListProjectBaseVMs(ctx, id)
+	if err != nil {
+		s.workspaceHTTPError(w, err)
+		return
+	}
+	result := struct {
+		Deleted []string `json:"deleted_vms"`
+		Kept    []keptVM `json:"kept_vms"`
+	}{[]string{}, []keptVM{}}
+	var failed []error
+	for _, vm := range vms {
+		kept, err := s.deleteProjectBaseVM(ctx, vm)
+		if err == nil {
+			err = s.db.ForgetProjectBaseVM(ctx, vm.Integration, vm.Name)
+		}
+		switch {
+		case err != nil:
+			failed = append(failed, fmt.Errorf("VM %s: %w", vm.Name, err))
+		case kept != "":
+			result.Kept = append(result.Kept, keptVM{vm.Name, kept})
+		default:
+			result.Deleted = append(result.Deleted, vm.Name)
+		}
+	}
+	if len(failed) > 0 {
+		s.notifyWorkspaceChanged()
+		http.Error(w, "Project not deleted: deleting its base VM failed; try again. "+errors.Join(failed...).Error(), http.StatusBadGateway)
+		return
+	}
+	s.workspace.mu.Lock()
+	err = s.db.DeleteProject(ctx, id)
+	s.workspace.mu.Unlock()
 	s.notifyWorkspaceChanged()
-	w.WriteHeader(http.StatusNoContent)
+	if err != nil {
+		s.workspaceHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // handleMoveConversation moves an idle conversation to another project; see db.MoveConversation.
@@ -290,6 +366,10 @@ func (s *Server) handleMoveConversation(w http.ResponseWriter, r *http.Request) 
 	defer s.workspace.mu.Unlock()
 	if s.workspace.initializing[id] {
 		s.workspaceHTTPError(w, db.ErrConflict)
+		return
+	}
+	if err := s.projectDeleting(req.Project); err != nil {
+		s.workspaceHTTPError(w, err)
 		return
 	}
 	// The loop restarts at the next turn, with the project's instructions

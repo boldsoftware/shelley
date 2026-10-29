@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +23,10 @@ type ProjectVM struct {
 	// Integration names the exe.dev integration that acts as the user
 	// (<integration>.int.exe.xyz) to copy VMs and SSH into them.
 	Integration string `json:"integration"`
+	// SetupConversationID is the conversation preparing the base while Base is "".
+	// It is read-only: Shelley starts that conversation when a project's VMs are
+	// turned on without a base, and the conversation sets Base when it is done.
+	SetupConversationID string `json:"setup_conversation_id"`
 }
 
 // ConversationVM is the VM a conversation runs on: its own copy of Base.
@@ -69,12 +74,15 @@ const (
 
 var vmNamePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?$`)
 
+// ValidVMName reports whether name is an exe.dev VM name.
+func ValidVMName(name string) bool { return vmNamePattern.MatchString(name) }
+
 func validateProjectVM(vm *ProjectVM, cwd string) error {
 	if vm == nil {
 		return nil
 	}
-	if !vmNamePattern.MatchString(vm.Base) || !vmNamePattern.MatchString(vm.Integration) {
-		return fmt.Errorf("%w: vm.base and vm.integration must be exe.dev names (lowercase letters, digits, hyphens; at most 42 bytes)", ErrInvalid)
+	if vm.Base != "" && !vmNamePattern.MatchString(vm.Base) || !vmNamePattern.MatchString(vm.Integration) {
+		return fmt.Errorf("%w: vm.base (empty to have a setup conversation create one) and vm.integration must be exe.dev names (lowercase letters, digits, hyphens; at most 42 bytes)", ErrInvalid)
 	}
 	if len(vm.Base) > maxBaseVMName {
 		return fmt.Errorf("%w: vm.base must be at most %d bytes, leaving room for each conversation's VM name (BASE-<conversation id>)", ErrInvalid, maxBaseVMName)
@@ -96,13 +104,29 @@ func setProjectVM(tx *Tx, project string, vm *ProjectVM) error {
 	_, err := tx.Exec(`INSERT INTO profile_vms(profile,base_vm,integration) VALUES(?,?,?)
 		ON CONFLICT(profile) DO UPDATE SET base_vm=excluded.base_vm,integration=excluded.integration`,
 		project, vm.Base, vm.Integration)
+	if err != nil || vm.NeedsBase() {
+		return err
+	}
+	_, err = tx.Exec("DELETE FROM profile_vm_setups WHERE profile=?", project)
+	return err
+}
+
+// setProjectVMSetup records conversationID as the conversation preparing the base VM
+// of project, whose VMs must be on with no base or setup yet.
+func setProjectVMSetup(tx *Tx, project, conversationID string) error {
+	result, err := tx.Exec(`INSERT INTO profile_vm_setups(profile,conversation_id)
+		SELECT profile,? FROM profile_vms WHERE profile=? AND base_vm=''`, conversationID, project)
+	if err := rowsChanged(result, err); errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("%w: project %s no longer needs a base VM set up", ErrConflict, project)
+	}
 	return err
 }
 
 // CreateVMProjectConversation creates a top-level conversation in project, a
-// VM project, in one transaction with its VM, working in the project's
-// directory there.
-func (db *DB) CreateVMProjectConversation(ctx context.Context, cwd, model *string, opts ConversationOptions, project *Project) (*generated.Conversation, error) {
+// VM project, in one transaction with either its VM, working in the
+// project's directory there, or, for setup, the record that it is the
+// project's base VM setup conversation.
+func (db *DB) CreateVMProjectConversation(ctx context.Context, cwd, model *string, opts ConversationOptions, project *Project, setup bool) (*generated.Conversation, error) {
 	id, err := GenerateConversationID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate conversation ID: %w", err)
@@ -119,6 +143,9 @@ func (db *DB) CreateVMProjectConversation(ctx context.Context, cwd, model *strin
 		if err != nil {
 			return err
 		}
+		if setup {
+			return setProjectVMSetup(tx, project.Name, id)
+		}
 		return insertConversationVM(tx, id, *project.VM, project.VMDir())
 	})
 	return &conversation, err
@@ -127,6 +154,9 @@ func (db *DB) CreateVMProjectConversation(ctx context.Context, cwd, model *strin
 // insertConversationVM records the VM conversationID uses in a project with
 // vm, working in dir there.
 func insertConversationVM(tx *Tx, conversationID string, vm ProjectVM, dir string) error {
+	if vm.NeedsBase() {
+		return fmt.Errorf("%w: the project has no base VM yet", ErrConflict)
+	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err := tx.Exec(`INSERT INTO conversation_vms(conversation_id,vm_name,base_vm,integration,status,dir,created_at,updated_at)
 		VALUES(?,?,?,?,?,?,?,?)`, conversationID, ConversationVMName(vm, conversationID), vm.Base, vm.Integration, ConversationVMPending, dir, now, now)
@@ -134,7 +164,8 @@ func insertConversationVM(tx *Tx, conversationID string, vm ProjectVM, dir strin
 }
 
 func attachProjectVMs(rx *Rx, projects []Project) error {
-	rows, err := rx.Query(`SELECT profile,base_vm,integration FROM profile_vms`)
+	rows, err := rx.Query(`SELECT v.profile,v.base_vm,v.integration,COALESCE(s.conversation_id,'')
+		FROM profile_vms v LEFT JOIN profile_vm_setups s ON s.profile=v.profile`)
 	if err != nil {
 		return err
 	}
@@ -143,7 +174,7 @@ func attachProjectVMs(rx *Rx, projects []Project) error {
 	for rows.Next() {
 		var name string
 		var vm ProjectVM
-		if err := rows.Scan(&name, &vm.Base, &vm.Integration); err != nil {
+		if err := rows.Scan(&name, &vm.Base, &vm.Integration, &vm.SetupConversationID); err != nil {
 			return err
 		}
 		vms[name] = &vm
@@ -152,6 +183,12 @@ func attachProjectVMs(rx *Rx, projects []Project) error {
 		projects[i].VM = vms[projects[i].Name]
 	}
 	return rows.Err()
+}
+
+// NeedsBase reports whether the project's VMs have no base yet, which a setup
+// conversation prepares.
+func (vm *ProjectVM) NeedsBase() bool {
+	return vm.Base == ""
 }
 
 // VMDir is where a VM project's work happens on its VMs.
@@ -170,6 +207,9 @@ func ConversationVMName(vm ProjectVM, conversationID string) string {
 // BindConversationVM records the VM a new conversation in a VM project will use. The conversation
 // keeps it, even if it later moves to another project.
 func (db *DB) BindConversationVM(ctx context.Context, conversationID string, vm ProjectVM) error {
+	if vm.NeedsBase() {
+		return fmt.Errorf("%w: the project has no base VM yet", ErrConflict)
+	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	return db.pool.Exec(ctx, `INSERT INTO conversation_vms(conversation_id,vm_name,base_vm,integration,status,created_at,updated_at)
 		VALUES(?,?,?,?,?,?,?)`, conversationID, ConversationVMName(vm, conversationID), vm.Base, vm.Integration, ConversationVMPending, now, now)

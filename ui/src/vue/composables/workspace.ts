@@ -156,8 +156,15 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
 export interface ProjectDeletionPlan {
   /** Why the project can't be deleted yet, or "". */
   blocker: string;
-  /** Archived conversations, which move to "No project" with their history. */
+  /** The base VM setup conversation deletion stops and archives, or "". */
+  setupId: string;
+  /** Archived conversations, which move to "No project" with their history (as
+   * does the setup conversation). */
   archived: number;
+  /** VMs Shelley created for the project, which deletion deletes. */
+  deletesVMs: string[];
+  /** The project's VMs Shelley did not create, which it keeps. */
+  keepsVMs: string[];
 }
 
 export function projectDeletionPlan(
@@ -165,12 +172,19 @@ export function projectDeletionPlan(
   project: Project,
   t: Translate,
 ): ProjectDeletionPlan {
+  const setup = project.vm?.setup_conversation_id ?? "";
   const members = data?.conversations.filter((c) => c.project === project.name) ?? [];
-  const active = members.filter((c) => !c.archived).length;
+  const active = members.filter((c) => !c.archived && c.conversation_id !== setup).length;
   const ids = new Set(members.map((c) => c.conversation_id));
   const running = data?.runs.some(
     (run) => run.status === "running" && ids.has(run.conversation_id),
   );
+  const deletesVMs = (data?.base_vms ?? [])
+    .filter((vm) => vm.project === project.name)
+    .map((vm) => vm.vm_name);
+  const keepsVMs: string[] = [];
+  if (project.vm?.base && !deletesVMs.includes(project.vm.base))
+    keepsVMs.push(`base VM ${project.vm.base}`);
   return {
     blocker: !data
       ? t("loading")
@@ -181,7 +195,10 @@ export function projectDeletionPlan(
           : running
             ? t("waitForRunningAction")
             : "",
+    setupId: members.some((c) => c.conversation_id === setup && !c.archived) ? setup : "",
     archived: members.filter((c) => c.archived).length,
+    deletesVMs,
+    keepsVMs,
   };
 }
 

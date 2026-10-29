@@ -1,6 +1,7 @@
-<!-- Where a project's conversations run: their own VMs copied from a base, or
-     this Shelley host. Part of the project editor. Shown only where usable: on a
-     host with exe.dev integrations, or for a project with a VM. -->
+<!-- Where a project's conversations run: their own VMs copied from a base (the
+     default for new projects in workspace mode), or this Shelley host. Part of
+     the project editor. Shown only where usable: on a host with exe.dev
+     integrations, or for a project with a VM. -->
 <template>
   <template v-if="available">
   <div v-if="heading" class="project-section-heading">
@@ -24,21 +25,26 @@
       <i :class="['pi', option.icon]" aria-hidden="true" />
       <span>
         <strong>{{ option.label }}</strong>
+        <span v-if="option.value === 'own' && workspaceMode" class="project-badge">Recommended</span>
         <span class="project-muted">{{ option.help }}</span>
       </span>
     </label>
   </fieldset>
   <template v-if="vm && mode === 'own'">
-    <label for="project-vm-base">Base VM</label>
+    <ProjectVMSetup v-if="vm.setup_conversation_id" :vm="vm" @navigate="emit('navigate')" />
+    <label for="project-vm-base">Base VM <span class="project-muted">(optional)</span></label>
     <input
       id="project-vm-base"
       :value="vm.base"
-      required
-      placeholder="my-base"
+      placeholder="Empty: an agent creates and prepares one"
       autocomplete="off"
       :disabled="disabled"
       @input="update({ base: ($event.target as HTMLInputElement).value })"
     />
+    <p v-if="!vm.base && !vm.setup_conversation_id" class="project-muted">
+      Saving starts a setup {{ noun }} that creates a base VM, clones the repositories, installs
+      toolchains and warms caches. New {{ nouns }} wait until it is done.
+    </p>
   </template>
   <template v-if="vm">
     <label for="project-vm-integration">exe.dev integration</label>
@@ -65,16 +71,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import ProjectVMSetup from "./ProjectVMSetup.vue";
 import { workspaceApi, type ProjectVM } from "../../services/workspace";
-import { wording } from "../../utils/workspaceMode";
+import { wording, workspaceMode } from "../../utils/workspaceMode";
 
 const noun = wording("conversation", "task");
+const nouns = wording("conversations", "tasks");
 const Nouns = wording("Conversations", "Tasks");
 
 export type VMMode = "host" | "own";
 const props = defineProps<{ vm: ProjectVM | null; disabled?: boolean; heading?: boolean }>();
-const emit = defineEmits<{ (e: "update:vm", vm: ProjectVM | null): void }>();
+const emit = defineEmits<{
+  (e: "update:vm", vm: ProjectVM | null): void;
+  (e: "navigate"): void;
+}>();
 const modes: { value: VMMode; icon: string; label: string; help: string }[] = [
   {
     value: "own",
@@ -90,11 +101,14 @@ const modes: { value: VMMode; icon: string; label: string; help: string }[] = [
   },
 ];
 const integrations = ref<string[]>([]);
-const available = computed(() => !!props.vm || integrations.value.length > 0);
+// Shown for a project with a VM stays shown after picking this host, so the
+// choice can be undone on a host with no integrations.
+const hadVM = !!props.vm;
+const available = computed(() => hadVM || integrations.value.length > 0);
 const defaultIntegration = ref("");
 const error = ref("");
 const mode = computed<VMMode>(() => (!props.vm ? "host" : "own"));
-workspaceApi.exeDevIntegrations().then(
+const loaded = workspaceApi.exeDevIntegrations().then(
   (result) => {
     integrations.value = result.integrations;
     defaultIntegration.value = result.default;
@@ -102,6 +116,12 @@ workspaceApi.exeDevIntegrations().then(
   (err: unknown) => {
     error.value = err instanceof Error ? err.message : String(err);
   },
+);
+// A VM mode chosen before the integrations loaded gets the default then.
+onMounted(() =>
+  loaded.then(() => {
+    if (props.vm && !props.vm.integration) update({ integration: defaultIntegration.value });
+  }),
 );
 function update(change: Partial<ProjectVM>) {
   if (props.vm) emit("update:vm", { ...props.vm, ...change });
@@ -115,6 +135,7 @@ function setMode(next: VMMode) {
       : {
           base: vm?.base ?? "",
           integration: vm?.integration || defaultIntegration.value,
+          setup_conversation_id: vm?.setup_conversation_id ?? "",
         },
   );
 }

@@ -96,6 +96,7 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   await group.getByRole("button", { name: `${name} project actions`, exact: true }).click();
   await projectMenu.getByRole("menuitem", { name: "Delete project…", exact: true }).click();
   const remove = page.getByRole("dialog", { name: "Delete project?", exact: true });
+  // A project on this host has no VMs to mention.
   await expect(remove.getByTestId("project-delete-effects")).toHaveText(
     "Its archived conversation moves to No project.",
   );

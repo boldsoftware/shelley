@@ -29,7 +29,12 @@
       />
       <p class="project-muted">{{ t("projectInstructionsHint") }}</p>
       <ProjectRepoPicker v-model="draft.repos" :disabled="saving" />
-      <ProjectVMFields v-model:vm="draft.vm" heading :disabled="saving" />
+      <ProjectVMFields
+        v-model:vm="draft.vm"
+        heading
+        :disabled="saving"
+        @navigate="closeProject"
+      />
       <label for="project-cwd">{{ t("workingDirectory") }}</label>
       <input
         id="project-cwd"
@@ -39,6 +44,7 @@
         :placeholder="draft.vm ? `${HOME}/project` : '/path/to/project (optional)'"
         autocomplete="off"
         :disabled="saving"
+        @input="cwdTouched = true"
       />
       <p class="project-muted">
         {{ draft.vm ? t("projectCwdHintVm") : t("projectCwdHintHost") }}
@@ -142,6 +148,7 @@
           {{ project.name }}
         </option>
       </select>
+      <ProjectVMSetup :vm="chosenProject?.vm ?? null" @navigate="closeCreator" />
       <label for="new-conversation-title">
         {{ t("conversationTitle") }} <span class="project-muted">{{ t("optional") }}</span>
       </label>
@@ -172,7 +179,11 @@
         type="submit"
         form="project-conversation-form"
         :loading="creating"
-        :disabled="!newProjectConversation.project || !newProjectConversation.message.trim()"
+        :disabled="
+          !newProjectConversation.project ||
+          !newProjectConversation.message.trim() ||
+          chosenProject?.vm?.base === ''
+        "
       />
     </template>
   </Modal>
@@ -195,10 +206,26 @@
   </Modal>
 
   <Modal :is-open="!!deleting" :title="t('deleteProjectTitle')" @close="closeDelete">
-    <template v-if="deletePlan">
+    <template v-if="deleteNotice">
+      <p>
+        Deleted <strong>{{ deleting?.name }}</strong
+        >.
+      </p>
+      <p v-for="note in deleteNotice" :key="note" class="error-line" role="alert">{{ note }}</p>
+    </template>
+    <template v-else-if="deletePlan">
       <p>{{ t("deleteProjectConfirm").replace("{name}", deleting?.name ?? "") }}</p>
       <p v-if="deletePlan.blocker" class="error-line" role="alert">{{ deletePlan.blocker }}.</p>
       <ul v-else class="project-delete-effects" data-testid="project-delete-effects">
+        <li v-if="deletePlan.setupId">
+          Stops its base VM setup {{ noun }} and archives it under No project.
+        </li>
+        <li v-for="vm in deletePlan.deletesVMs" :key="vm">
+          <strong>Deletes VM {{ vm }}</strong> (Shelley created it as the base VM).
+        </li>
+        <li v-for="vm in deletePlan.keepsVMs" :key="vm">
+          Keeps {{ vm }} (Shelley didn't create it).
+        </li>
         <li v-if="deletePlan.archived">
           {{
             deletePlan.archived === 1
@@ -206,12 +233,20 @@
               : t("archivedConversationsMove").replace("{count}", String(deletePlan.archived))
           }}
         </li>
+        <li v-if="deleting?.vm && !deletePlan.deletesVMs.length">Deletes no VMs.</li>
       </ul>
     </template>
     <p v-if="deleteError" class="error-line" role="alert">{{ deleteError }}</p>
     <template #footer>
-      <Button :label="t('cancel')" text severity="secondary" :disabled="saving" @click="closeDelete" />
       <Button
+        :label="deleteNotice ? t('closeAction') : t('cancel')"
+        text
+        severity="secondary"
+        :disabled="saving"
+        @click="closeDelete"
+      />
+      <Button
+        v-if="!deleteNotice"
         :label="saving ? t('deletingEllipsis') : t('deleteProject')"
         severity="danger"
         :loading="saving"
@@ -226,6 +261,7 @@
 import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
 import Modal from "./Modal.vue";
+import ProjectVMSetup from "./ProjectVMSetup.vue";
 import ProjectRepoPicker from "./ProjectRepoPicker.vue";
 import ProjectVMFields from "./ProjectVMFields.vue";
 import { workspaceApi, type Project } from "../../services/workspace";
@@ -234,7 +270,8 @@ import type { Conversation } from "../../types";
 import { useWorkspace } from "../composables/workspace";
 import { useI18n } from "../composables/i18n";
 import { errorMessage } from "../../utils/errorMessage";
-import { wording } from "../../utils/workspaceMode";
+import { wording, workspaceMode } from "../../utils/workspaceMode";
+import { navigateToConversationSlug } from "../composables/subagentLive";
 
 const noun = wording("conversation", "task");
 const Nouns = wording("Conversations", "Tasks");
@@ -246,15 +283,19 @@ const draft = ref<Project | null>(null);
 // The name the project had when editing began, "" for a new one: renaming
 // saves to it.
 const editingName = ref("");
-// The VM user's home.
+// The VM user's home, where the base VM's setup clones the repositories.
 const HOME = "/home/exedev";
+const cwdTouched = ref(false);
 const saving = ref(false);
 const creating = ref(false);
 const projectError = ref("");
 const creatorError = ref("");
 const deleting = workspace.projectDeletion;
 const deletePlan = computed(() => deleting.value && workspace.deletionPlan(deleting.value));
+// After deletion: VMs the server found were not Shelley's, so kept.
+const deleteNotice = ref<string[] | null>(null);
 watch(deleting, () => {
+  deleteNotice.value = null;
   deleteError.value = "";
 });
 const deleteError = ref("");
@@ -267,10 +308,41 @@ watch(workspace.projectEditor, (editor) => {
   if (!editor) return;
   draft.value = editor.project
     ? JSON.parse(JSON.stringify(editor.project))
-    : { name: "", instructions: "", cwd: "", actions: [], repos: [], vm: null };
+    : {
+        name: "",
+        instructions: "",
+        cwd: "",
+        actions: [],
+        repos: [],
+        // In workspace mode new projects run each conversation on its own VM
+        // (ProjectVMFields fills in this host's default integration);
+        // otherwise on this host.
+        vm: workspaceMode
+          ? { base: "", integration: "", setup_conversation_id: "" }
+          : null,
+      };
   editingName.value = editor.project?.name ?? "";
+  cwdTouched.value = !!editor.project;
   projectError.value = "";
 });
+const slug = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "project";
+// A new project's working directory follows its repositories until edited:
+// on a VM, the single repository's clone, or home holding several.
+watch(
+  () => draft.value && ([draft.value.repos, draft.value.name, !!draft.value.vm] as const),
+  (current) => {
+    if (!current || cwdTouched.value || !draft.value) return;
+    const [repos, name, onVM] = current;
+    if (!onVM) draft.value.cwd = "";
+    else if (repos.length === 1) draft.value.cwd = `${HOME}/${repos[0].repository.split("/")[1]}`;
+    else draft.value.cwd = repos.length ? HOME : `${HOME}/${slug(name)}`;
+  },
+  { deep: true },
+);
 watch(workspace.conversationCreator, (creator) => {
   if (!creator) return;
   newProjectConversation.value = { project: creator.project, title: "", message: "" };
@@ -304,11 +376,14 @@ async function saveProject() {
     if (new Set(actions.map((action) => action.id)).size !== actions.length)
       throw new Error("Each action needs a unique ID.");
     const saved = { ...project, name: project.name.trim() };
-    await (editingName.value
+    const result = await (editingName.value
       ? workspaceApi.updateProject(editingName.value, saved)
       : workspaceApi.createProject(saved));
     await workspace.refresh();
     workspace.projectEditor.value = null;
+    // A new project's base VM setup conversation is where to follow along.
+    const setup = result.vm?.setup_conversation_id;
+    if (!editingName.value && setup) navigateToConversationSlug(setup);
   } catch (err) {
     projectError.value = errorMessage(err);
   } finally {
@@ -344,9 +419,11 @@ async function deleteProject() {
   saving.value = true;
   deleteError.value = "";
   try {
-    await workspaceApi.deleteProject(deleting.value.name);
+    const result = await workspaceApi.deleteProject(deleting.value.name);
     await workspace.refresh();
-    deleting.value = null;
+    if (result.kept_vms.length)
+      deleteNotice.value = result.kept_vms.map((vm) => `Kept VM ${vm.vm_name}: ${vm.reason}.`);
+    else deleting.value = null;
   } catch (err) {
     deleteError.value = errorMessage(err);
   } finally {

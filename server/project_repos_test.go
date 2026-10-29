@@ -33,7 +33,7 @@ func TestDefaultExeDevIntegration(t *testing.T) {
 	}
 }
 
-func TestProjectGithubRepos(t *testing.T) {
+func TestProjectGithubReposAndSetup(t *testing.T) {
 	t.Parallel()
 	e := newProfileEnv(t)
 	env, err := exeenv.New("https", "exe.xyz")
@@ -42,6 +42,7 @@ func TestProjectGithubRepos(t *testing.T) {
 	}
 	e.srv.listIntegrations = func(context.Context) (exeenv.Environment, []reflectionIntegration, error) {
 		return env, []reflectionIntegration{
+			{Name: "setup-test-exe", Type: "exe-dev"},
 			{Name: "team-acme-api", Type: "github", Team: true, Help: "git clone https://github.int.exe.xyz/acme/api.git"},
 			{Name: "acme-web", Type: "github", Help: "git clone https://github.int.exe.xyz/acme/web"},
 			{Name: "broken", Type: "github", Help: "no url"},
@@ -55,28 +56,39 @@ func TestProjectGithubRepos(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []githubRepo{
-		{ProjectRepo: db.ProjectRepo{Integration: "team-acme-api", Repository: "acme/api"}, Team: true},
-		{ProjectRepo: db.ProjectRepo{Integration: "acme-web", Repository: "acme/web"}},
+		{ProjectRepo: db.ProjectRepo{Integration: "team-acme-api", Repository: "acme/api"}, CloneURL: "https://github.int.exe.xyz/acme/api.git", Team: true},
+		{ProjectRepo: db.ProjectRepo{Integration: "acme-web", Repository: "acme/web"}, CloneURL: "https://github.int.exe.xyz/acme/web.git"},
 	}
 	if !reflect.DeepEqual(listed.Repos, want) || !strings.HasPrefix(listed.ConnectURL, "https://exe.dev/integrations/add?") {
 		t.Fatalf("listed: %+v", listed)
 	}
 
 	// Off exe.dev there is nothing to connect.
+	onExeDev := e.srv.listIntegrations
 	e.srv.listIntegrations = func(context.Context) (exeenv.Environment, []reflectionIntegration, error) {
 		return exeenv.Environment{}, nil, nil
 	}
 	if err := json.Unmarshal([]byte(e.want(200, "GET", "/api/github-repos", "")), &listed); err != nil || listed.ConnectURL != "" || len(listed.Repos) != 0 {
 		t.Fatalf("off exe.dev: %+v %v", listed, err)
 	}
+	e.srv.listIntegrations = onExeDev
 
 	var created db.Project
-	body := `{"name":"Acme","instructions":"Ship the Acme storefront.","cwd":"","repos":[{"integration":"team-acme-api","repository":"acme/api"},{"integration":"acme-web","repository":"acme/web"}]}`
+	body := `{"name":"Acme","instructions":"Ship the Acme storefront.","cwd":"/home/exedev","vm":{"base":"","integration":""},
+		"repos":[{"integration":"team-acme-api","repository":"acme/api"},{"integration":"acme-web","repository":"acme/web"}]}`
 	if err := json.Unmarshal([]byte(e.want(201, "POST", "/api/projects", body)), &created); err != nil {
 		t.Fatal(err)
 	}
-	if len(created.Repos) != 2 {
+	if len(created.Repos) != 2 || created.VM == nil || created.VM.SetupConversationID == "" {
 		t.Fatalf("created: %+v", created)
+	}
+	setupID := created.VM.SetupConversationID
+	e.waitTurn(setupID, 0)
+	system := systemText(e.lastTurnRequest())
+	for _, s := range []string{"acme/api into ~/api", "git clone https://github.int.exe.xyz/acme/web.git", `project "Acme"`, "<project_instructions>\nShip the Acme storefront."} {
+		if !strings.Contains(system, s) {
+			t.Fatalf("setup prompt lacks %q:\n%s", s, system)
+		}
 	}
 	db.EnableWorkspaceMode(t, e.srv.db)
 	assistantID, err := e.srv.ensureWorkspace(t.Context())

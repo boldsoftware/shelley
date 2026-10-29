@@ -153,7 +153,7 @@ func TestWorkspaceHTTPAndProjectCRUD(t *testing.T) {
 	}
 	db.AddTestProject(t, database, "my-project")
 	workspaceResponse[db.WorkspaceConversation](t, workspaceAPI(s, "PUT", "/api/conversation/"+conv.ConversationID+"/project", `{"project":"my-project"}`), 200)
-	if response := workspaceAPI(s, "DELETE", "/api/projects/Documentation", ""); response.Code != 204 {
+	if response := workspaceAPI(s, "DELETE", "/api/projects/Documentation", ""); response.Code != 200 {
 		t.Fatalf("delete empty project: %d %s", response.Code, response.Body.String())
 	}
 	if response := workspaceAPI(s, "POST", "/api/projects", `{"name":"Assistant"}`); response.Code != 409 {

@@ -1501,8 +1501,6 @@ func (s *Server) runChatMessageHook(r *http.Request, conversationID, modelID, re
 
 // handleNewConversation handles POST /api/conversations/new - creates conversation implicitly on first message
 func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
 	// Parse request
 	var req NewConversationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1510,6 +1508,13 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.newConversation(w, r, req, false)
+}
+
+// newConversation creates the conversation of req and sends its first
+// message; setup creates req.Project's base VM setup conversation.
+func (s *Server) newConversation(w http.ResponseWriter, r *http.Request, req NewConversationRequest, setup bool) {
+	ctx := r.Context()
 	if req.Message == "" {
 		http.Error(w, "Message is required", http.StatusBadRequest)
 		return
@@ -1564,7 +1569,7 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 		cwdPtr = &req.Cwd
 	}
 
-	conversation, releaseCreation, err := s.createProjectConversation(ctx, cwdPtr, &modelID, convOpts, req.Project)
+	conversation, releaseCreation, err := s.createProjectConversation(ctx, cwdPtr, &modelID, convOpts, req.Project, setup)
 	if err != nil {
 		s.workspaceHTTPError(w, err)
 		return

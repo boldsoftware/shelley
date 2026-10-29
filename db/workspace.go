@@ -71,6 +71,9 @@ type Workspace struct {
 	Conversations []WorkspaceConversation `json:"conversations"`
 	Runs          []ActionRunSummary      `json:"runs"`
 	VMs           []ConversationVM        `json:"vms"`
+	// BaseVMs are the base VMs Shelley created for projects, which deleting
+	// the project deletes.
+	BaseVMs []ProjectBaseVM `json:"base_vms"`
 }
 
 // EnsureWorkspace serializes singleton creation with all other DB writes.
@@ -495,6 +498,9 @@ func (db *DB) GetWorkspace(ctx context.Context) (*Workspace, error) {
 			return err
 		}
 		if workspace.VMs, err = listConversationVMs(rx, true); err != nil {
+			return err
+		}
+		if workspace.BaseVMs, err = listProjectBaseVMs(rx, ""); err != nil {
 			return err
 		}
 		if err := func() error {
