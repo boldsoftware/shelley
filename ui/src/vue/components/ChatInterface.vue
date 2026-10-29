@@ -1208,7 +1208,6 @@ const upgradeTitle = computed(() => {
 
 const modelUpgrade = computed(() => {
   if (
-    !conversationLive.value ||
     loading.value ||
     props.currentConversation?.archived ||
     props.currentConversation?.parent_conversation_id
@@ -1254,6 +1253,10 @@ const upgradeAllOffer = computed(() => {
 
 async function offerUpgradeAll() {
   const upgrade = modelUpgrade.value!;
+  if (!conversationLive.value) {
+    setSelectedModel(upgrade.to.id);
+    return;
+  }
   const conversationId = props.conversationId!;
   if (!(await switchConversationModel(upgrade.to.id))) return;
   upgradeAllPair.value = {

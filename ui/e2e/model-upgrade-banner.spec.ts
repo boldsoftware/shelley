@@ -33,7 +33,7 @@ async function offerUpgrade(page: Page, state: { dismissed: boolean }) {
     await route.fulfill({ json: withUpgrade(await (await route.fetch()).json()) });
   });
   await page.route(
-    (url) => /^\/c\/[^/]+$/.test(url.pathname),
+    (url) => url.pathname === "/new" || /^\/c\/[^/]+$/.test(url.pathname),
     async (route) => {
       if (route.request().resourceType() !== "document") return route.continue();
       const html = await (await route.fetch()).text();
@@ -63,6 +63,53 @@ function modelsInHtml(html: string): [string, number, number] {
 }
 
 test.describe("model upgrade banner", () => {
+  test("new chats show the upgrade before sending and Switch updates the composer", async ({
+    page,
+  }) => {
+    await offerUpgrade(page, { dismissed: false });
+    await page.addInitScript(() => localStorage.setItem("shelley_selected_model", "predictable"));
+    await page.goto("/new");
+
+    const banner = page.getByTestId("model-upgrade-banner");
+    await expect(banner).toContainText("Newer version of Predictable available");
+    await expect(banner).toContainText("predictable → Predictable Next");
+    await page.getByTestId("model-upgrade-action").click();
+    await expect(banner).toHaveCount(0);
+    await expect(page.locator(".status-field-model .model-picker")).toContainText("Predictable Next");
+    expect(await page.evaluate(() => localStorage.getItem("shelley_selected_model"))).toBe(next.id);
+    await expect(page.getByTestId("model-upgrade-all-banner")).toHaveCount(0);
+  });
+
+  test("unsent drafts show the upgrade and Switch saves the model without sending", async ({
+    page,
+    request,
+  }) => {
+    await offerUpgrade(page, { dismissed: false });
+    const response = await request.post("/api/conversations/draft", {
+      data: { model: "predictable", draft: "Not sent yet" },
+    });
+    expect(response.ok()).toBeTruthy();
+    const draft = await response.json();
+    const switched = page.waitForRequest(
+      (r) =>
+        r.method() === "PUT" &&
+        r.url().endsWith(`/conversation/${draft.conversation_id}/draft`) &&
+        r.postDataJSON().model === next.id,
+    );
+    await page.route(`**/api/conversation/${draft.conversation_id}/draft`, (route) =>
+      route.fulfill({ json: { ...draft, ...route.request().postDataJSON() } }),
+    );
+    await page.goto(`/c/${draft.slug}`);
+
+    await expect(page.getByTestId("model-upgrade-banner")).toContainText(
+      "Newer version of Predictable available",
+    );
+    await page.getByTestId("model-upgrade-action").click();
+    expect((await switched).postDataJSON()).toEqual({ model: next.id });
+    await expect(page.getByTestId("model-upgrade-banner")).toHaveCount(0);
+    await expect(page.getByTestId("message-input")).toHaveValue("Not sent yet");
+  });
+
   test("Switch sends the newer model", async ({ page, request }) => {
     await offerUpgrade(page, { dismissed: false });
     const slug = await createConversationViaAPI(request, "echo: upgrade me");
