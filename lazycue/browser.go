@@ -71,7 +71,6 @@ func NewBrowser(parentCtx context.Context, initScript string) (*Browser, error) 
 	opts := append(
 		chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("disable-dbus", true),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("disable-dev-shm-usage", true),
 		chromedp.WindowSize(viewportWidth, viewportHeight),
