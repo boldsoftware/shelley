@@ -575,7 +575,7 @@ const actionItems = computed<CommandItem[]>(() => {
   });
 
   // Archive current conversation
-  if (props.currentConversation) {
+  if (props.currentConversation && !props.currentConversation.archived) {
     const conv = props.currentConversation;
     items.push({
       id: "archive-conversation",
