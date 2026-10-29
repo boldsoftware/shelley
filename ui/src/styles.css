@@ -14077,6 +14077,7 @@ kbd {
 /* OutputIframeTool styles */
 .output-iframe-wrapper {
   width: 100%;
+  box-sizing: content-box;
   border: 1px solid var(--border);
   border-radius: 4px;
   background-color: var(--bg-base);
