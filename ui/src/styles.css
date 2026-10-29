@@ -17773,3 +17773,25 @@ kbd {
 .terminal-panel:has(.terminal-key-shortcuts) {
   min-height: 140px;
 }
+
+/* The drawer's inline error for a failed row action. */
+.drawer-error {
+  padding: 0 0.75rem;
+}
+
+.error-line {
+  margin: 0.5rem 0;
+  color: var(--error-text);
+  font-size: var(--font-size-13);
+  overflow-wrap: anywhere;
+}
+
+.text-button {
+  padding: 0.2rem 0.4rem;
+  color: var(--link-color);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

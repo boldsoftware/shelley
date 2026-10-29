@@ -166,6 +166,11 @@
       </div>
     </div>
 
+    <p v-if="rowError" class="error-line drawer-error" role="alert">
+      {{ rowError }}
+      <button type="button" class="text-button" @click="rowError = ''">{{ t("dismiss") }}</button>
+    </p>
+
     <div
       v-if="groupBy === 'daily'"
       class="drawer-day-filter"
@@ -644,6 +649,7 @@ import {
 } from "../../utils/tagFilter";
 import type { OfferedTag } from "../../utils/tagFilter";
 import { perfCount } from "../../utils/perf";
+import { errorMessage } from "../../utils/errorMessage";
 
 const props = defineProps<{
   isOpen: boolean;
@@ -670,6 +676,7 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const rowError = ref("");
 
 // --- URL / modified-click helpers ---
 function conversationUrl(conversation: Conversation): string | null {
@@ -1079,9 +1086,10 @@ function toggleSubagents(e: MouseEvent, conversationId: string) {
 async function loadArchivedConversations() {
   loadingArchived.value = true;
   try {
+    rowError.value = "";
     archivedConversations.value = await api.getArchivedConversations();
   } catch (err) {
-    console.error("Failed to load archived conversations:", err);
+    rowError.value = errorMessage(err);
   } finally {
     loadingArchived.value = false;
   }
@@ -1112,23 +1120,25 @@ async function handleArchive(e: MouseEvent, conversationId: string) {
   e.stopPropagation();
   const nextConversation = neighborAfterRemoval(flatVisualOrder, conversationId);
   try {
+    rowError.value = "";
     await api.archiveConversation(conversationId);
     emit("removed", conversationId, nextConversation);
     if (showArchived.value) void loadArchivedConversations();
   } catch (err) {
-    console.error("Failed to archive conversation:", err);
+    rowError.value = errorMessage(err);
   }
 }
 async function handleUnarchive(e: MouseEvent, conversationId: string) {
   e.stopPropagation();
   try {
+    rowError.value = "";
     const conversation = await api.unarchiveConversation(conversationId);
     archivedConversations.value = archivedConversations.value.filter(
       (c) => c.conversation_id !== conversationId,
     );
     emit("unarchived", conversation);
   } catch (err) {
-    console.error("Failed to unarchive conversation:", err);
+    rowError.value = errorMessage(err);
   }
 }
 function handleDeleteClick(e: MouseEvent, conversationId: string) {
@@ -1140,6 +1150,7 @@ async function handleConfirmDelete(e: MouseEvent, conversationId: string) {
   pendingDeleteId.value = null;
   const nextConversation = neighborAfterRemoval(flatVisualOrder, conversationId);
   try {
+    rowError.value = "";
     // The composer's placeholder has nothing saved to delete.
     if (conversationId !== COMPOSER_ROW_ID) await api.deleteConversation(conversationId);
     archivedConversations.value = archivedConversations.value.filter(
@@ -1147,7 +1158,7 @@ async function handleConfirmDelete(e: MouseEvent, conversationId: string) {
     );
     emit("removed", conversationId, nextConversation);
   } catch (err) {
-    console.error("Failed to delete conversation:", err);
+    rowError.value = errorMessage(err);
   }
 }
 function handleCancelDelete(e: MouseEvent) {
@@ -1195,11 +1206,12 @@ async function saveTags(conversationId: string, tags: string[]) {
     normalized.push(trimmed);
   }
   try {
+    rowError.value = "";
     const updated = await api.updateConversationTags(conversationId, normalized);
     emit("renamed", updated);
     await refreshConversationSnapshots(updated);
   } catch (err) {
-    console.error("Failed to update tags:", err);
+    rowError.value = errorMessage(err);
   }
 }
 async function handleAddTag(conversation: Conversation, tag?: string) {
@@ -1293,16 +1305,17 @@ async function handleRename(conversationId: string) {
     (c) => c.slug === sanitized && c.conversation_id !== conversationId,
   );
   if (isDuplicate) {
-    alert(t("duplicateName"));
+    rowError.value = t("duplicateName");
     return;
   }
   editingId.value = null;
   try {
+    rowError.value = "";
     const updated = await api.renameConversation(conversationId, sanitized);
     emit("renamed", updated);
     await refreshConversationSnapshots(updated);
   } catch (err) {
-    console.error("Failed to rename conversation:", err);
+    rowError.value = errorMessage(err);
   }
 }
 function handleRenameKeyDown(e: KeyboardEvent, conversationId: string) {
