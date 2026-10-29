@@ -569,7 +569,7 @@
       ref="contextMenuRef"
       :model="contextMenuItems"
       :aria-label="t('actions')"
-      :pt="{ root: { class: 'drawer-actions-menu', 'data-testid': 'conversation-context-menu' } }"
+      :pt="navMenuPt('conversation-context-menu')"
       @hide="onContextMenuHide"
     />
   </div>
@@ -614,6 +614,7 @@ import ConversationQueryEditor from "./ConversationQueryEditor.vue";
 import Button from "primevue/button";
 import ContextMenu from "primevue/contextmenu";
 import type { MenuItem } from "primevue/menuitem";
+import { navMenuPt } from "./navMenu";
 import DatePicker from "primevue/datepicker";
 import Popover from "primevue/popover";
 import { DrawerCtxKey, type GroupBy, parseTags } from "./conversationDrawerShared";

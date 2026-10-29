@@ -60,29 +60,11 @@
           aria-label="Conversation interrupted"
         />
         <div v-if="hasActions" class="conversation-actions drawer-actions-row drawer-actions-top">
-          <Button
-            class="btn-icon-sm drawer-actions-trigger"
-            text
-            severity="secondary"
-            size="small"
-            v-tooltip.top="{ value: ctx.t('actions'), showDelay: 400, hideDelay: 150 }"
-            :aria-label="ctx.t('actions')"
-            aria-haspopup="menu"
-            :aria-expanded="actionsMenuOpen"
-            @click.stop="toggleActionsMenu"
-          >
-            <OverflowDotsIcon class="drawer-actions-trigger-icon" />
-          </Button>
-          <Menu
+          <NavActionsMenu
             ref="actionsMenuRef"
-            :model="actionsMenuItems"
-            popup
-            :aria-label="ctx.t('actions')"
-            :pt="{
-              root: { class: 'drawer-actions-menu', 'data-testid': 'conversation-actions-menu' },
-            }"
-            @show="actionsMenuOpen = true"
-            @hide="actionsMenuOpen = false"
+            :items="actionsMenuItems"
+            :label="ctx.t('actions')"
+            testid="conversation-actions-menu"
           />
         </div>
       </div>
@@ -437,8 +419,7 @@ import {
   type VNode,
 } from "vue";
 import Button from "primevue/button";
-import Menu from "primevue/menu";
-import OverflowDotsIcon from "./OverflowDotsIcon.vue";
+import NavActionsMenu from "./NavActionsMenu.vue";
 import WorkspaceActionIcon from "./WorkspaceActionIcon.vue";
 import type { Conversation, ConversationWithState } from "../../types";
 import { isImeComposing } from "../../utils/imeComposing";
@@ -463,8 +444,7 @@ const composerPreview = inject(ComposerPreviewKey, null);
 
 const renameInput = ref<HTMLInputElement | null>(null);
 const tagInput = ref<HTMLInputElement | null>(null);
-const actionsMenuRef = ref<InstanceType<typeof Menu> | null>(null);
-const actionsMenuOpen = ref(false);
+const actionsMenuRef = ref<InstanceType<typeof NavActionsMenu> | null>(null);
 const actionsMenuItems = computed(() => ctx.conversationActions(props.conversation));
 
 const convState = computed(() => props.conversation as ConversationWithState);
@@ -621,10 +601,6 @@ function onRowContextMenu(e: MouseEvent) {
 watch(ctx.contextMenuId, (id) => {
   if (id !== null) actionsMenuRef.value?.hide();
 });
-
-function toggleActionsMenu(e: MouseEvent) {
-  actionsMenuRef.value?.toggle(e);
-}
 
 function dispatchParticipantTooltipFocus(target: EventTarget | null, type: "focus" | "blur") {
   if (target instanceof HTMLElement) target.dispatchEvent(new FocusEvent(type));
