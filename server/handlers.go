@@ -576,6 +576,10 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 
 	// Build initialization data
 	modelList := s.getModelList()
+	if err := s.hideDismissedUpgrades(r.Context(), modelList); err != nil {
+		s.internalError(w, "Failed to read dismissed upgrades", err)
+		return
+	}
 	defaultModel := s.effectiveDefaultModel(modelList)
 	markDefaultModel(modelList, defaultModel)
 
@@ -608,14 +612,20 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 	// Note: AGENTS.md content is NOT embedded in init data. It is fetched fresh
 	// via /api/user-agents-md when the editor modal opens so that reopening
 	// after a save shows current disk state, not stale page-load content.
+	promptDone, err := s.db.GetSetting(r.Context(), upgradePromptKey)
+	if err != nil {
+		s.internalError(w, "Failed to read settings", err)
+		return
+	}
 	initData := map[string]interface{}{
-		"models":              modelList,
-		"default_model":       defaultModel,
-		"hostname":            hostname,
-		"default_cwd":         defaultCwd,
-		"home_dir":            homeDir,
-		"user_agents_md_path": userAgentsMdPath,
-		"user_email":          strings.TrimSpace(r.Header.Get("X-ExeDev-Email")),
+		"models":                    modelList,
+		"model_upgrade_prompt_done": promptDone != "",
+		"default_model":             defaultModel,
+		"hostname":                  hostname,
+		"default_cwd":               defaultCwd,
+		"home_dir":                  homeDir,
+		"user_agents_md_path":       userAgentsMdPath,
+		"user_email":                strings.TrimSpace(r.Header.Get("X-ExeDev-Email")),
 		// is_exe_dev lets the UI pick exe.dev-specific setup advice even when
 		// model_setup_hint is absent (the catalog can empty AFTER page load, via
 		// a detached integration plus Refresh).
@@ -2594,16 +2604,24 @@ type ModelInfo struct {
 	// better available sibling (see models.AssignTiers). The UI keeps tier-2
 	// models behind a "more models" affordance. Older iOS/Android clients that
 	// don't know about this field simply ignore it.
-	Tier              int      `json:"tier,omitempty"`
-	SupportsImages    bool     `json:"supports_images"`
-	SupportsReasoning bool     `json:"supports_reasoning"`
-	ReasoningLevels   []string `json:"reasoning_levels,omitempty"`
+	Tier              int           `json:"tier,omitempty"`
+	Upgrade           *ModelUpgrade `json:"upgrade,omitempty"`
+	SupportsImages    bool          `json:"supports_images"`
+	SupportsReasoning bool          `json:"supports_reasoning"`
+	ReasoningLevels   []string      `json:"reasoning_levels,omitempty"`
 	// DefaultReasoningLevel is the reasoning level a conversation gets when it
 	// carries no explicit thinking_level override. Lets the UI label
 	// conversations honestly (e.g. "Reasoning medium") instead of leaving the
 	// badge blank. Empty means the provider picks its own default and Shelley
 	// can't name it up front.
 	DefaultReasoningLevel string `json:"default_reasoning_level,omitempty"`
+}
+
+// ModelUpgrade names the ready model that replaces this one.
+type ModelUpgrade struct {
+	To   string `json:"to"`
+	Kind string `json:"kind"` // "version" | "generation"
+	Line string `json:"line"` // model class, e.g. "Opus"
 }
 
 // handleModelCommand intercepts the built-in "/model" slash command. It
@@ -2939,12 +2957,16 @@ func assignModelTiers(modelList []ModelInfo) {
 		}
 	}
 	tiers := models.AssignTiers(readyIDs)
+	ready := readyBuiltinModels(modelList)
 	for i := range modelList {
 		if modelList[i].Ready {
 			if modelList[i].SourceID != "" || modelList[i].Source == models.SourceCustomLabel {
 				modelList[i].Tier = models.Tier1
 			} else {
 				modelList[i].Tier = tiers[modelList[i].ID]
+				if to, kind, line := models.BestUpgrade(modelList[i].ID, ready); to != "" {
+					modelList[i].Upgrade = &ModelUpgrade{To: to, Kind: string(kind), Line: line}
+				}
 			}
 		}
 	}
@@ -2975,13 +2997,131 @@ func (s *Server) effectiveDefaultModel(modelList []ModelInfo) string {
 // handleModels returns the list of available models
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	modelList := s.getModelList()
+	if err := s.hideDismissedUpgrades(r.Context(), modelList); err != nil {
+		s.internalError(w, "Failed to read dismissed upgrades", err)
+		return
+	}
 	markDefaultModel(modelList, s.effectiveDefaultModel(modelList))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(modelList)
 }
 
+// readyBuiltinModels names the ready built-in models, the only ones an
+// upgrade may point at.
+func readyBuiltinModels(modelList []ModelInfo) map[string]bool {
+	ready := make(map[string]bool, len(modelList))
+	for _, m := range modelList {
+		if m.Ready && m.SourceID == "" && m.Source != models.SourceCustomLabel {
+			ready[m.ID] = true
+		}
+	}
+	return ready
+}
+
+const upgradeDismissedKeyPrefix = "model_upgrade_dismissed:"
+
+// upgradePromptKey records that the "upgrade your other conversations too?"
+// offer has been answered, so it is never made again.
+const upgradePromptKey = "model_upgrade_prompt_done"
+
+// hideDismissedUpgrades drops upgrade suggestions whose target the user
+// dismissed.
+func (s *Server) hideDismissedUpgrades(ctx context.Context, modelList []ModelInfo) error {
+	settings, err := s.db.GetAllSettings(ctx)
+	if err != nil {
+		return err
+	}
+	for i := range modelList {
+		if u := modelList[i].Upgrade; u != nil && settings[upgradeDismissedKeyPrefix+u.To] != "" {
+			modelList[i].Upgrade = nil
+		}
+	}
+	return nil
+}
+
+// handleDismissModelUpgrade stops suggesting `to` as an upgrade, for every
+// conversation.
+func (s *Server) handleDismissModelUpgrade(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		To string `json:"to"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || models.ByID(req.To) == nil {
+		http.Error(w, "to must be a built-in model id", http.StatusBadRequest)
+		return
+	}
+	if err := s.db.SetSetting(r.Context(), upgradeDismissedKeyPrefix+req.To, "1"); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Other open clients should drop the banner too.
+	s.notifyModelsChanged()
+	w.WriteHeader(http.StatusNoContent)
+}
+
 type builtModelRefresher interface {
 	RefreshBuiltModels([]models.Built) error
+}
+
+// handleUpgradeAllModels repeats the switch the user just made, from -> to, on
+// every other conversation still on `from`, then spends the offer.
+// Conversations mid-turn are skipped, since a switch stops the turn.
+func (s *Server) handleUpgradeAllModels(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	ready := readyBuiltinModels(s.getModelList())
+	if to, _, _ := models.BestUpgrade(req.From, ready); to == "" || to != req.To {
+		http.Error(w, "to must be the upgrade offered for from", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	userEmail := r.Header.Get("X-ExeDev-Email")
+	ctx = contextWithUserEmail(ctx, userEmail)
+	items, err := s.db.ListConversations(ctx, 5000, 0)
+	if err != nil {
+		s.internalError(w, "Failed to list conversations", err)
+		return
+	}
+	to := req.To
+	upgraded, skipped := 0, 0
+	for _, item := range items {
+		if item.IsDraft || item.Archived || derefString(item.Model) != req.From {
+			continue
+		}
+		if s.IsAgentWorking(item.ConversationID) {
+			skipped++
+			continue
+		}
+		manager, err := s.getOrCreateConversationManager(ctx, item.ConversationID, userEmail)
+		if err != nil {
+			s.internalError(w, "Failed to reach conversation "+item.ConversationID, err)
+			return
+		}
+		if _, err := s.changeSettings(ctx, manager, SettingsChange{Model: &to}); err != nil {
+			s.internalError(w, "Failed to switch conversation "+item.ConversationID, err)
+			return
+		}
+		upgraded++
+	}
+	if err := s.db.SetSetting(ctx, upgradePromptKey, "1"); err != nil {
+		s.internalError(w, "Failed to record the offer", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"upgraded": upgraded, "skipped": skipped})
+}
+
+// handleDismissUpgradePrompt spends the offer without moving anything.
+func (s *Server) handleDismissUpgradePrompt(w http.ResponseWriter, r *http.Request) {
+	if err := s.db.SetSetting(r.Context(), upgradePromptKey, "1"); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleModelRefresh refreshes the non-custom model catalog and returns the
@@ -3007,6 +3147,10 @@ func (s *Server) handleModelRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 	s.notifyModelsChanged()
 	modelList := s.getModelList()
+	if err := s.hideDismissedUpgrades(r.Context(), modelList); err != nil {
+		s.internalError(w, "Failed to read dismissed upgrades", err)
+		return
+	}
 	markDefaultModel(modelList, s.effectiveDefaultModel(modelList))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(modelList)

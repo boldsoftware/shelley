@@ -7,8 +7,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"shelley.exe.dev/db"
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/predictable"
 	"shelley.exe.dev/models"
@@ -57,7 +59,7 @@ func TestHandleModelsCarriesIntegrationMode(t *testing.T) {
 	if info := mgr.GetModelInfo("subscription"); info == nil || info.Mode != "chatgpt" {
 		t.Fatalf("manager subscription info = %+v, want mode chatgpt", info)
 	}
-	s := &Server{llmManager: mgr, logger: slog.Default()}
+	s := &Server{db: testDB(t), llmManager: mgr, logger: slog.Default()}
 	rec := httptest.NewRecorder()
 	s.handleModels(rec, httptest.NewRequest(http.MethodGet, "/api/models", nil))
 	if requests != 0 {
@@ -123,7 +125,7 @@ func TestHandleModelsIncludesReasoningLevels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager failed: %v", err)
 	}
-	s := &Server{llmManager: mgr, logger: slog.Default()}
+	s := &Server{db: testDB(t), llmManager: mgr, logger: slog.Default()}
 	rec := httptest.NewRecorder()
 	s.handleModels(rec, httptest.NewRequest(http.MethodGet, "/api/models", nil))
 
@@ -154,7 +156,7 @@ func TestHandleModelsReportsMaxContextTokens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager failed: %v", err)
 	}
-	s := &Server{llmManager: mgr, logger: slog.Default()}
+	s := &Server{db: testDB(t), llmManager: mgr, logger: slog.Default()}
 	rec := httptest.NewRecorder()
 	s.handleModels(rec, httptest.NewRequest(http.MethodGet, "/api/models", nil))
 
@@ -186,6 +188,7 @@ func TestHandleModelRefreshReturnsRefreshedModels(t *testing.T) {
 		t.Fatalf("NewManager failed: %v", err)
 	}
 	s := &Server{
+		db:         testDB(t),
 		llmManager: mgr,
 		logger:     slog.Default(),
 		streamPub:  subpub.New[StreamResponse](),
@@ -254,7 +257,7 @@ func TestHandleModelsAssignsTiers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager failed: %v", err)
 	}
-	s := &Server{llmManager: mgr, logger: slog.Default()}
+	s := &Server{db: testDB(t), llmManager: mgr, logger: slog.Default()}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/models", nil)
 	rec := httptest.NewRecorder()
@@ -308,5 +311,131 @@ func TestAssignModelTiersKeepsCustomModelsProminent(t *testing.T) {
 		if model.Tier != want[model.ID] {
 			t.Errorf("%s tier = %d, want %d", model.ID, model.Tier, want[model.ID])
 		}
+	}
+}
+
+func testDB(t *testing.T) *db.DB {
+	t.Helper()
+	database, cleanup := setupTestDB(t)
+	t.Cleanup(cleanup)
+	return database
+}
+
+func TestModelUpgradeDismissedPerTarget(t *testing.T) {
+	mgr, err := models.NewManager(&models.Config{
+		Models: []models.Built{
+			{ID: "claude-opus-4.7", Provider: models.ProviderAnthropic, Service: predictable.NewService()},
+			{ID: "claude-opus-4.8", Provider: models.ProviderAnthropic, Service: predictable.NewService()},
+			{ID: "claude-opus-5.5", Provider: models.ProviderAnthropic, Service: predictable.NewService()},
+		},
+		Logger: slog.Default(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{db: testDB(t), llmManager: mgr, logger: slog.Default()}
+	upgrades := func() map[string]string {
+		rec := httptest.NewRecorder()
+		s.handleModels(rec, httptest.NewRequest(http.MethodGet, "/api/models", nil))
+		var got []ModelInfo
+		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, m := range got {
+			if m.Upgrade != nil {
+				out[m.ID] = m.Upgrade.To
+			}
+		}
+		return out
+	}
+	if got := upgrades(); got["claude-opus-4.7"] != "claude-opus-5.5" || got["claude-opus-4.8"] != "claude-opus-5.5" {
+		t.Fatalf("before dismiss: %v", got)
+	}
+	rec := httptest.NewRecorder()
+	s.handleDismissModelUpgrade(rec, httptest.NewRequest(http.MethodPost, "/api/model-upgrade/dismiss", strings.NewReader(`{"to":"claude-opus-5.5"}`)))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("dismiss status = %d", rec.Code)
+	}
+	if got := upgrades(); len(got) != 0 {
+		t.Fatalf("after dismiss: %v", got)
+	}
+	rec = httptest.NewRecorder()
+	s.handleDismissModelUpgrade(rec, httptest.NewRequest(http.MethodPost, "/api/model-upgrade/dismiss", strings.NewReader(`{"to":"nope"}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown target status = %d", rec.Code)
+	}
+}
+
+func TestUpgradeAllMovesOtherConversations(t *testing.T) {
+	mgr, err := models.NewManager(&models.Config{
+		Models: []models.Built{
+			{ID: "claude-opus-4.7", Provider: models.ProviderAnthropic, Service: predictable.NewService()},
+			{ID: "claude-opus-5.5", Provider: models.ProviderAnthropic, Service: predictable.NewService()},
+			{ID: "claude-opus-4.8", Provider: models.ProviderAnthropic, Service: predictable.NewService()},
+		},
+		Logger: slog.Default(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _, _ := newTestServer(t)
+	s.llmManager = mgr
+	s.predictableOnly = false
+	ctx := context.Background()
+	old := "claude-opus-4.7"
+	newest := "claude-opus-5.5"
+	slug := "behind"
+	behind, err := s.db.CreateConversation(ctx, &slug, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	slug2 := "atop"
+	atop, err := s.db.CreateConversation(ctx, &slug2, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	slug3 := "elsewhere"
+	other, err := s.db.CreateConversation(ctx, &slug3, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// "elsewhere" has the same upgrade but a different model, so it stays.
+	for id, model := range map[string]string{behind.ConversationID: old, atop.ConversationID: newest, other.ConversationID: "claude-opus-4.8"} {
+		rec := httptest.NewRecorder()
+		s.handleConversationSettings(rec, httptest.NewRequest(http.MethodPost, "/api/conversation/"+id+"/settings", strings.NewReader(`{"model":"`+model+`"}`)), id)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("seed %s = %d, body %q", id, rec.Code, rec.Body.String())
+		}
+	}
+	rec := httptest.NewRecorder()
+	s.handleUpgradeAllModels(rec, httptest.NewRequest(http.MethodPost, "/api/model-upgrade/apply-all", strings.NewReader(`{"from":"claude-opus-4.7","to":"claude-opus-4.8"}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("a target that is not the offered upgrade = %d", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	s.handleUpgradeAllModels(rec, httptest.NewRequest(http.MethodPost, "/api/model-upgrade/apply-all", strings.NewReader(`{"from":"claude-opus-4.7","to":"claude-opus-5.5"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %q", rec.Code, rec.Body.String())
+	}
+	if got := rec.Body.String(); got != "{\"skipped\":0,\"upgraded\":1}\n" {
+		t.Fatalf("body = %q", got)
+	}
+	moved, err := s.db.GetConversationByID(ctx, behind.ConversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if derefString(moved.Model) != newest {
+		t.Fatalf("behind model = %q", derefString(moved.Model))
+	}
+	untouched, err := s.db.GetConversationByID(ctx, other.ConversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if derefString(untouched.Model) != "claude-opus-4.8" {
+		t.Fatalf("other model = %q", derefString(untouched.Model))
+	}
+	if done, err := s.db.GetSetting(ctx, upgradePromptKey); err != nil || done == "" {
+		t.Fatalf("prompt key = %q, %v", done, err)
 	}
 }

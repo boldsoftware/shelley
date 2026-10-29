@@ -191,6 +191,41 @@ class ApiService {
     }
   }
 
+  async dismissModelUpgrade(to: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/model-upgrade/dismiss`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify({ to }),
+    });
+    if (!response.ok) {
+      throw await responseError(response, "Failed to dismiss upgrade");
+    }
+  }
+
+  // Moves the other conversations in the family `from` belongs to onto their
+  // upgrades.
+  async upgradeAllModels(from: string, to: string): Promise<{ upgraded: number; skipped: number }> {
+    const response = await fetch(`${this.baseUrl}/model-upgrade/apply-all`, {
+      method: "POST",
+      headers: this.postHeaders,
+      body: JSON.stringify({ from, to }),
+    });
+    if (!response.ok) {
+      throw await responseError(response, "Failed to upgrade other conversations");
+    }
+    return response.json();
+  }
+
+  async dismissUpgradePrompt(): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/model-upgrade/prompt-dismissed`, {
+      method: "POST",
+      headers: this.postHeaders,
+    });
+    if (!response.ok) {
+      throw await responseError(response, "Failed to record the answer");
+    }
+  }
+
   async refreshModels(): Promise<AvailableModel[]> {
     const response = await fetch(`${this.baseUrl}/models/refresh`, {
       method: "POST",

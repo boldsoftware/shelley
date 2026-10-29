@@ -127,6 +127,8 @@ export interface Model {
   // available sibling. The picker keeps tier-2 models behind a "more models"
   // toggle. Absent/0 is treated as tier 1 by the UI.
   tier?: number;
+  // Ready model that replaces this one; kind is "version" or "generation".
+  upgrade?: { to: string; kind: "version" | "generation"; line: string };
   // Reasoning level applied when a conversation carries no explicit
   // thinking_level override. Empty when the provider picks its own default.
   default_reasoning_level?: string;
@@ -268,6 +270,9 @@ export interface InitData {
   // (a gpt-transcribe route exists, e.g. from OPENAI_API_KEY).
   transcription_available?: boolean;
   user_email?: string;
+  // True once the "upgrade your other conversations too?" offer has been
+  // answered, so it is never made again.
+  model_upgrade_prompt_done?: boolean;
   banner?: string; // If set, shown as a top-of-page banner (e.g. to mark demo instances)
 }
 

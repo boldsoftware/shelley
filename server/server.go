@@ -637,6 +637,9 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 
 	// Models API (dynamic list refresh)
 	api.Handle("POST /api/models/refresh", compressionHandler(http.HandlerFunc(s.handleModelRefresh)))
+	api.HandleFunc("POST /api/model-upgrade/dismiss", s.handleDismissModelUpgrade)
+	api.HandleFunc("POST /api/model-upgrade/apply-all", s.handleUpgradeAllModels)
+	api.HandleFunc("POST /api/model-upgrade/prompt-dismissed", s.handleDismissUpgradePrompt)
 	api.Handle("GET /api/models", compressionHandler(http.HandlerFunc(s.handleModels)))
 	api.HandleFunc("GET /api/tools", s.handleTools)
 

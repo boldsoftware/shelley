@@ -48,7 +48,7 @@ func TestThinkingControlsBelongToModelEndpointPair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Server{llmManager: mgr, logger: slog.Default()}
+	s := &Server{db: testDB(t), llmManager: mgr, logger: slog.Default()}
 	rec := httptest.NewRecorder()
 	s.handleModels(rec, httptest.NewRequest(http.MethodGet, "/api/models", nil))
 	var got []ModelInfo

@@ -409,6 +409,33 @@
 
     <StatusHookRow :status="hookStatus" :stale="hookStatusStale" />
 
+    <ModelUpgradeBanner
+      v-if="upgradeAllResultShown"
+      :title="upgradeAllResultShown.text"
+      :detail="upgradeAllResultShown.detail"
+      testid="model-upgrade-all-result"
+      @dismiss="upgradeAllResult = null"
+    />
+    <ModelUpgradeBanner
+      v-else-if="upgradeAllOffer && upgradeAllPair"
+      :title="`Switch your other ${upgradeAllPair.fromName} chats too?`"
+      :detail="`${upgradeAllPair.fromName} → ${upgradeAllPair.toName}`"
+      action="Switch all"
+      testid="model-upgrade-all"
+      @action="upgradeAllOthers"
+      @dismiss="dismissUpgradeOffer"
+    />
+    <ModelUpgradeBanner
+      v-else-if="modelUpgrade"
+      :title="upgradeTitle"
+      :detail="`${modelName(modelUpgrade.from)} → ${modelName(modelUpgrade.to)}`"
+      action="Switch"
+      testid="model-upgrade"
+      :busy="agentWorking"
+      @action="offerUpgradeAll"
+      @dismiss="dismissModelUpgrade(modelUpgrade.to.id)"
+    />
+
     <!-- Status bar -->
     <div :class="statusBarClass">
       <div class="status-bar-content">
@@ -681,6 +708,7 @@ import { focusMessageInput, focusMessageInputIfUnfocused } from "../../utils/foc
 import { buildMessageQuote } from "../../utils/messageQuote";
 import { hasMultipleUsers } from "../../utils/messageAuthors";
 import { tildifyPath } from "../../utils/tildify";
+import { prettyModelName } from "../../utils/modelNames";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
 import { formatDay } from "../../utils/messageTime";
 import {
@@ -778,6 +806,7 @@ import MarkdownContent from "./MarkdownContent.vue";
 import InlineText from "./InlineText.vue";
 import ThinkingContent from "./tools/ThinkingContent.vue";
 import ResourceNotice from "./ResourceNotice.vue";
+import ModelUpgradeBanner from "./ModelUpgradeBanner.vue";
 
 // Props mirror ChatInterfaceProps in the React source. Callbacks that
 // ChatInterface awaits or simply invokes are passed as function props
@@ -1129,9 +1158,11 @@ async function updateConversationSettings(change: SettingsChange) {
 type QueuedChange = SettingsChange | ((s: Settings) => SettingsChange | null);
 let settingsQueue = Promise.resolve<{ id: string; settings: ConversationSettings } | null>(null);
 let settingsQueued = 0;
-function changeConversationSettings(change: QueuedChange) {
+// Resolves true once this change is accepted by the server.
+function changeConversationSettings(change: QueuedChange): Promise<boolean> {
   const id = props.conversationId;
-  if (!id) return;
+  if (!id) return Promise.resolve(false);
+  let accepted = false;
   settingsQueued++;
   settingsQueue = settingsQueue.then(async (prior) => {
     let left = prior?.id === id ? prior : null;
@@ -1143,7 +1174,10 @@ function changeConversationSettings(change: QueuedChange) {
           : props.conversationId === id
             ? change(left?.settings ?? settingsInEffect.value.settings)
             : null;
-      if (c) left = { id, settings: await api.updateConversationSettings(id, c) };
+      if (c) {
+        left = { id, settings: await api.updateConversationSettings(id, c) };
+        accepted = true;
+      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : "Failed to change settings";
       left = null;
@@ -1151,6 +1185,7 @@ function changeConversationSettings(change: QueuedChange) {
     // Once the queue empties, the conversation shows what's in effect.
     return --settingsQueued ? left : null;
   });
+  return settingsQueue.then(() => accepted);
 }
 
 // The open conversation's reasoning level, as the pills name it.
@@ -1158,10 +1193,120 @@ function conversationLevel(): ThinkingLevel {
   return (settingsInEffect.value.settings.thinking_level || "default") as ThinkingLevel;
 }
 
-function switchConversationModel(model: string) {
-  if (model === settingsInEffect.value.settings.model) return;
+// Prefer a name the user set; otherwise prettify, so long ids like
+// "deepseek-v4.1-flash-1017-fireworks" read as "DeepSeek V4.1 Flash 1017".
+function modelName(m: Model): string {
+  return m.display_name && m.display_name !== m.id ? m.display_name : prettyModelName(m.id);
+}
+
+const upgradeTitle = computed(() => {
+  const u = modelUpgrade.value?.from.upgrade;
+  return u?.kind === "generation"
+    ? `New ${u.line} generation available`
+    : `Newer version of ${u?.line} available`;
+});
+
+const modelUpgrade = computed(() => {
+  if (
+    !conversationLive.value ||
+    loading.value ||
+    props.currentConversation?.archived ||
+    props.currentConversation?.parent_conversation_id
+  ) {
+    return null;
+  }
+  const from = models.value.find((m) => m.id === settingsInEffect.value.settings.model);
+  const to = models.value.find((m) => m.id === from?.upgrade?.to);
+  if (!from || !to) return null;
+  return { from, to };
+});
+
+const upgradeAllDone = ref(!!window.__SHELLEY_INIT__?.model_upgrade_prompt_done);
+// The switch just made, to repeat on other chats. Held in a ref because the
+// upgrade itself is gone once the switch lands.
+const upgradeAllPair = ref<{
+  conversationId: string;
+  from: string;
+  to: string;
+  fromName: string;
+  toName: string;
+} | null>(null);
+// What the offer did, shown in the chat it was taken from.
+const upgradeAllResult = ref<{ conversationId: string; text: string; detail?: string } | null>(
+  null,
+);
+const upgradeAllResultShown = computed(() =>
+  upgradeAllResult.value?.conversationId === props.conversationId ? upgradeAllResult.value : null,
+);
+// Offered once ever, in the chat just switched once the server accepted it,
+// and only when some other chat is still on the old model.
+const upgradeAllOffer = computed(() => {
+  const pair = upgradeAllPair.value;
+  return (
+    !upgradeAllDone.value &&
+    !!pair &&
+    pair.conversationId === props.conversationId &&
+    conversations.value.some(
+      (c) => c.model === pair.from && c.conversation_id !== props.conversationId && !c.archived,
+    )
+  );
+});
+
+async function offerUpgradeAll() {
+  const upgrade = modelUpgrade.value!;
+  const conversationId = props.conversationId!;
+  if (!(await switchConversationModel(upgrade.to.id))) return;
+  upgradeAllPair.value = {
+    conversationId,
+    from: upgrade.from.id,
+    to: upgrade.to.id,
+    fromName: modelName(upgrade.from),
+    toName: modelName(upgrade.to),
+  };
+}
+
+async function upgradeAllOthers() {
+  const { conversationId, from, to, fromName, toName } = upgradeAllPair.value!;
+  try {
+    const { upgraded: n, skipped } = await api.upgradeAllModels(from, to);
+    upgradeAllDone.value = true;
+    const chats = (k: number) => `${k} ${k === 1 ? "chat" : "chats"}`;
+    upgradeAllResult.value = {
+      conversationId,
+      text: n
+        ? `✓ Switched ${chats(n)} from ${fromName} to ${toName}`
+        : `No other ${fromName} chats switched`,
+      // Switching would stop their turn, so they keep the old model.
+      detail: skipped ? `Skipped ${chats(skipped)} still running` : undefined,
+    };
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Failed to upgrade other conversations";
+  }
+}
+
+async function dismissUpgradeOffer() {
+  upgradeAllDone.value = true;
+  try {
+    await api.dismissUpgradePrompt();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Failed to record the answer";
+  }
+}
+
+async function dismissModelUpgrade(to: string) {
+  try {
+    await api.dismissModelUpgrade(to);
+    models.value = await api.getModels();
+    if (window.__SHELLEY_INIT__) window.__SHELLEY_INIT__.models = models.value;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Failed to dismiss upgrade";
+  }
+}
+
+function switchConversationModel(model: string): Promise<boolean> {
+  if (model === settingsInEffect.value.settings.model) return Promise.resolve(false);
   // The server rounds the reasoning level to one the model has.
-  changeConversationSettings({ model });
+  return changeConversationSettings({ model });
 }
 
 function switchConversationCombination(
