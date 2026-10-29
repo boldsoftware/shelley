@@ -7,6 +7,7 @@ import * as zlib from "zlib";
 import * as crypto from "crypto";
 import { execSync } from "child_process";
 import wawoff2 from "wawoff2";
+import { Resvg } from "@resvg/resvg-js";
 import { generateShikiLanguageManifest } from "./generate-shiki-language-manifest.mjs";
 
 // Esbuild plugin: rewrite any "monaco-editor*" import (including deep paths
@@ -254,6 +255,20 @@ async function build() {
       }
     }
     fs.writeFileSync("dist/SymbolsNerdFontMono.woff2", await symbolsNerdFont());
+    const appIcon = fs.readFileSync("src/app-icon.svg");
+    for (const [file, size] of [
+      ["icon-192.png", 192],
+      ["icon-512.png", 512],
+      ["apple-touch-icon.png", 180],
+    ]) {
+      const png = new Resvg(appIcon, {
+        fitTo: { mode: "width", value: size },
+        font: { loadSystemFonts: false }, // no text to draw
+      })
+        .render()
+        .asPng();
+      fs.writeFileSync(`dist/${file}`, png);
+    }
 
     // Write build info
     // Get the absolute path to the src directory for staleness checking
