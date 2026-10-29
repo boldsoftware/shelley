@@ -234,6 +234,14 @@ func llmDataForAPI(llmData *string, msgType, messageID string) (*string, *bool) 
 				changed = true
 			}
 		}
+		if msgType == string(db.MessageTypeAgent) && msg.Content[i].Type == llm.ContentTypeToolUse && msg.Content[i].ToolName == claudetool.MessageUserName {
+			// message_user's text is the agent's reply to the user, drawn
+			// from the tool input rather than a text block.
+			if stripped, ok := stripMessageUserCitations(msg.Content[i].ToolInput); ok {
+				msg.Content[i].ToolInput = stripped
+				changed = true
+			}
+		}
 		if msg.Content[i].OpenAIResponsesReasoning != nil {
 			msg.Content[i].OpenAIResponsesReasoning = nil
 			changed = true
@@ -248,6 +256,34 @@ func llmDataForAPI(llmData *string, msgType, messageID string) (*string, *bool) 
 	}
 	s := string(stripped)
 	return &s, endOfTurnPtr
+}
+
+// stripMessageUserCitations strips inline citation markers from a
+// message_user tool input's text, keeping every other field as is. It
+// reports false when there is nothing to change.
+func stripMessageUserCitations(input json.RawMessage) (json.RawMessage, bool) {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(input, &fields) != nil {
+		return nil, false
+	}
+	var text string
+	if json.Unmarshal(fields["text"], &text) != nil {
+		return nil, false
+	}
+	stripped := llm.StripInlineCitationMarkers(text)
+	if stripped == text {
+		return nil, false
+	}
+	b, err := json.Marshal(stripped)
+	if err != nil {
+		return nil, false
+	}
+	fields["text"] = b
+	out, err := json.Marshal(fields)
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 func extractEndOfTurn(raw string) (bool, bool) {
