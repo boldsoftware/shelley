@@ -153,6 +153,7 @@ const props = defineProps<{
   isOpen: boolean;
   conversations: ConversationWithState[];
   currentConversation: ConversationWithState | null;
+  isAssistant?: boolean;
   hasCwd: boolean;
   canRecordAudio: boolean;
   canRecordScreen: boolean;
@@ -575,7 +576,7 @@ const actionItems = computed<CommandItem[]>(() => {
   });
 
   // Archive current conversation
-  if (props.currentConversation && !props.currentConversation.archived) {
+  if (props.currentConversation && !props.isAssistant && !props.currentConversation.archived) {
     const conv = props.currentConversation;
     items.push({
       id: "archive-conversation",

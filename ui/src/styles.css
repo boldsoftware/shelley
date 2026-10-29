@@ -1580,7 +1580,8 @@ body {
   padding: 0.25rem 0.5rem 0.5rem;
 }
 
-.conversation-item {
+.conversation-item,
+.workspace-assistant-row {
   width: 100%;
   text-align: left;
   padding: 0.75rem;
@@ -1593,11 +1594,13 @@ body {
   gap: 0.25rem;
 }
 
-.conversation-item:hover {
+.conversation-item:hover,
+.workspace-assistant-row:hover {
   background: color-mix(in srgb, var(--text-primary) 4%, transparent);
 }
 
-.conversation-item.active {
+.conversation-item.active,
+.workspace-assistant-row.active {
   background: var(--primary);
   color: white;
 }
@@ -1620,7 +1623,8 @@ body {
   font-style: italic;
 }
 
-.conversation-item .conversation-title {
+.conversation-item .conversation-title,
+.workspace-assistant-row .conversation-title {
   font-weight: 500;
   font-size: var(--font-size-14);
   overflow: hidden;
@@ -1628,7 +1632,8 @@ body {
   white-space: nowrap;
 }
 
-.conversation-item .conversation-preview {
+.conversation-item .conversation-preview,
+.workspace-assistant-row .conversation-preview {
   font-size: var(--font-size-12);
   color: var(--text-tertiary);
   overflow: hidden;
@@ -1637,7 +1642,8 @@ body {
   margin-top: 0.125rem;
 }
 
-.conversation-item.active .conversation-preview {
+.conversation-item.active .conversation-preview,
+.workspace-assistant-row.active .conversation-preview {
   color: rgba(255, 255, 255, 0.8);
 }
 
@@ -14224,7 +14230,8 @@ kbd {
   flex-shrink: 0;
 }
 
-.conversation-item .working-indicator {
+.conversation-item .working-indicator,
+.workspace-assistant-row .working-indicator {
   display: inline-block;
   align-self: center;
   width: 7px;
@@ -14235,7 +14242,8 @@ kbd {
   opacity: 1;
 }
 
-.conversation-item.active .working-indicator {
+.conversation-item.active .working-indicator,
+.workspace-assistant-row.active .working-indicator {
   background-color: white;
   color: white;
 }
@@ -14266,7 +14274,8 @@ kbd {
   background: currentColor;
 }
 
-.conversation-item.active .drawer-interrupted-indicator {
+.conversation-item.active .drawer-interrupted-indicator,
+.workspace-assistant-row.active .workspace-assistant-icon {
   color: currentColor;
 }
 
@@ -14434,6 +14443,22 @@ kbd {
 .drawer-actions-menu .p-contextmenu-item-content:hover,
 .drawer-actions-menu .p-contextmenu-item.p-focus > .p-contextmenu-item-content {
   background: var(--bg-hover);
+}
+
+/* With a mouse, a ⋯ shows on the row or heading being pointed at, focused,
+   acted on or open; touch screens always show it. */
+@media (hover: hover) and (pointer: fine) {
+  .workspace-mode
+    :is(.conversation-item, .project-heading):not(
+      .active,
+      .context-menu-target,
+      :hover,
+      :focus-within
+    )
+    .drawer-actions-trigger:not([aria-expanded="true"]) {
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
 }
 
 /* Inline delete confirmation rendered in place of the trash icon. */
@@ -17824,8 +17849,22 @@ kbd {
   min-height: 140px;
 }
 
-/* Projects: the drawer's project groups, a conversation's project header,
-   and the project dialogs. */
+/* The Assistant's row, pinned above the drawer's lists; otherwise styled as a
+   .conversation-item. */
+.workspace-assistant-row {
+  width: auto;
+  flex-shrink: 0;
+  margin: 0.25rem 0.375rem 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.workspace-assistant-icon {
+  margin-right: 0.375rem;
+  color: var(--primary);
+  font-size: var(--font-size-12);
+}
+
 .project-list {
   padding-bottom: 0.5rem;
 }
@@ -17874,7 +17913,8 @@ kbd {
   flex-shrink: 0;
 }
 
-.project-heading .project-icon-button {
+.project-heading .project-icon-button,
+.workspace-mode .drawer-actions-trigger.btn-icon-sm {
   width: 1.5rem;
   height: 1.5rem;
 }
@@ -17985,8 +18025,32 @@ kbd {
   }
 }
 
+/* Workspace mode's drawer is denser. */
+.workspace-mode .drawer-header {
+  padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+}
+
+.workspace-mode .conversation-list,
+.workspace-mode .drawer-day-filter ~ .drawer-body .conversation-list,
+.workspace-mode .drawer-search ~ .drawer-body .conversation-list {
+  padding: 0.25rem 0.375rem;
+}
+
+.workspace-mode .conversation-item,
+.workspace-assistant-row {
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.375rem;
+  margin-bottom: 0.125rem;
+  line-height: 1.4;
+}
+
 /* The mobile drawer keeps finger-sized targets. */
 @media (max-width: 768px) {
+  .workspace-mode .conversation-item,
+  .workspace-assistant-row {
+    padding: 0.5rem 0.625rem;
+  }
+
   .project-toggle {
     padding-block: 0.5rem;
   }

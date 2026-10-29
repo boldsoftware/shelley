@@ -278,6 +278,8 @@ export interface InitData {
   // (a gpt-transcribe route exists, e.g. from OPENAI_API_KEY).
   transcription_available?: boolean;
   user_email?: string;
+  // workspace mode: see utils/workspaceMode.ts.
+  workspace?: boolean;
   // True once the "upgrade your other conversations too?" offer has been
   // answered, so it is never made again.
   model_upgrade_prompt_done?: boolean;

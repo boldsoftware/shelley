@@ -1,6 +1,9 @@
 <template>
   <section
-    v-if="project || (assignable && workspace.data.value?.projects.length)"
+    v-if="
+      (project || (assignable && workspace.data.value?.projects.length)) &&
+      !workspace.isAssistant(conversationId)
+    "
     class="project-header"
     :aria-label="t('project')"
   >

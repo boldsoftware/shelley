@@ -53,8 +53,8 @@
             />
           </svg>
         </Button>
-        <!-- Group by button -->
-        <div v-if="!showArchived" ref="groupMenuRef" class="group-by-wrapper">
+        <!-- Group by button; workspace mode always groups by project -->
+        <div v-if="!workspaceMode && !showArchived" ref="groupMenuRef" class="group-by-wrapper">
           <Button
             :class="`btn-icon${groupBy !== 'none' ? ' group-by-active' : ''}`"
             text
@@ -123,7 +123,7 @@
         </Button>
         <!-- New conversation button -->
         <Button
-          v-if="!showArchived"
+          v-if="!showArchived && !workspaceMode"
           class="btn-icon"
           text
           severity="secondary"
@@ -177,6 +177,30 @@
       </div>
     </div>
 
+    <a
+      v-if="workspace.data.value?.assistant_id"
+      href="/"
+      class="workspace-assistant-row"
+      :class="{ active: workspace.isAssistant(currentConversationId) }"
+      :aria-current="workspace.isAssistant(currentConversationId) ? 'page' : undefined"
+      data-testid="assistant-row"
+      @click="selectAssistant"
+    >
+      <div class="drawer-conversation-item-flex-container">
+        <div class="drawer-conversation-header-row">
+          <div class="conversation-title drawer-conversation-item-flex-container">
+            <i class="pi pi-sparkles workspace-assistant-icon" aria-hidden="true" />Assistant
+          </div>
+          <span
+            v-if="assistantWorking"
+            class="working-indicator"
+            role="status"
+            aria-label="Assistant is working"
+          />
+        </div>
+        <div class="conversation-preview">Your permanent workspace companion</div>
+      </div>
+    </a>
     <p v-if="rowError" class="error-line drawer-error" role="alert">
       {{ rowError }}
       <button type="button" class="text-button" @click="rowError = ''">{{ t("dismiss") }}</button>
@@ -694,6 +718,7 @@ import { workspaceApi, type Project } from "../../services/workspace";
 import DatePicker from "primevue/datepicker";
 import Popover from "primevue/popover";
 import { DrawerCtxKey, type GroupBy, parseTags } from "./conversationDrawerShared";
+import { workspaceMode } from "../../utils/workspaceMode";
 import { workingConversationIds } from "../../utils/workingConversations";
 import type { EphemeralTerminal } from "./terminalTypes";
 import {
@@ -749,6 +774,26 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const workspace = useWorkspace();
 const rowError = ref("");
+const assistantWorking = computed(() =>
+  props.conversations.some(
+    (conversation) => workspace.isAssistant(conversation.conversation_id) && conversation.working,
+  ),
+);
+async function selectAssistant(event: MouseEvent) {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  try {
+    const id = workspace.data.value?.assistant_id;
+    if (!id) throw new Error("Assistant is unavailable");
+    const conversation =
+      props.conversations.find((item) => item.conversation_id === id) ??
+      (await api.getConversationBySlug(id));
+    if (!conversation) throw new Error("Assistant could not be loaded");
+    emit("select-conversation", conversation);
+  } catch (err) {
+    rowError.value = err instanceof Error ? err.message : String(err);
+  }
+}
 // Project ⋯ menus by group, so right-clicking a heading opens its menu.
 const projectMenus = new Map<string, InstanceType<typeof NavActionsMenu>>();
 function setProjectMenu(groupId: string, menu: unknown) {
@@ -892,9 +937,11 @@ const expandedSubagents = ref<Set<string>>(new Set());
 // clears its choice, so the new conversation always shows. Only the active,
 // unfiltered list shows empty projects; archived and filtered views drop them.
 const groupFoldChoices = ref<Map<string, boolean>>(new Map());
-// "project" groups by project (see the workspace).
+// "project" groups by project (see the workspace); workspace mode
+// always does, and offers no other grouping.
 const groupBy = ref<GroupBy>(
   (() => {
+    if (workspaceMode) return "project";
     const stored = localStorage.getItem("shelley-group-by");
     return stored === "cwd" ||
       stored === "git_repo" ||
@@ -963,7 +1010,9 @@ const groupByOptions = computed<GroupBy[]>(() =>
     ? ["none", "cwd", "git_repo", "tag", "daily", "project", "participants"]
     : ["none", "cwd", "git_repo", "tag", "daily", "project"],
 );
-let participantDefaultsSeeded = false;
+// Workspace mode never seeds it: conversations the Assistant or the API start
+// have no human author, so a user: filter would hide them.
+let participantDefaultsSeeded = workspaceMode;
 watch(
   multipleParticipantsAvailable,
   (available) => {
@@ -1222,6 +1271,7 @@ const formatCwdForDisplay = tildifyPath;
 // --- Archive / unarchive / delete ---
 async function handleArchive(e: MouseEvent, conversationId: string) {
   e.stopPropagation();
+  if (workspace.isAssistant(conversationId)) return;
   const nextConversation = neighborAfterRemoval(flatVisualOrder, conversationId);
   try {
     rowError.value = "";
@@ -1352,12 +1402,15 @@ async function handleRemoveTag(conversation: Conversation, tag: string) {
 // --- Row actions ---
 function conversationActions(conversation: Conversation): MenuItem[] {
   const id = conversation.conversation_id;
+  if (workspace.isAssistant(id)) return [];
+  const archive: MenuItem = {
+    label: t("archive"),
+    icon: "pi pi-inbox",
+    command: ({ originalEvent }) => void handleArchive(originalEvent as MouseEvent, id),
+  };
+  // Stock Shelley lists Archive first; workspace mode sets it apart, last.
   const items: MenuItem[] = [
-    {
-      label: t("archive"),
-      icon: "pi pi-inbox",
-      command: ({ originalEvent }) => void handleArchive(originalEvent as MouseEvent, id),
-    },
+    ...(workspaceMode ? [] : [archive]),
     {
       label: t("rename"),
       icon: "pi pi-pencil",
@@ -1385,6 +1438,7 @@ function conversationActions(conversation: Conversation): MenuItem[] {
       })),
     });
   }
+  if (workspaceMode) items.push({ separator: true }, archive);
   return items;
 }
 const workingIds = computed(() => workingConversationIds(props.conversations));
@@ -1610,7 +1664,9 @@ const stableTopLevelConversations = computed(() => {
   resetOrderRefsForResort();
   void resortKey.value;
   const sorted = sortConversationsByBucket(
-    props.conversations.filter((c) => !c.parent_conversation_id),
+    props.conversations.filter(
+      (c) => !c.parent_conversation_id && !workspace.isAssistant(c.conversation_id),
+    ),
   );
   const { items, order } = applyStableOrder(sorted, topOrder);
   topOrder = order;
@@ -1659,7 +1715,9 @@ const draftLabels = computed<Record<string, string>>(() => {
 const stableArchivedConversations = computed(() => {
   resetOrderRefsForResort();
   void resortKey.value;
-  const sorted = sortConversationsByBucket(archivedConversations.value);
+  const sorted = sortConversationsByBucket(
+    archivedConversations.value.filter((c) => !workspace.isAssistant(c.conversation_id)),
+  );
   const { items, order } = applyStableOrder(sorted, archivedOrder);
   archivedOrder = order;
   return filterConversationsByQuery(
@@ -1720,7 +1778,10 @@ const displayedConversations = computed<(Conversation | ConversationWithState)[]
   if (isSearching.value)
     return filterConversationsByQuery(
       filterConversationsByParticipantQuery(
-        filterConversationsByDay(searchResults.value ?? [], selectedDay.value),
+        filterConversationsByDay(
+          (searchResults.value ?? []).filter((c) => !workspace.isAssistant(c.conversation_id)),
+          selectedDay.value,
+        ),
         selectedUsers.value,
         parsedQuery.value.includeUnattributed,
       ),
@@ -1744,13 +1805,18 @@ const cacheActiveTopLevelRows = computed(
 const tagFilterPool = computed<ConversationWithParticipants[]>(() => {
   if (isSearching.value)
     return filterConversationsByParticipantQuery(
-      filterConversationsByDay(searchResults.value ?? [], selectedDay.value),
+      filterConversationsByDay(
+        (searchResults.value ?? []).filter((c) => !workspace.isAssistant(c.conversation_id)),
+        selectedDay.value,
+      ),
       selectedUsers.value,
       parsedQuery.value.includeUnattributed,
     );
   const pool = showArchived.value
     ? archivedConversations.value
-    : props.conversations.filter((c) => !c.parent_conversation_id);
+    : props.conversations.filter(
+        (c) => !c.parent_conversation_id && !workspace.isAssistant(c.conversation_id),
+      );
   return filterConversationsByParticipantQuery(
     filterConversationsByDay(pool, selectedDay.value),
     selectedUsers.value,
@@ -1969,6 +2035,7 @@ const projectGroups = computed(() => {
     conversations: [] as Conversation[],
   };
   for (const conversation of displayedConversations.value) {
+    if (workspace.isAssistant(conversation.conversation_id)) continue;
     const project =
       memberships.get(conversation.conversation_id) ??
       (conversation.parent_conversation_id

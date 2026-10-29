@@ -74,6 +74,7 @@ export function createWorkspaceState(t: Translate) {
     newProjectConversation: (project = "") => {
       conversationCreator.value = { project };
     },
+    isAssistant: (id: string | null | undefined) => !!id && id === data.value?.assistant_id,
     /** What deleting a project does, or why it can't yet (blocker). */
     deletionPlan: (project: Project) => projectDeletionPlan(data.value, project, t),
     projectFor: (id: string | null | undefined) => {

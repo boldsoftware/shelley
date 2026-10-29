@@ -136,3 +136,29 @@ func TestPublishConversationStateWaitsForDelegatedWork(t *testing.T) {
 		})
 	}
 }
+
+func TestPublishConversationStateSkipsAssistant(t *testing.T) {
+	t.Parallel()
+	server, database, _ := newTestServer(t)
+	ch := &recordingChannel{}
+	server.RegisterNotificationChannel(ch)
+
+	db.EnableWorkspaceMode(t, server.db)
+	assistantID, err := server.ensureWorkspace(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	conv, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server.publishConversationState(ConversationState{ConversationID: assistantID, Model: "predictable"})
+	if n := ch.count(); n != 0 {
+		t.Fatalf("Assistant turn end notified %d times", n)
+	}
+	server.publishConversationState(ConversationState{ConversationID: conv.ConversationID, Model: "predictable"})
+	if n := ch.count(); n != 1 {
+		t.Fatalf("project conversation turn end notified %d times, want 1", n)
+	}
+}

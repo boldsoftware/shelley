@@ -1,6 +1,9 @@
 package server
 
-import "shelley.exe.dev/featureflags"
+import (
+	"shelley.exe.dev/db"
+	"shelley.exe.dev/featureflags"
+)
 
 // FlagPerformanceHUD overlays a small heads-up display in the web UI showing
 // live counters of hot reactive recomputations (message coalescing, render
@@ -12,5 +15,15 @@ import "shelley.exe.dev/featureflags"
 var FlagPerformanceHUD = featureflags.Register(featureflags.Flag{
 	Name:        "performance-hud",
 	Description: "Show a heads-up display of UI recomputation counters (also available via __shelleyPerf in the console).",
+	Default:     false,
+})
+
+// FlagWorkspace turns on workspace mode: a pinned Assistant at / that routes
+// work into projects, and the drawer grouped by project by default. Set at
+// VM creation (POST /feature-flags {"name":"workspace","value":true}); the
+// page and server read it on each load.
+var FlagWorkspace = featureflags.Register(featureflags.Flag{
+	Name:        db.WorkspaceFlag,
+	Description: "Workspace mode: a pinned Assistant routes work into projects.",
 	Default:     false,
 })

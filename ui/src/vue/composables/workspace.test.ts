@@ -8,6 +8,7 @@ import { createWorkspaceState, projectDeletionPlan } from "./workspace";
 const translate = (key: keyof TranslationKeys) => en[key];
 
 const empty = (): Workspace => ({
+  assistant_id: "assistant",
   projects: [
     {
       name: "Blog",
@@ -15,7 +16,9 @@ const empty = (): Workspace => ({
       cwd: "/tmp",
     },
   ],
-  conversations: [{ conversation_id: "task", project: "Blog", archived: false }],
+  conversations: [
+    { conversation_id: "task", project: "Blog", is_assistant: false, archived: false },
+  ],
 });
 function harness(t: TestContext) {
   const workspace = createWorkspaceState(translate);
@@ -28,8 +31,10 @@ test("identical snapshots preserve references", async (t) => {
   const fetch = t.mock.method(workspaceApi, "workspace", async () => empty());
   await workspace.refresh();
   const first = workspace.data.value;
+  assert.equal(workspace.isAssistant("assistant"), true);
+  assert.equal(workspace.isAssistant(null), false);
   assert.equal(workspace.projectFor("task")?.name, "Blog");
-  assert.equal(workspace.projectFor("plain"), undefined);
+  assert.equal(workspace.projectFor("assistant"), undefined);
   await workspace.refresh();
   assert.equal(fetch.mock.callCount(), 2);
   assert.equal(workspace.data.value, first, "unchanged workspace does not rerender projects");
@@ -66,7 +71,9 @@ test("mutations during a refresh coalesce into one fresh follow-up snapshot", as
     return Promise.resolve({
       ...empty(),
       projects: [{ ...empty().projects[0], name: "Renamed" }],
-      conversations: [{ conversation_id: "task", project: "Renamed", archived: false }],
+      conversations: [
+        { conversation_id: "task", project: "Renamed", is_assistant: false, archived: false },
+      ],
     });
   });
   const pending = workspace.refresh();

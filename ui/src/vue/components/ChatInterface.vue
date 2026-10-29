@@ -52,11 +52,11 @@
         <!-- Overflow menu (PrimeVue Popover + Select) -->
         <ChatOverflowMenu
           :has-cwd="hasCwd"
-          :show-directory="isMobile"
+          :show-directory="isMobile && !isAssistant"
           :cwd="currentConversation?.cwd || selectedCwd"
           :links="links"
           :can-archive="
-            !!(conversationId && onArchiveConversation && !currentConversation?.archived)
+            !!(conversationId && onArchiveConversation && !currentConversation?.archived && !isAssistant)
           "
           :can-export="!!(conversationId && messages.length > 0)"
           :has-update="hasUpdate"
@@ -162,7 +162,17 @@
           <!-- empty state -->
           <div v-if="conversationOptions.kind !== 'search' && messages.length === 0 && liveExchangeTurns.length === 0" class="empty-state">
             <div class="empty-state-content">
-              <p class="text-base chat-welcome-text">
+              <template v-if="isAssistant">
+                <h2 class="text-primary">What would you like to get done?</h2>
+                <p class="chat-welcome-text">
+                  Ask a quick question, or describe a project. I’ll answer here or start a task in
+                  the right project.
+                </p>
+                <p class="text-sm chat-secondary-text">
+                  Each project keeps its own instructions and working directory.
+                </p>
+              </template>
+              <p v-else class="text-base chat-welcome-text">
                 <template v-for="(part, i) in welcomeParts" :key="i">
                   <strong v-if="part === '{hostname}'">{{ hostname }}</strong>
                   <a
@@ -228,7 +238,7 @@
                 </ul>
                 <p v-if="modelSetupHint.footer">{{ t(modelSetupHint.footer) }}</p>
               </PvMessage>
-              <p v-else-if="voicePhase === 'idle'" class="text-sm chat-secondary-text">
+              <p v-else-if="!isAssistant && voicePhase === 'idle'" class="text-sm chat-secondary-text">
                 {{
                   t(
                     canSendWithModel(selectedModel, readyModelIds, providerIds)
@@ -637,6 +647,7 @@
 <script setup lang="ts">
 import { provideIframeVersions } from "../composables/iframeVersions";
 import ProjectHeader from "./ProjectHeader.vue";
+import { handleModifiedNavClick } from "../utils/openInNewTab";
 import {
   computed,
   inject,
@@ -718,10 +729,10 @@ import { closeMarkdownDoc, useMarkdownDoc } from "../composables/markdownDoc";
 import { isImeComposing } from "../../utils/imeComposing";
 import { focusMessageInput, focusMessageInputIfUnfocused } from "../../utils/focusMessageInput";
 import { buildMessageQuote } from "../../utils/messageQuote";
+import { conversationTitle } from "../../utils/conversationTitle";
 import { hasMultipleUsers } from "../../utils/messageAuthors";
 import { tildifyPath } from "../../utils/tildify";
 import { prettyModelName } from "../../utils/modelNames";
-import { handleModifiedNavClick } from "../utils/openInNewTab";
 import { formatDay } from "../../utils/messageTime";
 import {
   clearConversationViewCache,
@@ -832,6 +843,8 @@ const props = withDefaults(
     onResourceStatus?: (status: ResourceStatus) => void;
     onOpenDrawer: () => void;
     onNewConversation: () => Promise<boolean>;
+    onNewProjectConversation?: () => void;
+    isAssistant?: boolean;
     onSelectConversation?: (conversation: Conversation) => void;
     onArchiveConversation?: (conversationId: string) => Promise<void>;
     currentConversation?: Conversation;
@@ -2392,7 +2405,9 @@ const contextNudgesOn = computed(
 );
 
 const displayTitle = computed(() => {
-  const title = props.currentConversation?.slug || "Shelley";
+  if (props.isAssistant) return "Assistant";
+  const slug = props.currentConversation?.slug;
+  const title = slug ? conversationTitle(slug) : "Shelley";
   if (props.currentConversation?.archived) return `${title} (archived)`;
   return title;
 });
@@ -4195,7 +4210,7 @@ function openExport() {
   window.open(`/export/${props.conversationId}`, "_blank", "noopener");
 }
 async function archiveFromMenu() {
-  if (!props.conversationId || !props.onArchiveConversation) return;
+  if (!props.conversationId || !props.onArchiveConversation || props.isAssistant) return;
   try {
     await props.onArchiveConversation(props.conversationId);
   } catch (err) {
@@ -4242,7 +4257,8 @@ function handleMenuShortcut(e: KeyboardEvent) {
       if (
         !props.conversationId ||
         !props.onArchiveConversation ||
-        props.currentConversation?.archived
+        props.currentConversation?.archived ||
+        props.isAssistant
       )
         return;
       void archiveFromMenu();
@@ -4262,6 +4278,10 @@ function handleMenuShortcut(e: KeyboardEvent) {
 }
 
 function onNewConversationClick(e: MouseEvent) {
+  if (props.onNewProjectConversation) {
+    props.onNewProjectConversation();
+    return;
+  }
   if (handleModifiedNavClick(e, "/new")) return;
   props.onNewConversation();
 }
@@ -4532,6 +4552,7 @@ const statusContentProps = computed(() => {
     thinkingLevel: conversationLive.value ? conversationLevel() : thinkingLevel.value,
     knob: knob.value,
     cwdError: cwdError.value,
+    isAssistant: props.isAssistant,
     onUnarchive: handleUnarchive,
     onClearError: () => (error.value = null),
     onCancel: handleCancel,

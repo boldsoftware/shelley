@@ -18,7 +18,8 @@ type Project struct {
 	// Name is the profile's name.
 	Name string `json:"name"`
 	// Instructions are appended to every request of the project's
-	// conversations, like an AGENTS.md.
+	// conversations, like an AGENTS.md; their start is what the Assistant
+	// routes on.
 	Instructions string `json:"instructions"`
 	Cwd          string `json:"cwd"`
 }

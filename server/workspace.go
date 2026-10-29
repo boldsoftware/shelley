@@ -10,9 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
+	"shelley.exe.dev/ui"
 )
 
 // mu serializes starting an agent turn with project moves.
@@ -21,6 +23,77 @@ type workspaceState struct {
 	// New conversations are fenced until their first-message pipeline has
 	// either accepted the turn or returned an error.
 	initializing map[string]bool
+
+	// assistantID is the Assistant's id, "" outside workspace mode, as of
+	// the last ensureWorkspace.
+	assistantID atomic.Pointer[string]
+}
+
+// ensureWorkspace, in workspace mode, creates the Assistant if there is
+// none yet. It returns the Assistant's id, or "" outside workspace mode,
+// and keeps it for assistantID. It runs at startup and when the workspace
+// flag changes, so requests never create the Assistant.
+func (s *Server) ensureWorkspace(ctx context.Context) (id string, err error) {
+	defer func() {
+		if err == nil {
+			s.workspace.assistantID.Store(&id)
+		}
+	}()
+	// Initialization belongs to the server, not to the first HTTP client's
+	// lifetime. An aborted request must not poison the workspace forever.
+	ctx = context.WithoutCancel(ctx)
+	if on, err := s.db.WorkspaceMode(ctx); err != nil || !on {
+		return "", err
+	}
+	if id, err := s.db.GetAssistantID(ctx); !errors.Is(err, sql.ErrNoRows) {
+		return id, err
+	}
+	// The workspace Assistant texts like the shipped Assistant profile and
+	// follows its edits until its own settings change.
+	profile := "Assistant"
+	settings, err := s.newConversationSettings(ctx, SettingsChange{Profile: &profile}, s.getModelList())
+	if err != nil {
+		return "", fmt.Errorf("workspace Assistant settings: %w", err)
+	}
+	var opts db.ConversationOptions
+	settings.applyTo(&opts)
+	return s.db.EnsureWorkspace(ctx, settings.Model, opts)
+}
+
+// assistantID returns the Assistant's id, or "" outside workspace mode.
+func (s *Server) assistantID() string {
+	if id := s.workspace.assistantID.Load(); id != nil {
+		return *id
+	}
+	return ""
+}
+
+// isAssistant reports whether conversationID is the workspace Assistant.
+func (s *Server) isAssistant(conversationID string) bool {
+	id := s.assistantID()
+	return id != "" && id == conversationID
+}
+
+// workspaceFlagChanged loads the workspace for the new value of its flag,
+// and has open pages reload (see uiBuild), since the page reads the mode
+// only when it loads.
+func (s *Server) workspaceFlagChanged(ctx context.Context) error {
+	if _, err := s.ensureWorkspace(ctx); err != nil {
+		return err
+	}
+	if s.streamPub != nil {
+		s.streamPub.Broadcast(StreamResponse{UIBuild: s.uiBuild()})
+	}
+	return nil
+}
+
+// uiBuild is the page's build: the UI's, and whether it is in workspace
+// mode, so toggling the mode makes open pages stale.
+func (s *Server) uiBuild() string {
+	if s.assistantID() != "" {
+		return ui.BuildID() + "+workspace"
+	}
+	return ui.BuildID()
 }
 
 func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
@@ -37,8 +110,9 @@ func (s *Server) notifyWorkspaceChanged() {
 	}
 }
 
-// inProject reports whether conversation id is in a project. The workspace
-// lists those, so creating, archiving, unarchiving or deleting one changes it.
+// inProject reports whether conversation id is in a project (or is the
+// Assistant). The workspace lists those, so creating, archiving,
+// unarchiving or deleting one changes it.
 func (s *Server) inProject(ctx context.Context, id string) (bool, error) {
 	_, err := s.db.GetWorkspaceConversation(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -177,6 +251,7 @@ func (s *Server) handleMoveConversation(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "project is required", http.StatusBadRequest)
 		return
 	}
+	// db.MoveConversation refuses the Assistant.
 	id := r.PathValue("id")
 	manager, err := s.getOrCreateConversationManager(r.Context(), id, r.Header.Get("X-ExeDev-Email"))
 	if err != nil {

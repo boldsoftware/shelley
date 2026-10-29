@@ -425,8 +425,9 @@ type Server struct {
 	channelClient *http.Client
 	// channelDebug is the in-memory chat service behind /debug/channels.
 	channelDebug      channelDebug
-	listenPort        int    // TCP port the server is listening on
-	socketPath        string // Unix socket the server listens on, or ""
+	listenPort        int                    // TCP port the server is listening on
+	webOrigin         atomic.Pointer[string] // see rememberWebOrigin
+	socketPath        string                 // Unix socket the server listens on, or ""
 	terminals         *TerminalSessions
 	mcp               *mcp.Manager
 	exitDelay         time.Duration
@@ -1687,7 +1688,10 @@ func (s *Server) publishConversationState(state ConversationState) {
 		// (push, email, discord, ntfy) and hooks, same as subagents. So do
 		// channel conversations, which the user follows in the chat.
 		notifyDisabled := convErr == nil && (db.ParseConversationOptions(conv.ConversationOptions).DisableNotifications || conv.ExternalConversationID != nil)
-		suppressNotify := isSubagent || notifyDisabled
+		// The workspace Assistant talks to the user directly (message_user),
+		// so its turn ends are not announced: no push to iOS (exe.dev notify
+		// gateway or app hooks), channels, or browser.
+		suppressNotify := isSubagent || notifyDisabled || s.isAssistant(state.ConversationID)
 		if !suppressNotify {
 			// Work still running for this conversation will wake it again when
 			// it finishes, so that later turn is the one worth notifying about.
@@ -1896,11 +1900,30 @@ func (s *Server) Start(port string) error {
 // reverse order: last added = first executed).
 func (s *Server) tcpHandler(mux http.Handler) http.Handler {
 	h := LoggerMiddleware(s.logger)(mux)
+	h = s.rememberWebOrigin(h)
 	h = http.NewCrossOriginProtection().Handler(h)
 	if s.requireHeader != "" {
 		h = RequireHeaderMiddleware(s.requireHeader)(h)
 	}
 	return h
+}
+
+// rememberWebOrigin, in workspace mode, records the origin the user's
+// browser reaches Shelley at, behind whatever proxy, so the Assistant can
+// send full links to it. The latest browser request wins.
+func (s *Server) rememberWebOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.assistantID() == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if origin := r.Header.Get("Origin"); origin != "" && r.Header.Get("Sec-Fetch-Site") == "same-origin" {
+			if cur := s.webOrigin.Load(); cur == nil || *cur != origin {
+				s.webOrigin.Store(&origin)
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // StartWithListeners starts the HTTP server on the given web listener (TCP, or
@@ -1926,6 +1949,12 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 		s.logger.Error("Failed to recover agent_working state; serving anyway", "error", err)
 	} else if err != nil {
 		s.logger.Error("Failed to recover agent_working state", "error", err)
+		return err
+	}
+
+	// Workspace mode's Assistant exists before any request needs it.
+	if _, err := s.ensureWorkspace(context.Background()); err != nil {
+		s.logger.Error("Failed to load the workspace", "error", err)
 		return err
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sync"
 	"testing"
 
 	"shelley.exe.dev/db/generated"
@@ -18,6 +19,148 @@ func newDBTestConversation(t *testing.T, database *DB, project, cwd string) stri
 		t.Fatal(err)
 	}
 	return conversation.ConversationID
+}
+
+func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
+	t.Parallel()
+	database, cleanup := NewTestDB(t)
+	defer cleanup()
+	ctx := t.Context()
+	if on, err := database.WorkspaceMode(ctx); err != nil || on {
+		t.Fatalf("a new database in workspace mode: %v %v", on, err)
+	}
+	EnableWorkspaceMode(t, database)
+	cwd := t.TempDir()
+	slug, model := "keep-this-task", "predictable"
+	opts := ConversationOptions{SystemPrompt: "Preserve me", ThinkingLevel: "high"}
+	active, err := database.CreateConversation(ctx, &slug, true, &cwd, &model, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archived, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.ArchiveConversation(ctx, archived.ConversationID); err != nil {
+		t.Fatal(err)
+	}
+	internal, err := database.CreateConversation(ctx, nil, false, nil, nil, ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	channel, err := database.CreateChannelConversation(ctx, "external", "https://chat.invalid", model, ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var child generated.Conversation
+	if err := database.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		var err error
+		child, err = generated.New(tx.Conn()).CreateSubagentConversation(ctx, generated.CreateSubagentConversationParams{
+			ConversationID: "child-task", ParentConversationID: &active.ConversationID,
+		})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	type result struct {
+		id  string
+		err error
+	}
+	start := make(chan struct{})
+	results := make(chan result, 16)
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Go(func() {
+			<-start
+			id, err := database.EnsureWorkspace(ctx, model, ConversationOptions{ThinkingLevel: "medium"})
+			results <- result{id, err}
+		})
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	var assistantID string
+	for result := range results {
+		if result.err != nil {
+			t.Fatal(result.err)
+		}
+		if assistantID == "" {
+			assistantID = result.id
+		} else if assistantID != result.id {
+			t.Fatalf("different assistants: %q and %q", assistantID, result.id)
+		}
+	}
+	workspace, err := database.GetWorkspace(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workspace.AssistantID != assistantID || len(workspace.Projects) != 0 || len(workspace.Conversations) != 1 {
+		t.Fatalf("unexpected workspace: %+v", workspace)
+	}
+	// Existing conversations are in no project.
+	for _, id := range []string{active.ConversationID, archived.ConversationID, internal.ConversationID, child.ConversationID, channel.ConversationID} {
+		if _, err := database.GetWorkspaceConversation(ctx, id); !errors.Is(err, sql.ErrNoRows) {
+			t.Fatalf("conversation %s in a project: %v", id, err)
+		}
+	}
+	assistant, err := database.GetConversationByID(ctx, assistantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if assistant.Model == nil || *assistant.Model != model || assistant.Cwd != nil ||
+		!assistant.UserInitiated || assistant.ParentConversationID != nil ||
+		ParseConversationOptions(assistant.ConversationOptions).ThinkingLevel != "medium" {
+		t.Fatalf("unexpected assistant: %+v", assistant)
+	}
+	meta, err := database.GetWorkspaceConversation(ctx, assistantID)
+	if err != nil || !meta.IsAssistant || meta.Project != "" {
+		t.Fatalf("assistant metadata: %+v %v", meta, err)
+	}
+	// Outside workspace mode there is no Assistant; it's an ordinary
+	// conversation, which a project can take.
+	if err := database.SetFeatureFlagOverride(ctx, WorkspaceFlag, "false"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.GetAssistantID(ctx); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("assistant outside workspace mode: %v", err)
+	}
+	if _, err := database.GetWorkspaceConversation(ctx, assistantID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("assistant metadata outside workspace mode: %v", err)
+	}
+	if w, err := database.GetWorkspace(ctx); err != nil || w.AssistantID != "" || len(w.Projects) != 0 {
+		t.Fatalf("workspace outside workspace mode: %+v %v", w, err)
+	}
+	EnableWorkspaceMode(t, database)
+	unchanged, err := database.GetConversationByID(ctx, active.ConversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *unchanged.Slug != slug || *unchanged.Cwd != cwd || *unchanged.Model != model ||
+		unchanged.ConversationOptions != active.ConversationOptions || unchanged.Archived {
+		t.Fatalf("workspace setup changed original conversation: %+v", unchanged)
+	}
+	newConversation, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.EnsureWorkspace(ctx, "different-model", ConversationOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.GetWorkspaceConversation(ctx, newConversation.ConversationID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("new conversation in a project: %v", err)
+	}
+	var count int
+	if err := database.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		return rx.QueryRow("SELECT count(*) FROM conversations WHERE conversation_id NOT IN (?,?,?,?,?,?)",
+			active.ConversationID, archived.ConversationID, internal.ConversationID, child.ConversationID, channel.ConversationID, newConversation.ConversationID).Scan(&count)
+	}); err != nil || count != 1 {
+		t.Fatalf("orphan assistants: count=%d err=%v", count, err)
+	}
+	AddTestProject(t, database, "Docs")
+	if err := database.MoveConversation(ctx, assistantID, "Docs"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("assistant move: %v", err)
+	}
 }
 
 func TestProjectLifecycleAndValidation(t *testing.T) {

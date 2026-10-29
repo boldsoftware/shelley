@@ -2,37 +2,104 @@ import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { createConversationViaAPIWithDetails, testWorkingDirectory } from "./helpers";
 
-const headers = { "X-Shelley-Request": "1" };
+// These specs exercise workspace mode, which each test turns on before its
+// page loads and off again so the worker's other specs see stock Shelley.
+test.beforeEach(async ({ request }) => {
+  const resp = await request.post("/feature-flags", { data: { name: "workspace", value: true } });
+  expect(resp.ok()).toBeTruthy();
+});
+test.afterEach(async ({ request }) => {
+  const resp = await request.delete("/feature-flags", { data: { name: "workspace" } });
+  expect(resp.ok()).toBeTruthy();
+});
 
-// Opens the drawer grouped by project, where projects are managed.
-async function openProjects(page: Page) {
-  await page.getByRole("button", { name: "Open conversations", exact: true }).click();
-  await page.getByRole("button", { name: "Group conversations" }).click();
-  await page
-    .locator(".group-by-menu-item")
-    .filter({ hasText: /^Project$/ })
-    .click();
-  await expect(page.getByRole("button", { name: "New project", exact: true })).toBeVisible();
+async function openWorkspace(page: Page) {
+  if (!(await page.locator(".drawer").isVisible())) {
+    await page.getByRole("button", { name: "Open tasks", exact: true }).click();
+  } else if (await page.getByRole("button", { name: "Open tasks", exact: true }).isVisible()) {
+    await page.getByRole("button", { name: "Open tasks", exact: true }).click();
+  }
+  await expect(page.getByTestId("assistant-row")).toBeVisible();
 }
 
-test("create, edit and delete a project; start a conversation in it", async ({ page, request }) => {
-  const plain = await createConversationViaAPIWithDetails(request, "Hello");
-  await page.goto(`/c/${plain.conversationId}`);
-  // Without projects, a conversation shows no project picker. Other specs on
-  // this worker's server may have made some.
-  await expect(page.getByTestId("message-input")).toBeEnabled();
-  const before = (await (await request.get("/api/workspace")).json()) as { projects: unknown[] };
-  if (!before.projects.length) {
-    await expect(page.getByLabel("Conversation project", { exact: true })).toHaveCount(0);
-  }
-  await openProjects(page);
+test("root opens the pinned Assistant; explicit conversation links remain selected", async ({
+  page,
+  request,
+}) => {
+  const conversation = await createConversationViaAPIWithDetails(request, "Hello");
+  await page.goto("/");
+  await expect(page.locator("h1.header-title")).toHaveText("Assistant");
+  await expect(
+    page.getByRole("heading", { name: "What would you like to get done?", exact: true }),
+  ).toBeVisible();
+  await openWorkspace(page);
+  await expect(page.getByTestId("assistant-row")).toHaveCount(1);
+  await expect(page.locator(".conversation-group").getByTestId("assistant-row")).toHaveCount(0);
+  await page.getByRole("button", { name: "Archived tasks", exact: true }).click();
+  await expect(page.getByTestId("assistant-row")).toBeVisible();
+  await expect(page.getByTestId("assistant-row").getByRole("button")).toHaveCount(0);
+  // With a project to move it into, the conversation offers the project picker.
+  const project = await request.post("/api/projects", {
+    headers: { "X-Shelley-Request": "1" },
+    data: { name: `Root ${randomUUID().slice(0, 8)}`, instructions: "", cwd: "" },
+  });
+  expect(project.ok()).toBeTruthy();
+  await page.goto(`/c/${conversation.conversationId}`);
+  await expect(page.locator("h1.header-title")).not.toHaveText("Assistant");
+  await expect(page).toHaveURL(new RegExp(`/c/(${conversation.slug}|${conversation.conversationId})$`));
+  await expect(page.getByLabel("Task project", { exact: true })).toBeVisible();
+});
+
+test("the Assistant's one URL is /", async ({ page, request }) => {
+  const conversation = await createConversationViaAPIWithDetails(request, "Hello");
+  const workspace = await request.get("/api/workspace");
+  expect(workspace.ok()).toBe(true);
+  const { assistant_id: assistantId } = (await workspace.json()) as { assistant_id: string };
+  const conversationURL = new RegExp(`/c/(${conversation.slug}|${conversation.conversationId})$`);
+
+  await page.goto(`/c/${assistantId}?message_id=m1`);
+  await expect(page.locator("h1.header-title")).toHaveText("Assistant");
+  await expect(page).toHaveURL(/\/\?message_id=m1$/);
+
+  await page.goto(`/c/${conversation.conversationId}`);
+  await expect(page).toHaveURL(conversationURL);
+  await page.goto("/");
+  await expect(page.locator("h1.header-title")).toHaveText("Assistant");
+  await openWorkspace(page);
+  await expect(page.getByTestId("assistant-row")).toHaveAttribute("href", "/");
+  await expect(page).toHaveURL(/\/$/);
+
+  await page.evaluate((slug) => {
+    window.history.pushState({}, "", `/c/${slug}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, conversation.conversationId);
+  await expect(page.locator("h1.header-title")).not.toHaveText("Assistant");
+  await page.goBack();
+  await expect(page.locator("h1.header-title")).toHaveText("Assistant");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goForward();
+  await expect(page.locator("h1.header-title")).not.toHaveText("Assistant");
+  await expect(page).toHaveURL(conversationURL);
+  await page.goto(`/c/${conversation.conversationId}`);
+  await openWorkspace(page);
+  await page.getByTestId("assistant-row").click();
+  await expect(page.locator("h1.header-title")).toHaveText("Assistant");
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test("project editor and task creation", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("h1.header-title")).toHaveText("Assistant");
+  await openWorkspace(page);
   await page.getByRole("button", { name: "New project", exact: true }).click();
   const newProject = page.getByRole("dialog", { name: "New project", exact: true });
   const name = `Publish ${randomUUID().slice(0, 8)}`;
   await newProject.getByLabel("Name", { exact: true }).fill(name);
   await newProject
     .getByLabel("Project instructions (AGENTS.md)", { exact: true })
-    .fill("Keep release notes brief.");
+    .fill("Keep publishing tasks brief.");
   await newProject.getByLabel("Working directory", { exact: true }).fill(testWorkingDirectory());
   await newProject.getByRole("button", { name: "Save project", exact: true }).click();
   await expect(newProject).toBeHidden();
@@ -40,104 +107,77 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
   const projectMenu = page.getByTestId("project-actions-menu");
   await expect(projectMenu.getByRole("menuitem")).toHaveText(["Edit project…", "Delete project…"]);
+  await expect(projectMenu.getByRole("menuitem", { name: "Delete project…" })).not.toHaveAttribute(
+    "aria-disabled",
+    "true",
+  );
   await projectMenu.getByRole("menuitem", { name: "Edit project…", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Edit project", exact: true });
   await expect(editor.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
-    "Keep release notes brief.",
+    "Keep publishing tasks brief.",
   );
   await editor
     .getByLabel("Project instructions (AGENTS.md)", { exact: true })
-    .fill("Keep release notes brief. Link the release.");
+    .fill("Keep publishing tasks brief. Link the release.");
   await editor.getByRole("button", { name: "Save project", exact: true }).click();
   await expect(editor).toBeHidden();
-
-  await page.getByRole("button", { name: `New conversation in ${name}`, exact: true }).click();
-  const creator = page.getByRole("dialog", { name: "New Conversation", exact: true });
+  await page.getByRole("button", { name: `New task in ${name}`, exact: true }).click();
+  const creator = page.getByRole("dialog", { name: "New Task", exact: true });
   await expect(creator.getByLabel("Project", { exact: true }).locator("option:checked")).toHaveText(
     name,
   );
   await creator.getByLabel("Title", { exact: false }).fill("Publish release notes");
   await creator.getByLabel("Instructions", { exact: true }).fill("Hello");
-  await creator.getByRole("button", { name: "Start conversation", exact: true }).click();
+  await creator.getByRole("button", { name: "Start task", exact: true }).click();
   await expect(creator).toBeHidden();
-  await expect(page).toHaveURL(/\/c\/publish-release-notes/);
   await expect(
-    page.getByLabel("Conversation project", { exact: true }).locator("option:checked"),
+    page.getByLabel("Task project", { exact: true }).locator("option:checked"),
   ).toHaveText(name);
-  await page.getByRole("button", { name: "Edit conversation project", exact: true }).click();
+  await page.getByRole("button", { name: "Edit task project", exact: true }).click();
   const edit = page.getByRole("dialog", { name: "Edit project", exact: true });
   await expect(edit.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
-    "Keep release notes brief. Link the release.",
+    "Keep publishing tasks brief. Link the release.",
   );
-  await edit.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(edit).toBeHidden();
-
-  // Now that a project exists, a conversation outside it offers the picker.
-  await page.goto(`/c/${plain.conversationId}`);
-  await expect(
-    page.getByLabel("Conversation project", { exact: true }).locator("option:checked"),
-  ).toHaveText("No project");
-
-  // Archiving its conversation lets the project be deleted; the archived
-  // conversation moves to No project.
-  const workspace = await request.get("/api/workspace");
-  const { conversations } = (await workspace.json()) as {
-    conversations: { conversation_id: string; project: string }[];
-  };
-  const created = conversations.find((c) => c.project === name);
-  expect(created).toBeTruthy();
-  const archived = await request.post(`/api/conversation/${created!.conversation_id}/archive`, {
-    headers,
-  });
-  expect(archived.ok()).toBeTruthy();
-  await openProjects(page);
-  const group = page.getByRole("region", { name, exact: true });
-  await expect(group).toBeVisible();
-  await group.getByRole("button", { name: `${name} project actions`, exact: true }).click();
-  await projectMenu.getByRole("menuitem", { name: "Delete project…", exact: true }).click();
-  const remove = page.getByRole("dialog", { name: "Delete project?", exact: true });
-  await expect(remove.getByTestId("project-delete-effects")).toHaveText(
-    "Its archived conversation moves to No project.",
-  );
-  await remove.getByRole("button", { name: "Delete project", exact: true }).click();
-  await expect(remove).toBeHidden();
-  await expect(group).toHaveCount(0);
-  const after = (await (await request.get("/api/workspace")).json()) as {
-    projects: { name: string }[];
-  };
-  expect(after.projects.map((p) => p.name)).not.toContain(name);
 });
 
-test("project edits from elsewhere arrive through SSE", async ({ page, request }) => {
-  const plain = await createConversationViaAPIWithDetails(request, "Hello");
-  await page.goto(`/c/${plain.conversationId}`);
-  await openProjects(page);
+test("agent project edits arrive through workspace SSE without navigating away from Assistant", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("h1.header-title")).toHaveText("Assistant");
+  await openWorkspace(page);
   const name = `Agent ${randomUUID().slice(0, 8)}`;
   const response = await request.post("/api/projects", {
-    headers,
-    data: { name, instructions: "Created outside this tab", cwd: testWorkingDirectory() },
+    headers: { "X-Shelley-Request": "1" },
+    data: {
+      name,
+      instructions: "Created outside this tab",
+      cwd: testWorkingDirectory(),
+    },
   });
   expect(response.ok()).toBeTruthy();
   const project = await response.json();
   await expect(
-    page.getByRole("button", { name: `New conversation in ${name}`, exact: true }),
+    page.getByRole("button", { name: `New task in ${name}`, exact: true }),
   ).toBeVisible();
   const renamed = `${name} renamed`;
   const update = await request.put(`/api/projects/${encodeURIComponent(name)}`, {
-    headers,
+    headers: { "X-Shelley-Request": "1" },
     data: { ...project, name: renamed },
   });
   expect(update.ok()).toBeTruthy();
   await expect(
-    page.getByRole("button", { name: `New conversation in ${renamed}`, exact: true }),
+    page.getByRole("button", { name: `New task in ${renamed}`, exact: true }),
   ).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`/c/(${plain.slug}|${plain.conversationId})$`));
+  await expect(page.locator("h1.header-title")).toHaveText("Assistant");
 });
 
 test("project and conversation ⋯ menus: delete waits for an empty project; move to project", async ({
   page,
   request,
 }) => {
+  const headers = { "X-Shelley-Request": "1" };
   const project = async (name: string) => {
     const response = await request.post("/api/projects", {
       headers,
@@ -158,8 +198,8 @@ test("project and conversation ⋯ menus: delete waits for an empty project; mov
   expect(created.ok()).toBeTruthy();
   const { conversation_id: projectConversationId } = (await created.json()) as { conversation_id: string };
 
-  await page.goto(`/c/${projectConversationId}`);
-  await openProjects(page);
+  await page.goto("/");
+  await openWorkspace(page);
   const fromGroup = page.locator(`section[aria-label="${from}"]`);
   const toGroup = page.locator(`section[aria-label="${to}"]`);
   const conversationRow = page.locator(`.conversation-item[data-conversation-id="${projectConversationId}"]`);
@@ -176,14 +216,14 @@ test("project and conversation ⋯ menus: delete waits for an empty project; mov
   await toToggle.click();
   await expect(toToggle).toHaveAttribute("aria-expanded", "false");
 
-  // A project with active conversations can't be deleted, and its menu says why.
+  // A project with conversations can't be deleted, and its menu says why.
   await fromGroup.getByRole("button", { name: `${from} project actions`, exact: true }).click();
   const projectMenu = page.getByTestId("project-actions-menu");
   const remove = projectMenu.getByRole("menuitem", { name: "Delete project…" });
   await expect(remove).toHaveAttribute("aria-disabled", "true");
   await expect(remove.locator("[data-note]")).toHaveAttribute(
     "data-note",
-    "Archive or move its active conversation first",
+    "Archive or move its active task first",
   );
   await page.keyboard.press("Escape");
   await expect(projectMenu).toHaveCount(0);
@@ -203,4 +243,26 @@ test("project and conversation ⋯ menus: delete waits for an empty project; mov
   await toToggle.click();
   await expect(toGroup.locator(conversationRow)).toHaveCount(0);
   await expect(toToggle).toHaveAttribute("aria-expanded", "false");
+});
+
+test("the Assistant shows no host or working directory; conversations still do", async ({
+  page,
+  request,
+}) => {
+  const conversation = await createConversationViaAPIWithDetails(request, "Hello");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/c/${conversation.conversationId}`);
+  await expect(page.locator(".status-ready")).toBeVisible();
+  await expect(page.locator(".status-readout-cwd")).toBeVisible();
+
+  await page.goto("/");
+  await expect(page.locator("h1.header-title")).toHaveText("Assistant");
+  await expect(page.locator(".context-usage-label")).toBeVisible();
+  await expect(page.locator(".status-ready")).toHaveCount(0);
+  await expect(page.locator(".status-readout-cwd, .status-field-cwd")).toHaveCount(0);
+
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.getByRole("button", { name: "More options", exact: true }).click();
+  await expect(page.locator(".overflow-menu-item", { hasText: "Change Language" })).toBeVisible();
+  await expect(page.locator(".overflow-menu-item", { hasText: "Directory" })).toHaveCount(0);
 });

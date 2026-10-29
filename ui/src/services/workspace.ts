@@ -12,11 +12,14 @@ export interface Project {
 
 export interface WorkspaceConversation {
   conversation_id: string;
+  /** "" for the Assistant. */
   project: string;
+  is_assistant: boolean;
   archived: boolean;
 }
 
 export interface Workspace {
+  assistant_id: string;
   projects: Project[];
   conversations: WorkspaceConversation[];
 }

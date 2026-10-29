@@ -14,12 +14,14 @@ import "katex/dist/katex.min.css";
 import { initializeTheme } from "../services/theme";
 import { initializeNotifications } from "../services/notifications";
 import { i18nPlugin } from "./composables/i18n";
+import { workspaceMode } from "../utils/workspaceMode";
 import { exportConversationIdFromPath } from "./export";
 import App from "./App.vue";
 import ExportPage from "./components/ExportPage.vue";
 
 // Apply theme before render to avoid a flash of the wrong color scheme.
 initializeTheme();
+if (workspaceMode) document.documentElement.classList.add("workspace-mode");
 
 const rootContainer = document.getElementById("root");
 if (!rootContainer) throw new Error("Root container not found");

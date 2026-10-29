@@ -387,7 +387,7 @@ func (s *Server) handleGetConversationSettings(w http.ResponseWriter, r *http.Re
 // It responds with the settings now in effect. A running turn is stopped
 // first, as with /model, unless only the profile label changes.
 func (s *Server) handleConversationSettings(w http.ResponseWriter, r *http.Request, conversationID string) {
-	if !s.checkConversationRequest(w, conversationID) {
+	if !s.checkConversationRequest(w, r, conversationID, "settings") {
 		return
 	}
 	ctx := r.Context()

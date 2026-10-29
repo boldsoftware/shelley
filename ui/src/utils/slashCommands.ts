@@ -1,3 +1,4 @@
+import { wording } from "./workspaceMode";
 export interface SlashCommand {
   command: `/${string}`;
   description: string;
@@ -22,7 +23,7 @@ export const SLASH_COMMANDS = {
   },
   FORK: {
     command: "/fork",
-    description: "forks this conversation",
+    description: wording("forks this conversation", "forks this thread into a new task"),
     takesArgs: false,
   },
   DIFF: {
@@ -37,27 +38,30 @@ export const SLASH_COMMANDS = {
   },
   COMPACT: {
     command: "/compact",
-    description: "compacts this conversation",
+    description: wording("compacts this conversation", "compacts this thread"),
     takesArgs: true,
   },
   CLEAR: {
     command: "/clear",
-    description: "clears context, keeping this conversation",
+    description: wording(
+      "clears context, keeping this conversation",
+      "clears context, keeping this thread",
+    ),
     takesArgs: false,
   },
   NEW: {
     command: "/new",
-    description: "starts a new conversation",
+    description: wording("starts a new conversation", "starts a new task"),
     takesArgs: true,
   },
   ARCHIVE: {
     command: "/archive",
-    description: "archives this conversation",
+    description: wording("archives this conversation", "archives this task"),
     takesArgs: false,
   },
   RENAME: {
     command: "/rename",
-    description: "renames this conversation",
+    description: wording("renames this conversation", "renames this task"),
     takesArgs: true,
   },
 } as const satisfies Record<string, SlashCommand>;

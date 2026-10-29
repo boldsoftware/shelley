@@ -618,6 +618,8 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		return
 	}
 	initData := map[string]interface{}{
+		// workspace mode: see FlagWorkspace.
+		"workspace":                 s.assistantID() != "",
 		"models":                    modelList,
 		"model_upgrade_prompt_done": promptDone != "",
 		"default_model":             defaultModel,
@@ -662,7 +664,7 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 	// Whether this VM has an exe.dev "notify" integration, so the UI can show
 	// the auto-configured push-notification toggle.
 	initData["exe_notify_available"] = s.exeNotifyAvailable()
-	initData["ui_build"] = ui.BuildID()
+	initData["ui_build"] = s.uiBuild()
 	if s.Banner != "" {
 		initData["banner"] = s.Banner
 	}
@@ -1054,7 +1056,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, "Message is required", http.StatusBadRequest)
 		return
 	}
-	if !s.checkConversationRequest(w, conversationID) {
+	if !s.checkConversationRequest(w, r, conversationID, "chat") {
 		return
 	}
 	if req.ConversationOptions != nil &&
@@ -1790,7 +1792,7 @@ func (s *Server) handleCancelConversation(w http.ResponseWriter, r *http.Request
 // startup, without adding a synthetic user message. Upgrade restarts resume
 // automatically.
 func (s *Server) handleResumeConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
-	if !s.checkConversationRequest(w, conversationID) {
+	if !s.checkConversationRequest(w, r, conversationID, "resume") {
 		return
 	}
 	ctx := r.Context()
@@ -1833,7 +1835,7 @@ func (s *Server) handleResumeConversation(w http.ResponseWriter, r *http.Request
 // model. Requires a latest message of type "error" that is classified
 // retryable.
 func (s *Server) handleRetryConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
-	if !s.checkConversationRequest(w, conversationID) {
+	if !s.checkConversationRequest(w, r, conversationID, "retry") {
 		return
 	}
 	ctx := r.Context()
@@ -1940,7 +1942,7 @@ type continueRequest struct {
 // is left untouched (append-only log) and excluded from context, so the new
 // model sees the same request.
 func (s *Server) handleContinueConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
-	if !s.checkConversationRequest(w, conversationID) {
+	if !s.checkConversationRequest(w, r, conversationID, "continue") {
 		return
 	}
 	ctx := r.Context()
@@ -2349,7 +2351,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 		}
 	}
 
-	if includeConversationListPatches && !writeStreamData(StreamResponse{ModelsChanged: true, UIBuild: ui.BuildID()}) {
+	if includeConversationListPatches && !writeStreamData(StreamResponse{ModelsChanged: true, UIBuild: s.uiBuild()}) {
 		return
 	}
 
@@ -3313,7 +3315,7 @@ func (s *Server) handleArchivedConversations(w http.ResponseWriter, r *http.Requ
 
 // handleArchiveConversation handles POST /conversation/<id>/archive
 func (s *Server) handleArchiveConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
-	if !s.checkConversationRequest(w, conversationID) {
+	if !s.checkConversationRequest(w, r, conversationID, "archive") {
 		return
 	}
 	ctx := r.Context()
@@ -3365,7 +3367,7 @@ func (s *Server) handleUnarchiveConversation(w http.ResponseWriter, r *http.Requ
 
 // handleDeleteConversation handles POST /conversation/<id>/delete
 func (s *Server) handleDeleteConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
-	if !s.checkConversationRequest(w, conversationID) {
+	if !s.checkConversationRequest(w, r, conversationID, "delete") {
 		return
 	}
 	ctx := r.Context()
@@ -3423,7 +3425,7 @@ type RenameRequest struct {
 
 // handleRenameConversation handles POST /conversation/<id>/rename
 func (s *Server) handleRenameConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
-	if !s.checkConversationRequest(w, conversationID) {
+	if !s.checkConversationRequest(w, r, conversationID, "rename") {
 		return
 	}
 	ctx := r.Context()
@@ -3469,7 +3471,7 @@ type SetCwdRequest struct {
 // updated but the running toolset not, or vice versa — is worse than a refused
 // one, because nothing afterwards would notice the disagreement.
 func (s *Server) handleSetConversationCwd(w http.ResponseWriter, r *http.Request, conversationID string) {
-	if !s.checkConversationRequest(w, conversationID) {
+	if !s.checkConversationRequest(w, r, conversationID, "cwd") {
 		return
 	}
 	ctx := r.Context()

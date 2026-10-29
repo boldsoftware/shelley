@@ -116,3 +116,11 @@ func AddTestProject(tb testTB, database *DB, name string) {
 		tb.Fatalf("add test project: %v", err)
 	}
 }
+
+// EnableWorkspaceMode turns on workspace mode (see WorkspaceFlag).
+func EnableWorkspaceMode(tb testTB, db *DB) {
+	tb.Helper()
+	if err := db.SetFeatureFlagOverride(context.Background(), WorkspaceFlag, "true"); err != nil {
+		tb.Fatalf("enable workspace mode: %v", err)
+	}
+}

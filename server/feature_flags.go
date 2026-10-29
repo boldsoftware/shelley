@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"shelley.exe.dev/db"
 	"shelley.exe.dev/featureflags"
 )
 
@@ -68,6 +69,12 @@ func (s *Server) handleSetFeatureFlag(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Failed to set feature flag: %v", err), http.StatusInternalServerError)
 		return
 	}
+	if req.Name == db.WorkspaceFlag {
+		if err := s.workspaceFlagChanged(r.Context()); err != nil {
+			s.internalError(w, "Failed to load the workspace", err)
+			return
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
@@ -89,6 +96,12 @@ func (s *Server) handleDeleteFeatureFlag(w http.ResponseWriter, r *http.Request)
 		s.logger.Error("Failed to delete feature flag", "error", err, "name", req.Name)
 		http.Error(w, fmt.Sprintf("Failed to delete feature flag: %v", err), http.StatusInternalServerError)
 		return
+	}
+	if req.Name == db.WorkspaceFlag {
+		if err := s.workspaceFlagChanged(r.Context()); err != nil {
+			s.internalError(w, "Failed to load the workspace", err)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})

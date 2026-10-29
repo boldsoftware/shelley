@@ -11,6 +11,8 @@ import { upgoer5 } from "../../i18n/upgoer5";
 import { zhCN } from "../../i18n/zh-CN";
 import { zhTW } from "../../i18n/zh-TW";
 import { vi } from "../../i18n/vi";
+import { workspaceEn } from "../../i18n/workspace";
+import { workspaceMode } from "../../utils/workspaceMode";
 
 const LOCALE_STORAGE_KEY = "shelley-locale";
 
@@ -55,10 +57,11 @@ export function createI18n(): I18n {
     }
   };
   const t = (key: keyof TranslationKeys): string => {
+    if (workspaceMode && locale.value === "en" && workspaceEn[key]) return workspaceEn[key];
     const dict = translations[locale.value];
     const value = dict[key];
     if (value !== undefined && value !== "") return value;
-    return en[key];
+    return (workspaceMode && workspaceEn[key]) || en[key];
   };
   return { locale, setLocale, t };
 }

@@ -77,6 +77,15 @@ func TestProjectProfiles(t *testing.T) {
 	if system := systemText(req); !strings.HasPrefix(system, "Be terse.") || !strings.Contains(system, "<project_instructions>\nWrite docs.") || hasTool(req, "bash") {
 		t.Fatalf("first turn: system %q, bash %v", system, hasTool(req, "bash"))
 	}
+	// Outside workspace mode a project brings its instructions, not the
+	// workspace; in it, both.
+	if system := systemText(req); strings.Contains(system, "<workspace>") {
+		t.Fatalf("workspace prompt outside workspace mode: %q", system)
+	}
+	e.want(200, "POST", "/feature-flags", `{"name":"workspace","value":true}`)
+	if system := systemText(turn(id)); !strings.Contains(system, "<workspace>") || !strings.Contains(system, "<project_instructions>\nWrite docs.") {
+		t.Fatalf("workspace mode prompt: %q", system)
+	}
 
 	// Conversations don't switch profiles into or out of a project; they move.
 	e.want(409, "POST", "/api/conversation/"+id+"/settings", `{"profile":"Default"}`)

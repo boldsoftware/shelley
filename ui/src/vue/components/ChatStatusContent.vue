@@ -5,7 +5,7 @@
 <template>
   <!-- Archived -->
   <template v-if="currentConversation?.archived">
-    <span class="status-message">This conversation is archived.</span>
+    <span class="status-message">{{ wording("This conversation is archived.", "This task is archived.") }}</span>
     <button class="status-button status-button-primary" @click="onUnarchive">Unarchive</button>
   </template>
 
@@ -79,7 +79,7 @@
       class="status-interrupted-group"
       data-testid="conversation-interrupted"
     >
-      <span class="status-message">Conversation Interrupted</span>
+      <span class="status-message">{{ wording("Conversation Interrupted", "Turn interrupted") }}</span>
       <button
         type="button"
         class="status-button status-interrupted-button"
@@ -91,12 +91,13 @@
         {{ resumingInterrupted ? "Continuing…" : "Continue" }}
       </button>
     </div>
-    <span v-else class="status-message status-ready">
+    <!-- The Assistant isn't tied to a host or directory: no "Ready on", no cwd. -->
+    <span v-else-if="!isAssistant" class="status-message status-ready">
       <span class="hide-on-mobile">Ready on </span>{{ hostname }}
     </span>
     <StatusReadout
       v-bind="readoutProps"
-      :cwd="cwd"
+      :cwd="isAssistant ? undefined : cwd"
       :conversation-id="conversationId"
       :agent-working="agentWorking"
     />
@@ -122,6 +123,7 @@
       />
     </div>
     <div
+      v-if="!isAssistant"
       :class="`status-field status-field-cwd${cwdError ? ' status-field-error' : ''}`"
       v-tooltip.top="cwdError || 'Working directory for file operations'"
     >
@@ -145,6 +147,7 @@ import type { Conversation, Message, Model } from "../../types";
 import type { OtherUsageRow, UsageEntry } from "../../utils/tokenCostGraph";
 import { tildifyPath } from "../../utils/tildify";
 import { useI18n } from "../composables/i18n";
+import { wording } from "../../utils/workspaceMode";
 import type { ThinkingLevel } from "./thinkingLevel";
 import type { SettingsKnob } from "../composables/profiles";
 import AnimatedWorkingStatus from "./AnimatedWorkingStatus.vue";
@@ -176,6 +179,8 @@ const props = defineProps<{
   /** Profiles and tools, for whichever picker shows. */
   knob: SettingsKnob;
   cwdError: string | null;
+  /** The workspace Assistant, which hides the host and cwd readouts. */
+  isAssistant?: boolean;
   // callbacks
   onUnarchive: () => void;
   onClearError: () => void;

@@ -2,9 +2,10 @@ import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { createConversationViaAPIWithDetails, testWorkingDirectory } from "./helpers";
 
-// "Group by → Project" groups conversations by the project profile they run
-// with.
-test("Group by Project groups conversations by project", async ({ page, request }) => {
+// Outside workspace mode (the default), Shelley is stock: no pinned
+// Assistant, upstream's drawer, and "Group by → Project" groups
+// conversations by the project profile they run with.
+test("stock mode offers Group by Project without the workspace", async ({ page, request }) => {
   const name = `Stock ${randomUUID().slice(0, 8)}`;
   const project = await request.post("/api/projects", {
     headers: { "X-Shelley-Request": "1" },
@@ -22,6 +23,7 @@ test("Group by Project groups conversations by project", async ({ page, request 
   await page.goto("/");
   await expect(page).toHaveURL(/\/c\//);
   await page.getByRole("button", { name: "Open conversations", exact: true }).click();
+  await expect(page.getByTestId("assistant-row")).toHaveCount(0);
   await expect(page.locator(".project-group")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Group conversations" }).click();
@@ -29,7 +31,9 @@ test("Group by Project groups conversations by project", async ({ page, request 
     .locator(".group-by-menu-item")
     .filter({ hasText: /^Project$/ })
     .click();
-  const group = page.locator(".project-group", { has: page.getByText(name, { exact: true }) });
+  const group = page.locator(".project-group", {
+    has: page.getByText(name, { exact: true }),
+  });
   await expect(group.locator(`[data-conversation-id="${projectConversationId}"]`)).toBeVisible();
   const none = page.getByRole("region", { name: "No project", exact: true });
   await expect(none.locator(`[data-conversation-id="${plain.conversationId}"]`)).toBeVisible();

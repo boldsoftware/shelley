@@ -43,7 +43,10 @@
             <em v-if="!conversation.slug">untitled</em>
             <template v-else>
               <template
-                v-for="(seg, i) in highlightSearchMatches(conversation.slug, ctx.searchText.value)"
+                v-for="(seg, i) in highlightSearchMatches(
+                  conversationTitle(conversation.slug),
+                  ctx.searchText.value,
+                )"
                 :key="i"
               >
                 <mark v-if="seg.mark" class="conversation-snippet-mark">{{ seg.text }}</mark>
@@ -432,6 +435,7 @@ import WorkspaceActionIcon from "./WorkspaceActionIcon.vue";
 import type { Conversation, ConversationWithState } from "../../types";
 import { isImeComposing } from "../../utils/imeComposing";
 import { highlightSearchMatches } from "../../utils/searchHighlight";
+import { conversationTitle } from "../../utils/conversationTitle";
 import {
   DrawerCtxKey,
   parseTags,
@@ -566,7 +570,13 @@ const isExpanded = computed(() =>
   ctx.expandedSubagents.value.has(props.conversation.conversation_id),
 );
 const itemArchived = computed(() => props.conversation.archived);
-const hasActions = computed(() => !isDraft.value && !itemArchived.value && !isPlaceholder.value);
+const hasActions = computed(
+  () =>
+    !isDraft.value &&
+    !itemArchived.value &&
+    !isPlaceholder.value &&
+    actionsMenuItems.value.length > 0,
+);
 const isNew = computed(
   () =>
     !isDraft.value &&
