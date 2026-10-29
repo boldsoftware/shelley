@@ -1030,6 +1030,15 @@ type ChatRequest struct {
 	Skills []string `json:"skills,omitempty"`
 }
 
+// NewConversationRequest is the body of POST /api/conversations/new.
+type NewConversationRequest struct {
+	ChatRequest
+	// Project is the conversation's project, and therefore its profile.
+	Project string `json:"project,omitempty"`
+	// Title becomes the conversation's slug instead of a generated one.
+	Title string `json:"title,omitempty"`
+}
+
 // handleChatConversation handles POST /conversation/<id>/chat
 func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
 	ctx := r.Context()
@@ -1043,6 +1052,9 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 
 	if req.Message == "" {
 		http.Error(w, "Message is required", http.StatusBadRequest)
+		return
+	}
+	if !s.checkConversationRequest(w, conversationID) {
 		return
 	}
 	if req.ConversationOptions != nil &&
@@ -1486,7 +1498,7 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Parse request
-	var req ChatRequest
+	var req NewConversationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
@@ -1494,6 +1506,9 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 
 	if req.Message == "" {
 		http.Error(w, "Message is required", http.StatusBadRequest)
+		return
+	}
+	if !s.prepareProjectConversation(w, r, &req) {
 		return
 	}
 
@@ -1543,12 +1558,20 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 		cwdPtr = &req.Cwd
 	}
 
-	conversation, err := s.db.CreateConversation(ctx, nil, true, cwdPtr, &modelID, convOpts)
+	conversation, releaseCreation, err := s.createProjectConversation(ctx, cwdPtr, &modelID, convOpts, req.Project)
 	if err != nil {
-		s.internalError(w, "Failed to create conversation", err)
+		s.workspaceHTTPError(w, err)
 		return
 	}
+	defer releaseCreation()
+	cwdPtr = conversation.Cwd
 	conversationID := conversation.ConversationID
+	if title := slug.Sanitize(req.Title); title != "" {
+		if err := s.nameConversation(ctx, conversationID, title); err != nil {
+			s.internalError(w, "Failed to name conversation", err)
+			return
+		}
+	}
 
 	// Run new-conversation hook, which may override prompt, model, and cwd.
 	// Hook failures abort the request.
@@ -1667,7 +1690,7 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if firstMessage && !hookSlugApplied {
+	if firstMessage && !hookSlugApplied && req.Title == "" {
 		s.generateSlugAsync(conversationID, req.Message, modelID)
 	}
 
@@ -1767,6 +1790,9 @@ func (s *Server) handleCancelConversation(w http.ResponseWriter, r *http.Request
 // startup, without adding a synthetic user message. Upgrade restarts resume
 // automatically.
 func (s *Server) handleResumeConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
+	if !s.checkConversationRequest(w, conversationID) {
+		return
+	}
 	ctx := r.Context()
 	manager, err := s.getOrCreateConversationManager(ctx, conversationID, r.Header.Get("X-ExeDev-Email"))
 	if err != nil {
@@ -1807,6 +1833,9 @@ func (s *Server) handleResumeConversation(w http.ResponseWriter, r *http.Request
 // model. Requires a latest message of type "error" that is classified
 // retryable.
 func (s *Server) handleRetryConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
+	if !s.checkConversationRequest(w, conversationID) {
+		return
+	}
 	ctx := r.Context()
 
 	// Validate that there's actually a retryable error to act on BEFORE
@@ -1911,6 +1940,9 @@ type continueRequest struct {
 // is left untouched (append-only log) and excluded from context, so the new
 // model sees the same request.
 func (s *Server) handleContinueConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
+	if !s.checkConversationRequest(w, conversationID) {
+		return
+	}
 	ctx := r.Context()
 
 	// Parse the optional body (empty body is fine — defaults to Opus).
@@ -3281,7 +3313,15 @@ func (s *Server) handleArchivedConversations(w http.ResponseWriter, r *http.Requ
 
 // handleArchiveConversation handles POST /conversation/<id>/archive
 func (s *Server) handleArchiveConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
+	if !s.checkConversationRequest(w, conversationID) {
+		return
+	}
 	ctx := r.Context()
+	member, err := s.inProject(ctx, conversationID)
+	if err != nil {
+		s.internalError(w, "Failed to load conversation's project", err, "conversationID", conversationID)
+		return
+	}
 	conversation, err := s.db.ArchiveConversation(ctx, conversationID)
 	if err != nil {
 		s.internalError(w, "Failed to archive conversation", err, "conversationID", conversationID)
@@ -3294,6 +3334,9 @@ func (s *Server) handleArchiveConversation(w http.ResponseWriter, r *http.Reques
 	if manager != nil {
 		manager.cancelIdleCompaction()
 	}
+	if member {
+		s.notifyWorkspaceChanged()
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(conversation)
@@ -3302,10 +3345,18 @@ func (s *Server) handleArchiveConversation(w http.ResponseWriter, r *http.Reques
 // handleUnarchiveConversation handles POST /conversation/<id>/unarchive
 func (s *Server) handleUnarchiveConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
 	ctx := r.Context()
+	member, err := s.inProject(ctx, conversationID)
+	if err != nil {
+		s.internalError(w, "Failed to load conversation's project", err, "conversationID", conversationID)
+		return
+	}
 	conversation, err := s.db.UnarchiveConversation(ctx, conversationID)
 	if err != nil {
 		s.internalError(w, "Failed to unarchive conversation", err, "conversationID", conversationID)
 		return
+	}
+	if member {
+		s.notifyWorkspaceChanged()
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -3314,12 +3365,23 @@ func (s *Server) handleUnarchiveConversation(w http.ResponseWriter, r *http.Requ
 
 // handleDeleteConversation handles POST /conversation/<id>/delete
 func (s *Server) handleDeleteConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
+	if !s.checkConversationRequest(w, conversationID) {
+		return
+	}
 	ctx := r.Context()
+	member, err := s.inProject(ctx, conversationID)
+	if err != nil {
+		s.internalError(w, "Failed to load conversation's project", err, "conversationID", conversationID)
+		return
+	}
 	if err := s.deleteConversation(ctx, conversationID); err != nil {
 		// The terminals are already global at this point. That is harmless and
 		// visible to the user, so no rollback is attempted.
 		s.internalError(w, "Failed to delete conversation", err, "conversationID", conversationID)
 		return
+	}
+	if member {
+		s.notifyWorkspaceChanged()
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -3361,6 +3423,9 @@ type RenameRequest struct {
 
 // handleRenameConversation handles POST /conversation/<id>/rename
 func (s *Server) handleRenameConversation(w http.ResponseWriter, r *http.Request, conversationID string) {
+	if !s.checkConversationRequest(w, conversationID) {
+		return
+	}
 	ctx := r.Context()
 
 	var req RenameRequest
@@ -3404,6 +3469,9 @@ type SetCwdRequest struct {
 // updated but the running toolset not, or vice versa — is worse than a refused
 // one, because nothing afterwards would notice the disagreement.
 func (s *Server) handleSetConversationCwd(w http.ResponseWriter, r *http.Request, conversationID string) {
+	if !s.checkConversationRequest(w, conversationID) {
+		return
+	}
 	ctx := r.Context()
 
 	var req SetCwdRequest

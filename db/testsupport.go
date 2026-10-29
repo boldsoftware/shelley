@@ -103,3 +103,16 @@ func buildTestTemplateSnapshot() (snapshot []byte, err error) {
 
 	return snapshot, nil
 }
+
+// AddTestProject creates project name for tests that need one, unless it
+// exists. Its instructions are "Instructions of <name>."
+func AddTestProject(tb testTB, database *DB, name string) {
+	tb.Helper()
+	if _, err := database.GetProject(context.Background(), name); err == nil {
+		return
+	}
+	_, err := database.CreateProject(context.Background(), Project{Name: name, Instructions: "Instructions of " + name + "."}, "")
+	if err != nil {
+		tb.Fatalf("add test project: %v", err)
+	}
+}

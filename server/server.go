@@ -98,7 +98,8 @@ type ConversationWithState struct {
 
 // StreamResponse represents the response format for conversation streaming
 type StreamResponse struct {
-	ModelsChanged bool `json:"models_changed,omitempty"`
+	ModelsChanged    bool `json:"models_changed,omitempty"`
+	WorkspaceChanged bool `json:"workspace_changed,omitempty"`
 	// ConversationID identifies which conversation this per-conversation
 	// event belongs to. The unified /api/stream2 delivers events for all
 	// active conversations on a single connection; clients route by this
@@ -396,6 +397,7 @@ type Server struct {
 	notifDispatcher          *notifications.Dispatcher
 	conversationListStream   *conversationListStream
 	conversationListGitCache *conversationListGitCache
+	workspace                workspaceState
 	integrationSkills        *integrationSkillCache
 	listIntegrations         integrationLister
 	// fileListCache memoizes working-directory file listings for the fuzzy
@@ -657,6 +659,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 
 	s.registerMCPRoutes(api, mux)
 	s.registerProfileRoutes(api)
+	s.registerWorkspaceRoutes(api)
 
 	// Notification channels API
 	api.HandleFunc("GET /api/notification-channels", s.handleListNotificationChannels)
@@ -1142,6 +1145,10 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		manager.keepRecentTokens = s.keepRecentTokens()
 		manager.idleCompactionMinTokens = s.idleCompactionMinTokensOrDefault()
 		switch role {
+		case roleTopLevel:
+			manager.decorateService = func(service llm.Service) (llm.Service, error) {
+				return s.projectService(conversationID, service)
+			}
 		case roleSubagent:
 			manager.rewriteFinalReply = func(ctx context.Context, reply llm.Message) (llm.Message, bool) {
 				return s.reportUnreportedReply(ctx, manager, reply)

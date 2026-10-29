@@ -8,10 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
+	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
 )
 
@@ -25,6 +26,9 @@ type Profile struct {
 	Default    bool `json:"default"`
 	Builtin    bool `json:"builtin"`
 	UserEdited bool `json:"user_edited"`
+	// Project marks a project's profile (see db.Project). Conversations in
+	// it are in the project; they don't switch profiles, but move.
+	Project bool `json:"project"`
 	Settings
 	// VoicePrompt is how the profile's voice calls speak; "" means no
 	// persona. It belongs to the profile, not its Settings: conversations
@@ -106,6 +110,11 @@ func (s *Server) handleListProfiles(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "Failed to list profiles", err)
 		return
 	}
+	projects, err := s.db.ListProjects(r.Context())
+	if err != nil {
+		s.internalError(w, "Failed to list profiles", err)
+		return
+	}
 	out := make([]Profile, 0, len(rows))
 	for _, row := range rows {
 		p, err := profileFromRow(row)
@@ -113,6 +122,7 @@ func (s *Server) handleListProfiles(w http.ResponseWriter, r *http.Request) {
 			s.internalError(w, "Failed to list profiles", err)
 			return
 		}
+		p.Project = slices.ContainsFunc(projects, func(project db.Project) bool { return project.Name == p.Name })
 		out = append(out, p)
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -128,22 +138,6 @@ func decodeStrict(w http.ResponseWriter, r *http.Request, v any) bool {
 		return false
 	}
 	return true
-}
-
-// profileNameProblem says what's wrong with a profile name, or "". Names are
-// path segments in the API.
-func profileNameProblem(name string) string {
-	switch {
-	case name == "":
-		return "name is required"
-	case len(name) > 64:
-		return "name is longer than 64 bytes"
-	case strings.Contains(name, "/") || strings.ContainsFunc(name, unicode.IsControl):
-		return "name can't contain / or control characters"
-	case name == "." || name == "..":
-		return "name can't be . or .." // they don't survive in a URL path
-	}
-	return ""
 }
 
 func encodeProfile(st Settings, voicePrompt string) string {
@@ -166,7 +160,7 @@ func (s *Server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body.Name = strings.TrimSpace(body.Name)
-	if msg := profileNameProblem(body.Name); msg != "" {
+	if msg := db.ProfileNameProblem(body.Name); msg != "" {
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
@@ -290,9 +284,17 @@ func (s *Server) handleRestoreProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSetDefaultProfile handles POST /api/profiles/{name}/default: the
-// profile becomes the default, in place of the previous one.
+// profile becomes the default, in place of the previous one. A project's
+// profile can't: a conversation that names no profile is in no project.
 func (s *Server) handleSetDefaultProfile(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	if _, err := s.db.GetProject(r.Context(), name); err == nil {
+		http.Error(w, fmt.Sprintf("profile %q is a project's and can't be the default", name), http.StatusConflict)
+		return
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		s.internalError(w, "Failed to load project", err)
+		return
+	}
 	err := s.db.QueriesTx(r.Context(), func(q *generated.Queries) error {
 		if err := q.ClearDefaultProfile(r.Context()); err != nil {
 			return err
@@ -320,12 +322,21 @@ func (s *Server) handleSetDefaultProfile(w http.ResponseWriter, r *http.Request)
 }
 
 // handleDeleteProfile handles DELETE /api/profiles/{name}. The default
-// profile can't be deleted. Conversations keep their settings, and the name
-// as a label.
+// profile can't be deleted, nor a project's, which deleting the project
+// does. Conversations keep their settings, and the name as a label.
 func (s *Server) handleDeleteProfile(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	_, err := s.db.GetProject(r.Context(), name)
+	if err == nil {
+		http.Error(w, fmt.Sprintf("profile %q is a project; delete the project instead", name), http.StatusConflict)
+		return
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		s.internalError(w, "Failed to delete profile", err)
+		return
+	}
 	var n int64
-	err := s.db.QueriesTx(r.Context(), func(q *generated.Queries) (err error) {
+	err = s.db.QueriesTx(r.Context(), func(q *generated.Queries) (err error) {
 		n, err = q.DeleteProfile(r.Context(), name)
 		return err
 	})

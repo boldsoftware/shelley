@@ -387,6 +387,9 @@ func (s *Server) handleGetConversationSettings(w http.ResponseWriter, r *http.Re
 // It responds with the settings now in effect. A running turn is stopped
 // first, as with /model, unless only the profile label changes.
 func (s *Server) handleConversationSettings(w http.ResponseWriter, r *http.Request, conversationID string) {
+	if !s.checkConversationRequest(w, conversationID) {
+		return
+	}
 	ctx := r.Context()
 	var change SettingsChange
 	dec := json.NewDecoder(r.Body)
@@ -398,6 +401,10 @@ func (s *Server) handleConversationSettings(w http.ResponseWriter, r *http.Reque
 	conv, err := s.db.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		http.Error(w, "Conversation not found", http.StatusNotFound)
+		return
+	}
+	if err := s.checkProfileSwitch(ctx, *conv, change); err != nil {
+		s.workspaceHTTPError(w, err)
 		return
 	}
 	switch {
