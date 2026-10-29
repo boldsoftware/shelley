@@ -113,6 +113,9 @@ type StreamResponse struct {
 	ConversationListPatch *ConversationListPatchEvent `json:"conversation_list_patch,omitempty"`
 	// Heartbeat indicates this is a heartbeat message (no new data, just keeping connection alive)
 	Heartbeat bool `json:"heartbeat,omitempty"`
+	// UIBuild is the server's UI build (ui.BuildID), sent on each /api/stream2
+	// connection so a page from an older build reloads.
+	UIBuild string `json:"ui_build,omitempty"`
 	// NotificationEvent is set when a notification-worthy event occurs (e.g. agent finished).
 	NotificationEvent *notifications.Event `json:"notification_event,omitempty"`
 	// ResourceStatus is global, including an immediate snapshot of each kind on reconnect.

@@ -15,6 +15,8 @@ export const ru: TranslationKeys = {
   dismiss: "Скрыть",
   retry: "Повторить",
   failedToLoadConversations: "Не удалось загрузить диалоги. Пожалуйста, обновите страницу.",
+  shelleyUpdated: "Shelley обновлён",
+  reloadPage: "Перезагрузить",
 
   // Chat Header & Actions
   newConversation: "Новый диалог",

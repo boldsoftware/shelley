@@ -15,6 +15,8 @@ export const vi: TranslationKeys = {
   dismiss: "Bỏ qua",
   retry: "Thử lại",
   failedToLoadConversations: "Tải trò chuyện thất bại. Vui lòng tải lại trang.",
+  shelleyUpdated: "Shelley đã được cập nhật",
+  reloadPage: "Tải lại",
 
   // Chat Header & Actions
   newConversation: "Hội thoại mới",

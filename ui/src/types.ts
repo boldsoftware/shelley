@@ -233,6 +233,8 @@ export interface StreamResponse extends Omit<StreamResponseForTS, "messages"> {
   context_window_size?: number;
   conversation_list_patch?: ConversationListPatchEvent;
   heartbeat?: boolean;
+  /** The server's UI build, on each stream connection. */
+  ui_build?: string;
   notification_event?: NotificationEvent;
   resource_status?: ResourceStatus;
   models_changed?: boolean;
@@ -249,6 +251,8 @@ export interface Link {
 
 // InitData is injected into window by the server
 export interface InitData {
+  /** The UI build this page was served with (see StreamResponse.ui_build). */
+  ui_build?: string;
   models: Model[];
   default_model: string;
   default_cwd?: string;

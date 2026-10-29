@@ -119,10 +119,20 @@ const fakeWindow = new FakeEventTarget() as FakeEventTarget & {
   setTimeout: typeof fakeSetTimeout;
   clearTimeout: typeof fakeClearTimeout;
   location: { reload: () => void };
+  sessionStorage: Map<string, string> & {
+    getItem: (k: string) => string | null;
+    setItem: (k: string, v: string) => void;
+  };
+  __SHELLEY_INIT__?: { ui_build?: string };
 };
 fakeWindow.setTimeout = fakeSetTimeout;
 fakeWindow.clearTimeout = fakeClearTimeout;
 fakeWindow.location = { reload: () => (reloadCalls += 1) };
+const fakeSession = new Map<string, string>();
+fakeWindow.sessionStorage = Object.assign(fakeSession, {
+  getItem: (k: string) => fakeSession.get(k) ?? null,
+  setItem: (k: string, v: string) => void fakeSession.set(k, v),
+});
 
 let fetchResponseType: ResponseType = "basic";
 let fetchStatus = 200;
@@ -160,6 +170,8 @@ function reset(): void {
   fetchURL = "";
   fetchRedirect = undefined;
   reloadCalls = 0;
+  fakeSession.clear();
+  delete fakeWindow.__SHELLEY_INIT__;
 }
 
 // ---- Module under test -----------------------------------------------------
@@ -177,6 +189,7 @@ function newStream() {
   let reconnects = 0;
   let modelsChanged = 0;
   const statuses: string[] = [];
+  let staleBuilds = 0;
   const handle = connectGlobalStream({
     getHash: () => "hash0",
     onListPatch: () => {},
@@ -187,6 +200,9 @@ function newStream() {
     onReconnect: () => {
       reconnects += 1;
     },
+    onStaleBuild: () => {
+      staleBuilds += 1;
+    },
   });
   return {
     handle,
@@ -196,6 +212,9 @@ function newStream() {
     },
     get reconnects() {
       return reconnects;
+    },
+    get staleBuilds() {
+      return staleBuilds;
     },
   };
 }
@@ -418,6 +437,50 @@ await run("heartbeat watchdog reconnects a foreground zombie", () => {
   latest().emitOpen();
   assert(markAllStaleCalls === 1, "markAllStale fired after watchdog reconnect");
   assert(s.reconnects === 1, "onReconnect fired after watchdog reconnect");
+  s.handle.close();
+});
+
+await run("reloads once when the server runs a different UI build", async () => {
+  reset();
+  fakeWindow.__SHELLEY_INIT__ = { ui_build: "old" };
+  let s = newStream();
+  latest().emitOpen();
+  latest().emitMessage({ models_changed: true, ui_build: "old" });
+  assert(reloadCalls === 0 && s.staleBuilds === 0, "same build: no reload");
+  // A visible page offers to reload, and reloads once the tab is hidden.
+  latest().emitMessage({ models_changed: true, ui_build: "new" });
+  assert(reloadCalls === 0 && s.staleBuilds === 1, "visible: offered a reload");
+  fakeDocument.visibilityState = "hidden";
+  fakeDocument.dispatch("visibilitychange");
+  assert(reloadCalls === 1, "reloaded once hidden");
+  s.handle.close();
+
+  // A hidden page reloads right away.
+  reset();
+  fakeWindow.__SHELLEY_INIT__ = { ui_build: "old" };
+  fakeDocument.visibilityState = "hidden";
+  s = newStream();
+  latest().emitOpen();
+  latest().emitMessage({ models_changed: true, ui_build: "new" });
+  assert(reloadCalls === 1 && s.staleBuilds === 0, "hidden: reloaded");
+  assert(latest().closed, "closed the stream before reloading");
+  s.handle.close();
+  fakeDocument.visibilityState = "visible";
+
+  // A page that still has the old build after reloading (a stale cache)
+  // doesn't reload again for the same server build.
+  s = newStream();
+  latest().emitOpen();
+  latest().emitMessage({ models_changed: true, ui_build: "new" });
+  assert(reloadCalls === 1 && s.staleBuilds === 0, "no reload loop");
+  s.handle.close();
+
+  // Pages without a build (dev servers) never reload.
+  reset();
+  s = newStream();
+  latest().emitOpen();
+  latest().emitMessage({ models_changed: true, ui_build: "new" });
+  assert(reloadCalls === 0, "no page build: no reload");
   s.handle.close();
 });
 

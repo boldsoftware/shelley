@@ -15,6 +15,8 @@ export const zhTW: TranslationKeys = {
   dismiss: "關閉",
   retry: "重試",
   failedToLoadConversations: "載入對話失敗，請重新整理頁面。",
+  shelleyUpdated: "Shelley 已更新",
+  reloadPage: "重新載入",
 
   // Chat Header & Actions
   newConversation: "新建對話",

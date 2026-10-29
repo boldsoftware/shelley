@@ -662,6 +662,17 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Offers to reload a page from an older UI build. */
+.update-bar {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.75rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: var(--font-size-13);
+  text-align: center;
+}
+
 /* Drawer/Sidebar */
 .drawer {
   position: fixed;

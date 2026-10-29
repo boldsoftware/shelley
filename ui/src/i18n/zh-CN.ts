@@ -15,6 +15,8 @@ export const zhCN: TranslationKeys = {
   dismiss: "关闭",
   retry: "重试",
   failedToLoadConversations: "加载对话失败，请刷新页面。",
+  shelleyUpdated: "Shelley 已更新",
+  reloadPage: "重新加载",
 
   // Chat Header & Actions
   newConversation: "新建对话",

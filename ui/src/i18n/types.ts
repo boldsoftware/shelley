@@ -15,6 +15,8 @@ export interface TranslationKeys {
   dismiss: string;
   retry: string;
   failedToLoadConversations: string;
+  shelleyUpdated: string;
+  reloadPage: string;
 
   // Chat Header & Actions
   newConversation: string;

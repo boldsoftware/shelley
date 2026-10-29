@@ -15,6 +15,8 @@ export const upgoer5: TranslationKeys = {
   dismiss: "Go away",
   retry: "Try again",
   failedToLoadConversations: "Could not get your talks. Please open this again.",
+  shelleyUpdated: "Shelley got new changes",
+  reloadPage: "Open again",
 
   // Chat Header & Actions
   newConversation: "New Talk",

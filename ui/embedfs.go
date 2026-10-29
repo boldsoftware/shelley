@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -124,3 +126,18 @@ func Checksums() map[string]string {
 	}
 	return checksums
 }
+
+// BuildID identifies the embedded UI build: a hash of its asset checksums,
+// or "" without them. A page loaded from a different build is stale.
+var BuildID = sync.OnceValue(func() string {
+	checksums := Checksums()
+	if checksums == nil {
+		return ""
+	}
+	data, err := json.Marshal(checksums) // sorted keys
+	if err != nil {
+		panic(err)
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:6])
+})

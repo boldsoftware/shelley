@@ -16,6 +16,8 @@ export const fr: TranslationKeys = {
   retry: "Réessayer",
   failedToLoadConversations:
     "Impossible de charger les conversations. Veuillez rafraîchir la page.",
+  shelleyUpdated: "Shelley a été mis à jour",
+  reloadPage: "Recharger",
 
   // Chat Header & Actions
   newConversation: "Nouvelle conversation",

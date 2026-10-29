@@ -15,6 +15,8 @@ export const en: TranslationKeys = {
   dismiss: "Dismiss",
   retry: "Retry",
   failedToLoadConversations: "Failed to load conversations. Please refresh the page.",
+  shelleyUpdated: "Shelley was updated",
+  reloadPage: "Reload",
 
   // Chat Header & Actions
   newConversation: "New Conversation",

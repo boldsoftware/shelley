@@ -15,6 +15,8 @@ export const es: TranslationKeys = {
   dismiss: "Descartar",
   retry: "Reintentar",
   failedToLoadConversations: "No se pudieron cargar las conversaciones. Actualice la página.",
+  shelleyUpdated: "Shelley se actualizó",
+  reloadPage: "Recargar",
 
   // Chat Header & Actions
   newConversation: "Nueva conversación",

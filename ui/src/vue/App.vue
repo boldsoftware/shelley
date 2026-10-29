@@ -32,6 +32,10 @@
       </div>
     </div>
     <div v-if="banner" class="top-banner" :title="banner">{{ banner }}</div>
+    <div v-if="uiUpdated" class="update-bar" role="status">
+      {{ t("shelleyUpdated") }}
+      <button type="button" class="text-button" @click="reloadPage">{{ t("reloadPage") }}</button>
+    </div>
     <div class="app-container">
       <ConversationDrawer
         :is-open="drawerOpen"
@@ -405,6 +409,9 @@ function updatePageTitle(conversation: Conversation | undefined) {
 }
 
 const banner = window.__SHELLEY_INIT__?.banner;
+// The server runs a newer UI build; the page reloads once hidden.
+const uiUpdated = ref(false);
+const reloadPage = () => window.location.reload();
 
 // ---- state ----
 // Patches replace the list (and only the rows they touch), so deep reactivity is unnecessary.
@@ -1247,6 +1254,7 @@ onMounted(() => {
     onStatusChange: (status) => (streamStatus.value = status),
     onResourceSnapshot: replaceResourceStatuses,
     onResourceStatus: applyResourceStatus,
+    onStaleBuild: () => (uiUpdated.value = true),
     onReconnect: () => {
       reconnectNonce.value++;
     },

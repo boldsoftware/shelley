@@ -15,6 +15,8 @@ export const ja: TranslationKeys = {
   dismiss: "閉じる",
   retry: "再試行",
   failedToLoadConversations: "会話の読み込みに失敗しました。ページを更新してください。",
+  shelleyUpdated: "Shelley が更新されました",
+  reloadPage: "再読み込み",
 
   // Chat Header & Actions
   newConversation: "新しい会話",

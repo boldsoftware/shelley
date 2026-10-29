@@ -662,6 +662,7 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 	// Whether this VM has an exe.dev "notify" integration, so the UI can show
 	// the auto-configured push-notification toggle.
 	initData["exe_notify_available"] = s.exeNotifyAvailable()
+	initData["ui_build"] = ui.BuildID()
 	if s.Banner != "" {
 		initData["banner"] = s.Banner
 	}
@@ -2316,7 +2317,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 		}
 	}
 
-	if includeConversationListPatches && !writeStreamData(StreamResponse{ModelsChanged: true}) {
+	if includeConversationListPatches && !writeStreamData(StreamResponse{ModelsChanged: true, UIBuild: ui.BuildID()}) {
 		return
 	}
 
