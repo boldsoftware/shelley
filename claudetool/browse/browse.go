@@ -144,7 +144,6 @@ func (b *BrowseTools) GetBrowserContext() (context.Context, error) {
 	// Initialize a new browser
 	opts := chromedp.DefaultExecAllocatorOptions[:]
 	opts = append(opts, chromedp.NoSandbox)
-	opts = append(opts, chromedp.Flag("--disable-dbus", true))
 	opts = append(opts, chromedp.WSURLReadTimeout(60*time.Second))
 	// Disable WebAuthn to prevent segfaults on FIDO/WebAuthn sites (issue #78)
 	// Must include all default disabled features plus WebAuthentication
