@@ -149,12 +149,17 @@ func TestBashBackgroundsLongCommand(t *testing.T) {
 	text := out.LLMContent[0].Text
 	// The timeout can fire before the shell produces any output.
 	for _, want := range []string{
-		job.ID, job.LogPath, "kill -- -" + strconv.Itoa(job.PID), "never poll",
-		"work that doesn't need its output; otherwise end your turn",
+		job.ID, job.LogPath, "kill -- -" + strconv.Itoa(job.PID), "END YOUR TURN NOW",
+		"doesn't need its output", "NO sleep", "read the log freely",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("result %q does not contain %q", text, want)
 		}
+	}
+	// ui/src/utils/backgroundOutput.ts finds the trailer by this header and suffix.
+	header := fmt.Sprintf(" background job %s (PGID %d). Log: %s\n", job.ID, job.PID, job.LogPath)
+	if !strings.Contains(text, header) || !strings.HasSuffix(text, fmt.Sprintf("Cancel with `kill -- -%d`.]", job.PID)) {
+		t.Errorf("result %q does not match the trailer shape the UI strips", text)
 	}
 	if strings.Contains(text, "Keep working on other things") {
 		t.Error("background notice encourages unplanned work")

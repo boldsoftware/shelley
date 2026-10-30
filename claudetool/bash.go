@@ -400,6 +400,18 @@ func (b *BashTool) executeBashInDir(ctx context.Context, req bashInput, wd strin
 	return bashResult{out: out}, nil
 }
 
+// jobWaitGuidance is blunt because models tend to `sleep N; tail log`
+// instead of ending their turn, which delays the completion notice.
+const jobWaitGuidance = `Its output will arrive as a new message that wakes you when the job exits.
+What to do now:
+- Need its output to continue? END YOUR TURN NOW. Write one line like "Waiting for the job." and stop.
+- Have work that doesn't need its output? Do that, then end your turn.
+NEVER wait on it. Until it finishes:
+- NO sleep, for any duration (` + "`sleep 45; tail <log>`" + ` is exactly the wrong move)
+- NO tail, cat, or grep of its log to see if it's done
+- NO checking on it with ps, ls, or a loop
+After it finishes, read the log freely. Any command you run keeps you busy, so the job's completion cannot wake you until it returns.`
+
 // background hands the still-running job to b.Jobs, which reports its
 // completion to the conversation, and describes it for the model.
 // how leads the description, e.g. "Started as" or "Still running after 1m0s; moved to".
@@ -412,7 +424,8 @@ func (b *BashTool) background(ctx context.Context, job BackgroundJob, exited <-c
 		out.WriteString(tail + "\n")
 	}
 	fmt.Fprintf(&out, "[%s background job %s (PGID %d). Log: %s\n", how, job.ID, job.PID, job.LogPath)
-	fmt.Fprintf(&out, "Its output will arrive as a new message; never poll or sleep for it. Continue only with work that doesn't need its output; otherwise end your turn. Cancel with `kill -- -%d`.]", job.PID)
+	out.WriteString(jobWaitGuidance)
+	fmt.Fprintf(&out, " Cancel with `kill -- -%d`.]", job.PID)
 	return bashResult{out: out.String(), job: &job}, nil
 }
 
