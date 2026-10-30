@@ -54,7 +54,7 @@ func registerGlobalFlags(fs *flag.FlagSet, global *GlobalConfig) {
 	fs.BoolVar(&global.Debug, "debug", false, "Enable debug logging")
 	fs.BoolVar(&global.PredictableOnly, "predictable-only", false, "Use only the predictable service, ignoring all other models")
 	fs.StringVar(&global.ConfigPath, "config", "", "Path to shelley.json configuration file (optional)")
-	fs.StringVar(&global.DefaultModel, "default-model", "", "Default model for web UI (overrides shelley.json default_model; falls back to the first ready model when unset)")
+	fs.StringVar(&global.DefaultModel, "default-model", "", "Default model for web UI (overrides shelley.json default_model; prefers the first ready tier-1 model when unset)")
 	fs.BoolVar(&global.DisableLLMIntegration, "disable-llm-integration", false, "Ignore any discovered exe.dev llm integration")
 	fs.BoolVar(&global.DisableGateway, "disable-gateway", false, "Ignore llm_gateway from shelley.json")
 }

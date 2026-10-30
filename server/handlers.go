@@ -2973,8 +2973,8 @@ func assignModelTiers(modelList []ModelInfo) {
 }
 
 // effectiveDefaultModel returns the model id to use when the client hasn't
-// picked one. A configured override wins; otherwise modelList order is
-// authoritative. Returns "" only when no model is ready.
+// picked one. A ready configured override wins; otherwise prefer ready tier-1
+// models in catalog order. Returns "" only when no model is ready.
 func (s *Server) effectiveDefaultModel(modelList []ModelInfo) string {
 	if len(modelList) == 0 {
 		return ""
@@ -2984,6 +2984,11 @@ func (s *Server) effectiveDefaultModel(modelList []ModelInfo) string {
 			if m.ID == s.defaultModel && m.Ready {
 				return s.defaultModel
 			}
+		}
+	}
+	for _, m := range modelList {
+		if m.Ready && m.Tier == models.Tier1 {
+			return m.ID
 		}
 	}
 	for _, m := range modelList {

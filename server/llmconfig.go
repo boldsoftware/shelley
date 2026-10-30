@@ -26,7 +26,7 @@ type LLMConfig struct {
 	TranscriptionModels []models.TranscriptionModel
 
 	// DefaultModel is an optional process or shelley.json override. When empty,
-	// model order is authoritative and the first ready model is the default.
+	// prefer the first ready tier-1 model, then the first ready model.
 	DefaultModel string
 
 	// DB is the database for custom models (optional).

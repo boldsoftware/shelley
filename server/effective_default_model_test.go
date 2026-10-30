@@ -14,11 +14,41 @@ import (
 func TestEffectiveDefaultModelPrefersConfiguredWhenReady(t *testing.T) {
 	s := &Server{defaultModel: "claude-opus-4.7"}
 	got := s.effectiveDefaultModel([]ModelInfo{
-		{ID: "claude-opus-4.7", Ready: true},
-		{ID: "claude-sonnet-4.6", Ready: true},
+		{ID: "claude-sonnet-4.6", Ready: true, Tier: models.Tier1},
+		{ID: "claude-opus-4.7", Ready: true, Tier: models.Tier2},
 	})
 	if got != "claude-opus-4.7" {
 		t.Errorf("got %q, want claude-opus-4.7", got)
+	}
+}
+
+func TestEffectiveDefaultModelPrefersFirstReadyTier1(t *testing.T) {
+	for _, configured := range []string{"", "unavailable"} {
+		t.Run("configured="+configured, func(t *testing.T) {
+			s := &Server{defaultModel: configured}
+			list := []ModelInfo{
+				{ID: "gpt-5.6-sol", Ready: true},
+				{ID: "gpt-6-astra", Ready: false},
+				{ID: "gpt-6.1-sol", Ready: true},
+				{ID: "gpt-6.1-terra", Ready: true},
+			}
+			assignModelTiers(list)
+			if got := s.effectiveDefaultModel(list); got != "gpt-6.1-sol" {
+				t.Errorf("got %q, want gpt-6.1-sol", got)
+			}
+		})
+	}
+}
+
+func TestEffectiveDefaultModelUsesFirstReadyWhenOnlyTier2Available(t *testing.T) {
+	s := &Server{}
+	got := s.effectiveDefaultModel([]ModelInfo{
+		{ID: "unavailable", Ready: false, Tier: models.Tier1},
+		{ID: "first-ready", Ready: true, Tier: models.Tier2},
+		{ID: "second-ready", Ready: true, Tier: models.Tier2},
+	})
+	if got != "first-ready" {
+		t.Errorf("got %q, want first-ready", got)
 	}
 }
 
