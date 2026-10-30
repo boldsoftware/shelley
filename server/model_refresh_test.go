@@ -227,8 +227,8 @@ func TestHandleModelRefreshReturnsRefreshedModels(t *testing.T) {
 	if len(got) != 2 || got[0].ID != "new-built" || got[0].Source != "new source" {
 		t.Fatalf("models = %+v, want new-built first", got)
 	}
-	if !got[0].IsDefault || got[1].IsDefault {
-		t.Fatalf("models = %+v, want first refreshed model marked default", got)
+	if got[0].IsDefault || !got[1].IsDefault {
+		t.Fatalf("models = %+v, want the ready tier-1 refreshed model marked default", got)
 	}
 	if mgr.HasModel("old-built") {
 		t.Fatal("old built model was not removed")
