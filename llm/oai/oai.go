@@ -787,7 +787,7 @@ func fromLLMContent(c llm.Content) (string, []openai.ToolCall) {
 				ID:   c.ID, // Use the content ID if provided
 				Function: openai.FunctionCall{
 					Name:      c.ToolName,
-					Arguments: string(c.ToolInput),
+					Arguments: string(canonicalToolInput(c.ToolInput)),
 				},
 			},
 		}
@@ -1089,6 +1089,13 @@ func toolArgumentsInput(arguments string) json.RawMessage {
 	}
 	encoded, _ := json.Marshal(arguments)
 	return encoded
+}
+
+// canonicalToolInput is a tool call's input as sent back to the provider:
+// history from before llm.CanonicalToolInput may still repeat names.
+func canonicalToolInput(input json.RawMessage) json.RawMessage {
+	input, _ = llm.CanonicalToolInput(input)
+	return input
 }
 
 // toToolResultLLMContent converts a tool result message from OpenAI to llm.Content.

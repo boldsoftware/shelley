@@ -469,7 +469,7 @@ func fromLLMMessageResponses(msg llm.Message, reasoningReplay responsesReasoning
 					_ = json.Unmarshal(c.ToolInput, &input)
 					items = append(items, responsesInputItem{Type: "custom_tool_call", CallID: c.ID, Name: c.ToolName, Input: input.Input})
 				} else {
-					items = append(items, responsesInputItem{Type: "function_call", CallID: c.ID, Name: c.ToolName, Arguments: string(c.ToolInput)})
+					items = append(items, responsesInputItem{Type: "function_call", CallID: c.ID, Name: c.ToolName, Arguments: string(canonicalToolInput(c.ToolInput))})
 				}
 			}
 		}

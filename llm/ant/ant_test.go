@@ -3438,3 +3438,15 @@ func TestCharsPerToken(t *testing.T) {
 		}
 	}
 }
+
+// History recorded before tool input was canonicalized may repeat names;
+// the API rejects such a request, so it is sent canonical.
+func TestFromLLMContentRepeatedToolInputNames(t *testing.T) {
+	got := fromLLMContent(llm.Content{
+		Type: llm.ContentTypeToolUse, ID: "t", ToolName: "bash",
+		ToolInput: json.RawMessage(`{"ssh_target":"x","ssh_target":""}`),
+	})
+	if string(got.ToolInput) != `{"ssh_target":""}` {
+		t.Fatalf("tool input %s", got.ToolInput)
+	}
+}
