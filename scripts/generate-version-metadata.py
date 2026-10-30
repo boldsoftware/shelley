@@ -12,15 +12,6 @@ import urllib.parse
 from pathlib import Path
 
 
-# The headless-shell release to advertise instead of the newest one, on the
-# platforms it has a build for. Chromium releases, and so the
-# chromedp/headless-shell builds the release workflow publishes, still trust
-# the compromised eMudhra intermediates
-# (https://emudhra.we-have-a-problem.com). This release is Chromium
-# 156.0.8078.48 for linux/amd64 with their blocklist (chromium da63b94c4ee2)
-# applied. Remove the pin once a chromedp build has the blocklist.
-HEADLESS_SHELL_PIN = "headless-shell/v156.0.8078.48.p1"
-
 HEADLESS_SHELL_PLATFORMS = ("linux_amd64", "linux_arm64")
 RELEASES_URL = "https://github.com/boldsoftware/shelley/releases/download"
 
@@ -28,9 +19,9 @@ RELEASES_URL = "https://github.com/boldsoftware/shelley/releases/download"
 def get_headless_shells() -> tuple[str, dict[str, dict[str, str]]]:
     """Choose a headless-shell build for each platform.
 
-    Each platform gets the pinned release's build if it has one, else the
-    newest release's that has one. Returns the pinned (or newest) release
-    with builds and {platform: {"version": "Chromium 147.0.7727.24", "url": ...}}.
+    Each platform gets its build from the newest release that has one.
+    Returns the newest release with builds and
+    {platform: {"version": "Chromium 147.0.7727.24", "url": ...}}.
     Shelley releases far outnumber headless-shell releases, so this goes by
     git tags rather than by recent releases.
     """
@@ -41,12 +32,6 @@ def get_headless_shells() -> tuple[str, dict[str, dict[str, str]]]:
     if not tags:
         print("ERROR: no headless-shell/v* tags found", file=sys.stderr)
         sys.exit(1)
-    if HEADLESS_SHELL_PIN:
-        if HEADLESS_SHELL_PIN not in tags:
-            print(f"ERROR: pinned tag {HEADLESS_SHELL_PIN} not found", file=sys.stderr)
-            sys.exit(1)
-        tags.remove(HEADLESS_SHELL_PIN)
-        tags.insert(0, HEADLESS_SHELL_PIN)
     builds = {}
     first = None
     for tag in tags:
@@ -58,9 +43,6 @@ def get_headless_shells() -> tuple[str, dict[str, dict[str, str]]]:
                     "version": f"Chromium {tag.removeprefix('headless-shell/v')}",
                     "url": f"{RELEASES_URL}/{tag}/{name}",
                 }
-        if tag == HEADLESS_SHELL_PIN and not builds:
-            print(f"ERROR: pinned release {HEADLESS_SHELL_PIN} has no headless-shell builds", file=sys.stderr)
-            sys.exit(1)
         first = first or (tag if builds else None)
         if len(builds) == len(HEADLESS_SHELL_PLATFORMS):
             return first, builds
@@ -138,7 +120,7 @@ def generate_release_json(output_dir: Path) -> None:
     hs_tag, hs_builds = get_headless_shells()
     release_info["headless_shells"] = hs_builds
     # Shelley before headless_shells reads one version for every platform:
-    # the pinned (or newest) release, with only the builds it has.
+    # the newest release with builds, with only the builds it has.
     hs_version = f"Chromium {hs_tag.removeprefix('headless-shell/v')}"
     release_info["headless_shell_version"] = hs_version
     release_info["headless_shell_urls"] = {
