@@ -30,12 +30,12 @@ func TestPatchToolAliasesSharePathLock(t *testing.T) {
 
 	patch := &PatchTool{WorkingDir: NewMutableWorkingDir(tempDir)}
 	for _, alias := range []string{path, symlink, hardlink} {
-		unlock := patch.lockPath(alias)
+		unlock := patch.lockPath(nil, alias)
 		unlock()
 	}
 
 	created := filepath.Join(tempDir, "created.txt")
-	unlock := patch.lockPath(created)
+	unlock := patch.lockPath(nil, created)
 	if err := os.WriteFile(created, []byte("created"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestPatchToolAliasesSharePathLock(t *testing.T) {
 	if err := os.Link(created, createdHardlink); err != nil {
 		t.Skipf("hard link unavailable: %v", err)
 	}
-	unlock = patch.lockPath(createdHardlink)
+	unlock = patch.lockPath(nil, createdHardlink)
 	unlock()
 
 	patch.pathLocksMu.Lock()

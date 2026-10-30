@@ -119,6 +119,9 @@ type ToolSetConfig struct {
 	ToolOverrides map[string]string
 	// DisableAllTools disables every tool by default; ToolOverrides with "on" re-enable.
 	DisableAllTools bool
+	// VM, if set, is another machine the conversation works on: bash and
+	// patch calls then choose their target, it or this host (see VM).
+	VM VM
 }
 
 // ToolSet holds a set of tools for a single conversation.
@@ -218,6 +221,7 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		Env:              env,
 		Jobs:             cfg.BackgroundJobs,
 		BackgroundAfter:  cfg.BashBackgroundAfter,
+		VM:               cfg.VM,
 	}
 
 	patchProvider, patchProfile := "", "nested"
@@ -227,7 +231,7 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 			patchProfile = llm.PatchProfile(svc)
 		}
 	}
-	patchTool := &PatchTool{WorkingDir: wd, Provider: patchProvider, Profile: patchProfile}
+	patchTool := &PatchTool{WorkingDir: wd, Provider: patchProvider, Profile: patchProfile, VM: cfg.VM}
 
 	changeDirTool := &ChangeDirTool{
 		WorkingDir: wd,

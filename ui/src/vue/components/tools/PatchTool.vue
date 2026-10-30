@@ -294,6 +294,15 @@ const path = computed(() => {
   return typeof ti === "string" ? ti : "";
 });
 
+// A patch to a file on another machine (an ssh_target other than this
+// host's "localhost"; older calls said ""): its display path is
+// "MACHINE:PATH", and the editor here can't open it.
+const onVM = computed(() => {
+  const ti = props.toolInput;
+  const target = typeof ti === "object" && ti !== null ? (ti as { ssh_target?: unknown }).ssh_target : undefined;
+  return typeof target === "string" && target !== "" && target !== "localhost";
+});
+
 const displayData = computed<PatchDisplayData | null>(() => {
   const d = props.display;
   if (d && typeof d === "object" && "path" in d) {
@@ -362,7 +371,7 @@ const editorPath = computed(() =>
 // while the patch is still being applied — the file is mid-write then. Still
 // offered for a failed patch: seeing the file as it stands is what you want.
 const openEditor = useOpenFileEditor();
-const showOpenInEditor = computed(() => !!editorPath.value && isComplete.value);
+const showOpenInEditor = computed(() => !!editorPath.value && isComplete.value && !onVM.value);
 
 function openInEditor() {
   openEditor(editorPath.value);
