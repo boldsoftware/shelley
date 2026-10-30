@@ -2772,11 +2772,8 @@ func TestUserFacingLLMError(t *testing.T) {
 
 	// Idle/stall timeout is explained, not surfaced as a raw deadline error.
 	msg := userFacingLLMError(idleErr, nil)
-	want := "LLM request timed out: the model stopped sending data for 3m0s " +
-		"(idle/stall timeout), so the request was aborted. This usually " +
-		"means the provider or upstream connection stalled mid-response, " +
-		"not that your turn was too long — a slow but steadily streaming " +
-		"response is allowed to finish. Press Retry to try again.\n\n" +
+	want := "LLM request stalled: the model produced no output for 3m0s, " +
+		"so Shelley aborted the request. Press Retry to try again.\n\n" +
 		"Details: stream: llm stream idle timeout: no data received within idle window after 3m0s: context canceled"
 	if msg != want {
 		t.Errorf("idle error message = %q, want %q", msg, want)

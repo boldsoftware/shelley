@@ -362,7 +362,7 @@ func TestParseSSEStreamRefusalDetails(t *testing.T) {
 		``,
 	}, "\n")
 
-	resp, err := parseSSEStream(strings.NewReader(stream), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(stream), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream: %v", err)
 	}
@@ -1530,7 +1530,7 @@ func TestToLLMContentWithNestedToolResults(t *testing.T) {
 
 func TestParseSSEStreamText(t *testing.T) {
 	stream := mockSSEResponse("msg_abc", Claude46Sonnet, "Hello!", 10, 5)
-	resp, err := parseSSEStream(strings.NewReader(stream), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(stream), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
 	}
@@ -1571,7 +1571,7 @@ func TestParseSSEStreamMultipleDeltas(t *testing.T) {
 	b.WriteString("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":3}}\n\n")
 	b.WriteString("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
 
-	resp, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
 	}
@@ -1600,7 +1600,7 @@ func TestParseSSEStreamDropsEmptyTextBlock(t *testing.T) {
 	b.WriteString("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":1}}\n\n")
 	b.WriteString("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
 
-	resp, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
 	}
@@ -1627,7 +1627,7 @@ func TestParseSSEStreamToolUse(t *testing.T) {
 	b.WriteString("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":25}}\n\n")
 	b.WriteString("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
 
-	resp, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
 	}
@@ -1678,7 +1678,7 @@ func TestParseSSEStreamToolUseEmptyInput(t *testing.T) {
 	b.WriteString("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":10}}\n\n")
 	b.WriteString("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
 
-	resp, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
 	}
@@ -1716,7 +1716,7 @@ func TestParseSSEStreamThinking(t *testing.T) {
 	b.WriteString("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":15}}\n\n")
 	b.WriteString("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
 
-	resp, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
 	}
@@ -1751,7 +1751,7 @@ func TestParseSSEStreamPing(t *testing.T) {
 	b.WriteString("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":1}}\n\n")
 	b.WriteString("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
 
-	resp, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
 	}
@@ -1762,7 +1762,7 @@ func TestParseSSEStreamPing(t *testing.T) {
 
 func TestParseSSEStreamNoMessageStart(t *testing.T) {
 	stream := "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"
-	_, err := parseSSEStream(strings.NewReader(stream), nil)
+	_, err := parseSSEStream(t.Context(), strings.NewReader(stream), nil)
 	if err == nil {
 		t.Fatal("expected error for missing message_start")
 	}
@@ -1778,7 +1778,7 @@ func TestParseSSEStreamIncomplete(t *testing.T) {
 	b.WriteString("event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\n")
 	b.WriteString("event: ping\ndata: {\"type\":\"ping\"}\n\n")
 
-	_, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	_, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err == nil {
 		t.Fatal("expected error for incomplete stream (no message_stop)")
 	}
@@ -1792,7 +1792,7 @@ func TestParseSSEStreamError(t *testing.T) {
 	b.WriteString("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_err\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"test\",\"content\":[],\"stop_reason\":null,\"usage\":{\"input_tokens\":1,\"output_tokens\":0}}}\n\n")
 	b.WriteString(`event: error` + "\n" + `data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}` + "\n\n")
 
-	_, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	_, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err == nil {
 		t.Fatal("expected error for stream error event")
 	}
@@ -2134,7 +2134,7 @@ data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":
 event: message_stop
 data: {"type":"message_stop"}
 `
-	resp, err := parseSSEStream(strings.NewReader(recorded), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(recorded), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
 	}
@@ -2163,7 +2163,7 @@ func TestParseSSEStreamConnectionReset(t *testing.T) {
 		"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\n\n"
 
 	r := &errorAfterReader{data: []byte(partial), err: fmt.Errorf("connection reset by peer")}
-	_, err := parseSSEStream(r, nil)
+	_, err := parseSSEStream(t.Context(), r, nil)
 	if err == nil {
 		t.Fatal("expected error for connection reset")
 	}
@@ -2205,7 +2205,7 @@ func mockTruncatedSSEResponse(id, model, text string, inputTokens uint64) string
 func TestParseSSEStreamTruncated(t *testing.T) {
 	// A stream that cuts off before message_delta (no stop_reason) should be an error.
 	stream := mockTruncatedSSEResponse("msg_trunc", Claude46Sonnet, "partial response", 100)
-	_, err := parseSSEStream(strings.NewReader(stream), nil)
+	_, err := parseSSEStream(t.Context(), strings.NewReader(stream), nil)
 	if err == nil {
 		t.Fatal("expected error for truncated stream, got nil")
 	}
@@ -2222,7 +2222,7 @@ func TestParseSSEStreamTruncatedMidContentBlock(t *testing.T) {
 	b.WriteString("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\n\n")
 	// Cut off here — no content_block_stop, no message_delta, no message_stop
 
-	_, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	_, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err == nil {
 		t.Fatal("expected error for truncated stream, got nil")
 	}
@@ -2396,7 +2396,7 @@ func TestParseSSEStreamMultiLineData(t *testing.T) {
 	b.WriteString("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":5}}\n\n")
 	b.WriteString("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
 
-	resp, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
 	}
@@ -2415,7 +2415,7 @@ func TestParseSSEStreamErrorIncludesData(t *testing.T) {
 	b.WriteString("data: {\"type\": \"message_start\" \"broken json}\n")
 	b.WriteString("\n")
 
-	_, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	_, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err == nil {
 		t.Fatal("expected error for malformed JSON")
 	}
@@ -2436,7 +2436,7 @@ func TestParseSSEStreamTruncatedJSON(t *testing.T) {
 	b.WriteString("data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_del\n")
 	b.WriteString("\n")
 
-	_, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	_, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err == nil {
 		t.Fatal("expected error for truncated JSON")
 	}
@@ -2498,7 +2498,7 @@ func TestParseSSEStreamInvalidCharInJSON(t *testing.T) {
 	b.WriteString("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":1}}\n\n")
 	b.WriteString("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
 
-	resp, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
 	}
@@ -2715,7 +2715,7 @@ func TestParseSSEStreamWebSearch(t *testing.T) {
 	b.WriteString(`event: message_delta` + "\n" + `data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":50}}` + "\n\n")
 	b.WriteString(`event: message_stop` + "\n" + `data: {"type":"message_stop"}` + "\n\n")
 
-	resp, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
 	}
@@ -2796,7 +2796,7 @@ func TestParseSSEStreamServerToolUseWithInputDeltas(t *testing.T) {
 	b.WriteString(`event: message_delta` + "\n" + `data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":10}}` + "\n\n")
 	b.WriteString(`event: message_stop` + "\n" + `data: {"type":"message_stop"}` + "\n\n")
 
-	resp, err := parseSSEStream(strings.NewReader(b.String()), nil)
+	resp, err := parseSSEStream(t.Context(), strings.NewReader(b.String()), nil)
 	if err != nil {
 		t.Fatalf("parseSSEStream() error = %v", err)
 	}

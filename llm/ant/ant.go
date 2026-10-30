@@ -1168,7 +1168,7 @@ func invalidThinkingSignature(message string) bool {
 
 // parseSSEStream reads an SSE stream and assembles the complete response.
 // If onStream is non-nil, it is called with each text/thinking delta as it arrives.
-func parseSSEStream(r io.Reader, onStream func(llm.StreamDelta)) (*response, error) {
+func parseSSEStream(ctx context.Context, r io.Reader, onStream func(llm.StreamDelta)) (*response, error) {
 	var (
 		resp            *response
 		contents        []content // indexed by content block index
@@ -1186,6 +1186,9 @@ func parseSSEStream(r io.Reader, onStream func(llm.StreamDelta)) (*response, err
 		if err := json.Unmarshal([]byte(data), &event); err != nil {
 			return fmt.Errorf("parsing SSE event (event=%q, data=%s): %w",
 				sse.EventType, truncateForError(data, 512), err)
+		}
+		if event.Type != "ping" {
+			llm.ReportProgress(ctx)
 		}
 
 		switch event.Type {
@@ -1267,9 +1270,6 @@ func parseSSEStream(r io.Reader, onStream func(llm.StreamDelta)) (*response, err
 
 		case "message_stop":
 			messageDone = true
-
-		case "ping":
-			// keepalive, ignore
 
 		case "error":
 			return fmt.Errorf("stream error event: %s", data)
@@ -1421,7 +1421,7 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 
 		switch {
 		case resp.StatusCode == http.StatusOK:
-			response, err := parseSSEStream(resp.Body, ir.OnStream)
+			response, err := parseSSEStream(ctx, resp.Body, ir.OnStream)
 			resp.Body.Close()
 			if err != nil {
 				// Stream parse errors might be transient (connection reset, etc.)

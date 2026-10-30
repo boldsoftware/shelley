@@ -1008,7 +1008,7 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 
 		var resp responsesResponse
 		if responsesShouldParseStream(req, httpResp.Header) {
-			streamResp, err := parseResponsesSSEStream(httpResp.Body, ir.OnStream)
+			streamResp, err := parseResponsesSSEStream(ctx, httpResp.Body, ir.OnStream)
 			httpResp.Body.Close()
 			if err != nil {
 				now := time.Now().Format(time.DateTime)
@@ -1275,7 +1275,7 @@ func iterResponsesSSEEvents(r io.Reader, yield func(responsesSSEEvent) error) er
 	return dispatch()
 }
 
-func parseResponsesSSEStream(r io.Reader, onStream func(llm.StreamDelta)) (*responsesResponse, error) {
+func parseResponsesSSEStream(ctx context.Context, r io.Reader, onStream func(llm.StreamDelta)) (*responsesResponse, error) {
 	var completed *responsesResponse
 	// Responses streams finalize message/tool output in output_item.done.
 	// response.completed may only carry completion metadata and usage.
@@ -1293,6 +1293,9 @@ func parseResponsesSSEStream(r io.Reader, onStream func(llm.StreamDelta)) (*resp
 		eventType := event.Type
 		if eventType == "" {
 			eventType = sse.EventType
+		}
+		if eventType != "keepalive" {
+			llm.ReportProgress(ctx)
 		}
 
 		switch eventType {

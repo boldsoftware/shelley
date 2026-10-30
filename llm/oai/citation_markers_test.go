@@ -24,7 +24,7 @@ func TestParseResponsesSSEFinishesMalformedCitationContent(t *testing.T) {
 	}, "\n")
 
 	var got strings.Builder
-	if _, err := parseResponsesSSEStream(strings.NewReader(stream), func(delta llm.StreamDelta) {
+	if _, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), func(delta llm.StreamDelta) {
 		got.WriteString(delta.Text)
 	}); err != nil {
 		t.Fatal(err)
@@ -47,7 +47,7 @@ func TestParseResponsesSSEFinishesCitationAtStreamEnd(t *testing.T) {
 	}, "\n")
 
 	var got strings.Builder
-	if _, err := parseResponsesSSEStream(strings.NewReader(stream), func(delta llm.StreamDelta) {
+	if _, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), func(delta llm.StreamDelta) {
 		got.WriteString(delta.Text)
 	}); err != nil {
 		t.Fatal(err)

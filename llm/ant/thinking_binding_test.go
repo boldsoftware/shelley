@@ -89,7 +89,7 @@ func TestThinkingBindingStreamMetadata(t *testing.T) {
 	})
 	emit(streamEvent{Type: "message_stop"})
 
-	parsed, err := parseSSEStream(strings.NewReader(stream.String()), nil)
+	parsed, err := parseSSEStream(t.Context(), strings.NewReader(stream.String()), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

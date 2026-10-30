@@ -297,21 +297,34 @@ func (l *RunConfig) run(ctx context.Context) error {
 
 // sendWithRetry issues one model request with transport retries. Provider-internal
 // retries own user-visible warnings; this catches transient failures that escape
-// the provider. The transport's idle timeout is the primary bound, while
-// maxTurnDuration is an absolute backstop for sockets kept alive without progress.
-// requestTrace retains correlation IDs even if the request fails without a response.
+// the provider. The request is aborted once it goes stallTimeout without a model
+// event, or after maxRequestDuration in total. requestTrace retains correlation IDs even if the request fails without
+// a response.
 func (l *RunConfig) sendWithRetry(ctx context.Context, req *llm.Request, requestTrace **llm.RequestTrace) (*llm.Response, error) {
-	llmCtx, cancel := context.WithTimeout(ctx, maxTurnDuration)
+	llmCtx, cancel := context.WithTimeoutCause(ctx, maxRequestDuration, errTooLong)
 	defer cancel()
+	llmCtx, stop := withStallTimeout(llmCtx, stallTimeout)
+	defer stop()
 	if l.PromptCacheKey != "" {
 		llmCtx = llmhttp.WithPromptCacheKey(llmCtx, l.PromptCacheKey)
 	}
 	llmCtx, *requestTrace = llm.WithRequestTrace(llmCtx)
+	resp, err := l.doWithRetry(llmCtx, req)
+	if err != nil && errors.Is(context.Cause(llmCtx), errStalled) {
+		return nil, &stallError{timeout: stallTimeout, cause: err}
+	}
+	if err != nil && errors.Is(context.Cause(llmCtx), errTooLong) {
+		return nil, &tooLongError{limit: maxRequestDuration, cause: err}
+	}
+	return resp, err
+}
+
+func (l *RunConfig) doWithRetry(ctx context.Context, req *llm.Request) (*llm.Response, error) {
 	const maxRetries = 2
 	var resp *llm.Response
 	var err error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		resp, err = l.LLM.Do(llmCtx, req)
+		resp, err = l.LLM.Do(ctx, req)
 		if err == nil {
 			return resp, nil
 		}
@@ -325,11 +338,60 @@ func (l *RunConfig) sendWithRetry(ctx context.Context, req *llm.Request, request
 			"max_retries", maxRetries)
 		select {
 		case <-time.After(sleep):
-		case <-llmCtx.Done():
-			return nil, llmCtx.Err()
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 	}
 	return resp, err
+}
+
+var (
+	errStalled = errors.New("no model output")
+	errTooLong = errors.New("request time limit reached")
+)
+
+// withStallTimeout returns a context that is canceled with errStalled once
+// timeout passes without llm.ReportProgress being called on it.
+func withStallTimeout(ctx context.Context, timeout time.Duration) (context.Context, func()) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	timer := time.AfterFunc(timeout, func() { cancel(errStalled) })
+	ctx = llm.WithProgress(ctx, func() { timer.Reset(timeout) })
+	return ctx, func() {
+		timer.Stop()
+		cancel(nil)
+	}
+}
+
+// stallError reports a request aborted by withStallTimeout.
+type stallError struct {
+	timeout time.Duration
+	cause   error
+}
+
+func (e *stallError) Error() string {
+	return fmt.Sprintf("no model output for %s: %v", e.timeout, e.cause)
+}
+
+func (e *stallError) Unwrap() error { return e.cause }
+
+func (e *stallError) RequestErrorInfo() llm.RequestErrorInfo {
+	return llm.RequestErrorInfo{Retryable: true, IdleStallDuration: e.timeout}
+}
+
+// tooLongError reports a request aborted at maxRequestDuration.
+type tooLongError struct {
+	limit time.Duration
+	cause error
+}
+
+func (e *tooLongError) Error() string {
+	return fmt.Sprintf("request exceeded %s: %v", e.limit, e.cause)
+}
+
+func (e *tooLongError) Unwrap() error { return e.cause }
+
+func (e *tooLongError) RequestErrorInfo() llm.RequestErrorInfo {
+	return llm.RequestErrorInfo{Retryable: true}
 }
 
 // maxPauseContinuations bounds how many times we will re-request to resolve a

@@ -17,14 +17,17 @@ import (
 
 var errMessagePersistence = errors.New("message persistence failed")
 
-// maxTurnDuration is an absolute backstop on a single LLM request (including
-// its inner transport retries). The primary bound on a stuck stream is the
-// transport idle/stall timeout. This ceiling only exists to stop a provider
-// that keeps the connection warm with heartbeats/keepalives (which reset the
-// idle timer) from hanging a turn indefinitely. It is deliberately far larger
-// than the idle window so that genuinely long, steadily-streaming turns are
-// unaffected.
-const maxTurnDuration = 15 * time.Minute
+// stallTimeout bounds how long a single LLM request (including its inner
+// transport retries) may go without a model event. Keepalives do not count,
+// so a provider that keeps a dead turn's connection warm is still cut off,
+// while a slow but steadily streaming response runs to completion. The
+// transport's byte-level idle timeout separately catches silent sockets.
+const stallTimeout = 5 * time.Minute
+
+// maxRequestDuration bounds a single LLM request (including its inner
+// transport retries) however steadily it streams, so a model that never
+// finishes cannot hold a turn forever.
+const maxRequestDuration = 60 * time.Minute
 
 // MessageRecordFunc is called to record new messages to persistent storage.
 // otherUsage carries the usage of indirect LLM calls affiliated with the
@@ -465,16 +468,15 @@ func (l *Loop) checkGitStateChange(ctx context.Context) {
 // for cost tracking (excluded from context) and an error message for the user.
 func userFacingLLMError(err error, trace *llm.RequestTrace) string {
 	var msg string
-	if info, ok := llm.RequestErrorInfoFromError(err); ok && info.IdleStallDuration > 0 {
-		msg = fmt.Sprintf(
-			"LLM request timed out: the model stopped sending data for %s "+
-				"(idle/stall timeout), so the request was aborted. This usually "+
-				"means the provider or upstream connection stalled mid-response, "+
-				"not that your turn was too long — a slow but steadily streaming "+
-				"response is allowed to finish. Press Retry to try again.\n\n"+
-				"Details: %v",
-			info.IdleStallDuration, err,
-		)
+	var tooLong *tooLongError
+	if errors.As(err, &tooLong) {
+		msg = fmt.Sprintf("LLM request took too long: the model was still responding after %s, "+
+			"so Shelley aborted the request. Press Retry to try again.\n\nDetails: %v",
+			tooLong.limit, err)
+	} else if info, ok := llm.RequestErrorInfoFromError(err); ok && info.IdleStallDuration > 0 {
+		msg = fmt.Sprintf("LLM request stalled: the model produced no output for %s, "+
+			"so Shelley aborted the request. Press Retry to try again.\n\nDetails: %v",
+			info.IdleStallDuration, err)
 	} else {
 		msg = fmt.Sprintf("LLM request failed: %v", err)
 	}

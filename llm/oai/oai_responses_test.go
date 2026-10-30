@@ -1214,7 +1214,7 @@ func TestParseResponsesSSEEmptyTerminalErrorMessage(t *testing.T) {
 		`data: {"type":"error","error":{"message":"","type":"invalid_request_error","code":"unsupported_value"}}`,
 		``,
 	}, "\n")
-	_, err := parseResponsesSSEStream(strings.NewReader(stream), nil)
+	_, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil)
 	if err == nil {
 		t.Fatal("parseResponsesSSEStream() error = nil, want terminal error")
 	}
@@ -1967,7 +1967,7 @@ func TestParseResponsesSSECustomToolCall(t *testing.T) {
 		`data: {"type":"response.completed","response":{"id":"resp_1","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}`,
 		``,
 	}, "\n")
-	response, err := parseResponsesSSEStream(strings.NewReader(stream), nil)
+	response, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1982,7 +1982,7 @@ func TestParseResponsesSSEErrorAcceptsNumericCode(t *testing.T) {
 		`data: {"type":"error","error":{"message":"overloaded","type":"server_error","code":500}}`,
 		``,
 	}, "\n")
-	_, err := parseResponsesSSEStream(strings.NewReader(stream), nil)
+	_, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil)
 	if err == nil || !strings.Contains(err.Error(), "stream error event: overloaded") {
 		t.Fatalf("error = %v, want parsed stream error", err)
 	}
@@ -2029,7 +2029,7 @@ func TestParseResponsesSSETimestamps(t *testing.T) {
 	}, "\n")
 
 	var deltas []llm.StreamDelta
-	response, err := parseResponsesSSEStream(strings.NewReader(stream), func(delta llm.StreamDelta) {
+	response, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), func(delta llm.StreamDelta) {
 		deltas = append(deltas, delta)
 	})
 	if err != nil {

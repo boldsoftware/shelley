@@ -13,6 +13,7 @@ const (
 	requestTraceContextKey requestContextKey = iota
 	purposeContextKey
 	usageCollectorContextKey
+	progressContextKey
 )
 
 // RequestTrace collects provider-neutral named diagnostics in insertion order.
@@ -114,4 +115,17 @@ func (a *UsageAccumulator) Take() []PurposedUsage {
 	entries := a.entries
 	a.entries = nil
 	return entries
+}
+
+// WithProgress attaches f to ctx. Providers call it, via ReportProgress, each
+// time a streamed response delivers a model event; keepalives do not count.
+func WithProgress(ctx context.Context, f func()) context.Context {
+	return context.WithValue(ctx, progressContextKey, f)
+}
+
+// ReportProgress calls the function attached by WithProgress, if any.
+func ReportProgress(ctx context.Context) {
+	if f, ok := ctx.Value(progressContextKey).(func()); ok {
+		f()
+	}
 }

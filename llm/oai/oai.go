@@ -1276,7 +1276,7 @@ func chatInBandErrorRetryable(apiErr *openai.APIError) bool {
 	return responsesErrorRetryable(&responsesError{Message: apiErr.Message, Type: apiErr.Type, Code: code})
 }
 
-func (s *Service) consumeChatCompletionStream(stream *openai.ChatCompletionStream, onStream func(llm.StreamDelta)) (*llm.Response, error) {
+func (s *Service) consumeChatCompletionStream(ctx context.Context, stream *openai.ChatCompletionStream, onStream func(llm.StreamDelta)) (*llm.Response, error) {
 	msg := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleAssistant}
 	headers := stream.Header()
 	var (
@@ -1312,6 +1312,7 @@ func (s *Service) consumeChatCompletionStream(stream *openai.ChatCompletionStrea
 			return nil, err
 		}
 		started = true
+		llm.ReportProgress(ctx)
 		if chunk.ID != "" {
 			id = chunk.ID
 		}
@@ -1713,7 +1714,7 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			var stream *openai.ChatCompletionStream
 			stream, err = client.CreateChatCompletionStream(ctx, req)
 			if err == nil {
-				result, err = s.consumeChatCompletionStream(stream, ir.OnStream)
+				result, err = s.consumeChatCompletionStream(ctx, stream, ir.OnStream)
 				closeErr := stream.Close()
 				if err == nil && closeErr != nil {
 					err = closeErr

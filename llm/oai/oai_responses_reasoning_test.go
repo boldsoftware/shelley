@@ -612,7 +612,7 @@ func TestParseResponsesSSEPreservesReasoningStateAndOutputOrder(t *testing.T) {
 		}),
 	}, "")
 
-	resp, err := parseResponsesSSEStream(strings.NewReader(stream), nil)
+	resp, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil)
 	if err != nil {
 		t.Fatalf("parseResponsesSSEStream: %v", err)
 	}
@@ -639,7 +639,7 @@ func TestParseResponsesSSECompletedReasoningStateWins(t *testing.T) {
 		}},
 	})
 
-	resp, err := parseResponsesSSEStream(strings.NewReader(stream), nil)
+	resp, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil)
 	if err != nil {
 		t.Fatalf("parseResponsesSSEStream: %v", err)
 	}
@@ -654,7 +654,7 @@ func TestParseResponsesSSERejectsInterruptedReasoningState(t *testing.T) {
 		Type:             "reasoning",
 		EncryptedContent: "partial",
 	})
-	if _, err := parseResponsesSSEStream(strings.NewReader(stream), nil); err == nil || !strings.Contains(err.Error(), "incomplete stream") {
+	if _, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil); err == nil || !strings.Contains(err.Error(), "incomplete stream") {
 		t.Fatalf("error = %v, want incomplete stream", err)
 	}
 }
