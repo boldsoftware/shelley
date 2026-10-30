@@ -85,7 +85,6 @@
               :disabled-reason="conversationWorking ? t('modelSwitchBusy') : undefined"
               :refreshing="refreshingModels"
               :knob="knob"
-              append-to-body
               @select-model="
                 conversationLive ? switchConversationModel($event) : setSelectedModel($event)
               "

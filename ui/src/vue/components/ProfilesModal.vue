@@ -20,7 +20,6 @@
             :thinking-level="(draft.settings.thinking_level || 'default') as ThinkingLevel"
             :show-recent="false"
             :catalog-actions="false"
-            append-to-body
             aria-label-prefix="Profile model"
             @select-model="setModel"
             @select-combination="setModel"

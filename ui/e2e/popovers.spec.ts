@@ -1186,12 +1186,8 @@ test.describe("Status readout controls", () => {
     await expect(pickerPanel).toBeHidden();
   });
 
-  // The inline picker's overlay is portaled to <body> precisely so it can be
-  // clamped to the viewport: anchored to the trigger (append-to="self") it is
-  // positioned by relativePosition(), which aligns left edges and never clamps,
-  // and the trigger sits at the right edge of the bar — so on a narrow screen the
-  // panel ran off the left (measured x = -93 at 360px). Pin that it stays on
-  // screen, on the viewport where there is least room.
+  // Picker overlays are portaled to <body> so PrimeVue can clamp them to the
+  // viewport instead of a trigger ancestor clipping or misplacing them.
   test("picker overlay stays on screen on a narrow viewport", async ({ page, request }) => {
     test.setTimeout(60000);
     await page.setViewportSize({ width: 360, height: 760 });

@@ -158,6 +158,22 @@ test.describe("Model picker (PrimeVue)", () => {
     await expect(searchbox).not.toBeFocused();
   });
 
+  test("new-chat search stays usable when the viewport becomes compact", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/new");
+
+    await page.locator(".status-bar-new .model-picker.p-select").click();
+    const searchbox = page.locator(".model-picker-panel").getByRole("searchbox");
+    await searchbox.click();
+    await page.setViewportSize({ width: 390, height: 460 });
+
+    await expect(searchbox).toBeVisible();
+    await expect(searchbox).toBeFocused();
+    await searchbox.fill("predict");
+    await expect(searchbox).toHaveValue("predict");
+    await expect(page.locator(".model-picker-panel .p-select-option")).toContainText("predictable");
+  });
+
   test("the selected model keeps the keyboard focus once the panel settles", async ({ page }) => {
     // PrimeVue's Select clears the keyboard focus on a timer after its trigger
     // blurs, which it does as the search takes focus; fire that timer instead

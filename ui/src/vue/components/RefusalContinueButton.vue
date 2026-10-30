@@ -13,7 +13,6 @@
       :show-reasoning="false"
       :catalog-actions="false"
       panel-class="refusal-model-picker-panel"
-      append-to-body
       aria-label-prefix="Continue with another model"
       data-testid="refusal-continue-button"
       @select-model="continueWithModel"

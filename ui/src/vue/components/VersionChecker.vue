@@ -115,7 +115,6 @@
               </button>
               <span v-tooltip.top="noModelsReason" class="version-rebase-model">
                 <ModelPicker
-                  append-to-body
                   aria-label-prefix="Rebase model"
                   trigger-label="Model"
                   scroll-height="16rem"
