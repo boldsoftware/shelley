@@ -39,6 +39,7 @@ func (v localVM) Prepare(context.Context) error {
 	}
 	return nil
 }
+
 func (v localVM) Command(script string, args ...string) []string {
 	return append([]string{"bash", "-c", localVMRelay, "relay", script}, args...)
 }
@@ -147,13 +148,27 @@ func TestVMTargets(t *testing.T) {
 
 func TestNoVMNoTarget(t *testing.T) {
 	t.Parallel()
-	for _, tool := range NewToolSet(t.Context(), ToolSetConfig{WorkingDir: t.TempDir()}).Tools() {
+	dir := t.TempDir()
+	for _, tool := range NewToolSet(t.Context(), ToolSetConfig{WorkingDir: dir, BackgroundJobs: make(testJobs, 1)}).Tools() {
 		if strings.Contains(string(tool.InputSchema), `"ssh_target"`) {
 			t.Fatalf("%s offers an ssh_target without a VM", tool.Name)
 		}
-		if tool.Name == "bash" {
+		switch tool.Name {
+		case "bash":
 			if out := tool.Run(t.Context(), json.RawMessage(`{"command":"true","ssh_target":"box"}`)); out.Error == nil {
 				t.Fatal("bash accepted an ssh_target without a VM")
+			}
+			// A stray "localhost" is this machine, where the call runs anyway.
+			if out := tool.Run(t.Context(), json.RawMessage(`{"command":"echo here","ssh_target":"localhost"}`)); out.Error != nil {
+				t.Fatalf("bash with ssh_target localhost: %v", out.Error)
+			}
+		case "patch":
+			in := `{"path":"f","patches":[{"operation":"overwrite","newText":"x"}],"ssh_target":"localhost"}`
+			if out := tool.Run(t.Context(), json.RawMessage(in)); out.Error != nil {
+				t.Fatalf("patch with ssh_target localhost: %v", out.Error)
+			}
+			if b, err := os.ReadFile(filepath.Join(dir, "f")); err != nil || string(b) != "x" {
+				t.Fatalf("patch wrote %q, %v", b, err)
 			}
 		}
 	}

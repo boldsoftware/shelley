@@ -40,10 +40,11 @@ const Localhost = "localhost"
 
 // targetVM resolves a call's ssh_target: the VM for its name, nil for
 // Localhost. With a VM, ssh_target is required, so a call never lands on
-// the wrong machine by default; without one it must be absent.
+// the wrong machine by default; without one it is not offered, and only
+// Localhost, where the call runs anyway, is accepted.
 func targetVM(vm VM, target *string) (VM, error) {
 	switch {
-	case vm == nil && target == nil:
+	case vm == nil && (target == nil || *target == Localhost):
 		return nil, nil
 	case vm == nil:
 		return nil, fmt.Errorf("ssh_target %q: this conversation has no VM; omit ssh_target", *target)
