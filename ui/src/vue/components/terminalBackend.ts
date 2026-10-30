@@ -21,6 +21,7 @@ import {
   type GhosttySynchronizedTerminal,
   type GhosttyWheelTerminal,
 } from "./ghosttyPolicies";
+import { installGhosttyWrappedUrls, type GhosttyLinkTerminal } from "./ghosttyLinks";
 import { getTerminalTheme } from "./terminalHelpers";
 import { attachTerminalTouch } from "./terminalTouch";
 
@@ -362,6 +363,7 @@ async function openGhostty(host: HTMLElement, opts: TerminalViewOptions): Promis
     term as unknown as GhosttyMouseTerminal,
   );
   installGhosttyMetaPassthrough(term as unknown as GhosttyKeyTerminal);
+  installGhosttyWrappedUrls(term as unknown as GhosttyLinkTerminal, mod.UrlRegexProvider);
   // Focus the textarea directly: Terminal.focus() reaches it only after a
   // timeout, outside the tap that has to open a soft keyboard.
   const input = host.querySelector("textarea")!;

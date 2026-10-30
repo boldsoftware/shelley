@@ -551,3 +551,99 @@ test("Shift+drag selects and copies while the program tracks the mouse", async (
     .poll(() => page.evaluate(() => (window as unknown as { __copied: string[] }).__copied))
     .toContainEqual(expect.stringContaining("select-me-please"));
 });
+
+// Long URLs (an OAuth sign-in link) soft-wrap over several rows. A click on
+// any of them opens the whole URL, as in xterm.js and desktop terminals;
+// ghostty-web on its own finds URLs a row at a time, so the first row opened
+// a truncated URL and the rest opened nothing. A URL that fills its row and
+// then ends with a newline is not joined to the next line.
+test("Ctrl+click opens a URL that wraps over several rows", async ({ page, request }) => {
+  await page.addInitScript(() => {
+    const opened: string[] = [];
+    Object.defineProperty(window, "__opened", { value: opened });
+    window.open = (url?: string | URL) => (opened.push(String(url)), null);
+  });
+  const terminal = await runScript(page, request, [
+    "echo ghostty-ready",
+    "while [ ! -e go ]; do sleep 0.05; done",
+    "stty size > size",
+    "cols=$(cut -d' ' -f2 size)",
+    'pad() { head -c "$1" /dev/zero | tr \'\\0\' "$2"; }',
+    // Clear and home, so the wrapped URL starts on the top row.
+    "printf '\\033[H\\033[2J'",
+    "printf 'https://example.com/%s/end\\n' \"$(pad $((cols * 2)) a)\"",
+    // Exactly one row: the newline, not a wrap, ends it.
+    "printf 'https://example.org/%s\\n' \"$(pad $((cols - 20)) b)\"",
+    "echo not-part-of-the-url",
+    // An OSC 8 hyperlink whose wrapped text is another URL.
+    'printf \'\\033]8;;https://target.example/\\033\\\\%s\\033]8;;\\033\\\\\\n\' "https://example.net/$(pad "$cols" c)"',
+    // Then push it all into the scrollback.
+    "while [ ! -e more ]; do sleep 0.05; done",
+    "seq 1 $(( $(cut -d' ' -f1 size) * 2 ))",
+    "exec cat",
+  ]);
+  await expect.poll(inserted(page, "all output")).toContain("ghostty-ready");
+  writeFileSync(join(cwd, "go"), "");
+  await expect.poll(inserted(page, "visible screen")).toContain("https://example.net/");
+  const [rows, cols] = readFileSync(join(cwd, "size"), "utf8").trim().split(" ").map(Number);
+  const long = `https://example.com/${"a".repeat(cols * 2)}/end`;
+  const short = `https://example.org/${"b".repeat(cols - 20)}`;
+
+  const box = (await terminal.locator("canvas").boundingBox())!;
+  const opened = () => page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
+  const cell = (row: number, col: number) => ({
+    x: box.x + (col + 0.5) * (box.width / cols),
+    y: box.y + (row + 0.5) * (box.height / rows),
+  });
+  const ctrlClick = async (row: number, col: number) => {
+    const { x, y } = cell(row, col);
+    await page.mouse.move(x, y);
+    await page.keyboard.down("Control");
+    await page.mouse.click(x, y);
+    await page.keyboard.up("Control");
+  };
+  // The URL's three rows, then the one-row URL, then the line after it.
+  for (const [row, col] of [
+    [0, 2],
+    [1, cols - 1],
+    [2, 1],
+  ]) {
+    await ctrlClick(row, col);
+    await expect.poll(opened).toEqual([long]);
+    await page.evaluate(() => ((window as unknown as { __opened: string[] }).__opened.length = 0));
+  }
+  await ctrlClick(3, cols - 1);
+  await expect.poll(opened).toEqual([short]);
+  await page.evaluate(() => ((window as unknown as { __opened: string[] }).__opened.length = 0));
+  await ctrlClick(4, 2);
+  await ctrlClick(3, 5); // a click that does open something, to wait for
+  await expect.poll(opened).toEqual([short]);
+  await page.evaluate(() => ((window as unknown as { __opened: string[] }).__opened.length = 0));
+  // The hyperlink's target, not its text, from either row, second row first.
+  for (const row of [6, 5]) {
+    await ctrlClick(row, 3);
+    await expect.poll(opened).toEqual(["https://target.example/"]);
+    await page.evaluate(() => ((window as unknown as { __opened: string[] }).__opened.length = 0));
+  }
+  // The pointer shows it's a link.
+  const pointer = () => terminal.locator("canvas").evaluate((c) => c.style.cursor);
+  await page.mouse.move(cell(4, 2).x, cell(4, 2).y);
+  await expect.poll(pointer).toBe("text");
+  await page.mouse.move(cell(1, 3).x, cell(1, 3).y);
+  await expect.poll(pointer).toBe("pointer");
+
+  // Scrolled back to, from the scrollback, where ghostty-web keeps no wrap
+  // flags.
+  writeFileSync(join(cwd, "more"), "");
+  const screen = inserted(page, "visible screen");
+  await expect.poll(screen).toContain(`\n${rows * 2}`);
+  await expect(async () => {
+    // Inserting the screen moved the pointer to the menu.
+    await page.mouse.move(cell(0, 0).x, cell(0, 0).y);
+    await page.mouse.wheel(0, -box.height / 2);
+    expect(await screen()).toMatch(/^https:\/\/example\.com\/a+\naaa/m);
+  }).toPass();
+  const top = (await screen()).split("\n").findIndex((l) => l.startsWith("https://example.com"));
+  await ctrlClick(top + 1, 3);
+  await expect.poll(opened).toEqual([long]);
+});
