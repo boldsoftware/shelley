@@ -66,16 +66,16 @@ test("asks on open and again after each change", async (t) => {
     requests.map((r) => r.id),
     ["c1"],
   );
-  requests[0].resolve({ body: "main", bgcolor: "red" });
+  requests[0].resolve({ items: [{ body: "main", bgcolor: "red" }] });
   await settle();
-  assert.deepEqual(status.value, { body: "main", bgcolor: "red" });
+  assert.deepEqual(status.value, { items: [{ body: "main", bgcolor: "red" }] });
 
   seq.value++;
   await settle();
   assert.equal(requests.length, 2);
-  requests[1].resolve({ body: "feature" });
+  requests[1].resolve({ items: [{ body: "feature" }] });
   await settle();
-  assert.deepEqual(status.value, { body: "feature" });
+  assert.deepEqual(status.value, { items: [{ body: "feature" }] });
 });
 
 test("changes during a request collapse into one more", async (t) => {
@@ -85,24 +85,24 @@ test("changes during a request collapse into one more", async (t) => {
   seq.value++;
   await settle();
   assert.equal(requests.length, 1);
-  requests[0].resolve({ body: "old" });
+  requests[0].resolve({ items: [{ body: "old" }] });
   await settle();
   assert.equal(requests.length, 2);
-  requests[1].resolve({ body: "new" });
+  requests[1].resolve({ items: [{ body: "new" }] });
   await settle();
   assert.equal(requests.length, 2);
-  assert.deepEqual(status.value, { body: "new" });
+  assert.deepEqual(status.value, { items: [{ body: "new" }] });
 });
 
 test("switching conversations drops the old one's status and request", async (t) => {
   const { requests, id, status, stale } = harness(t);
-  requests[0].resolve({ body: "c1 status" });
+  requests[0].resolve({ items: [{ body: "c1 status" }] });
   await settle();
   assert.equal(stale.value, false);
   id.value = "c2";
   await settle();
   // Kept only to hold the row's place until c2's comes.
-  assert.deepEqual(status.value, { body: "c1 status" });
+  assert.deepEqual(status.value, { items: [{ body: "c1 status" }] });
   assert.equal(stale.value, true);
   assert.deepEqual(
     requests.map((r) => r.id),
@@ -117,18 +117,18 @@ test("switching conversations drops the old one's status and request", async (t)
     requests.map((r) => r.id),
     ["c1", "c2", "c3"],
   );
-  requests[1].resolve({ body: "c2 status" });
+  requests[1].resolve({ items: [{ body: "c2 status" }] });
   await settle();
-  assert.deepEqual(status.value, { body: "c1 status" });
-  requests[2].resolve({ body: "c3 status" });
+  assert.deepEqual(status.value, { items: [{ body: "c1 status" }] });
+  requests[2].resolve({ items: [{ body: "c3 status" }] });
   await settle();
-  assert.deepEqual(status.value, { body: "c3 status" });
+  assert.deepEqual(status.value, { items: [{ body: "c3 status" }] });
   assert.equal(stale.value, false);
 });
 
 test("a loading conversation waits, then asks once", async (t) => {
   const { requests, id, ready, seq, status, stale } = harness(t);
-  requests[0].resolve({ body: "c1 status" });
+  requests[0].resolve({ items: [{ body: "c1 status" }] });
   await settle();
   // Switching marks it loading in the same tick; its messages come in.
   id.value = "c2";
@@ -155,7 +155,7 @@ test("a loading conversation waits, then asks once", async (t) => {
 test("a failure for a new conversation drops the old one's status", async (t) => {
   const { requests, id, offline, status, stale } = harness(t);
   t.mock.method(console, "warn", () => {});
-  requests[0].resolve({ body: "c1 status" });
+  requests[0].resolve({ items: [{ body: "c1 status" }] });
   await settle();
   offline.value = true;
   id.value = "c2";
@@ -220,13 +220,13 @@ test("coming back during a request from before asks again once", async (t) => {
   // back. The answer on its way is from before.
   setVisibility("hidden");
   comeBack(t);
-  requests[0].resolve({ body: "old-branch" });
+  requests[0].resolve({ items: [{ body: "old-branch" }] });
   await settle();
   assert.equal(requests.length, 2);
-  requests[1].resolve({ body: "new-branch" });
+  requests[1].resolve({ items: [{ body: "new-branch" }] });
   await settle();
   assert.equal(requests.length, 2);
-  assert.deepEqual(status.value, { body: "new-branch" });
+  assert.deepEqual(status.value, { items: [{ body: "new-branch" }] });
 
   // Likewise a request a message started while the window was in the
   // background, still on its way when the user focuses it.
@@ -234,12 +234,12 @@ test("coming back during a request from before asks again once", async (t) => {
   await settle();
   assert.equal(requests.length, 3);
   focus(t);
-  requests[2].resolve({ body: "old-branch" });
+  requests[2].resolve({ items: [{ body: "old-branch" }] });
   await settle();
   assert.equal(requests.length, 4);
-  requests[3].resolve({ body: "new-branch" });
+  requests[3].resolve({ items: [{ body: "new-branch" }] });
   await settle();
-  assert.deepEqual(status.value, { body: "new-branch" });
+  assert.deepEqual(status.value, { items: [{ body: "new-branch" }] });
 });
 
 test("disposing cancels a pending return", async (t) => {
@@ -255,7 +255,7 @@ test("disposing cancels a pending return", async (t) => {
 
 test("a null id asks nothing and shows nothing", async (t) => {
   const { requests, id, status, stale } = harness(t);
-  requests[0].resolve({ body: "main" });
+  requests[0].resolve({ items: [{ body: "main" }] });
   await settle();
   id.value = null;
   await settle();

@@ -5180,7 +5180,7 @@ select:disabled {
   flex: 0 0 auto;
   background: var(--bg-base);
   border-top: 1px solid var(--border);
-  padding: 0.25rem 1rem;
+  padding: 0.125rem 1rem;
   padding-left: max(1rem, env(safe-area-inset-left));
   padding-right: max(1rem, env(safe-area-inset-right));
   font-family: var(--font-mono);
@@ -5192,19 +5192,87 @@ select:disabled {
   text-overflow: ellipsis;
 }
 
-/* An error wraps, since a title tooltip never shows on touch, up to three
-   lines and then scrolls, or a long stderr would push the composer off the
-   screen. */
-.status-hook-row.status-hook-row-error {
-  max-height: calc(4.2em + 0.5rem);
-  overflow-y: auto;
-  white-space: normal;
+.status-hook-error-popover {
+  width: min(36rem, calc(100vw - 2rem));
+}
+
+.status-hook-error-details {
+  margin: 0;
+  max-height: min(20rem, 50dvh);
+  overflow: auto;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-12);
+  color: var(--text-primary);
 }
 
 .status-hook-row .text-link {
   color: inherit;
   text-decoration-color: currentColor;
+}
+
+.status-hook-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.125rem 0.625rem;
+}
+
+@media (max-width: 767px) {
+  .status-hook-row:not(.status-hook-row-error) {
+    overflow-x: auto;
+    text-overflow: clip;
+  }
+
+  .status-hook-items {
+    flex-wrap: nowrap;
+    width: max-content;
+    min-width: 100%;
+  }
+}
+
+.status-hook-item {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-hook-item-control {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.status-hook-row .p-select.model-picker-inline .p-select-label {
+  padding-block: 0;
+  margin-block: 0;
+}
+
+.status-hook-item-control:focus-visible,
+.status-hook-row .p-select.model-picker-inline .p-select-label:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+.status-hook-item-action,
+.status-hook-row .model-picker-value-name {
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+}
+
+.status-hook-item-action:hover,
+.status-hook-row .model-picker-inline:hover .model-picker-value-name,
+.status-hook-row .model-picker-inline.p-focus .model-picker-value-name {
+  text-decoration-style: solid;
 }
 
 .status-message.status-warning {
@@ -9031,7 +9099,9 @@ svg {
 }
 
 .diff-tree-row.active .diff-tree-icon,
-.diff-tree-row.active .diff-tree-highlight-count {
+.diff-tree-row.active .diff-tree-highlight-count,
+.status-hook-row .p-select.model-picker-inline:hover:not(.p-disabled),
+.status-hook-row .p-select.model-picker-inline.p-focus {
   color: inherit;
 }
 
@@ -13101,7 +13171,8 @@ kbd {
   font-size: var(--font-size-14);
 }
 
-.msg-unexpected-role-text {
+.msg-unexpected-role-text,
+.status-hook-row.status-hook-row-error {
   color: var(--warning-text);
 }
 

@@ -446,7 +446,37 @@
       @dismiss="dismissResourceNotice"
     />
 
-    <StatusHookRow :status="hookStatus" :stale="hookStatusStale" />
+    <StatusHookRow :status="hookStatus" :stale="hookStatusStale" @action="handleStatusHookAction">
+      <template #open_models="{ item }">
+        <ModelPicker
+          inline
+          :style="{ color: item.color, backgroundColor: item.bgcolor }"
+          :title="item.title || item.body"
+          :trigger-label="item.body"
+          :models="models"
+          :selected-model="selectedModel"
+          :thinking-level="statusContentProps.thinkingLevel"
+          :disabled="conversationWorking || sending"
+          :disabled-reason="conversationWorking ? t('modelSwitchBusy') : undefined"
+          :refreshing="refreshingModels"
+          :knob="knob"
+          @select-model="
+            conversationLive ? switchConversationModel($event) : setSelectedModel($event)
+          "
+          @select-combination="
+            (model, level) =>
+              conversationLive
+                ? switchConversationCombination(model, level)
+                : setSelectedCombination(model, level)
+          "
+          @thinking-change="
+            conversationLive ? switchConversationThinkingLevel($event) : setThinkingLevel($event)
+          "
+          @manage-models="props.onOpenModelsModal?.()"
+          @refresh-models="handleRefreshModels"
+        />
+      </template>
+    </StatusHookRow>
 
     <ModelUpgradeBanner
       v-if="upgradeAllResultShown"
@@ -846,6 +876,7 @@ import { useStatusBar } from "../composables/statusBar";
 import TranscriptionTask from "./TranscriptionTask.vue";
 import ChatStatusContent from "./ChatStatusContent.vue";
 import StatusHookRow from "./StatusHookRow.vue";
+import type { StatusBarItem } from "../../services/api";
 import MarkdownContent from "./MarkdownContent.vue";
 import InlineText from "./InlineText.vue";
 import ThinkingContent from "./tools/ThinkingContent.vue";
@@ -1067,8 +1098,34 @@ const { status: hookStatus, stale: hookStatusStale } = useStatusBar(
       ? null
       : props.conversationId,
   () => !loading.value,
-  [() => messages.value.at(-1)?.sequence_id],
+  [() => messages.value.at(-1)?.sequence_id, () => props.currentConversation?.model],
 );
+function handleStatusHookAction(item: StatusBarItem) {
+  switch (item.action) {
+    case "open_files":
+      props.onOpenFileFinder?.();
+      break;
+    case "open_mcp":
+      props.onOpenMcpServersModal?.();
+      break;
+    case "open_commands":
+      props.onOpenCommandPalette?.();
+      break;
+    case "open_diff":
+      if (item.args?.commit) handleOpenDiffViewer(item.args.commit);
+      else showDiffViewer.value = true;
+      break;
+    case "open_terminal":
+      focusOrOpenTerminal();
+      break;
+    case "open_git":
+      showGitGraph.value = true;
+      break;
+    case "open_directory":
+      showDirectoryPicker.value = true;
+      break;
+  }
+}
 const renderingConversation = ref(false);
 const showLoadingProgressUI = ref(false);
 const loadingProgress = ref<{

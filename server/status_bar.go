@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -33,13 +34,29 @@ type StatusBarHookInput struct {
 	Model          string `json:"model"`
 }
 
-// StatusBar is what the status-bar hook printed for a conversation, or why
-// it failed. All empty means show nothing.
+// StatusBar is the normalized status-bar hook response, or why it failed.
 type StatusBar struct {
-	Body    string `json:"body,omitempty"`
-	BGColor string `json:"bgcolor,omitempty"`
-	Color   string `json:"color,omitempty"`
-	Error   string `json:"error,omitempty"`
+	Items   []StatusBarItem `json:"items,omitempty"`
+	BGColor string          `json:"bgcolor,omitempty"`
+	Color   string          `json:"color,omitempty"`
+	Error   string          `json:"error,omitempty"`
+}
+
+// StatusBarItem is one item printed by the status-bar hook.
+type StatusBarItem struct {
+	Body    string               `json:"body,omitempty"`
+	BGColor string               `json:"bgcolor,omitempty"`
+	Color   string               `json:"color,omitempty"`
+	Title   string               `json:"title,omitempty"`
+	Action  string               `json:"action,omitempty"`
+	Args    *StatusBarActionArgs `json:"args,omitempty"`
+}
+
+// StatusBarActionArgs contains the optional arguments supported by native
+// status-bar actions.
+type StatusBarActionArgs struct {
+	Commit string `json:"commit,omitempty"`
+	URL    string `json:"url,omitempty"`
 }
 
 // cappedBuffer keeps the first max bytes and notes whether more arrived. It
@@ -130,7 +147,9 @@ func stopProcessGroup(pgid int) {
 	syscall.Kill(-pgid, syscall.SIGKILL)
 }
 
-// parseStatusBar reads one JSON object, or nothing, from the hook's output.
+// parseStatusBar reads one object, or nothing, from the hook's output. The
+// body is a string or a list of items. Unknown fields are errors; null fields
+// are the same as absent ones.
 func parseStatusBar(stdout *cappedBuffer) (StatusBar, error) {
 	if stdout.over {
 		return StatusBar{}, fmt.Errorf("output exceeds %d bytes", statusBarHookMaxOutput)
@@ -140,19 +159,106 @@ func parseStatusBar(stdout *cappedBuffer) (StatusBar, error) {
 		return StatusBar{}, nil
 	}
 	var out struct {
-		Body    string `json:"body"`
-		BGColor string `json:"bgcolor"`
-		Color   string `json:"color"`
+		Body    json.RawMessage `json:"body"`
+		BGColor string          `json:"bgcolor"`
+		Color   string          `json:"color"`
 	}
-	dec := json.NewDecoder(bytes.NewReader(output))
+	if err := decodeStatusBarJSON(output, &out); err != nil {
+		return StatusBar{}, err
+	}
+	status := StatusBar{BGColor: out.BGColor, Color: out.Color}
+	body := bytes.TrimSpace(out.Body)
+	switch {
+	case len(body) == 0 || body[0] == 'n':
+	case body[0] == '"':
+		var text string
+		if err := json.Unmarshal(body, &text); err != nil {
+			return StatusBar{}, fmt.Errorf("invalid JSON output: %w", err)
+		}
+		if text = strings.TrimSpace(text); text != "" {
+			status.Items = []StatusBarItem{{Body: text}}
+		}
+	case body[0] == '[':
+		var items []StatusBarItem
+		if err := decodeStatusBarJSON(body, &items); err != nil {
+			return StatusBar{}, err
+		}
+		for i, item := range items {
+			if err := item.check(); err != nil {
+				return StatusBar{}, fmt.Errorf("invalid JSON output: body item %d: %w", i+1, err)
+			}
+			if item.Body != "" {
+				status.Items = append(status.Items, item)
+			}
+		}
+	default:
+		return StatusBar{}, errors.New("invalid JSON output: body must be a string or an array of items")
+	}
+	if len(status.Items) == 0 {
+		return StatusBar{}, nil
+	}
+	return status, nil
+}
+
+// decodeStatusBarJSON decodes exactly one value, rejecting unknown fields and
+// trailing data.
+func decodeStatusBarJSON(data []byte, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&out); err != nil {
-		return StatusBar{}, fmt.Errorf("invalid JSON output: %w", err)
+	if err := dec.Decode(v); err != nil {
+		return fmt.Errorf("invalid JSON output: %w", err)
 	}
 	if _, err := dec.Token(); err != io.EOF {
-		return StatusBar{}, errors.New("invalid JSON output: trailing data after the object")
+		return errors.New("invalid JSON output: trailing data after the value")
 	}
-	return StatusBar{Body: strings.TrimSpace(out.Body), BGColor: out.BGColor, Color: out.Color}, nil
+	return nil
+}
+
+var statusBarActions = map[string]bool{
+	"open_models": true, "open_diff": true, "open_terminal": true, "open_files": true,
+	"open_git": true, "open_mcp": true, "open_directory": true, "open_commands": true, "open_url": true,
+}
+
+// check validates the action and its args, and normalizes them. Each action
+// has its own args; anything else is an error, so a typo does not silently
+// open the wrong thing.
+func (item *StatusBarItem) check() error {
+	item.Body = strings.TrimSpace(item.Body)
+	if item.Action != "" && !statusBarActions[item.Action] {
+		return fmt.Errorf("unknown action %q", item.Action)
+	}
+	if item.Args == nil {
+		if item.Action == "open_url" {
+			return errors.New("args.url must be an absolute HTTP(S) URL with a hostname")
+		}
+		return nil
+	}
+	if item.Action == "" {
+		return errors.New("args need an action")
+	}
+	if item.Args.Commit != "" && item.Action != "open_diff" {
+		return fmt.Errorf("args.commit is not supported by %s", item.Action)
+	}
+	if item.Args.URL != "" && item.Action != "open_url" {
+		return fmt.Errorf("args.url is not supported by %s", item.Action)
+	}
+	if item.Args.Commit != "" {
+		if !validCommitHash(item.Args.Commit) {
+			return errors.New("args.commit must be a full or abbreviated commit hash (4-64 hexadecimal characters)")
+		}
+		item.Args.Commit = strings.ToLower(item.Args.Commit)
+	}
+	if item.Action == "open_url" {
+		u, err := url.Parse(item.Args.URL)
+		if err != nil || !u.IsAbs() ||
+			(!strings.EqualFold(u.Scheme, "http") && !strings.EqualFold(u.Scheme, "https")) || u.Hostname() == "" {
+			return errors.New("args.url must be an absolute HTTP(S) URL with a hostname")
+		}
+	}
+	if *item.Args == (StatusBarActionArgs{}) {
+		item.Args = nil
+	}
+	return nil
 }
 
 // handleConversationStatusBar handles GET /api/conversation/{id}/status-bar.

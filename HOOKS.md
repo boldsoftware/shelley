@@ -6,7 +6,7 @@ in `$HOME/.config/shelley/hooks/<name>`.
 If a hook fails (non-zero exit, invalid output, etc.) the operation it
 belongs to is aborted. The `end-of-turn` hook is the exception: by the
 time it fires there is no operation left to abort, so failures are just
-logged. A failed `status-bar` hook shows its error in its row.
+logged. A failed `status-bar` hook shows a button in its row that reveals the error.
 
 ## Available Hooks
 
@@ -16,7 +16,7 @@ logged. A failed `status-bar` hook shows its error in its row.
 | `new-conversation` | JSON | JSON (mutable fields) |
 | `chat-message` | JSON | JSON (`message` field) |
 | `end-of-turn` | JSON | ignored |
-| `status-bar` | JSON | JSON (`body`, `bgcolor`, `color`) |
+| `status-bar` | JSON | one JSON object with a string or array `body` |
 
 ## Example payloads
 
@@ -133,6 +133,7 @@ directory, for each browser tab showing the conversation:
 
 - when the conversation opens;
 - after each new message: yours, the agent's, each tool result;
+- when the model changes;
 - when you come back to the tab or its window.
 
 It doesn't run for a tab in the background, a draft, an archived
@@ -155,12 +156,59 @@ cheap: `git branch --show-current`, not a `git status` of a big repo.
 }
 ```
 
-Stdout is one JSON object; every field is optional, and empty stdout
-shows nothing. `body` is one line of plain text, with URLs linkified;
-`bgcolor` and `color` are CSS colors. A failure (non-zero exit, invalid
-JSON, unknown fields, over 4 KiB, a background process left holding
-its output) shows the error instead.
+Stdout is always one JSON object; bare top-level arrays are not accepted.
+Its root fields are `body`, `bgcolor`, and `color`. The body is one line of
+plain text (URLs are linkified) or a flat array of item objects. Omitted,
+null, empty, or whitespace-only body text, an empty item array, and empty
+stdout show nothing. The API normalizes visible content to `{ "items": [...] }`;
+root `bgcolor` and `color` style the whole row. A null field is the same as
+an omitted one. Items with an empty body (or null items) are skipped.
+
+Each array item may contain `body` (plain text), `bgcolor`, `color`, `title`,
+`action`, and `args`. Item colors override the row style. `title` supplies the
+item's tooltip. An item without an action is plain text; `args` is forbidden
+without an action. Root-level item fields such as `title`, `action`, and
+`args`, as well as old `href` and flat `commit` fields, are not supported.
+
+Actions are `open_models`, `open_diff`, `open_terminal`, `open_files`,
+`open_git`, `open_mcp`, `open_directory`, `open_commands`, and `open_url`.
+`open_url` requires `args.url`, an absolute HTTP(S) URL with a hostname. It is
+rendered as a real link that opens in a new tab, with `noopener noreferrer`;
+localhost links retain Shelley's local-link rewriting.
+
+`open_diff` optionally accepts `args.commit`, a full or abbreviated commit
+hash (4–64 hexadecimal characters), not a branch or revision expression.
+Omitted `args` or `args: {}` opens the viewer's default selection, just like
+the normal Diffs control; this is not necessarily the working diff.
+`open_url` accepts only its required `url` argument. Other native actions
+accept no argument keys; omitted `args` or
+`args: {}` is equivalent. Unknown actions/fields/arguments, invalid types,
+or an invalid URL fail the hook and show the error in the row.
+
+```json
+{ "body": [{ "body": "Diff 4cd8f2e", "action": "open_diff", "args": { "commit": "4cd8f2e" } }] }
+```
+
+A failure (non-zero exit, invalid JSON, unknown fields or actions, over 4 KiB,
+a background process left holding its output) shows the error instead.
+
+`open_models` is the current conversation's model/reasoning picker, not
+model management. The hook already receives the current `model` and can
+use it as the item label. Changing the conversation model refreshes the hook.
 
 ```json
 { "body": "main", "bgcolor": "#204a87", "color": "white" }
+```
+
+```json
+{
+  "bgcolor": "var(--bg-secondary)",
+  "color": "var(--text-secondary)",
+  "body": [
+    { "body": "main" },
+    { "body": "12 changed files", "action": "open_diff" },
+    { "body": "Sonnet", "action": "open_models" },
+    { "body": "Proposal", "action": "open_url", "args": { "url": "https://example.com/proposal" } }
+  ]
+}
 ```

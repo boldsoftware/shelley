@@ -59,8 +59,18 @@ export interface BackgroundJob {
 
 // What the status-bar hook printed for a conversation (server StatusBar). All
 // empty means show nothing.
-export interface StatusBar {
+export interface StatusBarItem {
   body?: string;
+  bgcolor?: string;
+  color?: string;
+  title?: string;
+  // Validated by the server; see HOOKS.md for the actions and their args.
+  action?: string;
+  args?: { commit?: string; url?: string };
+}
+
+export interface StatusBar {
+  items?: StatusBarItem[];
   bgcolor?: string;
   color?: string;
   error?: string;

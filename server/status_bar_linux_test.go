@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -29,8 +30,8 @@ func TestStatusBarHookKillsChildrenOnFailure(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
 			writeStatusBarHook(t, dir, tc.child+` & echo $! > child; `+tc.then)
-			if got, err := runStatusBarHookIn(t.Context(), dir, StatusBarHookInput{Cwd: dir}); got != (StatusBar{}) || fmt.Sprint(err) != tc.wantErr {
-				t.Fatalf("got %q, %v; want %s", got, err, tc.wantErr)
+			if got, err := runStatusBarHookIn(t.Context(), dir, StatusBarHookInput{Cwd: dir}); !reflect.DeepEqual(got, StatusBar{}) || fmt.Sprint(err) != tc.wantErr {
+				t.Fatalf("got %+v, %v; want %s", got, err, tc.wantErr)
 			}
 			waitForExit(t, filepath.Join(dir, "child"))
 		})

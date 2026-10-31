@@ -3,7 +3,7 @@ name: shelley-hooks
 description: Use when the user wants to customize Shelley by injecting behavior at lifecycle events. It documents Shelley's hooks.
 ---
 
-Executable files at `~/.config/shelley/hooks/<name>`. Missing or non-executable files are ignored. 30s timeout. Any hook failure (non-zero exit, invalid output, etc.) aborts the operation it belongs to — except `end-of-turn`, where the operation is already finished, so failures are just logged, and `status-bar`, which shows its error in its row.
+Executable files at `~/.config/shelley/hooks/<name>`. Missing or non-executable files are ignored. 30s timeout. Any hook failure (non-zero exit, invalid output, etc.) aborts the operation it belongs to — except `end-of-turn`, where the operation is already finished, so failures are just logged, and `status-bar`, which shows a button in its row that reveals the error.
 
 Auth-bearing headers (`Cookie`, `Set-Cookie`, `Authorization`, `Proxy-Authorization`) are stripped from the `headers` fields before hooks see them.
 
@@ -107,13 +107,66 @@ stdin JSON:
 }
 ```
 
-stdout: one JSON object, all fields optional. Empty stdout shows nothing.
+stdout: one JSON object; bare top-level arrays are not accepted. The only
+root fields are `body`, `bgcolor`, and `color`. `body` is one line of plain
+text or a flat array of item objects; URLs in plain text are linkified.
+Omitted, null, empty, or whitespace-only body text, an empty item array, and
+empty stdout show nothing. The API normalizes visible content to
+`{ "items": [...] }`; root `bgcolor` and `color` style the whole row.
+A null field is the same as an omitted one. Items with an empty body (or
+null items) are skipped.
 ```json
 { "body": "main", "bgcolor": "#204a87", "color": "white" }
 ```
 
-`body` is one line of plain text, URLs linkified. `bgcolor` and `color` are
-CSS colors. Failures (non-zero exit, invalid JSON, unknown fields, over 4 KiB,
+Each item may include `body` (plain text), `bgcolor`, `color`, `title`,
+`action`, and `args`. Item colors override the row style; `title` supplies an
+item tooltip. An item without an action is plain text, and `args` is forbidden
+without an action. Root-level item fields, `href`, and flat `commit` are not
+supported.
+
+Actions are `open_models`, `open_diff`, `open_terminal`, `open_files`,
+`open_git`, `open_mcp`, `open_directory`, `open_commands`, and `open_url`.
+`open_url` requires `args.url`, an absolute HTTP(S) URL with a hostname. It
+renders as a real link opening in a new tab with `noopener noreferrer`;
+localhost links retain Shelley's local-link rewriting.
+
+`open_models` opens the conversation's model/reasoning picker, not model
+management. Use the stdin `model` as its label to show the current choice.
+Changing the conversation model refreshes the hook.
+
+`open_diff` optionally accepts `args.commit`, a full or abbreviated commit
+hash (4–64 hexadecimal characters), not a branch or revision expression.
+Omitted `args` or `args: {}` opens the viewer's default selection, just like
+the normal Diffs control; this is not necessarily the working diff.
+`open_url` accepts only its required `url` argument. Other native actions
+accept no argument keys; omitted `args` or
+`args: {}` is equivalent. Unknown actions/fields/arguments, invalid types,
+or an invalid URL fail and show the error in the row.
+
+An array body can mix plain text, links, and panel actions:
+```json
+{
+  "bgcolor": "var(--bg-secondary)",
+  "color": "var(--text-secondary)",
+  "body": [
+    { "body": "main" },
+    { "body": "docs", "action": "open_url", "args": { "url": "https://example.com/docs" } },
+    { "body": "Models", "action": "open_models" }
+  ]
+}
+```
+
+Example: open a diff for a commit:
+```json
+{
+  "body": [
+    { "body": "Diff 4cd8f2e", "action": "open_diff", "args": { "commit": "4cd8f2e" } }
+  ]
+}
+```
+
+Failures (non-zero exit, invalid JSON, unknown fields or actions, over 4 KiB,
 a background process left holding its output) show as an error in the row.
 
 Example: show the branch, red on `main`:
