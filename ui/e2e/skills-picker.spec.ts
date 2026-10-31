@@ -56,6 +56,40 @@ async function mockMcpTools(page: Page) {
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
+  test("hovering long MCP details keeps the picker height and position fixed", async ({ page, request }) => {
+    await withTempDir("shelley-skills-", async (cwd) => {
+      await page.route("**/api/mcp/servers", (route) =>
+        route.fulfill({ json: [{ name: "web" }] }),
+      );
+      await page.route("**/api/mcp/servers/web/tools", (route) =>
+        route.fulfill({
+          json: { tools: [{
+            name: "search",
+            description: "Long MCP tool description. ".repeat(200),
+            inputSchema: { properties: {} },
+          }] },
+        }),
+      );
+      await openConversation(page, request, cwd);
+      await page.getByTestId("message-input").fill("/skills ");
+      const picker = page.getByTestId("skill-picker");
+      const skill = picker.getByRole("option").filter({ hasText: "draft-review" });
+      const tool = picker.getByRole("option").filter({ hasText: "search" });
+      await expect(tool).toHaveCount(1);
+      await skill.hover();
+      const bounds = await picker.boundingBox();
+      expect(bounds?.height).toBe(420);
+      await tool.hover();
+      await expect(picker.locator(".skill-picker-detail")).toContainText("Long MCP tool description.");
+      expect(await picker.boundingBox()).toEqual(bounds);
+      expect(await picker.locator(".skill-picker-detail").evaluate(
+        (el) => el.scrollHeight > el.clientHeight,
+      )).toBe(true);
+      await skill.hover();
+      expect(await picker.boundingBox()).toEqual(bounds);
+    });
+  });
+
   test("choosing a skill adds a chip, clears /skills and sends nothing", async ({
     page,
     request,
@@ -144,15 +178,63 @@ test.describe("desktop", () => {
   });
 });
 
-test("mobile skill sheet opens without focusing its search field", async ({ page, request }) => {
+test("mobile skills fill the space above the composer and keep typing focus", async ({ page, request }) => {
   await withTempDir("shelley-skills-", async (cwd) => {
+    await mockMcpTools(page);
     await openConversation(page, request, cwd);
-    await page.getByTestId("message-input").fill("/skills draft-review");
+    const input = page.getByTestId("message-input");
+    await input.fill("/skills ");
     const picker = page.getByTestId("skill-picker");
+    await expect(input).toBeFocused();
+    await expect(picker.getByRole("searchbox")).toHaveCount(0);
+    await expect.poll(async () => (await picker.boundingBox())?.y).toBeCloseTo(12, 0);
+    expect((await picker.boundingBox())!.height).toBeGreaterThan(420);
+    await input.pressSequentially("a-long-skill-query-that-wraps-across-multiple-lines");
+    await expect(picker).toContainText("No matching skills");
+    await expect.poll(() => picker.evaluate((el) =>
+      Math.round(el.getBoundingClientRect().top - (window.visualViewport?.offsetTop ?? 0)),
+    )).toBe(12);
+    await picker.getByText("No matching skills").tap();
+    await expect(input).toBeFocused();
+    await expect(picker).toBeVisible();
+    await input.fill("/skills ");
+    await input.pressSequentially("draft-review");
     await expect(picker.getByRole("option")).toHaveCount(1);
-    await expect(picker.getByRole("searchbox", { name: "Find a skill" })).not.toBeFocused();
+    await expect(picker.getByRole("option")).toContainText("draft-review");
+    await expect(input).toBeFocused();
+    await page.setViewportSize({ width: 393, height: 500 });
+    await expect.poll(() => picker.evaluate((el) => {
+      const bounds = el.getBoundingClientRect();
+      const input = document.querySelector('[data-testid="message-input"]')!.getBoundingClientRect();
+      return {
+        top: Math.round(bounds.top - (window.visualViewport?.offsetTop ?? 0)),
+        gap: Math.round(input.top - bounds.bottom),
+      };
+    })).toEqual({ top: 12, gap: 6 });
+    const bounds = (await picker.boundingBox())!;
+    expect(bounds.height).toBeGreaterThan(200);
     await picker.getByRole("button", { name: "Close skills" }).click();
     await expect(picker).toBeHidden();
+    await expect(input).toBeFocused();
+  });
+});
+
+test("mobile MCP filtering and selection keep focus in the composer", async ({ page, request }) => {
+  await withTempDir("shelley-skills-", async (cwd) => {
+    await mockMcpTools(page);
+    await openConversation(page, request, cwd);
+    const input = page.getByTestId("message-input");
+    await input.fill("/skills ");
+    await expect(input).toBeFocused();
+    await input.pressSequentially("library search");
+    const picker = page.getByTestId("skill-picker");
+    await expect(picker.getByRole("option")).toHaveCount(1);
+    await expect(picker.locator(".skill-mcp-badge")).toHaveText("library");
+    await expect(input).toBeFocused();
+    await picker.getByRole("option").click();
+    await expect(page.getByTestId("skill-chip")).toContainText("search");
+    await expect(input).toHaveValue("");
+    await expect(input).toBeFocused();
   });
 });
 

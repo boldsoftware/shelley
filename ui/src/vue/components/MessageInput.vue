@@ -155,118 +155,95 @@
         </div>
       </div>
       <div class="textarea-wrapper">
-        <Teleport to="body" :disabled="!mobileSkillPicker">
-          <div
-            v-if="showSkillMenu && mobileSkillPicker"
-            class="skill-picker-backdrop"
-            @click="dismissSkills()"
-          ></div>
-          <div
-            v-if="showSkillMenu"
-            ref="skillMenuRef"
-            class="slash-command-menu skill-picker"
-            :class="{ 'skill-picker-mobile': mobileSkillPicker }"
-            :style="mobileSkillPicker ? {
-              top: `${skillViewport.top + 12}px`,
-              height: `${skillViewport.height - 12}px`,
-            } : undefined"
-            :role="mobileSkillPicker ? 'dialog' : undefined"
-            :aria-modal="mobileSkillPicker ? true : undefined"
-            :aria-label="mobileSkillPicker ? 'Choose a skill' : undefined"
-            data-testid="skill-picker"
-          >
-            <div class="skill-picker-head">
-              <b class="font-medium">Skills</b>
-              <button
-                v-if="mobileSkillPicker"
-                type="button"
-                class="skill-picker-close"
-                aria-label="Close skills"
-                @click="closeSkillPicker"
-              >
-                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-              <span v-else>↑↓ choose · Enter add · Esc close</span>
-            </div>
-            <input
+        <div
+          v-if="showSkillMenu"
+          ref="skillMenuRef"
+          class="slash-command-menu skill-picker"
+          :class="{ 'skill-picker-mobile': mobileSkillPicker }"
+          :style="mobileSkillPicker ? { height: `${mobileSkillPickerHeight}px` } : undefined"
+          data-testid="skill-picker"
+          @mousedown="mobileSkillPicker && $event.preventDefault()"
+        >
+          <div class="skill-picker-head">
+            <b class="font-medium">Skills</b>
+            <button
               v-if="mobileSkillPicker"
-              :value="skillSearchQuery"
-              class="skill-picker-search"
-              type="search"
-              placeholder="Find a skill"
-              aria-label="Find a skill"
-              autocomplete="off"
-              @input="setSkillSearch"
-              @keydown.enter.prevent="chooseSkill(skillSelected)"
-              @keydown.esc="closeSkillPicker"
-            />
-            <div v-if="skillWarning" class="skill-picker-warning" role="status">{{ skillWarning }}</div>
-            <div v-if="skillLoading || skillError" class="file-completion-status" role="status">
-              {{ skillError || "Loading skills…" }}
+              type="button"
+              class="skill-picker-close"
+              aria-label="Close skills"
+              @mousedown.prevent
+              @click="closeSkillPicker"
+            >
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <span v-else>↑↓ choose · Enter add · Esc close</span>
+          </div>
+          <div v-if="skillWarning" class="skill-picker-warning" role="status">{{ skillWarning }}</div>
+          <div v-if="skillLoading || skillError" class="file-completion-status" role="status">
+            {{ skillError || "Loading skills…" }}
+          </div>
+          <div
+            v-else-if="!skillMatches.length"
+            class="file-completion-status"
+            role="status"
+          >
+            No matching skills
+          </div>
+          <div v-else class="skill-picker-split">
+            <div :id="skillMenuId" role="listbox" aria-label="Skills" class="skill-picker-names">
+              <button
+                v-for="(item, index) in skillMatches"
+                :id="`${skillMenuId}-${index}`"
+                :key="item.name"
+                type="button"
+                tabindex="-1"
+                :class="['slash-command-item', { selected: index === skillSelected }]"
+                role="option"
+                :aria-selected="index === skillSelected"
+                :aria-label="`${item.name}: ${item.description}`"
+                @mousedown.prevent
+                @mouseenter="skillSelected = index"
+                @click="chooseSkill(index)"
+              >
+                <span class="slash-command-name skill-picker-label">
+                  <span class="truncate">{{ item.mcp_tool || item.name }}</span>
+                  <span v-if="item.mcp_server" class="skill-mcp-badge">{{ item.mcp_server }}</span>
+                </span>
+                <span v-if="mobileSkillPicker" class="skill-picker-description">{{ item.description }}</span>
+                <span v-if="mobileSkillPicker" class="skill-picker-add" aria-hidden="true">
+                  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14" /></svg>
+                </span>
+              </button>
             </div>
             <div
-              v-else-if="!skillMatches.length"
-              class="file-completion-status"
-              role="status"
-            >
-              No matching skills
-            </div>
-            <div v-else class="skill-picker-split">
-              <div :id="skillMenuId" role="listbox" aria-label="Skills" class="skill-picker-names">
-                <button
-                  v-for="(item, index) in skillMatches"
-                  :id="`${skillMenuId}-${index}`"
-                  :key="item.name"
-                  type="button"
-                  tabindex="-1"
-                  :class="['slash-command-item', { selected: index === skillSelected }]"
-                  role="option"
-                  :aria-selected="index === skillSelected"
-                  :aria-label="`${item.name}: ${item.description}`"
-                  @mousedown.prevent
-                  @mouseenter="skillSelected = index"
-                  @click="chooseSkill(index)"
-                >
-                  <span class="slash-command-name skill-picker-label">
-                    <span class="truncate">{{ item.mcp_tool || item.name }}</span>
-                    <span v-if="item.mcp_server" class="skill-mcp-badge">{{ item.mcp_server }}</span>
-                  </span>
-                  <span v-if="mobileSkillPicker" class="skill-picker-description">{{ item.description }}</span>
-                  <span v-if="mobileSkillPicker" class="skill-picker-add" aria-hidden="true">
-                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14" /></svg>
-                  </span>
-                </button>
-              </div>
-              <div
-                v-if="!mobileSkillPicker && skillMatches[skillSelected]"
-                class="skill-picker-detail" aria-hidden="true">
-                <div class="skill-picker-detail-name">{{ skillMatches[skillSelected].mcp_tool || skillMatches[skillSelected].name }}</div>
-                <p>{{ skillMatches[skillSelected].description }}</p>
-                <template v-if="skillMatches[skillSelected].mcp_server">
-                  <dl v-if="Object.keys(skillMatches[skillSelected].parameters?.properties || {}).length" class="skill-mcp-parameters">
-                    <template v-for="(parameter, name) in skillMatches[skillSelected].parameters?.properties" :key="name">
-                      <dt>
-                        <code>{{ name }}</code>
-                        <span class="text-secondary">{{ Array.isArray(parameter.type) ? parameter.type.join(" | ") : parameter.type }}</span>
-                        <span v-if="skillMatches[skillSelected].parameters?.required?.includes(String(name))" class="text-secondary">required</span>
-                      </dt>
-                      <dd v-if="parameter.description" class="text-secondary">{{ parameter.description }}</dd>
-                    </template>
-                  </dl>
-                  <div class="skill-picker-source">Read tool schema before calling</div>
-                  <code class="skill-mcp-activate">{{ skillMatches[skillSelected].activate }}</code>
-                </template>
-                <div class="skill-picker-source">
-                  {{
-                    [skillMatches[skillSelected].origin, skillMatches[skillSelected].source_path]
-                      .filter(Boolean)
-                      .join(" · ")
-                  }}
-                </div>
+              v-if="!mobileSkillPicker && skillMatches[skillSelected]"
+              class="skill-picker-detail" aria-hidden="true">
+              <div class="skill-picker-detail-name">{{ skillMatches[skillSelected].mcp_tool || skillMatches[skillSelected].name }}</div>
+              <p>{{ skillMatches[skillSelected].description }}</p>
+              <template v-if="skillMatches[skillSelected].mcp_server">
+                <dl v-if="Object.keys(skillMatches[skillSelected].parameters?.properties || {}).length" class="skill-mcp-parameters">
+                  <template v-for="(parameter, name) in skillMatches[skillSelected].parameters?.properties" :key="name">
+                    <dt>
+                      <code>{{ name }}</code>
+                      <span class="text-secondary">{{ Array.isArray(parameter.type) ? parameter.type.join(" | ") : parameter.type }}</span>
+                      <span v-if="skillMatches[skillSelected].parameters?.required?.includes(String(name))" class="text-secondary">required</span>
+                    </dt>
+                    <dd v-if="parameter.description" class="text-secondary">{{ parameter.description }}</dd>
+                  </template>
+                </dl>
+                <div class="skill-picker-source">Read tool schema before calling</div>
+                <code class="skill-mcp-activate">{{ skillMatches[skillSelected].activate }}</code>
+              </template>
+              <div class="skill-picker-source">
+                {{
+                  [skillMatches[skillSelected].origin, skillMatches[skillSelected].source_path]
+                    .filter(Boolean)
+                    .join(" · ")
+                }}
               </div>
             </div>
           </div>
-        </Teleport>
+        </div>
 
         <div
           v-if="showFileMenu"
@@ -769,10 +746,7 @@ const readyAttachments = computed(() =>
 const dragCounter = ref(0);
 const isSmallScreen = ref(typeof window !== "undefined" ? window.innerWidth < 480 : false);
 const mobileSkillPicker = ref(window.innerWidth <= 767);
-const skillViewport = ref({
-  top: window.visualViewport?.offsetTop ?? 0,
-  height: window.visualViewport?.height ?? window.innerHeight,
-});
+const mobileSkillPickerHeight = ref(0);
 const showQueueMenu = ref(false);
 const slashMenuSelectedIndex = ref(0);
 const profileMenuSelectedIndex = ref(0);
@@ -1278,32 +1252,30 @@ function onSkillMenuOutside(e: MouseEvent) {
   if (skillMenuRef.value?.contains(e.target as Node) || e.target === textareaRef.value) return;
   dismissSkills();
 }
-const skillSearchQuery = computed(() =>
-  message.value.split("\n", 1)[0].replace(/^\/skills[ \t]*/, ""),
-);
-function setSkillSearch(e: Event) {
-  const query = (e.target as HTMLInputElement).value;
-  const newline = message.value.indexOf("\n");
-  const rest = newline < 0 ? "" : message.value.slice(newline);
-  const command = `/skills ${query}`;
-  setMessage(command + rest);
-  updateSkillSelection(command.length, command.length);
-}
 function closeSkillPicker() {
   dismissSkills();
   textareaRef.value?.focus({ preventScroll: true });
 }
 function onTextareaBlur(e: FocusEvent) {
   fileFocused.value = false;
-  if (mobileSkillPicker.value && showSkillMenu.value) return;
   if (!skillMenuRef.value?.contains(e.relatedTarget as Node)) skillFocused.value = false;
 }
+function sizeMobileSkillPicker() {
+  if (!mobileSkillPicker.value || !skillMenuRef.value) return;
+  const bottom = skillMenuRef.value.getBoundingClientRect().bottom;
+  mobileSkillPickerHeight.value = Math.max(0, bottom - (window.visualViewport?.offsetTop ?? 0) - 12);
+}
+const skillPickerResizeObserver = new ResizeObserver(sizeMobileSkillPicker);
 watch(showSkillMenu, async (open) => {
+  skillPickerResizeObserver.disconnect();
   if (open) document.addEventListener("mousedown", onSkillMenuOutside);
   else document.removeEventListener("mousedown", onSkillMenuOutside);
-  if (open && mobileSkillPicker.value) {
+  if (open) {
     await nextTick();
-    if (showSkillMenu.value && mobileSkillPicker.value) textareaRef.value?.blur();
+    if (!showSkillMenu.value) return;
+    skillPickerResizeObserver.observe(textareaRef.value!.closest(".message-input-container")!);
+    skillPickerResizeObserver.observe(document.documentElement);
+    sizeMobileSkillPicker();
   }
 });
 watch(skillSelected, async () => {
@@ -1920,10 +1892,7 @@ watch(
 
 // Handle virtual keyboard appearance on mobile via visualViewport.
 function handleViewportResize() {
-  skillViewport.value = {
-    top: window.visualViewport?.offsetTop ?? 0,
-    height: window.visualViewport?.height ?? window.innerHeight,
-  };
+  requestAnimationFrame(sizeMobileSkillPicker);
   if (document.activeElement === textareaRef.value) {
     requestAnimationFrame(() => {
       textareaRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1936,8 +1905,10 @@ onMounted(() => {
   window.addEventListener("keyup", trackAlt);
   window.addEventListener("blur", clearAlt);
   window.addEventListener("resize", handleResize);
+  window.addEventListener("scroll", sizeMobileSkillPicker, true);
   if (typeof window !== "undefined" && window.visualViewport) {
     window.visualViewport.addEventListener("resize", handleViewportResize);
+    window.visualViewport.addEventListener("scroll", sizeMobileSkillPicker);
   }
 });
 
@@ -1951,8 +1922,11 @@ onUnmounted(() => {
   recordingSubmission.value?.preparation.release();
   recordingSubmission.value = null;
   window.removeEventListener("resize", handleResize);
+  window.removeEventListener("scroll", sizeMobileSkillPicker, true);
+  skillPickerResizeObserver.disconnect();
   if (typeof window !== "undefined" && window.visualViewport) {
     window.visualViewport.removeEventListener("resize", handleViewportResize);
+    window.visualViewport.removeEventListener("scroll", sizeMobileSkillPicker);
   }
   document.removeEventListener("mousedown", onQueueMenuOutside);
   document.removeEventListener("mousedown", onSlashMenuOutside);

@@ -4614,6 +4614,7 @@ diffs-container {
 
 /* Desktop skill picker: names beside the highlighted description. */
 .slash-command-menu.skill-picker {
+  height: min(420px, 55vh);
   max-height: min(420px, 55vh);
   padding: 0;
   gap: 0;
@@ -4637,6 +4638,7 @@ diffs-container {
 
 .skill-picker-split {
   display: grid;
+  flex: 1;
   grid-template-columns: minmax(9rem, 19rem) minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
@@ -4735,22 +4737,8 @@ diffs-container {
   overflow-wrap: anywhere;
 }
 
-.skill-picker-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  background: rgb(15 23 42 / 45%);
-  touch-action: none;
-}
-
 .slash-command-menu.skill-picker-mobile {
-  position: fixed;
-  inset: auto 0;
-  z-index: 2001;
   max-height: none;
-  border-radius: 12px 12px 0 0;
-  border: 0;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .skill-picker-mobile .skill-picker-head {
@@ -4777,20 +4765,6 @@ diffs-container {
 .skill-picker-add svg {
   width: 20px;
   height: 20px;
-}
-
-.skill-picker-search {
-  flex: none;
-  min-height: 44px;
-  margin: 12px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 1rem;
-  line-height: 1.4;
 }
 
 .skill-picker-mobile .skill-picker-split {
