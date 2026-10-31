@@ -79,9 +79,10 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	options := db.ParseConversationOptions(assistant.ConversationOptions)
-	if options.Profile != "Assistant" || options.SettingsEdited || options.ToolOverrides["message_user"] != "on" ||
+	if assistant.Slug == nil || *assistant.Slug != db.AssistantSlug ||
+		options.Profile != "Assistant" || options.SettingsEdited || options.ToolOverrides["message_user"] != "on" ||
 		!strings.Contains(options.SystemPrompt, "text-message exchange") {
-		t.Fatalf("assistant did not start from the Assistant profile: %+v", options)
+		t.Fatalf("assistant did not start as the Assistant: slug %v, options %+v", assistant.Slug, options)
 	}
 	if setWorkspaceFlag(t, s, "true"); s.assistantID() != workspace.AssistantID {
 		t.Fatal("assistant changed")

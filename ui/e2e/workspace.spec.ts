@@ -33,6 +33,7 @@ test("root opens the pinned Assistant; explicit conversation links remain select
   };
   await page.goto("/");
   await expect(page.locator("h1.header-title")).toHaveText("Assistant");
+  await expect(page).toHaveTitle(/^Assistant - /);
   // The first-run state offers New Project until a project exists.
   await expect(
     page.getByRole("heading", {

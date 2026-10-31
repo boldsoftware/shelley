@@ -1558,9 +1558,10 @@ func messageText(message llm.Message) string {
 // sequence_id, so a client that never sees it observes a hole and throws away
 // its cached history. It is published even when slug assignment failed, since
 // the row exists regardless. Empty source text (a message with no text blocks)
-// is skipped: there is nothing to name the conversation after.
+// is skipped: there is nothing to name the conversation after. So is the
+// workspace Assistant, which is titled "Assistant" (db.AssistantSlug).
 func (s *Server) generateSlugAsync(conversationID, source, modelID string) {
-	if source == "" {
+	if source == "" || s.isAssistant(conversationID) {
 		return
 	}
 	go func() {

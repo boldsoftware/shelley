@@ -81,6 +81,9 @@ type Workspace struct {
 // The server adds the rules of customizing Shelley to its project's prompt.
 const shelleyProjectInstructions = `Customize, maintain, and improve Shelley, this coding agent.`
 
+// AssistantSlug is the workspace Assistant's slug.
+const AssistantSlug = "assistant"
+
 // EnsureWorkspace serializes singleton creation with all other DB writes.
 // Both the assistant row and its identity are committed together, never as an
 // orphan created outside the transaction.
@@ -111,10 +114,17 @@ func (db *DB) EnsureWorkspace(ctx context.Context, shelleyCwd, model string, opt
 			if model != "" {
 				modelPtr = &model
 			}
+			// The Assistant is titled "Assistant", not after its first
+			// message: its slug is "assistant", or none while another
+			// conversation has that slug (see 059-assistant-slug.sql).
+			var slug *string
+			if err := tx.QueryRow("SELECT CASE WHEN EXISTS(SELECT 1 FROM conversations WHERE slug=?) THEN NULL ELSE ? END", AssistantSlug, AssistantSlug).Scan(&slug); err != nil {
+				return err
+			}
 			// No cwd is invented for the assistant; its tools use the normal
 			// configured server working directory.
 			if _, err := generated.New(tx.Conn()).CreateConversation(ctx, generated.CreateConversationParams{
-				ConversationID: assistantID, UserInitiated: true, Model: modelPtr, ConversationOptions: string(options),
+				ConversationID: assistantID, Slug: slug, UserInitiated: true, Model: modelPtr, ConversationOptions: string(options),
 			}); err != nil {
 				return err
 			}

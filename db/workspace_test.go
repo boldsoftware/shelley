@@ -112,7 +112,7 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if assistant.Model == nil || *assistant.Model != model || assistant.Cwd != nil ||
+	if assistant.Slug == nil || *assistant.Slug != AssistantSlug || assistant.Model == nil || *assistant.Model != model || assistant.Cwd != nil ||
 		!assistant.UserInitiated || assistant.ParentConversationID != nil ||
 		ParseConversationOptions(assistant.ConversationOptions).ThinkingLevel != "medium" {
 		t.Fatalf("unexpected assistant: %+v", assistant)
@@ -543,4 +543,68 @@ func TestWorkspaceBoundsCompletedRunHistoryButKeepsRunning(t *testing.T) {
 	if run, err := database.GetActionRun(ctx, oldestID); err != nil || run.Status != "failed" {
 		t.Fatalf("old run not retained durably: %+v %v", run, err)
 	}
+}
+
+// An Assistant created while another conversation is called "assistant"
+// stays unnamed.
+func TestWorkspaceAssistantSlugTaken(t *testing.T) {
+	t.Parallel()
+	database, cleanup := NewTestDB(t)
+	defer cleanup()
+	ctx := t.Context()
+	EnableWorkspaceMode(t, database)
+	slug := AssistantSlug
+	if _, err := database.CreateConversation(ctx, &slug, true, nil, nil, ConversationOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	id, err := database.EnsureWorkspace(ctx, t.TempDir(), "", ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if assistant, err := database.GetConversationByID(ctx, id); err != nil || assistant.Slug != nil {
+		t.Fatalf("assistant: %+v %v", assistant, err)
+	}
+}
+
+// Migration 059 renames an existing Assistant "assistant", or unnames it
+// while another conversation has that slug.
+func TestAssistantSlugMigration(t *testing.T) {
+	t.Parallel()
+	for _, taken := range []bool{false, true} {
+		database := setupDBMigratedThrough(t, 58)
+		ctx := t.Context()
+		if err := database.pool.Exec(ctx, `INSERT INTO conversations(conversation_id, slug, user_initiated) VALUES('a', 'reduce-nav-category-padding', 1), ('b', 'other', 1);
+			INSERT INTO workspace(singleton, assistant_id) VALUES(1, 'a')`); err != nil {
+			t.Fatal(err)
+		}
+		if taken {
+			if err := database.pool.Exec(ctx, "UPDATE conversations SET slug='assistant' WHERE conversation_id='b'"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := database.runMigration(ctx, "059-assistant-slug.sql", 59); err != nil {
+			t.Fatal(err)
+		}
+		want := map[string]string{"a": "assistant", "b": "other"}
+		if taken {
+			want = map[string]string{"a": "", "b": "assistant"}
+		}
+		for id, want := range want {
+			c, err := database.GetConversationByID(ctx, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := ptrValue(c.Slug); got != want {
+				t.Fatalf("taken=%v: %s has slug %q, want %q", taken, id, got, want)
+			}
+		}
+		database.Close()
+	}
+}
+
+func ptrValue(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
