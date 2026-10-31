@@ -19,9 +19,13 @@ func TestProfileMentionParser(t *testing.T) {
 	e.want(201, "POST", "/api/profiles", `{"name":"Code"}`)
 	e.want(201, "POST", "/api/profiles", `{"name":"Code Review"}`)
 	for _, tc := range []struct{ text, name string }{
-		{"+code review hello", "Code Review"}, {"+CODE\thi", "Code"},
-		{"+Code\nhi", "Code"}, {"+CodeReviewer hi", ""}, {"hi +Code", ""},
-		{"+missing hi", ""}, {"+Code", ""},
+		{"+code review hello", "Code Review"},
+		{"+CODE\thi", "Code"},
+		{"+Code\nhi", "Code"},
+		{"+CodeReviewer hi", ""},
+		{"hi +Code", ""},
+		{"+missing hi", ""},
+		{"+Code", ""},
 	} {
 		profile, err := e.srv.profileMention(t.Context(), tc.text)
 		if err != nil {
