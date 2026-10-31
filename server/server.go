@@ -1147,6 +1147,13 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 			manager.resolveModelService = snapshots.GetServiceSnapshot
 		}
 		manager.role = role
+		if role == roleTopLevel {
+			manager.profileMention = s.profileMention
+			manager.profileModelService = s.llmManager.GetService
+			manager.deferUserMessage = func(ctx context.Context, model string, message llm.Message) error {
+				return manager.queueMessageLocked(ctx, s, model, message, false)
+			}
+		}
 		manager.prepareConversationVM = func() { s.prepareConversationVM(conversationID) }
 		manager.onTurnStartRejected = func() { go manager.drainPendingMessages(s) }
 		manager.followProfile = func(ctx context.Context) (llm.Service, string, error) {

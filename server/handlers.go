@@ -1465,6 +1465,11 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	}
 
 	firstMessage, err := manager.AcceptUserMessage(ctx, llmService, modelID, userMessage)
+	var invalid invalidSettings
+	if errors.As(err, &invalid) {
+		http.Error(w, invalid.Error(), http.StatusBadRequest)
+		return
+	}
 	if errors.Is(err, db.ErrConflict) {
 		s.workspaceHTTPError(w, err)
 		return
@@ -1692,6 +1697,10 @@ func (s *Server) newConversation(w http.ResponseWriter, r *http.Request, req New
 	userMessage.Content = withSkillMentions(userMessage.Content, skillNames)
 
 	firstMessage, err := manager.AcceptUserMessage(ctx, llmService, modelID, userMessage)
+	if errors.As(err, &invalid) {
+		http.Error(w, invalid.Error(), http.StatusBadRequest)
+		return
+	}
 	if errors.Is(err, db.ErrConflict) {
 		s.workspaceHTTPError(w, err)
 		return

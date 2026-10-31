@@ -160,6 +160,7 @@ export type MessageType =
   | "gitinfo"
   | "warning"
   | "modelchange"
+  | "profileturn"
   | "slug"
   | "inplacecompaction"
   | "livetranscript";

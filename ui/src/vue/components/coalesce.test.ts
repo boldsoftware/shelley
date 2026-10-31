@@ -358,6 +358,62 @@ function serverToolUse(id: string): LLMContent {
   );
 }
 
+{
+  const user = {
+    ...agentMessage([text("+probe hello")]),
+    type: "user",
+  } as Message;
+  const marker = {
+    ...agentMessage([]),
+    type: "profileturn",
+    llm_data: null,
+    user_data: {
+      profile_to: "Probe",
+      profile_return_to: "Default",
+      profile_mention_phase: "start",
+    },
+  } as unknown as Message;
+  const manualSwitch = {
+    ...agentMessage([]),
+    type: "modelchange",
+    user_data: { profile_to: "Other" },
+  } as unknown as Message;
+  for (const terminal of [
+    {
+      ...agentMessage([text("done")]),
+      end_of_turn: true,
+      llm_data: { Role: 1, Content: [text("done")], EndOfTurn: true },
+    },
+    { ...agentMessage([text("failed")]), type: "error" },
+    { ...agentMessage([text("cancelled")]), end_of_turn: true },
+  ]) {
+    const items = coalesceMessages([user, marker, terminal as unknown as Message, manualSwitch]);
+    check(
+      "profile start stays after the literal mention",
+      items[0].message === user && items[1].message === marker,
+    );
+    check("profile end follows terminal response", items[3].message?.type === "profileturn");
+    check(
+      "profile end returns to saved settings",
+      JSON.parse(items[3].message?.user_data || "{}").profile_to === "Default",
+    );
+    check(
+      "manual switches are never guessed as profile boundaries",
+      items[4].message === manualSwitch,
+    );
+  }
+  const interrupted = agentMessage([text("working")]);
+  const nextUser = { ...agentMessage([text("ordinary followup")]), type: "user" } as Message;
+  const items = coalesceMessages([user, marker, interrupted, nextUser]);
+  check(
+    "interrupted profile closes before the next typed message",
+    items[2].message === interrupted &&
+      items[3].message?.type === "profileturn" &&
+      JSON.parse(items[3].message?.user_data || "{}").profile_mention_phase === "end" &&
+      items[4].message === nextUser,
+  );
+}
+
 console.log(`\ncoalesceMessages Tests: ${passed} passed, ${failed} failed\n`);
 if (failures.length > 0) {
   for (const f of failures) console.log(f);

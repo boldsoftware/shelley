@@ -50,7 +50,7 @@ assert.equal(isVisibleConversationMessage(distilledSummary, "end-of-turn"), fals
 assert.equal(isVisibleConversationMessage(intermediate, "end-of-turn"), false);
 assert.equal(isVisibleConversationMessage(final, "end-of-turn"), true);
 
-for (const type of ["error", "warning", "gitinfo", "modelchange"] as const) {
+for (const type of ["error", "warning", "gitinfo", "modelchange", "profileturn"] as const) {
   assert.equal(
     isVisibleConversationMessage(message({ message_id: type, type }), "end-of-turn"),
     true,

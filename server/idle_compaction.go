@@ -191,6 +191,7 @@ func (s *Server) compactIdleConversation(cm *ConversationManager, version uint64
 	}
 	cm.mu.Lock()
 	cm.idleCompacting = true
+	cm.profileTurn = false
 	cm.hasConversationEvents = true
 	l := cm.loop
 	cm.mu.Unlock()

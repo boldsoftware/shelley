@@ -67,12 +67,19 @@ export function isVisibleConversationMessage(
   if (mode === "all") return true;
   if (mode === "brief") {
     if (isTypedUserMessage(message)) return true;
-    return ["error", "warning", "modelchange"].includes(message.type);
+    return ["error", "warning", "modelchange", "profileturn"].includes(message.type);
   }
   if (isHumanUserMessage(message)) return true;
   if (isDistillStatusMessage(message)) return true;
   if (message.type === "agent") return !!message.end_of_turn;
-  return ["error", "warning", "gitinfo", "modelchange", "inplacecompaction"].includes(message.type);
+  return [
+    "error",
+    "warning",
+    "gitinfo",
+    "modelchange",
+    "profileturn",
+    "inplacecompaction",
+  ].includes(message.type);
 }
 
 export const MESSAGE_USER_TOOL = "message_user";

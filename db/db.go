@@ -1720,6 +1720,8 @@ const (
 	// the /model command, or otherwise changed what its loop is built with (a
 	// tool enabled mid-conversation). User-visible only, never sent to the LLM.
 	MessageTypeModelChange MessageType = "modelchange"
+	// MessageTypeProfileTurn labels a one-turn override, not a settings change.
+	MessageTypeProfileTurn MessageType = "profileturn"
 	// MessageTypeSlug records LLM calls made outside a turn (first, the call
 	// that generated the conversation's slug; see CreateUsageMessage). Rendered
 	// as nothing and never sent to the LLM: it exists only to carry their usage, so the cost shows up in the conversation's

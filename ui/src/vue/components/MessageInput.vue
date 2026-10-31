@@ -29,7 +29,7 @@
        use the `:on-send` / `:on-queue` function props. -->
 <template>
   <div
-    :class="`message-input-container ${isDraggingOver ? 'drag-over' : ''} ${isShellMode ? 'shell-mode' : ''} ${showSlashMenu || showFileMenu || showSkillMenu ? 'slash-menu-open' : ''}`"
+    :class="`message-input-container ${isDraggingOver ? 'drag-over' : ''} ${isShellMode ? 'shell-mode' : ''} ${showSlashMenu || showProfileMenu || showFileMenu || showSkillMenu ? 'slash-menu-open' : ''}`"
     @dragover="handleDragOver"
     @dragenter="handleDragEnter"
     @dragleave="handleDragLeave"
@@ -348,6 +348,34 @@
           </div>
         </div>
         <div
+          v-if="showProfileMenu"
+          :id="profileMenuId"
+          ref="profileMenuRef"
+          class="slash-command-menu"
+          role="listbox"
+          aria-label="Profiles"
+          data-testid="profile-menu"
+        >
+          <button
+            v-for="(profile, index) in profileSuggestions"
+            :key="profile.name"
+            :id="`${profileMenuId}-${index}`"
+            type="button"
+            :class="`slash-command-item profile-menu-item${index === profileMenuSelectedIndex ? ' selected' : ''}`"
+            role="option"
+            :aria-selected="index === profileMenuSelectedIndex"
+            @mousedown.prevent
+            @mouseenter="profileMenuSelectedIndex = index"
+            @click="chooseProfile(index)"
+          >
+            <span class="profile-menu-topline">
+              <span class="slash-command-name">+{{ profile.name }}</span>
+              <span class="profile-menu-meta">{{ profileMeta(profile) }}</span>
+            </span>
+            <span class="slash-command-description">{{ profileDescription(profile) }}</span>
+          </button>
+        </div>
+        <div
           v-if="showSlashMenu"
           ref="slashMenuRef"
           class="slash-command-menu"
@@ -421,14 +449,18 @@
           :rows="initialRows ?? 1"
           aria-label="Message input"
           data-testid="message-input"
-          :aria-autocomplete="showSkillMenu || showFileMenu ? 'list' : undefined"
-          :aria-controls="showSkillMenu ? skillMenuId : showFileMenu ? fileMenuId : undefined"
+          :aria-autocomplete="showSkillMenu || showFileMenu || showProfileMenu ? 'list' : undefined"
+          :aria-controls="
+            showSkillMenu ? skillMenuId : showFileMenu ? fileMenuId : showProfileMenu ? profileMenuId : undefined
+          "
           :aria-activedescendant="
             showSkillMenu && skillMatches.length
               ? `${skillMenuId}-${skillSelected}`
               : showFileMenu && fileMatches.length
                 ? `${fileMenuId}-${fileSelected}`
-                : undefined
+                : showProfileMenu && profileSuggestions.length
+                  ? `${profileMenuId}-${profileMenuSelectedIndex}`
+                  : undefined
           "
           @input="onTextareaInput"
           @select="syncFileSelection"
@@ -566,6 +598,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, shallowReactive, shall
 import { useFileCompletion } from "../composables/fileCompletion";
 import { useSkillCompletion } from "../composables/skillCompletion";
 import type { SkillDescriptor } from "../../services/api";
+import type { Profile } from "../../types";
 import { useI18n } from "../composables/i18n";
 import { pickPlaceholderHint } from "../../utils/placeholderHints";
 import HighlightedText from "./HighlightedText.vue";
@@ -577,6 +610,7 @@ import RecordButton from "./RecordButton.vue";
 import RecordingPanel from "./RecordingPanel.vue";
 import type { RecordingDestination, RecordingMode, RecordingPreparation } from "./recordingDestination";
 import { focusMessageInputIfUnfocused } from "../../utils/focusMessageInput";
+import { prettyModelName } from "../../utils/modelNames";
 import {
   CONCRETE_THINKING_LEVELS,
   supportedThinkingLevels,
@@ -634,10 +668,14 @@ const props = withDefaults(
     lazyDraftId?: string | null;
     /** Ready models (id + reasoning capabilities), used to autocomplete the
      * /model command arguments with only the levels the target model accepts. */
-    modelOptions?: ({ id: string } & ReasoningModelCapabilities)[];
+    modelOptions?: ({ id: string; default_reasoning_level?: string } & ReasoningModelCapabilities)[];
     /** Currently selected model id; the levels offered for "/model <level>"
      * (no model argument) are the ones this model accepts. */
     currentModelId?: string;
+    /** Concrete server default used by profiles that do not name a model. */
+    defaultModelId?: string;
+    /** Profiles offered when the message starts with +. */
+    profiles?: Profile[];
     /** Working directory for server-side @ filename completion. */
     cwd?: string;
     /** Child conversations cannot start nested BTW readers. */
@@ -652,6 +690,7 @@ const props = withDefaults(
     autoFocus: false,
     initialRows: 1,
     isChildConversation: false,
+    profiles: () => [],
   },
 );
 
@@ -736,6 +775,8 @@ const skillViewport = ref({
 });
 const showQueueMenu = ref(false);
 const slashMenuSelectedIndex = ref(0);
+const profileMenuSelectedIndex = ref(0);
+const profileMenuDismissed = ref(false);
 const slashMenuDismissed = ref(false);
 // Set once the user has moved the highlight in the /model argument menu (via
 // Arrow keys). When they then press Enter we complete the highlighted option
@@ -744,6 +785,7 @@ const modelArgMenuNavigated = ref(false);
 
 const queueMenuRef = ref<HTMLDivElement | null>(null);
 const slashMenuRef = ref<HTMLDivElement | null>(null);
+const profileMenuRef = ref<HTMLDivElement | null>(null);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const screenRecordingAvailable =
@@ -1145,6 +1187,7 @@ function handleSendClick(e: MouseEvent) {
 
 // --- @ filename autocomplete --------------------------------------------
 const fileMenuId = useId();
+const profileMenuId = useId();
 const fileMenuRef = ref<HTMLDivElement | null>(null);
 // useFileCompletion keys its results on the session and reacts synchronously,
 // so it must not observe the session mid-update. conversationId and
@@ -1340,6 +1383,64 @@ const showSlashMenu = computed(
     !isDisabled.value &&
     !isShellMode.value,
 );
+
+const profileQuery = computed(() => {
+  const match = message.value.match(/^\+([^\s]*)$/);
+  return match ? match[1].toLowerCase() : null;
+});
+const profileSuggestions = computed(() => {
+  if (profileQuery.value === null) return [];
+  return props.profiles.filter((profile) =>
+    profile.name.toLowerCase().startsWith(profileQuery.value!),
+  );
+});
+const showProfileMenu = computed(
+  () =>
+    profileQuery.value !== null &&
+    !profileMenuDismissed.value &&
+    profileSuggestions.value.length > 0 &&
+    !isDisabled.value &&
+    !isShellMode.value,
+);
+
+watch(profileQuery, () => {
+  profileMenuSelectedIndex.value = 0;
+  profileMenuDismissed.value = false;
+});
+
+async function chooseProfile(index: number) {
+  const profile = profileSuggestions.value[index];
+  if (!profile) return;
+  setMessage(`+${profile.name} `);
+  await nextTick();
+  textareaRef.value?.focus();
+  textareaRef.value?.setSelectionRange(message.value.length, message.value.length);
+}
+
+function profileDescription(profile: Profile): string {
+  return profile.system_prompt.trim().split(/\r?\n/, 1)[0] || "Built-in system prompt";
+}
+
+function profileMeta(profile: Profile): string {
+  const model = profile.model || props.defaultModelId || "";
+  const info = (props.modelOptions ?? []).find((option) => option.id === model);
+  const reasoning = profile.thinking_level || info?.default_reasoning_level || "";
+  return [prettyModelName(model), reasoning].filter(Boolean).join(" · ");
+}
+
+function onProfileMenuOutside(e: MouseEvent) {
+  if (profileMenuRef.value?.contains(e.target as Node) || e.target === textareaRef.value) return;
+  profileMenuDismissed.value = true;
+}
+
+watch(showProfileMenu, (open) => {
+  if (open) document.addEventListener("mousedown", onProfileMenuOutside);
+  else document.removeEventListener("mousedown", onProfileMenuOutside);
+});
+watch(profileMenuSelectedIndex, async () => {
+  await nextTick();
+  profileMenuRef.value?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+});
 
 // --- /model argument autocomplete ---------------------------------------
 // As soon as "/model" has been typed (with or without a trailing space), offer
@@ -1691,6 +1792,28 @@ function handleKeyDown(e: KeyboardEvent) {
       return;
     }
   }
+  if (showProfileMenu.value) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      profileMenuDismissed.value = true;
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      profileMenuSelectedIndex.value =
+        (profileMenuSelectedIndex.value +
+          (e.key === "ArrowDown" ? 1 : -1) +
+          profileSuggestions.value.length) %
+        profileSuggestions.value.length;
+      return;
+    }
+    if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      void chooseProfile(profileMenuSelectedIndex.value);
+      return;
+    }
+  }
   if (showSlashMenu.value) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -1833,6 +1956,7 @@ onUnmounted(() => {
   }
   document.removeEventListener("mousedown", onQueueMenuOutside);
   document.removeEventListener("mousedown", onSlashMenuOutside);
+  document.removeEventListener("mousedown", onProfileMenuOutside);
   document.removeEventListener("mousedown", onFileMenuOutside);
   document.removeEventListener("mousedown", onSkillMenuOutside);
   for (const session of sessions) clearAttachments(session);

@@ -30,7 +30,10 @@
   <WarningMessage v-else-if="message.type === 'warning'" :message="message" />
 
   <!-- modelchange -->
-  <ModelChangeMessage v-else-if="message.type === 'modelchange'" :message="message" />
+  <ModelChangeMessage
+    v-else-if="message.type === 'modelchange' || message.type === 'profileturn'"
+    :message="message"
+  />
 
   <!-- inplacecompaction -->
   <InPlaceCompactionMessage v-else-if="message.type === 'inplacecompaction'" :message="message" />

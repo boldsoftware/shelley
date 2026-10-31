@@ -6,6 +6,7 @@ import {
   distillStatus,
   isCompactionCarried,
 } from "../../types";
+import { isTypedUserMessage } from "../../utils/conversationView";
 import { isCancelledToolResult } from "../utils/toolStatus";
 
 export interface CoalescedItem {
@@ -39,6 +40,7 @@ export function coalesceMessages(
   interruptedGeneration?: number,
 ): CoalescedItem[] {
   messages = messages.filter((message) => message.type !== "livetranscript");
+  messages = profileTurnBoundaries(messages);
   if (messages.length === 0) return [];
 
   const items: CoalescedItem[] = [];
@@ -279,6 +281,40 @@ export function coalesceMessages(
   });
 
   return items;
+}
+
+// A profile-turn marker is display metadata, not a settings change. Its closing
+// boundary follows the terminal reply or precedes the next typed message.
+function profileTurnBoundaries(messages: Message[]): Message[] {
+  const result: Message[] = [];
+  let returnTo: string | null = null;
+  for (const message of messages) {
+    const nextTurn = returnTo !== null && isTypedUserMessage(message);
+    if (!nextTurn) result.push(message);
+    if (message.type === "profileturn") {
+      try {
+        const data =
+          typeof message.user_data === "string" ? JSON.parse(message.user_data) : message.user_data;
+        returnTo = data?.profile_return_to || "conversation settings";
+      } catch {
+        returnTo = null;
+      }
+    } else if (returnTo !== null && (nextTurn || message.type === "error" || message.end_of_turn)) {
+      result.push({
+        ...message,
+        message_id: `${message.message_id}:profile-end`,
+        type: "profileturn",
+        llm_data: null,
+        user_data: JSON.stringify({
+          profile_to: returnTo,
+          profile_mention_phase: "end",
+        }),
+      });
+      returnTo = null;
+    }
+    if (nextTurn) result.push(message);
+  }
+  return result;
 }
 
 function messageItem(message: Message, carried: boolean): CoalescedItem {

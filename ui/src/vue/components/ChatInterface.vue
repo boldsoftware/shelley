@@ -544,6 +544,12 @@
       :lazy-draft-id="lazyDraftId"
       :model-options="readyModels"
       :current-model-id="selectedModel"
+      :default-model-id="profileDefaultModel"
+      :profiles="
+        agentWorking || currentConversation?.parent_conversation_id
+          ? []
+          : profiles.filter((profile) => !profile.project)
+      "
       :is-child-conversation="!!currentConversation?.parent_conversation_id"
       @clear-injected-text="
         diffCommentText = '';
@@ -1157,6 +1163,7 @@ const readyModelIds = computed(() => models.value.filter((m) => m.ready).map((m)
 // Ready models with reasoning capabilities, for the same autocomplete to offer
 // only levels the target model accepts.
 const readyModels = computed(() => models.value.filter((m) => m.ready));
+const profileDefaultModel = computed(() => serverDefaultModel() || pickReadyModel(models.value));
 
 // Copy for the empty-model-list state. The server tells us WHY the list is
 // empty (missing exe.dev reflection/llm integration, or not on exe.dev at

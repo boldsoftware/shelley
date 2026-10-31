@@ -629,3 +629,40 @@ test.describe("Settings knob", () => {
     }
   });
 });
+
+test("profile keyboard selection stays visible in a scrolling menu", async ({ page, request }) => {
+  const prefix = `Scroll${Date.now()}`;
+  const names = Array.from({ length: 10 }, (_, i) => `${prefix}-${i}`);
+  try {
+    for (const name of names) {
+      expect((await request.post("/api/profiles", { data: { name } })).ok()).toBeTruthy();
+    }
+    await page.goto("/new");
+    const input = page.getByTestId("message-input");
+    await input.fill(`+${prefix}`);
+    const menu = page.getByTestId("profile-menu");
+    await expect(menu.getByRole("option")).toHaveCount(names.length);
+    expect(await menu.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+
+    const selected = menu.getByRole("option", { selected: true });
+    const selectionVisible = () =>
+      selected.evaluate((el) => {
+        const row = el.getBoundingClientRect();
+        const menu = el.closest('[role="listbox"]')!.getBoundingClientRect();
+        return row.top >= menu.top && row.bottom <= menu.bottom;
+      });
+    for (let i = 1; i < names.length; i++) await input.press("ArrowDown");
+    await expect(selected).toContainText(names.at(-1)!);
+    await expect.poll(selectionVisible).toBe(true);
+
+    await input.press("ArrowDown");
+    await expect(selected).toContainText(names[0]);
+    await expect.poll(selectionVisible).toBe(true);
+    await input.press("Enter");
+    await expect(input).toHaveValue(`+${names[0]} `);
+  } finally {
+    for (const name of names) {
+      expect((await request.delete(`/api/profiles/${name}`)).ok()).toBeTruthy();
+    }
+  }
+});

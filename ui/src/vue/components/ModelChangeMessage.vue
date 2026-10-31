@@ -10,14 +10,20 @@
 <template>
   <div
     v-if="isSwitch"
-    class="message message-gitinfo msg-modelchange-container msg-modelchange-switch"
+    :class="[
+      'message',
+      'message-gitinfo',
+      'msg-modelchange-container',
+      'msg-modelchange-switch',
+      { 'msg-profile-mention-boundary': profileMentionPhase },
+    ]"
     data-testid="message-modelchange"
     role="status"
-    :aria-label="text"
+    :aria-label="ariaLabel"
   >
-    <span class="msg-modelchange-icon">🤖</span>
+    <span v-if="!profileMentionPhase" class="msg-modelchange-icon">🤖</span>
     <span v-if="data.profile_to" class="msg-modelchange-group">
-      <span class="msg-modelchange-label">profile</span>
+      <span class="msg-modelchange-label">{{ profileLabel }}</span>
       <span class="msg-modelchange-chip msg-modelchange-to">{{ data.profile_to }}</span>
     </span>
     <span v-if="modelChanged" class="msg-modelchange-group">
@@ -73,6 +79,7 @@ interface ModelChangeData {
   tools_off?: string[];
   compact_nudge_tokens?: number;
   system_prompt_changed?: boolean;
+  profile_mention_phase?: "start" | "end";
   text?: string;
 }
 
@@ -88,6 +95,19 @@ const data = computed<ModelChangeData>(() => {
 });
 
 const text = computed(() => data.value.text || "Model changed");
+const profileMentionPhase = computed(() => data.value.profile_mention_phase || "");
+const profileLabel = computed(() =>
+  profileMentionPhase.value === "start"
+    ? "running as"
+    : profileMentionPhase.value === "end"
+      ? "back to"
+      : "profile",
+);
+const ariaLabel = computed(() =>
+  profileMentionPhase.value && data.value.profile_to
+    ? `${profileLabel.value} ${data.value.profile_to}`
+    : text.value,
+);
 
 // A model switch records a non-empty `to`; a reasoning change records
 // reasoning_to; and so on. Informational markers (bare /model, errors) have

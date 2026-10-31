@@ -73,7 +73,7 @@ func (s *Server) resumeConversation(ctx context.Context, resume db.UpgradeResume
 		return service, nil
 	}
 	if err := manager.ResumeInterruptedTurnAfterUpgrade(ctx, resume, defaultModelID, serviceForModel, resumeWarningText); err != nil {
-		if errors.Is(err, errInterruptedTurnNotApplicable) {
+		if errors.Is(err, errInterruptedTurnNotApplicable) || errors.Is(err, errProfileTurnStopped) {
 			return nil
 		}
 		return err
