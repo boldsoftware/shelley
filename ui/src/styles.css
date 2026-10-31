@@ -4737,10 +4737,6 @@ diffs-container {
   overflow-wrap: anywhere;
 }
 
-.slash-command-menu.skill-picker-mobile {
-  max-height: none;
-}
-
 .skill-picker-mobile .skill-picker-head {
   flex: none;
   align-items: center;

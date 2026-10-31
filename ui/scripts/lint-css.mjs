@@ -57,7 +57,7 @@ const legacyFontSizes = new Set([
   "16px",
   "inherit",
 ]);
-const expectedLegacyFontSizeDeclarations = 156;
+const expectedLegacyFontSizeDeclarations = 155;
 const expectedDuplicateRuleGroups = 171;
 const expectedExcessDuplicateRules = 474;
 const legacyFontShorthands = new Set([

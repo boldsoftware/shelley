@@ -160,7 +160,11 @@
           ref="skillMenuRef"
           class="slash-command-menu skill-picker"
           :class="{ 'skill-picker-mobile': mobileSkillPicker }"
-          :style="mobileSkillPicker ? { height: `${mobileSkillPickerHeight}px` } : undefined"
+          :style="
+            mobileSkillPicker
+              ? { height: `${mobileSkillPickerHeight}px`, maxHeight: 'none' }
+              : undefined
+          "
           data-testid="skill-picker"
           @mousedown="mobileSkillPicker && $event.preventDefault()"
         >
