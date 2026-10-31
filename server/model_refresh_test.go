@@ -321,7 +321,7 @@ func testDB(t *testing.T) *db.DB {
 	return database
 }
 
-func TestModelUpgradeDismissedPerTarget(t *testing.T) {
+func TestModelUpgradeDismissedPerPair(t *testing.T) {
 	mgr, err := models.NewManager(&models.Config{
 		Models: []models.Built{
 			{ID: "claude-opus-4.7", Provider: models.ProviderAnthropic, Service: predictable.NewService()},
@@ -334,6 +334,9 @@ func TestModelUpgradeDismissedPerTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &Server{db: testDB(t), llmManager: mgr, logger: slog.Default()}
+	if err := s.db.SetSetting(context.Background(), upgradeDismissedKeyPrefix+"claude-opus-5.5", "1"); err != nil {
+		t.Fatal(err)
+	}
 	upgrades := func() map[string]string {
 		rec := httptest.NewRecorder()
 		s.handleModels(rec, httptest.NewRequest(http.MethodGet, "/api/models", nil))
@@ -353,15 +356,15 @@ func TestModelUpgradeDismissedPerTarget(t *testing.T) {
 		t.Fatalf("before dismiss: %v", got)
 	}
 	rec := httptest.NewRecorder()
-	s.handleDismissModelUpgrade(rec, httptest.NewRequest(http.MethodPost, "/api/model-upgrade/dismiss", strings.NewReader(`{"to":"claude-opus-5.5"}`)))
+	s.handleDismissModelUpgrade(rec, httptest.NewRequest(http.MethodPost, "/api/model-upgrade/dismiss", strings.NewReader(`{"from":"claude-opus-4.7","to":"claude-opus-5.5"}`)))
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("dismiss status = %d", rec.Code)
 	}
-	if got := upgrades(); len(got) != 0 {
+	if got := upgrades(); got["claude-opus-4.7"] != "" || got["claude-opus-4.8"] != "claude-opus-5.5" {
 		t.Fatalf("after dismiss: %v", got)
 	}
 	rec = httptest.NewRecorder()
-	s.handleDismissModelUpgrade(rec, httptest.NewRequest(http.MethodPost, "/api/model-upgrade/dismiss", strings.NewReader(`{"to":"nope"}`)))
+	s.handleDismissModelUpgrade(rec, httptest.NewRequest(http.MethodPost, "/api/model-upgrade/dismiss", strings.NewReader(`{"from":"claude-opus-4.7","to":"nope"}`)))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("unknown target status = %d", rec.Code)
 	}

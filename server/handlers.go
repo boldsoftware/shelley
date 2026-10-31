@@ -3073,36 +3073,39 @@ func readyBuiltinModels(modelList []ModelInfo) map[string]bool {
 
 const upgradeDismissedKeyPrefix = "model_upgrade_dismissed:"
 
+func upgradeDismissedKey(from, to string) string {
+	return upgradeDismissedKeyPrefix + from + ":" + to
+}
+
 // upgradePromptKey records that the "upgrade your other conversations too?"
 // offer has been answered, so it is never made again.
 const upgradePromptKey = "model_upgrade_prompt_done"
 
-// hideDismissedUpgrades drops upgrade suggestions whose target the user
-// dismissed.
+// hideDismissedUpgrades drops only the exact upgrade pairs the user dismissed.
 func (s *Server) hideDismissedUpgrades(ctx context.Context, modelList []ModelInfo) error {
 	settings, err := s.db.GetAllSettings(ctx)
 	if err != nil {
 		return err
 	}
 	for i := range modelList {
-		if u := modelList[i].Upgrade; u != nil && settings[upgradeDismissedKeyPrefix+u.To] != "" {
+		if u := modelList[i].Upgrade; u != nil && settings[upgradeDismissedKey(modelList[i].ID, u.To)] != "" {
 			modelList[i].Upgrade = nil
 		}
 	}
 	return nil
 }
 
-// handleDismissModelUpgrade stops suggesting `to` as an upgrade, for every
-// conversation.
+// handleDismissModelUpgrade stops suggesting one exact model upgrade.
 func (s *Server) handleDismissModelUpgrade(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		To string `json:"to"`
+		From string `json:"from"`
+		To   string `json:"to"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || models.ByID(req.To) == nil {
-		http.Error(w, "to must be a built-in model id", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || models.ByID(req.From) == nil || models.ByID(req.To) == nil {
+		http.Error(w, "from and to must be built-in model ids", http.StatusBadRequest)
 		return
 	}
-	if err := s.db.SetSetting(r.Context(), upgradeDismissedKeyPrefix+req.To, "1"); err != nil {
+	if err := s.db.SetSetting(r.Context(), upgradeDismissedKey(req.From, req.To), "1"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

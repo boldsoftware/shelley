@@ -174,7 +174,7 @@ test.describe("model upgrade banner", () => {
     await expect(page.getByTestId("model-upgrade-all-banner")).toHaveCount(0);
   });
 
-  test("dismissing records the target and hides the banner", async ({ page, request }) => {
+  test("dismissing records the pair and hides the banner", async ({ page, request }) => {
     const state = { dismissed: false };
     await offerUpgrade(page, state);
     const slug = await createConversationViaAPI(request, "echo: dismiss me");
@@ -187,7 +187,7 @@ test.describe("model upgrade banner", () => {
 
     await expect(page.getByTestId("model-upgrade-banner")).toBeVisible();
     await page.getByTestId("model-upgrade-dismiss").click();
-    expect((await dismissed).postDataJSON()).toEqual({ to: next.id });
+    expect((await dismissed).postDataJSON()).toEqual({ from: "predictable", to: next.id });
     await expect(page.getByTestId("model-upgrade-banner")).toHaveCount(0);
   });
 });

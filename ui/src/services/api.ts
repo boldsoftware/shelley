@@ -191,11 +191,11 @@ class ApiService {
     }
   }
 
-  async dismissModelUpgrade(to: string): Promise<void> {
+  async dismissModelUpgrade(from: string, to: string): Promise<void> {
     const response = await fetch(`${this.baseUrl}/model-upgrade/dismiss`, {
       method: "POST",
       headers: this.postHeaders,
-      body: JSON.stringify({ to }),
+      body: JSON.stringify({ from, to }),
     });
     if (!response.ok) {
       throw await responseError(response, "Failed to dismiss upgrade");

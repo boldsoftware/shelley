@@ -18,7 +18,7 @@ const (
 )
 
 // generationEdges are the hand-written hops out of the old GPT-5.x names,
-// which carry no size in their id. Everything else is derived from shadowPairs.
+// which carry no size in their id.
 var generationEdges = map[string]string{
 	"gpt-5.5":       "gpt-6-sol",
 	"gpt-5.4":       "gpt-6-sol",
@@ -98,12 +98,10 @@ func releaseDate(id string) string {
 	return date
 }
 
-// BestUpgrade picks the newest ready model that shadowPairs says beats
-// `from`. Candidates share the provider, and the line too unless the id
-// carries no line of its own: the old GPT-5.x names are matched by provider
-// and reach the GPT-6 set through the hand-written generationEdges hop. The
-// newest models.dev release date wins; an undated candidate only wins when
-// nothing dated is on offer.
+// BestUpgrade picks the newest ready model in the same lineage as `from`.
+// The old GPT-5.x names reach their replacement lineage through
+// generationEdges. Explicit shadowPairs remain useful when release dates are
+// missing.
 func BestUpgrade(from string, ready map[string]bool) (to string, kind UpgradeKind, line string) {
 	m := ByID(from)
 	if m == nil {
@@ -114,20 +112,31 @@ func BestUpgrade(from string, ready map[string]bool) (to string, kind UpgradeKin
 	if hop, ok := generationEdges[from]; ok {
 		kind, seed = UpgradeGeneration, hop
 	}
-	sameLine := seed == from
+	targetLine := lineOf(seed)
+	fromDate := releaseDate(from)
 	best, bestDate := "", ""
 	consider := func(id string) {
 		if id == from || !ready[id] {
 			return
 		}
 		d := releaseDate(id)
+		if kind == UpgradeVersion && fromDate != "" && (d == "" || d <= fromDate) {
+			return
+		}
 		if best != "" && (d == "" || (bestDate != "" && d <= bestDate)) {
 			return
 		}
 		best, bestDate = id, d
 	}
 	consider(seed)
-	// Walk "better than" links, so one new pair extends the whole chain.
+	for id := range ready {
+		candidate := ByID(id)
+		if candidate != nil && candidate.Provider == m.Provider && lineOf(id) == targetLine {
+			consider(id)
+		}
+	}
+	// Walk explicit "better than" links for undated models and generation
+	// bridges whose intermediate target is unavailable.
 	seen := map[string]bool{from: true, seed: true}
 	for queue := []string{from, seed}; len(queue) > 0; queue = queue[1:] {
 		for _, p := range shadowPairs {
@@ -135,7 +144,7 @@ func BestUpgrade(from string, ready map[string]bool) (to string, kind UpgradeKin
 			if p.Worse != queue[0] || seen[p.Better] || b == nil || b.Provider != m.Provider {
 				continue
 			}
-			if sameLine && lineOf(p.Better) != lineOf(from) {
+			if kind == UpgradeVersion && lineOf(p.Better) != targetLine {
 				continue
 			}
 			seen[p.Better] = true

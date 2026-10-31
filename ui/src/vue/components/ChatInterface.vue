@@ -472,7 +472,7 @@
       testid="model-upgrade"
       :busy="agentWorking"
       @action="offerUpgradeAll"
-      @dismiss="dismissModelUpgrade(modelUpgrade.to.id)"
+      @dismiss="dismissModelUpgrade(modelUpgrade.from.id, modelUpgrade.to.id)"
     />
 
     <!-- Status bar -->
@@ -1346,9 +1346,9 @@ async function dismissUpgradeOffer() {
   }
 }
 
-async function dismissModelUpgrade(to: string) {
+async function dismissModelUpgrade(from: string, to: string) {
   try {
-    await api.dismissModelUpgrade(to);
+    await api.dismissModelUpgrade(from, to);
     models.value = await api.getModels();
     if (window.__SHELLEY_INIT__) window.__SHELLEY_INIT__.models = models.value;
   } catch (err) {

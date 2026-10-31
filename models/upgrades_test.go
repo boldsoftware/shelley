@@ -20,6 +20,7 @@ func TestBestUpgrade(t *testing.T) {
 		"gpt-5.6-sol":                   "gpt-6.1-sol/version/Sol",
 		"gpt-6-sol":                     "gpt-6.1-sol/version/Sol",
 		"gpt-5.6-terra":                 "gpt-6.1-terra/version/Terra",
+		"gpt-5.6-luna":                  "gpt-6-luna/version/Luna",
 		"gpt-5.5":                       "gpt-6.1-sol/generation/OpenAI",
 		"gpt-5.4":                       "gpt-6.1-sol/generation/OpenAI",
 		"gpt-5.3-codex":                 "gpt-6.1-sol/generation/OpenAI",
