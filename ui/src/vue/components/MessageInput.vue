@@ -97,11 +97,12 @@
           class="skill-chip"
           data-testid="skill-chip"
         >
-          <span class="skill-chip-label truncate" :title="skill.description">{{ skill.name }}</span>
+          <span class="skill-chip-label truncate" :title="skill.description">{{ skill.mcp_tool || skill.name }}</span>
+          <span v-if="skill.mcp_server" class="skill-mcp-badge">{{ skill.mcp_server }}</span>
           <button
             type="button"
             class="skill-chip-x"
-            :aria-label="`Remove skill ${skill.name}`"
+            :aria-label="skill.mcp_server ? `Remove tool ${skill.mcp_tool} from ${skill.mcp_server}` : `Remove skill ${skill.name}`"
             @click="removeSelectedSkill(skill.name)"
           >
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -199,6 +200,7 @@
               @keydown.enter.prevent="chooseSkill(skillSelected)"
               @keydown.esc="closeSkillPicker"
             />
+            <div v-if="skillWarning" class="skill-picker-warning" role="status">{{ skillWarning }}</div>
             <div v-if="skillLoading || skillError" class="file-completion-status" role="status">
               {{ skillError || "Loading skills…" }}
             </div>
@@ -225,7 +227,10 @@
                   @mouseenter="skillSelected = index"
                   @click="chooseSkill(index)"
                 >
-                  <span class="slash-command-name">{{ item.name }}</span>
+                  <span class="slash-command-name skill-picker-label">
+                    <span class="truncate">{{ item.mcp_tool || item.name }}</span>
+                    <span v-if="item.mcp_server" class="skill-mcp-badge">{{ item.mcp_server }}</span>
+                  </span>
                   <span v-if="mobileSkillPicker" class="skill-picker-description">{{ item.description }}</span>
                   <span v-if="mobileSkillPicker" class="skill-picker-add" aria-hidden="true">
                     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14" /></svg>
@@ -235,8 +240,22 @@
               <div
                 v-if="!mobileSkillPicker && skillMatches[skillSelected]"
                 class="skill-picker-detail" aria-hidden="true">
-                <div class="skill-picker-detail-name">{{ skillMatches[skillSelected].name }}</div>
+                <div class="skill-picker-detail-name">{{ skillMatches[skillSelected].mcp_tool || skillMatches[skillSelected].name }}</div>
                 <p>{{ skillMatches[skillSelected].description }}</p>
+                <template v-if="skillMatches[skillSelected].mcp_server">
+                  <dl v-if="Object.keys(skillMatches[skillSelected].parameters?.properties || {}).length" class="skill-mcp-parameters">
+                    <template v-for="(parameter, name) in skillMatches[skillSelected].parameters?.properties" :key="name">
+                      <dt>
+                        <code>{{ name }}</code>
+                        <span class="text-secondary">{{ Array.isArray(parameter.type) ? parameter.type.join(" | ") : parameter.type }}</span>
+                        <span v-if="skillMatches[skillSelected].parameters?.required?.includes(String(name))" class="text-secondary">required</span>
+                      </dt>
+                      <dd v-if="parameter.description" class="text-secondary">{{ parameter.description }}</dd>
+                    </template>
+                  </dl>
+                  <div class="skill-picker-source">Read tool schema before calling</div>
+                  <code class="skill-mcp-activate">{{ skillMatches[skillSelected].activate }}</code>
+                </template>
                 <div class="skill-picker-source">
                   {{
                     [skillMatches[skillSelected].origin, skillMatches[skillSelected].source_path]
@@ -1150,6 +1169,7 @@ const {
   selected: skillSelected,
   loading: skillLoading,
   error: skillError,
+  warning: skillWarning,
   focused: skillFocused,
   updateSelection: updateSkillSelection,
   dismiss: dismissSkills,

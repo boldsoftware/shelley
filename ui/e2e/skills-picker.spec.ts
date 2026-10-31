@@ -30,6 +30,29 @@ async function pickSkill(page: Page) {
   return input;
 }
 
+async function mockMcpTools(page: Page) {
+  await page.route("**/api/mcp/servers", (route) =>
+    route.fulfill({ json: [{ name: "web" }, { name: "library" }, { name: "locked" }] }),
+  );
+  await page.route("**/api/mcp/servers/*/tools", (route) => {
+    const server = new URL(route.request().url()).pathname.split("/").at(-2);
+    if (server === "locked")
+      return route.fulfill({ status: 401, body: "Log in to locked" });
+    return route.fulfill({
+      json: {
+        tools: [{
+          name: "search",
+          description: `Search ${server} sources`,
+          inputSchema: {
+            properties: { query: { type: "string", description: "Search terms" } },
+            required: ["query"],
+          },
+        }],
+      },
+    });
+  });
+}
+
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -85,6 +108,40 @@ test.describe("desktop", () => {
       expect(stored.at(-1)).toBe(prefix + "echo: please review");
     });
   });
+
+  test("MCP tools show short names, server badges, schemas and partial errors, and send the exact tool", async ({ page, request }) => {
+    await withTempDir("shelley-mcp-skills-", async (cwd) => {
+      await mockMcpTools(page);
+      const id = await openConversation(page, request, cwd);
+      const input = page.getByTestId("message-input");
+      await input.fill("/skills search");
+      const picker = page.getByTestId("skill-picker");
+      const options = picker.getByRole("option");
+      await expect(options).toHaveCount(2);
+      await expect(options.first().locator(".truncate")).toHaveText("search");
+      await expect(options.first().locator(".skill-mcp-badge")).toHaveText("web");
+      await expect(options.last().locator(".skill-mcp-badge")).toHaveText("library");
+      await expect(picker.locator(".skill-picker-warning")).toContainText("locked");
+      await expect(picker.locator(".skill-mcp-parameters")).toContainText("query");
+      await expect(picker.locator(".skill-mcp-parameters")).toContainText("required");
+      await expect(picker.locator(".skill-mcp-activate")).toContainText("'web.search'");
+      await options.first().click();
+      const chip = page.getByTestId("skill-chip");
+      await expect(chip.locator(".skill-chip-label")).toHaveText("search");
+      await expect(chip.locator(".skill-mcp-badge")).toHaveText("web");
+      await expect(chip.getByRole("button", { name: "Remove tool search from web", exact: true })).toBeVisible();
+      await input.fill("echo: find sources");
+      const posted = page.waitForRequest((req) =>
+        req.method() === "POST" && new URL(req.url()).pathname === `/api/conversation/${id}/chat`,
+      );
+      await page.getByTestId("send-button").click();
+      const payload = (await posted).postDataJSON();
+      expect(payload.skills).toEqual([]);
+      expect(payload.message).toMatch(/^echo: find sources\n\nUse the MCP tool "web.search"/);
+      await expect(chip).toHaveCount(0);
+      await expect(page.locator(".message-user").last()).toContainText('Use the MCP tool "web.search"');
+    });
+  });
 });
 
 test("mobile skill sheet opens without focusing its search field", async ({ page, request }) => {
@@ -96,5 +153,23 @@ test("mobile skill sheet opens without focusing its search field", async ({ page
     await expect(picker.getByRole("searchbox", { name: "Find a skill" })).not.toBeFocused();
     await picker.getByRole("button", { name: "Close skills" }).click();
     await expect(picker).toBeHidden();
+  });
+});
+
+test("mobile MCP tools remain distinct by badge and can both be selected", async ({ page, request }) => {
+  await withTempDir("shelley-mcp-skills-", async (cwd) => {
+    await mockMcpTools(page);
+    await openConversation(page, request, cwd);
+    const input = page.getByTestId("message-input");
+    for (const server of ["web", "library"]) {
+      await input.fill(`/skills ${server} search`);
+      const picker = page.getByTestId("skill-picker");
+      await expect(picker.getByRole("option")).toHaveCount(1);
+      await expect(picker.locator(".skill-mcp-badge")).toHaveText(server);
+      await expect(picker.locator(".skill-picker-description")).toHaveText(`Search ${server} sources`);
+      await picker.getByRole("option").click();
+    }
+    await expect(page.getByTestId("skill-chip")).toHaveCount(2);
+    await expect(page.getByTestId("skill-chip").locator(".skill-mcp-badge")).toHaveText(["web", "library"]);
   });
 });

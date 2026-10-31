@@ -17,6 +17,7 @@ export function useSkillCompletion(options: {
   const selected = ref(0);
   const loading = ref(false);
   const error = ref("");
+  const warning = ref("");
   const skills = ref<SkillDescriptor[]>([]);
   const token = computed(() =>
     skillTokenAt(
@@ -70,13 +71,18 @@ export function useSkillCompletion(options: {
     skills.value = [];
     selected.value = 0;
     error.value = "";
+    warning.value = "";
     loading.value = false;
   }
   watch(context, reset, { flush: "sync" });
   watch(
     () => (visible.value ? context.value : null),
     async (ctx) => {
-      if (ctx === null || ctx === loadedFor) return;
+      if (ctx === null) {
+        if (loading.value) reset();
+        return;
+      }
+      if (ctx === loadedFor) return;
       reset();
       loadedFor = ctx;
       loading.value = true;
@@ -92,7 +98,10 @@ export function useSkillCompletion(options: {
           options.conversationId(),
           mine.signal,
         );
-        if (controller === mine) skills.value = result.skills;
+        if (controller === mine) {
+          skills.value = result.skills;
+          warning.value = result.warnings?.join("\n") ?? "";
+        }
       } catch (err) {
         if (controller !== mine) return;
         error.value = err instanceof Error ? err.message : String(err);
@@ -133,6 +142,7 @@ export function useSkillCompletion(options: {
     selected,
     loading,
     error,
+    warning,
     focused,
     updateSelection,
     dismiss,

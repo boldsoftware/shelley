@@ -139,3 +139,32 @@ test("errors cannot select and the next open retries", async (t) => {
   await h.load("foo");
   assert.equal(h.completion.matches.value.length, 1);
 });
+
+test("partial MCP warnings stay visible without blocking selection and reset with context", async (t) => {
+  const h = await harness(t);
+  h.requests[0].resolve({ ...response("mcp:web.search"), warnings: ["locked: log in"] });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(h.completion.warning.value, "locked: log in");
+  assert.equal(h.completion.error.value, "");
+  assert.equal(h.completion.choose(0)?.skill.name, "mcp:web.search");
+  h.cwd.value = "/other";
+  assert.equal(h.completion.warning.value, "");
+});
+
+test("closing while MCP discovery is loading aborts it and reopening retries", async (t) => {
+  const h = await harness(t);
+  h.completion.dismiss();
+  assert.equal(h.requests[0].signal?.aborted, true);
+  assert.equal(h.completion.loading.value, false);
+  h.completion.reopen();
+  await nextTick();
+  assert.equal(h.requests.length, 2);
+  h.requests[0].resolve({ ...response("stale"), warnings: ["stale warning"] });
+  await h.load("current");
+  assert.deepEqual(
+    h.completion.matches.value.map((skill) => skill.name),
+    ["current"],
+  );
+  assert.equal(h.completion.warning.value, "");
+});

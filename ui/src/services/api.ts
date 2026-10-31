@@ -82,6 +82,27 @@ export interface SkillDescriptor {
   activate: string;
   source_path?: string;
   origin?: string;
+  mcp_server?: string;
+  mcp_tool?: string;
+  parameters?: ToolSchema;
+}
+
+function mcpActivation(name: string): string {
+  return `shelley mcp list '${name.replace(/'/g, "'\\''")}' -schema`;
+}
+
+function withMcpSelections(request: ChatRequest): ChatRequest {
+  const tools = request.skills?.filter((name) => name.startsWith("mcp:")) ?? [];
+  if (!tools.length) return request;
+  const instructions = tools.map((name) => {
+    const tool = name.slice(4);
+    return `Use the MCP tool ${JSON.stringify(tool)} for this task. First read its documentation and input schema with \`${mcpActivation(tool)}\`, then call it with shelley mcp call and the appropriate arguments.`;
+  });
+  return {
+    ...request,
+    message: `${request.message}\n\n${instructions.join("\n")}`,
+    skills: request.skills?.filter((name) => !name.startsWith("mcp:")),
+  };
 }
 
 export interface AvailableModel {
@@ -349,7 +370,7 @@ class ApiService {
     const response = await fetch(`${this.baseUrl}/conversations/new`, {
       method: "POST",
       headers: this.postHeaders,
-      body: JSON.stringify(request),
+      body: JSON.stringify(withMcpSelections(request)),
     });
     if (!response.ok) {
       throw await responseError(response, "Failed to start conversation");
@@ -470,7 +491,7 @@ class ApiService {
     const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/chat`, {
       method: "POST",
       headers: this.postHeaders,
-      body: JSON.stringify(request),
+      body: JSON.stringify(withMcpSelections(request)),
       signal,
     });
     if (!response.ok) {
@@ -910,12 +931,60 @@ class ApiService {
     cwd: string,
     conversationId: string | null,
     signal?: AbortSignal,
-  ): Promise<{ skills: SkillDescriptor[] }> {
+  ): Promise<{ skills: SkillDescriptor[]; warnings?: string[] }> {
     const params = new URLSearchParams({ cwd });
     if (conversationId) params.set("conversation_id", conversationId);
     const response = await fetch(`${this.baseUrl}/skills?${params}`, { signal });
     if (!response.ok) throw await responseError(response, "Failed to load skills");
-    return response.json();
+    const catalog: { skills: SkillDescriptor[] } = await response.json();
+    let servers: McpServer[];
+    try {
+      servers = await mcpServersApi.list(signal);
+    } catch (error) {
+      signal?.throwIfAborted();
+      return { ...catalog, warnings: [error instanceof Error ? error.message : String(error)] };
+    }
+    const tools = await Promise.allSettled(
+      servers.map(async (server) => {
+        const deadline = AbortSignal.timeout(5000);
+        const toolSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+        const available = await mcpServersApi.tools(server.name, toolSignal);
+        const valid = available.filter((tool) => /^[A-Za-z0-9_.-]{1,128}$/.test(tool.name));
+        return {
+          skills: valid.map((tool): SkillDescriptor => {
+            const qualifiedName = `${server.name}.${tool.name}`;
+            return {
+              name: `mcp:${qualifiedName}`,
+              mcp_server: server.name,
+              mcp_tool: tool.name,
+              description: tool.description || `Call ${qualifiedName}.`,
+              activate: mcpActivation(qualifiedName),
+              origin: "MCP tool",
+              source_path: server.name,
+              parameters: tool.inputSchema,
+            };
+          }),
+          warnings:
+            valid.length < available.length
+              ? [`${server.name}: skipped tools with invalid names`]
+              : [],
+        };
+      }),
+    );
+    signal?.throwIfAborted();
+    return {
+      skills: [
+        ...catalog.skills,
+        ...tools.flatMap((result) => (result.status === "fulfilled" ? result.value.skills : [])),
+      ],
+      warnings: tools.flatMap((result, index) =>
+        result.status === "rejected"
+          ? [
+              `${servers[index].name}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
+            ]
+          : result.value.warnings,
+      ),
+    };
   }
 
   // findFiles fuzzy-searches files under `dir` server-side. `query` is the
@@ -1552,8 +1621,8 @@ async function mcpFetch(path: string, failure: string, init?: RequestInit): Prom
 const mcpPath = (name: string) => `/${encodeURIComponent(name)}`;
 
 export const mcpServersApi = {
-  async list(): Promise<McpServer[]> {
-    return (await mcpFetch("", "Failed to load MCP servers")).json();
+  async list(signal?: AbortSignal): Promise<McpServer[]> {
+    return (await mcpFetch("", "Failed to load MCP servers", { signal })).json();
   },
   async save(server: McpServer, isNew: boolean): Promise<void> {
     await mcpFetch(isNew ? "" : mcpPath(server.name), "Failed to save MCP server", {
@@ -1568,7 +1637,7 @@ export const mcpServersApi = {
   async logout(name: string): Promise<void> {
     await mcpFetch(`${mcpPath(name)}/logout`, "Failed to log out", { method: "POST" });
   },
-  async tools(name: string, signal: AbortSignal): Promise<McpTool[]> {
+  async tools(name: string, signal?: AbortSignal): Promise<McpTool[]> {
     const response = await mcpFetch(`${mcpPath(name)}/tools`, "Failed to list tools", { signal });
     return ((await response.json()) as { tools: McpTool[] }).tools;
   },
