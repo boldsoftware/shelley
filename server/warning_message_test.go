@@ -3,12 +3,99 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"shelley.exe.dev/db"
+	"shelley.exe.dev/llm"
+	"shelley.exe.dev/loop"
 )
+
+func TestRoutingWarningBypassesRetryCap(t *testing.T) {
+	for _, retries := range []int{0, 2, 3, 5} {
+		t.Run(fmt.Sprint(retries), func(t *testing.T) {
+			h := NewTestHarness(t)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			conversation, err := h.db.CreateConversation(ctx, nil, true, nil, nil, db.ConversationOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			cm, err := h.server.getOrCreateConversationManager(ctx, conversation.ConversationID, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for range retries {
+				if err := cm.recordWarning(ctx, "retrying"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before, err := h.db.ListMessages(ctx, conversation.ConversationID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			retryWarnings := 0
+			for _, message := range before {
+				if message.Type == string(db.MessageTypeWarning) {
+					retryWarnings++
+				}
+			}
+			if retryWarnings != min(retries, maxConsecutiveWarnings) {
+				t.Fatalf("stored %d retry warnings after %d retries", retryWarnings, retries)
+			}
+			next := h.server.streamPub.Subscribe(ctx, -1)
+			agent := loop.NewLoop(loop.Config{
+				LLM:                  h.llm,
+				History:              []llm.Message{llm.UserStringMessage("routing demo: opus")},
+				RecordMessage:        cm.recordMessage,
+				RecordWarning:        cm.recordWarning,
+				RecordRoutingWarning: cm.recordRoutingWarning,
+			})
+			if err := agent.ProcessOneTurn(ctx); err != nil {
+				t.Fatal(err)
+			}
+			messages, err := h.db.ListMessages(ctx, conversation.ConversationID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(messages) != len(before)+2 {
+				t.Fatalf("stored %d messages: retry cap or routing notice lost", len(messages))
+			}
+			notice, reply := messages[len(messages)-2], messages[len(messages)-1]
+			if notice.Type != string(db.MessageTypeWarning) || !notice.ExcludedFromContext || reply.Type != string(db.MessageTypeAgent) || notice.SequenceID >= reply.SequenceID {
+				t.Fatalf("expected context-excluded notice before reply: notice = %+v, reply = %+v", notice, reply)
+			}
+			var data map[string]any
+			if notice.UserData == nil {
+				t.Fatal("missing notice user data")
+			}
+			if err := json.Unmarshal([]byte(*notice.UserData), &data); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasPrefix(data["text"].(string), "Provider routed") || data["suppression_text"] != nil || data["suppressed"] != nil {
+				t.Fatalf("routing notice inherited retry suppression: %v", data)
+			}
+			routing, ok := data["routing"].(map[string]any)
+			if !ok || routing["from"] != "Claude Fable 5.1" || routing["to"] != "Claude Opus 4.8" ||
+				routing["title"] != "Provider routed this response" || routing["recovered"] != false || routing["detail"] == "" {
+				t.Fatalf("missing structured routing data: %v", data)
+			}
+			for {
+				frame, ok := next()
+				if !ok {
+					t.Fatal("routing notice never reached unified stream")
+				}
+				for _, message := range frame.Messages {
+					if message.MessageID == notice.MessageID {
+						return
+					}
+				}
+			}
+		})
+	}
+}
 
 func TestPredictableFailRecordsWarningMessage(t *testing.T) {
 	t.Parallel()

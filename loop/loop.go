@@ -52,15 +52,16 @@ type GitStateChangeFunc func(ctx context.Context, state *gitstate.GitState)
 
 // Config contains all configuration needed to create a Loop.
 type Config struct {
-	LLM           llm.Service
-	ModelID       string
-	History       []llm.Message
-	Tools         []*llm.Tool
-	RecordMessage MessageRecordFunc
-	RecordWarning WarningRecordFunc
-	Logger        *slog.Logger
-	System        []llm.SystemContent
-	WorkingDir    string // working directory for tools
+	LLM                  llm.Service
+	ModelID              string
+	History              []llm.Message
+	Tools                []*llm.Tool
+	RecordMessage        MessageRecordFunc
+	RecordWarning        WarningRecordFunc
+	RecordRoutingWarning RoutingNoticeRecordFunc
+	Logger               *slog.Logger
+	System               []llm.SystemContent
+	WorkingDir           string // working directory for tools
 	// GitTracker, if set, is checked for git state changes at the end of
 	// each turn, and OnGitStateChange is called with each change.
 	GitTracker       *gitstate.Tracker
@@ -112,31 +113,33 @@ type Injection struct {
 // Loop manages a conversation turn with an LLM including tool execution and message recording.
 // Notably, when the turn ends, the "Loop" is over. TODO: maybe rename to Turn?
 type Loop struct {
-	llm              llm.Service
-	modelID          string
-	tools            []*llm.Tool
-	recordMessage    MessageRecordFunc
-	recordWarning    WarningRecordFunc
-	history          []llm.Message
-	messageQueue     []queuedMessage
-	turnRunner       TurnRunner
-	totalUsage       llm.Usage
-	mu               sync.Mutex
-	logger           *slog.Logger
-	system           []llm.SystemContent
-	workingDir       string
-	gitTracker       *gitstate.Tracker
-	onGitStateChange GitStateChangeFunc
-	onToolProgress   llm.ToolProgressFunc
-	onStreamDelta    func(llm.StreamDelta)
-	onStreamDone     func()
-	onSuccess        func(*llm.Request)
-	injectMessages   func(ctx context.Context) (Injection, error)
-	rewriteReply     func(context.Context, llm.Message) (llm.Message, bool)
-	thinkingLevel    llm.ThinkingLevel
-	promptCacheKey   string
-	notify           chan struct{} // signaled when a message is queued or retry requested
-	retryPending     bool          // set by Retry() to re-run processLLMRequest with current history
+	llm                  llm.Service
+	modelID              string
+	tools                []*llm.Tool
+	recordMessage        MessageRecordFunc
+	recordWarning        WarningRecordFunc
+	recordRoutingWarning RoutingNoticeRecordFunc
+	history              []llm.Message
+	messageQueue         []queuedMessage
+	turnRunner           TurnRunner
+	totalUsage           llm.Usage
+	mu                   sync.Mutex
+	logger               *slog.Logger
+	system               []llm.SystemContent
+	workingDir           string
+	gitTracker           *gitstate.Tracker
+	onGitStateChange     GitStateChangeFunc
+	onToolProgress       llm.ToolProgressFunc
+	onStreamDelta        func(llm.StreamDelta)
+	onStreamDone         func()
+	onSuccess            func(*llm.Request)
+	injectMessages       func(ctx context.Context) (Injection, error)
+	rewriteReply         func(context.Context, llm.Message) (llm.Message, bool)
+	thinkingLevel        llm.ThinkingLevel
+	promptCacheKey       string
+	modelRouting         modelRouting
+	notify               chan struct{} // signaled when a message is queued or retry requested
+	retryPending         bool          // set by Retry() to re-run processLLMRequest with current history
 }
 
 // NewLoop creates a new Loop instance with the provided configuration
@@ -147,27 +150,28 @@ func NewLoop(config Config) *Loop {
 	}
 
 	return &Loop{
-		llm:              config.LLM,
-		modelID:          config.ModelID,
-		history:          config.History,
-		tools:            config.Tools,
-		recordMessage:    config.RecordMessage,
-		recordWarning:    config.RecordWarning,
-		messageQueue:     make([]queuedMessage, 0),
-		logger:           logger,
-		system:           config.System,
-		workingDir:       config.WorkingDir,
-		gitTracker:       config.GitTracker,
-		onGitStateChange: config.OnGitStateChange,
-		onToolProgress:   config.OnToolProgress,
-		onStreamDelta:    config.OnStreamDelta,
-		onStreamDone:     config.OnStreamDone,
-		onSuccess:        config.OnSuccessfulRequest,
-		injectMessages:   config.InjectMessages,
-		rewriteReply:     config.RewriteFinalReply,
-		thinkingLevel:    config.ThinkingLevel,
-		promptCacheKey:   config.PromptCacheKey,
-		notify:           make(chan struct{}, 1),
+		llm:                  config.LLM,
+		modelID:              config.ModelID,
+		history:              config.History,
+		tools:                config.Tools,
+		recordMessage:        config.RecordMessage,
+		recordWarning:        config.RecordWarning,
+		recordRoutingWarning: config.RecordRoutingWarning,
+		messageQueue:         make([]queuedMessage, 0),
+		logger:               logger,
+		system:               config.System,
+		workingDir:           config.WorkingDir,
+		gitTracker:           config.GitTracker,
+		onGitStateChange:     config.OnGitStateChange,
+		onToolProgress:       config.OnToolProgress,
+		onStreamDelta:        config.OnStreamDelta,
+		onStreamDone:         config.OnStreamDone,
+		onSuccess:            config.OnSuccessfulRequest,
+		injectMessages:       config.InjectMessages,
+		rewriteReply:         config.RewriteFinalReply,
+		thinkingLevel:        config.ThinkingLevel,
+		promptCacheKey:       config.PromptCacheKey,
+		notify:               make(chan struct{}, 1),
 	}
 }
 
@@ -382,6 +386,7 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 		ThinkingLevel:  thinkingLevel,
 		WorkingDir:     l.workingDir,
 		PromptCacheKey: l.promptCacheKey,
+		modelRouting:   &l.modelRouting,
 		Pending:        l.pending,
 		Hooks:          l.hooks(),
 		Logger:         l.logger,
@@ -478,7 +483,8 @@ func (l *Loop) hooks() Hooks {
 			l.appendContext(r.Message)
 			return nil
 		},
-		OnWarning: l.recordWarning,
+		OnWarning:        l.recordWarning,
+		OnRoutingWarning: l.recordRoutingWarning,
 	}
 	if l.onStreamDelta != nil {
 		h.OnStreamingResponse = func(_ context.Context, d llm.StreamDelta) { l.onStreamDelta(d) }

@@ -1797,6 +1797,21 @@ func (cm *ConversationManager) feedQueued(ctx context.Context, s *Server, queued
 
 const maxConsecutiveWarnings = 3
 
+func (cm *ConversationManager) recordRoutingWarning(ctx context.Context, notice loop.RoutingNotice) error {
+	message, err := cm.db.CreateMessage(ctx, db.CreateMessageParams{
+		ConversationID:      cm.conversationID,
+		Type:                db.MessageTypeWarning,
+		UserData:            map[string]any{"text": notice.Text(), "routing": notice},
+		ExcludedFromContext: true,
+		BumpTimestamp:       true,
+	})
+	if err != nil {
+		return err
+	}
+	cm.Touch()
+	return cm.publishCreated(ctx, *message)
+}
+
 func (cm *ConversationManager) recordWarning(ctx context.Context, text string) error {
 	result, err := cm.db.CreateWarningMessage(ctx, cm.conversationID, text, maxConsecutiveWarnings, "Suppressing further warnings.")
 	if err != nil {
@@ -2482,10 +2497,11 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 		RecordWarning: func(ctx context.Context, text string) error {
 			return cm.recordWarning(ctx, text)
 		},
-		Logger:     logger,
-		System:     system,
-		WorkingDir: cwd,
-		GitTracker: toolSet.GitTracker(),
+		RecordRoutingWarning: cm.recordRoutingWarning,
+		Logger:               logger,
+		System:               system,
+		WorkingDir:           cwd,
+		GitTracker:           toolSet.GitTracker(),
 		OnGitStateChange: func(ctx context.Context, state *gitstate.GitState) {
 			cm.recordGitStateChange(ctx, state)
 		},

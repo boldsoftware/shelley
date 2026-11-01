@@ -45,6 +45,7 @@ type Hooks struct {
 	OnSuccessfulRequest func(*llm.Request)
 	OnToolResponse      func(context.Context, ToolResponse) error
 	OnWarning           func(context.Context, string) error
+	OnRoutingWarning    RoutingNoticeRecordFunc
 	// RewriteFinalReply may turn a reply that would end the turn into tool
 	// calls, which then run as if the model had made them. It is consulted
 	// at most once per turn. A turn that ends with an error offers the
@@ -74,6 +75,7 @@ type RunConfig struct {
 	CurrentSystem func() []llm.SystemContent
 	Hooks         Hooks
 	Logger        *slog.Logger
+	modelRouting  *modelRouting
 }
 
 // Run executes one agent turn. It checks RunConfig.Pending before every model
@@ -116,6 +118,9 @@ func cloneContents(contents []llm.Content) []llm.Content {
 // without requesting another client-side tool call.
 func (l *RunConfig) run(ctx context.Context) error {
 	messages := cloneMessages(l.Messages)
+	if l.modelRouting == nil {
+		l.modelRouting = &modelRouting{}
+	}
 	iterations := 0
 	rewritten := false
 	for {
@@ -236,12 +241,18 @@ func (l *RunConfig) run(ctx context.Context) error {
 
 		l.Logger.Debug("received LLM response", "content_count", len(resp.Content), "stop_reason", resp.StopReason.String(), "usage", resp.Usage.String())
 
+		responseCtx := context.WithoutCancel(ctx)
+		routingErr := l.modelRouting.observe(responseCtx, resp, l.Hooks.OnRoutingWarning)
+		if routingErr != nil {
+			routingErr = fmt.Errorf("record model routing notice: %w", routingErr)
+		}
+
 		// Handle max tokens truncation BEFORE adding to history - truncated responses
 		// should not be added to history normally (they get special handling)
 		if resp.StopReason == llm.StopReasonMaxTokens {
 			l.Logger.Warn("LLM response truncated due to max tokens")
-			l.failTurn(ctx, l.truncationError(ctx, resp), &messages, &rewritten)
-			return nil
+			l.failTurn(ctx, l.truncationError(responseCtx, resp), &messages, &rewritten)
+			return routingErr
 		}
 
 		// Handle refusals BEFORE adding to history. On stop_reason=refusal the
@@ -252,8 +263,8 @@ func (l *RunConfig) run(ctx context.Context) error {
 		// endless string of blank turns. Surface it as a visible error instead.
 		if resp.StopReason == llm.StopReasonRefusal {
 			l.Logger.Warn("LLM declined to continue (stop_reason=refusal)")
-			l.failTurn(ctx, l.refusalError(ctx, resp), &messages, &rewritten)
-			return nil
+			l.failTurn(ctx, l.refusalError(responseCtx, resp), &messages, &rewritten)
+			return routingErr
 		}
 
 		// Retain the exact provider-visible prefix for an idle cache refresh.
@@ -275,21 +286,26 @@ func (l *RunConfig) run(ctx context.Context) error {
 		calls := assistantMessage.Content
 		assistantMessage = canonicalToolInputs(assistantMessage)
 		if toolUse {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			if err := l.emitResponse(context.WithoutCancel(ctx), assistantMessage, resp.UsageWithMeta(), "failed to record assistant tool-use message"); err != nil {
-				return fmt.Errorf("%w: assistant tool-use message: %v", errMessagePersistence, err)
+			if err := l.emitResponse(responseCtx, assistantMessage, resp.UsageWithMeta(), "failed to record assistant tool-use message"); err != nil {
+				return errors.Join(routingErr, fmt.Errorf("%w: assistant tool-use message: %v", errMessagePersistence, err))
 			}
 		} else {
-			l.emitResponse(ctx, assistantMessage, resp.UsageWithMeta(), "failed to record assistant message")
+			if err := l.emitResponse(responseCtx, assistantMessage, resp.UsageWithMeta(), "failed to record assistant message"); err != nil {
+				return errors.Join(routingErr, fmt.Errorf("%w: assistant message: %v", errMessagePersistence, err))
+			}
 		}
 		messages = append(messages, assistantMessage)
 
+		if routingErr != nil {
+			return routingErr
+		}
 		if !toolUse {
 			return nil
 		}
 
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		l.Logger.Debug("handling tool calls", "content_count", len(assistantMessage.Content))
 		if err := l.executeToolCalls(ctx, calls, &messages); err != nil {
 			if errors.Is(err, errToolEndedTurn) {
