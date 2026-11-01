@@ -241,18 +241,18 @@ func (l *RunConfig) run(ctx context.Context) error {
 
 		l.Logger.Debug("received LLM response", "content_count", len(resp.Content), "stop_reason", resp.StopReason.String(), "usage", resp.Usage.String())
 
-		responseCtx := context.WithoutCancel(ctx)
-		routingErr := l.modelRouting.observe(responseCtx, resp, l.Hooks.OnRoutingWarning)
-		if routingErr != nil {
-			routingErr = fmt.Errorf("record model routing notice: %w", routingErr)
+		if ctx.Err() == nil {
+			if err := l.modelRouting.observe(ctx, resp, l.Hooks.OnRoutingWarning); err != nil {
+				l.Logger.Error("failed to record model routing notice", "error", err)
+			}
 		}
 
 		// Handle max tokens truncation BEFORE adding to history - truncated responses
 		// should not be added to history normally (they get special handling)
 		if resp.StopReason == llm.StopReasonMaxTokens {
 			l.Logger.Warn("LLM response truncated due to max tokens")
-			l.failTurn(ctx, l.truncationError(responseCtx, resp), &messages, &rewritten)
-			return routingErr
+			l.failTurn(ctx, l.truncationError(ctx, resp), &messages, &rewritten)
+			return nil
 		}
 
 		// Handle refusals BEFORE adding to history. On stop_reason=refusal the
@@ -263,8 +263,8 @@ func (l *RunConfig) run(ctx context.Context) error {
 		// endless string of blank turns. Surface it as a visible error instead.
 		if resp.StopReason == llm.StopReasonRefusal {
 			l.Logger.Warn("LLM declined to continue (stop_reason=refusal)")
-			l.failTurn(ctx, l.refusalError(responseCtx, resp), &messages, &rewritten)
-			return routingErr
+			l.failTurn(ctx, l.refusalError(ctx, resp), &messages, &rewritten)
+			return nil
 		}
 
 		// Retain the exact provider-visible prefix for an idle cache refresh.
@@ -286,26 +286,21 @@ func (l *RunConfig) run(ctx context.Context) error {
 		calls := assistantMessage.Content
 		assistantMessage = canonicalToolInputs(assistantMessage)
 		if toolUse {
-			if err := l.emitResponse(responseCtx, assistantMessage, resp.UsageWithMeta(), "failed to record assistant tool-use message"); err != nil {
-				return errors.Join(routingErr, fmt.Errorf("%w: assistant tool-use message: %v", errMessagePersistence, err))
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := l.emitResponse(context.WithoutCancel(ctx), assistantMessage, resp.UsageWithMeta(), "failed to record assistant tool-use message"); err != nil {
+				return fmt.Errorf("%w: assistant tool-use message: %v", errMessagePersistence, err)
 			}
 		} else {
-			if err := l.emitResponse(responseCtx, assistantMessage, resp.UsageWithMeta(), "failed to record assistant message"); err != nil {
-				return errors.Join(routingErr, fmt.Errorf("%w: assistant message: %v", errMessagePersistence, err))
-			}
+			l.emitResponse(ctx, assistantMessage, resp.UsageWithMeta(), "failed to record assistant message")
 		}
 		messages = append(messages, assistantMessage)
 
-		if routingErr != nil {
-			return routingErr
-		}
 		if !toolUse {
 			return nil
 		}
 
-		if err := ctx.Err(); err != nil {
-			return err
-		}
 		l.Logger.Debug("handling tool calls", "content_count", len(assistantMessage.Content))
 		if err := l.executeToolCalls(ctx, calls, &messages); err != nil {
 			if errors.Is(err, errToolEndedTurn) {

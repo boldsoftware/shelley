@@ -68,7 +68,6 @@ func requestMentions(req *llm.Request, needle string) bool {
 // statement or new prefix checks. Do not extend or wrap this service - modify it in place.
 // Available patterns include:
 //   - "echo: <text>" - echoes the text back
-//   - "routing demo: opus|fable|snapshot|unknown" - simulates Claude routing metadata
 //   - "bash: <command>" - triggers bash tool with command
 //   - "bash-bg: <command>" - triggers bash tool with background=true
 //   - "bash@<ssh_target>: <command>", "bash-bg@<ssh_target>: <command>" - the
@@ -286,30 +285,6 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 
 	default:
 		// Handle pattern-based inputs
-		if model, ok := strings.CutPrefix(inputText, "routing demo: "); ok {
-			var served string
-			switch model {
-			case "opus":
-				served = "claude-opus-4-8"
-			case "fable":
-				served = "claude-fable-5-1"
-			case "snapshot":
-				served = "claude-fable-5-1-20261001"
-			case "unknown":
-				served = ""
-			default:
-				return nil, fmt.Errorf("unknown routing fixture %q: use opus, fable, snapshot, or unknown", model)
-			}
-			response := s.makeResponse("Simulated provider response: requested Claude Fable 5.1; served model ID: "+fmt.Sprintf("%q", served)+". No real Claude request was made.\n\nTry `routing demo: opus` twice, then `routing demo: fable` to see routing, duplicate suppression, and recovery. `routing demo: snapshot` should stay silent; `routing demo: unknown` supplies no served model.", inputTokens)
-			response.Origin = &llm.MessageOrigin{
-				Provider:  "anthropic",
-				Transport: "predictable-routing-fixture",
-				Model:     "claude-fable-5-1",
-			}
-			response.Model = served
-			return response, nil
-		}
-
 		if text, ok := strings.CutPrefix(inputText, "echo: "); ok {
 			return s.makeResponse(text, inputTokens), nil
 		}

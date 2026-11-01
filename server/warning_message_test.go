@@ -46,14 +46,15 @@ func TestRoutingWarningBypassesRetryCap(t *testing.T) {
 				t.Fatalf("stored %d retry warnings after %d retries", retryWarnings, retries)
 			}
 			next := h.server.streamPub.Subscribe(ctx, -1)
-			agent := loop.NewLoop(loop.Config{
-				LLM:                  h.llm,
-				History:              []llm.Message{llm.UserStringMessage("routing demo: opus")},
-				RecordMessage:        cm.recordMessage,
-				RecordWarning:        cm.recordWarning,
-				RecordRoutingWarning: cm.recordRoutingWarning,
-			})
-			if err := agent.ProcessOneTurn(ctx); err != nil {
+			if err := cm.recordRoutingWarning(ctx, loop.RoutingNotice{
+				Title: "Provider routed this response", From: "Claude Fable 5.1", To: "Claude Opus 4.8",
+				Detail: "You requested Claude Fable 5.1.",
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := cm.recordMessage(ctx, llm.Message{
+				Role: llm.MessageRoleAssistant, Content: llm.TextContent("reply"), EndOfTurn: true,
+			}, llm.Usage{}, nil); err != nil {
 				t.Fatal(err)
 			}
 			messages, err := h.db.ListMessages(ctx, conversation.ConversationID)

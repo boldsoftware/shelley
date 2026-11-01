@@ -9,8 +9,7 @@ import (
 )
 
 type modelRouting struct {
-	requested string
-	served    string
+	served map[string]string
 }
 
 type RoutingNotice struct {
@@ -48,8 +47,8 @@ func (r *modelRouting) observe(ctx context.Context, response *llm.Response, warn
 	if requested == "" || served == "" {
 		return nil
 	}
-	previous := r.served
-	if r.requested != requested {
+	previous, seen := r.served[requested]
+	if !seen {
 		previous = requested
 	}
 	if previous != served {
@@ -57,7 +56,7 @@ func (r *modelRouting) observe(ctx context.Context, response *llm.Response, warn
 			Title:     "Provider routed this response",
 			From:      previous,
 			To:        served,
-			Detail:    "Your requested model is unchanged. The provider did not supply a routing reason.",
+			Detail:    fmt.Sprintf("You requested %s. The provider did not supply a routing reason.", requested),
 			Recovered: served == requested,
 		}
 		if notice.Recovered {
@@ -68,6 +67,9 @@ func (r *modelRouting) observe(ctx context.Context, response *llm.Response, warn
 			return err
 		}
 	}
-	r.requested, r.served = requested, served
+	if r.served == nil {
+		r.served = make(map[string]string)
+	}
+	r.served[requested] = served
 	return nil
 }

@@ -11,8 +11,7 @@ import (
 // ("claude-opus-4-8-20260115"), and provider-qualified names
 // ("us.anthropic.claude-opus-4-8-v1:0", "claude-opus-5@20260724"). Returns
 // ok=false for strings that don't follow the claude-<family>-<version> shape,
-// such as the legacy version-first names ("claude-3-opus-20240229"), which
-// all predate adaptive thinking anyway.
+// such as the legacy version-first names ("claude-3-opus-20240229").
 func ParseClaudeModel(model string) (family string, major, minor int, ok bool) {
 	tokens := strings.FieldsFunc(strings.ToLower(model), func(r rune) bool {
 		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
