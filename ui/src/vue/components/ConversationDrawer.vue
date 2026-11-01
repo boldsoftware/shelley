@@ -33,6 +33,7 @@
   <div :class="`drawer ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''}`">
     <!-- Header -->
     <div class="drawer-header">
+      <ExeBrand v-if="workspaceMode" />
       <h2 v-if="showArchived" class="app-bar-title drawer-title">{{ t("archived") }}</h2>
       <div class="drawer-header-actions">
         <!-- Search toggle button -->
@@ -740,6 +741,7 @@ import {
   type ActiveStructuredQueryEdit,
 } from "../../utils/conversationQuery";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
+import ExeBrand from "./ExeBrand.vue";
 import { COMPOSER_ROW_ID } from "../../utils/composerRow";
 import ConversationRow from "./ConversationDrawerRow.vue";
 import ProjectVMSetup from "./ProjectVMSetup.vue";

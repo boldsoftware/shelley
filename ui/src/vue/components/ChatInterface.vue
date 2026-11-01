@@ -43,6 +43,7 @@
           </svg>
         </Button>
 
+        <ExeBrand v-if="workspaceMode && isDrawerCollapsed" class="show-on-desktop-only" />
         <h1 class="app-bar-title header-title" :title="currentConversation?.slug || 'Shelley'">
           {{ displayTitle }}
         </h1>
@@ -864,6 +865,8 @@ import AgentsMdEditorModal from "./AgentsMdEditorModal.vue";
 import TerminalPanel from "./TerminalPanel.vue";
 import VersionChecker from "./VersionChecker.vue";
 import ChatOverflowMenu from "./ChatOverflowMenu.vue";
+import ExeBrand from "./ExeBrand.vue";
+import { workspaceMode } from "../../utils/workspaceMode";
 import LiveVoice from "./LiveVoice.vue";
 import LiveExchange from "./LiveExchange.vue";
 import type { LiveCallDestination } from "../composables/liveCallConversation";
