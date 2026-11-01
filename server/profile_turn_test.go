@@ -387,3 +387,28 @@ func TestProfileMentionRetryAfterSourceRefreshDoesNotFallback(t *testing.T) {
 		t.Fatal("Retry started a baseline turn after losing the profile override")
 	}
 }
+
+func TestProfileMentionSetupFailureLeavesNoLoop(t *testing.T) {
+	e := newProfileEnv(t)
+	e.want(201, "POST", "/api/profiles", `{"name":"Unavailable","model":"model-b"}`)
+	conv, err := e.database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := e.srv.getOrCreateConversationManager(t.Context(), conv.ConversationID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.profileModelService = func(string) (llm.Service, error) {
+		return nil, fmt.Errorf("model-b is unavailable")
+	}
+	if _, err := manager.AcceptUserMessage(t.Context(), e.ps, "model-a", llm.UserStringMessage("+Unavailable hello")); err == nil {
+		t.Fatal("profile setup failure was accepted")
+	}
+	manager.mu.Lock()
+	installed := manager.loop != nil
+	manager.mu.Unlock()
+	if installed {
+		t.Fatal("rejected profile turn left its unstarted loop installed")
+	}
+}

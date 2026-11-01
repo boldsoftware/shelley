@@ -626,15 +626,21 @@ func (cm *ConversationManager) acceptUserMessage(ctx context.Context, service ll
 	if _, err := cm.recordInterruptedToolResults(ctx); err != nil {
 		return false, "", fmt.Errorf("failed to record interrupted tool results: %w", err)
 	}
-	if err := cm.ensureLoopLocked(service, modelID); err != nil {
-		return false, "", err
-	}
 	userData, err := marshalTurnUserData(ctx)
 	if err != nil {
 		return false, "", err
 	}
+	if err := cm.ensureLoopLocked(service, modelID); err != nil {
+		return false, "", err
+	}
 	run, err := cm.prepareProfileTurn(ctx, message, userData)
 	if err != nil {
+		if !hadLoop {
+			cm.mu.Lock()
+			loopInstance := cm.loop
+			cm.mu.Unlock()
+			cm.discardUnstartedLoopLocked(loopInstance)
+		}
 		return false, "", err
 	}
 
@@ -724,8 +730,10 @@ func (cm *ConversationManager) rejectTurnStart(keepWorking bool) {
 	}
 }
 
-// discardUnstartedLoopLocked tears down a loop without recording cancellation.
-// The caller holds loopLifecycleMu; this returns with it held again.
+// discardUnstartedLoopLocked removes a loop created for a turn that never
+// started. Leaving it installed makes CancelConversation treat the rejected
+// turn as active and append a bogus cancellation marker. The caller holds
+// loopLifecycleMu; this returns with it held again.
 func (cm *ConversationManager) discardUnstartedLoopLocked(expected *loop.Loop) {
 	cm.mu.Lock()
 	if cm.loop != expected {
