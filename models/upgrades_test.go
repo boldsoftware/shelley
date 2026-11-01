@@ -68,3 +68,27 @@ func TestBestUpgradeFallsBackPastMissingTarget(t *testing.T) {
 		t.Fatalf("got %q", to)
 	}
 }
+
+func TestBestUpgradeWithoutReleaseDates(t *testing.T) {
+	ready := map[string]bool{"claude-opus-4.8": true, "claude-opus-5": true, "claude-opus-5.5": true}
+	dated := releaseDate
+	t.Cleanup(func() { releaseDate = dated })
+	undated := func(missing string) func(string) string {
+		return func(id string) string {
+			if id == missing {
+				return ""
+			}
+			return dated(id)
+		}
+	}
+
+	// An undated new model is not told to "upgrade" to an older one.
+	releaseDate = undated("claude-opus-5.5")
+	if to, _, _ := BestUpgrade("claude-opus-5.5", ready); to != "" {
+		t.Fatalf("undated model offered %q", to)
+	}
+	// An undated successor still counts when shadowPairs vouch for it.
+	if to, _, _ := BestUpgrade("claude-opus-4.8", ready); to != "claude-opus-5.5" {
+		t.Fatalf("undated listed successor: got %q", to)
+	}
+}

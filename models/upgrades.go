@@ -1,6 +1,7 @@
 package models
 
 import (
+	"slices"
 	"strings"
 
 	"shelley.exe.dev/models/modelsdev"
@@ -89,7 +90,7 @@ func providerName(p Provider) string {
 	return string(p)
 }
 
-func releaseDate(id string) string {
+var releaseDate = func(id string) string {
 	m := ByID(id)
 	if m == nil {
 		return ""
@@ -100,8 +101,8 @@ func releaseDate(id string) string {
 
 // BestUpgrade picks the newest ready model in the same lineage as `from`.
 // The old GPT-5.x names reach their replacement lineage through
-// generationEdges. Explicit shadowPairs remain useful when release dates are
-// missing.
+// generationEdges. Without both release dates, only explicit shadowPairs and
+// generation hops count as upgrades.
 func BestUpgrade(from string, ready map[string]bool) (to string, kind UpgradeKind, line string) {
 	m := ByID(from)
 	if m == nil {
@@ -115,24 +116,24 @@ func BestUpgrade(from string, ready map[string]bool) (to string, kind UpgradeKin
 	targetLine := lineOf(seed)
 	fromDate := releaseDate(from)
 	best, bestDate := "", ""
-	consider := func(id string) {
+	consider := func(id string, explicit bool) {
 		if id == from || !ready[id] {
 			return
 		}
 		d := releaseDate(id)
-		if kind == UpgradeVersion && fromDate != "" && (d == "" || d <= fromDate) {
+		if kind == UpgradeVersion && !explicit && (fromDate == "" || d == "" || d <= fromDate) {
 			return
 		}
-		if best != "" && (d == "" || (bestDate != "" && d <= bestDate)) {
+		if best != "" && (shadows(best, id) || !shadows(id, best) && (d == "" || (bestDate != "" && d <= bestDate))) {
 			return
 		}
 		best, bestDate = id, d
 	}
-	consider(seed)
+	consider(seed, true)
 	for id := range ready {
 		candidate := ByID(id)
 		if candidate != nil && candidate.Provider == m.Provider && lineOf(id) == targetLine {
-			consider(id)
+			consider(id, false)
 		}
 	}
 	// Walk explicit "better than" links for undated models and generation
@@ -149,7 +150,7 @@ func BestUpgrade(from string, ready map[string]bool) (to string, kind UpgradeKin
 			}
 			seen[p.Better] = true
 			queue = append(queue, p.Better)
-			consider(p.Better)
+			consider(p.Better, true)
 		}
 	}
 	if best == "" {
@@ -159,4 +160,8 @@ func BestUpgrade(from string, ready map[string]bool) (to string, kind UpgradeKin
 		return best, kind, providerName(m.Provider)
 	}
 	return best, kind, lineName(best, m.Provider)
+}
+
+func shadows(better, worse string) bool {
+	return slices.Contains(shadowPairs, shadowPair{Better: better, Worse: worse})
 }
