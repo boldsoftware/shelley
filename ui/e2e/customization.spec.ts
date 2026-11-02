@@ -66,7 +66,7 @@ test("installed build restarts on one click", async ({ page, request }) => {
   await openWorkspace(page);
   await expect(build).toContainText("Restarting…");
   state = { ...state, status: "running" };
-  await expect(build.getByRole("status")).toHaveText("Running", { timeout: 12_000 });
+  await expect(build).toHaveCount(0, { timeout: 12_000 });
   expect(restartCount).toBe(1);
 });
 

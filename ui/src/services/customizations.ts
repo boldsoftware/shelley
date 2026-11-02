@@ -27,6 +27,9 @@ export interface Customization {
   auto_restart_in_ms?: number;
 }
 
+export type NotRunning = Customization & { status: Exclude<Customization["status"], "running"> };
+export const notRunning = (c: Customization): c is NotRunning => c.status !== "running";
+
 export const customizationsApi = {
   list: () => apiJSON<Customization[]>("/api/customizations", "Failed to load build status"),
   /** Verifies again, keeping the conversation's finished claim. */

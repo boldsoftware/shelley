@@ -56,10 +56,10 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import type { Customization } from "../../services/customizations";
+import type { NotRunning } from "../../services/customizations";
 
 const props = defineProps<{
-  state: Customization;
+  state: NotRunning;
   pendingConversation: string;
   unavailable: boolean;
 }>();
@@ -84,7 +84,7 @@ const status = computed(() =>
     ? { label: "Not installed", title: "Verified, but installing failed; retrying after the next turn" }
     : { label: labels[props.state.status], title: titles[props.state.status] },
 );
-const labels: Record<Customization["status"], string> = {
+const labels: Record<NotRunning["status"], string> = {
   waiting: "Waiting…",
   verifying: "Verifying…",
   ready: "Installing…",
@@ -92,9 +92,8 @@ const labels: Record<Customization["status"], string> = {
   failed: "Failed",
   installed: "Installed",
   restarting: "Restarting…",
-  running: "Running",
 };
-const titles: Record<Customization["status"], string> = {
+const titles: Record<NotRunning["status"], string> = {
   waiting: "Waiting to verify the Shelley build",
   verifying: "Verifying the Shelley build",
   ready: "Verified; installing the build",
@@ -102,7 +101,6 @@ const titles: Record<Customization["status"], string> = {
   failed: "Verification failed",
   installed: "Verified build installed; restart Shelley to run it",
   restarting: "Reconnecting; waiting for the verified build to start",
-  running: "Verified build installed and running",
 };
 </script>
 
