@@ -1320,7 +1320,9 @@ function formatDate(timestamp: string): string {
 
 const formatCwdForDisplay = tildifyPath;
 
+// Workspace mode's rows leave out the machine and directory: projects set them.
 function workingDirectory(c: Conversation): { text: string; title: string } | null {
+  if (workspaceMode) return null;
   const data = workspace.data.value;
   const vm = data?.vms.find(
     (v) => v.conversation_id === c.conversation_id || v.conversation_id === c.parent_conversation_id,
