@@ -276,6 +276,13 @@ function onActivate(e: MouseEvent | KeyboardEvent) {
       handleMarkdownDocClick(e, download);
       return;
     }
+    // Plain links to local images point at the file endpoint, and open the
+    // image view like an embedded image.
+    const imageLink = target.closest<HTMLAnchorElement>("a[href^='/api/message/'][href*='/file?path=']");
+    if (imageLink) {
+      if (props.commentable) handleImageCommentClick(e, { src: imageLink.href });
+      return;
+    }
   }
 
   const img = target;

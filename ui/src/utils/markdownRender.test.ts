@@ -285,6 +285,38 @@ assert(!withoutId.includes("<img"), "local image dropped with no messageId to au
     root.querySelector("a")?.hasAttribute("href") === false,
     "sandbox: link is inert with no messageId to authorize it",
   );
+  // Plain links to local files work like sandbox: ones, except that an
+  // image opens in the image view; URLs and Shelley's pages stay links.
+  root.innerHTML = renderMarkdownToSafeHTML(
+    "[a](/tmp/sbx/a.png) [b](out/b.csv) [c](report.md) [d](sandbox:/tmp/d.png) " +
+      "[e](https://x.test/e.png) [f](/c/abc?message_id=1) [g](#top) [h](mailto:h@x.test)",
+    "msg-1",
+  );
+  const hrefs = [...root.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+  const want = [
+    "/api/message/msg-1/file?path=%2Ftmp%2Fsbx%2Fa.png",
+    "/api/message/msg-1/download?path=out%2Fb.csv",
+    "/api/message/msg-1/download?path=report.md",
+    "/api/message/msg-1/download?path=%2Ftmp%2Fd.png",
+    "https://x.test/e.png",
+    "/c/abc?message_id=1",
+    "#top",
+    "mailto:h@x.test",
+  ];
+  assert(
+    JSON.stringify(hrefs) === JSON.stringify(want),
+    `plain local links: ${JSON.stringify(hrefs)}`,
+  );
+  const image = root.querySelector("a");
+  assert(
+    image?.getAttribute("target") === "_blank" && !image.hasAttribute("download"),
+    "plain image link opens the image, not a download",
+  );
+  root.innerHTML = renderMarkdownToSafeHTML("[a](/tmp/a.png)");
+  assert(
+    root.querySelector("a")?.getAttribute("href") === "/tmp/a.png",
+    "plain local link untouched with no messageId",
+  );
   root.innerHTML = renderMarkdownToSafeHTML('<a href="/x" download="evil.sh">x</a>', "msg-1");
   assert(
     root.querySelector("a")?.hasAttribute("download") === false,

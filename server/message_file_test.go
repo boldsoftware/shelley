@@ -512,20 +512,55 @@ func TestHandleMessageDownload_RelativeToCwd(t *testing.T) {
 	}
 }
 
-// Only an explicit sandbox: link authorizes a download. A path the message
-// merely mentions (or shows as an image) is not an offer to download it.
-func TestHandleMessageDownload_RequiresSandboxLink(t *testing.T) {
+// Only a link authorizes a download, as sandbox: or a plain local path. A path
+// the message merely mentions (or shows as an image, or puts in a code span) is
+// not an offer to download it.
+func TestHandleMessageDownload_RequiresLink(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	secret := filepath.Join(dir, "secret.txt")
-	if err := os.WriteFile(secret, []byte("TOP SECRET"), 0o644); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"secret.txt", "linked.txt", "plain.txt", "shown.png"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-	srv, msgID := setupFileServer(t, dir, "I read "+secret+", [this](./secret.txt), and `[x](sandbox:"+secret+")`.")
+	secret := filepath.Join(dir, "secret.txt")
+	srv, msgID := setupFileServer(t, dir, "I read "+secret+" and `[x](sandbox:"+secret+")`. ![s](shown.png) "+
+		"[linked](sandbox:"+dir+"/linked.txt) [plain](plain.txt) [abs]("+dir+"/plain.txt) [web](https://example.com"+secret+")")
 
-	for _, p := range []string{secret, "./secret.txt"} {
-		if resp := getDownload(t, srv, msgID, p); resp.StatusCode != http.StatusNotFound {
-			t.Errorf("%s: expected 404, got %d", p, resp.StatusCode)
+	for p, want := range map[string]int{
+		secret:                         http.StatusNotFound,
+		"./secret.txt":                 http.StatusNotFound,
+		"shown.png":                    http.StatusNotFound,
+		"https://example.com" + secret: http.StatusNotFound,
+		dir + "/linked.txt":            http.StatusOK,
+		"plain.txt":                    http.StatusOK,
+		dir + "/plain.txt":             http.StatusOK,
+	} {
+		if resp := getDownload(t, srv, msgID, p); resp.StatusCode != want {
+			t.Errorf("%s: expected %d, got %d", p, want, resp.StatusCode)
+		}
+	}
+}
+
+func TestLinkedFilePath(t *testing.T) {
+	t.Parallel()
+	for dest, want := range map[string]string{
+		"sandbox:/tmp/a.txt":   "/tmp/a.txt",
+		"/tmp/a.png":           "/tmp/a.png",
+		"out/a.png":            "out/a.png",
+		"../a b.txt":           "../a b.txt",
+		"":                     "",
+		"#section":             "",
+		"?q=1":                 "",
+		"//host/a.png":         "",
+		"/c/abc?message_id=1":  "",
+		"/api/message/x/file":  "",
+		"https://example.com/": "",
+		"mailto:a@b.c":         "",
+		"localhost:8000/a":     "",
+	} {
+		if got, ok := linkedFilePath(dest); got != want || ok != (want != "") {
+			t.Errorf("linkedFilePath(%q) = %q, %v; want %q", dest, got, ok, want)
 		}
 	}
 }
@@ -571,5 +606,76 @@ func TestHandleMessageDownload_MatchesRenderedLinks(t *testing.T) {
 		if resp := getDownload(t, srv, msgID, dir+"/"+name); resp.StatusCode != want {
 			t.Errorf("%s: expected %d, got %d", name, want, resp.StatusCode)
 		}
+	}
+}
+
+// A VM conversation's links name files here or on its VM: this host's file
+// when it has one (relative to the scratch directory), else the VM's
+// (relative to the project's directory there).
+func TestMessageFileFromConversationVM(t *testing.T) {
+	t.Parallel()
+	s, database, id, vmDir, ssh, _ := newConversationVMFixture(t, "true")
+	vm, err := s.prepareConversationVMNow(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conversation, err := database.GetConversationByID(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.conversationVMTools(t.Context(), conversation); err != nil {
+		t.Fatal(err)
+	}
+	scratch := derefString(conversation.Cwd)
+	write := func(path string, data []byte) {
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(vmDir, "chart.png"), pngBytes)
+	write(filepath.Join(vmDir, "report.txt"), []byte("on the VM"))
+	write(filepath.Join(vmDir, "both.txt"), []byte("on the VM"))
+	write(filepath.Join(scratch, "both.txt"), []byte("here"))
+	created, err := database.CreateMessage(t.Context(), db.CreateMessageParams{
+		ConversationID: id,
+		Type:           db.MessageTypeAgent,
+		LLMData: llm.Message{Role: llm.MessageRoleAssistant, Content: []llm.Content{{
+			Type: llm.ContentTypeText,
+			Text: "![c](chart.png) [r](report.txt) [b](both.txt) [m](missing.txt)",
+		}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux)
+	get := func(endpoint, path string) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		mux.ServeHTTP(recorder, httptest.NewRequest("GET", "/api/message/"+created.MessageID+"/"+endpoint+"?path="+url.QueryEscape(path), nil))
+		return recorder
+	}
+	if got := get("file", "chart.png"); got.Code != http.StatusOK || got.Header().Get("Content-Type") != "image/png" || !bytes.Equal(got.Body.Bytes(), pngBytes) {
+		t.Errorf("VM image: %d %q %q", got.Code, got.Header().Get("Content-Type"), got.Body.String())
+	}
+	if got := get("download", "report.txt"); got.Code != http.StatusOK || got.Body.String() != "on the VM" ||
+		got.Header().Get("Content-Length") != "9" || !strings.Contains(got.Header().Get("Content-Disposition"), "report.txt") {
+		t.Errorf("VM download: %d %v %q", got.Code, got.Header(), got.Body.String())
+	}
+	if got := get("download", "both.txt"); got.Code != http.StatusOK || got.Body.String() != "here" {
+		t.Errorf("file on both machines: %d %q", got.Code, got.Body.String())
+	}
+	if got := get("download", "missing.txt"); got.Code != http.StatusNotFound {
+		t.Errorf("missing file: %d %q", got.Code, got.Body.String())
+	}
+	if runs := ssh.calls(t, "run"); len(runs) != 3 || runs[0] != vm.Name {
+		t.Errorf("ssh runs: %v", runs)
+	}
+
+	// An archived conversation's VM is gone: never reached again.
+	if _, err := database.ArchiveConversation(t.Context(), id); err != nil {
+		t.Fatal(err)
+	}
+	if got := get("download", "report.txt"); got.Code != http.StatusBadGateway || !strings.Contains(got.Body.String(), "archived") {
+		t.Errorf("archived conversation: %d %q", got.Code, got.Body.String())
 	}
 }

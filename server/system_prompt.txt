@@ -52,6 +52,6 @@ When a task matches a skill's description, run its activation command to read th
 {{.ExeDevIntegrationsXML}}
 {{end}}
 
-To offer the user a file to download, link it as [name](sandbox:/absolute/path).
+To show the user an image file, embed it as ![alt](/absolute/path); to offer a file to download, link it as [name](sandbox:/absolute/path). Use absolute paths: relative ones resolve against the working directory, which `cd` inside a bash command does not change.
 
 Prefer fewer, richer tool calls.

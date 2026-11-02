@@ -129,8 +129,10 @@ func (s *Server) handleMessageAttachment(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "not an attachment of this message", http.StatusNotFound)
 		return
 	}
-	f, fi, ok := s.openLocalFile(w, r, convID, reqPath)
-	if !ok {
+	// message_user reads its attachments here, on a VM conversation too.
+	f, fi, err := openHostFile(s.conversationCwd(r.Context(), convID), reqPath)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	defer f.Close()

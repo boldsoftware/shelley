@@ -42,6 +42,21 @@ export function classifyImageSrc(src: string): ImageKind {
   return "local";
 }
 
+// linkedFilePath returns the file a link destination names: the path of a
+// sandbox: link, or the destination itself when it is a local path, absolute
+// or relative, rather than a URL, a fragment, or one of Shelley's own pages.
+// Models link files they made either way. Mirrors linkedFilePath in
+// server/message_file.go, which authorizes the download.
+export function linkedFilePath(href: string): string | undefined {
+  if (href.startsWith(SANDBOX_SCHEME)) return href.slice(SANDBOX_SCHEME.length);
+  if (["#", "?", "//", "/c/", "/api/"].some((prefix) => href.startsWith(prefix))) return undefined;
+  if (href === "" || /^[a-z][a-z0-9+.-]*:/i.test(href)) return undefined;
+  return href;
+}
+
+// Plain links to these open in the image view rather than downloading.
+const IMAGE_FILE_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
+
 // fileEndpointURL builds the same-origin URL that serves a local image
 // referenced by a specific message.
 export function fileEndpointURL(messageId: string, path: string): string {
@@ -70,11 +85,15 @@ function buildMarked(messageId?: string, localhostLinks?: LocalhostLinkOptions):
         // data: kept as-is; remote/invalid left untouched and dropped by sanitize.
         return;
       }
-      if (token.type === "link" && token.href.startsWith(SANDBOX_SCHEME)) {
-        // Without the owning message there is nothing to authorize the
-        // download; the untouched href is then stripped by the sanitizer.
-        const path = token.href.slice(SANDBOX_SCHEME.length);
-        if (messageId && path) token.href = fileDownloadURL(messageId, path);
+      const path = token.type === "link" ? linkedFilePath(token.href) : undefined;
+      if (token.type === "link" && path !== undefined) {
+        // Without the owning message there is nothing to authorize the file;
+        // the link is left as written (a sandbox: href is then stripped by
+        // the sanitizer). A plain link to an image shows it, like an embed;
+        // a sandbox: link always downloads.
+        if (!messageId || !path) return;
+        const show = !token.href.startsWith(SANDBOX_SCHEME) && IMAGE_FILE_RE.test(path);
+        token.href = show ? fileEndpointURL(messageId, path) : fileDownloadURL(messageId, path);
         return;
       }
       if (token.type === "link" && localhostLinks) {

@@ -1,22 +1,34 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	gmtext "github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
+	"shelley.exe.dev/db"
 	"shelley.exe.dev/llm"
 )
 
@@ -56,7 +68,7 @@ func (s *Server) handleMessageFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "path not referenced by message", http.StatusNotFound)
 		return
 	}
-	f, fi, ok := s.openLocalFile(w, r, convID, reqPath)
+	f, ok := s.openMessageFile(w, r, convID, reqPath)
 	if !ok {
 		return
 	}
@@ -64,14 +76,14 @@ func (s *Server) handleMessageFile(w http.ResponseWriter, r *http.Request) {
 
 	// Sniff the content and require an image.
 	head := make([]byte, sniffLen)
-	n, _ := f.Read(head)
-	contentType, ok := servableImageType(head[:n], fi.Name())
-	if !ok {
-		http.Error(w, "file is not an image", http.StatusForbidden)
+	n, err := io.ReadFull(f, head)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		http.Error(w, "read failed", http.StatusBadGateway)
 		return
 	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		http.Error(w, "seek failed", http.StatusInternalServerError)
+	contentType, ok := servableImageType(head[:n], f.name)
+	if !ok {
+		http.Error(w, "file is not an image", http.StatusForbidden)
 		return
 	}
 
@@ -84,6 +96,7 @@ func (s *Server) handleMessageFile(w http.ResponseWriter, r *http.Request) {
 	// Short-term caching: unlike DB-embedded images, on-disk files can change
 	// during a session, so don't cache aggressively.
 	w.Header().Set("Cache-Control", "private, max-age=60")
+	w.Write(head[:n])
 	io.Copy(w, f)
 }
 
@@ -92,23 +105,46 @@ func (s *Server) handleMessageFile(w http.ResponseWriter, r *http.Request) {
 // so Shelley adopts it (see system_prompt.txt) rather than fighting it.
 const sandboxScheme = "sandbox:"
 
-// handleMessageDownload serves a local file linked from a message's markdown as
-// [name](sandbox:<path>), as an attachment of any type.
+// urlScheme matches a destination that starts with a URI scheme.
+var urlScheme = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*:`)
+
+// linkedFilePath returns the file a link destination names: the path of a
+// sandbox: link, or the destination itself when it is a local path, absolute
+// or relative, rather than a URL, a fragment, or one of Shelley's own pages.
+// Models link files they made either way. Mirrors linkedFilePath in
+// ui/src/utils/markdownRender.ts.
+func linkedFilePath(dest string) (string, bool) {
+	if p, ok := strings.CutPrefix(dest, sandboxScheme); ok {
+		return p, true
+	}
+	for _, prefix := range []string{"#", "?", "//", "/c/", "/api/"} {
+		if strings.HasPrefix(dest, prefix) {
+			return "", false
+		}
+	}
+	if dest == "" || urlScheme.MatchString(dest) {
+		return "", false
+	}
+	return dest, true
+}
+
+// handleMessageDownload serves a local file linked from a message's markdown,
+// as [name](sandbox:<path>) or [name](<path>), as an attachment of any type.
 // Route: GET /api/message/{message_id}/download?path=<path>
 //
-// path is the link's destination after "sandbox:", exactly as a markdown
+// path is the link's file path (see linkedFilePath), exactly as a markdown
 // parser yields it. Unlike handleMessageFile there is no content check, so the
-// capability is stricter: path must equal the destination of a sandbox: link
-// in the message. A path the message merely mentions, shows as an image, or
-// that is a prefix of a link is not an offer to download it. The destination
-// is a URI, so it is percent-decoded to name the file. Serving as an
-// attachment keeps the bytes from ever rendering on Shelley's origin.
+// capability is stricter: path must be the file of a link in the message. A
+// path the message merely mentions, shows as an image, or that is a prefix of
+// a link is not an offer to download it. The destination is a URI, so it is
+// percent-decoded to name the file. Serving as an attachment keeps the bytes
+// from ever rendering on Shelley's origin.
 func (s *Server) handleMessageDownload(w http.ResponseWriter, r *http.Request) {
 	reqPath, msg, convID, ok := s.messageFileRequest(w, r)
 	if !ok {
 		return
 	}
-	if !slices.Contains(sandboxLinkPaths(msg), reqPath) {
+	if !slices.Contains(linkedFilePaths(msg), reqPath) {
 		http.Error(w, "path not linked by message", http.StatusNotFound)
 		return
 	}
@@ -117,25 +153,27 @@ func (s *Server) handleMessageDownload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad path encoding", http.StatusBadRequest)
 		return
 	}
-	f, fi, ok := s.openLocalFile(w, r, convID, path)
+	f, ok := s.openMessageFile(w, r, convID, path)
 	if !ok {
 		return
 	}
 	defer f.Close()
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": fi.Name()}))
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": f.name}))
 	w.Header().Set("Content-Security-Policy", "sandbox")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "private, no-cache")
-	http.ServeContent(w, r, "", fi.ModTime(), f)
+	w.Header().Set("Content-Length", strconv.FormatInt(f.size, 10))
+	w.Header().Set("Last-Modified", f.modTime.UTC().Format(http.TimeFormat))
+	io.Copy(w, f)
 }
 
-// sandboxLinkPaths returns the destinations, minus the scheme, of the
-// sandbox: links and autolinks in m, read as the UI renders it: each run of
-// adjacent text blocks is one GFM document, and an image's alt text holds no
-// links. Backslash escapes are resolved, as the UI's markdown parser does;
+// linkedFilePaths returns the file paths (see linkedFilePath) of the links
+// and autolinks in m, read as the UI renders it: each run of adjacent text
+// blocks is one GFM document, and an image's alt text holds no links.
+// Backslash escapes are resolved, as the UI's markdown parser does;
 // percent-encoding is kept.
-func sandboxLinkPaths(m *llm.Message) []string {
+func linkedFilePaths(m *llm.Message) []string {
 	md := goldmark.New(goldmark.WithExtensions(extension.GFM)).Parser()
 	var paths []string
 	for _, run := range textRuns(m) {
@@ -153,7 +191,7 @@ func sandboxLinkPaths(m *llm.Message) []string {
 			case *ast.AutoLink:
 				dest = string(n.URL(src))
 			}
-			if p, ok := strings.CutPrefix(dest, sandboxScheme); ok {
+			if p, ok := linkedFilePath(dest); ok {
 				paths = append(paths, p)
 			}
 			return ast.WalkContinue, nil
@@ -203,16 +241,55 @@ func (s *Server) messageFileRequest(w http.ResponseWriter, r *http.Request) (req
 	return reqPath, m, msg.ConversationID, true
 }
 
-// openLocalFile opens the regular file at path, resolving a relative path
-// against the conversation's working directory. On failure it writes the
-// error response.
-func (s *Server) openLocalFile(w http.ResponseWriter, r *http.Request, conversationID, path string) (*os.File, os.FileInfo, bool) {
+// messageFile is a file a message links, open on the machine that has it.
+type messageFile struct {
+	io.ReadCloser
+	name    string
+	size    int64
+	modTime time.Time
+}
+
+// openMessageFile opens the regular file at path for a message of
+// conversationID. A VM conversation works on two machines and a path does not
+// say which, so the file is this host's, where its tools and screenshots are
+// and its relative paths resolve against its scratch directory, or if this
+// host has none, the VM's, relative to the project's directory there. On
+// failure it writes the error response.
+func (s *Server) openMessageFile(w http.ResponseWriter, r *http.Request, conversationID, path string) (*messageFile, bool) {
+	f, fi, err := openHostFile(s.conversationCwd(r.Context(), conversationID), path)
+	if err == nil {
+		return &messageFile{f, fi.Name(), fi.Size(), fi.ModTime()}, true
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		vm, vmErr := s.db.GetConversationVM(r.Context(), conversationID)
+		switch {
+		case vmErr == nil:
+			var vf *messageFile
+			if vf, err = s.openVMFile(r.Context(), vm, path); err == nil {
+				return vf, true
+			}
+		case !errors.Is(vmErr, sql.ErrNoRows):
+			err = vmErr
+		}
+	}
+	switch {
+	case errors.Is(err, fs.ErrNotExist), errors.Is(err, fs.ErrPermission):
+		http.Error(w, "not found", http.StatusNotFound)
+	case errors.Is(err, errFileTooLarge):
+		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+	default:
+		http.Error(w, err.Error(), http.StatusBadGateway)
+	}
+	return nil, false
+}
+
+// openHostFile opens the regular file at path on this host, resolving a
+// relative path against cwd.
+func openHostFile(cwd, path string) (*os.File, fs.FileInfo, error) {
 	if !filepath.IsAbs(path) {
 		// A relative path is relative to where the agent was working.
-		cwd := s.conversationCwd(r, conversationID)
 		if cwd == "" {
-			http.Error(w, "conversation working directory unknown", http.StatusNotFound)
-			return nil, nil, false
+			return nil, nil, fmt.Errorf("%w: relative path %q, and the conversation has no working directory", fs.ErrNotExist, path)
 		}
 		path = filepath.Join(cwd, path)
 	}
@@ -222,16 +299,106 @@ func (s *Server) openLocalFile(w http.ResponseWriter, r *http.Request, conversat
 	// appears, which would hang this request goroutine, and a path can now name
 	// anything on the machine. Nothing we want to serve is a non-regular file.
 	fi, err := os.Stat(path)
-	if err != nil || !fi.Mode().IsRegular() {
-		http.Error(w, "not found", http.StatusNotFound)
-		return nil, nil, false
+	if err != nil {
+		return nil, nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, nil, fmt.Errorf("%w: %s is not a regular file", fs.ErrNotExist, path)
 	}
 	f, err := os.Open(path)
-	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
-		return nil, nil, false
+	return f, fi, err
+}
+
+// maxVMFileSize bounds a file served from a conversation's VM.
+const maxVMFileSize = 256 << 20
+
+// vmFileTimeout bounds reaching a VM and starting a file's transfer.
+const vmFileTimeout = 30 * time.Second
+
+var errFileTooLarge = fmt.Errorf("file is larger than %d MiB", maxVMFileSize>>20)
+
+// vmFileScript prints regular file $1's size and modification time (Unix
+// seconds) on a line, then its contents. It exits 44 if there is no such
+// regular file, and 45 if it is larger than $2 bytes.
+const vmFileScript = `[ -f "$1" ] || exit 44
+set -- "$1" "$2" $(stat -Lc '%s %Y' -- "$1")
+[ $# -eq 4 ] || exit 1
+[ "$3" -le "$2" ] || exit 45
+echo "$3 $4"
+exec cat -- "$1"`
+
+// openVMFile streams the regular file at path from a conversation's VM,
+// resolving a relative path against the VM's directory. It never provisions
+// or connects the VM: viewing a message must not change it, and the next tool
+// call does that.
+func (s *Server) openVMFile(ctx context.Context, vm *db.ConversationVM, p string) (*messageFile, error) {
+	if err := conversationVMArchived(vm); err != nil {
+		return nil, err
 	}
-	return f, fi, true
+	if vm.Status != db.ConversationVMReady {
+		return nil, fmt.Errorf("VM %s is not ready (%s)", vm.Name, vm.Status)
+	}
+	if !path.IsAbs(p) {
+		p = path.Join(vm.Dir, p)
+	}
+	target, err := s.conversationVMTarget(vm)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	timer := time.AfterFunc(vmFileTimeout, cancel)
+	argv := target.Command(vmFileScript, p, strconv.Itoa(maxVMFileSize))
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	stdout, err := cmd.StdoutPipe()
+	if err == nil {
+		err = cmd.Start()
+	}
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	out := bufio.NewReader(stdout)
+	header, err := out.ReadString('\n')
+	var size, mtime int64
+	if err == nil {
+		_, err = fmt.Sscanf(header, "%d %d\n", &size, &mtime)
+	}
+	if err != nil {
+		cancel()
+		waitErr := cmd.Wait()
+		var exitErr *exec.ExitError
+		switch {
+		case errors.As(waitErr, &exitErr) && exitErr.ExitCode() == 44:
+			return nil, fmt.Errorf("%w: %s on VM %s", fs.ErrNotExist, p, vm.Name)
+		case errors.As(waitErr, &exitErr) && exitErr.ExitCode() == 45:
+			return nil, errFileTooLarge
+		case waitErr != nil:
+			err = waitErr
+		}
+		return nil, fmt.Errorf("read %s on VM %s: %w: %s", p, vm.Name, err, strings.TrimSpace(stderr.String()))
+	}
+	timer.Stop()
+	return &messageFile{
+		ReadCloser: vmFileReader{io.LimitReader(out, size), cmd, cancel},
+		name:       path.Base(p),
+		size:       size,
+		modTime:    time.Unix(mtime, 0),
+	}, nil
+}
+
+// vmFileReader reads a file's contents from the ssh command sending them.
+type vmFileReader struct {
+	io.Reader
+	cmd    *exec.Cmd
+	cancel context.CancelFunc
+}
+
+func (v vmFileReader) Close() error {
+	v.cancel()
+	v.cmd.Wait()
+	return nil
 }
 
 // conversationCwd returns the working directory recorded for a conversation,
@@ -239,8 +406,8 @@ func (s *Server) openLocalFile(w http.ResponseWriter, r *http.Request, conversat
 // process's own working directory: without an explicit conversation workspace
 // there is no safe boundary to scope file serving to, so the caller treats an
 // empty result as "deny".
-func (s *Server) conversationCwd(r *http.Request, conversationID string) string {
-	conv, err := s.db.GetConversationByID(r.Context(), conversationID)
+func (s *Server) conversationCwd(ctx context.Context, conversationID string) string {
+	conv, err := s.db.GetConversationByID(ctx, conversationID)
 	if err == nil && conv != nil && conv.Cwd != nil && *conv.Cwd != "" {
 		return *conv.Cwd
 	}
