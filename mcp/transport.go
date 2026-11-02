@@ -10,6 +10,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"shelley.exe.dev/version"
 )
 
 func httpTransport(srv Server, h auth.OAuthHandler) sdk.Transport {
@@ -28,10 +30,13 @@ func httpClient(srv Server) *http.Client {
 	return &http.Client{Transport: headerTransport(srv.Headers), CheckRedirect: sameOriginRedirects}
 }
 
+// headerTransport identifies as Shelley and adds static headers, which
+// may replace the User-Agent.
 type headerTransport map[string]string
 
 func (h headerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	r = r.Clone(r.Context())
+	r.Header.Set("User-Agent", version.UserAgent())
 	for k, v := range h {
 		r.Header.Set(k, v)
 	}

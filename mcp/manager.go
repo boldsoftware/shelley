@@ -79,7 +79,7 @@ func NewManager(database *db.DB, loginURL func(server string) string) *Manager {
 		loginURL:  loginURL,
 		client:    sdk.NewClient(&sdk.Implementation{Name: "shelley", Version: version.Version}, nil),
 		transport: httpTransport,
-		authCtx:   context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{Timeout: 30 * time.Second}),
+		authCtx:   context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{Timeout: 30 * time.Second, Transport: headerTransport(nil)}),
 		sessions:  map[key]*session{},
 		logins:    map[string]*login{},
 		required:  map[string]bool{},

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -39,7 +40,12 @@ type AuthServer struct {
 }
 
 // AuthStats counts requests to an AuthServer.
-type AuthStats struct{ Registrations, Refreshes int }
+type AuthStats struct {
+	Registrations, Refreshes int
+	// UserAgents are the distinct User-Agents of requests to the
+	// authorization server or the MCP server, except a browser's to /authorize.
+	UserAgents []string
+}
 
 // NewAuthServer starts an AuthServer issuing access tokens that live for
 // an hour, and the MCP server it protects.
@@ -50,11 +56,11 @@ func NewAuthServer(t testing.TB) *AuthServer {
 	mux.HandleFunc("POST /register", s.register)
 	mux.HandleFunc("GET /authorize", s.authorize)
 	mux.HandleFunc("POST /token", s.token)
-	s.Server = httptest.NewServer(mux)
+	s.Server = httptest.NewServer(s.recordUserAgent(mux))
 	t.Cleanup(s.Close)
 
 	mcp := http.NewServeMux()
-	s.MCP = httptest.NewServer(mcp)
+	s.MCP = httptest.NewServer(s.recordUserAgent(mcp))
 	t.Cleanup(s.MCP.Close)
 	prm := "/.well-known/oauth-protected-resource/mcp"
 	mcp.Handle("/mcp", auth.RequireBearerToken(s.verify, &auth.RequireBearerTokenOptions{ResourceMetadataURL: s.MCP.URL + prm})(newFixture().handler()))
@@ -93,7 +99,22 @@ func (s *AuthServer) RejectTokens() {
 func (s *AuthServer) Stats() AuthStats {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.stats
+	st := s.stats
+	st.UserAgents = slices.Clone(st.UserAgents)
+	return st
+}
+
+func (s *AuthServer) recordUserAgent(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/authorize" {
+			s.mu.Lock()
+			if ua := r.UserAgent(); !slices.Contains(s.stats.UserAgents, ua) {
+				s.stats.UserAgents = append(s.stats.UserAgents, ua)
+			}
+			s.mu.Unlock()
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // RevokeAccessTokens invalidates the access tokens issued so far.

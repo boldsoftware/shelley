@@ -63,6 +63,16 @@ type Info struct {
 	Customized bool   `json:"customized,omitempty"`
 }
 
+// UserAgent is the User-Agent Shelley sends: "Shelley", with the short
+// commit when known.
+func UserAgent() string {
+	ua := "Shelley"
+	if c := GetInfo().Commit; c != "" {
+		ua += "/" + c[:min(8, len(c))]
+	}
+	return ua
+}
+
 // GetInfo returns build information using runtime/debug.ReadBuildInfo,
 // falling back to a registered build-info.json filesystem when available.
 // Environment overrides for testing:

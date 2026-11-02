@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -16,6 +17,7 @@ import (
 	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/llm/predictable"
 	"shelley.exe.dev/mcp/mcptest"
+	"shelley.exe.dev/version"
 )
 
 const requiredHeader = "X-Exedev-Userid"
@@ -215,6 +217,10 @@ func TestMCPOAuthRefresh(t *testing.T) {
 		t.Fatalf("%d refreshes", n)
 	}
 	e.wantEvent("token_refreshed")
+	// Logging in, refreshing, and calling tools all identify as Shelley.
+	if uas := as.Stats().UserAgents; !slices.Equal(uas, []string{version.UserAgent()}) {
+		t.Fatalf("User-Agents %q", uas)
+	}
 	as.RevokeRefreshTokens()
 	e.wantLoginRequired()
 	e.wantEvent("refresh_failed")

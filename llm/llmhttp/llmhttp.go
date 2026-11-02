@@ -169,13 +169,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Clone the request to avoid modifying the original
 	req = req.Clone(req.Context())
 
-	// Add User-Agent with Shelley version
-	info := version.GetInfo()
-	userAgent := "Shelley"
-	if info.Commit != "" {
-		userAgent += "/" + info.Commit[:min(8, len(info.Commit))]
-	}
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("User-Agent", version.UserAgent())
 
 	// Assign a Shelley request id (or honor one already set) so every LLM
 	// request is correlatable. The id is echoed into any RequestTrace on the

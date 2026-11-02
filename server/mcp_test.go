@@ -22,6 +22,7 @@ import (
 	"shelley.exe.dev/llm/predictable"
 	"shelley.exe.dev/mcp"
 	"shelley.exe.dev/mcp/mcptest"
+	"shelley.exe.dev/version"
 )
 
 // mcpEnv is a Shelley server reached through its TCP middleware.
@@ -205,6 +206,14 @@ func TestMCPToolsAndCalls(t *testing.T) {
 	}
 	if got := e.call("t", "", "header", `{"name":"X-Test"}`); got != "yes" {
 		t.Fatalf("static header: %q", got)
+	}
+	if got := e.call("t", "", "header", `{"name":"User-Agent"}`); got != version.UserAgent() {
+		t.Fatalf("User-Agent: %q", got)
+	}
+	// A configured User-Agent wins.
+	e.want(200, "PUT", "/api/mcp/servers/t", "", fmt.Sprintf(`{"url":%q,"headers":{"User-Agent":"custom"}}`, f.URL))
+	if got := e.call("t", "", "header", `{"name":"User-Agent"}`); got != "custom" {
+		t.Fatalf("configured User-Agent: %q", got)
 	}
 	if b := e.want(200, "POST", "/api/mcp/servers/t/call", "", `{"tool":"fail"}`); !strings.Contains(b, `"isError":true`) {
 		t.Fatalf("fail: %s", b)

@@ -451,7 +451,7 @@ type registrationError struct{ msg string }
 func (e *registrationError) Error() string { return e.msg }
 
 func (t registrationErrors) RoundTrip(req *http.Request) (*http.Response, error) {
-	resp, err := http.DefaultTransport.RoundTrip(req)
+	resp, err := headerTransport(nil).RoundTrip(req)
 	// Registration is the only JSON POST to an authorization server.
 	if err != nil || resp.StatusCode < 400 || req.Method != http.MethodPost || req.Header.Get("Content-Type") != "application/json" {
 		return resp, err
