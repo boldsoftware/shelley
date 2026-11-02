@@ -4,9 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 
-	"shelley.exe.dev/llm"
+	"shelley.exe.dev/db/generated"
 )
 
 // ChannelRoute is where a texted message delivered to a conversation that
@@ -23,52 +22,57 @@ type ChannelRoute struct {
 // delivery does, keeps the first.
 func (db *DB) RecordChannelRoute(ctx context.Context, route ChannelRoute) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		_, err := tx.Exec(`INSERT INTO channel_message_routes(conversation_id,external_message_id,chat_id,endpoint)
-			VALUES(?,?,?,?) ON CONFLICT DO NOTHING`, route.ConversationID, route.ExternalMessageID, route.ChatID, route.Endpoint)
-		return err
+		return generated.New(tx.Conn()).CreateChannelRoute(ctx, generated.CreateChannelRouteParams{
+			ConversationID: route.ConversationID, ExternalMessageID: route.ExternalMessageID, ChatID: route.ChatID, Endpoint: route.Endpoint,
+		})
 	})
+}
+
+func newChannelRoute(row generated.ChannelMessageRoute) *ChannelRoute {
+	return &ChannelRoute{ConversationID: row.ConversationID, ExternalMessageID: row.ExternalMessageID, ChatID: row.ChatID, Endpoint: row.Endpoint}
 }
 
 // GetChannelRoute returns the route of the conversation's message with the
 // channel id externalMessageID.
 func (db *DB) GetChannelRoute(ctx context.Context, conversationID, externalMessageID string) (*ChannelRoute, error) {
-	route := ChannelRoute{ConversationID: conversationID, ExternalMessageID: externalMessageID}
+	var route *ChannelRoute
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow(`SELECT chat_id,endpoint FROM channel_message_routes WHERE conversation_id=? AND external_message_id=?`,
-			conversationID, externalMessageID).Scan(&route.ChatID, &route.Endpoint)
+		row, err := generated.New(rx.Conn()).GetChannelRoute(ctx, generated.GetChannelRouteParams{
+			ConversationID: conversationID, ExternalMessageID: externalMessageID,
+		})
+		route = newChannelRoute(row)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &route, nil
+	return route, nil
 }
 
 // LatestChannelRoute returns the route of chat chatID's latest message.
 func (db *DB) LatestChannelRoute(ctx context.Context, chatID string) (*ChannelRoute, error) {
-	route := ChannelRoute{ChatID: chatID}
+	var route *ChannelRoute
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow(`SELECT conversation_id,external_message_id,endpoint FROM channel_message_routes
-			WHERE chat_id=? ORDER BY created_at DESC, rowid DESC LIMIT 1`, chatID).Scan(&route.ConversationID, &route.ExternalMessageID, &route.Endpoint)
+		row, err := generated.New(rx.Conn()).LatestChannelRoute(ctx, chatID)
+		route = newChannelRoute(row)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &route, nil
+	return route, nil
 }
 
 // HasChannelRouteEndpoint reports whether a message of chat chatID came
 // with endpoint.
 func (db *DB) HasChannelRouteEndpoint(ctx context.Context, chatID, endpoint string) (bool, error) {
 	var ok bool
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow(`SELECT EXISTS(SELECT 1 FROM channel_message_routes WHERE chat_id=? AND endpoint=?)`, chatID, endpoint).Scan(&ok)
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
+		ok, err = generated.New(rx.Conn()).HasChannelRouteEndpoint(ctx, generated.HasChannelRouteEndpointParams{ChatID: chatID, Endpoint: endpoint})
+		return err
 	})
 	return ok, err
 }
-
-// notToolResult keeps the messages m that carry no tool result.
-var notToolResult = fmt.Sprintf("NOT EXISTS (SELECT 1 FROM json_each(m.llm_data,'$.Content') c WHERE json_extract(c.value,'$.Type')=%d)",
-	int(llm.ContentTypeToolResult))
 
 // LatestUserExternalMessageID returns the channel id of the conversation's
 // latest user message, or "" if it did not come from a channel. Any user
@@ -76,16 +80,16 @@ var notToolResult = fmt.Sprintf("NOT EXISTS (SELECT 1 FROM json_each(m.llm_data,
 // finished job), except tool results and the copies a compaction carries
 // forward: it is what the agent is answering.
 func (db *DB) LatestUserExternalMessageID(ctx context.Context, conversationID string) (string, error) {
-	var id sql.NullString
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow(`SELECT external_message_id FROM messages m
-			WHERE conversation_id=? AND type='user'
-			  AND NOT (json_valid(user_data) AND json_type(user_data,'$.compaction_carried') IS NOT NULL)
-			  AND `+notToolResult+`
-			ORDER BY sequence_id DESC LIMIT 1`, conversationID).Scan(&id)
+	var id *string
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
+		id, err = generated.New(rx.Conn()).LatestUserExternalMessageID(ctx, conversationID)
+		return err
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
-	return id.String, err
+	if err != nil || id == nil {
+		return "", err
+	}
+	return *id, nil
 }

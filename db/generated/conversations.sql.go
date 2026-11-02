@@ -106,6 +106,43 @@ func (q *Queries) CountConversations(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countConversationsByGeneration = `-- name: CountConversationsByGeneration :many
+SELECT c.current_generation, COUNT(*) AS count
+FROM conversations c
+WHERE EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.conversation_id)
+GROUP BY c.current_generation
+ORDER BY c.current_generation
+`
+
+type CountConversationsByGenerationRow struct {
+	CurrentGeneration int64 `json:"current_generation"`
+	Count             int64 `json:"count"`
+}
+
+// Conversations with messages by their current generation.
+func (q *Queries) CountConversationsByGeneration(ctx context.Context) ([]CountConversationsByGenerationRow, error) {
+	rows, err := q.db.QueryContext(ctx, countConversationsByGeneration)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountConversationsByGenerationRow{}
+	for rows.Next() {
+		var i CountConversationsByGenerationRow
+		if err := rows.Scan(&i.CurrentGeneration, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createChannelConversation = `-- name: CreateChannelConversation :one
 INSERT INTO conversations (conversation_id, user_initiated, model, conversation_options, external_conversation_id, external_endpoint)
 VALUES (?, TRUE, ?, ?, ?, ?)
@@ -692,6 +729,49 @@ func (q *Queries) GetSubagents(ctx context.Context, parentConversationID *string
 		return nil, err
 	}
 	return items, nil
+}
+
+const importConversation = `-- name: ImportConversation :exec
+INSERT INTO conversations (conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived,
+    parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, turn_interrupted)
+VALUES (?1, ?2, ?3,
+    CAST(?4 AS TEXT), CAST(?5 AS TEXT), ?6, FALSE,
+    ?7, ?8, ?9, ?10,
+    FALSE, ?11, ?12)
+`
+
+type ImportConversationParams struct {
+	ConversationID       string  `json:"conversation_id"`
+	Slug                 *string `json:"slug"`
+	UserInitiated        bool    `json:"user_initiated"`
+	CreatedAt            string  `json:"created_at"`
+	UpdatedAt            string  `json:"updated_at"`
+	Cwd                  *string `json:"cwd"`
+	ParentConversationID *string `json:"parent_conversation_id"`
+	Model                *string `json:"model"`
+	ConversationOptions  string  `json:"conversation_options"`
+	CurrentGeneration    int64   `json:"current_generation"`
+	Tags                 string  `json:"tags"`
+	TurnInterrupted      bool    `json:"turn_interrupted"`
+}
+
+// Inserts a conversation copied from another Shelley, unarchived and idle.
+func (q *Queries) ImportConversation(ctx context.Context, arg ImportConversationParams) error {
+	_, err := q.db.ExecContext(ctx, importConversation,
+		arg.ConversationID,
+		arg.Slug,
+		arg.UserInitiated,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.Cwd,
+		arg.ParentConversationID,
+		arg.Model,
+		arg.ConversationOptions,
+		arg.CurrentGeneration,
+		arg.Tags,
+		arg.TurnInterrupted,
+	)
+	return err
 }
 
 const incrementConversationGeneration = `-- name: IncrementConversationGeneration :one

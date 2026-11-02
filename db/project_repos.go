@@ -1,9 +1,12 @@
 package db
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"regexp"
+
+	"shelley.exe.dev/db/generated"
 )
 
 // ProjectRepo is a GitHub repository attached to a project through an exe.dev
@@ -41,33 +44,28 @@ func validateProjectRepos(repos []ProjectRepo) error {
 	return nil
 }
 
-func setProjectRepos(tx *Tx, project string, repos []ProjectRepo) error {
-	if _, err := tx.Exec("DELETE FROM profile_repos WHERE profile=?", project); err != nil {
+func setProjectRepos(ctx context.Context, q *generated.Queries, project string, repos []ProjectRepo) error {
+	if err := q.DeleteProjectRepos(ctx, project); err != nil {
 		return err
 	}
 	for i, repo := range repos {
-		if _, err := tx.Exec("INSERT INTO profile_repos(profile,position,integration,repository) VALUES(?,?,?,?)",
-			project, i, repo.Integration, repo.Repository); err != nil {
+		if err := q.CreateProjectRepo(ctx, generated.CreateProjectRepoParams{
+			Profile: project, Position: int64(i), Integration: repo.Integration, Repository: repo.Repository,
+		}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func attachProjectRepos(rx *Rx, projects []Project) error {
-	rows, err := rx.Query("SELECT profile,integration,repository FROM profile_repos ORDER BY profile,position")
+func attachProjectRepos(ctx context.Context, q *generated.Queries, projects []Project) error {
+	rows, err := q.ListProjectRepos(ctx)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 	repos := map[string][]ProjectRepo{}
-	for rows.Next() {
-		var name string
-		var repo ProjectRepo
-		if err := rows.Scan(&name, &repo.Integration, &repo.Repository); err != nil {
-			return err
-		}
-		repos[name] = append(repos[name], repo)
+	for _, row := range rows {
+		repos[row.Profile] = append(repos[row.Profile], ProjectRepo{Integration: row.Integration, Repository: row.Repository})
 	}
 	for i := range projects {
 		projects[i].Repos = repos[projects[i].Name]
@@ -75,5 +73,5 @@ func attachProjectRepos(rx *Rx, projects []Project) error {
 			projects[i].Repos = []ProjectRepo{}
 		}
 	}
-	return rows.Err()
+	return nil
 }

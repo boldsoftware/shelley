@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
+	"shelley.exe.dev/db/generated"
 )
 
 // Action runs report to their conversation's agent through its durable message
@@ -13,7 +15,22 @@ import (
 
 // ListDueActionReports returns finished runs with a report pending.
 func (db *DB) ListDueActionReports(ctx context.Context) ([]ActionRun, error) {
-	return db.listActionRuns(ctx, `WHERE status!='running' AND report='pending'`)
+	var runs []ActionRun
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		rows, err := generated.New(rx.Conn()).ListDueActionReports(ctx)
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			run, err := newActionRun(row)
+			if err != nil {
+				return err
+			}
+			runs = append(runs, *run)
+		}
+		return nil
+	})
+	return runs, err
 }
 
 // SkipActionReport decides a pending report needs no message. It reports
@@ -21,11 +38,7 @@ func (db *DB) ListDueActionReports(ctx context.Context) ([]ActionRun, error) {
 func (db *DB) SkipActionReport(ctx context.Context, runID string) (bool, error) {
 	var changed bool
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		result, err := tx.Exec("UPDATE action_runs SET report='skipped' WHERE id=? AND report='pending'", runID)
-		if err != nil {
-			return err
-		}
-		n, err := result.RowsAffected()
+		n, err := generated.New(tx.Conn()).SetPendingActionReport(ctx, generated.SetPendingActionReportParams{Report: "skipped", ID: runID})
 		changed = n == 1
 		return err
 	})
@@ -37,24 +50,22 @@ func (db *DB) SkipActionReport(ctx context.Context, runID string) (bool, error) 
 func (db *DB) QueueActionReport(ctx context.Context, runID string, qm QueuedMessage) (bool, error) {
 	var queued bool
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		var conversationID string
-		err := tx.QueryRow("SELECT conversation_id FROM action_runs WHERE id=? AND report='pending'", runID).Scan(&conversationID)
-		if errors.Is(err, sql.ErrNoRows) {
+		q := generated.New(tx.Conn())
+		run, err := q.GetActionRun(ctx, runID)
+		if errors.Is(err, sql.ErrNoRows) || err == nil && run.Report != "pending" {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		if err := mutateQueuedMessagesTx(ctx, tx, conversationID, func(msgs []QueuedMessage) ([]QueuedMessage, error) {
+		if err := mutateQueuedMessagesTx(ctx, tx, run.ConversationID, func(msgs []QueuedMessage) ([]QueuedMessage, error) {
 			return append(msgs, qm), nil
 		}); err != nil {
 			return err
 		}
-		if _, err := tx.Exec("UPDATE action_runs SET report='sent' WHERE id=?", runID); err != nil {
-			return err
-		}
-		queued = true
-		return nil
+		_, err = q.SetPendingActionReport(ctx, generated.SetPendingActionReportParams{Report: "sent", ID: runID})
+		queued = err == nil
+		return err
 	})
 	return queued, err
 }

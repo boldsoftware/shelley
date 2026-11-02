@@ -2,10 +2,11 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"shelley.exe.dev/db/generated"
 )
 
 var ErrProviderConflict = errors.New("model provider changed")
@@ -25,16 +26,12 @@ type ModelProvider struct {
 	Version      int64
 }
 
-const providerColumns = "provider_id, provider_type, endpoint, api_key, display_name, models, version"
-
-func scanModelProvider(row interface{ Scan(...any) error }) (ModelProvider, error) {
-	var p ModelProvider
-	var raw string
-	err := row.Scan(&p.ProviderID, &p.ProviderType, &p.Endpoint, &p.APIKey, &p.DisplayName, &raw, &p.Version)
-	if err != nil {
-		return p, err
+func modelProviderFromRow(row generated.ModelProvider) (ModelProvider, error) {
+	p := ModelProvider{
+		ProviderID: row.ProviderID, ProviderType: row.ProviderType, Endpoint: row.Endpoint,
+		APIKey: row.ApiKey, DisplayName: row.DisplayName, Version: row.Version,
 	}
-	if err := json.Unmarshal([]byte(raw), &p.Models); err != nil {
+	if err := json.Unmarshal([]byte(row.Models), &p.Models); err != nil {
 		return p, fmt.Errorf("decode provider models: %w", err)
 	}
 	return p, nil
@@ -43,19 +40,18 @@ func scanModelProvider(row interface{ Scan(...any) error }) (ModelProvider, erro
 func (db *DB) GetModelProviders(ctx context.Context) ([]ModelProvider, error) {
 	providers := []ModelProvider{}
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		rows, err := rx.Query("SELECT " + providerColumns + " FROM model_providers ORDER BY rowid")
+		rows, err := generated.New(rx.Conn()).ListModelProviders(ctx)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			p, err := scanModelProvider(rows)
+		for _, row := range rows {
+			p, err := modelProviderFromRow(row)
 			if err != nil {
 				return err
 			}
 			providers = append(providers, p)
 		}
-		return rows.Err()
+		return nil
 	})
 	return providers, err
 }
@@ -63,8 +59,11 @@ func (db *DB) GetModelProviders(ctx context.Context) ([]ModelProvider, error) {
 func (db *DB) GetModelProvider(ctx context.Context, id string) (*ModelProvider, error) {
 	var p ModelProvider
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		var err error
-		p, err = scanModelProvider(rx.QueryRow("SELECT "+providerColumns+" FROM model_providers WHERE provider_id = ?", id))
+		row, err := generated.New(rx.Conn()).GetModelProvider(ctx, id)
+		if err != nil {
+			return err
+		}
+		p, err = modelProviderFromRow(row)
 		return err
 	})
 	if err != nil {
@@ -79,9 +78,10 @@ func (db *DB) CreateModelProvider(ctx context.Context, p ModelProvider) error {
 		return err
 	}
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		_, err := tx.Exec("INSERT INTO model_providers ("+providerColumns+") VALUES (?, ?, ?, ?, ?, ?, 1)",
-			p.ProviderID, p.ProviderType, p.Endpoint, p.APIKey, p.DisplayName, string(raw))
-		return err
+		return generated.New(tx.Conn()).CreateModelProvider(ctx, generated.CreateModelProviderParams{
+			ProviderID: p.ProviderID, ProviderType: p.ProviderType, Endpoint: p.Endpoint,
+			ApiKey: p.APIKey, DisplayName: p.DisplayName, Models: string(raw),
+		})
 	})
 }
 
@@ -91,23 +91,15 @@ func (db *DB) UpdateModelProvider(ctx context.Context, p ModelProvider, expected
 		return err
 	}
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		result, err := tx.Exec(`UPDATE model_providers
-			SET provider_type = ?, endpoint = ?, api_key = ?, display_name = ?, models = ?, version = version + 1
-			WHERE provider_id = ? AND version = ?`,
-			p.ProviderType, p.Endpoint, p.APIKey, p.DisplayName, string(raw), p.ProviderID, expectedVersion)
-		if err != nil {
-			return err
-		}
-		n, err := result.RowsAffected()
+		q := generated.New(tx.Conn())
+		n, err := q.UpdateModelProvider(ctx, generated.UpdateModelProviderParams{
+			ProviderType: p.ProviderType, Endpoint: p.Endpoint, ApiKey: p.APIKey, DisplayName: p.DisplayName,
+			Models: string(raw), ProviderID: p.ProviderID, Version: expectedVersion,
+		})
 		if err != nil || n != 0 {
 			return err
 		}
-		var found string
-		err = tx.QueryRow("SELECT provider_id FROM model_providers WHERE provider_id = ?", p.ProviderID).Scan(&found)
-		if errors.Is(err, sql.ErrNoRows) {
-			return sql.ErrNoRows
-		}
-		if err != nil {
+		if _, err := q.GetModelProvider(ctx, p.ProviderID); err != nil {
 			return err
 		}
 		return ErrProviderConflict
@@ -116,17 +108,6 @@ func (db *DB) UpdateModelProvider(ctx context.Context, p ModelProvider, expected
 
 func (db *DB) DeleteModelProvider(ctx context.Context, id string) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		result, err := tx.Exec("DELETE FROM model_providers WHERE provider_id = ?", id)
-		if err != nil {
-			return err
-		}
-		n, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if n == 0 {
-			return sql.ErrNoRows
-		}
-		return nil
+		return rowsChanged(generated.New(tx.Conn()).DeleteModelProvider(ctx, id))
 	})
 }

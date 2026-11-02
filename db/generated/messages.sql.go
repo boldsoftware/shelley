@@ -7,6 +7,7 @@ package generated
 
 import (
 	"context"
+	"strings"
 )
 
 const copyMessagesForFork = `-- name: CopyMessagesForFork :exec
@@ -94,6 +95,38 @@ func (q *Queries) CountMessagesByType(ctx context.Context, arg CountMessagesByTy
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const countMessagesByTypeAll = `-- name: CountMessagesByTypeAll :many
+SELECT type, COUNT(*) AS count FROM messages GROUP BY type ORDER BY COUNT(*) DESC
+`
+
+type CountMessagesByTypeAllRow struct {
+	Type  string `json:"type"`
+	Count int64  `json:"count"`
+}
+
+func (q *Queries) CountMessagesByTypeAll(ctx context.Context) ([]CountMessagesByTypeAllRow, error) {
+	rows, err := q.db.QueryContext(ctx, countMessagesByTypeAll)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountMessagesByTypeAllRow{}
+	for rows.Next() {
+		var i CountMessagesByTypeAllRow
+		if err := rows.Scan(&i.Type, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const countMessagesInConversation = `-- name: CountMessagesInConversation :one
@@ -263,6 +296,23 @@ func (q *Queries) GetGenerationAtOrBeforeSequence(ctx context.Context, arg GetGe
 	return generation, err
 }
 
+const getGenerationMaxSequenceID = `-- name: GetGenerationMaxSequenceID :one
+SELECT CAST(COALESCE(MAX(sequence_id), 0) AS INTEGER) FROM messages
+WHERE conversation_id = ? AND generation = ?
+`
+
+type GetGenerationMaxSequenceIDParams struct {
+	ConversationID string `json:"conversation_id"`
+	Generation     int64  `json:"generation"`
+}
+
+func (q *Queries) GetGenerationMaxSequenceID(ctx context.Context, arg GetGenerationMaxSequenceIDParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getGenerationMaxSequenceID, arg.ConversationID, arg.Generation)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getLatestActionableMessage = `-- name: GetLatestActionableMessage :one
 SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation, llm_api_url, model_name, forked_from_message_id, user_email, other_usage_data, external_message_id FROM messages
 WHERE conversation_id = ? AND type NOT IN ('slug', 'livetranscript')
@@ -393,6 +443,45 @@ func (q *Queries) HasExternalMessage(ctx context.Context, arg HasExternalMessage
 	return column_1, err
 }
 
+const hasUserMessageAfter = `-- name: HasUserMessageAfter :one
+SELECT CAST(EXISTS (
+    SELECT 1 FROM messages m
+    WHERE m.conversation_id = ? AND m.type = 'user' AND m.sequence_id > ?
+      AND NOT EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') c WHERE json_extract(c.value, '$.Type') = 6)
+) AS BOOLEAN)
+`
+
+type HasUserMessageAfterParams struct {
+	ConversationID string `json:"conversation_id"`
+	SequenceID     int64  `json:"sequence_id"`
+}
+
+// Whether a user message other than a tool result (type 6) follows sequence_id.
+func (q *Queries) HasUserMessageAfter(ctx context.Context, arg HasUserMessageAfterParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasUserMessageAfter, arg.ConversationID, arg.SequenceID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const latestUserExternalMessageID = `-- name: LatestUserExternalMessageID :one
+SELECT external_message_id FROM messages m
+WHERE m.conversation_id = ? AND m.type = 'user'
+  AND NOT (json_valid(m.user_data) AND json_type(m.user_data, '$.compaction_carried') IS NOT NULL)
+  AND NOT EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') c WHERE json_extract(c.value, '$.Type') = 6)
+ORDER BY m.sequence_id DESC LIMIT 1
+`
+
+// The channel id of the conversation's latest user message (but for tool
+// results, type 6, and the copies a compaction carries forward), or NULL if it
+// did not come from a channel.
+func (q *Queries) LatestUserExternalMessageID(ctx context.Context, conversationID string) (*string, error) {
+	row := q.db.QueryRowContext(ctx, latestUserExternalMessageID, conversationID)
+	var external_message_id *string
+	err := row.Scan(&external_message_id)
+	return external_message_id, err
+}
+
 const listAgentMessagesSinceLastUser = `-- name: ListAgentMessagesSinceLastUser :many
 SELECT m.message_id, m.conversation_id, m.sequence_id, m.type,
        m.llm_data, m.user_data, m.usage_data, m.created_at,
@@ -447,6 +536,91 @@ func (q *Queries) ListAgentMessagesSinceLastUser(ctx context.Context, arg ListAg
 			&i.OtherUsageData,
 			&i.ExternalMessageID,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listConversationMessageSizes = `-- name: ListConversationMessageSizes :many
+SELECT COUNT(*) AS messages,
+    CAST(COALESCE(SUM(COALESCE(LENGTH(llm_data), 0) + COALESCE(LENGTH(user_data), 0) + COALESCE(LENGTH(display_data), 0)), 0) AS INTEGER) AS bytes
+FROM messages
+GROUP BY conversation_id
+`
+
+type ListConversationMessageSizesRow struct {
+	Messages int64 `json:"messages"`
+	Bytes    int64 `json:"bytes"`
+}
+
+// Each conversation's message count and the bytes of its JSON payloads.
+func (q *Queries) ListConversationMessageSizes(ctx context.Context) ([]ListConversationMessageSizesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listConversationMessageSizes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListConversationMessageSizesRow{}
+	for rows.Next() {
+		var i ListConversationMessageSizesRow
+		if err := rows.Scan(&i.Messages, &i.Bytes); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listConversationParticipants = `-- name: ListConversationParticipants :many
+SELECT conversation_id, CAST(user_email AS TEXT) AS user_email, COUNT(*) AS message_count
+FROM messages
+WHERE user_email IS NOT NULL AND user_email <> '' AND conversation_id IN (/*SLICE:conversation_ids*/?)
+GROUP BY conversation_id, user_email
+ORDER BY conversation_id, user_email
+`
+
+type ListConversationParticipantsRow struct {
+	ConversationID string `json:"conversation_id"`
+	UserEmail      string `json:"user_email"`
+	MessageCount   int64  `json:"message_count"`
+}
+
+// The authenticated authors of the conversations' messages, with their
+// message counts.
+func (q *Queries) ListConversationParticipants(ctx context.Context, conversationIds []string) ([]ListConversationParticipantsRow, error) {
+	query := listConversationParticipants
+	var queryParams []interface{}
+	if len(conversationIds) > 0 {
+		for _, v := range conversationIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:conversation_ids*/?", strings.Repeat(",?", len(conversationIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:conversation_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListConversationParticipantsRow{}
+	for rows.Next() {
+		var i ListConversationParticipantsRow
+		if err := rows.Scan(&i.ConversationID, &i.UserEmail, &i.MessageCount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -846,6 +1020,60 @@ func (q *Queries) ListMessagesTail(ctx context.Context, arg ListMessagesTailPara
 	return items, nil
 }
 
+const listMessagesThrough = `-- name: ListMessagesThrough :many
+SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation, llm_api_url, model_name, forked_from_message_id, user_email, other_usage_data, external_message_id FROM messages
+WHERE conversation_id = ? AND generation = ? AND sequence_id <= ? AND excluded_from_context = FALSE
+ORDER BY sequence_id ASC
+`
+
+type ListMessagesThroughParams struct {
+	ConversationID string `json:"conversation_id"`
+	Generation     int64  `json:"generation"`
+	SequenceID     int64  `json:"sequence_id"`
+}
+
+// The context-visible messages of a generation, up to and including sequence_id.
+func (q *Queries) ListMessagesThrough(ctx context.Context, arg ListMessagesThroughParams) ([]Message, error) {
+	rows, err := q.db.QueryContext(ctx, listMessagesThrough, arg.ConversationID, arg.Generation, arg.SequenceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.ConversationID,
+			&i.SequenceID,
+			&i.Type,
+			&i.LlmData,
+			&i.UserData,
+			&i.UsageData,
+			&i.CreatedAt,
+			&i.DisplayData,
+			&i.ExcludedFromContext,
+			&i.Generation,
+			&i.LlmApiUrl,
+			&i.ModelName,
+			&i.ForkedFromMessageID,
+			&i.UserEmail,
+			&i.OtherUsageData,
+			&i.ExternalMessageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTypedUserMessages = `-- name: ListTypedUserMessages :many
 SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation, llm_api_url, model_name, forked_from_message_id, user_email, other_usage_data, external_message_id FROM messages
 WHERE conversation_id = ? AND type = 'user'
@@ -894,6 +1122,97 @@ func (q *Queries) ListTypedUserMessages(ctx context.Context, conversationID stri
 			&i.UserEmail,
 			&i.OtherUsageData,
 			&i.ExternalMessageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchEnhancementModel = `-- name: SearchEnhancementModel :one
+SELECT CAST(c.model AS TEXT) FROM conversations c
+WHERE c.parent_conversation_id IS NULL AND c.model IS NOT NULL AND c.model <> ''
+  AND coalesce(json_extract(c.conversation_options, '$.kind'), '') <> 'search'
+  AND EXISTS (
+      SELECT 1 FROM messages m INDEXED BY idx_messages_participants
+      WHERE m.conversation_id = c.conversation_id AND m.user_email = CAST(?1 AS TEXT)
+        AND m.user_email IS NOT NULL AND m.user_email <> ''
+  )
+ORDER BY c.updated_at DESC LIMIT 1
+`
+
+// The model of the latest top-level, non-search conversation with a message by email.
+func (q *Queries) SearchEnhancementModel(ctx context.Context, email string) (string, error) {
+	row := q.db.QueryRowContext(ctx, searchEnhancementModel, email)
+	var c_model string
+	err := row.Scan(&c_model)
+	return c_model, err
+}
+
+const searchMessageContext = `-- name: SearchMessageContext :many
+WITH hits AS (
+    SELECT hm.message_id AS hit_id, hm.conversation_id AS hit_conversation_id, hm.sequence_id AS hit_sequence_id
+    FROM messages hm WHERE hm.message_id IN (/*SLICE:hit_ids*/?)
+), nearby AS (
+    SELECT h.hit_id, m.message_id, m.type, abs(m.sequence_id - h.hit_sequence_id) AS distance,
+        substr((SELECT group_concat(j.value ->> 'Text', char(10))
+            FROM json_each(CASE WHEN json_valid(m.llm_data) THEN m.llm_data ELSE '{}' END, '$.Content') j
+            WHERE j.value ->> 'Type' = 2), 1, 6000) AS text
+    FROM hits h CROSS JOIN messages m ON m.conversation_id = h.hit_conversation_id
+        AND m.sequence_id BETWEEN h.hit_sequence_id - 12 AND h.hit_sequence_id + 6
+    WHERE m.type IN ('user', 'agent')
+      AND (m.type = 'agent' OR (
+          json_extract(m.user_data, '$.sender_conversation_id') IS NULL
+          AND json_extract(m.user_data, '$.background_job_id') IS NULL
+          AND json_extract(m.user_data, '$.mcp_server_change') IS NULL
+      ))
+)
+SELECT CAST(n.hit_id AS TEXT) AS hit_id, CAST(n.message_id AS TEXT) AS message_id, CAST(n.type AS TEXT) AS speaker,
+    CAST(n.distance AS INTEGER) AS distance, CAST(n.text AS TEXT) AS text
+FROM nearby n WHERE length(trim(n.text)) > 0
+`
+
+type SearchMessageContextRow struct {
+	HitID     string `json:"hit_id"`
+	MessageID string `json:"message_id"`
+	Speaker   string `json:"speaker"`
+	Distance  int64  `json:"distance"`
+	Text      string `json:"text"`
+}
+
+// The text of the user and agent messages near each hit.
+func (q *Queries) SearchMessageContext(ctx context.Context, hitIds []string) ([]SearchMessageContextRow, error) {
+	query := searchMessageContext
+	var queryParams []interface{}
+	if len(hitIds) > 0 {
+		for _, v := range hitIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:hit_ids*/?", strings.Repeat(",?", len(hitIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:hit_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchMessageContextRow{}
+	for rows.Next() {
+		var i SearchMessageContextRow
+		if err := rows.Scan(
+			&i.HitID,
+			&i.MessageID,
+			&i.Speaker,
+			&i.Distance,
+			&i.Text,
 		); err != nil {
 			return nil, err
 		}

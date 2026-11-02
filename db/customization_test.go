@@ -188,7 +188,7 @@ func TestCustomizationRunningArchivesOnlyFinishedIdleConversations(t *testing.T)
 	}
 	// The Assistant cannot verify, but must survive a record regardless.
 	if err := database.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		return writeCustomization(tx, &Customization{ConversationID: assistant, Status: "installed", ArtifactSHA256: "new", Finished: true, Generation: "g"})
+		return writeCustomization(ctx, tx, &Customization{ConversationID: assistant, Status: "installed", ArtifactSHA256: "new", Finished: true, Generation: "g"})
 	}); err != nil {
 		t.Fatal(err)
 	}

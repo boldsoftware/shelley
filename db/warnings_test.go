@@ -134,7 +134,7 @@ func TestWarningMigrationKeepsContextIndex(t *testing.T) {
 	ctx := t.Context()
 	var found bool
 	err := database.Pool().Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		rows, err := rx.Query("PRAGMA index_list(messages)")
+		rows, err := rx.Conn().QueryContext(ctx, "PRAGMA index_list(messages)")
 		if err != nil {
 			return err
 		}

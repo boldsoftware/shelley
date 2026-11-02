@@ -188,7 +188,7 @@ func searchInitialMessage(query string, matches []searchMatch, passages []db.Sea
 	}
 	best := map[string]map[string]ranked{}
 	for _, p := range passages {
-		score := -p.Distance
+		score := -int(p.Distance)
 		lower := strings.ToLower(p.Text)
 		for _, term := range terms {
 			if strings.Contains(lower, term) {

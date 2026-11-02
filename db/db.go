@@ -108,7 +108,7 @@ func New(cfg Config) (*DB, error) {
 	// even if the process changes working directory later.
 	var path string
 	if err := pool.Rx(context.Background(), func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow("SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&path)
+		return rx.Conn().QueryRowContext(ctx, "SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&path)
 	}); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("database path: %w", err)
@@ -181,24 +181,16 @@ func (db *DB) Migrate(ctx context.Context) error {
 	executed := make(map[string]bool)
 	var tableName string
 	err = db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		row := rx.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='migrations'")
+		row := rx.Conn().QueryRowContext(ctx, "SELECT name FROM sqlite_master WHERE type='table' AND name='migrations'")
 		return row.Scan(&tableName)
 	})
 	if err == nil {
 		err = db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-			rows, err := rx.Query("SELECT migration_name FROM migrations")
-			if err != nil {
-				return fmt.Errorf("failed to query executed migrations: %w", err)
-			}
-			defer rows.Close()
-			for rows.Next() {
-				var name string
-				if err := rows.Scan(&name); err != nil {
-					return fmt.Errorf("failed to scan migration name: %w", err)
-				}
+			names, err := generated.New(rx.Conn()).ListMigrationNames(ctx)
+			for _, name := range names {
 				executed[name] = true
 			}
-			return rows.Err()
+			return err
 		})
 		if err != nil {
 			return fmt.Errorf("failed to load executed migrations: %w", err)
@@ -229,11 +221,13 @@ func (db *DB) runMigration(ctx context.Context, filename string, migrationNumber
 	}
 
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		if _, err := tx.Exec(string(content)); err != nil {
+		if _, err := tx.Conn().ExecContext(ctx, string(content)); err != nil {
 			return fmt.Errorf("failed to execute migration %s: %w", filename, err)
 		}
 
-		if _, err := tx.Exec("INSERT INTO migrations (migration_number, migration_name) VALUES (?, ?)", migrationNumber, filename); err != nil {
+		if err := generated.New(tx.Conn()).RecordMigration(ctx, generated.RecordMigrationParams{
+			MigrationNumber: int64(migrationNumber), MigrationName: filename,
+		}); err != nil {
 			return fmt.Errorf("failed to record migration %s in migrations table: %w", filename, err)
 		}
 
@@ -967,32 +961,12 @@ func (db *DB) ConversationParticipants(ctx context.Context, conversationIDs []st
 	if len(conversationIDs) == 0 {
 		return out, nil
 	}
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(conversationIDs)), ",")
-	args := make([]any, len(conversationIDs))
-	for i, id := range conversationIDs {
-		args[i] = id
-	}
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		rows, err := rx.Conn().QueryContext(ctx, `
-			SELECT conversation_id, user_email, COUNT(*)
-			FROM messages
-			WHERE user_email IS NOT NULL AND user_email <> ''
-			  AND conversation_id IN (`+placeholders+`)
-			GROUP BY conversation_id, user_email
-			ORDER BY conversation_id, user_email`, args...)
-		if err != nil {
-			return err
+		rows, err := generated.New(rx.Conn()).ListConversationParticipants(ctx, conversationIDs)
+		for _, row := range rows {
+			out[row.ConversationID] = append(out[row.ConversationID], ConversationParticipant{Email: row.UserEmail, MessageCount: row.MessageCount})
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var id string
-			var participant ConversationParticipant
-			if err := rows.Scan(&id, &participant.Email, &participant.MessageCount); err != nil {
-				return err
-			}
-			out[id] = append(out[id], participant)
-		}
-		return rows.Err()
+		return err
 	})
 	return out, err
 }

@@ -18,7 +18,7 @@ func TestPoolReadersUseMemoryTempStore(t *testing.T) {
 	for range cap(p.readers) {
 		var mode int
 		if err := p.Rx(context.Background(), func(ctx context.Context, rx *Rx) error {
-			return rx.QueryRow("PRAGMA temp_store").Scan(&mode)
+			return rx.Conn().QueryRowContext(ctx, "PRAGMA temp_store").Scan(&mode)
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -37,7 +37,7 @@ func fillDB(t *testing.T, p *Pool) {
 	}
 	var pages int
 	if err := p.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow("PRAGMA page_count").Scan(&pages)
+		return rx.Conn().QueryRowContext(ctx, "PRAGMA page_count").Scan(&pages)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestPoolOnDiskFull(t *testing.T) {
 	p.OnDiskFull(func() { fired++ })
 
 	err := p.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		_, err := tx.Exec("INSERT INTO disk_full_filler VALUES (zeroblob(1<<20))")
+		_, err := tx.Conn().ExecContext(ctx, "INSERT INTO disk_full_filler VALUES (zeroblob(1<<20))")
 		return err
 	})
 	if !IsDiskFull(err) {

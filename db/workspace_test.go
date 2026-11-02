@@ -169,7 +169,7 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	}
 	var count int
 	if err := database.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow("SELECT count(*) FROM conversations WHERE conversation_id NOT IN (?,?,?,?,?,?)",
+		return rx.Conn().QueryRowContext(ctx, "SELECT count(*) FROM conversations WHERE conversation_id NOT IN (?,?,?,?,?,?)",
 			active.ConversationID, archived.ConversationID, internal.ConversationID, child.ConversationID, channel.ConversationID, newConversation.ConversationID).Scan(&count)
 	}); err != nil || count != 1 {
 		t.Fatalf("orphan assistants: count=%d err=%v", count, err)
@@ -444,7 +444,7 @@ func TestActionPendingWorkGuardsAndSuccessRetention(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := database.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		_, err := tx.Exec(`INSERT INTO background_jobs(job_id,conversation_id,tool_use_id,command,pid,process_start_time,log_path,exit_path,started_at)
+		_, err := tx.Conn().ExecContext(ctx, `INSERT INTO background_jobs(job_id,conversation_id,tool_use_id,command,pid,process_start_time,log_path,exit_path,started_at)
 			VALUES('job','active-child','tool','true',1,1,'log','exit',CURRENT_TIMESTAMP)`)
 		return err
 	}); err != nil {
@@ -454,7 +454,7 @@ func TestActionPendingWorkGuardsAndSuccessRetention(t *testing.T) {
 		t.Fatalf("descendant job allowed action: %v", err)
 	}
 	if err := database.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		_, err := tx.Exec("UPDATE background_jobs SET exited=TRUE,notified=TRUE WHERE job_id='job'")
+		_, err := tx.Conn().ExecContext(ctx, "UPDATE background_jobs SET exited=TRUE,notified=TRUE WHERE job_id='job'")
 		return err
 	}); err != nil {
 		t.Fatal(err)

@@ -564,7 +564,7 @@ func fillTestDB(t *testing.T, database *db.DB) {
 	}
 	var pages int
 	if err := p.Rx(ctx, func(ctx context.Context, rx *db.Rx) error {
-		return rx.QueryRow("PRAGMA page_count").Scan(&pages)
+		return rx.Conn().QueryRowContext(ctx, "PRAGMA page_count").Scan(&pages)
 	}); err != nil {
 		t.Fatal(err)
 	}

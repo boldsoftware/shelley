@@ -22,7 +22,7 @@ func TestPoolTxCommitError(t *testing.T) {
 	commits := 0
 	p.OnCommit(func() { commits++ })
 	err := p.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		_, err := tx.Exec("INSERT INTO commit_child VALUES (42)")
+		_, err := tx.Conn().ExecContext(ctx, "INSERT INTO commit_child VALUES (42)")
 		if err != nil {
 			t.Fatalf("insert should succeed until commit: %v", err)
 		}
@@ -36,7 +36,7 @@ func TestPoolTxCommitError(t *testing.T) {
 	}
 	var count int
 	if err := p.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow("SELECT count(*) FROM commit_child").Scan(&count)
+		return rx.Conn().QueryRowContext(ctx, "SELECT count(*) FROM commit_child").Scan(&count)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestPoolTxCommitError(t *testing.T) {
 		t.Fatalf("failed commit left %d rows", count)
 	}
 	if err := p.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		_, err := tx.Exec("INSERT INTO commit_parent VALUES (42); INSERT INTO commit_child VALUES (42)")
+		_, err := tx.Conn().ExecContext(ctx, "INSERT INTO commit_parent VALUES (42); INSERT INTO commit_child VALUES (42)")
 		return err
 	}); err != nil {
 		t.Fatalf("connection was not usable after rollback: %v", err)

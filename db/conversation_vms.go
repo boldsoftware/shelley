@@ -107,27 +107,23 @@ func validateProjectVM(vm *ProjectVM, cwd string) error {
 // maxBaseVMName leaves room in a VM name for "-" and a conversation id.
 const maxBaseVMName = 42 - 8
 
-func setProjectVM(tx *Tx, project string, vm *ProjectVM) error {
+func setProjectVM(ctx context.Context, q *generated.Queries, project string, vm *ProjectVM) error {
 	if vm == nil {
-		_, err := tx.Exec("DELETE FROM profile_vms WHERE profile=?", project)
+		return q.DeleteProjectVM(ctx, project)
+	}
+	if err := q.UpsertProjectVM(ctx, generated.UpsertProjectVMParams{
+		Profile: project, BaseVm: vm.Base, SharedVm: vm.SharedVM, Integration: vm.Integration,
+	}); err != nil || vm.NeedsBase() {
 		return err
 	}
-	_, err := tx.Exec(`INSERT INTO profile_vms(profile,base_vm,shared_vm,integration) VALUES(?,?,?,?)
-		ON CONFLICT(profile) DO UPDATE SET base_vm=excluded.base_vm,shared_vm=excluded.shared_vm,integration=excluded.integration`,
-		project, vm.Base, vm.SharedVM, vm.Integration)
-	if err != nil || vm.NeedsBase() {
-		return err
-	}
-	_, err = tx.Exec("DELETE FROM profile_vm_setups WHERE profile=?", project)
-	return err
+	return q.DeleteProjectVMSetup(ctx, project)
 }
 
 // setProjectVMSetup records conversationID as the conversation preparing the base VM
 // of project, whose VMs must be on with no base or setup yet.
-func setProjectVMSetup(tx *Tx, project, conversationID string) error {
-	result, err := tx.Exec(`INSERT INTO profile_vm_setups(profile,conversation_id)
-		SELECT profile,? FROM profile_vms WHERE profile=? AND base_vm='' AND shared_vm=''`, conversationID, project)
-	if err := rowsChanged(result, err); errors.Is(err, sql.ErrNoRows) {
+func setProjectVMSetup(ctx context.Context, q *generated.Queries, project, conversationID string) error {
+	err := rowsChanged(q.CreateProjectVMSetup(ctx, generated.CreateProjectVMSetupParams{ConversationID: conversationID, Profile: project}))
+	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("%w: project %s no longer needs a base VM set up", ErrConflict, project)
 	}
 	return err
@@ -148,52 +144,47 @@ func (db *DB) CreateVMProjectConversation(ctx context.Context, cwd, model *strin
 	}
 	var conversation generated.Conversation
 	err = db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		conversation, err = generated.New(tx.Conn()).CreateConversation(ctx, generated.CreateConversationParams{
+		q := generated.New(tx.Conn())
+		conversation, err = q.CreateConversation(ctx, generated.CreateConversationParams{
 			ConversationID: id, UserInitiated: true, Cwd: cwd, Model: model, ConversationOptions: string(optsJSON),
 		})
 		if err != nil {
 			return err
 		}
 		if setup {
-			return setProjectVMSetup(tx, project.Name, id)
+			return setProjectVMSetup(ctx, q, project.Name, id)
 		}
-		return insertConversationVM(tx, id, *project.VM, project.VMDir())
+		return insertConversationVM(ctx, q, id, *project.VM, project.VMDir())
 	})
 	return &conversation, err
 }
 
 // insertConversationVM records the VM conversationID uses in a project with
 // vm, working in dir there.
-func insertConversationVM(tx *Tx, conversationID string, vm ProjectVM, dir string) error {
+func insertConversationVM(ctx context.Context, q *generated.Queries, conversationID string, vm ProjectVM, dir string) error {
 	if vm.NeedsBase() {
 		return fmt.Errorf("%w: the project has no base VM yet", ErrConflict)
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := tx.Exec(`INSERT INTO conversation_vms(conversation_id,vm_name,base_vm,integration,shared,status,dir,created_at,updated_at)
-		VALUES(?,?,?,?,?,?,?,?,?)`, conversationID, ConversationVMName(vm, conversationID), vm.Base, vm.Integration, vm.SharedVM != "", ConversationVMPending, dir, now, now)
-	return err
+	now := formatTime(time.Now())
+	return q.CreateConversationVM(ctx, generated.CreateConversationVMParams{
+		ConversationID: conversationID, VmName: ConversationVMName(vm, conversationID), BaseVm: vm.Base, Integration: vm.Integration,
+		Shared: vm.SharedVM != "", Status: ConversationVMPending, Dir: dir, CreatedAt: now, UpdatedAt: now,
+	})
 }
 
-func attachProjectVMs(rx *Rx, projects []Project) error {
-	rows, err := rx.Query(`SELECT v.profile,v.base_vm,v.shared_vm,v.integration,COALESCE(s.conversation_id,'')
-		FROM profile_vms v LEFT JOIN profile_vm_setups s ON s.profile=v.profile`)
+func attachProjectVMs(ctx context.Context, q *generated.Queries, projects []Project) error {
+	rows, err := q.ListProjectVMs(ctx)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 	vms := map[string]*ProjectVM{}
-	for rows.Next() {
-		var name string
-		var vm ProjectVM
-		if err := rows.Scan(&name, &vm.Base, &vm.SharedVM, &vm.Integration, &vm.SetupConversationID); err != nil {
-			return err
-		}
-		vms[name] = &vm
+	for _, row := range rows {
+		vms[row.Profile] = &ProjectVM{Base: row.BaseVm, SharedVM: row.SharedVm, Integration: row.Integration, SetupConversationID: row.SetupConversationID}
 	}
 	for i := range projects {
 		projects[i].VM = vms[projects[i].Name]
 	}
-	return rows.Err()
+	return nil
 }
 
 // NeedsBase reports whether the project's conversations get their own VMs but it
@@ -223,27 +214,19 @@ func ConversationVMName(vm ProjectVM, conversationID string) string {
 // another project.
 func (db *DB) BindConversationVM(ctx context.Context, conversationID string, vm ProjectVM, dir string) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		return insertConversationVM(tx, conversationID, vm, dir)
+		return insertConversationVM(ctx, generated.New(tx.Conn()), conversationID, vm, dir)
 	})
 }
 
-const conversationVMColumns = `v.conversation_id,v.vm_name,v.base_vm,v.integration,v.shared,v.status,v.error,v.ssh_dest,v.https_url,
-	v.vm_created_at,v.copy_requested_at,v.dir,COALESCE(c.archived,1),v.created_at,v.updated_at`
-
-// conversationVMTables joins each VM to its conversation, which a deleted
-// conversation lacks: it counts as archived, so its VM is deleted too.
-const conversationVMTables = "conversation_vms v LEFT JOIN conversations c ON c.conversation_id=v.conversation_id"
-
-func scanConversationVM(scanner rowScanner) (*ConversationVM, error) {
-	var vm ConversationVM
-	var created, updated string
-	if err := scanner.Scan(&vm.ConversationID, &vm.Name, &vm.Base, &vm.Integration, &vm.Shared, &vm.Status, &vm.Error,
-		&vm.SSHDest, &vm.HTTPSURL, &vm.VMCreatedAt, &vm.CopyRequestedAt, &vm.Dir, &vm.ConversationArchived, &created, &updated); err != nil {
-		return nil, err
+func newConversationVM(row generated.ConversationVm, archived bool) (*ConversationVM, error) {
+	vm := ConversationVM{
+		ConversationID: row.ConversationID, Name: row.VmName, Base: row.BaseVm, Integration: row.Integration, Shared: row.Shared,
+		Status: row.Status, Error: row.Error, SSHDest: row.SshDest, HTTPSURL: row.HttpsUrl, VMCreatedAt: row.VmCreatedAt,
+		CopyRequestedAt: row.CopyRequestedAt, Dir: row.Dir, ConversationArchived: archived,
 	}
 	var err1, err2 error
-	vm.CreatedAt, err1 = time.Parse(time.RFC3339Nano, created)
-	vm.UpdatedAt, err2 = time.Parse(time.RFC3339Nano, updated)
+	vm.CreatedAt, err1 = parseTime(row.CreatedAt)
+	vm.UpdatedAt, err2 = parseTime(row.UpdatedAt)
 	return &vm, errors.Join(err1, err2)
 }
 
@@ -252,15 +235,12 @@ func scanConversationVM(scanner rowScanner) (*ConversationVM, error) {
 // returns sql.ErrNoRows for a conversation that runs locally.
 func (db *DB) GetConversationVM(ctx context.Context, conversationID string) (*ConversationVM, error) {
 	var vm *ConversationVM
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
-		vm, err = scanConversationVM(rx.QueryRow(`WITH RECURSIVE chain(id, depth) AS (
-				SELECT ?, 0
-				UNION ALL
-				SELECT c.parent_conversation_id, chain.depth+1 FROM conversations c JOIN chain ON c.conversation_id=chain.id
-				WHERE c.parent_conversation_id IS NOT NULL AND chain.depth < 64
-			)
-			SELECT `+conversationVMColumns+` FROM `+conversationVMTables+` JOIN chain ON v.conversation_id=chain.id
-			ORDER BY chain.depth DESC LIMIT 1`, conversationID))
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		row, err := generated.New(rx.Conn()).GetConversationVM(ctx, conversationID)
+		if err != nil {
+			return err
+		}
+		vm, err = newConversationVM(row.ConversationVm, row.ConversationArchived)
 		return err
 	})
 	return vm, err
@@ -269,7 +249,7 @@ func (db *DB) GetConversationVM(ctx context.Context, conversationID string) (*Co
 // ListConversationVMs returns every conversation VM.
 func (db *DB) ListConversationVMs(ctx context.Context) (vms []ConversationVM, err error) {
 	err = db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		vms, err = listConversationVMs(rx, false)
+		vms, err = listConversationVMs(ctx, generated.New(rx.Conn()), false)
 		return err
 	})
 	return vms, err
@@ -277,33 +257,39 @@ func (db *DB) ListConversationVMs(ctx context.Context) (vms []ConversationVM, er
 
 // listConversationVMs lists every conversation VM or, if current, those that
 // exist or that an active conversation copies afresh at its next turn.
-func listConversationVMs(rx *Rx, current bool) ([]ConversationVM, error) {
-	out := []ConversationVM{}
-	where := ""
+func listConversationVMs(ctx context.Context, q *generated.Queries, current bool) ([]ConversationVM, error) {
+	var rows []generated.ListConversationVMsRow
+	var err error
 	if current {
-		where = " WHERE v.status!='" + ConversationVMDeleted + "' OR NOT COALESCE(c.archived,1)"
+		var currentRows []generated.ListCurrentConversationVMsRow
+		currentRows, err = q.ListCurrentConversationVMs(ctx)
+		for _, row := range currentRows {
+			rows = append(rows, generated.ListConversationVMsRow(row))
+		}
+	} else {
+		rows, err = q.ListConversationVMs(ctx)
 	}
-	rows, err := rx.Query("SELECT " + conversationVMColumns + " FROM " + conversationVMTables + where + " ORDER BY v.created_at,v.conversation_id")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		vm, err := scanConversationVM(rows)
+	out := []ConversationVM{}
+	for _, row := range rows {
+		vm, err := newConversationVM(row.ConversationVm, row.ConversationArchived)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, *vm)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // UpdateConversationVM records the VM's status, error, addresses, identity,
 // and directory.
 func (db *DB) UpdateConversationVM(ctx context.Context, vm ConversationVM) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		result, err := tx.Exec(`UPDATE conversation_vms SET status=?,error=?,ssh_dest=?,https_url=?,vm_created_at=?,copy_requested_at=?,dir=?,updated_at=? WHERE conversation_id=?`,
-			vm.Status, vm.Error, vm.SSHDest, vm.HTTPSURL, vm.VMCreatedAt, vm.CopyRequestedAt, vm.Dir, time.Now().UTC().Format(time.RFC3339Nano), vm.ConversationID)
-		return rowsChanged(result, err)
+		return rowsChanged(generated.New(tx.Conn()).UpdateConversationVM(ctx, generated.UpdateConversationVMParams{
+			Status: vm.Status, Error: vm.Error, SshDest: vm.SSHDest, HttpsUrl: vm.HTTPSURL, VmCreatedAt: vm.VMCreatedAt,
+			CopyRequestedAt: vm.CopyRequestedAt, Dir: vm.Dir, UpdatedAt: formatTime(time.Now()), ConversationID: vm.ConversationID,
+		}))
 	})
 }

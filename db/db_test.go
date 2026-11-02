@@ -118,38 +118,38 @@ func TestDB_Migrate_TracksByName(t *testing.T) {
 	}
 
 	// Simulate the cross-branch rename scenario: this database was
-	// initialized against a branch where 017 was a different file. We
+	// initialized against a branch where 027 was a different file. We
 	// rewrite the migrations row to that old name and undo what real
-	// 017 did, then re-run Migrate to confirm it doesn't silently skip
-	// the on-disk 017 just because some other 017 row already exists.
+	// 027 did, then re-run Migrate to confirm it doesn't silently skip
+	// the on-disk 027 just because some other 027 row already exists.
 	err = db.Pool().Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		if _, err := tx.Exec("DELETE FROM migrations WHERE migration_number = 17"); err != nil {
+		if _, err := tx.Conn().ExecContext(ctx, "DELETE FROM migrations WHERE migration_number = 27"); err != nil {
 			return err
 		}
-		if _, err := tx.Exec("INSERT INTO migrations (migration_number, migration_name) VALUES (17, '017-some-old-name.sql')"); err != nil {
+		if _, err := tx.Conn().ExecContext(ctx, "INSERT INTO migrations (migration_number, migration_name) VALUES (27, '027-some-old-name.sql')"); err != nil {
 			return err
 		}
-		_, err := tx.Exec("ALTER TABLE conversations DROP COLUMN conversation_options")
+		_, err := tx.Conn().ExecContext(ctx, "ALTER TABLE conversations DROP COLUMN tags")
 		return err
 	})
 	if err != nil {
 		t.Fatalf("failed to set up rename scenario: %v", err)
 	}
 
-	// Now re-run Migrate. The real 017 has a different filename, so it must run.
+	// Now re-run Migrate. The real 027 has a different filename, so it must run.
 	if err := db.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate() after rename: %v", err)
 	}
 
 	var gotColumn int
 	err = db.Pool().Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow("SELECT COUNT(*) FROM pragma_table_info('conversations') WHERE name = 'conversation_options'").Scan(&gotColumn)
+		return rx.Conn().QueryRowContext(ctx, "SELECT COUNT(*) FROM pragma_table_info('conversations') WHERE name = 'tags'").Scan(&gotColumn)
 	})
 	if err != nil {
 		t.Fatalf("failed to check column existence: %v", err)
 	}
 	if gotColumn != 1 {
-		t.Fatalf("conversation_options column was not re-added; row keyed by number prevented re-run")
+		t.Fatalf("tags column was not re-added; row keyed by number prevented re-run")
 	}
 }
 
@@ -164,7 +164,7 @@ func TestDB_Migrate_MarksDefaultBuiltin(t *testing.T) {
 			// Raw SQL: the current generated queries include columns not yet
 			// present in this pre-upgrade fixture.
 			if err := db.Pool().Tx(ctx, func(ctx context.Context, tx *Tx) error {
-				_, err := tx.Exec("UPDATE profiles SET settings = ? WHERE name = 'Default'", settings)
+				_, err := tx.Conn().ExecContext(ctx, "UPDATE profiles SET settings = ? WHERE name = 'Default'", settings)
 				return err
 			}); err != nil {
 				t.Fatal(err)
@@ -477,7 +477,7 @@ func assertMessagesTableHasNoCheck(t *testing.T, db *DB, ctx context.Context) {
 
 	var createSQL string
 	err := db.Pool().Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow("SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'messages'").Scan(&createSQL)
+		return rx.Conn().QueryRowContext(ctx, "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'messages'").Scan(&createSQL)
 	})
 	if err != nil {
 		t.Fatalf("query messages schema: %v", err)
@@ -492,7 +492,7 @@ func assertMessagesIndexesExist(t *testing.T, db *DB, ctx context.Context, names
 
 	found := map[string]bool{}
 	err := db.Pool().Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		rows, err := rx.Query("SELECT name FROM sqlite_schema WHERE type = 'index' AND tbl_name = 'messages'")
+		rows, err := rx.Conn().QueryContext(ctx, "SELECT name FROM sqlite_schema WHERE type = 'index' AND tbl_name = 'messages'")
 		if err != nil {
 			return err
 		}
@@ -521,7 +521,7 @@ func assertTriggersExist(t *testing.T, db *DB, ctx context.Context, names ...str
 
 	found := map[string]bool{}
 	err := db.Pool().Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		rows, err := rx.Query("SELECT name FROM sqlite_schema WHERE type = 'trigger'")
+		rows, err := rx.Conn().QueryContext(ctx, "SELECT name FROM sqlite_schema WHERE type = 'trigger'")
 		if err != nil {
 			return err
 		}
@@ -837,10 +837,10 @@ func TestBackgroundJobsExitedMigration(t *testing.T) {
 	ctx := t.Context()
 	// Raw SQL: generated queries assume the latest schema.
 	err := database.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		if _, err := tx.Exec(`INSERT INTO conversations (conversation_id, user_initiated) VALUES ('c', TRUE)`); err != nil {
+		if _, err := tx.Conn().ExecContext(ctx, `INSERT INTO conversations (conversation_id, user_initiated) VALUES ('c', TRUE)`); err != nil {
 			return err
 		}
-		_, err := tx.Exec(`INSERT INTO background_jobs (job_id, conversation_id, tool_use_id, command, pid, process_start_time, log_path, exit_path, started_at, notified)
+		_, err := tx.Conn().ExecContext(ctx, `INSERT INTO background_jobs (job_id, conversation_id, tool_use_id, command, pid, process_start_time, log_path, exit_path, started_at, notified)
 			VALUES ('done', 'c', '', '', 0, 0, '', '', CURRENT_TIMESTAMP, TRUE), ('pending', 'c', '', '', 0, 0, '', '', CURRENT_TIMESTAMP, FALSE)`)
 		return err
 	})

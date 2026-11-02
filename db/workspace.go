@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -32,13 +33,8 @@ type ProjectAction struct {
 }
 
 // WorkspaceConversation is a conversation's place in the workspace: the project its profile
-// names, or the Assistant.
-type WorkspaceConversation struct {
-	ConversationID string `json:"conversation_id"`
-	Project        string `json:"project"`
-	IsAssistant    bool   `json:"is_assistant"`
-	Archived       bool   `json:"archived"`
-}
+// names, or the Assistant. See 060-workspace-views.sql.
+type WorkspaceConversation = generated.WorkspaceConversation
 
 // ActionRunSummary is what the workspace lists of a run.
 type ActionRunSummary struct {
@@ -90,58 +86,70 @@ const AssistantSlug = "assistant"
 func (db *DB) EnsureWorkspace(ctx context.Context, shelleyCwd, model string, opts ConversationOptions) (string, error) {
 	var assistantID string
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		err := tx.QueryRow("SELECT assistant_id FROM workspace WHERE singleton = 1").Scan(&assistantID)
-		if errors.Is(err, sql.ErrNoRows) {
-			// Shelley's own project, unless a profile has its name.
-			var taken bool
-			if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM profiles WHERE name='Shelley')").Scan(&taken); err != nil {
-				return err
-			}
-			if !taken {
-				if err := createProject(tx, Project{Name: "Shelley", Instructions: shelleyProjectInstructions, Cwd: shelleyCwd, Actions: []ProjectAction{}}, ""); err != nil {
-					return err
-				}
-			}
-			assistantID, err = GenerateConversationID()
-			if err != nil {
-				return err
-			}
-			options, err := json.Marshal(opts)
-			if err != nil {
-				return err
-			}
-			var modelPtr *string
-			if model != "" {
-				modelPtr = &model
-			}
-			// The Assistant is titled "Assistant", not after its first
-			// message: its slug is "assistant", or none while another
-			// conversation has that slug (see 059-assistant-slug.sql).
-			var slug *string
-			if err := tx.QueryRow("SELECT CASE WHEN EXISTS(SELECT 1 FROM conversations WHERE slug=?) THEN NULL ELSE ? END", AssistantSlug, AssistantSlug).Scan(&slug); err != nil {
-				return err
-			}
-			// No cwd is invented for the assistant; its tools use the normal
-			// configured server working directory.
-			if _, err := generated.New(tx.Conn()).CreateConversation(ctx, generated.CreateConversationParams{
-				ConversationID: assistantID, Slug: slug, UserInitiated: true, Model: modelPtr, ConversationOptions: string(options),
-			}); err != nil {
-				return err
-			}
-			_, err = tx.Exec("INSERT INTO workspace(singleton,assistant_id) VALUES(1,?)", assistantID)
+		q := generated.New(tx.Conn())
+		workspace, err := q.GetWorkspace(ctx)
+		if err == nil {
+			assistantID = workspace.AssistantID
+			return nil
 		}
-		return err
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		// Shelley's own project, unless a profile has its name.
+		taken, err := found(q.GetProfile(ctx, "Shelley"))
+		if err != nil {
+			return err
+		}
+		if !taken {
+			if err := createProject(ctx, q, Project{Name: "Shelley", Instructions: shelleyProjectInstructions, Cwd: shelleyCwd, Actions: []ProjectAction{}}, ""); err != nil {
+				return err
+			}
+		}
+		assistantID, err = GenerateConversationID()
+		if err != nil {
+			return err
+		}
+		options, err := json.Marshal(opts)
+		if err != nil {
+			return err
+		}
+		var modelPtr *string
+		if model != "" {
+			modelPtr = &model
+		}
+		// The Assistant is titled "Assistant", not after its first
+		// message: its slug is "assistant", or none while another
+		// conversation has that slug (see 059-assistant-slug.sql).
+		var slug *string
+		if taken, err := found(q.GetConversationBySlug(ctx, ptr(AssistantSlug))); err != nil {
+			return err
+		} else if !taken {
+			slug = ptr(AssistantSlug)
+		}
+		// No cwd is invented for the assistant; its tools use the normal
+		// configured server working directory.
+		if _, err := q.CreateConversation(ctx, generated.CreateConversationParams{
+			ConversationID: assistantID, Slug: slug, UserInitiated: true, Model: modelPtr, ConversationOptions: string(options),
+		}); err != nil {
+			return err
+		}
+		return q.CreateWorkspace(ctx, assistantID)
 	})
 	return assistantID, err
 }
 
-type rowScanner interface{ Scan(...any) error }
-
-func rowsChanged(result sql.Result, err error) error {
-	if err != nil {
-		return err
+// found reports whether a query for one row found it.
+func found[T any](_ T, err error) (bool, error) {
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
 	}
-	n, err := result.RowsAffected()
+	return err == nil, err
+}
+
+func ptr[T any](v T) *T { return &v }
+
+// rowsChanged turns an update or delete that changed no rows into sql.ErrNoRows.
+func rowsChanged(n int64, err error) error {
 	if err == nil && n == 0 {
 		return sql.ErrNoRows
 	}
@@ -149,97 +157,67 @@ func rowsChanged(result sql.Result, err error) error {
 }
 
 // WorkspaceFlag names the feature flag that turns on workspace mode: a
-// pinned Assistant that routes work into projects.
+// pinned Assistant that routes work into projects. 060-workspace-views.sql
+// and db/query/workspace.sql name it too.
 const WorkspaceFlag = "workspace"
-
-const workspaceOn = `EXISTS(SELECT 1 FROM feature_flags WHERE name='` + WorkspaceFlag + `' AND trim(value)='true')`
-
-// workspaceAssistant is the Assistant's conversation id, or NULL: there is
-// none until workspace mode creates it, and none while the mode is off.
-const workspaceAssistant = `(SELECT assistant_id FROM workspace WHERE singleton=1 AND ` + workspaceOn + `)`
 
 // WorkspaceMode reports whether workspace mode is on.
 func (db *DB) WorkspaceMode(ctx context.Context) (bool, error) {
 	var on bool
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow("SELECT " + workspaceOn).Scan(&on)
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
+		on, err = generated.New(rx.Conn()).WorkspaceMode(ctx)
+		return err
 	})
 	return on, err
-}
-
-// workspaceConversationQuery lists the workspace's conversations: top-level conversations
-// whose profile is a project, and the Assistant. Callers filter with AND.
-const workspaceConversationQuery = `SELECT conversation_id,project,is_assistant,archived FROM (
-	SELECT c.conversation_id,
-		CASE WHEN c.conversation_id IS ` + workspaceAssistant + ` THEN '' ELSE COALESCE(p.profile,'') END AS project,
-		c.conversation_id IS ` + workspaceAssistant + ` AS is_assistant, c.archived
-	FROM conversations c
-	LEFT JOIN profile_projects p ON p.profile=` + conversationProfile + `
-	WHERE c.parent_conversation_id IS NULL
-) WHERE (project!='' OR is_assistant)`
-
-// conversationProfile is the profile label of conversation c.
-const conversationProfile = `(CASE WHEN json_valid(c.conversation_options) THEN json_extract(c.conversation_options,'$.profile') END)`
-
-func scanWorkspaceConversation(scanner rowScanner) (*WorkspaceConversation, error) {
-	var c WorkspaceConversation
-	if err := scanner.Scan(&c.ConversationID, &c.Project, &c.IsAssistant, &c.Archived); err != nil {
-		return nil, err
-	}
-	return &c, nil
 }
 
 // GetWorkspaceConversation returns sql.ErrNoRows for conversations that are neither
 // in a project nor the Assistant.
 func (db *DB) GetWorkspaceConversation(ctx context.Context, conversationID string) (*WorkspaceConversation, error) {
-	var c *WorkspaceConversation
+	var c WorkspaceConversation
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
-		c, err = scanWorkspaceConversation(rx.QueryRow(workspaceConversationQuery+" AND conversation_id=?", conversationID))
+		c, err = generated.New(rx.Conn()).GetWorkspaceConversation(ctx, conversationID)
 		return err
 	})
-	return c, err
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
 }
 
 // conversationAvailable is always called within the writing transaction, making
 // duplicate actions and project moves atomic even with concurrent requests.
-func conversationAvailable(ctx context.Context, tx *Tx, conversationID string) (*generated.Conversation, error) {
-	conversation, err := generated.New(tx.Conn()).GetConversation(ctx, conversationID)
+func conversationAvailable(ctx context.Context, q *generated.Queries, conversationID string) (*generated.Conversation, error) {
+	conversation, err := q.GetConversation(ctx, conversationID)
 	if err != nil {
 		return nil, err
 	}
-	var assistant bool
-	if err := tx.QueryRow("SELECT ? IS "+workspaceAssistant, conversationID).Scan(&assistant); err != nil {
+	assistantID, err := q.GetAssistantID(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
-	running, err := hasRunningAction(tx.Rx, conversationID)
+	running, err := q.HasRunningAction(ctx, conversationID)
 	if err != nil {
 		return nil, err
 	}
-	pending, err := pendingWork(tx, &conversation)
+	pending, err := pendingWork(ctx, q, &conversation)
 	if err != nil {
 		return nil, err
 	}
-	if assistant || running || !conversation.UserInitiated ||
+	if assistantID == conversationID || running || !conversation.UserInitiated ||
 		conversation.ParentConversationID != nil || conversation.ExternalConversationID != nil || pending {
 		return nil, ErrConflict
 	}
 	return &conversation, nil
 }
 
-func pendingWork(tx *Tx, conversation *generated.Conversation) (bool, error) {
+func pendingWork(ctx context.Context, q *generated.Queries, conversation *generated.Conversation) (bool, error) {
 	queued, err := ParseQueuedMessagesStrict(conversation.QueuedMessages)
 	if err != nil {
 		return false, err
 	}
-	var dependentWork bool
-	if err := tx.QueryRow(`WITH RECURSIVE family(id) AS (
-		SELECT ? UNION SELECT c.conversation_id FROM conversations c JOIN family f ON c.parent_conversation_id=f.id
-	) SELECT EXISTS(
-		SELECT 1 FROM conversations c JOIN family f ON c.conversation_id=f.id
-		WHERE c.conversation_id != ? AND (c.agent_working OR c.turn_interrupted OR c.queued_messages NOT IN ('[]','','null'))
-		UNION ALL
-		SELECT 1 FROM background_jobs b JOIN family f ON b.conversation_id=f.id WHERE NOT b.exited OR NOT b.notified
-	)`, conversation.ConversationID, conversation.ConversationID).Scan(&dependentWork); err != nil {
+	dependentWork, err := q.HasDependentWork(ctx, conversation.ConversationID)
+	if err != nil {
 		return false, err
 	}
 	return conversation.AgentWorking || len(queued) != 0 || conversation.TurnInterrupted || dependentWork, nil
@@ -250,44 +228,32 @@ func pendingWork(tx *Tx, conversation *generated.Conversation) (bool, error) {
 // project's at its next turn; one that has keeps its own.
 func (db *DB) MoveConversation(ctx context.Context, conversationID, project string) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		if _, err := conversationAvailable(ctx, tx, conversationID); err != nil {
+		q := generated.New(tx.Conn())
+		if _, err := conversationAvailable(ctx, q, conversationID); err != nil {
 			return err
 		}
-		var exists int
-		if err := tx.QueryRow("SELECT 1 FROM profile_projects WHERE profile=?", project).Scan(&exists); err != nil {
+		if _, err := q.GetProject(ctx, project); err != nil {
 			return err
 		}
-		return setConversationProfile(tx, conversationID, project)
+		return q.SetConversationProfile(ctx, generated.SetConversationProfileParams{Profile: project, ConversationID: conversationID})
 	})
-}
-
-func setConversationProfile(tx *Tx, conversationID, profile string) error {
-	_, err := tx.Exec(`UPDATE conversations SET conversation_options=json_set(
-		CASE WHEN json_valid(conversation_options) THEN conversation_options ELSE '{}' END,'$.profile',?)
-		WHERE conversation_id=?`, profile, conversationID)
-	return err
 }
 
 // GetAssistantID returns sql.ErrNoRows without an Assistant: before
 // workspace mode creates it, or while the mode is off.
 func (db *DB) GetAssistantID(ctx context.Context) (string, error) {
 	var id string
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow("SELECT assistant_id FROM workspace WHERE singleton=1 AND " + workspaceOn).Scan(&id)
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
+		id, err = generated.New(rx.Conn()).GetAssistantID(ctx)
+		return err
 	})
 	return id, err
-}
-
-func hasRunningAction(rx *Rx, conversationID string) (bool, error) {
-	var running bool
-	err := rx.QueryRow("SELECT EXISTS(SELECT 1 FROM action_runs WHERE conversation_id=? AND status='running')", conversationID).Scan(&running)
-	return running, err
 }
 
 func (db *DB) HasRunningAction(ctx context.Context, conversationID string) (bool, error) {
 	var running bool
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
-		running, err = hasRunningAction(rx, conversationID)
+		running, err = generated.New(rx.Conn()).HasRunningAction(ctx, conversationID)
 		return err
 	})
 	return running, err
@@ -295,8 +261,9 @@ func (db *DB) HasRunningAction(ctx context.Context, conversationID string) (bool
 
 func (db *DB) HasAnyRunningAction(ctx context.Context) (bool, error) {
 	var running bool
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow("SELECT EXISTS(SELECT 1 FROM action_runs WHERE status='running')").Scan(&running)
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
+		running, err = generated.New(rx.Conn()).HasAnyRunningAction(ctx)
+		return err
 	})
 	return running, err
 }
@@ -308,28 +275,23 @@ func (db *DB) BeginAction(ctx context.Context, conversationID, actionID string) 
 	var action ProjectAction
 	var cwd string
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		conversation, err := conversationAvailable(ctx, tx, conversationID)
+		q := generated.New(tx.Conn())
+		conversation, err := conversationAvailable(ctx, q, conversationID)
 		if err != nil {
 			return err
 		}
 		if conversation.Archived {
 			return fmt.Errorf("%w: the conversation is archived", ErrConflict)
 		}
-		project, err := getProject(tx.Rx, "(SELECT project FROM ("+workspaceConversationQuery+" AND conversation_id=?))", conversationID)
+		project, err := getConversationProject(ctx, q, conversationID)
 		if err != nil {
 			return err
 		}
-		found := false
-		for _, candidate := range project.Actions {
-			if candidate.ID == actionID {
-				action = candidate
-				found = true
-				break
-			}
-		}
-		if !found {
+		i := slices.IndexFunc(project.Actions, func(a ProjectAction) bool { return a.ID == actionID })
+		if i < 0 {
 			return sql.ErrNoRows
 		}
+		action = project.Actions[i]
 		if conversation.Cwd != nil {
 			cwd = *conversation.Cwd
 		}
@@ -341,79 +303,63 @@ func (db *DB) BeginAction(ctx context.Context, conversationID, actionID string) 
 			ID: uuid.NewString(), ConversationID: conversationID, Project: project.Name,
 			ActionID: action.ID, Label: action.Label, Status: "running", StartedAt: tx.Now.UTC(), Report: report,
 		}, Command: action.Command}
-		_, err = tx.Exec(`INSERT INTO action_runs
-			(id,conversation_id,profile,action_id,label,command,status,started_at,archive_on_success,report)
-			VALUES(?,?,?,?,?,?,'running',?,?,?)`, run.ID, run.ConversationID, run.Project, run.ActionID, run.Label, run.Command,
-			run.StartedAt.Format(time.RFC3339Nano), action.ArchiveOnSuccess, report)
-		return err
+		return q.CreateActionRun(ctx, generated.CreateActionRunParams{
+			ID: run.ID, ConversationID: run.ConversationID, Profile: run.Project, ActionID: run.ActionID, Label: run.Label,
+			Command: run.Command, StartedAt: formatTime(run.StartedAt), ArchiveOnSuccess: action.ArchiveOnSuccess, Report: report,
+		})
 	})
 	return &run, &action, cwd, err
 }
 
-const (
-	actionRunSummaryColumns = `id,conversation_id,profile,action_id,label,status,started_at,finished_at,exit_code,report`
-	actionRunColumns        = actionRunSummaryColumns + `,command,output,error,archived`
-)
+// Times are stored as RFC 3339 text.
+func formatTime(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
 
-func scanActionRunSummary(run *ActionRunSummary, scanner rowScanner, more ...any) error {
-	var started string
-	var finished sql.NullString
-	if err := scanner.Scan(append([]any{
-		&run.ID, &run.ConversationID, &run.Project, &run.ActionID, &run.Label, &run.Status,
-		&started, &finished, &run.ExitCode, &run.Report,
-	}, more...)...); err != nil {
-		return err
+func parseTime(s string) (time.Time, error) { return time.Parse(time.RFC3339Nano, s) }
+
+func parseOptionalTime(s *string) (*time.Time, error) {
+	if s == nil {
+		return nil, nil
 	}
-	var err error
-	run.StartedAt, err = time.Parse(time.RFC3339Nano, started)
-	if err != nil {
-		return err
-	}
-	if finished.Valid {
-		at, err := time.Parse(time.RFC3339Nano, finished.String)
-		if err != nil {
-			return err
-		}
-		run.FinishedAt = &at
-	}
-	return nil
+	t, err := parseTime(*s)
+	return &t, err
 }
 
-func scanActionRun(scanner rowScanner) (*ActionRun, error) {
-	var run ActionRun
-	if err := scanActionRunSummary(&run.ActionRunSummary, scanner, &run.Command, &run.Output, &run.Error, &run.Archived); err != nil {
+func newActionRunSummary(row generated.ListWorkspaceActionRunsRow) (ActionRunSummary, error) {
+	run := ActionRunSummary{
+		ID: row.ID, ConversationID: row.ConversationID, Project: row.Profile, ActionID: row.ActionID,
+		Label: row.Label, Status: row.Status, Report: row.Report,
+	}
+	if row.ExitCode != nil {
+		run.ExitCode = ptr(int(*row.ExitCode))
+	}
+	var err1, err2 error
+	run.StartedAt, err1 = parseTime(row.StartedAt)
+	run.FinishedAt, err2 = parseOptionalTime(row.FinishedAt)
+	return run, errors.Join(err1, err2)
+}
+
+func newActionRun(row generated.ActionRun) (*ActionRun, error) {
+	summary, err := newActionRunSummary(generated.ListWorkspaceActionRunsRow{
+		ID: row.ID, ConversationID: row.ConversationID, Profile: row.Profile, ActionID: row.ActionID, Label: row.Label,
+		Status: row.Status, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, ExitCode: row.ExitCode, Report: row.Report,
+	})
+	if err != nil {
 		return nil, err
 	}
-	return &run, nil
+	return &ActionRun{ActionRunSummary: summary, Command: row.Command, Output: row.Output, Error: row.Error, Archived: row.Archived}, nil
 }
 
 func (db *DB) GetActionRun(ctx context.Context, id string) (*ActionRun, error) {
 	var run *ActionRun
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
-		run, err = scanActionRun(rx.QueryRow("SELECT "+actionRunColumns+" FROM action_runs WHERE id=?", id))
-		return err
-	})
-	return run, err
-}
-
-func (db *DB) listActionRuns(ctx context.Context, where string, args ...any) ([]ActionRun, error) {
-	var runs []ActionRun
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		rows, err := rx.Query("SELECT "+actionRunColumns+" FROM action_runs "+where+" ORDER BY started_at,id", args...)
+		row, err := generated.New(rx.Conn()).GetActionRun(ctx, id)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			run, err := scanActionRun(rows)
-			if err != nil {
-				return err
-			}
-			runs = append(runs, *run)
-		}
-		return rows.Err()
+		run, err = newActionRun(row)
+		return err
 	})
-	return runs, err
+	return run, err
 }
 
 // BoundedOutput retains the recent tail, keeping valid UTF-8 and a strict
@@ -434,16 +380,15 @@ func BoundedOutput(output string) string {
 
 func (db *DB) AppendActionOutput(ctx context.Context, id, output string) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		var existing string
-		var status string
-		if err := tx.QueryRow("SELECT output,status FROM action_runs WHERE id=?", id).Scan(&existing, &status); err != nil {
+		q := generated.New(tx.Conn())
+		run, err := q.GetActionRun(ctx, id)
+		if err != nil {
 			return err
 		}
-		if status != "running" {
+		if run.Status != "running" {
 			return ErrConflict
 		}
-		_, err := tx.Exec("UPDATE action_runs SET output=? WHERE id=?", BoundedOutput(existing+output), id)
-		return err
+		return q.SetActionRunOutput(ctx, generated.SetActionRunOutputParams{Output: BoundedOutput(run.Output + output), ID: id})
 	})
 }
 
@@ -451,122 +396,97 @@ func (db *DB) AppendActionOutput(ctx context.Context, id, output string) error {
 // interrupted run cannot later archive its conversation, even if an old process exits.
 func (db *DB) FinishAction(ctx context.Context, id string, exitCode *int, runError string) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		var conversationID, status string
-		var archive bool
-		if err := tx.QueryRow("SELECT conversation_id,status,archive_on_success FROM action_runs WHERE id=?", id).Scan(&conversationID, &status, &archive); err != nil {
+		q := generated.New(tx.Conn())
+		run, err := q.GetActionRun(ctx, id)
+		if err != nil {
 			return err
 		}
-		if status != "running" {
+		if run.Status != "running" {
 			return ErrConflict
 		}
-		status = "failed"
+		status := "failed"
 		if exitCode != nil && *exitCode == 0 && runError == "" {
 			status = "succeeded"
 		}
-		if _, err := tx.Exec("UPDATE action_runs SET status=?,error=?,finished_at=?,exit_code=? WHERE id=?",
-			status, BoundedOutput(runError), tx.Now.UTC().Format(time.RFC3339Nano), exitCode, id); err != nil {
+		var exit *int64
+		if exitCode != nil {
+			exit = ptr(int64(*exitCode))
+		}
+		if err := q.FinishActionRun(ctx, generated.FinishActionRunParams{
+			Status: status, Error: BoundedOutput(runError), FinishedAt: ptr(formatTime(tx.Now)), ExitCode: exit, ID: id,
+		}); err != nil {
 			return err
 		}
-		if status == "succeeded" && archive {
-			conversation, err := generated.New(tx.Conn()).GetConversation(ctx, conversationID)
-			if err != nil {
-				return err
-			}
-			pending, err := pendingWork(tx, &conversation)
-			if err != nil {
-				return err
-			}
-			if pending {
-				var output string
-				if err := tx.QueryRow("SELECT output FROM action_runs WHERE id=?", id).Scan(&output); err != nil {
-					return err
-				}
-				_, err := tx.Exec("UPDATE action_runs SET output=? WHERE id=?",
-					BoundedOutput(output+"\nCommand succeeded; not archived because new work is pending.\n"), id)
-				return err
-			}
-			if _, err := generated.New(tx.Conn()).ArchiveConversation(ctx, conversationID); err != nil {
-				return err
-			}
-			_, err = tx.Exec("UPDATE action_runs SET archived=TRUE WHERE id=?", id)
+		if status != "succeeded" || !run.ArchiveOnSuccess {
+			return nil
+		}
+		conversation, err := q.GetConversation(ctx, run.ConversationID)
+		if err != nil {
 			return err
 		}
-		return nil
+		pending, err := pendingWork(ctx, q, &conversation)
+		if err != nil {
+			return err
+		}
+		if pending {
+			return q.SetActionRunOutput(ctx, generated.SetActionRunOutputParams{
+				Output: BoundedOutput(run.Output + "\nCommand succeeded; not archived because new work is pending.\n"), ID: id,
+			})
+		}
+		if _, err := q.ArchiveConversation(ctx, run.ConversationID); err != nil {
+			return err
+		}
+		return q.MarkActionRunArchived(ctx, id)
 	})
 }
 
 func (db *DB) InterruptActionRuns(ctx context.Context) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		_, err := tx.Exec(`UPDATE action_runs SET status='interrupted',error='Server restarted; command outcome is unknown. The conversation was not archived.',finished_at=?
-			WHERE status='running'`, tx.Now.UTC().Format(time.RFC3339Nano))
-		return err
+		return generated.New(tx.Conn()).InterruptRunningActionRuns(ctx, ptr(formatTime(tx.Now)))
 	})
 }
 
 func (db *DB) InterruptActionRun(ctx context.Context, id, reason string) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		result, err := tx.Exec(`UPDATE action_runs SET status='interrupted',error=?,finished_at=?
-			WHERE id=? AND status='running'`, BoundedOutput(reason), tx.Now.UTC().Format(time.RFC3339Nano), id)
-		return rowsChanged(result, err)
+		return rowsChanged(generated.New(tx.Conn()).InterruptActionRun(ctx, generated.InterruptActionRunParams{
+			Error: BoundedOutput(reason), FinishedAt: ptr(formatTime(tx.Now)), ID: id,
+		}))
 	})
 }
 
 func (db *DB) GetWorkspace(ctx context.Context) (*Workspace, error) {
-	workspace := &Workspace{Conversations: []WorkspaceConversation{}, Runs: []ActionRunSummary{}}
+	workspace := &Workspace{Runs: []ActionRunSummary{}}
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		if err := rx.QueryRow("SELECT COALESCE(" + workspaceAssistant + ",'')").Scan(&workspace.AssistantID); err != nil {
-			return err
-		}
+		q := generated.New(rx.Conn())
 		var err error
-		workspace.Projects, err = listProjects(rx)
+		workspace.AssistantID, err = q.GetAssistantID(ctx)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if workspace.Projects, err = listProjects(ctx, q); err != nil {
+			return err
+		}
+		if workspace.VMs, err = listConversationVMs(ctx, q, true); err != nil {
+			return err
+		}
+		if workspace.BaseVMs, err = listProjectBaseVMs(ctx, q, ""); err != nil {
+			return err
+		}
+		if workspace.Conversations, err = q.ListWorkspaceConversations(ctx); err != nil {
+			return err
+		}
+		rows, err := q.ListWorkspaceActionRuns(ctx)
 		if err != nil {
 			return err
 		}
-		if workspace.VMs, err = listConversationVMs(rx, true); err != nil {
-			return err
-		}
-		if workspace.BaseVMs, err = listProjectBaseVMs(rx, ""); err != nil {
-			return err
-		}
-		if err := func() error {
-			rows, err := rx.Query(workspaceConversationQuery + " ORDER BY conversation_id")
+		for _, row := range rows {
+			run, err := newActionRunSummary(row)
 			if err != nil {
-				return err
-			}
-			defer rows.Close()
-			for rows.Next() {
-				c, err := scanWorkspaceConversation(rows)
-				if err != nil {
-					return err
-				}
-				workspace.Conversations = append(workspace.Conversations, *c)
-			}
-			return rows.Err()
-		}(); err != nil {
-			return err
-		}
-		// Running runs, recent ones, and each conversation's latest, which its
-		// transcript shows until it reports. GET /api/action-runs/{id} has the rest.
-		rows, err := rx.Query("SELECT " + actionRunSummaryColumns + ` FROM action_runs
-			WHERE status='running' OR id IN (
-				SELECT id FROM action_runs WHERE status!='running' ORDER BY started_at DESC,id DESC LIMIT 20
-			) OR id=(
-				SELECT latest.id FROM action_runs latest
-				WHERE latest.conversation_id=action_runs.conversation_id
-				ORDER BY latest.started_at DESC,latest.id DESC LIMIT 1
-			) ORDER BY started_at,id`)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var run ActionRunSummary
-			if err := scanActionRunSummary(&run, rows); err != nil {
 				return err
 			}
 			workspace.Runs = append(workspace.Runs, run)
 		}
-		return rows.Err()
+		return nil
 	})
 	return workspace, err
 }

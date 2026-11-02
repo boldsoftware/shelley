@@ -314,11 +314,6 @@ type Tx struct {
 	Now time.Time
 }
 
-func (tx *Tx) Exec(query string, args ...interface{}) (sql.Result, error) {
-	res, err := tx.conn.ExecContext(tx.ctx, query, args...)
-	return res, wrapErr("exec", err)
-}
-
 type Rx struct {
 	ctx    context.Context
 	conn   *sql.Conn
@@ -330,44 +325,9 @@ func (rx *Rx) Context() context.Context {
 	return rx.ctx
 }
 
-func (rx *Rx) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	rows, err := rx.conn.QueryContext(rx.ctx, query, args...)
-	return rows, wrapErr("query", err)
-}
-
-func (rx *Rx) QueryRow(query string, args ...interface{}) *Row {
-	rows, err := rx.conn.QueryContext(rx.ctx, query, args...)
-	return &Row{err: err, rows: rows}
-}
-
 // Conn returns the underlying sql.Conn for use with external libraries like sqlc
 func (rx *Rx) Conn() *sql.Conn {
 	return rx.conn
-}
-
-// Row is equivalent to *sql.Row, but we provide a more useful error.
-type Row struct {
-	err  error
-	rows *sql.Rows
-}
-
-func (r *Row) Scan(dest ...any) error {
-	if r.err != nil {
-		return wrapErr("QueryRow", r.err)
-	}
-
-	defer r.rows.Close()
-	if !r.rows.Next() {
-		if err := r.rows.Err(); err != nil {
-			return wrapErr("QueryRow.Scan", err)
-		}
-		return wrapErr("QueryRow.Scan", sql.ErrNoRows)
-	}
-	err := r.rows.Scan(dest...)
-	if err != nil {
-		return wrapErr("QueryRow.Scan", err)
-	}
-	return wrapErr("QueryRow.Scan", r.rows.Close())
 }
 
 func wrapErr(prefix string, err error) error {

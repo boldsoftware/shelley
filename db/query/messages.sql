@@ -220,3 +220,85 @@ LIMIT 1;
 SELECT EXISTS (
   SELECT 1 FROM messages WHERE conversation_id = ? AND external_message_id = ?
 );
+
+-- name: GetGenerationMaxSequenceID :one
+SELECT CAST(COALESCE(MAX(sequence_id), 0) AS INTEGER) FROM messages
+WHERE conversation_id = ? AND generation = ?;
+
+-- name: ListMessagesThrough :many
+-- The context-visible messages of a generation, up to and including sequence_id.
+SELECT * FROM messages
+WHERE conversation_id = ? AND generation = ? AND sequence_id <= ? AND excluded_from_context = FALSE
+ORDER BY sequence_id ASC;
+
+-- name: ListConversationParticipants :many
+-- The authenticated authors of the conversations' messages, with their
+-- message counts.
+SELECT conversation_id, CAST(user_email AS TEXT) AS user_email, COUNT(*) AS message_count
+FROM messages
+WHERE user_email IS NOT NULL AND user_email <> '' AND conversation_id IN (sqlc.slice('conversation_ids'))
+GROUP BY conversation_id, user_email
+ORDER BY conversation_id, user_email;
+
+-- name: LatestUserExternalMessageID :one
+-- The channel id of the conversation's latest user message (but for tool
+-- results, type 6, and the copies a compaction carries forward), or NULL if it
+-- did not come from a channel.
+SELECT external_message_id FROM messages m
+WHERE m.conversation_id = ? AND m.type = 'user'
+  AND NOT (json_valid(m.user_data) AND json_type(m.user_data, '$.compaction_carried') IS NOT NULL)
+  AND NOT EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') c WHERE json_extract(c.value, '$.Type') = 6)
+ORDER BY m.sequence_id DESC LIMIT 1;
+
+-- name: HasUserMessageAfter :one
+-- Whether a user message other than a tool result (type 6) follows sequence_id.
+SELECT CAST(EXISTS (
+    SELECT 1 FROM messages m
+    WHERE m.conversation_id = ? AND m.type = 'user' AND m.sequence_id > ?
+      AND NOT EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') c WHERE json_extract(c.value, '$.Type') = 6)
+) AS BOOLEAN);
+
+-- name: SearchEnhancementModel :one
+-- The model of the latest top-level, non-search conversation with a message by email.
+SELECT CAST(c.model AS TEXT) FROM conversations c
+WHERE c.parent_conversation_id IS NULL AND c.model IS NOT NULL AND c.model <> ''
+  AND coalesce(json_extract(c.conversation_options, '$.kind'), '') <> 'search'
+  AND EXISTS (
+      SELECT 1 FROM messages m INDEXED BY idx_messages_participants
+      WHERE m.conversation_id = c.conversation_id AND m.user_email = CAST(sqlc.arg(email) AS TEXT)
+        AND m.user_email IS NOT NULL AND m.user_email <> ''
+  )
+ORDER BY c.updated_at DESC LIMIT 1;
+
+-- name: SearchMessageContext :many
+-- The text of the user and agent messages near each hit.
+WITH hits AS (
+    SELECT hm.message_id AS hit_id, hm.conversation_id AS hit_conversation_id, hm.sequence_id AS hit_sequence_id
+    FROM messages hm WHERE hm.message_id IN (sqlc.slice('hit_ids'))
+), nearby AS (
+    SELECT h.hit_id, m.message_id, m.type, abs(m.sequence_id - h.hit_sequence_id) AS distance,
+        substr((SELECT group_concat(j.value ->> 'Text', char(10))
+            FROM json_each(CASE WHEN json_valid(m.llm_data) THEN m.llm_data ELSE '{}' END, '$.Content') j
+            WHERE j.value ->> 'Type' = 2), 1, 6000) AS text
+    FROM hits h CROSS JOIN messages m ON m.conversation_id = h.hit_conversation_id
+        AND m.sequence_id BETWEEN h.hit_sequence_id - 12 AND h.hit_sequence_id + 6
+    WHERE m.type IN ('user', 'agent')
+      AND (m.type = 'agent' OR (
+          json_extract(m.user_data, '$.sender_conversation_id') IS NULL
+          AND json_extract(m.user_data, '$.background_job_id') IS NULL
+          AND json_extract(m.user_data, '$.mcp_server_change') IS NULL
+      ))
+)
+SELECT CAST(n.hit_id AS TEXT) AS hit_id, CAST(n.message_id AS TEXT) AS message_id, CAST(n.type AS TEXT) AS speaker,
+    CAST(n.distance AS INTEGER) AS distance, CAST(n.text AS TEXT) AS text
+FROM nearby n WHERE length(trim(n.text)) > 0;
+
+-- name: ListConversationMessageSizes :many
+-- Each conversation's message count and the bytes of its JSON payloads.
+SELECT COUNT(*) AS messages,
+    CAST(COALESCE(SUM(COALESCE(LENGTH(llm_data), 0) + COALESCE(LENGTH(user_data), 0) + COALESCE(LENGTH(display_data), 0)), 0) AS INTEGER) AS bytes
+FROM messages
+GROUP BY conversation_id;
+
+-- name: CountMessagesByTypeAll :many
+SELECT type, COUNT(*) AS count FROM messages GROUP BY type ORDER BY COUNT(*) DESC;

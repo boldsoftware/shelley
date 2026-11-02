@@ -8,6 +8,24 @@ import (
 	"time"
 )
 
+type ActionRun struct {
+	ID               string  `json:"id"`
+	ConversationID   string  `json:"conversation_id"`
+	Profile          string  `json:"profile"`
+	ActionID         string  `json:"action_id"`
+	Label            string  `json:"label"`
+	Command          string  `json:"command"`
+	Status           string  `json:"status"`
+	Output           string  `json:"output"`
+	Error            string  `json:"error"`
+	StartedAt        string  `json:"started_at"`
+	FinishedAt       *string `json:"finished_at"`
+	ExitCode         *int64  `json:"exit_code"`
+	ArchiveOnSuccess bool    `json:"archive_on_success"`
+	Archived         bool    `json:"archived"`
+	Report           string  `json:"report"`
+}
+
 type BackgroundJob struct {
 	JobID            string    `json:"job_id"`
 	ConversationID   string    `json:"conversation_id"`
@@ -27,6 +45,14 @@ type CacheSession struct {
 	UserID     string    `json:"user_id"`
 	CreatedAt  time.Time `json:"created_at"`
 	LastSeenAt time.Time `json:"last_seen_at"`
+}
+
+type ChannelMessageRoute struct {
+	ConversationID    string    `json:"conversation_id"`
+	ExternalMessageID string    `json:"external_message_id"`
+	ChatID            string    `json:"chat_id"`
+	Endpoint          string    `json:"endpoint"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 type Conversation struct {
@@ -49,6 +75,23 @@ type Conversation struct {
 	TurnInterrupted        bool      `json:"turn_interrupted"`
 	ExternalConversationID *string   `json:"external_conversation_id"`
 	ExternalEndpoint       *string   `json:"external_endpoint"`
+}
+
+type ConversationVm struct {
+	ConversationID  string `json:"conversation_id"`
+	VmName          string `json:"vm_name"`
+	BaseVm          string `json:"base_vm"`
+	Integration     string `json:"integration"`
+	Status          string `json:"status"`
+	Error           string `json:"error"`
+	SshDest         string `json:"ssh_dest"`
+	HttpsUrl        string `json:"https_url"`
+	VmCreatedAt     string `json:"vm_created_at"`
+	CopyRequestedAt string `json:"copy_requested_at"`
+	Dir             string `json:"dir"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
+	Shared          bool   `json:"shared"`
 }
 
 type LiveCallTranscript struct {
@@ -115,6 +158,16 @@ type Model struct {
 	ReasoningReplay  string    `json:"reasoning_replay"`
 }
 
+type ModelProvider struct {
+	ProviderID   string `json:"provider_id"`
+	ProviderType string `json:"provider_type"`
+	Endpoint     string `json:"endpoint"`
+	ApiKey       string `json:"api_key"`
+	DisplayName  string `json:"display_name"`
+	Models       string `json:"models"`
+	Version      int64  `json:"version"`
+}
+
 type NotificationChannel struct {
 	ChannelID   string    `json:"channel_id"`
 	ChannelType string    `json:"channel_type"`
@@ -131,4 +184,47 @@ type Profile struct {
 	Settings   string `json:"settings"`
 	Builtin    bool   `json:"builtin"`
 	UserEdited bool   `json:"user_edited"`
+}
+
+type ProfileBaseVm struct {
+	Integration string `json:"integration"`
+	VmName      string `json:"vm_name"`
+	Profile     string `json:"profile"`
+	Status      string `json:"status"`
+	VmCreatedAt string `json:"vm_created_at"`
+	RequestedAt string `json:"requested_at"`
+}
+
+type ProfileProject struct {
+	Profile      string `json:"profile"`
+	Instructions string `json:"instructions"`
+	Cwd          string `json:"cwd"`
+	Actions      string `json:"actions"`
+}
+
+type ProfileRepo struct {
+	Profile     string `json:"profile"`
+	Position    int64  `json:"position"`
+	Integration string `json:"integration"`
+	Repository  string `json:"repository"`
+}
+
+type ShelleyCustomization struct {
+	ConversationID string `json:"conversation_id"`
+	Status         string `json:"status"`
+	Generation     string `json:"generation"`
+	ArtifactPath   string `json:"artifact_path"`
+	Data           string `json:"data"`
+}
+
+type Workspace struct {
+	Singleton   int64  `json:"singleton"`
+	AssistantID string `json:"assistant_id"`
+}
+
+type WorkspaceConversation struct {
+	ConversationID string `json:"conversation_id"`
+	Project        string `json:"project"`
+	IsAssistant    bool   `json:"is_assistant"`
+	Archived       bool   `json:"archived"`
 }

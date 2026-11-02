@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"shelley.exe.dev/db/generated"
 )
 
 // Project is a profile's project data: what conversations in the profile
@@ -88,22 +90,21 @@ func (db *DB) CreateProject(ctx context.Context, project Project, from string) (
 		return nil, err
 	}
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		return createProject(tx, project, from)
+		return createProject(ctx, generated.New(tx.Conn()), project, from)
 	})
 	return &project, err
 }
 
-func createProject(tx *Tx, project Project, from string) error {
-	var exists bool
-	if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM profiles WHERE name=?)", project.Name).Scan(&exists); err != nil {
+func createProject(ctx context.Context, q *generated.Queries, project Project, from string) error {
+	exists, err := found(q.GetProfile(ctx, project.Name))
+	if err != nil {
 		return err
 	}
 	if exists {
 		return fmt.Errorf("%w: a profile named %q already exists", ErrConflict, project.Name)
 	}
-	result, err := tx.Exec(`INSERT INTO profiles(name,settings)
-		SELECT ?,settings FROM profiles WHERE CASE WHEN ?='' THEN is_default ELSE name=? END`, project.Name, from, from)
-	if err := rowsChanged(result, err); errors.Is(err, sql.ErrNoRows) {
+	err = rowsChanged(q.CopyProfile(ctx, generated.CopyProfileParams{Name: project.Name, FromProfile: from}))
+	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("%w: profile %q not found", ErrInvalid, from)
 	} else if err != nil {
 		return err
@@ -112,14 +113,15 @@ func createProject(tx *Tx, project Project, from string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec("INSERT INTO profile_projects(profile,instructions,cwd,actions) VALUES(?,?,?,?)",
-		project.Name, project.Instructions, project.Cwd, string(actions)); err != nil {
+	if err := q.CreateProject(ctx, generated.CreateProjectParams{
+		Profile: project.Name, Instructions: project.Instructions, Cwd: project.Cwd, Actions: string(actions),
+	}); err != nil {
 		return err
 	}
-	if err := setProjectRepos(tx, project.Name, project.Repos); err != nil {
+	if err := setProjectRepos(ctx, q, project.Name, project.Repos); err != nil {
 		return err
 	}
-	return setProjectVM(tx, project.Name, project.VM)
+	return setProjectVM(ctx, q, project.Name, project.VM)
 }
 
 // UpdateProject replaces the project data of profile name, and renames the
@@ -134,57 +136,53 @@ func (db *DB) UpdateProject(ctx context.Context, name string, project Project) e
 		return err
 	}
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		result, err := tx.Exec("UPDATE profile_projects SET instructions=?,cwd=?,actions=? WHERE profile=?",
-			project.Instructions, project.Cwd, string(actions), name)
-		if err := rowsChanged(result, err); err != nil {
+		q := generated.New(tx.Conn())
+		if err := rowsChanged(q.UpdateProject(ctx, generated.UpdateProjectParams{
+			Instructions: project.Instructions, Cwd: project.Cwd, Actions: string(actions), Profile: name,
+		})); err != nil {
 			return err
 		}
-		if err := setProjectRepos(tx, name, project.Repos); err != nil {
+		if err := setProjectRepos(ctx, q, name, project.Repos); err != nil {
 			return err
 		}
-		if err := setProjectVM(tx, name, project.VM); err != nil {
+		if err := setProjectVM(ctx, q, name, project.VM); err != nil {
 			return err
 		}
 		if project.Name == name {
 			return nil
 		}
-		return renameProfile(tx, name, project.Name)
+		return renameProfile(ctx, q, name, project.Name)
 	})
 }
 
 // renameProfile renames a custom profile. Its project data follows by
 // foreign key; conversation labels and action runs are updated here.
-func renameProfile(tx *Tx, from, to string) error {
-	var builtin, taken bool
-	if err := tx.QueryRow("SELECT builtin, EXISTS(SELECT 1 FROM profiles WHERE name=?) FROM profiles WHERE name=?", to, from).Scan(&builtin, &taken); err != nil {
+func renameProfile(ctx context.Context, q *generated.Queries, from, to string) error {
+	profile, err := q.GetProfile(ctx, from)
+	if err != nil {
 		return err
 	}
+	taken, err := found(q.GetProfile(ctx, to))
 	switch {
-	case builtin:
+	case err != nil:
+		return err
+	case profile.Builtin:
 		return fmt.Errorf("%w: built-in profile %q can't be renamed", ErrInvalid, from)
 	case taken:
 		return fmt.Errorf("%w: a profile named %q already exists", ErrConflict, to)
 	}
-	if _, err := tx.Exec("UPDATE profiles SET name=? WHERE name=?", to, from); err != nil {
+	if err := q.RenameProfile(ctx, generated.RenameProfileParams{ToName: to, FromName: from}); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`UPDATE conversations AS c SET conversation_options=json_set(c.conversation_options,'$.profile',?)
-		WHERE `+conversationProfile+`=?`, to, from); err != nil {
+	if err := q.RenameConversationsProfile(ctx, generated.RenameConversationsProfileParams{ToProfile: to, FromProfile: from}); err != nil {
 		return err
 	}
-	_, err := tx.Exec("UPDATE action_runs SET profile=? WHERE profile=?", to, from)
-	return err
+	return q.RenameActionRunsProfile(ctx, generated.RenameActionRunsProfileParams{ToProfile: to, FromProfile: from})
 }
 
-const projectColumns = "profile,instructions,cwd,actions"
-
-func scanProject(scanner rowScanner) (*Project, error) {
-	var project Project
-	var actions string
-	if err := scanner.Scan(&project.Name, &project.Instructions, &project.Cwd, &actions); err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal([]byte(actions), &project.Actions); err != nil {
+func newProject(row generated.ProfileProject) (*Project, error) {
+	project := Project{Name: row.Profile, Instructions: row.Instructions, Cwd: row.Cwd}
+	if err := json.Unmarshal([]byte(row.Actions), &project.Actions); err != nil {
 		return nil, err
 	}
 	if project.Actions == nil {
@@ -193,21 +191,34 @@ func scanProject(scanner rowScanner) (*Project, error) {
 	return &project, nil
 }
 
-// getProject loads the project named by the SQL expression nameExpr.
-func getProject(rx *Rx, nameExpr string, args ...any) (*Project, error) {
-	project, err := scanProject(rx.QueryRow("SELECT "+projectColumns+" FROM profile_projects WHERE profile="+nameExpr, args...))
+func getProject(ctx context.Context, q *generated.Queries, name string) (*Project, error) {
+	row, err := q.GetProject(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	project, err := newProject(row)
 	if err != nil {
 		return nil, err
 	}
 	projects := []Project{*project}
-	err = attachProjectDetails(rx, projects)
+	err = attachProjectDetails(ctx, q, projects)
 	return &projects[0], err
+}
+
+// getConversationProject returns the project of conversation conversationID, or
+// sql.ErrNoRows if it is in none.
+func getConversationProject(ctx context.Context, q *generated.Queries, conversationID string) (*Project, error) {
+	c, err := q.GetWorkspaceConversation(ctx, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	return getProject(ctx, q, c.Project)
 }
 
 func (db *DB) GetProject(ctx context.Context, name string) (*Project, error) {
 	var project *Project
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
-		project, err = getProject(rx, "?", name)
+		project, err = getProject(ctx, generated.New(rx.Conn()), name)
 		return err
 	})
 	return project, err
@@ -218,43 +229,39 @@ func (db *DB) GetProject(ctx context.Context, name string) (*Project, error) {
 func (db *DB) GetConversationProject(ctx context.Context, conversationID string) (*Project, error) {
 	var project *Project
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
-		project, err = getProject(rx, "(SELECT project FROM ("+workspaceConversationQuery+" AND conversation_id=?))", conversationID)
+		project, err = getConversationProject(ctx, generated.New(rx.Conn()), conversationID)
 		return err
 	})
 	return project, err
 }
 
-func listProjects(rx *Rx) ([]Project, error) {
-	out := []Project{}
-	rows, err := rx.Query("SELECT " + projectColumns + " FROM profile_projects ORDER BY profile")
+func listProjects(ctx context.Context, q *generated.Queries) ([]Project, error) {
+	rows, err := q.ListProjects(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		project, err := scanProject(rows)
+	out := []Project{}
+	for _, row := range rows {
+		project, err := newProject(row)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, *project)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return out, attachProjectDetails(rx, out)
+	return out, attachProjectDetails(ctx, q, out)
 }
 
-func attachProjectDetails(rx *Rx, projects []Project) error {
-	if err := attachProjectVMs(rx, projects); err != nil {
+func attachProjectDetails(ctx context.Context, q *generated.Queries, projects []Project) error {
+	if err := attachProjectVMs(ctx, q, projects); err != nil {
 		return err
 	}
-	return attachProjectRepos(rx, projects)
+	return attachProjectRepos(ctx, q, projects)
 }
 
 func (db *DB) ListProjects(ctx context.Context) ([]Project, error) {
 	var out []Project
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
-		out, err = listProjects(rx)
+		out, err = listProjects(ctx, generated.New(rx.Conn()))
 		return err
 	})
 	return out, err
@@ -265,32 +272,27 @@ func (db *DB) ListProjects(ctx context.Context) ([]Project, error) {
 // setup conversation, or a running action, or its profile is the default.
 func (db *DB) CheckProjectDeletable(ctx context.Context, name string) (setupID string, err error) {
 	err = db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		setupID, err = checkProjectDeletable(rx, name)
+		setupID, err = checkProjectDeletable(ctx, generated.New(rx.Conn()), name)
 		return err
 	})
 	return setupID, err
 }
 
-func checkProjectDeletable(rx *Rx, name string) (string, error) {
-	var setupID string
-	if err := rx.QueryRow(`SELECT COALESCE(s.conversation_id,'') FROM profile_projects p
-		LEFT JOIN profile_vm_setups s ON s.profile=p.profile WHERE p.profile=?`, name).Scan(&setupID); err != nil {
+func checkProjectDeletable(ctx context.Context, q *generated.Queries, name string) (string, error) {
+	setupID, err := q.GetProjectSetupConversationID(ctx, name)
+	if err != nil {
 		return "", err
 	}
-	var active int
-	var running bool
-	if err := rx.QueryRow(`WITH members AS (`+workspaceConversationQuery+` AND project=?)
-		SELECT (SELECT COUNT(*) FROM members WHERE NOT archived AND conversation_id!=?),
-		EXISTS(SELECT 1 FROM action_runs r JOIN members t ON t.conversation_id=r.conversation_id WHERE r.status='running')`,
-		name, setupID).Scan(&active, &running); err != nil {
+	activity, err := q.GetProjectActivity(ctx, generated.GetProjectActivityParams{Project: name, ExceptID: setupID})
+	if err != nil {
 		return "", err
 	}
 	switch {
-	case active == 1:
+	case activity.Active == 1:
 		return "", fmt.Errorf("%w: project %q has an active conversation; archive it or move it to another project first", ErrConflict, name)
-	case active > 1:
-		return "", fmt.Errorf("%w: project %q has %d active conversations; archive them or move them to another project first", ErrConflict, name, active)
-	case running:
+	case activity.Active > 1:
+		return "", fmt.Errorf("%w: project %q has %d active conversations; archive them or move them to another project first", ErrConflict, name, activity.Active)
+	case activity.Running:
 		return "", fmt.Errorf("%w: project %q has a running action; wait for it to finish", ErrConflict, name)
 	}
 	return setupID, nil
@@ -302,24 +304,23 @@ func checkProjectDeletable(rx *Rx, name string) (string, error) {
 // their history, and the name as a label, outside any project.
 func (db *DB) DeleteProject(ctx context.Context, name string) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		setupID, err := checkProjectDeletable(tx.Rx, name)
+		q := generated.New(tx.Conn())
+		setupID, err := checkProjectDeletable(ctx, q, name)
 		if err != nil {
 			return err
 		}
-		var leftover string
-		err = tx.QueryRow("SELECT vm_name FROM profile_base_vms WHERE profile=? LIMIT 1", name).Scan(&leftover)
-		if err == nil {
-			return fmt.Errorf("%w: base VM %s of the project is not deleted yet", ErrConflict, leftover)
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
+		vms, err := listProjectBaseVMs(ctx, q, name)
+		if err != nil {
 			return err
 		}
+		if len(vms) > 0 {
+			return fmt.Errorf("%w: base VM %s of the project is not deleted yet", ErrConflict, vms[0].Name)
+		}
 		if setupID != "" {
-			if _, err := tx.Exec("UPDATE conversations SET archived=TRUE WHERE conversation_id=?", setupID); err != nil {
+			if _, err := q.ArchiveConversation(ctx, setupID); err != nil {
 				return err
 			}
 		}
-		_, err = tx.Exec("DELETE FROM profiles WHERE name=?", name)
-		return err
+		return q.DeleteProjectProfile(ctx, name)
 	})
 }

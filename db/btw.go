@@ -143,10 +143,10 @@ func (db *DB) GetBtwParentSnapshot(ctx context.Context, parentID string) (genera
 			return err
 		}
 		pointer.Generation = parent.CurrentGeneration
-		return rx.QueryRow(
-			"SELECT COALESCE(MAX(sequence_id), 0) FROM messages WHERE conversation_id = ? AND generation = ?",
-			parentID, pointer.Generation,
-		).Scan(&pointer.SequenceID)
+		pointer.SequenceID, err = q.GetGenerationMaxSequenceID(ctx, generated.GetGenerationMaxSequenceIDParams{
+			ConversationID: parentID, Generation: pointer.Generation,
+		})
+		return err
 	})
 	return parent, pointer, err
 }
@@ -197,33 +197,11 @@ func (db *DB) DismissBtwReader(ctx context.Context, parentID, childID string) er
 // selected by conversation, generation, and inclusive sequence boundary.
 func (db *DB) ListFrozenParentMessages(ctx context.Context, conversationID string, pointer BtwParentPointer) ([]generated.Message, error) {
 	var messages []generated.Message
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		rows, err := rx.Query(
-			`SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data,
-				created_at, display_data, excluded_from_context, generation, llm_api_url, model_name,
-				forked_from_message_id, user_email, other_usage_data, external_message_id
-			FROM messages
-			WHERE conversation_id = ? AND generation = ? AND sequence_id <= ? AND excluded_from_context = FALSE
-			ORDER BY sequence_id ASC`,
-			conversationID, pointer.Generation, pointer.SequenceID,
-		)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var m generated.Message
-			if err := rows.Scan(
-				&m.MessageID, &m.ConversationID, &m.SequenceID, &m.Type, &m.LlmData, &m.UserData,
-				&m.UsageData, &m.CreatedAt, &m.DisplayData, &m.ExcludedFromContext, &m.Generation,
-				&m.LlmApiUrl, &m.ModelName, &m.ForkedFromMessageID, &m.UserEmail, &m.OtherUsageData,
-				&m.ExternalMessageID,
-			); err != nil {
-				return err
-			}
-			messages = append(messages, m)
-		}
-		return rows.Err()
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
+		messages, err = generated.New(rx.Conn()).ListMessagesThrough(ctx, generated.ListMessagesThroughParams{
+			ConversationID: conversationID, Generation: pointer.Generation, SequenceID: pointer.SequenceID,
+		})
+		return err
 	})
 	return messages, err
 }

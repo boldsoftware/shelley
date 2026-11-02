@@ -55,25 +55,26 @@ func (state *Customization) Unsettled() bool {
 	return false
 }
 
-const customizationSelect = `SELECT t.generation,t.artifact_path,t.data,c.archived
-	FROM shelley_customizations t JOIN conversations c ON c.conversation_id=t.conversation_id`
-
-func scanCustomization(scanner rowScanner) (*Customization, error) {
-	var state Customization
-	var data string
-	if err := scanner.Scan(&state.Generation, &state.ArtifactPath, &data, &state.Archived); err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal([]byte(data), &state); err != nil {
+func newCustomization(row generated.ShelleyCustomization, archived bool) (*Customization, error) {
+	state := Customization{Generation: row.Generation, ArtifactPath: row.ArtifactPath, Archived: archived}
+	if err := json.Unmarshal([]byte(row.Data), &state); err != nil {
 		return nil, err
 	}
 	return &state, nil
 }
 
+func getCustomization(ctx context.Context, q *generated.Queries, id string) (*Customization, error) {
+	row, err := q.GetCustomization(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return newCustomization(row.ShelleyCustomization, row.Archived)
+}
+
 func (db *DB) GetCustomization(ctx context.Context, id string) (*Customization, error) {
 	var state *Customization
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
-		state, err = scanCustomization(rx.QueryRow(customizationSelect+" WHERE t.conversation_id=?", id))
+		state, err = getCustomization(ctx, generated.New(rx.Conn()), id)
 		return err
 	})
 	return state, err
@@ -82,32 +83,32 @@ func (db *DB) GetCustomization(ctx context.Context, id string) (*Customization, 
 func (db *DB) ListCustomizations(ctx context.Context) ([]Customization, error) {
 	states := []Customization{}
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		rows, err := rx.Query(customizationSelect + " ORDER BY t.conversation_id")
+		rows, err := generated.New(rx.Conn()).ListCustomizations(ctx)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			state, err := scanCustomization(rows)
+		for _, row := range rows {
+			state, err := newCustomization(row.ShelleyCustomization, row.Archived)
 			if err != nil {
 				return err
 			}
 			states = append(states, *state)
 		}
-		return rows.Err()
+		return nil
 	})
 	return states, err
 }
 
 func (db *DB) HasVerifyingCustomization(ctx context.Context) (bool, error) {
 	var active bool
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		return rx.QueryRow("SELECT EXISTS(SELECT 1 FROM shelley_customizations WHERE status='verifying')").Scan(&active)
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
+		active, err = generated.New(rx.Conn()).HasVerifyingCustomization(ctx)
+		return err
 	})
 	return active, err
 }
 
-func writeCustomization(tx *Tx, state *Customization) error {
+func writeCustomization(ctx context.Context, tx *Tx, state *Customization) error {
 	switch state.Status {
 	case "waiting", "verifying", "ready", "stale", "failed", "installed", "restarting", "running":
 	default:
@@ -120,44 +121,46 @@ func writeCustomization(tx *Tx, state *Customization) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(`INSERT INTO shelley_customizations(conversation_id,status,generation,artifact_path,data)
-		VALUES(?,?,?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET
-		status=excluded.status,generation=excluded.generation,artifact_path=excluded.artifact_path,data=excluded.data`,
-		state.ConversationID, state.Status, state.Generation, state.ArtifactPath, string(data))
-	return err
+	return generated.New(tx.Conn()).UpsertCustomization(ctx, generated.UpsertCustomizationParams{
+		ConversationID: state.ConversationID, Status: state.Status, Generation: state.Generation,
+		ArtifactPath: state.ArtifactPath, Data: string(data),
+	})
 }
 
 // customizationRequested requires a project conversation (the server checks
 // that the project is Shelley's own, see customizationDirectory) and records
 // the conversation's last message for a finished claim.
-func customizationRequested(tx *Tx, state *Customization) error {
-	var eligible bool
-	if err := tx.QueryRow(`SELECT EXISTS(`+workspaceConversationQuery+` AND conversation_id=? AND project!='')`, state.ConversationID).Scan(&eligible); err != nil {
+func customizationRequested(ctx context.Context, q *generated.Queries, state *Customization) error {
+	c, err := q.GetWorkspaceConversation(ctx, state.ConversationID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	if !eligible {
+	if err != nil || c.Project == "" {
 		return fmt.Errorf("%w: only conversations in the Shelley project can verify customizations", ErrInvalid)
 	}
 	if !state.Finished {
 		return nil
 	}
-	return tx.QueryRow("SELECT COALESCE(MAX(sequence_id),0) FROM messages WHERE conversation_id=?", state.ConversationID).Scan(&state.FinishedSequenceID)
+	next, err := q.GetNextSequenceID(ctx, state.ConversationID)
+	state.FinishedSequenceID = next - 1
+	return err
 }
 
 func (db *DB) BeginCustomization(ctx context.Context, id, commit string, finished bool) (*Customization, error) {
 	state := &Customization{ConversationID: id, Commit: commit, Status: "verifying", Finished: finished, Generation: uuid.NewString()}
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		if err := customizationRequested(tx, state); err != nil {
+		q := generated.New(tx.Conn())
+		if err := customizationRequested(ctx, q, state); err != nil {
 			return err
 		}
-		var active bool
-		if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM shelley_customizations WHERE status IN ('verifying','restarting'))").Scan(&active); err != nil {
+		active, err := q.HasActiveCustomization(ctx)
+		if err != nil {
 			return err
 		}
 		if active {
 			return fmt.Errorf("%w: customization verification or restart is in progress", ErrConflict)
 		}
-		return writeCustomization(tx, state)
+		return writeCustomization(ctx, tx, state)
 	})
 	return state, err
 }
@@ -167,14 +170,14 @@ func (db *DB) BeginCustomization(ctx context.Context, id, commit string, finishe
 func (db *DB) UpdateCustomization(ctx context.Context, id, generation string, update func(*Customization)) (*Customization, error) {
 	var state *Customization
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) (err error) {
-		state, err = updateCustomization(tx, id, generation, update)
+		state, err = updateCustomization(ctx, tx, id, generation, update)
 		return err
 	})
 	return state, err
 }
 
-func updateCustomization(tx *Tx, id, generation string, update func(*Customization)) (*Customization, error) {
-	state, err := scanCustomization(tx.QueryRow(customizationSelect+" WHERE t.conversation_id=?", id))
+func updateCustomization(ctx context.Context, tx *Tx, id, generation string, update func(*Customization)) (*Customization, error) {
+	state, err := getCustomization(ctx, generated.New(tx.Conn()), id)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +185,7 @@ func updateCustomization(tx *Tx, id, generation string, update func(*Customizati
 		return nil, fmt.Errorf("%w: customization verification was superseded", ErrConflict)
 	}
 	update(state)
-	return state, writeCustomization(tx, state)
+	return state, writeCustomization(ctx, tx, state)
 }
 
 // AdoptCustomization gives a conversation the outcome of a build that contains its
@@ -195,7 +198,7 @@ func (db *DB) AdoptCustomization(ctx context.Context, id, generation string, sou
 	var state *Customization
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) (err error) {
 		adopted := false
-		state, err = updateCustomization(tx, id, generation, func(current *Customization) {
+		state, err = updateCustomization(ctx, tx, id, generation, func(current *Customization) {
 			upgrade := progress[current.Status] != 0 && progress[source.Status] >= progress[current.Status]
 			if !current.Unsettled() && !upgrade {
 				return
@@ -208,7 +211,7 @@ func (db *DB) AdoptCustomization(ctx context.Context, id, generation string, sou
 		if err != nil || !adopted || state.Status != "running" {
 			return err
 		}
-		return archiveAppliedConversation(ctx, tx, state)
+		return archiveAppliedConversation(ctx, generated.New(tx.Conn()), state)
 	})
 	return state, err
 }
@@ -219,26 +222,33 @@ func (db *DB) AdoptCustomization(ctx context.Context, id, generation string, sou
 // queued message, working subagent, or background job. Containment alone never archives a conversation, so a history
 // rewrite or merge that makes a build contain every conversation's commits archives
 // nothing by itself. The Assistant is never archived.
-func archiveAppliedConversation(ctx context.Context, tx *Tx, state *Customization) error {
+func archiveAppliedConversation(ctx context.Context, q *generated.Queries, state *Customization) error {
 	if !state.Finished {
 		return nil
 	}
-	// A later user message (not a tool result) reopens the conversation.
-	var keep bool
-	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM workspace WHERE assistant_id=?) OR EXISTS(SELECT 1 FROM messages m
-		WHERE conversation_id=? AND type='user' AND sequence_id>? AND `+notToolResult+`)`,
-		state.ConversationID, state.ConversationID, state.FinishedSequenceID).Scan(&keep); err != nil || keep {
+	workspace, err := q.GetWorkspace(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	conversation, err := generated.New(tx.Conn()).GetConversation(ctx, state.ConversationID)
+	if workspace.AssistantID == state.ConversationID {
+		return nil
+	}
+	// A later user message (not a tool result) reopens the conversation.
+	reopened, err := q.HasUserMessageAfter(ctx, generated.HasUserMessageAfterParams{
+		ConversationID: state.ConversationID, SequenceID: state.FinishedSequenceID,
+	})
+	if err != nil || reopened {
+		return err
+	}
+	conversation, err := q.GetConversation(ctx, state.ConversationID)
 	if err != nil {
 		return err
 	}
-	pending, err := pendingWork(tx, &conversation)
+	pending, err := pendingWork(ctx, q, &conversation)
 	if err != nil || pending {
 		return err
 	}
-	_, err = generated.New(tx.Conn()).ArchiveConversation(ctx, state.ConversationID)
+	_, err = q.ArchiveConversation(ctx, state.ConversationID)
 	return err
 }
 
@@ -262,7 +272,7 @@ func (db *DB) RecoverCustomizations(ctx context.Context, runningSHA, installedSH
 			continue
 		}
 		err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-			current, err := updateCustomization(tx, state.ConversationID, state.Generation, func(current *Customization) {
+			current, err := updateCustomization(ctx, tx, state.ConversationID, state.Generation, func(current *Customization) {
 				switch {
 				case current.Status == "verifying":
 					// Interrupted, not failed: the server verifies it again.
@@ -282,7 +292,7 @@ func (db *DB) RecoverCustomizations(ctx context.Context, runningSHA, installedSH
 			if err != nil || state.Status == "running" || current.Status != "running" {
 				return err
 			}
-			return archiveAppliedConversation(ctx, tx, current)
+			return archiveAppliedConversation(ctx, generated.New(tx.Conn()), current)
 		})
 		if err != nil {
 			return err
@@ -296,18 +306,18 @@ func (db *DB) RecoverCustomizations(ctx context.Context, runningSHA, installedSH
 func (db *DB) WaitForCustomization(ctx context.Context, id, commit string, finished bool) (*Customization, error) {
 	state := &Customization{ConversationID: id, Commit: commit, Status: "waiting", Finished: finished, Generation: uuid.NewString()}
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		if err := customizationRequested(tx, state); err != nil {
+		q := generated.New(tx.Conn())
+		if err := customizationRequested(ctx, q, state); err != nil {
 			return err
 		}
-		var status string
-		err := tx.QueryRow("SELECT status FROM shelley_customizations WHERE conversation_id=?", id).Scan(&status)
+		current, err := q.GetCustomization(ctx, id)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		if status == "verifying" || status == "restarting" {
+		if status := current.ShelleyCustomization.Status; status == "verifying" || status == "restarting" {
 			return fmt.Errorf("%w: this conversation's customization is already %s", ErrConflict, status)
 		}
-		return writeCustomization(tx, state)
+		return writeCustomization(ctx, tx, state)
 	})
 	return state, err
 }

@@ -103,7 +103,8 @@ type ImportConversation struct {
 // channel ids, which belong to the source host's chats.
 func (db *DB) ImportConversations(ctx context.Context, name string, imports []ImportConversation) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		project, err := getProject(tx.Rx, "?", name)
+		q := generated.New(tx.Conn())
+		project, err := getProject(ctx, q, name)
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("%w: no project %s", ErrInvalid, name)
 		}
@@ -118,15 +119,15 @@ func (db *DB) ImportConversations(ctx context.Context, name string, imports []Im
 			cwd = &project.Cwd
 		}
 		for _, imp := range imports {
-			if err := importConversation(ctx, tx, imp.Conversation, imp.Title, cwd); err != nil {
+			if err := importConversation(ctx, q, imp.Conversation, imp.Title, cwd); err != nil {
 				return err
 			}
 			id := imp.Conversation.Conversation.ConversationID
-			if err := setConversationProfile(tx, id, project.Name); err != nil {
+			if err := q.SetConversationProfile(ctx, generated.SetConversationProfileParams{Profile: project.Name, ConversationID: id}); err != nil {
 				return err
 			}
 			if project.VM != nil {
-				if err := insertConversationVM(tx, id, *project.VM, project.VMDir()); err != nil {
+				if err := insertConversationVM(ctx, q, id, *project.VM, project.VMDir()); err != nil {
 					return err
 				}
 			}
@@ -135,10 +136,10 @@ func (db *DB) ImportConversations(ctx context.Context, name string, imports []Im
 	})
 }
 
-func importConversation(ctx context.Context, tx *Tx, c ImportedConversation, slug string, cwd *string) error {
+func importConversation(ctx context.Context, q *generated.Queries, c ImportedConversation, slug string, cwd *string) error {
 	conv := c.Conversation
-	var exists bool
-	if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM conversations WHERE conversation_id=?)", conv.ConversationID).Scan(&exists); err != nil {
+	exists, err := found(q.GetConversation(ctx, conv.ConversationID))
+	if err != nil {
 		return err
 	}
 	if exists {
@@ -147,16 +148,16 @@ func importConversation(ctx context.Context, tx *Tx, c ImportedConversation, slu
 	if slug == "" && conv.Slug != nil {
 		slug = *conv.Slug
 	}
-	var slugArg any
+	var slugArg *string
 	if slug != "" {
 		for attempt := range SlugAttempts {
 			candidate := SlugCandidate(slug, attempt)
-			var taken bool
-			if err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM conversations WHERE slug=?)", candidate).Scan(&taken); err != nil {
+			taken, err := found(q.GetConversationBySlug(ctx, &candidate))
+			if err != nil {
 				return err
 			}
 			if !taken {
-				slugArg = candidate
+				slugArg = &candidate
 				break
 			}
 		}
@@ -165,15 +166,14 @@ func importConversation(ctx context.Context, tx *Tx, c ImportedConversation, slu
 		}
 	}
 	at := func(t time.Time) string { return t.UTC().Format(time.DateTime) }
-	_, err := tx.Exec(`INSERT INTO conversations(conversation_id,slug,user_initiated,created_at,updated_at,cwd,archived,
-		parent_conversation_id,model,conversation_options,current_generation,agent_working,tags,turn_interrupted)
-		VALUES(?,?,?,?,?,?,FALSE,?,?,?,?,FALSE,?,?)`,
-		conv.ConversationID, slugArg, conv.UserInitiated, at(conv.CreatedAt), at(conv.UpdatedAt), cwd,
-		conv.ParentConversationID, conv.Model, conv.ConversationOptions, conv.CurrentGeneration, conv.Tags, conv.TurnInterrupted)
-	if err != nil {
+	if err := q.ImportConversation(ctx, generated.ImportConversationParams{
+		ConversationID: conv.ConversationID, Slug: slugArg, UserInitiated: conv.UserInitiated,
+		CreatedAt: at(conv.CreatedAt), UpdatedAt: at(conv.UpdatedAt), Cwd: cwd, ParentConversationID: conv.ParentConversationID,
+		Model: conv.Model, ConversationOptions: conv.ConversationOptions, CurrentGeneration: conv.CurrentGeneration,
+		Tags: conv.Tags, TurnInterrupted: conv.TurnInterrupted,
+	}); err != nil {
 		return fmt.Errorf("import conversation %s: %w", conv.ConversationID, err)
 	}
-	q := generated.New(tx.Conn())
 	for _, m := range c.Messages {
 		if m.ConversationID != conv.ConversationID {
 			return errors.New("import: message of another conversation")
@@ -189,7 +189,7 @@ func importConversation(ctx context.Context, tx *Tx, c ImportedConversation, slu
 		}
 	}
 	for _, sub := range c.Subagents {
-		if err := importConversation(ctx, tx, sub, "", cwd); err != nil {
+		if err := importConversation(ctx, q, sub, "", cwd); err != nil {
 			return err
 		}
 	}

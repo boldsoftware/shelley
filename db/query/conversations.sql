@@ -637,3 +637,20 @@ WHERE queued_messages != '[]' AND (external_conversation_id IS NOT NULL OR EXIST
     SELECT 1 FROM json_each(CASE WHEN json_valid(queued_messages) THEN queued_messages ELSE '[]' END) WHERE json_extract(value, '$.user_data.action_run_id') IS NOT NULL
 ))
 ORDER BY created_at ASC;
+
+-- name: ImportConversation :exec
+-- Inserts a conversation copied from another Shelley, unarchived and idle.
+INSERT INTO conversations (conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived,
+    parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, turn_interrupted)
+VALUES (sqlc.arg(conversation_id), sqlc.arg(slug), sqlc.arg(user_initiated),
+    CAST(sqlc.arg(created_at) AS TEXT), CAST(sqlc.arg(updated_at) AS TEXT), sqlc.arg(cwd), FALSE,
+    sqlc.arg(parent_conversation_id), sqlc.arg(model), sqlc.arg(conversation_options), sqlc.arg(current_generation),
+    FALSE, sqlc.arg(tags), sqlc.arg(turn_interrupted));
+
+-- name: CountConversationsByGeneration :many
+-- Conversations with messages by their current generation.
+SELECT c.current_generation, COUNT(*) AS count
+FROM conversations c
+WHERE EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.conversation_id)
+GROUP BY c.current_generation
+ORDER BY c.current_generation;

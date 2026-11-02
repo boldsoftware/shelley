@@ -82,7 +82,7 @@ func TestSearchMessageContext(t *testing.T) {
 		if delta < 0 {
 			delta = -delta
 		}
-		if item.Distance != int(delta) || item.Text != fixture.text[:min(len(fixture.text), 6000)] {
+		if item.Distance != delta || item.Text != fixture.text[:min(len(fixture.text), 6000)] {
 			t.Fatalf("wrong excerpt or distance for message %d", i)
 		}
 	}

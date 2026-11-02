@@ -64,7 +64,7 @@ func TestSubagentToolDescriptionListsSubagents(t *testing.T) {
 	}
 	var got []row
 	if err := f.database.Pool().Rx(ctx, func(ctx context.Context, rx *db.Rx) error {
-		rows, err := rx.Query(query)
+		rows, err := rx.Conn().QueryContext(ctx, query)
 		if err != nil {
 			return err
 		}
