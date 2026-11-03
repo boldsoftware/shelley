@@ -45,6 +45,57 @@ async function useVMHostname(page: Page) {
   });
 }
 
+// Match the synthetic touch gestures used by conversation-drawer.spec.ts.
+async function swipe(page: Page, selector: string, startX: number, endX: number) {
+  return page.evaluate(
+    ({ selector, startX, endX }) => {
+      const target = document.querySelector(selector);
+      if (!(target instanceof Element)) throw new Error(`Missing ${selector}`);
+      const touch = (x: number) =>
+        new Touch({
+          identifier: 1,
+          target,
+          clientX: x,
+          clientY: 300,
+          screenX: x,
+          screenY: 300,
+          pageX: x,
+          pageY: 300,
+        });
+      const start = touch(startX);
+      const end = touch(endX);
+      target.dispatchEvent(
+        new TouchEvent("touchstart", {
+          bubbles: true,
+          cancelable: true,
+          touches: [start],
+          targetTouches: [start],
+          changedTouches: [start],
+        }),
+      );
+      const move = new TouchEvent("touchmove", {
+        bubbles: true,
+        cancelable: true,
+        touches: [end],
+        targetTouches: [end],
+        changedTouches: [end],
+      });
+      target.dispatchEvent(move);
+      target.dispatchEvent(
+        new TouchEvent("touchend", {
+          bubbles: true,
+          cancelable: true,
+          touches: [],
+          targetTouches: [],
+          changedTouches: [end],
+        }),
+      );
+      return move.defaultPrevented;
+    },
+    { selector, startX, endX },
+  );
+}
+
 test("the status-bar hook shows the conversation's status and reruns after messages", async ({
   page,
   request,
@@ -137,6 +188,7 @@ test("the status-bar hook shows the conversation's status and reruns after messa
 test("status items preserve colors, native actions, links, and mobile scrolling", async ({
   page,
   request,
+  browserName,
 }) => {
   test.skip(!!process.env.TEST_SERVER_URL, "installs a hook in the test server's home");
   installHook();
@@ -234,6 +286,13 @@ test("status items preserve colors, native actions, links, and mobile scrolling"
 
       if (width < 768) {
         await expect(segment.locator(".status-hook-items")).toHaveCSS("flex-wrap", "nowrap");
+        await expect(segment).toHaveCSS("overflow-x", "auto");
+        await expect(segment).toHaveCSS("scrollbar-width", "none");
+        if (browserName !== "firefox") {
+          expect(
+            await segment.evaluate((row) => getComputedStyle(row, "::-webkit-scrollbar").display),
+          ).toBe("none");
+        }
         const scroll = await segment.evaluate((row) => {
           row.scrollLeft = 50;
           return {
@@ -264,5 +323,43 @@ test("status items preserve colors, native actions, links, and mobile scrolling"
       await expect(errorDetails).toBeHidden();
       await expect(segment).toHaveText("Status hook failed");
     }
+  });
+});
+
+test("mobile status row swipes leave the drawer alone, even when content fits", async ({
+  page,
+  request,
+}) => {
+  test.skip(!!process.env.TEST_SERVER_URL, "installs a hook in the test server's home");
+  installHook();
+  await page.setViewportSize({ width: 393, height: 851 });
+  await withTempDir("status-bar-swipe-", async (cwd) => {
+    const status = (body: string) =>
+      writeFileSync(join(cwd, ".status-bar.json"), JSON.stringify({ body }));
+    status("Short https://example.com/");
+    const slug = await createConversationViaAPI(request, "Hello", { cwd });
+    await page.goto(`/c/${slug}`);
+    const row = page.getByTestId("status-bar-hook");
+    const drawer = page.locator(".drawer");
+    await expect(row.getByRole("link")).toBeVisible();
+    expect(await row.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await expect(drawer).not.toHaveClass(/open/);
+
+    for (const selector of ['[data-testid="status-bar-hook"]', ".status-hook-row .text-link"]) {
+      expect(await swipe(page, selector, 180, 256)).toBe(false);
+      await expect(drawer).not.toHaveClass(/open/);
+    }
+
+    status(`${"long-status-".repeat(50)} https://example.com/`);
+    await page.reload();
+    await expect(row).toContainText("long-status-");
+    expect(await row.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    expect(await swipe(page, ".status-hook-row .status-hook-item", 180, 256)).toBe(false);
+    await expect(drawer).not.toHaveClass(/open/);
+
+    expect(await swipe(page, ".main-content", 180, 256)).toBe(true);
+    await expect(drawer).toHaveClass(/open/);
+    expect(await swipe(page, ".backdrop", 380, 328)).toBe(true);
+    await expect(drawer).not.toHaveClass(/open/);
   });
 });

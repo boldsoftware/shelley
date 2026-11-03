@@ -52,6 +52,7 @@ export function useMobileDrawerSwipe(drawerOpen: Ref<boolean>) {
 
     const touch = event.touches[0];
     const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest(".status-hook-row")) return;
     const opening = !drawerOpen.value;
 
     // Code blocks, tables, diffs, and other wide content own horizontal

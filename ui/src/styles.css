@@ -5286,6 +5286,7 @@ select:disabled {
   .status-hook-row:not(.status-hook-row-error) {
     overflow-x: auto;
     text-overflow: clip;
+    scrollbar-width: none;
   }
 
   .status-hook-items {
@@ -11913,7 +11914,8 @@ kbd {
   scrollbar-width: none;
 }
 
-.terminal-panel-tabs::-webkit-scrollbar {
+.terminal-panel-tabs::-webkit-scrollbar,
+.status-hook-row:not(.status-hook-row-error)::-webkit-scrollbar {
   display: none;
 }
 
