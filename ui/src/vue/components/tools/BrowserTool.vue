@@ -18,6 +18,7 @@
   <BrowserEvalTool v-else-if="action === 'eval'" v-bind="props" />
   <BrowserResizeTool v-else-if="action === 'resize'" v-bind="props" />
   <ScreenshotTool v-else-if="action === 'screenshot'" v-bind="props" />
+  <BrowserPdfTool v-else-if="action === 'pdf'" v-bind="props" />
   <BrowserConsoleLogsTool
     v-else-if="action === 'console_logs'"
     tool-name="browser_recent_console_logs"
@@ -77,6 +78,7 @@ import BrowserEvalTool from "./BrowserEvalTool.vue";
 import BrowserResizeTool from "./BrowserResizeTool.vue";
 import BrowserConsoleLogsTool from "./BrowserConsoleLogsTool.vue";
 import BrowserScreencastTool from "./BrowserScreencastTool.vue";
+import BrowserPdfTool from "./BrowserPdfTool.vue";
 import BrowserEmulateTool from "./BrowserEmulateTool.vue";
 import BrowserNetworkTool from "./BrowserNetworkTool.vue";
 import BrowserAccessibilityTool from "./BrowserAccessibilityTool.vue";

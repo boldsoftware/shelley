@@ -113,6 +113,7 @@ func isReadableUIFile(path string) bool {
 		strings.HasPrefix(path, browse.UploadDir+"/") ||
 		strings.HasPrefix(path, browse.ConsoleLogsDir+"/") ||
 		strings.HasPrefix(path, browse.ScreencastDir+"/") ||
+		strings.HasPrefix(path, browse.PDFDir+"/") ||
 		strings.HasPrefix(path, claudetool.OneShotImageDir+"/")
 }
 

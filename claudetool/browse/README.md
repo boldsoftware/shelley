@@ -15,6 +15,7 @@ Uses an `action` field to select the operation:
 | `eval` | Evaluate JavaScript in the browser context |
 | `resize` | Resize the browser viewport |
 | `screenshot` | Take a screenshot of the page or a specific element |
+| `pdf` | Print the page to a PDF in `/tmp/shelley-pdfs/` |
 | `console_logs` | Get recent browser console logs |
 | `clear_console_logs` | Clear all captured console logs |
 

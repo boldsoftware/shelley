@@ -640,7 +640,7 @@ func (b *BrowseTools) GetTools() []*llm.Tool {
 }
 
 var combinedBrowserActions = []string{
-	"navigate", "eval", "resize", "screenshot", "console_logs", "clear_console_logs",
+	"navigate", "eval", "resize", "screenshot", "pdf", "console_logs", "clear_console_logs",
 	"screencast_start", "screencast_stop", "screencast_status",
 	"emulate_help", "emulate_device", "emulate_custom", "emulate_reset", "emulate_dark_mode", "emulate_media",
 	"network_help", "network_enable", "network_disable", "network_get_log", "network_clear", "network_cookies", "network_clear_cache",
@@ -659,6 +659,9 @@ are in the schema.
   type, read, scroll, or wait for selectors.
 - resize(width, height, timeout?): set viewport size.
 - screenshot(selector?, timeout?): capture the page or an element; shows the image to the user.
+- pdf(timeout?): print the current page (navigate first; file:// URLs work) to a
+  PDF with backgrounds. CSS @page rules override the default: Letter portrait,
+  0.4in margins.
 - console_logs(limit?): read captured console logs.
 - clear_console_logs(): clear captured console logs.
 - screencast_start(format?, quality?, max_width?, max_height?, every_nth_frame?):
@@ -888,6 +891,8 @@ func (b *BrowseTools) runCombined(ctx context.Context, input combinedInput) llm.
 		return b.resizeRun(ctx, resizeInput{Width: input.Width, Height: input.Height, Timeout: input.Timeout})
 	case "screenshot":
 		return b.screenshotRun(ctx, screenshotInput{Selector: input.Selector, Timeout: input.Timeout})
+	case "pdf":
+		return b.pdfRun(ctx, input.Timeout)
 	case "console_logs":
 		return b.recentConsoleLogsRun(ctx, recentConsoleLogsInput{Limit: input.Limit})
 	case "clear_console_logs":

@@ -24,6 +24,8 @@ export function toolEmoji(name: string | undefined | null, input?: unknown): str
         return "📐";
       case "screenshot":
         return "📷";
+      case "pdf":
+        return "📄";
       case "console_logs":
       case "clear_console_logs":
         return "📋";

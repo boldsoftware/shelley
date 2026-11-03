@@ -83,6 +83,12 @@ test.describe('Tool Component Verification', () => {
     // Spot-check the rest of the set.
     await expectEmoji(toolCard('https://example.com'), '🌐');
     await expectEmoji(toolCard('document.title'), '⚡');
+    await expectEmoji(toolCard(/^pdf$/), '📄');
+    // browser: pdf links the saved file through /api/read.
+    const pdfHref = await page.locator('.pdf-tool-link').first().getAttribute('href');
+    expect(pdfHref).toMatch(/^\/api\/read\?path=%2Ftmp%2Fshelley-pdfs%2F[0-9a-f-]+\.pdf$/);
+    const pdfResponse = await request.get(pdfHref!);
+    expect(pdfResponse.headers()['content-type']).toBe('application/pdf');
     await expectEmoji(toolCard(/console/i), '📋');
     await expectEmoji(toolCard('/tmp/test-prompt.txt'), '🤖');
     // The emulate/network/accessibility/profile families are folded into the

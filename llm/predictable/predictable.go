@@ -1112,6 +1112,15 @@ func (s *Service) makeToolSmorgasbordResponse(inputTokens uint64) *llm.Response 
 		ToolInput: json.RawMessage(screenshotInput),
 	})
 
+	// browser: pdf action
+	pdfInput, _ := json.Marshal(map[string]string{"action": "pdf"})
+	content = append(content, llm.Content{
+		ID:        fmt.Sprintf("tool_pdf_%d", (baseNano+4)%1000),
+		Type:      llm.ContentTypeToolUse,
+		ToolName:  "browser",
+		ToolInput: json.RawMessage(pdfInput),
+	})
+
 	// browser: navigate action
 	navigateInput, _ := json.Marshal(map[string]string{"action": "navigate", "url": "https://example.com"})
 	content = append(content, llm.Content{

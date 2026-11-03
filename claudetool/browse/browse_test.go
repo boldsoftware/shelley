@@ -69,7 +69,7 @@ func TestCombinedTool(t *testing.T) {
 	// Verify all actions are listed in the enum, including the folded-in
 	// emulate_*/network_*/accessibility_*/profile_* families.
 	expectedActions := []string{
-		"navigate", "eval", "resize", "console_logs", "clear_console_logs", "screenshot",
+		"navigate", "eval", "resize", "console_logs", "clear_console_logs", "screenshot", "pdf",
 		"emulate_device", "emulate_custom", "emulate_reset", "emulate_dark_mode", "emulate_media",
 		"network_enable", "network_get_log", "network_cookies", "network_clear_cache",
 		"accessibility_tree", "accessibility_query", "accessibility_node",

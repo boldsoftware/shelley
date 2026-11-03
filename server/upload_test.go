@@ -455,3 +455,30 @@ func TestUploadLargeFile(t *testing.T) {
 	}
 	os.Remove(response["path"])
 }
+
+func TestBrowserPDFCanBeReadViaReadEndpoint(t *testing.T) {
+	t.Parallel()
+	server, _, _ := newTestServer(t)
+
+	if err := os.MkdirAll(browse.PDFDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.CreateTemp(browse.PDFDir, "*.pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Remove(f.Name()) })
+	if _, err := f.WriteString("%PDF-1.4\n"); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	w := httptest.NewRecorder()
+	server.handleRead(w, httptest.NewRequest("GET", "/api/read?path="+url.QueryEscape(f.Name()), nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("read failed with status %d: %s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/pdf" {
+		t.Errorf("Content-Type = %q, want application/pdf", ct)
+	}
+}
