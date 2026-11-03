@@ -72,7 +72,7 @@
            count has one: the segment is bare text, so nothing but the dotted
            underline says it can be clicked. -->
       <span
-        v-tooltip.top="busyReason || t('modelSwitchHint')"
+        v-tooltip.top="busyReason || modelHint"
         class="status-readout-model status-readout-control"
       >
         <ModelPicker
@@ -100,6 +100,7 @@ import PathText from "./PathText.vue";
 import { computed } from "vue";
 import type { Message, Model } from "../../types";
 import type { OtherUsageRow, UsageEntry } from "../../utils/tokenCostGraph";
+import { customModelBadge } from "../../utils/customModelBadge";
 import { tildifyPath } from "../../utils/tildify";
 import { useI18n } from "../composables/i18n";
 import type { ThinkingLevel } from "./thinkingLevel";
@@ -146,6 +147,15 @@ const cwdLeaf = computed(() => {
 // Undefined rather than "" when idle: v-tooltip treats an empty string as a
 // tooltip to render, and the ModelPicker prop is optional.
 const busyReason = computed(() => (props.agentWorking ? t("modelSwitchBusy") : undefined));
+
+// The idle hint on the model segment. The inline picker's custom badge carries
+// no native title (it would double up with this wrapper's tooltip, and is
+// unreachable while the control is disabled), so the endpoint host rides here.
+const modelHint = computed(() => {
+  const badge = customModelBadge(props.models.find((m) => m.id === props.selectedModel));
+  const hint = t("modelSwitchHint");
+  return badge ? `${hint} · ${badge.label}: ${badge.title}` : hint;
+});
 
 // The cwd segment says the full path (the visible text is tildified, and
 // ellipsized when the bar is tight) plus what a click does — or why it can't.

@@ -1383,6 +1383,19 @@ func (e *testRequestError) Error() string { return e.message }
 
 func (e *testRequestError) RequestErrorInfo() llm.RequestErrorInfo { return e.info }
 
+// customModelNote mimics the models package's custom-model note, with a
+// display name and host chosen to collide with classifier keywords.
+const customModelNote = `custom model "EOF" (id eof, host overloaded.example) used its own API key; edit or remove it under Model → Add / Remove Models`
+
+func annotated(note, upstream string) error {
+	return &llm.AnnotatedError{Note: note, Err: errors.New(upstream)}
+}
+
+const (
+	upstream400   = `attempt 1 at t: status 400 Bad Request (url=u, model=m): {"type":"invalid_request_error"}`
+	upstreamReset = "read tcp: connection reset by peer"
+)
+
 func newIdleStallError(duration time.Duration) error {
 	return &testRequestError{
 		message: fmt.Sprintf("llm stream idle timeout: no data received within idle window after %s: context canceled", duration),
@@ -1560,6 +1573,9 @@ func TestIsRetryableError(t *testing.T) {
 		{"rate limit not in tight set", fmt.Errorf("rate limit exceeded"), false},
 		{"503 not in tight set", fmt.Errorf("upstream returned 503"), false},
 		{"generic error", fmt.Errorf("something went wrong"), false},
+		{"annotation does not make a 400 retryable", annotated(customModelNote, upstream400), false},
+		{"annotated connection reset", annotated(customModelNote, upstreamReset), true},
+		{"annotation does not block a connection reset", annotated("custom model \"invalid api key\"", upstreamReset), true},
 	}
 
 	for _, tt := range tests {
@@ -1597,6 +1613,9 @@ func TestIsRetryableLLMError(t *testing.T) {
 		{"invalid_request_error not retryable", fmt.Errorf("invalid_request_error: messages.0.content.0.thinking.signature: Field required"), false},
 		{"model_not_found not retryable", fmt.Errorf("model_not_found: The model gpt-foo does not exist"), false},
 		{"generic error not retryable", fmt.Errorf("something weird happened"), false},
+		{"annotation does not make a 400 retryable", annotated(customModelNote, upstream400), false},
+		{"annotated connection reset retryable", annotated(customModelNote, upstreamReset), true},
+		{"annotation does not block a connection reset", annotated("custom model \"invalid api key\"", upstreamReset), true},
 	}
 
 	for _, tt := range tests {
@@ -2789,6 +2808,12 @@ func TestUserFacingLLMError(t *testing.T) {
 	generic := userFacingLLMError(fmt.Errorf("boom"), nil)
 	if !strings.Contains(generic, "boom") {
 		t.Errorf("generic error message = %q, want it to contain the cause", generic)
+	}
+
+	// An annotation is shown above the upstream error.
+	custom := userFacingLLMError(annotated(customModelNote, upstream400), nil)
+	if want := "LLM request failed: " + customModelNote + "\n" + upstream400; custom != want {
+		t.Errorf("annotated error message = %q, want %q", custom, want)
 	}
 
 	// Trace diagnostics are appended when present.

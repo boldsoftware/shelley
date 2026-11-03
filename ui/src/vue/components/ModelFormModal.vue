@@ -99,6 +99,9 @@
           fluid
           :dt="inputFieldDt"
         />
+        <div v-if="collision" class="form-hint form-hint-warning" role="status">
+          {{ t("displayNameCollisionWarning").replace("{name}", collision.display_name || collision.id) }}
+        </div>
       </div>
 
       <!-- API Key -->
@@ -272,9 +275,11 @@ import { inputFieldDt, selectFieldDt } from "./configFieldDt";
 import Modal from "./Modal.vue";
 import ModelProviderForm from "./ModelProviderForm.vue";
 import ModelEndpointInput from "./ModelEndpointInput.vue";
+import { findDisplayNameCollision } from "../../utils/modelNameCollision";
 import { useI18n } from "../composables/i18n";
 import {
   customModelsApi,
+  type AvailableModel,
   type CustomModel,
   type ModelProviderConnection,
   type CreateCustomModelRequest,
@@ -295,11 +300,16 @@ import {
   type ProviderType,
 } from "./customModelConstants";
 
-const props = defineProps<{
-  isOpen: boolean;
-  editModel: CustomModel | null;
-  editProvider: ModelProviderConnection | null;
-}>();
+const props = withDefaults(
+  defineProps<{
+    isOpen: boolean;
+    editModel: CustomModel | null;
+    editProvider: ModelProviderConnection | null;
+    existingModels?: AvailableModel[];
+  }>(),
+  { existingModels: () => [] },
+);
+const collision = computed(() => findDisplayNameCollision(form.display_name, props.existingModels));
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "saved"): void;

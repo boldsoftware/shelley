@@ -313,6 +313,8 @@ export const es: TranslationKeys = {
   model: "Modelo",
   displayName: "Nombre para mostrar",
   nameShownInSelector: "Nombre que se muestra en el selector de modelos",
+  displayNameCollisionWarning:
+    "Un modelo integrado también se llama «{name}». El selector de modelos mostrará dos modelos con este nombre.",
   apiKey: "Clave de API",
   enterApiKey: "Ingrese la clave de API",
   maxOutputTokens: "Máximo de tokens de salida",

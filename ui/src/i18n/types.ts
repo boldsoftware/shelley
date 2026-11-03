@@ -305,6 +305,7 @@ export interface TranslationKeys {
   model: string;
   displayName: string;
   nameShownInSelector: string;
+  displayNameCollisionWarning: string;
   apiKey: string;
   enterApiKey: string;
   maxOutputTokens: string;

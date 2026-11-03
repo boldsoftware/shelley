@@ -55,7 +55,7 @@ func TestProviderSnapshotsStayOfflineAndAccountBound(t *testing.T) {
 	}
 	id := ProviderRouteID("a", wire)
 	service, source, initial, err := manager.GetServiceSnapshot(id)
-	if err != nil || source != "a" || service.(*reasoningService).Service.(*oai.ResponsesService).APIKey != "alpha" {
+	if err != nil || source != "a" || service.(*loggingService).service.(*reasoningService).Service.(*oai.ResponsesService).APIKey != "alpha" {
 		t.Fatalf("wrong account: %s, %v", source, err)
 	}
 	update := func() {
@@ -89,7 +89,7 @@ func TestProviderSnapshotsStayOfflineAndAccountBound(t *testing.T) {
 	row.APIKey = "rotated"
 	update()
 	service, source, revision, err = manager.GetServiceSnapshot(id)
-	if err != nil || source != "a" || revision == initial || service.(*reasoningService).Service.(*oai.ResponsesService).APIKey != "rotated" {
+	if err != nil || source != "a" || revision == initial || service.(*loggingService).service.(*reasoningService).Service.(*oai.ResponsesService).APIKey != "rotated" {
 		t.Fatalf("unlisted route did not use current credentials: %v", err)
 	}
 	before := manager.GetAvailableModels()

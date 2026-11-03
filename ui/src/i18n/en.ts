@@ -312,6 +312,8 @@ export const en: TranslationKeys = {
   model: "Model",
   displayName: "Display Name",
   nameShownInSelector: "Name shown in the model selector",
+  displayNameCollisionWarning:
+    "A built-in model is also named “{name}”. The model picker will show two models with this name.",
   apiKey: "API Key",
   enterApiKey: "Enter API key",
   maxOutputTokens: "Max output tokens",

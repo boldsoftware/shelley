@@ -254,6 +254,7 @@
     :is-open="formOpen"
     :edit-model="editModel"
     :edit-provider="editingProvider"
+    :existing-models="builtInModelsFiltered"
     @saved="handleFormSaved"
     @provider-saved="handleProviderSaved"
     @close="formOpen = false"

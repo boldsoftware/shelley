@@ -312,6 +312,8 @@ export const ja: TranslationKeys = {
   model: "モデル",
   displayName: "表示名",
   nameShownInSelector: "モデル選択に表示される名前",
+  displayNameCollisionWarning:
+    "組み込みモデルにも「{name}」という名前があります。モデル選択に同じ名前のモデルが2つ表示されます。",
   apiKey: "APIキー",
   enterApiKey: "APIキーを入力",
   maxOutputTokens: "最大出力トークン数",

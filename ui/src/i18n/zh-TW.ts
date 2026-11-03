@@ -305,6 +305,7 @@ export const zhTW: TranslationKeys = {
   model: "模型",
   displayName: "顯示名稱",
   nameShownInSelector: "在模型選擇器中顯示的名稱",
+  displayNameCollisionWarning: "內建模型也叫「{name}」。模型選擇器將顯示兩個同名模型。",
   apiKey: "API 金鑰",
   enterApiKey: "輸入 API 金鑰",
   maxOutputTokens: "最大輸出權杖數",

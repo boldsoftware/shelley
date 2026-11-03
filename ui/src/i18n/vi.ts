@@ -313,6 +313,8 @@ export const vi: TranslationKeys = {
   model: "Model",
   displayName: "Tên hiển thị",
   nameShownInSelector: "Tên ở phần chọn model",
+  displayNameCollisionWarning:
+    "Một model tích hợp cũng có tên “{name}”. Phần chọn model sẽ hiển thị hai model trùng tên này.",
   apiKey: "API Key",
   enterApiKey: "Nhập API key",
   maxOutputTokens: "Số token đầu ra tối đa",

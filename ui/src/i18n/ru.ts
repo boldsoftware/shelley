@@ -311,6 +311,8 @@ export const ru: TranslationKeys = {
   model: "Модель",
   displayName: "Отображаемое имя",
   nameShownInSelector: "Имя, отображаемое в селекторе моделей",
+  displayNameCollisionWarning:
+    "Встроенная модель тоже называется «{name}». В селекторе моделей будут две модели с этим именем.",
   apiKey: "API-ключ",
   enterApiKey: "Введите API-ключ",
   maxOutputTokens: "Максимум выходных токенов",

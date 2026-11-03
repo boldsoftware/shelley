@@ -766,7 +766,7 @@ func TestManagerLoadsCustomReasoningReplayOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrapped, ok := service.(*reasoningService)
+	wrapped, ok := service.(*loggingService).service.(*reasoningService)
 	if !ok {
 		t.Fatalf("service type = %T", service)
 	}

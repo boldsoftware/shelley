@@ -61,11 +61,17 @@
     @hide="onHide"
   >
     <template #value>
-      <slot name="value" :label="selectedLabel">
+      <slot name="value" :label="selectedLabel" :badge="selectedBadge">
         <span class="model-picker-value">
           <span :class="['model-picker-value-name', { 'status-readout-affordance': inline }]">{{
             triggerLabel || selectedLabel
           }}</span>
+          <span
+            v-if="selectedBadge"
+            class="model-picker-custom-badge"
+            :title="inline ? undefined : selectedBadge.title"
+            >{{ selectedBadge.label }}</span
+          >
           <span v-if="effortText && !inline && !triggerLabel" class="model-picker-value-effort"
             >· {{ effortText }}</span
           >
@@ -135,8 +141,12 @@
         <div class="model-picker-option-content">
           <span class="model-picker-option-name">{{ option.label }}</span>
           <span
-            v-if="option.source && (option.source_id || option.source !== dominantSource)"
+            v-if="
+              option.source &&
+              (option.source_id || option.source !== dominantSource || isCustom(option))
+            "
             class="model-picker-option-source"
+            :title="isCustom(option) ? endpointHost(option.base_url) : undefined"
             >{{ option.source }}</span
           >
         </div>
@@ -384,6 +394,7 @@ import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import Select from "primevue/select";
 import { statusPickerDt } from "./statusPickerDt";
 import { prettyModelLabels } from "../../utils/modelNames";
+import { customModelBadge, endpointHost } from "../../utils/customModelBadge";
 import { accountSuffixes } from "../../utils/providerAccounts";
 import { THINKING_LEVELS, type ThinkingLevel } from "./thinkingLevel";
 import { useI18n } from "../composables/i18n";
@@ -618,6 +629,13 @@ const selectedLabel = computed(
 
 // ---- reasoning effort --------------------------------------------------
 
+// A hook-supplied trigger label replaces the model label, so the badge would
+// describe a model the trigger is not showing.
+const selectedBadge = computed(() =>
+  props.triggerLabel ? null : customModelBadge(selectedModelObj.value),
+);
+const isCustom = (m: Pick<Model, "source" | "source_id" | "base_url">) =>
+  customModelBadge(m) !== null;
 const reasoningSupported = computed(() => selectedModelObj.value?.supports_reasoning !== false);
 
 // The model's default as a real, selectable level (null when the provider's

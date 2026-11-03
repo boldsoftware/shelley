@@ -555,7 +555,7 @@ func isRetryableError(err error) bool {
 	if info, ok := llm.RequestErrorInfoFromError(err); ok {
 		return info.Retryable && !info.NoImmediateRetry
 	}
-	lower := strings.ToLower(err.Error())
+	lower := strings.ToLower(llm.ErrorText(err))
 	for _, p := range []string{
 		"eof",
 		"connection reset",
@@ -597,7 +597,7 @@ func IsRetryableLLMError(err error) bool {
 	if info, ok := llm.RequestErrorInfoFromError(err); ok {
 		return info.Retryable
 	}
-	lower := strings.ToLower(err.Error())
+	lower := strings.ToLower(llm.ErrorText(err))
 
 	// Hard non-retryable signals override anything else.
 	nonRetryable := []string{

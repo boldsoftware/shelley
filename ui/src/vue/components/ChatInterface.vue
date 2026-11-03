@@ -103,10 +103,13 @@
               @manage-models="hide(); props.onOpenModelsModal?.()"
               @refresh-models="handleRefreshModels"
             >
-              <template #value="{ label }">
+              <template #value="{ label, badge }">
                 <WorkspaceActionIcon action="model" class="chat-menu-icon" />
                 {{ t("model") }}
                 <span class="overflow-menu-cwd" :title="label">{{ label }}</span>
+                <span v-if="badge" class="model-picker-custom-badge" :title="badge.title">{{
+                  badge.label
+                }}</span>
               </template>
             </ModelPicker>
           </template>

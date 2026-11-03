@@ -316,6 +316,8 @@ export const fr: TranslationKeys = {
   model: "Modèle",
   displayName: "Nom d'affichage",
   nameShownInSelector: "Nom affiché dans le sélecteur de modèle",
+  displayNameCollisionWarning:
+    "Un modèle intégré s’appelle aussi « {name} ». Le sélecteur de modèle affichera deux modèles portant ce nom.",
   apiKey: "Clé API",
   enterApiKey: "Saisir la clé API",
   maxOutputTokens: "Nombre maximal de tokens de sortie",

@@ -307,6 +307,8 @@ export const upgoer5: TranslationKeys = {
   model: "Brain",
   displayName: "Name to Show",
   nameShownInSelector: "Name that shows up when you pick one",
+  displayNameCollisionWarning:
+    "A model that came with the app is also named “{name}”. When you pick one, you will see two with this name.",
   apiKey: "Key",
   enterApiKey: "Put in your key",
   maxOutputTokens: "How many answer pieces can be made",

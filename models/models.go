@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -538,12 +539,19 @@ type ConfigInfo interface {
 	ConfigDetails() map[string]string
 }
 
-// loggingService wraps an llm.Service with request/usage logging.
+// loggingService wraps an llm.Service with request/usage logging. For
+// DB-backed custom models it also prefixes request errors with
+// customModelErrorPrefix, so every caller can tell that the failing request
+// went out with the custom model's own API key.
 type loggingService struct {
-	service  llm.Service
-	logger   *slog.Logger
-	modelID  string
-	provider Provider
+	service     llm.Service
+	logger      *slog.Logger
+	modelID     string
+	provider    Provider
+	source      string
+	sourceID    string
+	displayName string
+	baseURL     string
 }
 
 func (l *loggingService) Do(ctx context.Context, request *llm.Request) (*llm.Response, error) {
@@ -562,6 +570,9 @@ func (l *loggingService) Do(ctx context.Context, request *llm.Request) (*llm.Res
 		}
 		logAttrs = append(logAttrs, "error", err)
 		l.logger.Error("LLM request failed", logAttrs...)
+		if l.source == SourceCustomLabel && l.sourceID == "" {
+			err = &llm.AnnotatedError{Note: customModelErrorPrefix(l.displayName, l.modelID, l.baseURL), Err: err}
+		}
 		return response, err
 	}
 
@@ -591,6 +602,17 @@ func (l *loggingService) Do(ctx context.Context, request *llm.Request) (*llm.Res
 		}
 	}
 	return response, err
+}
+
+// customModelErrorPrefix names a custom model and where to change it. It never
+// includes the model's API key.
+func customModelErrorPrefix(displayName, modelID, baseURL string) string {
+	host := baseURL
+	if u, err := url.Parse(baseURL); err == nil && u.Host != "" {
+		host = u.Host
+	}
+	return fmt.Sprintf("custom model %q (id %s, host %s) used its own API key; edit or remove it under Model → Add / Remove Models",
+		displayName, modelID, host)
 }
 
 func (l *loggingService) CacheTTL() time.Duration { return llm.CacheTTL(l.service) }
@@ -801,16 +823,23 @@ func (m *Manager) GetService(modelID string) (llm.Service, error) {
 	return m.loggedService(entry), nil
 }
 
+// loggedService always wraps, even without a logger, so custom-model errors
+// carry their prefix regardless of logging configuration.
 func (m *Manager) loggedService(entry serviceEntry) llm.Service {
-	if m.logger != nil {
-		return &loggingService{
-			service:  entry.service,
-			logger:   m.logger,
-			modelID:  entry.modelID,
-			provider: entry.provider,
-		}
+	logger := m.logger
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
 	}
-	return entry.service
+	return &loggingService{
+		service:     entry.service,
+		logger:      logger,
+		modelID:     entry.modelID,
+		provider:    entry.provider,
+		source:      entry.source,
+		sourceID:    entry.sourceID,
+		displayName: entry.displayName,
+		baseURL:     entry.baseURL,
+	}
 }
 
 func (m *Manager) GetAvailableModels() []string {

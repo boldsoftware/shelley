@@ -4,8 +4,14 @@
     <span class="generation-context-icon" aria-hidden="true">🤖</span>
     <span class="generation-context-copy">
       <span class="generation-context-label">Model:</span>
-      <span class="generation-context-value model-bar-value">
+      <span
+        class="generation-context-value model-bar-value"
+        :class="{ 'model-bar-value-custom': badge }"
+      >
         <span class="model-bar-name" :title="modelTitle">{{ displayName }}</span>
+        <span v-if="badge" class="model-bar-custom-badge" :title="badge.title">{{
+          badge.label
+        }}</span>
         <span class="model-bar-reasoning">, {{ effectiveReasoning }}</span>
       </span>
     </span>
@@ -15,6 +21,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { prettyModelLabels } from "../../utils/modelNames";
+import { customModelBadge } from "../../utils/customModelBadge";
 import type { Model } from "../../types";
 
 const props = withDefaults(
@@ -52,6 +59,8 @@ const modelObj = computed(() => {
     props.models.find((m) => m.id === want) || props.models.find((m) => norm(m.id) === norm(want))
   );
 });
+
+const badge = computed(() => (isMixed.value ? null : customModelBadge(modelObj.value)));
 
 // A generation that ran more than one model (via a mid-generation /model
 // switch) shows "Mixed"; the full list is on hover. Otherwise show the single
