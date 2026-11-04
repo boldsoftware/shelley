@@ -118,7 +118,7 @@
           severity="secondary"
           :aria-label="t('newProject')"
           v-tooltip.top="t('newProject')"
-          @click="workspace.editProject()"
+          @click="workspace.startNewProject()"
         >
           <i class="pi pi-folder-plus" aria-hidden="true" />
         </Button>
@@ -519,6 +519,21 @@
         class="conversation-list project-list"
       >
         <section
+          v-if="namingProject"
+          class="conversation-group project-group"
+          data-testid="new-project-row"
+        >
+          <div class="project-heading project-naming">
+            <i class="pi pi-folder-plus" aria-hidden="true" />
+            <ProjectNameField
+              initial=""
+              :label="t('newProject')"
+              :submit="createProject"
+              @done="workspace.namingProject.value = false"
+            />
+          </div>
+        </section>
+        <section
           v-for="group in projectGroups"
           :key="group.id"
           class="conversation-group project-group"
@@ -742,6 +757,7 @@ import ExeBrand from "./ExeBrand.vue";
 import { COMPOSER_ROW_ID } from "../../utils/composerRow";
 import ConversationRow from "./ConversationDrawerRow.vue";
 import ProjectVMSetup from "./ProjectVMSetup.vue";
+import ProjectNameField from "./ProjectNameField.vue";
 import CustomizationStatus from "./CustomizationStatus.vue";
 import { useCustomizations } from "../composables/customizations";
 import { notRunning } from "../../services/customizations";
@@ -894,6 +910,25 @@ function handleAuxClick(e: MouseEvent, conversation: Conversation) {
 
 // --- State ---
 const showArchived = ref(false);
+// Naming a new project shows its row, in the project list.
+const namingProject = computed(() => workspace.namingProject.value && !showArchived.value);
+watch(workspace.namingProject, (naming) => {
+  if (!naming) return;
+  showArchived.value = false;
+  emit("open");
+  if (props.isCollapsed) emit("toggle-collapse");
+});
+async function createProject(name: string) {
+  await workspaceApi.createProject({
+    name,
+    instructions: "",
+    cwd: "",
+    actions: [],
+    repos: [],
+    vm: null,
+  });
+  await workspace.refresh();
+}
 const archivedConversations = ref<ConversationWithParticipants[]>([]);
 const loadingArchived = ref(false);
 const searchQuery = ref("");

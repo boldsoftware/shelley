@@ -26,30 +26,75 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
     await expect(page.getByLabel("Conversation project", { exact: true })).toHaveCount(0);
   }
   await openProjects(page);
-  await page.getByRole("button", { name: "New project", exact: true }).click();
-  const newProject = page.getByRole("region", { name: "New project", exact: true });
-  const name = `Publish ${randomUUID().slice(0, 8)}`;
-  await newProject.getByLabel("Name", { exact: true }).fill(name);
-  await newProject
-    .getByLabel("Project instructions (AGENTS.md)", { exact: true })
-    .fill("Keep release notes brief.");
-  await newProject.getByLabel("Working directory", { exact: true }).fill(testWorkingDirectory());
-  await newProject.getByRole("button", { name: "Save project", exact: true }).click();
-  await expect(newProject).toBeHidden();
-  await page.getByRole("button", { name: "Open conversations", exact: true }).click();
+  // New project names the project in place, in the nav: Escape or an empty
+  // name creates nothing; a name the server would refuse is explained there.
+  const newProject = page.getByRole("button", { name: "New project", exact: true });
+  const nameField = page.getByTestId("new-project-row").getByLabel("New project", { exact: true });
+  await newProject.click();
+  await expect(nameField).toBeFocused();
+  await nameField.fill("Dropped");
+  await nameField.press("Escape");
+  await expect(nameField).toHaveCount(0);
+  await newProject.click();
+  await nameField.blur();
+  await expect(nameField).toHaveCount(0);
+  await newProject.click();
+  await nameField.fill("a/b");
+  await nameField.press("Enter");
+  await expect(page.getByTestId("new-project-row").getByRole("alert")).toHaveText(
+    "The name can't contain / or control characters.",
+  );
+  let name = `Publish ${randomUUID().slice(0, 8)}`;
+  await nameField.fill(name);
+  // Leaving the field creates the project.
+  await nameField.blur();
+  await expect(nameField).toHaveCount(0);
+  const group = page.getByRole("region", { name, exact: true });
+  await expect(group).toBeVisible();
+  const projects = (await (await request.get("/api/workspace")).json()) as {
+    projects: { name: string; vm: unknown }[];
+  };
+  expect(projects.projects.map((p) => p.name)).not.toContain("Dropped");
+  // Naming a project creates no VM: it runs on this host until edited.
+  expect(projects.projects.find((p) => p.name === name)?.vm).toBeNull();
 
   await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
   const projectMenu = page.getByTestId("project-actions-menu");
   await expect(projectMenu.getByRole("menuitem")).toHaveText(["Edit project…", "Delete project…"]);
   await projectMenu.getByRole("menuitem", { name: "Edit project…", exact: true }).click();
+  // The editor is titled with the project's name, which a click renames:
+  // Escape reverts, Enter saves (leaving the form's other edits unsaved).
   const editor = page.getByRole("region", { name: "Edit project", exact: true });
+  await editor
+    .getByLabel("Project instructions (AGENTS.md)", { exact: true })
+    .fill("Keep release notes brief.");
+  await editor.getByRole("button", { name, exact: true }).click();
+  const rename = editor.getByLabel("Rename", { exact: true });
+  await expect(rename).toBeFocused();
+  await rename.fill("Discarded");
+  await rename.press("Escape");
+  await expect(editor).toBeVisible();
+  await editor.getByRole("button", { name, exact: true }).click();
+  const original = name;
+  name = `${original} notes`;
+  await rename.fill(name);
+  await rename.press("Enter");
+  await expect(editor.getByRole("button", { name, exact: true })).toBeVisible();
+  const renamed = (await (await request.get("/api/workspace")).json()) as {
+    projects: { name: string; instructions: string }[];
+  };
+  expect(renamed.projects.find((p) => p.name === name)?.instructions).toBe("");
+  expect(renamed.projects.map((p) => p.name)).not.toContain(original);
+  await editor.getByLabel("Working directory", { exact: true }).fill(testWorkingDirectory());
+  await editor.getByRole("button", { name: "Save project", exact: true }).click();
+  await expect(editor).toBeHidden();
+  await page.getByRole("button", { name: "Open conversations", exact: true }).click();
+  await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
+  await projectMenu.getByRole("menuitem", { name: "Edit project…", exact: true }).click();
   await expect(editor.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
     "Keep release notes brief.",
   );
-  await editor
-    .getByLabel("Project instructions (AGENTS.md)", { exact: true })
-    .fill("Keep release notes brief. Link the release.");
-  await editor.getByRole("button", { name: "Save project", exact: true }).click();
+  await editor.getByRole("button", { name: "Cancel", exact: true }).first().click();
   await expect(editor).toBeHidden();
   await page.getByRole("button", { name: "Open conversations", exact: true }).click();
 
@@ -68,7 +113,7 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   await page.getByRole("button", { name: "Edit conversation project", exact: true }).click();
   const edit = page.getByRole("region", { name: "Edit project", exact: true });
   await expect(edit.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
-    "Keep release notes brief. Link the release.",
+    "Keep release notes brief.",
   );
   await edit.getByRole("button", { name: "Cancel", exact: true }).first().click();
   await expect(edit).toBeHidden();
@@ -92,9 +137,9 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   });
   expect(archived.ok()).toBeTruthy();
   await openProjects(page);
-  const group = page.getByRole("region", { name, exact: true });
-  await expect(group).toBeVisible();
-  await group.getByRole("button", { name: `${name} project actions`, exact: true }).click();
+  const renamedGroup = page.getByRole("region", { name, exact: true });
+  await expect(renamedGroup).toBeVisible();
+  await renamedGroup.getByRole("button", { name: `${name} project actions`, exact: true }).click();
   await projectMenu.getByRole("menuitem", { name: "Delete project…", exact: true }).click();
   const remove = page.getByRole("dialog", { name: "Delete project?", exact: true });
   // A project on this host has no VMs to mention.
@@ -103,7 +148,7 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   );
   await remove.getByRole("button", { name: "Delete project", exact: true }).click();
   await expect(remove).toBeHidden();
-  await expect(group).toHaveCount(0);
+  await expect(renamedGroup).toHaveCount(0);
   const after = (await (await request.get("/api/workspace")).json()) as {
     projects: { name: string }[];
   };

@@ -154,7 +154,6 @@ export const ja: TranslationKeys = {
   removeAction: "削除",
   editProject: "プロジェクトを編集",
   projectFormIntro: "このプロジェクトのすべての会話に共通する指示、リポジトリ、アクション。",
-  projectName: "名前",
   projectInstructions: "プロジェクトの指示 (AGENTS.md)",
   projectInstructionsHint: "このプロジェクトの各会話に追加される AGENTS.md 形式の指示。",
   workingDirectory: "作業ディレクトリ",

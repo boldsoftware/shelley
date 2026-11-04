@@ -104,23 +104,11 @@ test("project editor, task creation, failed action retry, and success-only archi
   await expect(page.locator("h1.header-title")).toHaveText("Assistant");
   await openWorkspace(page);
   await page.getByRole("button", { name: "New project", exact: true }).click();
-  const newProject = page.getByRole("region", { name: "New project", exact: true });
   const name = `Publish ${randomUUID().slice(0, 8)}`;
-  await newProject.getByLabel("Name", { exact: true }).fill(name);
-  // New projects default to their own VMs, in a directory named after them.
-  await expect(newProject.getByRole("radio", { name: /Their own VMs/ })).toBeChecked();
-  await expect(newProject.getByLabel("Working directory", { exact: true })).toHaveValue(
-    `/home/exedev/${name.toLowerCase().replace(" ", "-")}`,
-  );
-  await newProject.getByRole("radio", { name: /This Shelley host/ }).check();
-  await expect(newProject.getByLabel("Working directory", { exact: true })).toHaveValue("");
-  await newProject
-    .getByLabel("Project instructions (AGENTS.md)", { exact: true })
-    .fill("Keep publishing tasks brief.");
-  await newProject.getByLabel("Working directory", { exact: true }).fill(testWorkingDirectory());
-  await newProject.getByRole("button", { name: "Save project", exact: true }).click();
-  await expect(newProject).toBeHidden();
-  await openWorkspace(page);
+  const nameField = page.getByTestId("new-project-row").getByLabel("New project", { exact: true });
+  await nameField.fill(name);
+  await nameField.press("Enter");
+  await expect(nameField).toHaveCount(0);
 
   await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
   const projectMenu = page.getByTestId("project-actions-menu");
@@ -131,9 +119,10 @@ test("project editor, task creation, failed action retry, and success-only archi
   );
   await projectMenu.getByRole("menuitem", { name: "Edit project…", exact: true }).click();
   const editor = page.getByRole("region", { name: "Edit project", exact: true });
-  await expect(editor.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
-    "Keep publishing tasks brief.",
-  );
+  await editor
+    .getByLabel("Project instructions (AGENTS.md)", { exact: true })
+    .fill("Keep publishing tasks brief.");
+  await editor.getByLabel("Working directory", { exact: true }).fill(testWorkingDirectory());
   await editor.getByRole("button", { name: "Add action", exact: true }).click();
   await editor.getByLabel("ID", { exact: true }).fill("publish");
   await editor.getByLabel("Button label", { exact: true }).fill("Publish & archive");

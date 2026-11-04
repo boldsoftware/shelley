@@ -151,7 +151,6 @@ export interface TranslationKeys {
   removeAction: string;
   editProject: string;
   projectFormIntro: string;
-  projectName: string;
   projectInstructions: string;
   projectInstructionsHint: string;
   workingDirectory: string;

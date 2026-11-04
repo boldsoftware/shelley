@@ -155,7 +155,6 @@ export const vi: TranslationKeys = {
   removeAction: "Xóa",
   editProject: "Sửa dự án",
   projectFormIntro: "Hướng dẫn, kho mã và hành động chung cho mọi cuộc trò chuyện trong dự án này.",
-  projectName: "Tên",
   projectInstructions: "Hướng dẫn dự án (AGENTS.md)",
   projectInstructionsHint:
     "Hướng dẫn kiểu AGENTS.md được thêm vào mọi cuộc trò chuyện trong dự án này.",

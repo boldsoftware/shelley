@@ -195,7 +195,7 @@
                   type="button"
                   class="first-project-button"
                   data-testid="first-project-button"
-                  @click="workspace.editProject()"
+                  @click="workspace.startNewProject()"
                 >
                   <i class="pi pi-folder-plus" aria-hidden="true" />
                   New Project

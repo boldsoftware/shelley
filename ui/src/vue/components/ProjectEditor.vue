@@ -1,12 +1,8 @@
-<!-- The project editor, a page in the main pane in place of the chat: a new
-     project, or one being edited. Saving a new project that needs a base VM
-     opens its setup conversation. -->
+<!-- The project editor, a page in the main pane in place of the chat. Its
+     title is the project's name, which a click renames; saving a project
+     that turned on VMs opens its base VM's setup conversation. -->
 <template>
-  <section
-    class="project-page"
-    :aria-label="editingName ? t('editProject') : t('newProject')"
-    @keydown.esc="close"
-  >
+  <section class="project-page" :aria-label="t('editProject')" @keydown.esc="close">
     <div class="header">
       <div class="header-left">
         <Button
@@ -18,7 +14,24 @@
           @click="emit('openDrawer')"
         />
         <h1 class="app-bar-title header-title">
-          {{ editingName ? t("editProject") : t("newProject") }}
+          <span v-if="renaming" class="project-title-rename">
+            <ProjectNameField
+              :initial="editingName"
+              :label="t('rename')"
+              :submit="renameProject"
+              @done="renaming = false"
+            />
+          </span>
+          <button
+            v-else
+            type="button"
+            class="project-title-button"
+            :title="t('rename')"
+            :disabled="saving"
+            @click="renaming = true"
+          >
+            {{ editingName }}
+          </button>
         </h1>
       </div>
       <div class="header-actions">
@@ -41,17 +54,6 @@
         @submit.prevent="saveProject"
       >
         <p class="project-muted">{{ t("projectFormIntro") }}</p>
-        <label for="project-name">{{ t("projectName") }}</label>
-        <input
-          id="project-name"
-          v-model="draft.name"
-          required
-          maxlength="64"
-          autocomplete="off"
-          :placeholder="t('projectNamePlaceholder')"
-          :autofocus="!editingName"
-          :disabled="saving"
-        />
         <label for="project-instructions">{{ t("projectInstructions") }}</label>
         <textarea
           id="project-instructions"
@@ -171,20 +173,21 @@ import { ref, watch } from "vue";
 import Button from "primevue/button";
 import ProjectRepoPicker from "./ProjectRepoPicker.vue";
 import ProjectVMFields from "./ProjectVMFields.vue";
+import ProjectNameField from "./ProjectNameField.vue";
 import { workspaceApi, type Project } from "../../services/workspace";
 import { useWorkspace } from "../composables/workspace";
 import { useI18n } from "../composables/i18n";
 import { errorMessage } from "../../utils/errorMessage";
-import { workspaceMode } from "../../utils/workspaceMode";
 import { navigateToConversationSlug } from "../composables/subagentLive";
 
 const { t } = useI18n();
 const emit = defineEmits<{ (e: "openDrawer"): void }>();
 const workspace = useWorkspace();
 const draft = ref<Project | null>(null);
-// The name the project had when editing began, "" for a new one: renaming
-// saves to it.
+// The project's name, which renaming (in place, in the title) changes and
+// saving saves to.
 const editingName = ref("");
+const renaming = ref(false);
 // The VM user's home, where the base VM's setup clones the repositories.
 const HOME = "/home/exedev";
 const cwdTouched = ref(false);
@@ -195,33 +198,37 @@ watch(
   workspace.projectEditor,
   (editor) => {
     if (!editor) return;
-    draft.value = editor.project
-      ? JSON.parse(JSON.stringify(editor.project))
-      : {
-          name: "",
-          instructions: "",
-          cwd: "",
-          actions: [],
-          repos: [],
-          // In workspace mode new projects run each conversation on its own VM
-          // (ProjectVMFields fills in this host's default integration);
-          // otherwise on this host.
-          vm: workspaceMode
-            ? { base: "", shared_vm: "", integration: "", setup_conversation_id: "" }
-            : null,
-        };
-    editingName.value = editor.project?.name ?? "";
-    cwdTouched.value = !!editor.project;
+    draft.value = JSON.parse(JSON.stringify(editor.project));
+    editingName.value = editor.project.name;
+    renaming.value = false;
+    // A project without a directory gets one that follows its repositories
+    // and VMs, until edited.
+    cwdTouched.value = !!editor.project.cwd;
     projectError.value = "";
   },
   { immediate: true },
 );
+// The latest rename, which saving waits for: leaving the title for Save
+// renames first.
+let renamed = Promise.resolve();
+function renameProject(name: string) {
+  return (renamed = rename(name));
+}
+// Renames the project as saved, leaving the draft's other edits unsaved.
+async function rename(name: string) {
+  const saved = workspace.data.value?.projects.find((p) => p.name === editingName.value);
+  if (!saved) throw new Error(`Project ${editingName.value} no longer exists.`);
+  await workspaceApi.updateProject(editingName.value, { ...saved, name });
+  editingName.value = name;
+  if (draft.value) draft.value.name = name;
+  await workspace.refresh();
+}
 const slug = (name: string) =>
   name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "") || "project";
-// A new project's working directory follows its repositories until edited:
+// A working directory follows the repositories until edited:
 // on a VM, the single repository's clone, or home holding several.
 watch(
   () => draft.value && ([draft.value.repos, draft.value.name, !!draft.value.vm] as const),
@@ -255,15 +262,14 @@ async function saveProject() {
     const actions = project.actions;
     if (new Set(actions.map((action) => action.id)).size !== actions.length)
       throw new Error("Each action needs a unique ID.");
-    const saved = { ...project, name: project.name.trim() };
-    const result = await (editingName.value
-      ? workspaceApi.updateProject(editingName.value, saved)
-      : workspaceApi.createProject(saved));
+    await renamed.catch(() => undefined); // its error shows in the title
+    const before = workspace.projectEditor.value?.project.vm?.setup_conversation_id;
+    const result = await workspaceApi.updateProject(editingName.value, project);
     await workspace.refresh();
     workspace.projectEditor.value = null;
-    // A new project's base VM setup conversation is where to follow along.
+    // Turning on VMs starts the base VM setup conversation: follow along there.
     const setup = result.vm?.setup_conversation_id;
-    if (!editingName.value && setup) navigateToConversationSlug(setup);
+    if (setup && setup !== before) navigateToConversationSlug(setup);
   } catch (err) {
     projectError.value = errorMessage(err);
   } finally {

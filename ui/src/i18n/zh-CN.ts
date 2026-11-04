@@ -151,7 +151,6 @@ export const zhCN: TranslationKeys = {
   removeAction: "移除",
   editProject: "编辑项目",
   projectFormIntro: "此项目中所有对话共享的指令、仓库和操作。",
-  projectName: "名称",
   projectInstructions: "项目指令 (AGENTS.md)",
   projectInstructionsHint: "附加到此项目每个对话的 AGENTS.md 风格指令。",
   workingDirectory: "工作目录",

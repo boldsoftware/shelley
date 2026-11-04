@@ -1,6 +1,6 @@
-<!-- Where a project's conversations run: their own VMs copied from a base (the
-     default for new projects in workspace mode), this Shelley host, or one
-     shared VM. Part of the project editor. Shown only where usable: on a
+<!-- Where a project's conversations run: their own VMs copied from a base
+     (recommended in workspace mode), this Shelley host (where new projects
+     start, so naming one creates no VM), or one shared VM. Part of the project editor. Shown only where usable: on a
      host with exe.dev integrations, or for a project with a VM. -->
 <template>
   <template v-if="available">

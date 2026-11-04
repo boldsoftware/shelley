@@ -157,7 +157,6 @@ export const fr: TranslationKeys = {
   editProject: "Modifier le projet",
   projectFormIntro:
     "Instructions, dépôts et actions communs à toutes les conversations de ce projet.",
-  projectName: "Nom",
   projectInstructions: "Instructions du projet (AGENTS.md)",
   projectInstructionsHint:
     "Instructions de type AGENTS.md ajoutées à chaque conversation de ce projet.",

@@ -3,7 +3,7 @@ import { test, type TestContext } from "node:test";
 import { workspaceApi, type ActionRunSummary, type Workspace } from "../../services/workspace";
 import { en } from "../../i18n/en";
 import type { TranslationKeys } from "../../i18n/types";
-import { createWorkspaceState, projectDeletionPlan } from "./workspace";
+import { createWorkspaceState, projectDeletionPlan, projectNameProblem } from "./workspace";
 
 const translate = (key: keyof TranslationKeys) => en[key];
 
@@ -263,4 +263,15 @@ test("project deletion plan: active conversations block; the setup conversation 
   };
   const plan = projectDeletionPlan(data, own, translate);
   assert.deepEqual([plan.deletesVMs, plan.keepsVMs, plan.setupId], [[], ["base VM mine"], ""]);
+});
+
+test("projectNameProblem refuses what the server would", () => {
+  assert.equal(projectNameProblem("Blog", ["Docs"]), "");
+  assert.equal(projectNameProblem("Blog", ["Blog"]), "A project named Blog already exists.");
+  assert.match(projectNameProblem("", []), /required/);
+  assert.match(projectNameProblem("a/b", []), /\//);
+  assert.match(projectNameProblem("a\tb", []), /control/);
+  assert.match(projectNameProblem("..", []), /\.\./);
+  assert.equal(projectNameProblem("é".repeat(32), []), "");
+  assert.match(projectNameProblem("é".repeat(33), []), /64 bytes/);
 });

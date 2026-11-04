@@ -22,8 +22,9 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     () => new Map(data.value?.conversations.map((c) => [c.conversation_id, c.project])),
   );
   const error = ref<string | null>(null);
-  /** The project being edited, or a new one (project null). */
-  const projectEditor = shallowRef<{ project: Project | null } | null>(null);
+  const projectEditor = shallowRef<{ project: Project } | null>(null);
+  /** Whether the drawer shows the row naming a new project. */
+  const namingProject = ref(false);
   const projectDeletion = shallowRef<Project | null>(null);
   /** The project the new conversation composer starts its conversation
    * in, "" for none; newConversationTrigger has App open the composer. */
@@ -123,14 +124,18 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     refresh,
     rememberRun,
     projectEditor,
+    namingProject,
     projectDeletion,
     composerProject,
     newConversationTrigger,
     dispose: () => {
       stopped = true;
     },
-    editProject: (project: Project | null = null) => {
+    editProject: (project: Project) => {
       projectEditor.value = { project };
+    },
+    startNewProject: () => {
+      namingProject.value = true;
     },
     /** Whether the user has projects besides Shelley's own, which is built
      * in; true until the workspace loads. */
@@ -228,4 +233,17 @@ export function useWorkspace() {
   const workspace = inject(WorkspaceKey);
   if (!workspace) throw new Error("Workspace provider is required");
   return workspace;
+}
+
+/** Why name (trimmed) can't name a project, as the server would refuse it,
+ * or "". taken holds the other projects' names. */
+export function projectNameProblem(name: string, taken: string[]): string {
+  if (!name) return "A name is required.";
+  if (new TextEncoder().encode(name).length > 64) return "The name is longer than 64 bytes.";
+  // eslint-disable-next-line no-control-regex
+  if (/[/\u0000-\u001f\u007f-\u009f]/.test(name))
+    return "The name can't contain / or control characters.";
+  if (name === "." || name === "..") return "The name can't be . or ..";
+  if (taken.includes(name)) return `A project named ${name} already exists.`;
+  return "";
 }

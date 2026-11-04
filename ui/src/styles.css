@@ -16939,7 +16939,8 @@ kbd {
 .language-picker-modal {
   max-width: 22rem;
 }
-.language-picker-options {
+.language-picker-options,
+.project-title-rename {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -18205,6 +18206,55 @@ kbd {
 .workspace-mode .drawer-actions-trigger.btn-icon-sm {
   width: 1.5rem;
   height: 1.5rem;
+}
+
+/* A new project's row while its name is typed. */
+.project-naming {
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding-block: 0.2rem;
+}
+
+.project-naming,
+.project-naming > .pi {
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.project-name-field {
+  flex: 1;
+  min-width: 0;
+  padding: 0.15rem 0.35rem;
+  color: var(--text-primary);
+  font: inherit;
+  background: var(--bg-base);
+  border: 1px solid var(--primary);
+  border-radius: 0.3rem;
+  outline: none;
+}
+
+.error-line.project-name-error {
+  flex-basis: 100%;
+  margin: 0;
+  font-weight: normal;
+}
+
+/* The project editor's title, its name, which a click renames. */
+.project-title-button {
+  padding: 0 0.25rem;
+  margin-left: -0.25rem;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 0.3rem;
+  cursor: text;
+  text-align: left;
+}
+
+.project-title-button:hover {
+  border-color: var(--border);
 }
 
 .project-icon-button:hover {
