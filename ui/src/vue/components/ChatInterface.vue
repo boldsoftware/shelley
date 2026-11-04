@@ -57,7 +57,12 @@
           :cwd="currentConversation?.cwd || selectedCwd"
           :links="links"
           :can-archive="
-            !!(conversationId && onArchiveConversation && !currentConversation?.archived && !isAssistant)
+            !!(
+              conversationId &&
+              onArchiveConversation &&
+              !currentConversation?.archived &&
+              !isAssistant
+            )
           "
           :archive-note="workspace.archiveNote(conversationId)"
           :can-export="!!(conversationId && messages.length > 0)"
@@ -100,7 +105,10 @@
                   ? switchConversationThinkingLevel($event)
                   : setThinkingLevel($event)
               "
-              @manage-models="hide(); props.onOpenModelsModal?.()"
+              @manage-models="
+                hide();
+                props.onOpenModelsModal?.();
+              "
               @refresh-models="handleRefreshModels"
             >
               <template #value="{ label, badge }">
@@ -128,7 +136,10 @@
             @click="onHeaderCallClick"
           >
             <svg fill="currentColor" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path :transform="voicePhase !== 'idle' ? 'rotate(135 12 12)' : undefined" d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1.02l-2.2 2.2Z" />
+              <path
+                :transform="voicePhase !== 'idle' ? 'rotate(135 12 12)' : undefined"
+                d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1.02l-2.2 2.2Z"
+              />
             </svg>
           </button>
           <button
@@ -165,7 +176,14 @@
       <div ref="messagesContainerRef" class="messages-container scrollable">
         <div v-if="!loading || renderingConversation" ref="messagesListRef" class="messages-list">
           <!-- empty state -->
-          <div v-if="conversationOptions.kind !== 'search' && messages.length === 0 && liveExchangeTurns.length === 0" class="empty-state">
+          <div
+            v-if="
+              conversationOptions.kind !== 'search' &&
+              messages.length === 0 &&
+              liveExchangeTurns.length === 0
+            "
+            class="empty-state"
+          >
             <div class="empty-state-content">
               <div v-if="isAssistant && !workspace.hasProjects.value" class="first-project">
                 <h2 class="text-primary">Start with a project</h2>
@@ -260,7 +278,10 @@
                 </ul>
                 <p v-if="modelSetupHint.footer">{{ t(modelSetupHint.footer) }}</p>
               </PvMessage>
-              <p v-else-if="!isAssistant && voicePhase === 'idle'" class="text-sm chat-secondary-text">
+              <p
+                v-else-if="!isAssistant && voicePhase === 'idle'"
+                class="text-sm chat-secondary-text"
+              >
                 {{
                   t(
                     canSendWithModel(selectedModel, readyModelIds, providerIds)
@@ -361,7 +382,10 @@
               :on-cancel="conversationId ? cancelQueuedMessage : undefined"
             />
           </template>
-          <div v-if="visibleQueuedGhosts.length > 1 && conversationId" class="queued-cancel-all-row">
+          <div
+            v-if="visibleQueuedGhosts.length > 1 && conversationId"
+            class="queued-cancel-all-row"
+          >
             <button
               class="queued-message-badge-cancel"
               data-testid="cancel-all-queued"
@@ -1037,9 +1061,7 @@ const liveVoiceRef = ref<InstanceType<typeof LiveVoice> | null>(null);
 const voicePhase = ref<"idle" | "connecting" | "live">("idle");
 const liveExchangeTurns = computed(() => {
   const live = liveVoiceRef.value;
-  return voicePhase.value !== "idle" && live
-    ? live.transcript
-    : [];
+  return voicePhase.value !== "idle" && live ? live.transcript : [];
 });
 const liveExchangeOriginTitle = computed(() => {
   const live = liveVoiceRef.value;
@@ -1050,7 +1072,9 @@ const liveExchangeOriginTitle = computed(() => {
 const headerCallLabel = computed(() =>
   voicePhase.value === "idle"
     ? t("startVoiceConversation")
-    : voicePhase.value === "connecting" ? "Cancel voice call" : "End voice call",
+    : voicePhase.value === "connecting"
+      ? "Cancel voice call"
+      : "End voice call",
 );
 function startVoice() {
   void liveVoiceRef.value?.start();
@@ -1125,7 +1149,10 @@ const showUserEmails = computed(() => {
 provide("showUserEmails", showUserEmails);
 // Only the workspace Assistant receives texted messages; web chats' messages
 // also carry external ids.
-provide("isAssistantConversation", computed(() => !!props.isAssistant));
+provide(
+  "isAssistantConversation",
+  computed(() => !!props.isAssistant),
+);
 const loading = ref(true);
 // Run the status-bar hook once the conversation has loaded and after every
 // message. Not for drafts or archived conversations.
@@ -3602,8 +3629,10 @@ async function queueMessageTo(
 }
 
 function getLiveConversation(id: string): Conversation | undefined {
-  return props.conversations.find((row) => row.conversation_id === id) ??
-    (props.currentConversation?.conversation_id === id ? props.currentConversation : undefined);
+  return (
+    props.conversations.find((row) => row.conversation_id === id) ??
+    (props.currentConversation?.conversation_id === id ? props.currentConversation : undefined)
+  );
 }
 
 // A call is pinned to the conversation on screen when it is tapped. On /new,
@@ -3621,10 +3650,13 @@ function captureLiveConversation(): LiveCallDestination {
   return {
     conversationId,
     conversation: props.currentConversation,
-    settings: isDraft ? { ...creation, conversation_options: buildConversationOptions() } : undefined,
-    prepareConversation: () => sessionVersion === draftSessionVersion
-      ? ensureDraftConversation(draftText, creation)
-      : createDraftForSession(draft, sessionVersion, creation),
+    settings: isDraft
+      ? { ...creation, conversation_options: buildConversationOptions() }
+      : undefined,
+    prepareConversation: () =>
+      sessionVersion === draftSessionVersion
+        ? ensureDraftConversation(draftText, creation)
+        : createDraftForSession(draft, sessionVersion, creation),
   };
 }
 
@@ -3758,10 +3790,32 @@ function followReviewConversation() {
   };
 }
 
+// The new conversation's view replaces the composer before MessageInput's
+// own clear, which then skips the changed session, so the sent text leaves
+// the new-conversation slot here, unless a newer composition took it over.
 async function sendFirstMessage(prompt: string, skills: string[] = []) {
+  const session = newDraftSessionVersion;
+  await startFirstMessage(prompt, skills);
+  if (session === newDraftSessionVersion) clearCachedDraft(null);
+}
+
+async function startFirstMessage(prompt: string, skills: string[]) {
   if (!props.onFirstMessage) return;
   if (!canSendWithModel(selectedModel.value, readyModelIds.value, providerIds.value)) {
     throw new Error(noModelErrorMessage());
+  }
+  // A project's conversation takes the project's directory and settings,
+  // except the model and reasoning level picked here.
+  const project = composerProject.value;
+  if (project) {
+    await props.onFirstMessage(
+      prompt,
+      selectedModel.value,
+      undefined,
+      { profile: project, thinking_level: composerSettings.value.thinking_level },
+      skills,
+    );
+    return;
   }
   if (selectedCwd.value) {
     const validation = await api.validateCwd(selectedCwd.value);
@@ -4160,8 +4214,14 @@ async function sendMessage(message: string, skills: string[] = []) {
     if (isDraft) undoSubmit = props.onComposerSubmit?.(request.message, selectedCwd.value || null);
     let effectiveId = props.conversationId || draftConvId;
     if (!effectiveId && inflightCreate) effectiveId = await inflightCreate;
-    if (!effectiveId && props.onFirstMessage) {
+    // A project's conversation starts on the server's project path, not
+    // from a draft; the draft saved before the project was picked goes.
+    if ((!effectiveId || (isDraft && composerProject.value)) && props.onFirstMessage) {
       await sendFirstMessage(message.trim(), skills);
+      if (effectiveId) {
+        clearCachedDraft(effectiveId);
+        void api.deleteConversation(effectiveId).catch(console.error);
+      }
     } else if (effectiveId) {
       const id = effectiveId;
       const accepted = await postSubmittedDraft(id, submittedDraft, () =>
@@ -4434,6 +4494,13 @@ function appendBtwSummaryToComposer(answer: string) {
   draftSeed.value = { value };
 }
 const lazyDraftId = ref<string | null>(null);
+// The project a new conversation starts in, "" for none; App's, chosen in the
+// status bar, in workspace mode only.
+const composerProject = computed(() =>
+  workspaceMode && (!props.conversationId || props.currentConversation?.is_draft)
+    ? workspace.composerProject.value
+    : "",
+);
 let draftConvId: string | null = props.conversationId;
 let draftIsDraft = !!props.currentConversation?.is_draft;
 let inflightCreate: Promise<string> | null = null;
@@ -4515,7 +4582,8 @@ async function saveDraft(value: string) {
     }
     return;
   }
-  if (!value.trim()) return;
+  // A project's conversation starts with its first message (sendFirstMessage).
+  if (!value.trim() || composerProject.value) return;
   await ensureDraftConversation(value);
 }
 
@@ -4658,6 +4726,9 @@ const statusContentProps = computed(() => {
     resumingInterrupted: resumingInterrupted.value,
     cancelling: cancelling.value,
     selectedCwd: selectedCwd.value,
+    projects: workspaceMode ? (workspace.data.value?.projects ?? []) : [],
+    project: composerProject.value,
+    onSelectProject: (name: string) => (workspace.composerProject.value = name),
     contextWindowSize: contextWindowSize.value,
     maxContextTokens: maxContextTokens.value,
     usageEntries: usageEntries.value,
@@ -5280,8 +5351,17 @@ async function jumpToMessage(messageId: string) {
 
 // Match the native SubagentTool navigation path: no document reload.
 function onConversationLinkClick(event: MouseEvent) {
-  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  )
+    return;
+  const link =
+    event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
   if (!link || link.hasAttribute("download")) return;
   const url = new URL(link.href, window.location.href);
   if (url.origin !== window.location.origin || !/^\/c\/[^/]+\/?$/.test(url.pathname)) return;
@@ -5300,14 +5380,24 @@ onUnmounted(() => window.removeEventListener("popstate", onMessageLinkNavigation
 
 // Search citations link to full message IDs, independent of the optional TOC.
 let appliedMessageLink = "";
-watch([() => props.conversationId, messages, loading, messageLinkNavigation], async () => {
-  const id = new URLSearchParams(window.location.search).get("message_id");
-  const key = `${props.conversationId}:${id}`;
-  if (!id || loading.value || key === appliedMessageLink || !messages.value.some(m => m.message_id === id)) return;
-  appliedMessageLink = key;
-  await nextTick();
-  if (!(await jumpToMessage(id))) appliedMessageLink = "";
-}, {flush: "post"});
+watch(
+  [() => props.conversationId, messages, loading, messageLinkNavigation],
+  async () => {
+    const id = new URLSearchParams(window.location.search).get("message_id");
+    const key = `${props.conversationId}:${id}`;
+    if (
+      !id ||
+      loading.value ||
+      key === appliedMessageLink ||
+      !messages.value.some((m) => m.message_id === id)
+    )
+      return;
+    appliedMessageLink = key;
+    await nextTick();
+    if (!(await jumpToMessage(id))) appliedMessageLink = "";
+  },
+  { flush: "post" },
+);
 
 // Auto-scroll after DOM updates (mirrors the useLayoutEffect).
 watch(

@@ -380,3 +380,18 @@ test("archiving the only row beside an unused draft returns to the draft", async
   await expect(activeRow(page)).toHaveAttribute("data-conversation-id", "composer");
   expect(composerRequests).toEqual([]);
 });
+
+test("a first message sent before the draft is saved leaves the next new conversation empty", async ({
+  page,
+}) => {
+  const message = `echo: once ${Date.now()}`;
+  await openNewConversation(page);
+  await page.getByTestId("message-input").fill(message);
+  await page.getByTestId("send-button").click();
+  await expect(page).toHaveURL(/\/c\//);
+  await expect(page.getByTestId("message-input")).toHaveValue("");
+  await startNewConversationFromHeader(page);
+  await expect(page.getByTestId("message-input")).toHaveValue("");
+  await page.reload();
+  await expect(page.getByTestId("message-input")).toHaveValue("");
+});

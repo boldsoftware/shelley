@@ -167,23 +167,13 @@ export const en: TranslationKeys = {
   savingEllipsis: "Saving…",
   saveProject: "Save project",
   project: "Project",
-  chooseProject: "Choose a project",
-  conversationTitle: "Title",
-  optional: "(optional)",
-  conversationTitlePlaceholder: "What needs doing?",
-  conversationInstructions: "Instructions",
-  conversationInstructionsPlaceholder: "What should Shelley do?",
-  workingIn: "Working in",
   startingEllipsis: "Starting…",
-  startConversation: "Start conversation",
   deleteProjectTitle: "Delete project?",
   deleteProjectConfirm: "Delete {name}? Conversation history is never deleted.",
   archivedConversationMoves: "Its archived conversation moves to No project.",
   archivedConversationsMove: "Its {count} archived conversations move to No project.",
   deletingEllipsis: "Deleting…",
   deleteProject: "Delete project",
-  conversationCreatedNotOpened:
-    "The conversation was created but could not be opened. Reload the conversation list.",
   conversationProject: "Conversation project",
   chooseConversationProject: "Choose a project for this conversation",
   editConversationProject: "Edit conversation project",
@@ -522,6 +512,7 @@ export const en: TranslationKeys = {
   // Status Bar
   modelLabel: "Model:",
   dirLabel: "Dir:",
+  projectLabel: "Project:",
 
   // Sidebar buttons
   editUserAgentsMd: "Edit User AGENTS.md",

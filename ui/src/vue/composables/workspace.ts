@@ -25,7 +25,10 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
   /** The project being edited, or a new one (project null). */
   const projectEditor = shallowRef<{ project: Project | null } | null>(null);
   const projectDeletion = shallowRef<Project | null>(null);
-  const conversationCreator = shallowRef<{ project: string } | null>(null);
+  /** The project the new conversation composer starts its conversation
+   * in, "" for none; newConversationTrigger has App open the composer. */
+  const composerProject = ref("");
+  const newConversationTrigger = ref(0);
   let pending: Promise<void> | null = null;
   let stopped = false;
   let revision = 0;
@@ -121,7 +124,8 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     rememberRun,
     projectEditor,
     projectDeletion,
-    conversationCreator,
+    composerProject,
+    newConversationTrigger,
     dispose: () => {
       stopped = true;
     },
@@ -138,8 +142,10 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     deleteProject: (project: Project) => {
       projectDeletion.value = project;
     },
+    /** Opens the new conversation composer in project ("" for none). */
     newProjectConversation: (project = "") => {
-      conversationCreator.value = { project };
+      composerProject.value = project;
+      newConversationTrigger.value++;
     },
     isAssistant: (id: string | null | undefined) => !!id && id === data.value?.assistant_id,
     vmFor,

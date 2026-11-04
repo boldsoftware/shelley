@@ -38,6 +38,14 @@ test("stock mode offers Group by Project without the workspace", async ({ page, 
   const none = page.getByRole("region", { name: "No project", exact: true });
   await expect(none.locator(`[data-conversation-id="${plain.conversationId}"]`)).toBeVisible();
 
+  // Outside workspace mode a new conversation has no Project picker.
+  await page.getByRole("button", { name: `New conversation in ${name}`, exact: true }).click();
+  await expect(page.getByTestId("message-input")).toBeVisible();
+  await expect(page.locator(".project-picker")).toHaveCount(0);
+  await expect(page.locator(".status-field-cwd")).toBeVisible();
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open conversations", exact: true }).click();
+
   // The choice is remembered.
   await page.reload();
   await page.getByRole("button", { name: "Open conversations", exact: true }).click();

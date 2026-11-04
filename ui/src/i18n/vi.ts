@@ -168,15 +168,7 @@ export const vi: TranslationKeys = {
   savingEllipsis: "Đang lưu…",
   saveProject: "Lưu dự án",
   project: "Dự án",
-  chooseProject: "Chọn một dự án",
-  conversationTitle: "Tiêu đề",
-  optional: "(không bắt buộc)",
-  conversationTitlePlaceholder: "Cần làm gì?",
-  conversationInstructions: "Hướng dẫn",
-  conversationInstructionsPlaceholder: "Shelley nên làm gì?",
-  workingIn: "Làm việc trong",
   startingEllipsis: "Đang bắt đầu…",
-  startConversation: "Bắt đầu trò chuyện",
   deleteProjectTitle: "Xóa dự án?",
   deleteProjectConfirm: "Xóa {name}? Lịch sử trò chuyện không bao giờ bị xóa.",
   archivedConversationMoves: "Cuộc trò chuyện đã lưu trữ của nó chuyển sang Không có dự án.",
@@ -184,8 +176,6 @@ export const vi: TranslationKeys = {
     "{count} cuộc trò chuyện đã lưu trữ của nó chuyển sang Không có dự án.",
   deletingEllipsis: "Đang xóa…",
   deleteProject: "Xóa dự án",
-  conversationCreatedNotOpened:
-    "Cuộc trò chuyện đã được tạo nhưng không thể mở. Hãy tải lại danh sách trò chuyện.",
   conversationProject: "Dự án của cuộc trò chuyện",
   chooseConversationProject: "Chọn dự án cho cuộc trò chuyện này",
   editConversationProject: "Sửa dự án của cuộc trò chuyện",
@@ -522,6 +512,7 @@ export const vi: TranslationKeys = {
   // Status Bar
   modelLabel: "Model:",
   dirLabel: "Thư mục:",
+  projectLabel: "Dự án:",
 
   // Sidebar buttons
   editUserAgentsMd: "Chỉnh sửa AGENTS.md",

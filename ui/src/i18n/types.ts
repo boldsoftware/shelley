@@ -162,22 +162,13 @@ export interface TranslationKeys {
   savingEllipsis: string;
   saveProject: string;
   project: string;
-  chooseProject: string;
-  conversationTitle: string;
-  optional: string;
-  conversationTitlePlaceholder: string;
-  conversationInstructions: string;
-  conversationInstructionsPlaceholder: string;
-  workingIn: string;
   startingEllipsis: string;
-  startConversation: string;
   deleteProjectTitle: string;
   deleteProjectConfirm: string;
   archivedConversationMoves: string;
   archivedConversationsMove: string;
   deletingEllipsis: string;
   deleteProject: string;
-  conversationCreatedNotOpened: string;
   conversationProject: string;
   chooseConversationProject: string;
   editConversationProject: string;
@@ -505,6 +496,7 @@ export interface TranslationKeys {
   // Status Bar
   modelLabel: string;
   dirLabel: string;
+  projectLabel: string;
 
   // AGENTS.md editor
   editUserAgentsMd: string;

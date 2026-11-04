@@ -5,7 +5,9 @@
 <template>
   <!-- Archived -->
   <template v-if="currentConversation?.archived">
-    <span class="status-message">{{ wording("This conversation is archived.", "This task is archived.") }}</span>
+    <span class="status-message">{{
+      wording("This conversation is archived.", "This task is archived.")
+    }}</span>
     <button class="status-button status-button-primary" @click="onUnarchive">Unarchive</button>
   </template>
 
@@ -79,7 +81,9 @@
       class="status-interrupted-group"
       data-testid="conversation-interrupted"
     >
-      <span class="status-message">{{ wording("Conversation Interrupted", "Turn interrupted") }}</span>
+      <span class="status-message">{{
+        wording("Conversation Interrupted", "Turn interrupted")
+      }}</span>
       <button
         type="button"
         class="status-button status-interrupted-button"
@@ -122,8 +126,28 @@
         @refresh-models="onRefreshModels"
       />
     </div>
+    <!-- With projects, the project takes the directory's place: a project's
+         conversation starts in the project's directory. -->
+    <div v-if="!isAssistant && projects.length" class="status-field status-field-project">
+      <span class="status-field-label">{{ t("projectLabel") }}</span>
+      <Select
+        :model-value="project || NO_PROJECT"
+        :options="projectOptions"
+        option-label="label"
+        option-value="value"
+        :disabled="sending"
+        size="small"
+        :dt="projectPickerDt"
+        class="project-picker"
+        :pt="{ overlay: { class: 'project-picker-panel' } }"
+        :aria-label="t('project')"
+        append-to="body"
+        @update:model-value="(v: string) => onSelectProject(v === NO_PROJECT ? '' : v)"
+      />
+    </div>
+    <ProjectVMSetup v-if="chosenProject?.vm" :vm="chosenProject.vm" />
     <div
-      v-if="!isAssistant"
+      v-if="!isAssistant && !chosenProject"
       :class="`status-field status-field-cwd${cwdError ? ' status-field-error' : ''}`"
       v-tooltip.top="cwdError || 'Working directory for file operations'"
     >
@@ -152,6 +176,10 @@ import type { ThinkingLevel } from "./thinkingLevel";
 import type { SettingsKnob } from "../composables/profiles";
 import AnimatedWorkingStatus from "./AnimatedWorkingStatus.vue";
 import ModelPicker from "./ModelPicker.vue";
+import Select from "primevue/select";
+import { statusPickerDt } from "./statusPickerDt";
+import ProjectVMSetup from "./ProjectVMSetup.vue";
+import type { Project } from "../../services/workspace";
 import StatusReadout from "./StatusReadout.vue";
 
 const props = defineProps<{
@@ -165,6 +193,11 @@ const props = defineProps<{
   resumingInterrupted: boolean;
   cancelling: boolean;
   selectedCwd: string;
+  /** Projects a new conversation can start in, none outside workspace mode. */
+  projects: Project[];
+  /** The chosen project, "" for none. */
+  project: string;
+  onSelectProject: (name: string) => void;
   contextWindowSize: number;
   maxContextTokens: number;
   usageEntries: UsageEntry[];
@@ -212,6 +245,19 @@ const props = defineProps<{
 
 const { t } = useI18n();
 
+const chosenProject = computed(() => props.projects.find((p) => p.name === props.project));
+// PrimeVue's Select shows "" as no selection, so No project has a value of
+// its own.
+const NO_PROJECT = "\0";
+// The model picker pads its own option markup; these options are plain text.
+const projectPickerDt = {
+  ...statusPickerDt,
+  option: { ...statusPickerDt.option, padding: "0.375rem 0.75rem" },
+};
+const projectOptions = computed(() => [
+  { label: t("noProject"), value: NO_PROJECT },
+  ...props.projects.map((p) => ({ label: p.name, value: p.name })),
+]);
 // The conversation's cwd once saved, the picked one while it is still a draft.
 const cwd = computed(() => props.currentConversation?.cwd || props.selectedCwd);
 

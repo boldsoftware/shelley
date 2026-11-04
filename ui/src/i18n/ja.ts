@@ -166,15 +166,7 @@ export const ja: TranslationKeys = {
   savingEllipsis: "保存中…",
   saveProject: "プロジェクトを保存",
   project: "プロジェクト",
-  chooseProject: "プロジェクトを選択",
-  conversationTitle: "タイトル",
-  optional: "（任意）",
-  conversationTitlePlaceholder: "何をしますか？",
-  conversationInstructions: "指示",
-  conversationInstructionsPlaceholder: "Shelley に何をさせますか？",
-  workingIn: "作業場所:",
   startingEllipsis: "開始中…",
-  startConversation: "会話を開始",
   deleteProjectTitle: "プロジェクトを削除しますか？",
   deleteProjectConfirm: "{name} を削除しますか？会話履歴は削除されません。",
   archivedConversationMoves: "アーカイブ済みの会話は「プロジェクトなし」に移動します。",
@@ -182,8 +174,6 @@ export const ja: TranslationKeys = {
     "アーカイブ済みの {count} 件の会話は「プロジェクトなし」に移動します。",
   deletingEllipsis: "削除中…",
   deleteProject: "プロジェクトを削除",
-  conversationCreatedNotOpened:
-    "会話は作成されましたが、開けませんでした。会話一覧を再読み込みしてください。",
   conversationProject: "会話のプロジェクト",
   chooseConversationProject: "この会話のプロジェクトを選択",
   editConversationProject: "会話のプロジェクトを編集",
@@ -523,6 +513,7 @@ export const ja: TranslationKeys = {
   // Status Bar
   modelLabel: "モデル:",
   dirLabel: "ディレクトリ:",
+  projectLabel: "プロジェクト:",
 
   // Sidebar buttons
   editUserAgentsMd: "ユーザー AGENTS.md を編集",

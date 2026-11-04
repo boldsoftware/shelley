@@ -53,16 +53,15 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   await expect(editor).toBeHidden();
   await page.getByRole("button", { name: "Open conversations", exact: true }).click();
 
-  await page.getByRole("button", { name: `New conversation in ${name}`, exact: true }).click();
-  const creator = page.getByRole("dialog", { name: "New Conversation", exact: true });
-  await expect(creator.getByLabel("Project", { exact: true }).locator("option:checked")).toHaveText(
-    name,
-  );
-  await creator.getByLabel("Title", { exact: false }).fill("Publish release notes");
-  await creator.getByLabel("Instructions", { exact: true }).fill("Hello");
-  await creator.getByRole("button", { name: "Start conversation", exact: true }).click();
-  await expect(creator).toBeHidden();
-  await expect(page).toHaveURL(/\/c\/publish-release-notes/);
+  // Outside workspace mode the composer has no project picker; start the
+  // project's conversation through the API.
+  const started = await request.post("/api/conversations/new", {
+    headers,
+    data: { project: name, title: "Publish release notes", message: "Hello" },
+  });
+  expect(started.ok()).toBeTruthy();
+  const { conversation_id: startedId } = (await started.json()) as { conversation_id: string };
+  await page.goto(`/c/${startedId}`);
   await expect(
     page.getByLabel("Conversation project", { exact: true }).locator("option:checked"),
   ).toHaveText(name);
@@ -159,13 +158,17 @@ test("project and conversation ⋯ menus: delete waits for an empty project; mov
     data: { project: source.name, title: `Move me ${suffix}`, message: "Hello" },
   });
   expect(created.ok()).toBeTruthy();
-  const { conversation_id: projectConversationId } = (await created.json()) as { conversation_id: string };
+  const { conversation_id: projectConversationId } = (await created.json()) as {
+    conversation_id: string;
+  };
 
   await page.goto(`/c/${projectConversationId}`);
   await openProjects(page);
   const fromGroup = page.locator(`section[aria-label="${from}"]`);
   const toGroup = page.locator(`section[aria-label="${to}"]`);
-  const conversationRow = page.locator(`.conversation-item[data-conversation-id="${projectConversationId}"]`);
+  const conversationRow = page.locator(
+    `.conversation-item[data-conversation-id="${projectConversationId}"]`,
+  );
   const fromToggle = fromGroup.locator(".project-toggle");
   const toToggle = toGroup.locator(".project-toggle");
   await expect(fromGroup.locator(conversationRow)).toBeVisible();

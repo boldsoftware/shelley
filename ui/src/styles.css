@@ -7452,10 +7452,12 @@ svg {
   }
 
   .status-bar-new .status-chip,
-  .status-bar-new .p-select.model-picker {
+  .status-bar-new .p-select.model-picker,
+  .status-bar-new .p-select.project-picker {
     display: flex;
     align-items: center;
     min-width: 0;
+    max-width: none;
     height: 2.25rem;
     min-height: 0;
     padding: 0 0.625rem;
@@ -7465,7 +7467,8 @@ svg {
     white-space: nowrap;
   }
 
-  .status-bar-new .p-select.model-picker .p-select-label {
+  .status-bar-new .p-select.model-picker .p-select-label,
+  .status-bar-new .p-select.project-picker .p-select-label {
     flex: 1;
     min-width: 0;
     padding: 0;
@@ -7473,7 +7476,8 @@ svg {
     line-height: inherit;
   }
 
-  .status-bar-new .p-select.model-picker .p-select-dropdown {
+  .status-bar-new .p-select.model-picker .p-select-dropdown,
+  .status-bar-new .p-select.project-picker .p-select-dropdown {
     width: 1.75rem;
   }
 
@@ -18579,4 +18583,15 @@ kbd {
   padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--border);
   background: var(--bg-base);
+}
+
+/* The new conversation's project (ChatStatusContent). */
+.p-select.project-picker {
+  max-width: 14rem;
+}
+
+/* PrimeVue has no overlay font-size token; match the status bar's scale. */
+.p-select-overlay.project-picker-panel {
+  min-width: 10rem;
+  font-size: var(--font-size-13);
 }

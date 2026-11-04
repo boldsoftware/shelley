@@ -44,12 +44,9 @@ export const workspaceEn: Partial<TranslationKeys> = {
   projectInstructionsHint: "AGENTS.md-style instructions appended to every task in this project.",
   projectProfileHint:
     "The project is also a profile: its model, effort, tools and base system prompt are its tasks’ settings. Change them from a task’s model picker (Update profile).",
-  startConversation: "Start task",
   deleteProjectConfirm: "Delete {name}? Task history is never deleted.",
   archivedConversationMoves: "Its archived task moves to No project.",
   archivedConversationsMove: "Its {count} archived tasks move to No project.",
-  conversationCreatedNotOpened:
-    "The task was created but could not be opened. Reload the task list.",
   conversationProject: "Task project",
   chooseConversationProject: "Choose a project for this task",
   editConversationProject: "Edit task project",

@@ -167,23 +167,13 @@ export const ru: TranslationKeys = {
   savingEllipsis: "Сохранение…",
   saveProject: "Сохранить проект",
   project: "Проект",
-  chooseProject: "Выберите проект",
-  conversationTitle: "Заголовок",
-  optional: "(необязательно)",
-  conversationTitlePlaceholder: "Что нужно сделать?",
-  conversationInstructions: "Инструкции",
-  conversationInstructionsPlaceholder: "Что должна сделать Shelley?",
-  workingIn: "Рабочий каталог:",
   startingEllipsis: "Запуск…",
-  startConversation: "Начать разговор",
   deleteProjectTitle: "Удалить проект?",
   deleteProjectConfirm: "Удалить {name}? История разговоров никогда не удаляется.",
   archivedConversationMoves: "Его архивный разговор перейдёт в «Без проекта».",
   archivedConversationsMove: "Его архивные разговоры ({count}) перейдут в «Без проекта».",
   deletingEllipsis: "Удаление…",
   deleteProject: "Удалить проект",
-  conversationCreatedNotOpened:
-    "Разговор создан, но открыть его не удалось. Перезагрузите список разговоров.",
   conversationProject: "Проект разговора",
   chooseConversationProject: "Выберите проект для этого разговора",
   editConversationProject: "Изменить проект разговора",
@@ -523,6 +513,7 @@ export const ru: TranslationKeys = {
   // Status Bar
   modelLabel: "Модель:",
   dirLabel: "Каталог:",
+  projectLabel: "Проект:",
 
   // Sidebar buttons
   editUserAgentsMd: "Редактировать AGENTS.md",

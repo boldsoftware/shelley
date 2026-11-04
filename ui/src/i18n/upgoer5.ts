@@ -164,23 +164,13 @@ export const upgoer5: TranslationKeys = {
   savingEllipsis: "Keeping…",
   saveProject: "Keep work",
   project: "Work",
-  chooseProject: "Pick a work",
-  conversationTitle: "Name",
-  optional: "(if you want)",
-  conversationTitlePlaceholder: "What needs doing?",
-  conversationInstructions: "What to do",
-  conversationInstructionsPlaceholder: "What should Shelley do?",
-  workingIn: "Working in",
   startingEllipsis: "Starting…",
-  startConversation: "Start talk",
   deleteProjectTitle: "Throw away work?",
   deleteProjectConfirm: "Throw away {name}? What was said in talks is never thrown away.",
   archivedConversationMoves: "Its put-away talk moves to No work.",
   archivedConversationsMove: "Its {count} put-away talks move to No work.",
   deletingEllipsis: "Throwing away…",
   deleteProject: "Throw away work",
-  conversationCreatedNotOpened:
-    "The talk was made but could not be opened. Load the list of talks again.",
   conversationProject: "Work of this talk",
   chooseConversationProject: "Pick a work for this talk",
   editConversationProject: "Change the work of this talk",
@@ -516,6 +506,7 @@ export const upgoer5: TranslationKeys = {
   // Status Bar
   modelLabel: "Brain:",
   dirLabel: "Place:",
+  projectLabel: "Work:",
 
   // Sidebar buttons
   editUserAgentsMd: "Change your helper words file",

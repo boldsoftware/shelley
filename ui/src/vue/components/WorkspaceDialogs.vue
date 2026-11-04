@@ -1,73 +1,5 @@
 <template>
   <Modal
-    :is-open="!!workspace.conversationCreator.value"
-    :title="t('newConversation')"
-    @close="closeCreator"
-  >
-    <form id="project-conversation-form" class="project-form" @submit.prevent="createConversation">
-      <label for="new-conversation-project">{{ t("project") }}</label>
-      <select
-        id="new-conversation-project"
-        v-model="newProjectConversation.project"
-        required
-        :disabled="creating"
-      >
-        <option disabled value="">{{ t("chooseProject") }}</option>
-        <option
-          v-for="project in workspace.data.value?.projects"
-          :key="project.name"
-          :value="project.name"
-        >
-          {{ project.name }}
-        </option>
-      </select>
-      <ProjectVMSetup :vm="chosenProject?.vm ?? null" @navigate="closeCreator" />
-      <label for="new-conversation-title">
-        {{ t("conversationTitle") }} <span class="project-muted">{{ t("optional") }}</span>
-      </label>
-      <input
-        id="new-conversation-title"
-        v-model="newProjectConversation.title"
-        :placeholder="t('conversationTitlePlaceholder')"
-        :disabled="creating"
-      />
-      <label for="new-conversation-message">{{ t("conversationInstructions") }}</label>
-      <textarea
-        id="new-conversation-message"
-        v-model="newProjectConversation.message"
-        required
-        rows="6"
-        :placeholder="t('conversationInstructionsPlaceholder')"
-        :disabled="creating"
-      />
-      <p v-if="chosenProject?.cwd" class="project-muted">
-        {{ t("workingIn") }} <code>{{ chosenProject.cwd }}</code>
-      </p>
-      <p v-if="creatorError" class="error-line" role="alert">{{ creatorError }}</p>
-    </form>
-    <template #footer>
-      <Button
-        :label="t('cancel')"
-        text
-        severity="secondary"
-        :disabled="creating"
-        @click="closeCreator"
-      />
-      <Button
-        :label="creating ? t('startingEllipsis') : t('startConversation')"
-        type="submit"
-        form="project-conversation-form"
-        :loading="creating"
-        :disabled="
-          !newProjectConversation.project ||
-          !newProjectConversation.message.trim() ||
-          (chosenProject?.vm?.base === '' && !chosenProject.vm.shared_vm)
-        "
-      />
-    </template>
-  </Modal>
-
-  <Modal
     :is-open="!!workspace.archiveConfirmation.value"
     :title="`Archive ${noun}?`"
     @close="workspace.answerArchive(false)"
@@ -145,10 +77,7 @@
 import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
 import Modal from "./Modal.vue";
-import ProjectVMSetup from "./ProjectVMSetup.vue";
 import { workspaceApi } from "../../services/workspace";
-import { api } from "../../services/api";
-import type { Conversation } from "../../types";
 import { useWorkspace } from "../composables/workspace";
 import { useI18n } from "../composables/i18n";
 import { errorMessage } from "../../utils/errorMessage";
@@ -157,11 +86,8 @@ import { wording } from "../../utils/workspaceMode";
 const noun = wording("conversation", "task");
 
 const { t } = useI18n();
-const emit = defineEmits<{ (e: "created", conversation: Conversation): void }>();
 const workspace = useWorkspace();
 const saving = ref(false);
-const creating = ref(false);
-const creatorError = ref("");
 const deleting = workspace.projectDeletion;
 const deletePlan = computed(() => deleting.value && workspace.deletionPlan(deleting.value));
 // After deletion: VMs the server found were not Shelley's, so kept.
@@ -171,45 +97,9 @@ watch(deleting, () => {
   deleteError.value = "";
 });
 const deleteError = ref("");
-const newProjectConversation = ref({ project: "", title: "", message: "" });
-const chosenProject = computed(() =>
-  workspace.data.value?.projects.find((p) => p.name === newProjectConversation.value.project),
-);
 
-watch(workspace.conversationCreator, (creator) => {
-  if (!creator) return;
-  newProjectConversation.value = { project: creator.project, title: "", message: "" };
-  creatorError.value = "";
-});
-function closeCreator() {
-  if (!creating.value) workspace.conversationCreator.value = null;
-}
 function closeDelete() {
   if (!saving.value) deleting.value = null;
-}
-async function createConversation() {
-  if (creating.value) return;
-  creating.value = true;
-  creatorError.value = "";
-  try {
-    const result = await workspaceApi.createConversation({
-      ...newProjectConversation.value,
-      title: newProjectConversation.value.title.trim(),
-      message: newProjectConversation.value.message.trim(),
-    });
-    // Close after creation, before navigation: never offer a duplicate submission
-    // if loading the already-created conversation subsequently fails.
-    workspace.conversationCreator.value = null;
-    const conversation = await api.getConversationBySlug(result.conversation_id);
-    if (!conversation) throw new Error(t("conversationCreatedNotOpened"));
-    emit("created", conversation);
-    await workspace.refresh();
-  } catch (err) {
-    if (workspace.conversationCreator.value) creatorError.value = errorMessage(err);
-    else workspace.error.value = errorMessage(err);
-  } finally {
-    creating.value = false;
-  }
 }
 async function deleteProject() {
   if (!deleting.value || saving.value) return;

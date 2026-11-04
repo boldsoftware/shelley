@@ -35,7 +35,7 @@
       <span>{{ workspace.error.value }}</span>
       <Button :label="t('retry')" text @click="retryWorkspace" />
     </div>
-    <WorkspaceDialogs @created="selectConversation" />
+    <WorkspaceDialogs />
     <div v-if="banner" class="top-banner" :title="banner">{{ banner }}</div>
     <div v-if="uiUpdated" class="update-bar" role="status">
       {{ t("shelleyUpdated") }}
@@ -902,11 +902,13 @@ async function selectAssistant() {
 }
 
 // ---- conversation actions ----
-// Workspace mode starts conversations in projects; otherwise, a new conversation.
+// Workspace mode starts a conversation in the current one's project.
 function newConversation() {
-  if (workspaceMode) workspace.newProjectConversation();
+  if (workspaceMode)
+    workspace.newProjectConversation(workspace.projectFor(currentConversationId.value)?.name);
   else void startNewConversation();
 }
+watch(workspace.newConversationTrigger, () => void startNewConversation());
 
 async function startNewConversation(): Promise<boolean> {
   error.value = null;

@@ -211,11 +211,7 @@
     </p>
     <p v-if="customizations.requestError.value" class="error-line drawer-error" role="alert">
       {{ customizations.requestError.value }}
-      <button
-        type="button"
-        class="text-button"
-        @click="customizations.requestError.value = ''"
-      >
+      <button type="button" class="text-button" @click="customizations.requestError.value = ''">
         Dismiss
       </button>
     </p>
@@ -518,7 +514,10 @@
           Show all conversations
         </Button>
       </div>
-      <div v-else-if="groupBy === 'project' && projectGroups" class="conversation-list project-list">
+      <div
+        v-else-if="groupBy === 'project' && projectGroups"
+        class="conversation-list project-list"
+      >
         <section
           v-for="group in projectGroups"
           :key="group.id"
@@ -549,9 +548,7 @@
               class="project-icon-button"
               :aria-label="t('newConversationInProject').replace('{project}', group.label)"
               :title="t('newConversationInProject').replace('{project}', group.label)"
-              @click="
-                group.project ? workspace.newProjectConversation(group.project.name) : emit('new-conversation')
-              "
+              @click="workspace.newProjectConversation(group.project?.name)"
             >
               <i class="pi pi-plus" aria-hidden="true" />
             </button>
@@ -946,13 +943,23 @@ const searchError = ref<string | null>(null);
 const enhancing = ref(false);
 const enhanceError = ref<string | null>(null);
 let enhanceController: AbortController | null = null;
-const enhanceDisabled = computed(() => enhancing.value || searching.value || searchResults.value === null || !!searchError.value || !searchText.value.trim());
+const enhanceDisabled = computed(
+  () =>
+    enhancing.value ||
+    searching.value ||
+    searchResults.value === null ||
+    !!searchError.value ||
+    !searchText.value.trim(),
+);
 function stopEnhancement() {
   enhanceController?.abort();
   enhanceController = null;
   enhancing.value = false;
 }
-function clearEnhancement() { stopEnhancement(); enhanceError.value = null; }
+function clearEnhancement() {
+  stopEnhancement();
+  enhanceError.value = null;
+}
 async function openEnhancement() {
   if (enhanceDisabled.value) return;
   emit("close");
@@ -961,7 +968,12 @@ async function openEnhancement() {
   enhanceError.value = null;
   enhancing.value = true;
   try {
-    const result = await api.startSearchChat(searchText.value.trim(), showArchived.value, controller.signal, displayedConversations.value);
+    const result = await api.startSearchChat(
+      searchText.value.trim(),
+      showArchived.value,
+      controller.signal,
+      displayedConversations.value,
+    );
     if (!controller.signal.aborted) emit("select-conversation", result.conversation);
   } catch (err) {
     if (!controller.signal.aborted) {
@@ -969,7 +981,10 @@ async function openEnhancement() {
       emit("open");
     }
   } finally {
-    if (enhanceController === controller) { enhanceController = null; enhancing.value = false; }
+    if (enhanceController === controller) {
+      enhanceController = null;
+      enhancing.value = false;
+    }
   }
 }
 watch([searchQuery, showArchived], clearEnhancement);
@@ -1325,9 +1340,11 @@ function workingDirectory(c: Conversation): { text: string; title: string } | nu
   if (workspaceMode) return null;
   const data = workspace.data.value;
   const vm = data?.vms.find(
-    (v) => v.conversation_id === c.conversation_id || v.conversation_id === c.parent_conversation_id,
+    (v) =>
+      v.conversation_id === c.conversation_id || v.conversation_id === c.parent_conversation_id,
   );
-  if (vm?.dir) return { text: `${vm.vm_name}:${tildifyPath(vm.dir)}`, title: `${vm.vm_name}:${vm.dir}` };
+  if (vm?.dir)
+    return { text: `${vm.vm_name}:${tildifyPath(vm.dir)}`, title: `${vm.vm_name}:${vm.dir}` };
   if (!c.cwd) return null;
   return { text: formatCwdForDisplay(c.cwd) ?? c.cwd, title: c.cwd };
 }
@@ -2360,9 +2377,20 @@ provide(DrawerCtxKey, {
 });
 </script>
 
-
 <style scoped>
-button.drawer-search-shelley { border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; background: var(--bg-secondary); color: var(--text-primary); font-weight: 500; }
-button.drawer-search-shelley:hover:not(:disabled) { border-color: var(--link-color); background: var(--bg-base); }
-button.drawer-search-shelley:disabled { opacity: .5; }
+button.drawer-search-shelley {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+button.drawer-search-shelley:hover:not(:disabled) {
+  border-color: var(--link-color);
+  background: var(--bg-base);
+}
+button.drawer-search-shelley:disabled {
+  opacity: 0.5;
+}
 </style>

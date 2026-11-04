@@ -49,7 +49,9 @@ test("root opens the pinned Assistant; explicit conversation links remain select
   await expect(page.getByTestId("assistant-row").getByRole("button")).toHaveCount(0);
   await page.goto(`/c/${conversation.conversationId}`);
   await expect(page.locator("h1.header-title")).not.toHaveText("Assistant");
-  await expect(page).toHaveURL(new RegExp(`/c/(${conversation.slug}|${conversation.conversationId})$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/c/(${conversation.slug}|${conversation.conversationId})$`),
+  );
   await expect(page.getByLabel("Task project", { exact: true })).toBeVisible();
 });
 
@@ -145,14 +147,11 @@ test("project editor, task creation, failed action retry, and success-only archi
   await expect(editor).toBeHidden();
   await openWorkspace(page);
   await page.getByRole("button", { name: `New task in ${name}`, exact: true }).click();
-  const creator = page.getByRole("dialog", { name: "New Task", exact: true });
-  await expect(creator.getByLabel("Project", { exact: true }).locator("option:checked")).toHaveText(
-    name,
-  );
-  await creator.getByLabel("Title", { exact: false }).fill("Publish release notes");
-  await creator.getByLabel("Instructions", { exact: true }).fill("Hello");
-  await creator.getByRole("button", { name: "Start task", exact: true }).click();
-  await expect(creator).toBeHidden();
+  // The regular composer starts it, with the project picked.
+  await expect(page.locator(".project-picker")).toHaveText(name);
+  await page.getByTestId("message-input").fill("Hello");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(page).toHaveURL(/\/c\//);
   await expect(
     page.getByLabel("Task project", { exact: true }).locator("option:checked"),
   ).toHaveText(name);
@@ -258,13 +257,17 @@ test("project and conversation ⋯ menus: delete waits for an empty project; mov
     data: { project: source.name, title: `Move me ${suffix}`, message: "Hello" },
   });
   expect(created.ok()).toBeTruthy();
-  const { conversation_id: projectConversationId } = (await created.json()) as { conversation_id: string };
+  const { conversation_id: projectConversationId } = (await created.json()) as {
+    conversation_id: string;
+  };
 
   await page.goto("/");
   await openWorkspace(page);
   const fromGroup = page.locator(`section[aria-label="${from}"]`);
   const toGroup = page.locator(`section[aria-label="${to}"]`);
-  const conversationRow = page.locator(`.conversation-item[data-conversation-id="${projectConversationId}"]`);
+  const conversationRow = page.locator(
+    `.conversation-item[data-conversation-id="${projectConversationId}"]`,
+  );
   const fromToggle = fromGroup.locator(".project-toggle");
   const toToggle = toGroup.locator(".project-toggle");
   await expect(fromGroup.locator(conversationRow)).toBeVisible();

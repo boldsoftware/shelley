@@ -153,14 +153,6 @@ export const workspaceApi = {
       "Failed to delete the project",
       "DELETE",
     ),
-  /** Starts a conversation in project; a title becomes its slug. */
-  createConversation: (input: { project: string; title: string; message: string }) =>
-    apiJSON<{ conversation_id: string }>(
-      "/api/conversations/new",
-      "Failed to start the conversation",
-      "POST",
-      input,
-    ),
   moveConversation: (id: string, project: string) =>
     apiJSON<void>(
       `/api/conversation/${encodeURIComponent(id)}/project`,
