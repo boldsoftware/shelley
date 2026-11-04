@@ -205,6 +205,8 @@ export interface TranslationKeys {
   messagePlaceholderShort: string;
   attachFile: string;
   sendMessage: string;
+  suggestionLabel: string;
+  useSuggestionTitle: string;
   recordingTitle: string;
   recordingReturn: string;
   recordingStop: string;

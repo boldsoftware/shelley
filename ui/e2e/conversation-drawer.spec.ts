@@ -201,6 +201,8 @@ function conversation(
     turn_interrupted: false,
     external_conversation_id: null,
     external_endpoint: null,
+    next_prompt_suggestion: "",
+    next_prompt_suggestion_seq: 0,
     working: false,
     subagent_count: 0,
     preview: "Preview",

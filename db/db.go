@@ -1997,25 +1997,55 @@ func (db *DB) CreateUsageMessage(ctx context.Context, conversationID string, oth
 	}
 	var message generated.Message
 	err = db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		conversation, err := q.GetConversation(ctx, conversationID)
-		if err != nil {
-			return fmt.Errorf("failed to get conversation: %w", err)
-		}
-		sequenceID, err := q.GetNextSequenceID(ctx, conversationID)
-		if err != nil {
-			return fmt.Errorf("failed to get next sequence ID: %w", err)
-		}
-		message, err = q.CreateMessage(ctx, generated.CreateMessageParams{
-			MessageID:           uuid.New().String(),
-			ConversationID:      conversationID,
-			SequenceID:          sequenceID,
-			Generation:          conversation.CurrentGeneration,
-			Type:                string(MessageTypeSlug),
-			OtherUsageData:      otherUsageJSON,
-			ExcludedFromContext: true,
-		})
+		message, err = createUsageMessageTx(ctx, generated.New(tx.Conn()), conversationID, otherUsageJSON)
 		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &message, nil
+}
+
+func createUsageMessageTx(ctx context.Context, q *generated.Queries, conversationID string, otherUsageJSON *string) (generated.Message, error) {
+	conversation, err := q.GetConversation(ctx, conversationID)
+	if err != nil {
+		return generated.Message{}, fmt.Errorf("failed to get conversation: %w", err)
+	}
+	sequenceID, err := q.GetNextSequenceID(ctx, conversationID)
+	if err != nil {
+		return generated.Message{}, fmt.Errorf("failed to get next sequence ID: %w", err)
+	}
+	return q.CreateMessage(ctx, generated.CreateMessageParams{
+		MessageID:           uuid.New().String(),
+		ConversationID:      conversationID,
+		SequenceID:          sequenceID,
+		Generation:          conversation.CurrentGeneration,
+		Type:                string(MessageTypeSlug),
+		OtherUsageData:      otherUsageJSON,
+		ExcludedFromContext: true,
+	})
+}
+
+// SetNextPromptSuggestion records the suggested next user message for the
+// turn that ended at sequence id seq, together with the usage marker for the
+// call that produced it, in one transaction. An empty text records that the
+// model had no suggestion. Returns the marker, which the caller must publish.
+func (db *DB) SetNextPromptSuggestion(ctx context.Context, conversationID string, seq int64, text string, usage llm.PurposedUsage) (*generated.Message, error) {
+	usageJSON, err := marshalJSON([]llm.PurposedUsage{usage})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal usage: %w", err)
+	}
+	var message generated.Message
+	err = db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		if message, err = createUsageMessageTx(ctx, q, conversationID, usageJSON); err != nil {
+			return err
+		}
+		return q.SetNextPromptSuggestion(ctx, generated.SetNextPromptSuggestionParams{
+			ConversationID:          conversationID,
+			NextPromptSuggestion:    text,
+			NextPromptSuggestionSeq: seq,
+		})
 	})
 	if err != nil {
 		return nil, err

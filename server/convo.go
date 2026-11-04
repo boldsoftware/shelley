@@ -160,6 +160,15 @@ type ConversationManager struct {
 	cacheWarmService  llm.Service
 	cacheWarmModelID  string
 	cacheWarmRevision uint64
+	// cacheWarmTail is what the loop recorded for context after
+	// cacheWarmRequest: its reply, and any tool results. After the turn, the
+	// request and its tail are the next turn's prefix, which a next prompt
+	// suggestion extends. Nil while the turn's requests go unreported (a
+	// profile turn). Guarded by mu.
+	cacheWarmTail []llm.Message
+	// cancelSuggestion stops the next prompt suggestion request, if one is
+	// in flight. Idle work cancellation calls it. Guarded by mu.
+	cancelSuggestion context.CancelFunc
 
 	// changingSettings holds queued messages back, from both the drain and
 	// the running turn, while ApplySettings or StartNewGeneration interrupts
@@ -398,6 +407,9 @@ func (cm *ConversationManager) setAgentWorking(working, persist bool) {
 		cm.cancelIdleCompactionLocked()
 		// The queue drains again when this turn ends.
 		cm.undrainable = ""
+		// A turn that does not report its requests (a profile turn) must
+		// not extend an earlier turn's request.
+		cm.cacheWarmTail = nil
 	}
 	if cm.agentWorking == working {
 		cm.mu.Unlock()
@@ -2529,7 +2541,18 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 		Tools:          toolSet.Tools(),
 		ThinkingLevel:  llm.ParseThinkingLevel(conversationOpts.ThinkingLevel),
 		PromptCacheKey: promptCacheKey,
-		RecordMessage:  recordMessage,
+		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+			// Before recording: recording the turn's end schedules the
+			// suggestion, which reads the tail.
+			if !message.ExcludedFromContext && cm.isCurrentLoopGeneration(generation) {
+				cm.mu.Lock()
+				if cm.cacheWarmTail != nil {
+					cm.cacheWarmTail = append(cm.cacheWarmTail, message)
+				}
+				cm.mu.Unlock()
+			}
+			return recordMessage(ctx, message, usage, otherUsage)
+		},
 		RecordWarning: func(ctx context.Context, text string) error {
 			return cm.recordWarning(ctx, text)
 		},
@@ -2558,7 +2581,7 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 			warm := *req
 			warm.OnStream, warm.OnRetry = nil, nil
 			cm.mu.Lock()
-			cm.cacheWarmRequest, cm.cacheWarmService = &warm, service
+			cm.cacheWarmRequest, cm.cacheWarmService, cm.cacheWarmTail = &warm, service, []llm.Message{}
 			cm.cacheWarmModelID, cm.cacheWarmRevision = modelID, sourceRevision
 			cm.mu.Unlock()
 		},

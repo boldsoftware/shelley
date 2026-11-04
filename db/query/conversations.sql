@@ -654,3 +654,12 @@ FROM conversations c
 WHERE EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.conversation_id)
 GROUP BY c.current_generation
 ORDER BY c.current_generation;
+
+-- name: SetNextPromptSuggestion :exec
+-- Leaves the conversation list order alone. A suggestion for an older turn
+-- never replaces one for a newer turn.
+UPDATE conversations
+SET next_prompt_suggestion = sqlc.arg('next_prompt_suggestion'),
+    next_prompt_suggestion_seq = sqlc.arg('next_prompt_suggestion_seq')
+WHERE conversation_id = sqlc.arg('conversation_id')
+  AND next_prompt_suggestion_seq <= sqlc.arg('next_prompt_suggestion_seq');

@@ -1,6 +1,10 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/featureflags"
 )
@@ -27,3 +31,29 @@ var FlagWorkspace = featureflags.Register(featureflags.Flag{
 	Description: "Workspace mode: a pinned Assistant routes work into projects.",
 	Default:     false,
 })
+
+// FlagNextPromptSuggestions asks the model, after each top-level turn, what
+// the user will likely type next, and offers it in the empty composer.
+var FlagNextPromptSuggestions = featureflags.Register(featureflags.Flag{
+	Name:        "next-prompt-suggestions",
+	Description: "After each turn, suggest the next message in the empty composer (Tab accepts). Costs one extra model request per turn, mostly prompt-cached where the model caches.",
+	Default:     false,
+})
+
+// flagOn reports whether the boolean flag f is on: its stored override, or
+// else its default.
+func (s *Server) flagOn(ctx context.Context, f featureflags.Flag) (bool, error) {
+	overrides, err := s.db.GetAllFeatureFlagOverrides(ctx)
+	if err != nil {
+		return false, err
+	}
+	raw, ok := overrides[f.Name]
+	if !ok {
+		return f.Default == true, nil
+	}
+	var on bool
+	if err := json.Unmarshal([]byte(raw), &on); err != nil {
+		return false, fmt.Errorf("feature flag %s: %w", f.Name, err)
+	}
+	return on, nil
+}

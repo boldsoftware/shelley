@@ -4034,6 +4034,46 @@ diffs-container {
   background: rgba(249, 115, 22, 0.18);
 }
 
+/* The suggested next message, labeled and muted, just above the text box. */
+.next-prompt-suggestion {
+  flex: 0 0 100%;
+  order: -1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.125rem 0.5rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: var(--font-size-14);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.next-prompt-suggestion:disabled {
+  cursor: not-allowed;
+}
+
+.next-prompt-suggestion-label {
+  flex: none;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.next-prompt-suggestion kbd {
+  margin-left: 0.25rem;
+  padding: 0 0.25rem;
+  font: inherit;
+  font-size: var(--font-size-11);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
 /* Action row under textarea */
 .message-controls-row {
   display: flex;
@@ -4138,7 +4178,8 @@ diffs-container {
 
 /* Touch devices have no keyboard to use the hints with. */
 @media (hover: none) {
-  .record-menu .overflow-menu-shortcut {
+  .record-menu .overflow-menu-shortcut,
+  .next-prompt-suggestion kbd {
     display: none;
   }
 }
@@ -7521,14 +7562,24 @@ svg {
     width: 100%;
   }
 
-  .message-input-form .message-attachments {
+  .message-input-form .message-attachments,
+  .message-input-form .next-prompt-suggestion {
     grid-column: 1 / -1;
     grid-row: 2;
     order: 0;
   }
 
-  .message-input-form:has(.message-attachments) .textarea-wrapper {
+  .message-input-form:has(.message-attachments, .next-prompt-suggestion) .textarea-wrapper {
     grid-row: 3;
+  }
+
+  /* Tapping it puts the rest in the text box. */
+  .next-prompt-suggestion-text {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
   }
 
   .message-textarea {
@@ -11051,7 +11102,9 @@ svg {
 
 .btn-icon:hover,
 .skill-chip-x:hover,
-.skill-chip-x:focus-visible {
+.skill-chip-x:focus-visible,
+.next-prompt-suggestion:not(:disabled):hover,
+.next-prompt-suggestion:focus-visible {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }

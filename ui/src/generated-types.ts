@@ -23,6 +23,8 @@ export interface Conversation {
   turn_interrupted: boolean;
   external_conversation_id: string | null;
   external_endpoint: string | null;
+  next_prompt_suggestion: string;
+  next_prompt_suggestion_seq: number;
 }
 
 export interface Usage {
@@ -136,6 +138,8 @@ export interface ConversationWithStateForTS {
   turn_interrupted: boolean;
   external_conversation_id: string | null;
   external_endpoint: string | null;
+  next_prompt_suggestion: string;
+  next_prompt_suggestion_seq: number;
   working: boolean;
   git_repo_root?: string;
   git_worktree_root?: string;

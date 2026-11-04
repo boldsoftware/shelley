@@ -213,6 +213,8 @@ export const vi: TranslationKeys = {
   messagePlaceholderShort: "Tin nhắn...",
   attachFile: "Đính kèm file",
   sendMessage: "Gửi",
+  suggestionLabel: "Gợi ý",
+  useSuggestionTitle: "Đưa gợi ý này vào ô soạn để sửa hoặc gửi (Tab)",
   recordingTitle: "Ghi nội dung",
   recordingReturn: "Quay lại màn hình ghi",
   recordingStop: "Dừng ghi",

@@ -208,6 +208,8 @@ export const upgoer5: TranslationKeys = {
   messagePlaceholderShort: "Write...",
   attachFile: "Add a thing",
   sendMessage: "Send it",
+  suggestionLabel: "Maybe say",
+  useSuggestionTitle: "Put these words in the box to change or send (Tab)",
   recordingTitle: "Record sound or screen",
   recordingReturn: "Go back to the recording",
   recordingStop: "Stop recording",

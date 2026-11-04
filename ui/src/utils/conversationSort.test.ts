@@ -25,6 +25,8 @@ function conv(id: string, updatedAt: string): ConversationWithState {
     turn_interrupted: false,
     external_conversation_id: null,
     external_endpoint: null,
+    next_prompt_suggestion: "",
+    next_prompt_suggestion_seq: 0,
     tags: "[]",
     is_draft: false,
     draft: "",

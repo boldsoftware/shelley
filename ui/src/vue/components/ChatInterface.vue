@@ -555,6 +555,7 @@
           : profiles.filter((profile) => !profile.project)
       "
       :is-child-conversation="!!currentConversation?.parent_conversation_id"
+      :next-prompt-suggestion="nextPromptSuggestion"
       @clear-injected-text="
         diffCommentText = '';
         terminalInjectedText = null;
@@ -783,6 +784,7 @@ import {
   type SettingsKnob,
 } from "../composables/profiles";
 import { useDraftAutosave } from "../composables/draftAutosave";
+import { useFeatureFlag } from "../composables/featureFlags";
 import { useVersionChecker } from "../composables/versionChecker";
 import { provideToolProgress } from "../composables/toolProgress";
 import { closeImageComment, useImageCommentTarget } from "../composables/imageComment";
@@ -1087,6 +1089,29 @@ const lastMessageId = computed(() => {
   return null;
 });
 provide("lastMessageId", lastMessageId);
+
+// The server suggests what the user will type after a turn. It stands only
+// while nothing has happened since that turn ended, besides usage markers
+// and git and model notes (a new generation, for one, ends it), and nothing
+// the user sent waits in the queue.
+const nextPromptSuggestionsOn = useFeatureFlag("next-prompt-suggestions");
+const nextPromptSuggestion = computed(() => {
+  const conv = props.currentConversation;
+  if (
+    !nextPromptSuggestionsOn.value ||
+    !conv?.next_prompt_suggestion ||
+    conversationWorking.value ||
+    loading.value ||
+    queuedGhosts.value.length
+  ) {
+    return null;
+  }
+  const seq = conv.next_prompt_suggestion_seq;
+  for (let i = messages.value.length - 1; i >= 0 && messages.value[i].sequence_id > seq; i--) {
+    if (!["slug", "gitinfo", "modelchange"].includes(messages.value[i].type)) return null;
+  }
+  return conv.next_prompt_suggestion;
+});
 
 // When more than one distinct human user (by exe.dev email) has participated in
 // a conversation, descendant Message components show each user message's author

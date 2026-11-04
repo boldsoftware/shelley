@@ -10,6 +10,7 @@ import (
 
 	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/db"
+	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/llm"
 )
 
@@ -32,8 +33,9 @@ const maxIdleCompactionMinutes = int(math.MaxInt64 / time.Minute)
 //go:embed idle_nudge_prompt.txt
 var idleNudgePrompt string
 
-// cancelIdleCompactionLocked cancels all idle work: compaction and cache
-// warming. Activity, settings changes, and compaction all go through here.
+// cancelIdleCompactionLocked cancels all idle work: compaction, cache
+// warming, and the next prompt suggestion. Activity, settings changes, and
+// compaction all go through here.
 func (cm *ConversationManager) cancelIdleCompactionLocked() {
 	cm.idleCompactionVersion++
 	cm.idleCompacting = false
@@ -44,6 +46,10 @@ func (cm *ConversationManager) cancelIdleCompactionLocked() {
 	if cm.cacheWarmTimer != nil {
 		cm.cacheWarmTimer.Stop()
 		cm.cacheWarmTimer = nil
+	}
+	if cm.cancelSuggestion != nil {
+		cm.cancelSuggestion()
+		cm.cancelSuggestion = nil
 	}
 }
 
@@ -74,10 +80,11 @@ func (cm *ConversationManager) idleWorkBlockedLocked() bool {
 	return cm.agentWorking || cm.cancelling || cm.loopTearingDown || cm.changingSettings
 }
 
-// scheduleIdleWork arms the idle policies after a successful turn: one
-// compaction attempt, and cache refreshes until then or the keep-warm window
-// ends, whichever is first: compaction replaces the context the cache holds.
-func (cm *ConversationManager) scheduleIdleWork(s *Server) {
+// scheduleIdleWork arms the idle policies after a successful turn, which
+// ended at sequence id endSeq: a next prompt suggestion, one compaction
+// attempt, and cache refreshes until then or the keep-warm window ends,
+// whichever is first: compaction replaces the context the cache holds.
+func (cm *ConversationManager) scheduleIdleWork(s *Server, endSeq int64) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 	if cm.role != roleTopLevel || cm.idleWorkBlockedLocked() {
@@ -104,6 +111,7 @@ func (cm *ConversationManager) scheduleIdleWork(s *Server) {
 	}
 	now := time.Now()
 	cm.scheduleCacheWarmLocked(s, version, now.Add(warmFor), now)
+	cm.suggestNextPromptLocked(s, endSeq)
 }
 
 // scheduleCacheWarmLocked arms a refresh shortly before the cache last
@@ -249,6 +257,31 @@ func idleNudgeText(opts db.ConversationOptions) string {
 	return text
 }
 
+// conversationQuiet reports whether nothing is going on in conversation
+// besides waiting for the user: it is not archived, a draft, interrupted, or
+// working, and has no queued, delegated, or live-call work.
+func (s *Server) conversationQuiet(ctx context.Context, conversation *generated.Conversation) (bool, error) {
+	if conversation.Archived || conversation.IsDraft || conversation.TurnInterrupted || conversation.AgentWorking ||
+		len(db.ParseQueuedMessages(conversation.QueuedMessages)) > 0 {
+		return false, nil
+	}
+	if delegated, err := s.hasActiveDelegatedWork(ctx, conversation.ConversationID); err != nil || delegated {
+		return false, err
+	}
+	s.liveCalls.mu.Lock()
+	defer s.liveCalls.mu.Unlock()
+	for _, call := range s.liveCalls.calls {
+		if call.conversationID == conversation.ConversationID {
+			select {
+			case <-call.done:
+			default:
+				return false, nil
+			}
+		}
+	}
+	return true, nil
+}
+
 // claimIdleCompaction reports whether the conversation is still idle, has a
 // context the agent can compact, and nothing else is going on: no queued,
 // delegated or live-call work.
@@ -273,28 +306,8 @@ func (s *Server) claimIdleCompaction(ctx context.Context, cm *ConversationManage
 	if err != nil {
 		return false, err
 	}
-	if conversation.Archived || conversation.IsDraft || conversation.TurnInterrupted || conversation.AgentWorking ||
-		len(db.ParseQueuedMessages(conversation.QueuedMessages)) > 0 {
-		return false, nil
-	}
-	delegated, err := s.hasActiveDelegatedWork(ctx, cm.conversationID)
-	if err != nil || delegated {
+	if quiet, err := s.conversationQuiet(ctx, conversation); err != nil || !quiet {
 		return false, err
-	}
-	s.liveCalls.mu.Lock()
-	live := false
-	for _, call := range s.liveCalls.calls {
-		if call.conversationID == cm.conversationID {
-			select {
-			case <-call.done:
-			default:
-				live = true
-			}
-		}
-	}
-	s.liveCalls.mu.Unlock()
-	if live {
-		return false, nil
 	}
 	// A small context is not worth a turn, and everything in the recent part
 	// is kept as is: nothing to compact.

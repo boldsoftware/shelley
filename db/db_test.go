@@ -869,12 +869,9 @@ func TestDB_Migrate_MarksExistingConversationsEdited(t *testing.T) {
 	db := setupDBMigratedThrough(t, 45)
 	defer db.Close()
 	ctx := t.Context()
-	withProfile, err := db.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{Profile: "Default", ThinkingLevel: "high"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	without, err := db.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{})
-	if err != nil {
+	// Raw SQL: the generated queries expect the latest schema.
+	if err := db.pool.Exec(ctx, `INSERT INTO conversations(conversation_id, user_initiated, conversation_options)
+		VALUES('with', 1, '{"profile":"Default","thinking_level":"high"}'), ('without', 1, '{}')`); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Migrate(ctx); err != nil {
@@ -883,7 +880,7 @@ func TestDB_Migrate_MarksExistingConversationsEdited(t *testing.T) {
 	for _, tc := range []struct {
 		id     string
 		edited bool
-	}{{withProfile.ConversationID, true}, {without.ConversationID, false}} {
+	}{{"with", true}, {"without", false}} {
 		conv, err := db.GetConversationByID(ctx, tc.id)
 		if err != nil {
 			t.Fatal(err)

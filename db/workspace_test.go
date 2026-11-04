@@ -585,6 +585,10 @@ func TestAssistantSlugMigration(t *testing.T) {
 		if err := database.runMigration(ctx, "059-assistant-slug.sql", 59); err != nil {
 			t.Fatal(err)
 		}
+		// The generated queries expect the latest schema.
+		if err := database.Migrate(ctx); err != nil {
+			t.Fatal(err)
+		}
 		want := map[string]string{"a": "assistant", "b": "other"}
 		if taken {
 			want = map[string]string{"a": "", "b": "assistant"}

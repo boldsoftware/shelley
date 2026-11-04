@@ -1,0 +1,7 @@
+<next_prompt_suggestion>
+Shelley sent this message, not the user. The user's message box is empty, and Shelley wants to fill it with a suggestion of what they will most likely type next. They can accept it, edit it, or ignore it; it is never sent on its own.
+
+Predict the user's next message from the whole conversation, from their goals and how they have reacted so far. Often the likeliest next step acts on something already produced: apply or commit a change, test it, fix one specific flaw, redo it differently, reformat it, or ask for more of the same. Otherwise, pick the most grounded follow-up question, answer, or instruction. Keep the concrete details it depends on. Do not invent facts or a new agenda.
+
+Write the suggestion in the user's voice, as one line of at most 240 characters, with no alternatives or explanation. Do not use tools. Reply with only this JSON: {"suggestion": "<the message>"}. If no next message is clearly likelier than others, reply {"suggestion": null}.
+</next_prompt_suggestion>

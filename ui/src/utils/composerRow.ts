@@ -113,6 +113,8 @@ function placeholder(
     turn_interrupted: false,
     external_conversation_id: null,
     external_endpoint: null,
+    next_prompt_suggestion: "",
+    next_prompt_suggestion_seq: 0,
     working: row.sent !== null,
     git_repo_root: sibling?.git_repo_root,
     git_worktree_root: sibling?.git_worktree_root,

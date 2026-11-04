@@ -86,6 +86,20 @@
         aria-hidden="true"
         @change="handleFileSelect"
       />
+      <button
+        v-if="suggestion"
+        id="next-prompt-suggestion"
+        type="button"
+        class="next-prompt-suggestion"
+        data-testid="next-prompt-suggestion"
+        :title="t('useSuggestionTitle')"
+        :disabled="isDisabled"
+        @mousedown.prevent
+        @click="acceptSuggestion"
+      >
+        <span class="next-prompt-suggestion-label">{{ t("suggestionLabel") }}</span>
+        <span class="next-prompt-suggestion-text">{{ suggestion }} <kbd aria-hidden="true">Tab</kbd></span>
+      </button>
       <div
         v-if="attachments.length > 0 || selectedSkills.length > 0"
         class="message-attachments"
@@ -425,6 +439,8 @@
           ref="textareaRef"
           :value="message"
           :placeholder="placeholderText"
+          :aria-keyshortcuts="suggestion ? 'Tab' : undefined"
+          :aria-describedby="suggestion ? 'next-prompt-suggestion' : undefined"
           class="message-textarea"
           :disabled="isDisabled"
           :rows="initialRows ?? 1"
@@ -661,6 +677,9 @@ const props = withDefaults(
     cwd?: string;
     /** Child conversations cannot start nested BTW readers. */
     isChildConversation?: boolean;
+    /** Suggested next message, shown above the text box; Tab in the empty
+     * composer or a click on it takes it. */
+    nextPromptSuggestion?: string | null;
   }>(),
   {
     recordingInlineAvailable: true,
@@ -781,6 +800,30 @@ watch(isSmallScreen, (small) => {
   initialPlatform = small;
   hint.value = pickPlaceholderHint(small);
 });
+
+// The suggested next message shows in full just above the text box while
+// the composer could take it: shown, not replaced by a recording, and empty
+// (no text, attachments, or skills). Typing hides it; Tab or a click on it
+// takes it.
+const suggestion = computed(() =>
+  !props.composerHidden &&
+  (!recordingActive.value || recordingFloating.value) &&
+  message.value === "" &&
+  !attachments.value.length &&
+  !selectedSkills.value.length
+    ? (props.nextPromptSuggestion ?? "")
+    : "",
+);
+
+function acceptSuggestion() {
+  if (!suggestion.value || isDisabled.value) return;
+  setMessage(suggestion.value);
+  void nextTick(() => {
+    const textarea = textareaRef.value;
+    textarea?.focus();
+    textarea?.setSelectionRange(textarea.value.length, textarea.value.length);
+  });
+}
 
 const placeholderText = computed(() => {
   if (hint.value.id !== "default" && hint.value.text) return hint.value.text;
@@ -1852,6 +1895,11 @@ function handleKeyDown(e: KeyboardEvent) {
       chooseModelArg(slashMenuSelectedIndex.value);
       return;
     }
+  }
+  if (suggestion.value && e.key === "Tab" && !e.shiftKey && !e.altKey && !isModEvent(e)) {
+    e.preventDefault();
+    acceptSuggestion();
+    return;
   }
   // Escape blurs the textarea so follow-up shortcuts work.
   if (e.key === "Escape") {

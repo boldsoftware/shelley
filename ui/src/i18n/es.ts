@@ -213,6 +213,8 @@ export const es: TranslationKeys = {
   messagePlaceholderShort: "Mensaje...",
   attachFile: "Adjuntar archivo",
   sendMessage: "Enviar mensaje",
+  suggestionLabel: "Sugerencia",
+  useSuggestionTitle: "Poner esta sugerencia en el cuadro de texto para editarla o enviarla (Tab)",
   recordingTitle: "Grabar contenido",
   recordingReturn: "Volver a la grabación",
   recordingStop: "Detener grabación",

@@ -206,6 +206,8 @@ export const zhTW: TranslationKeys = {
   messagePlaceholderShort: "輸入訊息...",
   attachFile: "附加檔案",
   sendMessage: "傳送訊息",
+  suggestionLabel: "建議",
+  useSuggestionTitle: "將此建議放入輸入框以編輯或傳送 (Tab)",
   recordingTitle: "錄製媒體",
   recordingReturn: "返回錄製",
   recordingStop: "停止錄製",

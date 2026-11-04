@@ -189,6 +189,10 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 		inputText = strings.TrimSpace(external.Text)
 	}
 
+	if strings.HasPrefix(inputText, "<next_prompt_suggestion>") {
+		return s.makeNextPromptSuggestionResponse(req, inputTokens), nil
+	}
+
 	if id, ok := idleNudgeFirstRow(req); ok {
 		if strings.Contains(req.Messages[len(req.Messages)-1].Content[0].Text, "Keep everything.") {
 			return s.makeToolResponse("compact_in_place", json.RawMessage(`{"action":"skip"}`), inputTokens), nil
@@ -1315,6 +1319,27 @@ const wideTablesMarkdown = `Here are some wide tables to test rendering:
 | NPS Score | 42 | 45 | 48 | 52 | +23.8% | 📈 |
 
 That's a variety of table widths for testing!`
+
+// makeNextPromptSuggestionResponse suggests asking for more about the reply
+// the suggestion request follows, as an echo so that sending it works too.
+// A reply of "no suggestion" gets none.
+func (s *Service) makeNextPromptSuggestionResponse(req *llm.Request, inputTokens uint64) *llm.Response {
+	var reply string
+	if n := len(req.Messages); n >= 2 {
+		for _, c := range req.Messages[n-2].Content {
+			if c.Type == llm.ContentTypeText {
+				reply = c.Text
+			}
+		}
+	}
+	suggestion := any(nil)
+	if reply != "no suggestion" {
+		runes := []rune(strings.Join(strings.Fields(reply), " "))
+		suggestion = "echo: More about " + string(runes[:min(len(runes), 100)])
+	}
+	text, _ := json.Marshal(map[string]any{"suggestion": suggestion})
+	return s.makeResponse(string(text), inputTokens)
+}
 
 // idleIndexRow matches the first row of a compact_in_place index.
 var idleIndexRow = regexp.MustCompile("(?m)^id {2,}role.*\n(\\S+) ")

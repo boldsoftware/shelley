@@ -30,6 +30,8 @@ function conversation(
     turn_interrupted: false,
     external_conversation_id: null,
     external_endpoint: null,
+    next_prompt_suggestion: "",
+    next_prompt_suggestion_seq: 0,
     running_background_jobs: 0,
     ...overrides,
   };
