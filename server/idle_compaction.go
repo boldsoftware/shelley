@@ -47,6 +47,14 @@ func (cm *ConversationManager) cancelIdleCompactionLocked() {
 	}
 }
 
+// isIdleCompacting reports whether the running or just ended turn is an idle
+// compaction that nothing else joined.
+func (cm *ConversationManager) isIdleCompacting() bool {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	return cm.idleCompacting
+}
+
 func (cm *ConversationManager) cancelIdleCompaction() {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -184,13 +192,16 @@ func (s *Server) compactIdleConversation(cm *ConversationManager, version uint64
 		return err
 	}
 	cm.syncAgentWorking(true)
+	// Before anything can end the turn, which is then not announced.
+	cm.mu.Lock()
+	cm.idleCompacting = true
+	cm.mu.Unlock()
 	nudge, err := cm.recordIdleNudge(ctx)
 	if err != nil {
 		cm.SetAgentWorking(false)
 		return err
 	}
 	cm.mu.Lock()
-	cm.idleCompacting = true
 	cm.profileTurn = false
 	cm.hasConversationEvents = true
 	l := cm.loop

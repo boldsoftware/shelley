@@ -1798,6 +1798,8 @@ func (s *Server) handleCancelConversation(w http.ResponseWriter, r *http.Request
 		return
 	}
 	s.cancelSubagentTree(ctx, conversationID)
+	// A turn end may have waited on the cleared queue.
+	s.settleTurnEnds(conversationID)
 
 	if !exists {
 		w.WriteHeader(http.StatusOK)
@@ -4044,6 +4046,9 @@ func (s *Server) handleCancelQueued(w http.ResponseWriter, r *http.Request, conv
 		s.internalError(w, "Failed to cancel queued messages", err, "conversationID", conversationID)
 		return
 	}
+	// A turn end may have waited on the queue. (The manager's cancel settles
+	// too, through notifySubscribers; one of them finds it.)
+	s.settleTurnEnds(conversationID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})

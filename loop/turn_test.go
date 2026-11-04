@@ -3,8 +3,11 @@ package loop
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/predictable"
@@ -54,5 +57,55 @@ func TestQueuedTurnOverrideAndRetry(t *testing.T) {
 	}
 	if req := service.GetLastRequest(); req.System[0].Text != "BASE" {
 		t.Fatal("override changed the loop defaults")
+	}
+}
+
+// duringRequest runs a callback while the model writes the first response.
+type duringRequest struct {
+	*predictable.Service
+	once func()
+}
+
+func (s *duringRequest) Do(ctx context.Context, req *llm.Request) (*llm.Response, error) {
+	if s.once != nil {
+		s.once()
+		s.once = nil
+	}
+	return s.Service.Do(ctx, req)
+}
+
+// A message that arrives while the model writes the final reply runs in a
+// turn of its own, which Go marks the start of. Meanwhile, and when the turn
+// before ends, WillRunTurn reports it.
+func TestOnTurnStartPrecedesEveryTurn(t *testing.T) {
+	service := &duringRequest{Service: predictable.NewService()}
+	events := make(chan string, 8)
+	var agent *Loop
+	agent = NewLoop(Config{
+		LLM:         service,
+		OnTurnStart: func() { events <- fmt.Sprint("start ", agent.WillRunTurn()) },
+		RecordMessage: func(_ context.Context, m llm.Message, _ llm.Usage, _ []llm.PurposedUsage) error {
+			if m.EndOfTurn {
+				events <- fmt.Sprint("end ", agent.WillRunTurn())
+			}
+			return nil
+		},
+	})
+	service.once = func() { agent.QueueUserMessage(llm.UserStringMessage("echo: second")) }
+	agent.QueueUserMessage(llm.UserStringMessage("echo: first"))
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go agent.Go(ctx)
+	var got []string
+	for len(got) < 4 {
+		select {
+		case e := <-events:
+			got = append(got, e)
+		case <-time.After(10 * time.Second):
+			t.Fatalf("events = %v, timed out", got)
+		}
+	}
+	if want := []string{"start true", "end true", "start true", "end false"}; !slices.Equal(got, want) {
+		t.Fatalf("events = %v, want %v", got, want)
 	}
 }

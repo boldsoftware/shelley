@@ -167,6 +167,11 @@ type ConversationManager struct {
 	// It is set under modelSettingsMu.
 	changingSettings bool
 
+	// undrainable is the ID of the queued message that last failed to start
+	// a turn, or that a failed loop left. Nothing retries it until a drain is
+	// requested or another turn runs.
+	undrainable string
+
 	// draining is true while a drainPendingMessages owner is in flight. A
 	// concurrent caller records drainRequested and returns the owner's drainDone
 	// token; the owner makes another pass before publishing completion. This
@@ -370,18 +375,6 @@ func (cm *ConversationManager) SetThinkingLevel(ctx context.Context, reasoning s
 	return nil
 }
 
-// EndOfTurnHooks returns the registered top-level end-of-turn hooks.
-func (cm *ConversationManager) EndOfTurnHooks(ctx context.Context) ([]db.ConversationHook, error) {
-	if err := cm.Hydrate(ctx); err != nil {
-		return nil, err
-	}
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-	hooks := make([]db.ConversationHook, len(cm.conversationOptions.EndOfTurnHooks))
-	copy(hooks, cm.conversationOptions.EndOfTurnHooks)
-	return hooks, nil
-}
-
 // SetAgentWorking updates the agent working state, persists it to the
 // conversations table (so the conversation list patch stream picks it up via
 // the standard Pool.OnCommit hook), and notifies the server to broadcast.
@@ -403,6 +396,8 @@ func (cm *ConversationManager) setAgentWorking(working, persist bool) {
 	cm.mu.Lock()
 	if working {
 		cm.cancelIdleCompactionLocked()
+		// The queue drains again when this turn ends.
+		cm.undrainable = ""
 	}
 	if cm.agentWorking == working {
 		cm.mu.Unlock()
@@ -1238,6 +1233,7 @@ func (cm *ConversationManager) QueueTranscription(ctx context.Context, s *Server
 func (cm *ConversationManager) drainQueueIfIdle(s *Server) {
 	cm.mu.Lock()
 	needsDrain := !cm.agentWorking
+	cm.undrainable = "" // either drain retries it
 	cm.mu.Unlock()
 	if needsDrain {
 		go cm.drainPendingMessages(s)
@@ -1357,14 +1353,14 @@ func (cm *ConversationManager) queueMessageLocked(ctx context.Context, s *Server
 		s.resumeParentCompletions(cm.conversationID)
 	}
 	cm.Touch()
+	cm.logger.Info("Queued user message", "queued_id", qm.ID, "midTurn", midTurn)
+	// Before notifying, which settles turn ends: the queue is to drain.
+	cm.drainQueueIfIdle(s)
 
 	// Broadcast the updated conversation (with the new queued_messages array)
 	// to per-conversation subscribers. The list-patch stream is refreshed
 	// automatically by the Pool.OnCommit hook fired by the append's Tx.
 	go s.notifySubscribers(context.WithoutCancel(ctx), cm.conversationID)
-
-	cm.logger.Info("Queued user message", "queued_id", qm.ID, "midTurn", midTurn)
-	cm.drainQueueIfIdle(s)
 	return nil
 }
 
@@ -1688,9 +1684,40 @@ func (cm *ConversationManager) drainPendingMessagesOwned(s *Server) {
 		// failure such as a DB outage.
 		if err := cm.feedQueued(ctx, s, queued); err != nil {
 			cm.logger.Error("Failed to drain queued messages", "error", err)
+			if !errors.Is(err, errActionRunning) {
+				cm.markUndrainable(ctx)
+				go s.settleTurnEnds(cm.conversationID)
+			}
 			return
 		}
 	}
+}
+
+// markUndrainable records that nothing will drain the queue, so a turn end
+// that waits on it is announced.
+func (cm *ConversationManager) markUndrainable(ctx context.Context) {
+	queued, err := cm.db.GetQueuedMessages(ctx, cm.conversationID)
+	if err != nil || len(queued) == 0 {
+		return
+	}
+	cm.mu.Lock()
+	cm.undrainable = queued[0].ID
+	cm.mu.Unlock()
+}
+
+// loopWillRunTurn reports whether the loop has a turn to run after the
+// current one.
+func (cm *ConversationManager) loopWillRunTurn() bool {
+	cm.mu.Lock()
+	l := cm.loop
+	cm.mu.Unlock()
+	return l != nil && l.WillRunTurn()
+}
+
+func (cm *ConversationManager) undrainableID() string {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	return cm.undrainable
 }
 
 // feedQueued records queued items in order and feeds them to the loop,
@@ -2539,6 +2566,18 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 			return cm.takeInjectable(ctx, generation, nudger)
 		},
 		RewriteFinalReply: rewriteFinalReply,
+		// A message can arrive too late to join the turn before, which
+		// already marked the conversation idle. Otherwise whoever started
+		// the turn marked it working, idle compaction included. The
+		// lifecycle lock orders this with a settings change, which refuses
+		// a working conversation and replaces the loop.
+		OnTurnStart: func() {
+			cm.loopLifecycleMu.Lock()
+			defer cm.loopLifecycleMu.Unlock()
+			if cm.isCurrentLoopGeneration(generation) && !cm.IsAgentWorking() {
+				cm.SetAgentWorking(true)
+			}
+		},
 	})
 
 	cm.mu.Lock()
@@ -2624,6 +2663,8 @@ func (cm *ConversationManager) handleFatalLoopExit(loopInstance *loop.Loop, gene
 	cm.mu.Unlock()
 
 	detached.stop()
+	// The turn records no end, which would drain the queue.
+	cm.markUndrainable(context.Background())
 	cm.SetAgentWorking(false)
 	cm.finishLoopTeardownLocked(detached.generation)
 }

@@ -382,6 +382,53 @@ func TestIdleCompactionUserWritesDuringIdleTurn(t *testing.T) {
 	})
 }
 
+// An idle compaction is the server's own turn: its end is announced only if
+// the user wrote during it.
+func TestIdleCompactionIsNotAnnounced(t *testing.T) {
+	t.Parallel()
+	for _, write := range []bool{false, true} {
+		t.Run(fmt.Sprint("user writes: ", write), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				h := NewTestHarness(t)
+				defer stopActiveConversationLoops(h.server)
+				ch := &recordingChannel{}
+				h.server.RegisterNotificationChannel(ch)
+				opts := db.ConversationOptions{IdleCompactionMinutes: 3}
+				opts.ToolOverrides = map[string]string{claudetool.CompactInPlaceName: "on"}
+				h.convOpts = &opts
+				h.server.keepRecentTokensOverride = 1
+				h.server.idleCompactionMinTokens = 1
+				h.NewConversation("echo: keep the garden plan", "")
+				synctest.Wait()
+				h.Chat("echo: rosemary arrives tomorrow")
+				synctest.Wait()
+				if n := ch.count(); n != 2 {
+					t.Fatalf("announced %d turns, want 2", n)
+				}
+				want := 2
+				if write {
+					h.llm.SetResponseDelay(30 * time.Second)
+				}
+				<-time.After(3 * time.Minute)
+				synctest.Wait()
+				if write {
+					if w := postChat(t, h.server, h.convID, "echo: thyme too"); w.Code != http.StatusAccepted {
+						t.Fatalf("chat during idle turn = %d: %s", w.Code, w.Body.String())
+					}
+					h.llm.SetResponseDelay(0)
+					want = 3
+				}
+				<-time.After(2 * time.Minute)
+				synctest.Wait()
+				requireIdleCompactions(t, h, 1)
+				if n := ch.count(); n != want {
+					t.Fatalf("announced %d turns, want %d", n, want)
+				}
+			})
+		})
+	}
+}
+
 func TestIdleCompactionUsesCopiedProfileDelay(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {

@@ -273,6 +273,10 @@ func (s *Server) projectService(conversationID string, service llm.Service) (llm
 	return &workspaceService{Service: service, server: s, conversationID: conversationID}, nil
 }
 
+// errActionRunning holds a turn back until the conversation's action
+// finishes, which drains its queue.
+var errActionRunning = fmt.Errorf("%w: an action is running", db.ErrConflict)
+
 // All model-start paths call this while holding loopLifecycleMu. Action
 // reservation uses that same lock, including starts from a late subagent or
 // background completion rather than an HTTP chat request. Archiving a conversation
@@ -284,7 +288,7 @@ func (cm *ConversationManager) checkProjectTurn(ctx context.Context) error {
 		return err
 	}
 	if running {
-		return fmt.Errorf("%w: an action is running", db.ErrConflict)
+		return errActionRunning
 	}
 	if cm.toolSetConfig.VM == nil {
 		return nil

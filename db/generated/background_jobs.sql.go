@@ -10,6 +10,18 @@ import (
 	"time"
 )
 
+const countUnfinishedBackgroundJobs = `-- name: CountUnfinishedBackgroundJobs :one
+SELECT COUNT(*) FROM background_jobs WHERE conversation_id = ? AND (NOT exited OR NOT notified)
+`
+
+// A job is unfinished until its exit notice is queued in its conversation.
+func (q *Queries) CountUnfinishedBackgroundJobs(ctx context.Context, conversationID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUnfinishedBackgroundJobs, conversationID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const insertBackgroundJob = `-- name: InsertBackgroundJob :exec
 INSERT INTO background_jobs (job_id, conversation_id, tool_use_id, command, pid, process_start_time, log_path, exit_path, started_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)

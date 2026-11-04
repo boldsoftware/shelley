@@ -248,7 +248,7 @@ func (s *Server) reportUnreportedReply(ctx context.Context, cm *ConversationMana
 		s.logger.Error("Failed to load subagent", "conversationID", cm.conversationID, "error", err)
 		return reply, false
 	}
-	if !isDelegatedSubagent(*conv) || len(db.ParseQueuedMessages(conv.QueuedMessages)) > 0 {
+	if !isDelegatedSubagent(*conv) {
 		return reply, false
 	}
 	s.mu.Lock()
@@ -258,19 +258,20 @@ func (s *Server) reportUnreportedReply(ctx context.Context, cm *ConversationMana
 		return reply, false
 	}
 	busy, err := s.hasActiveDelegatedWork(ctx, conv.ConversationID)
-	if err == nil && !busy {
-		// An exited job wakes the subagent once its notice is queued.
-		var jobs []generated.BackgroundJob
-		err = s.db.Queries(ctx, func(q *generated.Queries) (err error) {
-			jobs, err = q.ListUnfinishedBackgroundJobs(ctx)
-			return err
-		})
-		busy = slices.ContainsFunc(jobs, func(j generated.BackgroundJob) bool { return j.ConversationID == conv.ConversationID })
-	}
 	if err != nil {
 		s.logger.Error("Failed to check subagent's delegated work", "conversationID", conv.ConversationID, "error", err)
 	}
 	if busy || err != nil {
+		return reply, false
+	}
+	// Read after delegated work, which queues its notice before it stops
+	// counting.
+	queued, err := s.db.GetQueuedMessages(ctx, conv.ConversationID)
+	if err != nil {
+		s.logger.Error("Failed to read subagent's queue", "conversationID", conv.ConversationID, "error", err)
+		return reply, false
+	}
+	if len(queued) > 0 {
 		return reply, false
 	}
 	msgs, err := s.db.ListMessages(ctx, conv.ConversationID)

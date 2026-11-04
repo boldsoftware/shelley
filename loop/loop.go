@@ -96,6 +96,10 @@ type Config struct {
 	// RewriteFinalReply, if set, may turn a reply that would end the turn
 	// into tool calls, at most once per turn. See Hooks.RewriteFinalReply.
 	RewriteFinalReply func(context.Context, llm.Message) (llm.Message, bool)
+	// OnTurnStart, if set, is called before each turn Go runs, including one
+	// for messages that arrived too late to join the turn before it.
+	// Meanwhile WillRunTurn reports true.
+	OnTurnStart func()
 
 	RecordRoutingWarning RoutingNoticeRecordFunc
 }
@@ -135,10 +139,12 @@ type Loop struct {
 	onSuccess        func(*llm.Request)
 	injectMessages   func(ctx context.Context) (Injection, error)
 	rewriteReply     func(context.Context, llm.Message) (llm.Message, bool)
+	onTurnStart      func()
 	thinkingLevel    llm.ThinkingLevel
 	promptCacheKey   string
 	notify           chan struct{} // signaled when a message is queued or retry requested
 	retryPending     bool          // set by Retry() to re-run processLLMRequest with current history
+	startingTurn     bool          // Go took a turn and is calling onTurnStart
 
 	modelRouting         modelRouting
 	recordRoutingWarning RoutingNoticeRecordFunc
@@ -170,6 +176,7 @@ func NewLoop(config Config) *Loop {
 		onSuccess:        config.OnSuccessfulRequest,
 		injectMessages:   config.InjectMessages,
 		rewriteReply:     config.RewriteFinalReply,
+		onTurnStart:      config.OnTurnStart,
 		thinkingLevel:    config.ThinkingLevel,
 		promptCacheKey:   config.PromptCacheKey,
 		notify:           make(chan struct{}, 1),
@@ -316,9 +323,16 @@ func (l *Loop) Go(ctx context.Context) error {
 		}
 		retryPending := l.retryPending
 		l.retryPending = false
+		l.startingTurn = hasQueuedMessages || retryPending
 		l.mu.Unlock()
 
 		if hasQueuedMessages || retryPending {
+			if l.onTurnStart != nil {
+				l.onTurnStart()
+			}
+			l.mu.Lock()
+			l.startingTurn = false
+			l.mu.Unlock()
 			// Send request to LLM
 			l.logger.Debug("processing queued messages", "count", 1)
 			if err := l.processLLMRequest(ctx); err != nil {
@@ -419,6 +433,14 @@ func (l *Loop) currentSystem() []llm.SystemContent {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.system
+}
+
+// WillRunTurn reports whether Go has a turn to run after the current one:
+// messages that arrived too late to join it, or a retry.
+func (l *Loop) WillRunTurn() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.messageQueue) > 0 || l.retryPending || l.startingTurn
 }
 
 func (l *Loop) pending(ctx context.Context, messages []llm.Message) ([]llm.Message, error) {

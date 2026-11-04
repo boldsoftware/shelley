@@ -155,7 +155,8 @@ func (s *Server) reportBackgroundJobExit(ctx context.Context, job claudetool.Bac
 }
 
 // notifyBackgroundJobExit queues job's notice in its conversation and
-// records that it did. A failure is retried at the next startup.
+// records that it did. A failure is retried at the next startup; until then
+// the conversation waits on the job, and its turn ends are not announced.
 func (s *Server) notifyBackgroundJobExit(job claudetool.BackgroundJob) {
 	ctx := context.Background()
 	err := s.deliverBackgroundJobNotice(ctx, job)
@@ -166,7 +167,11 @@ func (s *Server) notifyBackgroundJobExit(job claudetool.BackgroundJob) {
 	}
 	if err != nil {
 		s.logger.Error("Failed to deliver background job notice", "job", job.ID, "conversation", job.ConversationID, "error", err)
+		return
 	}
+	// A turn that ended before the job counted as delivered waited on it,
+	// even if that turn was the one answering the notice.
+	s.settleTurnEnds(job.ConversationID)
 }
 
 // deliverBackgroundJobNotice queues job's notice as a user row whose

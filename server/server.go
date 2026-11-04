@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -386,8 +388,10 @@ type Server struct {
 	activeConversations map[string]*ConversationManager
 	// Serialize fallback delivery with Stop so a late completion cannot
 	// restart a parent whose queue was just cleared.
-	stoppedParents           map[string]bool // guarded by mu
-	stoppingParents          map[string]bool // guarded by mu; a send during Stop must not reopen the fence
+	stoppedParents           map[string]bool        // guarded by mu
+	stoppingParents          map[string]bool        // guarded by mu; a send during Stop must not reopen the fence
+	owedTurnEnds             map[string]owedTurnEnd // guarded by mu; see announceTurnEnd
+	owedTurnEndSeq           uint64                 // guarded by mu
 	searchChatMu             sync.Mutex
 	mu                       sync.Mutex
 	deletingConversations    map[string]bool
@@ -505,6 +509,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		activeConversations:   make(map[string]*ConversationManager),
 		stoppedParents:        make(map[string]bool),
 		stoppingParents:       make(map[string]bool),
+		owedTurnEnds:          make(map[string]owedTurnEnd),
 		deletingConversations: make(map[string]bool),
 		logger:                logger,
 		predictableOnly:       predictableOnly,
@@ -1591,6 +1596,10 @@ func convertToLLMMessage(msg generated.Message) (llm.Message, error) {
 // metadata (e.g. a slug change), to the conversation's subscribers and the
 // conversation list.
 func (s *Server) notifySubscribers(ctx context.Context, conversationID string, newMsgs ...generated.Message) {
+	if len(newMsgs) == 0 {
+		// The update may have emptied the queue a turn end waits on.
+		defer s.settleTurnEnds(conversationID)
+	}
 	s.mu.Lock()
 	manager, exists := s.activeConversations[conversationID]
 	s.mu.Unlock()
@@ -1684,23 +1693,107 @@ func (s *Server) publicURL(path string) string {
 	return fmt.Sprintf("https://%s:%d%s", hostname, s.listenPort, path)
 }
 
-// hasActiveDelegatedWork reports whether conversationID has a running
-// background job or a working subagent.
+// hasActiveDelegatedWork reports whether conversationID has delegated work
+// that will wake it: a background job whose exit notice is not queued yet
+// (one that has exited counts until then), or a subagent that is working, or
+// that owes it a report and will work again.
 func (s *Server) hasActiveDelegatedWork(ctx context.Context, conversationID string) (bool, error) {
-	jobs, err := s.runningBackgroundJobsOf(ctx, conversationID)
+	var jobs int64
+	err := s.db.Queries(ctx, func(q *generated.Queries) (err error) {
+		jobs, err = q.CountUnfinishedBackgroundJobs(ctx, conversationID)
+		return err
+	})
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("count background jobs: %w", err)
 	}
-	if len(jobs) > 0 {
+	if jobs > 0 {
 		return true, nil
 	}
 	children, err := s.db.GetSubagents(ctx, conversationID)
 	if err != nil {
 		return false, fmt.Errorf("load subagents: %w", err)
 	}
-	return slices.ContainsFunc(children, func(c generated.Conversation) bool {
-		return c.AgentWorking && isManagedChild(c) && !isBtwReader(c)
-	}), nil
+	children = slices.DeleteFunc(children, func(c generated.Conversation) bool {
+		return !isManagedChild(c) || isBtwReader(c)
+	})
+	if slices.ContainsFunc(children, func(c generated.Conversation) bool { return c.AgentWorking }) {
+		return true, nil
+	}
+	// An idle subagent waiting on work of its own reports when that is done.
+	// One that has reported need not wake its parent again, though it may
+	// keep a job running for good, such as a dev server.
+	for _, c := range children {
+		if !isDelegatedSubagent(c) {
+			continue
+		}
+		busy, err := s.willWorkAgain(ctx, c.ConversationID)
+		if err != nil {
+			return false, err
+		}
+		if !busy {
+			continue
+		}
+		msgs, err := s.db.ListMessages(ctx, c.ConversationID)
+		if err != nil {
+			return false, fmt.Errorf("list subagent messages: %w", err)
+		}
+		if owesReport(msgs) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// willWorkAgain reports whether conversationID, whose turn ended, is not idle
+// after all: delegated work will queue a message when it finishes, or a queued
+// message will start a turn, or already has. Delegated work is checked first
+// because it queues its message before it stops counting, and draining a
+// message marks the conversation working in the transaction that dequeues
+// it, so the conversation read after sees the message either way. The loop
+// is checked after the conversation for the same reason: it marks the
+// conversation working before it stops reporting the turn it took.
+func (s *Server) willWorkAgain(ctx context.Context, conversationID string) (bool, error) {
+	delegated, err := s.hasActiveDelegatedWork(ctx, conversationID)
+	if err != nil || delegated {
+		return delegated, err
+	}
+	conv, err := s.db.GetConversationByID(ctx, conversationID)
+	if err != nil {
+		return false, fmt.Errorf("load conversation: %w", err)
+	}
+	if conv.AgentWorking {
+		return true, nil
+	}
+	s.mu.Lock()
+	cm := s.activeConversations[conversationID]
+	s.mu.Unlock()
+	if cm != nil && cm.loopWillRunTurn() {
+		return true, nil
+	}
+	queued := db.ParseQueuedMessages(conv.QueuedMessages)
+	if len(queued) == 0 {
+		return false, nil
+	}
+	head := queued[0]
+	if head.Kind == db.QueuedMessageKindTranscription {
+		switch head.State {
+		case db.QueuedMessageStateWorking:
+			return true, nil // it drains once transcribed
+		case db.QueuedMessageStateFailed:
+			return false, nil // until the user retries or cancels it
+		}
+	}
+	// Nothing drains the queue of a conversation that is not loaded, nor
+	// retries a message that failed to start a turn, before another turn
+	// ends or the user acts.
+	return cm != nil && cm.undrainableID() != head.ID, nil
+}
+
+// owedTurnEnd is an ended turn whose notifications wait for its conversation
+// to go idle.
+type owedTurnEnd struct {
+	model string
+	seq   uint64 // tells apart turns of one conversation
 }
 
 // publishConversationState broadcasts a conversation state update to ALL active
@@ -1710,127 +1803,214 @@ func (s *Server) publishConversationState(state ConversationState) {
 	// from the SetConversationAgentWorking Tx commit hook — no explicit
 	// notify needed here. This function is now responsible only for the
 	// per-conversation SSE broadcast and end-of-turn notifications.
-
-	// When the agent finishes working, emit a notification event.
-	// Skip notifications for subagent conversations — they're internal
-	// and would just be noise for the user.
 	var notifEvent *notifications.Event
-	if !state.Working {
+	if state.Working {
+		// This turn's end is announced instead.
+		s.mu.Lock()
+		delete(s.owedTurnEnds, state.ConversationID)
+		s.mu.Unlock()
+	} else {
 		s.reconcileCustomizationsAfterTurn(state.ConversationID)
-		conv, convErr := s.db.GetConversationByID(context.Background(), state.ConversationID)
-		isSubagent := convErr == nil && isManagedChild(*conv)
-		// Honor an explicit per-conversation opt-out: conversations created
-		// with disable_notifications suppress all end-of-turn notifications
-		// (push, email, discord, ntfy) and hooks, same as subagents. So do
-		// channel conversations, which the user follows in the chat.
-		notifyDisabled := convErr == nil && (db.ParseConversationOptions(conv.ConversationOptions).DisableNotifications || conv.ExternalConversationID != nil)
-		// The workspace Assistant talks to the user directly (message_user),
-		// so its turn ends are not announced: no push to iOS (exe.dev notify
-		// gateway or app hooks), channels, or browser.
-		suppressNotify := isSubagent || notifyDisabled || s.isAssistant(state.ConversationID)
-		if !suppressNotify {
-			// Work still running for this conversation will wake it again when
-			// it finishes, so that later turn is the one worth notifying about.
-			// If that can't be told, don't announce a finish that may not be one.
-			delegated, err := s.hasActiveDelegatedWork(context.Background(), state.ConversationID)
-			if err != nil {
-				s.logger.Error("Failed to check delegated work", "conversationID", state.ConversationID, "error", err)
-			}
-			suppressNotify = delegated || err != nil
-		}
-		var hooks []db.ConversationHook
-		if !suppressNotify {
-			s.mu.Lock()
-			manager := s.activeConversations[state.ConversationID]
-			s.mu.Unlock()
-			if manager != nil {
-				var err error
-				hooks, err = manager.EndOfTurnHooks(context.Background())
-				if err != nil {
-					s.logger.Warn("failed to load end-of-turn hooks", "conversationID", state.ConversationID, "error", err)
-				}
-			}
-			// Auto-configure exe.dev push: deliver end-of-turn notifications
-			// to the notify gateway when the VM has the integration and the
-			// user hasn't disabled it. This reuses the existing end-of-turn
-			// hook path, deduped by URL so it collapses with the hook the iOS
-			// app registers (one push, not two); when disabled it strips any
-			// gateway hook so the toggle reliably silences pushes.
-			hooks = withExeNotifyHook(hooks, s.exeNotifyEnabled(context.Background()))
-		}
-
-		var slug string
-		if convErr == nil && conv.Slug != nil {
-			slug = *conv.Slug
-		}
-		hostname := publicHostname()
-		payload := notifications.AgentDonePayload{
-			Hostname:          hostname,
-			Model:             state.Model,
-			ConversationTitle: slug,
-			ConversationURL:   s.conversationURL(slug),
-			VMName:            strings.TrimSuffix(hostname, ".exe.xyz"),
-		}
-		// The literal latest agent message is often a tool-only turn (e.g.
-		// agent ended on `git status`), which produces a useless "Agent
-		// finished" notification. Walk back through every agent message
-		// since the most recent user message and pick the newest one with
-		// real text content; if none, summarize the last tool call.
-		if msgs, err := s.db.ListAgentMessagesSinceLastUser(context.Background(), state.ConversationID); err == nil {
-			payload.FinalResponse = finalResponseBody(msgs)
-		}
-		event := notifications.Event{
-			Type:           notifications.EventAgentDone,
-			ConversationID: state.ConversationID,
-			Timestamp:      time.Now(),
-			Payload:        payload,
-		}
-		if !suppressNotify {
-			s.notifDispatcher.Dispatch(context.Background(), event)
-			for _, hook := range hooks {
-				go s.sendEndOfTurnHook(context.Background(), hook, event)
-			}
-			// The end-of-turn hook is a side-channel for local automation
-			// (sounds, desktop notifications, etc). Fire-and-forget on a
-			// background goroutine so a slow hook doesn't delay the SSE
-			// "agent done" broadcast — but still log non-nil errors so a
-			// broken hook is visible.
-			input := EndOfTurnHookInput{
-				Type:            "end_of_turn",
-				ConversationID:  event.ConversationID,
-				Timestamp:       event.Timestamp,
-				Hostname:        payload.Hostname,
-				Model:           payload.Model,
-				Slug:            payload.ConversationTitle,
-				ConversationURL: payload.ConversationURL,
-				VMName:          payload.VMName,
-				FinalResponse:   payload.FinalResponse,
-			}
-			go func() {
-				if err := RunEndOfTurnHookIn(s.hooksDir, input); err != nil {
-					s.logger.Error("end-of-turn hook failed", "conversationID", input.ConversationID, "error", err)
-				}
-			}()
-			// The UI raises a browser notification from this.
-			notifEvent = &event
-		}
+		notifEvent = s.announceTurnEnd(state.ConversationID, state.Model)
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	streamData := StreamResponse{
+	s.broadcast(StreamResponse{
 		ConversationID:    state.ConversationID,
 		ConversationState: &state,
 		NotificationEvent: notifEvent,
+	})
+}
+
+// announceTurnEnd sends the notifications for the turn of conversationID that
+// just ended, and returns the event the UI raises a browser notification from,
+// or nil if nothing was sent. Only an idle conversation is announced: one that
+// will work again owes the announcement until it goes idle (see
+// settleTurnEnds), since a later turn may be the one worth announcing.
+func (s *Server) announceTurnEnd(conversationID, model string) *notifications.Event {
+	ctx := context.Background()
+	conv, err := s.db.GetConversationByID(ctx, conversationID)
+	if err != nil {
+		s.logger.Error("Failed to load conversation for end-of-turn notification", "conversationID", conversationID, "error", err)
+		return nil
 	}
+	// Its ancestors may have been waiting on this subagent.
+	if isManagedChild(*conv) {
+		if conv.ParentConversationID != nil {
+			go s.settleTurnEnds(*conv.ParentConversationID)
+		}
+		return nil
+	}
+	if !s.announcesTurnEnds(conv) {
+		return nil
+	}
+	// An idle compaction is the server's turn, not the user's.
+	s.mu.Lock()
+	cm := s.activeConversations[conversationID]
+	s.mu.Unlock()
+	if cm != nil && cm.isIdleCompacting() {
+		return nil
+	}
+	// Owe the announcement before checking for pending work, so whatever
+	// ends that work and settles finds it.
+	s.mu.Lock()
+	s.owedTurnEndSeq++
+	s.owedTurnEnds[conversationID] = owedTurnEnd{model: model, seq: s.owedTurnEndSeq}
+	s.mu.Unlock()
+	return s.takeOwedTurnEnd(ctx, conversationID)
+}
+
+// announcesTurnEnds reports whether conv's turn ends are announced at all.
+// Subagent turns are internal and would just be noise for the user.
+// Conversations created with disable_notifications opt out of all end-of-turn
+// notifications (push, email, discord, ntfy) and hooks. So do channel
+// conversations, which the user follows in the chat, and archived ones. The
+// workspace Assistant talks to the user directly (message_user), so its turn
+// ends are not announced either: no push to iOS (exe.dev notify gateway or
+// app hooks), channels, or browser.
+func (s *Server) announcesTurnEnds(conv *generated.Conversation) bool {
+	return !isManagedChild(*conv) && !db.ParseConversationOptions(conv.ConversationOptions).DisableNotifications &&
+		conv.ExternalConversationID == nil && !conv.Archived && !s.isAssistant(conv.ConversationID)
+}
+
+// settleTurnEnds announces the turn end that conversationID or any of its
+// ancestors owes, once that conversation is idle: the work it waited on ended
+// without starting another turn (a subagent that did not report back, a
+// queue the user cleared or that cannot drain, a job notice answered before
+// it was marked delivered).
+func (s *Server) settleTurnEnds(conversationID string) {
+	s.mu.Lock()
+	none := len(s.owedTurnEnds) == 0
+	s.mu.Unlock()
+	ctx := context.Background()
+	for seen := map[string]bool{}; !none && !seen[conversationID]; {
+		seen[conversationID] = true
+		if event := s.takeOwedTurnEnd(ctx, conversationID); event != nil {
+			s.broadcast(StreamResponse{ConversationID: conversationID, NotificationEvent: event})
+		}
+		conv, err := s.db.GetConversationByID(ctx, conversationID)
+		if err != nil || conv.ParentConversationID == nil {
+			return
+		}
+		conversationID = *conv.ParentConversationID
+	}
+}
+
+// takeOwedTurnEnd sends conversationID's owed turn end if it is idle now, and
+// returns the event; nil if nothing was sent.
+func (s *Server) takeOwedTurnEnd(ctx context.Context, conversationID string) *notifications.Event {
+	s.mu.Lock()
+	owed, ok := s.owedTurnEnds[conversationID]
+	s.mu.Unlock()
+	if !ok {
+		return nil
+	}
+	conv, err := s.db.GetConversationByID(ctx, conversationID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		s.logger.Error("Failed to load conversation for end-of-turn notification", "conversationID", conversationID, "error", err)
+		return nil
+	}
+	if err != nil || !s.announcesTurnEnds(conv) {
+		s.dropOwedTurnEnd(conversationID, owed) // deleted or opted out since
+		return nil
+	}
+	busy, err := s.willWorkAgain(ctx, conversationID)
+	if err != nil {
+		// Don't announce a finish that may not be one.
+		s.logger.Error("Failed to check for pending work", "conversationID", conversationID, "error", err)
+	}
+	if busy || err != nil || !s.dropOwedTurnEnd(conversationID, owed) {
+		return nil
+	}
+	return s.sendTurnEnd(ctx, conv, owed.model)
+}
+
+// dropOwedTurnEnd forgets owed and reports whether it was still owed: it
+// was not sent already, and no other turn started meanwhile.
+func (s *Server) dropOwedTurnEnd(conversationID string, owed owedTurnEnd) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.owedTurnEnds[conversationID] != owed {
+		return false
+	}
+	delete(s.owedTurnEnds, conversationID)
+	return true
+}
+
+// sendTurnEnd sends conv's end-of-turn notifications: to notification
+// channels, end-of-turn hooks, and the hooks directory. It returns the event.
+func (s *Server) sendTurnEnd(ctx context.Context, conv *generated.Conversation, model string) *notifications.Event {
+	// From conv, not the manager: an owed turn end may settle after the
+	// manager was cleaned up.
+	hooks := db.ParseConversationOptions(conv.ConversationOptions).EndOfTurnHooks
+	// Auto-configure exe.dev push: deliver end-of-turn notifications
+	// to the notify gateway when the VM has the integration and the
+	// user hasn't disabled it. This reuses the existing end-of-turn
+	// hook path, deduped by URL so it collapses with the hook the iOS
+	// app registers (one push, not two); when disabled it strips any
+	// gateway hook so the toggle reliably silences pushes.
+	hooks = withExeNotifyHook(hooks, s.exeNotifyEnabled(ctx))
+
+	slug := derefString(conv.Slug)
+	hostname := publicHostname()
+	payload := notifications.AgentDonePayload{
+		Hostname:          hostname,
+		Model:             model,
+		ConversationTitle: slug,
+		ConversationURL:   s.conversationURL(slug),
+		VMName:            strings.TrimSuffix(hostname, ".exe.xyz"),
+	}
+	// The literal latest agent message is often a tool-only turn (e.g.
+	// agent ended on `git status`), which produces a useless "Agent
+	// finished" notification. Walk back through every agent message
+	// since the most recent user message and pick the newest one with
+	// real text content; if none, summarize the last tool call.
+	if msgs, err := s.db.ListAgentMessagesSinceLastUser(ctx, conv.ConversationID); err == nil {
+		payload.FinalResponse = finalResponseBody(msgs)
+	}
+	event := notifications.Event{
+		Type:           notifications.EventAgentDone,
+		ConversationID: conv.ConversationID,
+		Timestamp:      time.Now(),
+		Payload:        payload,
+	}
+	s.notifDispatcher.Dispatch(ctx, event)
+	for _, hook := range hooks {
+		go s.sendEndOfTurnHook(ctx, hook, event)
+	}
+	// The end-of-turn hook is a side-channel for local automation
+	// (sounds, desktop notifications, etc). Fire-and-forget on a
+	// background goroutine so a slow hook doesn't delay the SSE
+	// "agent done" broadcast — but still log non-nil errors so a
+	// broken hook is visible.
+	input := EndOfTurnHookInput{
+		Type:            "end_of_turn",
+		ConversationID:  event.ConversationID,
+		Timestamp:       event.Timestamp,
+		Hostname:        payload.Hostname,
+		Model:           payload.Model,
+		Slug:            payload.ConversationTitle,
+		ConversationURL: payload.ConversationURL,
+		VMName:          payload.VMName,
+		FinalResponse:   payload.FinalResponse,
+	}
+	go func() {
+		if err := RunEndOfTurnHookIn(s.hooksDir, input); err != nil {
+			s.logger.Error("end-of-turn hook failed", "conversationID", input.ConversationID, "error", err)
+		}
+	}()
+	return &event
+}
+
+// broadcast sends a per-conversation event to every stream.
+func (s *Server) broadcast(data StreamResponse) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.streamPub != nil {
-		s.streamPub.Broadcast(streamData)
+		s.streamPub.Broadcast(data)
 	}
 	// Legacy /api/conversation/<id>/stream subscribers (iOS, CLI) still
 	// receive state updates via the per-conversation subpub.
 	for _, manager := range s.activeConversations {
-		manager.subpub.Broadcast(streamData)
+		manager.subpub.Broadcast(data)
 	}
 }
 
@@ -1919,6 +2099,8 @@ func (s *Server) Cleanup() {
 	for i, manager := range toCleanup {
 		manager.stopLoop()
 		s.logger.Debug("Cleaned up inactive conversation", "conversationID", toCleanupIDs[i])
+		// Nothing drains its queue now.
+		s.settleTurnEnds(toCleanupIDs[i])
 	}
 }
 

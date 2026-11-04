@@ -555,20 +555,21 @@ func (s *Server) finalizeQueuedTranscription(parentID string, queued db.QueuedMe
 		s.failQueuedTranscription(parentID, queued.ID, attemptID, audit, fmt.Errorf("update transcription user data: %w", err))
 		return
 	}
-	ready, err := s.updateCurrentQueuedTranscription(context.Background(), parentID, queued.ID, attemptID, func(current *db.QueuedMessage) {
+	// The manager drains the ready message. Loaded first, it never looks
+	// abandoned (see willWorkAgain).
+	manager, err := s.getOrCreateConversationManager(context.Background(), parentID, "")
+	if err != nil {
+		s.failQueuedTranscription(parentID, queued.ID, attemptID, audit, fmt.Errorf("load conversation: %w", err))
+		return
+	}
+	if _, err := s.updateCurrentQueuedTranscription(context.Background(), parentID, queued.ID, attemptID, func(current *db.QueuedMessage) {
 		current.State = db.QueuedMessageStateReady
 		current.Llm = llmJSON
 		current.Transcription.Audit = auditJSON
 		current.UserData = userData
 		current.Error = ""
-	})
-	if err != nil {
+	}); err != nil {
 		s.logQueuedTranscriptionError("Failed to finalize queued transcription", parentID, queued.ID, err)
-		return
-	}
-	manager, err := s.getOrCreateConversationManager(context.Background(), parentID, "")
-	if err != nil {
-		s.logger.Error("Failed to resume parent queue after transcription", "parent", parentID, "queued_id", ready.ID, "error", err)
 		return
 	}
 	manager.drainQueueIfIdle(s)

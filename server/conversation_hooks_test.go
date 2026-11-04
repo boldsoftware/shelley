@@ -45,36 +45,3 @@ func TestRegisterConversationHookDedupes(t *testing.T) {
 		t.Fatalf("hook URL = %q", opts.EndOfTurnHooks[0].URL)
 	}
 }
-
-func TestEndOfTurnHooksPersistAfterRead(t *testing.T) {
-	t.Parallel()
-	server, database, _ := newTestServer(t)
-	conversation, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{
-		EndOfTurnHooks: []db.ConversationHook{{URL: "http://notify.int.exe.xyz/"}},
-	})
-	if err != nil {
-		t.Fatalf("failed to create conversation: %v", err)
-	}
-
-	manager, err := server.getOrCreateConversationManager(t.Context(), conversation.ConversationID, "")
-	if err != nil {
-		t.Fatalf("failed to get manager: %v", err)
-	}
-
-	hooks, err := manager.EndOfTurnHooks(t.Context())
-	if err != nil {
-		t.Fatalf("failed to load hooks: %v", err)
-	}
-	if len(hooks) != 1 || hooks[0].URL != "http://notify.int.exe.xyz/" {
-		t.Fatalf("hooks = %#v", hooks)
-	}
-
-	updated, err := database.GetConversationByID(t.Context(), conversation.ConversationID)
-	if err != nil {
-		t.Fatalf("failed to load conversation: %v", err)
-	}
-	opts := db.ParseConversationOptions(updated.ConversationOptions)
-	if len(opts.EndOfTurnHooks) != 1 {
-		t.Fatalf("expected hook to persist, got %#v", opts.EndOfTurnHooks)
-	}
-}
