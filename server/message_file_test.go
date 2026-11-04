@@ -149,6 +149,10 @@ func TestHandleMessageFile_Success(t *testing.T) {
 	if ct := resp.Header.Get("Content-Type"); ct != "image/png" {
 		t.Errorf("Content-Type = %q, want image/png", ct)
 	}
+	// The agent may rewrite the file: browsers must revalidate it.
+	if cc := resp.Header.Get("Cache-Control"); cc != "private, no-cache" {
+		t.Errorf("Cache-Control = %q, want private, no-cache", cc)
+	}
 	body, _ := io.ReadAll(resp.Body)
 	if !bytes.Equal(body, pngBytes) {
 		t.Errorf("body mismatch: got %d bytes", len(body))
