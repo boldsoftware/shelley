@@ -50,10 +50,11 @@ test("stock mode offers Group by Project without the workspace", async ({ page, 
     route.fulfill({ json: { integrations, default: integrations[0] ?? "" } }),
   );
   await page.getByRole("button", { name: "New project", exact: true }).click();
-  const editor = page.getByRole("dialog", { name: "New project", exact: true });
+  const editor = page.getByRole("region", { name: "New project", exact: true });
   await expect(editor.getByLabel("Working directory", { exact: true })).toBeVisible();
   await expect(editor.getByRole("radio", { name: /This Shelley host/ })).toHaveCount(0);
-  await editor.getByRole("button", { name: "Close modal", exact: true }).click();
+  await editor.getByRole("button", { name: "Cancel", exact: true }).first().click();
+  await page.getByRole("button", { name: "Open conversations", exact: true }).click();
 
   integrations = ["exe"];
   await page.getByRole("button", { name: "New project", exact: true }).click();

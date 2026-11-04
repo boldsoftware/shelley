@@ -102,7 +102,7 @@ test("project editor, task creation, failed action retry, and success-only archi
   await expect(page.locator("h1.header-title")).toHaveText("Assistant");
   await openWorkspace(page);
   await page.getByRole("button", { name: "New project", exact: true }).click();
-  const newProject = page.getByRole("dialog", { name: "New project", exact: true });
+  const newProject = page.getByRole("region", { name: "New project", exact: true });
   const name = `Publish ${randomUUID().slice(0, 8)}`;
   await newProject.getByLabel("Name", { exact: true }).fill(name);
   // New projects default to their own VMs, in a directory named after them.
@@ -118,6 +118,7 @@ test("project editor, task creation, failed action retry, and success-only archi
   await newProject.getByLabel("Working directory", { exact: true }).fill(testWorkingDirectory());
   await newProject.getByRole("button", { name: "Save project", exact: true }).click();
   await expect(newProject).toBeHidden();
+  await openWorkspace(page);
 
   await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
   const projectMenu = page.getByTestId("project-actions-menu");
@@ -127,7 +128,7 @@ test("project editor, task creation, failed action retry, and success-only archi
     "true",
   );
   await projectMenu.getByRole("menuitem", { name: "Edit project…", exact: true }).click();
-  const editor = page.getByRole("dialog", { name: "Edit project", exact: true });
+  const editor = page.getByRole("region", { name: "Edit project", exact: true });
   await expect(editor.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
     "Keep publishing tasks brief.",
   );
@@ -142,6 +143,7 @@ test("project editor, task creation, failed action retry, and success-only archi
     .check();
   await editor.getByRole("button", { name: "Save project", exact: true }).click();
   await expect(editor).toBeHidden();
+  await openWorkspace(page);
   await page.getByRole("button", { name: `New task in ${name}`, exact: true }).click();
   const creator = page.getByRole("dialog", { name: "New Task", exact: true });
   await expect(creator.getByLabel("Project", { exact: true }).locator("option:checked")).toHaveText(
@@ -169,7 +171,7 @@ test("project editor, task creation, failed action retry, and success-only archi
 
   // A command that hangs can be stopped.
   await page.getByRole("button", { name: "Edit task project", exact: true }).click();
-  const hang = page.getByRole("dialog", { name: "Edit project", exact: true });
+  const hang = page.getByRole("region", { name: "Edit project", exact: true });
   await hang.getByLabel("Shell command", { exact: true }).fill("printf 'waiting\\n'; sleep 600");
   await hang.getByRole("button", { name: "Save project", exact: true }).click();
   await expect(hang).toBeHidden();
@@ -184,7 +186,7 @@ test("project editor, task creation, failed action retry, and success-only archi
   await expect(publish).toBeEnabled();
 
   await page.getByRole("button", { name: "Edit task project", exact: true }).click();
-  const edit = page.getByRole("dialog", { name: "Edit project", exact: true });
+  const edit = page.getByRole("region", { name: "Edit project", exact: true });
   await edit
     .getByLabel("Shell command", { exact: true })
     .fill("printf 'published successfully\\n'");

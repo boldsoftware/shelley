@@ -27,7 +27,7 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   }
   await openProjects(page);
   await page.getByRole("button", { name: "New project", exact: true }).click();
-  const newProject = page.getByRole("dialog", { name: "New project", exact: true });
+  const newProject = page.getByRole("region", { name: "New project", exact: true });
   const name = `Publish ${randomUUID().slice(0, 8)}`;
   await newProject.getByLabel("Name", { exact: true }).fill(name);
   await newProject
@@ -36,12 +36,13 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   await newProject.getByLabel("Working directory", { exact: true }).fill(testWorkingDirectory());
   await newProject.getByRole("button", { name: "Save project", exact: true }).click();
   await expect(newProject).toBeHidden();
+  await page.getByRole("button", { name: "Open conversations", exact: true }).click();
 
   await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
   const projectMenu = page.getByTestId("project-actions-menu");
   await expect(projectMenu.getByRole("menuitem")).toHaveText(["Edit project…", "Delete project…"]);
   await projectMenu.getByRole("menuitem", { name: "Edit project…", exact: true }).click();
-  const editor = page.getByRole("dialog", { name: "Edit project", exact: true });
+  const editor = page.getByRole("region", { name: "Edit project", exact: true });
   await expect(editor.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
     "Keep release notes brief.",
   );
@@ -50,6 +51,7 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
     .fill("Keep release notes brief. Link the release.");
   await editor.getByRole("button", { name: "Save project", exact: true }).click();
   await expect(editor).toBeHidden();
+  await page.getByRole("button", { name: "Open conversations", exact: true }).click();
 
   await page.getByRole("button", { name: `New conversation in ${name}`, exact: true }).click();
   const creator = page.getByRole("dialog", { name: "New Conversation", exact: true });
@@ -65,11 +67,11 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
     page.getByLabel("Conversation project", { exact: true }).locator("option:checked"),
   ).toHaveText(name);
   await page.getByRole("button", { name: "Edit conversation project", exact: true }).click();
-  const edit = page.getByRole("dialog", { name: "Edit project", exact: true });
+  const edit = page.getByRole("region", { name: "Edit project", exact: true });
   await expect(edit.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
     "Keep release notes brief. Link the release.",
   );
-  await edit.getByRole("button", { name: "Cancel", exact: true }).click();
+  await edit.getByRole("button", { name: "Cancel", exact: true }).first().click();
   await expect(edit).toBeHidden();
 
   // Now that a project exists, a conversation outside it offers the picker.

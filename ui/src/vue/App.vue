@@ -64,7 +64,11 @@
       />
 
       <div class="main-content">
+        <ProjectEditor v-if="workspace.projectEditor.value" @open-drawer="drawerOpen = true" />
+        <!-- Hidden, not unmounted, while editing a project, so the chat keeps
+             its scroll, draft and terminals. -->
         <ChatInterface
+          v-show="!workspace.projectEditor.value"
           ref="chatInterfaceRef"
           :conversation-id="currentConversationId"
           :stream-status="streamStatus"
@@ -75,7 +79,10 @@
           :on-new-conversation="startNewConversation"
           :on-new-project-conversation="
             workspaceMode
-              ? () => workspace.newProjectConversation(workspace.projectFor(currentConversationId)?.name)
+              ? () =>
+                  workspace.newProjectConversation(
+                    workspace.projectFor(currentConversationId)?.name,
+                  )
               : undefined
           "
           :is-assistant="workspace.isAssistant(currentConversationId)"
@@ -310,6 +317,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, provide, ref, watch, shallowRef } from "vue";
 import ChatInterface from "./components/ChatInterface.vue";
+import ProjectEditor from "./components/ProjectEditor.vue";
 import type { RecordingMode } from "./components/recordingDestination";
 import { isImeComposing } from "../utils/imeComposing";
 import { conversationTitle } from "../utils/conversationTitle";
@@ -465,6 +473,14 @@ const workspace = createWorkspace((run: ActionRunSummary) => {
 });
 const refreshWorkspace = () => void workspace.refresh().catch(() => {});
 const drawerOpen = ref(false);
+// The project editor takes the main pane: opening it closes the mobile drawer,
+// and choosing a conversation (selectFromDrawer, or a new one) closes it.
+watch(workspace.projectEditor, (editor) => {
+  if (editor) drawerOpen.value = false;
+});
+watch(currentConversationId, () => {
+  workspace.projectEditor.value = null;
+});
 useMobileDrawerSwipe(drawerOpen);
 watch(drawerOpen, (open) => {
   if (!open || !window.matchMedia("(max-width: 767px)").matches) return;
@@ -974,9 +990,13 @@ function selectConversation(conversation: Conversation) {
 // composer is still disabled while loading, its autoFocus watch retries.
 function selectFromDrawer(conversation: Conversation) {
   const active = document.activeElement;
-  if (active instanceof HTMLElement && active.closest(".conversation-item, .workspace-assistant-row")) {
+  if (
+    active instanceof HTMLElement &&
+    active.closest(".conversation-item, .workspace-assistant-row")
+  ) {
     active.blur();
   }
+  workspace.projectEditor.value = null;
   selectConversation(conversation);
   focusMessageInputIfUnfocused();
 }

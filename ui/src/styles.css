@@ -18547,3 +18547,36 @@ kbd {
 .project-vm-cleanup {
   margin: 0.125rem 0.75rem;
 }
+
+/* The project editor page (ProjectEditor.vue): header and footer pinned, the
+   form scrolls in a readable column. */
+.project-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--bg-base);
+}
+
+.project-page-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.5rem max(1rem, env(safe-area-inset-left)) 2rem;
+}
+
+.project-page-form {
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+.project-page-footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  background: var(--bg-base);
+}
