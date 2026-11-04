@@ -236,8 +236,8 @@ func TestNextPromptSuggestionSkipsQueuedWork(t *testing.T) {
 	})
 }
 
-// Channel conversations, web chats included, are answered in their chat,
-// whose composer offers no suggestion.
+// A chat's messages, web chats' included, are answered in their chat, whose
+// composer offers no suggestion.
 func TestNextPromptSuggestionSkipsChannels(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
@@ -251,8 +251,8 @@ func TestNextPromptSuggestionSkipsChannels(t *testing.T) {
 		}
 		synctest.Wait()
 
-		if _, err := conversationByExternalID(t, h.db, "web-usr1"); err != nil {
-			t.Fatal(err)
+		if route, err := h.db.LatestChannelRoute(t.Context(), "web-usr1"); err != nil || !h.server.isAssistant(route.ConversationID) {
+			t.Fatalf("web chat route: %+v %v", route, err)
 		}
 		if n := len(suggestionRequests(h)); n != 0 {
 			t.Fatalf("suggestion requests = %d, want 0", n)
@@ -267,8 +267,7 @@ func TestNextPromptSuggestionSkipsTextedAssistantTurns(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		h := newSuggestionHarness(t, true)
 		defer stopActiveConversationLoops(h.server)
-		db.EnableWorkspaceMode(t, h.db)
-		id, err := h.server.ensureWorkspace(t.Context())
+		id, err := h.server.ensureAssistant(t.Context(), true)
 		if err != nil {
 			t.Fatal(err)
 		}

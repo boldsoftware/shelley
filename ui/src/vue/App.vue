@@ -414,7 +414,8 @@ const initialIsNew = isNewPath() || (!getSlugFromPath() && hasPendingNewDraft())
 function updateUrlWithSlug(conversation: Conversation | undefined) {
   const currentSlug = getSlugFromPath();
   // In workspace mode the Assistant lives at "/".
-  const assistant = !!conversation && workspace.isAssistant(conversation.conversation_id);
+  const assistant =
+    workspaceMode && !!conversation && workspace.isAssistant(conversation.conversation_id);
   let newSlug: string | null = null;
   if (assistant) {
     newSlug = null;

@@ -233,11 +233,8 @@ func TestPublishConversationStateSkipsAssistant(t *testing.T) {
 	ch := &recordingChannel{}
 	server.RegisterNotificationChannel(ch)
 
-	db.EnableWorkspaceMode(t, server.db)
-	assistantID, err := server.ensureWorkspace(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	setWorkspaceFlag(t, server, "true")
+	assistantID := server.assistantID()
 	conv, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
 	if err != nil {
 		t.Fatal(err)

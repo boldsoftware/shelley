@@ -139,14 +139,18 @@ func postJSON(t *testing.T, h http.Handler, path string, body any) *httptest.Res
 	return w
 }
 
-func conversationByExternalID(t *testing.T, database *db.DB, chatID string) (generated.Conversation, error) {
+// chatAssistant returns the conversation chat's latest message went to,
+// failing unless it is the Assistant.
+func chatAssistant(t *testing.T, s *Server, chatID string) string {
 	t.Helper()
-	var conv generated.Conversation
-	err := database.Queries(t.Context(), func(q *generated.Queries) (err error) {
-		conv, err = q.GetConversationByExternalID(t.Context(), &chatID)
-		return err
-	})
-	return conv, err
+	route, err := s.db.LatestChannelRoute(t.Context(), chatID)
+	if err != nil {
+		t.Fatalf("chat %s route: %v", chatID, err)
+	}
+	if id := s.assistantID(); id == "" || route.ConversationID != id {
+		t.Fatalf("chat %s went to %s, not the Assistant %q", chatID, route.ConversationID, id)
+	}
+	return route.ConversationID
 }
 
 // channelUserMessages returns the conversation's user messages as
@@ -182,20 +186,18 @@ func channelUserMessages(t *testing.T, database *db.DB, conversationID string) [
 	return out
 }
 
-// Channels use the named Assistant, not the user's default, except that
-// message_user must stay on to answer the chat. A chat that shares
-// Assistant's settings takes its edits; one with its own prompt keeps them.
+// The Assistant a chat's first message makes uses the Assistant profile,
+// not the user's default (unless it was deleted), except that message_user
+// must stay on to answer the chat. It takes the profile's edits, but not
+// its deletion.
 func TestChannelMessageAssistantProfile(t *testing.T) {
 	for _, web := range []bool{false, true} {
 		for _, tc := range []struct {
 			name      string
 			assistant bool
-			prompt    string
 		}{
 			{name: "Assistant", assistant: true},
-			{name: "Assistant/event override", assistant: true, prompt: "Event override in {{.WorkingDirectory}}."},
 			{name: "deleted Assistant"},
-			{name: "deleted Assistant/event override", prompt: "Event override in {{.WorkingDirectory}}."},
 		} {
 			t.Run(fmt.Sprintf("web=%t/%s", web, tc.name), func(t *testing.T) {
 				t.Parallel()
@@ -209,13 +211,18 @@ func TestChannelMessageAssistantProfile(t *testing.T) {
 					e.want(204, "DELETE", "/api/profiles/Assistant", "")
 				}
 
-				want := ConversationSettings{Settings: Settings{
-					Model: "model-a", ToolOverrides: map[string]string{"message_user": "on"},
+				// Without the Assistant profile, the Assistant starts from
+				// the default one.
+				want := ConversationSettings{Profile: "Other", Settings: Settings{
+					Model: "model-b", ThinkingLevel: "low",
+					ToolOverrides:      map[string]string{"message_user": "on", "bash": "off"},
+					CompactNudgeTokens: 54321,
+					SystemPrompt:       "Unrelated default profile.",
 				}}
-				promptText := "Shelley"
-				thinking := llm.ThinkingLevelDefault
+				promptText := "Unrelated default profile."
+				thinking := llm.ThinkingLevelLow
 				if tc.assistant {
-					want = ConversationSettings{Profile: "Assistant", Edited: tc.prompt != "", Settings: Settings{
+					want = ConversationSettings{Profile: "Assistant", Settings: Settings{
 						Model: "model-b", ThinkingLevel: "high",
 						ToolOverrides:      map[string]string{"message_user": "on", "bash": "off", "compact_in_place": "on"},
 						CompactNudgeTokens: 12345,
@@ -223,30 +230,21 @@ func TestChannelMessageAssistantProfile(t *testing.T) {
 					}}
 					promptText, thinking = "Channel assistant in ", llm.ThinkingLevelHigh
 				}
-				if tc.prompt != "" {
-					want.SystemPrompt, promptText = tc.prompt, "Event override in "
-				}
 				tools := []string{"compact_in_place"}
 				notTools := []string{"bash"}
-				send := func(id, prompt string) {
+				send := func(id string) {
 					t.Helper()
-					body, err := json.Marshal(channelEvent{
-						Type: "message", ID: id, ChatID: "profile-chat", Web: web,
-						Text: "hello", SystemPrompt: prompt,
-					})
+					body, err := json.Marshal(channelEvent{Type: "message", ID: id, ChatID: "profile-chat", Web: web, Text: "hello"})
 					if err != nil {
 						t.Fatal(err)
 					}
 					e.want(204, "POST", "/api/channels/messages", string(body))
 				}
-				send("first", tc.prompt)
-				conv, err := conversationByExternalID(t, e.database, "profile-chat")
-				if err != nil {
-					t.Fatal(err)
-				}
+				send("first")
+				assistantID := chatAssistant(t, e.srv, "profile-chat")
 				checkSettings := func() {
 					t.Helper()
-					stored, err := e.database.GetConversationByID(t.Context(), conv.ConversationID)
+					stored, err := e.database.GetConversationByID(t.Context(), assistantID)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -256,7 +254,7 @@ func TestChannelMessageAssistantProfile(t *testing.T) {
 				}
 				checkRequest := func(before int) {
 					t.Helper()
-					e.waitTurn(conv.ConversationID, before)
+					e.waitTurn(assistantID, before)
 					req := e.lastTurnRequest()
 					if !hasTool(req, claudetool.MessageUserName) {
 						t.Error("channel request must offer message_user even when the profile disables it")
@@ -283,9 +281,8 @@ func TestChannelMessageAssistantProfile(t *testing.T) {
 				if !tc.assistant {
 					return
 				}
-				// A later event's prompt never changes an existing chat, nor
-				// does deleting the profile. Editing it changes only a chat
-				// that shares its settings.
+				// Editing the profile changes the Assistant; deleting it
+				// does not.
 				for _, mutation := range []struct {
 					method string
 					status int
@@ -295,7 +292,7 @@ func TestChannelMessageAssistantProfile(t *testing.T) {
 					{"DELETE", 204, ""},
 				} {
 					e.want(mutation.status, mutation.method, "/api/profiles/Assistant", mutation.body)
-					if mutation.method == "PUT" && !want.Edited {
+					if mutation.method == "PUT" {
 						want.Settings = Settings{
 							Model: "model-a", ThinkingLevel: "low",
 							ToolOverrides:      map[string]string{"message_user": "on", "bash": "on"},
@@ -304,8 +301,8 @@ func TestChannelMessageAssistantProfile(t *testing.T) {
 						promptText, thinking = "Edited Assistant.", llm.ThinkingLevelLow
 						tools, notTools = []string{"bash"}, nil
 					}
-					before := len(listMessages(t, e.database, conv.ConversationID))
-					send(mutation.method, "Later event prompt must be ignored.")
+					before := len(listMessages(t, e.database, assistantID))
+					send(mutation.method)
 					checkSettings()
 					checkRequest(before)
 				}
@@ -324,11 +321,8 @@ func TestChannelMessageExternalIDOnlyInLLM(t *testing.T) {
 	}); w.Code != http.StatusNoContent {
 		t.Fatalf("receive: %d %s", w.Code, w.Body.String())
 	}
-	conv, err := conversationByExternalID(t, database, chat)
-	if err != nil {
-		t.Fatal(err)
-	}
-	typed, err := database.ListTypedUserMessages(t.Context(), conv.ConversationID)
+	assistantID := chatAssistant(t, server, chat)
+	typed, err := database.ListTypedUserMessages(t.Context(), assistantID)
 	if err != nil || len(typed) != 1 {
 		t.Fatalf("typed user messages = %d: %v", len(typed), err)
 	}
@@ -346,17 +340,17 @@ func TestChannelMessageExternalIDOnlyInLLM(t *testing.T) {
 	if got := lastRequestUserText(live); got != want {
 		t.Fatalf("live LLM message = %q, want %q", got, want)
 	}
-	if got := channelUserMessages(t, database, conv.ConversationID); !slices.Equal(got, []string{id + ": " + text}) {
+	if got := channelUserMessages(t, database, assistantID); !slices.Equal(got, []string{id + ": " + text}) {
 		t.Fatalf("stored channel message = %q, want original text", got)
 	}
 
-	manager, err := server.getOrCreateConversationManager(t.Context(), conv.ConversationID, "")
+	manager, err := server.getOrCreateConversationManager(t.Context(), assistantID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var rows []generated.Message
 	if err := database.Queries(t.Context(), func(q *generated.Queries) (err error) {
-		rows, err = q.ListMessagesForContext(t.Context(), conv.ConversationID)
+		rows, err = q.ListMessagesForContext(t.Context(), assistantID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -381,7 +375,7 @@ func TestChannelMessageInjectsAfterCurrentTool(t *testing.T) {
 		t.Run(fmt.Sprintf("queuedUI=%t", queuedUI), func(t *testing.T) {
 			t.Parallel()
 			gate := newGateLLMService("third", "from the UI")
-			server, database, h := channelTestServer(t, gate)
+			server, database, _ := channelTestServer(t, gate)
 			started, release := make(chan struct{}), make(chan struct{})
 			var once sync.Once
 			releaseTool := func() { once.Do(func() { close(release) }) }
@@ -399,14 +393,10 @@ func TestChannelMessageInjectsAfterCurrentTool(t *testing.T) {
 			}))
 			t.Cleanup(endpoint.Close)
 			t.Cleanup(releaseTool)
-			conv, err := server.channelConversation(t.Context(), endpoint.URL, "chat-tool", "")
-			if err != nil {
-				t.Fatal(err)
-			}
 			deliver := func(id, text string) {
 				t.Helper()
-				if w := postJSON(t, h, "/api/channels/messages", channelEvent{Type: "message", ID: id, ChatID: "chat-tool", Text: text}); w.Code != http.StatusNoContent {
-					t.Fatalf("deliver %s: status %d: %s", id, w.Code, w.Body.String())
+				if err := server.receiveChannelEvent(t.Context(), endpoint.URL, channelEvent{Type: "message", ID: id, ChatID: "chat-tool", Text: text}); err != nil {
+					t.Fatalf("deliver %s: %v", id, err)
 				}
 			}
 			prompt := `message_user: {"text":"working"}`
@@ -417,7 +407,8 @@ func TestChannelMessageInjectsAfterCurrentTool(t *testing.T) {
 			case <-time.After(5 * time.Second):
 				t.Fatal("tool did not start")
 			}
-			manager, err := server.getOrCreateConversationManager(t.Context(), conv.ConversationID, "")
+			assistantID := chatAssistant(t, server, "chat-tool")
+			manager, err := server.getOrCreateConversationManager(t.Context(), assistantID, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -429,7 +420,7 @@ func TestChannelMessageInjectsAfterCurrentTool(t *testing.T) {
 			deliver("m2", "second")
 			deliver("m3", "third")
 			deliver("m2", "second")
-			queued, err := database.GetQueuedMessages(t.Context(), conv.ConversationID)
+			queued, err := database.GetQueuedMessages(t.Context(), assistantID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -440,7 +431,7 @@ func TestChannelMessageInjectsAfterCurrentTool(t *testing.T) {
 			if len(queued) != offset+2 || !queued[offset].Inject || !queued[offset+1].Inject {
 				t.Fatalf("webhook messages must wait for the tool as injectable entries: %+v", queued)
 			}
-			if got := channelUserMessages(t, database, conv.ConversationID); len(got) != 1 {
+			if got := channelUserMessages(t, database, assistantID); len(got) != 1 {
 				t.Fatalf("messages recorded before tool finished: %v", got)
 			}
 			releaseTool()
@@ -455,13 +446,13 @@ func TestChannelMessageInjectsAfterCurrentTool(t *testing.T) {
 				!strings.HasSuffix(messageText(tail[2]), "\nthird\n</external_message>") {
 				t.Fatalf("next request must contain tool result followed by webhook messages: %+v", tail)
 			}
-			for _, m := range listMessages(t, database, conv.ConversationID) {
+			for _, m := range listMessages(t, database, assistantID) {
 				if m.Type == string(db.MessageTypeAgent) && storedLLMMessage(t, &m).EndOfTurn {
 					t.Fatal("webhook message waited until the turn ended")
 				}
 			}
 			want := []string{"m1: " + prompt, "m2: second", "m3: third"}
-			if got := channelUserMessages(t, database, conv.ConversationID); !slices.Equal(got, want) {
+			if got := channelUserMessages(t, database, assistantID); !slices.Equal(got, want) {
 				t.Fatalf("user messages = %v, want %v", got, want)
 			}
 			gate.release("third")
@@ -470,14 +461,15 @@ func TestChannelMessageInjectsAfterCurrentTool(t *testing.T) {
 				gate.release("from the UI")
 			}
 			waitFor(t, 5*time.Second, func() bool {
-				c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
+				c, err := database.GetConversationByID(t.Context(), assistantID)
 				return err == nil && !c.AgentWorking && c.QueuedMessages == "[]"
 			})
 		})
 	}
 }
 
-func TestChannelMessageDeliversToChatConversation(t *testing.T) {
+// Every chat's messages go to the Assistant, made by the first.
+func TestChannelMessagesDeliverToAssistant(t *testing.T) {
 	t.Parallel()
 	gate := newGateLLMService("first")
 	server, database, h := channelTestServer(t, gate)
@@ -489,12 +481,9 @@ func TestChannelMessageDeliversToChatConversation(t *testing.T) {
 	}
 
 	deliver(channelEvent{Type: "message", ID: "m1", ChatID: "chat-1", Sender: "+15550100", Text: "first"})
-	conv, err := conversationByExternalID(t, database, "chat-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if conv.ExternalEndpoint == nil || *conv.ExternalEndpoint != "https://messages.int.exe.xyz" {
-		t.Fatalf("external_endpoint = %v, want the messages integration", conv.ExternalEndpoint)
+	assistantID := chatAssistant(t, server, "chat-1")
+	if route, err := database.GetChannelRoute(t.Context(), assistantID, "m1"); err != nil || route.ChatID != "chat-1" || route.Endpoint != "https://messages.int.exe.xyz" {
+		t.Fatalf("route = %+v, %v, want chat-1's at the messages integration", route, err)
 	}
 	gate.waitStarted(t, "first")
 
@@ -503,12 +492,12 @@ func TestChannelMessageDeliversToChatConversation(t *testing.T) {
 	deliver(channelEvent{Type: "message", ID: "m2", ChatID: "chat-1", Text: "second"})
 	deliver(channelEvent{Type: "message", ID: "m1", ChatID: "chat-1", Text: "first"})
 	deliver(channelEvent{Type: "message", ID: "m2", ChatID: "chat-1", Text: "second"})
-	if got := strings.Join(channelUserMessages(t, database, conv.ConversationID), "\n"); got != "m1: first" {
+	if got := strings.Join(channelUserMessages(t, database, assistantID), "\n"); got != "m1: first" {
 		t.Fatalf("user messages mid-turn:\n%s", got)
 	}
 
 	// Channel messages are injectable even behind a queued UI message.
-	manager, err := server.getOrCreateConversationManager(t.Context(), conv.ConversationID, "")
+	manager, err := server.getOrCreateConversationManager(t.Context(), assistantID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -527,7 +516,7 @@ func TestChannelMessageDeliversToChatConversation(t *testing.T) {
 	// Queued retries must also deduplicate before fetching provider media.
 	media.Close()
 	deliver(photo)
-	queued, err := database.GetQueuedMessages(t.Context(), conv.ConversationID)
+	queued, err := database.GetQueuedMessages(t.Context(), assistantID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -551,7 +540,7 @@ func TestChannelMessageDeliversToChatConversation(t *testing.T) {
 
 	gate.release("first")
 	waitFor(t, 5*time.Second, func() bool {
-		c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
+		c, err := database.GetConversationByID(t.Context(), assistantID)
 		return err == nil && !c.AgentWorking && c.QueuedMessages == "[]"
 	})
 	deliver(channelEvent{Type: "message", ID: "m3", ChatID: "chat-1", Text: "third"})
@@ -562,11 +551,11 @@ func TestChannelMessageDeliversToChatConversation(t *testing.T) {
 	// An opt-out is exed's business; replies would be refused.
 	deliver(channelEvent{Type: "message", ID: "m6", ChatID: "chat-1", Text: "STOP", OptOut: true})
 	waitFor(t, 5*time.Second, func() bool {
-		c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
+		c, err := database.GetConversationByID(t.Context(), assistantID)
 		return err == nil && !c.AgentWorking && c.QueuedMessages == "[]"
 	})
 
-	got := strings.Join(channelUserMessages(t, database, conv.ConversationID), "\n")
+	got := strings.Join(channelUserMessages(t, database, assistantID), "\n")
 	if want := "m1: first\nm2: second\n: from the UI\nm3: " + photoText + "\nm4: fourth"; got != want {
 		t.Fatalf("user messages:\n%s\nwant:\n%s", got, want)
 	}
@@ -586,15 +575,13 @@ func TestChannelMessageDeliversToChatConversation(t *testing.T) {
 		t.Fatalf("queued channel and UI messages in LLM requests: channel=%v UI=%v", sawQueued, sawUI)
 	}
 
-	// Another chat gets its own conversation.
-	deliver(channelEvent{Type: "message", ID: "m1", ChatID: "chat-2", Text: "other chat"})
-	other, err := conversationByExternalID(t, database, "chat-2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if other.ConversationID == conv.ConversationID {
-		t.Fatal("chat-2 was delivered to chat-1's conversation")
-	}
+	// Another chat's messages go to the Assistant too.
+	deliver(channelEvent{Type: "message", ID: "m7", ChatID: "chat-2", Text: "other chat"})
+	chatAssistant(t, server, "chat-2")
+	waitFor(t, 5*time.Second, func() bool {
+		got := channelUserMessages(t, database, assistantID)
+		return got[len(got)-1] == "m7: other chat"
+	})
 }
 
 func TestChannelMessageRejectsBadEvents(t *testing.T) {
@@ -602,6 +589,10 @@ func TestChannelMessageRejectsBadEvents(t *testing.T) {
 	_, _, h := channelTestServer(t, nil)
 	if w := postJSON(t, h, "/api/channels/messages", channelEvent{Type: "message", ID: "m1", Text: "hi"}); w.Code != http.StatusBadRequest {
 		t.Fatalf("status %d, want 400", w.Code)
+	}
+	// Replies to a message without an id could not be routed back.
+	if w := postJSON(t, h, "/api/channels/messages", channelEvent{Type: "message", ChatID: "chat-1", Text: "hi"}); w.Code != http.StatusBadRequest {
+		t.Fatalf("no id: status %d, want 400", w.Code)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/channels/messages", strings.NewReader("{"))
 	w := httptest.NewRecorder()
@@ -617,8 +608,8 @@ func TestChannelMessageRejectsBadEvents(t *testing.T) {
 }
 
 // The debug page's chats run the whole loop over HTTP: the phone's text
-// lands in the chat's conversation, and the conversation's replies reach the
-// emulated gateway, which refuses them like exed's.
+// lands in the Assistant, and replies reach the emulated gateway, which
+// refuses them like exed's.
 func TestDebugChannelRoundTrip(t *testing.T) {
 	t.Parallel()
 	server, database, h, ts := debugChannelTestServer(t)
@@ -628,28 +619,29 @@ func TestDebugChannelRoundTrip(t *testing.T) {
 	if w := postJSON(t, h, "/api/debug/channels/"+chat+"/receive", map[string]string{"text": "hello"}); w.Code != http.StatusOK {
 		t.Fatalf("receive: status %d: %s", w.Code, w.Body.String())
 	}
-	conv, err := conversationByExternalID(t, database, chat)
+	assistantID := chatAssistant(t, server, chat)
+	route, err := database.LatestChannelRoute(t.Context(), chat)
 	if err != nil {
 		t.Fatal(err)
 	}
 	prefix := "http://localhost:" + port + "/debug/channels/gateway/" + chat + "/"
-	if conv.ExternalEndpoint == nil || !strings.HasPrefix(*conv.ExternalEndpoint, prefix) {
-		t.Fatalf("external_endpoint = %v, want %s<token>", conv.ExternalEndpoint, prefix)
+	if !strings.HasPrefix(route.Endpoint, prefix) {
+		t.Fatalf("endpoint = %q, want %s<token>", route.Endpoint, prefix)
 	}
-	endpoint := *conv.ExternalEndpoint
+	endpoint := route.Endpoint
 	waitFor(t, 5*time.Second, func() bool {
-		c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
+		c, err := database.GetConversationByID(t.Context(), assistantID)
 		return err == nil && !c.AgentWorking
 	})
-	if got := channelUserMessages(t, database, conv.ConversationID); len(got) != 1 || !strings.HasPrefix(got[0], "debug-in-") || !strings.HasSuffix(got[0], "-1: hello") {
+	if got := channelUserMessages(t, database, assistantID); len(got) != 1 || !strings.HasPrefix(got[0], "debug-in-") || !strings.HasSuffix(got[0], "-1: hello") {
 		t.Fatalf("user messages = %q", got)
 	}
 
 	send := func(text string) error {
-		_, err := server.sendChannelMessage(t.Context(), conv.ConversationID, text, "", nil)
+		_, err := server.sendChannelEndpointMessage(t.Context(), endpoint, text, "", nil)
 		return err
 	}
-	id, err := server.sendChannelMessage(t.Context(), conv.ConversationID, "hi back", "", nil)
+	id, err := server.sendChannelEndpointMessage(t.Context(), endpoint, "hi back", "", nil)
 	if err != nil || !strings.HasPrefix(id, "debug-out-") || !strings.HasSuffix(id, "-2") {
 		t.Fatalf("send = %q, %v", id, err)
 	}
@@ -745,7 +737,7 @@ func TestDebugChannelRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	slices.SortFunc(chats, func(a, b debugChatView) int { return len(b.Events) - len(a.Events) })
-	if len(chats) != 2 || chats[0].ConversationID != conv.ConversationID {
+	if len(chats) != 2 || chats[0].ConversationID != assistantID {
 		t.Fatalf("chats = %+v", chats)
 	}
 	var kinds []string
@@ -757,8 +749,8 @@ func TestDebugChannelRoundTrip(t *testing.T) {
 	}
 }
 
-// A restarted Shelley forgets debug chats but not their conversations; the
-// chat's new messages must not pass for retries of the old ones.
+// A restarted Shelley forgets debug chats but not the Assistant; the chat's
+// new messages must not pass for retries of the old ones.
 func TestDebugChannelIDsSurviveRestart(t *testing.T) {
 	t.Parallel()
 	server, database, h := channelTestServer(t, nil)
@@ -770,12 +762,9 @@ func TestDebugChannelIDsSurviveRestart(t *testing.T) {
 		}
 	}
 	receive("before")
-	conv, err := conversationByExternalID(t, database, chat)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assistantID := chatAssistant(t, server, chat)
 	waitFor(t, 5*time.Second, func() bool {
-		c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
+		c, err := database.GetConversationByID(t.Context(), assistantID)
 		return err == nil && !c.AgentWorking
 	})
 	d := &server.channelDebug
@@ -784,77 +773,65 @@ func TestDebugChannelIDsSurviveRestart(t *testing.T) {
 	d.mu.Unlock()
 	receive("after")
 	waitFor(t, 5*time.Second, func() bool {
-		return len(channelUserMessages(t, database, conv.ConversationID)) == 2
+		return len(channelUserMessages(t, database, assistantID)) == 2
 	})
 }
 
-// Messages queued in a channel conversation nothing is draining, as after a
-// restart, are drained at startup and when the chat retries one of them.
+// Texted messages queued in the Assistant with nothing draining them, as
+// after a restart, are drained at startup and when the chat retries one of
+// them.
 func TestChannelQueuesDrainWithoutTheUI(t *testing.T) {
 	t.Parallel()
 	server, database, h := channelTestServer(t, nil)
-	queue := func(chatID, id, text string) string {
+	assistantID, err := server.ensureAssistant(t.Context(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queue := func(id, text string) {
 		t.Helper()
-		conv, err := database.CreateChannelConversation(t.Context(), chatID, "https://messages.int.exe.xyz", "predictable", db.ConversationOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
 		llmJSON, err := json.Marshal(llm.UserStringMessage(text))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := database.AppendQueuedMessage(t.Context(), conv.ConversationID, db.QueuedMessage{
+		if _, err := database.AppendQueuedMessage(t.Context(), assistantID, db.QueuedMessage{
 			ID: id, Llm: llmJSON, CreatedAt: time.Now().UTC(), Model: "predictable", ExternalMessageID: id,
 		}); err != nil {
 			t.Fatal(err)
 		}
-		return conv.ConversationID
 	}
-	drained := func(conversationID, want string) {
+	drained := func(want string) {
 		t.Helper()
 		waitFor(t, 5*time.Second, func() bool {
-			c, err := database.GetConversationByID(t.Context(), conversationID)
+			c, err := database.GetConversationByID(t.Context(), assistantID)
 			return err == nil && !c.AgentWorking && c.QueuedMessages == "[]"
 		})
-		if got := strings.Join(channelUserMessages(t, database, conversationID), "\n"); got != want {
+		if got := strings.Join(channelUserMessages(t, database, assistantID), "\n"); got != want {
 			t.Fatalf("user messages = %q, want %q", got, want)
 		}
 	}
 
-	startup := queue("chat-startup", "q1", "left queued")
+	queue("q1", "left queued")
 	server.recoverChannelQueues(t.Context())
-	drained(startup, "q1: left queued")
+	drained("q1: left queued")
 
-	retried := queue("chat-retry", "q2", "retried")
+	queue("q2", "retried")
 	if w := postJSON(t, h, "/api/channels/messages", channelEvent{Type: "message", ID: "q2", ChatID: "chat-retry", Text: "retried"}); w.Code != http.StatusNoContent {
 		t.Fatalf("retry: status %d: %s", w.Code, w.Body.String())
 	}
-	drained(retried, "q2: retried")
+	drained("q1: left queued\nq2: retried")
 }
 
-func TestSendChannelMessageNeedsBoundConversation(t *testing.T) {
-	t.Parallel()
-	server, database, _ := channelTestServer(t, nil)
-	conv, err := database.CreateConversation(t.Context(), nil, true, nil, strPtr("predictable"), db.ConversationOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := server.sendChannelMessage(t.Context(), conv.ConversationID, "hi", "", nil); err == nil || !strings.Contains(err.Error(), "not bound") {
-		t.Fatalf("send from unbound conversation: %v", err)
-	}
-}
-
-// A chat's simultaneous first messages create one conversation and are all
-// delivered.
+// Simultaneous first messages, from one chat or several, make one
+// Assistant and are all delivered to it.
 func TestChannelConcurrentFirstMessages(t *testing.T) {
 	t.Parallel()
-	_, database, h := channelTestServer(t, nil)
+	server, database, h := channelTestServer(t, nil)
 	const n = 8
 	var wg sync.WaitGroup
 	codes := make([]int, n)
 	for i := range n {
 		wg.Go(func() {
-			ev := channelEvent{Type: "message", ID: fmt.Sprintf("m%d", i), ChatID: "chat-race", Text: fmt.Sprintf("hello %d", i)}
+			ev := channelEvent{Type: "message", ID: fmt.Sprintf("m%d", i), ChatID: fmt.Sprintf("chat-race-%d", i%3), Text: fmt.Sprintf("hello %d", i)}
 			codes[i] = postJSON(t, h, "/api/channels/messages", ev).Code
 		})
 	}
@@ -864,15 +841,17 @@ func TestChannelConcurrentFirstMessages(t *testing.T) {
 			t.Fatalf("delivery %d: status %d", i, code)
 		}
 	}
-	conv, err := conversationByExternalID(t, database, "chat-race")
-	if err != nil {
-		t.Fatal(err)
+	assistantID := server.assistantID()
+	for i := range n {
+		if route, err := database.GetChannelRoute(t.Context(), assistantID, fmt.Sprintf("m%d", i)); err != nil || route.ChatID != fmt.Sprintf("chat-race-%d", i%3) {
+			t.Fatalf("m%d route in the Assistant = %+v, %v", i, route, err)
+		}
 	}
 	waitFor(t, 5*time.Second, func() bool {
-		c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
+		c, err := database.GetConversationByID(t.Context(), assistantID)
 		return err == nil && !c.AgentWorking && c.QueuedMessages == "[]"
 	})
-	if got := channelUserMessages(t, database, conv.ConversationID); len(got) != n {
+	if got := channelUserMessages(t, database, assistantID); len(got) != n {
 		t.Fatalf("user messages = %q", got)
 	}
 }
@@ -907,24 +886,33 @@ func (*unavailableLLM) GetService(string) (llm.Service, error) {
 	return nil, errors.New("model unavailable")
 }
 
-// A chat whose first message cannot reach a model gets no conversation, so
-// the failed deliveries leave nothing behind.
-func TestChannelMessageWithoutModelCreatesNoConversation(t *testing.T) {
+// A message that cannot reach a model fails its delivery and leaves no
+// trace of it, so that exed's retry delivers it.
+func TestChannelMessageWithoutModelIsRetried(t *testing.T) {
 	t.Parallel()
 	server, database, h := channelTestServer(t, nil)
+	working := server.llmManager
 	server.llmManager = &unavailableLLM{}
-	if w := postJSON(t, h, "/api/channels/messages", channelEvent{Type: "message", ID: "m1", ChatID: "chat-1", Text: "hi"}); w.Code != http.StatusInternalServerError {
+	ev := channelEvent{Type: "message", ID: "m1", ChatID: "chat-1", Text: "hi"}
+	if w := postJSON(t, h, "/api/channels/messages", ev); w.Code != http.StatusInternalServerError {
 		t.Fatalf("status %d, want 500", w.Code)
 	}
-	if _, err := conversationByExternalID(t, database, "chat-1"); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("conversation lookup: %v", err)
+	if _, err := database.LatestChannelRoute(t.Context(), "chat-1"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("route of the failed delivery: %v", err)
+	}
+	server.llmManager = working
+	if w := postJSON(t, h, "/api/channels/messages", ev); w.Code != http.StatusNoContent {
+		t.Fatalf("retry: status %d: %s", w.Code, w.Body.String())
+	}
+	if got := channelUserMessages(t, database, chatAssistant(t, server, "chat-1")); !slices.Equal(got, []string{"m1: hi"}) {
+		t.Fatalf("user messages = %q", got)
 	}
 }
 
-// A chat's conversation answers with message_user: its messages and
+// The Assistant answers a chat with message_user: its messages and
 // reactions reach the chat, and what the chat cannot take is an error the
 // agent sees.
-func TestChannelConversationRepliesWithMessageUser(t *testing.T) {
+func TestAssistantRepliesWithMessageUser(t *testing.T) {
 	t.Parallel()
 	server, database, h, _ := debugChannelTestServer(t)
 	const chat = "debug-reply"
@@ -935,11 +923,7 @@ func TestChannelConversationRepliesWithMessageUser(t *testing.T) {
 			t.Fatalf("receive: status %d: %s", w.Code, w.Body.String())
 		}
 		if conversationID == "" {
-			conv, err := conversationByExternalID(t, database, chat)
-			if err != nil {
-				t.Fatal(err)
-			}
-			conversationID = conv.ConversationID
+			conversationID = chatAssistant(t, server, chat)
 		}
 		waitFor(t, 5*time.Second, func() bool {
 			c, err := database.GetConversationByID(t.Context(), conversationID)
@@ -967,7 +951,7 @@ func TestChannelConversationRepliesWithMessageUser(t *testing.T) {
 		return result
 	}
 
-	// Channel conversations have message_user on.
+	// The Assistant has message_user on.
 	call(claudetool.MessageUserInput{Text: "Hello from Shelley"})
 	evs := events()
 	if last := evs[len(evs)-1]; last.Kind != "out" || last.Text != "Hello from Shelley" {
@@ -996,11 +980,11 @@ func TestChannelConversationRepliesWithMessageUser(t *testing.T) {
 			t.Fatalf("reaction %s = %+v, want %s", emoji, evs[len(evs)-1], want)
 		}
 	}
-	conv, err := database.GetConversationByID(t.Context(), conversationID)
+	route, err := database.LatestChannelRoute(t.Context(), chat)
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoint, err := url.Parse(*conv.ExternalEndpoint)
+	endpoint, err := url.Parse(route.Endpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1069,33 +1053,36 @@ func TestChannelChatSaysWhetherDeliveryFailed(t *testing.T) {
 	}))
 	t.Cleanup(endpoint.Close)
 	t.Cleanup(func() { close(release) })
-	chat := func(name string) channelChat {
-		conv, err := database.CreateChannelConversation(t.Context(), "chat-"+name, endpoint.URL+"/"+name, "predictable", db.ConversationOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return channelChat{s: server, conversationID: conv.ConversationID}
-	}
-
-	refuse := chat("refuse")
-	if err := refuse.Send(t.Context(), "hi", nil, claudetool.UserMessage{}); err == nil || !strings.Contains(err.Error(), "refused") || !strings.Contains(err.Error(), "line_paused") {
-		t.Fatalf("refused send: %v", err)
-	}
-	for name, want := range map[string]string{"upstream": "may have been delivered", "internal": "may have been delivered", "upstream-refused": "refused"} {
-		if err := chat(name).Send(t.Context(), "hi", nil, claudetool.UserMessage{}); err == nil || !strings.Contains(err.Error(), want) {
-			t.Fatalf("%s: %v, want %q", name, err, want)
-		}
-	}
-	// A reaction to a message typed in Shelley's UI calls nothing.
-	if err := refuse.React(t.Context(), claudetool.UserMessage{ID: "typed"}, "👍"); err != nil {
-		t.Fatalf("reaction to a UI message: %v", err)
-	}
-	unbound, err := database.CreateConversation(t.Context(), nil, true, nil, strPtr("predictable"), db.ConversationOptions{})
+	assistantID, err := server.ensureAssistant(t.Context(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := (channelChat{s: server, conversationID: unbound.ConversationID}).Send(t.Context(), "hi", nil, claudetool.UserMessage{}); err == nil || !strings.Contains(err.Error(), "nothing was sent") {
-		t.Fatalf("send from unbound conversation: %v", err)
+	chat := assistantChat{s: server, conversationID: assistantID}
+	// texted returns a message texted from a chat whose endpoint is name.
+	texted := func(name string) claudetool.UserMessage {
+		t.Helper()
+		id := "in-" + name
+		if err := database.RecordChannelRoute(t.Context(), db.ChannelRoute{ConversationID: assistantID, ExternalMessageID: id, ChatID: "chat-" + name, Endpoint: endpoint.URL + "/" + name}); err != nil {
+			t.Fatal(err)
+		}
+		return claudetool.UserMessage{ID: id, SequenceID: 1, ExternalID: id}
+	}
+
+	if err := chat.Send(t.Context(), "hi", nil, texted("refuse")); err == nil || !strings.Contains(err.Error(), "refused") || !strings.Contains(err.Error(), "line_paused") {
+		t.Fatalf("refused send: %v", err)
+	}
+	for name, want := range map[string]string{"upstream": "may have been delivered", "internal": "may have been delivered", "upstream-refused": "refused"} {
+		if err := chat.Send(t.Context(), "hi", nil, texted(name)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("%s: %v, want %q", name, err, want)
+		}
+	}
+	// A reply or reaction to a message typed in Shelley's UI calls nothing.
+	typed := claudetool.UserMessage{ID: "typed", SequenceID: 2}
+	if err := chat.React(t.Context(), typed, "👍"); err != nil {
+		t.Fatalf("reaction to a UI message: %v", err)
+	}
+	if err := chat.Send(t.Context(), "hi", nil, typed); err != nil {
+		t.Fatalf("reply to a UI message: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -1103,16 +1090,17 @@ func TestChannelChatSaysWhetherDeliveryFailed(t *testing.T) {
 		<-got
 		cancel()
 	}()
-	if err := chat("hang").Send(ctx, "hi", nil, claudetool.UserMessage{}); err == nil || !strings.Contains(err.Error(), "may have been delivered") {
+	if err := chat.Send(ctx, "hi", nil, texted("hang")); err == nil || !strings.Contains(err.Error(), "may have been delivered") {
 		t.Fatalf("cancelled send: %v", err)
 	}
 }
 
-// A web chat's conversation keeps message_user's messages, and the web page
-// reads them from the chat's stream.
+// A web chat's messages go to the Assistant, which keeps message_user's
+// answers to them, and the web page reads them from the chat's stream: the
+// Assistant's.
 func TestWebChatRoundTrip(t *testing.T) {
 	t.Parallel()
-	_, database, h := channelTestServer(t, nil)
+	server, database, h := channelTestServer(t, nil)
 	ts := httptest.NewServer(h)
 	t.Cleanup(ts.Close)
 	const chat = "web-usr123"
@@ -1129,18 +1117,15 @@ func TestWebChatRoundTrip(t *testing.T) {
 	if w := postJSON(t, h, "/api/channels/messages", channelEvent{Type: "message", ID: "m1", ChatID: chat, Web: true, Text: `message_user: {"text":"hello from the VM"}`}); w.Code != http.StatusNoContent {
 		t.Fatalf("deliver: status %d: %s", w.Code, w.Body.String())
 	}
-	conv, err := conversationByExternalID(t, database, chat)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if conv.ExternalEndpoint != nil {
-		t.Fatalf("external_endpoint = %q, want none", *conv.ExternalEndpoint)
+	assistantID := chatAssistant(t, server, chat)
+	if route, err := database.LatestChannelRoute(t.Context(), chat); err != nil || route.Endpoint != "" {
+		t.Fatalf("route = %+v, %v, want no endpoint", route, err)
 	}
 	waitFor(t, 5*time.Second, func() bool {
-		c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
+		c, err := database.GetConversationByID(t.Context(), assistantID)
 		return err == nil && !c.AgentWorking && c.QueuedMessages == "[]"
 	})
-	c := &compactTestConversation{t: t, database: database, id: conv.ConversationID}
+	c := &compactTestConversation{t: t, database: database, id: assistantID}
 	if _, r := c.lastMessageUserResult(); r.ToolError {
 		t.Fatalf("message_user result = %+v", r)
 	}
@@ -1167,8 +1152,8 @@ func TestWebChatRoundTrip(t *testing.T) {
 		if err := json.Unmarshal([]byte(data), &sr); err != nil {
 			t.Fatal(err)
 		}
-		if sr.ConversationID != conv.ConversationID && len(sr.Messages) > 0 {
-			t.Fatalf("stream of conversation %s, want %s", sr.ConversationID, conv.ConversationID)
+		if sr.ConversationID != assistantID && len(sr.Messages) > 0 {
+			t.Fatalf("stream of conversation %s, want %s", sr.ConversationID, assistantID)
 		}
 		for _, m := range sr.Messages {
 			if m.LlmData != nil && strings.Contains(*m.LlmData, "hello from the VM") && m.Type == string(db.MessageTypeAgent) {
@@ -1196,18 +1181,18 @@ func (s *turnRecordingService) Do(ctx context.Context, request *llm.Request) (*l
 	return s.Service.Do(ctx, request)
 }
 
-// The message that starts a chat's conversation configures it: its system
-// prompt becomes the conversation's custom one, and its first reply answers it in place of the
-// agent. A later message's are ignored. The user follows the conversation
-// in the chat, so it sends no notifications.
-func TestChannelFirstMessageConfiguresConversation(t *testing.T) {
+// The first reaction and reply of the message that starts the Assistant
+// answer it in place of the agent. A later message's, from any chat, are
+// ignored. The user follows the Assistant in their chats, so it sends no
+// notifications.
+func TestChannelFirstMessageAnswersTheAssistantsFirst(t *testing.T) {
 	t.Parallel()
 	server, database, h, _ := debugChannelTestServer(t)
 	model := &turnRecordingService{Service: predictable.NewService()}
 	server.llmManager = &testLLMManager{service: model}
 	const chat = "debug-first"
 	const welcome = "You made it! I’m Shelley."
-	receive := func(body map[string]string) string {
+	receive := func(chat string, body map[string]string) string {
 		t.Helper()
 		w := postJSON(t, h, "/api/debug/channels/"+chat+"/receive", body)
 		if w.Code != http.StatusOK {
@@ -1221,46 +1206,38 @@ func TestChannelFirstMessageConfiguresConversation(t *testing.T) {
 		}
 		return resp.MessageID
 	}
-	hey := map[string]string{"text": "Hey", "system_prompt": "You are texting.", "first_reaction": "❤️", "first_reply": welcome}
+	hey := map[string]string{"text": "Hey", "first_reaction": "❤️", "first_reply": welcome}
 
-	// The system prompt is a template; one that can't render starts nothing.
-	if w := postJSON(t, h, "/api/debug/channels/debug-bad/receive", map[string]string{"text": "Hey", "system_prompt": "{{.Nope}}"}); w.Code == http.StatusOK {
-		t.Fatalf("bad template: status %d", w.Code)
-	}
-	if _, err := conversationByExternalID(t, database, "debug-bad"); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("conversation for a bad template: %v", err)
-	}
-
-	heyID := receive(hey)
+	heyID := receive(chat, hey)
 	server.channelDebug.mu.Lock()
 	evs := slices.Clone(server.channelDebug.chats[chat].Events)
 	server.channelDebug.mu.Unlock()
 	if len(evs) != 3 || evs[1].Kind != "react" || evs[1].Text != "love" || evs[1].MessageID != heyID || evs[2].Kind != "out" || evs[2].Text != welcome || evs[2].ReplyTo != "" {
 		t.Fatalf("chat events = %+v", evs)
 	}
-	conv, err := conversationByExternalID(t, database, chat)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if conv.AgentWorking {
-		t.Fatal("agent working after the first reply")
-	}
-	if opts := db.ParseConversationOptions(conv.ConversationOptions); opts.SystemPrompt != "You are texting." {
-		t.Fatalf("options = %+v", opts)
+	assistantID := chatAssistant(t, server, chat)
+	if conv, err := database.GetConversationByID(t.Context(), assistantID); err != nil || conv.AgentWorking {
+		t.Fatalf("agent working after the first reply: %v", err)
 	}
 	notified := &recordingChannel{}
 	server.RegisterNotificationChannel(notified)
-	server.publishConversationState(ConversationState{ConversationID: conv.ConversationID, Model: "predictable"})
+	server.publishConversationState(ConversationState{ConversationID: assistantID, Model: "predictable"})
 	if notified.count() != 0 {
-		t.Fatal("channel conversation notified")
+		t.Fatal("Assistant notified")
 	}
 
-	hey["system_prompt"] = "Ignored."
-	receive(hey)
+	// Another chat's first message is not the Assistant's.
+	receive("debug-second", hey)
 	waitFor(t, 5*time.Second, func() bool {
-		c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
+		c, err := database.GetConversationByID(t.Context(), assistantID)
 		return err == nil && !c.AgentWorking
 	})
+	server.channelDebug.mu.Lock()
+	evs = slices.Clone(server.channelDebug.chats["debug-second"].Events)
+	server.channelDebug.mu.Unlock()
+	if len(evs) != 1 || evs[0].Kind != "in" {
+		t.Fatalf("second chat's events = %+v, want only its message", evs)
+	}
 	model.mu.Lock()
 	turns := slices.Clone(model.turns)
 	model.mu.Unlock()
@@ -1268,9 +1245,6 @@ func TestChannelFirstMessageConfiguresConversation(t *testing.T) {
 		t.Fatalf("agent turns = %d, want 1: the second message's", len(turns))
 	}
 	req := turns[0]
-	if len(req.System) == 0 || req.System[0].Text != "You are texting.\n" {
-		t.Fatalf("system = %+v", req.System)
-	}
 	// The agent sees the first reply as its own message_user call.
 	var history []string
 	for _, m := range req.Messages {
@@ -1303,19 +1277,19 @@ func TestChannelFirstMessageConfiguresConversation(t *testing.T) {
 	}
 
 	// A new generation starts the context afresh, not the conversation.
-	if _, err := server.startNewGeneration(t.Context(), conv.ConversationID); err != nil {
+	if _, err := server.startNewGeneration(t.Context(), assistantID); err != nil {
 		t.Fatal(err)
 	}
-	receive(hey)
+	receive(chat, hey)
 	waitFor(t, 5*time.Second, func() bool {
-		c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
+		c, err := database.GetConversationByID(t.Context(), assistantID)
 		return err == nil && !c.AgentWorking
 	})
 	model.mu.Lock()
 	turns = slices.Clone(model.turns)
 	model.mu.Unlock()
-	if len(turns) != 2 || turns[1].System[0].Text != "You are texting.\n" {
-		t.Fatalf("agent turns = %d, want 2 under the conversation's system prompt", len(turns))
+	if len(turns) != 2 {
+		t.Fatalf("agent turns = %d, want 2", len(turns))
 	}
 }
 
@@ -1345,11 +1319,7 @@ func TestChannelFirstReplyOutlivesTheDelivery(t *testing.T) {
 	if err := server.receiveChannelEvent(ctx, endpoint.URL, ev); err != nil {
 		t.Fatal(err)
 	}
-	conv, err := conversationByExternalID(t, database, "chat-gone")
-	if err != nil {
-		t.Fatal(err)
-	}
-	c := &compactTestConversation{t: t, database: database, id: conv.ConversationID}
+	c := &compactTestConversation{t: t, database: database, id: chatAssistant(t, server, "chat-gone")}
 	if _, r := c.lastMessageUserResult(); r.ToolError {
 		t.Fatalf("result = %+v", r)
 	}
@@ -1365,7 +1335,7 @@ func TestChannelFirstReplyOutlivesTheDelivery(t *testing.T) {
 // and the turn ends: no agent is there to try again.
 func TestChannelFirstReplyRefused(t *testing.T) {
 	t.Parallel()
-	_, database, h, _ := debugChannelTestServer(t)
+	server, database, h, _ := debugChannelTestServer(t)
 	const chat = "debug-refused"
 	if w := postJSON(t, h, "/api/debug/channels/"+chat+"/refuse", map[string]string{"code": "line_paused"}); w.Code != http.StatusNoContent {
 		t.Fatalf("refuse: status %d", w.Code)
@@ -1373,21 +1343,18 @@ func TestChannelFirstReplyRefused(t *testing.T) {
 	if w := postJSON(t, h, "/api/debug/channels/"+chat+"/receive", map[string]string{"text": "Hey", "first_reply": "Welcome"}); w.Code != http.StatusOK {
 		t.Fatalf("receive: status %d: %s", w.Code, w.Body.String())
 	}
-	conv, err := conversationByExternalID(t, database, chat)
-	if err != nil {
-		t.Fatal(err)
+	assistantID := chatAssistant(t, server, chat)
+	if conv, err := database.GetConversationByID(t.Context(), assistantID); err != nil || conv.AgentWorking {
+		t.Fatalf("agent working after the first reply: %v", err)
 	}
-	if conv.AgentWorking {
-		t.Fatal("agent working after the first reply")
-	}
-	c := &compactTestConversation{t: t, database: database, id: conv.ConversationID}
+	c := &compactTestConversation{t: t, database: database, id: assistantID}
 	if _, r := c.lastMessageUserResult(); !r.ToolError || !strings.Contains(r.ToolResult[0].Text, "line_paused") || !messageUserDisplay(t, r).ChatFailed {
 		t.Fatalf("result = %+v", r)
 	}
 }
 
-// A web chat takes a first reply too, kept in the conversation, and like
-// any chat it notifies no one.
+// A web chat's first message starts the Assistant with a first reply too,
+// kept in the conversation.
 func TestWebChatFirstReply(t *testing.T) {
 	t.Parallel()
 	server, database, _ := channelTestServer(t, nil)
@@ -1395,18 +1362,8 @@ func TestWebChatFirstReply(t *testing.T) {
 	if err := server.receiveChannelEvent(t.Context(), "", ev); err != nil {
 		t.Fatal(err)
 	}
-	conv, err := conversationByExternalID(t, database, ev.ChatID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c := &compactTestConversation{t: t, database: database, id: conv.ConversationID}
+	c := &compactTestConversation{t: t, database: database, id: chatAssistant(t, server, ev.ChatID)}
 	if _, r := c.lastMessageUserResult(); r.ToolError || r.ToolResult[0].Text != "Sent." {
 		t.Fatalf("result = %+v", r)
-	}
-	notified := &recordingChannel{}
-	server.RegisterNotificationChannel(notified)
-	server.publishConversationState(ConversationState{ConversationID: conv.ConversationID, Model: "predictable"})
-	if notified.count() != 0 {
-		t.Fatal("web chat notified")
 	}
 }

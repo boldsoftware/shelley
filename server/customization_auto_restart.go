@@ -167,7 +167,7 @@ func (s *Server) kickAutoRestart() {
 // reports whether the restart was scheduled, and otherwise when to evaluate
 // again (0: not until kicked).
 func (s *Server) autoRestartTick(ctx context.Context) (bool, time.Duration) {
-	if s.assistantID() == "" {
+	if !s.workspaceMode() {
 		s.customizations.autoRestart.Store(nil)
 		return false, 0
 	}

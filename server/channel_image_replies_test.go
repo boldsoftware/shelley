@@ -133,20 +133,17 @@ func TestChannelImageReplies(t *testing.T) {
 			}))
 			t.Cleanup(gateway.Close)
 			server, database, _ := channelTestServer(t, nil)
-			conv, err := server.channelConversation(t.Context(), gateway.URL, "image-reply", "")
-			if err != nil {
-				t.Fatal(err)
-			}
 			if err := server.receiveChannelEvent(t.Context(), gateway.URL, channelEvent{
 				Type: "message", ID: "incoming-photo", ChatID: "image-reply", Text: "hello",
 			}); err != nil {
 				t.Fatal(err)
 			}
+			assistantID := chatAssistant(t, server, "image-reply")
 			waitFor(t, 5*time.Second, func() bool {
-				c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
+				c, err := database.GetConversationByID(t.Context(), assistantID)
 				return err == nil && !c.AgentWorking
 			})
-			typed, err := database.ListTypedUserMessages(t.Context(), conv.ConversationID)
+			typed, err := database.ListTypedUserMessages(t.Context(), assistantID)
 			if err != nil || len(typed) != 1 {
 				t.Fatalf("user messages = %d: %v", len(typed), err)
 			}
@@ -154,8 +151,8 @@ func TestChannelImageReplies(t *testing.T) {
 			if mode == "image-only" {
 				text = ""
 			}
-			tool := claudetool.MessageUserTool(userMessageFinder{db: database, conversationID: conv.ConversationID},
-				channelChat{s: server, conversationID: conv.ConversationID}, claudetool.NewMutableWorkingDir(dir))
+			tool := claudetool.MessageUserTool(userMessageFinder{db: database, conversationID: assistantID},
+				assistantChat{s: server, conversationID: assistantID}, claudetool.NewMutableWorkingDir(dir))
 			input, _ := json.Marshal(claudetool.MessageUserInput{
 				Text: text, Attachments: names, ReplyTo: typed[0].SequenceID, EndTurn: true,
 			})

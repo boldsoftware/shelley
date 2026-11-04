@@ -1167,9 +1167,7 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		manager.recordDrainedQueued = func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message) (int64, error) {
 			return s.recordDrainedQueuedMessages(ctx, conversationID, qm, messages)
 		}
-		if role == roleTopLevel && conversation.ExternalEndpoint != nil {
-			manager.userChat = channelChat{s: s, conversationID: conversationID}
-		} else if role == roleTopLevel && s.isAssistant(conversationID) {
+		if role == roleTopLevel && s.isAssistant(conversationID) {
 			manager.userChat = assistantChat{s: s, conversationID: conversationID}
 		}
 		manager.userEmail = userEmail
@@ -2132,7 +2130,7 @@ func (s *Server) tcpHandler(mux http.Handler) http.Handler {
 // send full links to it. The latest browser request wins.
 func (s *Server) rememberWebOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.assistantID() == "" {
+		if !s.workspaceMode() {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -2176,7 +2174,7 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	}
 
 	// Workspace mode's Assistant exists before any request needs it.
-	if _, err := s.ensureWorkspace(context.Background()); err != nil {
+	if err := s.loadWorkspace(context.Background()); err != nil {
 		s.logger.Error("Failed to load the workspace", "error", err)
 		return err
 	}

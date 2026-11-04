@@ -384,7 +384,11 @@ func (s *Server) workspaceInstructions(ctx context.Context, id string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("load workspace context: %w", err)
 	}
-	if s.assistantID() == "" {
+	if !s.workspaceMode() {
+		if metadata.IsAssistant {
+			// Outside workspace mode the Assistant routes nothing.
+			return "", nil
+		}
 		// Outside workspace mode a project is its profile plus instructions;
 		// the workspace (routing, its API) stays out of the prompt.
 		project, err := s.db.GetProject(ctx, metadata.Project)

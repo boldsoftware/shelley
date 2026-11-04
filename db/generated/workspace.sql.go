@@ -360,6 +360,24 @@ func (q *Queries) MarkActionRunArchived(ctx context.Context, id string) error {
 	return err
 }
 
+const promotableTextedConversation = `-- name: PromotableTextedConversation :one
+SELECT c.conversation_id FROM conversations c
+WHERE c.external_endpoint IS NOT NULL AND c.parent_conversation_id IS NULL AND NOT c.archived
+  AND COALESCE(CASE WHEN json_valid(c.conversation_options) THEN json_extract(c.conversation_options, '$.profile') END, '')
+      NOT IN (SELECT profile FROM profile_projects)
+ORDER BY c.updated_at DESC LIMIT 1
+`
+
+// The most recent texted chat's conversation that can become the Assistant:
+// one with an endpoint (not a web chat's), top-level, unarchived, and in no
+// project.
+func (q *Queries) PromotableTextedConversation(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, promotableTextedConversation)
+	var conversation_id string
+	err := row.Scan(&conversation_id)
+	return conversation_id, err
+}
+
 const renameActionRunsProfile = `-- name: RenameActionRunsProfile :exec
 UPDATE action_runs SET profile = ?1 WHERE profile = ?2
 `
@@ -387,6 +405,20 @@ type RenameConversationsProfileParams struct {
 
 func (q *Queries) RenameConversationsProfile(ctx context.Context, arg RenameConversationsProfileParams) error {
 	_, err := q.db.ExecContext(ctx, renameConversationsProfile, arg.ToProfile, arg.FromProfile)
+	return err
+}
+
+const routeTextedMessages = `-- name: RouteTextedMessages :exec
+INSERT OR IGNORE INTO channel_message_routes (conversation_id, external_message_id, chat_id, endpoint)
+SELECT m.conversation_id, m.external_message_id, c.external_conversation_id, c.external_endpoint
+FROM messages m JOIN conversations c ON c.conversation_id = m.conversation_id
+WHERE m.conversation_id = ? AND m.external_message_id IS NOT NULL
+  AND c.external_conversation_id IS NOT NULL AND c.external_endpoint IS NOT NULL
+`
+
+// Records the routes of a conversation's texted messages to its chat.
+func (q *Queries) RouteTextedMessages(ctx context.Context, conversationID string) error {
+	_, err := q.db.ExecContext(ctx, routeTextedMessages, conversationID)
 	return err
 }
 
@@ -437,6 +469,17 @@ func (q *Queries) SetPendingActionReport(ctx context.Context, arg SetPendingActi
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const unbindChatConversation = `-- name: UnbindChatConversation :exec
+UPDATE conversations SET external_conversation_id = NULL, external_endpoint = NULL
+WHERE conversation_id = ?
+`
+
+// Unbinds a conversation from its chat.
+func (q *Queries) UnbindChatConversation(ctx context.Context, conversationID string) error {
+	_, err := q.db.ExecContext(ctx, unbindChatConversation, conversationID)
+	return err
 }
 
 const workspaceMode = `-- name: WorkspaceMode :one

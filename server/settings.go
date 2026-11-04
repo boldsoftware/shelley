@@ -319,8 +319,8 @@ func (s *Server) newConversationSettings(ctx context.Context, change SettingsCha
 }
 
 // followProfile brings a conversation that hasn't edited its profile's
-// settings up to the profile's current ones before its next turn starts. A
-// channel chat keeps message_user, which it answers with. It does nothing
+// settings up to the profile's current ones before its next turn starts. The
+// Assistant keeps message_user, which it answers texts with. It does nothing
 // while a turn runs, and keeps the settings if the profile was deleted or
 // can't be used. It returns the service and model it followed to, or nil if
 // it did nothing.
@@ -344,7 +344,7 @@ func (s *Server) followProfile(ctx context.Context, cm *ConversationManager) (ll
 		if err != nil {
 			return cur, err
 		}
-		if conv.ExternalConversationID != nil {
+		if s.isAssistant(conv.ConversationID) {
 			to.ToolOverrides[claudetool.MessageUserName] = "on"
 		}
 		next = to

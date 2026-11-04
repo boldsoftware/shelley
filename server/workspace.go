@@ -42,49 +42,82 @@ type workspaceState struct {
 	// deleting holds the projects being deleted (handleDeleteProject).
 	deleting map[string]bool
 
-	// assistantID is the Assistant's id, "" outside workspace mode, as of
-	// the last ensureWorkspace.
+	// assistantID is the Assistant's id, or nil before there is one.
 	assistantID atomic.Pointer[string]
+	// mode is the workspace flag (see loadWorkspace).
+	mode atomic.Bool
 }
 
-// ensureWorkspace, in workspace mode, creates the Assistant (and the
-// Shelley project) if there is none yet. It returns the Assistant's id, or
-// "" outside workspace mode, and keeps it for assistantID. It runs at
-// startup and when the workspace flag changes, so requests never create
-// the Assistant.
-func (s *Server) ensureWorkspace(ctx context.Context) (id string, err error) {
-	defer func() {
-		if err == nil {
-			s.workspace.assistantID.Store(&id)
-		}
-	}()
+// loadWorkspace reads the workspace flag. In workspace mode, which
+// opens the Assistant at /, it creates the Assistant if there is none yet
+// and seeds the Shelley project. Without it, the Assistant only exists
+// once a texted chat's conversation becomes it or a message comes in (see
+// ensureAssistant). It runs at startup and when the flag changes.
+func (s *Server) loadWorkspace(ctx context.Context) error {
 	// Initialization belongs to the server, not to the first HTTP client's
 	// lifetime. An aborted request must not poison the workspace forever.
 	ctx = context.WithoutCancel(ctx)
-	if on, err := s.db.WorkspaceMode(ctx); err != nil || !on {
-		return "", err
-	}
-	if id, err := s.db.GetAssistantID(ctx); !errors.Is(err, sql.ErrNoRows) {
-		return id, err
-	}
-	home, err := os.UserHomeDir()
+	on, err := s.db.WorkspaceMode(ctx)
 	if err != nil {
-		return "", err
+		return err
 	}
-	// The workspace Assistant texts like the shipped Assistant profile and
-	// follows its edits until its own settings change.
-	profile := "Assistant"
-	settings, err := s.newConversationSettings(ctx, SettingsChange{Profile: &profile}, s.getModelList())
-	if err != nil {
-		return "", fmt.Errorf("workspace Assistant settings: %w", err)
-	}
-	var opts db.ConversationOptions
-	settings.applyTo(&opts)
-	return s.db.EnsureWorkspace(ctx,
-		filepath.Join(home, ".config", "shelley", "shelley-customization"), settings.Model, opts)
+	s.workspace.mode.Store(on)
+	_, err = s.ensureAssistant(ctx, on)
+	return err
 }
 
-// assistantID returns the Assistant's id, or "" outside workspace mode.
+// ensureAssistant returns the Assistant's id, making the most recent
+// texted chat's conversation the Assistant if there is none, or, with
+// create, a new one. It keeps the id for assistantID.
+func (s *Server) ensureAssistant(ctx context.Context, create bool) (string, error) {
+	if id := s.assistantID(); id != "" {
+		return id, nil
+	}
+	// A new Assistant texts like the shipped Assistant profile and follows its
+	// edits until its own settings change. Without it, it starts from the
+	// default profile. Only creating one needs a model.
+	var model string
+	var opts db.ConversationOptions
+	if create {
+		var change SettingsChange
+		if p, err := s.getProfile(ctx, "Assistant"); err == nil {
+			change.Profile = &p.Name
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return "", err
+		}
+		settings, err := s.newConversationSettings(ctx, change, s.getModelList())
+		if err != nil {
+			return "", fmt.Errorf("assistant settings: %w", err)
+		}
+		// It answers texts with message_user.
+		settings.ToolOverrides[claudetool.MessageUserName] = "on"
+		settings.applyTo(&opts)
+		model = settings.Model
+	}
+	// In workspace mode, Shelley's own project comes with it.
+	var shelleyCwd string
+	if s.workspaceMode() {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		shelleyCwd = filepath.Join(home, ".config", "shelley", "shelley-customization")
+	}
+	id, err := s.db.EnsureAssistant(ctx, model, opts, create, shelleyCwd)
+	if err != nil || id == "" {
+		return "", err
+	}
+	s.workspace.assistantID.Store(&id)
+	return id, nil
+}
+
+// workspaceMode reports whether the workspace flag is on, as of the last
+// loadWorkspace.
+func (s *Server) workspaceMode() bool {
+	return s.workspace.mode.Load()
+}
+
+// assistantID returns the Assistant's id, or "" before there is one.
 func (s *Server) assistantID() string {
 	if id := s.workspace.assistantID.Load(); id != nil {
 		return *id
@@ -92,7 +125,7 @@ func (s *Server) assistantID() string {
 	return ""
 }
 
-// isAssistant reports whether conversationID is the workspace Assistant.
+// isAssistant reports whether conversationID is the Assistant.
 func (s *Server) isAssistant(conversationID string) bool {
 	id := s.assistantID()
 	return id != "" && id == conversationID
@@ -102,7 +135,7 @@ func (s *Server) isAssistant(conversationID string) bool {
 // and has open pages reload (see uiBuild), since the page reads the mode
 // only when it loads.
 func (s *Server) workspaceFlagChanged(ctx context.Context) error {
-	if _, err := s.ensureWorkspace(ctx); err != nil {
+	if err := s.loadWorkspace(ctx); err != nil {
 		return err
 	}
 	if s.streamPub != nil {
@@ -114,7 +147,7 @@ func (s *Server) workspaceFlagChanged(ctx context.Context) error {
 // uiBuild is the page's build: the UI's, and whether it is in workspace
 // mode, so toggling the mode makes open pages stale.
 func (s *Server) uiBuild() string {
-	if s.assistantID() != "" {
+	if s.workspaceMode() {
 		return ui.BuildID() + "+workspace"
 	}
 	return ui.BuildID()

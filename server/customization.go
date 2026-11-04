@@ -152,7 +152,7 @@ func (s *Server) registerCustomizationRoutes(api *http.ServeMux) {
 // customizationReady refuses customization requests outside workspace mode,
 // which is what seeds the Shelley project.
 func (s *Server) customizationReady(w http.ResponseWriter, r *http.Request) bool {
-	if s.assistantID() == "" {
+	if !s.workspaceMode() {
 		http.Error(w, "Customization needs workspace mode", http.StatusNotFound)
 		return false
 	}
@@ -170,7 +170,7 @@ func (s *Server) isShelleyProject(ctx context.Context, project *db.Project) (boo
 	if project.VM != nil || project.Cwd == "" {
 		return false, nil
 	}
-	if s.assistantID() == "" {
+	if !s.workspaceMode() {
 		return false, nil
 	}
 	canonical, err := s.customizations.deps.canonicalDir()
@@ -790,7 +790,7 @@ func customizationContains(ctx context.Context, cwd, head, commit string) (bool,
 // reconcileCustomizationsNow reconciles in workspace mode and wakes the
 // auto-restart worker.
 func (s *Server) reconcileCustomizationsNow(ctx context.Context) error {
-	if s.assistantID() == "" {
+	if !s.workspaceMode() {
 		return nil
 	}
 	if err := s.ensureCustomizations(ctx); err != nil {

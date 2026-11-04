@@ -278,7 +278,7 @@ func TestIdleCompactionNothingToCompactIsOneShotNoOp(t *testing.T) {
 
 func TestIdleCompactionRequiresEnabledPolicyAndTopLevel(t *testing.T) {
 	t.Parallel()
-	for _, kind := range []string{"ordinary", "external chat disabled", "external chat enabled", "subagent child"} {
+	for _, kind := range []string{"ordinary", "Assistant disabled", "Assistant enabled", "subagent child"} {
 		t.Run(kind, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				h := NewTestHarness(t)
@@ -291,12 +291,16 @@ func TestIdleCompactionRequiresEnabledPolicyAndTopLevel(t *testing.T) {
 					t.Fatal(err)
 				}
 				switch kind {
-				case "external chat disabled", "external chat enabled":
-					if kind == "external chat enabled" {
+				case "Assistant disabled", "Assistant enabled":
+					if kind == "Assistant enabled" {
 						opts.IdleCompactionMinutes = 3
 					}
-					// Echo never invokes message_user; no external delivery.
-					conv, err = h.db.CreateChannelConversation(t.Context(), "garden-chat", "/unused", "predictable", opts)
+					// Echo never invokes message_user; nothing is texted.
+					var id string
+					if id, err = h.server.ensureAssistant(t.Context(), true); err == nil {
+						err = h.db.UpdateConversationOptions(t.Context(), id, opts)
+						conv.ConversationID = id
+					}
 				case "subagent child":
 					conv, err = h.db.CreateSubagentConversation(t.Context(), "gardener", conv.ConversationID, nil)
 					if err == nil {
@@ -315,7 +319,7 @@ func TestIdleCompactionRequiresEnabledPolicyAndTopLevel(t *testing.T) {
 				compactions := idleCompactions(t, h)
 				<-time.After(3 * time.Minute)
 				synctest.Wait()
-				if kind == "external chat enabled" {
+				if kind == "Assistant enabled" {
 					compactions++
 				}
 				requireIdleCompactions(t, h, compactions)

@@ -22,15 +22,17 @@ import (
 	"shelley.exe.dev/llm"
 )
 
-// A channel connects conversations to an external chat service, such as the
+// A channel connects the Assistant to external chat services, such as the
 // exe.dev messages integration (the VM owner's iMessage, RCS, or SMS chat
-// with exe.dev). Each external chat maps to one conversation, created on the
-// chat's first message. The conversation records the chat's id
-// (external_conversation_id) and the endpoint its replies go to
-// (external_endpoint); each delivered message records the channel's id for
-// it (external_message_id). The agent answers with message_user, whose
-// messages and reactions go to the chat (see channelChat). The user
-// follows the conversation in the chat, so it sends no notifications.
+// with exe.dev) and web chats. Every chat's messages go to the one
+// Assistant, made on the first if there is none yet (see ensureAssistant).
+// Each delivered message records the channel's id for it
+// (external_message_id), and its chat and the endpoint replies to it go to
+// in channel_message_routes. The Assistant answers with message_user,
+// which texts only what answers a texted message, to its chat (see
+// assistantChat); a web chat's answers stay in the conversation, which its
+// page reads. The user follows texts in the chat, so they send no
+// notifications.
 //
 // An endpoint speaks the exe.dev messages gateway's API: POST /send
 // {"text":"...","reply_to":"<message_id>"} answers {"message_id":"..."}, POST /react
@@ -55,22 +57,19 @@ type channelEvent struct {
 	Text        string              `json:"text"`
 	Attachments []channelAttachment `json:"attachments"`
 	// Web marks a web chat: one shown on a web page that reads the
-	// conversation's stream (GET /api/channels/messages/{chat}/stream)
-	// instead of taking replies. Its conversation has no endpoint, so
-	// message_user's messages stay in the conversation. The chat's first
-	// message decides.
+	// Assistant's stream (GET /api/channels/messages/{chat}/stream) instead
+	// of taking replies. Its messages have no endpoint, so message_user's
+	// answers to them stay in the conversation.
 	Web bool `json:"web"`
 	// OptOut marks a message (like "STOP") with which the user opted out.
 	// exed recorded it and answered; replies are refused until they write
 	// again.
 	OptOut bool `json:"opt_out"`
-	// SystemPrompt, if set, is the custom system prompt of the conversation
-	// the message starts: a template, like a profile's (see
-	// ConversationOptions.SystemPrompt).
-	SystemPrompt string `json:"system_prompt"`
 	// FirstReaction and FirstReply, if either is set, answer a message that
-	// starts the conversation in place of the agent: a reaction to it and a
-	// message. On a later message they are ignored.
+	// starts the Assistant's conversation in place of the agent: a reaction
+	// to it and a message. On a later message they are ignored. (exed's
+	// system_prompt, for a chat's own conversation, is ignored: the
+	// Assistant has its own profile.)
 	FirstReaction string `json:"first_reaction"`
 	FirstReply    string `json:"first_reply"`
 }
@@ -111,15 +110,12 @@ func (s *Server) handleChannelMessage(w http.ResponseWriter, r *http.Request) {
 var errInvalidChannelEvent = errors.New("channel event has no chat_id")
 
 // handleChannelStream serves GET /api/channels/messages/{chat}/stream: the
-// chat's conversation stream, as GET /api/conversation/{id}/stream serves
-// it, or 204 No Content before the chat's first message.
+// stream of the Assistant, which takes the chat's messages, as GET
+// /api/conversation/{id}/stream serves it, or 204 No Content before the
+// chat's first message.
 func (s *Server) handleChannelStream(w http.ResponseWriter, r *http.Request) {
 	chatID := r.PathValue("chat")
-	var conv generated.Conversation
-	err := s.db.Queries(r.Context(), func(q *generated.Queries) (err error) {
-		conv, err = q.GetConversationByExternalID(r.Context(), &chatID)
-		return err
-	})
+	route, err := s.db.LatestChannelRoute(r.Context(), chatID)
 	if errors.Is(err, sql.ErrNoRows) {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -128,13 +124,13 @@ func (s *Server) handleChannelStream(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "Failed to look up chat conversation", err, "chat_id", chatID)
 		return
 	}
-	s.handleStreamConversation(w, r, conv.ConversationID)
+	s.handleStreamConversation(w, r, route.ConversationID)
 }
 
 // receiveChannelEvent delivers ev, an event on the external chat whose
 // replies go to endpoint ("" for a web chat, whose replies stay in the
-// conversation), to the chat's conversation as a user message. A message
-// that was already delivered (a retry) is dropped.
+// conversation), to the Assistant as a user message. A message that was
+// already delivered (a retry) is dropped.
 func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev channelEvent) error {
 	if ev.ChatID == "" {
 		return errInvalidChannelEvent
@@ -142,62 +138,51 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	if ev.Type != "message" || ev.OptOut || (strings.TrimSpace(ev.Text) == "" && len(ev.Attachments) == 0) {
 		return nil
 	}
+	if ev.ID == "" {
+		return errChannelEventNoID
+	}
 	s.noteUserActivity()
 
-	// One delivery per chat at a time, so that a chat's first messages
-	// create one conversation and a retry racing its original is seen as
-	// delivered.
+	// One delivery per chat at a time, so that a retry racing its original
+	// is seen as delivered.
 	unlock, err := s.lockChannelChat(ctx, ev.ChatID)
 	if err != nil {
 		return err
 	}
 	defer unlock()
 
-	// With a workspace Assistant, every texted message goes to it, not to a
-	// conversation of its own chat (see assistant_channel.go).
-	conv, assistant, err := s.assistantChannelConversation(ctx, ev)
+	id, err := s.ensureAssistant(ctx, true)
 	if err != nil {
 		return err
 	}
-	if conv == nil {
-		conv, err = s.channelConversation(ctx, endpoint, ev.ChatID, ev.SystemPrompt)
-		if err != nil {
-			return err
-		}
-	}
-	conversationID := conv.ConversationID
-	manager, err := s.getOrCreateConversationManager(ctx, conversationID, "")
+	conv, err := s.db.GetConversationByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	if ev.ID != "" {
-		delivered, err := s.channelMessageDelivered(ctx, conversationID, ev.ID)
-		if err != nil {
-			return err
-		}
-		if delivered {
-			// The original may wait in a queue nothing drains, as after
-			// a restart.
-			manager.drainQueueIfIdle(s)
-			return nil
-		}
+	manager, err := s.getOrCreateConversationManager(ctx, id, "")
+	if err != nil {
+		return err
 	}
-
+	delivered, err := s.channelMessageDelivered(ctx, id, ev.ID)
+	if err != nil {
+		return err
+	}
+	if delivered {
+		// The original may wait in a queue nothing drains, as after a
+		// restart.
+		manager.drainQueueIfIdle(s)
+		return nil
+	}
 	if conv.Model == nil {
-		return fmt.Errorf("conversation %s has no model", conversationID)
+		return fmt.Errorf("conversation %s has no model", id)
 	}
 	modelID := *conv.Model
 	service, err := s.llmManager.GetService(modelID)
 	if err != nil {
 		return fmt.Errorf("model %s: %w", modelID, err)
 	}
-	if assistant {
-		err := s.db.RecordChannelRoute(ctx, db.ChannelRoute{ConversationID: conversationID, ExternalMessageID: ev.ID, ChatID: ev.ChatID, Endpoint: endpoint})
-		if err != nil {
-			return err
-		}
-	} else {
-		endpoint = derefString(conv.ExternalEndpoint)
+	if err := s.db.RecordChannelRoute(ctx, db.ChannelRoute{ConversationID: id, ExternalMessageID: ev.ID, ChatID: ev.ChatID, Endpoint: endpoint}); err != nil {
+		return err
 	}
 	// Fetch signed provider URLs only after deduplication, while holding the
 	// chat lock. Retries must not re-fetch URLs that may have expired.
@@ -212,11 +197,8 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	if manager.IsAgentWorking() {
 		return manager.InjectMessage(ctx, s, modelID, message)
 	}
-	if !assistant && (ev.FirstReaction != "" || ev.FirstReply != "") {
+	if ev.FirstReaction != "" || ev.FirstReply != "" {
 		answered, err := manager.answerFirstMessage(ctx, message, ev.FirstReaction, ev.FirstReply)
-		if answered {
-			s.generateSlugAsync(conversationID, ev.Text, modelID)
-		}
 		if answered || err != nil {
 			return err
 		}
@@ -224,14 +206,8 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	if endpoint != "" {
 		s.showChannelTyping(ctx, endpoint)
 	}
-	first, err := manager.AcceptUserMessage(ctx, service, modelID, message)
-	if err != nil {
-		return err
-	}
-	if first {
-		s.generateSlugAsync(conversationID, ev.Text, modelID)
-	}
-	return nil
+	_, err = manager.AcceptUserMessage(ctx, service, modelID, message)
+	return err
 }
 
 // answerFirstMessage records message, from the chat, as the conversation's
@@ -365,8 +341,8 @@ func (s *Server) lockChannelChat(ctx context.Context, chatID string) (func(), er
 	}
 }
 
-// recoverChannelQueues drains, at startup, the queues of channel
-// conversations and of conversations holding a project action's report.
+// recoverChannelQueues drains, at startup, the queues of conversations
+// holding a project action's report, and the Assistant's.
 // Nobody may be watching their UI, so messages left queued by the previous
 // process would otherwise wait for the conversation's next message.
 func (s *Server) recoverChannelQueues(ctx context.Context) {
@@ -388,44 +364,8 @@ func (s *Server) recoverChannelQueues(ctx context.Context) {
 		manager.drainQueueIfIdle(s)
 	}
 	if err := s.recoverAssistantChannelQueue(ctx); err != nil {
-		s.logger.Error("Failed to drain the workspace Assistant's channel queue", "error", err)
+		s.logger.Error("Failed to drain the Assistant's channel queue", "error", err)
 	}
-}
-
-// channelConversation returns the conversation of the external chat chatID,
-// creating it on the chat's first message from Assistant if it exists, or
-// the server's defaults otherwise. message_user is always on; systemPrompt,
-// if set, overrides the profile's. Invalid settings create no conversation,
-// so failing deliveries leave no empty conversations.
-func (s *Server) channelConversation(ctx context.Context, endpoint, chatID, systemPrompt string) (*generated.Conversation, error) {
-	var conv generated.Conversation
-	err := s.db.Queries(ctx, func(q *generated.Queries) (err error) {
-		conv, err = q.GetConversationByExternalID(ctx, &chatID)
-		return err
-	})
-	if !errors.Is(err, sql.ErrNoRows) {
-		return &conv, err
-	}
-	var settings ConversationSettings
-	profile, err := s.getProfile(ctx, "Assistant")
-	if err == nil {
-		settings = ConversationSettings{Profile: profile.Name, Settings: profile.Settings}
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
-	}
-	var change SettingsChange
-	if systemPrompt != "" {
-		change.SystemPrompt = &systemPrompt
-	}
-	settings, err = s.resolveSettings(ctx, settings, change, s.getModelList())
-	if err != nil {
-		return nil, err
-	}
-	// The agent answers the chat with message_user.
-	settings.ToolOverrides[claudetool.MessageUserName] = "on"
-	var opts db.ConversationOptions
-	settings.applyTo(&opts)
-	return s.db.CreateChannelConversation(ctx, chatID, endpoint, settings.Model, opts)
 }
 
 // channelMessageDelivered reports whether the channel message id is already
@@ -471,16 +411,6 @@ func (e *channelSendError) Error() string {
 	return fmt.Sprintf("%s (HTTP %d): %s", e.Code, e.Status, e.Message)
 }
 
-// sendChannelMessage sends text to the external chat that conversationID is
-// bound to, and returns the channel's id for the sent message.
-func (s *Server) sendChannelMessage(ctx context.Context, conversationID, text, replyTo string, attachmentIDs []string) (string, error) {
-	endpoint, err := s.channelEndpoint(ctx, conversationID)
-	if err != nil {
-		return "", err
-	}
-	return s.sendChannelEndpointMessage(ctx, endpoint, text, replyTo, attachmentIDs)
-}
-
 // sendChannelEndpointMessage sends text to the external chat of endpoint,
 // and returns the channel's id for the sent message.
 func (s *Server) sendChannelEndpointMessage(ctx context.Context, endpoint, text, replyTo string, attachmentIDs []string) (string, error) {
@@ -496,19 +426,6 @@ func (s *Server) sendChannelEndpointMessage(ctx context.Context, endpoint, text,
 	}
 	err := s.callChannelEndpoint(ctx, endpoint, "/send", body, &sent)
 	return sent.MessageID, err
-}
-
-// channelEndpoint returns the endpoint of the external chat that
-// conversationID is bound to.
-func (s *Server) channelEndpoint(ctx context.Context, conversationID string) (string, error) {
-	conv, err := s.db.GetConversationByID(ctx, conversationID)
-	if err != nil {
-		return "", err
-	}
-	if conv.ExternalEndpoint == nil {
-		return "", fmt.Errorf("conversation %s is not bound to an external chat", conversationID)
-	}
-	return *conv.ExternalEndpoint, nil
 }
 
 // callChannelEndpoint POSTs body to path at endpoint, an external chat's,
@@ -578,29 +495,6 @@ func (e *channelSendError) refused() bool {
 // may have carried out.
 var errChannelMaybeDelivered = errors.New("it may have been delivered anyway")
 
-// channelChat is the claudetool.UserChat of a conversation bound to an
-// external chat: message_user's messages go to the chat, unless they answer
-// a message typed in Shelley's UI (see answersChat).
-type channelChat struct {
-	s              *Server
-	conversationID string
-}
-
-func (c channelChat) Send(ctx context.Context, text string, attachments []claudetool.MessageUserAttachment, target claudetool.UserMessage) error {
-	ok, err := c.answersChat(ctx, target)
-	if err != nil {
-		return fmt.Errorf("nothing was sent: %w", err)
-	}
-	if !ok {
-		return nil
-	}
-	endpoint, err := c.s.channelEndpoint(ctx, c.conversationID)
-	if err != nil {
-		return fmt.Errorf("nothing was sent: %w", err)
-	}
-	return c.s.sendChannelChat(ctx, endpoint, text, attachments, target)
-}
-
 // sendChannelChat uploads attachments and sends them with text, replying to
 // target's external message if it has one, to the external chat of
 // endpoint.
@@ -615,35 +509,6 @@ func (s *Server) sendChannelChat(ctx context.Context, endpoint, text string, att
 	}
 	_, err := s.sendChannelEndpointMessage(ctx, endpoint, text, target.ExternalID, ids)
 	return chatDeliveryError(err)
-}
-
-// answersChat reports whether a message replying to target, or if target
-// is zero to the user's latest message, answers a message from the chat
-// rather than one typed in Shelley's UI, which is answered there only. The
-// chat began the conversation, so before any message it is the chat's.
-func (c channelChat) answersChat(ctx context.Context, target claudetool.UserMessage) (bool, error) {
-	if target.SequenceID != 0 {
-		return target.ExternalID != "", nil
-	}
-	typed, err := c.s.db.ListTypedUserMessages(ctx, c.conversationID)
-	if err != nil {
-		return false, err
-	}
-	return len(typed) == 0 || typed[0].ExternalMessageID != nil, nil
-}
-
-// React reacts to target in the chat, as a tapback if emoji is one. A
-// message typed in Shelley's UI rather than the chat has no chat message to
-// react to; the reaction stays in the UI.
-func (c channelChat) React(ctx context.Context, target claudetool.UserMessage, emoji string) error {
-	if target.ExternalID == "" {
-		return nil
-	}
-	endpoint, err := c.s.channelEndpoint(ctx, c.conversationID)
-	if err != nil {
-		return fmt.Errorf("nothing was sent: %w", err)
-	}
-	return c.s.reactChannelChat(ctx, endpoint, target, emoji)
 }
 
 // reactChannelChat reacts to target's external message in the external

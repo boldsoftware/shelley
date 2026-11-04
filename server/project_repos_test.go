@@ -90,11 +90,8 @@ func TestProjectGithubReposAndSetup(t *testing.T) {
 			t.Fatalf("setup prompt lacks %q:\n%s", s, system)
 		}
 	}
-	db.EnableWorkspaceMode(t, e.srv.db)
-	assistantID, err := e.srv.ensureWorkspace(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	setWorkspaceFlag(t, e.srv, "true")
+	assistantID := e.srv.assistantID()
 	prompt, err := e.srv.workspaceInstructions(t.Context(), assistantID)
 	if err != nil {
 		t.Fatal(err)

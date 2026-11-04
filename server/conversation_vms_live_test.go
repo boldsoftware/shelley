@@ -31,10 +31,7 @@ func TestConversationVMLive(t *testing.T) {
 	http.DefaultTransport = &http.Transport{}
 	t.Cleanup(func() { http.DefaultTransport = refusing })
 	s, database, _ := newTestServer(t)
-	db.EnableWorkspaceMode(t, s.db)
-	if _, err := s.ensureWorkspace(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	setWorkspaceFlag(t, s, "true")
 	s.socketPath = os.Getenv("SHELLEY_SOCKET")
 	project, err := database.CreateProject(t.Context(), db.Project{
 		Name: "Live VM", Cwd: config[2], VM: &db.ProjectVM{Base: config[0], Integration: config[1]},

@@ -185,7 +185,10 @@
             class="empty-state"
           >
             <div class="empty-state-content">
-              <div v-if="isAssistant && !workspace.hasProjects.value" class="first-project">
+              <div
+                v-if="workspaceMode && isAssistant && !workspace.hasProjects.value"
+                class="first-project"
+              >
                 <h2 class="text-primary">Start with a project</h2>
                 <p class="chat-welcome-text">
                   A project brings together its GitHub repositories, instructions and VMs. I’ll
@@ -202,7 +205,7 @@
                 </button>
                 <p class="text-sm chat-secondary-text">Or just ask me something below.</p>
               </div>
-              <template v-else-if="isAssistant">
+              <template v-else-if="workspaceMode && isAssistant">
                 <h2 class="text-primary">What would you like to get done?</h2>
                 <p class="chat-welcome-text">
                   Ask a quick question, or describe a project. I’ll answer here or start a task in

@@ -9,8 +9,9 @@ import (
 	"time"
 )
 
-// A turn started from the chat first shows Shelley typing there. A message
-// typed in Shelley's UI is answered there only: no typing, no send.
+// A turn the chat started in the Assistant first shows Shelley typing there.
+// A message typed in Shelley's UI is answered there only: no typing, no
+// send.
 func TestChannelTypingAtTurnStart(t *testing.T) {
 	t.Parallel()
 	server, database, h := channelTestServer(t, nil)
@@ -23,19 +24,16 @@ func TestChannelTypingAtTurnStart(t *testing.T) {
 		w.Write([]byte(`{"message_id":"out-1"}`))
 	}))
 	t.Cleanup(endpoint.Close)
-	conv, err := server.channelConversation(t.Context(), endpoint.URL, "chat-typing", "")
-	if err != nil {
-		t.Fatal(err)
-	}
 	ev := channelEvent{Type: "message", ID: "m1", ChatID: "chat-typing", Text: `message_user: {"text":"on it"}`}
-	if w := postJSON(t, h, "/api/channels/messages", ev); w.Code != http.StatusNoContent {
-		t.Fatalf("deliver: status %d: %s", w.Code, w.Body.String())
+	if err := server.receiveChannelEvent(t.Context(), endpoint.URL, ev); err != nil {
+		t.Fatalf("deliver: %v", err)
 	}
+	assistantID := chatAssistant(t, server, "chat-typing")
 	idle := func(messages int) {
 		t.Helper()
 		waitFor(t, 5*time.Second, func() bool {
-			c, err := database.GetConversationByID(t.Context(), conv.ConversationID)
-			return err == nil && !c.AgentWorking && len(channelUserMessages(t, database, conv.ConversationID)) == messages
+			c, err := database.GetConversationByID(t.Context(), assistantID)
+			return err == nil && !c.AgentWorking && len(channelUserMessages(t, database, assistantID)) == messages
 		})
 	}
 	got := func() []string {
@@ -49,12 +47,12 @@ func TestChannelTypingAtTurnStart(t *testing.T) {
 		t.Fatalf("calls = %v, want %v", got(), want)
 	}
 
-	path := "/api/conversation/" + conv.ConversationID + "/chat"
+	path := "/api/conversation/" + assistantID + "/chat"
 	if w := postJSON(t, h, path, ChatRequest{Message: `message_user: {"text":"for the UI"}`, Model: "predictable"}); w.Code != http.StatusAccepted {
 		t.Fatalf("UI message: status %d: %s", w.Code, w.Body.String())
 	}
 	idle(2)
-	c := &compactTestConversation{t: t, database: database, id: conv.ConversationID}
+	c := &compactTestConversation{t: t, database: database, id: assistantID}
 	if _, r := c.lastMessageUserResult(); r.ToolError {
 		t.Fatalf("UI reply result = %+v", r)
 	}

@@ -620,7 +620,7 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 	}
 	initData := map[string]interface{}{
 		// workspace mode: see FlagWorkspace.
-		"workspace":                 s.assistantID() != "",
+		"workspace":                 s.workspaceMode(),
 		"models":                    modelList,
 		"model_upgrade_prompt_done": promptDone != "",
 		"default_model":             defaultModel,

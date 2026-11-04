@@ -15,8 +15,8 @@ import (
 	"shelley.exe.dev/llm"
 )
 
-// assistantChannelTest is a debug-channel server with a workspace, so
-// texted messages go to the workspace Assistant.
+// assistantChannelTest is a debug-channel server in workspace mode, whose
+// Assistant takes texted messages.
 type assistantChannelTest struct {
 	t           *testing.T
 	server      *Server
@@ -28,11 +28,8 @@ type assistantChannelTest struct {
 func newAssistantChannelTest(t *testing.T) *assistantChannelTest {
 	t.Helper()
 	server, database, h, _ := debugChannelTestServer(t)
-	db.EnableWorkspaceMode(t, server.db)
-	id, err := server.ensureWorkspace(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	setWorkspaceFlag(t, server, "true")
+	id := server.assistantID()
 	return &assistantChannelTest{t: t, server: server, database: database, h: h, assistantID: id}
 }
 
@@ -123,7 +120,7 @@ func (a *assistantChannelTest) sequenceOf(externalID string) int64 {
 	return 0
 }
 
-// Texted messages from every chat go to the workspace Assistant, and only what
+// Texted messages from every chat go to the Assistant, and only what
 // answers one is texted, to the chat it came from.
 func TestTextedMessagesGoToAssistant(t *testing.T) {
 	t.Parallel()
@@ -131,11 +128,6 @@ func TestTextedMessagesGoToAssistant(t *testing.T) {
 
 	aID := a.text("debug-a", messageUserText(t, claudetool.MessageUserInput{Text: "hi a"}))
 	bID := a.text("debug-b", messageUserText(t, claudetool.MessageUserInput{Text: "hi b"}))
-	for _, chat := range []string{"debug-a", "debug-b"} {
-		if _, err := conversationByExternalID(t, a.database, chat); err == nil {
-			t.Fatalf("chat %s got its own conversation", chat)
-		}
-	}
 	got := channelUserMessages(t, a.database, a.assistantID)
 	if len(got) != 2 || !strings.HasPrefix(got[0], aID+": ") || !strings.HasPrefix(got[1], bID+": ") {
 		t.Fatalf("Assistant user messages = %q", got)
@@ -211,21 +203,76 @@ func TestAssistantChatAnswersLatestUserMessage(t *testing.T) {
 	}
 }
 
-// Web chats keep their own conversations, and the Assistant is told where
-// texts arrive.
-func TestWebChatKeepsItsConversationWithAssistant(t *testing.T) {
+// A web chat's messages go to the Assistant too, and the Assistant is told
+// where texts arrive.
+func TestWebChatGoesToAssistant(t *testing.T) {
 	t.Parallel()
 	a := newAssistantChannelTest(t)
 	ev := channelEvent{Type: "message", ID: "w1", ChatID: "web-x", Web: true, Text: "hi"}
 	if err := a.server.receiveChannelEvent(t.Context(), "", ev); err != nil {
 		t.Fatal(err)
 	}
-	conv, err := conversationByExternalID(t, a.database, "web-x")
-	if err != nil || conv.ConversationID == a.assistantID {
-		t.Fatalf("web chat conversation = %+v, %v", conv, err)
+	if route, err := a.database.GetChannelRoute(t.Context(), a.assistantID, "w1"); err != nil || route.ChatID != "web-x" || route.Endpoint != "" {
+		t.Fatalf("web chat route = %+v, %v", route, err)
 	}
 	prompt, err := a.server.workspaceInstructions(t.Context(), a.assistantID)
 	if err != nil || !strings.Contains(prompt, "arrive in this conversation as external_message") {
 		t.Fatalf("Assistant prompt lacks texts: %v", err)
+	}
+}
+
+// A texted chat's conversation from before the Assistant becomes it,
+// instead of a new one, when the Assistant is first needed: at startup, or
+// for the first texted message, whatever the workspace flag. Its history
+// stays, it answers the chat's earlier messages, and new texts from any
+// chat go to it.
+func TestTextedConversationBecomesAssistant(t *testing.T) {
+	for _, trigger := range []string{"startup", "text"} {
+		t.Run(trigger, func(t *testing.T) {
+			t.Parallel()
+			server, database, h, _ := debugChannelTestServer(t)
+			// Such a conversation answered its chat with message_user.
+			opts := db.ConversationOptions{ToolOverrides: map[string]string{claudetool.MessageUserName: "on"}}
+			texted, err := database.CreateChannelConversation(t.Context(), "debug-p", server.debugChannelEndpoint("debug-p"), "predictable", opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, err := database.CreateMessage(t.Context(), db.CreateMessageParams{
+				ConversationID: texted.ConversationID, Type: db.MessageTypeUser, LLMData: llm.UserStringMessage("before"), ExternalMessageID: "p1",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := &assistantChannelTest{t: t, server: server, database: database, h: h, assistantID: texted.ConversationID}
+			if trigger == "startup" {
+				if err := server.loadWorkspace(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+			}
+			nextID := a.text("debug-q", messageUserText(t, claudetool.MessageUserInput{Text: "hi q"}))
+			if server.assistantID() != texted.ConversationID {
+				t.Fatalf("Assistant = %q, want the texted conversation %q", server.assistantID(), texted.ConversationID)
+			}
+			conv, err := database.GetConversationByID(t.Context(), texted.ConversationID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if conv.Slug == nil || *conv.Slug != db.AssistantSlug || conv.ExternalConversationID != nil || conv.ExternalEndpoint != nil {
+				t.Fatalf("promoted conversation: slug %v, chat %v, endpoint %v", conv.Slug, conv.ExternalConversationID, conv.ExternalEndpoint)
+			}
+
+			// The chat's earlier message is answered in the chat; a typed one is not.
+			a.typed(messageUserText(t, claudetool.MessageUserInput{Text: "to p", ReplyTo: before.SequenceID}))
+			a.typed(messageUserText(t, claudetool.MessageUserInput{Text: "ui only"}))
+			if s := a.sent("debug-p"); !slices.Equal(s, []string{"out:p1:to p"}) {
+				t.Fatalf("chat p = %q", s)
+			}
+			if s := a.sent("debug-q"); !slices.Equal(s, []string{"out::hi q"}) {
+				t.Fatalf("chat q = %q", s)
+			}
+			if got := channelUserMessages(t, database, texted.ConversationID); len(got) != 4 || got[0] != "p1: before" || !strings.HasPrefix(got[1], nextID+": ") {
+				t.Fatalf("Assistant user messages = %q", got)
+			}
+		})
 	}
 }

@@ -179,7 +179,7 @@
     </div>
 
     <a
-      v-if="workspace.data.value?.assistant_id"
+      v-if="workspaceMode && workspace.data.value?.assistant_id"
       href="/"
       class="workspace-assistant-row"
       :class="{ active: workspace.isAssistant(currentConversationId) }"
@@ -849,6 +849,8 @@ const customizationByConversation = computed(
 );
 const customizationFor = (id: string) => customizationByConversation.value.get(id);
 const rowError = ref("");
+// In workspace mode the Assistant is pinned above the lists, not in them.
+const pinnedAssistant = (id: string) => workspaceMode && workspace.isAssistant(id);
 const assistantWorking = computed(() =>
   props.conversations.some(
     (conversation) => workspace.isAssistant(conversation.conversation_id) && conversation.working,
@@ -1841,7 +1843,7 @@ const stableTopLevelConversations = computed(() => {
   void resortKey.value;
   const sorted = sortConversationsByBucket(
     props.conversations.filter(
-      (c) => !c.parent_conversation_id && !workspace.isAssistant(c.conversation_id),
+      (c) => !c.parent_conversation_id && !pinnedAssistant(c.conversation_id),
     ),
   );
   const { items, order } = applyStableOrder(sorted, topOrder);
@@ -1899,7 +1901,7 @@ const stableArchivedConversations = computed(() => {
   resetOrderRefsForResort();
   void resortKey.value;
   const sorted = sortConversationsByBucket(
-    archivedRows.value.filter((c) => !workspace.isAssistant(c.conversation_id)),
+    archivedRows.value.filter((c) => !pinnedAssistant(c.conversation_id)),
   );
   const { items, order } = applyStableOrder(sorted, archivedOrder);
   archivedOrder = order;
@@ -1965,7 +1967,7 @@ const displayedConversations = computed<(Conversation | ConversationWithState)[]
     return filterConversationsByQuery(
       filterConversationsByParticipantQuery(
         filterConversationsByDay(
-          (searchResults.value ?? []).filter((c) => !workspace.isAssistant(c.conversation_id)),
+          (searchResults.value ?? []).filter((c) => !pinnedAssistant(c.conversation_id)),
           selectedDay.value,
         ),
         selectedUsers.value,
@@ -1995,13 +1997,13 @@ const tagFilterPool = computed<ConversationWithParticipants[]>(() => {
   if (isSearching.value)
     return filterConversationsByParticipantQuery(
       filterConversationsByDay(
-        (searchResults.value ?? []).filter((c) => !workspace.isAssistant(c.conversation_id)),
+        (searchResults.value ?? []).filter((c) => !pinnedAssistant(c.conversation_id)),
         selectedDay.value,
       ),
       selectedUsers.value,
       parsedQuery.value.includeUnattributed,
     );
-  const pool = listPool.value.filter((c) => !workspace.isAssistant(c.conversation_id));
+  const pool = listPool.value.filter((c) => !pinnedAssistant(c.conversation_id));
   return filterConversationsByParticipantQuery(
     filterConversationsByDay(pool, selectedDay.value),
     selectedUsers.value,
@@ -2218,7 +2220,7 @@ const projectGroups = computed(() => {
     conversations: [] as Conversation[],
   };
   for (const conversation of displayedConversations.value) {
-    if (workspace.isAssistant(conversation.conversation_id)) continue;
+    if (pinnedAssistant(conversation.conversation_id)) continue;
     const project =
       memberships.get(conversation.conversation_id) ??
       (conversation.parent_conversation_id

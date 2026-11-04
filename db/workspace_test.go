@@ -25,7 +25,7 @@ func newDBTestConversation(t *testing.T, database *DB, project, cwd string) stri
 	return conversation.ConversationID
 }
 
-func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
+func TestAssistantAtomicSingleton(t *testing.T) {
 	t.Parallel()
 	database, cleanup := NewTestDB(t)
 	defer cleanup()
@@ -33,7 +33,10 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	if on, err := database.WorkspaceMode(ctx); err != nil || on {
 		t.Fatalf("a new database in workspace mode: %v %v", on, err)
 	}
-	EnableWorkspaceMode(t, database)
+	// Without create, there is no Assistant until one is needed.
+	if id, err := database.EnsureAssistant(ctx, "predictable", ConversationOptions{}, false, ""); err != nil || id != "" {
+		t.Fatalf("assistant without create: %q %v", id, err)
+	}
 	cwd := t.TempDir()
 	slug, model := "keep-this-task", "predictable"
 	opts := ConversationOptions{SystemPrompt: "Preserve me", ThinkingLevel: "high"}
@@ -52,7 +55,9 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	channel, err := database.CreateChannelConversation(ctx, "external", "https://chat.invalid", model, ConversationOptions{})
+	// A web chat's conversation, with no endpoint, does not become the
+	// Assistant (see TestPromotesTextedConversation).
+	channel, err := database.CreateChannelConversation(ctx, "external", "", model, ConversationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +82,7 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	for range 16 {
 		wg.Go(func() {
 			<-start
-			id, err := database.EnsureWorkspace(ctx, cwd, model, ConversationOptions{ThinkingLevel: "medium"})
+			id, err := database.EnsureAssistant(ctx, model, ConversationOptions{ThinkingLevel: "medium"}, true, cwd)
 			results <- result{id, err}
 		})
 	}
@@ -121,21 +126,11 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	if err != nil || !meta.IsAssistant || meta.Project != "" {
 		t.Fatalf("assistant metadata: %+v %v", meta, err)
 	}
-	// Outside workspace mode there is no Assistant; it's an ordinary
-	// conversation, which a project can take.
-	if err := database.SetFeatureFlagOverride(ctx, WorkspaceFlag, "false"); err != nil {
-		t.Fatal(err)
+	// The Assistant does not depend on workspace mode, which only shows it
+	// differently.
+	if id, err := database.GetAssistantID(ctx); err != nil || id != assistantID {
+		t.Fatalf("assistant outside workspace mode: %q %v", id, err)
 	}
-	if _, err := database.GetAssistantID(ctx); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("assistant outside workspace mode: %v", err)
-	}
-	if _, err := database.GetWorkspaceConversation(ctx, assistantID); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("assistant metadata outside workspace mode: %v", err)
-	}
-	if w, err := database.GetWorkspace(ctx); err != nil || w.AssistantID != "" || len(w.Projects) != 1 {
-		t.Fatalf("workspace outside workspace mode: %+v %v", w, err)
-	}
-	EnableWorkspaceMode(t, database)
 	unchanged, err := database.GetConversationByID(ctx, active.ConversationID)
 	if err != nil {
 		t.Fatal(err)
@@ -157,8 +152,8 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.EnsureWorkspace(ctx, "not-a-repository", "different-model", ConversationOptions{}); err != nil {
-		t.Fatal(err)
+	if id, err := database.EnsureAssistant(ctx, "different-model", ConversationOptions{}, true, "not-a-repository"); err != nil || id != assistantID {
+		t.Fatalf("second ensure: %q %v", id, err)
 	}
 	shelley, _ = database.GetProject(ctx, "Shelley")
 	if shelley.Instructions != "Keep agent edits" || !reflect.DeepEqual(shelley.Actions, []ProjectAction{{ID: "custom", Label: "Configured action", Command: "make custom"}}) {
@@ -180,6 +175,20 @@ func TestWorkspaceAtomicSingletonAndAdoption(t *testing.T) {
 	}
 	if _, _, _, err := database.BeginAction(ctx, assistantID, "release"); !errors.Is(err, ErrConflict) {
 		t.Fatalf("assistant action: %v", err)
+	}
+}
+
+// Shelley's own project comes with the Assistant only when it is made with
+// a Shelley cwd (see TestAssistantAtomicSingleton).
+func TestAssistantWithoutShelleyProject(t *testing.T) {
+	t.Parallel()
+	database, cleanup := NewTestDB(t)
+	defer cleanup()
+	if _, err := database.EnsureAssistant(t.Context(), "predictable", ConversationOptions{}, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.GetProject(t.Context(), "Shelley"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("project without a Shelley cwd: %v", err)
 	}
 }
 
@@ -557,7 +566,7 @@ func TestWorkspaceAssistantSlugTaken(t *testing.T) {
 	if _, err := database.CreateConversation(ctx, &slug, true, nil, nil, ConversationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	id, err := database.EnsureWorkspace(ctx, t.TempDir(), "", ConversationOptions{})
+	id, err := database.EnsureAssistant(ctx, "", ConversationOptions{}, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -611,4 +620,39 @@ func ptrValue(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// The most recent texted chat's conversation that is unarchived and in no
+// project becomes the Assistant, unbound from its chat, even outside
+// workspace mode.
+func TestPromotesTextedConversation(t *testing.T) {
+	t.Parallel()
+	database, cleanup := NewTestDB(t)
+	defer cleanup()
+	ctx := t.Context()
+	AddTestProject(t, database, "P")
+	texted := func(chat, profile string) string {
+		c, err := database.CreateChannelConversation(ctx, chat, "https://chat.invalid/"+chat, "predictable", ConversationOptions{Profile: profile})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.ConversationID
+	}
+	want := texted("eligible", "")
+	archived := texted("archived", "")
+	if _, err := database.ArchiveConversation(ctx, archived); err != nil {
+		t.Fatal(err)
+	}
+	texted("in-project", "P")
+	id, err := database.EnsureAssistant(ctx, "predictable", ConversationOptions{}, false, "")
+	if err != nil || id != want {
+		t.Fatalf("Assistant = %q, %v; want %q", id, err, want)
+	}
+	assistant, err := database.GetConversationByID(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if assistant.ExternalConversationID != nil || assistant.ExternalEndpoint != nil || assistant.Slug == nil || *assistant.Slug != AssistantSlug {
+		t.Fatalf("unexpected Assistant: %+v", assistant)
+	}
 }

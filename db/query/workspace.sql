@@ -97,3 +97,26 @@ UPDATE action_runs SET report = ? WHERE id = ? AND report = 'pending';
 
 -- name: RenameActionRunsProfile :exec
 UPDATE action_runs SET profile = sqlc.arg(to_profile) WHERE profile = sqlc.arg(from_profile);
+
+-- name: PromotableTextedConversation :one
+-- The most recent texted chat's conversation that can become the Assistant:
+-- one with an endpoint (not a web chat's), top-level, unarchived, and in no
+-- project.
+SELECT c.conversation_id FROM conversations c
+WHERE c.external_endpoint IS NOT NULL AND c.parent_conversation_id IS NULL AND NOT c.archived
+  AND COALESCE(CASE WHEN json_valid(c.conversation_options) THEN json_extract(c.conversation_options, '$.profile') END, '')
+      NOT IN (SELECT profile FROM profile_projects)
+ORDER BY c.updated_at DESC LIMIT 1;
+
+-- name: RouteTextedMessages :exec
+-- Records the routes of a conversation's texted messages to its chat.
+INSERT OR IGNORE INTO channel_message_routes (conversation_id, external_message_id, chat_id, endpoint)
+SELECT m.conversation_id, m.external_message_id, c.external_conversation_id, c.external_endpoint
+FROM messages m JOIN conversations c ON c.conversation_id = m.conversation_id
+WHERE m.conversation_id = ? AND m.external_message_id IS NOT NULL
+  AND c.external_conversation_id IS NOT NULL AND c.external_endpoint IS NOT NULL;
+
+-- name: UnbindChatConversation :exec
+-- Unbinds a conversation from its chat.
+UPDATE conversations SET external_conversation_id = NULL, external_endpoint = NULL
+WHERE conversation_id = ?;

@@ -34,7 +34,8 @@ func newWorkspaceServer(t *testing.T) (*Server, *db.DB, string) {
 	return s, database, s.assistantID()
 }
 
-// The flag, not requests, makes the Assistant; pages reload for either value.
+// Workspace mode, not reading the workspace, makes the Assistant; pages
+// reload for either value.
 func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 	t.Parallel()
 	s, database, _ := newTestServer(t)
@@ -95,8 +96,12 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 	if got := builds(func() { setWorkspaceFlag(t, s, "") }); len(got) != 1 || got[0] != ui.BuildID() {
 		t.Fatalf("turning workspace mode off announced builds %q", got)
 	}
-	if s.assistantID() != "" || s.isAssistant(workspace.AssistantID) {
-		t.Fatal("an Assistant outside workspace mode")
+	// The Assistant stays; workspace mode only showed it differently.
+	if !s.isAssistant(workspace.AssistantID) {
+		t.Fatal("the Assistant went with workspace mode")
+	}
+	if init := indexInitData(t, s); init["workspace"] != false {
+		t.Fatalf("init data after workspace mode: workspace=%v", init["workspace"])
 	}
 }
 

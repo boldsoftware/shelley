@@ -16,7 +16,7 @@ import (
 func ensureTestWorkspace(t *testing.T, database *DB) string {
 	t.Helper()
 	EnableWorkspaceMode(t, database)
-	id, err := database.EnsureWorkspace(t.Context(), t.TempDir(), "predictable", ConversationOptions{ThinkingLevel: "medium"})
+	id, err := database.EnsureAssistant(t.Context(), "predictable", ConversationOptions{ThinkingLevel: "medium"}, true, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -30,7 +30,7 @@ func TestChannelAttachments(t *testing.T) {
 			}))
 			t.Cleanup(media.Close)
 			model := predictable.NewService()
-			_, database, h := channelTestServer(t, model)
+			server, database, h := channelTestServer(t, model)
 			body := map[string]any{
 				"type": "message", "id": "photo-1", "chat_id": "photos", "web": true, "text": text,
 				"attachments": []map[string]any{
@@ -41,11 +41,8 @@ func TestChannelAttachments(t *testing.T) {
 			if w := postJSON(t, h, "/api/channels/messages", body); w.Code != http.StatusNoContent {
 				t.Fatalf("receive: %d %s", w.Code, w.Body.String())
 			}
-			conv, err := conversationByExternalID(t, database, "photos")
-			if err != nil {
-				t.Fatal(err)
-			}
-			messages := channelUserMessages(t, database, conv.ConversationID)
+			assistantID := chatAssistant(t, server, "photos")
+			messages := channelUserMessages(t, database, assistantID)
 			if len(messages) != 1 {
 				t.Fatalf("stored messages = %q", messages)
 			}
@@ -91,7 +88,7 @@ func TestChannelAttachments(t *testing.T) {
 			if got := downloads.Load(); got != 2 {
 				t.Fatalf("downloads = %d, want 2", got)
 			}
-			if got := channelUserMessages(t, database, conv.ConversationID); len(got) != 1 || got[0] != messages[0] {
+			if got := channelUserMessages(t, database, assistantID); len(got) != 1 || got[0] != messages[0] {
 				t.Fatalf("retry duplicated message: %q", got)
 			}
 		})
@@ -113,7 +110,7 @@ func TestChannelAttachmentFailureRetries(t *testing.T) {
 		fmt.Fprint(w, "image")
 	}))
 	t.Cleanup(media.Close)
-	_, database, h := channelTestServer(t, nil)
+	server, database, h := channelTestServer(t, nil)
 	body := map[string]any{
 		"type": "message", "id": "photo-1", "chat_id": "retry-photos", "web": true, "text": "caption",
 		"first_reply": "received",
@@ -127,11 +124,8 @@ func TestChannelAttachmentFailureRetries(t *testing.T) {
 	if w := postJSON(t, h, "/api/channels/messages", body); w.Code < 500 {
 		t.Fatalf("failed download acknowledged: %d %s", w.Code, w.Body.String())
 	}
-	conv, err := conversationByExternalID(t, database, "retry-photos")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := channelUserMessages(t, database, conv.ConversationID); len(got) != 0 {
+	assistantID := server.assistantID()
+	if got := channelUserMessages(t, database, assistantID); len(got) != 0 {
 		t.Fatalf("partial delivery = %q", got)
 	}
 	if _, err := os.Stat(firstPath); !os.IsNotExist(err) {
@@ -141,7 +135,7 @@ func TestChannelAttachmentFailureRetries(t *testing.T) {
 	if w := postJSON(t, h, "/api/channels/messages", body); w.Code != http.StatusNoContent {
 		t.Fatalf("retry: %d %s", w.Code, w.Body.String())
 	}
-	messages := channelUserMessages(t, database, conv.ConversationID)
+	messages := channelUserMessages(t, database, assistantID)
 	if len(messages) != 1 || !strings.HasPrefix(messages[0], "photo-1: caption\n\n[") {
 		t.Fatalf("retried delivery = %q", messages)
 	}

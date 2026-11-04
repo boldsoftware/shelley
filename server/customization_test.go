@@ -62,10 +62,7 @@ func newCustomizationFixture(t *testing.T) *customizationFixture {
 			return customizationTestGit(t, cwd, "rev-list", "--max-parents=0", "HEAD"), err
 		},
 	}
-	db.EnableWorkspaceMode(t, s.db)
-	if _, err := s.ensureWorkspace(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	setWorkspaceFlag(t, s, "true")
 	if err := os.Mkdir(cwd, 0o700); err != nil {
 		t.Fatal(err)
 	}

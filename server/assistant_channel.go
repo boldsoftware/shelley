@@ -8,50 +8,14 @@ import (
 
 	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/db"
-	"shelley.exe.dev/db/generated"
 )
-
-// With a workspace, the workspace Assistant takes every texted
-// message, from any chat, instead of a conversation per chat. Each texted
-// message records its chat and endpoint in channel_message_routes, and the
-// Assistant's message_user texts only what answers a texted message, to
-// the chat it came from (see assistantChat). Web chats keep their own
-// conversations: their page reads the chat's conversation stream, which
-// must not be the Assistant's. A texted chat's own conversation, if it has
-// one, gets no new messages.
-//
-// The event's SystemPrompt, FirstReaction, and FirstReply configure and
-// greet a chat's new conversation; the Assistant is neither new nor the
-// chat's, and has its own profile, so they are ignored.
 
 // errChannelEventNoID refuses a texted message without an id: replies to
 // it could not be routed back.
 var errChannelEventNoID = errors.New("channel event has no id")
 
-// assistantChannelConversation returns the workspace Assistant's conversation if
-// ev goes to it, or nil if it goes to its chat's conversation: a web chat's,
-// or any without a workspace.
-func (s *Server) assistantChannelConversation(ctx context.Context, ev channelEvent) (conv *generated.Conversation, assistant bool, err error) {
-	if ev.Web {
-		return nil, false, nil
-	}
-	id := s.assistantID()
-	if id == "" {
-		return nil, false, nil
-	}
-	if ev.ID == "" {
-		return nil, false, errChannelEventNoID
-	}
-	c, err := s.db.GetConversationByID(ctx, id)
-	if err != nil {
-		return nil, false, err
-	}
-	return c, true, nil
-}
-
-// recoverAssistantChannelQueue drains the workspace Assistant's queue at startup
-// if it holds a texted message, as recoverChannelQueues does for chats'
-// conversations: the user may not open the UI to drain it.
+// recoverAssistantChannelQueue drains the Assistant's queue at startup
+// if it holds a texted message: the user may not open the UI to drain it.
 func (s *Server) recoverAssistantChannelQueue(ctx context.Context) error {
 	id := s.assistantID()
 	if id == "" {
@@ -72,9 +36,10 @@ func (s *Server) recoverAssistantChannelQueue(ctx context.Context) error {
 	return nil
 }
 
-// assistantChat is the workspace Assistant's claudetool.UserChat. It is bound to
-// no chat: a message or reaction goes to a chat only when it answers a
-// texted message, to the chat that message came from. Everything else (an
+// assistantChat is the Assistant's claudetool.UserChat. It is bound to no
+// chat: a message or reaction goes to a chat only when it answers a texted
+// message, to the chat that message came from. Answers to a web chat's
+// messages stay in the conversation, which the chat's page reads. Everything else (an
 // answer to a message typed in the UI, to a conversation's or subagent's report, or
 // to a scheduled wakeup) stays in the UI.
 type assistantChat struct {
@@ -104,7 +69,7 @@ func (c assistantChat) Send(ctx context.Context, text string, attachments []clau
 	if err != nil {
 		return fmt.Errorf("nothing was sent: %w", err)
 	}
-	if route == nil {
+	if route == nil || route.Endpoint == "" {
 		return nil
 	}
 	return c.s.sendChannelChat(ctx, route.Endpoint, text, attachments, target)
@@ -117,6 +82,9 @@ func (c assistantChat) React(ctx context.Context, target claudetool.UserMessage,
 	route, err := c.route(ctx, target)
 	if err != nil {
 		return fmt.Errorf("nothing was sent: %w", err)
+	}
+	if route == nil || route.Endpoint == "" {
+		return nil
 	}
 	return c.s.reactChannelChat(ctx, route.Endpoint, target, emoji)
 }

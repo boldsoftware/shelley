@@ -2,13 +2,11 @@ package server
 
 import (
 	"crypto/rand"
-	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -123,7 +121,7 @@ func debugGatewayPath(chatID, token string) string {
 }
 
 // debugChannelEndpoint returns a new endpoint for debug chat chatID's
-// replies; the first one is stored with the chat's conversation.
+// replies, which its messages' routes keep.
 func (s *Server) debugChannelEndpoint(chatID string) string {
 	return s.debugChannelEndpointWithToken(chatID, rand.Text())
 }
@@ -132,41 +130,25 @@ func (s *Server) debugChannelEndpointWithToken(chatID, token string) string {
 	return fmt.Sprintf("http://localhost:%d%s", s.listenPort, debugGatewayPath(chatID, token))
 }
 
-// debugGatewayAuthorized reports whether token is the one in debug chat
-// chatID's stored endpoint, or in that of one of its messages to the
-// workspace Assistant.
+// debugGatewayAuthorized reports whether token is the one in the endpoint
+// of one of debug chat chatID's messages.
 func (s *Server) debugGatewayAuthorized(r *http.Request, chatID, token string) bool {
-	if ok, err := s.db.HasChannelRouteEndpoint(r.Context(), chatID, s.debugChannelEndpointWithToken(chatID, token)); err == nil && ok {
-		return true
-	}
-	conv, err := s.debugChatConversation(r, chatID)
-	if err != nil || conv.ExternalEndpoint == nil {
-		return false
-	}
-	u, err := url.Parse(*conv.ExternalEndpoint)
-	return err == nil && subtle.ConstantTimeCompare([]byte(u.Path), []byte(debugGatewayPath(chatID, token))) == 1
+	ok, err := s.db.HasChannelRouteEndpoint(r.Context(), chatID, s.debugChannelEndpointWithToken(chatID, token))
+	return err == nil && ok
 }
 
-// debugChatConversation returns debug chat chatID's conversation: the
-// workspace Assistant if the chat's messages went there.
+// debugChatConversation returns the conversation debug chat chatID's
+// messages went to: the Assistant's.
 func (s *Server) debugChatConversation(r *http.Request, chatID string) (generated.Conversation, error) {
 	route, err := s.db.LatestChannelRoute(r.Context(), chatID)
-	if err == nil {
-		conv, err := s.db.GetConversationByID(r.Context(), route.ConversationID)
-		if err != nil {
-			return generated.Conversation{}, err
-		}
-		return *conv, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
+	if err != nil {
 		return generated.Conversation{}, err
 	}
-	var conv generated.Conversation
-	err = s.db.Queries(r.Context(), func(q *generated.Queries) (err error) {
-		conv, err = q.GetConversationByExternalID(r.Context(), &chatID)
-		return err
-	})
-	return conv, err
+	conv, err := s.db.GetConversationByID(r.Context(), route.ConversationID)
+	if err != nil {
+		return generated.Conversation{}, err
+	}
+	return *conv, nil
 }
 
 // debugChatID returns the request's debug chat id, or answers 404 and "".
@@ -318,9 +300,8 @@ func (s *Server) handleDebugChannelsList(w http.ResponseWriter, r *http.Request)
 
 // handleDebugChannelReceive serves POST /api/debug/channels/{chat}/receive
 // {"text": "..."}: the phone writes on the debug chat, which delivers the
-// text to the chat's conversation as exed delivers a text. The body may set
-// the conversation fields exed sends (system_prompt, first_reaction,
-// first_reply) too.
+// text to the Assistant as exed delivers a text. The body may set
+// first_reaction and first_reply, as exed sends them, too.
 func (s *Server) handleDebugChannelReceive(w http.ResponseWriter, r *http.Request) {
 	chatID := debugChatID(w, r)
 	if chatID == "" {
@@ -344,7 +325,6 @@ func (s *Server) handleDebugChannelReceive(w http.ResponseWriter, r *http.Reques
 		ChatID:        chatID,
 		Sender:        "debug",
 		Text:          req.Text,
-		SystemPrompt:  req.SystemPrompt,
 		FirstReaction: req.FirstReaction,
 		FirstReply:    req.FirstReply,
 	})
@@ -377,20 +357,15 @@ func (s *Server) handleDebugChannelSend(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "text is required", http.StatusBadRequest)
 		return
 	}
-	conv, err := s.debugChatConversation(r, chatID)
-	if err != nil {
+	// The chat answers at its latest message's endpoint.
+	route, err := s.db.LatestChannelRoute(r.Context(), chatID)
+	if errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "chat has no conversation; write from the phone first", http.StatusNotFound)
 		return
 	}
-	// A chat whose messages went to the workspace Assistant answers at its
-	// latest message's endpoint.
 	var id string
-	route, err := s.db.LatestChannelRoute(r.Context(), chatID)
-	switch {
-	case err == nil:
+	if err == nil {
 		id, err = s.sendChannelEndpointMessage(r.Context(), route.Endpoint, req.Text, "", nil)
-	case errors.Is(err, sql.ErrNoRows):
-		id, err = s.sendChannelMessage(r.Context(), conv.ConversationID, req.Text, "", nil)
 	}
 	var rf *channelSendError
 	if errors.As(err, &rf) {

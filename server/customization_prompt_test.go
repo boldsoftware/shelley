@@ -10,10 +10,7 @@ import (
 
 func TestShelleyConversationReceivesVerificationWorkflowInShelleyProject(t *testing.T) {
 	s, database, _ := newTestServer(t)
-	db.EnableWorkspaceMode(t, s.db)
-	if _, err := s.ensureWorkspace(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	setWorkspaceFlag(t, s, "true")
 	// Shelley's project is the one in the canonical customization checkout.
 	cwd := t.TempDir()
 	s.customizations.deps.canonicalDir = func() (string, error) { return cwd, nil }

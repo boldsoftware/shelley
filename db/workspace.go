@@ -80,10 +80,13 @@ const shelleyProjectInstructions = `Customize, maintain, and improve Shelley, th
 // AssistantSlug is the workspace Assistant's slug.
 const AssistantSlug = "assistant"
 
-// EnsureWorkspace serializes singleton creation with all other DB writes.
-// Both the assistant row and its identity are committed together, never as an
-// orphan created outside the transaction.
-func (db *DB) EnsureWorkspace(ctx context.Context, shelleyCwd, model string, opts ConversationOptions) (string, error) {
+// EnsureAssistant returns the Assistant's id. Without one, the most recent
+// texted chat's conversation becomes it (see promoteTextedConversation),
+// or, with create, a new one is made with model and opts; otherwise the id
+// is "". The Assistant and its workspace row are committed together, and
+// with them, if shelleyCwd is set, Shelley's own project there, unless a
+// profile has its name.
+func (db *DB) EnsureAssistant(ctx context.Context, model string, opts ConversationOptions, create bool, shelleyCwd string) (string, error) {
 	var assistantID string
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
 		q := generated.New(tx.Conn())
@@ -95,15 +98,25 @@ func (db *DB) EnsureWorkspace(ctx context.Context, shelleyCwd, model string, opt
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		// Shelley's own project, unless a profile has its name.
-		taken, err := found(q.GetProfile(ctx, "Shelley"))
-		if err != nil {
+		if assistantID, err = promoteTextedConversation(ctx, q); err != nil {
 			return err
 		}
-		if !taken {
-			if err := createProject(ctx, q, Project{Name: "Shelley", Instructions: shelleyProjectInstructions, Cwd: shelleyCwd, Actions: []ProjectAction{}}, ""); err != nil {
+		if assistantID == "" && !create {
+			return nil
+		}
+		if shelleyCwd != "" {
+			taken, err := found(q.GetProfile(ctx, "Shelley"))
+			if err != nil {
 				return err
 			}
+			if !taken {
+				if err := createProject(ctx, q, Project{Name: "Shelley", Instructions: shelleyProjectInstructions, Cwd: shelleyCwd, Actions: []ProjectAction{}}, ""); err != nil {
+					return err
+				}
+			}
+		}
+		if assistantID != "" {
+			return q.CreateWorkspace(ctx, assistantID)
 		}
 		assistantID, err = GenerateConversationID()
 		if err != nil {
@@ -117,14 +130,9 @@ func (db *DB) EnsureWorkspace(ctx context.Context, shelleyCwd, model string, opt
 		if model != "" {
 			modelPtr = &model
 		}
-		// The Assistant is titled "Assistant", not after its first
-		// message: its slug is "assistant", or none while another
-		// conversation has that slug (see 059-assistant-slug.sql).
-		var slug *string
-		if taken, err := found(q.GetConversationBySlug(ctx, ptr(AssistantSlug))); err != nil {
+		slug, err := assistantSlug(ctx, q)
+		if err != nil {
 			return err
-		} else if !taken {
-			slug = ptr(AssistantSlug)
 		}
 		// No cwd is invented for the assistant; its tools use the normal
 		// configured server working directory.
@@ -136,6 +144,48 @@ func (db *DB) EnsureWorkspace(ctx context.Context, shelleyCwd, model string, opt
 		return q.CreateWorkspace(ctx, assistantID)
 	})
 	return assistantID, err
+}
+
+// assistantSlug is the Assistant's slug: it is titled "Assistant", not
+// after its first message, so its slug is "assistant", or none while
+// another conversation has that slug (see 059-assistant-slug.sql).
+func assistantSlug(ctx context.Context, q *generated.Queries) (*string, error) {
+	taken, err := found(q.GetConversationBySlug(ctx, ptr(AssistantSlug)))
+	if err != nil || taken {
+		return nil, err
+	}
+	return ptr(AssistantSlug), nil
+}
+
+// promoteTextedConversation returns the id of the most recent texted
+// chat's conversation (see PromotableTextedConversation), or "" without
+// one, made the Assistant but for its workspace row: its texted messages
+// get routes, so replies to them still reach the chat, it is unbound from
+// the chat, and it is titled like a new Assistant.
+func promoteTextedConversation(ctx context.Context, q *generated.Queries) (string, error) {
+	id, err := q.PromotableTextedConversation(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if err := q.RouteTextedMessages(ctx, id); err != nil {
+		return "", err
+	}
+	if err := q.UnbindChatConversation(ctx, id); err != nil {
+		return "", err
+	}
+	slug, err := assistantSlug(ctx, q)
+	if err != nil {
+		return "", err
+	}
+	if slug != nil {
+		if _, err := q.UpdateConversationSlug(ctx, generated.UpdateConversationSlugParams{Slug: slug, ConversationID: id}); err != nil {
+			return "", err
+		}
+	}
+	return id, nil
 }
 
 // found reports whether a query for one row found it.
@@ -239,8 +289,7 @@ func (db *DB) MoveConversation(ctx context.Context, conversationID, project stri
 	})
 }
 
-// GetAssistantID returns sql.ErrNoRows without an Assistant: before
-// workspace mode creates it, or while the mode is off.
+// GetAssistantID returns sql.ErrNoRows before there is an Assistant.
 func (db *DB) GetAssistantID(ctx context.Context) (string, error) {
 	var id string
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
