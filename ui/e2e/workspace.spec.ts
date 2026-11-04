@@ -44,9 +44,33 @@ test("root opens the pinned Assistant; explicit conversation links remain select
   await openWorkspace(page);
   await expect(page.getByTestId("assistant-row")).toHaveCount(1);
   await expect(page.locator(".conversation-group").getByTestId("assistant-row")).toHaveCount(0);
-  await page.getByRole("button", { name: "Archived tasks", exact: true }).click();
+  // Archived tasks are behind search's Archived toggle, listed with the
+  // active ones; the footer button is stock Shelley's.
+  await expect(page.getByRole("button", { name: "View Archived", exact: true })).toHaveCount(0);
+  const archived = await createConversationViaAPIWithDetails(request, "Hello");
+  expect(
+    (
+      await request.post(`/api/conversation/${archived.conversationId}/archive`, {
+        headers: { "X-Shelley-Request": "1" },
+      })
+    ).ok(),
+  ).toBe(true);
+  const row = (id: string) => page.locator(`.conversation-item[data-conversation-id="${id}"]`);
+  await expect(row(conversation.conversationId)).toBeVisible();
+  await expect(row(archived.conversationId)).toHaveCount(0);
+  await page.getByRole("button", { name: "Search tasks...", exact: true }).click();
+  const toggle = page.getByTestId("archived-toggle");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(row(conversation.conversationId)).toBeVisible();
+  await expect(row(archived.conversationId)).toHaveClass(/conversation-item-archived/);
   await expect(page.getByTestId("assistant-row")).toBeVisible();
   await expect(page.getByTestId("assistant-row").getByRole("button")).toHaveCount(0);
+  await row(archived.conversationId).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Restore", exact: true }).click();
+  await expect(row(archived.conversationId)).not.toHaveClass(/conversation-item-archived/);
+  await toggle.click();
+  await expect(row(archived.conversationId)).toBeVisible();
   await page.goto(`/c/${conversation.conversationId}`);
   await expect(page.locator("h1.header-title")).not.toHaveText("Assistant");
   await expect(page).toHaveURL(

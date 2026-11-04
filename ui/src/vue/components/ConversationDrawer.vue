@@ -34,7 +34,7 @@
     <!-- Header -->
     <div class="drawer-header">
       <ExeBrand v-if="workspaceMode" />
-      <h2 v-if="showArchived" class="app-bar-title drawer-title">{{ t("archived") }}</h2>
+      <h2 v-if="archivedOnly" class="app-bar-title drawer-title">{{ t("archived") }}</h2>
       <div class="drawer-header-actions">
         <!-- Search toggle button -->
         <Button
@@ -393,6 +393,16 @@
         >
           Ask Shelley
         </button>
+        <button
+          v-if="workspaceMode"
+          type="button"
+          :class="`drawer-filter-action${showArchived ? ' drawer-filter-action-on' : ''}`"
+          :aria-pressed="showArchived"
+          data-testid="archived-toggle"
+          @click="showArchived = !showArchived"
+        >
+          {{ t("archived") }}
+        </button>
         <span
           class="drawer-filter-result-count"
           :aria-label="`${displayedConversations.length} results`"
@@ -478,7 +488,7 @@
         <Button text :label="t('retry')" @click="refreshSearchResults" />
       </div>
       <div
-        v-else-if="loadingArchived && showArchived && !isSearching"
+        v-else-if="loadingArchived && archivedOnly && !isSearching"
         class="text-secondary drawer-empty-state"
       >
         <p>{{ t("loading") }}</p>
@@ -558,7 +568,7 @@
               <span class="conversation-group-count">{{ group.conversations.length }}</span>
             </button>
             <button
-              v-if="!showArchived"
+              v-if="!archivedOnly"
               type="button"
               class="project-icon-button"
               :aria-label="t('newConversationInProject').replace('{project}', group.label)"
@@ -606,7 +616,7 @@
           </template>
         </section>
         <p v-if="!projectGroups.length" class="text-secondary drawer-empty-state">
-          {{ showArchived ? t("noArchivedConversations") : t("noSearchResults") }}
+          {{ archivedOnly ? t("noArchivedConversations") : t("noSearchResults") }}
         </p>
       </div>
       <div
@@ -624,12 +634,12 @@
           {{
             isSearching
               ? t("noSearchResults")
-              : showArchived
+              : archivedOnly
                 ? t("noArchivedConversations")
                 : t("noConversationsYet")
           }}
         </p>
-        <p v-if="!showArchived && !isSearching" class="text-sm drawer-empty-state-hint">
+        <p v-if="!archivedOnly && !isSearching" class="text-sm drawer-empty-state-hint">
           {{ t("startNewToGetStarted") }}
         </p>
       </div>
@@ -683,8 +693,8 @@
       </div>
     </div>
 
-    <!-- Footer with archived toggle -->
-    <div class="drawer-footer">
+    <!-- Footer with archived toggle; workspace mode's is in the search bar -->
+    <div v-if="!workspaceMode" class="drawer-footer">
       <Button
         class="drawer-footer-button"
         severity="secondary"
@@ -910,6 +920,9 @@ function handleAuxClick(e: MouseEvent, conversation: Conversation) {
 
 // --- State ---
 const showArchived = ref(false);
+// Stock Shelley's footer swaps the list for the archived conversations;
+// workspace mode's Archived toggle, by search, lists them with the others.
+const archivedOnly = computed(() => showArchived.value && !workspaceMode);
 // Naming a new project shows its row, in the project list.
 const namingProject = computed(() => workspace.namingProject.value && !showArchived.value);
 watch(workspace.namingProject, (naming) => {
@@ -1005,7 +1018,7 @@ async function openEnhancement() {
   try {
     const result = await api.startSearchChat(
       searchText.value.trim(),
-      showArchived.value,
+      archivedOnly.value,
       controller.signal,
       displayedConversations.value,
     );
@@ -1132,7 +1145,11 @@ const structuredFiltersActive = computed(
     queryHasTagFilter(parsedQuery.value),
 );
 const searchToolbarActive = computed(
-  () => searchOpen.value || structuredFiltersActive.value || searchText.value.trim() !== "",
+  () =>
+    searchOpen.value ||
+    structuredFiltersActive.value ||
+    searchText.value.trim() !== "" ||
+    (showArchived.value && workspaceMode),
 );
 const highlightIndex = ref(0);
 const searchWrapRef = ref<HTMLElement | null>(null);
@@ -1212,7 +1229,12 @@ async function fetchSearchResults(query: string, seq: number) {
   const controller = new AbortController();
   searchController = controller;
   try {
-    const results = await api.searchConversationsFTS(query, controller.signal, showArchived.value);
+    const scopes = archivedOnly.value ? [true] : showArchived.value ? [false, true] : [false];
+    const results = (
+      await Promise.all(
+        scopes.map((archived) => api.searchConversationsFTS(query, controller.signal, archived)),
+      )
+    ).flat();
     if (!controller.signal.aborted && seq === searchSeq) searchResults.value = results;
   } catch (error) {
     if (controller.signal.aborted || seq !== searchSeq) return;
@@ -1407,6 +1429,7 @@ async function handleUnarchive(e: MouseEvent, conversationId: string) {
       (c) => c.conversation_id !== conversationId,
     );
     emit("unarchived", conversation);
+    if (searchText.value.trim()) void refreshSearchResults();
   } catch (err) {
     rowError.value = errorMessage(err);
   }
@@ -1573,7 +1596,25 @@ function conversationActions(conversation: Conversation): MenuItem[] {
       })),
     });
   }
-  if (workspaceMode) items.push({ separator: true }, archive);
+  if (workspaceMode)
+    items.push(
+      { separator: true },
+      ...(conversation.archived
+        ? ([
+            {
+              label: t("restore"),
+              icon: "pi pi-replay",
+              command: ({ originalEvent }) => void handleUnarchive(originalEvent as MouseEvent, id),
+            },
+            {
+              label: `${t("delete_")}…`,
+              icon: "pi pi-trash",
+              class: "drawer-menu-danger",
+              command: ({ originalEvent }) => handleDeleteClick(originalEvent as MouseEvent, id),
+            },
+          ] satisfies MenuItem[])
+        : [archive]),
+    );
   return items;
 }
 const workingIds = computed(() => workingConversationIds(props.conversations));
@@ -1847,11 +1888,18 @@ const draftLabels = computed<Record<string, string>>(() => {
   return labels;
 });
 
+// Listed with the active ones, a conversation the conversation list reports
+// unarchived before the archived list drops it is listed once, as active.
+const archivedRows = computed(() => {
+  if (archivedOnly.value) return archivedConversations.value;
+  const active = new Set(props.conversations.map((c) => c.conversation_id));
+  return archivedConversations.value.filter((c) => !active.has(c.conversation_id));
+});
 const stableArchivedConversations = computed(() => {
   resetOrderRefsForResort();
   void resortKey.value;
   const sorted = sortConversationsByBucket(
-    archivedConversations.value.filter((c) => !workspace.isAssistant(c.conversation_id)),
+    archivedRows.value.filter((c) => !workspace.isAssistant(c.conversation_id)),
   );
   const { items, order } = applyStableOrder(sorted, archivedOrder);
   archivedOrder = order;
@@ -1870,12 +1918,15 @@ const stableArchivedConversations = computed(() => {
 // grouping and ordering instead of collapsing into flat search results.
 const isSearching = computed(() => searchText.value.trim().length > 0);
 
+// The top-level rows the list shows before any search or filter.
+const listPool = computed<ConversationWithParticipants[]>(() => {
+  if (archivedOnly.value) return archivedRows.value;
+  const active = props.conversations.filter((c) => !c.parent_conversation_id);
+  return showArchived.value ? [...active, ...archivedRows.value] : active;
+});
+
 const calendarDayCounts = computed(() => {
-  const pool = isSearching.value
-    ? (searchResults.value ?? [])
-    : showArchived.value
-      ? archivedConversations.value
-      : props.conversations.filter((c) => !c.parent_conversation_id);
+  const pool = isSearching.value ? (searchResults.value ?? []) : listPool.value;
   const matches = filterConversationsByQuery(
     filterConversationsByParticipantQuery(
       pool,
@@ -1922,7 +1973,10 @@ const displayedConversations = computed<(Conversation | ConversationWithState)[]
       ),
       parsedQuery.value,
     );
-  return showArchived.value ? stableArchivedConversations.value : topLevelConversations.value;
+  if (archivedOnly.value) return stableArchivedConversations.value;
+  if (showArchived.value)
+    return [...topLevelConversations.value, ...stableArchivedConversations.value];
+  return topLevelConversations.value;
 });
 const displayedConversationIds = computed(
   () => new Set(displayedConversations.value.map((conversation) => conversation.conversation_id)),
@@ -1947,11 +2001,7 @@ const tagFilterPool = computed<ConversationWithParticipants[]>(() => {
       selectedUsers.value,
       parsedQuery.value.includeUnattributed,
     );
-  const pool = showArchived.value
-    ? archivedConversations.value
-    : props.conversations.filter(
-        (c) => !c.parent_conversation_id && !workspace.isAssistant(c.conversation_id),
-      );
+  const pool = listPool.value.filter((c) => !workspace.isAssistant(c.conversation_id));
   return filterConversationsByParticipantQuery(
     filterConversationsByDay(pool, selectedDay.value),
     selectedUsers.value,
@@ -1966,9 +2016,7 @@ const tagFilterPool = computed<ConversationWithParticipants[]>(() => {
 const participantFilterPool = computed<ConversationWithParticipants[]>(() => {
   const pool = isSearching.value
     ? (searchResults.value ?? [])
-    : showArchived.value
-      ? archivedConversations.value
-      : props.conversations.filter((c) => !c.parent_conversation_id && !c.is_draft);
+    : listPool.value.filter((c) => !c.is_draft);
   return filterConversationsByDay(pool, selectedDay.value);
 });
 

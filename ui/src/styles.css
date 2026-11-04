@@ -324,7 +324,8 @@ body {
   color: var(--text-primary);
 }
 
-.text-secondary {
+.text-secondary,
+.conversation-item-archived .conversation-title {
   color: var(--text-secondary);
 }
 
@@ -954,6 +955,12 @@ body {
   font-size: var(--font-size-11);
   line-height: 1.25;
   cursor: pointer;
+}
+
+.drawer-filter-action-on {
+  border-style: solid;
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .drawer-filter-action-wrap {

@@ -6,7 +6,7 @@
      the DrawerCtx inject. Mirrors renderConversationItem in the React source. -->
 <template>
   <div
-    :class="`conversation-item ${isActive ? 'active' : ''}${isNew ? ' conversation-item-enter' : ''}${ctx.contextMenuId.value === conversation.conversation_id ? ' context-menu-target' : ''}`"
+    :class="`conversation-item ${isActive ? 'active' : ''}${isNew ? ' conversation-item-enter' : ''}${itemArchived && workspaceMode ? ' conversation-item-archived' : ''}${ctx.contextMenuId.value === conversation.conversation_id ? ' context-menu-target' : ''}`"
     :data-conversation-id="conversation.conversation_id"
     role="link"
     tabindex="0"
@@ -340,8 +340,17 @@
       </div>
     </div>
 
-    <div v-if="itemArchived" class="conversation-actions drawer-actions-row-offset">
+    <!-- Workspace mode's archived rows keep these in their ⋯ menu; Delete
+         there asks for confirmation here. -->
+    <div
+      v-if="
+        itemArchived &&
+        (!workspaceMode || ctx.pendingDeleteId.value === conversation.conversation_id)
+      "
+      class="conversation-actions drawer-actions-row-offset"
+    >
       <Button
+        v-if="!workspaceMode"
         class="btn-icon-sm"
         text
         severity="secondary"
@@ -445,6 +454,7 @@ import {
 import { isTagSelected } from "../../utils/tagFilter";
 import { perfCount } from "../../utils/perf";
 import { COMPOSER_ROW_ID, ComposerPreviewKey } from "../../utils/composerRow";
+import { workspaceMode } from "../../utils/workspaceMode";
 import GearIcon from "./GearIcon.vue";
 
 const props = defineProps<{
@@ -570,11 +580,12 @@ const subagentBadgeTooltip = computed(() => {
 const isExpanded = computed(() =>
   ctx.expandedSubagents.value.has(props.conversation.conversation_id),
 );
+// Workspace mode lists archived rows among active ones, so it dims them.
 const itemArchived = computed(() => props.conversation.archived);
 const hasActions = computed(
   () =>
     !isDraft.value &&
-    !itemArchived.value &&
+    (!itemArchived.value || workspaceMode) &&
     !isPlaceholder.value &&
     actionsMenuItems.value.length > 0,
 );
