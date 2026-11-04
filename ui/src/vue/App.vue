@@ -1148,7 +1148,10 @@ async function handleFirstMessage(
       skills,
     });
     const newConversationId = response.conversation_id;
-    messageStore.setAgentWorking(newConversationId, true);
+    // The conversation list's patches can beat the response: a first turn
+    // they already reported ended stays ended (no later patch would say so).
+    const listed = conversations.value.find((c) => c.conversation_id === newConversationId);
+    messageStore.setAgentWorking(newConversationId, listed?.working ?? true);
     if (composer.value === pending) {
       composer.value = { ...pending, id: newConversationId };
     }
