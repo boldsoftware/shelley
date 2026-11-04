@@ -414,7 +414,8 @@ conversation names.
 - `WS /api/exec-ws?cwd=` — websocket for an interactive shell session.
   `cmd=` starts a new persistent session; `term_id=` reattaches to an existing
   one and never reruns the command. `conversation_id=` records which
-  conversation owns a newly spawned terminal.
+  conversation owns a newly spawned terminal. Client messages may be at most
+  32 KiB, so the client splits long pastes into several `input` messages.
 - `GET /api/terminals` — all persistent terminals, unfiltered.
   `conversation_id` is the owning conversation, or `null` for a terminal shown
   in every conversation.

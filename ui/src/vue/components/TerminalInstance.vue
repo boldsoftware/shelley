@@ -26,6 +26,7 @@ import {
 } from "./terminalBackend";
 import { useTerminalFontSizePreference } from "../composables/terminalFontSizePreference";
 import { cleanTerminalTitle, TerminalTitleParser } from "./terminalTitle";
+import { splitInput } from "./terminalInput";
 
 const props = defineProps<{
   term: EphemeralTerminal;
@@ -90,9 +91,8 @@ function setTitle(raw: string) {
 let settled = false;
 
 function sendInput(data: string) {
-  if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "input", data }));
-  }
+  if (ws?.readyState !== WebSocket.OPEN) return;
+  for (const piece of splitInput(data)) ws.send(JSON.stringify({ type: "input", data: piece }));
 }
 
 function fitAndNotifyServer() {
