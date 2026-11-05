@@ -48,6 +48,7 @@
         :conversations="drawerConversations"
         :ephemeral-terminals="ephemeralTerminals"
         :current-conversation-id="drawerCurrentConversationId"
+        :composer-projects="drawerComposerProjects"
         :viewed-conversation="viewedConversation"
         :show-active-trigger="showActiveTrigger"
         :message-sent-trigger="messageSentTrigger"
@@ -82,15 +83,12 @@
           :resource-statuses="Object.values(resourceStatuses)"
           :on-resource-status="applyResourceStatus"
           :on-open-drawer="() => (drawerOpen = true)"
-          :on-new-conversation="startNewConversation"
+          :on-new-conversation="() => startNewConversation(shownProject())"
           :on-new-project-conversation="
-            workspaceMode
-              ? () =>
-                  workspace.newProjectConversation(
-                    workspace.projectFor(currentConversationId)?.name,
-                  )
-              : undefined
+            workspaceMode ? () => workspace.newProjectConversation(shownProject()) : undefined
           "
+          :composer-project="composerProject"
+          :on-select-composer-project="selectComposerProject"
           :is-assistant="workspace.isAssistant(currentConversationId)"
           :on-select-conversation="selectConversation"
           :on-archive-conversation="archiveFromChat"
@@ -372,6 +370,7 @@ import { ConversationsListKey, CurrentConversationIdKey } from "./composables/su
 import {
   COMPOSER_ROW_ID,
   ComposerPreviewKey,
+  composerProjects,
   composerRowId,
   withComposerRow,
   type ComposerRow,
@@ -676,8 +675,29 @@ const drawerCurrentConversationId = computed(() =>
     ? null
     : (currentConversationId.value ?? (composer.value ? COMPOSER_ROW_ID : null)),
 );
-function newComposer(id: string | null, cwd: string | null): ComposerRow {
-  return { id, cwd, startedAt: new Date().toISOString(), sent: null, listed: false };
+const drawerComposerProjects = computed(() => composerProjects([composer.value, lingering.value]));
+function newComposer(id: string | null, cwd: string | null, project: string): ComposerRow {
+  return { id, cwd, project, startedAt: new Date().toISOString(), sent: null, listed: false };
+}
+// The project the composition on screen starts its conversation in, "" for
+// none: chosen with a project's +, or in the status bar (workspace mode).
+const composerProject = computed(() => {
+  const row = composer.value;
+  return workspaceMode && row?.sent === null && row.id === currentConversationId.value
+    ? row.project
+    : "";
+});
+function selectComposerProject(project: string) {
+  const id = currentConversationId.value;
+  const row =
+    composer.value?.id === id
+      ? composer.value
+      : newComposer(id, currentConversation.value?.cwd ?? null, "");
+  composer.value = { ...row, project };
+}
+// The project of what's on screen: the composition's, or the conversation's.
+function shownProject(): string {
+  return composerProject.value || (workspace.projectFor(currentConversationId.value)?.name ?? "");
 }
 // The new-conversation view is a draft from the moment it opens; opening
 // another conversation ends the composition.
@@ -688,7 +708,7 @@ watch(
     if (id === null) {
       if (isLoading || row?.id === null) return;
       lingering.value = null;
-      composer.value = newComposer(null, composerCwd);
+      composer.value = newComposer(null, composerCwd, "");
     } else if (row && row.id !== id) {
       const unused = row.id === null && row.sent === null && !composerText.value.trim();
       if (unused && drawerHovered) lingering.value = row;
@@ -722,14 +742,14 @@ function onComposerInput(text: string, cwd: string | null) {
   if (row && row.id === id) {
     if (row.cwd !== cwd) composer.value = { ...row, cwd };
   } else if (id !== null) {
-    composer.value = newComposer(id, cwd); // an opened draft
+    composer.value = newComposer(id, cwd, ""); // an opened draft
   }
 }
 
 // Returns a function that undoes the submission if the send fails.
 function onComposerSubmit(text: string, cwd: string | null): () => void {
   const id = currentConversationId.value;
-  const row = composer.value?.id === id ? composer.value : newComposer(id, cwd);
+  const row = composer.value?.id === id ? composer.value : newComposer(id, cwd, "");
   const submitted = { ...row, sent: text };
   composer.value = submitted;
   return () => {
@@ -946,15 +966,16 @@ async function selectAssistant() {
 }
 
 // ---- conversation actions ----
-// Workspace mode starts a conversation in the current one's project.
+// A new conversation starts in the project of what's on screen.
 function newConversation() {
-  if (workspaceMode)
-    workspace.newProjectConversation(workspace.projectFor(currentConversationId.value)?.name);
-  else void startNewConversation();
+  if (workspaceMode) workspace.newProjectConversation(shownProject());
+  else void startNewConversation("");
 }
-watch(workspace.newConversationTrigger, () => void startNewConversation());
+watch(workspace.newConversationRequest, (request) => {
+  if (request) void startNewConversation(request.project);
+});
 
-async function startNewConversation(): Promise<boolean> {
+async function startNewConversation(project: string): Promise<boolean> {
   error.value = null;
   const conversation = currentConversation.value;
   let cwd = conversation?.git_worktree_root || conversation?.cwd;
@@ -980,6 +1001,13 @@ async function startNewConversation(): Promise<boolean> {
   currentConversationId.value = null;
   viewedConversation.value = null;
   workspace.projectView.value = null;
+  // An unsent new conversation's row stays, now in project.
+  const row = composer.value;
+  lingering.value = null;
+  composer.value =
+    row?.id === null && row.sent === null
+      ? { ...row, project }
+      : newComposer(null, composerCwd, project);
   window.history.replaceState({}, "", "/new");
   drawerOpen.value = false;
   return true;
@@ -1136,7 +1164,9 @@ function onDraftCreated(conversation: Conversation) {
   const id = conversation.conversation_id;
   const row = composer.value;
   composer.value =
-    row && (row.id === null || row.id === id) ? { ...row, id } : newComposer(id, conversation.cwd);
+    row && (row.id === null || row.id === id)
+      ? { ...row, id }
+      : newComposer(id, conversation.cwd, "");
   viewedConversation.value = conversation;
   currentConversationId.value = id;
 }
@@ -1193,7 +1223,8 @@ async function handleFirstMessage(
   // The composer row stands in for the new conversation until the response
   // names it.
   const typed = composer.value?.id === null ? composer.value : null;
-  const row = typed ?? newComposer(null, cwd ?? null);
+  // A conversation started from a project's profile is in that project.
+  const row = typed ?? newComposer(null, cwd ?? null, conversationOptions?.profile ?? "");
   const pending: ComposerRow = { ...row, sent: row.sent ?? message };
   composer.value = pending;
   const settle = onComposerCreate();

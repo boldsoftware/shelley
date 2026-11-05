@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { COMPOSER_ROW_ID, withComposerRow, type ComposerRow } from "./composerRow";
+import { COMPOSER_ROW_ID, composerProjects, withComposerRow, type ComposerRow } from "./composerRow";
 import type { ConversationWithState } from "../types";
 
 function conv(id: string, extra: Partial<ConversationWithState> = {}): ConversationWithState {
@@ -37,6 +37,7 @@ function row(extra: Partial<ComposerRow> = {}): ComposerRow {
   return {
     id: null,
     cwd: "/repo",
+    project: "",
     startedAt: "2026-05-10T12:05:00Z",
     sent: null,
     listed: false,
@@ -137,4 +138,17 @@ run("once listed, a row removed from the list stays gone", () => {
   assert.deepEqual(withComposerRow([older], row({ id: "c2", listed: true }), null), [older]);
   const sent = row({ id: "c2", sent: "hello", listed: true });
   assert.deepEqual(withComposerRow([older], sent, null), [older]);
+});
+
+run("composer rows place their conversations in their projects", () => {
+  const projects = composerProjects([
+    row({ project: "A" }),
+    row({ id: "c2", project: "B" }),
+    row({ id: "c3" }),
+    null,
+  ]);
+  assert.deepEqual([...projects], [
+    [COMPOSER_ROW_ID, "A"],
+    ["c2", "B"],
+  ]);
 });

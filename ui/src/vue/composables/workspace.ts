@@ -28,10 +28,9 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
   /** Whether the drawer shows the row naming a new project. */
   const namingProject = ref(false);
   const projectDeletion = shallowRef<Project | null>(null);
-  /** The project the new conversation composer starts its conversation
-   * in, "" for none; newConversationTrigger has App open the composer. */
-  const composerProject = ref("");
-  const newConversationTrigger = ref(0);
+  /** Each asks App to open the new conversation composer in project ("" for
+   * none); App's composer row keeps the project. */
+  const newConversationRequest = shallowRef<{ project: string } | null>(null);
   let pending: Promise<void> | null = null;
   let stopped = false;
   let revision = 0;
@@ -139,8 +138,7 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     projectView,
     namingProject,
     projectDeletion,
-    composerProject,
-    newConversationTrigger,
+    newConversationRequest,
     dispose: () => {
       stopped = true;
     },
@@ -173,8 +171,7 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     },
     /** Opens the new conversation composer in project ("" for none). */
     newProjectConversation: (project = "") => {
-      composerProject.value = project;
-      newConversationTrigger.value++;
+      newConversationRequest.value = { project };
     },
     isAssistant: (id: string | null | undefined) => !!id && id === data.value?.assistant_id,
     vmFor,

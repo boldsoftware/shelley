@@ -223,6 +223,53 @@ test("project editor, task creation, failed action retry, and success-only archi
   await expect(publish).toBeDisabled();
 });
 
+test("a project's + composes its new conversation there, in the drawer and on the server", async ({
+  page,
+  request,
+}) => {
+  const headers = { "X-Shelley-Request": "1" };
+  const suffix = randomUUID().slice(0, 8);
+  const [a, b] = [`Plus A ${suffix}`, `Plus B ${suffix}`];
+  for (const name of [a, b]) {
+    const response = await request.post("/api/projects", {
+      headers,
+      data: { name, instructions: "", cwd: testWorkingDirectory(), actions: [] },
+    });
+    expect(response.ok()).toBeTruthy();
+  }
+  await page.goto("/");
+  await openWorkspace(page);
+  const composerRow = (project: string) =>
+    page.locator(`section[aria-label="${project}"] [data-conversation-id="composer"]`);
+  await page.getByRole("button", { name: `New task in ${a}`, exact: true }).click();
+  await expect(page.locator(".project-picker")).toHaveText(a);
+  await openWorkspace(page);
+  await expect(composerRow(a)).toBeVisible();
+  // Another project's + moves the new conversation there.
+  await page.getByRole("button", { name: `New task in ${b}`, exact: true }).click();
+  await expect(page.locator(".project-picker")).toHaveText(b);
+  await openWorkspace(page);
+  await expect(composerRow(b)).toBeVisible();
+  await expect(composerRow(a)).toHaveCount(0);
+  await page.getByRole("button", { name: "Close tasks", exact: true }).click();
+  // New Task from its composer stays in the project.
+  await page.getByRole("button", { name: "New Task", exact: true }).click();
+  await expect(page.locator(".project-picker")).toHaveText(b);
+
+  await page.getByTestId("message-input").fill("Hello");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(page).toHaveURL(/\/c\//);
+  await openWorkspace(page);
+  const id = await page
+    .locator(`section[aria-label="${b}"] .conversation-item[aria-current="page"]`)
+    .getAttribute("data-conversation-id");
+  const workspace = await (await request.get("/api/workspace", { headers })).json();
+  expect(
+    workspace.conversations.find((c: { conversation_id: string }) => c.conversation_id === id)
+      ?.project,
+  ).toBe(b);
+});
+
 test("agent project edits arrive through workspace SSE without navigating away from Assistant", async ({
   page,
   request,

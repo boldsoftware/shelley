@@ -956,6 +956,10 @@ const props = withDefaults(
     onOpenDrawer: () => void;
     onNewConversation: () => Promise<boolean>;
     onNewProjectConversation?: () => void;
+    /** The project a new conversation or draft starts its conversation in,
+     * "" for none (workspace mode). */
+    composerProject?: string;
+    onSelectComposerProject?: (project: string) => void;
     isAssistant?: boolean;
     onSelectConversation?: (conversation: Conversation) => void;
     onArchiveConversation?: (conversationId: string) => Promise<void>;
@@ -2131,9 +2135,11 @@ const storedProfile = ref(localStorage.getItem(PROFILE_KEY) || "");
 // survive a reload.
 const APPLIED_PROFILE_KEY = "shelley.profileApplied";
 const appliedProfile = ref(localStorage.getItem(APPLIED_PROFILE_KEY) || "");
+const composerProject = computed(() => props.composerProject ?? "");
+// A project's composer takes on its project's profile.
 const composerProfile = computed(
   () =>
-    profiles.value.find((p) => p.name === storedProfile.value) ??
+    profiles.value.find((p) => p.name === (composerProject.value || storedProfile.value)) ??
     profiles.value.find((p) => p.default),
 );
 function applyComposerProfile(p: Profile) {
@@ -4551,13 +4557,6 @@ function appendBtwSummaryToComposer(answer: string) {
   draftSeed.value = { value };
 }
 const lazyDraftId = ref<string | null>(null);
-// The project a new conversation starts in, "" for none; App's, chosen in the
-// status bar, in workspace mode only.
-const composerProject = computed(() =>
-  workspaceMode && (!props.conversationId || props.currentConversation?.is_draft)
-    ? workspace.composerProject.value
-    : "",
-);
 let draftConvId: string | null = props.conversationId;
 let draftIsDraft = !!props.currentConversation?.is_draft;
 let inflightCreate: Promise<string> | null = null;
@@ -4785,7 +4784,7 @@ const statusContentProps = computed(() => {
     selectedCwd: selectedCwd.value,
     projects: workspaceMode ? (workspace.data.value?.projects ?? []) : [],
     project: composerProject.value,
-    onSelectProject: (name: string) => (workspace.composerProject.value = name),
+    onSelectProject: (name: string) => props.onSelectComposerProject?.(name),
     contextWindowSize: contextWindowSize.value,
     maxContextTokens: maxContextTokens.value,
     usageEntries: usageEntries.value,

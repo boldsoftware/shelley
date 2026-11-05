@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
+import { watch } from "vue";
 import { workspaceApi, type ActionRunSummary, type Workspace } from "../../services/workspace";
 import { en } from "../../i18n/en";
 import type { TranslationKeys } from "../../i18n/types";
@@ -302,6 +303,20 @@ test("project deletion plan: active conversations block; the setup conversation 
   // A base an agent set up that Shelley no longer lists as its own stays.
   const managed = { ...blog, vm: { ...own.vm, managed_base_vm: true, base: "made" } };
   assert.deepEqual(projectDeletionPlan(data, managed, translate).keepsVMs, ["base VM made"]);
+});
+
+test("every + on a project asks for a composer in that project, even the same one again", (t) => {
+  const { workspace } = harness(t);
+  const requests: (string | undefined)[] = [];
+  const stop = watch(workspace.newConversationRequest, (r) => requests.push(r?.project), {
+    flush: "sync",
+  });
+  t.after(stop);
+  workspace.newProjectConversation("A");
+  workspace.newProjectConversation("B");
+  workspace.newProjectConversation("B");
+  workspace.newProjectConversation();
+  assert.deepEqual(requests, ["A", "B", "B", ""]);
 });
 
 test("projectNameProblem refuses what the server would", () => {

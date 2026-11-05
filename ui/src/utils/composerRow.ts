@@ -15,6 +15,8 @@ export interface ComposerRow {
   /** Server conversation id, once the draft or first message created one. */
   id: string | null;
   cwd: string | null;
+  /** The project its conversation starts in (workspace mode), "" for none. */
+  project: string;
   startedAt: string;
   /** The submitted message, which previews the row until the agent replies. */
   sent: string | null;
@@ -36,6 +38,15 @@ export const ComposerPreviewKey: InjectionKey<ComposerPreview> = Symbol("compose
 
 export function composerRowId(row: ComposerRow): string {
   return row.id ?? COMPOSER_ROW_ID;
+}
+
+/** The projects of the given composer rows (the composition's, a lingering
+ * one's) by drawer id: the drawer places them before the workspace lists
+ * their conversations, if ever. */
+export function composerProjects(rows: (ComposerRow | null)[]): Map<string, string> {
+  return new Map(
+    rows.flatMap((row) => (row?.project ? [[composerRowId(row), row.project] as const] : [])),
+  );
 }
 
 /** `creating` lists the conversation ids known when a request creating the

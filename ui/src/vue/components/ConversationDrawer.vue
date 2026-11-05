@@ -852,6 +852,9 @@ const props = defineProps<{
   // terminal pinned to them.
   ephemeralTerminals: EphemeralTerminal[];
   currentConversationId: string | null;
+  /** The projects of the composer's rows, which the workspace lists only
+   * once their conversations exist in them (see composerProjects). */
+  composerProjects: ReadonlyMap<string, string>;
   viewedConversation?: Conversation | null;
   showActiveTrigger?: number;
   messageSentTrigger?: number;
@@ -2271,6 +2274,7 @@ const projectGroups = computed(() => {
     if (pinnedAssistant(conversation.conversation_id)) continue;
     const project =
       memberships.get(conversation.conversation_id) ??
+      props.composerProjects.get(conversation.conversation_id) ??
       (conversation.parent_conversation_id
         ? memberships.get(conversation.parent_conversation_id)
         : undefined);
