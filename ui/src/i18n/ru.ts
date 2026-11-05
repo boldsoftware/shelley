@@ -544,4 +544,21 @@ export const ru: TranslationKeys = {
   // Project order
   moveProjectUp: "Переместить вверх",
   moveProjectDown: "Переместить вниз",
+  // Where a conversation runs
+  vmStarting: "запускается…",
+  vmConnected: "подключена",
+  vmUnreachable: "недоступна; следующий ход повторит попытку",
+  vmDeletionFailed: "удаление не удалось; повторяем",
+  vmDeletingArchived: "удаляется (диалог в архиве)…",
+  vmDeletedArchived: "удалена (диалог в архиве)",
+  vmDeletedRecopy: "удалена; следующий ход скопирует новую из {vm}",
+  vmNotDeleted: "не удалена",
+  vmPlaceDeleted: "ВМ",
+  vmPlaceShared: "Работает на общей ВМ",
+  vmPlaceOwn: "Работает на своей ВМ",
+  vmSummary: "ВМ {vm} · {status}",
+  vmSummaryShared: "Общая ВМ {vm} · {status}",
+  placeThisHost: "Этот хост, {hostname}",
+  placeWorksOnHost: "Работает на этом хосте, {hostname}",
+  opensInNewTab: "(откроется в новой вкладке)",
 };

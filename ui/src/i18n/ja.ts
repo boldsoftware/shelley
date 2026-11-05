@@ -544,4 +544,21 @@ export const ja: TranslationKeys = {
   // Project order
   moveProjectUp: "上へ移動",
   moveProjectDown: "下へ移動",
+  // Where a conversation runs
+  vmStarting: "起動中…",
+  vmConnected: "接続済み",
+  vmUnreachable: "接続できません。次のターンで再試行します",
+  vmDeletionFailed: "削除に失敗しました。再試行中",
+  vmDeletingArchived: "削除中（会話はアーカイブ済み）…",
+  vmDeletedArchived: "削除済み（会話はアーカイブ済み）",
+  vmDeletedRecopy: "削除済み。次のターンで {vm} から新しくコピーします",
+  vmNotDeleted: "削除されていません",
+  vmPlaceDeleted: "VM",
+  vmPlaceShared: "共有 VM で作業",
+  vmPlaceOwn: "専用の VM で作業",
+  vmSummary: "VM {vm} · {status}",
+  vmSummaryShared: "共有 VM {vm} · {status}",
+  placeThisHost: "このホスト、{hostname}",
+  placeWorksOnHost: "このホスト {hostname} で作業",
+  opensInNewTab: "（新しいタブで開きます）",
 };

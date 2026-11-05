@@ -53,8 +53,12 @@ test("restart refusal remains visible after successful status refresh", async (t
     throw new Error("Wait for running commands");
   });
   await state.refresh();
-  await state.mutate(installed(), "restart");
-  assert.equal(state.requestError.value, "Wait for running commands");
+  await state.mutate(installed(), "restart", "drawer");
+  assert.deepEqual(state.requestError.value, {
+    message: "Wait for running commands",
+    conversationId: "task",
+    place: "drawer",
+  });
   assert.equal(state.error.value, "");
   assert.equal(state.pendingConversation.value, "");
 });
@@ -80,8 +84,8 @@ test("an old GET cannot overwrite an acknowledged verification; duplicate mutati
       }),
   );
   const old = state.refresh();
-  const mutation = state.mutate(installed(), "verify");
-  await state.mutate(installed(), "verify");
+  const mutation = state.mutate(installed(), "verify", "drawer");
+  await state.mutate(installed(), "verify", "drawer");
   assert.equal(verify.mock.callCount(), 1);
   const verifying: Customization = { ...installed(), status: "verifying" };
   finishVerify(verifying);
@@ -104,7 +108,7 @@ test("an ambiguous restart request reconciles server state but never resubmits i
   t.mock.method(customizationsApi, "list", async () => [
     { ...installed(), status: "running" as const },
   ]);
-  await state.mutate(installed(), "restart");
+  await state.mutate(installed(), "restart", "drawer");
   assert.equal(state.entries.value[0].status, "running");
   assert.equal(restart.mock.callCount(), 1);
 });
@@ -122,7 +126,7 @@ test("cancelling an auto-restart posts the build and refreshes", async (t) => {
     return current;
   });
   await state.refresh();
-  await state.mutate(current, "cancelAutoRestart");
+  await state.mutate(current, "cancelAutoRestart", "drawer");
   assert.equal(cancel.mock.callCount(), 1);
   assert.equal(state.entries.value[0].auto_restart, undefined);
 });

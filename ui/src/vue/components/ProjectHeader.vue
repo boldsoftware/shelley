@@ -1,7 +1,11 @@
+<!-- A task's project row under its title: its project (picker and editor),
+     the project's action buttons, and the state of a Shelley build the task
+     verified. Workspace mode's title row says where the task runs; stock
+     Shelley says it here. -->
 <template>
   <section
     v-if="
-      (project || (assignable && workspace.data.value?.projects.length)) &&
+      (project || build || (assignable && workspace.data.value?.projects.length)) &&
       !workspace.isAssistant(conversationId)
     "
     class="project-header"
@@ -10,7 +14,9 @@
     <div class="project-header-row">
       <div class="project-picker">
         <i class="pi pi-folder" aria-hidden="true" />
-        <label class="sr-only" for="current-conversation-project">{{ t("conversationProject") }}</label>
+        <label class="sr-only" for="current-conversation-project">{{
+          t("conversationProject")
+        }}</label>
         <select
           id="current-conversation-project"
           :value="project?.name ?? ''"
@@ -19,7 +25,11 @@
           @change="moveConversation"
         >
           <option v-if="!project" value="" disabled>{{ t("noProject") }}</option>
-          <option v-for="item in workspace.data.value?.projects" :key="item.name" :value="item.name">
+          <option
+            v-for="item in workspace.data.value?.projects"
+            :key="item.name"
+            :value="item.name"
+          >
             {{ item.name }}
           </option>
         </select>
@@ -53,10 +63,30 @@
           @click="runAction(action.id)"
         />
       </div>
+      <CustomizationStatus
+        v-if="customizations && build"
+        :state="build"
+        :pending-conversation="customizations.pendingConversation.value"
+        :unavailable="!!customizations.error.value"
+        @restart="customizations.mutate(build, 'restart', 'header')"
+        @verify="customizations.mutate(build, 'verify', 'header')"
+        @cancel-auto-restart="customizations.mutate(build, 'cancelAutoRestart', 'header')"
+      />
     </div>
-    <p v-if="vm" class="project-vm project-muted" :class="`project-status-${vmTone}`" role="status">
+    <p v-if="customizations && buildError" class="error-line" role="alert">
+      {{ buildError }}
+      <button type="button" class="text-button" @click="customizations.requestError.value = null">
+        {{ t("dismiss") }}
+      </button>
+    </p>
+    <p
+      v-if="!workspaceMode && vm && status"
+      class="project-vm project-muted"
+      :class="`project-status-${status.tone}`"
+      role="status"
+    >
       <i class="pi pi-server" aria-hidden="true" />
-      {{ vm.status === "deleted" ? "VM" : vm.shared ? "Works on shared VM" : "Works on VM" }}
+      {{ vmPlace(vm, t) }}
       <span v-if="vm.status === 'deleted'">{{ vm.vm_name }}</span>
       <a
         v-else
@@ -65,12 +95,12 @@
         rel="noopener noreferrer"
       >
         {{ vm.vm_name }}
-        <span class="sr-only">(opens in new tab)</span>
+        <span class="sr-only">{{ t("opensInNewTab") }}</span>
       </a>
-      · {{ vmLabel }}
+      · {{ status.label }}
       <template v-if="archiveNote"> · {{ archiveNote }}</template>
     </p>
-    <p v-if="vm?.error" class="error-line" role="alert">{{ vm.error }}</p>
+    <p v-if="!workspaceMode && vm?.error" class="error-line" role="alert">{{ vm.error }}</p>
     <p v-if="requestError" class="error-line" role="alert">
       {{ requestError }}
       <button
@@ -82,7 +112,10 @@
         {{ t("retry") }}
       </button>
     </p>
-    <p v-if="!activeRun && busy && project?.actions.length" class="project-muted project-action-hint">
+    <p
+      v-if="!activeRun && busy && project?.actions.length"
+      class="project-muted project-action-hint"
+    >
       {{ t("actionsAfterWorking") }}
     </p>
   </section>
@@ -95,7 +128,11 @@ import { workspaceApi, type ProjectAction } from "../../services/workspace";
 import { useWorkspace } from "../composables/workspace";
 import { useI18n } from "../composables/i18n";
 import { errorMessage } from "../../utils/errorMessage";
-import { wording } from "../../utils/workspaceMode";
+import { workspaceMode } from "../../utils/workspaceMode";
+import { vmPlace, vmStatus } from "../../utils/vmStatus";
+import { useCustomizations } from "../composables/customizations";
+import { notRunning } from "../../services/customizations";
+import CustomizationStatus from "./CustomizationStatus.vue";
 // assignable: a top-level user conversation, which may be in no project.
 const props = defineProps<{
   conversationId: string | null;
@@ -107,32 +144,22 @@ const { t } = useI18n();
 const workspace = useWorkspace();
 const project = computed(() => workspace.projectFor(props.conversationId));
 const vm = computed(() => workspace.vmFor(props.conversationId));
-const noun = wording("conversation", "task");
-const vmLabel = computed(() => {
-  const current = vm.value;
-  if (!current) return "";
-  return {
-    pending: "starting…",
-    ready: "connected",
-    failed: "unreachable; the next turn retries",
-    deleting: current.error ? "deletion failed; retrying" : `deleting (${noun} archived)…`,
-    deleted: current.conversation_archived
-      ? `deleted (${noun} archived)`
-      : `deleted; the next turn copies a fresh one from ${current.base_vm}`,
-    kept: "not deleted",
-  }[current.status];
-});
-const vmTone = computed(
-  () =>
-    ({
-      pending: "progress",
-      ready: "success",
-      failed: "danger",
-      deleting: vm.value?.error ? "danger" : "progress",
-      deleted: "neutral",
-      kept: "warning",
-    })[vm.value?.status ?? "pending"],
+const status = computed(() => vm.value && vmStatus(vm.value, t));
+// Only workspace mode has Shelley builds.
+const customizations = workspaceMode ? useCustomizations() : null;
+// A Shelley build this task verified that the server doesn't run yet.
+const build = computed(() =>
+  customizations?.entries.value
+    .filter(notRunning)
+    .find((entry) => entry.conversation_id === props.conversationId),
 );
+// A failed click on this task's build buttons here; the drawer shows its own.
+const buildError = computed(() => {
+  const failure = customizations?.requestError.value;
+  return failure?.place === "header" && failure.conversationId === props.conversationId
+    ? failure.message
+    : "";
+});
 const archiveNote = computed(() => workspace.archiveNote(props.conversationId));
 const runs = computed(() =>
   (workspace.data.value?.runs ?? [])
@@ -170,8 +197,7 @@ async function runAction(actionId: string) {
     const run = await workspaceApi.runAction(id, actionId);
     workspace.rememberRun(run);
   } catch (err) {
-    if (id === props.conversationId)
-      requestError.value = errorMessage(err);
+    if (id === props.conversationId) requestError.value = errorMessage(err);
   } finally {
     starting.value = "";
   }
@@ -193,8 +219,7 @@ async function changeProject(target: string) {
     await workspaceApi.moveConversation(id, target);
     await workspace.refresh();
   } catch (err) {
-    if (id === props.conversationId)
-      requestError.value = errorMessage(err);
+    if (id === props.conversationId) requestError.value = errorMessage(err);
   } finally {
     moving.value = false;
   }

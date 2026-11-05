@@ -54,4 +54,8 @@ export const workspaceEn: Partial<TranslationKeys> = {
   archiveOnSuccess: "Archive task on success (publish/apply actions)",
   projectCwdHintVm: "Where tasks start, on the VM: an absolute path.",
   projectCwdHintHost: "Where tasks start, on this host. Empty: they find it themselves.",
+
+  // Where a conversation runs
+  vmDeletingArchived: "deleting (task archived)…",
+  vmDeletedArchived: "deleted (task archived)",
 };

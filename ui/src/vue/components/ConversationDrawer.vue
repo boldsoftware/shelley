@@ -209,9 +209,13 @@
     <p v-if="customizations.error.value" class="error-line drawer-error" role="status">
       Shelley build status unavailable. Reconnecting… {{ customizations.error.value }}
     </p>
-    <p v-if="customizations.requestError.value" class="error-line drawer-error" role="alert">
-      {{ customizations.requestError.value }}
-      <button type="button" class="text-button" @click="customizations.requestError.value = ''">
+    <p
+      v-if="customizations.requestError.value?.place === 'drawer'"
+      class="error-line drawer-error"
+      role="alert"
+    >
+      {{ customizations.requestError.value.message }}
+      <button type="button" class="text-button" @click="customizations.requestError.value = null">
         Dismiss
       </button>
     </p>
@@ -603,12 +607,21 @@
                 :state="customizationFor(conv.conversation_id)!"
                 :pending-conversation="customizations.pendingConversation.value"
                 :unavailable="!!customizations.error.value"
-                @restart="customizations.mutate(customizationFor(conv.conversation_id)!, 'restart')"
-                @verify="customizations.mutate(customizationFor(conv.conversation_id)!, 'verify')"
+                @restart="
+                  customizations.mutate(
+                    customizationFor(conv.conversation_id)!,
+                    'restart',
+                    'drawer',
+                  )
+                "
+                @verify="
+                  customizations.mutate(customizationFor(conv.conversation_id)!, 'verify', 'drawer')
+                "
                 @cancel-auto-restart="
                   customizations.mutate(
                     customizationFor(conv.conversation_id)!,
                     'cancelAutoRestart',
+                    'drawer',
                   )
                 "
               />

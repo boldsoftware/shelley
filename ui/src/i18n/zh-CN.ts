@@ -532,4 +532,21 @@ export const zhCN: TranslationKeys = {
   // Project order
   moveProjectUp: "上移",
   moveProjectDown: "下移",
+  // Where a conversation runs
+  vmStarting: "启动中…",
+  vmConnected: "已连接",
+  vmUnreachable: "无法访问；下一轮会重试",
+  vmDeletionFailed: "删除失败；正在重试",
+  vmDeletingArchived: "正在删除（对话已归档）…",
+  vmDeletedArchived: "已删除（对话已归档）",
+  vmDeletedRecopy: "已删除；下一轮会从 {vm} 复制一个新的",
+  vmNotDeleted: "未删除",
+  vmPlaceDeleted: "虚拟机",
+  vmPlaceShared: "在共享虚拟机上工作",
+  vmPlaceOwn: "在专属虚拟机上工作",
+  vmSummary: "虚拟机 {vm} · {status}",
+  vmSummaryShared: "共享虚拟机 {vm} · {status}",
+  placeThisHost: "本主机，{hostname}",
+  placeWorksOnHost: "在本主机 {hostname} 上工作",
+  opensInNewTab: "（在新标签页中打开）",
 };

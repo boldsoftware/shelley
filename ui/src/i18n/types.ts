@@ -528,4 +528,21 @@ export interface TranslationKeys {
   // Project order
   moveProjectUp: string;
   moveProjectDown: string;
+  // Where a conversation runs
+  vmStarting: string;
+  vmConnected: string;
+  vmUnreachable: string;
+  vmDeletionFailed: string;
+  vmDeletingArchived: string;
+  vmDeletedArchived: string;
+  vmDeletedRecopy: string;
+  vmNotDeleted: string;
+  vmPlaceDeleted: string;
+  vmPlaceShared: string;
+  vmPlaceOwn: string;
+  vmSummary: string;
+  vmSummaryShared: string;
+  placeThisHost: string;
+  placeWorksOnHost: string;
+  opensInNewTab: string;
 }

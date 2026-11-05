@@ -547,4 +547,21 @@ export const es: TranslationKeys = {
   // Project order
   moveProjectUp: "Subir",
   moveProjectDown: "Bajar",
+  // Where a conversation runs
+  vmStarting: "iniciando…",
+  vmConnected: "conectada",
+  vmUnreachable: "inaccesible; el próximo turno lo reintenta",
+  vmDeletionFailed: "falló la eliminación; reintentando",
+  vmDeletingArchived: "eliminando (conversación archivada)…",
+  vmDeletedArchived: "eliminada (conversación archivada)",
+  vmDeletedRecopy: "eliminada; el próximo turno copia una nueva de {vm}",
+  vmNotDeleted: "no eliminada",
+  vmPlaceDeleted: "VM",
+  vmPlaceShared: "Trabaja en la VM compartida",
+  vmPlaceOwn: "Trabaja en su propia VM",
+  vmSummary: "VM {vm} · {status}",
+  vmSummaryShared: "VM compartida {vm} · {status}",
+  placeThisHost: "Este host, {hostname}",
+  placeWorksOnHost: "Trabaja en este host, {hostname}",
+  opensInNewTab: "(se abre en una pestaña nueva)",
 };

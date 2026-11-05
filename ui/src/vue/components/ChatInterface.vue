@@ -44,9 +44,19 @@
         </Button>
 
         <ExeBrand v-if="workspaceMode && isDrawerCollapsed" class="show-on-desktop-only" />
-        <h1 class="app-bar-title header-title" :title="currentConversation?.slug || 'Shelley'">
+        <h1
+          class="app-bar-title header-title"
+          :class="{ 'header-title-yields': showPlace }"
+          :title="currentConversation?.slug || 'Shelley'"
+        >
           {{ displayTitle }}
         </h1>
+        <ConversationPlace
+          v-if="showPlace && workspace.data.value"
+          :conversation-id="conversationId!"
+          :cwd="currentConversation?.cwd ?? ''"
+          :hostname="hostname"
+        />
       </div>
 
       <div class="header-actions">
@@ -739,6 +749,7 @@
 <script setup lang="ts">
 import { provideIframeVersions } from "../composables/iframeVersions";
 import ProjectHeader from "./ProjectHeader.vue";
+import ConversationPlace from "./ConversationPlace.vue";
 import ActionRunsTail from "./ActionRunsTail.vue";
 import { useWorkspace } from "../composables/workspace";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
@@ -2577,6 +2588,14 @@ const displayTitle = computed(() => {
   return title;
 });
 
+// Workspace mode's title row also says where a task runs.
+const showPlace = computed(
+  () =>
+    workspaceMode &&
+    !!props.conversationId &&
+    !props.isAssistant &&
+    !props.currentConversation?.is_draft,
+);
 const hasCwd = computed(() => !!(props.currentConversation?.cwd || selectedCwd.value));
 const proxyURL = computed(() => `https://${hostname}/`);
 // On exe.dev hosts the welcome message advertises the proxy features; off

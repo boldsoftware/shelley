@@ -543,4 +543,21 @@ export const vi: TranslationKeys = {
   // Project order
   moveProjectUp: "Di chuyển lên",
   moveProjectDown: "Di chuyển xuống",
+  // Where a conversation runs
+  vmStarting: "đang khởi động…",
+  vmConnected: "đã kết nối",
+  vmUnreachable: "không truy cập được; lượt tiếp theo sẽ thử lại",
+  vmDeletionFailed: "xóa thất bại; đang thử lại",
+  vmDeletingArchived: "đang xóa (cuộc trò chuyện đã lưu trữ)…",
+  vmDeletedArchived: "đã xóa (cuộc trò chuyện đã lưu trữ)",
+  vmDeletedRecopy: "đã xóa; lượt tiếp theo sẽ sao chép một bản mới từ {vm}",
+  vmNotDeleted: "chưa xóa",
+  vmPlaceDeleted: "VM",
+  vmPlaceShared: "Chạy trên VM dùng chung",
+  vmPlaceOwn: "Chạy trên VM riêng",
+  vmSummary: "VM {vm} · {status}",
+  vmSummaryShared: "VM dùng chung {vm} · {status}",
+  placeThisHost: "Máy chủ này, {hostname}",
+  placeWorksOnHost: "Chạy trên máy chủ này, {hostname}",
+  opensInNewTab: "(mở trong thẻ mới)",
 };

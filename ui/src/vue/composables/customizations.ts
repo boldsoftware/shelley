@@ -1,14 +1,21 @@
-import { onUnmounted, ref, shallowRef } from "vue";
+import { onScopeDispose, ref, shallowRef } from "vue";
 import { customizationsApi, type Customization } from "../../services/customizations";
 import { errorMessage } from "../../utils/errorMessage";
 import { workspaceMode } from "../../utils/workspaceMode";
 
 /** A single nav poll also detects external checkout changes. A restart
  * reloads the page through the UI build check once the new server answers. */
+/** Where a build's buttons were clicked: its failure shows there. */
+export type CustomizationsPlace = "drawer" | "header";
+
 export function createCustomizationsState(isVisible: () => boolean = () => true) {
   const entries = shallowRef<Customization[]>([]);
   const error = ref("");
-  const requestError = ref("");
+  const requestError = ref<{
+    message: string;
+    conversationId: string;
+    place: CustomizationsPlace;
+  } | null>(null);
   const pendingConversation = ref("");
   let timer: ReturnType<typeof setTimeout> | null = null;
   let pending: Promise<void> | null = null;
@@ -60,11 +67,12 @@ export function createCustomizationsState(isVisible: () => boolean = () => true)
   async function mutate(
     state: Customization,
     operation: "verify" | "restart" | "cancelAutoRestart",
+    place: CustomizationsPlace,
   ) {
     if (pendingConversation.value) return;
     pendingConversation.value = state.conversation_id;
     revision++;
-    requestError.value = "";
+    requestError.value = null;
     try {
       const next = await customizationsApi[operation](state);
       if (!stopped)
@@ -73,7 +81,11 @@ export function createCustomizationsState(isVisible: () => boolean = () => true)
           next,
         ];
     } catch (err) {
-      requestError.value = errorMessage(err);
+      requestError.value = {
+        message: errorMessage(err),
+        conversationId: state.conversation_id,
+        place,
+      };
     } finally {
       revision++;
       pendingConversation.value = "";
@@ -92,10 +104,27 @@ export function createCustomizationsState(isVisible: () => boolean = () => true)
   return { entries, error, requestError, pendingConversation, refresh, mutate, pause, dispose };
 }
 
-export function useCustomizations() {
-  const state = createCustomizationsState(() => !document.hidden);
+type CustomizationsState = ReturnType<typeof createCustomizationsState>;
+let shared: { state: CustomizationsState; users: number; stop: () => void } | null = null;
+
+/** The page's one customizations poll, shared by the components that show
+ * build states (the drawer and a task's header) while any is mounted. */
+export function useCustomizations(): CustomizationsState {
   // Only workspace mode has the Shelley project that customizes Shelley.
-  if (!workspaceMode) return state;
+  if (!workspaceMode) return createCustomizationsState(() => !document.hidden);
+  shared ??= start();
+  const current = shared;
+  current.users++;
+  onScopeDispose(() => {
+    if (--current.users > 0) return;
+    current.stop();
+    if (shared === current) shared = null;
+  });
+  return current.state;
+}
+
+function start() {
+  const state = createCustomizationsState(() => !document.hidden);
   const refresh = () => {
     if (!document.hidden) void state.refresh();
   };
@@ -106,10 +135,13 @@ export function useCustomizations() {
   document.addEventListener("visibilitychange", visibility);
   window.addEventListener("focus", refresh);
   refresh();
-  onUnmounted(() => {
-    state.dispose();
-    document.removeEventListener("visibilitychange", visibility);
-    window.removeEventListener("focus", refresh);
-  });
-  return state;
+  return {
+    state,
+    users: 0,
+    stop: () => {
+      state.dispose();
+      document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener("focus", refresh);
+    },
+  };
 }

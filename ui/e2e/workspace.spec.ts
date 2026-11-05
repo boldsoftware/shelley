@@ -438,3 +438,85 @@ test("the Assistant shows no host or working directory; conversations still do",
   await expect(page.locator(".overflow-menu-item", { hasText: "Change Language" })).toBeVisible();
   await expect(page.locator(".overflow-menu-item", { hasText: "Directory" })).toHaveCount(0);
 });
+
+test("a task's title row says where it runs; its project row doesn't", async ({
+  page,
+  request,
+}) => {
+  const name = `Header ${randomUUID().slice(0, 8)}`;
+  const created = await request.post("/api/projects", {
+    data: {
+      name,
+      instructions: "",
+      cwd: testWorkingDirectory(),
+      actions: [{ id: "ship", label: "Ship it", command: "true" }],
+    },
+  });
+  expect(created.ok()).toBeTruthy();
+  const start = async (project: string, message: string) => {
+    const response = await request.post("/api/conversations/new", {
+      data: { project, title: `Header task ${randomUUID().slice(0, 8)}`, message },
+    });
+    expect(response.ok()).toBeTruthy();
+    return ((await response.json()) as { conversation_id: string }).conversation_id;
+  };
+  const id = await start(name, "Hello");
+  // Its VM, as the server would report a shared one.
+  await page.route("**/api/workspace", async (route) => {
+    const workspace = await (await route.fetch()).json();
+    workspace.vms.push({
+      conversation_id: id,
+      vm_name: "exe-hub",
+      base_vm: "",
+      integration: "hub",
+      shared: true,
+      status: "ready",
+      error: "",
+      ssh_dest: "",
+      https_url: "",
+      dir: "/home/exedev/hub",
+      conversation_archived: false,
+    });
+    await route.fulfill({ json: workspace });
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/c/${id}`);
+  const header = page.locator(".header");
+  const place = header.getByTestId("conversation-place");
+  await expect(place).toHaveAccessibleName("Shared VM exe-hub · connected");
+  await place.click();
+  const details = page.locator(".conversation-place-popover");
+  await expect(details).toContainText("Works on shared VM exe-hub");
+  await expect(details.getByRole("status")).toHaveText("connected");
+  await expect(details.getByRole("link", { name: /exe-hub/ })).toHaveAttribute(
+    "href",
+    "https://exe-hub.exe.xyz/",
+  );
+  await page.keyboard.press("Escape");
+  // The project row has the project and its actions, not the VM.
+  const projectRow = page.locator(".project-header");
+  await expect(projectRow.getByRole("button", { name: "Ship it", exact: true })).toBeVisible();
+  await expect(projectRow).not.toContainText("exe-hub");
+
+  // On a phone the title gives way.
+  await page.setViewportSize({ width: 390, height: 800 });
+  await expect(place).toBeInViewport({ ratio: 1 });
+
+  // A task on this host.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const bare = `${name} bare`;
+  expect(
+    (
+      await request.post("/api/projects", {
+        data: { name: bare, instructions: "", cwd: testWorkingDirectory() },
+      })
+    ).ok(),
+  ).toBeTruthy();
+  const plain = await start(bare, "Hello");
+  await page.goto(`/c/${plain}`);
+  await expect(header.getByTestId("conversation-place")).toHaveAccessibleName(/^This host, /);
+  await page.goto("/");
+  await expect(page.locator("h1.header-title")).toHaveText("Assistant");
+  await expect(page.getByTestId("conversation-place")).toHaveCount(0);
+  await expect(page.locator(".project-header")).toHaveCount(0);
+});

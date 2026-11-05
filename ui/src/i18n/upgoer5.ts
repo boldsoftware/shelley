@@ -537,4 +537,21 @@ export const upgoer5: TranslationKeys = {
   // Project order
   moveProjectUp: "Move up",
   moveProjectDown: "Move down",
+  // Where a conversation runs
+  vmStarting: "starting…",
+  vmConnected: "ready",
+  vmUnreachable: "can't reach it; the next turn tries again",
+  vmDeletionFailed: "taking it away didn't work; trying again",
+  vmDeletingArchived: "taking it away (talk put away)…",
+  vmDeletedArchived: "taken away (talk put away)",
+  vmDeletedRecopy: "taken away; the next turn makes a new one from {vm}",
+  vmNotDeleted: "not taken away",
+  vmPlaceDeleted: "Computer",
+  vmPlaceShared: "Works on a shared computer",
+  vmPlaceOwn: "Works on its own computer",
+  vmSummary: "Computer {vm} · {status}",
+  vmSummaryShared: "Shared computer {vm} · {status}",
+  placeThisHost: "This computer, {hostname}",
+  placeWorksOnHost: "Works on this computer, {hostname}",
+  opensInNewTab: "(opens in a new page)",
 };

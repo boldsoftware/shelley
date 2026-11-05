@@ -1552,7 +1552,9 @@ body {
   letter-spacing: 0.02em;
 }
 
-.conversation-group-header:hover {
+.conversation-group-header:hover,
+.conversation-place:hover,
+.conversation-place[aria-expanded="true"] {
   background: var(--bg-secondary);
   color: var(--text-primary);
 }
@@ -1948,7 +1950,8 @@ body {
   white-space: nowrap;
 }
 
-.message-reaction-count {
+.message-reaction-count,
+.conversation-place-popover a i {
   font-size: var(--font-size-11);
 }
 
@@ -4363,7 +4366,8 @@ diffs-container {
   opacity: 0.45;
 }
 
-.recording-status-dot.error {
+.recording-status-dot.error,
+.conversation-place-dot.place-danger {
   background: var(--error-text);
 }
 
@@ -17898,6 +17902,7 @@ kbd {
   .btw-inline-spinner,
   .command-palette-spinner,
   .conversation-loading-bar-fill,
+  .conversation-place-dot.place-progress,
   .export-spinner,
   .message-voice-btn.listening,
   .patch-tool-running,
@@ -18660,5 +18665,85 @@ kbd {
 /* PrimeVue has no overlay font-size token; match the status bar's scale. */
 .p-select-overlay.project-picker-panel {
   min-width: 10rem;
+  font-size: var(--font-size-13);
+}
+
+/* Workspace mode's title row: the title gives way to where the task runs,
+   one icon after it. */
+.header-title-yields {
+  flex-shrink: 1000;
+  min-width: 4rem;
+}
+
+.conversation-place {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-left: -0.25rem;
+  border: none;
+  border-radius: 0.3rem;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.conversation-place > .conversation-place-dot {
+  position: absolute;
+  right: 0.2rem;
+  bottom: 0.25rem;
+  box-shadow: 0 0 0 2px var(--bg-base);
+}
+
+.conversation-place-dot {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.conversation-place-dot.place-success {
+  background: var(--success-text);
+}
+
+.conversation-place-dot.place-warning {
+  background: var(--warning-text);
+}
+
+.conversation-place-dot.place-neutral {
+  background: var(--text-tertiary);
+}
+
+.conversation-place-dot.place-progress {
+  background: var(--link-color);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.conversation-place-popover {
+  max-width: min(22rem, calc(100vw - 1rem));
+  font-size: var(--font-size-13);
+}
+
+.conversation-place-popover p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.conversation-place-popover p + p {
+  margin-top: 0.4rem;
+}
+
+.conversation-place-path {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-12);
+  color: var(--text-secondary);
+}
+
+.project-header > .project-header-row > .customization-status {
+  margin: 0;
   font-size: var(--font-size-13);
 }

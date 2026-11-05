@@ -532,4 +532,21 @@ export const zhTW: TranslationKeys = {
   // Project order
   moveProjectUp: "上移",
   moveProjectDown: "下移",
+  // Where a conversation runs
+  vmStarting: "啟動中…",
+  vmConnected: "已連線",
+  vmUnreachable: "無法連線；下一輪會重試",
+  vmDeletionFailed: "刪除失敗；正在重試",
+  vmDeletingArchived: "正在刪除（對話已封存）…",
+  vmDeletedArchived: "已刪除（對話已封存）",
+  vmDeletedRecopy: "已刪除；下一輪會從 {vm} 複製一個新的",
+  vmNotDeleted: "未刪除",
+  vmPlaceDeleted: "虛擬機",
+  vmPlaceShared: "在共用虛擬機上工作",
+  vmPlaceOwn: "在專屬虛擬機上工作",
+  vmSummary: "虛擬機 {vm} · {status}",
+  vmSummaryShared: "共用虛擬機 {vm} · {status}",
+  placeThisHost: "本主機，{hostname}",
+  placeWorksOnHost: "在本主機 {hostname} 上工作",
+  opensInNewTab: "（在新分頁中開啟）",
 };
