@@ -8,6 +8,8 @@
 # continue unless the node and pnpm on PATH are the releases ui/mise.toml pins.
 # Every build, test and CI entry point that runs Node goes through here.
 set -euo pipefail
+# An exported CDPATH makes cd print the directory, corrupting $(cd ...).
+unset CDPATH
 
 ui="$(cd "$(dirname "${BASH_SOURCE[0]}")/../ui" && pwd)"
 
