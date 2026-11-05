@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -57,5 +58,29 @@ func TestShelleyConversationReceivesVerificationWorkflowInShelleyProject(t *test
 	}
 	if strings.Contains(other, shelleyCustomizationPrompt) {
 		t.Fatal("Shelley-specific verification required on a non-Shelley conversation")
+	}
+}
+
+// On a fresh host the checkout is only created by the first customization,
+// but the seeded Self project is Shelley's own from the start.
+func TestShelleyProjectBeforeCheckoutExists(t *testing.T) {
+	s, database, _ := newTestServer(t)
+	setWorkspaceFlag(t, s, "true")
+	cwd := filepath.Join(t.TempDir(), "shelley-customization")
+	s.customizations.deps.canonicalDir = func() (string, error) { return cwd, nil }
+	shelley, err := database.GetProject(t.Context(), db.SelfProject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shelley.Cwd = cwd
+	if err := database.UpdateProject(t.Context(), db.SelfProject, *shelley); err != nil {
+		t.Fatal(err)
+	}
+	if workspace := workspaceResponse[db.Workspace](t, workspaceAPI(s, "GET", "/api/workspace", ""), http.StatusOK); workspace.ShelleyProject != db.SelfProject {
+		t.Fatalf("shelley_project=%q", workspace.ShelleyProject)
+	}
+	other := db.Project{Name: "elsewhere", Cwd: filepath.Join(t.TempDir(), "missing")}
+	if same, err := s.isShelleyProject(t.Context(), &other); err != nil || same {
+		t.Fatalf("a different missing directory is Shelley's: %v %v", same, err)
 	}
 }

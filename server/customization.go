@@ -165,7 +165,8 @@ func (s *Server) customizationReady(w http.ResponseWriter, r *http.Request) bool
 
 // isShelleyProject reports whether project is Shelley's own: workspace mode
 // is on and its directory is the canonical customization checkout, on this
-// host.
+// host. Until the first customization creates the checkout, the seeded Self
+// project still names its path.
 func (s *Server) isShelleyProject(ctx context.Context, project *db.Project) (bool, error) {
 	if project.VM != nil || project.Cwd == "" {
 		return false, nil
@@ -179,7 +180,7 @@ func (s *Server) isShelleyProject(ctx context.Context, project *db.Project) (boo
 	}
 	same, err := sameDirectory(project.Cwd, canonical)
 	if errors.Is(err, os.ErrNotExist) {
-		return false, nil // A missing directory is no checkout.
+		return filepath.Clean(project.Cwd) == filepath.Clean(canonical), nil
 	}
 	return same, err
 }
