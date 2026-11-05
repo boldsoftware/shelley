@@ -36,6 +36,7 @@ const empty = (): Workspace => ({
   vms: [],
   base_vms: [],
   shelley_project: "",
+  onboarding_dismissed: false,
 });
 const run = (): ActionRunSummary => ({
   id: "run",

@@ -660,4 +660,5 @@ export const vi: TranslationKeys = {
   onboardingPhoneConnected: "Nhắn tin tới {number}",
   onboardingPhoneConnect: "Nhắn tin tới {number}, rồi kết nối VM này",
   onboardingAskBelow: "Hoặc cứ hỏi tôi điều gì đó bên dưới.",
+  onboardingDismiss: "Ẩn",
 };

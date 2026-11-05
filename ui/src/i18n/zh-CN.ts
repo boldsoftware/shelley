@@ -643,4 +643,5 @@ export const zhCN: TranslationKeys = {
   onboardingPhoneConnected: "发短信到 {number}",
   onboardingPhoneConnect: "发短信到 {number}，然后连接此 VM",
   onboardingAskBelow: "或者直接在下方问我。",
+  onboardingDismiss: "关闭",
 };

@@ -659,4 +659,5 @@ export const ja: TranslationKeys = {
   onboardingPhoneConnected: "{number} にメッセージを送る",
   onboardingPhoneConnect: "{number} にメッセージを送り、この VM を接続",
   onboardingAskBelow: "または、下で何でも聞いてください。",
+  onboardingDismiss: "閉じる",
 };

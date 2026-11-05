@@ -28,6 +28,69 @@ async function openWorkspace(page: Page) {
   await expect(page.getByTestId("assistant-row")).toBeVisible();
 }
 
+test("the onboarding card tops the Assistant's transcript until dismissed", async ({
+  page,
+  request,
+}) => {
+  // Shown whatever an earlier run left, until the dismissal under test.
+  await page.route("**/api/workspace", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      json: { ...(await response.json()), onboarding_dismissed: false },
+    });
+  });
+  await page.route("**/api/onboarding", (route) =>
+    route.fulfill({
+      json: {
+        text_number: "",
+        text_connected: false,
+        exe_dev: "acme-exe",
+        vm_host: "NAME.exe.test",
+      },
+    }),
+  );
+  await page.goto("/");
+  const card = page.getByTestId("onboarding");
+  await expect(card).toBeVisible();
+  await page.screenshot({ path: "test-results/onboarding-card.png" });
+  // Build a web app prefills a prompt for the user to finish.
+  await card.getByTestId("onboarding-web-app").click();
+  const input = page.getByTestId("message-input");
+  await expect(input).toHaveValue(/through the acme-exe integration/);
+  await expect(input).toHaveValue(/make it public with `share set-public NAME`.*\n\nThe app: $/s);
+  // Sent messages land below the card, which stays in the transcript.
+  const text = `echo: onboarding ${randomUUID().slice(0, 8)}`;
+  await input.fill(text);
+  await page.getByTestId("send-button").click();
+  const sent = page.locator(".messages-list").getByText(text).first();
+  await expect(sent).toBeVisible();
+  await expect(card).toBeAttached();
+  expect(
+    await card.evaluate(
+      (el, t) =>
+        [...document.querySelectorAll(".messages-list *")].some(
+          (m) =>
+            m.textContent === t &&
+            !!(el.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING),
+        ),
+      text,
+    ),
+  ).toBe(true);
+  await card.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/onboarding-card-messages.png" });
+  // Dismissing is the server's, so it survives reloads.
+  await page.unrouteAll({ behavior: "wait" });
+  await card.getByTestId("onboarding-dismiss").click();
+  await expect(card).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator(".messages-list").getByText(text).first()).toBeVisible();
+  await expect(page.getByTestId("onboarding")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/onboarding-dismissed.png" });
+  const workspace = await (await request.get("/api/workspace")).json();
+  expect(workspace.onboarding_dismissed).toBe(true);
+});
+
 test("root opens the pinned Assistant; explicit conversation links remain selected", async ({
   page,
   request,
@@ -35,21 +98,21 @@ test("root opens the pinned Assistant; explicit conversation links remain select
   const conversation = await createConversationViaAPIWithDetails(request, "Hello");
   // The worker's earlier specs may have created projects.
   const workspace = (await (await request.get("/api/workspace")).json()) as {
-    projects: { name: string }[];
-    shelley_project: string;
+    onboarding_dismissed: boolean;
   };
-  const firstRun = workspace.projects.every((p) => p.name === workspace.shelley_project);
   await page.goto("/");
   await expect(page.locator("h1.header-title")).toHaveText("Assistant");
   await expect(page).toHaveTitle(/^Assistant - /);
-  // The first-run state offers ways to start until a project exists.
+  // The onboarding card offers ways to start until the user dismisses it.
   await expect(
     page.getByRole("heading", {
       name: "What would you like to get done?",
       exact: true,
     }),
   ).toBeVisible();
-  await expect(page.getByTestId("onboarding-web-app")).toHaveCount(firstRun ? 1 : 0);
+  await expect(page.getByTestId("onboarding-web-app")).toHaveCount(
+    workspace.onboarding_dismissed ? 0 : 1,
+  );
   await openWorkspace(page);
   await expect(page.getByTestId("assistant-row")).toHaveCount(1);
   await expect(page.locator(".conversation-group").getByTestId("assistant-row")).toHaveCount(0);

@@ -264,15 +264,13 @@ test.describe("in workspace mode", () => {
 
   test("first-run onboarding starts a project for the picked repositories", async ({ page }) => {
     await mockExeDev(page, { value: true });
-    // The first run: no projects besides Shelley's own.
+    // The onboarding card, even if an earlier spec dismissed it.
     await page.route("**/api/workspace", async (route) => {
       const response = await route.fetch();
-      const workspace = (await response.json()) as {
-        projects: { name: string }[];
-        shelley_project: string;
-      };
-      workspace.projects = workspace.projects.filter((p) => p.name === workspace.shelley_project);
-      await route.fulfill({ response, json: workspace });
+      await route.fulfill({
+        response,
+        json: { ...(await response.json()), onboarding_dismissed: false },
+      });
     });
     const saved: unknown[] = [];
     await page.route("**/api/projects", (route) => {

@@ -72,6 +72,9 @@ type Workspace struct {
 	BaseVMs []ProjectBaseVM `json:"base_vms"`
 	// ShelleyProject names the project that customizes Shelley, if any.
 	ShelleyProject string `json:"shelley_project"`
+	// OnboardingDismissed is whether the user dismissed the Assistant's
+	// onboarding card.
+	OnboardingDismissed bool `json:"onboarding_dismissed"`
 }
 
 // The server adds the rules of customizing Shelley to its project's prompt.

@@ -671,4 +671,5 @@ export const fr: TranslationKeys = {
   onboardingPhoneConnected: "Écrivez au {number}",
   onboardingPhoneConnect: "Écrivez au {number}, puis connectez cette VM",
   onboardingAskBelow: "Ou posez-moi simplement une question ci-dessous.",
+  onboardingDismiss: "Masquer",
 };

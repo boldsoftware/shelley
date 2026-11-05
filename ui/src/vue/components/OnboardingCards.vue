@@ -1,7 +1,18 @@
-<!-- The Assistant's first-run state, before the user has a project: ways
-     to get started. -->
+<!-- The Assistant's onboarding: ways to get started, a card at the top of
+     its transcript until the user dismisses it. -->
 <template>
-  <div class="onboarding">
+  <section class="onboarding" data-testid="onboarding" :aria-label="t('onboardingHeading')">
+    <button
+      type="button"
+      class="onboarding-dismiss"
+      :aria-label="t('onboardingDismiss')"
+      :title="t('onboardingDismiss')"
+      :disabled="dismissing"
+      data-testid="onboarding-dismiss"
+      @click="dismiss"
+    >
+      <i class="pi pi-times" aria-hidden="true" />
+    </button>
     <h2 class="text-primary">{{ t("onboardingHeading") }}</h2>
     <GithubStart v-if="githubOpen" @back="githubOpen = false" />
     <template v-else>
@@ -52,19 +63,21 @@
       <p v-if="error" class="error-line" role="alert">{{ error }}</p>
       <p class="text-sm chat-secondary-text">{{ t("onboardingAskBelow") }}</p>
     </template>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
 import { ref } from "vue";
 import GithubStart from "./GithubStart.vue";
 import { workspaceApi, type Onboarding } from "../../services/workspace";
+import { useWorkspace } from "../composables/workspace";
 import { useI18n } from "../composables/i18n";
 import { errorMessage } from "../../utils/errorMessage";
 import { smsLink, webAppPrompt } from "../../utils/projectSetup";
 
 /** prompt: text for the composer, which the user completes and sends. */
 const emit = defineEmits<{ prompt: [text: string] }>();
+const workspace = useWorkspace();
 const { t } = useI18n();
 const githubOpen = ref(false);
 // GitHub repositories connect through exe.dev.
@@ -73,6 +86,7 @@ const info = ref<Onboarding | null>(null);
 // Texting works from any device: a phone opens the link, and the card
 // shows the number to text from one.
 const userAgent = navigator.userAgent;
+const dismissing = ref(false);
 const error = ref("");
 const fail = (err: unknown) => (error.value = errorMessage(err));
 
@@ -80,18 +94,60 @@ void workspaceApi.githubRepos().then((result) => {
   githubConnectable.value = !!result.connect_url;
 }, fail);
 void workspaceApi.onboarding().then((result) => (info.value = result), fail);
+
+async function dismiss() {
+  dismissing.value = true;
+  error.value = "";
+  try {
+    await workspaceApi.dismissOnboarding();
+    await workspace.refresh();
+  } catch (err) {
+    fail(err);
+  } finally {
+    dismissing.value = false;
+  }
+}
 </script>
 
 <style scoped>
 .onboarding {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
   width: 40rem;
   max-width: 100%;
-  margin: 0 auto;
-  padding: 0 1rem;
+  margin: 1.5rem auto;
+  padding: 1.25rem 1rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: var(--bg-base);
+}
+
+.onboarding > h2 {
+  margin: 0;
+  padding: 0 1.5rem;
+  font-size: 1.25rem;
+  text-align: center;
+}
+
+.onboarding-dismiss {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  padding: 0.4rem;
+  border: none;
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.onboarding-dismiss:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .onboarding-cards {

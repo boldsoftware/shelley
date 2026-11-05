@@ -5566,6 +5566,11 @@ select:disabled {
   color: var(--text-secondary);
 }
 
+/* Below the Assistant's onboarding card, only notices remain. */
+.onboarding + .empty-state {
+  height: auto;
+}
+
 .empty-state-content {
   max-width: 100%;
   text-align: center;

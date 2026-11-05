@@ -160,6 +160,7 @@ func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/github-repos", s.handleGithubRepos)
 	api.HandleFunc("GET /api/github-accounts", s.workspaceOnly(s.handleGithubAccounts))
 	api.HandleFunc("GET /api/onboarding", s.workspaceOnly(s.handleOnboarding))
+	api.HandleFunc("POST /api/onboarding/dismiss", s.workspaceOnly(s.handleDismissOnboarding))
 	api.HandleFunc("GET /api/page-frame", s.handlePageFrame)
 	api.HandleFunc("POST /api/projects", s.handleCreateProject)
 	api.HandleFunc("PUT /api/projects/{name}", s.handleUpdateProject)
@@ -236,6 +237,12 @@ func (s *Server) handleWorkspace(w http.ResponseWriter, r *http.Request) {
 			workspace.ShelleyProject = workspace.Projects[i].Name
 		}
 	}
+	dismissed, err := s.db.GetSetting(r.Context(), onboardingDismissedKey)
+	if err != nil {
+		s.workspaceHTTPError(w, err)
+		return
+	}
+	workspace.OnboardingDismissed = dismissed != ""
 	writeJSON(w, http.StatusOK, workspace)
 }
 

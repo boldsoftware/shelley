@@ -653,4 +653,5 @@ export const upgoer5: TranslationKeys = {
   onboardingPhoneConnected: "Write to {number}",
   onboardingPhoneConnect: "Write to {number}, then tie in this far computer",
   onboardingAskBelow: "Or just ask me something below.",
+  onboardingDismiss: "Hide this",
 };

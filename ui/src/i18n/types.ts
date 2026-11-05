@@ -633,4 +633,5 @@ export interface TranslationKeys {
   onboardingPhoneConnected: string;
   onboardingPhoneConnect: string;
   onboardingAskBelow: string;
+  onboardingDismiss: string;
 }

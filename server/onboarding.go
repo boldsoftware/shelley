@@ -26,6 +26,20 @@ type onboarding struct {
 	VMHost string `json:"vm_host"`
 }
 
+// onboardingDismissedKey is the setting that, once the user dismisses the
+// Assistant's onboarding card, keeps it hidden on every device.
+const onboardingDismissedKey = "onboarding_dismissed"
+
+// handleDismissOnboarding serves POST /api/onboarding/dismiss.
+func (s *Server) handleDismissOnboarding(w http.ResponseWriter, r *http.Request) {
+	if err := s.db.SetSetting(r.Context(), onboardingDismissedKey, "1"); err != nil {
+		s.internalError(w, "Failed to dismiss onboarding", err)
+		return
+	}
+	s.notifyWorkspaceChanged()
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // handleOnboarding serves GET /api/onboarding.
 func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 	env, integrations, err := s.listIntegrations(r.Context())

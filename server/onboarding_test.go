@@ -57,3 +57,28 @@ func TestOnboarding(t *testing.T) {
 		t.Fatalf("no exe-dev integration: %+v", got)
 	}
 }
+
+func TestDismissOnboarding(t *testing.T) {
+	t.Parallel()
+	s, _, _ := newTestServer(t)
+	if code := workspaceAPI(s, "POST", "/api/onboarding/dismiss", "").Code; code != 404 {
+		t.Fatalf("outside workspace mode: %d", code)
+	}
+	db.EnableWorkspaceMode(t, s.db)
+	if err := s.loadWorkspace(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	dismissed := func() bool {
+		t.Helper()
+		return workspaceResponse[db.Workspace](t, workspaceAPI(s, "GET", "/api/workspace", ""), 200).OnboardingDismissed
+	}
+	if dismissed() {
+		t.Fatal("dismissed before dismissing")
+	}
+	if code := workspaceAPI(s, "POST", "/api/onboarding/dismiss", "").Code; code != 204 {
+		t.Fatalf("dismiss: %d", code)
+	}
+	if !dismissed() {
+		t.Fatal("not dismissed")
+	}
+}

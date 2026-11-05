@@ -643,4 +643,5 @@ export const zhTW: TranslationKeys = {
   onboardingPhoneConnected: "傳簡訊到 {number}",
   onboardingPhoneConnect: "傳簡訊到 {number}，然後連接此 VM",
   onboardingAskBelow: "或者直接在下方問我。",
+  onboardingDismiss: "關閉",
 };

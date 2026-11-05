@@ -660,4 +660,5 @@ export const ru: TranslationKeys = {
   onboardingPhoneConnected: "Напишите на {number}",
   onboardingPhoneConnect: "Напишите на {number}, затем подключите эту ВМ",
   onboardingAskBelow: "Или просто спросите меня о чём-нибудь ниже.",
+  onboardingDismiss: "Скрыть",
 };

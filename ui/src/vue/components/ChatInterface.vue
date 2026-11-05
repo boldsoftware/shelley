@@ -199,6 +199,10 @@
       />
       <div ref="messagesContainerRef" class="messages-container scrollable">
         <div v-if="!loading || renderingConversation" ref="messagesListRef" class="messages-list">
+          <OnboardingCards
+            v-if="showOnboarding"
+            @prompt="(text) => (composerInjectedText = text)"
+          />
           <!-- empty state -->
           <div
             v-if="
@@ -209,19 +213,17 @@
             class="empty-state"
           >
             <div class="empty-state-content">
-              <OnboardingCards
-                v-if="workspaceMode && isAssistant && !workspace.hasProjects.value"
-                @prompt="(text) => (composerInjectedText = text)"
-              />
-              <template v-else-if="workspaceMode && isAssistant">
-                <h2 class="text-primary">What would you like to get done?</h2>
-                <p class="chat-welcome-text">
-                  Ask a quick question, or describe a project. I’ll answer here or start a task in
-                  the right project.
-                </p>
-                <p class="text-sm chat-secondary-text">
-                  Projects keep repositories, instructions and actions together.
-                </p>
+              <template v-if="workspaceMode && isAssistant">
+                <template v-if="!showOnboarding">
+                  <h2 class="text-primary">What would you like to get done?</h2>
+                  <p class="chat-welcome-text">
+                    Ask a quick question, or describe a project. I’ll answer here or start a task in
+                    the right project.
+                  </p>
+                  <p class="text-sm chat-secondary-text">
+                    Projects keep repositories, instructions and actions together.
+                  </p>
+                </template>
               </template>
               <p v-else class="text-base chat-welcome-text">
                 <template v-for="(part, i) in welcomeParts" :key="i">
@@ -4678,6 +4680,14 @@ function handleDraftCleared() {
   draftSyncedAt = "";
 }
 
+// The Assistant's onboarding card tops its transcript until dismissed.
+const showOnboarding = computed(
+  () =>
+    workspaceMode &&
+    props.isAssistant &&
+    conversationOptions.value.kind !== "search" &&
+    workspace.data.value?.onboarding_dismissed === false,
+);
 const messageInputInjectedText = computed(
   () => composerInjectedText.value || diffCommentText.value || undefined,
 );

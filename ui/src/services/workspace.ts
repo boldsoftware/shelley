@@ -203,6 +203,8 @@ export interface Workspace {
   base_vms: ProjectBaseVM[];
   /** The project that customizes Shelley, or "". */
   shelley_project: string;
+  /** Whether the user dismissed the Assistant's onboarding card. */
+  onboarding_dismissed: boolean;
 }
 
 export const workspaceApi = {
@@ -246,6 +248,8 @@ export const workspaceApi = {
     ),
   /** What the first-run cards need from the exe.dev environment. */
   onboarding: () => apiJSON<Onboarding>("/api/onboarding", "Failed to load onboarding"),
+  dismissOnboarding: () =>
+    apiJSON<void>("/api/onboarding/dismiss", "Failed to dismiss onboarding", "POST"),
   createProject: (project: ProjectInput) =>
     apiJSON<Project>("/api/projects", "Failed to create the project", "POST", project),
   /** Replaces project name's data; a different project.name renames it. */

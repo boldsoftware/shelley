@@ -159,13 +159,6 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     startNewProject: () => {
       namingProject.value = true;
     },
-    /** Whether the user has projects besides Shelley's own, which is built
-     * in; true until the workspace loads. */
-    hasProjects: computed(
-      () =>
-        !data.value ||
-        data.value.projects.some((project) => project.name !== data.value?.shelley_project),
-    ),
     deleteProject: (project: Project) => {
       projectDeletion.value = project;
     },
