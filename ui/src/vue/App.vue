@@ -1368,10 +1368,9 @@ watch(
       document.title = [page, hostname, "Shelley Agent"].filter(Boolean).join(" - ");
       return;
     }
-    const currentConv =
-      viewedConversation.value?.conversation_id === currentConversationId.value
-        ? viewedConversation.value
-        : conversations.value.find((conv) => conv.conversation_id === currentConversationId.value);
+    // The conversation its header shows: a cached copy of a renamed one
+    // would put its old slug back in the URL.
+    const currentConv = currentConversation.value;
     if (currentConv) {
       updatePageTitle(currentConv);
       updateUrlWithSlug(currentConv);
