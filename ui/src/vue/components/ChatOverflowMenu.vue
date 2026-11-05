@@ -1,5 +1,6 @@
 <!--
-  Desktop keeps workspace actions and the VM link in the header; mobile puts
+  Desktop keeps workspace actions and the VM link (outside workspace mode) in
+  the header; mobile puts
   them, with Edit File and the command menu, in a row of icons atop this menu.
   Settings live in shared composables/services; conversation actions emit
   events for ChatInterface to wire to its existing handlers.
@@ -103,7 +104,12 @@
           viewBox="0 0 24 24"
           class="chat-menu-icon"
         >
-          <path stroke-linecap="round" stroke-linejoin="round" :stroke-width="2" :d="link.icon_svg" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            :stroke-width="2"
+            :d="link.icon_svg"
+          />
         </svg>
         <WorkspaceActionIcon v-else action="openLink" class="chat-menu-icon" />
         {{ link.title }}
@@ -342,6 +348,7 @@ import { useI18n } from "../composables/i18n";
 import { useConversationView } from "../composables/conversationView";
 import { menuShortcutLabel } from "../../utils/menuShortcuts";
 import { tildifyPath } from "../../utils/tildify";
+import { workspaceMode } from "../../utils/workspaceMode";
 import { type ThemeMode, getStoredTheme, setStoredTheme, applyTheme } from "../../services/theme";
 import {
   isChannelEnabled,
@@ -416,8 +423,12 @@ function onExternalLink(url: string) {
 }
 
 // The server's VM link is named after the hostname; don't promote other links.
+// Workspace mode shows a task's pages as tabs in its title row, so the host's
+// link stays in the menu there.
 const vmLink = computed(() =>
-  props.links.find((link) => link.title === window.__SHELLEY_INIT__?.hostname),
+  workspaceMode
+    ? undefined
+    : props.links.find((link) => link.title === window.__SHELLEY_INIT__?.hostname),
 );
 const menuLinks = computed(() => props.links.filter((link) => link !== vmLink.value));
 

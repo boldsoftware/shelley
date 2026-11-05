@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   createConversationViaAPIWithDetails,
   editProject,
+  installServerLinks,
   openProjectSettings,
   testWorkingDirectory,
 } from "./helpers";
@@ -460,6 +461,7 @@ test("a task's title row holds its page tabs and where it runs; actions get the 
     .map((n) => `[Page ${n}](https://page${n}.example.com/ "tab")`)
     .join(" ");
   const id = await start(name, `echo: See ${links}.`);
+  await installServerLinks(page);
   // Its VM, as the server would report a shared one.
   await page.route("**/api/workspace", async (route) => {
     const workspace = await (await route.fetch()).json();
@@ -500,6 +502,14 @@ test("a task's title row holds its page tabs and where it runs; actions get the 
   const projectRow = page.locator(".project-header");
   await expect(projectRow.getByRole("button", { name: "Ship it", exact: true })).toBeVisible();
   await expect(projectRow).not.toContainText("exe-hub");
+  // Tabs show the pages; the host's link stays in the menu, not the header.
+  await expect(header.getByRole("link", { name: "vm.example", includeHidden: true })).toHaveCount(
+    0,
+  );
+  await expect(header.locator(".chat-workspace-divider")).toHaveCount(0);
+  await header.getByRole("button", { name: "More options", exact: true }).click();
+  await expect(page.locator(".overflow-menu-item", { hasText: "vm.example" })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   // On a phone the title gives way; tabs that don't fit are in a menu.
   await page.setViewportSize({ width: 390, height: 800 });
