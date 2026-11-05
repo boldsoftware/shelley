@@ -255,16 +255,30 @@ const testCases: TestCase[] = [
     ],
   },
   {
-    name: "rewrites a plain-text localhost link when opted in",
+    name: "rewrites only the href of a plain-text localhost link when opted in",
     input: "Open http://localhost:3000/app?q=one#result",
     options: exeDev,
     expected: [
       { type: "text", content: "Open " },
       {
         type: "link",
-        content: "https://demo.exe.xyz:3000/app?q=one#result",
+        content: "http://localhost:3000/app?q=one#result",
         href: "https://demo.exe.xyz:3000/app?q=one#result",
       },
+    ],
+  },
+  {
+    name: "keeps a localhost URL inside a shell command literal",
+    input: `ssh vm "curl -fsS -d '{}' http://localhost:9999/feature-flags" && echo ok`,
+    options: exeDev,
+    expected: [
+      { type: "text", content: `ssh vm "curl -fsS -d '{}' ` },
+      {
+        type: "link",
+        content: "http://localhost:9999/feature-flags",
+        href: "https://demo.exe.xyz:9999/feature-flags",
+      },
+      { type: "text", content: `" && echo ok` },
     ],
   },
   {

@@ -115,9 +115,9 @@ test("the status-bar hook shows the conversation's status and reruns after messa
     await useVMHostname(page);
     await page.goto(`/c/${slug}`);
     const segment = page.getByTestId("status-bar-hook");
-    // VM-local URLs point at the exe.dev proxy, like links in chat.
-    // Backticks stay backticks: the body isn't chat text.
-    await expect(segment).toHaveText("feature-x `wip` https://myvm.exe.xyz:8000/");
+    // VM-local URLs link to the exe.dev proxy, like links in chat, and
+    // keep their text. Backticks stay backticks: the body isn't chat text.
+    await expect(segment).toHaveText("feature-x `wip` http://localhost:8000/");
     await expect(segment).toHaveCSS("background-color", "rgb(32, 74, 135)");
     await expect(segment).toHaveCSS("color", "rgb(255, 255, 255)");
     await expect(segment.getByRole("link")).toHaveAttribute("href", "https://myvm.exe.xyz:8000/");

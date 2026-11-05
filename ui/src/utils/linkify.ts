@@ -74,13 +74,12 @@ export function parseLinks(text: string, options?: LocalhostLinkOptions): Linkif
       });
     }
 
-    // Add the link
+    // Add the link; only its href goes through the exe.dev proxy.
     const url = match[0];
-    const href = options ? rewriteLocalhostLink(url, options) : url;
     results.push({
       type: "link",
-      content: href,
-      href,
+      content: url,
+      href: options ? rewriteLocalhostLink(url, options) : url,
     });
 
     lastIndex = match.index + url.length;

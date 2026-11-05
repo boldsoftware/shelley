@@ -336,34 +336,60 @@ assert(
     rewrittenMarkdownLink.includes(">Open app</a>"),
   "opted-in markdown links use the public exe.dev URL",
 );
-const rewrittenAutolink = renderMarkdownToSafeHTML(
-  "http://127.0.0.1:4321/live",
-  undefined,
-  undefined,
-  exeDevLinks,
-);
-assert(
-  rewrittenAutolink.includes('href="https://demo.exe.xyz:4321/live"') &&
-    rewrittenAutolink.includes(">https://demo.exe.xyz:4321/live</a>"),
-  "opted-in markdown autolinks rewrite both href and visible URL",
-);
+// Only hrefs go through the exe.dev proxy: the visible (and so copied) text
+// stays exactly what the message wrote.
+function renderExeDev(markdown: string): DocumentFragment {
+  return JSDOM.fragment(renderMarkdownToSafeHTML(markdown, undefined, undefined, exeDevLinks));
+}
+{
+  const root = renderExeDev("http://127.0.0.1:4321/live");
+  const link = root.querySelector("a");
+  assert(
+    link?.getAttribute("href") === "https://demo.exe.xyz:4321/live" &&
+      root.textContent?.trim() === "http://127.0.0.1:4321/live",
+    "a bare localhost URL keeps its text and links to the exe.dev URL",
+  );
+}
+{
+  const root = renderExeDev("<http://localhost:3000/auto>");
+  assert(
+    root.querySelector("a")?.getAttribute("href") === "https://demo.exe.xyz:3000/auto" &&
+      root.textContent?.trim() === "http://localhost:3000/auto",
+    "a localhost <autolink> keeps its text and links to the exe.dev URL",
+  );
+}
+{
+  const root = renderExeDev("Open `http://localhost:3000/inline`");
+  const link = root.querySelector("a");
+  assert(
+    link?.getAttribute("href") === "https://demo.exe.xyz:3000/inline" &&
+      link.querySelector("code")?.textContent === "http://localhost:3000/inline",
+    "a localhost URL in inline code keeps its text and links to the exe.dev URL",
+  );
+}
+{
+  const command = `ssh vm.exe.xyz "curl -fsS -d '{\\"name\\":true}' http://localhost:9999/feature-flags" && echo https://vm.shelley.exe.xyz`;
+  const root = renderExeDev(command);
+  const link = root.querySelector('a[href="https://demo.exe.xyz:9999/feature-flags"]');
+  assert(
+    link?.textContent === "http://localhost:9999/feature-flags" &&
+      !root.textContent?.includes("demo.exe.xyz"),
+    "a localhost URL inside a plain-text shell command stays literal",
+  );
+}
+{
+  const root = renderExeDev("```\ncurl http://localhost:3000/fenced\n```");
+  assert(
+    !root.querySelector("a") &&
+      root.querySelector("pre code")?.textContent === "curl http://localhost:3000/fenced\n",
+    "a localhost URL in a fenced block is neither linked nor rewritten",
+  );
+}
 const unrewrittenMarkdownLink = renderMarkdownToSafeHTML("[Open app](http://localhost:3000/path)");
 assert(
   unrewrittenMarkdownLink.includes('href="http://localhost:3000/path"') &&
     unrewrittenMarkdownLink.includes(">Open app</a>"),
   "markdown links are unchanged without the opt-in",
-);
-const localURLCode = renderMarkdownToSafeHTML(
-  "`http://localhost:3000/inline`\n\n```\nhttp://localhost:3000/fenced\n```",
-  undefined,
-  undefined,
-  exeDevLinks,
-);
-assert(
-  localURLCode.includes('href="https://demo.exe.xyz:3000/inline"') &&
-    localURLCode.includes("<code>https://demo.exe.xyz:3000/inline</code>") &&
-    localURLCode.includes("<pre><code>http://localhost:3000/fenced\n</code></pre>"),
-  "standalone inline-code URLs use the opt-in localhost rewrite, but fenced code is unchanged",
 );
 const remoteLocalhostImage = renderMarkdownToSafeHTML(
   "![plot](http://localhost:3000/plot.png)",

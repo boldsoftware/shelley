@@ -96,19 +96,10 @@ function buildMarked(messageId?: string, localhostLinks?: LocalhostLinkOptions):
         token.href = show ? fileEndpointURL(messageId, path) : fileDownloadURL(messageId, path);
         return;
       }
+      // Only the href goes through the exe.dev proxy: the visible text (a
+      // bare URL's label included) stays what the message wrote.
       if (token.type === "link" && localhostLinks) {
-        const original = token.href;
-        const rewritten = rewriteLocalhostLink(original, localhostLinks);
-        token.href = rewritten;
-        // Bare URLs and <autolinks> use the URL as their visible label.
-        if (rewritten !== original && token.text === original) {
-          token.text = rewritten;
-          const labelToken = token.tokens?.length === 1 ? token.tokens[0] : undefined;
-          if (labelToken?.type === "text") {
-            labelToken.text = rewritten;
-            labelToken.raw = rewritten;
-          }
-        }
+        token.href = rewriteLocalhostLink(token.href, localhostLinks);
       }
     },
   });
@@ -143,7 +134,6 @@ function linkifyCodeSpans(root: HTMLElement, localhostLinks?: LocalhostLinkOptio
     const link = root.ownerDocument.createElement("a");
     link.setAttribute("href", href);
     setLinkTarget(link);
-    code.textContent = href;
     code.replaceWith(link);
     link.append(code);
   }
