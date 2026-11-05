@@ -19,12 +19,11 @@ type onboarding struct {
 	// there is none; TextConnected, whether a number is connected yet.
 	TextNumber    string `json:"text_number"`
 	TextConnected bool   `json:"text_connected"`
-	// ExeDev is the exe-dev integration a web app's task creates its VM
-	// through (this host's default), "" for none; ExeDevHost is its host,
-	// and VMHost a VM's hostname, with NAME for the VM's name.
-	ExeDev     string `json:"exe_dev"`
-	ExeDevHost string `json:"exe_dev_host"`
-	VMHost     string `json:"vm_host"`
+	// ExeDev is the exe-dev integration a web app's VM is created through
+	// (this host's default), "" for none; VMHost a VM's hostname, with NAME
+	// for the VM's name.
+	ExeDev string `json:"exe_dev"`
+	VMHost string `json:"vm_host"`
 }
 
 // handleOnboarding serves GET /api/onboarding.
@@ -46,10 +45,6 @@ func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 		names = append(names, ig.Name)
 	}
 	if result.ExeDev = defaultExeDevIntegration(names); result.ExeDev != "" {
-		i := slices.IndexFunc(integrations, func(ig reflectionIntegration) bool {
-			return ig.Type == "exe-dev" && ig.Name == result.ExeDev
-		})
-		result.ExeDevHost = env.IntegrationHost(result.ExeDev, integrations[i].Team)
 		result.VMHost = env.VMHost("NAME")
 	}
 	writeJSON(w, http.StatusOK, result)

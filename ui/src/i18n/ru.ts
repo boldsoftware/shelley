@@ -656,7 +656,6 @@ export const ru: TranslationKeys = {
   onboardingWebApp: "Создать веб-приложение",
   onboardingWebAppVMs: "Каждое приложение на своей ВМ exe.dev",
   onboardingWebAppPorts: "Каждое приложение на своём порту этой ВМ",
-  onboardingWebAppsProject: "Веб-приложения",
   onboardingPhone: "Общайтесь с exe с телефона",
   onboardingPhoneConnected: "Напишите на {number}",
   onboardingPhoneConnect: "Напишите на {number}, затем подключите эту ВМ",

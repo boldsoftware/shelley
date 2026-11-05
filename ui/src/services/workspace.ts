@@ -100,10 +100,9 @@ export interface Onboarding {
   text_number: string;
   /** A number is connected to this VM. */
   text_connected: boolean;
-  /** The exe-dev integration a web app's task creates its VM through, ""
-   * for none; its host; and a VM's hostname, with NAME for its name. */
+  /** The exe-dev integration a web app's VM is created through, "" for
+   * none, and a VM's hostname, with NAME for its name. */
   exe_dev: string;
-  exe_dev_host: string;
   vm_host: string;
 }
 

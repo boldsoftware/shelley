@@ -211,6 +211,7 @@
             <div class="empty-state-content">
               <OnboardingCards
                 v-if="workspaceMode && isAssistant && !workspace.hasProjects.value"
+                @prompt="(text) => (composerInjectedText = text)"
               />
               <template v-else-if="workspaceMode && isAssistant">
                 <h2 class="text-primary">What would you like to get done?</h2>
@@ -592,7 +593,7 @@
       :next-prompt-suggestion="nextPromptSuggestion"
       @clear-injected-text="
         diffCommentText = '';
-        terminalInjectedText = null;
+        composerInjectedText = null;
       "
       @draft-change="handleDraftChange"
       @draft-send-started="handleDraftSendStarted"
@@ -1678,7 +1679,7 @@ const scrollToBottomTooltip = computed(() =>
   isMobile.value ? "Scroll to bottom" : `Scroll to bottom (${scrollToBottomShortcut})`,
 );
 const lastKnownMessageCount = ref<number | null>(null);
-const terminalInjectedText = ref<string | null>(null);
+const composerInjectedText = ref<string | null>(null);
 const terminalAutoFocusId = ref<string | null>(null);
 const terminalPanelRef = ref<InstanceType<typeof TerminalPanel> | null>(null);
 
@@ -4402,7 +4403,7 @@ function handleMessageComment(messageId: string, snippet: string) {
 }
 
 function handleInsertFromTerminal(text: string) {
-  terminalInjectedText.value = text;
+  composerInjectedText.value = text;
 }
 
 // Overflow-menu action handlers. Closing the menu is owned by ChatOverflowMenu
@@ -4678,7 +4679,7 @@ function handleDraftCleared() {
 }
 
 const messageInputInjectedText = computed(
-  () => terminalInjectedText.value || diffCommentText.value || undefined,
+  () => composerInjectedText.value || diffCommentText.value || undefined,
 );
 const messageInputInitialRows = computed(() =>
   props.conversationId && !props.currentConversation?.is_draft ? 1 : 3,

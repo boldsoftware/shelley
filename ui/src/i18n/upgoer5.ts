@@ -649,7 +649,6 @@ export const upgoer5: TranslationKeys = {
   onboardingWebApp: "Build a web app",
   onboardingWebAppVMs: "Each app on its own exe.dev far computer",
   onboardingWebAppPorts: "Each app on its own door of this far computer",
-  onboardingWebAppsProject: "Web apps",
   onboardingPhone: "Talk with exe on your phone",
   onboardingPhoneConnected: "Write to {number}",
   onboardingPhoneConnect: "Write to {number}, then tie in this far computer",

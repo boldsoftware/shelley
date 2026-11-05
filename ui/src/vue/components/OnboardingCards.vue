@@ -23,13 +23,10 @@
           type="button"
           class="onboarding-card"
           data-testid="onboarding-web-app"
-          :disabled="creatingWebApps || !info"
-          @click="buildWebApp"
+          :disabled="!info"
+          @click="info && emit('prompt', webAppPrompt(info.exe_dev, info.vm_host))"
         >
-          <i
-            :class="['pi', creatingWebApps ? 'pi-spin pi-spinner' : 'pi-globe']"
-            aria-hidden="true"
-          />
+          <i class="pi pi-globe" aria-hidden="true" />
           <span>
             <strong>{{ t("onboardingWebApp") }}</strong>
             <span>{{ t(info?.exe_dev ? "onboardingWebAppVMs" : "onboardingWebAppPorts") }}</span>
@@ -62,12 +59,12 @@
 import { ref } from "vue";
 import GithubStart from "./GithubStart.vue";
 import { workspaceApi, type Onboarding } from "../../services/workspace";
-import { useWorkspace } from "../composables/workspace";
 import { useI18n } from "../composables/i18n";
 import { errorMessage } from "../../utils/errorMessage";
-import { smsLink, uniqueProjectName, webAppsInstructions } from "../../utils/projectSetup";
+import { smsLink, webAppPrompt } from "../../utils/projectSetup";
 
-const workspace = useWorkspace();
+/** prompt: text for the composer, which the user completes and sends. */
+const emit = defineEmits<{ prompt: [text: string] }>();
 const { t } = useI18n();
 const githubOpen = ref(false);
 // GitHub repositories connect through exe.dev.
@@ -76,7 +73,6 @@ const info = ref<Onboarding | null>(null);
 // Texting works from any device: a phone opens the link, and the card
 // shows the number to text from one.
 const userAgent = navigator.userAgent;
-const creatingWebApps = ref(false);
 const error = ref("");
 const fail = (err: unknown) => (error.value = errorMessage(err));
 
@@ -84,34 +80,6 @@ void workspaceApi.githubRepos().then((result) => {
   githubConnectable.value = !!result.connect_url;
 }, fail);
 void workspaceApi.onboarding().then((result) => (info.value = result), fail);
-
-async function buildWebApp() {
-  if (!info.value) return;
-  const { exe_dev, exe_dev_host, vm_host } = info.value;
-  creatingWebApps.value = true;
-  error.value = "";
-  try {
-    const name = uniqueProjectName(
-      t("onboardingWebAppsProject"),
-      workspace.data.value?.projects.map((p) => p.name) ?? [],
-    );
-    const project = {
-      name,
-      instructions: webAppsInstructions(exe_dev, exe_dev_host, vm_host),
-      cwd: "",
-      actions: [],
-      vm: null,
-      repos: [],
-    };
-    await workspaceApi.createProject(project);
-    await workspace.refresh();
-    workspace.newProjectConversation(name);
-  } catch (err) {
-    fail(err);
-  } finally {
-    creatingWebApps.value = false;
-  }
-}
 </script>
 
 <style scoped>

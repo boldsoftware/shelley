@@ -656,7 +656,6 @@ export const vi: TranslationKeys = {
   onboardingWebApp: "Xây dựng ứng dụng web",
   onboardingWebAppVMs: "Mỗi ứng dụng trên một VM exe.dev riêng",
   onboardingWebAppPorts: "Mỗi ứng dụng trên một cổng riêng của VM này",
-  onboardingWebAppsProject: "Ứng dụng web",
   onboardingPhone: "Trò chuyện với exe trên điện thoại",
   onboardingPhoneConnected: "Nhắn tin tới {number}",
   onboardingPhoneConnect: "Nhắn tin tới {number}, rồi kết nối VM này",

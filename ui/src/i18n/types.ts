@@ -629,7 +629,6 @@ export interface TranslationKeys {
   onboardingWebApp: string;
   onboardingWebAppVMs: string;
   onboardingWebAppPorts: string;
-  onboardingWebAppsProject: string;
   onboardingPhone: string;
   onboardingPhoneConnected: string;
   onboardingPhoneConnect: string;

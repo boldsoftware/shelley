@@ -639,7 +639,6 @@ export const zhCN: TranslationKeys = {
   onboardingWebApp: "构建一个 Web 应用",
   onboardingWebAppVMs: "每个应用都有自己的 exe.dev VM",
   onboardingWebAppPorts: "每个应用使用此 VM 的独立端口",
-  onboardingWebAppsProject: "Web 应用",
   onboardingPhone: "用手机和 exe 聊天",
   onboardingPhoneConnected: "发短信到 {number}",
   onboardingPhoneConnect: "发短信到 {number}，然后连接此 VM",

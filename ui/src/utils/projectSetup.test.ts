@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { projectCwd, smsLink, uniqueProjectName, webAppsInstructions } from "./projectSetup";
+import { projectCwd, smsLink, uniqueProjectName, webAppPrompt } from "./projectSetup";
 
 const repo = (repository: string) => ({ integration: "gh", repository });
 
@@ -17,12 +17,12 @@ test("uniqueProjectName numbers taken names", () => {
   assert.equal(uniqueProjectName("web", ["Web", "web-2"]), "web-3");
 });
 
-test("webAppsInstructions reach VMs through the integration", () => {
-  const text = webAppsInstructions("acme-exe", "acme-exe.int.exe.test", "NAME.exe.test");
-  assert.match(text, /curl -X POST https:\/\/acme-exe\.int\.exe\.test\/exec/);
-  assert.match(text, /SSH_AUTH_SOCK=\/tmp\/acme-exe\.sock ssh exedev@NAME\.exe\.test/);
-  assert.match(text, /at https:\/\/NAME\.exe\.test\//);
-  assert.doesNotMatch(webAppsInstructions("", "", ""), /exe-dev|curl/);
+test("webAppPrompt makes a public VM through the integration", () => {
+  const text = webAppPrompt("acme-exe", "NAME.exe.test");
+  assert.match(text, /through the acme-exe integration \(`new --name NAME`/);
+  assert.match(text, /at https:\/\/NAME\.exe\.test\/, make it public with `share set-public NAME`/);
+  assert.match(text, /\n\nThe app: $/);
+  assert.doesNotMatch(webAppPrompt("", ""), /exe\.dev VM|share/);
 });
 
 test("smsLink takes the body in the platform's form", () => {

@@ -660,7 +660,6 @@ export const es: TranslationKeys = {
   onboardingWebApp: "Crear una app web",
   onboardingWebAppVMs: "Cada app en su propia VM de exe.dev",
   onboardingWebAppPorts: "Cada app en su propio puerto de esta VM",
-  onboardingWebAppsProject: "Apps web",
   onboardingPhone: "Chatea con exe desde tu teléfono",
   onboardingPhoneConnected: "Escribe a {number}",
   onboardingPhoneConnect: "Escribe a {number} y luego conecta esta VM",

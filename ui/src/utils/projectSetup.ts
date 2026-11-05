@@ -26,20 +26,15 @@ export function uniqueProjectName(name: string, taken: string[]): string {
   return candidate;
 }
 
-/** Instructions for a project of web apps: each on its own new exe.dev VM
- * (vmHost, with NAME for its name), which its tasks create and reach
- * through exe-dev integration (at host), or, with none (""), each on its
- * own port of this VM. */
-export function webAppsInstructions(integration: string, host: string, vmHost: string): string {
-  const serve =
-    "Serve each app with a systemd unit so it survives reboots. Only make it public when the user asks. Verify the live URL in the browser (screenshot) and report it to the user.";
-  if (!integration)
-    return `Web apps, each served on its own port (3000-9999) of this VM, in its own directory under ~/apps.\n\n${serve}`;
-  return [
-    "Web apps, each on its own new exe.dev VM named after the app.",
-    `Tasks run on this host and manage VMs through the ${integration} integration, which acts as the user on exe.dev: \`curl https://${host}/\` says what it may do (e.g. a tag-scoped key reaches only VMs with its tag, so tag each new VM with it), and \`curl -X POST https://${host}/exec -d 'COMMAND'\` runs an exe.dev CLI command (\`help new\` lists flags; e.g. \`new --name NAME\`). SSH to a VM through the integration's ssh-agent: keep \`socat UNIX-LISTEN:/tmp/${integration}.sock,fork "EXEC:'openssl s_client -quiet -verify_quiet -verify_return_error -verify_hostname ${host} -alpn ssh-agent -connect ${host}:443'"\` running (e.g. in tmux), then \`SSH_AUTH_SOCK=/tmp/${integration}.sock ssh exedev@${vmHost}\`.`,
-    `Serve the app on port 8000 of its VM, at https://${vmHost}/. ${serve} Never modify or delete VMs you did not create.`,
-  ].join("\n\n");
+/** The Assistant prompt that starts a web app: on its own new exe.dev VM,
+ * made public, through exe-dev integration (vmHost, with NAME for the VM's
+ * name), or without one on a port of this VM. It ends where the user
+ * describes the app. */
+export function webAppPrompt(integration: string, vmHost: string): string {
+  const steps = integration
+    ? `Create a new exe.dev VM for it through the ${integration} integration (\`new --name NAME\`, tagged as the integration requires) and build the app there; \`new --prompt\` can hand the build to the VM's own Shelley. Serve it on port 8000, so the VM's HTTPS proxy serves it at https://${vmHost}/, make it public with \`share set-public NAME\`, check that the page loads, and reply with its URL.`
+    : "Build it on this VM, in its own directory under ~/apps, served by a systemd unit on a free port (3000-9999). Check that the page loads, and reply with its URL.";
+  return `Build me a web app. ${steps}\n\nThe app: `;
 }
 
 /** A link that opens a text to number with body. Messages on Apple

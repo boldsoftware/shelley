@@ -655,7 +655,6 @@ export const ja: TranslationKeys = {
   onboardingWebApp: "Web アプリを作る",
   onboardingWebAppVMs: "アプリごとに専用の exe.dev VM",
   onboardingWebAppPorts: "アプリごとにこの VM の専用ポート",
-  onboardingWebAppsProject: "Web アプリ",
   onboardingPhone: "スマートフォンで exe とチャット",
   onboardingPhoneConnected: "{number} にメッセージを送る",
   onboardingPhoneConnect: "{number} にメッセージを送り、この VM を接続",

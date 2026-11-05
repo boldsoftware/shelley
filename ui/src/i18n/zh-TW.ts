@@ -639,7 +639,6 @@ export const zhTW: TranslationKeys = {
   onboardingWebApp: "建立一個 Web 應用程式",
   onboardingWebAppVMs: "每個應用程式都有自己的 exe.dev VM",
   onboardingWebAppPorts: "每個應用程式使用此 VM 的獨立連接埠",
-  onboardingWebAppsProject: "Web 應用程式",
   onboardingPhone: "用手機和 exe 聊天",
   onboardingPhoneConnected: "傳簡訊到 {number}",
   onboardingPhoneConnect: "傳簡訊到 {number}，然後連接此 VM",

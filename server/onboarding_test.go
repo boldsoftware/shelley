@@ -36,7 +36,7 @@ func TestOnboarding(t *testing.T) {
 	if err := s.loadWorkspace(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	want := onboarding{TextNumber: exeTextLine, ExeDev: "box-exe", ExeDevHost: "box-exe.team.exe.xyz", VMHost: "NAME.exe.xyz"}
+	want := onboarding{TextNumber: exeTextLine, ExeDev: "box-exe", VMHost: "NAME.exe.xyz"}
 	if got := get(); got != want {
 		t.Fatalf("not connected: %+v", got)
 	}
@@ -45,9 +45,9 @@ func TestOnboarding(t *testing.T) {
 	if got := get(); got != want {
 		t.Fatalf("connected: %+v", got)
 	}
-	// The texting line is production exe.dev's; hosts follow the environment.
+	// The texting line is production exe.dev's; VM hosts follow the environment.
 	env = staging
-	want = onboarding{ExeDev: "box-exe", ExeDevHost: "box-exe.team.exe-staging.xyz", VMHost: "NAME.exe-staging.xyz"}
+	want = onboarding{ExeDev: "box-exe", VMHost: "NAME.exe-staging.xyz"}
 	if got := get(); got != want {
 		t.Fatalf("staging: %+v", got)
 	}
