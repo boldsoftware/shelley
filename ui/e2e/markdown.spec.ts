@@ -173,6 +173,20 @@ test.describe("Markdown rendering", () => {
       .toBeGreaterThan(0);
   });
 
+  test("says why a local image is unavailable", async ({ page, request }) => {
+    // A file deleted since the message showed it explains itself rather than
+    // leaving a broken-image glyph.
+    const slug = await createConversationViaAPI(
+      request,
+      "echo: Before ![Settings page](/tmp/shelley-e2e-deleted-shot.png) after",
+    );
+    await page.goto(`/c/${slug}`);
+    await expect(page.locator(".message-agent .markdown-image-missing")).toHaveText(
+      "Image unavailable (Settings page: /tmp/shelley-e2e-deleted-shot.png: file not found)",
+    );
+    await expect(page.locator(".message-agent img")).toHaveCount(0);
+  });
+
   test("markdown links open in new tab with noopener", async ({ page, request }) => {
     const slug = await createConversationViaAPI(
       request,

@@ -524,4 +524,9 @@ export const zhTW: TranslationKeys = {
   simplifiedChinese: "简体中文",
   traditionalChinese: "繁體中文",
   vietnamese: "Tiếng Việt",
+
+  // Markdown images
+  imageUnavailable: "圖片無法使用（{image}：{reason}）",
+  imageBrowserCannotShow: "瀏覽器無法顯示",
+  inlineImage: "內嵌圖片",
 };

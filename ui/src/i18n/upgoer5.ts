@@ -529,4 +529,9 @@ export const upgoer5: TranslationKeys = {
   simplifiedChinese: "简体中文",
   traditionalChinese: "繁體中文",
   vietnamese: "Tiếng Việt",
+
+  // Markdown images
+  imageUnavailable: "Picture not here ({image}: {reason})",
+  imageBrowserCannotShow: "this page can't show it",
+  inlineImage: "picture inside the words",
 };

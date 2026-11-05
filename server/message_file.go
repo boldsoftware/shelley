@@ -284,7 +284,7 @@ func (s *Server) openMessageFile(w http.ResponseWriter, r *http.Request, convers
 	}
 	switch {
 	case errors.Is(err, fs.ErrNotExist), errors.Is(err, fs.ErrPermission):
-		http.Error(w, "not found", http.StatusNotFound)
+		http.Error(w, "file not found", http.StatusNotFound)
 	case errors.Is(err, errFileTooLarge):
 		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
 	default:

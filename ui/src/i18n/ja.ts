@@ -536,4 +536,9 @@ export const ja: TranslationKeys = {
   simplifiedChinese: "简体中文",
   traditionalChinese: "繁體中文",
   vietnamese: "Tiếng Việt",
+
+  // Markdown images
+  imageUnavailable: "画像を表示できません（{image}: {reason}）",
+  imageBrowserCannotShow: "ブラウザーで表示できません",
+  inlineImage: "インライン画像",
 };

@@ -13,6 +13,7 @@
     class="markdown-content break-words"
     @click="onActivate"
     @keydown="onActivate"
+    @error.capture="onImageError"
     v-html="html"
   ></div>
 </template>
@@ -27,7 +28,9 @@ import { localhostLinkOptionsFromInit } from "../../utils/linkify";
 import * as markdownMath from "../../utils/markdownMath";
 import { renderMarkdownToSafeHTML } from "../../utils/markdownRender";
 import { perfWrap } from "../../utils/perf";
+import { errorMessage } from "../../utils/errorMessage";
 import { handleImageCommentClick, openImageComment } from "../composables/imageComment";
+import { useI18n } from "../composables/i18n";
 import { handleMarkdownDocClick } from "../composables/markdownDoc";
 import { whenNearViewport } from "../composables/nearViewport";
 
@@ -64,6 +67,7 @@ const props = defineProps<{
   reflow?: boolean;
 }>();
 
+const { t } = useI18n();
 const containerRef = ref<HTMLDivElement | null>(null);
 
 // Highlighting swaps a block's single text node for one span per token —
@@ -260,6 +264,35 @@ async function copyCodeBlock(button: HTMLButtonElement): Promise<void> {
   } catch (error) {
     console.error("Copying code failed", error);
   }
+}
+
+// An image that fails to load (its file deleted since, say) would show as
+// the browser's bare broken-image glyph, or nothing at all; say instead
+// what it was and why, from the file endpoint's error.
+async function onImageError(e: Event) {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  const src = img.getAttribute("src") ?? "";
+  const path = new URL(src, location.href).searchParams.get("path");
+  let reason: string;
+  try {
+    const response = await fetch(src);
+    reason = response.ok
+      ? t("imageBrowserCannotShow")
+      : (await response.text()).trim() || `HTTP ${response.status}`;
+  } catch (err) {
+    reason = errorMessage(err);
+  }
+  if (!img.isConnected) return;
+  const notice = document.createElement("span");
+  notice.className = "markdown-image-missing";
+  notice.setAttribute("role", "img");
+  const image = path ?? t("inlineImage");
+  notice.textContent = t("imageUnavailable")
+    .replace("{image}", img.alt ? `${img.alt}: ${image}` : image)
+    .replace("{reason}", reason);
+  notice.setAttribute("aria-label", notice.textContent);
+  (img.closest(".commentable-image-link") ?? img).replaceWith(notice);
 }
 
 function onActivate(e: MouseEvent | KeyboardEvent) {

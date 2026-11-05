@@ -520,4 +520,9 @@ export interface TranslationKeys {
   simplifiedChinese: string;
   traditionalChinese: string;
   vietnamese: string;
+
+  // Markdown images
+  imageUnavailable: string;
+  imageBrowserCannotShow: string;
+  inlineImage: string;
 }

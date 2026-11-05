@@ -524,4 +524,9 @@ export const zhCN: TranslationKeys = {
   simplifiedChinese: "简体中文",
   traditionalChinese: "繁體中文",
   vietnamese: "Tiếng Việt",
+
+  // Markdown images
+  imageUnavailable: "图片不可用（{image}：{reason}）",
+  imageBrowserCannotShow: "浏览器无法显示",
+  inlineImage: "内嵌图片",
 };

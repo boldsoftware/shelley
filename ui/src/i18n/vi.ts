@@ -535,4 +535,9 @@ export const vi: TranslationKeys = {
   simplifiedChinese: "简体中文",
   traditionalChinese: "繁體中文",
   vietnamese: "Tiếng Việt",
+
+  // Markdown images
+  imageUnavailable: "Hình ảnh không khả dụng ({image}: {reason})",
+  imageBrowserCannotShow: "trình duyệt không thể hiển thị",
+  inlineImage: "hình ảnh nội tuyến",
 };

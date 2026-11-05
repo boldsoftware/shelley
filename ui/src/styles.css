@@ -12343,6 +12343,16 @@ kbd {
   max-height: var(--image-max-height);
 }
 
+.markdown-image-missing {
+  display: inline-block;
+  padding: 0.35rem 0.6rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.4rem;
+  color: var(--text-secondary);
+  font-size: var(--font-size-13);
+  overflow-wrap: anywhere;
+}
+
 .markdown-content h1,
 .markdown-content h2,
 .markdown-content h3,

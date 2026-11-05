@@ -544,4 +544,9 @@ export const fr: TranslationKeys = {
   simplifiedChinese: "简体中文",
   traditionalChinese: "繁體中文",
   vietnamese: "Tiếng Việt",
+
+  // Markdown images
+  imageUnavailable: "Image indisponible ({image} : {reason})",
+  imageBrowserCannotShow: "le navigateur ne peut pas l’afficher",
+  inlineImage: "image intégrée",
 };

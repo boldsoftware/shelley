@@ -536,4 +536,9 @@ export const ru: TranslationKeys = {
   simplifiedChinese: "简体中文",
   traditionalChinese: "繁體中文",
   vietnamese: "Tiếng Việt",
+
+  // Markdown images
+  imageUnavailable: "Изображение недоступно ({image}: {reason})",
+  imageBrowserCannotShow: "браузер не может его показать",
+  inlineImage: "встроенное изображение",
 };

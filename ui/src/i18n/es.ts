@@ -539,4 +539,9 @@ export const es: TranslationKeys = {
   simplifiedChinese: "简体中文",
   traditionalChinese: "繁體中文",
   vietnamese: "Tiếng Việt",
+
+  // Markdown images
+  imageUnavailable: "Imagen no disponible ({image}: {reason})",
+  imageBrowserCannotShow: "el navegador no puede mostrarla",
+  inlineImage: "imagen incrustada",
 };
