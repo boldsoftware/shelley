@@ -1,6 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { createConversationViaAPIWithDetails, testWorkingDirectory } from "./helpers";
+import {
+  createConversationViaAPIWithDetails,
+  openProjectSettings,
+  testWorkingDirectory,
+} from "./helpers";
 
 // Outside workspace mode (the default), Shelley is stock: no pinned
 // Assistant, upstream's drawer, and "Group by → Project" groups
@@ -57,18 +61,11 @@ test("stock mode offers Group by Project without the workspace", async ({ page, 
   await page.route("**/api/exe-dev-integrations", (route) =>
     route.fulfill({ json: { integrations, default: integrations[0] ?? "" } }),
   );
-  const editor = page.getByRole("region", { name: "Edit project", exact: true });
-  const openEditor = async () => {
-    await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
-    await page
-      .getByTestId("project-actions-menu")
-      .getByRole("menuitem", { name: "Edit project…", exact: true })
-      .click();
-  };
-  await openEditor();
+  const openEditor = () => openProjectSettings(page, name);
+  const editor = await openEditor();
   await expect(editor.getByLabel("Working directory", { exact: true })).toBeVisible();
   await expect(editor.getByRole("radio", { name: /This Shelley host/ })).toHaveCount(0);
-  await editor.getByRole("button", { name: "Cancel", exact: true }).first().click();
+  await page.goBack();
   await page.getByRole("button", { name: "Open conversations", exact: true }).click();
 
   integrations = ["exe"];

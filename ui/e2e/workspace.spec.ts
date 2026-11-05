@@ -1,6 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { createConversationViaAPIWithDetails, editProject, testWorkingDirectory } from "./helpers";
+import {
+  createConversationViaAPIWithDetails,
+  editProject,
+  openProjectSettings,
+  testWorkingDirectory,
+} from "./helpers";
 
 // These specs exercise workspace mode, which each test turns on before its
 // page loads and off again so the worker's other specs see stock Shelley.
@@ -136,24 +141,16 @@ test("project editor, task creation, failed action retry, and success-only archi
   await nameField.press("Enter");
   await expect(nameField).toHaveCount(0);
 
-  await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
-  const projectMenu = page.getByTestId("project-actions-menu");
-  await expect(projectMenu.getByRole("menuitem")).toHaveText([
-    "Edit project…",
-    "Move up",
-    "Move down",
-    "Delete project…",
-  ]);
-  await expect(projectMenu.getByRole("menuitem", { name: "Delete project…" })).not.toHaveAttribute(
-    "aria-disabled",
-    "true",
-  );
-  await projectMenu.getByRole("menuitem", { name: "Edit project…", exact: true }).click();
-  const editor = page.getByRole("region", { name: "Edit project", exact: true });
+  // A project without a page opens on its settings, which can delete it.
+  const editor = await openProjectSettings(page, name);
+  await expect(page).toHaveURL(/\/project\/\d+\/settings$/);
+  await expect(editor.getByRole("button", { name: "Delete project…" })).toBeEnabled();
   await editor
     .getByLabel("Project instructions (AGENTS.md)", { exact: true })
     .fill("Keep publishing tasks brief.");
   await editor.getByLabel("Working directory", { exact: true }).fill(testWorkingDirectory());
+  // A page gives the view a tab framing it, first.
+  await editor.getByLabel("Project page", { exact: true }).fill("https://example.com/");
   await editor.getByRole("button", { name: "Add action", exact: true }).click();
   await editor.getByLabel("ID", { exact: true }).fill("publish");
   await editor.getByLabel("Button label", { exact: true }).fill("Publish & archive");
@@ -164,7 +161,21 @@ test("project editor, task creation, failed action retry, and success-only archi
     .getByLabel("Archive task on success (publish/apply actions)", { exact: true })
     .check();
   await editor.getByRole("button", { name: "Save project", exact: true }).click();
+  await expect(editor.getByText("Saved.", { exact: true })).toBeVisible();
+  const view = page.getByTestId("project-view");
+  await expect(view.getByRole("navigation").getByRole("button")).toHaveText([
+    "example.com",
+    "Settings",
+  ]);
+  await view.getByRole("button", { name: "example.com", exact: true }).click();
+  await expect(page).toHaveURL(/\/project\/\d+$/);
   await expect(editor).toBeHidden();
+  // The bar links to the page, as does the frame when it can't show it.
+  await expect(
+    view.locator(".header").getByRole("link", { name: "Open example.com in a new tab" }),
+  ).toHaveAttribute("href", "https://example.com/");
+  await page.goBack();
+  await expect(editor).toBeVisible();
   await openWorkspace(page);
   await page.getByRole("button", { name: `New task in ${name}`, exact: true }).click();
   // The regular composer starts it, with the project picked.
@@ -292,17 +303,12 @@ test("project and conversation ⋯ menus: delete waits for an empty project; mov
   await toToggle.click();
   await expect(toToggle).toHaveAttribute("aria-expanded", "false");
 
-  // A project with conversations can't be deleted, and its menu says why.
-  await fromGroup.getByRole("button", { name: `${from} project actions`, exact: true }).click();
-  const projectMenu = page.getByTestId("project-actions-menu");
-  const remove = projectMenu.getByRole("menuitem", { name: "Delete project…" });
-  await expect(remove).toHaveAttribute("aria-disabled", "true");
-  await expect(remove.locator("[data-note]")).toHaveAttribute(
-    "data-note",
-    "Archive or move its active task first",
-  );
-  await page.keyboard.press("Escape");
-  await expect(projectMenu).toHaveCount(0);
+  // A project with conversations can't be deleted, and its settings say why.
+  const editor = await openProjectSettings(page, from);
+  await expect(editor.getByRole("button", { name: "Delete project…" })).toBeDisabled();
+  await expect(editor).toContainText("Archive or move its active task first");
+  await page.goBack();
+  await openWorkspace(page);
 
   await conversationRow.getByRole("button", { name: "Actions", exact: true }).click();
   const conversationMenu = page.getByTestId("conversation-actions-menu");
@@ -370,11 +376,8 @@ test("project folds survive reloads and renames; a deleted project's goes", asyn
     ).projects.map((p) => p.name);
   const before = await order();
   const at = before.indexOf(empty.name);
-  await page.getByRole("button", { name: `${empty.name} project actions`, exact: true }).click();
-  await page
-    .getByTestId("project-actions-menu")
-    .getByRole("menuitem", { name: "Move up", exact: true })
-    .click();
+  const settings = await openProjectSettings(page, empty.name);
+  await settings.getByRole("button", { name: "Move up", exact: true }).click();
   const after = [...before];
   [after[at - 1], after[at]] = [after[at], after[at - 1]];
   await expect.poll(order).toEqual(after);

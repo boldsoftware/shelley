@@ -48,28 +48,33 @@ export async function openWorkspaceTool(page: Page, name: string): Promise<void>
     .click();
 }
 
-/** Edits a project in the editor its drawer group's menu opens (workspace
- *  mode), and saves it. */
+/** Opens a project's settings from its drawer group, which must be shown:
+ *  picking the project opens its view, on its page if it has one. */
+export async function openProjectSettings(page: Page, project: string): Promise<Locator> {
+  await page.locator(`section[aria-label="${project}"] a.project-select`).click();
+  await page
+    .getByTestId("project-view")
+    .getByRole("navigation")
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  return page.getByRole("region", { name: "Edit project", exact: true });
+}
+
+/** Edits a project in its settings (workspace mode), saves it, and returns
+ *  to the page it was edited from. */
 export async function editProject(
   page: Page,
   project: string,
   edit: (editor: Locator) => Promise<void>,
 ): Promise<void> {
+  const from = page.url();
   const open = page.getByRole("button", { name: "Open tasks", exact: true });
   if (await open.isVisible()) await open.click();
-  const actions = page.getByRole("button", { name: `${project} project actions`, exact: true });
-  await expect(actions).toBeInViewport();
-  await actions.click();
-  await page
-    .getByTestId("project-actions-menu")
-    .getByRole("menuitem", { name: "Edit project…", exact: true })
-    .click();
-  // The editor takes the main pane, closing the drawer, and saving returns
-  // to the task.
-  const editor = page.getByRole("region", { name: "Edit project", exact: true });
+  const editor = await openProjectSettings(page, project);
   await edit(editor);
   await editor.getByRole("button", { name: "Save project", exact: true }).click();
-  await expect(editor).toBeHidden();
+  await expect(editor.getByText("Saved.", { exact: true })).toBeVisible();
+  await page.goto(from);
 }
 
 export async function startNewConversationFromHeader(page: Page): Promise<void> {

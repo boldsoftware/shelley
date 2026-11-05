@@ -186,7 +186,12 @@
 
     <!-- Messages area -->
     <div class="messages-area-wrapper" :aria-busy="loading">
-      <PageFrames v-if="pages" :pages="pages" />
+      <PageFrames
+        v-if="pages"
+        :tabs="pages.tabs.value"
+        :active="pages.active.value"
+        :mounted="pages.mounted.value"
+      />
       <div ref="messagesContainerRef" class="messages-container scrollable">
         <div v-if="!loading || renderingConversation" ref="messagesListRef" class="messages-list">
           <!-- empty state -->

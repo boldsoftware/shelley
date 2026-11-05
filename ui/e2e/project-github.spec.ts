@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import type { ExeAccountView, GithubAccount } from "../src/services/workspace";
+import { openProjectSettings } from "./helpers";
 
 // The exe.dev account as an exe-dev integration with full control sees it
 // (this server's exe.dev is mocked at its API): GitHub connected or not, and
@@ -113,12 +114,7 @@ async function openEditor(page: Page, name: string, workspace = true) {
       .filter({ hasText: /^Project$/ })
       .click();
   }
-  await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
-  await page
-    .getByTestId("project-actions-menu")
-    .getByRole("menuitem", { name: "Edit project…", exact: true })
-    .click();
-  return page.getByRole("region", { name: "Edit project", exact: true });
+  return openProjectSettings(page, name);
 }
 
 async function newProject(request: import("@playwright/test").APIRequestContext) {
@@ -146,6 +142,7 @@ test("stock mode keeps the editor's host repositories, without the exe.dev accou
     "Repositories",
     "Conversations run on",
     "Actions",
+    "Position in the sidebar",
   ]);
   await expect(editor.locator(".project-choice", { hasText: "acme/host" })).toBeVisible();
   await expect(editor.getByTestId("project-integrations")).toHaveCount(0);
@@ -175,6 +172,7 @@ test.describe("in workspace mode", () => {
       "GitHub repositories",
       "Integrations",
       "Actions",
+      "Position in the sidebar",
     ]);
 
     // Without GitHub, the editor sends the user to exe.dev's sign-in, and
@@ -233,7 +231,7 @@ test.describe("in workspace mode", () => {
     await page.screenshot({ path: "test-results/project-github.png" });
 
     await editor.getByRole("button", { name: "Save project", exact: true }).click();
-    await expect(editor).toBeHidden();
+    await expect(editor.getByText("Saved.", { exact: true })).toBeVisible();
     const { projects } = (await (await request.get("/api/workspace")).json()) as {
       projects: { name: string; repos: unknown[] }[];
     };

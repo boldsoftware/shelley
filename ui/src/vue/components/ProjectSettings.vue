@@ -1,58 +1,10 @@
-<!-- The project editor, a page in the main pane in place of the chat. Its
-     title is the project's name, which a click renames; saving a project
-     that turned on VMs opens its base VM's setup conversation. -->
+<!-- A project's settings, its view's Settings tab. Saving a project that
+     turned on VMs opens its base VM's setup conversation; moving it in the
+     sidebar and deleting it act at once. -->
 <template>
-  <section class="project-page" :aria-label="t('editProject')" @keydown.esc="close">
-    <div class="header">
-      <div class="header-left">
-        <Button
-          class="btn-icon hide-on-desktop"
-          text
-          severity="secondary"
-          icon="pi pi-bars"
-          :aria-label="t('openConversations')"
-          @click="emit('openDrawer')"
-        />
-        <h1 class="app-bar-title header-title">
-          <span v-if="renaming" class="project-title-rename">
-            <ProjectNameField
-              :initial="editingName"
-              :label="t('rename')"
-              :submit="renameProject"
-              @done="renaming = false"
-            />
-          </span>
-          <button
-            v-else
-            type="button"
-            class="project-title-button"
-            :title="t('rename')"
-            :disabled="saving"
-            @click="renaming = true"
-          >
-            {{ editingName }}
-          </button>
-        </h1>
-      </div>
-      <div class="header-actions">
-        <Button
-          class="btn-icon"
-          text
-          severity="secondary"
-          icon="pi pi-times"
-          :aria-label="t('cancel')"
-          :disabled="saving"
-          @click="close"
-        />
-      </div>
-    </div>
+  <section class="project-page" :aria-label="t('editProject')">
     <div class="project-page-body">
-      <form
-        v-if="draft"
-        id="project-form"
-        class="project-form project-page-form"
-        @submit.prevent="saveProject"
-      >
+      <form id="project-form" class="project-form project-page-form" @submit.prevent="saveProject">
         <p class="project-muted">{{ t("projectFormIntro") }}</p>
         <label for="project-instructions">{{ t("projectInstructions") }}</label>
         <textarea
@@ -65,7 +17,7 @@
         />
         <p class="project-muted">{{ t("projectInstructionsHint") }}</p>
         <ProjectRepoPicker v-if="!account" v-model="draft.repos" :disabled="saving" />
-        <ProjectVMFields v-model:vm="draft.vm" heading :disabled="saving" @navigate="close" />
+        <ProjectVMFields v-model:vm="draft.vm" heading :disabled="saving" />
         <template v-if="account">
           <ProjectGithubRepos
             v-model="draft.repos"
@@ -90,6 +42,29 @@
           {{ draft.vm ? t("projectCwdHintVm") : t("projectCwdHintHost") }}
         </p>
         <p class="project-muted">{{ t("projectProfileHint") }}</p>
+        <template v-if="workspaceMode">
+          <label for="project-page-url">{{ t("projectPageUrl") }}</label>
+          <input
+            id="project-page-url"
+            v-model="draft.page_url"
+            type="url"
+            :placeholder="suggestedPage || 'https://example.com/'"
+            autocomplete="off"
+            :disabled="saving"
+          />
+          <p class="project-muted">
+            {{ t("projectPageHint") }}
+            <button
+              v-if="suggestedPage && !draft.page_url"
+              type="button"
+              class="text-button"
+              :disabled="saving"
+              @click="draft.page_url = suggestedPage"
+            >
+              {{ t("projectPageUse").replace("{url}", suggestedPage) }}
+            </button>
+          </p>
+        </template>
         <div class="project-section-heading">
           <h3>{{ t("actions") }}</h3>
           <Button
@@ -163,10 +138,55 @@
           </div>
         </fieldset>
         <p v-if="projectError" class="error-line" role="alert">{{ projectError }}</p>
+        <div class="project-section-heading">
+          <h3>{{ t("projectPosition") }}</h3>
+          <span>
+            <Button
+              :label="t('moveProjectUp')"
+              icon="pi pi-arrow-up"
+              text
+              size="small"
+              :disabled="moving || position <= 0"
+              @click="moveProject(-1)"
+            />
+            <Button
+              :label="t('moveProjectDown')"
+              icon="pi pi-arrow-down"
+              text
+              size="small"
+              :disabled="moving || position < 0 || position === projectNames.length - 1"
+              @click="moveProject(1)"
+            />
+          </span>
+        </div>
+        <p v-if="moveError" class="error-line" role="alert">{{ moveError }}</p>
+        <div class="project-danger-zone">
+          <h3>{{ t("dangerZone") }}</h3>
+          <p class="project-muted">{{ deletion.blocker || t("deleteProjectHint") }}</p>
+          <Button
+            :label="t('deleteProjectEllipsis')"
+            icon="pi pi-trash"
+            severity="danger"
+            outlined
+            size="small"
+            :disabled="!!deletion.blocker || saving"
+            @click="workspace.deleteProject(project)"
+          />
+        </div>
       </form>
     </div>
     <div class="project-page-footer">
-      <Button :label="t('cancel')" text severity="secondary" :disabled="saving" @click="close" />
+      <span v-if="saved && !dirty" class="project-muted" role="status">{{
+        t("projectSaved")
+      }}</span>
+      <Button
+        v-if="dirty"
+        :label="t('discardChanges')"
+        text
+        severity="secondary"
+        :disabled="saving"
+        @click="discard"
+      />
       <Button
         :label="saving ? t('savingEllipsis') : t('saveProject')"
         type="submit"
@@ -184,7 +204,6 @@ import ProjectRepoPicker from "./ProjectRepoPicker.vue";
 import ProjectGithubRepos from "./ProjectGithubRepos.vue";
 import ProjectVMFields from "./ProjectVMFields.vue";
 import ProjectIntegrations from "./ProjectIntegrations.vue";
-import ProjectNameField from "./ProjectNameField.vue";
 import { workspaceApi, type Project, type ProjectPlacement } from "../../services/workspace";
 import { useExeAccount } from "../composables/exeAccount";
 import { useWorkspace } from "../composables/workspace";
@@ -194,19 +213,43 @@ import { navigateToConversationSlug } from "../composables/subagentLive";
 import { projectCwd, VM_HOME } from "../../utils/projectSetup";
 import { workspaceMode } from "../../utils/workspaceMode";
 
+const props = defineProps<{
+  project: Project;
+  /** Settles once a rename in the view's title is saved, which saving waits
+   *  for: leaving the title for Save renames first. */
+  renamed: () => Promise<void>;
+}>();
 const { t } = useI18n();
-const emit = defineEmits<{ (e: "openDrawer"): void }>();
 const workspace = useWorkspace();
-const draft = ref<Project | null>(null);
-// The project's name, which renaming (in place, in the title) changes and
-// saving saves to.
-const editingName = ref("");
-const renaming = ref(false);
+// The saved project as edited; its name is the saved one's (the title renames).
+const draft = ref<Project>(copy(props.project));
 const cwdTouched = ref(false);
+const saving = ref(false);
+const saved = ref(false);
+const projectError = ref("");
+function copy(project: Project): Project {
+  return JSON.parse(JSON.stringify(project)) as Project;
+}
+// Comparable: the name follows the title, not the draft.
+function settings(project: Project) {
+  return JSON.stringify({ ...project, name: "", position: 0 });
+}
+const dirty = computed(() => settings(draft.value) !== settings(props.project));
+function load(project: Project) {
+  draft.value = copy(project);
+  // A project without a directory gets one that follows its repositories
+  // and VMs, until edited.
+  cwdTouched.value = !!project.cwd;
+  projectError.value = "";
+}
+load(props.project);
+function discard() {
+  load(props.project);
+}
 // Where the draft's tasks run, for the exe.dev account's repositories and
 // integrations (workspace mode's), which follow it.
 const placement = computed<ProjectPlacement>(() => {
-  const vm = draft.value?.vm;
+  const vm = draft.value.vm;
   return {
     integration: vm?.integration ?? "",
     mode: !vm ? "host" : vm.shared_vm ? "shared" : "own",
@@ -214,50 +257,43 @@ const placement = computed<ProjectPlacement>(() => {
     shared_vm: vm?.shared_vm ?? "",
   };
 });
-const account = workspaceMode ? useExeAccount(editingName, placement) : null;
-const saving = ref(false);
-const projectError = ref("");
-
-watch(
-  workspace.projectEditor,
-  (editor) => {
-    if (!editor) return;
-    draft.value = JSON.parse(JSON.stringify(editor.project));
-    editingName.value = editor.project.name;
-    renaming.value = false;
-    // A project without a directory gets one that follows its repositories
-    // and VMs, until edited.
-    cwdTouched.value = !!editor.project.cwd;
-    projectError.value = "";
-  },
-  { immediate: true },
+const account = workspaceMode
+  ? useExeAccount(
+      computed(() => props.project.name),
+      placement,
+    )
+  : null;
+// A shared VM's site is the obvious page; it is only ever saved explicitly.
+const suggestedPage = computed(() =>
+  draft.value.vm?.shared_vm ? `https://${draft.value.vm.shared_vm}.exe.xyz/` : "",
 );
-// The latest rename, which saving waits for: leaving the title for Save
-// renames first.
-let renamed = Promise.resolve();
-function renameProject(name: string) {
-  return (renamed = rename(name));
-}
-// Renames the project as saved, leaving the draft's other edits unsaved.
-async function rename(name: string) {
-  const saved = workspace.data.value?.projects.find((p) => p.name === editingName.value);
-  if (!saved) throw new Error(`Project ${editingName.value} no longer exists.`);
-  await workspaceApi.updateProject(editingName.value, { ...saved, name });
-  editingName.value = name;
-  if (draft.value) draft.value.name = name;
-  await workspace.refresh();
-}
 // A working directory follows the repositories until edited.
 watch(
-  () => draft.value && ([draft.value.repos, draft.value.name, !!draft.value.vm] as const),
-  (current) => {
-    if (!current || cwdTouched.value || !draft.value) return;
-    draft.value.cwd = projectCwd(current[1], current[0], current[2]);
+  () => [draft.value.repos, props.project.name, !!draft.value.vm] as const,
+  ([repos, name, vm]) => {
+    if (!cwdTouched.value) draft.value.cwd = projectCwd(name, repos, vm);
   },
   { deep: true },
 );
-function close() {
-  if (!saving.value) workspace.projectEditor.value = null;
+const deletion = computed(() => workspace.deletionPlan(props.project));
+const projectNames = computed(() => workspace.data.value?.projects.map((p) => p.name) ?? []);
+const position = computed(() => projectNames.value.indexOf(props.project.name));
+const moving = ref(false);
+const moveError = ref("");
+async function moveProject(by: number) {
+  const order = [...projectNames.value];
+  const from = position.value;
+  [order[from], order[from + by]] = [order[from + by], order[from]];
+  moving.value = true;
+  moveError.value = "";
+  try {
+    await workspaceApi.reorderProjects(order);
+    await workspace.refresh();
+  } catch (err) {
+    moveError.value = errorMessage(err);
+  } finally {
+    moving.value = false;
+  }
 }
 function addAction() {
   draft.value?.actions.push({
@@ -269,19 +305,21 @@ function addAction() {
   });
 }
 async function saveProject() {
-  const project = draft.value;
-  if (saving.value || !project) return;
+  if (saving.value) return;
   saving.value = true;
+  saved.value = false;
   projectError.value = "";
   try {
-    const actions = project.actions;
+    const actions = draft.value.actions;
     if (new Set(actions.map((action) => action.id)).size !== actions.length)
       throw new Error("Each action needs a unique ID.");
-    await renamed.catch(() => undefined); // its error shows in the title
-    const before = workspace.projectEditor.value?.project.vm?.setup_conversation_id;
-    const result = await workspaceApi.updateProject(editingName.value, project);
+    await props.renamed().catch(() => undefined); // its error shows in the title
+    const before = props.project.vm?.setup_conversation_id;
+    const name = props.project.name;
+    const result = await workspaceApi.updateProject(name, { ...draft.value, name });
     await workspace.refresh();
-    workspace.projectEditor.value = null;
+    load(props.project);
+    saved.value = true;
     // Turning on VMs starts the base VM setup conversation: follow along there.
     const setup = result.vm?.setup_conversation_id;
     if (setup && setup !== before) navigateToConversationSlug(setup);

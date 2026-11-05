@@ -1,4 +1,5 @@
-<!-- The shown page tab's page over the transcript. Every page shown once
+<!-- The shown page tab's page, over a task's transcript or in a project's
+     view: a positioned parent's whole area. Every page shown once
      stays mounted, hidden, so flipping keeps its state. A page is never
      Shelley's origin (pageFrame refuses it), so allow-same-origin keeps the
      page's own origin, and its cookies and storage, without reaching
@@ -6,13 +7,9 @@
      Cookies ignore ports, though: a page on another port of Shelley's host
      is sent Shelley's cookies and can set them, framed here or not. -->
 <template>
-  <div v-show="pages.active.value" class="page-frames" data-testid="page-frames">
-    <template v-for="tab in pages.tabs.value" :key="tab.key">
-      <div
-        v-if="pages.mounted.value.has(tab.key)"
-        v-show="pages.active.value === tab.key"
-        class="page-frame-pane"
-      >
+  <div v-show="active" class="page-frames" data-testid="page-frames">
+    <template v-for="tab in tabs" :key="tab.key">
+      <div v-if="mounted.has(tab.key)" v-show="active === tab.key" class="page-frame-pane">
         <div v-if="tab.error || tab.blocked" class="page-frame-message" role="alert">
           <p>{{ tab.error || tab.blocked }}</p>
           <a :href="tab.url" target="_blank" rel="noopener noreferrer" class="p-button">
@@ -53,11 +50,13 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import type { PageTabs } from "../composables/pageTabs";
+import type { PageTabView } from "../composables/pageTabs";
 import { frameURL } from "../../utils/pageTabs";
 import { useI18n } from "../composables/i18n";
 
-defineProps<{ pages: PageTabs }>();
+/** active: the shown tab's key, or null for none; mounted: the keys of the
+ *  tabs whose frames stay mounted. */
+defineProps<{ tabs: PageTabView[]; active: string | null; mounted: ReadonlySet<string> }>();
 const { t } = useI18n();
 
 const hintDismissed = ref(new Set<string>());

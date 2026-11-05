@@ -555,11 +555,17 @@
         >
           <div
             class="project-heading"
-            @contextmenu="group.project && projectMenus.get(group.id)?.open($event)"
+            :class="{ active: group.project && group.project.id === shownProjectId }"
           >
             <button
               type="button"
               class="project-toggle"
+              :aria-label="
+                t(projectGroupCollapsed(group) ? 'unfoldProject' : 'foldProject').replace(
+                  '{project}',
+                  group.label,
+                )
+              "
               :aria-expanded="!projectGroupCollapsed(group)"
               @click="toggleProjectGroup(group)"
             >
@@ -568,9 +574,22 @@
                 :class="{ 'project-chevron-collapsed': projectGroupCollapsed(group) }"
                 aria-hidden="true"
               />
-              <span class="conversation-group-label" :title="group.label">{{ group.label }}</span>
-              <span class="conversation-group-count">{{ group.conversations.length }}</span>
             </button>
+            <component
+              :is="group.project ? 'a' : 'span'"
+              class="project-select"
+              :href="
+                group.project ? projectViewPath({ id: group.project.id, tab: 'page' }) : undefined
+              "
+              :aria-current="
+                group.project && group.project.id === shownProjectId ? 'page' : undefined
+              "
+              :title="group.label"
+              @click="selectProject($event, group.project)"
+            >
+              <span class="conversation-group-label">{{ group.label }}</span>
+              <span class="conversation-group-count">{{ group.conversations.length }}</span>
+            </component>
             <button
               v-if="!archivedOnly"
               type="button"
@@ -581,13 +600,6 @@
             >
               <i class="pi pi-plus" aria-hidden="true" />
             </button>
-            <NavActionsMenu
-              v-if="group.project"
-              :ref="(menu) => setProjectMenu(group.id, menu)"
-              :items="projectActions(group.project)"
-              :label="t('projectActions').replace('{project}', group.label)"
-              testid="project-actions-menu"
-            />
           </div>
           <ProjectVMSetup v-if="group.project" :vm="group.project.vm" />
           <p
@@ -794,9 +806,8 @@ import ConversationQueryEditor from "./ConversationQueryEditor.vue";
 import Button from "primevue/button";
 import ContextMenu from "primevue/contextmenu";
 import type { MenuItem } from "primevue/menuitem";
-import NavActionsMenu from "./NavActionsMenu.vue";
 import { navMenuPt } from "./navMenu";
-import { useWorkspace } from "../composables/workspace";
+import { projectViewPath, useWorkspace } from "../composables/workspace";
 import { workspaceApi, type Project } from "../../services/workspace";
 import DatePicker from "primevue/datepicker";
 import Popover from "primevue/popover";
@@ -890,44 +901,14 @@ async function selectAssistant(event: MouseEvent) {
     rowError.value = err instanceof Error ? err.message : String(err);
   }
 }
-// Project ⋯ menus by group, so right-clicking a heading opens its menu.
-const projectMenus = new Map<string, InstanceType<typeof NavActionsMenu>>();
-function setProjectMenu(groupId: string, menu: unknown) {
-  if (menu) projectMenus.set(groupId, menu as InstanceType<typeof NavActionsMenu>);
-  else projectMenus.delete(groupId);
-}
-function projectActions(project: Project): MenuItem[] {
-  const blocker = workspace.deletionPlan(project).blocker;
-  const names = workspace.data.value?.projects.map((p) => p.name) ?? [];
-  const index = names.indexOf(project.name);
-  return [
-    {
-      label: t("editProjectEllipsis"),
-      icon: "pi pi-pencil",
-      command: () => workspace.editProject(project),
-    },
-    {
-      label: t("moveProjectUp"),
-      icon: "pi pi-arrow-up",
-      disabled: index <= 0,
-      command: () => void moveProject(names, index, index - 1),
-    },
-    {
-      label: t("moveProjectDown"),
-      icon: "pi pi-arrow-down",
-      disabled: index === names.length - 1,
-      command: () => void moveProject(names, index, index + 1),
-    },
-    { separator: true },
-    {
-      label: t("deleteProjectEllipsis"),
-      icon: "pi pi-trash",
-      class: "drawer-menu-danger",
-      disabled: !!blocker,
-      note: blocker || undefined,
-      command: () => workspace.deleteProject(project),
-    },
-  ];
+// The project whose view the main pane shows, or null.
+const shownProjectId = computed(() => workspace.projectView.value?.id ?? null);
+// Clicking a project's name shows its view; a modified or middle click opens
+// it in a new tab, as a link does.
+function selectProject(e: MouseEvent, project: Project | null) {
+  if (!project || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+  e.preventDefault();
+  workspace.openProject(project);
 }
 
 // --- URL / modified-click helpers ---
@@ -1694,17 +1675,6 @@ function conversationActions(conversation: Conversation): MenuItem[] {
   return items;
 }
 const workingIds = computed(() => workingConversationIds(props.conversations));
-// Swaps the projects at from and to in names, the user's order of projects.
-async function moveProject(names: string[], from: number, to: number) {
-  const order = [...names];
-  [order[from], order[to]] = [order[to], order[from]];
-  try {
-    await workspaceApi.reorderProjects(order);
-    await workspace.refresh();
-  } catch (err) {
-    rowError.value = errorMessage(err);
-  }
-}
 async function moveConversation(id: string, project: string) {
   try {
     await workspaceApi.moveConversation(id, project);

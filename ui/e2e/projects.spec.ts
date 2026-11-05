@@ -58,50 +58,45 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   // Naming a project creates no VM: it runs on this host until edited.
   expect(projects.projects.find((p) => p.name === name)?.vm).toBeNull();
 
-  await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
-  const projectMenu = page.getByTestId("project-actions-menu");
-  await expect(projectMenu.getByRole("menuitem")).toHaveText([
-    "Edit project…",
-    "Move up",
-    "Move down",
-    "Delete project…",
-  ]);
-  await projectMenu.getByRole("menuitem", { name: "Edit project…", exact: true }).click();
-  // The editor is titled with the project's name, which a click renames:
-  // Escape reverts, Enter saves (leaving the form's other edits unsaved).
+  // Picking the project opens its view, straight on its settings since it
+  // has no page; Delete project is there, not in a menu.
+  await group.locator("a.project-select").click();
+  await expect(page).toHaveURL(/\/project\/\d+\/settings$/);
+  const view = page.getByTestId("project-view");
+  await expect(view.getByRole("navigation").getByRole("button")).toHaveText(["Settings"]);
   const editor = page.getByRole("region", { name: "Edit project", exact: true });
+  await expect(editor.getByRole("button", { name: "Delete project…", exact: true })).toBeEnabled();
+  // The view is titled with the project's name, which a click renames:
+  // Escape reverts, Enter saves (leaving the form's other edits unsaved).
   await editor
     .getByLabel("Project instructions (AGENTS.md)", { exact: true })
     .fill("Keep release notes brief.");
-  await editor.getByRole("button", { name, exact: true }).click();
-  const rename = editor.getByLabel("Rename", { exact: true });
+  await view.getByRole("button", { name, exact: true }).click();
+  const rename = view.getByLabel("Rename", { exact: true });
   await expect(rename).toBeFocused();
   await rename.fill("Discarded");
   await rename.press("Escape");
   await expect(editor).toBeVisible();
-  await editor.getByRole("button", { name, exact: true }).click();
+  await view.getByRole("button", { name, exact: true }).click();
   const original = name;
   name = `${original} notes`;
   await rename.fill(name);
   await rename.press("Enter");
-  await expect(editor.getByRole("button", { name, exact: true })).toBeVisible();
+  await expect(view.getByRole("button", { name, exact: true })).toBeVisible();
   const renamed = (await (await request.get("/api/workspace")).json()) as {
     projects: { name: string; instructions: string }[];
   };
   expect(renamed.projects.find((p) => p.name === name)?.instructions).toBe("");
   expect(renamed.projects.map((p) => p.name)).not.toContain(original);
   await editor.getByLabel("Working directory", { exact: true }).fill(testWorkingDirectory());
+  // Outside workspace mode a project has no page to show.
+  await expect(editor.getByLabel("Project page", { exact: true })).toHaveCount(0);
   await editor.getByRole("button", { name: "Save project", exact: true }).click();
-  await expect(editor).toBeHidden();
-  await page.getByRole("button", { name: "Open conversations", exact: true }).click();
-  await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
-  await projectMenu.getByRole("menuitem", { name: "Edit project…", exact: true }).click();
+  await expect(editor.getByText("Saved.", { exact: true })).toBeVisible();
+  await page.reload();
   await expect(editor.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
     "Keep release notes brief.",
   );
-  await editor.getByRole("button", { name: "Cancel", exact: true }).first().click();
-  await expect(editor).toBeHidden();
-  await page.getByRole("button", { name: "Open conversations", exact: true }).click();
 
   // Outside workspace mode the composer has no project picker; start the
   // project's conversation through the API.
@@ -120,7 +115,7 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   await expect(edit.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
     "Keep release notes brief.",
   );
-  await edit.getByRole("button", { name: "Cancel", exact: true }).first().click();
+  await page.goBack();
   await expect(edit).toBeHidden();
 
   // Now that a project exists, a conversation outside it offers the picker.
@@ -144,8 +139,8 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   await openProjects(page);
   const renamedGroup = page.getByRole("region", { name, exact: true });
   await expect(renamedGroup).toBeVisible();
-  await renamedGroup.getByRole("button", { name: `${name} project actions`, exact: true }).click();
-  await projectMenu.getByRole("menuitem", { name: "Delete project…", exact: true }).click();
+  await renamedGroup.locator("a.project-select").click();
+  await editor.getByRole("button", { name: "Delete project…", exact: true }).click();
   const remove = page.getByRole("dialog", { name: "Delete project?", exact: true });
   // A project on this host has no VMs to mention.
   await expect(remove.getByTestId("project-delete-effects")).toHaveText(
@@ -186,7 +181,7 @@ test("project edits from elsewhere arrive through SSE", async ({ page, request }
   await expect(page).toHaveURL(new RegExp(`/c/(${plain.slug}|${plain.conversationId})$`));
 });
 
-test("project and conversation ⋯ menus: delete waits for an empty project; move to project", async ({
+test("project settings and conversation menu: delete waits for an empty project; move to project", async ({
   page,
   request,
 }) => {
@@ -232,17 +227,13 @@ test("project and conversation ⋯ menus: delete waits for an empty project; mov
   await toToggle.click();
   await expect(toToggle).toHaveAttribute("aria-expanded", "false");
 
-  // A project with active conversations can't be deleted, and its menu says why.
-  await fromGroup.getByRole("button", { name: `${from} project actions`, exact: true }).click();
-  const projectMenu = page.getByTestId("project-actions-menu");
-  const remove = projectMenu.getByRole("menuitem", { name: "Delete project…" });
-  await expect(remove).toHaveAttribute("aria-disabled", "true");
-  await expect(remove.locator("[data-note]")).toHaveAttribute(
-    "data-note",
-    "Archive or move its active conversation first",
-  );
-  await page.keyboard.press("Escape");
-  await expect(projectMenu).toHaveCount(0);
+  // A project with active conversations can't be deleted, and its settings say why.
+  await fromGroup.locator("a.project-select").click();
+  const editor = page.getByRole("region", { name: "Edit project", exact: true });
+  await expect(editor.getByRole("button", { name: "Delete project…" })).toBeDisabled();
+  await expect(editor).toContainText("Archive or move its active conversation first");
+  await page.goBack();
+  await openProjects(page);
 
   await conversationRow.getByRole("button", { name: "Actions", exact: true }).click();
   const conversationMenu = page.getByTestId("conversation-actions-menu");

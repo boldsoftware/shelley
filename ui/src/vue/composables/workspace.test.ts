@@ -3,7 +3,13 @@ import { test, type TestContext } from "node:test";
 import { workspaceApi, type ActionRunSummary, type Workspace } from "../../services/workspace";
 import { en } from "../../i18n/en";
 import type { TranslationKeys } from "../../i18n/types";
-import { createWorkspaceState, projectDeletionPlan, projectNameProblem } from "./workspace";
+import {
+  createWorkspaceState,
+  projectDeletionPlan,
+  projectNameProblem,
+  projectViewFromPath,
+  projectViewPath,
+} from "./workspace";
 
 const translate = (key: keyof TranslationKeys) => en[key];
 
@@ -19,6 +25,7 @@ const empty = (): Workspace => ({
       actions: [],
       vm: null,
       repos: [],
+      page_url: "",
     },
   ],
   conversations: [
@@ -276,4 +283,13 @@ test("projectNameProblem refuses what the server would", () => {
   assert.match(projectNameProblem("..", []), /\.\./);
   assert.equal(projectNameProblem("é".repeat(32), []), "");
   assert.match(projectNameProblem("é".repeat(33), []), /64 bytes/);
+});
+
+test("a project's view has a path of its own per tab", () => {
+  assert.equal(projectViewPath({ id: 4, tab: "page" }), "/project/4");
+  assert.equal(projectViewPath({ id: 4, tab: "settings" }), "/project/4/settings");
+  assert.deepEqual(projectViewFromPath("/project/4"), { id: 4, tab: "page" });
+  assert.deepEqual(projectViewFromPath("/project/4/settings/"), { id: 4, tab: "settings" });
+  for (const path of ["/project/", "/project/x", "/project/4/other", "/c/project", "/"])
+    assert.equal(projectViewFromPath(path), null, path);
 });

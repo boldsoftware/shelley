@@ -64,11 +64,17 @@
       />
 
       <div class="main-content">
-        <ProjectEditor v-if="workspace.projectEditor.value" @open-drawer="drawerOpen = true" />
-        <!-- Hidden, not unmounted, while editing a project, so the chat keeps
-             its scroll, draft and terminals. -->
+        <ProjectView
+          v-if="workspace.projectView.value"
+          :key="workspace.projectView.value.id"
+          :is-drawer-collapsed="drawerCollapsed"
+          @open-drawer="drawerOpen = true"
+          @toggle-drawer-collapse="toggleDrawerCollapsed"
+        />
+        <!-- Hidden, not unmounted, behind a project, so the chat keeps its
+             scroll, draft and terminals. -->
         <ChatInterface
-          v-show="!workspace.projectEditor.value"
+          v-show="!workspace.projectView.value"
           ref="chatInterfaceRef"
           :conversation-id="currentConversationId"
           :stream-status="streamStatus"
@@ -318,7 +324,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, provide, ref, watch, shallowRef } from "vue";
 import ChatInterface from "./components/ChatInterface.vue";
-import ProjectEditor from "./components/ProjectEditor.vue";
+import ProjectView from "./components/ProjectView.vue";
 import type { RecordingMode } from "./components/recordingDestination";
 import { isImeComposing } from "../utils/imeComposing";
 import { conversationTitle } from "../utils/conversationTitle";
@@ -374,7 +380,12 @@ import { provideOpenFileEditor } from "./composables/fileEditor";
 import { useFeatureFlag } from "./composables/featureFlags";
 import { useMobileDrawerSwipe } from "./composables/mobileDrawerSwipe";
 import WorkspaceDialogs from "./components/WorkspaceDialogs.vue";
-import { createWorkspace } from "./composables/workspace";
+import {
+  createWorkspace,
+  projectPage,
+  projectViewFromPath,
+  projectViewPath,
+} from "./composables/workspace";
 import type { ActionRunSummary } from "../services/workspace";
 import PerfHud from "./components/PerfHud.vue";
 
@@ -435,6 +446,13 @@ function updateUrlWithSlug(conversation: Conversation | undefined) {
   }
 }
 
+// The path conversation's page lives at: in workspace mode the Assistant's is "/".
+function conversationPath(conversation: Conversation) {
+  return workspaceMode && workspace.isAssistant(conversation.conversation_id)
+    ? "/"
+    : `/c/${conversation.slug && !isGeneratedId(conversation.slug) ? conversation.slug : conversation.conversation_id}`;
+}
+
 function updatePageTitle(conversation: Conversation | undefined) {
   const hostname = window.__SHELLEY_INIT__?.hostname;
   const parts: string[] = [];
@@ -474,15 +492,35 @@ const workspace = createWorkspace((run: ActionRunSummary) => {
     });
 });
 const refreshWorkspace = () => void workspace.refresh().catch(() => {});
+workspace.projectView.value = projectViewFromPath(window.location.pathname);
 const drawerOpen = ref(false);
-// The project editor takes the main pane: opening it closes the mobile drawer,
-// and choosing a conversation (selectFromDrawer, or a new one) closes it.
-watch(workspace.projectEditor, (editor) => {
-  if (editor) drawerOpen.value = false;
+// A project's view takes the main pane at its own path: opening it closes
+// the mobile drawer; choosing a conversation, or a new one, closes it.
+watch(workspace.projectView, (view) => {
+  if (!view) return;
+  drawerOpen.value = false;
+  const path = projectViewPath(view);
+  if (window.location.pathname !== path) window.history.pushState({}, "", path);
 });
-watch(currentConversationId, () => {
-  workspace.projectEditor.value = null;
+// A project that doesn't exist (any more) leaves for the conversation
+// behind; one without a page shows its settings, at their path.
+watch([workspace.projectView, workspace.data], ([view, data]) => {
+  if (!view || !data) return;
+  const project = workspace.projectById(view.id);
+  if (!project) {
+    workspace.projectView.value = null;
+    window.history.replaceState({}, "", behindPath());
+  } else if (view.tab === "page" && !projectPage(project)) {
+    const settings = { id: view.id, tab: "settings" } as const;
+    window.history.replaceState({}, "", projectViewPath(settings));
+    workspace.projectView.value = settings;
+  }
 });
+// The path of the conversation behind a project's view.
+function behindPath() {
+  const behind = viewedConversation.value;
+  return behind ? conversationPath(behind) : "/new";
+}
 useMobileDrawerSwipe(drawerOpen);
 watch(drawerOpen, (open) => {
   if (!open || !window.matchMedia("(max-width: 767px)").matches) return;
@@ -633,8 +671,10 @@ const drawerConversations = computed(() => {
   const list = withComposerRow(conversations.value, composer.value, creating.value);
   return lingering.value ? withComposerRow(list, lingering.value, null) : list;
 });
-const drawerCurrentConversationId = computed(
-  () => currentConversationId.value ?? (composer.value ? COMPOSER_ROW_ID : null),
+const drawerCurrentConversationId = computed(() =>
+  workspace.projectView.value
+    ? null
+    : (currentConversationId.value ?? (composer.value ? COMPOSER_ROW_ID : null)),
 );
 function newComposer(id: string | null, cwd: string | null): ComposerRow {
   return { id, cwd, startedAt: new Date().toISOString(), sent: null, listed: false };
@@ -939,6 +979,7 @@ async function startNewConversation(): Promise<boolean> {
   }
   currentConversationId.value = null;
   viewedConversation.value = null;
+  workspace.projectView.value = null;
   window.history.replaceState({}, "", "/new");
   drawerOpen.value = false;
   return true;
@@ -948,6 +989,7 @@ function startNewConversationWithCwd(cwd: string | null) {
   if (cwd) localStorage.setItem("shelley_selected_cwd", cwd);
   currentConversationId.value = null;
   viewedConversation.value = null;
+  workspace.projectView.value = null;
   window.history.replaceState({}, "", "/new");
   drawerOpen.value = false;
   cwdSyncTrigger.value++;
@@ -984,6 +1026,10 @@ function selectConversation(conversation: Conversation) {
     else reopenLingering();
     return;
   }
+  if (workspace.projectView.value) {
+    workspace.projectView.value = null;
+    window.history.pushState({}, "", conversationPath(conversation));
+  }
   conversationSelectionTrigger.value++;
   currentConversationId.value = conversation.conversation_id;
   viewedConversation.value = conversation;
@@ -1002,7 +1048,6 @@ function selectFromDrawer(conversation: Conversation) {
   ) {
     active.blur();
   }
-  workspace.projectEditor.value = null;
   selectConversation(conversation);
   focusMessageInputIfUnfocused();
 }
@@ -1276,6 +1321,8 @@ function handleKeyDown(e: KeyboardEvent) {
 
 // ---- popstate (back/forward + SubagentTool navigation) ----
 async function handlePopState() {
+  workspace.projectView.value = projectViewFromPath(window.location.pathname);
+  if (workspace.projectView.value) return;
   if (isNewPath()) {
     currentConversationId.value = null;
     viewedConversation.value = null;
@@ -1312,8 +1359,15 @@ async function handlePopState() {
 
 // ---- page title + URL sync ----
 watch(
-  [currentConversationId, viewedConversation, conversations],
+  [currentConversationId, viewedConversation, conversations, workspace.projectView, workspace.data],
   () => {
+    const view = workspace.projectView.value;
+    const page = view && (workspace.projectById(view.id)?.name ?? "Project");
+    if (page) {
+      const hostname = window.__SHELLEY_INIT__?.hostname;
+      document.title = [page, hostname, "Shelley Agent"].filter(Boolean).join(" - ");
+      return;
+    }
     const currentConv =
       viewedConversation.value?.conversation_id === currentConversationId.value
         ? viewedConversation.value

@@ -50,6 +50,32 @@ function saveClosed(id: string, urls: Set<string>) {
   localStorage.setItem(CLOSED_KEY, JSON.stringify(kept.slice(-CLOSED_CONVERSATIONS)));
 }
 
+/** Whether the browser can frame pages, by URL: probe checks one (again,
+ * with refresh), and view gives a tab what its check found. */
+export function useFrameChecks() {
+  const { t } = useI18n();
+  const frames = reactive(new Map<string, FrameState>());
+  async function probe(url: string, refresh: boolean) {
+    frames.set(url, { frame: refresh ? null : (frames.get(url)?.frame ?? null), error: "" });
+    try {
+      const failure = t("pageTabCheckFailed").replace("{url}", url);
+      frames.set(url, { frame: await pageFrame(url, failure, refresh), error: "" });
+    } catch (err) {
+      frames.set(url, { frame: null, error: errorMessage(err) });
+    }
+  }
+  function view(tab: PageTab, reloadedAt: number): PageTabView {
+    const state = frames.get(tab.url) ?? { frame: null, error: "" };
+    return {
+      ...tab,
+      ...state,
+      blocked: state.frame?.blocked ? t(BLOCKED[state.frame.blocked]) : "",
+      reloadedAt,
+    };
+  }
+  return { frames, probe, view };
+}
+
 /** The page frame the user is in, by its tab key. */
 function focusedFrame(): string | undefined {
   const el = document.activeElement;
@@ -68,12 +94,10 @@ export function usePageTabs(
   working: Ref<boolean>,
 ) {
   const workspace = useWorkspace();
-  const { t } = useI18n();
+  const { frames, probe, view } = useFrameChecks();
   const closed = ref(new Set<string>());
   const active = ref<string | null>(null);
   const mounted = ref(new Set<string>());
-  // By URL.
-  const frames = reactive(new Map<string, FrameState>());
   // By tab key.
   const reloads = reactive(new Map<string, number>());
   // How many messages there were when each frame last loaded.
@@ -97,26 +121,8 @@ export function usePageTabs(
       });
     for (const link of pageLinks(messages.value))
       links.push({ ...link, url: options ? rewriteLocalhostLink(link.url, options) : link.url });
-    return pageTabs(links, closed.value).map((tab) => {
-      const state = frames.get(tab.url) ?? { frame: null, error: "" };
-      return {
-        ...tab,
-        ...state,
-        blocked: state.frame?.blocked ? t(BLOCKED[state.frame.blocked]) : "",
-        reloadedAt: reloads.get(tab.key) ?? 0,
-      };
-    });
+    return pageTabs(links, closed.value).map((tab) => view(tab, reloads.get(tab.key) ?? 0));
   });
-
-  async function probe(url: string, refresh: boolean) {
-    frames.set(url, { frame: refresh ? null : (frames.get(url)?.frame ?? null), error: "" });
-    try {
-      const failure = t("pageTabCheckFailed").replace("{url}", url);
-      frames.set(url, { frame: await pageFrame(url, failure, refresh), error: "" });
-    } catch (err) {
-      frames.set(url, { frame: null, error: errorMessage(err) });
-    }
-  }
 
   function reload(key: string) {
     reloads.set(key, Date.now());

@@ -6,6 +6,7 @@ import {
   type Workspace,
 } from "../../services/workspace";
 import { errorMessage } from "../../utils/errorMessage";
+import { workspaceMode } from "../../utils/workspaceMode";
 import { useI18n, type TranslationKeys } from "./i18n";
 
 type Translate = (key: keyof TranslationKeys) => string;
@@ -22,7 +23,8 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     () => new Map(data.value?.conversations.map((c) => [c.conversation_id, c.project])),
   );
   const error = ref<string | null>(null);
-  const projectEditor = shallowRef<{ project: Project } | null>(null);
+  /** The project shown in the main pane in place of the chat, and its tab. */
+  const projectView = shallowRef<ProjectView | null>(null);
   /** Whether the drawer shows the row naming a new project. */
   const namingProject = ref(false);
   const projectDeletion = shallowRef<Project | null>(null);
@@ -123,7 +125,7 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     error,
     refresh,
     rememberRun,
-    projectEditor,
+    projectView,
     namingProject,
     projectDeletion,
     composerProject,
@@ -131,9 +133,11 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     dispose: () => {
       stopped = true;
     },
-    editProject: (project: Project) => {
-      projectEditor.value = { project };
+    /** Shows project in the main pane, on tab. */
+    openProject: (project: Project, tab: ProjectTab = "page") => {
+      projectView.value = { id: project.id, tab };
     },
+    projectById: (id: number) => data.value?.projects.find((project) => project.id === id),
     startNewProject: () => {
       namingProject.value = true;
     },
@@ -167,6 +171,32 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
     /** Whether profile name is a project's. */
     isProject: (name: string | null | undefined) => !!name && projectsByName.value.has(name),
   };
+}
+
+/** A project's view's tabs: its web page (with none, its settings show
+ * instead) and its settings. */
+export type ProjectTab = "page" | "settings";
+
+/** The web page a project's view opens on, or "": pages are framed through
+ * workspace mode's /api/page-frame, so stock Shelley shows none. */
+export function projectPage(project: Project): string {
+  return workspaceMode ? project.page_url : "";
+}
+
+export interface ProjectView {
+  id: number;
+  tab: ProjectTab;
+}
+
+/** Where a project's view lives: /project/ID, /project/ID/settings. */
+export function projectViewPath(view: ProjectView): string {
+  return `/project/${view.id}${view.tab === "settings" ? "/settings" : ""}`;
+}
+
+/** The project view at path, or null. */
+export function projectViewFromPath(path: string): ProjectView | null {
+  const match = /^\/project\/(\d+)(\/settings)?\/?$/.exec(path);
+  return match ? { id: Number(match[1]), tab: match[2] ? "settings" : "page" } : null;
 }
 
 export interface ProjectDeletionPlan {

@@ -27,10 +27,13 @@ export interface Project {
   vm: ProjectVM | null;
   /** GitHub repositories attached through exe.dev GitHub integrations. */
   repos: ProjectRepo[];
+  /** The web page the project's view opens on, "" for none. */
+  page_url: string;
 }
 
-/** A project as created or saved: the server assigns its id and position. */
-export type ProjectInput = Omit<Project, "id" | "position">;
+/** A project as created or saved: the server assigns its id and position,
+ * and keeps its page_url when it is left out. */
+export type ProjectInput = Omit<Project, "id" | "position" | "page_url"> & { page_url?: string };
 
 export interface ProjectRepo {
   integration: string;

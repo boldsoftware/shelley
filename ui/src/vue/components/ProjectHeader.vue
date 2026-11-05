@@ -42,7 +42,7 @@
           class="project-icon-button"
           :aria-label="t('editConversationProject')"
           :title="t('editProjectInstructions')"
-          @click="workspace.editProject(project)"
+          @click="workspace.openProject(project, 'settings')"
         >
           <i class="pi pi-pencil" aria-hidden="true" />
         </button>

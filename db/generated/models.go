@@ -197,6 +197,11 @@ type ProfileBaseVm struct {
 	RequestedAt string `json:"requested_at"`
 }
 
+type ProfilePage struct {
+	Profile string `json:"profile"`
+	Url     string `json:"url"`
+}
+
 type ProfileProject struct {
 	ID           int64  `json:"id"`
 	Profile      string `json:"profile"`

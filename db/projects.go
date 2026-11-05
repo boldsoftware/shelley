@@ -38,6 +38,9 @@ type Project struct {
 	VM *ProjectVM `json:"vm"`
 	// Repos are the GitHub repositories attached to the project.
 	Repos []ProjectRepo `json:"repos"`
+	// PageURL is the web page the project's view opens on, "" for none. On
+	// input, nil (absent) keeps the current one.
+	PageURL *string `json:"page_url"`
 }
 
 // ProfileNameProblem says what's wrong with a profile name, or "". Names are
@@ -74,6 +77,9 @@ func validateProject(project *Project) error {
 		return err
 	}
 	if err := validateProjectRepos(project.Repos); err != nil {
+		return err
+	}
+	if err := validateProjectPage(project.PageURL); err != nil {
 		return err
 	}
 	seen := map[string]bool{}
@@ -134,6 +140,9 @@ func createProject(ctx context.Context, q *generated.Queries, project Project, f
 	if err := setProjectRepos(ctx, q, project.Name, project.Repos); err != nil {
 		return err
 	}
+	if err := setProjectPage(ctx, q, project.Name, project.PageURL); err != nil {
+		return err
+	}
 	return setProjectVM(ctx, q, project.Name, project.VM)
 }
 
@@ -156,6 +165,9 @@ func (db *DB) UpdateProject(ctx context.Context, name string, project Project) e
 			return err
 		}
 		if err := setProjectRepos(ctx, q, name, project.Repos); err != nil {
+			return err
+		}
+		if err := setProjectPage(ctx, q, name, project.PageURL); err != nil {
 			return err
 		}
 		if err := setProjectVM(ctx, q, name, project.VM); err != nil {
@@ -266,6 +278,9 @@ func listProjects(ctx context.Context, q *generated.Queries) ([]Project, error) 
 
 func attachProjectDetails(ctx context.Context, q *generated.Queries, projects []Project) error {
 	if err := attachProjectVMs(ctx, q, projects); err != nil {
+		return err
+	}
+	if err := attachProjectPages(ctx, q, projects); err != nil {
 		return err
 	}
 	return attachProjectRepos(ctx, q, projects)
