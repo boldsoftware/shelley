@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -19,6 +20,11 @@ import (
 // conversation is in a project when its profile label names one. See
 // 050-profile-projects.sql.
 type Project struct {
+	// ID is assigned on creation, kept across renames and never reused.
+	// Position is the project's place in the user's order, 0 first; a new
+	// project goes last (see ReorderProjects). Both are ignored on input.
+	ID       int64 `json:"id"`
+	Position int64 `json:"position"`
 	// Name is the profile's name.
 	Name string `json:"name"`
 	// Instructions are appended to every request of the project's
@@ -89,10 +95,17 @@ func (db *DB) CreateProject(ctx context.Context, project Project, from string) (
 	if err := validateProject(&project); err != nil {
 		return nil, err
 	}
+	var created *Project
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		return createProject(ctx, generated.New(tx.Conn()), project, from)
+		q := generated.New(tx.Conn())
+		if err := createProject(ctx, q, project, from); err != nil {
+			return err
+		}
+		var err error
+		created, err = getProject(ctx, q, project.Name)
+		return err
 	})
-	return &project, err
+	return created, err
 }
 
 func createProject(ctx context.Context, q *generated.Queries, project Project, from string) error {
@@ -181,7 +194,7 @@ func renameProfile(ctx context.Context, q *generated.Queries, from, to string) e
 }
 
 func newProject(row generated.ProfileProject) (*Project, error) {
-	project := Project{Name: row.Profile, Instructions: row.Instructions, Cwd: row.Cwd}
+	project := Project{ID: row.ID, Position: row.Position, Name: row.Profile, Instructions: row.Instructions, Cwd: row.Cwd}
 	if err := json.Unmarshal([]byte(row.Actions), &project.Actions); err != nil {
 		return nil, err
 	}
@@ -321,6 +334,40 @@ func (db *DB) DeleteProject(ctx context.Context, name string) error {
 				return err
 			}
 		}
-		return q.DeleteProjectProfile(ctx, name)
+		if err := q.DeleteProjectProfile(ctx, name); err != nil {
+			return err
+		}
+		names, err := q.ListProjectNames(ctx)
+		if err != nil {
+			return err
+		}
+		return setProjectOrder(ctx, q, names)
 	})
+}
+
+// ReorderProjects puts the projects in the order of names, which must name
+// every project once.
+func (db *DB) ReorderProjects(ctx context.Context, names []string) error {
+	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		current, err := q.ListProjectNames(ctx)
+		if err != nil {
+			return err
+		}
+		slices.Sort(current)
+		if !slices.Equal(current, slices.Sorted(slices.Values(names))) {
+			return fmt.Errorf("%w: the order must name every project once", ErrConflict)
+		}
+		return setProjectOrder(ctx, q, names)
+	})
+}
+
+// setProjectOrder numbers the projects names 0, 1, … in that order.
+func setProjectOrder(ctx context.Context, q *generated.Queries, names []string) error {
+	for i, name := range names {
+		if err := q.SetProjectPosition(ctx, generated.SetProjectPositionParams{Position: int64(i), Profile: name}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

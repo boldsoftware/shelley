@@ -31,7 +31,8 @@ func (q *Queries) CopyProfile(ctx context.Context, arg CopyProfileParams) (int64
 }
 
 const createProject = `-- name: CreateProject :exec
-INSERT INTO profile_projects (profile, instructions, cwd, actions) VALUES (?, ?, ?, ?)
+INSERT INTO profile_projects (profile, instructions, cwd, actions, position)
+VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(position) + 1, 0) FROM profile_projects))
 `
 
 type CreateProjectParams struct {
@@ -41,6 +42,7 @@ type CreateProjectParams struct {
 	Actions      string `json:"actions"`
 }
 
+// A new project goes last.
 func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) error {
 	_, err := q.db.ExecContext(ctx, createProject,
 		arg.Profile,
@@ -144,17 +146,19 @@ func (q *Queries) DeleteProjectVMSetup(ctx context.Context, profile string) erro
 }
 
 const getProject = `-- name: GetProject :one
-SELECT profile, instructions, cwd, actions FROM profile_projects WHERE profile = ?
+SELECT id, profile, instructions, cwd, actions, position FROM profile_projects WHERE profile = ?
 `
 
 func (q *Queries) GetProject(ctx context.Context, profile string) (ProfileProject, error) {
 	row := q.db.QueryRowContext(ctx, getProject, profile)
 	var i ProfileProject
 	err := row.Scan(
+		&i.ID,
 		&i.Profile,
 		&i.Instructions,
 		&i.Cwd,
 		&i.Actions,
+		&i.Position,
 	)
 	return i, err
 }
@@ -228,6 +232,33 @@ func (q *Queries) ListProjectBaseVMs(ctx context.Context, project string) ([]Pro
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectNames = `-- name: ListProjectNames :many
+SELECT profile FROM profile_projects ORDER BY position
+`
+
+func (q *Queries) ListProjectNames(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listProjectNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var profile string
+		if err := rows.Scan(&profile); err != nil {
+			return nil, err
+		}
+		items = append(items, profile)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -314,7 +345,7 @@ func (q *Queries) ListProjectVMs(ctx context.Context) ([]ListProjectVMsRow, erro
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT profile, instructions, cwd, actions FROM profile_projects ORDER BY profile
+SELECT id, profile, instructions, cwd, actions, position FROM profile_projects ORDER BY position
 `
 
 func (q *Queries) ListProjects(ctx context.Context) ([]ProfileProject, error) {
@@ -327,10 +358,12 @@ func (q *Queries) ListProjects(ctx context.Context) ([]ProfileProject, error) {
 	for rows.Next() {
 		var i ProfileProject
 		if err := rows.Scan(
+			&i.ID,
 			&i.Profile,
 			&i.Instructions,
 			&i.Cwd,
 			&i.Actions,
+			&i.Position,
 		); err != nil {
 			return nil, err
 		}
@@ -356,6 +389,20 @@ type RenameProfileParams struct {
 
 func (q *Queries) RenameProfile(ctx context.Context, arg RenameProfileParams) error {
 	_, err := q.db.ExecContext(ctx, renameProfile, arg.ToName, arg.FromName)
+	return err
+}
+
+const setProjectPosition = `-- name: SetProjectPosition :exec
+UPDATE profile_projects SET position = ? WHERE profile = ?
+`
+
+type SetProjectPositionParams struct {
+	Position int64  `json:"position"`
+	Profile  string `json:"profile"`
+}
+
+func (q *Queries) SetProjectPosition(ctx context.Context, arg SetProjectPositionParams) error {
+	_, err := q.db.ExecContext(ctx, setProjectPosition, arg.Position, arg.Profile)
 	return err
 }
 

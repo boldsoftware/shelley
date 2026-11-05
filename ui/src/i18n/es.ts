@@ -544,4 +544,7 @@ export const es: TranslationKeys = {
   imageUnavailable: "Imagen no disponible ({image}: {reason})",
   imageBrowserCannotShow: "el navegador no puede mostrarla",
   inlineImage: "imagen incrustada",
+  // Project order
+  moveProjectUp: "Subir",
+  moveProjectDown: "Bajar",
 };

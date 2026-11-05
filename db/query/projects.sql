@@ -2,7 +2,13 @@
 SELECT * FROM profile_projects WHERE profile = ?;
 
 -- name: ListProjects :many
-SELECT * FROM profile_projects ORDER BY profile;
+SELECT * FROM profile_projects ORDER BY position;
+
+-- name: ListProjectNames :many
+SELECT profile FROM profile_projects ORDER BY position;
+
+-- name: SetProjectPosition :exec
+UPDATE profile_projects SET position = ? WHERE profile = ?;
 
 -- name: CopyProfile :execrows
 -- Creates profile name with the settings of profile from_profile, or of the
@@ -12,7 +18,9 @@ SELECT CAST(sqlc.arg(name) AS TEXT), settings FROM profiles
 WHERE CASE WHEN CAST(sqlc.arg(from_profile) AS TEXT) = '' THEN is_default ELSE name = sqlc.arg(from_profile) END;
 
 -- name: CreateProject :exec
-INSERT INTO profile_projects (profile, instructions, cwd, actions) VALUES (?, ?, ?, ?);
+-- A new project goes last.
+INSERT INTO profile_projects (profile, instructions, cwd, actions, position)
+VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(position) + 1, 0) FROM profile_projects));
 
 -- name: UpdateProject :execrows
 UPDATE profile_projects SET instructions = ?, cwd = ?, actions = ? WHERE profile = ?;

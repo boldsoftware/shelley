@@ -529,4 +529,7 @@ export const zhTW: TranslationKeys = {
   imageUnavailable: "圖片無法使用（{image}：{reason}）",
   imageBrowserCannotShow: "瀏覽器無法顯示",
   inlineImage: "內嵌圖片",
+  // Project order
+  moveProjectUp: "上移",
+  moveProjectDown: "下移",
 };

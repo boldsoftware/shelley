@@ -529,4 +529,7 @@ export const zhCN: TranslationKeys = {
   imageUnavailable: "图片不可用（{image}：{reason}）",
   imageBrowserCannotShow: "浏览器无法显示",
   inlineImage: "内嵌图片",
+  // Project order
+  moveProjectUp: "上移",
+  moveProjectDown: "下移",
 };

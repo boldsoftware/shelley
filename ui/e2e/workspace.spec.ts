@@ -136,7 +136,12 @@ test("project editor, task creation, failed action retry, and success-only archi
 
   await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
   const projectMenu = page.getByTestId("project-actions-menu");
-  await expect(projectMenu.getByRole("menuitem")).toHaveText(["Edit project…", "Delete project…"]);
+  await expect(projectMenu.getByRole("menuitem")).toHaveText([
+    "Edit project…",
+    "Move up",
+    "Move down",
+    "Delete project…",
+  ]);
   await expect(projectMenu.getByRole("menuitem", { name: "Delete project…" })).not.toHaveAttribute(
     "aria-disabled",
     "true",
@@ -321,6 +326,95 @@ test("project and conversation ⋯ menus: delete waits for an empty project; mov
   await toToggle.click();
   await expect(toGroup.locator(conversationRow)).toHaveCount(0);
   await expect(toToggle).toHaveAttribute("aria-expanded", "false");
+});
+
+test("project folds survive reloads and renames; a deleted project's goes", async ({
+  page,
+  request,
+}) => {
+  const headers = { "X-Shelley-Request": "1" };
+  const suffix = randomUUID().slice(0, 8);
+  const body = (name: string) => ({
+    name,
+    instructions: "",
+    cwd: testWorkingDirectory(),
+    actions: [],
+    repos: [],
+    vm: null,
+  });
+  const project = async (name: string) => {
+    const response = await request.post("/api/projects", { headers, data: body(name) });
+    expect(response.ok()).toBeTruthy();
+    return (await response.json()) as { id: number; name: string };
+  };
+  const busy = await project(`Busy ${suffix}`);
+  const empty = await project(`Empty ${suffix}`);
+  const created = await request.post("/api/conversations/new", {
+    headers,
+    data: { project: busy.name, title: `Fold me ${suffix}`, message: "Hello" },
+  });
+  expect(created.ok()).toBeTruthy();
+
+  await page.goto("/");
+  await openWorkspace(page);
+  const toggle = (name: string) => page.locator(`section[aria-label="${name}"] .project-toggle`);
+  await expect(toggle(busy.name)).toHaveAttribute("aria-expanded", "true");
+  await expect(toggle(empty.name)).toHaveAttribute("aria-expanded", "false");
+  await toggle(busy.name).click();
+  await toggle(empty.name).click();
+  await expect(toggle(busy.name)).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle(empty.name)).toHaveAttribute("aria-expanded", "true");
+
+  await page.reload();
+  await openWorkspace(page);
+  await expect(toggle(busy.name)).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle(empty.name)).toHaveAttribute("aria-expanded", "true");
+
+  // Move up swaps a project with the one before it, for every list of projects.
+  const order = async () =>
+    (
+      (await (await request.get("/api/workspace")).json()) as { projects: { name: string }[] }
+    ).projects.map((p) => p.name);
+  const before = await order();
+  const at = before.indexOf(empty.name);
+  await page.getByRole("button", { name: `${empty.name} project actions`, exact: true }).click();
+  await page
+    .getByTestId("project-actions-menu")
+    .getByRole("menuitem", { name: "Move up", exact: true })
+    .click();
+  const after = [...before];
+  [after[at - 1], after[at]] = [after[at], after[at - 1]];
+  await expect.poll(order).toEqual(after);
+  const swapped = [after[at - 1], after[at]];
+  await expect
+    .poll(async () =>
+      (
+        await page
+          .locator("section.project-group")
+          .evaluateAll((sections) => sections.map((s) => s.getAttribute("aria-label")))
+      ).filter((label) => label !== null && swapped.includes(label)),
+    )
+    .toEqual(swapped);
+
+  // Folds follow the project's id, not its name.
+  const renamed = `Renamed ${suffix}`;
+  const rename = await request.put(`/api/projects/${encodeURIComponent(busy.name)}`, {
+    headers,
+    data: body(renamed),
+  });
+  expect(rename.ok()).toBeTruthy();
+  const remove = await request.delete(`/api/projects/${encodeURIComponent(empty.name)}`, {
+    headers,
+  });
+  expect(remove.ok()).toBeTruthy();
+  await page.reload();
+  await openWorkspace(page);
+  await expect(toggle(renamed)).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle(empty.name)).toHaveCount(0);
+  const folds = await page.evaluate(() => localStorage.getItem("shelley-project-folds"));
+  const stored = JSON.parse(folds ?? "{}") as Record<string, boolean>;
+  expect(stored[`project:${busy.id}`]).toBe(true);
+  expect(`project:${empty.id}` in stored).toBe(false);
 });
 
 test("the Assistant shows no host or working directory; conversations still do", async ({

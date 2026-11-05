@@ -534,4 +534,7 @@ export const upgoer5: TranslationKeys = {
   imageUnavailable: "Picture not here ({image}: {reason})",
   imageBrowserCannotShow: "this page can't show it",
   inlineImage: "picture inside the words",
+  // Project order
+  moveProjectUp: "Move up",
+  moveProjectDown: "Move down",
 };

@@ -13,6 +13,10 @@ export interface ProjectAction {
  * instructions, a directory, actions, repositories, and VMs. A conversation
  * whose profile is a project is in it. */
 export interface Project {
+  /** Assigned on creation, kept across renames and never reused. */
+  id: number;
+  /** The project's place in the user's order, 0 first; lists show projects in it. */
+  position: number;
   name: string;
   /** Project instructions (AGENTS.md-style), appended to every conversation's prompt. */
   instructions: string;
@@ -24,6 +28,9 @@ export interface Project {
   /** GitHub repositories attached through exe.dev GitHub integrations. */
   repos: ProjectRepo[];
 }
+
+/** A project as created or saved: the server assigns its id and position. */
+export type ProjectInput = Omit<Project, "id" | "position">;
 
 export interface ProjectRepo {
   integration: string;
@@ -135,10 +142,10 @@ export const workspaceApi = {
       "/api/github-repos",
       "Failed to load GitHub repositories",
     ),
-  createProject: (project: Project) =>
+  createProject: (project: ProjectInput) =>
     apiJSON<Project>("/api/projects", "Failed to create the project", "POST", project),
   /** Replaces project name's data; a different project.name renames it. */
-  updateProject: (name: string, project: Project) =>
+  updateProject: (name: string, project: ProjectInput) =>
     apiJSON<Project>(
       `/api/projects/${encodeURIComponent(name)}`,
       "Failed to save the project",
@@ -153,6 +160,9 @@ export const workspaceApi = {
       "Failed to delete the project",
       "DELETE",
     ),
+  /** Puts the projects in order, which names every project once. */
+  reorderProjects: (projects: string[]) =>
+    apiJSON<void>("/api/project-order", "Failed to reorder the projects", "PUT", { projects }),
   moveConversation: (id: string, project: string) =>
     apiJSON<void>(
       `/api/conversation/${encodeURIComponent(id)}/project`,

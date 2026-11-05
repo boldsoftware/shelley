@@ -502,6 +502,8 @@ POST $SHELLEY_API/api/conversations/import
   Body: {"source_db":"/absolute/path/to/shelley.db","project":"Existing project name","conversations":[{"id":"CONVERSATION_ID","title":"Optional new title"}]}. Copies top-level, idle conversations of another Shelley's database (a copy on this host, e.g. fetched with scp along with its -wal and -shm files) into the project, with their history and subagents, to continue here; all or none, and an id that exists here is a conflict. Only with the user's request.
 DELETE $SHELLEY_API/api/projects/NAME
   Deletes the project and its profile. Refused (409) while the project has active tasks (other than its base VM setup task) or a running action. Stops and archives a running setup task, deletes the base VMs Shelley created for the project (returns {"deleted_vms","kept_vms"}), and moves archived tasks to no project. It needs the user's approval when it deletes VMs. Never deletes task history, repositories, user-supplied bases, or shared VMs; if a VM deletion fails, the project stays (502) and can be deleted again.
+PUT $SHELLEY_API/api/project-order
+  Body: {"projects":["Project name",...]}: every project once, in the order the user sees them (each project's "position" in GET /api/workspace).
 POST $SHELLEY_API/api/conversation/ID/actions/ACTION_ID
   Starts the project's configured command in the task directory; returns a run id. GET /api/action-runs/RUN_ID reports live output/status. Never manually archive while it runs: only a successful action archives, and errors/interruption leave the task visible. Do not fire-and-forget and report success.
 `

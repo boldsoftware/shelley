@@ -765,6 +765,12 @@ import {
 import { handleModifiedNavClick } from "../utils/openInNewTab";
 import ExeBrand from "./ExeBrand.vue";
 import { COMPOSER_ROW_ID } from "../../utils/composerRow";
+import {
+  loadCollapsedGroups,
+  loadProjectFolds,
+  saveCollapsedGroups,
+  saveProjectFolds,
+} from "../../utils/drawerFolds";
 import ConversationRow from "./ConversationDrawerRow.vue";
 import ProjectVMSetup from "./ProjectVMSetup.vue";
 import ProjectNameField from "./ProjectNameField.vue";
@@ -879,11 +885,25 @@ function setProjectMenu(groupId: string, menu: unknown) {
 }
 function projectActions(project: Project): MenuItem[] {
   const blocker = workspace.deletionPlan(project).blocker;
+  const names = workspace.data.value?.projects.map((p) => p.name) ?? [];
+  const index = names.indexOf(project.name);
   return [
     {
       label: t("editProjectEllipsis"),
       icon: "pi pi-pencil",
       command: () => workspace.editProject(project),
+    },
+    {
+      label: t("moveProjectUp"),
+      icon: "pi pi-arrow-up",
+      disabled: index <= 0,
+      command: () => void moveProject(names, index, index - 1),
+    },
+    {
+      label: t("moveProjectDown"),
+      icon: "pi pi-arrow-down",
+      disabled: index === names.length - 1,
+      command: () => void moveProject(names, index, index + 1),
     },
     { separator: true },
     {
@@ -1049,11 +1069,42 @@ const tagInput = ref("");
 const tagEditorRef = ref<HTMLElement | null>(null);
 const tagInputRef = ref<HTMLInputElement | null>(null);
 const expandedSubagents = ref<Set<string>>(new Set());
-// Explicit fold choices by project id (true = collapsed). Without one, a
-// project is folded exactly while it has no rows. A project's first conversation
-// clears its choice, so the new conversation always shows. Only the active,
-// unfiltered list shows empty projects; archived and filtered views drop them.
-const groupFoldChoices = ref<Map<string, boolean>>(new Map());
+// Project groups are keyed by project id, which survives renames.
+function projectGroupId(project: Project) {
+  return `project:${project.id}`;
+}
+const NO_PROJECT = "__no_project__";
+// Explicit fold choices by project group id (true = collapsed), kept across
+// reloads. Without one, a project is folded exactly while it has no rows. A
+// project's first conversation clears its choice, so the new conversation always
+// shows. Only the active, unfiltered list shows empty projects; archived and
+// filtered views drop them.
+const groupFoldChoices = ref(loadProjectFolds(localStorage));
+watch(groupFoldChoices, (folds) => saveProjectFolds(folds, localStorage));
+// Deleted projects' choices go, and so do those of projects whose first active
+// conversation arrived, so it shows. Arrivals are counted in the workspace,
+// which lists every project's conversations at once: the conversation list
+// may load after it.
+let activeCounts: Map<string, number> | null = null;
+watch(
+  workspace.data,
+  (data) => {
+    if (!data) return;
+    const ids = new Map(data.projects.map((project) => [project.name, projectGroupId(project)]));
+    const counts = new Map([...ids.values()].map((id) => [id, 0]));
+    for (const conversation of data.conversations) {
+      const id = ids.get(conversation.project);
+      if (id && !conversation.archived) counts.set(id, counts.get(id)! + 1);
+    }
+    const previous = activeCounts;
+    activeCounts = counts;
+    const keep = (id: string) =>
+      id === NO_PROJECT || (counts.has(id) && !(previous?.get(id) === 0 && counts.get(id)! > 0));
+    const next = new Map([...groupFoldChoices.value].filter(([id]) => keep(id)));
+    if (next.size !== groupFoldChoices.value.size) groupFoldChoices.value = next;
+  },
+  { immediate: true },
+);
 // "project" groups by project (see the workspace); workspace mode
 // always does, and offers no other grouping.
 const groupBy = ref<GroupBy>(
@@ -1071,7 +1122,8 @@ const groupBy = ref<GroupBy>(
   })(),
 );
 if (groupBy.value === "daily") selectedDay.value = shiftLocalDay(new Date(), 0);
-const collapsedGroups = ref<Set<string>>(new Set());
+const collapsedGroups = ref(loadCollapsedGroups(localStorage));
+watch(collapsedGroups, (groups) => saveCollapsedGroups(groups, localStorage));
 const groupMenuOpen = ref(false);
 const resortKey = ref(0);
 const seenIds = ref<Set<string> | null>(null);
@@ -1620,6 +1672,17 @@ function conversationActions(conversation: Conversation): MenuItem[] {
   return items;
 }
 const workingIds = computed(() => workingConversationIds(props.conversations));
+// Swaps the projects at from and to in names, the user's order of projects.
+async function moveProject(names: string[], from: number, to: number) {
+  const order = [...names];
+  [order[from], order[to]] = [order[to], order[from]];
+  try {
+    await workspaceApi.reorderProjects(order);
+    await workspace.refresh();
+  } catch (err) {
+    rowError.value = errorMessage(err);
+  }
+}
 async function moveConversation(id: string, project: string) {
   try {
     await workspaceApi.moveConversation(id, project);
@@ -2207,14 +2270,14 @@ const projectGroups = computed(() => {
   if (!data) return null;
   const memberships = new Map(data.conversations.map((c) => [c.conversation_id, c.project]));
   const groups = data.projects.map((project) => ({
-    id: `project:${project.name}`,
+    id: projectGroupId(project),
     label: project.name,
     project: project as Project | null,
     conversations: [] as Conversation[],
   }));
   const byName = new Map(groups.map((group) => [group.label, group]));
   const noProject = {
-    id: "__no_project__",
+    id: NO_PROJECT,
     label: t("noProject"),
     project: null,
     conversations: [] as Conversation[],
@@ -2358,25 +2421,6 @@ function groupTitle(key: string, group: Group): string | undefined {
   if (key === "__ungrouped__") return undefined;
   return groupBy.value === "tag" || groupBy.value === "participants" ? group.label : key;
 }
-
-// Unfold a project when its first conversation arrives. Counts are compared only
-// within the active, unfiltered list, so switching views is no arrival.
-let activeGroupCounts: Map<string, number> | null = null;
-watch(projectGroups, (groups) => {
-  if (!groups || showArchived.value || searchToolbarActive.value) {
-    activeGroupCounts = null;
-    return;
-  }
-  const previous = activeGroupCounts;
-  activeGroupCounts = new Map(groups.map((group) => [group.id, group.conversations.length]));
-  const arrived = groups.filter(
-    (group) => previous?.get(group.id) === 0 && group.conversations.length > 0,
-  );
-  if (!arrived.some((group) => groupFoldChoices.value.has(group.id))) return;
-  const next = new Map(groupFoldChoices.value);
-  for (const group of arrived) next.delete(group.id);
-  groupFoldChoices.value = next;
-});
 
 // Maintain the flat visual order for archive-based next-selection.
 watch(

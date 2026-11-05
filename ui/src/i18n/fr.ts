@@ -549,4 +549,7 @@ export const fr: TranslationKeys = {
   imageUnavailable: "Image indisponible ({image} : {reason})",
   imageBrowserCannotShow: "le navigateur ne peut pas l’afficher",
   inlineImage: "image intégrée",
+  // Project order
+  moveProjectUp: "Monter",
+  moveProjectDown: "Descendre",
 };

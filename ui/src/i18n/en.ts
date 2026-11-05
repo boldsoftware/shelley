@@ -540,4 +540,7 @@ export const en: TranslationKeys = {
   imageUnavailable: "Image unavailable ({image}: {reason})",
   imageBrowserCannotShow: "the browser can't display it",
   inlineImage: "inline image",
+  // Project order
+  moveProjectUp: "Move up",
+  moveProjectDown: "Move down",
 };

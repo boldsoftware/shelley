@@ -161,6 +161,7 @@ func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/projects", s.handleCreateProject)
 	api.HandleFunc("PUT /api/projects/{name}", s.handleUpdateProject)
 	api.HandleFunc("DELETE /api/projects/{name}", s.handleDeleteProject)
+	api.HandleFunc("PUT /api/project-order", s.handleReorderProjects)
 	api.HandleFunc("POST /api/projects/{name}/base-vm", s.handleCreateProjectBaseVM)
 	api.HandleFunc("POST /api/conversations/import", s.handleImportConversations)
 	api.HandleFunc("PUT /api/conversation/{id}/project", s.handleMoveConversation)
@@ -392,6 +393,23 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// handleReorderProjects puts the projects in the user's order: the body
+// names every project once; see db.ReorderProjects.
+func (s *Server) handleReorderProjects(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Projects []string `json:"projects"`
+	}
+	if !decodeStrict(w, r, &req) {
+		return
+	}
+	if err := s.db.ReorderProjects(r.Context(), req.Projects); err != nil {
+		s.workspaceHTTPError(w, err)
+		return
+	}
+	s.notifyWorkspaceChanged()
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleMoveConversation moves an idle conversation to another project; see db.MoveConversation.

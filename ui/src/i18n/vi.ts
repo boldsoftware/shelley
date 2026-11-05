@@ -540,4 +540,7 @@ export const vi: TranslationKeys = {
   imageUnavailable: "Hình ảnh không khả dụng ({image}: {reason})",
   imageBrowserCannotShow: "trình duyệt không thể hiển thị",
   inlineImage: "hình ảnh nội tuyến",
+  // Project order
+  moveProjectUp: "Di chuyển lên",
+  moveProjectDown: "Di chuyển xuống",
 };

@@ -541,4 +541,7 @@ export const ja: TranslationKeys = {
   imageUnavailable: "画像を表示できません（{image}: {reason}）",
   imageBrowserCannotShow: "ブラウザーで表示できません",
   inlineImage: "インライン画像",
+  // Project order
+  moveProjectUp: "上へ移動",
+  moveProjectDown: "下へ移動",
 };

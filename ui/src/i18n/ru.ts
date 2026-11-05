@@ -541,4 +541,7 @@ export const ru: TranslationKeys = {
   imageUnavailable: "Изображение недоступно ({image}: {reason})",
   imageBrowserCannotShow: "браузер не может его показать",
   inlineImage: "встроенное изображение",
+  // Project order
+  moveProjectUp: "Переместить вверх",
+  moveProjectDown: "Переместить вниз",
 };

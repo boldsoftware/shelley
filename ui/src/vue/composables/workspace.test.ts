@@ -11,6 +11,8 @@ const empty = (): Workspace => ({
   assistant_id: "assistant",
   projects: [
     {
+      id: 1,
+      position: 0,
       name: "Blog",
       instructions: "Writing\n\nBe brief",
       cwd: "/tmp",

@@ -198,10 +198,12 @@ type ProfileBaseVm struct {
 }
 
 type ProfileProject struct {
+	ID           int64  `json:"id"`
 	Profile      string `json:"profile"`
 	Instructions string `json:"instructions"`
 	Cwd          string `json:"cwd"`
 	Actions      string `json:"actions"`
+	Position     int64  `json:"position"`
 }
 
 type ProfileRepo struct {

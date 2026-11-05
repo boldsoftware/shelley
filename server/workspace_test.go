@@ -173,6 +173,16 @@ func TestWorkspaceHTTPAndProjectCRUD(t *testing.T) {
 			t.Fatalf("%s %s %s: status=%d body=%s", request.method, request.path, request.body, response.Code, response.Body.String())
 		}
 	}
+	db.AddTestProject(t, database, "another")
+	if response := workspaceAPI(s, "PUT", "/api/project-order", `{"projects":["another"]}`); response.Code != 409 {
+		t.Fatalf("partial order: %d %s", response.Code, response.Body.String())
+	}
+	if response := workspaceAPI(s, "PUT", "/api/project-order", `{"projects":["another","my-project"]}`); response.Code != 204 {
+		t.Fatalf("reorder: %d %s", response.Code, response.Body.String())
+	}
+	if after := workspaceResponse[db.Workspace](t, workspaceAPI(s, "GET", "/api/workspace", ""), 200); after.Projects[0].Name != "another" || after.Projects[1].Position != 1 {
+		t.Fatalf("reordered projects: %+v", after.Projects)
+	}
 }
 
 func TestActionHTTPOutlivesRequestAndArchivesOnSuccess(t *testing.T) {

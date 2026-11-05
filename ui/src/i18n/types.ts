@@ -525,4 +525,7 @@ export interface TranslationKeys {
   imageUnavailable: string;
   imageBrowserCannotShow: string;
   inlineImage: string;
+  // Project order
+  moveProjectUp: string;
+  moveProjectDown: string;
 }

@@ -60,7 +60,12 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
 
   await page.getByRole("button", { name: `${name} project actions`, exact: true }).click();
   const projectMenu = page.getByTestId("project-actions-menu");
-  await expect(projectMenu.getByRole("menuitem")).toHaveText(["Edit project…", "Delete project…"]);
+  await expect(projectMenu.getByRole("menuitem")).toHaveText([
+    "Edit project…",
+    "Move up",
+    "Move down",
+    "Delete project…",
+  ]);
   await projectMenu.getByRole("menuitem", { name: "Edit project…", exact: true }).click();
   // The editor is titled with the project's name, which a click renames:
   // Escape reverts, Enter saves (leaving the form's other edits unsaved).
