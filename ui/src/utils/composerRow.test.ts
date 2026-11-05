@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { COMPOSER_ROW_ID, composerProjects, withComposerRow, type ComposerRow } from "./composerRow";
+import {
+  COMPOSER_ROW_ID,
+  composerProjects,
+  withComposerRow,
+  type ComposerRow,
+} from "./composerRow";
 import type { ConversationWithState } from "../types";
 
 function conv(id: string, extra: Partial<ConversationWithState> = {}): ConversationWithState {
@@ -147,8 +152,11 @@ run("composer rows place their conversations in their projects", () => {
     row({ id: "c3" }),
     null,
   ]);
-  assert.deepEqual([...projects], [
-    [COMPOSER_ROW_ID, "A"],
-    ["c2", "B"],
-  ]);
+  assert.deepEqual(
+    [...projects],
+    [
+      [COMPOSER_ROW_ID, "A"],
+      ["c2", "B"],
+    ],
+  );
 });
