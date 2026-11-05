@@ -239,8 +239,10 @@ func (s *Server) exeAccountIntegrations(ctx context.Context, t projectTarget, vm
 	}
 	list := []exeAccountIntegration{}
 	for _, it := range items {
-		ig := exeAccountIntegration{Name: it.Name, Type: it.Type, Team: it.Team, Title: it.CatalogTitle + it.WireTitle, Comment: it.Comment,
-			Repositories: append([]string{}, it.Repositories...), Attachments: append([]string{}, it.Attachments...)}
+		ig := exeAccountIntegration{
+			Name: it.Name, Type: it.Type, Team: it.Team, Title: it.CatalogTitle + it.WireTitle, Comment: it.Comment,
+			Repositories: append([]string{}, it.Repositories...), Attachments: append([]string{}, it.Attachments...),
+		}
 		ig.Added = t.Tag != "" && slices.Contains(ig.Attachments, "tag:"+t.Tag)
 		ig.Reaches = ig.Added || len(vms) > 0
 		for _, vm := range vms {

@@ -63,8 +63,10 @@ func (f *fullExeDev) exec(_ context.Context, _, command string) ([]byte, error) 
 		ig := find(args[2])
 		ig["attachments"] = slices.DeleteFunc(ig["attachments"].([]string), func(a string) bool { return a == args[3] })
 	case args[1] == "add":
-		f.integrations = append(f.integrations, map[string]any{"name": strings.TrimPrefix(args[3], "--name="), "type": args[2],
-			"repositories": []string{strings.TrimPrefix(args[4], "--repository=")}, "attachments": []string{strings.TrimPrefix(args[5], "--attach=")}})
+		f.integrations = append(f.integrations, map[string]any{
+			"name": strings.TrimPrefix(args[3], "--name="), "type": args[2],
+			"repositories": []string{strings.TrimPrefix(args[4], "--repository=")}, "attachments": []string{strings.TrimPrefix(args[5], "--attach=")},
+		})
 	default:
 		return nil, errors.New("unexpected command " + command)
 	}
