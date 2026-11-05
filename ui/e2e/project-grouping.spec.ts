@@ -56,7 +56,8 @@ test("stock mode offers Group by Project without the workspace", async ({ page, 
   await expect(group.locator(`[data-conversation-id="${projectConversationId}"]`)).toBeVisible();
 
   // Projects run on this host until edited; a host with no exe.dev
-  // integration doesn't offer VMs at all.
+  // integration offers only machines reached with ssh. Their own VMs copy a
+  // named base VM, start empty, or copy one an agent automanages.
   let integrations: string[] = [];
   await page.route("**/api/exe-dev-integrations", (route) =>
     route.fulfill({ json: { integrations, default: integrations[0] ?? "" } }),
@@ -64,7 +65,12 @@ test("stock mode offers Group by Project without the workspace", async ({ page, 
   const openEditor = () => openProjectSettings(page, name);
   const editor = await openEditor();
   await expect(editor.getByLabel("Working directory", { exact: true })).toBeVisible();
-  await expect(editor.getByRole("radio", { name: /This Shelley host/ })).toHaveCount(0);
+  await expect(editor.getByRole("radio", { name: /This Shelley host/ })).toBeChecked();
+  await expect(editor.getByRole("radio", { name: /Their own VMs/ })).toHaveCount(0);
+  await editor.getByRole("radio", { name: /One shared machine/ }).check();
+  await expect(editor.getByLabel("Reached through", { exact: true })).toHaveCount(0);
+  await expect(editor.getByLabel("exe.dev integration", { exact: true })).toHaveCount(0);
+  await editor.getByLabel("SSH destination", { exact: true }).fill("me@devbox");
   await page.goBack();
   await page.getByRole("button", { name: "Open conversations", exact: true }).click();
 
@@ -72,4 +78,36 @@ test("stock mode offers Group by Project without the workspace", async ({ page, 
   await openEditor();
   await expect(editor.getByRole("radio", { name: /This Shelley host/ })).toBeChecked();
   await expect(editor.getByText("Recommended")).toHaveCount(0);
+  // A shared machine is an exe.dev VM through an integration, or ssh.
+  await editor.getByRole("radio", { name: /One shared machine/ }).check();
+  const via = editor.getByLabel("Reached through", { exact: true });
+  await expect(via).toHaveValue("exe");
+  await expect(editor.getByLabel("VM", { exact: true })).toBeVisible();
+  await via.selectOption({ label: "ssh, with this host's SSH configuration" });
+  await expect(editor.getByLabel("SSH destination", { exact: true })).toBeVisible();
+  const base = editor.getByLabel("Base VM", { exact: true });
+  const automanage = editor.getByLabel(/Automanage/);
+  await editor.getByRole("radio", { name: /Their own VMs/ }).check();
+  await expect(base).toHaveValue("");
+  await expect(base).toHaveAttribute("placeholder", /Optional/);
+  await expect(editor.getByText(/starts on a new, empty VM/)).toBeVisible();
+  await base.fill("my-base");
+  await expect(editor.getByText(/a copy of this existing VM/)).toBeVisible();
+  await automanage.check();
+  await expect(base).toHaveAttribute("readonly", "");
+  await expect(base).toHaveValue("");
+  await expect(base).toHaveAttribute("placeholder", /setup task/);
+  await expect(editor.getByText(/Saving starts a setup/)).toBeVisible();
+  await automanage.uncheck();
+  await expect(base).toHaveValue("");
+  const saved = page.waitForRequest(
+    (r) => r.url().includes("/api/projects/") && r.method() === "PUT",
+  );
+  await editor.getByRole("button", { name: "Save project", exact: true }).click();
+  expect((await saved).postDataJSON().vm).toMatchObject({
+    managed_base_vm: false,
+    base: "",
+    shared_vm: "",
+    integration: "exe",
+  });
 });

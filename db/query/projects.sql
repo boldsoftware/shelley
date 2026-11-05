@@ -57,24 +57,24 @@ INSERT INTO profile_repos (profile, position, integration, repository) VALUES (?
 SELECT * FROM profile_repos ORDER BY profile, position;
 
 -- name: UpsertProjectVM :exec
-INSERT INTO profile_vms (profile, base_vm, shared_vm, integration) VALUES (?, ?, ?, ?)
+INSERT INTO profile_vms (profile, base_vm, shared_vm, managed_base_vm, integration) VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (profile) DO UPDATE SET
-    base_vm = excluded.base_vm, shared_vm = excluded.shared_vm, integration = excluded.integration;
+    base_vm = excluded.base_vm, shared_vm = excluded.shared_vm, managed_base_vm = excluded.managed_base_vm, integration = excluded.integration;
 
 -- name: DeleteProjectVM :exec
 DELETE FROM profile_vms WHERE profile = ?;
 
 -- name: ListProjectVMs :many
-SELECT v.profile, v.base_vm, v.shared_vm, v.integration,
+SELECT v.profile, v.base_vm, v.shared_vm, v.managed_base_vm, v.integration,
     CAST(COALESCE(s.conversation_id, '') AS TEXT) AS setup_conversation_id
 FROM profile_vms v LEFT JOIN profile_vm_setups s ON s.profile = v.profile;
 
 -- name: CreateProjectVMSetup :execrows
--- Records the conversation setting up the base VM of a project whose VMs
--- have no base or shared VM.
+-- Records the conversation setting up the managed base VM of a project
+-- that has none yet.
 INSERT INTO profile_vm_setups (profile, conversation_id)
 SELECT v.profile, CAST(sqlc.arg(conversation_id) AS TEXT) FROM profile_vms v
-WHERE v.profile = sqlc.arg(profile) AND v.base_vm = '' AND v.shared_vm = '';
+WHERE v.profile = sqlc.arg(profile) AND v.managed_base_vm AND v.base_vm = '' AND v.shared_vm = '';
 
 -- name: DeleteProjectVMSetup :exec
 DELETE FROM profile_vm_setups WHERE profile = ?;

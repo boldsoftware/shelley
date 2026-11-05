@@ -18359,6 +18359,12 @@ kbd {
   font-size: var(--font-size-14);
 }
 
+.project-form input[readonly] {
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  cursor: default;
+}
+
 .project-form textarea {
   resize: vertical;
   min-height: 4rem;

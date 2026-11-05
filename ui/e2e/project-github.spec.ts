@@ -298,7 +298,13 @@ test.describe("in workspace mode", () => {
       expect.objectContaining({
         name: "repo-007",
         cwd: "/home/exedev/repo-007",
-        vm: { base: "", shared_vm: "", integration: "full-exe", setup_conversation_id: "" },
+        vm: {
+          base: "",
+          managed_base_vm: true,
+          shared_vm: "",
+          integration: "full-exe",
+          setup_conversation_id: "",
+        },
         repos: [{ integration: "acme-repo-007", repository: "acme/repo-007" }],
       }),
     ]);

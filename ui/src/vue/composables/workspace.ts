@@ -229,9 +229,9 @@ export function projectDeletionPlan(
     .filter((vm) => vm.project === project.name)
     .map((vm) => vm.vm_name);
   const keepsVMs: string[] = [];
-  if (project.vm?.base && !deletesVMs.includes(project.vm.base))
-    keepsVMs.push(`base VM ${project.vm.base}`);
-  if (project.vm?.shared_vm) keepsVMs.push(`shared VM ${project.vm.shared_vm}`);
+  const vm = project.vm;
+  if (vm?.base && !deletesVMs.includes(vm.base)) keepsVMs.push(`base VM ${vm.base}`);
+  if (vm?.shared_vm) keepsVMs.push(`${vm.integration ? "shared VM" : "SSH host"} ${vm.shared_vm}`);
   return {
     blocker: !data
       ? t("loading")

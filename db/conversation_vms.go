@@ -13,23 +13,32 @@ import (
 	"shelley.exe.dev/db/generated"
 )
 
-// ProjectVM makes a project run its conversations on exe.dev VMs: each on
-// its own copy of Base, or all on the one existing SharedVM.
+// ProjectVM makes a project run its conversations off this host: all on
+// SharedVM if it is set, else each on its own exe.dev VM, copied from Base,
+// or new and empty while Base is "" and ManagedBaseVM is off.
 type ProjectVM struct {
-	// Base is the VM each conversation's VM is copied from (exe.dev cp): it should
-	// already hold the repository at the project's cwd, toolchains, and
-	// warm caches. It is "" with SharedVM.
+	// Base is the VM each conversation's own VM is copied from (exe.dev cp):
+	// it should already hold the repository at the project's cwd,
+	// toolchains, and warm caches. It is "" with SharedVM.
 	Base string `json:"base"`
-	// SharedVM, if set, is an existing VM every conversation in the project runs
-	// on, concurrently, in its own working directory. Shelley never
-	// creates, copies, or deletes it.
+	// ManagedBaseVM has an agent build Base: while it is "", a setup
+	// conversation prepares one and the project starts no conversations.
+	// It is false with SharedVM.
+	ManagedBaseVM bool `json:"managed_base_vm"`
+	// SharedVM, if set, is the existing VM every conversation in the
+	// project runs on, concurrently, all starting in the project's
+	// directory. Shelley never creates, copies, or deletes it. Without an
+	// Integration, it is an ssh destination ([user@]host or a ~/.ssh/config
+	// alias) reached with this host's own SSH configuration, keys, and agent.
 	SharedVM string `json:"shared_vm"`
 	// Integration names the exe.dev integration that acts as the user
-	// (<integration>.int.exe.xyz) to copy VMs and SSH into them.
+	// (<integration>.int.exe.xyz) to copy VMs and SSH into them; "" for
+	// an ssh destination.
 	Integration string `json:"integration"`
-	// SetupConversationID is the conversation preparing the base while Base is "".
-	// It is read-only: Shelley starts that conversation when a project's VMs are
-	// turned on without a base, and the conversation sets Base when it is done.
+	// SetupConversationID is the conversation preparing a ManagedBaseVM
+	// project's base while Base is "". It is read-only: Shelley starts that
+	// conversation when the project has no base, and the conversation sets
+	// Base when it is done.
 	SetupConversationID string `json:"setup_conversation_id"`
 }
 
@@ -37,8 +46,10 @@ type ProjectVM struct {
 type ConversationVM struct {
 	ConversationID string `json:"conversation_id"`
 	Name           string `json:"vm_name"`
-	Base           string `json:"base_vm"` // "" for a shared VM
-	Integration    string `json:"integration"`
+	Base           string `json:"base_vm"` // "" for a shared or empty VM
+	// Integration is "" for an SSH host (see ProjectVM.Integration), reached
+	// with this host's own SSH configuration.
+	Integration string `json:"integration"`
 	// Shared marks a project's shared VM, used by many conversations: Shelley
 	// never creates or deletes it, and archiving leaves it alone.
 	Shared bool `json:"shared"`
@@ -81,6 +92,14 @@ const (
 
 var vmNamePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?$`)
 
+// SSHHost reports whether vm is an SSH host (see ProjectVM.Integration),
+// reached with this host's own SSH configuration rather than through exe.dev.
+func (vm *ConversationVM) SSHHost() bool { return vm.Integration == "" }
+
+// sshDestPattern is an ssh destination that can't be mistaken for an option
+// or carry a port or path: [user@]host, the host a name, alias, or IPv4 address.
+var sshDestPattern = regexp.MustCompile(`^([A-Za-z0-9._][A-Za-z0-9._-]*@)?[A-Za-z0-9_][A-Za-z0-9._-]*$`)
+
 // ValidVMName reports whether name is an exe.dev VM name.
 func ValidVMName(name string) bool { return vmNamePattern.MatchString(name) }
 
@@ -88,12 +107,19 @@ func validateProjectVM(vm *ProjectVM, cwd string) error {
 	if vm == nil {
 		return nil
 	}
-	if vm.Base != "" && !vmNamePattern.MatchString(vm.Base) || vm.SharedVM != "" && !vmNamePattern.MatchString(vm.SharedVM) ||
-		!vmNamePattern.MatchString(vm.Integration) {
-		return fmt.Errorf("%w: vm.base (empty to have a setup conversation create one), vm.shared_vm, and vm.integration must be exe.dev names (lowercase letters, digits, hyphens; at most 42 bytes)", ErrInvalid)
+	if vm.SharedVM != "" && (vm.Base != "" || vm.ManagedBaseVM) {
+		return fmt.Errorf("%w: vm.shared_vm runs every conversation on that one machine, so it takes no vm.base or vm.managed_base_vm", ErrInvalid)
 	}
-	if vm.Base != "" && vm.SharedVM != "" {
-		return fmt.Errorf("%w: set vm.base (each conversation gets its own copy) or vm.shared_vm (all of them share one VM), not both", ErrInvalid)
+	switch {
+	case vm.Integration == "" && vm.SharedVM == "":
+		return fmt.Errorf("%w: vm.integration must name the exe.dev integration for conversations' own VMs (only a vm.shared_vm ssh destination has none)", ErrInvalid)
+	case vm.Integration == "":
+		if len(vm.SharedVM) > 255 || !sshDestPattern.MatchString(vm.SharedVM) {
+			return fmt.Errorf("%w: without vm.integration, vm.shared_vm must be an ssh destination, [user@]host (set a port or other options in ~/.ssh/config)", ErrInvalid)
+		}
+	case vm.Base != "" && !vmNamePattern.MatchString(vm.Base) || vm.SharedVM != "" && !vmNamePattern.MatchString(vm.SharedVM) ||
+		!vmNamePattern.MatchString(vm.Integration):
+		return fmt.Errorf("%w: vm.base, vm.shared_vm, and vm.integration must be exe.dev names (lowercase letters, digits, hyphens; at most 42 bytes)", ErrInvalid)
 	}
 	if len(vm.Base) > maxBaseVMName {
 		return fmt.Errorf("%w: vm.base must be at most %d bytes, leaving room for each conversation's VM name (BASE-<conversation id>)", ErrInvalid, maxBaseVMName)
@@ -112,7 +138,7 @@ func setProjectVM(ctx context.Context, q *generated.Queries, project string, vm 
 		return q.DeleteProjectVM(ctx, project)
 	}
 	if err := q.UpsertProjectVM(ctx, generated.UpsertProjectVMParams{
-		Profile: project, BaseVm: vm.Base, SharedVm: vm.SharedVM, Integration: vm.Integration,
+		Profile: project, BaseVm: vm.Base, SharedVm: vm.SharedVM, ManagedBaseVm: vm.ManagedBaseVM, Integration: vm.Integration,
 	}); err != nil || vm.NeedsBase() {
 		return err
 	}
@@ -179,7 +205,7 @@ func attachProjectVMs(ctx context.Context, q *generated.Queries, projects []Proj
 	}
 	vms := map[string]*ProjectVM{}
 	for _, row := range rows {
-		vms[row.Profile] = &ProjectVM{Base: row.BaseVm, SharedVM: row.SharedVm, Integration: row.Integration, SetupConversationID: row.SetupConversationID}
+		vms[row.Profile] = &ProjectVM{Base: row.BaseVm, SharedVM: row.SharedVm, ManagedBaseVM: row.ManagedBaseVm, Integration: row.Integration, SetupConversationID: row.SetupConversationID}
 	}
 	for i := range projects {
 		projects[i].VM = vms[projects[i].Name]
@@ -187,10 +213,15 @@ func attachProjectVMs(ctx context.Context, q *generated.Queries, projects []Proj
 	return nil
 }
 
-// NeedsBase reports whether the project's conversations get their own VMs but it
-// has no base yet, which a setup conversation prepares.
+// NeedsBase reports whether the project has a ManagedBaseVM but no base yet,
+// which a setup conversation prepares.
 func (vm *ProjectVM) NeedsBase() bool {
-	return vm.Base == "" && vm.SharedVM == ""
+	return vm.ManagedBaseVM && vm.Base == "" && vm.SharedVM == ""
+}
+
+// Empty reports whether each conversation gets its own new, empty VM.
+func (vm *ProjectVM) Empty() bool {
+	return vm.Base == "" && vm.SharedVM == "" && !vm.ManagedBaseVM
 }
 
 // VMDir is where a VM project's work happens on its VMs.
@@ -203,8 +234,11 @@ func (p *Project) VMDir() string {
 
 // ConversationVMName is the VM name a conversation in a project with vm gets.
 func ConversationVMName(vm ProjectVM, conversationID string) string {
-	if vm.SharedVM != "" {
+	switch {
+	case vm.SharedVM != "":
 		return vm.SharedVM
+	case vm.Base == "":
+		return "shelley-" + strings.ToLower(conversationID)
 	}
 	return vm.Base + "-" + strings.ToLower(conversationID)
 }

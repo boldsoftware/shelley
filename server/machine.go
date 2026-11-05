@@ -59,7 +59,7 @@ func (s *Server) conversationMachine(ctx context.Context, id string) (machine, e
 	if vm.Status != db.ConversationVMReady {
 		return machine{}, fmt.Errorf("%w: VM %s is not ready (%s)", db.ErrConflict, vm.Name, vm.Status)
 	}
-	if !s.conversationVMMasterRunning(ctx, vm.Name) {
+	if !s.conversationVMMasterRunning(ctx, *vm) {
 		if vm, err = s.prepareConversationVMNow(ctx, vm.ConversationID); err != nil {
 			return machine{}, err
 		}

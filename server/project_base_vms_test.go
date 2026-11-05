@@ -39,7 +39,7 @@ func (e *profileEnv) workspace() db.Workspace {
 func (e *profileEnv) newSetupProject(name string) (string, string) {
 	e.t.Helper()
 	var c db.Project
-	if err := json.Unmarshal([]byte(e.want(201, "POST", "/api/projects", `{"name":"`+name+`","cwd":"/r","vm":{"base":"","integration":""}}`)), &c); err != nil {
+	if err := json.Unmarshal([]byte(e.want(201, "POST", "/api/projects", `{"name":"`+name+`","cwd":"/r","vm":{"managed_base_vm":true,"base":"","integration":"base-test-exe"}}`)), &c); err != nil {
 		e.t.Fatal(err)
 	}
 	e.waitTurn(c.VM.SetupConversationID, 0)
@@ -66,7 +66,7 @@ func TestDeleteProjectDeletesItsBaseVM(t *testing.T) {
 	}
 
 	// The setup sets the base; an active conversation blocks deletion.
-	e.want(200, "PUT", path, `{"name":"Remote Work","cwd":"/r","vm":{"base":"remote-work-base","integration":"base-test-exe"}}`)
+	e.want(200, "PUT", path, `{"name":"Remote Work","cwd":"/r","vm":{"managed_base_vm":true,"base":"remote-work-base","integration":"base-test-exe"}}`)
 	var member struct {
 		ConversationID string `json:"conversation_id"`
 	}

@@ -84,7 +84,7 @@ func targetSchema(schema string, vm VM) string {
 
 // VMJobScript runs a command on a VM. Arguments: working directory,
 // command, then environment assignments. The command runs under
-// bash --login in its own session, its output streamed back. When the local
+// bash --login in its own session (or process group, without setsid), its output streamed back. When the local
 // side goes away (stdin EOF), the session is killed, mirroring how a local
 // job's process group dies with it, so the local process's stdin must stay
 // open while it runs.
@@ -98,9 +98,20 @@ exec 3<&0 </dev/null
   kill -KILL -- "-$(cat -- "$pg")" ) >/dev/null 2>&1 &
 w=$!
 exec 3<&-
-setsid -w bash -c 'echo $$ >"$1" && exec bash --login -c "$2"' shelley "$pg" "$cmd" 2>&1
+run='echo $$ >"$1" && exec bash --login -c "$2"'
+if command -v setsid >/dev/null; then
+  setsid -w bash -c "$run" shelley "$pg" "$cmd" 2>&1
+else
+  # No setsid (macOS): job control gives the command its own process group.
+  # Off again before the wait, or bash reports the job's end in its output.
+  set -m
+  bash -c "$run" shelley "$pg" "$cmd" 2>&1 &
+  set +m
+  wait "$!"
+fi
 s=$?
-kill "$w" 2>/dev/null
+exec 2>/dev/null # bash reports the watcher's death there
+kill "$w"
 rm -f -- "$pg"
 exit "$s"`
 
@@ -176,15 +187,21 @@ func (v vmFS) ReadFile(ctx context.Context, path string) ([]byte, error) {
 
 // vmWriteScript writes stdin to $1 (through a symlink, like os.WriteFile)
 // atomically: a dropped connection leaves the file as it was. A new file gets
-// mode $2, an existing one keeps its own.
+// mode $2, an existing one keeps its own. It sticks to what GNU and BSD (macOS)
+// tools share (BSD chmod takes no --; paths are absolute).
 const vmWriteScript = `mkdir -p -- "$(dirname -- "$1")" || exit 1
-f=$(readlink -f -- "$1") || exit 1
+f=$1 n=0
+while [ -L "$f" ]; do
+	[ $((n += 1)) -le 40 ] || exit 1
+	l=$(readlink -- "$f") || exit 1
+	case $l in /*) f=$l ;; *) f=$(dirname -- "$f")/$l ;; esac
+done
 t=$f.shelley-tmp.$$
 trap 'rm -f -- "$t"' EXIT
 if [ -e "$f" ]; then
-	cat >"$t" && chmod --reference="$f" -- "$t"
+	m=$(stat -c %a -- "$f" 2>/dev/null || stat -f %Lp -- "$f") && cat >"$t" && chmod "$m" "$t"
 else
-	cat >"$t" && chmod "$2" -- "$t"
+	cat >"$t" && chmod "$2" "$t"
 fi || exit 1
 mv -f -- "$t" "$f"`
 

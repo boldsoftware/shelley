@@ -74,7 +74,7 @@ func TestProjectGithubReposAndSetup(t *testing.T) {
 	e.srv.listIntegrations = onExeDev
 
 	var created db.Project
-	body := `{"name":"Acme","instructions":"Ship the Acme storefront.","cwd":"/home/exedev","vm":{"base":"","integration":""},
+	body := `{"name":"Acme","instructions":"Ship the Acme storefront.","cwd":"/home/exedev","vm":{"managed_base_vm":true,"base":"","integration":"setup-test-exe"},
 		"repos":[{"integration":"team-acme-api","repository":"acme/api"},{"integration":"acme-web","repository":"acme/web"}]}`
 	if err := json.Unmarshal([]byte(e.want(201, "POST", "/api/projects", body)), &created); err != nil {
 		t.Fatal(err)

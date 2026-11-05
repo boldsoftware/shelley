@@ -90,7 +90,13 @@ async function start() {
       repos.value[i] = added;
     }
     const vm = integration.value
-      ? { base: "", shared_vm: "", integration: integration.value, setup_conversation_id: "" }
+      ? {
+          base: "",
+          managed_base_vm: true,
+          shared_vm: "",
+          integration: integration.value,
+          setup_conversation_id: "",
+        }
       : null;
     const result = await workspaceApi.updateProject(created, {
       name: created,

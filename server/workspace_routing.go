@@ -496,7 +496,7 @@ POST $SHELLEY_API/api/conversation/ID/chat
 POST $SHELLEY_API/api/projects
 PUT $SHELLEY_API/api/projects/NAME
   Complete project body: {"name":"Project name","instructions":"Project instructions (AGENTS.md-style), appended to every task's prompt","cwd":"/absolute/real/project/path","repos":[{"integration":"GITHUB_INTEGRATION","repository":"OWNER/REPO"}],"actions":[{"id":"release","label":"make release","command":"make release","archive_on_success":true,"silent":false},{"id":"test","label":"make test","command":"make test","archive_on_success":false,"silent":false}],"vm":null,"page_url":"https://example.com/"}
-  NAME is the project's name, URL-path-escaped (e.g. my%20project). A different name in a PUT body renames the project. Names are unique among profiles, at most 64 bytes, without "/". cwd can be empty when the environment is not known yet. Use an existing directory once discovered. page_url is the web page the project's view in the UI opens on, e.g. the site its tasks work on ("" for none); omitted, it stays as it is. Instructions are additive to the task's existing prompt; their start is what you route on, so lead with what the project is for. A project is a profile (GET $SHELLEY_API/api/profiles lists them, with "project": true): its settings (model, effort, tools, base system prompt) start as a copy of the default profile's, or of the profile named by "copy_settings_from" when creating; change them with PUT $SHELLEY_API/api/profiles/NAME (the complete settings). vm is null (tasks run on this host), {"base":"BASE_VM","integration":"EXE_DEV_INTEGRATION"} (each new task runs its tools and actions on its own VM copied from BASE_VM), or {"shared_vm":"VM","integration":"EXE_DEV_INTEGRATION"} (every task runs on that one existing VM, concurrently, in its own directory; Shelley never creates, copies, or deletes it, and it gets no access to this Shelley's API); cwd is then a directory on the VM. Browser runs on this host for VM tasks; files users upload stay on this host; tasks copy them to the VM with scp. An empty integration means this host's default exe.dev integration: the only one, or the one named after this VM (an error names the choices otherwise). An empty base without shared_vm starts a setup task in the project (vm.setup_conversation_id) that creates and prepares a base VM, cloning each repo to ~/REPO on it, then sets vm.base; until then the project refuses new tasks. repos are GitHub repositories this host reaches through exe.dev GitHub integrations (GET $SHELLEY_API/api/github-repos lists them, one per integration). The user adds the account's other repositories and integrations to a project in its editor, which attaches them to exe.dev tag shelley-<project slug> and gives that tag to the project's VMs. Always send the project's current vm and repos back unchanged unless asked to change it; omitting it turns task VMs off (and ends a setup). Enabling or changing vm needs the user's approval: it creates VMs on their account, or runs tasks on a VM they share. Archiving a task on its own VM (by any route) deletes the VM Shelley created for it, losing uncommitted work there; unarchiving continues on a fresh copy of the base. Action ids are up to 64 letters, digits, "-" and "_". A run's result is sent to its task's agent unless the action is "silent". Keep actions deliberate and minimal: commands execute with the user's VM permissions, so do not add destructive cleanup or external side effects without authorization.
+  NAME is the project's name, URL-path-escaped (e.g. my%20project). A different name in a PUT body renames the project. Names are unique among profiles, at most 64 bytes, without "/". cwd can be empty when the environment is not known yet. Use an existing directory once discovered. page_url is the web page the project's view in the UI opens on, e.g. the site its tasks work on ("" for none); omitted, it stays as it is. Instructions are additive to the task's existing prompt; their start is what you route on, so lead with what the project is for. A project is a profile (GET $SHELLEY_API/api/profiles lists them, with "project": true): its settings (model, effort, tools, base system prompt) start as a copy of the default profile's, or of the profile named by "copy_settings_from" when creating; change them with PUT $SHELLEY_API/api/profiles/NAME (the complete settings). vm is null (tasks run on this host), {"base":"BASE_VM","integration":"EXE_DEV_INTEGRATION"} (each new task runs its tools and actions on its own VM copied from BASE_VM), {"base":"","integration":"EXE_DEV_INTEGRATION"} (each new task gets its own new, empty VM, and its agent clones and installs what it needs), or {"shared_vm":"VM","integration":"EXE_DEV_INTEGRATION"} (every task runs on that one existing VM, concurrently, all starting in cwd; Shelley never creates, copies, or deletes it, and it gets no access to this Shelley's API), or {"shared_vm":"[user@]HOST","integration":""} (likewise, on any machine this host reaches with its own SSH configuration and keys, e.g. a Tailscale host or a ~/.ssh/config alias); cwd is then a directory on the VM. Browser runs on this host for VM tasks; files users upload stay on this host; tasks copy them to the VM with scp. EXE_DEV_INTEGRATION is one of GET $SHELLEY_API/api/exe-dev-integrations ("default" is this host's); an empty integration means ssh, so only a shared_vm can omit it. Experimental, only when the user asks for it: {"base":"","managed_base_vm":true,"integration":"EXE_DEV_INTEGRATION"} starts a setup task in the project (vm.setup_conversation_id) that creates and prepares a base VM, cloning each repo to ~/REPO on it, then sets vm.base; until then the project refuses new tasks. repos are GitHub repositories this host reaches through exe.dev GitHub integrations (GET $SHELLEY_API/api/github-repos lists them, one per integration). The user adds the account's other repositories and integrations to a project in its editor, which attaches them to exe.dev tag shelley-<project slug> and gives that tag to the project's VMs. Always send the project's current vm and repos back unchanged unless asked to change it; omitting it turns task VMs off (and ends a setup). Enabling or changing vm needs the user's approval: it creates VMs on their account, or runs tasks on a VM they share. Archiving a task on its own VM (by any route) deletes the VM Shelley created for it, losing uncommitted work there; unarchiving continues on a fresh copy of the base (or a new, empty VM). Action ids are up to 64 letters, digits, "-" and "_". A run's result is sent to its task's agent unless the action is "silent". Keep actions deliberate and minimal: commands execute with the user's VM permissions, so do not add destructive cleanup or external side effects without authorization.
 PUT $SHELLEY_API/api/conversation/ID/project
   Body: {"project":"Existing project name"}; moves an idle task, not the Assistant. Unless its settings were changed, it takes the new project's at its next turn.
 POST $SHELLEY_API/api/conversations/import
@@ -551,6 +551,9 @@ func (s *Server) conversationVMPrompt(ctx context.Context, id string) (string, e
 	if vm.HTTPSURL != "" {
 		web = vm.HTTPSURL
 	}
+	forward := "`ssh -fN -L LOCALPORT:localhost:PORT " + vm.Name + "`"
+	browser := fmt.Sprintf("The browser runs on this host. The user reaches the VM's web server on port 8000 at %s, and port PORT at that address with :PORT, behind their exe.dev login, which the browser doesn't have; to browse a VM port, forward it (ssh_target \"localhost\": %s) and open http://localhost:LOCALPORT.", web, forward)
+	reach := "While the VM is being created (a minute or two), ssh_target calls wait for it. If it can't be reached, the call's error says why: retry, or report it."
 	workspace, err := s.db.WorkspaceMode(ctx)
 	if err != nil {
 		return "", err
@@ -560,9 +563,17 @@ func (s *Server) conversationVMPrompt(ctx context.Context, id string) (string, e
 		this, others = "task", "tasks"
 	}
 	where := fmt.Sprintf("its own exe.dev VM %q, a copy of %q", vm.Name, vm.Base)
+	if vm.Base == "" && !vm.Shared {
+		where = fmt.Sprintf("its own exe.dev VM %q, a new exe.dev VM that started empty: Shelley created %s on it, but clone repositories and install what the work needs yourself", vm.Name, vm.Dir)
+	}
 	lifecycle := fmt.Sprintf("Archiving this %s deletes the VM, losing anything not pushed or published from it.", this)
 	if vm.Shared {
 		where = fmt.Sprintf("the exe.dev VM %q, which it SHARES with the project's other %s and with whatever else runs there", vm.Name, others)
+		if vm.SSHHost() {
+			where = fmt.Sprintf("the machine %q, reached with this host's own SSH configuration, which it SHARES with the project's other %s and with whatever else runs there", vm.Name, others)
+			browser = fmt.Sprintf("The browser runs on this host; to browse a port on %s, forward it (ssh_target \"localhost\": %s) and open http://localhost:LOCALPORT.", vm.Name, forward)
+			reach = "If it can't be reached, the call's error says why: retry, or report it."
+		}
 		lifecycle = fmt.Sprintf("Other %s may work on this VM concurrently: work in your own git worktree or directory, don't disturb files, ports, processes, or services you didn't start, and coordinate before changing anything shared. The VM's own Shelley, if any, is a different instance. Archiving this %s leaves the VM and its files as they are.", others, this)
 	}
 	var actions string
@@ -581,12 +592,12 @@ This %[7]s's work happens on %[1]s, in %[3]s. The agent loop and your tools run 
 
 - Paths in the project instructions are VM paths. Read the repository's AGENTS.md (and similar guidance) on the VM before changing anything: guidance files and skills listed elsewhere in this prompt come from this host.
 - Your working directory here starts as %[4]s, this %[7]s's scratch space. To look at or send a VM file, copy it here first (ssh_target "localhost": `+"`scp %[2]s:FILE %[4]s/`"+`), then use read_image, output_iframe, or a message_user attachment. Image embeds and file links in your messages (![alt](/path), [name](sandbox:/path)) show the user this host's file at that path or, if this host has none, %[2]s's: give VM files by their absolute path on %[2]s. Files the user uploads arrive on this host (paths in their messages); copy them over with `+"`scp FILE %[2]s:DIR/`"+`. ssh, scp and rsync to %[2]s work from this host with no keys or options.
-- The browser runs on this host. The user reaches the VM's web server on port 8000 at %[8]s, and port PORT at that address with :PORT, behind their exe.dev login, which the browser doesn't have; to browse a VM port, forward it (ssh_target "localhost": `+"`ssh -fN -L LOCALPORT:localhost:PORT %[2]s`"+`) and open http://localhost:LOCALPORT.
+- %[8]s
 - Run long commands in bash's background mode, or in tmux on the VM.%[5]s
-- While the VM is being created (a minute or two), ssh_target calls wait for it. If it can't be reached, the call's error says why: retry, or report it. Never fall back to doing the work on this host.
+- %[9]s Never fall back to doing the work on this host.
 %[6]s
 </project_vm>
-`, where, vm.Name, dir, scratch, actions, lifecycle, this, web), nil
+`, where, vm.Name, dir, scratch, actions, lifecycle, this, browser, reach), nil
 }
 
 // writeProjectPrompt writes a project conversation's project instructions
@@ -603,7 +614,7 @@ func (s *Server) writeProjectPrompt(ctx context.Context, out *strings.Builder, c
 	}
 	out.WriteString("\n</project_instructions>\n")
 	for _, repo := range current.Repos {
-		if current.VM != nil {
+		if vm := current.VM; vm != nil && !vm.Empty() {
 			fmt.Fprintf(out, "Project repository: %s (exe.dev GitHub integration %q; on its VMs at ~/%s).\n", repo.Repository, repo.Integration, repo.Name())
 		} else {
 			fmt.Fprintf(out, "Project repository: %s (exe.dev GitHub integration %q).\n", repo.Repository, repo.Integration)

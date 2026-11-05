@@ -248,7 +248,13 @@ test("project deletion plan: active conversations block; the setup conversation 
   data.runs = [];
   const setup = {
     ...blog,
-    vm: { base: "", shared_vm: "", integration: "i", setup_conversation_id: "setup" },
+    vm: {
+      managed_base_vm: true,
+      base: "",
+      shared_vm: "",
+      integration: "i",
+      setup_conversation_id: "setup",
+    },
   };
   data.conversations.push({
     conversation_id: "setup",
@@ -268,10 +274,25 @@ test("project deletion plan: active conversations block; the setup conversation 
   data.base_vms = [];
   const own = {
     ...blog,
-    vm: { base: "mine", shared_vm: "", integration: "i", setup_conversation_id: "" },
+    vm: {
+      managed_base_vm: false,
+      base: "mine",
+      shared_vm: "",
+      integration: "i",
+      setup_conversation_id: "",
+    },
   };
   const plan = projectDeletionPlan(data, own, translate);
   assert.deepEqual([plan.deletesVMs, plan.keepsVMs, plan.setupId], [[], ["base VM mine"], ""]);
+
+  const shared = { ...blog, vm: { ...own.vm, base: "", shared_vm: "hub" } };
+  assert.deepEqual(projectDeletionPlan(data, shared, translate).keepsVMs, ["shared VM hub"]);
+  const ssh = { ...blog, vm: { ...shared.vm, shared_vm: "me@devbox", integration: "" } };
+  assert.deepEqual(projectDeletionPlan(data, ssh, translate).keepsVMs, ["SSH host me@devbox"]);
+
+  // A base an agent set up that Shelley no longer lists as its own stays.
+  const managed = { ...blog, vm: { ...own.vm, managed_base_vm: true, base: "made" } };
+  assert.deepEqual(projectDeletionPlan(data, managed, translate).keepsVMs, ["base VM made"]);
 });
 
 test("projectNameProblem refuses what the server would", () => {

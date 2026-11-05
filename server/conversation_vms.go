@@ -94,6 +94,9 @@ func conversationVMArchived(vm *db.ConversationVM) error {
 		return nil
 	case vm.Shared:
 		return fmt.Errorf("%w: this conversation is archived; unarchive it to continue on the shared VM %s", db.ErrConflict, vm.Name)
+	case vm.Base == "":
+		return fmt.Errorf("%w: this conversation is archived, which deletes its VM %s; unarchive it to continue on a new, empty VM",
+			db.ErrConflict, vm.Name)
 	default:
 		return fmt.Errorf("%w: this conversation is archived, which deletes its VM %s; unarchive it to continue on a fresh copy of %s",
 			db.ErrConflict, vm.Name, vm.Base)
@@ -119,7 +122,7 @@ func (s *Server) prepareConversationVMNow(ctx context.Context, conversationID st
 	if err := conversationVMArchived(vm); err != nil {
 		return nil, err
 	}
-	if vm.Status == db.ConversationVMReady && s.conversationVMMasterRunning(ctx, vm.Name) {
+	if vm.Status == db.ConversationVMReady && s.conversationVMMasterRunning(ctx, *vm) {
 		return vm, nil
 	}
 	err = s.connectConversationVM(ctx, vm)
@@ -143,8 +146,13 @@ func (s *Server) prepareConversationVMNow(ctx context.Context, conversationID st
 
 // connectConversationVM copies the base VM unless the conversation's VM exists, recording
 // the copy's identity, then starts the control master, waiting for a new
-// VM's SSH to come up. A shared VM must already exist.
+// VM's SSH to come up. A shared VM must already exist. An SSH host never
+// involves exe.dev.
 func (s *Server) connectConversationVM(ctx context.Context, vm *db.ConversationVM) error {
+	if vm.SSHHost() {
+		vm.SSHDest = vm.Name
+		return s.startConversationVMMaster(ctx, vm, time.Now())
+	}
 	dir, err := s.conversationVMDir()
 	if err != nil {
 		return err
@@ -170,7 +178,20 @@ func (s *Server) connectConversationVM(ctx context.Context, vm *db.ConversationV
 		if err := s.db.UpdateConversationVM(context.WithoutCancel(ctx), *vm); err != nil {
 			return fmt.Errorf("record conversation VM %s: %w", vm.Name, err)
 		}
-		if _, err := s.exeDev(ctx, vm.Integration, "cp "+vm.Base+" "+vm.Name+" --json"); err != nil {
+		create := "cp " + vm.Base + " " + vm.Name + " --json"
+		if vm.Base == "" {
+			create = "new --name=" + vm.Name + " --comment='Shelley conversation " + vm.ConversationID + "' --json"
+			// A copy keeps its base's tags; a new VM gets the project's
+			// tag, which brings integrations added in Edit project.
+			tag, err := s.conversationProjectTag(ctx, vm)
+			if err != nil {
+				return err
+			}
+			if tag != "" {
+				create += " --tag=" + tag
+			}
+		}
+		if _, err := s.exeDev(ctx, vm.Integration, create); err != nil {
 			return err
 		}
 		// A new VM's host key is new too, even if the name was used before.
@@ -179,7 +200,7 @@ func (s *Server) connectConversationVM(ctx context.Context, vm *db.ConversationV
 			return err
 		}
 		if found == nil {
-			return fmt.Errorf("exe.dev cp %s %s reported success, but the VM is not listed", vm.Base, vm.Name)
+			return fmt.Errorf("exe.dev %s reported success, but the VM is not listed", create)
 		}
 		if found.CreatedAt == "" {
 			return fmt.Errorf("exe.dev ls %s lists no creation time, so Shelley could not delete it later", vm.Name)
@@ -203,21 +224,34 @@ func (s *Server) connectConversationVM(ctx context.Context, vm *db.ConversationV
 	if err := s.writeVMSSHConfig(context.WithoutCancel(ctx)); err != nil {
 		return err
 	}
-	config, err := s.vmSSHConfigPath()
+	return s.startConversationVMMaster(ctx, vm, deadline)
+}
+
+// startConversationVMMaster starts vm's SSH control master unless it is
+// running, retrying until deadline.
+func (s *Server) startConversationVMMaster(ctx context.Context, vm *db.ConversationVM, deadline time.Time) error {
+	// Another conversation's preparation already connected a shared VM.
+	if s.conversationVMMasterRunning(ctx, *vm) {
+		return nil
+	}
+	dir, err := s.conversationVMDir()
 	if err != nil {
 		return err
 	}
-	// Another conversation's preparation already connected a shared VM.
-	if s.conversationVMMasterRunning(ctx, vm.Name) {
-		return nil
+	options, err := s.conversationVMSSHOptions(*vm)
+	if err != nil {
+		return err
+	}
+	if !vm.SSHHost() {
+		// An exe.dev VM that isn't ready yet has a configuration explaining
+		// that to anyone else connecting; Shelley's connections bypass it.
+		options = append(options, "-o", "ProxyCommand=none")
 	}
 	logPath := filepath.Join(dir, vm.Name+".log")
 	for {
 		os.Remove(logPath)
-		// The VM isn't ready yet, so its configuration explains that to
-		// anyone else connecting; this connection bypasses it.
-		cmd := exec.CommandContext(ctx, s.sshProgram(), "-F", config, "-o", "ProxyCommand=none",
-			"-o", "ControlMaster=yes", "-o", "ControlPersist=4h", "-N", "-f", "-E", logPath, vm.Name)
+		args := append([]string{"-o", "ControlMaster=yes", "-o", "ControlPersist=4h"}, options...)
+		cmd := exec.CommandContext(ctx, s.sshProgram(), append(args, "-N", "-f", "-E", logPath, vm.Name)...)
 		// -f leaves the master running; it must not hold pipes of ours. It
 		// outlives a restart (the next process reuses it) and exits when
 		// idle, e.g. once a preview instance is gone; ssh connects
@@ -225,7 +259,7 @@ func (s *Server) connectConversationVM(ctx context.Context, vm *db.ConversationV
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil
 		err := cmd.Run()
 		if err == nil {
-			return nil
+			return s.createConversationVMDir(ctx, vm)
 		}
 		log, _ := os.ReadFile(logPath)
 		err = fmt.Errorf("ssh %s: %w: %s", vm.Name, err, bytes.TrimSpace(log))
@@ -239,6 +273,24 @@ func (s *Server) connectConversationVM(ctx context.Context, vm *db.ConversationV
 		case <-time.After(2 * time.Second):
 		}
 	}
+}
+
+// createConversationVMDir creates the working directory on a new, empty VM,
+// which lacks it; a copy of a base or a shared VM has it already.
+func (s *Server) createConversationVMDir(ctx context.Context, vm *db.ConversationVM) error {
+	if vm.Shared || vm.Base != "" {
+		return nil
+	}
+	target, err := s.conversationVMTarget(vm)
+	if err != nil {
+		return err
+	}
+	argv := target.Command(`mkdir -p -- "$1"`, vm.Dir)
+	out, err := exec.CommandContext(ctx, argv[0], argv[1:]...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("create %s on VM %s: %w: %s", vm.Dir, vm.Name, err, bytes.TrimSpace(out))
+	}
+	return nil
 }
 
 func (s *Server) sshProgram() string {
@@ -266,26 +318,32 @@ func createdSince(createdAt string, requested time.Time) bool {
 	return err == nil && !created.Before(requested.Add(-time.Minute))
 }
 
-// conversationVMMasterRunning reports whether VM name's control master is up.
+// conversationVMMasterRunning reports whether vm's control master is up.
 // Like closeConversationVMConnection, it names the control socket itself:
 // the SSH configuration lists only active conversations' VMs.
-func (s *Server) conversationVMMasterRunning(ctx context.Context, name string) bool {
-	control, err := s.conversationVMControlPath(name)
+func (s *Server) conversationVMMasterRunning(ctx context.Context, vm db.ConversationVM) bool {
+	control, err := s.conversationVMControlPath(vm)
 	if err != nil {
 		return false
 	}
-	return exec.CommandContext(ctx, s.sshProgram(), "-F", os.DevNull, "-o", "ControlPath="+control, "-O", "check", name).Run() == nil
+	return exec.CommandContext(ctx, s.sshProgram(), "-F", os.DevNull, "-o", "ControlPath="+control, "-O", "check", vm.Name).Run() == nil
 }
 
-// conversationVMControlPath is VM name's control socket. Its name is a hash:
-// a socket path must fit in about 100 bytes, VM names take up to 42, and ssh
-// appends 17 more while it creates the socket.
-func (s *Server) conversationVMControlPath(name string) (string, error) {
+// conversationVMControlPath is vm's control socket. Its name is a hash: a
+// socket path must fit in about 100 bytes, VM names take up to 42 (ssh
+// destinations 255), and ssh appends 17 more while it creates the socket. An
+// SSH host's is distinct from an exe.dev VM's of the same name: they are
+// different machines.
+func (s *Server) conversationVMControlPath(vm db.ConversationVM) (string, error) {
 	dir, err := s.conversationVMDir()
 	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256([]byte(name))
+	key := vm.Name
+	if vm.SSHHost() {
+		key = "ssh:" + vm.Name
+	}
+	sum := sha256.Sum256([]byte(key))
 	return filepath.Join(dir, hex.EncodeToString(sum[:8])+".ctl"), nil
 }
 
@@ -350,15 +408,33 @@ func (s *Server) conversationVMTools(ctx context.Context, conversation *generate
 }
 
 func (s *Server) conversationVMTarget(vm *db.ConversationVM) (conversationVMTarget, error) {
-	config, err := s.vmSSHConfigPath()
-	return conversationVMTarget{s: s, owner: vm.ConversationID, name: vm.Name, dir: vm.Dir, config: config}, err
+	options, err := s.conversationVMSSHOptions(*vm)
+	return conversationVMTarget{s: s, owner: vm.ConversationID, name: vm.Name, dir: vm.Dir, options: options}, err
 }
 
-// conversationVMTarget is a VM conversation's claudetool.VM: its VM over SSH, through this
-// instance's SSH configuration and the VM's control master.
+// conversationVMSSHOptions are the ssh options that reach vm. An exe.dev VM's
+// are all in this instance's SSH configuration. An SSH host is the user's, so
+// their own configuration (keys, agent, aliases, ProxyJump) applies, plus
+// what Shelley needs: its control master, and failing rather than prompting.
+// Its new host keys are trusted on first use, as exe.dev VMs' are.
+func (s *Server) conversationVMSSHOptions(vm db.ConversationVM) ([]string, error) {
+	if !vm.SSHHost() {
+		config, err := s.vmSSHConfigPath()
+		return []string{"-F", config}, err
+	}
+	control, err := s.conversationVMControlPath(vm)
+	return []string{
+		"-o", "ControlPath=" + control, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
+		"-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4",
+	}, err
+}
+
+// conversationVMTarget is a VM conversation's claudetool.VM: its VM over SSH,
+// through its SSH options and the VM's control master.
 type conversationVMTarget struct {
-	s                        *Server
-	owner, name, dir, config string
+	s                *Server
+	owner, name, dir string
+	options          []string
 }
 
 func (t conversationVMTarget) Name() string { return t.name }
@@ -370,18 +446,19 @@ func (t conversationVMTarget) Prepare(ctx context.Context) error {
 }
 
 func (t conversationVMTarget) Command(script string, args ...string) []string {
-	return []string{
-		t.s.sshProgram(), "-F", t.config, "-T", t.name,
-		shellJoin(append([]string{"bash", "-c", script, "shelley"}, args...)),
-	}
+	// Only Shelley starts masters: one started by a command would hold that
+	// command's output open.
+	return t.ssh("-T", script, args...)
 }
 
 // Terminal is Command with a terminal on the VM, for the user's.
 func (t conversationVMTarget) Terminal(script string, args ...string) []string {
-	return []string{
-		t.s.sshProgram(), "-F", t.config, "-tt", t.name,
-		shellJoin(append([]string{"bash", "-c", script, "shelley"}, args...)),
-	}
+	return t.ssh("-tt", script, args...)
+}
+
+func (t conversationVMTarget) ssh(tty, script string, args ...string) []string {
+	argv := append([]string{t.s.sshProgram(), "-o", "ControlMaster=no"}, t.options...)
+	return append(argv, tty, t.name, shellJoin(append([]string{"bash", "-c", script, "shelley"}, args...)))
 }
 
 // conversationVMDir holds this instance's SSH control sockets, logs, known
@@ -584,4 +661,18 @@ func (s *Server) conversationVMLock(name string) *sync.Mutex {
 		s.conversationVMs.locks[name] = &sync.Mutex{}
 	}
 	return s.conversationVMs.locks[name]
+}
+
+// conversationProjectTag is the exe.dev tag of the conversation's project
+// if an integration uses it, else "".
+func (s *Server) conversationProjectTag(ctx context.Context, vm *db.ConversationVM) (string, error) {
+	conv, err := s.db.GetConversationByID(ctx, vm.ConversationID)
+	if err != nil {
+		return "", err
+	}
+	project := db.ParseConversationOptions(conv.ConversationOptions).Profile
+	if project == "" {
+		return "", nil
+	}
+	return s.projectTagInUse(ctx, vm.Integration, project)
 }

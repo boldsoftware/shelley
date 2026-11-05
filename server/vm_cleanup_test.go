@@ -24,6 +24,9 @@ type fakeExeDev struct {
 	rmErr    error
 	// newGate, if set, holds each new until it receives.
 	newGate chan struct{}
+	// integrations, if set, is what `integrations list --json` prints;
+	// otherwise the key can't list them, as a tag-scoped key.
+	integrations string
 }
 
 func (f *fakeExeDev) exec(_ context.Context, _, command string) ([]byte, error) {
@@ -54,7 +57,10 @@ func (f *fakeExeDev) exec(_ context.Context, _, command string) ([]byte, error) 
 		name := strings.TrimPrefix(args[1], "--name=")
 		f.vms[name] = time.Now().UTC().Format(time.RFC3339)
 		return []byte(`{}`), nil
-	case "integrations": // as for a tag-scoped key
+	case "integrations":
+		if f.integrations != "" {
+			return []byte(f.integrations), nil
+		}
 		return nil, &exeDevError{Command: command, Message: "tag-scoped SSH keys cannot list integrations"}
 	}
 	return nil, errors.New("unexpected command " + command)
@@ -142,7 +148,7 @@ func TestArchiveDeletesConversationVM(t *testing.T) {
 	// Its SSH master is closed, though the SSH configuration no longer
 	// lists the VM.
 	ssh := &fakeSSH{dir: filepath.Dir(s.conversationVMs.ssh)}
-	control, err := s.conversationVMControlPath(vm.Name)
+	control, err := s.conversationVMControlPath(vm)
 	if err != nil {
 		t.Fatal(err)
 	}

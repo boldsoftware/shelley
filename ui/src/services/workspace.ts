@@ -22,8 +22,8 @@ export interface Project {
   instructions: string;
   cwd: string;
   actions: ProjectAction[];
-  /** If set, conversations run their tools and actions on exe.dev VMs: each on its
-   * own copy of base, or all on shared_vm. */
+  /** If set, conversations run their tools and actions on exe.dev VMs, or on
+   * a machine this host reaches over ssh; null runs them on this host. */
   vm: ProjectVM | null;
   /** GitHub repositories attached through exe.dev GitHub integrations. */
   repos: ProjectRepo[];
@@ -112,19 +112,26 @@ export type ExeAccountChange =
   | { action: "tag" }
   | { action: "github"; repository: string };
 
+/** Where a project's conversations run off this host: all on shared_vm if
+ * it is set, else each on its own VM, copied from base, or new and empty
+ * while base is "" and managed_base_vm is off. */
 export interface ProjectVM {
-  /** "" while a setup conversation prepares the base; saving with "" (and no
-   * shared_vm) starts one. */
+  /** The base each conversation's own VM is copied from; "" with shared_vm. */
   base: string;
-  /** An existing VM all conversations share; Shelley never creates or deletes it. */
+  /** An agent builds base: while it is "", a setup conversation prepares
+   * one and new conversations wait. */
+  managed_base_vm: boolean;
+  /** The existing VM all conversations share; Shelley never creates or
+   * deletes it. With integration "", an ssh destination ([user@]host),
+   * reached with this host's own SSH configuration and keys. */
   shared_vm: string;
   integration: string;
   /** Read-only: the conversation preparing the base while base is "". */
   setup_conversation_id: string;
 }
 
-/** A conversation's exe.dev VM: its own, or its project's shared VM. Subagents
- * share their parent's VM. */
+/** A conversation's VM: its own, or its project's shared VM or SSH host
+ * (integration ""). Subagents share their parent's VM. */
 export interface ConversationVM {
   conversation_id: string;
   vm_name: string;

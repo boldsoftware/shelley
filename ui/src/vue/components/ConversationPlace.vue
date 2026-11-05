@@ -24,7 +24,8 @@
     <template v-if="vm && status">
       <p>
         {{ vmPlace(vm, t) }}
-        <span v-if="vm.status === 'deleted'">{{ vm.vm_name }}</span>
+        <!-- An SSH host (no integration) has no exe.dev page. -->
+        <span v-if="vm.status === 'deleted' || !vm.integration">{{ vm.vm_name }}</span>
         <a
           v-else
           :href="vm.https_url || `https://${vm.vm_name}.exe.xyz/`"

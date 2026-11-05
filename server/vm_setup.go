@@ -13,7 +13,7 @@ import (
 	"shelley.exe.dev/slug"
 )
 
-// Base VM setup: turning a project's VMs on without a base (vm.base "")
+// Base VM setup: turning a managed project's VMs on without a base (vm.base "")
 // starts a setup conversation in that project. It runs here, not on a VM: it reads
 // the project's local checkout, creates and prepares the base through the
 // project's integration, then sets vm.base. Until then the project refuses
@@ -138,7 +138,7 @@ This conversation prepares the base VM of project %[1]q. Each conversation in th
 4. %[7]s
 5. Find out what the work needs from the project's instructions, repositories, and actions, its directory %[6]q (a path on the base and every conversation VM), and any checkout at that path on this host: its real remote, guidance (AGENTS.md, README), setup/bootstrap scripts, and toolchain pins. Clone from real remotes, using credentials the VM gets through exe.dev integrations or tags. Install the toolchains, run the repositories' setup/bootstrap scripts, build once to warm caches, and check that each project action can run there (its command and prerequisites exist); run only actions without external side effects, never publishing (archive_on_success) ones.
 6. Never copy private keys, tokens, or other secrets to the VM without the user's explicit approval in this conversation: ask and wait. Don't edit, commit, or push the repositories on this host or the VM: setup installs tools and warms caches, and the base's checkouts should match their remotes. If the work seems to need a code change, report it instead.
-7. When the base is ready, GET $SHELLEY_API/api/workspace and PUT $SHELLEY_API/api/projects/%[2]s with the project's complete body and "vm":{"base":"NAME","integration":%[3]q}. That ends the setup; new conversations are then copied from the base.
+7. When the base is ready, GET $SHELLEY_API/api/workspace and PUT $SHELLEY_API/api/projects/%[2]s with the project's complete body and "vm":{"base":"NAME","managed_base_vm":true,"integration":%[3]q}. That ends the setup; new conversations are then copied from the base.
 8. Report briefly: the VM and its link (its https_url), what you set up and checked, and anything you could not set up and why (e.g. secrets left for the user). If you cannot finish, say why and leave vm.base unset; the user can switch the project's conversations to run on this host instead.
 </base_vm_setup>
 `, project.Name, url.PathEscape(project.Name), project.VM.Integration, baseVMName(project), agent, project.Cwd, repos, host), nil

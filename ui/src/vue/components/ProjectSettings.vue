@@ -252,7 +252,9 @@ const placement = computed<ProjectPlacement>(() => {
   const vm = draft.value.vm;
   return {
     integration: vm?.integration ?? "",
-    mode: !vm ? "host" : vm.shared_vm ? "shared" : "own",
+    // An SSH host (a shared_vm with no integration) is no exe.dev VM: like
+    // own VMs not created yet, the account's integrations reach none.
+    mode: !vm ? "host" : vm.shared_vm && vm.integration ? "shared" : "own",
     base: vm?.base ?? "",
     shared_vm: vm?.shared_vm ?? "",
   };

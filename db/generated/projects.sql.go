@@ -91,7 +91,7 @@ func (q *Queries) CreateProjectRepo(ctx context.Context, arg CreateProjectRepoPa
 const createProjectVMSetup = `-- name: CreateProjectVMSetup :execrows
 INSERT INTO profile_vm_setups (profile, conversation_id)
 SELECT v.profile, CAST(?1 AS TEXT) FROM profile_vms v
-WHERE v.profile = ?2 AND v.base_vm = '' AND v.shared_vm = ''
+WHERE v.profile = ?2 AND v.managed_base_vm AND v.base_vm = '' AND v.shared_vm = ''
 `
 
 type CreateProjectVMSetupParams struct {
@@ -99,8 +99,8 @@ type CreateProjectVMSetupParams struct {
 	Profile        string `json:"profile"`
 }
 
-// Records the conversation setting up the base VM of a project whose VMs
-// have no base or shared VM.
+// Records the conversation setting up the managed base VM of a project
+// that has none yet.
 func (q *Queries) CreateProjectVMSetup(ctx context.Context, arg CreateProjectVMSetupParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, createProjectVMSetup, arg.ConversationID, arg.Profile)
 	if err != nil {
@@ -327,7 +327,7 @@ func (q *Queries) ListProjectRepos(ctx context.Context) ([]ProfileRepo, error) {
 }
 
 const listProjectVMs = `-- name: ListProjectVMs :many
-SELECT v.profile, v.base_vm, v.shared_vm, v.integration,
+SELECT v.profile, v.base_vm, v.shared_vm, v.managed_base_vm, v.integration,
     CAST(COALESCE(s.conversation_id, '') AS TEXT) AS setup_conversation_id
 FROM profile_vms v LEFT JOIN profile_vm_setups s ON s.profile = v.profile
 `
@@ -336,6 +336,7 @@ type ListProjectVMsRow struct {
 	Profile             string `json:"profile"`
 	BaseVm              string `json:"base_vm"`
 	SharedVm            string `json:"shared_vm"`
+	ManagedBaseVm       bool   `json:"managed_base_vm"`
 	Integration         string `json:"integration"`
 	SetupConversationID string `json:"setup_conversation_id"`
 }
@@ -353,6 +354,7 @@ func (q *Queries) ListProjectVMs(ctx context.Context) ([]ListProjectVMsRow, erro
 			&i.Profile,
 			&i.BaseVm,
 			&i.SharedVm,
+			&i.ManagedBaseVm,
 			&i.Integration,
 			&i.SetupConversationID,
 		); err != nil {
@@ -496,16 +498,17 @@ func (q *Queries) UpsertProjectBaseVM(ctx context.Context, arg UpsertProjectBase
 }
 
 const upsertProjectVM = `-- name: UpsertProjectVM :exec
-INSERT INTO profile_vms (profile, base_vm, shared_vm, integration) VALUES (?, ?, ?, ?)
+INSERT INTO profile_vms (profile, base_vm, shared_vm, managed_base_vm, integration) VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (profile) DO UPDATE SET
-    base_vm = excluded.base_vm, shared_vm = excluded.shared_vm, integration = excluded.integration
+    base_vm = excluded.base_vm, shared_vm = excluded.shared_vm, managed_base_vm = excluded.managed_base_vm, integration = excluded.integration
 `
 
 type UpsertProjectVMParams struct {
-	Profile     string `json:"profile"`
-	BaseVm      string `json:"base_vm"`
-	SharedVm    string `json:"shared_vm"`
-	Integration string `json:"integration"`
+	Profile       string `json:"profile"`
+	BaseVm        string `json:"base_vm"`
+	SharedVm      string `json:"shared_vm"`
+	ManagedBaseVm bool   `json:"managed_base_vm"`
+	Integration   string `json:"integration"`
 }
 
 func (q *Queries) UpsertProjectVM(ctx context.Context, arg UpsertProjectVMParams) error {
@@ -513,6 +516,7 @@ func (q *Queries) UpsertProjectVM(ctx context.Context, arg UpsertProjectVMParams
 		arg.Profile,
 		arg.BaseVm,
 		arg.SharedVm,
+		arg.ManagedBaseVm,
 		arg.Integration,
 	)
 	return err

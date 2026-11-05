@@ -119,7 +119,7 @@ func TestImportConversations(t *testing.T) {
 	}
 	// A VM project still setting up its base refuses imports, as it refuses
 	// new conversations.
-	p.VM = &db.ProjectVM{Integration: p.VM.Integration}
+	p.VM = &db.ProjectVM{ManagedBaseVM: true, Integration: p.VM.Integration}
 	if err := database.UpdateProject(ctx, project, *p); err != nil {
 		t.Fatal(err)
 	}

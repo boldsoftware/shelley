@@ -232,7 +232,7 @@ func (s *Server) closeConversationVMConnection(vm db.ConversationVM) {
 		s.logger.Warn("Conversation VM cleanup: state directory", "vm", vm.Name, "error", err)
 		return
 	}
-	control, err := s.conversationVMControlPath(vm.Name)
+	control, err := s.conversationVMControlPath(vm)
 	if err != nil {
 		s.logger.Warn("Conversation VM cleanup: control socket", "vm", vm.Name, "error", err)
 		return

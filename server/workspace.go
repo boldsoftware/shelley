@@ -277,10 +277,6 @@ func (s *Server) decodeProject(w http.ResponseWriter, r *http.Request) (*project
 			return nil, false
 		}
 	}
-	if err := s.resolveProjectIntegration(r.Context(), req.VM); err != nil {
-		s.workspaceHTTPError(w, err)
-		return nil, false
-	}
 	return &req, true
 }
 
