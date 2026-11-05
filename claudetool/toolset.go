@@ -119,9 +119,14 @@ type ToolSetConfig struct {
 	ToolOverrides map[string]string
 	// DisableAllTools disables every tool by default; ToolOverrides with "on" re-enable.
 	DisableAllTools bool
-	// VM, if set, is another machine the conversation works on: bash and
-	// patch calls then choose their target, it or this host (see VM).
+	// VM, if set, is another machine the conversation works on: bash, patch
+	// and change_dir calls then choose their target, it or this host (see
+	// VM). WorkingDir is then on the VM, and HostDir is the one here.
 	VM VM
+	// HostDir, with a VM, is the conversation's working directory on this
+	// host: its scratch space, where tools that only work here (read_image,
+	// output_iframe, message_user, llm_one_shot) resolve relative paths.
+	HostDir string
 }
 
 // ToolSet holds a set of tools for a single conversation.
@@ -207,7 +212,12 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		}
 	}
 	wd := NewMutableWorkingDir(workingDir)
-	gitTracker := gitstate.NewTracker(wd.Get)
+	hostWD := wd
+	if cfg.VM != nil {
+		hostWD = NewMutableWorkingDir(cfg.HostDir)
+	}
+	// The tracker reports this host's repositories.
+	gitTracker := gitstate.NewTracker(hostWD.Get)
 
 	env := cfg.Env
 	env.ConversationID = cfg.ConversationID
@@ -222,6 +232,7 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		Jobs:             cfg.BackgroundJobs,
 		BackgroundAfter:  cfg.BashBackgroundAfter,
 		VM:               cfg.VM,
+		HostDir:          hostWD,
 	}
 
 	patchProvider, patchProfile := "", "nested"
@@ -231,14 +242,16 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 			patchProfile = llm.PatchProfile(svc)
 		}
 	}
-	patchTool := &PatchTool{WorkingDir: wd, Provider: patchProvider, Profile: patchProfile, VM: cfg.VM}
+	patchTool := &PatchTool{WorkingDir: wd, Provider: patchProvider, Profile: patchProfile, VM: cfg.VM, HostDir: hostWD}
 
 	changeDirTool := &ChangeDirTool{
 		WorkingDir: wd,
 		OnChange:   cfg.OnWorkingDirChange,
+		VM:         cfg.VM,
+		HostDir:    hostWD,
 	}
 
-	outputIframeTool := &OutputIframeTool{WorkingDir: wd}
+	outputIframeTool := &OutputIframeTool{WorkingDir: hostWD}
 
 	tools := []*llm.Tool{
 		bashTool.Tool(),
@@ -283,7 +296,7 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		tools = append(tools, CompactInPlaceTool(cfg.InPlaceCompactor))
 	}
 	if cfg.UserMessageFinder != nil {
-		tools = append(tools, MessageUserTool(cfg.UserMessageFinder, cfg.UserChat, wd))
+		tools = append(tools, MessageUserTool(cfg.UserMessageFinder, cfg.UserChat, hostWD))
 	}
 
 	// Add LLM one-shot tool if LLM provider is configured
@@ -291,7 +304,7 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		llmOneShotTool := &LLMOneShotTool{
 			LLMProvider:     cfg.LLMProvider,
 			ModelID:         cfg.ModelID,
-			WorkingDir:      wd,
+			WorkingDir:      hostWD,
 			AvailableModels: availableModels,
 		}
 		tools = append(tools, llmOneShotTool.Tool())

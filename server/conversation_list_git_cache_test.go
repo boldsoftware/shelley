@@ -157,7 +157,7 @@ func TestDecorateConversationsMixedCwds(t *testing.T) {
 		}
 	}
 	server := &Server{conversationListGitCache: newConversationListGitCache()}
-	result := server.decorateConversations(items)
+	result := server.decorateConversations(items, nil)
 	if len(result) != len(items) {
 		t.Fatalf("got %d rows, want %d", len(result), len(items))
 	}
@@ -185,7 +185,7 @@ func TestDecorateConversationsMixedCwds(t *testing.T) {
 		}
 		expiries[cwd] = entry.expiresAt
 	}
-	server.decorateConversations(items)
+	server.decorateConversations(items, nil)
 	for cwd, expiry := range expiries {
 		if !server.conversationListGitCache.entries[cwd].expiresAt.Equal(expiry) {
 			t.Fatalf("reuse extended expiry for %q", cwd)
@@ -203,9 +203,9 @@ func TestDecorateConversationsRevalidatesNextCall(t *testing.T) {
 		{Conversation: generated.Conversation{ConversationID: "second", Cwd: &repo}},
 	}
 	server := &Server{conversationListGitCache: newConversationListGitCache()}
-	before := server.decorateConversations(items)
+	before := server.decorateConversations(items, nil)
 	runGit(t, repo, "-c", "user.email=a@b", "-c", "user.name=t", "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-m", "two")
-	after := server.decorateConversations(items)
+	after := server.decorateConversations(items, nil)
 	state := gitstate.GetGitState(repo)
 	for i := range items {
 		if before[i].GitSubject != "one" || after[i].GitSubject != "two" ||
@@ -227,11 +227,11 @@ func BenchmarkDecorateConversationsRepeatedCwd(b *testing.B) {
 			for i := range items {
 				items[i].Cwd = &repo
 			}
-			server.decorateConversations(items) // Warm the real packed-ref cache entry.
+			server.decorateConversations(items, nil) // Warm the real packed-ref cache entry.
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				server.decorateConversations(items)
+				server.decorateConversations(items, nil)
 			}
 		})
 	}

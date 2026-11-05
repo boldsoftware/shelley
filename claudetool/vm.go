@@ -21,9 +21,6 @@ import (
 type VM interface {
 	// Name is the machine's SSH host name, the ssh_target that selects it.
 	Name() string
-	// Dir is the working directory there: commands start in it, and
-	// relative paths resolve against it.
-	Dir() string
 	// Prepare makes the machine reachable, provisioning and connecting as
 	// needed. Every tool call on it calls Prepare first and fails with its
 	// error; nothing falls back to this machine.
@@ -53,7 +50,7 @@ func targetVM(vm VM, target *string) (VM, error) {
 	case target != nil && *target == Localhost:
 		return nil, nil
 	}
-	choices := fmt.Sprintf("%q runs on %s (the project's code, in %s); %q runs here, on the Shelley host", vm.Name(), vm.Name(), vm.Dir(), Localhost)
+	choices := fmt.Sprintf("%q runs on %s (the project's code); %q runs here, on the Shelley host", vm.Name(), vm.Name(), Localhost)
 	if target != nil {
 		return nil, fmt.Errorf("ssh_target %q is neither %q nor %q: %s", *target, vm.Name(), Localhost, choices)
 	}
@@ -73,8 +70,8 @@ func targetSchema(schema string, vm VM) string {
 	s["properties"].(map[string]any)["ssh_target"] = map[string]any{
 		"type": "string",
 		"enum": []string{vm.Name(), Localhost},
-		"description": fmt.Sprintf("Which machine. %q: over ssh on %s, in %s, where the project's code is; use it for all project work. %q: here, on the Shelley host; only for Shelley's API, scp to or from %s, ssh -L to reach its ports from the browser, and files for read_image, output_iframe, or message_user.",
-			vm.Name(), vm.Name(), vm.Dir(), Localhost, vm.Name()),
+		"description": fmt.Sprintf("Which machine. %q: over ssh on %s, where the project's code is; use it for all project work. %q: here, on the Shelley host; only for Shelley's API, scp to or from %s, ssh -L to reach its ports from the browser, and files for read_image, output_iframe, or message_user. Each machine has its own working directory; change_dir moves the one of its ssh_target.",
+			vm.Name(), vm.Name(), Localhost, vm.Name()),
 	}
 	required, _ := s["required"].([]any)
 	s["required"] = append(required, "ssh_target")
@@ -119,15 +116,17 @@ rm -f -- "$e.in"
 printf '%d\n' "$s" >"$e.tmp" && mv -f -- "$e.tmp" "$e"
 exit "$s"`
 
-// hostFS is the file access patch needs, on whichever machine holds the file.
-type hostFS interface {
+// HostFS is file access on whichever machine holds the file: patch and the
+// UI's file views use it.
+type HostFS interface {
 	ReadFile(ctx context.Context, path string) ([]byte, error)
 	// WriteFile writes path, creating its directory: like os.WriteFile, a
 	// new file gets perm and an existing one keeps its mode.
 	WriteFile(ctx context.Context, path string, data []byte, perm fs.FileMode) error
 }
 
-func newHostFS(vm VM) hostFS {
+// NewHostFS is vm's files, or this host's for a nil vm.
+func NewHostFS(vm VM) HostFS {
 	if vm == nil {
 		return localFS{}
 	}

@@ -19,6 +19,7 @@ func runHighlights(args []string) {
 	dir := fs.String("C", ".", "Git repository directory")
 	fs.Parse(args[1:])
 	rest := fs.Args()
+	repo := commitnotes.Local(*dir)
 
 	fail := func(err error) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -34,7 +35,7 @@ func runHighlights(args []string) {
 		if len(rest) != 1 {
 			usage("<commit>")
 		}
-		h, err := commitnotes.HighlightsScaffold(*dir, rest[0])
+		h, err := commitnotes.HighlightsScaffold(repo, rest[0])
 		if err != nil {
 			fail(err)
 		}
@@ -57,11 +58,11 @@ func runHighlights(args []string) {
 			fail(err)
 		}
 		// Resolve the commit once: HEAD may move while attaching.
-		hash, err := commitnotes.CommitHash(*dir, rest[0])
+		hash, err := commitnotes.CommitHash(repo, rest[0])
 		if err != nil {
 			fail(err)
 		}
-		if err := commitnotes.VerifyHighlights(*dir, hash, h); err != nil {
+		if err := commitnotes.VerifyHighlights(repo, hash, h); err != nil {
 			fail(err)
 		}
 		if args[0] == "verify" {
@@ -77,7 +78,7 @@ func runHighlights(args []string) {
 		if err := enc.Encode(h); err != nil {
 			fail(err)
 		}
-		if err := commitnotes.WriteHighlights(*dir, hash, note.Bytes()); err != nil {
+		if err := commitnotes.WriteHighlights(repo, hash, note.Bytes()); err != nil {
 			fail(err)
 		}
 		fmt.Printf("attached highlights note to %s\n", rest[0])
@@ -86,7 +87,7 @@ func runHighlights(args []string) {
 		if len(rest) != 1 {
 			usage("<commit>")
 		}
-		data, err := commitnotes.ReadHighlights(*dir, rest[0])
+		data, err := commitnotes.ReadHighlights(repo, rest[0])
 		if err != nil {
 			fail(err)
 		}

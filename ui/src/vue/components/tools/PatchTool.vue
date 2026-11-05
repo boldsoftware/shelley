@@ -294,13 +294,13 @@ const path = computed(() => {
   return typeof ti === "string" ? ti : "";
 });
 
-// A patch to a file on another machine (an ssh_target other than this
+// A patch to a file on the conversation's VM (an ssh_target other than this
 // host's "localhost"; older calls said ""): its display path is
-// "MACHINE:PATH", and the editor here can't open it.
-const onVM = computed(() => {
+// "MACHINE:PATH", and the editor opens it there.
+const vmTarget = computed(() => {
   const ti = props.toolInput;
   const target = typeof ti === "object" && ti !== null ? (ti as { ssh_target?: unknown }).ssh_target : undefined;
-  return typeof target === "string" && target !== "" && target !== "localhost";
+  return typeof target === "string" && target !== "" && target !== "localhost" ? target : "";
 });
 
 const displayData = computed<PatchDisplayData | null>(() => {
@@ -371,10 +371,13 @@ const editorPath = computed(() =>
 // while the patch is still being applied — the file is mid-write then. Still
 // offered for a failed patch: seeing the file as it stands is what you want.
 const openEditor = useOpenFileEditor();
-const showOpenInEditor = computed(() => !!editorPath.value && isComplete.value && !onVM.value);
+const showOpenInEditor = computed(() => !!editorPath.value && isComplete.value);
 
 function openInEditor() {
-  openEditor(editorPath.value);
+  const prefix = vmTarget.value + ":";
+  if (!vmTarget.value) openEditor(editorPath.value);
+  else if (editorPath.value.startsWith(prefix)) openEditor(editorPath.value.slice(prefix.length), true);
+  else openEditor(editorPath.value, true);
 }
 
 // Raw diff string for fallback display

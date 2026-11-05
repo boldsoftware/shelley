@@ -155,13 +155,14 @@ func TestProjectVMConfig(t *testing.T) {
 	if masters := ssh.calls(t, "master"); len(masters) != 1 || masters[0] != name {
 		t.Fatalf("new conversation's VM masters: %v", masters)
 	}
-	// The conversation's tools run here, in its scratch directory.
+	// The conversation's directory is on its VM; its tools have a scratch
+	// directory here.
 	scratch, err := s.vmScratchDir(conversation.ConversationID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	vm, err := s.db.GetConversationVM(t.Context(), conversation.ConversationID)
-	if err != nil || vm.Name != name || vm.Status != db.ConversationVMReady || derefString(conversation.Cwd) != scratch {
+	if err != nil || vm.Name != name || vm.Status != db.ConversationVMReady || derefString(conversation.Cwd) != vm.Dir {
 		t.Fatalf("conversation VM: %+v %v cwd=%q", vm, err, derefString(conversation.Cwd))
 	}
 	if info, err := os.Stat(scratch); err != nil || !info.IsDir() {
@@ -175,7 +176,7 @@ func TestProjectVMConfig(t *testing.T) {
 	if childVM, err := s.db.GetConversationVM(t.Context(), child.ConversationID); err != nil || childVM.Name != vm.Name {
 		t.Fatalf("subagent VM: %+v %v", childVM, err)
 	}
-	if prompt, err := conversationPrompt(t, s, child.ConversationID); err != nil || !strings.Contains(prompt, `ssh_target "`+vm.Name+`": runs over ssh on `+vm.Name+". bash commands start in /nonexistent/repo") {
+	if prompt, err := conversationPrompt(t, s, child.ConversationID); err != nil || !strings.Contains(prompt, `ssh_target "`+vm.Name+`": runs over ssh on `+vm.Name+", in your working directory there, which starts as /nonexistent/repo") {
 		t.Fatalf("subagent prompt lacks its VM: %v %q", err, prompt)
 	}
 
@@ -225,11 +226,12 @@ func TestConversationVMWorksOverSSH(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if scratch, err := s.vmScratchDir(id); err != nil || manager.Cwd() != scratch {
-		t.Fatalf("conversation tools run in %q, not its scratch directory", manager.Cwd())
+	scratch, err := s.vmScratchDir(id)
+	if err != nil || manager.Cwd() != cwd || manager.HostDir() != scratch {
+		t.Fatalf("conversation works in %q, %q here, not its VM's directory and its scratch directory", manager.Cwd(), manager.HostDir())
 	}
 	prompt, err := conversationPrompt(t, s, id)
-	if err != nil || !strings.Contains(prompt, "<project_vm>") || !strings.Contains(prompt, `ssh_target "`+name+`": runs over ssh on `+name+". bash commands start in "+cwd) ||
+	if err != nil || !strings.Contains(prompt, "<project_vm>") || !strings.Contains(prompt, `ssh_target "`+name+`": runs over ssh on `+name+", in your working directory there, which starts as "+cwd) ||
 		!strings.Contains(prompt, "actions (Run command) run on the VM") {
 		t.Fatalf("conversation prompt lacks its VM: %v\n%s", err, prompt)
 	}
@@ -239,12 +241,12 @@ func TestConversationVMWorksOverSSH(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	vm, err := s.conversationVMTools(t.Context(), conversation)
-	if err != nil || vm == nil || vm.Name() != name || vm.Dir() != cwd {
-		t.Fatalf("conversation VM tools: %v %v", vm, err)
+	vm, toolScratch, err := s.conversationVMTools(t.Context(), conversation)
+	if err != nil || vm == nil || vm.Name() != name || toolScratch != scratch || derefString(conversation.Cwd) != cwd {
+		t.Fatalf("conversation VM tools: %v %q %v", vm, toolScratch, err)
 	}
 	tools := map[string]*llm.Tool{}
-	for _, tool := range claudetool.NewToolSet(t.Context(), claudetool.ToolSetConfig{WorkingDir: manager.Cwd(), VM: vm}).Tools() {
+	for _, tool := range claudetool.NewToolSet(t.Context(), claudetool.ToolSetConfig{WorkingDir: manager.Cwd(), HostDir: scratch, VM: vm}).Tools() {
 		tools[tool.Name] = tool
 	}
 	call := func(tool, input string) llm.ToolOut {
@@ -254,7 +256,7 @@ func TestConversationVMWorksOverSSH(t *testing.T) {
 	if out := call("bash", `{"command":"printf '%s|%s' \"$VIA_VM\" \"$PWD\"","ssh_target":"`+name+`"}`); out.Error != nil || out.LLMContent[0].Text != "1|"+cwd {
 		t.Fatalf("bash on the VM: %v %+v", out.Error, out.LLMContent)
 	}
-	if out := call("bash", `{"command":"printf '%s|%s' \"$VIA_VM\" \"$PWD\"","ssh_target":"localhost"}`); out.Error != nil || out.LLMContent[0].Text != "|"+manager.Cwd() {
+	if out := call("bash", `{"command":"printf '%s|%s' \"$VIA_VM\" \"$PWD\"","ssh_target":"localhost"}`); out.Error != nil || out.LLMContent[0].Text != "|"+scratch {
 		t.Fatalf("bash here: %v %+v", out.Error, out.LLMContent)
 	}
 	if out := call("bash", `{"command":"true"}`); out.Error == nil || !strings.Contains(out.Error.Error(), "ssh_target is required") {

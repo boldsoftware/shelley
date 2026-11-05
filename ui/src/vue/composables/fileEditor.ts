@@ -8,8 +8,9 @@
 import { inject, provide, type InjectionKey } from "vue";
 
 /** Opens `path` (absolute, or relative to the conversation's cwd) in the
- *  editor modal. A path that can't be resolved is ignored. */
-export type OpenFileEditor = (path: string) => void;
+ *  editor modal: on this host, or with onVm, on the conversation's VM. A path
+ *  that can't be resolved is ignored. */
+export type OpenFileEditor = (path: string, onVm?: boolean) => void;
 
 export const OpenFileEditorKey: InjectionKey<OpenFileEditor> = Symbol("open-file-editor");
 

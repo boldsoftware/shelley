@@ -300,7 +300,8 @@
         :is-open="!!editorFilePath"
         :path="editorFilePath"
         :title="`Edit ${tildifyPath(editorFilePath)}`"
-        :load-url="`/api/read-file?path=${encodeURIComponent(editorFilePath)}`"
+        :load-url="`/api/read-file?${machineParams(editorConversationId, { path: editorFilePath })}`"
+        :conversation-id="editorConversationId"
         commentable
         @close="editorFilePath = null"
         @comment="onEditorComment"
@@ -345,7 +346,7 @@ import {
   type ResourceStatus,
   type ChatRequest,
 } from "../types";
-import { api, ApiError } from "../services/api";
+import { api, ApiError, machineParams } from "../services/api";
 import { startActivityHeartbeat } from "../services/activityHeartbeat";
 import { btwStore } from "../services/btwStore";
 import { messageStore } from "../services/messageStore";
@@ -515,6 +516,8 @@ const faviconEmojiPickerOpen = ref(false);
 // Fuzzy file finder (Cmd/Ctrl+P) + the generic editor it opens.
 const fileFinderOpen = ref(false);
 const editorFilePath = ref<string | null>(null);
+// The conversation whose VM the edited file is on; undefined for this host.
+const editorConversationId = ref<string | undefined>();
 // Comment submitted from the file editor's comment mode, to be injected into
 // the chat message input. Fresh object per submit so the watcher always fires.
 const editorCommentText = ref<{ text: string } | null>(null);
@@ -1108,6 +1111,7 @@ function openFileFinder() {
 function openFileInEditor(absPath: string) {
   fileFinderOpen.value = false;
   editorFilePath.value = absPath;
+  editorConversationId.value = undefined;
 }
 
 // Open any file in the editor modal, from anywhere in the tree (patch tool
@@ -1115,9 +1119,17 @@ function openFileInEditor(absPath: string) {
 // carries only the path the agent passed, which may be relative; resolve those
 // against the same directory the file finder searches (the conversation's cwd,
 // else the last-used one). /api/read-file requires a clean absolute path.
-provideOpenFileEditor((path: string) => {
-  const abs = resolveAbsPath(path, finderDir.value);
-  if (abs) openFileInEditor(abs);
+provideOpenFileEditor((path: string, onVm?: boolean) => {
+  if (!onVm) {
+    const abs = resolveAbsPath(path, finderDir.value);
+    if (abs) openFileInEditor(abs);
+    return;
+  }
+  // On the conversation's VM, whose directory is its cwd.
+  const abs = resolveAbsPath(path, currentConversation.value?.cwd || "");
+  if (!abs || !currentConversationId.value) return;
+  editorFilePath.value = abs;
+  editorConversationId.value = currentConversationId.value;
 });
 
 // A comment submitted from the file editor's comment mode: hand it to

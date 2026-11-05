@@ -1,16 +1,23 @@
+import { onMachine } from "./api";
+
 // Serialize writes per file across file-editor instances. Switching files
 // replaces a keyed editor, but its pending auto-save must finish before any
 // later save or read of the same path.
 const pendingWrites = new Map<string, Promise<Response>>();
 const unsavedContents = new Map<string, { content: string }>();
 
-export function writeFileInOrder(path: string, content: string): Promise<Response> {
+// conversationId names the machine path is on (see machineParams).
+export function writeFileInOrder(
+  path: string,
+  content: string,
+  conversationId?: string,
+): Promise<Response> {
   // Keep the last buffer available if a keyed editor unmounts and its save fails.
   const unsaved = { content };
   unsavedContents.set(path, unsaved);
   const previous = pendingWrites.get(path);
   const write = (previous ? previous.catch(() => undefined) : Promise.resolve()).then(async () => {
-    const response = await fetch("/api/write-file", {
+    const response = await fetch(onMachine("/api/write-file", conversationId), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path, content }),

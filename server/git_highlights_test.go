@@ -49,7 +49,7 @@ func TestHandleGitHighlights(t *testing.T) {
 
 	// A note that no longer matches the commit is treated as absent.
 	stale := []byte(`{"version":1,"files":["test.txt"],"highlights":[{"file":"test.txt","line":9,"comment":"gone"}]}`)
-	if err := commitnotes.WriteHighlights(dir, hash, stale); err != nil {
+	if err := commitnotes.WriteHighlights(commitnotes.Local(dir), hash, stale); err != nil {
 		t.Fatal(err)
 	}
 	if w := request(hash); w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "line 9 is outside") {
@@ -57,7 +57,7 @@ func TestHandleGitHighlights(t *testing.T) {
 	}
 
 	note := []byte(`{"version":1,"files":["test.txt"],"highlights":[{"file":"test.txt","line":1,"comment":"the greeting"}]}`)
-	if err := commitnotes.WriteHighlights(dir, hash, note); err != nil {
+	if err := commitnotes.WriteHighlights(commitnotes.Local(dir), hash, note); err != nil {
 		t.Fatal(err)
 	}
 	w := request(hash[:8])

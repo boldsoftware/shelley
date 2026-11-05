@@ -316,7 +316,7 @@ func TestHandleGitDiffsHasHighlights(t *testing.T) {
 	}
 	second := strings.TrimSpace(string(secondOut))
 
-	if err := commitnotes.WriteHighlights(dir, first, []byte(`{"version":1,"files":["test.txt"],"highlights":[]}`)); err != nil {
+	if err := commitnotes.WriteHighlights(commitnotes.Local(dir), first, []byte(`{"version":1,"files":["test.txt"],"highlights":[]}`)); err != nil {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/git/diffs?cwd=%s", dir), nil)
@@ -367,7 +367,7 @@ func TestHandleGitDiffsIncludesRequestedCommit(t *testing.T) {
 	testGit(t, dir, "add", "side.txt")
 	testGit(t, dir, "commit", "--no-verify", "-m", "Side commit")
 	sideCommit := strings.TrimSpace(testGitOutput(t, dir, "rev-parse", "HEAD"))
-	if err := commitnotes.WriteHighlights(dir, sideCommit, []byte(`{"version":1,"files":["side.txt"],"highlights":[]}`)); err != nil {
+	if err := commitnotes.WriteHighlights(commitnotes.Local(dir), sideCommit, []byte(`{"version":1,"files":["side.txt"],"highlights":[]}`)); err != nil {
 		t.Fatal(err)
 	}
 	testGit(t, dir, "switch", originalBranch)
@@ -1656,7 +1656,7 @@ func TestHandleGitGraphExcludesNotes(t *testing.T) {
 	run("git", "add", "example.txt")
 	run("git", "commit", "-m", "Annotated commit\n\nPrompt: graph notes commit")
 	head := run("git", "rev-parse", "HEAD")
-	if err := commitnotes.WriteHighlights(repo, head, []byte(`{"version":1,"files":["example.txt"],"highlights":[]}`)); err != nil {
+	if err := commitnotes.WriteHighlights(commitnotes.Local(repo), head, []byte(`{"version":1,"files":["example.txt"],"highlights":[]}`)); err != nil {
 		t.Fatal(err)
 	}
 

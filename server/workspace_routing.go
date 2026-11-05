@@ -146,8 +146,8 @@ func (s *Server) createProjectConversation(ctx context.Context, cwd, model *stri
 		return nil, nil, err
 	}
 	if vm != nil {
-		// Moves it to its scratch directory here.
-		if _, err := s.conversationVMTools(ctx, conversation); err != nil {
+		// Its cwd is on the VM.
+		if _, _, err := s.conversationVMTools(ctx, conversation); err != nil {
 			return nil, nil, err
 		}
 		s.prepareConversationVM(conversation.ConversationID)
@@ -572,12 +572,12 @@ func (s *Server) conversationVMPrompt(ctx context.Context, id string) (string, e
 	}
 	return fmt.Sprintf(`
 <project_vm>
-This %[7]s's work happens on %[1]s, in %[3]s. The agent loop and your tools run on the Shelley host, so every bash and patch call says which machine with ssh_target:
-- ssh_target "%[2]s": runs over ssh on %[2]s. bash commands start in %[3]s (cd within a command to work elsewhere; change_dir moves only this host's directory), and patch paths are paths on %[2]s, relative ones resolving against %[3]s. Use it for ALL project work: reading and editing files, git, builds, tests, servers, package installs.
+This %[7]s's work happens on %[1]s, in %[3]s. The agent loop and your tools run on the Shelley host, so every bash, patch and change_dir call says which machine with ssh_target. Each machine has its own working directory, which change_dir with its ssh_target moves:
+- ssh_target "%[2]s": runs over ssh on %[2]s, in your working directory there, which starts as %[3]s; patch paths are paths on %[2]s. This is the conversation's working directory, the one the user's diff view, file editor and terminal show. Use it for ALL project work: reading and editing files, git, builds, tests, servers, package installs.
 - ssh_target "localhost": runs here, on the Shelley host, which runs Shelley itself and keeps its data and other projects' files. Use it only for Shelley's API, copying files to or from %[2]s, and files for read_image, output_iframe, or message_user, which always read files here. Never do project work here, even where the same path exists on this host.
 
 - Paths in the project instructions are VM paths. Read the repository's AGENTS.md (and similar guidance) on the VM before changing anything: guidance files and skills listed elsewhere in this prompt come from this host.
-- Your working directory here, %[4]s, is this %[7]s's scratch space. To look at or send a VM file, copy it here first (ssh_target "localhost": `+"`scp %[2]s:FILE %[4]s/`"+`), then use read_image, output_iframe, or a message_user attachment. Image embeds and file links in your messages (![alt](/path), [name](sandbox:/path)) show the user this host's file at that path or, if this host has none, %[2]s's: give VM files by their absolute path on %[2]s. Files the user uploads arrive on this host (paths in their messages); copy them over with `+"`scp FILE %[2]s:DIR/`"+`. ssh, scp and rsync to %[2]s work from this host with no keys or options.
+- Your working directory here starts as %[4]s, this %[7]s's scratch space. To look at or send a VM file, copy it here first (ssh_target "localhost": `+"`scp %[2]s:FILE %[4]s/`"+`), then use read_image, output_iframe, or a message_user attachment. Image embeds and file links in your messages (![alt](/path), [name](sandbox:/path)) show the user this host's file at that path or, if this host has none, %[2]s's: give VM files by their absolute path on %[2]s. Files the user uploads arrive on this host (paths in their messages); copy them over with `+"`scp FILE %[2]s:DIR/`"+`. ssh, scp and rsync to %[2]s work from this host with no keys or options.
 - The browser runs on this host. The user reaches the VM's web server on port 8000 at %[8]s, and port PORT at that address with :PORT, behind their exe.dev login, which the browser doesn't have; to browse a VM port, forward it (ssh_target "localhost": `+"`ssh -fN -L LOCALPORT:localhost:PORT %[2]s`"+`) and open http://localhost:LOCALPORT.
 - Run long commands in bash's background mode, or in tmux on the VM.%[5]s
 - While the VM is being created (a minute or two), ssh_target calls wait for it. If it can't be reached, the call's error says why: retry, or report it. Never fall back to doing the work on this host.

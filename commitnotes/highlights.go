@@ -59,12 +59,12 @@ func ParseHighlights(data []byte) (*Highlights, error) {
 
 // HighlightsScaffold returns highlights for commit listing every changed
 // file in diff order and no comments, ready to be reordered and annotated.
-func HighlightsScaffold(dir, commit string) (*Highlights, error) {
-	hash, err := CommitHash(dir, commit)
+func HighlightsScaffold(repo Repo, commit string) (*Highlights, error) {
+	hash, err := CommitHash(repo, commit)
 	if err != nil {
 		return nil, err
 	}
-	files, err := changedFiles(dir, hash)
+	files, err := changedFiles(repo, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -78,18 +78,18 @@ func HighlightsScaffold(dir, commit string) (*Highlights, error) {
 // VerifyHighlights checks h against commit: Files must list each changed file
 // exactly once, and every highlight must name a file the commit changes but
 // does not delete, and a line that exists in it.
-func VerifyHighlights(dir, commit string, h *Highlights) error {
+func VerifyHighlights(repo Repo, commit string, h *Highlights) error {
 	if h == nil {
 		return errors.New("highlights is nil")
 	}
 	if h.Version != 1 {
 		return fmt.Errorf("version is %d, want 1", h.Version)
 	}
-	hash, err := CommitHash(dir, commit)
+	hash, err := CommitHash(repo, commit)
 	if err != nil {
 		return err
 	}
-	files, err := changedFiles(dir, hash)
+	files, err := changedFiles(repo, hash)
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func VerifyHighlights(dir, commit string, h *Highlights) error {
 		}
 		lines, ok := lineCounts[f.path]
 		if !ok {
-			data, err := gitOutput(dir, "cat-file", "blob", hash+":"+f.path)
+			data, err := gitOutput(repo, nil, "cat-file", "blob", hash+":"+f.path)
 			if err != nil {
 				return fmt.Errorf("highlights[%d]: %w", i, err)
 			}
@@ -160,18 +160,18 @@ func VerifyHighlights(dir, commit string, h *Highlights) error {
 }
 
 // ReadHighlights returns commit's highlights note.
-func ReadHighlights(dir, commit string) ([]byte, error) {
-	return readNote(dir, highlightsNotesRef, commit)
+func ReadHighlights(repo Repo, commit string) ([]byte, error) {
+	return readNote(repo, highlightsNotesRef, commit)
 }
 
 // WriteHighlights stores data as commit's highlights note.
-func WriteHighlights(dir, commit string, data []byte) error {
-	return writeNote(dir, highlightsNotesRef, commit, data)
+func WriteHighlights(repo Repo, commit string, data []byte) error {
+	return writeNote(repo, highlightsNotesRef, commit, data)
 }
 
 // ListHighlights returns the set of commits with highlights notes.
-func ListHighlights(dir string) (map[string]bool, error) {
-	return listNotes(dir, highlightsNotesRef)
+func ListHighlights(repo Repo) (map[string]bool, error) {
+	return listNotes(repo, highlightsNotesRef)
 }
 
 type changedFile struct {
@@ -182,9 +182,9 @@ type changedFile struct {
 // changedFiles lists the files commit changes against its first parent (or
 // the empty tree), in diff order, under the paths Shelley's diff viewer
 // shows.
-func changedFiles(dir, hash string) ([]changedFile, error) {
+func changedFiles(repo Repo, hash string) ([]changedFile, error) {
 	out, err := gitOutput(
-		dir,
+		repo, nil,
 		"-c", "log.showRoot=true",
 		"show", hash,
 		"--format=", "--no-color", "--no-show-signature", "--name-status", "-z",

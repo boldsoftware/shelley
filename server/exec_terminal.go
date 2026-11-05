@@ -97,6 +97,13 @@ func (s *Server) handleExecWS(w http.ResponseWriter, r *http.Request) {
 			slug = *conv.Slug
 		}
 	}
+	if termID == "" {
+		if cmd, cwd, err = s.terminalCommand(ctx, conversationID, cmd, cwd); err != nil {
+			wsjson.Write(ctx, conn, ExecMessage{Type: "error", Data: err.Error()})
+			conn.Close(websocket.StatusInternalError, "attach failed")
+			return
+		}
+	}
 	// Resolve the cwd before building the env so SHELLEY_CWD and
 	// SHELLEY_GIT_ROOT describe the directory the command actually runs in.
 	cwd = terminalCwd(cwd)
@@ -362,3 +369,18 @@ func (s *Server) handleTerminalDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// terminalCommand is the command, and its directory here, of a terminal
+// running cmd in cwd for conversationID: a VM conversation's runs on its VM,
+// through ssh from its scratch directory here.
+func (s *Server) terminalCommand(ctx context.Context, conversationID, cmd, cwd string) (string, string, error) {
+	m, err := s.conversationMachine(ctx, conversationID)
+	if err != nil || m.vm == nil {
+		return cmd, cwd, err
+	}
+	return shellJoin(m.vm.Terminal(vmTerminalScript, m.dir(cwd), cmd)), m.scratch, nil
+}
+
+// vmTerminalScript runs command $2 in a login shell in directory $1.
+const vmTerminalScript = `cd -- "$1" || exit 1
+exec bash --login -c "$2"`

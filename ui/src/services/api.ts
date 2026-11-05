@@ -87,6 +87,22 @@ export interface SkillDescriptor {
   parameters?: ToolSchema;
 }
 
+// machineParams are query parameters naming the machine a request's paths are
+// on: conversationId's (its VM, if it has one), or with none, this host.
+export function machineParams(
+  conversationId: string | undefined,
+  params: Record<string, string>,
+): URLSearchParams {
+  const p = new URLSearchParams(params);
+  if (conversationId) p.set("conversation_id", conversationId);
+  return p;
+}
+
+// onMachine is url, which has no query, on conversationId's machine.
+export function onMachine(url: string, conversationId: string | undefined): string {
+  return conversationId ? `${url}?${machineParams(conversationId, {})}` : url;
+}
+
 function mcpActivation(name: string): string {
   return `shelley mcp list '${name.replace(/'/g, "'\\''")}' -schema`;
 }
@@ -719,7 +735,10 @@ class ApiService {
     return response.json();
   }
 
-  async listDirectory(path?: string): Promise<{
+  async listDirectory(
+    path?: string,
+    conversationId?: string,
+  ): Promise<{
     path: string;
     parent: string;
     entries: Array<{ name: string; is_dir: boolean; git_head_subject?: string }>;
@@ -732,18 +751,19 @@ class ApiService {
     git_worktree_root?: string;
     error?: string;
   }> {
-    const url = path
-      ? `${this.baseUrl}/list-directory?path=${encodeURIComponent(path)}`
-      : `${this.baseUrl}/list-directory`;
-    const response = await fetch(url);
+    const params = machineParams(conversationId, path ? { path } : {});
+    const response = await fetch(`${this.baseUrl}/list-directory?${params}`);
     if (!response.ok) {
       throw await responseError(response, "Failed to list directory");
     }
     return response.json();
   }
 
-  async createDirectory(path: string): Promise<{ path?: string; error?: string }> {
-    const response = await fetch(`${this.baseUrl}/create-directory`, {
+  async createDirectory(
+    path: string,
+    conversationId?: string,
+  ): Promise<{ path?: string; error?: string }> {
+    const response = await fetch(onMachine(`${this.baseUrl}/create-directory`, conversationId), {
       method: "POST",
       headers: this.postHeaders,
       body: JSON.stringify({ path }),
@@ -804,13 +824,15 @@ class ApiService {
     return response.json();
   }
 
-  // Git diff APIs
+  // Git diff APIs. Each takes the conversation whose machine (this host, or
+  // its VM) has cwd; without one, cwd is on this host.
   async getGitDiffs(
     cwd: string,
+    conversationId: string | undefined,
     commit?: string,
     includeStats = true,
   ): Promise<{ diffs: GitDiffInfo[]; gitRoot: string }> {
-    const params = new URLSearchParams({ cwd });
+    const params = machineParams(conversationId, { cwd });
     if (commit) params.set("commit", commit);
     if (!includeStats) params.set("stats", "false");
     const response = await fetch(`${this.baseUrl}/git/diffs?${params}`);
@@ -822,8 +844,12 @@ class ApiService {
   }
 
   // Null when the commit has no highlights, or they no longer match it.
-  async getGitHighlights(cwd: string, hash: string): Promise<CommitHighlights | null> {
-    const params = new URLSearchParams({ cwd, hash });
+  async getGitHighlights(
+    cwd: string,
+    conversationId: string | undefined,
+    hash: string,
+  ): Promise<CommitHighlights | null> {
+    const params = machineParams(conversationId, { cwd, hash });
     const response = await fetch(`${this.baseUrl}/git/highlights?${params}`);
     if (response.status === 404) return null;
     if (!response.ok) {
@@ -834,12 +860,12 @@ class ApiService {
 
   async getGitGraph(
     cwd: string,
+    conversationId: string | undefined,
     limit = 500,
     scope: "all" | "current" = "all",
   ): Promise<import("../types").GitGraphResponse> {
-    const response = await fetch(
-      `${this.baseUrl}/git/graph?cwd=${encodeURIComponent(cwd)}&limit=${limit}&scope=${scope}`,
-    );
+    const params = machineParams(conversationId, { cwd, limit: String(limit), scope });
+    const response = await fetch(`${this.baseUrl}/git/graph?${params}`);
     if (!response.ok) {
       const text = await response.text();
       throw new Error(text || response.statusText);
@@ -847,10 +873,13 @@ class ApiService {
     return response.json();
   }
 
-  async getGitCommitDetail(cwd: string, hash: string): Promise<import("../types").GitCommitDetail> {
-    const response = await fetch(
-      `${this.baseUrl}/git/commit-detail?cwd=${encodeURIComponent(cwd)}&hash=${encodeURIComponent(hash)}`,
-    );
+  async getGitCommitDetail(
+    cwd: string,
+    conversationId: string | undefined,
+    hash: string,
+  ): Promise<import("../types").GitCommitDetail> {
+    const params = machineParams(conversationId, { cwd, hash });
+    const response = await fetch(`${this.baseUrl}/git/commit-detail?${params}`);
     if (!response.ok) {
       const text = await response.text();
       throw new Error(text || response.statusText);
@@ -858,11 +887,15 @@ class ApiService {
     return response.json();
   }
 
-  async getGitDiffFiles(diffId: string, cwd: string, to?: string): Promise<GitFileInfo[]> {
-    const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
-    const response = await fetch(
-      `${this.baseUrl}/git/diffs/${diffId}/files?cwd=${encodeURIComponent(cwd)}${toParam}`,
-    );
+  async getGitDiffFiles(
+    diffId: string,
+    cwd: string,
+    conversationId: string | undefined,
+    to?: string,
+  ): Promise<GitFileInfo[]> {
+    const params = machineParams(conversationId, { cwd });
+    if (to) params.set("to", to);
+    const response = await fetch(`${this.baseUrl}/git/diffs/${diffId}/files?${params}`);
     if (!response.ok) {
       throw await responseError(response, "Failed to get diff files");
     }
@@ -873,13 +906,15 @@ class ApiService {
     diffId: string,
     filePath: string,
     cwd: string,
+    conversationId: string | undefined,
     to?: string,
   ): Promise<GitFileDiff> {
-    const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
+    const params = machineParams(conversationId, { cwd });
+    if (to) params.set("to", to);
     // Encode per segment so names containing '#', '?' or '%' survive the URL.
     const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
     const response = await fetch(
-      `${this.baseUrl}/git/file-diff/${diffId}/${encodedPath}?cwd=${encodeURIComponent(cwd)}${toParam}`,
+      `${this.baseUrl}/git/file-diff/${diffId}/${encodedPath}?${params}`,
     );
     if (!response.ok) {
       throw await responseError(response, "Failed to get file diff");
@@ -889,21 +924,25 @@ class ApiService {
 
   async getGitCommitMessages(
     cwd: string,
+    conversationId: string | undefined,
     from: string,
     to?: string,
   ): Promise<{ hash: string; subject: string; body: string; author: string; isHead: boolean }[]> {
-    const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
-    const response = await fetch(
-      `${this.baseUrl}/git/commit-messages?cwd=${encodeURIComponent(cwd)}&from=${encodeURIComponent(from)}${toParam}`,
-    );
+    const params = machineParams(conversationId, { cwd, from });
+    if (to) params.set("to", to);
+    const response = await fetch(`${this.baseUrl}/git/commit-messages?${params}`);
     if (!response.ok) {
       throw await responseError(response, "Failed to get commit messages");
     }
     return response.json();
   }
 
-  async amendGitMessage(cwd: string, message: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/git/amend-message`, {
+  async amendGitMessage(
+    cwd: string,
+    conversationId: string | undefined,
+    message: string,
+  ): Promise<void> {
+    const response = await fetch(onMachine(`${this.baseUrl}/git/amend-message`, conversationId), {
       method: "POST",
       headers: this.postHeaders,
       body: JSON.stringify({ cwd, message }),

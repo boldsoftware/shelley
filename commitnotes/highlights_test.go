@@ -15,7 +15,7 @@ func TestHighlightsScaffoldAndVerify(t *testing.T) {
 	write(t, dir, "old/name.txt", []byte(numbered(1, 20)))
 	root := commit(t, git, "root")
 
-	root1, err := HighlightsScaffold(dir, root)
+	root1, err := HighlightsScaffold(Local(dir), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,14 +35,14 @@ func TestHighlightsScaffoldAndVerify(t *testing.T) {
 	git("config", "diff.relative", "true")
 	git("config", "diff.orderFile", "/does/not/exist")
 
-	scaffold, err := HighlightsScaffold(dir, "HEAD")
+	scaffold, err := HighlightsScaffold(Local(dir), "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{"added.txt", "gone.txt", "keep.txt", "new/name.txt"}; !slices.Equal(scaffold.Files, want) {
 		t.Fatalf("scaffold files = %q, want %q", scaffold.Files, want)
 	}
-	if err := VerifyHighlights(dir, hash, scaffold); err != nil {
+	if err := VerifyHighlights(Local(dir), hash, scaffold); err != nil {
 		t.Fatalf("scaffold does not verify: %v", err)
 	}
 
@@ -58,7 +58,7 @@ func TestHighlightsScaffoldAndVerify(t *testing.T) {
 			},
 		}
 	}
-	if err := VerifyHighlights(dir, hash, valid()); err != nil {
+	if err := VerifyHighlights(Local(dir), hash, valid()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,7 +85,7 @@ func TestHighlightsScaffoldAndVerify(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h := valid()
 			tc.mutate(h)
-			err := VerifyHighlights(dir, hash, h)
+			err := VerifyHighlights(Local(dir), hash, h)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("VerifyHighlights error = %v, want %q", err, tc.want)
 			}
@@ -93,7 +93,7 @@ func TestHighlightsScaffoldAndVerify(t *testing.T) {
 	}
 	long := valid()
 	long.Highlights[0].Comment = strings.Repeat("é", MaxHighlightComment)
-	if err := VerifyHighlights(dir, hash, long); err != nil {
+	if err := VerifyHighlights(Local(dir), hash, long); err != nil {
 		t.Fatalf("comment at the limit: %v", err)
 	}
 }
@@ -109,7 +109,7 @@ func TestHighlightsMergeUsesFirstParent(t *testing.T) {
 	write(t, dir, "main.txt", []byte("main\n"))
 	commit(t, git, "main")
 	git("merge", "-q", "--no-ff", "-m", "merge", "side")
-	h, err := HighlightsScaffold(dir, "HEAD")
+	h, err := HighlightsScaffold(Local(dir), "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}

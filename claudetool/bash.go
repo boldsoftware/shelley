@@ -51,6 +51,9 @@ type BashTool struct {
 	// VM, if set, is where the conversation's project work happens: each
 	// call names its target, the VM or this host (see VM).
 	VM VM
+	// HostDir, with a VM, is the working directory here, for commands on
+	// this host; WorkingDir is then on the VM.
+	HostDir *MutableWorkingDir
 
 	// cdHinted records that the chained-cd hint has been shown. The hint
 	// is shown at most once per BashTool, that is, once per conversation:
@@ -86,6 +89,15 @@ func (b *BashTool) Tool() *llm.Tool {
 
 // getWorkingDir returns the current working directory.
 func (b *BashTool) getWorkingDir() string {
+	return b.WorkingDir.Get()
+}
+
+// dirFor is where a command on vm (nil for this host) starts: with a VM the
+// conversation's working directory is there, and this host's is HostDir.
+func (b *BashTool) dirFor(vm VM) string {
+	if vm == nil && b.HostDir != nil {
+		return b.HostDir.Get()
+	}
 	return b.WorkingDir.Get()
 }
 
@@ -175,10 +187,9 @@ func (b *BashTool) run(ctx context.Context, req bashInput) llm.ToolOut {
 		return llm.ErrorToolOut(err)
 	}
 	req.vm = vm
-	wd := b.getWorkingDir()
+	wd := b.dirFor(vm)
 	if vm != nil {
-		// Commands there start in its directory; a missing one fails there.
-		wd = vm.Dir()
+		// A missing directory there fails there.
 		if err := vm.Prepare(ctx); err != nil {
 			return llm.ErrorToolOut(err)
 		}
@@ -238,7 +249,7 @@ func (b *BashTool) run(ctx context.Context, req bashInput) llm.ToolOut {
 	}
 	exitCode := 0
 	display.ExitCode = &exitCode
-	if vm == nil && chainedCdLeavesDir(bashkit.ChainedCdPaths(req.Command), wd) && b.cdHinted.CompareAndSwap(false, true) {
+	if chainedCdLeavesDir(bashkit.ChainedCdPaths(req.Command), wd) && b.cdHinted.CompareAndSwap(false, true) {
 		out = chainedCdHint(wd) + "\n\n" + out
 	}
 	return llm.ToolOut{LLMContent: llm.TextContent(out), Display: display}
@@ -314,7 +325,7 @@ func (b *BashTool) makeBashCommand(vm VM, command, wd string, log *os.File, exit
 	if vm != nil {
 		argv := vm.Command(VMJobScript, append([]string{wd, command}, commandEnv...)...)
 		cmd = exec.Command("bash", append([]string{"-c", vmBashJobWrapper, "shelley-job", exitPath}, argv...)...)
-		cmd.Dir = b.getWorkingDir()
+		cmd.Dir = b.dirFor(nil)
 	} else {
 		cmd = exec.Command("bash", "-c", bashJobWrapper, "shelley-job", command, exitPath)
 		cmd.Dir = wd

@@ -6,7 +6,7 @@
 <template>
   <Modal
     :is-open="isOpen"
-    title="Select Directory"
+    :title="vm ? `Select Directory on ${vm.name}` : 'Select Directory'"
     class-name="directory-picker-modal"
     @close="emit('close')"
   >
@@ -365,6 +365,8 @@ const props = defineProps<{
   isOpen: boolean;
   initialPath?: string;
   foldersOnly?: boolean;
+  /** Browse conversation conversationId's VM, named name, not this host. */
+  vm?: { conversationId: string; name: string };
 }>();
 const emit = defineEmits<{ (e: "close"): void; (e: "select", path: string): void }>();
 
@@ -407,7 +409,7 @@ async function loadDirectory(path: string): Promise<CachedDirectory> {
   const cached = cache.get(normalizedPath);
   if (cached) return cached;
 
-  const result = await api.listDirectory(path || undefined);
+  const result = await api.listDirectory(path || undefined, props.vm?.conversationId);
   if (result.error) throw new Error(result.error);
   const dirData: CachedDirectory = {
     path: result.path,
@@ -421,9 +423,12 @@ async function loadDirectory(path: string): Promise<CachedDirectory> {
   return dirData;
 }
 
-const homeDir = window.__SHELLEY_INIT__?.home_dir || "";
+// This host's home and recent directories mean nothing on a VM.
+const homeDir = computed(() => (props.vm ? "" : window.__SHELLEY_INIT__?.home_dir || ""));
 const conversations = inject(ConversationsListKey, null);
-const recentProjectGroups = computed(() => groupRecentProjects(conversations?.value || []));
+const recentProjectGroups = computed(() =>
+  props.vm ? [] : groupRecentProjects(conversations?.value || []),
+);
 const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
 const recentMode = ref(false);
 const recentQuery = ref("");
@@ -447,9 +452,10 @@ const directoryShortcuts = computed<DirectoryShortcut[]>(() => {
   };
   const dir = displayDir.value;
   const inputDir = parseInputPath(inputPath.value).dirPath;
-  const browsingHome = !error.value && dir?.path === homeDir && (!inputDir || inputDir === homeDir);
-  if (homeDir && !browsingHome) {
-    addShortcut({ label: "Go to home directory", path: homeDir, isHome: true });
+  const home = homeDir.value;
+  const browsingHome = !error.value && dir?.path === home && (!inputDir || inputDir === home);
+  if (home && !browsingHome) {
+    addShortcut({ label: "Go to home directory", path: home, isHome: true });
   }
   if (dir?.git_repo_root && dir.git_repo_root !== dir.path) {
     addShortcut({ label: "Go to git worktree root", path: dir.git_repo_root });
@@ -493,9 +499,10 @@ function goToDirectory(path: string) {
 }
 
 function homeRelative(path: string): string {
-  if (!homeDir) return path;
-  if (path === homeDir) return "~";
-  return path.startsWith(`${homeDir}/`) ? `~${path.slice(homeDir.length)}` : path;
+  const home = homeDir.value;
+  if (!home) return path;
+  if (path === home) return "~";
+  return path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
 }
 
 function recentLabel(group: RecentProjectGroup, directory: RecentProjectDirectory): string {
@@ -569,7 +576,7 @@ async function handleCreateDirectory() {
   createLoading.value = true;
   createError.value = null;
   try {
-    const result = await api.createDirectory(newPath);
+    const result = await api.createDirectory(newPath, props.vm?.conversationId);
     if (result.error) {
       createError.value = result.error;
       return;

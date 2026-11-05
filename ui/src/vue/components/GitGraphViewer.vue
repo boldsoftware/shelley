@@ -39,6 +39,7 @@
           </button>
         </div>
         <button
+          v-if="!onVm"
           v-tooltip.top="`Pick repository (current: ${cwd})`"
           class="git-graph-tool"
           aria-label="Pick repository"
@@ -335,6 +336,11 @@ import {
 const props = withDefaults(
   defineProps<{
     cwd: string;
+    // The conversation whose machine (this host, or its VM) cwd is on.
+    conversationId?: string;
+    // cwd is on that conversation's VM, where the repository picker, which
+    // lists this host's repositories, can't pick.
+    onVm?: boolean;
     isOpen: boolean;
     // True when a modal (e.g. DiffViewer) is stacked on top of this one.
     // Suppresses Esc handling so the top-most modal closes first.
@@ -439,7 +445,7 @@ watch(
     loading.value = true;
     error.value = null;
     api
-      .getGitGraph(cwd.value, limit.value, scope.value)
+      .getGitGraph(cwd.value, props.conversationId, limit.value, scope.value)
       .then((d) => {
         if (cancelled) return;
         d.commits = normalizeCommits(d.commits || []);
@@ -514,7 +520,7 @@ watch(
     detail.value = null;
     detailLoading.value = true;
     api
-      .getGitCommitDetail(cwd.value, sel)
+      .getGitCommitDetail(cwd.value, props.conversationId, sel)
       .then((d) => {
         if (cancelled) return;
         detailCache.set(sel, d);

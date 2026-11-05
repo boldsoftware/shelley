@@ -15,11 +15,10 @@ import (
 	"shelley.exe.dev/llm"
 )
 
-// localVM is a VM that is this machine, in dir, with VIA_VM=1 set. Like
-// ssh, it relays stdin to a command in another session, which sees EOF
-// once the relay dies.
+// localVM is a VM that is this machine, with VIA_VM=1 set. Like ssh, it
+// relays stdin to a command in another session, which sees EOF once the
+// relay dies.
 type localVM struct {
-	dir      string
 	prepares *atomic.Int32
 }
 
@@ -32,7 +31,7 @@ kill $c 2>/dev/null; rm -rf -- "$d"
 exit $s`
 
 func (v localVM) Name() string { return "box" }
-func (v localVM) Dir() string  { return v.dir }
+
 func (v localVM) Prepare(context.Context) error {
 	if v.prepares != nil {
 		v.prepares.Add(1)
@@ -50,10 +49,15 @@ func TestVMTargets(t *testing.T) {
 	tools := map[string]*llm.Tool{}
 	jobs := make(testJobs, 1)
 	prepares := new(atomic.Int32)
-	for _, tool := range NewToolSet(t.Context(), ToolSetConfig{WorkingDir: here, VM: localVM{there, prepares}, BackgroundJobs: jobs}).Tools() {
+	var moved []string
+	// With a VM, the conversation's directory is on it.
+	for _, tool := range NewToolSet(t.Context(), ToolSetConfig{
+		WorkingDir: there, HostDir: here, VM: localVM{prepares}, BackgroundJobs: jobs,
+		OnWorkingDirChange: func(dir string) { moved = append(moved, dir) },
+	}).Tools() {
 		tools[tool.Name] = tool
 	}
-	for _, name := range []string{"bash", "patch"} {
+	for _, name := range []string{"bash", "patch", "change_dir"} {
 		var schema struct{ Required []string }
 		if err := json.Unmarshal(tools[name].InputSchema, &schema); err != nil || !strings.Contains(strings.Join(schema.Required, ","), "ssh_target") {
 			t.Fatalf("%s schema: %s", name, tools[name].InputSchema)
@@ -143,6 +147,43 @@ func TestVMTargets(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(here, "notes.txt")); err != nil {
 		t.Fatal(err)
+	}
+
+	// Each machine has its own working directory, which change_dir moves;
+	// moving the VM's moves the conversation's.
+	if out := call("change_dir", `{"path":"a","ssh_target":"box"}`); out.Error != nil {
+		t.Fatal(out.Error)
+	}
+	if out := call("bash", `{"command":"pwd","ssh_target":"box"}`); out.Error != nil || strings.TrimSpace(out.LLMContent[0].Text) != filepath.Join(there, "a") {
+		t.Fatalf("bash on the VM after change_dir: %v %+v", out.Error, out.LLMContent)
+	}
+	if out := call("patch", `{"path":"notes.txt","ssh_target":"box","patches":[{"operation":"replace","oldText":"two","newText":"three"}]}`); out.Error != nil {
+		t.Fatal(out.Error)
+	}
+	if out := call("bash", `{"command":"pwd","ssh_target":"localhost"}`); out.Error != nil || strings.TrimSpace(out.LLMContent[0].Text) != here {
+		t.Fatalf("bash here after change_dir on the VM: %v %+v", out.Error, out.LLMContent)
+	}
+	if out := call("change_dir", `{"path":"missing","ssh_target":"box"}`); out.Error == nil || !strings.Contains(out.Error.Error(), "does not exist") {
+		t.Fatalf("change_dir to a missing VM directory: %v", out.Error)
+	}
+	if out := call("change_dir", `{"path":"notes.txt","ssh_target":"box"}`); out.Error == nil || !strings.Contains(out.Error.Error(), "not a directory") {
+		t.Fatalf("change_dir to a VM file: %v", out.Error)
+	}
+	hereSub := filepath.Join(here, "sub")
+	if err := os.Mkdir(hereSub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if out := call("change_dir", `{"path":"sub","ssh_target":"localhost"}`); out.Error != nil {
+		t.Fatal(out.Error)
+	}
+	if out := call("bash", `{"command":"pwd","ssh_target":"localhost"}`); out.Error != nil || strings.TrimSpace(out.LLMContent[0].Text) != hereSub {
+		t.Fatalf("bash here after change_dir here: %v %+v", out.Error, out.LLMContent)
+	}
+	if out := call("bash", `{"command":"pwd","ssh_target":"box"}`); out.Error != nil || strings.TrimSpace(out.LLMContent[0].Text) != filepath.Join(there, "a") {
+		t.Fatalf("bash on the VM after change_dir here: %v %+v", out.Error, out.LLMContent)
+	}
+	if strings.Join(moved, ",") != filepath.Join(there, "a") {
+		t.Fatalf("conversation directory moves: %q", moved)
 	}
 }
 

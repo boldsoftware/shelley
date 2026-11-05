@@ -315,35 +315,38 @@ func (s *Server) dbHash() (string, error) {
 	return hex.EncodeToString(sum[:4]), err
 }
 
-// conversationVMTools moves a VM project's conversation (or its subagent's) to its
-// scratch directory here and returns the VM its bash and patch calls can
-// target; nil without a VM.
-func (s *Server) conversationVMTools(ctx context.Context, conversation *generated.Conversation) (claudetool.VM, error) {
+// conversationVMTools returns the VM a VM project's conversation (or its
+// subagent's) works on, which its bash, patch and change_dir calls can
+// target, and its scratch directory here, for calls on this host; nil without
+// a VM. The conversation's cwd is on the VM: one still in the scratch
+// directory, where conversations used to start, or with none, moves to the
+// VM's directory.
+func (s *Server) conversationVMTools(ctx context.Context, conversation *generated.Conversation) (claudetool.VM, string, error) {
 	vm, err := s.db.GetConversationVM(ctx, conversation.ConversationID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return nil, "", nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("load conversation VM: %w", err)
+		return nil, "", fmt.Errorf("load conversation VM: %w", err)
 	}
 	target, err := s.conversationVMTarget(vm)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	dir, err := s.vmScratchDir(vm.ConversationID)
+	scratch, err := s.vmScratchDir(vm.ConversationID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, err
+	if err := os.MkdirAll(scratch, 0o700); err != nil {
+		return nil, "", err
 	}
-	if derefString(conversation.Cwd) != dir {
-		if err := s.db.UpdateConversationCwd(ctx, conversation.ConversationID, dir); err != nil {
-			return nil, err
+	if cwd := derefString(conversation.Cwd); cwd == "" || cwd == scratch {
+		if err := s.db.UpdateConversationCwd(ctx, conversation.ConversationID, vm.Dir); err != nil {
+			return nil, "", err
 		}
-		conversation.Cwd = &dir
+		conversation.Cwd = &vm.Dir
 	}
-	return target, nil
+	return target, scratch, nil
 }
 
 func (s *Server) conversationVMTarget(vm *db.ConversationVM) (conversationVMTarget, error) {
@@ -369,6 +372,14 @@ func (t conversationVMTarget) Prepare(ctx context.Context) error {
 func (t conversationVMTarget) Command(script string, args ...string) []string {
 	return []string{
 		t.s.sshProgram(), "-F", t.config, "-T", t.name,
+		shellJoin(append([]string{"bash", "-c", script, "shelley"}, args...)),
+	}
+}
+
+// Terminal is Command with a terminal on the VM, for the user's.
+func (t conversationVMTarget) Terminal(script string, args ...string) []string {
+	return []string{
+		t.s.sshProgram(), "-F", t.config, "-tt", t.name,
 		shellJoin(append([]string{"bash", "-c", script, "shelley"}, args...)),
 	}
 }

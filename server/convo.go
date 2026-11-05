@@ -2007,7 +2007,7 @@ func (cm *ConversationManager) renderSystemPrompt(ctx context.Context, opts db.C
 	}
 	servers, exeDev := cm.promptIntegrations(ctx)
 	promptOpts = append(promptOpts, WithMCPServers(servers), WithExeDevIntegrations(exeDev), WithTemplate(opts.SystemPrompt))
-	text, promptSkills, err := generateSystemPromptWithIntegrationSkills(cm.cwd, cm.integrationSkills.Skills(ctx), promptOpts...)
+	text, promptSkills, err := generateSystemPromptWithIntegrationSkills(cm.promptDir(), cm.integrationSkills.Skills(ctx), promptOpts...)
 	if err != nil {
 		return renderedSystemPrompt{}, fmt.Errorf("failed to generate system prompt: %w", err)
 	}
@@ -2136,7 +2136,7 @@ func (cm *ConversationManager) renderSubagentSystemPrompt(ctx context.Context, o
 	if cm.role == roleSubagent {
 		mcpServers, exeDev = cm.promptIntegrations(ctx)
 	}
-	text, promptSkills, err := generateSubagentSystemPromptWithIntegrationSkills(cm.cwd, cm.role == roleSubagent, cm.integrationSkills.Skills(ctx), mcpServers, exeDev)
+	text, promptSkills, err := generateSubagentSystemPromptWithIntegrationSkills(cm.promptDir(), cm.role == roleSubagent, cm.integrationSkills.Skills(ctx), mcpServers, exeDev)
 	if err != nil {
 		return renderedSystemPrompt{}, fmt.Errorf("failed to generate subagent system prompt: %w", err)
 	}
@@ -3008,6 +3008,25 @@ func reasoningDisplayName(level string) string {
 func (cm *ConversationManager) Cwd() string {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
+	return cm.cwd
+}
+
+// HostDir is the conversation's working directory on this host: its cwd, or
+// for a VM conversation, whose cwd is on the VM, its scratch directory here.
+// Guidance files, skills, and files sent to the user come from here.
+func (cm *ConversationManager) HostDir() string {
+	if cm.toolSetConfig.VM != nil {
+		return cm.toolSetConfig.HostDir
+	}
+	return cm.Cwd()
+}
+
+// promptDir is HostDir for the system prompt, which reads cm.cwd as it
+// always has: without cm.mu, which its callers may hold.
+func (cm *ConversationManager) promptDir() string {
+	if cm.toolSetConfig.VM != nil {
+		return cm.toolSetConfig.HostDir
+	}
 	return cm.cwd
 }
 

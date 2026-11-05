@@ -220,6 +220,9 @@ const props = withDefaults(
      *  from the file extension (falling back to markdown). */
     language?: string;
     loadUrl?: string;
+    /** The conversation whose machine (this host, or its VM) path is on;
+     *  saves go there (loadUrl says where loads come from). */
+    conversationId?: string;
     /** Offer the edit/comment mode toggle (like DiffViewer). Comment mode
      *  makes the editor read-only; submitted comments are emitted as
      *  "comment" with a quoted block for the message input. */
@@ -472,7 +475,7 @@ async function saveContent(text: string) {
   if (statusTimeout) clearTimeout(statusTimeout);
   saveStatus.value = "saving";
   try {
-    const response = await writeFileInOrder(path, text);
+    const response = await writeFileInOrder(path, text, props.conversationId);
     if (response.ok && !unmounted) emit("saved", text);
     if (unmounted || !props.isOpen || version !== saveVersion) return;
     saveStatus.value = response.ok ? "saved" : "error";

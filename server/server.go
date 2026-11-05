@@ -816,11 +816,28 @@ type ListDirectoryResponse struct {
 	// GitWorktreeRoot is the main repository root, set only when GitRepoRoot
 	// is a linked worktree (different from the main repo).
 	GitWorktreeRoot string `json:"git_worktree_root,omitempty"`
+	// Error is a problem with the path the user can fix.
+	Error string `json:"error,omitempty"`
 }
 
 // handleListDirectory lists the contents of a directory for the directory picker
 func (s *Server) handleListDirectory(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
+	m, err := s.requestMachine(r)
+	if err != nil {
+		machineError(w, err)
+		return
+	}
+	if m.vm != nil {
+		response, err := m.listDirectory(path)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 	if path == "" {
 		// Default to home directory or root
 		homeDir, err := os.UserHomeDir()
@@ -912,15 +929,7 @@ func (s *Server) handleListDirectory(w http.ResponseWriter, r *http.Request) {
 	}
 	wg.Wait()
 
-	// Sort entries: non-hidden first, then hidden (.*), alphabetically within each group
-	sort.Slice(entries, func(i, j int) bool {
-		iHidden := strings.HasPrefix(entries[i].Name, ".")
-		jHidden := strings.HasPrefix(entries[j].Name, ".")
-		if iHidden != jHidden {
-			return !iHidden // non-hidden comes first
-		}
-		return entries[i].Name < entries[j].Name
-	})
+	sortDirectoryEntries(entries)
 
 	// Calculate parent directory
 	parent := filepath.Dir(path)
@@ -949,8 +958,19 @@ func (s *Server) handleListDirectory(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// getGitHeadSubject returns the subject line of HEAD commit for a git repository.
-// Returns empty string if unable to get the subject.
+// sortDirectoryEntries sorts entries non-hidden first, then hidden (.*),
+// alphabetically within each group.
+func sortDirectoryEntries(entries []DirectoryEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		iHidden := strings.HasPrefix(entries[i].Name, ".")
+		jHidden := strings.HasPrefix(entries[j].Name, ".")
+		if iHidden != jHidden {
+			return !iHidden // non-hidden comes first
+		}
+		return entries[i].Name < entries[j].Name
+	})
+}
+
 // isGitRepo checks if the given path is a git repository root.
 // Returns true for both regular repos (.git directory) and worktrees (.git file with gitdir:).
 func isGitRepo(dirPath string) bool {
@@ -1038,6 +1058,26 @@ func (s *Server) handleCreateDirectory(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "path is required",
 		})
+		return
+	}
+
+	m, err := s.requestMachine(r)
+	if err != nil {
+		machineError(w, err)
+		return
+	}
+	if m.vm != nil {
+		problem, err := m.mkdir(req.Path)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if problem != "" {
+			json.NewEncoder(w).Encode(map[string]string{"error": problem})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"path": m.clean(req.Path)})
 		return
 	}
 
@@ -1130,14 +1170,15 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		}
 		onStateChange := func(state ConversationState) { s.publishConversationState(state) }
 
-		// A VM conversation, subagents included, works on the VM
-		// from a scratch directory here: bash and patch target either.
-		vm, err := s.conversationVMTools(ctx, conversation)
+		// A VM conversation, subagents included, works on the VM, with a
+		// scratch directory here: bash, patch and change_dir target either.
+		vm, scratch, err := s.conversationVMTools(ctx, conversation)
 		if err != nil {
 			return nil, err
 		}
 		config := s.toolSetConfig
 		config.VM = vm
+		config.HostDir = scratch
 		if role != roleTopLevel {
 			// Only top-level conversations can spawn subagents.
 			config.SubagentDepth++

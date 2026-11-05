@@ -97,7 +97,7 @@
           v-tooltip.top="dirTooltip"
           class="diff-viewer-dir-btn"
           :aria-label="`Git directory: ${cwd}. Click to change`"
-          :aria-disabled="recordingLocked"
+          :aria-disabled="recordingLocked || onVm"
           @click="openDirPicker"
         >
           <span v-html="DIR_ICON" />
@@ -277,7 +277,7 @@
               v-tooltip.top="dirTooltip"
               class="diff-viewer-dir-btn"
               :aria-label="`Git directory: ${cwd}. Click to change`"
-              :aria-disabled="recordingLocked"
+              :aria-disabled="recordingLocked || onVm"
               @click="openDirPicker"
             >
               <span v-html="DIR_ICON" />
@@ -529,7 +529,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import type * as Monaco from "monaco-editor";
-import { api } from "../../services/api";
+import { api, onMachine } from "../../services/api";
 import { loadMonaco } from "../../services/monaco";
 import { isDarkModeActive } from "../../services/theme";
 import { useVimEnabled, useMonacoVim } from "../composables/monacoVim";
@@ -578,6 +578,11 @@ import type {
 
 const props = defineProps<{
   cwd: string;
+  // The conversation whose machine (this host, or its VM) cwd is on.
+  conversationId?: string;
+  // cwd is on that conversation's VM, where the repository picker, which
+  // lists this host's repositories, can't pick.
+  onVm?: boolean;
   isOpen: boolean;
   initialCommit?: string;
   // File to select once initialCommit's file list loads (e.g. from the git
@@ -894,7 +899,7 @@ function requestClose() {
 }
 
 function openDirPicker() {
-  if (!recordingLocked.value) showDirPicker.value = true;
+  if (!recordingLocked.value && !props.onVm) showDirPicker.value = true;
 }
 
 function emitComment(block: string) {
@@ -1102,7 +1107,7 @@ function createEditor() {
         if (!model) return;
         const newMessage = model.getValue();
         try {
-          await api.amendGitMessage(cwdVal, newMessage);
+          await api.amendGitMessage(cwdVal, props.conversationId, newMessage);
           amendStatus.value = "saved";
           setTimeout(() => (amendStatus.value = "idle"), 2000);
         } catch {
@@ -1293,7 +1298,7 @@ async function loadDiffs() {
   try {
     loading.value = true;
     error.value = null;
-    const response = await api.getGitDiffs(cwd, initialCommit, false);
+    const response = await api.getGitDiffs(cwd, props.conversationId, initialCommit, false);
     if (requestId !== loadDiffsRequestId) return;
     diffs.value = response.diffs;
     gitRoot.value = response.gitRoot;
@@ -1323,7 +1328,7 @@ async function loadCommitStats() {
     return;
   commitStatsRequestId = requestId;
   try {
-    const response = await api.getGitDiffs(props.cwd, props.initialCommit);
+    const response = await api.getGitDiffs(props.cwd, props.conversationId, props.initialCommit);
     if (requestId !== loadDiffsRequestId) return;
     const byId = new Map(response.diffs.map((diff) => [diff.id, diff]));
     diffs.value = diffs.value.map((diff) => {
@@ -1351,16 +1356,16 @@ async function loadFiles(diffId: string) {
   const toArg = diffId === "working" ? undefined : selectedTo.value;
   const initial = pendingInitialFile;
   pendingInitialFile = undefined;
-  const filesPromise = api.getGitDiffFiles(diffId, cwd, toArg);
+  const filesPromise = api.getGitDiffFiles(diffId, cwd, props.conversationId, toArg);
   const messagesPromise =
     diffId === "working"
       ? Promise.resolve<GitCommitMessage[]>([])
-      : api.getGitCommitMessages(cwd, diffId, toArg).catch(() => []);
+      : api.getGitCommitMessages(cwd, props.conversationId, diffId, toArg).catch(() => []);
   // Highlights describe one commit, so they apply only to its own diff.
   const hasHighlights =
     toArg === "self" && !!diffs.value.find((diff) => diff.id === diffId)?.hasHighlights;
   const highlightsPromise = hasHighlights
-    ? api.getGitHighlights(cwd, diffId).catch((err) => {
+    ? api.getGitHighlights(cwd, props.conversationId, diffId).catch((err) => {
         if (requestId === loadFilesRequestId) highlightsError.value = String(err);
         return null;
       })
@@ -1430,7 +1435,7 @@ async function loadFileDiff(diffId: string, filePath: string) {
       }
       return;
     }
-    const diffData = await api.getGitFileDiff(diffId, filePath, cwd, toArg);
+    const diffData = await api.getGitFileDiff(diffId, filePath, cwd, props.conversationId, toArg);
     if (requestId !== loadFileDiffRequestId) return;
     fileDiff.value = diffData;
   } catch (err) {
@@ -1541,7 +1546,7 @@ async function saveCurrentFile() {
   const fullPath = gitRoot.value + "/" + selectedFile.value;
   try {
     saveStatus.value = "saving";
-    const response = await fetch("/api/write-file", {
+    const response = await fetch(onMachine("/api/write-file", props.conversationId), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: fullPath, content }),

@@ -254,19 +254,28 @@ type messageFile struct {
 // conversationID. A VM conversation works on two machines and a path does not
 // say which, so the file is this host's, where its tools and screenshots are
 // and its relative paths resolve against its scratch directory, or if this
-// host has none, the VM's, relative to the project's directory there. On
+// host has none, the VM's, relative to the conversation's directory there. On
 // failure it writes the error response.
 func (s *Server) openMessageFile(w http.ResponseWriter, r *http.Request, conversationID, path string) (*messageFile, bool) {
-	f, fi, err := openHostFile(s.conversationCwd(r.Context(), conversationID), path)
+	cwd := s.conversationCwd(r.Context(), conversationID)
+	hostCwd := cwd
+	vm, vmErr := s.db.GetConversationVM(r.Context(), conversationID)
+	if vmErr == nil {
+		// The conversation's cwd is on the VM.
+		if hostCwd, vmErr = s.vmScratchDir(vm.ConversationID); vmErr != nil {
+			http.Error(w, vmErr.Error(), http.StatusInternalServerError)
+			return nil, false
+		}
+	}
+	f, fi, err := openHostFile(hostCwd, path)
 	if err == nil {
 		return &messageFile{f, fi.Name(), fi.Size(), fi.ModTime()}, true
 	}
 	if errors.Is(err, fs.ErrNotExist) {
-		vm, vmErr := s.db.GetConversationVM(r.Context(), conversationID)
 		switch {
 		case vmErr == nil:
 			var vf *messageFile
-			if vf, err = s.openVMFile(r.Context(), vm, path); err == nil {
+			if vf, err = s.openVMFile(r.Context(), vm, cwd, path); err == nil {
 				return vf, true
 			}
 		case !errors.Is(vmErr, sql.ErrNoRows):
@@ -322,17 +331,18 @@ var errFileTooLarge = fmt.Errorf("file is larger than %d MiB", maxVMFileSize>>20
 // seconds) on a line, then its contents. It exits 44 if there is no such
 // regular file, and 45 if it is larger than $2 bytes.
 const vmFileScript = `[ -f "$1" ] || exit 44
-set -- "$1" "$2" $(stat -Lc '%s %Y' -- "$1")
+set -- "$1" "$2" $(stat -Lc '%s %Y' -- "$1" 2>/dev/null || stat -Lf '%z %m' -- "$1")
 [ $# -eq 4 ] || exit 1
 [ "$3" -le "$2" ] || exit 45
 echo "$3 $4"
 exec cat -- "$1"`
 
 // openVMFile streams the regular file at path from a conversation's VM,
-// resolving a relative path against the VM's directory. It never provisions
+// resolving a relative path against dir there (the conversation's cwd), or
+// with none, the VM's directory. It never provisions
 // or connects the VM: viewing a message must not change it, and the next tool
 // call does that.
-func (s *Server) openVMFile(ctx context.Context, vm *db.ConversationVM, p string) (*messageFile, error) {
+func (s *Server) openVMFile(ctx context.Context, vm *db.ConversationVM, dir, p string) (*messageFile, error) {
 	if err := conversationVMArchived(vm); err != nil {
 		return nil, err
 	}
@@ -340,7 +350,10 @@ func (s *Server) openVMFile(ctx context.Context, vm *db.ConversationVM, p string
 		return nil, fmt.Errorf("VM %s is not ready (%s)", vm.Name, vm.Status)
 	}
 	if !path.IsAbs(p) {
-		p = path.Join(vm.Dir, p)
+		if dir == "" {
+			dir = vm.Dir
+		}
+		p = path.Join(dir, p)
 	}
 	target, err := s.conversationVMTarget(vm)
 	if err != nil {

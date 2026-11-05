@@ -51,7 +51,7 @@ func TestSharedConversationVM(t *testing.T) {
 		t.Fatalf("shared project started a setup: %+v %v", got.VM, err)
 	}
 	prompt, err := conversationPrompt(t, s, ids[0])
-	if err != nil || !strings.Contains(prompt, "SHARES") || !strings.Contains(prompt, `ssh_target "hub": runs over ssh on hub. bash commands start in /home/exedev/hub`) {
+	if err != nil || !strings.Contains(prompt, "SHARES") || !strings.Contains(prompt, `ssh_target "hub": runs over ssh on hub, in your working directory there, which starts as /home/exedev/hub`) {
 		t.Fatalf("shared conversation prompt: %v\n%s", err, prompt)
 	}
 

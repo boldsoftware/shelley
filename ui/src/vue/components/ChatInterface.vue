@@ -656,6 +656,7 @@
     <DirectoryPickerModal
       :is-open="showDirectoryPicker"
       :initial-path="currentConversation?.cwd || selectedCwd"
+      :vm="pickerVM"
       @close="showDirectoryPicker = false"
       @select="applyPickedCwd"
     />
@@ -665,6 +666,8 @@
     <!-- Git Graph Viewer -->
     <GitGraphViewer
       :cwd="(diffViewerCwd || currentConversation?.cwd || selectedCwd) as string"
+      :conversation-id="conversationId ?? undefined"
+      :on-vm="onVm"
       :is-open="showGitGraph"
       :covered="showDiffViewer"
       :can-open-diff="true"
@@ -703,6 +706,8 @@
     <!-- Diff Viewer -->
     <DiffViewer
       :cwd="(diffViewerCwd || currentConversation?.cwd || selectedCwd) as string"
+      :conversation-id="conversationId ?? undefined"
+      :on-vm="onVm"
       :is-open="showDiffViewer"
       :initial-commit="diffViewerInitialCommit"
       :initial-file="diffViewerInitialFile"
@@ -993,6 +998,16 @@ const props = withDefaults(
   },
 );
 const workspace = useWorkspace();
+// The conversation works on a VM: its cwd, and the diff viewer, git graph and
+// terminal, are there.
+const onVm = computed(() => !!workspace.vmFor(props.conversationId));
+// The directory picker browses the conversation's VM, if it has one.
+const pickerVM = computed(() => {
+  const vm = workspace.vmFor(props.conversationId);
+  return vm && props.conversationId
+    ? { conversationId: props.conversationId, name: vm.vm_name }
+    : undefined;
+});
 
 const { t } = useI18n();
 const conversations = inject(ConversationsListKey);

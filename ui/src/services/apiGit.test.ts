@@ -32,11 +32,11 @@ await run("getGitDiffs requests an explicit commit", async () => {
       return Response.json({ diffs: [], gitRoot: "/tmp/repo" });
     }) as typeof globalThis.fetch,
     async () => {
-      await api.getGitDiffs("/tmp/a repo", "abc1234");
+      await api.getGitDiffs("/tmp/a repo", "c1", "abc1234");
     },
   );
   assert(
-    requestedUrl === "/api/git/diffs?cwd=%2Ftmp%2Fa+repo&commit=abc1234",
+    requestedUrl === "/api/git/diffs?cwd=%2Ftmp%2Fa+repo&conversation_id=c1&commit=abc1234",
     `url = ${requestedUrl}`,
   );
 });

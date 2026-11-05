@@ -58,19 +58,18 @@ func TestConversationVMLive(t *testing.T) {
 		}
 	})
 
-	// The agent's tools run here, in the conversation's scratch directory; bash
-	// and patch target the VM or this host.
+	// The agent's tools run here; the conversation's directory is on the VM,
+	// and they have a scratch directory here. bash and patch target either.
 	conversation, err = database.GetConversationByID(t.Context(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := s.conversationVMTools(t.Context(), conversation)
+	target, scratch, err := s.conversationVMTools(t.Context(), conversation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	scratch := derefString(conversation.Cwd)
 	jobs := make(liveJobs, 1)
-	ts := claudetool.NewToolSet(t.Context(), claudetool.ToolSetConfig{WorkingDir: scratch, ConversationID: id, BackgroundJobs: jobs, VM: target})
+	ts := claudetool.NewToolSet(t.Context(), claudetool.ToolSetConfig{WorkingDir: vm.Dir, HostDir: scratch, ConversationID: id, BackgroundJobs: jobs, VM: target})
 	tools := map[string]*llm.Tool{}
 	for _, tool := range ts.Tools() {
 		tools[tool.Name] = tool

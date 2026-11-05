@@ -627,10 +627,10 @@ func TestMessageFileFromConversationVM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.conversationVMTools(t.Context(), conversation); err != nil {
+	_, scratch, err := s.conversationVMTools(t.Context(), conversation)
+	if err != nil {
 		t.Fatal(err)
 	}
-	scratch := derefString(conversation.Cwd)
 	write := func(path string, data []byte) {
 		if err := os.WriteFile(path, data, 0o644); err != nil {
 			t.Fatal(err)

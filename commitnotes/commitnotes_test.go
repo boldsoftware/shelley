@@ -67,22 +67,22 @@ func TestNotesRoundTrip(t *testing.T) {
 	write(t, dir, "a.txt", []byte("b\n"))
 	second := commit(t, git, "second")
 
-	if _, err := ReadHighlights(dir, first); !errors.Is(err, ErrNoNote) {
+	if _, err := ReadHighlights(Local(dir), first); !errors.Is(err, ErrNoNote) {
 		t.Fatalf("ReadHighlights error = %v", err)
 	}
-	notes, err := ListHighlights(dir)
+	notes, err := ListHighlights(Local(dir))
 	if err != nil || len(notes) != 0 {
 		t.Fatalf("ListHighlights = %v, %v", notes, err)
 	}
 	payload := []byte(`{"version":1,"files":["a.txt"],"highlights":[]}`)
-	if err := WriteHighlights(dir, first, payload); err != nil {
+	if err := WriteHighlights(Local(dir), first, payload); err != nil {
 		t.Fatal(err)
 	}
-	got, err := ReadHighlights(dir, first)
+	got, err := ReadHighlights(Local(dir), first)
 	if err != nil || strings.TrimSpace(string(got)) != string(payload) {
 		t.Fatalf("ReadHighlights = %q, %v", got, err)
 	}
-	notes, err = ListHighlights(dir)
+	notes, err = ListHighlights(Local(dir))
 	if err != nil || len(notes) != 1 || !notes[first] || notes[second] {
 		t.Fatalf("ListHighlights = %v, %v", notes, err)
 	}
@@ -102,14 +102,14 @@ func TestGitEnvIgnoresRepoOverrides(t *testing.T) {
 
 	t.Setenv("GIT_DIR", filepath.Join(other, ".git"))
 	t.Setenv("GIT_WORK_TREE", other)
-	gotHash, err := CommitHash(dir, "HEAD")
+	gotHash, err := CommitHash(Local(dir), "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if gotHash != hash {
 		t.Fatalf("GIT_DIR override leaked: got %s, want %s", gotHash, hash)
 	}
-	h, err := HighlightsScaffold(dir, "HEAD")
+	h, err := HighlightsScaffold(Local(dir), "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestWriteNoteConcurrent(t *testing.T) {
 	}
 	errs := make(chan error, len(commits))
 	for i := range commits {
-		go func() { errs <- WriteHighlights(dir, commits[i], []byte(fmt.Sprintf("note %d", i))) }()
+		go func() { errs <- WriteHighlights(Local(dir), commits[i], []byte(fmt.Sprintf("note %d", i))) }()
 	}
 	for range commits {
 		if err := <-errs; err != nil {
@@ -135,7 +135,7 @@ func TestWriteNoteConcurrent(t *testing.T) {
 		}
 	}
 	for i := range commits {
-		if note, err := ReadHighlights(dir, commits[i]); err != nil || strings.TrimSpace(string(note)) != fmt.Sprintf("note %d", i) {
+		if note, err := ReadHighlights(Local(dir), commits[i]); err != nil || strings.TrimSpace(string(note)) != fmt.Sprintf("note %d", i) {
 			t.Errorf("note %d = %q, %v", i, note, err)
 		}
 	}

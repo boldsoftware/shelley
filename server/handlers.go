@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"io/fs"
 	"mime"
 	"net/http"
 	"os"
@@ -138,8 +139,14 @@ func (s *Server) handleUserAgentsMd(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"path": path, "content": content})
 }
 
-// handleWriteFile writes content to a file (for diff viewer edit mode)
+// handleWriteFile writes content to a file (for diff viewer edit mode), on the
+// machine of the conversation_id parameter's conversation.
 func (s *Server) handleWriteFile(w http.ResponseWriter, r *http.Request) {
+	m, err := s.requestMachine(r)
+	if err != nil {
+		machineError(w, err)
+		return
+	}
 	var req struct {
 		Path    string `json:"path"`
 		Content string `json:"content"`
@@ -156,14 +163,13 @@ func (s *Server) handleWriteFile(w http.ResponseWriter, r *http.Request) {
 
 	// Security: only allow writing within certain directories
 	// For now, require the path to be within a git repository
-	clean := filepath.Clean(req.Path)
-	if !filepath.IsAbs(clean) {
+	clean := m.clean(req.Path)
+	if !strings.HasPrefix(clean, "/") {
 		http.Error(w, "absolute path required", http.StatusBadRequest)
 		return
 	}
 
-	// Write the file
-	if err := os.WriteFile(clean, []byte(req.Content), 0o644); err != nil {
+	if err := m.writeFile(clean, []byte(req.Content)); err != nil {
 		http.Error(w, fmt.Sprintf("failed to write file: %v", err), s.errorStatus(err))
 		return
 	}
@@ -171,7 +177,7 @@ func (s *Server) handleWriteFile(w http.ResponseWriter, r *http.Request) {
 	// If the file lives in the dedicated user AGENTS.md repo, record this
 	// edit as a new git commit. We intentionally don't surface git history in
 	// the UI; it exists purely so users can recover old versions on disk.
-	if isUserAgentsMdFile(clean) {
+	if m.vm == nil && isUserAgentsMdFile(clean) {
 		if err := commitUserAgentsMd("edit via web ui"); err != nil {
 			// Log-ish: don't fail the write if the commit fails.
 			fmt.Fprintf(os.Stderr, "warning: commit AGENTS.md edit: %v\n", err)
@@ -190,32 +196,42 @@ const maxEditableFileBytes = 16 << 20 // 16 MiB
 // {path, content}. The editor modal loads files through this (rather than
 // /api/read, which is restricted to image/upload dirs) so it can open any
 // file the fuzzy finder surfaces. Writing already accepts arbitrary absolute
-// paths via /api/write-file, so reading them is consistent.
+// paths via /api/write-file, so reading them is consistent. Like writing, it
+// reads on the machine of the conversation_id parameter's conversation.
 func (s *Server) handleReadFile(w http.ResponseWriter, r *http.Request) {
+	m, err := s.requestMachine(r)
+	if err != nil {
+		machineError(w, err)
+		return
+	}
 	p := r.URL.Query().Get("path")
 	if p == "" {
 		http.Error(w, "path required", http.StatusBadRequest)
 		return
 	}
-	clean := filepath.Clean(p)
-	if !filepath.IsAbs(clean) {
+	clean := m.clean(p)
+	if !strings.HasPrefix(clean, "/") {
 		http.Error(w, "absolute path required", http.StatusBadRequest)
 		return
 	}
-	info, err := os.Stat(clean)
+	isDir, size, err := m.stat(clean)
+	if err != nil && m.vm != nil && !errors.Is(err, fs.ErrNotExist) {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	if info.IsDir() {
+	if isDir {
 		http.Error(w, "path is a directory", http.StatusBadRequest)
 		return
 	}
-	if info.Size() > maxEditableFileBytes {
+	if size > maxEditableFileBytes {
 		http.Error(w, "file too large to edit", http.StatusRequestEntityTooLarge)
 		return
 	}
-	b, err := os.ReadFile(clean)
+	b, err := m.readFile(clean)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to read file: %v", err), http.StatusInternalServerError)
 		return
@@ -790,20 +806,30 @@ func (s *Server) conversationListWithStateInternal(ctx context.Context, limit, o
 	if err != nil {
 		return nil, err
 	}
-	return s.decorateConversations(conversations), nil
+	vms, err := s.db.ListConversationVMs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	onVM := make(map[string]bool, len(vms))
+	for _, vm := range vms {
+		onVM[vm.ConversationID] = true
+	}
+	return s.decorateConversations(conversations, onVM), nil
 }
 
-// decorateConversations adds git metadata to conversation list items.
-// Everything else, working state and counts included, comes from the query
-// that listed them (see db.ConversationListItem), so the list is one query.
-func (s *Server) decorateConversations(conversations []db.ConversationListItem) []ConversationWithState {
+// decorateConversations adds git metadata to conversation list items, except
+// those whose directory is on a VM (onVM's, and their subagents'), which
+// would take a VM connection each. Everything else, working state and counts
+// included, comes from the query that listed them (see
+// db.ConversationListItem).
+func (s *Server) decorateConversations(conversations []db.ConversationListItem, onVM map[string]bool) []ConversationWithState {
 	now := time.Now()
 	result := make([]ConversationWithState, len(conversations))
 	gitEntries := make(map[string]conversationListGitCacheEntry)
 	for i, item := range conversations {
 		conv := item.Conversation
 		cws := ConversationWithState{ConversationListItem: item, Working: conv.AgentWorking}
-		if conv.Cwd != nil {
+		if conv.Cwd != nil && !onVM[conv.ConversationID] && !onVM[derefString(conv.ParentConversationID)] {
 			cwd := *conv.Cwd
 			entry, ok := gitEntries[cwd]
 			if !ok {
@@ -3526,17 +3552,23 @@ func (s *Server) handleSetConversationCwd(w http.ResponseWriter, r *http.Request
 		http.Error(w, "cwd must be an absolute path", http.StatusBadRequest)
 		return
 	}
-	cwd := filepath.Clean(req.Cwd)
-	info, err := os.Stat(cwd)
+	// A VM conversation's directory is on its VM.
+	m, err := s.conversationMachine(ctx, conversationID)
 	if err != nil {
-		if os.IsNotExist(err) {
+		machineError(w, err)
+		return
+	}
+	cwd := m.clean(req.Cwd)
+	isDir, _, err := m.stat(cwd)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
 			http.Error(w, "directory does not exist", http.StatusBadRequest)
 			return
 		}
 		http.Error(w, fmt.Sprintf("cannot use directory: %v", err), http.StatusBadRequest)
 		return
 	}
-	if !info.IsDir() {
+	if !isDir {
 		http.Error(w, "path is not a directory", http.StatusBadRequest)
 		return
 	}
