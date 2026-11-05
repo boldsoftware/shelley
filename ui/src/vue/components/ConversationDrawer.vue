@@ -1649,14 +1649,23 @@ function conversationActions(conversation: Conversation): MenuItem[] {
   ];
   const current = workspace.projectFor(id);
   const targets = workspace.data.value?.projects.filter((p) => p.name !== current?.name) ?? [];
-  if (!conversation.parent_conversation_id && targets.length) {
-    // The server moves only idle conversations.
+  // The server moves only a person's own top-level conversations, while
+  // idle and without a running action (db.MoveConversation).
+  if (
+    conversation.user_initiated &&
+    !conversation.parent_conversation_id &&
+    !conversation.external_conversation_id &&
+    targets.length
+  ) {
     const working = workingIds.value.has(id);
+    const acting = !!workspace.data.value?.runs.some(
+      (run) => run.conversation_id === id && run.status === "running",
+    );
     items.push({
       label: t("moveToProject"),
       icon: "pi pi-folder",
-      disabled: working,
-      note: working ? t("waitUntilIdle") : undefined,
+      disabled: working || acting,
+      note: working ? t("waitUntilIdle") : acting ? t("waitForRunningAction") : undefined,
       items: targets.map((target) => ({
         label: target.name,
         command: () => void moveConversation(id, target.name),

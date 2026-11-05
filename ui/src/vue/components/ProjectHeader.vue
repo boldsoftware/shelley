@@ -1,18 +1,21 @@
-<!-- A task's project row under its title: its project (picker and editor),
-     the project's action buttons, and the state of a Shelley build the task
-     verified. Workspace mode's title row says where the task runs; stock
-     Shelley says it here. -->
+<!-- A task's project row under its title. Stock Shelley: its project
+     (picker and editor), the project's action buttons, and its VM. Workspace
+     mode, whose title row says where the task runs and whose drawer moves and
+     edits projects: only the action buttons and the state of a Shelley build
+     the task verified, and no row without them. -->
 <template>
   <section
     v-if="
-      (project || build || (assignable && workspace.data.value?.projects.length)) &&
+      (workspaceMode
+        ? actions.length || build
+        : project || (assignable && workspace.data.value?.projects.length)) &&
       !workspace.isAssistant(conversationId)
     "
     class="project-header"
     :aria-label="t('project')"
   >
     <div class="project-header-row">
-      <div class="project-picker">
+      <div v-if="!workspaceMode" class="project-picker">
         <i class="pi pi-folder" aria-hidden="true" />
         <label class="sr-only" for="current-conversation-project">{{
           t("conversationProject")
@@ -44,9 +47,9 @@
           <i class="pi pi-pencil" aria-hidden="true" />
         </button>
       </div>
-      <div v-if="project?.actions.length" class="project-header-actions">
+      <div v-if="actions.length" class="project-header-actions">
         <Button
-          v-for="action in project.actions"
+          v-for="action in actions"
           :key="action.id"
           :label="
             starting === action.id
@@ -112,10 +115,7 @@
         {{ t("retry") }}
       </button>
     </p>
-    <p
-      v-if="!activeRun && busy && project?.actions.length"
-      class="project-muted project-action-hint"
-    >
+    <p v-if="!activeRun && busy && actions.length" class="project-muted project-action-hint">
       {{ t("actionsAfterWorking") }}
     </p>
   </section>
@@ -143,6 +143,7 @@ const props = defineProps<{
 const { t } = useI18n();
 const workspace = useWorkspace();
 const project = computed(() => workspace.projectFor(props.conversationId));
+const actions = computed(() => project.value?.actions ?? []);
 const vm = computed(() => workspace.vmFor(props.conversationId));
 const status = computed(() => vm.value && vmStatus(vm.value, t));
 // Only workspace mode has Shelley builds.

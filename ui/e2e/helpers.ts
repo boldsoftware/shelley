@@ -48,6 +48,30 @@ export async function openWorkspaceTool(page: Page, name: string): Promise<void>
     .click();
 }
 
+/** Edits a project in the editor its drawer group's menu opens (workspace
+ *  mode), and saves it. */
+export async function editProject(
+  page: Page,
+  project: string,
+  edit: (editor: Locator) => Promise<void>,
+): Promise<void> {
+  const open = page.getByRole("button", { name: "Open tasks", exact: true });
+  if (await open.isVisible()) await open.click();
+  const actions = page.getByRole("button", { name: `${project} project actions`, exact: true });
+  await expect(actions).toBeInViewport();
+  await actions.click();
+  await page
+    .getByTestId("project-actions-menu")
+    .getByRole("menuitem", { name: "Edit project…", exact: true })
+    .click();
+  // The editor takes the main pane, closing the drawer, and saving returns
+  // to the task.
+  const editor = page.getByRole("region", { name: "Edit project", exact: true });
+  await edit(editor);
+  await editor.getByRole("button", { name: "Save project", exact: true }).click();
+  await expect(editor).toBeHidden();
+}
+
 export async function startNewConversationFromHeader(page: Page): Promise<void> {
   const button = page
     .locator(".header")

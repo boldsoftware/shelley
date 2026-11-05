@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { createConversationViaAPIWithDetails, testWorkingDirectory } from "./helpers";
+import { createConversationViaAPIWithDetails, editProject, testWorkingDirectory } from "./helpers";
 
 // These specs exercise workspace mode, which each test turns on before its
 // page loads and off again so the worker's other specs see stock Shelley.
@@ -79,7 +79,6 @@ test("root opens the pinned Assistant; explicit conversation links remain select
   await expect(page).toHaveURL(
     new RegExp(`/c/(${conversation.slug}|${conversation.conversationId})$`),
   );
-  await expect(page.getByLabel("Task project", { exact: true })).toBeVisible();
 });
 
 test("the Assistant's one URL is /", async ({ page, request }) => {
@@ -173,9 +172,6 @@ test("project editor, task creation, failed action retry, and success-only archi
   await page.getByTestId("message-input").fill("Hello");
   await page.getByRole("button", { name: "Send message", exact: true }).click();
   await expect(page).toHaveURL(/\/c\//);
-  await expect(
-    page.getByLabel("Task project", { exact: true }).locator("option:checked"),
-  ).toHaveText(name);
   const publish = page.getByRole("button", { name: "Publish & archive", exact: true });
   await expect(publish).toBeEnabled();
   await publish.click();
@@ -190,11 +186,9 @@ test("project editor, task creation, failed action retry, and success-only archi
   );
 
   // A command that hangs can be stopped.
-  await page.getByRole("button", { name: "Edit task project", exact: true }).click();
-  const hang = page.getByRole("region", { name: "Edit project", exact: true });
-  await hang.getByLabel("Shell command", { exact: true }).fill("printf 'waiting\\n'; sleep 600");
-  await hang.getByRole("button", { name: "Save project", exact: true }).click();
-  await expect(hang).toBeHidden();
+  await editProject(page, name, (editor) =>
+    editor.getByLabel("Shell command", { exact: true }).fill("printf 'waiting\\n'; sleep 600"),
+  );
   await publish.click();
   const hungRun = page.getByTestId("project-action-card").filter({ hasText: "Running" });
   await expect(hungRun).toContainText("waiting");
@@ -205,13 +199,9 @@ test("project editor, task creation, failed action retry, and success-only archi
   await expect(stoppedRun.getByTestId("project-action-status")).toHaveText("Interrupted");
   await expect(publish).toBeEnabled();
 
-  await page.getByRole("button", { name: "Edit task project", exact: true }).click();
-  const edit = page.getByRole("region", { name: "Edit project", exact: true });
-  await edit
-    .getByLabel("Shell command", { exact: true })
-    .fill("printf 'published successfully\\n'");
-  await edit.getByRole("button", { name: "Save project", exact: true }).click();
-  await expect(edit).toBeHidden();
+  await editProject(page, name, (editor) =>
+    editor.getByLabel("Shell command", { exact: true }).fill("printf 'published successfully\\n'"),
+  );
   await publish.click();
   const successfulRun = page.getByTestId("project-action-card").filter({ hasText: "Succeeded" });
   await expect(successfulRun.getByTestId("project-action-status")).toHaveText("Succeeded");
@@ -442,7 +432,10 @@ test("the Assistant shows no host or working directory; conversations still do",
   await expect(page.locator(".overflow-menu-item", { hasText: "Directory" })).toHaveCount(0);
 });
 
-test("a task's title row holds its page tabs and where it runs", async ({ page, request }) => {
+test("a task's title row holds its page tabs and where it runs; actions get the only other row", async ({
+  page,
+  request,
+}) => {
   const name = `Header ${randomUUID().slice(0, 8)}`;
   const created = await request.post("/api/projects", {
     data: {
@@ -499,7 +492,7 @@ test("a task's title row holds its page tabs and where it runs", async ({ page, 
     "https://exe-hub.exe.xyz/",
   );
   await page.keyboard.press("Escape");
-  // The project row has the project and its actions, not the VM.
+  // The project's actions are its second row.
   const projectRow = page.locator(".project-header");
   await expect(projectRow.getByRole("button", { name: "Ship it", exact: true })).toBeVisible();
   await expect(projectRow).not.toContainText("exe-hub");
@@ -519,7 +512,7 @@ test("a task's title row holds its page tabs and where it runs", async ({ page, 
   ]);
   await page.keyboard.press("Escape");
 
-  // A task on this host.
+  // A task on this host without project machinery has one row.
   await page.setViewportSize({ width: 1280, height: 800 });
   const bare = `${name} bare`;
   expect(
@@ -532,6 +525,7 @@ test("a task's title row holds its page tabs and where it runs", async ({ page, 
   const plain = await start(bare, "Hello");
   await page.goto(`/c/${plain}`);
   await expect(header.getByTestId("conversation-place")).toHaveAccessibleName(/^This host, /);
+  await expect(page.locator(".project-header")).toHaveCount(0);
   await page.goto("/");
   await expect(page.locator("h1.header-title")).toHaveText("Assistant");
   await expect(page.getByTestId("conversation-place")).toHaveCount(0);
