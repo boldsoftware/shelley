@@ -539,9 +539,11 @@
         >
           <div class="project-heading project-naming">
             <i class="pi pi-folder-plus" aria-hidden="true" />
-            <ProjectNameField
+            <NameField
               initial=""
               :label="t('newProject')"
+              :placeholder="t('projectNamePlaceholder')"
+              :check="workspace.projectNameCheck('')"
               :submit="createProject"
               @done="workspace.namingProject.value = false"
             />
@@ -772,6 +774,7 @@ import {
   neighborAfterRemoval,
 } from "../../utils/conversationSort";
 import { tildifyPath } from "../../utils/tildify";
+import { titleSlug } from "../../utils/conversationTitle";
 import { isImeComposing } from "../../utils/imeComposing";
 import { filterConversationsByDay, shiftLocalDay } from "../../utils/conversationDayFilter";
 import {
@@ -798,7 +801,7 @@ import {
 } from "../../utils/drawerFolds";
 import ConversationRow from "./ConversationDrawerRow.vue";
 import ProjectVMSetup from "./ProjectVMSetup.vue";
-import ProjectNameField from "./ProjectNameField.vue";
+import NameField from "./NameField.vue";
 import CustomizationStatus from "./CustomizationStatus.vue";
 import { useCustomizations } from "../composables/customizations";
 import { notRunning } from "../../services/customizations";
@@ -1507,17 +1510,6 @@ function handleCancelDelete(e: MouseEvent) {
   pendingDeleteId.value = null;
 }
 
-function sanitizeSlug(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[\s_]+/g, "-")
-    .replace(/[^a-z0-9-]+/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 60)
-    .replace(/-$/g, "");
-}
-
 async function refreshConversationSnapshots(updated: Conversation) {
   const refreshes: Promise<void>[] = [];
   if (searchText.value.trim()) refreshes.push(refreshSearchResults());
@@ -1713,7 +1705,7 @@ function handleStartRename(e: MouseEvent, conversation: Conversation) {
 }
 async function handleRename(conversationId: string) {
   if (editingId.value !== conversationId) return;
-  const sanitized = sanitizeSlug(editingSlug.value);
+  const sanitized = titleSlug(editingSlug.value);
   if (!sanitized) {
     editingId.value = null;
     return;

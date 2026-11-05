@@ -1,5 +1,5 @@
-<!-- A project picked in the drawer, in the main pane: one bar with its name
-     (a click renames it) and its tabs, its web page (if it has one) and its
+<!-- A project picked in the drawer, in the main pane: one bar, like a
+     conversation's, with its name (a click renames it) and its tabs, its web page (if it has one) and its
      settings, then the shown tab. The page is framed as a task's page tabs
      frame theirs, or says why it can't be and links to it. -->
 <template>
@@ -26,23 +26,14 @@
         />
         <ExeBrand v-if="workspaceMode && isDrawerCollapsed" class="show-on-desktop-only" />
         <h1 v-if="project" class="app-bar-title header-title header-title-yields">
-          <span v-if="renaming" class="project-title-rename">
-            <ProjectNameField
-              :initial="project.name"
-              :label="t('rename')"
-              :submit="renameProject"
-              @done="renaming = false"
-            />
-          </span>
-          <button
-            v-else
-            type="button"
-            class="project-title-button"
-            :title="t('rename')"
-            @click="renaming = true"
-          >
-            {{ project.name }}
-          </button>
+          <EditableTitle
+            :text="project.name"
+            :label="t('rename')"
+            editable
+            :placeholder="t('projectNamePlaceholder')"
+            :check="workspace.projectNameCheck(project.name)"
+            :submit="renameProject"
+          />
         </h1>
         <nav v-if="project" class="project-tabs" :aria-label="t('projectTabs')">
           <button
@@ -106,7 +97,7 @@ import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
 import ExeBrand from "./ExeBrand.vue";
 import PageFrames from "./PageFrames.vue";
-import ProjectNameField from "./ProjectNameField.vue";
+import EditableTitle from "./EditableTitle.vue";
 import ProjectSettings from "./ProjectSettings.vue";
 import { workspaceApi } from "../../services/workspace";
 import { useFrameChecks } from "../composables/pageTabs";
@@ -168,7 +159,6 @@ function reload() {
   if (url) void probe(url, true).then(() => (reloadedAt.value = Date.now()));
 }
 
-const renaming = ref(false);
 // The latest rename, which saving the settings waits for.
 let renamed = Promise.resolve();
 function renameProject(name: string) {

@@ -181,6 +181,47 @@ test("project edits from elsewhere arrive through SSE", async ({ page, request }
   await expect(page).toHaveURL(new RegExp(`/c/(${plain.slug}|${plain.conversationId})$`));
 });
 
+test("a conversation's title renames it in place, in a bar as tall as a project's", async ({
+  page,
+  request,
+}) => {
+  const conversation = await createConversationViaAPIWithDetails(request, "Hello");
+  await page.goto(`/c/${conversation.conversationId}`);
+  const header = page.locator(".header").first();
+  const title = header.getByRole("button", { name: conversation.slug, exact: true });
+  const rename = header.getByLabel("Rename", { exact: true });
+  // Escape reverts; Enter saves the title as a slug.
+  await title.click();
+  await expect(rename).toBeFocused();
+  await expect(rename).toHaveValue(conversation.slug);
+  await rename.fill("Discarded");
+  await rename.press("Escape");
+  await expect(rename).toHaveCount(0);
+  await title.click();
+  const slug = `titled ${randomUUID().slice(0, 8)}`;
+  await rename.fill(`${slug}!`);
+  await rename.press("Enter");
+  const renamed = slug.replace(" ", "-");
+  await expect(header.getByRole("button", { name: renamed, exact: true })).toBeVisible();
+  const saved = await (
+    await request.get(`/api/conversation/${conversation.conversationId}`)
+  ).json();
+  expect(saved.conversation.slug).toBe(renamed);
+  const conversationBar = (await header.boundingBox())!.height;
+
+  const name = `Bar ${randomUUID().slice(0, 8)}`;
+  const response = await request.post("/api/projects", {
+    headers,
+    data: { name, instructions: "", cwd: testWorkingDirectory() },
+  });
+  expect(response.ok()).toBeTruthy();
+  const project = (await response.json()) as { id: number };
+  await page.goto(`/project/${project.id}/settings`);
+  const view = page.getByTestId("project-view");
+  await expect(view.getByRole("button", { name, exact: true })).toBeVisible();
+  expect((await view.locator(".header").boundingBox())!.height).toBe(conversationBar);
+});
+
 test("project settings and conversation menu: delete waits for an empty project; move to project", async ({
   page,
   request,

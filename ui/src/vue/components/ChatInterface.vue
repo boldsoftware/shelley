@@ -49,7 +49,12 @@
           :class="{ 'header-title-yields': showPlace }"
           :title="currentConversation?.slug || 'Shelley'"
         >
-          {{ displayTitle }}
+          <EditableTitle
+            :text="displayTitle"
+            :label="t('rename')"
+            :editable="titleEditable"
+            :submit="renameFromTitle"
+          /><template v-if="currentConversation?.archived"> (archived)</template>
         </h1>
         <template v-if="showPlace">
           <PageTabStrip v-if="pages?.tabs.value.length" :pages="pages" />
@@ -832,7 +837,8 @@ import { closeMarkdownDoc, useMarkdownDoc } from "../composables/markdownDoc";
 import { isImeComposing } from "../../utils/imeComposing";
 import { focusMessageInput, focusMessageInputIfUnfocused } from "../../utils/focusMessageInput";
 import { buildMessageQuote } from "../../utils/messageQuote";
-import { conversationTitle } from "../../utils/conversationTitle";
+import { conversationTitle, titleSlug } from "../../utils/conversationTitle";
+import EditableTitle from "./EditableTitle.vue";
 import { hasMultipleUsers } from "../../utils/messageAuthors";
 import { tildifyPath } from "../../utils/tildify";
 import { prettyModelName } from "../../utils/modelNames";
@@ -2584,10 +2590,23 @@ const contextNudgesOn = computed(
 const displayTitle = computed(() => {
   if (props.isAssistant) return "Assistant";
   const slug = props.currentConversation?.slug;
-  const title = slug ? conversationTitle(slug) : "Shelley";
-  if (props.currentConversation?.archived) return `${title} (archived)`;
-  return title;
+  return slug ? conversationTitle(slug) : "Shelley";
 });
+// A click on the title renames the conversation, but not the Assistant's
+// (the server refuses) or a draft's.
+const titleEditable = computed(
+  () =>
+    !!props.conversationId &&
+    !props.isAssistant &&
+    !!props.currentConversation?.slug &&
+    !props.currentConversation.is_draft,
+);
+async function renameFromTitle(title: string) {
+  const slug = titleSlug(title);
+  if (!slug || slug === props.currentConversation?.slug) return;
+  const conversation = await api.renameConversation(props.conversationId!, slug);
+  props.onConversationUpdate?.(conversation);
+}
 
 // Workspace mode's title row also holds a task's page tabs and where it runs.
 const showPlace = computed(

@@ -1,39 +1,40 @@
-<!-- A project name being typed in place: Enter or leaving the field submits
-     a changed name, Escape (or an empty or unchanged name) cancels. Names the
-     server would refuse are explained under the field, which stays. -->
+<!-- A name being typed in place: Enter or leaving the field submits a
+     changed name, Escape (or an empty or unchanged name) cancels. A name
+     `check` refuses, or the submission's error, is explained under the
+     field, which stays. -->
 <template>
   <input
     ref="input"
     v-model="name"
-    class="project-name-field"
+    class="name-field"
     :aria-label="label"
     :aria-invalid="!!error"
-    :placeholder="t('projectNamePlaceholder')"
+    :placeholder="placeholder"
     autocomplete="off"
     spellcheck="false"
     :disabled="busy"
-    @keydown.enter.prevent="commit"
+    @keydown.enter="onEnter"
     @keydown.esc.stop.prevent="finish"
     @blur="commit"
   />
-  <p v-if="error" class="error-line project-name-error" role="alert">{{ error }}</p>
+  <p v-if="error" class="error-line name-field-error" role="alert">{{ error }}</p>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { projectNameProblem, useWorkspace } from "../composables/workspace";
-import { useI18n } from "../composables/i18n";
 import { errorMessage } from "../../utils/errorMessage";
+import { isImeComposing } from "../../utils/imeComposing";
 
 const props = defineProps<{
   initial: string;
   label: string;
+  placeholder?: string;
+  /** Why a trimmed, changed name can't be saved, or "". */
+  check?: (name: string) => string;
   /** Saves the name; a rejection's message is shown. */
   submit: (name: string) => Promise<void>;
 }>();
 const emit = defineEmits<{ (e: "done"): void }>();
-const { t } = useI18n();
-const workspace = useWorkspace();
 const input = ref<HTMLInputElement | null>(null);
 const name = ref(props.initial);
 const error = ref("");
@@ -50,14 +51,17 @@ onMounted(() => {
   input.value?.select();
 });
 
+function onEnter(e: KeyboardEvent) {
+  if (isImeComposing(e)) return;
+  e.preventDefault();
+  void commit();
+}
+
 async function commit() {
   if (busy.value || finished) return;
   const trimmed = name.value.trim();
   if (!trimmed || trimmed === props.initial) return finish();
-  const taken = (workspace.data.value?.projects ?? [])
-    .map((project) => project.name)
-    .filter((other) => other !== props.initial);
-  error.value = projectNameProblem(trimmed, taken);
+  error.value = props.check?.(trimmed) ?? "";
   if (error.value) return;
   busy.value = true;
   try {

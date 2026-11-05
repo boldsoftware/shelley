@@ -138,6 +138,15 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
       projectView.value = { id: project.id, tab };
     },
     projectById: (id: number) => data.value?.projects.find((project) => project.id === id),
+    /** Why the project named current (or "" for a new one) can't be named
+     * name, or "". */
+    projectNameCheck:
+      (current: string) =>
+      (name: string): string =>
+        projectNameProblem(
+          name,
+          (data.value?.projects ?? []).map((p) => p.name).filter((other) => other !== current),
+        ),
     startNewProject: () => {
       namingProject.value = true;
     },
