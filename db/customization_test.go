@@ -12,7 +12,7 @@ import (
 )
 
 // ensureTestWorkspace turns workspace mode on and creates the workspace (the
-// Assistant and the Shelley project), returning the Assistant's id.
+// Assistant and the Self project), returning the Assistant's id.
 func ensureTestWorkspace(t *testing.T, database *DB) string {
 	t.Helper()
 	EnableWorkspaceMode(t, database)

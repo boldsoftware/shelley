@@ -69,7 +69,7 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 	}
 	workspace = workspaceResponse[db.Workspace](t, workspaceAPI(s, "GET", "/api/workspace", ""), 200)
 	if workspace.AssistantID == "" || workspace.AssistantID != s.assistantID() || len(workspace.Conversations) != 1 ||
-		!workspace.Conversations[0].IsAssistant || len(workspace.Projects) != 1 || workspace.Projects[0].Name != "Shelley" {
+		!workspace.Conversations[0].IsAssistant || len(workspace.Projects) != 1 || workspace.Projects[0].Name != db.SelfProject {
 		t.Fatalf("workspace mode: %+v, cached Assistant %q", workspace, s.assistantID())
 	}
 	if init := indexInitData(t, s); init["workspace"] != true || init["ui_build"] != workspaceBuild {
@@ -88,9 +88,9 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 	if setWorkspaceFlag(t, s, "true"); s.assistantID() != workspace.AssistantID {
 		t.Fatal("assistant changed")
 	}
-	// The seeded Shelley project is deletable once empty.
-	if response := workspaceAPI(s, "DELETE", "/api/projects/Shelley", ""); response.Code != 200 {
-		t.Fatalf("delete the Shelley project: %d %s", response.Code, response.Body.String())
+	// The seeded Self project is deletable once empty.
+	if response := workspaceAPI(s, "DELETE", "/api/projects/Self", ""); response.Code != 200 {
+		t.Fatalf("delete the Self project: %d %s", response.Code, response.Body.String())
 	}
 
 	if got := builds(func() { setWorkspaceFlag(t, s, "") }); len(got) != 1 || got[0] != ui.BuildID() {

@@ -144,3 +144,23 @@ func (e Environment) IntegrationHost(name string, team bool) string {
 func (e Environment) IntegrationURL(name string, team bool) string {
 	return e.scheme + "://" + e.IntegrationHost(name, team)
 }
+
+// VMHost returns VM name's hostname, e.g. name.exe.xyz.
+func (e Environment) VMHost(name string) string {
+	return name + "." + e.boxHost
+}
+
+// Production reports whether e is production exe.dev.
+func (e Environment) Production() bool {
+	return e.scheme == "https" && e.boxHost == "exe.xyz"
+}
+
+// WebURL returns exe.dev's website, where the user manages their account:
+// production's, or "" in other environments, which don't say where theirs
+// is.
+func (e Environment) WebURL() string {
+	if e.Production() {
+		return "https://exe.dev"
+	}
+	return ""
+}

@@ -100,3 +100,56 @@ func TestProjectGithubReposAndSetup(t *testing.T) {
 		t.Fatalf("catalog lacks the project's instructions and repos:\n%s", prompt)
 	}
 }
+
+func TestProjectReposPrompt(t *testing.T) {
+	t.Parallel()
+	e := newProfileEnv(t)
+	env, err := exeenv.New("https", "exe.xyz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.srv.listIntegrations = func(context.Context) (exeenv.Environment, []reflectionIntegration, error) {
+		return env, []reflectionIntegration{{Name: "acme-web", Type: "github", Help: "git clone https://github.int.exe.xyz/acme/web"}}, nil
+	}
+	e.want(201, "POST", "/api/projects", `{"name":"Acme","instructions":"","cwd":"",
+		"repos":[{"integration":"acme-web","repository":"acme/web"},{"integration":"acme-api","repository":"acme/api"}]}`)
+	prompt := func() string {
+		t.Helper()
+		project, err := e.srv.db.GetProject(t.Context(), "Acme")
+		if err != nil {
+			t.Fatal(err)
+		}
+		text, err := e.srv.projectReposPrompt(t.Context(), project)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return text
+	}
+	// Without a saved tag, the prompt names none, nor guesses a clone URL.
+	text := prompt()
+	for _, want := range []string{
+		"acme/web into ~/web through exe.dev GitHub integration \"acme-web\": git clone https://github.int.exe.xyz/acme/web.git",
+		"acme/api into ~/api through exe.dev GitHub integration \"acme-api\" (not attached to this host now: ask the user to attach it)",
+		"(`curl https://reflection.int.exe.xyz/tags`). Check every clone",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("prompt lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "shelley-acme") || strings.Count(text, "git clone") != 1 {
+		t.Fatalf("prompt names an unsaved tag or guesses a URL:\n%s", text)
+	}
+	// Once saved, the tag is how added integrations reach the base.
+	if _, err := e.srv.db.SaveProjectExeTag(t.Context(), "Acme", projectTagBase("Acme")); err != nil {
+		t.Fatal(err)
+	}
+	text = prompt()
+	for _, want := range []string{
+		"\"acme-api\" (not attached to this host; if it was added in Edit project, it reaches the base through the project's tag \"shelley-acme\": its clone URL is in the base's `curl https://reflection.int.exe.xyz/integrations`)",
+		"Shelley gives it the project's tag \"shelley-acme\"",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("prompt lacks %q:\n%s", want, text)
+		}
+	}
+}

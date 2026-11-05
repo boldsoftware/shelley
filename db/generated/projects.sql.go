@@ -53,6 +53,20 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) er
 	return err
 }
 
+const createProjectExeTag = `-- name: CreateProjectExeTag :exec
+INSERT INTO profile_exe_tags (profile, tag) VALUES (?, ?)
+`
+
+type CreateProjectExeTagParams struct {
+	Profile string `json:"profile"`
+	Tag     string `json:"tag"`
+}
+
+func (q *Queries) CreateProjectExeTag(ctx context.Context, arg CreateProjectExeTagParams) error {
+	_, err := q.db.ExecContext(ctx, createProjectExeTag, arg.Profile, arg.Tag)
+	return err
+}
+
 const createProjectRepo = `-- name: CreateProjectRepo :exec
 INSERT INTO profile_repos (profile, position, integration, repository) VALUES (?, ?, ?, ?)
 `
@@ -190,6 +204,17 @@ func (q *Queries) GetProjectActivity(ctx context.Context, arg GetProjectActivity
 	var i GetProjectActivityRow
 	err := row.Scan(&i.Active, &i.Running)
 	return i, err
+}
+
+const getProjectExeTag = `-- name: GetProjectExeTag :one
+SELECT tag FROM profile_exe_tags WHERE profile = ?
+`
+
+func (q *Queries) GetProjectExeTag(ctx context.Context, profile string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getProjectExeTag, profile)
+	var tag string
+	err := row.Scan(&tag)
+	return tag, err
 }
 
 const getProjectSetupConversationID = `-- name: GetProjectSetupConversationID :one
@@ -376,6 +401,17 @@ func (q *Queries) ListProjects(ctx context.Context) ([]ProfileProject, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const projectExeTagTaken = `-- name: ProjectExeTagTaken :one
+SELECT CAST(EXISTS (SELECT 1 FROM profile_exe_tags WHERE tag = ?) AS BOOLEAN)
+`
+
+func (q *Queries) ProjectExeTagTaken(ctx context.Context, tag string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, projectExeTagTaken, tag)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const renameProfile = `-- name: RenameProfile :exec

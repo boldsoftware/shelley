@@ -136,7 +136,7 @@ func customizationRequested(ctx context.Context, q *generated.Queries, state *Cu
 		return err
 	}
 	if err != nil || c.Project == "" {
-		return fmt.Errorf("%w: only conversations in the Shelley project can verify customizations", ErrInvalid)
+		return fmt.Errorf("%w: only conversations in Shelley's own project can verify customizations", ErrInvalid)
 	}
 	if !state.Finished {
 		return nil

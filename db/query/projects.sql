@@ -94,3 +94,12 @@ DELETE FROM profile_base_vms WHERE integration = ? AND vm_name = ?;
 SELECT * FROM profile_base_vms
 WHERE CAST(sqlc.arg(project) AS TEXT) = '' OR profile = sqlc.arg(project)
 ORDER BY requested_at, vm_name;
+
+-- name: GetProjectExeTag :one
+SELECT tag FROM profile_exe_tags WHERE profile = ?;
+
+-- name: ProjectExeTagTaken :one
+SELECT CAST(EXISTS (SELECT 1 FROM profile_exe_tags WHERE tag = ?) AS BOOLEAN);
+
+-- name: CreateProjectExeTag :exec
+INSERT INTO profile_exe_tags (profile, tag) VALUES (?, ?);

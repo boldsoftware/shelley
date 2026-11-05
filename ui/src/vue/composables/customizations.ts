@@ -110,7 +110,7 @@ let shared: { state: CustomizationsState; users: number; stop: () => void } | nu
 /** The page's one customizations poll, shared by the components that show
  * build states (the drawer and a task's header) while any is mounted. */
 export function useCustomizations(): CustomizationsState {
-  // Only workspace mode has the Shelley project that customizes Shelley.
+  // Only workspace mode has the Self project that customizes Shelley.
   if (!workspaceMode) return createCustomizationsState(() => !document.hidden);
   shared ??= start();
   const current = shared;

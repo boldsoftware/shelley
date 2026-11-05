@@ -472,7 +472,7 @@ func exeDev(ctx context.Context, host, command string) ([]byte, error) {
 		Error string `json:"error"`
 	}
 	if json.Unmarshal(body, &failure) == nil && failure.Error != "" {
-		return nil, fmt.Errorf("exe.dev %q: %s", command, failure.Error)
+		return nil, &exeDevError{Command: command, Message: failure.Error}
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("exe.dev %q: %s: %s", command, resp.Status, bytes.TrimSpace(body))
@@ -480,12 +480,19 @@ func exeDev(ctx context.Context, host, command string) ([]byte, error) {
 	return body, nil
 }
 
+// exeDevError is exe.dev's refusal of a command, e.g. one the integration's
+// key may not run.
+type exeDevError struct{ Command, Message string }
+
+func (e *exeDevError) Error() string { return fmt.Sprintf("exe.dev %q: %s", e.Command, e.Message) }
+
 type exeDevVM struct {
-	Name      string `json:"vm_name"`
-	CreatedAt string `json:"created_at"`
-	SSHDest   string `json:"ssh_dest"`
-	HTTPSURL  string `json:"https_url"`
-	Status    string `json:"status"`
+	Name      string   `json:"vm_name"`
+	CreatedAt string   `json:"created_at"`
+	SSHDest   string   `json:"ssh_dest"`
+	HTTPSURL  string   `json:"https_url"`
+	Status    string   `json:"status"`
+	Tags      []string `json:"tags"`
 }
 
 // findExeDevVM returns the VM named name, or nil if there is none.

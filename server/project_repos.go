@@ -73,9 +73,13 @@ func (s *Server) projectReposPrompt(ctx context.Context, project *db.Project) (s
 	if len(project.Repos) == 0 {
 		return "The project has no repositories attached: create its directory (an empty git repository) unless its instructions say otherwise.", nil
 	}
-	_, integrations, err := s.listIntegrations(ctx)
+	env, integrations, err := s.listIntegrations(ctx)
 	if err != nil {
 		return "", fmt.Errorf("list GitHub integrations: %w", err)
+	}
+	tag, saved, err := s.db.ProjectExeTag(ctx, project.Name, projectTagBase(project.Name))
+	if err != nil {
+		return "", err
 	}
 	urls := map[string]string{}
 	for _, repo := range githubReposOf(integrations) {
@@ -87,11 +91,17 @@ func (s *Server) projectReposPrompt(ctx context.Context, project *db.Project) (s
 		fmt.Fprintf(&out, "\n- %s into ~/%s through exe.dev GitHub integration %q", repo.Repository, repo.Name(), repo.Integration)
 		if u := urls[repo.Integration]; u != "" {
 			fmt.Fprintf(&out, ": git clone %s", u)
+		} else if saved {
+			fmt.Fprintf(&out, " (not attached to this host; if it was added in Edit project, it reaches the base through the project's tag %q: its clone URL is in the base's `curl %s/integrations`)", tag, env.ReflectionURL())
 		} else {
 			out.WriteString(" (not attached to this host now: ask the user to attach it)")
 		}
 	}
-	out.WriteString("\nGitHub integrations reach a VM through its tags or a direct attachment, and copies keep their base's tags but not direct attachments. Give the base this host's tags (`curl https://reflection.int.exe.xyz/tags`) and check every clone works there; if one needs an attachment a tag can't give, ask the user to attach that integration to a tag the base has.")
+	fmt.Fprintf(&out, "\nGitHub integrations reach a VM through its tags or a direct attachment, and copies keep their base's tags but not direct attachments. Give the base this host's tags (`curl %s/tags`)", env.ReflectionURL())
+	if saved {
+		fmt.Fprintf(&out, "; Shelley gives it the project's tag %q, through which integrations added in Edit project reach it", tag)
+	}
+	out.WriteString(". Check every clone works there; if one needs an attachment a tag can't give, ask the user to attach that integration to a tag the base has.")
 	return out.String(), nil
 }
 

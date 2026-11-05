@@ -763,7 +763,8 @@ body {
   pointer-events: none;
 }
 
-.conversation-query-editor-host {
+.conversation-query-editor-host,
+.project-form .project-repo-filters input {
   flex: 1;
   min-width: 0;
 }
@@ -5555,6 +5556,7 @@ select:disabled {
 }
 
 .empty-state-content {
+  max-width: 100%;
   text-align: center;
 }
 
@@ -10964,7 +10966,8 @@ svg {
   color: var(--text-secondary);
 }
 .integrations-notify-controls,
-.directory-picker-input-container {
+.directory-picker-input-container,
+.project-repo-filters {
   display: flex;
   gap: 0.5rem;
 }
@@ -18359,46 +18362,6 @@ kbd {
 }
 
 /* The Assistant's first-run state: no projects yet. */
-.first-project {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  max-width: 30rem;
-  margin: 0 auto;
-  padding: 0 1rem;
-}
-
-.first-project-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  min-width: min(100%, 16rem);
-  margin: 0.5rem 0 1rem;
-  padding: 1rem 2rem;
-  border: 0;
-  border-radius: 0.75rem;
-  background: var(--primary);
-  color: white;
-  font-size: var(--font-size-14);
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
-  transition:
-    transform 0.15s,
-    background-color 0.15s;
-}
-
-.first-project-button:hover {
-  background: var(--primary-dark);
-  transform: translateY(-1px);
-}
-
-.first-project-button:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 3px;
-}
-
 /* The project editor's repository picker. */
 .project-repos {
   display: flex;
@@ -18449,7 +18412,8 @@ kbd {
   min-width: 0;
 }
 
-.project-choice > span > .project-muted {
+.project-choice > span > .project-muted,
+.project-repo-name > .project-muted {
   flex-basis: 100%;
   line-height: 1.4;
 }
@@ -18481,13 +18445,16 @@ kbd {
   font-size: var(--font-size-13);
 }
 
-.project-repo-links a {
+.project-repo-links a,
+.project-section-link {
   color: var(--link-color);
   text-decoration: none;
   white-space: nowrap;
 }
 
-.project-repo-links .pi {
+.project-repo-links .pi,
+.project-section-link .pi,
+.project-connect-button .pi-external-link {
   font-size: var(--font-size-11);
   vertical-align: baseline;
 }
@@ -18495,6 +18462,104 @@ kbd {
 .project-section-heading h3 {
   margin: 0.75rem 0 0.25rem;
   font-size: var(--font-size-14);
+}
+
+.project-section-heading .text-button,
+.project-section-link {
+  margin-top: 0.5rem;
+  font-size: var(--font-size-12);
+}
+
+/* A notice: e.g. exe.dev refusing a restricted integration. */
+.project-notice {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--warning-border);
+  border-radius: 0.5rem;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-size: var(--font-size-13);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.project-github-connect {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.project-connect-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 0.5rem;
+  background: var(--text-primary);
+  color: var(--bg-base);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.project-form .project-repo-filters select {
+  flex: none;
+  width: auto;
+  max-width: 40%;
+}
+
+/* A long list of repositories or integrations, one compact row each. */
+.project-repo-list {
+  max-height: 26rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  list-style: none;
+}
+
+.project-repo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.45rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.project-repo-row:first-child {
+  border-top: 0;
+}
+
+.project-repo-row.selected {
+  background: var(--bg-secondary);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.project-repo-row > .pi {
+  flex: none;
+  color: var(--text-secondary);
+}
+
+.project-repo-name {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.1rem 0.5rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.project-repo-none {
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.project-badge-plain {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .project-action-editor {

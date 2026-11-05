@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -104,6 +105,14 @@ func (s *Server) createProjectBaseVM(ctx context.Context, project *db.Project, n
 	}
 	if found != nil {
 		return nil, fmt.Errorf("%w: VM %s already exists; choose another name", db.ErrConflict, name)
+	}
+	// Integrations added in Edit project come through the project's tag.
+	tag, err := s.projectTagInUse(ctx, integration, project.Name)
+	if err != nil {
+		return nil, err
+	}
+	if flag := "--tag=" + tag; tag != "" && !slices.Contains(flags, flag) {
+		flags = append(flags, flag)
 	}
 	record := db.ProjectBaseVM{Project: project.Name, Name: name, Integration: integration, Status: db.ProjectBaseVMCreating, RequestedAt: time.Now()}
 	if err := s.db.RecordProjectBaseVM(ctx, record); err != nil {

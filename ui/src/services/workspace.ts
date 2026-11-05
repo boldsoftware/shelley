@@ -43,6 +43,72 @@ export interface GithubRepo extends ProjectRepo {
   team: boolean;
 }
 
+/** Where a project's tasks run, as edited, for the exe.dev account views:
+ * this host, copies of base, or a shared VM; integration acts as the user
+ * ("" is this host's default). */
+export interface ProjectPlacement {
+  integration: string;
+  mode: "host" | "own" | "shared";
+  base: string;
+  shared_vm: string;
+}
+
+/** An integration of the user's exe.dev account. */
+export interface ExeAccountIntegration {
+  name: string;
+  type: string;
+  team: boolean;
+  /** The catalog or database title, or "". */
+  title: string;
+  comment: string;
+  repositories: string[];
+  /** Specs: vm:NAME, tag:NAME, auto:all. */
+  attachments: string[];
+  /** Attached to the project's tag. */
+  added: boolean;
+  /** Reaches every VM the project's tasks run on now. */
+  reaches: boolean;
+}
+
+export interface ExeAccountView {
+  integration: string;
+  /** The tag that brings integrations to the project's VMs, "" until
+   * something is added. */
+  tag: string;
+  vms: { vm_name: string; found: boolean; tags: string[]; tagged: boolean }[];
+  integrations: ExeAccountIntegration[];
+  /** Why the account can't be shown (e.g. a restricted key), or "". */
+  error: string;
+  /** Where to manage integrations on exe.dev, "" where unknown. */
+  manage_url: string;
+}
+
+export interface GithubAccount {
+  account: string;
+  github_login: string;
+  repos: { full_name: string; private: boolean }[];
+  /** Why this account's repositories can't be listed, or "". */
+  error: string;
+}
+
+/** The exe.dev environment, for the workspace's first-run cards. */
+export interface Onboarding {
+  /** The number to text this VM's Assistant at, "" where there is none. */
+  text_number: string;
+  /** A number is connected to this VM. */
+  text_connected: boolean;
+  /** The exe-dev integration a web app's task creates its VM through, ""
+   * for none; its host; and a VM's hostname, with NAME for its name. */
+  exe_dev: string;
+  exe_dev_host: string;
+  vm_host: string;
+}
+
+export type ExeAccountChange =
+  | { action: "add" | "remove"; name: string; team: boolean }
+  | { action: "tag" }
+  | { action: "github"; repository: string };
+
 export interface ProjectVM {
   /** "" while a setup conversation prepares the base; saving with "" (and no
    * shared_vm) starts one. */
@@ -142,6 +208,32 @@ export const workspaceApi = {
       "/api/github-repos",
       "Failed to load GitHub repositories",
     ),
+  /** The exe.dev account's integrations, as they reach the project's VMs. */
+  exeAccount: (project: string, placement: ProjectPlacement) =>
+    apiJSON<ExeAccountView>(
+      `/api/projects/${encodeURIComponent(project)}/exe-account?${new URLSearchParams({ ...placement })}`,
+      "Failed to load exe.dev integrations",
+    ),
+  /** Changes the account as the user clicked; "github" returns the
+   * project repository to add. */
+  changeExeAccount: (project: string, placement: ProjectPlacement, change: ExeAccountChange) =>
+    apiJSON<ProjectRepo | undefined>(
+      `/api/projects/${encodeURIComponent(project)}/exe-account`,
+      "exe.dev change failed",
+      "POST",
+      { ...placement, ...change },
+    ),
+  /** GitHub accounts connected to the exe.dev account, through exe-dev
+   * integration ("" for this host's default), with their repositories;
+   * none means GitHub isn't connected, setup_url ("" where unknown)
+   * connects it. */
+  githubAccounts: (integration: string) =>
+    apiJSON<{ accounts: GithubAccount[] | null; error: string; setup_url: string }>(
+      `/api/github-accounts?${new URLSearchParams({ integration })}`,
+      "Failed to load GitHub repositories",
+    ),
+  /** What the first-run cards need from the exe.dev environment. */
+  onboarding: () => apiJSON<Onboarding>("/api/onboarding", "Failed to load onboarding"),
   createProject: (project: ProjectInput) =>
     apiJSON<Project>("/api/projects", "Failed to create the project", "POST", project),
   /** Replaces project name's data; a different project.name renames it. */

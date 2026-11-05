@@ -14,22 +14,22 @@ func TestShelleyConversationReceivesVerificationWorkflowInShelleyProject(t *test
 	// Shelley's project is the one in the canonical customization checkout.
 	cwd := t.TempDir()
 	s.customizations.deps.canonicalDir = func() (string, error) { return cwd, nil }
-	shelley, err := database.GetProject(t.Context(), "Shelley")
+	shelley, err := database.GetProject(t.Context(), db.SelfProject)
 	if err != nil {
 		t.Fatal(err)
 	}
 	shelley.Cwd = cwd
-	if err := database.UpdateProject(t.Context(), "Shelley", *shelley); err != nil {
+	if err := database.UpdateProject(t.Context(), db.SelfProject, *shelley); err != nil {
 		t.Fatal(err)
 	}
 	conversation, err := database.CreateConversation(t.Context(), nil, true, &cwd, nil, db.ConversationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := database.MoveConversation(t.Context(), conversation.ConversationID, "Shelley"); err != nil {
+	if err := database.MoveConversation(t.Context(), conversation.ConversationID, db.SelfProject); err != nil {
 		t.Fatal(err)
 	}
-	if workspace := workspaceResponse[db.Workspace](t, workspaceAPI(s, "GET", "/api/workspace", ""), http.StatusOK); workspace.ShelleyProject != "Shelley" {
+	if workspace := workspaceResponse[db.Workspace](t, workspaceAPI(s, "GET", "/api/workspace", ""), http.StatusOK); workspace.ShelleyProject != db.SelfProject {
 		t.Fatalf("shelley_project=%q", workspace.ShelleyProject)
 	}
 	instructions, err := s.workspaceInstructions(t.Context(), conversation.ConversationID)

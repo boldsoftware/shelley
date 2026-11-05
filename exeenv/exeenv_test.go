@@ -219,3 +219,20 @@ func TestCurrentPrefersConfiguredEnvironment(t *testing.T) {
 		t.Fatalf("Current().ReflectionURL() = %q, want %q", got.ReflectionURL(), env.ReflectionURL())
 	}
 }
+
+func TestWebURLIsProductionOnly(t *testing.T) {
+	prod, err := New("https", "exe.xyz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := New("https", "example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !prod.Production() || prod.WebURL() != "https://exe.dev" || prod.VMHost("box") != "box.exe.xyz" {
+		t.Fatalf("production: %v %q %q", prod.Production(), prod.WebURL(), prod.VMHost("box"))
+	}
+	if other.Production() || other.WebURL() != "" || (Environment{}).Production() {
+		t.Fatalf("other: %v %q", other.Production(), other.WebURL())
+	}
+}

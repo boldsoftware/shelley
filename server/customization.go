@@ -150,7 +150,7 @@ func (s *Server) registerCustomizationRoutes(api *http.ServeMux) {
 }
 
 // customizationReady refuses customization requests outside workspace mode,
-// which is what seeds the Shelley project.
+// which is what seeds the Self project.
 func (s *Server) customizationReady(w http.ResponseWriter, r *http.Request) bool {
 	if !s.workspaceMode() {
 		http.Error(w, "Customization needs workspace mode", http.StatusNotFound)

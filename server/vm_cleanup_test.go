@@ -54,6 +54,8 @@ func (f *fakeExeDev) exec(_ context.Context, _, command string) ([]byte, error) 
 		name := strings.TrimPrefix(args[1], "--name=")
 		f.vms[name] = time.Now().UTC().Format(time.RFC3339)
 		return []byte(`{}`), nil
+	case "integrations": // as for a tag-scoped key
+		return nil, &exeDevError{Command: command, Message: "tag-scoped SSH keys cannot list integrations"}
 	}
 	return nil, errors.New("unexpected command " + command)
 }

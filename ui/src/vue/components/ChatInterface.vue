@@ -199,26 +199,9 @@
             class="empty-state"
           >
             <div class="empty-state-content">
-              <div
+              <OnboardingCards
                 v-if="workspaceMode && isAssistant && !workspace.hasProjects.value"
-                class="first-project"
-              >
-                <h2 class="text-primary">Start with a project</h2>
-                <p class="chat-welcome-text">
-                  A project brings together its GitHub repositories, instructions and VMs. I’ll
-                  start tasks in it whenever you ask for work on it.
-                </p>
-                <button
-                  type="button"
-                  class="first-project-button"
-                  data-testid="first-project-button"
-                  @click="workspace.startNewProject()"
-                >
-                  <i class="pi pi-folder-plus" aria-hidden="true" />
-                  New Project
-                </button>
-                <p class="text-sm chat-secondary-text">Or just ask me something below.</p>
-              </div>
+              />
               <template v-else-if="workspaceMode && isAssistant">
                 <h2 class="text-primary">What would you like to get done?</h2>
                 <p class="chat-welcome-text">
@@ -752,6 +735,7 @@
 
 <script setup lang="ts">
 import { provideIframeVersions } from "../composables/iframeVersions";
+import OnboardingCards from "./OnboardingCards.vue";
 import ProjectHeader from "./ProjectHeader.vue";
 import PageTabStrip from "./PageTabStrip.vue";
 import ConversationPlace from "./ConversationPlace.vue";

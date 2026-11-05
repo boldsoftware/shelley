@@ -77,6 +77,10 @@ type Workspace struct {
 // The server adds the rules of customizing Shelley to its project's prompt.
 const shelleyProjectInstructions = `Customize, maintain, and improve Shelley, this coding agent.`
 
+// SelfProject names the project that customizes Shelley, which workspace
+// mode creates.
+const SelfProject = "Self"
+
 // AssistantSlug is the workspace Assistant's slug.
 const AssistantSlug = "assistant"
 
@@ -105,12 +109,12 @@ func (db *DB) EnsureAssistant(ctx context.Context, model string, opts Conversati
 			return nil
 		}
 		if shelleyCwd != "" {
-			taken, err := found(q.GetProfile(ctx, "Shelley"))
+			taken, err := found(q.GetProfile(ctx, SelfProject))
 			if err != nil {
 				return err
 			}
 			if !taken {
-				if err := createProject(ctx, q, Project{Name: "Shelley", Instructions: shelleyProjectInstructions, Cwd: shelleyCwd, Actions: []ProjectAction{}}, ""); err != nil {
+				if err := createProject(ctx, q, Project{Name: SelfProject, Instructions: shelleyProjectInstructions, Cwd: shelleyCwd, Actions: []ProjectAction{}}, ""); err != nil {
 					return err
 				}
 			}

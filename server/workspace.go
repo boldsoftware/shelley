@@ -50,7 +50,7 @@ type workspaceState struct {
 
 // loadWorkspace reads the workspace flag. In workspace mode, which
 // opens the Assistant at /, it creates the Assistant if there is none yet
-// and seeds the Shelley project. Without it, the Assistant only exists
+// and seeds the Self project. Without it, the Assistant only exists
 // once a texted chat's conversation becomes it or a message comes in (see
 // ensureAssistant). It runs at startup and when the flag changes.
 func (s *Server) loadWorkspace(ctx context.Context) error {
@@ -158,17 +158,33 @@ func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/workspace", s.handleWorkspace)
 	api.HandleFunc("GET /api/exe-dev-integrations", s.handleExeDevIntegrations)
 	api.HandleFunc("GET /api/github-repos", s.handleGithubRepos)
+	api.HandleFunc("GET /api/github-accounts", s.workspaceOnly(s.handleGithubAccounts))
+	api.HandleFunc("GET /api/onboarding", s.workspaceOnly(s.handleOnboarding))
 	api.HandleFunc("GET /api/page-frame", s.handlePageFrame)
 	api.HandleFunc("POST /api/projects", s.handleCreateProject)
 	api.HandleFunc("PUT /api/projects/{name}", s.handleUpdateProject)
 	api.HandleFunc("DELETE /api/projects/{name}", s.handleDeleteProject)
 	api.HandleFunc("PUT /api/project-order", s.handleReorderProjects)
 	api.HandleFunc("POST /api/projects/{name}/base-vm", s.handleCreateProjectBaseVM)
+	api.HandleFunc("GET /api/projects/{name}/exe-account", s.workspaceOnly(s.handleExeAccount))
+	api.HandleFunc("POST /api/projects/{name}/exe-account", s.workspaceOnly(s.handleExeAccountChange))
 	api.HandleFunc("POST /api/conversations/import", s.handleImportConversations)
 	api.HandleFunc("PUT /api/conversation/{id}/project", s.handleMoveConversation)
 	api.HandleFunc("POST /api/conversation/{id}/actions/{action_id}", s.handleRunAction)
 	api.HandleFunc("GET /api/action-runs/{id}", s.handleGetActionRun)
 	api.HandleFunc("POST /api/action-runs/{id}/cancel", s.handleCancelActionRun)
+}
+
+// workspaceOnly serves h in workspace mode; outside it, there is no such
+// route.
+func (s *Server) workspaceOnly(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.workspaceMode() {
+			http.NotFound(w, r)
+			return
+		}
+		h(w, r)
+	}
 }
 
 func (s *Server) notifyWorkspaceChanged() {

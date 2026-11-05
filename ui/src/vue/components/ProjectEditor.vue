@@ -64,15 +64,24 @@
           :disabled="saving"
         />
         <p class="project-muted">{{ t("projectInstructionsHint") }}</p>
-        <ProjectRepoPicker v-model="draft.repos" :disabled="saving" />
+        <ProjectRepoPicker v-if="!account" v-model="draft.repos" :disabled="saving" />
         <ProjectVMFields v-model:vm="draft.vm" heading :disabled="saving" @navigate="close" />
+        <template v-if="account">
+          <ProjectGithubRepos
+            v-model="draft.repos"
+            :placement="placement"
+            :account="account"
+            :disabled="saving"
+          />
+          <ProjectIntegrations :account="account" :placement="placement" :disabled="saving" />
+        </template>
         <label for="project-cwd">{{ t("workingDirectory") }}</label>
         <input
           id="project-cwd"
           v-model="draft.cwd"
           :required="!!draft.vm"
           :pattern="draft.vm ? '/.*' : undefined"
-          :placeholder="draft.vm ? `${HOME}/project` : '/path/to/project (optional)'"
+          :placeholder="draft.vm ? `${VM_HOME}/project` : '/path/to/project (optional)'"
           autocomplete="off"
           :disabled="saving"
           @input="cwdTouched = true"
@@ -169,16 +178,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
 import ProjectRepoPicker from "./ProjectRepoPicker.vue";
+import ProjectGithubRepos from "./ProjectGithubRepos.vue";
 import ProjectVMFields from "./ProjectVMFields.vue";
+import ProjectIntegrations from "./ProjectIntegrations.vue";
 import ProjectNameField from "./ProjectNameField.vue";
-import { workspaceApi, type Project } from "../../services/workspace";
+import { workspaceApi, type Project, type ProjectPlacement } from "../../services/workspace";
+import { useExeAccount } from "../composables/exeAccount";
 import { useWorkspace } from "../composables/workspace";
 import { useI18n } from "../composables/i18n";
 import { errorMessage } from "../../utils/errorMessage";
 import { navigateToConversationSlug } from "../composables/subagentLive";
+import { projectCwd, VM_HOME } from "../../utils/projectSetup";
+import { workspaceMode } from "../../utils/workspaceMode";
 
 const { t } = useI18n();
 const emit = defineEmits<{ (e: "openDrawer"): void }>();
@@ -188,9 +202,19 @@ const draft = ref<Project | null>(null);
 // saving saves to.
 const editingName = ref("");
 const renaming = ref(false);
-// The VM user's home, where the base VM's setup clones the repositories.
-const HOME = "/home/exedev";
 const cwdTouched = ref(false);
+// Where the draft's tasks run, for the exe.dev account's repositories and
+// integrations (workspace mode's), which follow it.
+const placement = computed<ProjectPlacement>(() => {
+  const vm = draft.value?.vm;
+  return {
+    integration: vm?.integration ?? "",
+    mode: !vm ? "host" : vm.shared_vm ? "shared" : "own",
+    base: vm?.base ?? "",
+    shared_vm: vm?.shared_vm ?? "",
+  };
+});
+const account = workspaceMode ? useExeAccount(editingName, placement) : null;
 const saving = ref(false);
 const projectError = ref("");
 
@@ -223,21 +247,12 @@ async function rename(name: string) {
   if (draft.value) draft.value.name = name;
   await workspace.refresh();
 }
-const slug = (name: string) =>
-  name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "") || "project";
-// A working directory follows the repositories until edited:
-// on a VM, the single repository's clone, or home holding several.
+// A working directory follows the repositories until edited.
 watch(
   () => draft.value && ([draft.value.repos, draft.value.name, !!draft.value.vm] as const),
   (current) => {
     if (!current || cwdTouched.value || !draft.value) return;
-    const [repos, name, onVM] = current;
-    if (!onVM) draft.value.cwd = "";
-    else if (repos.length === 1) draft.value.cwd = `${HOME}/${repos[0].repository.split("/")[1]}`;
-    else draft.value.cwd = repos.length ? HOME : `${HOME}/${slug(name)}`;
+    draft.value.cwd = projectCwd(current[1], current[0], current[2]);
   },
   { deep: true },
 );

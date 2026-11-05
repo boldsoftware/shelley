@@ -139,13 +139,13 @@ func TestAssistantAtomicSingleton(t *testing.T) {
 		unchanged.ConversationOptions != active.ConversationOptions || unchanged.Archived {
 		t.Fatalf("workspace setup changed original conversation: %+v", unchanged)
 	}
-	shelley, err := database.GetProject(ctx, "Shelley")
+	shelley, err := database.GetProject(ctx, SelfProject)
 	if err != nil {
 		t.Fatal(err)
 	}
 	shelley.Instructions = "Keep agent edits"
 	shelley.Actions = []ProjectAction{{ID: "custom", Label: "Configured action", Command: "make custom"}}
-	if err := database.UpdateProject(ctx, "Shelley", *shelley); err != nil {
+	if err := database.UpdateProject(ctx, SelfProject, *shelley); err != nil {
 		t.Fatal(err)
 	}
 	newConversation, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{})
@@ -155,7 +155,7 @@ func TestAssistantAtomicSingleton(t *testing.T) {
 	if id, err := database.EnsureAssistant(ctx, "different-model", ConversationOptions{}, true, "not-a-repository"); err != nil || id != assistantID {
 		t.Fatalf("second ensure: %q %v", id, err)
 	}
-	shelley, _ = database.GetProject(ctx, "Shelley")
+	shelley, _ = database.GetProject(ctx, SelfProject)
 	if shelley.Instructions != "Keep agent edits" || !reflect.DeepEqual(shelley.Actions, []ProjectAction{{ID: "custom", Label: "Configured action", Command: "make custom"}}) {
 		t.Fatal("workspace ensure overwrote project edits")
 	}

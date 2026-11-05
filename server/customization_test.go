@@ -72,7 +72,7 @@ func newCustomizationFixture(t *testing.T) *customizationFixture {
 	}
 	customizationTestGit(t, cwd, "add", ".gitignore")
 	customizationTestGit(t, cwd, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "fixture")
-	project, err := database.GetProject(t.Context(), "Shelley")
+	project, err := database.GetProject(t.Context(), db.SelfProject)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func newCustomizationFixture(t *testing.T) *customizationFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := database.MoveConversation(t.Context(), conversation.ConversationID, "Shelley"); err != nil {
+	if err := database.MoveConversation(t.Context(), conversation.ConversationID, db.SelfProject); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(live, []byte("old running executable"), 0o751); err != nil {
@@ -752,7 +752,7 @@ func TestCustomizationNeedsWorkspaceMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	if shelley, err := f.s.isShelleyProject(t.Context(), project); err != nil || shelley {
-		t.Fatalf("the Shelley project customizes Shelley outside workspace mode: %v", err)
+		t.Fatalf("the Self project customizes Shelley outside workspace mode: %v", err)
 	}
 	if scheduled, wait := f.s.autoRestartTick(t.Context()); scheduled || wait != 0 {
 		t.Fatal("auto-restart ran outside workspace mode")
@@ -836,7 +836,7 @@ func (f *customizationFixture) conversation(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := f.database.MoveConversation(t.Context(), conversation.ConversationID, "Shelley"); err != nil {
+	if err := f.database.MoveConversation(t.Context(), conversation.ConversationID, db.SelfProject); err != nil {
 		t.Fatal(err)
 	}
 	return conversation.ConversationID
