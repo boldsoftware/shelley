@@ -549,4 +549,22 @@ export const zhCN: TranslationKeys = {
   placeThisHost: "本主机，{hostname}",
   placeWorksOnHost: "在本主机 {hostname} 上工作",
   opensInNewTab: "（在新标签页中打开）",
+  // Page tabs
+  pageTabsLabel: "聊天和页面",
+  pageTabChat: "聊天",
+  pageTabsAll: "所有标签页",
+  pageTabOpenTitleInNewTab: "在新标签页中打开 {title}",
+  pageTabOpenInNewTab: "在新标签页中打开",
+  pageTabCloseTitle: "关闭 {title}",
+  pageTabClose: "关闭标签页",
+  pageTabClickToReload: "点击重新加载。",
+  pageTabOpensInNewTab: "它会在新标签页中打开。",
+  pageTabChecking: "正在检查 {url}…",
+  pageTabCheckFailed: "无法检查 {url} 能否在此显示",
+  pageTabLoginHint: "要求登录？先在单独的标签页中登录一次，然后点击这里的标签页重新加载。",
+  pageFrameBlockedShelley: "这是 Shelley 本身。",
+  pageFrameBlockedCsp: "该页面的 Content-Security-Policy 禁止在此以框架显示。",
+  pageFrameBlockedXFrameOptions: "该页面的 X-Frame-Options 禁止在此以框架显示。",
+  pageFrameBlockedLogin:
+    "此页面需要 exe.dev 登录，而浏览器不会把它的 Cookie 发送给嵌入在其他网站中的页面。",
 };

@@ -422,6 +422,7 @@ func (s *Server) workspaceInstructions(ctx context.Context, id string) (string, 
 		}
 		fmt.Fprintf(&out, "This conversation is a task in project %q.\n", project.Name)
 		out.WriteString("Complete the user's work in THIS task. Do not route the same request into another task. The project instructions below (the project's AGENTS.md) supplement the task's own system prompt.\n")
+		out.WriteString(pageTabsPrompt)
 		if err := s.writeProjectPrompt(ctx, &out, project, id); err != nil {
 			return "", err
 		}

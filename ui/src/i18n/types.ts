@@ -545,4 +545,21 @@ export interface TranslationKeys {
   placeThisHost: string;
   placeWorksOnHost: string;
   opensInNewTab: string;
+  // Page tabs
+  pageTabsLabel: string;
+  pageTabChat: string;
+  pageTabsAll: string;
+  pageTabOpenTitleInNewTab: string;
+  pageTabOpenInNewTab: string;
+  pageTabCloseTitle: string;
+  pageTabClose: string;
+  pageTabClickToReload: string;
+  pageTabOpensInNewTab: string;
+  pageTabChecking: string;
+  pageTabCheckFailed: string;
+  pageTabLoginHint: string;
+  pageFrameBlockedShelley: string;
+  pageFrameBlockedCsp: string;
+  pageFrameBlockedXFrameOptions: string;
+  pageFrameBlockedLogin: string;
 }

@@ -561,4 +561,24 @@ export const ru: TranslationKeys = {
   placeThisHost: "Этот хост, {hostname}",
   placeWorksOnHost: "Работает на этом хосте, {hostname}",
   opensInNewTab: "(откроется в новой вкладке)",
+  // Page tabs
+  pageTabsLabel: "Чат и страницы",
+  pageTabChat: "Чат",
+  pageTabsAll: "Все вкладки",
+  pageTabOpenTitleInNewTab: "Открыть {title} в новой вкладке",
+  pageTabOpenInNewTab: "Открыть в новой вкладке",
+  pageTabCloseTitle: "Закрыть {title}",
+  pageTabClose: "Закрыть вкладку",
+  pageTabClickToReload: "Нажмите, чтобы перезагрузить.",
+  pageTabOpensInNewTab: "Она откроется в новой вкладке.",
+  pageTabChecking: "Проверка {url}…",
+  pageTabCheckFailed: "Не удалось проверить, можно ли показать {url} здесь",
+  pageTabLoginHint:
+    "Просит войти? Войдите один раз в отдельной вкладке, затем нажмите здесь на её вкладку, чтобы перезагрузить.",
+  pageFrameBlockedShelley: "Это сам Shelley.",
+  pageFrameBlockedCsp: "Content-Security-Policy страницы запрещает показывать её здесь во фрейме.",
+  pageFrameBlockedXFrameOptions:
+    "Заголовок X-Frame-Options страницы запрещает показывать её здесь во фрейме.",
+  pageFrameBlockedLogin:
+    "Эта страница требует входа в exe.dev, а браузеры не отправляют его cookie странице во фрейме на другом сайте.",
 };

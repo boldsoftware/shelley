@@ -549,4 +549,22 @@ export const zhTW: TranslationKeys = {
   placeThisHost: "本主機，{hostname}",
   placeWorksOnHost: "在本主機 {hostname} 上工作",
   opensInNewTab: "（在新分頁中開啟）",
+  // Page tabs
+  pageTabsLabel: "聊天和頁面",
+  pageTabChat: "聊天",
+  pageTabsAll: "所有分頁",
+  pageTabOpenTitleInNewTab: "在新分頁中開啟 {title}",
+  pageTabOpenInNewTab: "在新分頁中開啟",
+  pageTabCloseTitle: "關閉 {title}",
+  pageTabClose: "關閉分頁",
+  pageTabClickToReload: "點擊重新載入。",
+  pageTabOpensInNewTab: "它會在新分頁中開啟。",
+  pageTabChecking: "正在檢查 {url}…",
+  pageTabCheckFailed: "無法檢查 {url} 能否在此顯示",
+  pageTabLoginHint: "要求登入？先在獨立的分頁中登入一次，然後點擊這裡的分頁重新載入。",
+  pageFrameBlockedShelley: "這是 Shelley 本身。",
+  pageFrameBlockedCsp: "該頁面的 Content-Security-Policy 禁止在此以框架顯示。",
+  pageFrameBlockedXFrameOptions: "該頁面的 X-Frame-Options 禁止在此以框架顯示。",
+  pageFrameBlockedLogin:
+    "此頁面需要 exe.dev 登入，而瀏覽器不會把它的 Cookie 傳送給嵌入在其他網站中的頁面。",
 };

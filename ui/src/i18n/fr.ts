@@ -569,4 +569,25 @@ export const fr: TranslationKeys = {
   placeThisHost: "Cet hôte, {hostname}",
   placeWorksOnHost: "Travaille sur cet hôte, {hostname}",
   opensInNewTab: "(s’ouvre dans un nouvel onglet)",
+  // Page tabs
+  pageTabsLabel: "Discussion et pages",
+  pageTabChat: "Discussion",
+  pageTabsAll: "Tous les onglets",
+  pageTabOpenTitleInNewTab: "Ouvrir {title} dans un nouvel onglet",
+  pageTabOpenInNewTab: "Ouvrir dans un nouvel onglet",
+  pageTabCloseTitle: "Fermer {title}",
+  pageTabClose: "Fermer l'onglet",
+  pageTabClickToReload: "Cliquez pour recharger.",
+  pageTabOpensInNewTab: "Elle s'ouvre dans un nouvel onglet.",
+  pageTabChecking: "Vérification de {url}…",
+  pageTabCheckFailed: "Impossible de vérifier si {url} peut être affichée ici",
+  pageTabLoginHint:
+    "On vous demande de vous connecter ? Connectez-vous une fois dans un onglet à part, puis cliquez sur son onglet ici pour la recharger.",
+  pageFrameBlockedShelley: "C'est Shelley lui-même.",
+  pageFrameBlockedCsp:
+    "La Content-Security-Policy de la page interdit de l'afficher ici dans un cadre.",
+  pageFrameBlockedXFrameOptions:
+    "L'en-tête X-Frame-Options de la page interdit de l'afficher ici dans un cadre.",
+  pageFrameBlockedLogin:
+    "Cette page demande votre connexion exe.dev, et les navigateurs n'envoient pas son cookie à une page encadrée sur un autre site.",
 };

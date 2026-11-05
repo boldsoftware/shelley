@@ -561,4 +561,23 @@ export const ja: TranslationKeys = {
   placeThisHost: "このホスト、{hostname}",
   placeWorksOnHost: "このホスト {hostname} で作業",
   opensInNewTab: "（新しいタブで開きます）",
+  // Page tabs
+  pageTabsLabel: "チャットとページ",
+  pageTabChat: "チャット",
+  pageTabsAll: "すべてのタブ",
+  pageTabOpenTitleInNewTab: "{title} を新しいタブで開く",
+  pageTabOpenInNewTab: "新しいタブで開く",
+  pageTabCloseTitle: "{title} を閉じる",
+  pageTabClose: "タブを閉じる",
+  pageTabClickToReload: "クリックで再読み込み。",
+  pageTabOpensInNewTab: "新しいタブで開きます。",
+  pageTabChecking: "{url} を確認中…",
+  pageTabCheckFailed: "{url} をここに表示できるか確認できませんでした",
+  pageTabLoginHint:
+    "ログインを求められますか？一度専用のタブでログインしてから、ここでそのタブをクリックして再読み込みしてください。",
+  pageFrameBlockedShelley: "これは Shelley 自身です。",
+  pageFrameBlockedCsp: "ページの Content-Security-Policy により、ここでフレーム表示できません。",
+  pageFrameBlockedXFrameOptions: "ページの X-Frame-Options により、ここでフレーム表示できません。",
+  pageFrameBlockedLogin:
+    "このページには exe.dev のログインが必要ですが、ブラウザーは別のサイトでフレーム表示されたページにそのクッキーを送りません。",
 };

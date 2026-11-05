@@ -439,10 +439,7 @@ test("the Assistant shows no host or working directory; conversations still do",
   await expect(page.locator(".overflow-menu-item", { hasText: "Directory" })).toHaveCount(0);
 });
 
-test("a task's title row says where it runs; its project row doesn't", async ({
-  page,
-  request,
-}) => {
+test("a task's title row holds its page tabs and where it runs", async ({ page, request }) => {
   const name = `Header ${randomUUID().slice(0, 8)}`;
   const created = await request.post("/api/projects", {
     data: {
@@ -460,7 +457,10 @@ test("a task's title row says where it runs; its project row doesn't", async ({
     expect(response.ok()).toBeTruthy();
     return ((await response.json()) as { conversation_id: string }).conversation_id;
   };
-  const id = await start(name, "Hello");
+  const links = [1, 2, 3, 4]
+    .map((n) => `[Page ${n}](https://page${n}.example.com/ "tab")`)
+    .join(" ");
+  const id = await start(name, `echo: See ${links}.`);
   // Its VM, as the server would report a shared one.
   await page.route("**/api/workspace", async (route) => {
     const workspace = await (await route.fetch()).json();
@@ -482,6 +482,9 @@ test("a task's title row says where it runs; its project row doesn't", async ({
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`/c/${id}`);
   const header = page.locator(".header");
+  // Its VM's site and the pages the agent linked.
+  await expect(header.getByTestId("page-tab")).toHaveCount(5);
+  await expect(header.getByRole("button", { name: "All tabs" })).toHaveCount(0);
   const place = header.getByTestId("conversation-place");
   await expect(place).toHaveAccessibleName("Shared VM exe-hub · connected");
   await place.click();
@@ -498,9 +501,20 @@ test("a task's title row says where it runs; its project row doesn't", async ({
   await expect(projectRow.getByRole("button", { name: "Ship it", exact: true })).toBeVisible();
   await expect(projectRow).not.toContainText("exe-hub");
 
-  // On a phone the title gives way.
+  // On a phone the title gives way; tabs that don't fit are in a menu.
   await page.setViewportSize({ width: 390, height: 800 });
   await expect(place).toBeInViewport({ ratio: 1 });
+  await header.getByRole("button", { name: "All tabs" }).click();
+  const menu = page.getByTestId("page-tabs-menu");
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    "Chat",
+    "exe-hub",
+    "Page 1",
+    "Page 2",
+    "Page 3",
+    "Page 4",
+  ]);
+  await page.keyboard.press("Escape");
 
   // A task on this host.
   await page.setViewportSize({ width: 1280, height: 800 });

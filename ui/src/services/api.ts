@@ -36,7 +36,7 @@ export class ApiError extends Error {
   }
 }
 
-async function responseError(response: Response, prefix: string): Promise<ApiError> {
+export async function responseError(response: Response, prefix: string): Promise<ApiError> {
   let detail = "";
   try {
     detail = (await response.text()).trim();

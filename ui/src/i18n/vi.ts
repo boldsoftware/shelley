@@ -560,4 +560,25 @@ export const vi: TranslationKeys = {
   placeThisHost: "Máy chủ này, {hostname}",
   placeWorksOnHost: "Chạy trên máy chủ này, {hostname}",
   opensInNewTab: "(mở trong thẻ mới)",
+  // Page tabs
+  pageTabsLabel: "Trò chuyện và trang",
+  pageTabChat: "Trò chuyện",
+  pageTabsAll: "Tất cả các thẻ",
+  pageTabOpenTitleInNewTab: "Mở {title} trong thẻ mới",
+  pageTabOpenInNewTab: "Mở trong thẻ mới",
+  pageTabCloseTitle: "Đóng {title}",
+  pageTabClose: "Đóng thẻ",
+  pageTabClickToReload: "Nhấp để tải lại.",
+  pageTabOpensInNewTab: "Trang sẽ mở trong thẻ mới.",
+  pageTabChecking: "Đang kiểm tra {url}…",
+  pageTabCheckFailed: "Không kiểm tra được liệu {url} có thể hiển thị ở đây hay không",
+  pageTabLoginHint:
+    "Trang yêu cầu đăng nhập? Hãy đăng nhập một lần trong thẻ riêng của nó, rồi nhấp vào thẻ của nó ở đây để tải lại.",
+  pageFrameBlockedShelley: "Đây chính là Shelley.",
+  pageFrameBlockedCsp:
+    "Content-Security-Policy của trang không cho phép hiển thị nó trong khung ở đây.",
+  pageFrameBlockedXFrameOptions:
+    "X-Frame-Options của trang không cho phép hiển thị nó trong khung ở đây.",
+  pageFrameBlockedLogin:
+    "Trang này cần đăng nhập exe.dev, và trình duyệt không gửi cookie đó cho trang hiển thị trong khung trên một trang web khác.",
 };

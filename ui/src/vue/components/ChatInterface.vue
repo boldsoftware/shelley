@@ -51,12 +51,15 @@
         >
           {{ displayTitle }}
         </h1>
-        <ConversationPlace
-          v-if="showPlace && workspace.data.value"
-          :conversation-id="conversationId!"
-          :cwd="currentConversation?.cwd ?? ''"
-          :hostname="hostname"
-        />
+        <template v-if="showPlace">
+          <PageTabStrip v-if="pages?.tabs.value.length" :pages="pages" />
+          <ConversationPlace
+            v-if="workspace.data.value"
+            :conversation-id="conversationId!"
+            :cwd="currentConversation?.cwd ?? ''"
+            :hostname="hostname"
+          />
+        </template>
       </div>
 
       <div class="header-actions">
@@ -183,6 +186,7 @@
 
     <!-- Messages area -->
     <div class="messages-area-wrapper" :aria-busy="loading">
+      <PageFrames v-if="pages" :pages="pages" />
       <div ref="messagesContainerRef" class="messages-container scrollable">
         <div v-if="!loading || renderingConversation" ref="messagesListRef" class="messages-list">
           <!-- empty state -->
@@ -749,7 +753,10 @@
 <script setup lang="ts">
 import { provideIframeVersions } from "../composables/iframeVersions";
 import ProjectHeader from "./ProjectHeader.vue";
+import PageTabStrip from "./PageTabStrip.vue";
 import ConversationPlace from "./ConversationPlace.vue";
+import PageFrames from "./PageFrames.vue";
+import { usePageTabs } from "../composables/pageTabs";
 import ActionRunsTail from "./ActionRunsTail.vue";
 import { useWorkspace } from "../composables/workspace";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
@@ -762,6 +769,7 @@ import {
   provide,
   reactive,
   ref,
+  toRef,
   useId,
   watch,
 } from "vue";
@@ -1643,6 +1651,10 @@ const conversationWorking = computed(
     (!!props.conversationId &&
       workingConversationIds(conversations.value).has(props.conversationId)),
 );
+// Page tabs are workspace mode's.
+const pages = workspaceMode
+  ? usePageTabs(toRef(props, "conversationId"), messages, conversationWorking)
+  : null;
 const resumingInterrupted = ref(false);
 const cancelling = ref(false);
 const contextWindowSize = ref(0);
@@ -2588,7 +2600,7 @@ const displayTitle = computed(() => {
   return title;
 });
 
-// Workspace mode's title row also says where a task runs.
+// Workspace mode's title row also holds a task's page tabs and where it runs.
 const showPlace = computed(
   () =>
     workspaceMode &&

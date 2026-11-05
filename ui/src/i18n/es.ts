@@ -564,4 +564,24 @@ export const es: TranslationKeys = {
   placeThisHost: "Este host, {hostname}",
   placeWorksOnHost: "Trabaja en este host, {hostname}",
   opensInNewTab: "(se abre en una pestaña nueva)",
+  // Page tabs
+  pageTabsLabel: "Chat y páginas",
+  pageTabChat: "Chat",
+  pageTabsAll: "Todas las pestañas",
+  pageTabOpenTitleInNewTab: "Abrir {title} en una pestaña nueva",
+  pageTabOpenInNewTab: "Abrir en una pestaña nueva",
+  pageTabCloseTitle: "Cerrar {title}",
+  pageTabClose: "Cerrar pestaña",
+  pageTabClickToReload: "Haz clic para recargar.",
+  pageTabOpensInNewTab: "Se abre en una pestaña nueva.",
+  pageTabChecking: "Comprobando {url}…",
+  pageTabCheckFailed: "No se pudo comprobar si {url} se puede mostrar aquí",
+  pageTabLoginHint:
+    "¿Te pide iniciar sesión? Inicia sesión una vez en una pestaña propia y luego haz clic en su pestaña aquí para recargarla.",
+  pageFrameBlockedShelley: "Esto es el propio Shelley.",
+  pageFrameBlockedCsp: "La Content-Security-Policy de la página impide mostrarla aquí en un marco.",
+  pageFrameBlockedXFrameOptions:
+    "La cabecera X-Frame-Options de la página impide mostrarla aquí en un marco.",
+  pageFrameBlockedLogin:
+    "Esta página requiere tu inicio de sesión de exe.dev, y los navegadores no envían su cookie a una página enmarcada en otro sitio.",
 };

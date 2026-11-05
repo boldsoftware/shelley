@@ -560,4 +560,23 @@ export const en: TranslationKeys = {
   placeThisHost: "This host, {hostname}",
   placeWorksOnHost: "Works on this host, {hostname}",
   opensInNewTab: "(opens in new tab)",
+  // Page tabs
+  pageTabsLabel: "Chat and pages",
+  pageTabChat: "Chat",
+  pageTabsAll: "All tabs",
+  pageTabOpenTitleInNewTab: "Open {title} in a new tab",
+  pageTabOpenInNewTab: "Open in a new tab",
+  pageTabCloseTitle: "Close {title}",
+  pageTabClose: "Close tab",
+  pageTabClickToReload: "Click to reload.",
+  pageTabOpensInNewTab: "It opens in a new tab.",
+  pageTabChecking: "Checking {url}…",
+  pageTabCheckFailed: "Failed to check whether {url} can be shown here",
+  pageTabLoginHint:
+    "Asks you to log in? Log in to it once in a tab of its own, then click its tab here to reload it.",
+  pageFrameBlockedShelley: "This is Shelley itself.",
+  pageFrameBlockedCsp: "The page's Content-Security-Policy forbids framing it here.",
+  pageFrameBlockedXFrameOptions: "The page's X-Frame-Options forbids framing it here.",
+  pageFrameBlockedLogin:
+    "This page needs your exe.dev login, and browsers don't send its cookie to a page framed on another site.",
 };

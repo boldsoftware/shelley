@@ -554,4 +554,23 @@ export const upgoer5: TranslationKeys = {
   placeThisHost: "This computer, {hostname}",
   placeWorksOnHost: "Works on this computer, {hostname}",
   opensInNewTab: "(opens in a new page)",
+  // Page tabs
+  pageTabsLabel: "Talk and pages",
+  pageTabChat: "Talk",
+  pageTabsAll: "All tabs",
+  pageTabOpenTitleInNewTab: "Open {title} in a new tab",
+  pageTabOpenInNewTab: "Open in a new tab",
+  pageTabCloseTitle: "Close {title}",
+  pageTabClose: "Close tab",
+  pageTabClickToReload: "Click to open again.",
+  pageTabOpensInNewTab: "It opens in a new tab.",
+  pageTabChecking: "Looking at {url}…",
+  pageTabCheckFailed: "Could not tell if {url} can be shown here",
+  pageTabLoginHint:
+    "Does it ask who you are? Tell it once in its own tab, then click its tab here to open it again.",
+  pageFrameBlockedShelley: "This is Shelley itself.",
+  pageFrameBlockedCsp: "The page says it may not be shown inside another page here.",
+  pageFrameBlockedXFrameOptions: "The page says it may not be shown inside another page here.",
+  pageFrameBlockedLogin:
+    "This page needs you to sign in to exe.dev, and that sign-in is not sent to a page shown inside a page from another place.",
 };

@@ -18668,8 +18668,8 @@ kbd {
   font-size: var(--font-size-13);
 }
 
-/* Workspace mode's title row: the title gives way to where the task runs,
-   one icon after it. */
+/* Workspace mode's title row: the title gives way first, then the page
+   tabs, which scroll; where the task runs is one icon after them. */
 .header-title-yields {
   flex-shrink: 1000;
   min-width: 4rem;
