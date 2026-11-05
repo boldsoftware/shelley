@@ -88,13 +88,24 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
   }
 
   const vmFor = (id: string | null | undefined) =>
-    data.value?.vms.find((vm) => vm.conversation_id === id);
-  /** What archiving a conversation on its own VM destroys; "" for others. */
+    data.value?.vms.find((vm) => vm.conversation_id === id && !vm.replaced);
+  /** What archiving a conversation on its own VMs destroys, the current one
+   * and any it moved away from; "" for others. */
   const archiveNote = (id: string | null | undefined) => {
-    const vm = vmFor(id);
-    return vm && !vm.shared && !vm.conversation_archived && vm.status !== "deleted"
-      ? `Archiving deletes VM ${vm.vm_name}; uncommitted work on it is lost.`
-      : "";
+    const names = (data.value?.vms ?? [])
+      .filter(
+        (vm) =>
+          vm.conversation_id === id &&
+          !vm.shared &&
+          !vm.conversation_archived &&
+          vm.status !== "deleted" &&
+          vm.status !== "kept",
+      )
+      .map((vm) => vm.vm_name);
+    if (!names.length) return "";
+    return names.length === 1
+      ? `Archiving deletes VM ${names[0]}; uncommitted work on it is lost.`
+      : `Archiving deletes VMs ${names.join(", ")}; uncommitted work on them is lost.`;
   };
   /** The archive waiting for the user to confirm deleting its VM. */
   const archiveConfirmation = shallowRef<{

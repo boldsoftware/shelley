@@ -258,7 +258,7 @@ func TestConversationVMCleanupRetriesAndStopsOnUnarchive(t *testing.T) {
 
 	// Unarchiving before a retry succeeds keeps the VM.
 	archiveConversation(t, s, id, "unarchive")
-	if err := s.cleanupConversationVM(t.Context(), id); err != nil {
+	if err := s.cleanupConversationVM(t.Context(), conversationVMOf(t, database, id).ID); err != nil {
 		t.Fatal(err)
 	}
 	if vm := conversationVMOf(t, database, id); vm.Status != db.ConversationVMPending || vm.Error != "" || vm.VMCreatedAt != created {
@@ -268,7 +268,7 @@ func TestConversationVMCleanupRetriesAndStopsOnUnarchive(t *testing.T) {
 	// Archived again, a retry deletes it.
 	exe.rmErr = nil
 	archiveConversation(t, s, id, "archive")
-	if err := s.cleanupConversationVM(t.Context(), id); err != nil {
+	if err := s.cleanupConversationVM(t.Context(), conversationVMOf(t, database, id).ID); err != nil {
 		t.Fatal(err)
 	}
 	if vm := conversationVMOf(t, database, id); vm.Status != db.ConversationVMDeleted {

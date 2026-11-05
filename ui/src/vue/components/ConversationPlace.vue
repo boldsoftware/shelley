@@ -1,6 +1,7 @@
 <!-- Where a task runs (workspace mode), as one icon in its title row: a VM
      with its connection state as a colored dot, or this host. A click or tap
-     spells it out, with the VM's link. -->
+     spells it out, with the VM's link, and offers to move the task to another
+     machine. -->
 <template>
   <button
     type="button"
@@ -54,12 +55,27 @@
       </p>
       <p v-if="cwd" class="conversation-place-path">{{ cwd }}</p>
     </template>
+    <Button
+      label="Move to another machine…"
+      icon="pi pi-arrow-right-arrow-left"
+      text
+      size="small"
+      data-testid="conversation-place-move"
+      @click="openMove"
+    />
   </Popover>
+  <ConversationMachineDialog
+    :is-open="moving"
+    :conversation-id="conversationId"
+    @close="moving = false"
+  />
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import Button from "primevue/button";
 import Popover from "primevue/popover";
+import ConversationMachineDialog from "./ConversationMachineDialog.vue";
 import { useWorkspace } from "../composables/workspace";
 import { useI18n } from "../composables/i18n";
 import { vmPlace, vmStatus } from "../../utils/vmStatus";
@@ -81,4 +97,9 @@ const summary = computed(() =>
 );
 const popover = ref<InstanceType<typeof Popover>>();
 const open = ref(false);
+const moving = ref(false);
+function openMove() {
+  popover.value?.hide();
+  moving.value = true;
+}
 </script>

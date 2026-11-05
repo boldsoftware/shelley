@@ -43,10 +43,10 @@ import (
 
 type conversationVMState struct {
 	mu      sync.Mutex
-	locks   map[string]*sync.Mutex         // per VM name: serializes preparation and deletion
-	agents  map[string]string              // integration -> local agent socket
-	hosts   map[string]string              // integration -> its host (see exeDevIntegrationHost)
-	retries map[string]conversationVMRetry // per conversation: failed VM cleanup
+	locks   map[string]*sync.Mutex        // per VM name: serializes preparation and deletion
+	agents  map[string]string             // integration -> local agent socket
+	hosts   map[string]string             // integration -> its host (see exeDevIntegrationHost)
+	retries map[int64]conversationVMRetry // per conversation VM: failed cleanup
 	// cleanup wakes the VM cleanup worker (see cleanupConversationVMs).
 	cleanup chan struct{}
 	// active is closed once this instance has conversation VMs, which starts

@@ -812,7 +812,7 @@ func (s *Server) conversationListWithStateInternal(ctx context.Context, limit, o
 	}
 	onVM := make(map[string]bool, len(vms))
 	for _, vm := range vms {
-		onVM[vm.ConversationID] = true
+		onVM[vm.ConversationID] = onVM[vm.ConversationID] || !vm.Replaced
 	}
 	return s.decorateConversations(conversations, onVM), nil
 }

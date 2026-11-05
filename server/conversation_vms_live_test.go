@@ -130,7 +130,7 @@ func TestConversationVMLive(t *testing.T) {
 	if _, err := database.ArchiveConversation(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.cleanupConversationVM(t.Context(), id); err != nil {
+	if err := s.cleanupConversationVM(t.Context(), vm.ID); err != nil {
 		t.Fatal(err)
 	}
 	<-jobs

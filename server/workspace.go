@@ -170,6 +170,7 @@ func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/projects/{name}/exe-account", s.workspaceOnly(s.handleExeAccountChange))
 	api.HandleFunc("POST /api/conversations/import", s.handleImportConversations)
 	api.HandleFunc("PUT /api/conversation/{id}/project", s.handleMoveConversation)
+	api.HandleFunc("PUT /api/conversation/{id}/vm", s.handleChangeConversationVM)
 	api.HandleFunc("POST /api/conversation/{id}/actions/{action_id}", s.handleRunAction)
 	api.HandleFunc("GET /api/action-runs/{id}", s.handleGetActionRun)
 	api.HandleFunc("POST /api/action-runs/{id}/cancel", s.handleCancelActionRun)

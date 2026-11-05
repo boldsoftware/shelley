@@ -57,7 +57,7 @@ func (s *Server) writeVMSSHConfig(ctx context.Context) error {
 	byName := map[string]db.ConversationVM{}
 	for _, vm := range vms {
 		// An SSH host is the user's: their own configuration reaches it.
-		if vm.SSHHost() || vm.ConversationArchived || vm.Status == db.ConversationVMDeleted || vm.Status == db.ConversationVMKept {
+		if vm.SSHHost() || vm.Replaced || vm.ConversationArchived || vm.Status == db.ConversationVMDeleted || vm.Status == db.ConversationVMKept {
 			continue
 		}
 		if seen, ok := byName[vm.Name]; ok && (seen.Status == db.ConversationVMReady || vm.Status != db.ConversationVMReady) {

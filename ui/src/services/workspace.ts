@@ -150,6 +150,9 @@ export interface ConversationVM {
    * created. */
   dir: string;
   conversation_archived: boolean;
+  /** A VM of its own the conversation moved away from (changeConversationVM):
+   * kept until archiving the conversation deletes it. */
+  replaced: boolean;
 }
 
 export interface WorkspaceConversation {
@@ -271,6 +274,16 @@ export const workspaceApi = {
       "Failed to move the conversation",
       "PUT",
       { project },
+    ),
+  /** Moves an idle conversation's tools to vm from its next turn: null for
+   * this host, a shared_vm for an existing machine, else a new VM of its own
+   * (a copy of base, or empty). dir "" is the machine's default. */
+  changeConversationVM: (id: string, vm: ProjectVM | null, dir: string) =>
+    apiJSON<{ vm: ConversationVM | null; cwd: string }>(
+      `/api/conversation/${encodeURIComponent(id)}/vm`,
+      "Failed to change the machine",
+      "PUT",
+      { vm: vm && { base: vm.base, shared_vm: vm.shared_vm, integration: vm.integration }, dir },
     ),
   run: (id: string) =>
     apiJSON<ActionRun>(

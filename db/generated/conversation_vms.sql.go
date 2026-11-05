@@ -41,6 +41,20 @@ func (q *Queries) CreateConversationVM(ctx context.Context, arg CreateConversati
 	return err
 }
 
+const deleteCurrentConversationVM = `-- name: DeleteCurrentConversationVM :execrows
+DELETE FROM conversation_vms WHERE conversation_id = ? AND replaced_at = ''
+`
+
+// Forgets the conversation's current VM, which Shelley has nothing to clean
+// up on.
+func (q *Queries) DeleteCurrentConversationVM(ctx context.Context, conversationID string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteCurrentConversationVM, conversationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getConversationVM = `-- name: GetConversationVM :one
 WITH RECURSIVE chain(id, depth) AS (
     SELECT CAST(?1 AS TEXT), 0
@@ -48,10 +62,10 @@ WITH RECURSIVE chain(id, depth) AS (
     SELECT c.parent_conversation_id, chain.depth + 1 FROM conversations c JOIN chain ON c.conversation_id = chain.id
     WHERE c.parent_conversation_id IS NOT NULL AND chain.depth < 64
 )
-SELECT v.conversation_id, v.vm_name, v.base_vm, v.integration, v.status, v.error, v.ssh_dest, v.https_url, v.vm_created_at, v.copy_requested_at, v.dir, v.created_at, v.updated_at, v.shared, CAST(COALESCE(c.archived, 1) AS BOOLEAN) AS conversation_archived
+SELECT v.id, v.conversation_id, v.vm_name, v.base_vm, v.integration, v.status, v.error, v.ssh_dest, v.https_url, v.vm_created_at, v.copy_requested_at, v.dir, v.created_at, v.updated_at, v.shared, v.replaced_at, CAST(COALESCE(c.archived, 1) AS BOOLEAN) AS conversation_archived
 FROM conversation_vms v
 LEFT JOIN conversations c ON c.conversation_id = v.conversation_id
-JOIN chain ON v.conversation_id = chain.id
+JOIN chain ON v.conversation_id = chain.id AND v.replaced_at = ''
 ORDER BY chain.depth DESC LIMIT 1
 `
 
@@ -60,12 +74,13 @@ type GetConversationVMRow struct {
 	ConversationArchived bool           `json:"conversation_archived"`
 }
 
-// The VM of the conversation, or of the top-level conversation it is a
-// subagent of. A deleted conversation counts as archived.
+// The current VM of the conversation, or of the top-level conversation it
+// is a subagent of. A deleted conversation counts as archived.
 func (q *Queries) GetConversationVM(ctx context.Context, conversationID string) (GetConversationVMRow, error) {
 	row := q.db.QueryRowContext(ctx, getConversationVM, conversationID)
 	var i GetConversationVMRow
 	err := row.Scan(
+		&i.ConversationVm.ID,
 		&i.ConversationVm.ConversationID,
 		&i.ConversationVm.VmName,
 		&i.ConversationVm.BaseVm,
@@ -80,16 +95,55 @@ func (q *Queries) GetConversationVM(ctx context.Context, conversationID string) 
 		&i.ConversationVm.CreatedAt,
 		&i.ConversationVm.UpdatedAt,
 		&i.ConversationVm.Shared,
+		&i.ConversationVm.ReplacedAt,
+		&i.ConversationArchived,
+	)
+	return i, err
+}
+
+const getConversationVMByID = `-- name: GetConversationVMByID :one
+SELECT v.id, v.conversation_id, v.vm_name, v.base_vm, v.integration, v.status, v.error, v.ssh_dest, v.https_url, v.vm_created_at, v.copy_requested_at, v.dir, v.created_at, v.updated_at, v.shared, v.replaced_at, CAST(COALESCE(c.archived, 1) AS BOOLEAN) AS conversation_archived
+FROM conversation_vms v
+LEFT JOIN conversations c ON c.conversation_id = v.conversation_id
+WHERE v.id = ?
+`
+
+type GetConversationVMByIDRow struct {
+	ConversationVm       ConversationVm `json:"conversation_vm"`
+	ConversationArchived bool           `json:"conversation_archived"`
+}
+
+// A deleted conversation counts as archived.
+func (q *Queries) GetConversationVMByID(ctx context.Context, id int64) (GetConversationVMByIDRow, error) {
+	row := q.db.QueryRowContext(ctx, getConversationVMByID, id)
+	var i GetConversationVMByIDRow
+	err := row.Scan(
+		&i.ConversationVm.ID,
+		&i.ConversationVm.ConversationID,
+		&i.ConversationVm.VmName,
+		&i.ConversationVm.BaseVm,
+		&i.ConversationVm.Integration,
+		&i.ConversationVm.Status,
+		&i.ConversationVm.Error,
+		&i.ConversationVm.SshDest,
+		&i.ConversationVm.HttpsUrl,
+		&i.ConversationVm.VmCreatedAt,
+		&i.ConversationVm.CopyRequestedAt,
+		&i.ConversationVm.Dir,
+		&i.ConversationVm.CreatedAt,
+		&i.ConversationVm.UpdatedAt,
+		&i.ConversationVm.Shared,
+		&i.ConversationVm.ReplacedAt,
 		&i.ConversationArchived,
 	)
 	return i, err
 }
 
 const listConversationVMs = `-- name: ListConversationVMs :many
-SELECT v.conversation_id, v.vm_name, v.base_vm, v.integration, v.status, v.error, v.ssh_dest, v.https_url, v.vm_created_at, v.copy_requested_at, v.dir, v.created_at, v.updated_at, v.shared, CAST(COALESCE(c.archived, 1) AS BOOLEAN) AS conversation_archived
+SELECT v.id, v.conversation_id, v.vm_name, v.base_vm, v.integration, v.status, v.error, v.ssh_dest, v.https_url, v.vm_created_at, v.copy_requested_at, v.dir, v.created_at, v.updated_at, v.shared, v.replaced_at, CAST(COALESCE(c.archived, 1) AS BOOLEAN) AS conversation_archived
 FROM conversation_vms v
 LEFT JOIN conversations c ON c.conversation_id = v.conversation_id
-ORDER BY v.created_at, v.conversation_id
+ORDER BY v.created_at, v.id
 `
 
 type ListConversationVMsRow struct {
@@ -97,7 +151,8 @@ type ListConversationVMsRow struct {
 	ConversationArchived bool           `json:"conversation_archived"`
 }
 
-// A deleted conversation counts as archived.
+// Every conversation VM, current or replaced. A deleted conversation counts
+// as archived.
 func (q *Queries) ListConversationVMs(ctx context.Context) ([]ListConversationVMsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listConversationVMs)
 	if err != nil {
@@ -108,6 +163,7 @@ func (q *Queries) ListConversationVMs(ctx context.Context) ([]ListConversationVM
 	for rows.Next() {
 		var i ListConversationVMsRow
 		if err := rows.Scan(
+			&i.ConversationVm.ID,
 			&i.ConversationVm.ConversationID,
 			&i.ConversationVm.VmName,
 			&i.ConversationVm.BaseVm,
@@ -122,6 +178,7 @@ func (q *Queries) ListConversationVMs(ctx context.Context) ([]ListConversationVM
 			&i.ConversationVm.CreatedAt,
 			&i.ConversationVm.UpdatedAt,
 			&i.ConversationVm.Shared,
+			&i.ConversationVm.ReplacedAt,
 			&i.ConversationArchived,
 		); err != nil {
 			return nil, err
@@ -138,11 +195,11 @@ func (q *Queries) ListConversationVMs(ctx context.Context) ([]ListConversationVM
 }
 
 const listCurrentConversationVMs = `-- name: ListCurrentConversationVMs :many
-SELECT v.conversation_id, v.vm_name, v.base_vm, v.integration, v.status, v.error, v.ssh_dest, v.https_url, v.vm_created_at, v.copy_requested_at, v.dir, v.created_at, v.updated_at, v.shared, CAST(COALESCE(c.archived, 1) AS BOOLEAN) AS conversation_archived
+SELECT v.id, v.conversation_id, v.vm_name, v.base_vm, v.integration, v.status, v.error, v.ssh_dest, v.https_url, v.vm_created_at, v.copy_requested_at, v.dir, v.created_at, v.updated_at, v.shared, v.replaced_at, CAST(COALESCE(c.archived, 1) AS BOOLEAN) AS conversation_archived
 FROM conversation_vms v
 LEFT JOIN conversations c ON c.conversation_id = v.conversation_id
-WHERE v.status != 'deleted' OR NOT COALESCE(c.archived, 1)
-ORDER BY v.created_at, v.conversation_id
+WHERE v.status != 'deleted' OR v.replaced_at = '' AND NOT COALESCE(c.archived, 1)
+ORDER BY v.created_at, v.id
 `
 
 type ListCurrentConversationVMsRow struct {
@@ -150,8 +207,9 @@ type ListCurrentConversationVMsRow struct {
 	ConversationArchived bool           `json:"conversation_archived"`
 }
 
-// The conversation VMs that exist or that an active conversation copies
-// afresh at its next turn. A deleted conversation counts as archived.
+// The conversation VMs that exist, current or replaced, or that an active
+// conversation copies afresh at its next turn. A deleted conversation counts
+// as archived.
 func (q *Queries) ListCurrentConversationVMs(ctx context.Context) ([]ListCurrentConversationVMsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listCurrentConversationVMs)
 	if err != nil {
@@ -162,6 +220,7 @@ func (q *Queries) ListCurrentConversationVMs(ctx context.Context) ([]ListCurrent
 	for rows.Next() {
 		var i ListCurrentConversationVMsRow
 		if err := rows.Scan(
+			&i.ConversationVm.ID,
 			&i.ConversationVm.ConversationID,
 			&i.ConversationVm.VmName,
 			&i.ConversationVm.BaseVm,
@@ -176,6 +235,7 @@ func (q *Queries) ListCurrentConversationVMs(ctx context.Context) ([]ListCurrent
 			&i.ConversationVm.CreatedAt,
 			&i.ConversationVm.UpdatedAt,
 			&i.ConversationVm.Shared,
+			&i.ConversationVm.ReplacedAt,
 			&i.ConversationArchived,
 		); err != nil {
 			return nil, err
@@ -191,10 +251,41 @@ func (q *Queries) ListCurrentConversationVMs(ctx context.Context) ([]ListCurrent
 	return items, nil
 }
 
+const ownConversationVMNameUsed = `-- name: OwnConversationVMNameUsed :one
+SELECT CAST(EXISTS (SELECT 1 FROM conversation_vms WHERE vm_name = ? AND NOT shared) AS BOOLEAN) AS used
+`
+
+func (q *Queries) OwnConversationVMNameUsed(ctx context.Context, vmName string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, ownConversationVMNameUsed, vmName)
+	var used bool
+	err := row.Scan(&used)
+	return used, err
+}
+
+const replaceConversationVM = `-- name: ReplaceConversationVM :execrows
+UPDATE conversation_vms SET replaced_at = ?, updated_at = ?
+WHERE conversation_id = ? AND replaced_at = ''
+`
+
+type ReplaceConversationVMParams struct {
+	ReplacedAt     string `json:"replaced_at"`
+	UpdatedAt      string `json:"updated_at"`
+	ConversationID string `json:"conversation_id"`
+}
+
+// Keeps the conversation's current VM as one it left.
+func (q *Queries) ReplaceConversationVM(ctx context.Context, arg ReplaceConversationVMParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, replaceConversationVM, arg.ReplacedAt, arg.UpdatedAt, arg.ConversationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const updateConversationVM = `-- name: UpdateConversationVM :execrows
 UPDATE conversation_vms
 SET status = ?, error = ?, ssh_dest = ?, https_url = ?, vm_created_at = ?, copy_requested_at = ?, dir = ?, updated_at = ?
-WHERE conversation_id = ?
+WHERE id = ?
 `
 
 type UpdateConversationVMParams struct {
@@ -206,7 +297,7 @@ type UpdateConversationVMParams struct {
 	CopyRequestedAt string `json:"copy_requested_at"`
 	Dir             string `json:"dir"`
 	UpdatedAt       string `json:"updated_at"`
-	ConversationID  string `json:"conversation_id"`
+	ID              int64  `json:"id"`
 }
 
 func (q *Queries) UpdateConversationVM(ctx context.Context, arg UpdateConversationVMParams) (int64, error) {
@@ -219,7 +310,7 @@ func (q *Queries) UpdateConversationVM(ctx context.Context, arg UpdateConversati
 		arg.CopyRequestedAt,
 		arg.Dir,
 		arg.UpdatedAt,
-		arg.ConversationID,
+		arg.ID,
 	)
 	if err != nil {
 		return 0, err

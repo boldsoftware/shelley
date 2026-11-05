@@ -44,6 +44,9 @@ type ProjectVM struct {
 
 // ConversationVM is the VM a conversation runs on: its own copy of Base, or a shared VM.
 type ConversationVM struct {
+	// ID identifies the record: a conversation that moved to another
+	// machine (ChangeConversationVM) keeps the own VM it left until archived.
+	ID             int64  `json:"-"`
 	ConversationID string `json:"conversation_id"`
 	Name           string `json:"vm_name"`
 	Base           string `json:"base_vm"` // "" for a shared or empty VM
@@ -73,6 +76,9 @@ type ConversationVM struct {
 	// Dir is the working directory on the VM: its project's when the
 	// conversation was created.
 	Dir string `json:"dir"`
+	// Replaced reports whether the conversation has since moved to another
+	// machine: it no longer uses the VM, which archiving still deletes.
+	Replaced bool `json:"replaced"`
 	// ConversationArchived reports whether the conversation owning the VM is
 	// archived, or deleted.
 	ConversationArchived bool      `json:"conversation_archived"`
@@ -254,7 +260,7 @@ func (db *DB) BindConversationVM(ctx context.Context, conversationID string, vm 
 
 func newConversationVM(row generated.ConversationVm, archived bool) (*ConversationVM, error) {
 	vm := ConversationVM{
-		ConversationID: row.ConversationID, Name: row.VmName, Base: row.BaseVm, Integration: row.Integration, Shared: row.Shared,
+		ID: row.ID, ConversationID: row.ConversationID, Name: row.VmName, Replaced: row.ReplacedAt != "", Base: row.BaseVm, Integration: row.Integration, Shared: row.Shared,
 		Status: row.Status, Error: row.Error, SSHDest: row.SshDest, HTTPSURL: row.HttpsUrl, VMCreatedAt: row.VmCreatedAt,
 		CopyRequestedAt: row.CopyRequestedAt, Dir: row.Dir, ConversationArchived: archived,
 	}
@@ -280,7 +286,22 @@ func (db *DB) GetConversationVM(ctx context.Context, conversationID string) (*Co
 	return vm, err
 }
 
-// ListConversationVMs returns every conversation VM.
+// GetConversationVMByID returns the conversation VM record id, current or
+// replaced.
+func (db *DB) GetConversationVMByID(ctx context.Context, id int64) (*ConversationVM, error) {
+	var vm *ConversationVM
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		row, err := generated.New(rx.Conn()).GetConversationVMByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		vm, err = newConversationVM(row.ConversationVm, row.ConversationArchived)
+		return err
+	})
+	return vm, err
+}
+
+// ListConversationVMs returns every conversation VM, current or replaced.
 func (db *DB) ListConversationVMs(ctx context.Context) (vms []ConversationVM, err error) {
 	err = db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
 		vms, err = listConversationVMs(ctx, generated.New(rx.Conn()), false)
@@ -290,7 +311,8 @@ func (db *DB) ListConversationVMs(ctx context.Context) (vms []ConversationVM, er
 }
 
 // listConversationVMs lists every conversation VM or, if current, those that
-// exist or that an active conversation copies afresh at its next turn.
+// exist, current or replaced, or that an active conversation copies afresh
+// at its next turn.
 func listConversationVMs(ctx context.Context, q *generated.Queries, current bool) ([]ConversationVM, error) {
 	var rows []generated.ListConversationVMsRow
 	var err error
@@ -323,7 +345,85 @@ func (db *DB) UpdateConversationVM(ctx context.Context, vm ConversationVM) error
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
 		return rowsChanged(generated.New(tx.Conn()).UpdateConversationVM(ctx, generated.UpdateConversationVMParams{
 			Status: vm.Status, Error: vm.Error, SshDest: vm.SSHDest, HttpsUrl: vm.HTTPSURL, VmCreatedAt: vm.VMCreatedAt,
-			CopyRequestedAt: vm.CopyRequestedAt, Dir: vm.Dir, UpdatedAt: formatTime(time.Now()), ConversationID: vm.ConversationID,
+			CopyRequestedAt: vm.CopyRequestedAt, Dir: vm.Dir, UpdatedAt: formatTime(time.Now()), ID: vm.ID,
 		}))
 	})
+}
+
+// ChangeConversationVM moves top-level conversation conversationID to vm, nil
+// for this host, working in dir there. vm is an existing machine
+// (SharedVM), or a new own VM: a copy of Base, or empty. The conversation
+// keeps an own VM it leaves, which archiving it deletes; it simply forgets
+// a shared one, or an own one Shelley never started creating.
+func (db *DB) ChangeConversationVM(ctx context.Context, conversationID string, vm *ProjectVM, dir string) error {
+	if vm != nil {
+		if vm.ManagedBaseVM || vm.SetupConversationID != "" {
+			return fmt.Errorf("%w: a conversation's VM has no managed base", ErrInvalid)
+		}
+		if err := validateProjectVM(vm, dir); err != nil {
+			return err
+		}
+	}
+	if !strings.HasPrefix(dir, "/") {
+		return fmt.Errorf("%w: dir must be an absolute path", ErrInvalid)
+	}
+	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		row, err := q.GetConversationVM(ctx, conversationID)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+		case err != nil:
+			return err
+		case row.ConversationVm.ConversationID != conversationID:
+			return fmt.Errorf("%w: a subagent works on its conversation's machine", ErrConflict)
+		case row.ConversationVm.Shared || row.ConversationVm.VmCreatedAt == "" && row.ConversationVm.CopyRequestedAt == "":
+			if _, err := q.DeleteCurrentConversationVM(ctx, conversationID); err != nil {
+				return err
+			}
+		default:
+			now := formatTime(time.Now())
+			if err := rowsChanged(q.ReplaceConversationVM(ctx, generated.ReplaceConversationVMParams{
+				ReplacedAt: now, UpdatedAt: now, ConversationID: conversationID,
+			})); err != nil {
+				return err
+			}
+		}
+		if vm != nil {
+			name, err := unusedConversationVMName(ctx, q, *vm, conversationID)
+			if err != nil {
+				return err
+			}
+			now := formatTime(time.Now())
+			if err := q.CreateConversationVM(ctx, generated.CreateConversationVMParams{
+				ConversationID: conversationID, VmName: name, BaseVm: vm.Base, Integration: vm.Integration,
+				Shared: vm.SharedVM != "", Status: ConversationVMPending, Dir: dir, CreatedAt: now, UpdatedAt: now,
+			}); err != nil {
+				return err
+			}
+		}
+		_, err = q.UpdateConversationCwd(ctx, generated.UpdateConversationCwdParams{Cwd: &dir, ConversationID: conversationID})
+		return err
+	})
+}
+
+// unusedConversationVMName is ConversationVMName, numbered for an own VM
+// whose name an earlier one (e.g. the conversation's previous VM) took.
+func unusedConversationVMName(ctx context.Context, q *generated.Queries, vm ProjectVM, conversationID string) (string, error) {
+	name := ConversationVMName(vm, conversationID)
+	if vm.SharedVM != "" {
+		return name, nil
+	}
+	for n := 1; ; n++ {
+		candidate := name
+		if n > 1 {
+			candidate = fmt.Sprintf("%s-%d", name, n)
+			if len(candidate) > 42 {
+				candidate = fmt.Sprintf("shelley-%s-%d", strings.ToLower(conversationID), n)
+			}
+		}
+		used, err := q.OwnConversationVMNameUsed(ctx, candidate)
+		if err != nil || !used {
+			return candidate, err
+		}
+	}
 }

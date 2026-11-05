@@ -1449,7 +1449,8 @@ function workingDirectory(c: Conversation): { text: string; title: string } | nu
   const data = workspace.data.value;
   const vm = data?.vms.find(
     (v) =>
-      v.conversation_id === c.conversation_id || v.conversation_id === c.parent_conversation_id,
+      !v.replaced &&
+      (v.conversation_id === c.conversation_id || v.conversation_id === c.parent_conversation_id),
   );
   if (vm?.dir)
     return { text: `${vm.vm_name}:${tildifyPath(vm.dir)}`, title: `${vm.vm_name}:${vm.dir}` };

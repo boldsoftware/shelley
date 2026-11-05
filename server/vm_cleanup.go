@@ -97,27 +97,27 @@ func (s *Server) cleanupConversationVMs(ctx context.Context) time.Duration {
 			continue
 		}
 		s.conversationVMs.mu.Lock()
-		retry := s.conversationVMs.retries[vm.ConversationID]
+		retry := s.conversationVMs.retries[vm.ID]
 		s.conversationVMs.mu.Unlock()
 		if wait := time.Until(retry.at); wait > 0 {
 			next = shorter(next, wait)
 			continue
 		}
-		err := s.cleanupConversationVM(ctx, vm.ConversationID)
+		err := s.cleanupConversationVM(ctx, vm.ID)
 		if ctx.Err() != nil {
 			return 0
 		}
 		s.conversationVMs.mu.Lock()
 		if err == nil {
-			delete(s.conversationVMs.retries, vm.ConversationID)
+			delete(s.conversationVMs.retries, vm.ID)
 		} else {
 			retry.attempts++
 			backoff := shorter(time.Minute<<(retry.attempts-1), time.Hour)
 			retry.at = time.Now().Add(backoff)
 			if s.conversationVMs.retries == nil {
-				s.conversationVMs.retries = map[string]conversationVMRetry{}
+				s.conversationVMs.retries = map[int64]conversationVMRetry{}
 			}
-			s.conversationVMs.retries[vm.ConversationID] = retry
+			s.conversationVMs.retries[vm.ID] = retry
 			next = shorter(next, backoff)
 			s.logger.Warn("Conversation VM cleanup failed", "conversationID", vm.ConversationID, "vm", vm.Name, "attempts", retry.attempts, "error", err)
 		}
@@ -126,11 +126,11 @@ func (s *Server) cleanupConversationVMs(ctx context.Context) time.Duration {
 	return next
 }
 
-// cleanupConversationVM deletes the VM of archived conversation id, or, if the conversation was
-// unarchived before that happened, lets it keep the VM. A failure is
-// recorded on the VM and returned.
-func (s *Server) cleanupConversationVM(ctx context.Context, id string) error {
-	vm, err := s.db.GetConversationVM(ctx, id)
+// cleanupConversationVM deletes conversation VM id of an archived
+// conversation, or, if the conversation was unarchived before that happened,
+// lets it keep the VM. A failure is recorded on the VM and returned.
+func (s *Server) cleanupConversationVM(ctx context.Context, id int64) error {
+	vm, err := s.db.GetConversationVMByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -140,17 +140,17 @@ func (s *Server) cleanupConversationVM(ctx context.Context, id string) error {
 			return err
 		}
 	}
-	if vm.ConversationArchived {
+	if vm.ConversationArchived && !vm.Replaced {
 		// Nothing may keep using the VM: archived conversations start no turns, and
 		// their VMs refuse preparation (prepareConversationVMNow).
-		if err := s.stopConversationTree(ctx, id); err != nil {
+		if err := s.stopConversationTree(ctx, vm.ConversationID); err != nil {
 			return s.recordConversationVMCleanupError(ctx, *vm, err)
 		}
 	}
 	lock := s.conversationVMLock(vm.Name)
 	lock.Lock()
 	defer lock.Unlock()
-	if vm, err = s.db.GetConversationVM(ctx, id); err != nil {
+	if vm, err = s.db.GetConversationVMByID(ctx, id); err != nil {
 		return err
 	}
 	if !vm.ConversationArchived {

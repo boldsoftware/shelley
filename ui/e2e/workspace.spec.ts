@@ -475,6 +475,7 @@ test("a task's title row holds its page tabs and where it runs; actions get the 
       https_url: "",
       dir: "/home/exedev/hub",
       conversation_archived: false,
+      replaced: false,
     });
     await route.fulfill({ json: workspace });
   });
@@ -533,4 +534,48 @@ test("a task's title row holds its page tabs and where it runs; actions get the 
   await expect(page.locator("h1.header-title")).toHaveText("Assistant");
   await expect(page.getByTestId("conversation-place")).toHaveCount(0);
   await expect(page.locator(".project-header")).toHaveCount(0);
+});
+
+test("a task moves to another machine from where it runs, and back", async ({ page, request }) => {
+  const name = `Mover ${randomUUID().slice(0, 8)}`;
+  expect(
+    (
+      await request.post("/api/projects", {
+        data: { name, instructions: "", cwd: testWorkingDirectory() },
+      })
+    ).ok(),
+  ).toBeTruthy();
+  const started = await request.post("/api/conversations/new", {
+    data: { project: name, title: `Mover task ${randomUUID().slice(0, 8)}`, message: "Hello" },
+  });
+  expect(started.ok()).toBeTruthy();
+  const { conversation_id: id } = (await started.json()) as { conversation_id: string };
+  await page.goto(`/c/${id}`);
+  const place = page.locator(".header").getByTestId("conversation-place");
+  await expect(place).toHaveAccessibleName(/^This host/);
+  await expect(page.getByText("Hello", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("agent-thinking")).toHaveCount(0);
+
+  await place.click();
+  await page.getByTestId("conversation-place-move").click();
+  const dialog = page.getByRole("dialog", { name: "Move task to" });
+  await dialog.getByText("An existing machine").click();
+  const via = dialog.locator("#machine-via");
+  if (await via.count()) await via.selectOption("");
+  await dialog.getByLabel("SSH destination").fill("nobody@shelley-e2e.invalid");
+  await dialog.getByLabel("Directory").fill("/tmp");
+  await dialog.getByTestId("machine-save").click();
+  await expect(dialog).toHaveCount(0);
+  await expect(place).toHaveAccessibleName(/^Shared VM nobody@shelley-e2e\.invalid/);
+  // The agent is told, as a status line.
+  await expect(page.getByTestId("message-cwdchange").last()).toContainText(
+    "nobody@shelley-e2e.invalid",
+  );
+
+  await place.click();
+  await page.getByTestId("conversation-place-move").click();
+  await dialog.getByText("This Shelley host").click();
+  await dialog.getByTestId("machine-save").click();
+  await expect(dialog).toHaveCount(0);
+  await expect(place).toHaveAccessibleName(/^This host/);
 });

@@ -457,14 +457,15 @@ export function isDistillStatusMessage(message: Message): boolean {
 // message isn't one. These are user-role messages because the agent has to read
 // them (a marker excluded from context would let it keep using the old
 // directory), but they aren't something the user typed, so the UI renders them
-// as a status line rather than a chat bubble. See recordCwdChangeNotice.
-export function cwdChange(message: Message): { from: string; to: string } | null {
+// as a status line rather than a chat bubble. See recordCwdChangeNotice. A
+// move to another machine (recordMachineChangeNotice) also names it.
+export function cwdChange(message: Message): { from: string; to: string; machine: string } | null {
   if (!message.user_data) return null;
   try {
     const userData =
       typeof message.user_data === "string" ? JSON.parse(message.user_data) : message.user_data;
     if (!userData?.cwd_change) return null;
-    return { from: userData.from || "", to: userData.to || "" };
+    return { from: userData.from || "", to: userData.to || "", machine: userData.machine || "" };
   } catch {
     return null;
   }

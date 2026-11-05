@@ -173,10 +173,18 @@ test("archiving a conversation on its own VM warns that the VM is deleted", (t) 
     https_url: "",
     dir: "/home/exedev/blog",
     conversation_archived: false,
+    replaced: false,
   };
   workspace.data.value = { ...empty(), vms: [vm] };
   assert.match(workspace.archiveNote("task"), /deletes VM base-task; uncommitted work/);
   assert.equal(workspace.archiveNote("other"), "");
+  // One it moved away from is deleted too, but is not where it runs.
+  workspace.data.value = {
+    ...empty(),
+    vms: [{ ...vm, vm_name: "shelley-task", replaced: true }, vm],
+  };
+  assert.match(workspace.archiveNote("task"), /deletes VMs shelley-task, base-task; uncommitted/);
+  assert.equal(workspace.vmFor("task")?.vm_name, "base-task");
   workspace.data.value = { ...empty(), vms: [{ ...vm, status: "deleted" }] };
   assert.equal(workspace.archiveNote("task"), "");
   // A shared VM outlives its conversations.
@@ -201,6 +209,7 @@ test("every archive route confirms deleting the conversation's own VM first", as
     https_url: "",
     dir: "/home/exedev/blog",
     conversation_archived: false,
+    replaced: false,
   };
   workspace.data.value = { ...empty(), vms: [vm] };
   const archived: string[] = [];

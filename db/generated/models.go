@@ -80,6 +80,7 @@ type Conversation struct {
 }
 
 type ConversationVm struct {
+	ID              int64  `json:"id"`
 	ConversationID  string `json:"conversation_id"`
 	VmName          string `json:"vm_name"`
 	BaseVm          string `json:"base_vm"`
@@ -94,6 +95,7 @@ type ConversationVm struct {
 	CreatedAt       string `json:"created_at"`
 	UpdatedAt       string `json:"updated_at"`
 	Shared          bool   `json:"shared"`
+	ReplacedAt      string `json:"replaced_at"`
 }
 
 type LiveCallTranscript struct {

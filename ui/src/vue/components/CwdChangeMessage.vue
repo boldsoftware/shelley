@@ -1,6 +1,7 @@
 <!-- Sub-component of Message.vue. Renders the notice recorded when the user
      moves a conversation's working directory from the status readout (see
-     recordCwdChangeNotice, and the cwdChange predicate in types.ts).
+     recordCwdChangeNotice, and the cwdChange predicate in types.ts), or a
+     conversation to another machine (recordMachineChangeNotice).
 
      The row is a user-role message because the agent has to read it: it holds
      the old directory in its system prompt and in every tool result so far, and
@@ -12,7 +13,12 @@
   <div class="message message-gitinfo msg-cwdchange-container" data-testid="message-cwdchange">
     <span class="msg-cwdchange-icon" aria-hidden="true">📁</span>
     <span class="msg-cwdchange-text">
-      <template v-if="from">
+      <template v-if="machine">
+        moved to <strong>{{ machine }}</strong
+        >, in
+        <code class="msg-cwdchange-path" :title="to">{{ to }}</code>
+      </template>
+      <template v-else-if="from">
         working directory
         <code class="msg-cwdchange-path" :title="from">{{ tildifyPath(from) }}</code>
         <span class="msg-cwdchange-arrow" aria-hidden="true">→</span>
@@ -34,7 +40,8 @@ import { tildifyPath } from "../../utils/tildify";
 
 const props = defineProps<{ message: MessageType }>();
 
-const change = computed(() => cwdChange(props.message) || { from: "", to: "" });
+const change = computed(() => cwdChange(props.message) || { from: "", to: "", machine: "" });
+const machine = computed(() => change.value.machine);
 const from = computed(() => change.value.from);
 const to = computed(() => change.value.to);
 </script>
