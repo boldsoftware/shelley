@@ -330,16 +330,6 @@ var (
 		SupportsImages:   true,
 	}
 
-	GPTOSS120B = Model{
-		UserName:         "gpt-oss-120b",
-		ModelName:        "accounts/fireworks/models/gpt-oss-120b",
-		TextVerbosity:    "",
-		URL:              FireworksURL,
-		APIKeyEnv:        FireworksAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   false,
-	}
-
 	GPT5 = Model{
 		UserName:           "gpt-5-thinking",
 		ModelName:          "gpt-5.1",
@@ -670,7 +660,6 @@ var ModelsRegistry = []Model{
 	GLM53Fireworks,
 	GLM53FlashFireworks,
 	KimiK3Fireworks,
-	GPTOSS120B,
 	LlamaCPP,
 	// Skaband-supported models
 	Qwen,
