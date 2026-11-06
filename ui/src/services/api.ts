@@ -1880,3 +1880,53 @@ class NotificationChannelsApi {
 }
 
 export const notificationChannelsApi = new NotificationChannelsApi();
+
+// A stored secret, without its value (server Secret, docs/secrets.md).
+export interface Secret {
+  id: string;
+  name: string;
+  kind: string;
+  conversation_id: string | null;
+  conversation_slug: string | null;
+  created_at: string;
+  injections: Array<{
+    conversation_id: string | null;
+    machine: string;
+    path: string;
+    created_at: string;
+  }>;
+}
+
+async function secretsRequest(method: string, path: string, body?: unknown): Promise<Response> {
+  const r = await fetch(`/api/secrets${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", "X-Shelley-Request": "1" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!r.ok) throw await responseError(r, "Secrets");
+  return r;
+}
+
+export const secretsApi = {
+  async list(): Promise<Secret[]> {
+    return (await secretsRequest("GET", "")).json();
+  },
+  async create(secret: {
+    id: string;
+    name: string;
+    kind: string;
+    value: string;
+    conversation_id: string | null;
+  }): Promise<void> {
+    await secretsRequest("POST", "", secret);
+  },
+  async rename(id: string, name: string): Promise<void> {
+    await secretsRequest("PATCH", `/${encodeURIComponent(id)}`, { name });
+  },
+  async remove(id: string): Promise<void> {
+    await secretsRequest("DELETE", `/${encodeURIComponent(id)}`);
+  },
+  async reveal(id: string): Promise<string> {
+    return (await (await secretsRequest("POST", `/${encodeURIComponent(id)}/reveal`)).json()).value;
+  },
+};

@@ -100,6 +100,38 @@
         <span class="next-prompt-suggestion-label">{{ t("suggestionLabel") }}</span>
         <span class="next-prompt-suggestion-text">{{ suggestion }} <kbd aria-hidden="true">Tab</kbd></span>
       </button>
+      <div v-if="sealedSecrets.length > 0" class="secret-bar" data-testid="secret-bar">
+        <span
+          v-for="s in sealedSecrets"
+          :key="s.id"
+          :class="`secret-chip secret-chip-${s.status}`"
+          :title="s.error ?? `Stored as a secret: the model sees {{secret:${s.id}}}`"
+        >
+          <svg
+            class="secret-chip-lock"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <rect x="5" y="11" width="14" height="10" rx="2" />
+            <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+          </svg>
+          <span class="secret-chip-id">{{ s.id }}</span>
+          <span v-if="s.status === 'error'" class="secret-chip-error text-error">{{
+            s.error
+          }}</span>
+          <button
+            type="button"
+            class="secret-chip-undo"
+            :aria-label="`Undo secret ${s.id}`"
+            @click="undoSecret(s.id)"
+          >
+            Undo
+          </button>
+        </span>
+      </div>
       <div
         v-if="attachments.length > 0 || selectedSkills.length > 0"
         class="message-attachments"
@@ -460,9 +492,9 @@
                   : undefined
           "
           @input="onTextareaInput"
-          @select="syncFileSelection"
-          @click="syncFileSelection"
-          @keyup="syncFileSelection"
+          @select="onCaretMove"
+          @click="onCaretMove"
+          @keyup="onCaretMove"
           @blur="onTextareaBlur"
           @keydown="handleKeyDown"
           @paste="handlePaste"
@@ -492,6 +524,30 @@
               stroke-linejoin="round"
               d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
             />
+          </svg>
+        </button>
+        <button
+          v-if="secretsOn"
+          type="button"
+          :disabled="isDisabled"
+          class="message-attach-btn"
+          aria-label="Mark as secret"
+          title="Mark the selection as a secret, or type one: {{secret=…}}"
+          data-testid="secret-button"
+          @mousedown.prevent
+          @click="markSecret"
+        >
+          <svg
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            aria-hidden="true"
+          >
+            <rect x="5" y="11" width="14" height="10" rx="2" />
+            <path stroke-linecap="round" d="M8 11V7a4 4 0 0 1 8 0v4" />
           </svg>
         </button>
         <RecordButton
@@ -607,6 +663,8 @@ import RecordButton from "./RecordButton.vue";
 import RecordingPanel from "./RecordingPanel.vue";
 import type { RecordingDestination, RecordingMode, RecordingPreparation } from "./recordingDestination";
 import { focusMessageInputIfUnfocused } from "../../utils/focusMessageInput";
+import { useFeatureFlag } from "../composables/featureFlags";
+import { useSecretSealing } from "../composables/secretSealing";
 import { prettyModelName } from "../../utils/modelNames";
 import {
   CONCRETE_THINKING_LEVELS,
@@ -740,11 +798,63 @@ const recordingFloating = computed(() => {
 });
 // setMessage mirrors the React controlled-value path: surfaces every change via
 // draft-change so the parent can persist it.
+// A draft holding an unsealed secret is not saved (docs/secrets.md).
 function setMessage(next: string | ((prev: string) => string)) {
   const prev = message.value;
   const value = typeof next === "function" ? next(prev) : next;
-  if (value !== prev) emit("draft-change", value);
+  if (value !== prev && !secrets.holdsUnsealed(value)) emit("draft-change", value);
   message.value = value;
+}
+
+const secretsOn = useFeatureFlag("secrets");
+const secrets = useSecretSealing(secretsOn, () => props.conversationId ?? undefined);
+const sealedSecrets = secrets.sealed;
+
+/** Sets the message to text with its complete secrets sealed (all of them
+ *  if all), keeping the caret where it was in the text. */
+function setMessageSealed(text: string, caret: number, all: boolean): string {
+  const out = secrets.seal(text, caret, all);
+  setMessage(out.text);
+  const textarea = textareaRef.value;
+  if (out.text !== text && textarea) {
+    void nextTick(() => textarea.setSelectionRange(out.caret, out.caret));
+  }
+  return out.text;
+}
+
+/** Seals every secret in the message before it is sent. */
+function sealForSend(): string {
+  return setMessageSealed(message.value, textareaRef.value?.selectionStart ?? 0, true);
+}
+
+function onCaretMove() {
+  syncFileSelection();
+  const textarea = textareaRef.value;
+  if (textarea) setMessageSealed(message.value, textarea.selectionStart, false);
+}
+
+function undoSecret(id: string) {
+  setMessage(secrets.undo(id, message.value).text);
+}
+
+/** The lock button: marks the selection as a secret (sealed at once), or
+ *  opens an empty mark at the caret to type one into. */
+function markSecret() {
+  const textarea = textareaRef.value;
+  if (!textarea) return;
+  const { selectionStart: start, selectionEnd: end } = textarea;
+  const text = message.value;
+  if (start === end) {
+    setMessage(`${text.slice(0, start)}{{secret=}}${text.slice(end)}`);
+    void nextTick(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + 9, start + 9);
+    });
+    return;
+  }
+  const marked = `${text.slice(0, start)}{{secret=${text.slice(start, end)}}}${text.slice(end)}`;
+  setMessageSealed(marked, start, true);
+  textarea.focus();
 }
 
 // Sync programmatic seeds (e.g. switching between draft conversations).
@@ -1304,6 +1414,7 @@ function closeSkillPicker() {
   textareaRef.value?.focus({ preventScroll: true });
 }
 function onTextareaBlur(e: FocusEvent) {
+  setMessageSealed(message.value, (e.target as HTMLTextAreaElement).selectionStart, true);
   fileFocused.value = false;
   if (!skillMenuRef.value?.contains(e.relatedTarget as Node)) skillFocused.value = false;
 }
@@ -1642,7 +1753,7 @@ async function handleSubmit(e: Event) {
   if (hasContent.value && !props.disabled && !submitting.value && uploadsInProgress.value === 0) {
     if (openTerminalIfRequested(composerDispatch(message.value))) return;
 
-    const messageToSend = composeMessageWithAttachments(message.value);
+    const messageToSend = composeMessageWithAttachments(sealForSend());
     const attachmentSession = activeAttachmentSession;
     // Pause autosave before awaiting onSend so a trailing PUT can't race the
     // chat POST. Don't clear the draft yet — if send fails the textarea stays.
@@ -1651,7 +1762,9 @@ async function handleSubmit(e: Event) {
     const origin = composerOrigin();
     submitting.value = true;
     try {
+      await secrets.ready();
       await props.onSend(messageToSend, selectedSkillNames());
+      void secrets.sent(messageToSend);
       clearAttachments(attachmentSession);
       guardComposerClear(origin, composerOrigin, () => {
         selectedSkills.value = [];
@@ -1677,7 +1790,12 @@ async function handleQueueMessage() {
     return;
   }
   if (hasContent.value && props.onQueue) {
-    const messageToQueue = composeMessageWithAttachments(message.value).trim();
+    const messageToQueue = composeMessageWithAttachments(sealForSend()).trim();
+    try {
+      await secrets.ready();
+    } catch {
+      return; // The secret bar shows the failed upload.
+    }
     const skillsToQueue = selectedSkills.value;
     const origin = composerOrigin();
     setMessage("");
@@ -1691,6 +1809,7 @@ async function handleQueueMessage() {
         messageToQueue,
         skillsToQueue.map((s) => s.name),
       );
+      void secrets.sent(messageToQueue);
     } catch {
       guardComposerClear(origin, composerOrigin, () => {
         selectedSkills.value = skillsToQueue;
@@ -1706,7 +1825,12 @@ async function handleSendNow() {
   if (hasContent.value && !props.disabled && !submitting.value && uploadsInProgress.value === 0) {
     const dispatch = composerDispatch(message.value, { intent: "send-now" });
     if (openTerminalIfRequested(dispatch)) return;
-    const composed = composeMessageWithAttachments(message.value);
+    const composed = composeMessageWithAttachments(sealForSend());
+    try {
+      await secrets.ready();
+    } catch {
+      return; // The secret bar shows the failed upload.
+    }
     const messageToSend = dispatch.route === "btw" ? composed : composed.trim();
     const skillsToSend = selectedSkills.value;
     setMessage("");
@@ -1723,6 +1847,7 @@ async function handleSendNow() {
         messageToSend,
         skillsToSend.map((s) => s.name),
       );
+      void secrets.sent(messageToSend);
     } catch {
       guardComposerClear(origin, composerOrigin, () => {
         selectedSkills.value = skillsToSend;
@@ -1744,7 +1869,9 @@ function openTerminalIfRequested(dispatch: ReturnType<typeof composerDispatch>):
 }
 
 function onTextareaInput(e: Event) {
-  setMessage((e.target as HTMLTextAreaElement).value);
+  const textarea = e.target as HTMLTextAreaElement;
+  const paste = (e as InputEvent).inputType === "insertFromPaste";
+  setMessageSealed(textarea.value, textarea.selectionStart, paste);
   syncFileSelection();
 }
 

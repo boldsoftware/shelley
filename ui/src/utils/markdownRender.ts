@@ -7,6 +7,7 @@ import { Marked } from "marked";
 import DOMPurify from "dompurify";
 import { rewriteLocalhostLink, type LocalhostLinkOptions } from "./linkify";
 import * as markdownMath from "./markdownMath";
+import { secretPill, splitPlaceholders } from "./secretDetect";
 
 // Maximum size (in characters of the data: URI) we are willing to inline.
 // Keeps the DOM and persisted payloads from ballooning when a model emits a
@@ -136,6 +137,46 @@ function linkifyCodeSpans(root: HTMLElement, localhostLinks?: LocalhostLinkOptio
     setLinkTarget(link);
     code.replaceWith(link);
     link.append(code);
+  }
+}
+
+// Renders {{secret:ID}} placeholders in text (not code) as SecretPill.vue
+// does.
+function pillSecrets(root: HTMLElement): void {
+  const doc = root.ownerDocument;
+  const walker = doc.createTreeWalker(root, 4 /* NodeFilter.SHOW_TEXT, not a global in tests */);
+  const nodes: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (n.textContent?.includes("{{secret:") && !n.parentElement?.closest("code, pre, a"))
+      nodes.push(n as Text);
+  }
+  for (const node of nodes) {
+    const parts = splitPlaceholders(node.textContent ?? "");
+    if (!parts.some((p) => p.secretId)) continue;
+    node.replaceWith(
+      ...parts.map((p) => {
+        if (!p.secretId) return doc.createTextNode(p.text);
+        const pill = doc.createElement("a");
+        const { href, title, filler } = secretPill(p.secretId);
+        pill.className = "secret-pill";
+        pill.setAttribute("href", href);
+        pill.setAttribute("target", "_blank");
+        pill.setAttribute("rel", "noopener");
+        pill.setAttribute("title", title);
+        const icon = doc.createElement("i");
+        icon.className = "pi pi-lock";
+        icon.setAttribute("aria-hidden", "true");
+        const id = doc.createElement("span");
+        id.className = "secret-pill-id";
+        id.textContent = p.secretId;
+        const blur = doc.createElement("span");
+        blur.className = "secret-pill-filler";
+        blur.setAttribute("aria-hidden", "true");
+        blur.textContent = filler;
+        pill.append(icon, id, blur);
+        return pill;
+      }),
+    );
   }
 }
 
@@ -269,6 +310,7 @@ export function renderMarkdownToSafeHTML(
     .parse(text, { async: false, breaks: !reflow }) as string;
   const root = DOMPurify.sanitize(raw, { ...SANITIZE_OPTS, RETURN_DOM: true }) as HTMLElement;
   linkifyCodeSpans(root, localhostLinks);
+  pillSecrets(root);
   const html = root.innerHTML;
 
   if (cacheKey) {

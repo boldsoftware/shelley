@@ -407,6 +407,7 @@ type Server struct {
 	conversationListGitCache *conversationListGitCache
 	workspace                workspaceState
 	conversationVMs          conversationVMState
+	secrets                  *secretStore
 	baseVMSetupMu            sync.Mutex // serializes starting base VM setup conversations
 	customizations           customizationState
 	integrationSkills        *integrationSkillCache
@@ -566,6 +567,14 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	}
 	s.terminals = ts
 
+	// The secrets key sits beside the database (docs/secrets.md), so a copy
+	// of the database alone holds no secret.
+	secretsKey := filepath.Join(os.TempDir(), "shelley-secrets-"+rand.Text()[:10], "secrets.key")
+	if DBPath != "" {
+		secretsKey = filepath.Join(filepath.Dir(DBPath), "secrets.key")
+	}
+	s.secrets = newSecretStore(database, secretsKey, func(ctx context.Context) (bool, error) { return s.flagOn(ctx, FlagSecrets) }, logger.Error)
+
 	// Any committed write may change the conversation list. Refresh after
 	// every Tx commit so SSE clients always see the current state. This is
 	// the single source of truth for the patch stream — no caller needs to
@@ -581,6 +590,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	s.toolSetConfig.DBPath = DBPath
 	s.toolSetConfig.BackgroundJobs = backgroundJobs{server: s}
 	s.toolSetConfig.MaxSubagentDepth = 1 // Only top-level conversations can spawn subagents
+	s.toolSetConfig.Secrets = s.secrets
 
 	return s
 }
@@ -676,6 +686,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	s.registerMCPRoutes(api, mux)
 	s.registerProfileRoutes(api)
 	s.registerWorkspaceRoutes(api)
+	s.registerSecretRoutes(api)
 
 	// Notification channels API
 	api.HandleFunc("GET /api/notification-channels", s.handleListNotificationChannels)

@@ -18886,3 +18886,183 @@ kbd {
   margin: 0;
   font-size: var(--font-size-13);
 }
+
+/* Secrets (docs/secrets.md): the transcript pill, the composer's sealed
+   bar, and the /secrets page. */
+.secret-pill,
+.markdown-content a.secret-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-12);
+  line-height: 1.5;
+  text-decoration: none;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.secret-pill:hover,
+.markdown-content a.secret-pill:hover {
+  border-color: var(--primary);
+  background: var(--bg-secondary);
+  color: var(--primary);
+}
+.secret-pill-filler {
+  filter: blur(3.5px);
+  user-select: none;
+  color: var(--text-secondary);
+}
+
+.secret-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.25rem 0 0.5rem;
+  flex: 0 0 100%;
+  order: -2;
+}
+.secret-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-12);
+}
+.secret-chip-uploading {
+  opacity: 0.6;
+}
+.secret-chip-lock {
+  width: 13px;
+  height: 13px;
+}
+.secret-chip-undo {
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+}
+.secret-chip-undo:hover {
+  background: var(--bg-tertiary);
+  text-decoration: underline;
+}
+
+.secrets-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  color: var(--text-primary);
+}
+.secrets-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.secrets-header h1 {
+  margin: 0;
+  line-height: 1.2;
+}
+.secrets-back,
+.secret-facts a {
+  color: var(--primary);
+  text-decoration: none;
+}
+.secrets-error {
+  padding: 8px 12px;
+  border: 1px solid var(--error-border);
+  border-radius: 6px;
+  background: var(--error-bg);
+  color: var(--error-text);
+}
+.secret-card {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-base);
+}
+.secret-card-target {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+.secret-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.secret-name {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+}
+.secret-name:hover,
+.secret-name:focus {
+  border-color: var(--border);
+}
+.secret-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 8px 0;
+  font-size: var(--font-size-13);
+}
+.secret-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.secret-injections {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.secret-injections li {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.secret-value {
+  margin: 8px 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  overflow-wrap: anywhere;
+}
+.secret-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-size-13);
+}
+.secret-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.secret-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

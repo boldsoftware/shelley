@@ -48,6 +48,14 @@ function withCallCounting<T>(fn: () => T): T {
 
 // ---- Baseline: rendering + sanitization behavior is unchanged ----
 
+const pilled = renderMarkdownToSafeHTML("use {{secret:openai-key-k3f9}} and `{{secret:x-1234}}`");
+assert(
+  pilled.includes('class="secret-pill" href="/secrets#openai-key-k3f9"') &&
+    pilled.includes('<span class="secret-pill-id">openai-key-k3f9</span>') &&
+    pilled.includes("<code>{{secret:x-1234}}</code>"),
+  "secret placeholders become pills outside code",
+);
+
 assert(
   renderMarkdownToSafeHTML("# Title\n\nSome **bold** text.").includes("<strong>bold</strong>"),
   "basic markdown renders bold",

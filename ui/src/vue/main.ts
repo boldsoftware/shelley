@@ -1,5 +1,5 @@
 // Vue 3 + PrimeVue entry point. Emits dist/main.js + dist/main.css, mounts into
-// #root, and handles routing (/export/<id> vs the chat app) plus app-wide
+// #root, and handles routing (/export/<id>, /secrets, the chat app) plus app-wide
 // side-effects (theme, notifications).
 import { createApp } from "vue";
 import PrimeVue from "primevue/config";
@@ -18,6 +18,7 @@ import { workspaceMode } from "../utils/workspaceMode";
 import { exportConversationIdFromPath } from "./export";
 import App from "./App.vue";
 import ExportPage from "./components/ExportPage.vue";
+import SecretsPage from "./components/SecretsPage.vue";
 
 // Apply theme before render to avoid a flash of the wrong color scheme.
 initializeTheme();
@@ -45,6 +46,11 @@ if (exportId) {
   app.use(PrimeVue, primeVueOptions);
   app.use(i18nPlugin);
   app.directive("tooltip", Tooltip);
+  app.mount(rootContainer);
+} else if (window.location.pathname === "/secrets") {
+  const app = createApp(SecretsPage);
+  app.use(PrimeVue, primeVueOptions);
+  app.use(i18nPlugin);
   app.mount(rootContainer);
 } else {
   initializeNotifications();

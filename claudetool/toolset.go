@@ -131,6 +131,9 @@ type ToolSetConfig struct {
 	// host: its scratch space, where tools that only work here (read_image,
 	// output_iframe, message_user, llm_one_shot) resolve relative paths.
 	HostDir string
+	// Secrets, if set, redacts stored secrets from every tool's output and,
+	// when enabled, provides the write_secret tool (docs/secrets.md).
+	Secrets Secrets
 }
 
 // ToolSet holds a set of tools for a single conversation.
@@ -357,7 +360,15 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		}
 	}
 
+	if cfg.Secrets != nil && cfg.Secrets.ToolEnabled(ctx) {
+		writeSecret := &WriteSecretTool{Secrets: cfg.Secrets, ConversationID: cfg.ConversationID, WorkingDir: wd, VM: cfg.VM, HostDir: hostWD}
+		tools = append(tools, writeSecret.Tool())
+	}
+
 	tools = FilterTools(tools, cfg.ToolOverrides, cfg.DisableAllTools)
+	if cfg.Secrets != nil {
+		tools = redactTools(tools, cfg.Secrets)
+	}
 	return &ToolSet{
 		tools:      tools,
 		cleanup:    cleanup,

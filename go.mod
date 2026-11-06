@@ -3,6 +3,7 @@ module shelley.exe.dev
 go 1.27.3
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/boldsoftware/shelley/lazycue v0.0.0-00010101000000-000000000000
 	github.com/chromedp/cdproto v0.0.0-20260922220944-a19bff23514f
 	github.com/chromedp/chromedp v0.16.0

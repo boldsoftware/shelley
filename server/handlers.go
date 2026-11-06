@@ -452,7 +452,8 @@ func isConversationSlugPath(path string) bool {
 }
 
 func isSPARoute(path string) bool {
-	return path == "/new" || strings.HasPrefix(path, "/export/") || strings.HasPrefix(path, "/project/")
+	return path == "/new" || strings.HasPrefix(path, "/export/") || strings.HasPrefix(path, "/project/") ||
+		path == "/secrets"
 }
 
 // acceptsGzip reports whether r accepts gzip encoding.
@@ -1083,6 +1084,9 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, "Message is required", http.StatusBadRequest)
 		return
 	}
+	if !s.redactChatMessage(w, r, &req) {
+		return
+	}
 	if !s.checkConversationRequest(w, r, conversationID, "chat") {
 		return
 	}
@@ -1549,6 +1553,9 @@ func (s *Server) newConversation(w http.ResponseWriter, r *http.Request, req New
 	ctx := r.Context()
 	if req.Message == "" {
 		http.Error(w, "Message is required", http.StatusBadRequest)
+		return
+	}
+	if !s.redactChatMessage(w, r, &req.ChatRequest) {
 		return
 	}
 	if !s.prepareProjectConversation(w, r, &req) {

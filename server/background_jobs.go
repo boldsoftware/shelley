@@ -187,6 +187,10 @@ func (s *Server) deliverBackgroundJobNotice(ctx context.Context, job claudetool.
 	modelID := cm.modelID
 	cm.mu.Unlock()
 	outcome := job.Outcome()
+	// The notice carries the job's output to the model.
+	if outcome.Tail, err = s.secrets.Redact(ctx, outcome.Tail); err != nil {
+		return err
+	}
 	text := outcome.Notice()
 	data := backgroundJobUserData{
 		BackgroundJobID: job.ID,
