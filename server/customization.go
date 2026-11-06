@@ -811,9 +811,7 @@ func (s *Server) reconcileCustomizationsAfterTurn(id string) {
 	if !s.customizations.used.Load() {
 		return
 	}
-	s.workspace.workers.Add(1)
-	go func() {
-		defer s.workspace.workers.Done()
+	s.goWorker(func() {
 		ctx := context.Background()
 		project, err := s.db.GetConversationProject(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -829,7 +827,7 @@ func (s *Server) reconcileCustomizationsAfterTurn(id string) {
 		if err != nil {
 			s.logger.Error("Customization reconciliation failed", "conversationID", id, "error", err)
 		}
-	}()
+	})
 }
 
 // customizationOutput collects a verification's output, which is persisted

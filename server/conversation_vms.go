@@ -65,12 +65,11 @@ type conversationVMState struct {
 // prepareConversationVM starts provisioning a conversation's VM and its SSH connection, so
 // it is usually ready by the time the agent uses it; ssh explains why
 // otherwise (see writeVMSSHConfig). New conversations and every turn of a VM conversation
-// call it. Shutdown cancels it and waits for it, like project actions.
+// call it. Shutdown cancels it and waits for it, like project actions, and
+// once shutdown waits none starts.
 func (s *Server) prepareConversationVM(conversationID string) {
 	s.activateConversationVMs()
-	s.workspace.workers.Add(1)
-	go func() {
-		defer s.workspace.workers.Done()
+	s.goWorker(func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go func() {
@@ -83,7 +82,7 @@ func (s *Server) prepareConversationVM(conversationID string) {
 		if _, err := s.prepareConversationVMNow(ctx, conversationID); err != nil {
 			s.logger.Warn("Conversation VM preparation failed", "conversationID", conversationID, "error", err)
 		}
-	}()
+	})
 }
 
 // conversationVMArchived refuses work on vm while its conversation is archived:

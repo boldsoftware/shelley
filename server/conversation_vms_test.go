@@ -297,6 +297,19 @@ func TestConversationVMWorksOverSSH(t *testing.T) {
 	}
 }
 
+// Shutdown waits for the workers preparing VMs, so none starts once it
+// waits: a turn starting then, say on an action's report, leaves its VM be.
+func TestConversationVMNotPreparedOnceWorkersAwaited(t *testing.T) {
+	t.Parallel()
+	s, _, id, _, ssh, _ := newConversationVMFixture(t, "true")
+	waitForActions(t, s)
+	s.prepareConversationVM(id)
+	s.workspace.workers.Wait()
+	if masters := ssh.calls(t, "master"); len(masters) != 0 {
+		t.Fatalf("VM prepared after waiting for workers: %v", masters)
+	}
+}
+
 func TestConversationVMActionFailsWithoutFallback(t *testing.T) {
 	t.Parallel()
 	s, database, id, _, ssh, exe := newConversationVMFixture(t, "echo ran")

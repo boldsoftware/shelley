@@ -26,6 +26,10 @@ import (
 type workspaceState struct {
 	mu      sync.Mutex
 	workers sync.WaitGroup
+	// workersStopped, under workersMu, refuses goWorker once waitActions
+	// waits for workers.
+	workersMu      sync.Mutex
+	workersStopped bool
 	// stops stops the runs this process executes, by run id.
 	stops map[string]chan struct{}
 	// reports wakes the action report worker.
@@ -565,6 +569,9 @@ func (s *Server) waitActions(ctx context.Context) error {
 	s.workspace.mu.Lock()
 	s.workspace.restarting = true
 	s.workspace.mu.Unlock()
+	s.workspace.workersMu.Lock()
+	s.workspace.workersStopped = true
+	s.workspace.workersMu.Unlock()
 	done := make(chan struct{})
 	go func() {
 		s.workspace.workers.Wait()
@@ -575,6 +582,17 @@ func (s *Server) waitActions(ctx context.Context) error {
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+// goWorker runs f on a worker waitActions waits for, unless it already waits.
+// For a worker started outside any other (by a turn, say), whose Add could
+// otherwise race Wait, or come after Wait returned and the database closed.
+func (s *Server) goWorker(f func()) {
+	s.workspace.workersMu.Lock()
+	defer s.workspace.workersMu.Unlock()
+	if !s.workspace.workersStopped {
+		s.workspace.workers.Go(f)
 	}
 }
 
