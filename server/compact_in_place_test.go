@@ -811,6 +811,69 @@ func TestIndexSkipsEvidenceOfEarlierAttempts(t *testing.T) {
 	}
 }
 
+// TestCompactIndexUpdate: while an earlier index is in context, a nudge does
+// not repeat it, but lists the rows that left the recent part since; after a
+// compaction hides it, the index is whole again.
+func TestCompactIndexUpdate(t *testing.T) {
+	big := strings.Repeat("x", 4*15_000)
+	history := []contextItem{
+		textItem(1, llm.MessageRoleUser, "do it"),
+		textItem(2, llm.MessageRoleAssistant, "first"),
+		textItem(3, llm.MessageRoleAssistant, big),
+	}
+	first, err := compactIndex(history, 0, 1, piTokenCounter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nudge := nudgeItem(4)
+	nudge.message.Content = append(nudge.message.Content, llm.Content{Type: llm.ContentTypeText, Text: first})
+	history = append(history, nudge,
+		textItem(5, llm.MessageRoleAssistant, "second"),
+		textItem(6, llm.MessageRoleAssistant, big))
+	listed := func(index string) string {
+		_, table, _ := strings.Cut(index, "```\n")
+		var ids []string
+		for _, m := range regexp.MustCompile(`(?m)^(\d+) `).FindAllStringSubmatch(table, -1) {
+			ids = append(ids, m[1])
+		}
+		return strings.Join(ids, " ")
+	}
+	if got := listed(first); got != "1 2" {
+		t.Fatalf("first index lists %q, want 1 2:\n%s", got, first)
+	}
+	update, err := compactIndex(history, 0, 1, piTokenCounter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := listed(update); !strings.HasPrefix(update, "## Index update") || got != "3 5" || strings.Contains(update, "Look for dead ends") {
+		t.Fatalf("update lists %q, want only 3 5 without the guidance:\n%s", got, update)
+	}
+
+	// A second nudge right away has nothing new to list.
+	again := nudgeItem(7)
+	again.message.Content = append(again.message.Content, llm.Content{Type: llm.ContentTypeText, Text: update})
+	unchanged, err := compactIndex(append(slices.Clone(history), again), 0, 1, piTokenCounter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(unchanged, "no rows have left the recent part") || listed(unchanged) != "" {
+		t.Fatalf("got:\n%s", unchanged)
+	}
+
+	// Once compacted, the nudges are hidden and the index is whole.
+	hidden, err := hideItems(slices.Clone(history), []int64{4}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	whole, err := compactIndex(hidden, 0, 1, piTokenCounter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := listed(whole); !strings.HasPrefix(whole, "## Index\n") || got != "1 2 3 5" {
+		t.Fatalf("index after compaction lists %q, want 1 2 3 5:\n%s", got, whole)
+	}
+}
+
 // TestCompactIndexRows: a tool call shares a row with its output, under the
 // call's id. Inputs read like commands, and outputs show their size or that
 // they are trimmed.

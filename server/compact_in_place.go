@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -604,30 +605,58 @@ single row. Rows marked * are messages from the user or the parent and notes
 and summaries from earlier compactions: they carry the task and its rules, so a
 range may not cover one unless it is just that row.`
 
-// compactIndex renders the index the agent compacts from.
+// compactIndex renders the index the agent compacts from. While an earlier
+// index is still in context (nothing was compacted since, so its ids and rows
+// hold), it renders only an update: the rows that left the recent part since.
 func compactIndex(history []contextItem, overhead, keepRecentTokens int, tc tokenCounter) (string, error) {
 	items, err := compactionView(history)
 	if err != nil {
 		return "", err
 	}
 	recent := recentStart(items, keepRecentTokens, tc)
+	rows, recentRow := splitRows(items, recent)
+	listed := 0
+	update := false
+	if id, ok := earlierIndexRecentPart(history); ok {
+		update = true
+		if id != "" {
+			listed = indexOfRow(rows, claudetool.IndexID(id))
+		}
+		// An earlier recent part the rows do not have was not from this
+		// history: the earlier index does not apply.
+		if listed < 0 {
+			listed, update = 0, false
+		}
+	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Index\n\nThe context is ~%d tokens: ~%d of system prompt and tools, and %d messages of ~%d tokens.\n",
+	if update {
+		b.WriteString("## Index update\n\n")
+	} else {
+		b.WriteString("## Index\n\n")
+	}
+	fmt.Fprintf(&b, "The context is ~%d tokens: ~%d of system prompt and tools, and %d messages of ~%d tokens.\n",
 		overhead+tc.items(items), overhead, len(items), tc.items(items))
 	if recent == 0 {
-		b.WriteString("All of it is recent, so nothing can be compacted yet.\n")
+		b.WriteString(recentPartAll + "\n")
 		return b.String(), nil
 	}
-	fmt.Fprintf(&b, "The recent part, from %s on (%d messages, ~%d tokens), is kept as is and not listed.\n",
+	fmt.Fprintf(&b, recentPartLine+"\n",
 		itemID(items[recent]), len(items)-recent, tc.items(items[recent:]))
 	b.WriteString("\n")
-	fmt.Fprintf(&b, compactIndexGuidance, maxCollapseTokens/1000)
-	b.WriteString("\n\nOne row per message, oldest first, except that a tool call and its output\n" +
-		"share a row. id is the sequence_id (of the call, for a shared row), or s<n>.<i>\n" +
-		"for a note from an earlier compaction. tokens are estimated; `→ N` gives the\n" +
-		"tokens of a call's output, or says it is trimmed or missing.\n\n```\n")
-
-	rows, recentRow := splitRows(items, recent)
+	if update {
+		if listed >= recentRow {
+			b.WriteString("The latest index above still applies; no rows have left the recent part since.\n")
+			return b.String(), nil
+		}
+		b.WriteString("The latest index above still applies, with its guidance. These rows have left\n" +
+			"the recent part since:\n\n```\n")
+	} else {
+		fmt.Fprintf(&b, compactIndexGuidance, maxCollapseTokens/1000)
+		b.WriteString("\n\nOne row per message, oldest first, except that a tool call and its output\n" +
+			"share a row. id is the sequence_id (of the call, for a shared row), or s<n>.<i>\n" +
+			"for a note from an earlier compaction. tokens are estimated; `→ N` gives the\n" +
+			"tokens of a call's output, or says it is trimmed or missing.\n\n```\n")
+	}
 	alone, err := aloneRows(rows)
 	if err != nil {
 		return "", err
@@ -636,6 +665,11 @@ func compactIndex(history []contextItem, overhead, keepRecentTokens int, tc toke
 	fmt.Fprintln(tw, "id\trole\ttokens\tcontent")
 	toolNames := map[string]string{}
 	for i, row := range rows[:recentRow] {
+		// Earlier rows still name the calls of later outputs.
+		description := describeRow(row, toolNames, tc)
+		if i < listed {
+			continue
+		}
 		role := "note"
 		switch {
 		case row[0].source == nil:
@@ -647,11 +681,48 @@ func compactIndex(history []contextItem, overhead, keepRecentTokens int, tc toke
 		if alone[i] {
 			role += "*"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", rowID(row), role, tc.items(row), describeRow(row, toolNames, tc))
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", rowID(row), role, tc.items(row), description)
 	}
 	tw.Flush()
 	b.WriteString("```\n")
 	return b.String(), nil
+}
+
+const (
+	recentPartLine = "The recent part, from %s on (%d messages, ~%d tokens), is kept as is and not listed."
+	recentPartAll  = "All of it is recent, so nothing can be compacted yet."
+)
+
+var recentPartPattern = regexp.MustCompile(`(?m)^The recent part, from (\S+) on `)
+
+// earlierIndexRecentPart finds the latest index in history (in a nudge, or an
+// index call's output) and returns the id where its recent part started, ""
+// if all of it was recent; it reports false if history has no index. Any
+// compaction hides the indexes before it, so the rows it listed are still
+// the rows before that id.
+func earlierIndexRecentPart(history []contextItem) (string, bool) {
+	seqs, toolUseIDs := compactionEvidence(history)
+	for i := len(history) - 1; i >= 0; i-- {
+		it := history[i]
+		var texts []llm.Content
+		for _, c := range it.message.Content {
+			if c.Type == llm.ContentTypeToolResult && slices.Contains(toolUseIDs, c.ToolUseID) {
+				texts = append(texts, c.ToolResult...)
+			}
+		}
+		if it.source != nil && slices.Contains(seqs, it.from) {
+			texts = append(texts, it.message.Content...)
+		}
+		for _, c := range texts {
+			if m := recentPartPattern.FindStringSubmatch(c.Text); m != nil {
+				return m[1], true
+			}
+			if strings.Contains(c.Text, "\n"+recentPartAll+"\n") {
+				return "", true
+			}
+		}
+	}
+	return "", false
 }
 
 // describeRow lists a row's blocks for the index, each tool call with the
