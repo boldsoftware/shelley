@@ -152,6 +152,9 @@ type ConversationManager struct {
 	// idleCompacting marks the running turn as an idle compaction, whose end
 	// does not re-arm idle work. Any activity clears it. Guarded by mu.
 	idleCompacting bool
+	// idleCompactedAt is the compactable part's estimated size (see
+	// compactableTokens) when the last idle compaction ended. Guarded by mu.
+	idleCompactedAt int
 	// cacheWarmTimer replays cacheWarmRequest, the last successful provider
 	// request, through cacheWarmService. All are guarded by mu and share
 	// idleCompactionVersion.
@@ -248,6 +251,10 @@ type ConversationManager struct {
 	// idleCompactionMinTokens is the estimated context size below which idle
 	// compaction is skipped.
 	idleCompactionMinTokens int
+	// idleCompactionMinGrowth is how much the compactable part must grow
+	// after an idle compaction, compacting or not, before the next is worth
+	// a turn; before the first, it is the least worth one.
+	idleCompactionMinGrowth int
 }
 
 // NewConversationManager constructs a manager with dependencies but defers hydration until needed.
@@ -1486,8 +1493,10 @@ func (cm *ConversationManager) takeInjectable(ctx context.Context, generation ui
 	}
 	// Right after a compaction the nudger only knows the size from before
 	// it; the next response reports the new one.
+	// An idle compaction turn has its nudge already: the size it crosses is
+	// taken, not nudged again.
 	if nudger != nil && !compacted && !profileTurn {
-		if size, ok := nudger.take(); ok {
+		if size, ok := nudger.take(); ok && !cm.isIdleCompacting() {
 			nudge, err := cm.recordContextNudge(ctx, size)
 			if err != nil {
 				return inj, err

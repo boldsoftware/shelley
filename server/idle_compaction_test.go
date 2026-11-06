@@ -35,6 +35,7 @@ func newIdlePolicyHarness(t *testing.T, opts db.ConversationOptions) (*TestHarne
 	h.convOpts = &opts
 	h.server.keepRecentTokensOverride = 1
 	h.server.idleCompactionMinTokens = 1
+	h.server.idleCompactionMinGrowth = 1
 	h.NewConversation("echo: keep the garden plan", "")
 	synctest.Wait()
 	h.Chat("echo: rosemary arrives tomorrow")
@@ -85,8 +86,9 @@ func requireIdleCompactions(t *testing.T, h *TestHarness, want int) {
 }
 
 // TestIdleCompactionCompactsInPlaceOnce: once idle, the agent is nudged to
-// compact its own context with compact_in_place. The nudge goes with the
-// compaction, and the turn's end does not start another idle cycle.
+// compact its own context with compact_in_place. The compaction ends the turn
+// and takes the nudge with it, and the turn's end does not start another idle
+// cycle.
 func TestIdleCompactionCompactsInPlaceOnce(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
@@ -100,23 +102,25 @@ func TestIdleCompactionCompactsInPlaceOnce(t *testing.T) {
 		synctest.Wait()
 		requireIdleCompactions(t, h, 1)
 
-		requests := h.llm.GetRecentRequests()
-		nudge := requests[len(requests)-2].Messages
-		last := nudge[len(nudge)-1]
-		if last.Content[0].Text != fmt.Sprintf(idleNudgePrompt, 3)+"\n\nKeep the garden plan." || !strings.Contains(last.Content[1].Text, "## Index") {
-			t.Fatalf("idle turn did not start with the nudge and index: %+v", last)
-		}
-		after := requestDump(requests[len(requests)-1])
-		if !strings.Contains(after, "IDLE NOTE") || strings.Contains(after, "has been idle") || !strings.Contains(after, "rosemary arrives tomorrow") {
-			t.Fatalf("compacted context should hold the note and the recent part, without the nudge:\n%s", after)
+		// The request that compacted was the turn's last.
+		request := h.llm.GetLastRequest()
+		nudge := request.Messages[len(request.Messages)-1]
+		if nudge.Content[0].Text != fmt.Sprintf(idleNudgePrompt, 3)+"\n\nKeep the garden plan." || !strings.Contains(nudge.Content[1].Text, "## Index") {
+			t.Fatalf("idle turn did not end with the request that has the nudge and index: %+v", nudge)
 		}
 
-		request := h.llm.GetLastRequest()
 		<-time.After(15 * time.Minute)
 		synctest.Wait()
 		requireIdleCompactions(t, h, 1)
 		if h.llm.GetLastRequest() != request {
 			t.Fatal("the idle turn's end started another idle cycle")
+		}
+
+		h.Chat("echo: back")
+		synctest.Wait()
+		after := requestDump(h.llm.GetLastRequest())
+		if !strings.Contains(after, "IDLE NOTE") || strings.Contains(after, "has been idle") || !strings.Contains(after, "rosemary arrives tomorrow") {
+			t.Fatalf("compacted context should hold the note and the recent part, without the nudge:\n%s", after)
 		}
 	})
 }
@@ -285,6 +289,7 @@ func TestIdleCompactionRequiresEnabledPolicyAndTopLevel(t *testing.T) {
 				defer stopActiveConversationLoops(h.server)
 				h.server.keepRecentTokensOverride = 1
 				h.server.idleCompactionMinTokens = 1
+				h.server.idleCompactionMinGrowth = 1
 				opts := db.ConversationOptions{DisableNotifications: true, ToolOverrides: map[string]string{claudetool.CompactInPlaceName: "on"}}
 				conv, err := h.db.CreateConversation(t.Context(), nil, true, nil, nil, opts)
 				if err != nil {
@@ -402,6 +407,7 @@ func TestIdleCompactionIsNotAnnounced(t *testing.T) {
 				h.convOpts = &opts
 				h.server.keepRecentTokensOverride = 1
 				h.server.idleCompactionMinTokens = 1
+				h.server.idleCompactionMinGrowth = 1
 				h.NewConversation("echo: keep the garden plan", "")
 				synctest.Wait()
 				h.Chat("echo: rosemary arrives tomorrow")
@@ -719,5 +725,35 @@ func TestIdleCompactionSkip(t *testing.T) {
 				t.Fatalf("context lost the conversation:\n%s", got)
 			}
 		}
+	})
+}
+
+// TestIdleCompactionWaitsForGrowth: after an idle compaction, here one that
+// skipped, a short exchange does not start another; once enough has been
+// added to compact, one does.
+func TestIdleCompactionWaitsForGrowth(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, cm := newIdlePolicyHarness(t, db.ConversationOptions{IdleCompactionMinutes: 3, IdleCompactionPrompt: "Keep everything."})
+		defer stopActiveConversationLoops(h.server)
+		<-time.After(3 * time.Minute)
+		synctest.Wait()
+		requireIdleCompactions(t, h, 1)
+		cm.mu.Lock()
+		cm.idleCompactionMinGrowth = 2_000
+		cm.mu.Unlock()
+
+		h.Chat("echo: basil sprouted")
+		synctest.Wait()
+		<-time.After(10 * time.Minute)
+		synctest.Wait()
+		requireIdleCompactions(t, h, 1)
+
+		h.Chat("echo: " + strings.Repeat("tomatoes ", 1_000))
+		synctest.Wait()
+		h.Chat("echo: mint spreads")
+		synctest.Wait()
+		<-time.After(3 * time.Minute)
+		synctest.Wait()
+		requireIdleCompactions(t, h, 2)
 	})
 }

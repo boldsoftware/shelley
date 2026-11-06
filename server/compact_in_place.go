@@ -62,8 +62,11 @@ func (cm *ConversationManager) contextIndex(ctx context.Context) (string, error)
 	return compactIndex(items, tc.overhead(system, cm.tools()), cm.keepRecentTokens, tc)
 }
 
-func (c inPlaceCompactor) Compact(ctx context.Context, in claudetool.CompactInPlaceInput) (string, error) {
-	return c.cm.compactMidTurn(ctx, c.generation, in)
+// Compact ends an idle compaction turn once it compacted or skipped: there
+// is nothing to say to the user.
+func (c inPlaceCompactor) Compact(ctx context.Context, in claudetool.CompactInPlaceInput) (string, bool, error) {
+	text, err := c.cm.compactMidTurn(ctx, c.generation, in)
+	return text, err == nil && c.cm.isIdleCompacting(), err
 }
 
 // compactMidTurn validates in against the current context and records it.
@@ -107,6 +110,10 @@ func (cm *ConversationManager) compactMidTurn(ctx context.Context, generation ui
 		// evidence touches only the history since the last nudge or call.
 		system = nil
 	}
+	var compactable int
+	if err == nil {
+		compactable, err = compactableTokens(after, cm.keepRecentTokens, tc)
+	}
 	var created []generated.Message
 	if err == nil {
 		created, err = cm.createInPlaceCompaction(context.WithoutCancel(ctx), c, system)
@@ -114,6 +121,9 @@ func (cm *ConversationManager) compactMidTurn(ctx context.Context, generation ui
 	if err == nil {
 		cm.mu.Lock()
 		cm.compactedGeneration = generation
+		if cm.idleCompacting {
+			cm.idleCompactedAt = compactable
+		}
 		cm.mu.Unlock()
 	}
 	cm.loopLifecycleMu.Unlock()
@@ -1024,4 +1034,14 @@ func (s *Server) handleCompactRequest(w http.ResponseWriter, r *http.Request) {
 		"conversation_id":    conversation.ConversationID,
 		"current_generation": conversation.CurrentGeneration,
 	})
+}
+
+// compactableTokens estimates the part of history compact_in_place lists:
+// what is not evidence of compacting and not in the recent part.
+func compactableTokens(history []contextItem, keepRecentTokens int, tc tokenCounter) (int, error) {
+	view, err := compactionView(history)
+	if err != nil {
+		return 0, err
+	}
+	return tc.items(view[:recentStart(view, keepRecentTokens, tc)]), nil
 }

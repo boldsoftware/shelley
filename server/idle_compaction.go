@@ -18,6 +18,9 @@ import (
 // idle compaction turn is not worth its cost.
 const defaultIdleCompactionMinTokens = 50_000
 
+// defaultIdleCompactionMinGrowth is the default idleCompactionMinGrowth.
+const defaultIdleCompactionMinGrowth = 20_000
+
 func (s *Server) idleCompactionMinTokensOrDefault() int {
 	if s.idleCompactionMinTokens > 0 {
 		return s.idleCompactionMinTokens
@@ -310,7 +313,8 @@ func (s *Server) claimIdleCompaction(ctx context.Context, cm *ConversationManage
 		return false, err
 	}
 	// A small context is not worth a turn, and everything in the recent part
-	// is kept as is: nothing to compact.
+	// is kept as is: nothing to compact. Nor is what the last idle compaction
+	// left, until enough has been added to it.
 	items, _, err := cm.loadContext(ctx)
 	if err != nil {
 		return false, err
@@ -319,15 +323,22 @@ func (s *Server) claimIdleCompaction(ctx context.Context, cm *ConversationManage
 	if err != nil {
 		return false, err
 	}
-	if tc := cm.tokenCounter(); tc.items(view) < cm.idleCompactionMinTokens || recentStart(view, cm.keepRecentTokens, tc) == 0 {
-		return false, nil
+	tc := cm.tokenCounter()
+	compactable, err := compactableTokens(items, cm.keepRecentTokens, tc)
+	if err != nil {
+		return false, err
 	}
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
+	if tc.items(view) < cm.idleCompactionMinTokens || compactable < cm.idleCompactedAt+cm.idleCompactionMinGrowth {
+		return false, nil
+	}
 	if !cm.idleCompactionClaimableLocked(version) {
 		return false, nil
 	}
 	cm.cancelIdleCompactionLocked()
+	// A turn that ends without compacting leaves it as it is.
+	cm.idleCompactedAt = compactable
 	return true, nil
 }
 

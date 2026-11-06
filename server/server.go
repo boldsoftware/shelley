@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -489,6 +490,10 @@ type Server struct {
 	// compaction is not worth a turn (see idleCompactionMinTokens). Zero
 	// means defaultIdleCompactionMinTokens. Tests set it to 1.
 	idleCompactionMinTokens int
+	// idleCompactionMinGrowth overrides how much the compactable part must
+	// grow between idle compactions (see idleCompactionMinGrowth). Zero means
+	// defaultIdleCompactionMinGrowth. Tests set it to 1.
+	idleCompactionMinGrowth int
 
 	// IndexedDB cache encryption master secret — see cache_key.go.
 	// Lives on the Server (not a package-global) so tests with
@@ -1230,6 +1235,7 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		manager.serverSocket = s.socketPath
 		manager.keepRecentTokens = s.keepRecentTokens()
 		manager.idleCompactionMinTokens = s.idleCompactionMinTokensOrDefault()
+		manager.idleCompactionMinGrowth = cmp.Or(s.idleCompactionMinGrowth, defaultIdleCompactionMinGrowth)
 		switch role {
 		case roleTopLevel:
 			manager.decorateService = func(service llm.Service) (llm.Service, error) {

@@ -16,9 +16,10 @@ const CompactInPlaceName = "compact_in_place"
 type InPlaceCompactor interface {
 	// Index lists the part of the LLM's current view that can be compacted.
 	Index(ctx context.Context) (string, error)
-	// Compact validates and records in, a compact or skip; the turn
-	// continues on the compacted history.
-	Compact(ctx context.Context, in CompactInPlaceInput) (string, error)
+	// Compact validates and records in, a compact or skip. The turn
+	// continues on the compacted history, unless endTurn: compacting was
+	// all the turn was for.
+	Compact(ctx context.Context, in CompactInPlaceInput) (text string, endTurn bool, err error)
 }
 
 // IndexID is an id from the index: a sequence id or a note id. Models send
@@ -95,19 +96,20 @@ func CompactInPlaceTool(c InPlaceCompactor) *llm.Tool {
 		InputSchema: llm.MustSchema(compactInPlaceSchema),
 		Run: llm.RunJSON(func(ctx context.Context, in CompactInPlaceInput) llm.ToolOut {
 			var text string
+			var endTurn bool
 			var err error
 			switch in.Action {
 			case "index":
 				text, err = c.Index(ctx)
 			case "compact", "skip":
-				text, err = c.Compact(ctx, in)
+				text, endTurn, err = c.Compact(ctx, in)
 			default:
 				err = fmt.Errorf("action must be index, compact or skip")
 			}
 			if err != nil {
 				return llm.ErrorToolOut(err)
 			}
-			return llm.ToolOut{LLMContent: llm.TextContent(text)}
+			return llm.ToolOut{LLMContent: llm.TextContent(text), EndTurn: endTurn}
 		}),
 	}
 }
