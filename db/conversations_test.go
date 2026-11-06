@@ -1058,13 +1058,12 @@ func TestQueuedTranscriptionLifecycle(t *testing.T) {
 	_, ready, err := database.UpdateQueuedMessage(ctx, parent.ConversationID, queued.ID, func(qm *QueuedMessage) error {
 		qm.State = QueuedMessageStateReady
 		qm.Llm = readyLLM
-		qm.Transcription.ContactSheetPath = "/tmp/a.jpg"
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ready.State != QueuedMessageStateReady || string(ready.Llm) != string(readyLLM) || ready.Transcription.ContactSheetPath != "/tmp/a.jpg" {
+	if ready.State != QueuedMessageStateReady || string(ready.Llm) != string(readyLLM) {
 		t.Fatalf("ready item = %#v", ready)
 	}
 
@@ -1092,9 +1091,8 @@ func TestRetryQueuedTranscriptionIsAtomic(t *testing.T) {
 		State:     QueuedMessageStateFailed,
 		Error:     "first attempt failed",
 		Transcription: &QueuedTranscription{
-			MediaPath:        "/tmp/a.webm",
-			ContactSheetPath: "/tmp/old.jpg",
-			Audit:            json.RawMessage(`[{"Role":1}]`),
+			MediaPath: "/tmp/a.webm",
+			Audit:     json.RawMessage(`[{"Role":1}]`),
 		},
 	}
 	if _, err := database.AppendQueuedMessage(ctx, parent.ConversationID, queued); err != nil {
@@ -1106,7 +1104,7 @@ func TestRetryQueuedTranscriptionIsAtomic(t *testing.T) {
 		t.Fatal(err)
 	}
 	if retried.State != QueuedMessageStateWorking || retried.Error != "" ||
-		retried.Transcription.ContactSheetPath != "" || len(retried.Transcription.Audit) != 0 {
+		len(retried.Transcription.Audit) != 0 {
 		t.Fatalf("retried item = %#v", retried)
 	}
 

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,10 +20,15 @@ import (
 	"shelley.exe.dev/modelsources"
 )
 
+// testOpenAIRecordingTranscriber routes the OpenAI models to endpoint, and
+// has no Deepgram route, so word timings come from whisper-1.
 func testOpenAIRecordingTranscriber(client *http.Client, endpoint string) *openAIRecordingTranscriber {
 	return &openAIRecordingTranscriber{
 		client: client,
 		resolveModel: func(modelName string) (models.TranscriptionModel, error) {
+			if modelName == models.TranscriptionDeepgramModel {
+				return models.TranscriptionModel{}, errTranscriptionModelUnavailable(modelName)
+			}
 			return models.TranscriptionModel{Model: modelName, Endpoint: endpoint}, nil
 		},
 	}
@@ -239,6 +246,183 @@ func TestOpenAIRecordingTranscriberWithTimestamps(t *testing.T) {
 		!strings.Contains(string(timestamps), `"words"`) ||
 		!strings.Contains(string(timestamps), `"segments"`) {
 		t.Fatalf("timestamps = %s", timestamps)
+	}
+}
+
+// With a Deepgram route, word timings come from Deepgram rather than
+// whisper-1, as sentences of punctuated words.
+func TestOpenAIRecordingTranscriberTimesWordsWithDeepgram(t *testing.T) {
+	mediaPath := transcriptionTestFile(t, "screen.webm")
+	var deepgramRequests atomic.Int32
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/deepgram/v1/listen" {
+			deepgramRequests.Add(1)
+			if got := r.URL.Query(); got.Get("model") != "nova-3" || got.Get("smart_format") != "true" || got.Get("language") != "multi" {
+				t.Errorf("Deepgram query = %v", got)
+			}
+			if got := r.Header.Get("Authorization"); got != "" {
+				t.Errorf("authorization should be injected by the proxy, got %q", got)
+			}
+			if body, _ := io.ReadAll(r.Body); string(body) != "media" {
+				t.Errorf("Deepgram body = %q", body)
+			}
+			_, _ = io.WriteString(w, `{"results":{"channels":[{"alternatives":[{
+				"transcript":"Look here. It broke.",
+				"words":[
+					{"word":"look","punctuated_word":"Look","start":1.5,"end":1.7,"confidence":0.9},
+					{"word":"here","punctuated_word":"here.","start":1.7,"end":2.0,"confidence":0.9},
+					{"word":"it","punctuated_word":"It","start":9.0,"end":9.2,"confidence":0.9},
+					{"word":"broke","punctuated_word":"broke.","start":9.2,"end":9.6,"confidence":0.9}],
+				"paragraphs":{"paragraphs":[{"sentences":[
+					{"text":"Look here.","start":1.5,"end":2.0},
+					{"text":"It broke.","start":9.0,"end":9.6}]}]}}]}]}}`)
+			return
+		}
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			t.Fatal(err)
+		}
+		if model := r.FormValue("model"); model != "gpt-transcribe" {
+			t.Errorf("unexpected OpenAI model = %q", model)
+		}
+		_, _ = io.WriteString(w, `{"text":"Look here. It broke."}`)
+	}))
+	defer api.Close()
+
+	transcriber := deepgramTestTranscriber(api.Client(), api.URL)
+	result, err := transcriber.Transcribe(t.Context(), mediaPath, "context", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deepgramRequests.Load() != 1 || result.Text != "Look here. It broke." || result.TimestampsModel != "nova-3" {
+		t.Fatalf("Deepgram requests = %d, result = %#v", deepgramRequests.Load(), result)
+	}
+	data, err := os.ReadFile(result.TimestampsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var timings speechTimings
+	if err := json.Unmarshal(data, &timings); err != nil {
+		t.Fatal(err)
+	}
+	got := timelineLines(nil, timings)
+	want := []string{`00:01.5  said: "Look here."`, `00:09.0  said: "It broke."`}
+	if !slices.Equal(got, want) {
+		t.Fatalf("timeline = %q, want %q", got, want)
+	}
+}
+
+// deepgramTestTranscriber routes nova-3 to Deepgram's listen API under base,
+// and the OpenAI models to the OpenAI transcription API under it.
+func deepgramTestTranscriber(client *http.Client, base string) *openAIRecordingTranscriber {
+	return &openAIRecordingTranscriber{
+		client: client,
+		resolveModel: func(modelName string) (models.TranscriptionModel, error) {
+			if modelName == models.TranscriptionDeepgramModel {
+				return models.TranscriptionModel{Model: modelName, Endpoint: base + "/deepgram/v1/listen", Deepgram: true}, nil
+			}
+			return models.TranscriptionModel{Model: modelName, Endpoint: base + "/v1/audio/transcriptions"}, nil
+		},
+	}
+}
+
+func TestDeepgramTimingsResponses(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		status  int
+		body    string
+		wantErr string
+	}{
+		{
+			name:   "silence",
+			status: http.StatusOK,
+			body:   `{"results":{"channels":[{"alternatives":[{"transcript":"","words":[],"paragraphs":{"transcript":"\n","paragraphs":[]}}]}]}}`,
+		},
+		{name: "empty object", status: http.StatusOK, body: `{}`, wantErr: "no words"},
+		{name: "null", status: http.StatusOK, body: `null`, wantErr: "no words"},
+		{name: "no channels", status: http.StatusOK, body: `{"results":{"channels":[]}}`, wantErr: "no words"},
+		{name: "no words array", status: http.StatusOK, body: `{"results":{"channels":[{"alternatives":[{"transcript":"hi"}]}]}}`, wantErr: "no words"},
+		{
+			name:    "bad audio",
+			status:  http.StatusBadRequest,
+			body:    `{"err_code":"Bad Request","err_msg":"Bad Request: failed to process audio: corrupt or unsupported data","request_id":"x"}`,
+			wantErr: "failed to process audio",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+				_, _ = io.WriteString(w, tt.body)
+			}))
+			defer api.Close()
+			transcriber := deepgramTestTranscriber(api.Client(), api.URL)
+			route, err := transcriber.resolveModel(models.TranscriptionDeepgramModel)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := transcriber.deepgramTimings(t.Context(), route, transcriptionTestFile(t, "screen.webm"))
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error = %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(body) != `{"words":[],"segments":[]}` {
+				t.Fatalf("timings = %s", body)
+			}
+		})
+	}
+}
+
+// A route named nova-3 that speaks OpenAI's transcription API, such as a
+// custom model, is not Deepgram; whisper-1 times the words.
+func TestOpenAIRecordingTranscriberIgnoresOpenAIRouteNamedLikeDeepgram(t *testing.T) {
+	mediaPath := transcriptionTestFile(t, "screen.webm")
+	var timedBy atomic.Value
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			t.Errorf("non-multipart request to %s: %v", r.URL, err)
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+			return
+		}
+		if model := r.FormValue("model"); model != models.TranscriptionTextModel {
+			timedBy.Store(model)
+		}
+		_, _ = io.WriteString(w, `{"text":"words","words":[],"segments":[]}`)
+	}))
+	defer api.Close()
+	endpoint := api.URL + "/v1/audio/transcriptions"
+	var routes []models.TranscriptionModel
+	for _, name := range []string{models.TranscriptionTextModel, models.TranscriptionTimestampsModel, models.TranscriptionDeepgramModel} {
+		routes = append(routes, models.TranscriptionModel{Model: name, Endpoint: endpoint, Source: models.SourceCustomLabel})
+	}
+	manager, err := models.NewManager(&models.Config{TranscriptionModels: routes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := newOpenAIRecordingTranscriber(manager, false).Transcribe(t.Context(), mediaPath, "context", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.TimestampsModel != models.TranscriptionTimestampsModel || timedBy.Load() != models.TranscriptionTimestampsModel {
+		t.Fatalf("result = %#v, timed by %v", result, timedBy.Load())
+	}
+}
+
+// A failure to look up the Deepgram route is reported, not taken as its
+// absence.
+func TestOpenAIRecordingTranscriberReportsDeepgramLookupFailure(t *testing.T) {
+	transcriber := &openAIRecordingTranscriber{resolveModel: func(modelName string) (models.TranscriptionModel, error) {
+		if modelName == models.TranscriptionDeepgramModel {
+			return models.TranscriptionModel{}, errors.New("database is locked")
+		}
+		return models.TranscriptionModel{Model: modelName, Endpoint: "http://unused.invalid"}, nil
+	}}
+	if err := transcriber.Available(); err == nil || !strings.Contains(err.Error(), "database is locked") {
+		t.Fatalf("error = %v", err)
 	}
 }
 
@@ -522,19 +706,14 @@ func TestOpenAIRecordingTranscriberPreparesOversizedScreenRecordingOnce(t *testi
 	}))
 	defer api.Close()
 
-	transcriber := &openAIRecordingTranscriber{
-		client: api.Client(),
-		resolveModel: func(modelName string) (models.TranscriptionModel, error) {
-			return models.TranscriptionModel{Model: modelName, Endpoint: api.URL}, nil
-		},
-		mediaRun: func(_ context.Context, name string, args ...string) ([]byte, error) {
-			if name != "ffmpeg" {
-				return nil, fmt.Errorf("command = %q", name)
-			}
-			preparationCalls.Add(1)
-			preparedPath = args[len(args)-1]
-			return nil, os.WriteFile(preparedPath, []byte("compressed screen audio"), 0o600)
-		},
+	transcriber := testOpenAIRecordingTranscriber(api.Client(), api.URL)
+	transcriber.mediaRun = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if name != "ffmpeg" {
+			return nil, fmt.Errorf("command = %q", name)
+		}
+		preparationCalls.Add(1)
+		preparedPath = args[len(args)-1]
+		return nil, os.WriteFile(preparedPath, []byte("compressed screen audio"), 0o600)
 	}
 	result, err := transcriber.Transcribe(t.Context(), mediaPath, "context", true)
 	if err != nil {

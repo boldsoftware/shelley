@@ -542,7 +542,6 @@ export function isCompactionCarried(message: Message): boolean {
 // Go side.
 export interface QueuedTranscription {
   media_path: string;
-  contact_sheet_path?: string;
   context?: string;
 }
 

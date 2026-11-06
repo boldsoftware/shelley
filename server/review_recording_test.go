@@ -17,12 +17,12 @@ import (
 	"shelley.exe.dev/models"
 )
 
-// speech returns one 100ms Whisper word per field of text, starting at start seconds.
-func speech(start float64, text string) []whisperWord {
-	var words []whisperWord
+// speech returns one 100ms word per field of text, starting at start seconds.
+func speech(start float64, text string) []timedWord {
+	var words []timedWord
 	for i, word := range strings.Fields(text) {
 		begin := start + 0.1*float64(i)
-		words = append(words, whisperWord{Word: word, Start: begin, End: begin + 0.1})
+		words = append(words, timedWord{Word: word, Start: begin, End: begin + 0.1})
 	}
 	return words
 }
@@ -45,10 +45,10 @@ func specReviewRecording() *reviewRecording {
 	}
 }
 
-func specReviewSpeech() whisperTimestamps {
-	return whisperTimestamps{
+func specReviewSpeech() speechTimings {
+	return speechTimings{
 		Words: append(speech(2.4, "So the first thing I'm looking at is"), speech(3.9, "this line which should just go away")...),
-		Segments: []whisperSegment{
+		Segments: []timedSegment{
 			{Start: 2.4, End: 5.3},
 		},
 	}
@@ -60,7 +60,7 @@ func TestBuildReviewTimeline(t *testing.T) {
 
 Repository: /home/exedev/repo
 Recorded: 2026-09-29T20:14:03.120Z · 3m12s
-Times are from the start of the audio. "said" lines are speech (whisper word timings); indented lines are what the page showed at that moment.
+Times are from the start of the audio. "said" lines are speech; indented lines are what the page showed at that moment.
 
 00:00.0    view: Files · a8a26e6a shelley/ui: don't navigate back… · shelley/ui/src/vue/App.vue
 00:00.0    on screen: shelley/ui/src/vue/App.vue (new 770–820, old 770–818)
@@ -77,11 +77,11 @@ Times are from the start of the audio. "said" lines are speech (whisper word tim
 
 func TestBuildReviewTimelineWithoutSpeech(t *testing.T) {
 	review := &reviewRecording{Version: 1, DurationMS: 1500, Events: []reviewEvent{{MS: 0, Type: "view", Where: "X"}}}
-	got := buildReviewTimeline(review, whisperTimestamps{Words: []whisperWord{}, Segments: []whisperSegment{}})
+	got := buildReviewTimeline(review, speechTimings{Words: []timedWord{}, Segments: []timedSegment{}})
 	want := `# Review recording timeline
 
 Recorded: 2s
-Times are from the start of the audio. "said" lines are speech (whisper word timings); indented lines are what the page showed at that moment.
+Times are from the start of the audio. "said" lines are speech; indented lines are what the page showed at that moment.
 No speech was detected.
 
 00:00.0    view: X
@@ -97,7 +97,7 @@ func TestReviewTimelineLines(t *testing.T) {
 		name     string
 		duration float64
 		events   []reviewEvent
-		speech   whisperTimestamps
+		speech   speechTimings
 		want     []string
 	}{
 		{
@@ -190,9 +190,9 @@ func TestReviewTimelineLines(t *testing.T) {
 		},
 		{
 			name: "segment boundaries split phrases",
-			speech: whisperTimestamps{
-				Words: append(speech(0, "one two three"), whisperWord{Word: "four", Start: 0.98, End: 1.2}, whisperWord{Word: "five", Start: 1.2, End: 1.4}),
-				Segments: []whisperSegment{
+			speech: speechTimings{
+				Words: append(speech(0, "one two three"), timedWord{Word: "four", Start: 0.98, End: 1.2}, timedWord{Word: "five", Start: 1.2, End: 1.4}),
+				Segments: []timedSegment{
 					{Start: 0, End: 1},
 					{Start: 1, End: 2},
 				},
@@ -203,6 +203,50 @@ func TestReviewTimelineLines(t *testing.T) {
 			},
 		},
 		{
+			// The user is likely doing something on screen during a long
+			// pause, so speech on either side gets its own time.
+			name:     "pause splits phrase",
+			duration: 20000,
+			speech: speechTimings{
+				Words:    append(speech(0, "one two"), speech(5, "three")...),
+				Segments: []timedSegment{{Start: 0, End: 5.1}},
+			},
+			want: []string{
+				`00:00.0  said: "one two"`,
+				`00:05.0  said: "three"`,
+			},
+		},
+		{
+			name:     "pause hidden in a stretched word",
+			duration: 20000,
+			speech: speechTimings{
+				Words:    []timedWord{{Word: "unchanged,", Start: 0, End: 7.4}, {Word: "and", Start: 7.4, End: 7.5}},
+				Segments: []timedSegment{{Start: 0, End: 7.5}},
+			},
+			want: []string{
+				`00:00.0  said: "unchanged,"`,
+				`00:07.4  said: "and"`,
+			},
+		},
+		{
+			// Deepgram's sentences start with their first word, and the
+			// last word of one may run past the start of the next.
+			name:     "stretched sentence-final word",
+			duration: 20000,
+			speech: speechTimings{
+				Words: []timedWord{
+					{Word: "64", Start: 0, End: 0.3},
+					{Word: "entries.", Start: 0.3, End: 1.4},
+					{Word: "Sure.", Start: 0.7, End: 1.0},
+				},
+				Segments: []timedSegment{{Start: 0, End: 1.4}, {Start: 0.7, End: 1.0}},
+			},
+			want: []string{
+				`00:00.0  said: "64 entries."`,
+				`00:00.7  said: "Sure."`,
+			},
+		},
+		{
 			name:     "context interleaves with words",
 			duration: 6000,
 			events: []reviewEvent{
@@ -210,7 +254,7 @@ func TestReviewTimelineLines(t *testing.T) {
 				{MS: 200, Type: "click", Where: "at word"},
 				{MS: 150, Type: "click", Where: "between"},
 			},
-			speech: whisperTimestamps{Words: speech(0, "a b c d")},
+			speech: speechTimings{Words: speech(0, "a b c d")},
 			want: []string{
 				`00:00.0  said: "a b"`,
 				"00:00.1    clicked: between",
@@ -282,7 +326,7 @@ func TestReviewTimelineLines(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := reviewTimelineLines(&reviewRecording{Version: 1, DurationMS: tt.duration, Events: tt.events}, tt.speech)
+			got := timelineLines(reviewContextLines(&reviewRecording{Version: 1, DurationMS: tt.duration, Events: tt.events}), tt.speech)
 			if !slices.Equal(got, tt.want) {
 				t.Fatalf("lines:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(tt.want, "\n"))
 			}
@@ -433,7 +477,7 @@ func TestQueuedReviewRecordingTranscription(t *testing.T) {
 	if err := json.Unmarshal(audit[0].Content[0].ToolInput, &input); err != nil {
 		t.Fatal(err)
 	}
-	if input["review_events"] != mediaPath+".review.json" || input["timestamps_model"] != models.TranscriptionTimestampsModel {
+	if input["review_events"] != mediaPath+".review.json" || input["timestamps"] != true {
 		t.Fatalf("audited input = %#v", input)
 	}
 }

@@ -139,15 +139,16 @@ type Built struct {
 	BaseURL string
 }
 
-// OpenAI transcription models used for recordings: TranscriptionTextModel
-// produces the canonical transcript, TranscriptionTimestampsModel the word and
-// segment timings.
+// Transcription models used for recordings: TranscriptionTextModel produces
+// the canonical transcript, and TranscriptionDeepgramModel or, failing that,
+// TranscriptionTimestampsModel the word and sentence timings.
 const (
 	TranscriptionTextModel       = "gpt-transcribe"
+	TranscriptionDeepgramModel   = "nova-3"
 	TranscriptionTimestampsModel = "whisper-1"
 )
 
-// TranscriptionModel is a known OpenAI-compatible transcription route.
+// TranscriptionModel is a known transcription route.
 type TranscriptionModel struct {
 	Model    string
 	Endpoint string
@@ -156,6 +157,9 @@ type TranscriptionModel struct {
 	// FromCredentials marks a route derived from OpenAI credentials (env key
 	// or gateway). Integration and custom routes take precedence over it.
 	FromCredentials bool
+	// Deepgram marks a route that speaks Deepgram's listen API rather than
+	// OpenAI's transcription API.
+	Deepgram bool
 }
 
 // Config holds runtime configuration for the Manager. Built-in models

@@ -32,11 +32,19 @@ func (f recordingTranscriberFunc) Transcribe(ctx context.Context, path, _ string
 func successfulRecordingTranscriber(text string) recordingTranscriber {
 	return recordingTranscriberFunc(func(_ context.Context, mediaPath string, timestamps bool) (transcriptionResult, error) {
 		result := transcriptionResult{Text: text, Model: models.TranscriptionTextModel}
-		if timestamps {
-			result.TimestampsModel = models.TranscriptionTimestampsModel
-			result.TimestampsPath = mediaPath + ".timestamps.json"
+		if !timestamps {
+			return result, nil
 		}
-		return result, nil
+		result.TimestampsModel = models.TranscriptionTimestampsModel
+		result.TimestampsPath = mediaPath + ".timestamps.json"
+		body, err := json.Marshal(speechTimings{
+			Words:    speech(1.5, text),
+			Segments: []timedSegment{{Start: 1.5, End: 3}},
+		})
+		if err != nil {
+			return result, err
+		}
+		return result, os.WriteFile(result.TimestampsPath, body, 0o600)
 	})
 }
 
@@ -157,73 +165,26 @@ func TestValidateTranscriptionPath(t *testing.T) {
 	}
 }
 
-func TestProbeTranscriptionMedia(t *testing.T) {
-	run := func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if name != "ffprobe" || args[len(args)-1] != "/tmp/video.webm" {
-			return nil, fmt.Errorf("unexpected command: %s %v", name, args)
+func TestProbeHasVideo(t *testing.T) {
+	for _, tt := range []struct {
+		probe string
+		want  bool
+	}{
+		{`{"streams":[{"codec_type":"audio"},{"codec_type":"video"}],"format":{}}`, true},
+		{`{"streams":[{"codec_type":"audio"}],"format":{}}`, false},
+	} {
+		run := func(_ context.Context, name string, args ...string) ([]byte, error) {
+			if name != "ffprobe" || args[len(args)-1] != "/tmp/media.webm" {
+				return nil, fmt.Errorf("unexpected command: %s %v", name, args)
+			}
+			return []byte(tt.probe), nil
 		}
-		return []byte(`{"streams":[{"codec_type":"audio"},{"codec_type":"video","duration":"8.5"}],"format":{"duration":"9.25"}}`), nil
-	}
-	media, err := probeTranscriptionMedia(context.Background(), "/tmp/video.webm", run)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !media.HasVideo || media.DurationSeconds != 9.25 {
-		t.Fatalf("media = %#v", media)
-	}
-}
-
-func TestProbeTranscriptionMediaUsesRecordingMetadataDuration(t *testing.T) {
-	mediaPath := transcriptionTestFile(t, "streamed-screen.webm")
-	metadata, err := json.Marshal(recordingMetadata{Path: mediaPath, DurationMS: 25_644})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(mediaPath+".json", metadata, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	run := func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if name != "ffprobe" || args[len(args)-1] != mediaPath {
-			return nil, fmt.Errorf("unexpected command: %s %v", name, args)
+		got, err := probeHasVideo(context.Background(), "/tmp/media.webm", run)
+		if err != nil {
+			t.Fatal(err)
 		}
-		return []byte(`{"streams":[{"codec_type":"audio"},{"codec_type":"video"}],"format":{}}`), nil
-	}
-	media, err := probeTranscriptionMedia(context.Background(), mediaPath, run)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !media.HasVideo || media.DurationSeconds != 25.644 {
-		t.Fatalf("media = %#v", media)
-	}
-}
-
-func TestCreateVideoContactSheet(t *testing.T) {
-	mediaPath := transcriptionTestFile(t, "screen.webm")
-	var gotArgs []string
-	run := func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if name != "ffmpeg" {
-			return nil, fmt.Errorf("unexpected command %q", name)
-		}
-		gotArgs = append([]string(nil), args...)
-		return nil, os.WriteFile(args[len(args)-1], []byte("jpeg"), 0o600)
-	}
-
-	got, err := createVideoContactSheet(context.Background(), mediaPath, transcriptionMedia{HasVideo: true, DurationSeconds: 24}, run)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := mediaPath + ".contact-sheet.jpg"
-	if got != want {
-		t.Fatalf("contact path = %q, want %q", got, want)
-	}
-	if _, err := os.Stat(want); err != nil {
-		t.Fatalf("contact sheet missing: %v", err)
-	}
-	joined := strings.Join(gotArgs, " ")
-	for _, wantArg := range []string{"-i " + mediaPath, "fps=fps=0.500000000:start_time=1.000000000", "tile=4x3", "-frames:v 1"} {
-		if !strings.Contains(joined, wantArg) {
-			t.Errorf("ffmpeg args %q missing %q", joined, wantArg)
+		if got != tt.want {
+			t.Errorf("probeHasVideo(%s) = %v, want %v", tt.probe, got, tt.want)
 		}
 	}
 }
@@ -382,8 +343,8 @@ func TestTranscriptionCommandPersistsBeforeDetachedWork(t *testing.T) {
 	if auditedInput["model"] != "gpt-transcribe" || auditedInput["response_format"] != "json" {
 		t.Fatalf("audited audio request = %#v", auditedInput)
 	}
-	if _, ok := auditedInput["timestamp_granularities"]; ok {
-		t.Fatalf("audited audio request has timestamp granularities: %#v", auditedInput)
+	if _, ok := auditedInput["timestamps"]; ok {
+		t.Fatalf("audited audio request asks for timestamps: %#v", auditedInput)
 	}
 	if strings.Contains(audit[1].Content[0].ToolResult[0].Text, "timestamps_path") {
 		t.Fatalf("audited audio result has timestamps: %#v", audit[1])
@@ -399,10 +360,6 @@ func TestQueuedTranscriptionPreservesFIFOAndVideoPaths(t *testing.T) {
 	defer stopActiveConversationLoops(server)
 	server.transcriber = successfulRecordingTranscriber("predictable spoken words")
 	mediaPath := transcriptionTestFile(t, "screen.webm")
-	metadataPath := mediaPath + ".json"
-	if err := os.WriteFile(metadataPath, []byte(`{"started_at":"2026-09-16T22:00:00Z","duration_ms":12000}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	conversation, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -416,8 +373,6 @@ func TestQueuedTranscriptionPreservesFIFOAndVideoPaths(t *testing.T) {
 			close(started)
 			<-release
 			return []byte(`{"streams":[{"codec_type":"audio"},{"codec_type":"video"}],"format":{"duration":"12"}}`), nil
-		case "ffmpeg":
-			return nil, os.WriteFile(args[len(args)-1], []byte("jpeg"), 0o600)
 		default:
 			return nil, fmt.Errorf("unexpected command %q", name)
 		}
@@ -463,14 +418,25 @@ func TestQueuedTranscriptionPreservesFIFOAndVideoPaths(t *testing.T) {
 		"Keep this note. [/tmp/shelley-uploads/context.png]",
 		"predictable spoken words",
 
-		"Screen recording: [" + mediaPath + "]",
-		"Contact sheet: [" + mediaPath + ".contact-sheet.jpg]",
-		"Transcript timestamps: [" + mediaPath + ".timestamps.json]",
-		"Recording metadata: [" + metadataPath + "]",
+		"Screen recording: [" + mediaPath + "]\nTimeline: [" + mediaPath + ".timeline.md]",
+		screenRecordingGuidance,
 	} {
 		if !strings.Contains(finalText, want) {
 			t.Errorf("final text missing %q: %s", want, finalText)
 		}
+	}
+	timeline, err := os.ReadFile(mediaPath + ".timeline.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantTimeline := `# Screen recording timeline
+
+Times are from the start of the recording.
+
+00:01.5  said: "predictable spoken words"
+`
+	if string(timeline) != wantTimeline {
+		t.Errorf("timeline file:\n%s\nwant:\n%s", timeline, wantTimeline)
 	}
 	if strings.Contains(finalText, "transcribed by subagent") {
 		t.Fatalf("final text has misleading attribution: %s", finalText)
@@ -489,8 +455,7 @@ func TestQueuedTranscriptionPreservesFIFOAndVideoPaths(t *testing.T) {
 	if auditedInput["model"] != "gpt-transcribe" || auditedInput["response_format"] != "json" {
 		t.Fatalf("audited video request = %#v", auditedInput)
 	}
-	if auditedInput["timestamps_model"] != "whisper-1" ||
-		auditedInput["timestamps_response_format"] != "verbose_json" {
+	if auditedInput["timestamps"] != true {
 		t.Fatalf("audited video timestamps = %#v", auditedInput)
 	}
 	if !strings.Contains(audit[1].Content[0].ToolResult[0].Text, `"model":"gpt-transcribe"`) ||

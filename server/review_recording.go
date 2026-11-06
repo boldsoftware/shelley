@@ -24,6 +24,10 @@ const (
 	reviewClearDwell     = 500
 	reviewPointerRunes   = 200
 	reviewSelectionRunes = 500
+	// timelinePause is the silence that starts a new phrase in a timeline.
+	timelinePause = 2.0
+	// timelineMaxWord bounds how long a single spoken word plausibly lasts.
+	timelineMaxWord = 1.0
 )
 
 const reviewGuidance = `Treat this as review feedback to work through. Resolve "this", "here", and "that" from the pointer and selection at that moment. People think aloud, backtrack, and change their minds; later statements supersede earlier ones. Something being on screen does not mean it was read or approved. For a long review, have a subagent turn the timeline into a list of feedback items, each with its file:line referent and the user's own words, preserving wording and nuance without summarizing or drawing conclusions.`
@@ -55,18 +59,21 @@ type reviewEvent struct {
 	State   string   `json:"state"`
 }
 
-type whisperTimestamps struct {
-	Words    []whisperWord    `json:"words"`
-	Segments []whisperSegment `json:"segments"`
+// speechTimings is the timestamps file written beside a recording: word
+// timings plus sentence (Deepgram) or segment (Whisper) spans.
+type speechTimings struct {
+	Words    []timedWord    `json:"words"`
+	Segments []timedSegment `json:"segments"`
 }
 
-type whisperWord struct {
+type timedWord struct {
 	Word  string  `json:"word"`
 	Start float64 `json:"start"`
 	End   float64 `json:"end"`
 }
 
-type whisperSegment struct {
+type timedSegment struct {
+	Text  string  `json:"text,omitempty"`
 	Start float64 `json:"start"`
 	End   float64 `json:"end"`
 }
@@ -138,33 +145,41 @@ func (r *reviewRecording) parentDetails(timestampsPath string) []string {
 	}
 }
 
-// writeTimeline merges the Whisper word timings at timestampsPath with the
+// writeTimeline merges the word timings at timestampsPath with the
 // review events and atomically replaces the timeline file.
 func (r *reviewRecording) writeTimeline(timestampsPath string) error {
+	return writeTimeline(r.timelinePath(), timestampsPath, func(speech speechTimings) string {
+		return buildReviewTimeline(r, speech)
+	})
+}
+
+// writeTimeline atomically replaces the file at path with build's rendering
+// of the word timings at timestampsPath.
+func writeTimeline(path, timestampsPath string, build func(speechTimings) string) error {
 	data, err := os.ReadFile(timestampsPath)
 	if err != nil {
 		return fmt.Errorf("read transcription timestamps: %w", err)
 	}
-	var speech whisperTimestamps
+	var speech speechTimings
 	if err := json.Unmarshal(data, &speech); err != nil {
 		return fmt.Errorf("parse transcription timestamps: %w", err)
 	}
-	temp, err := os.CreateTemp(filepath.Dir(r.mediaPath), filepath.Base(r.timelinePath())+".tmp-*")
+	temp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(temp.Name())
-	if _, err := temp.WriteString(buildReviewTimeline(r, speech)); err != nil {
+	if _, err := temp.WriteString(build(speech)); err != nil {
 		temp.Close()
 		return err
 	}
 	if err := temp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(temp.Name(), r.timelinePath())
+	return os.Rename(temp.Name(), path)
 }
 
-func buildReviewTimeline(r *reviewRecording, speech whisperTimestamps) string {
+func buildReviewTimeline(r *reviewRecording, speech speechTimings) string {
 	var b strings.Builder
 	b.WriteString("# Review recording timeline\n\n")
 	if r.Cwd != "" {
@@ -175,12 +190,12 @@ func buildReviewTimeline(r *reviewRecording, speech whisperTimestamps) string {
 		recorded = r.StartedAt + " · " + recorded
 	}
 	b.WriteString("Recorded: " + recorded + "\n")
-	b.WriteString(`Times are from the start of the audio. "said" lines are speech (whisper word timings); indented lines are what the page showed at that moment.` + "\n")
+	b.WriteString(`Times are from the start of the audio. "said" lines are speech; indented lines are what the page showed at that moment.` + "\n")
 	if len(speech.Words) == 0 {
 		b.WriteString("No speech was detected.\n")
 	}
 	b.WriteString("\n")
-	for _, line := range reviewTimelineLines(r, speech) {
+	for _, line := range timelineLines(reviewContextLines(r), speech) {
 		b.WriteString(line + "\n")
 	}
 	return b.String()
@@ -191,11 +206,10 @@ type reviewContextLine struct {
 	text string
 }
 
-// reviewTimelineLines interleaves speech phrases with the review context
-// lines. Phrases break at Whisper segment boundaries and before any context
-// line that happened by the next word's start.
-func reviewTimelineLines(r *reviewRecording, speech whisperTimestamps) []string {
-	pending := reviewContextLines(r)
+// timelineLines interleaves speech phrases with the context lines. Phrases
+// break at segment boundaries, at pauses, and before any context line that
+// happened by the next word's start.
+func timelineLines(pending []reviewContextLine, speech speechTimings) []string {
 	var lines, phrase []string
 	var phraseMS float64
 	flushPhrase := func() {
@@ -211,7 +225,8 @@ func reviewTimelineLines(r *reviewRecording, speech whisperTimestamps) []string 
 		}
 	}
 	segment := 0
-	for _, word := range speech.Words {
+	var lastEnd float64
+	for i, word := range speech.Words {
 		text := strings.TrimSpace(word.Word)
 		if text == "" {
 			continue
@@ -221,17 +236,27 @@ func reviewTimelineLines(r *reviewRecording, speech whisperTimestamps) []string 
 			flushPhrase()
 			emitContext(startMS)
 		}
-		// Word and segment timings are aligned independently, so assign a
-		// word to a segment by its midpoint.
-		mid := (word.Start + word.End) / 2
+		// Word and segment timings may disagree slightly, so assign a word
+		// to a segment by its midpoint. A word stretched over the next one,
+		// as Deepgram sometimes does at a sentence end, ends where it starts.
+		end := word.End
+		if i+1 < len(speech.Words) {
+			end = math.Min(end, speech.Words[i+1].Start)
+		}
+		mid := (word.Start + math.Max(word.Start, end)) / 2
 		for segment+1 < len(speech.Segments) && mid >= speech.Segments[segment+1].Start {
 			segment++
+			flushPhrase()
+		}
+		if word.Start-lastEnd >= timelinePause {
 			flushPhrase()
 		}
 		if len(phrase) == 0 {
 			phraseMS = startMS
 		}
 		phrase = append(phrase, text)
+		// Recognizers sometimes stretch the word before a pause across it.
+		lastEnd = math.Min(word.End, word.Start+timelineMaxWord)
 	}
 	flushPhrase()
 	emitContext(math.Inf(1))

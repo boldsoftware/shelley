@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -27,17 +25,9 @@ const (
 	transcriptionKind    = "transcription"
 )
 
+const screenRecordingGuidance = `The transcript is audio only, and speech recognition garbles technical terms. The user was showing you their screen as they talked: wherever what they said depends on what they were showing, view stills from the recording at those moments. The timeline gives the times.`
+
 type mediaCommandRunner func(context.Context, string, ...string) ([]byte, error)
-
-type transcriptionMedia struct {
-	HasVideo        bool
-	DurationSeconds float64
-}
-
-type recordingMetadata struct {
-	Path       string `json:"path"`
-	DurationMS int64  `json:"duration_ms"`
-}
 
 type transcriptionJob struct {
 	parentID  string
@@ -113,96 +103,26 @@ func runMediaCommand(ctx context.Context, name string, args ...string) ([]byte, 
 	return out, nil
 }
 
-func probeTranscriptionMedia(ctx context.Context, path string, run mediaCommandRunner) (transcriptionMedia, error) {
-	out, err := run(ctx, "ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,duration", "-of", "json", path)
+// probeHasVideo reports whether the media at path has a video stream.
+func probeHasVideo(ctx context.Context, path string, run mediaCommandRunner) (bool, error) {
+	out, err := run(ctx, "ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "json", path)
 	if err != nil {
-		return transcriptionMedia{}, err
+		return false, err
 	}
 	var probe struct {
 		Streams []struct {
 			CodecType string `json:"codec_type"`
-			Duration  string `json:"duration"`
 		} `json:"streams"`
-		Format struct {
-			Duration string `json:"duration"`
-		} `json:"format"`
 	}
 	if err := json.Unmarshal(out, &probe); err != nil {
-		return transcriptionMedia{}, fmt.Errorf("parse ffprobe output: %w", err)
-	}
-
-	media := transcriptionMedia{}
-	var durations []string
-	if probe.Format.Duration != "" {
-		durations = append(durations, probe.Format.Duration)
+		return false, fmt.Errorf("parse ffprobe output: %w", err)
 	}
 	for _, stream := range probe.Streams {
-		if stream.CodecType != "video" {
-			continue
-		}
-		media.HasVideo = true
-		if stream.Duration != "" {
-			durations = append(durations, stream.Duration)
+		if stream.CodecType == "video" {
+			return true, nil
 		}
 	}
-	if !media.HasVideo {
-		return media, nil
-	}
-	for _, raw := range durations {
-		seconds, err := strconv.ParseFloat(raw, 64)
-		if err == nil && seconds > 0 && !math.IsInf(seconds, 0) && !math.IsNaN(seconds) {
-			media.DurationSeconds = seconds
-			return media, nil
-		}
-	}
-
-	metadataJSON, err := os.ReadFile(path + ".json")
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return transcriptionMedia{}, errors.New("video duration is unavailable")
-		}
-		return transcriptionMedia{}, fmt.Errorf("read recording metadata: %w", err)
-	}
-	var metadata recordingMetadata
-	if err := json.Unmarshal(metadataJSON, &metadata); err != nil {
-		return transcriptionMedia{}, fmt.Errorf("parse recording metadata: %w", err)
-	}
-	if metadata.Path != path || metadata.DurationMS <= 0 {
-		return transcriptionMedia{}, errors.New("recording metadata does not contain a valid duration")
-	}
-	media.DurationSeconds = float64(metadata.DurationMS) / 1000
-	return media, nil
-}
-
-func createVideoContactSheet(ctx context.Context, mediaPath string, media transcriptionMedia, run mediaCommandRunner) (string, error) {
-	if !media.HasVideo || media.DurationSeconds <= 0 {
-		return "", errors.New("contact sheet requires video with a positive duration")
-	}
-	const frameCount = 12
-	fps := float64(frameCount) / media.DurationSeconds
-	start := media.DurationSeconds / (2 * frameCount)
-	filter := fmt.Sprintf(
-		"fps=fps=%.9f:start_time=%.9f,scale=w=320:h=180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2:black,tile=4x3:padding=4:margin=4",
-		fps, start,
-	)
-
-	contactPath := mediaPath + ".contact-sheet.jpg"
-	tempPath := contactPath + ".tmp-" + uuid.NewString() + ".jpg"
-	defer os.Remove(tempPath)
-	if _, err := run(ctx, "ffmpeg", "-nostdin", "-v", "error", "-y", "-i", mediaPath, "-vf", filter, "-frames:v", "1", "-q:v", "3", tempPath); err != nil {
-		return "", err
-	}
-	info, err := os.Stat(tempPath)
-	if err != nil {
-		return "", fmt.Errorf("stat generated contact sheet: %w", err)
-	}
-	if !info.Mode().IsRegular() {
-		return "", errors.New("ffmpeg did not create a regular contact sheet file")
-	}
-	if err := os.Rename(tempPath, contactPath); err != nil {
-		return "", fmt.Errorf("install contact sheet: %w", err)
-	}
-	return contactPath, nil
+	return false, nil
 }
 
 // validateTranscriptionCommand reports whether message is a built-in
@@ -319,7 +239,7 @@ func (s *Server) runQueuedTranscription(ctx context.Context, parentID string, qu
 		return
 	}
 
-	media, err := probeTranscriptionMedia(ctx, mediaPath, s.mediaRun)
+	hasVideo, err := probeHasVideo(ctx, mediaPath, s.mediaRun)
 	if err != nil {
 		s.failQueuedTranscription(parentID, queued.ID, attemptID, nil, fmt.Errorf("inspect recording: %w", err))
 		return
@@ -330,23 +250,7 @@ func (s *Server) runQueuedTranscription(ctx context.Context, parentID string, qu
 		return
 	}
 	// Word timings let the agent line speech up with the video or review events.
-	timestamps := media.HasVideo || review != nil
-	if media.HasVideo && queued.Transcription.ContactSheetPath == "" {
-		contactSheetPath, err := createVideoContactSheet(ctx, mediaPath, media, s.mediaRun)
-		if err != nil {
-			s.failQueuedTranscription(parentID, queued.ID, attemptID, nil, fmt.Errorf("create contact sheet: %w", err))
-			return
-		}
-		// Persist the sheet before transcription so a restart reuses it.
-		updated, err := s.updateCurrentQueuedTranscription(context.Background(), parentID, queued.ID, attemptID, func(current *db.QueuedMessage) {
-			current.Transcription.ContactSheetPath = contactSheetPath
-		})
-		if err != nil {
-			s.logQueuedTranscriptionError("Failed to persist transcription contact sheet", parentID, queued.ID, err)
-			return
-		}
-		queued = updated
-	}
+	timestamps := hasVideo || review != nil
 
 	prompt, err := s.transcriptionPrompt(ctx, parentID, review)
 	if err != nil {
@@ -386,13 +290,19 @@ func (s *Server) runQueuedTranscription(ctx context.Context, parentID string, qu
 		s.failQueuedTranscription(parentID, queued.ID, attemptID, audit, err)
 		return
 	}
-	if review != nil {
+	switch {
+	case review != nil:
 		if err := review.writeTimeline(result.TimestampsPath); err != nil {
 			s.failQueuedTranscription(parentID, queued.ID, attemptID, audit, fmt.Errorf("build review timeline: %w", err))
 			return
 		}
+	case hasVideo:
+		if err := writeTimeline(screenTimelinePath(mediaPath), result.TimestampsPath, buildScreenTimeline); err != nil {
+			s.failQueuedTranscription(parentID, queued.ID, attemptID, audit, fmt.Errorf("build screen recording timeline: %w", err))
+			return
+		}
 	}
-	s.finalizeQueuedTranscription(parentID, queued, attemptID, result, review, audit)
+	s.finalizeQueuedTranscription(parentID, queued, attemptID, result, hasVideo, review, audit)
 }
 
 // queuedTranscriptionIsCurrent reports whether the durable item is still in
@@ -417,9 +327,9 @@ func transcriptionToolUse(mediaPath, prompt string, timestamps bool, review *rev
 		"prompt_chars":    utf8.RuneCountInString(prompt),
 	}
 	if timestamps {
-		toolInputFields["timestamps_model"] = timestampTranscription.Model
-		toolInputFields["timestamps_response_format"] = timestampTranscription.ResponseFormat
-		toolInputFields["timestamp_granularities"] = timestampTranscription.TimestampGranularities
+		// Which model times the words is known only once it runs; the
+		// result records it.
+		toolInputFields["timestamps"] = true
 	}
 	if review != nil {
 		toolInputFields["review_events"] = review.eventsPath()
@@ -490,26 +400,30 @@ func transcriptionParentMessage(transcriptionContext, text string, details ...st
 	return llm.UserStringMessage(strings.Join(append(parts, details...), "\n\n"))
 }
 
-// recordingDetails lists the artifacts of a plain audio or screen recording
-// for the transcription message.
-func recordingDetails(transcription *db.QueuedTranscription, timestampsPath string) []string {
-	var details []string
-	if transcription.ContactSheetPath != "" {
-		details = append(
-			details,
-			"Screen recording: ["+transcription.MediaPath+"]",
-			"Contact sheet: ["+transcription.ContactSheetPath+"]",
-		)
+// screenRecordingDetails lists the artifacts of a screen recording for the
+// transcription message.
+func screenRecordingDetails(mediaPath string) []string {
+	return []string{
+		"Screen recording: [" + mediaPath + "]\n" +
+			"Timeline: [" + screenTimelinePath(mediaPath) + "]",
+		screenRecordingGuidance,
 	}
-	if timestampsPath == "" {
-		return details
+}
+
+func screenTimelinePath(mediaPath string) string { return mediaPath + ".timeline.md" }
+
+func buildScreenTimeline(speech speechTimings) string {
+	var b strings.Builder
+	b.WriteString("# Screen recording timeline\n\n")
+	b.WriteString("Times are from the start of the recording.\n")
+	if len(speech.Words) == 0 {
+		b.WriteString("No speech was detected.\n")
 	}
-	details = append(details, "Transcript timestamps: ["+timestampsPath+"]")
-	metadataPath := transcription.MediaPath + ".json"
-	if info, err := os.Stat(metadataPath); err == nil && info.Mode().IsRegular() {
-		details = append(details, "Recording metadata: ["+metadataPath+"]")
+	b.WriteString("\n")
+	for _, line := range timelineLines(nil, speech) {
+		b.WriteString(line + "\n")
 	}
-	return details
+	return b.String()
 }
 
 // queuedUserDataWithMessageText keeps FTS search text aligned with the final
@@ -530,12 +444,13 @@ func queuedUserDataWithMessageText(raw json.RawMessage, text string) (json.RawMe
 	return json.Marshal(data)
 }
 
-func (s *Server) finalizeQueuedTranscription(parentID string, queued db.QueuedMessage, attemptID string, result transcriptionResult, review *reviewRecording, audit []llm.Message) {
+func (s *Server) finalizeQueuedTranscription(parentID string, queued db.QueuedMessage, attemptID string, result transcriptionResult, hasVideo bool, review *reviewRecording, audit []llm.Message) {
 	var details []string
-	if review != nil {
+	switch {
+	case review != nil:
 		details = review.parentDetails(result.TimestampsPath)
-	} else {
-		details = recordingDetails(queued.Transcription, result.TimestampsPath)
+	case hasVideo:
+		details = screenRecordingDetails(queued.Transcription.MediaPath)
 	}
 	message := transcriptionParentMessage(queued.Transcription.Context, result.Text, details...)
 	llmJSON, err := json.Marshal(message)

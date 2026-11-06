@@ -247,18 +247,25 @@ func Build(catalog []models.Model, sources []Source, httpc *http.Client, logger 
 }
 
 // TranscriptionModels returns the audio transcription routes the sources
-// serve: those advertised by discovered LLM integrations, plus Shelley's
-// transcription models for any other source with an OpenAI credential.
+// serve: those advertised by discovered LLM integrations (OpenAI-compatible
+// and Deepgram), plus Shelley's transcription models for any other source
+// with an OpenAI credential.
 func TranscriptionModels(sources []Source) []models.TranscriptionModel {
 	var out []models.TranscriptionModel
 	for _, src := range sources {
 		if src.integration != nil {
+			base := strings.TrimSuffix(src.integration.URL, "/")
 			for _, model := range src.integration.TranscriptionModels {
-				out = append(out, models.TranscriptionModel{
+				route := models.TranscriptionModel{
 					Model:    model.apiModelName(),
-					Endpoint: strings.TrimSuffix(src.integration.URL, "/") + "/v1/audio/transcriptions",
+					Endpoint: base + "/v1/audio/transcriptions",
 					Source:   src.integration.Host,
-				})
+				}
+				if slices.Contains(model.APIs, "deepgram_listen") {
+					route.Endpoint = base + "/deepgram/v1/listen"
+					route.Deepgram = true
+				}
+				out = append(out, route)
 			}
 			continue
 		}
@@ -558,7 +565,8 @@ type LLMIntegrationConfig struct {
 	Models []IntegrationModel
 
 	// TranscriptionModels are audio models advertised through the OpenAI
-	// transcription API. They are not materialized as chat services.
+	// transcription API or Deepgram's listen API. They are not materialized
+	// as chat services.
 	TranscriptionModels []IntegrationModel
 }
 
@@ -697,7 +705,7 @@ func transcriptionModelsFromCatalog(catalog llmIntegrationModelCatalog) []Integr
 	}
 	var out []IntegrationModel
 	for _, model := range catalog.Models {
-		if model.ID != "" && model.apiModelName() != "" && slices.Contains(model.APIs, "openai_transcriptions") {
+		if model.ID != "" && model.apiModelName() != "" && (slices.Contains(model.APIs, "openai_transcriptions") || slices.Contains(model.APIs, "deepgram_listen")) {
 			out = append(out, model)
 		}
 	}

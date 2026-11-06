@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -92,7 +93,7 @@ func withTranscriptionModel(model string, err error) error {
 }
 
 func (e *transcriptionHTTPError) Error() string {
-	return fmt.Sprintf("OpenAI transcription failed (%s): %s", e.Status, e.Message)
+	return fmt.Sprintf("transcription failed (%s): %s", e.Status, e.Message)
 }
 
 // With predictableOnly every route is ignored, as real LLM models are.
@@ -152,15 +153,33 @@ func errTranscriptionModelUnavailable(modelName string) error {
 	return fmt.Errorf("transcription model %q is not available; %w", modelName, errNoTranscriptionRoute)
 }
 
-// Available checks both models: screen and review recordings also need
-// whisper-1's word timings.
+// Available checks for a timing model too: screen and review recordings
+// need word timings.
 func (t *openAIRecordingTranscriber) Available() error {
-	for _, model := range []string{textTranscription.Model, timestampTranscription.Model} {
-		if _, err := t.resolveModel(model); err != nil {
-			return err
-		}
+	if _, err := t.resolveModel(textTranscription.Model); err != nil {
+		return err
 	}
-	return nil
+	_, err := t.deepgramRoute()
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, errNoTranscriptionRoute) {
+		return err
+	}
+	_, err = t.resolveModel(timestampTranscription.Model)
+	return err
+}
+
+// deepgramRoute returns the Deepgram route that times words, preferred over
+// whisper-1 because its timings are tighter and arrive sooner. An error
+// wrapping errNoTranscriptionRoute means there is none.
+func (t *openAIRecordingTranscriber) deepgramRoute() (models.TranscriptionModel, error) {
+	route, err := t.resolveModel(models.TranscriptionDeepgramModel)
+	if err == nil && !route.Deepgram {
+		// An OpenAI-compatible route that happens to share the name.
+		err = errTranscriptionModelUnavailable(models.TranscriptionDeepgramModel)
+	}
+	return route, err
 }
 
 func (t *openAIRecordingTranscriber) Transcribe(ctx context.Context, mediaPath, prompt string, timestamps bool) (transcriptionResult, error) {
@@ -178,7 +197,16 @@ func (t *openAIRecordingTranscriber) Transcribe(ctx context.Context, mediaPath, 
 		return transcriptionResult{Text: response.Text, Model: textTranscription.Model}, nil
 	}
 
-	var transcriptResponse, timestampResponse transcriptionAPIResponse
+	deepgram, err := t.deepgramRoute()
+	timingModel := models.TranscriptionDeepgramModel
+	switch {
+	case errors.Is(err, errNoTranscriptionRoute):
+		timingModel = timestampTranscription.Model
+	case err != nil:
+		return transcriptionResult{}, err
+	}
+	var transcriptResponse transcriptionAPIResponse
+	var timings []byte
 	group, groupContext := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		var err error
@@ -187,26 +215,102 @@ func (t *openAIRecordingTranscriber) Transcribe(ctx context.Context, mediaPath, 
 	})
 	group.Go(func() error {
 		var err error
-		timestampResponse, err = t.transcribe(groupContext, uploadPath, prompt, timestampTranscription)
-		return withTranscriptionModel(timestampTranscription.Model, err)
+		if deepgram.Deepgram {
+			timings, err = t.deepgramTimings(groupContext, deepgram, uploadPath)
+		} else {
+			timings, err = t.whisperTimings(groupContext, uploadPath, prompt)
+		}
+		return withTranscriptionModel(timingModel, err)
 	})
 	if err := group.Wait(); err != nil {
 		return transcriptionResult{}, err
 	}
-	if err := validateTimestampResponse(timestampResponse.Body); err != nil {
-		return transcriptionResult{}, withTranscriptionModel(timestampTranscription.Model, err)
-	}
 
 	timestampsPath := mediaPath + ".timestamps.json"
-	if err := os.WriteFile(timestampsPath, timestampResponse.Body, 0o600); err != nil {
+	if err := os.WriteFile(timestampsPath, timings, 0o600); err != nil {
 		return transcriptionResult{}, fmt.Errorf("write transcription timestamps: %w", err)
 	}
 	return transcriptionResult{
 		Text:            transcriptResponse.Text,
 		Model:           textTranscription.Model,
-		TimestampsModel: timestampTranscription.Model,
+		TimestampsModel: timingModel,
 		TimestampsPath:  timestampsPath,
 	}, nil
+}
+
+// whisperTimings returns whisper-1's verbose JSON, which has the shape of
+// speechTimings.
+func (t *openAIRecordingTranscriber) whisperTimings(ctx context.Context, mediaPath, prompt string) ([]byte, error) {
+	response, err := t.transcribe(ctx, mediaPath, prompt, timestampTranscription)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateTimestampResponse(response.Body); err != nil {
+		return nil, err
+	}
+	return response.Body, nil
+}
+
+// deepgramTimings transcribes mediaPath at the Deepgram route and returns its
+// word and sentence timings as speechTimings JSON.
+func (t *openAIRecordingTranscriber) deepgramTimings(ctx context.Context, route models.TranscriptionModel, mediaPath string) ([]byte, error) {
+	endpoint, err := url.Parse(route.Endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("parse Deepgram endpoint: %w", err)
+	}
+	// smart_format adds punctuation and the paragraphs that hold sentence
+	// timings. The speaker's language is unknown, and multi covers the most
+	// common ones without automatic detection, which the gateway rejects.
+	endpoint.RawQuery = url.Values{
+		"model":        {models.TranscriptionDeepgramModel},
+		"smart_format": {"true"},
+		"language":     {"multi"},
+	}.Encode()
+	route.Endpoint = endpoint.String()
+	media, err := os.ReadFile(mediaPath)
+	if err != nil {
+		return nil, fmt.Errorf("read recording: %w", err)
+	}
+	body, err := t.post(ctx, route, "application/octet-stream", media)
+	if err != nil {
+		return nil, err
+	}
+	var decoded struct {
+		Results struct {
+			Channels []struct {
+				Alternatives []struct {
+					// Words is nil, not empty, when the response is not
+					// a transcription.
+					Words []struct {
+						PunctuatedWord string  `json:"punctuated_word"`
+						Start          float64 `json:"start"`
+						End            float64 `json:"end"`
+					} `json:"words"`
+					Paragraphs struct {
+						Paragraphs []struct {
+							Sentences []timedSegment `json:"sentences"`
+						} `json:"paragraphs"`
+					} `json:"paragraphs"`
+				} `json:"alternatives"`
+			} `json:"channels"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		return nil, fmt.Errorf("decode Deepgram response: %w", err)
+	}
+	channels := decoded.Results.Channels
+	if len(channels) == 0 || len(channels[0].Alternatives) == 0 || channels[0].Alternatives[0].Words == nil {
+		return nil, errors.New("Deepgram response has no words")
+	}
+	alt := channels[0].Alternatives[0]
+	timings := speechTimings{Words: []timedWord{}, Segments: []timedSegment{}}
+	for _, word := range alt.Words {
+		timings.Words = append(timings.Words, timedWord{Word: word.PunctuatedWord, Start: word.Start, End: word.End})
+	}
+	for _, paragraph := range alt.Paragraphs.Paragraphs {
+		timings.Segments = append(timings.Segments, paragraph.Sentences...)
+	}
+	return json.Marshal(timings)
 }
 
 func (t *openAIRecordingTranscriber) prepareUpload(ctx context.Context, mediaPath string) (string, func(), error) {
@@ -302,13 +406,30 @@ func (t *openAIRecordingTranscriber) transcribe(ctx context.Context, mediaPath, 
 		return transcriptionAPIResponse{}, err
 	}
 
-	return t.request(ctx, model, writer.FormDataContentType(), body.Bytes(), options.ResponseFormat != "verbose_json")
-}
-
-func (t *openAIRecordingTranscriber) request(ctx context.Context, model models.TranscriptionModel, contentType string, body []byte, requireText bool) (transcriptionAPIResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, model.Endpoint, bytes.NewReader(body))
+	responseBody, err := t.post(ctx, model, writer.FormDataContentType(), body.Bytes())
 	if err != nil {
 		return transcriptionAPIResponse{}, err
+	}
+	requireText := options.ResponseFormat != "verbose_json"
+	var decoded struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(responseBody, &decoded); err != nil {
+		return transcriptionAPIResponse{}, fmt.Errorf("decode transcription response: %w", err)
+	}
+	decoded.Text = strings.TrimSpace(decoded.Text)
+	if requireText && decoded.Text == "" {
+		return transcriptionAPIResponse{}, errors.New("OpenAI transcription returned an empty transcript")
+	}
+	return transcriptionAPIResponse{Text: decoded.Text, Body: responseBody}, nil
+}
+
+// post sends body to model's endpoint and returns the successful response
+// body.
+func (t *openAIRecordingTranscriber) post(ctx context.Context, model models.TranscriptionModel, contentType string, body []byte) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, model.Endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
 	}
 	req.Header.Set("Content-Type", contentType)
 	if model.APIKey != "" && model.APIKey != "implicit" {
@@ -317,50 +438,35 @@ func (t *openAIRecordingTranscriber) request(ctx context.Context, model models.T
 
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return transcriptionAPIResponse{}, fmt.Errorf("OpenAI transcription request: %w", err)
+		return nil, fmt.Errorf("transcription request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, maxTranscriptionResponse+1))
 	if err != nil {
-		return transcriptionAPIResponse{}, fmt.Errorf("read OpenAI transcription response: %w", err)
+		return nil, fmt.Errorf("read transcription response: %w", err)
 	}
 	if len(responseBody) > maxTranscriptionResponse {
-		return transcriptionAPIResponse{}, errors.New("OpenAI transcription response exceeded 16 MiB")
+		return nil, errors.New("transcription response exceeded 16 MiB")
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		errorBody := responseBody
-		if len(errorBody) > maxTranscriptionErrorBody {
-			errorBody = errorBody[:maxTranscriptionErrorBody]
-		}
-		message := strings.TrimSpace(string(errorBody))
-		var apiError struct {
-			Error struct {
-				Message string `json:"message"`
-			} `json:"error"`
-		}
-		if json.Unmarshal(errorBody, &apiError) == nil && apiError.Error.Message != "" {
-			message = apiError.Error.Message
-		}
-		if message == "" {
-			message = resp.Status
-		}
-		return transcriptionAPIResponse{}, &transcriptionHTTPError{
-			StatusCode: resp.StatusCode,
-			Status:     resp.Status,
-			Message:    message,
-		}
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return responseBody, nil
 	}
-
-	var decoded struct {
-		Text string `json:"text"`
+	errorBody := responseBody
+	if len(errorBody) > maxTranscriptionErrorBody {
+		errorBody = errorBody[:maxTranscriptionErrorBody]
 	}
-	if err := json.Unmarshal(responseBody, &decoded); err != nil {
-		return transcriptionAPIResponse{}, fmt.Errorf("decode OpenAI transcription response: %w", err)
+	// OpenAI nests the message under "error"; Deepgram uses err_msg.
+	var apiError struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+		ErrMsg string `json:"err_msg"`
 	}
-	decoded.Text = strings.TrimSpace(decoded.Text)
-	if requireText && decoded.Text == "" {
-		return transcriptionAPIResponse{}, errors.New("OpenAI transcription returned an empty transcript")
+	_ = json.Unmarshal(errorBody, &apiError)
+	return nil, &transcriptionHTTPError{
+		StatusCode: resp.StatusCode,
+		Status:     resp.Status,
+		Message:    cmp.Or(apiError.Error.Message, apiError.ErrMsg, strings.TrimSpace(string(errorBody)), resp.Status),
 	}
-	return transcriptionAPIResponse{Text: decoded.Text, Body: responseBody}, nil
 }

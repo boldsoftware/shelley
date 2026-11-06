@@ -148,8 +148,8 @@ These timestamps are private to the requesting identity.
   ordinary queue drainer creates the immutable parent user turn. Optional
   context follows the path on subsequent lines of the command and is prepended
   to the transcript, preserving text and ready attachments that were present
-  before recording. Video results include the original recording and generated
-  contact sheet paths in that turn.
+  before recording. Video results include the original recording's path in
+  that turn.
 - `POST /api/conversation/<id>/send-queued?queued_id=<id>` — interrupt the
   running turn and immediately drain the FIFO head. The supplied id must still
   name that head item.

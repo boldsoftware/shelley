@@ -937,7 +937,8 @@ func TestDiscoverLLMIntegrationsReadsModelsJSONCatalog(t *testing.T) {
 					{"id":"openai/gpt-5.6-sol","provider":"openai","native_id":"gpt-5.6-sol","apis":["openai_chat","openai_responses"]},
 					{"id":"openai/gpt-5.5","provider":"openai","native_id":"gpt-5.5","apis":["openai_responses"]},
 					{"id":"fireworks/glm-5p3","provider":"fireworks","native_id":"accounts/fireworks/models/glm-5p3","apis":["openai_chat"]},
-					{"id":"openai/gpt-transcribe","provider":"openai","native_id":"gpt-transcribe","apis":["openai_transcriptions"]}
+					{"id":"openai/gpt-transcribe","provider":"openai","native_id":"gpt-transcribe","apis":["openai_transcriptions"]},
+					{"id":"deepgram/nova-3","provider":"deepgram","native_id":"nova-3","apis":["deepgram_listen"]}
 				]
 			}`
 		default:
@@ -971,9 +972,12 @@ func TestDiscoverLLMIntegrationsReadsModelsJSONCatalog(t *testing.T) {
 		}
 	}
 	transcriptionModels := TranscriptionModels([]Source{LLMIntegration(integ, "")})
-	if len(transcriptionModels) != 1 ||
+	if len(transcriptionModels) != 2 ||
 		transcriptionModels[0].Model != "gpt-transcribe" ||
-		transcriptionModels[0].Endpoint != "https://llm.int.exe.xyz/v1/audio/transcriptions" {
+		transcriptionModels[0].Endpoint != "https://llm.int.exe.xyz/v1/audio/transcriptions" ||
+		transcriptionModels[1].Model != "nova-3" ||
+		transcriptionModels[1].Endpoint != "https://llm.int.exe.xyz/deepgram/v1/listen" ||
+		transcriptionModels[0].Deepgram || !transcriptionModels[1].Deepgram {
 		t.Fatalf("transcription models = %+v", transcriptionModels)
 	}
 }
