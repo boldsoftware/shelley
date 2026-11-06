@@ -302,3 +302,10 @@ GROUP BY conversation_id;
 
 -- name: CountMessagesByTypeAll :many
 SELECT type, COUNT(*) AS count FROM messages GROUP BY type ORDER BY COUNT(*) DESC;
+
+-- name: LatestExternalMessageWithPrefix :one
+-- The latest message whose channel message id starts with prefix, such as a
+-- Slack thread's.
+SELECT message_id FROM messages
+WHERE conversation_id = @conversation_id AND substr(external_message_id, 1, length(CAST(@prefix AS TEXT))) = CAST(@prefix AS TEXT)
+ORDER BY sequence_id DESC LIMIT 1;

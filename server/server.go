@@ -740,6 +740,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 
 	// Channels: external chats bound to conversations.
 	api.HandleFunc("POST /api/channels/messages", s.handleChannelMessage)
+	api.HandleFunc("POST /api/channels/slack", s.handleSlackEvent)
 	api.HandleFunc("GET /api/channels/messages/{chat}/stream", s.handleChannelStream)
 
 	// pprof endpoints
@@ -1208,7 +1209,9 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		manager.recordDrainedQueued = func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message) (int64, error) {
 			return s.recordDrainedQueuedMessages(ctx, conversationID, qm, messages)
 		}
-		if role == roleTopLevel && s.isAssistant(conversationID) {
+		if role == roleTopLevel && isSlackChat(conversation) {
+			manager.slack = slackChat{s: s, conversationID: conversationID}
+		} else if role == roleTopLevel && s.isAssistant(conversationID) {
 			manager.userChat = assistantChat{s: s, conversationID: conversationID}
 		}
 		manager.userEmail = userEmail

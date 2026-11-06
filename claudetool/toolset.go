@@ -82,6 +82,10 @@ type ToolSetConfig struct {
 	// UserChat, if set, is the external chat message_user's messages also
 	// go to.
 	UserChat UserChat
+	// Slack, if set, provides send_to_thread, send_to_channel and
+	// add_reaction (off
+	// unless enabled by ToolOverrides).
+	Slack Slack
 	// BackgroundJobs is told about bash commands moved to the background.
 	BackgroundJobs BackgroundJobs
 	// BashBackgroundAfter overrides DefaultBashBackgroundAfter when nonzero.
@@ -297,6 +301,9 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 	}
 	if cfg.UserMessageFinder != nil {
 		tools = append(tools, MessageUserTool(cfg.UserMessageFinder, cfg.UserChat, hostWD))
+	}
+	if cfg.Slack != nil {
+		tools = append(tools, SlackTools(cfg.Slack, wd)...)
 	}
 
 	// Add LLM one-shot tool if LLM provider is configured

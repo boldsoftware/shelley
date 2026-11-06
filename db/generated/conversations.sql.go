@@ -424,6 +424,39 @@ func (q *Queries) GetConversation(ctx context.Context, conversationID string) (C
 	return i, err
 }
 
+const getConversationByExternalID = `-- name: GetConversationByExternalID :one
+SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq FROM conversations WHERE external_conversation_id = ?
+`
+
+func (q *Queries) GetConversationByExternalID(ctx context.Context, externalConversationID *string) (Conversation, error) {
+	row := q.db.QueryRowContext(ctx, getConversationByExternalID, externalConversationID)
+	var i Conversation
+	err := row.Scan(
+		&i.ConversationID,
+		&i.Slug,
+		&i.UserInitiated,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Cwd,
+		&i.Archived,
+		&i.ParentConversationID,
+		&i.Model,
+		&i.ConversationOptions,
+		&i.CurrentGeneration,
+		&i.AgentWorking,
+		&i.Tags,
+		&i.IsDraft,
+		&i.Draft,
+		&i.QueuedMessages,
+		&i.TurnInterrupted,
+		&i.ExternalConversationID,
+		&i.ExternalEndpoint,
+		&i.NextPromptSuggestion,
+		&i.NextPromptSuggestionSeq,
+	)
+	return i, err
+}
+
 const getConversationBySlug = `-- name: GetConversationBySlug :one
 SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq FROM conversations
 WHERE slug = ?

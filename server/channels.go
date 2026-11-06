@@ -186,7 +186,7 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	}
 	// Fetch signed provider URLs only after deduplication, while holding the
 	// chat lock. Retries must not re-fetch URLs that may have expired.
-	ev.Text, err = s.channelMessageText(ctx, ev)
+	ev.Text, err = s.channelMessageText(ctx, ev.Text, ev.Attachments)
 	if err != nil {
 		return err
 	}
@@ -478,17 +478,17 @@ func (s *Server) callChannelEndpoint(ctx context.Context, endpoint, path string,
 }
 
 // refused reports whether e is one of the gateway's refusals before
-// sending, rather than a failure that may follow delivery: a server error,
-// its provider's server-side failure (passed on as upstream_error), or an
-// answer without a code, perhaps a proxy's.
+// sending, any 4xx with a code, rather than a failure that may follow
+// delivery: a server error, its provider's server-side failure (passed on
+// as upstream_error), or an answer without a code, perhaps a proxy's.
 func (e *channelSendError) refused() bool {
 	switch e.Code {
-	case "opted_out", "line_paused", "chat_critical", "rate_limited", "unanswered", "no_chat", "bad_request", "not_found", "not_configured":
+	case "":
+		return false
+	case "line_paused", "chat_critical", "not_configured":
 		return true
-	case "upstream_error":
-		return e.Status < 500
 	}
-	return false
+	return e.Status < 500
 }
 
 // errChannelMaybeDelivered marks a failed endpoint call that the endpoint

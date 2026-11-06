@@ -227,6 +227,8 @@ type ConversationManager struct {
 	// userChat, set for a top-level conversation bound to an external chat,
 	// is where message_user's messages also go.
 	userChat claudetool.UserChat
+	// slack, set for the Slack Assistant, backs its Slack tools.
+	slack claudetool.Slack
 
 	// idleWaiters are closed at the next working→idle transition; see idle.
 	idleWaiters []chan struct{}
@@ -2122,6 +2124,7 @@ func (cm *ConversationManager) systemPromptDisplayData(opts db.ConversationOptio
 	cfg.InPlaceCompactor = inPlaceCompactor{cm: cm}
 	cfg.UserMessageFinder = cm.userMessageFinder()
 	cfg.UserChat = cm.userChat
+	cfg.Slack = cm.slack
 	return systemPromptDisplayData(cfg, promptSkills)
 }
 
@@ -2481,6 +2484,7 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 	toolSetConfig.InPlaceCompactor = inPlaceCompactor{cm: cm, generation: generation}
 	toolSetConfig.UserMessageFinder = cm.userMessageFinder()
 	toolSetConfig.UserChat = cm.userChat
+	toolSetConfig.Slack = cm.slack
 	toolSet := claudetool.NewToolSet(processCtx, toolSetConfig)
 	var nudger *contextNudger
 	if claudetool.IsToolEnabled(claudetool.CompactInPlaceName, toolSetConfig.ToolOverrides, toolSetConfig.DisableAllTools) &&

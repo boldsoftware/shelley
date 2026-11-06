@@ -16,9 +16,11 @@ type channelAttachment struct {
 	Filename string `json:"filename"`
 }
 
-func (s *Server) channelMessageText(ctx context.Context, ev channelEvent) (text string, err error) {
-	if len(ev.Attachments) == 0 {
-		return ev.Text, nil
+// channelMessageText downloads attachments and returns text referencing
+// their local paths.
+func (s *Server) channelMessageText(ctx context.Context, text string, attachments []channelAttachment) (_ string, err error) {
+	if len(attachments) == 0 {
+		return text, nil
 	}
 	var paths []string
 	defer func() {
@@ -29,7 +31,7 @@ func (s *Server) channelMessageText(ctx context.Context, ev channelEvent) (text 
 		}
 	}()
 	var references []string
-	for _, attachment := range ev.Attachments {
+	for _, attachment := range attachments {
 		path, err := s.downloadChannelAttachment(ctx, attachment)
 		if err != nil {
 			return "", fmt.Errorf("download channel attachment: %w", err)
@@ -37,7 +39,6 @@ func (s *Server) channelMessageText(ctx context.Context, ev channelEvent) (text 
 		paths = append(paths, path)
 		references = append(references, "["+path+"]")
 	}
-	text = ev.Text
 	if strings.TrimSpace(text) != "" {
 		text += "\n\n"
 	}

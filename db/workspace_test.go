@@ -644,6 +644,11 @@ func TestPromotesTextedConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 	texted("in-project", "P")
+	// The Slack Assistant is no texted chat, however recent.
+	slack := texted("slack:assistant", "")
+	if err := database.Pool().Exec(ctx, "UPDATE conversations SET updated_at = '2999-01-01 00:00:00' WHERE conversation_id = ?", slack); err != nil {
+		t.Fatal(err)
+	}
 	id, err := database.EnsureAssistant(ctx, "predictable", ConversationOptions{}, false, "")
 	if err != nil || id != want {
 		t.Fatalf("Assistant = %q, %v; want %q", id, err, want)

@@ -110,7 +110,7 @@ func systemText(req *llm.Request) string {
 func TestProfilesCRUD(t *testing.T) {
 	t.Parallel()
 	e := newProfileEnv(t)
-	if p := e.profiles(); len(p) != 2 || !p["Default"].Default || p["Default"].Model != "" || p["Default"].SystemPrompt != "" {
+	if p := e.profiles(); len(p) != 3 || !p["Default"].Default || p["Default"].Model != "" || p["Default"].SystemPrompt != "" {
 		t.Fatalf("initial profiles: %+v", p)
 	}
 	e.want(201, "POST", "/api/profiles", `{"name":" Fast ","model":"model-b","thinking_level":"low","tool_overrides":{"bash":"off"}}`)
@@ -143,7 +143,7 @@ func TestProfilesCRUD(t *testing.T) {
 	e.want(404, "PUT", "/api/profiles/Nope", `{}`)
 	e.want(404, "DELETE", "/api/profiles/Nope", "")
 	e.want(204, "DELETE", "/api/profiles/Default", "")
-	if p := e.profiles(); len(p) != 3 {
+	if p := e.profiles(); len(p) != 4 {
 		t.Fatalf("after delete: %+v", p)
 	}
 	// Names are path segments.

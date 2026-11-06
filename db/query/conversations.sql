@@ -625,6 +625,9 @@ INSERT INTO conversations (conversation_id, user_initiated, model, conversation_
 VALUES (?, TRUE, ?, ?, ?, ?)
 RETURNING *;
 
+-- name: GetConversationByExternalID :one
+SELECT * FROM conversations WHERE external_conversation_id = ?;
+
 -- name: ListChannelConversationsWithQueuedMessages :many
 -- Conversations with queued messages nobody may be watching: those bound to
 -- an external chat, and those holding a project action's report. Used once

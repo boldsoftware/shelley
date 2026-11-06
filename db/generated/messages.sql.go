@@ -464,6 +464,26 @@ func (q *Queries) HasUserMessageAfter(ctx context.Context, arg HasUserMessageAft
 	return column_1, err
 }
 
+const latestExternalMessageWithPrefix = `-- name: LatestExternalMessageWithPrefix :one
+SELECT message_id FROM messages
+WHERE conversation_id = ?1 AND substr(external_message_id, 1, length(CAST(?2 AS TEXT))) = CAST(?2 AS TEXT)
+ORDER BY sequence_id DESC LIMIT 1
+`
+
+type LatestExternalMessageWithPrefixParams struct {
+	ConversationID string `json:"conversation_id"`
+	Prefix         string `json:"prefix"`
+}
+
+// The latest message whose channel message id starts with prefix, such as a
+// Slack thread's.
+func (q *Queries) LatestExternalMessageWithPrefix(ctx context.Context, arg LatestExternalMessageWithPrefixParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, latestExternalMessageWithPrefix, arg.ConversationID, arg.Prefix)
+	var message_id string
+	err := row.Scan(&message_id)
+	return message_id, err
+}
+
 const latestUserExternalMessageID = `-- name: LatestUserExternalMessageID :one
 SELECT external_message_id FROM messages m
 WHERE m.conversation_id = ? AND m.type = 'user'

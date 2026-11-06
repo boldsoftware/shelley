@@ -101,9 +101,10 @@ UPDATE action_runs SET profile = sqlc.arg(to_profile) WHERE profile = sqlc.arg(f
 -- name: PromotableTextedConversation :one
 -- The most recent texted chat's conversation that can become the Assistant:
 -- one with an endpoint (not a web chat's), top-level, unarchived, and in no
--- project.
+-- project. The Slack Assistant (chat ids slack:*) is not texted.
 SELECT c.conversation_id FROM conversations c
 WHERE c.external_endpoint IS NOT NULL AND c.parent_conversation_id IS NULL AND NOT c.archived
+  AND COALESCE(c.external_conversation_id, '') NOT LIKE 'slack:%'
   AND COALESCE(CASE WHEN json_valid(c.conversation_options) THEN json_extract(c.conversation_options, '$.profile') END, '')
       NOT IN (SELECT profile FROM profile_projects)
 ORDER BY c.updated_at DESC LIMIT 1;

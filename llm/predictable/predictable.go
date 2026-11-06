@@ -178,7 +178,7 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 	// The real LLM sees the sequence marker or the parent's provenance; for
 	// this test fixture, unwrap the text so its deterministic commands still
 	// work in channel chats and subagents.
-	if strings.HasPrefix(inputText, "<external_message ") || strings.HasPrefix(inputText, "<user_message ") || strings.HasPrefix(inputText, "<parent_message ") {
+	if strings.HasPrefix(inputText, "<external_message ") || strings.HasPrefix(inputText, "<user_message ") || strings.HasPrefix(inputText, "<parent_message ") || strings.HasPrefix(inputText, "<slack_message ") {
 		var external struct {
 			SequenceID int64  `xml:"sequence_id,attr"`
 			Text       string `xml:",chardata"`
@@ -391,6 +391,12 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 
 		if input, ok := strings.CutPrefix(inputText, "message_user: "); ok {
 			return s.makeToolResponse("message_user", json.RawMessage(input), inputTokens), nil
+		}
+
+		for _, tool := range []string{"send_to_thread", "send_to_channel", "add_reaction"} {
+			if input, ok := strings.CutPrefix(inputText, tool+": "); ok {
+				return s.makeToolResponse(tool, json.RawMessage(input), inputTokens), nil
+			}
 		}
 
 		if path, ok := strings.CutPrefix(inputText, "change_dir: "); ok {
@@ -1251,6 +1257,20 @@ func (s *Service) makeToolSmorgasbordResponse(inputTokens uint64) *llm.Response 
 		Type:      llm.ContentTypeToolUse,
 		ToolName:  "message_user",
 		ToolInput: json.RawMessage(`{"text":"On it.","reply_to":2,"reaction":"👍"}`),
+	})
+
+	// Slack tools
+	content = append(content, llm.Content{
+		ID:        fmt.Sprintf("tool_send_to_thread_%d", (baseNano+21)%1000),
+		Type:      llm.ContentTypeToolUse,
+		ToolName:  "send_to_thread",
+		ToolInput: json.RawMessage(`{"channel":"C0123","thread_ts":"1700000000.000100","text":"On it.","files":["report.txt"]}`),
+	})
+	content = append(content, llm.Content{
+		ID:        fmt.Sprintf("tool_add_reaction_%d", (baseNano+22)%1000),
+		Type:      llm.ContentTypeToolUse,
+		ToolName:  "add_reaction",
+		ToolInput: json.RawMessage(`{"channel":"C0123","ts":"1700000000.000100","emoji":"eyes"}`),
 	})
 
 	// browser: screencast_stop action (tests screencast UI widget)

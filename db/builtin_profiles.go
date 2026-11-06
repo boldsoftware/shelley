@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"maps"
 
 	"shelley.exe.dev/db/generated"
 )
@@ -16,25 +17,40 @@ var assistantSystemPrompt string
 //go:embed assistant_idle_prompt.txt
 var assistantIdlePrompt string
 
-// builtinProfiles is the single source of shipped profile settings.
-var builtinProfiles = map[string]string{"Default": "{}", "Assistant": assistantProfile()}
+//go:embed slack_assistant_system_prompt.txt
+var slackAssistantSystemPrompt string
 
-// assistantProfile is a text-message-first personal assistant.
-func assistantProfile() string {
+// builtinProfiles is the single source of shipped profile settings.
+var builtinProfiles = map[string]string{
+	"Default":   "{}",
+	"Assistant": assistantProfile(assistantSystemPrompt, map[string]string{"message_user": "on"}),
+	// The Slack Assistant answers Slack messages delivered by exe.dev's Slack app.
+	"Slack Assistant": assistantProfile(slackAssistantSystemPrompt, map[string]string{
+		"send_to_thread":  "on",
+		"send_to_channel": "on",
+		"add_reaction":    "on",
+		"message_user":    "off",
+	}),
+}
+
+// assistantProfile is a chat-first assistant, prompted by systemPrompt,
+// that talks through tools.
+func assistantProfile(systemPrompt string, tools map[string]string) string {
+	overrides := map[string]string{
+		"compact_in_place": "on", // idle compaction needs it, whatever the default
+		"llm_one_shot":     "off",
+		"output_iframe":    "off",
+	}
+	maps.Copy(overrides, tools)
 	settings, err := json.Marshal(map[string]any{
-		"system_prompt":        assistantSystemPrompt,
+		"system_prompt":        systemPrompt,
 		"compact_nudge_tokens": 130_000,
 		// Quiet chats are compacted in place, keeping what matters about
 		// the user; a warm cache keeps a quick follow-up cheap until then.
 		"idle_compaction_minutes": 8,
 		"idle_compaction_prompt":  assistantIdlePrompt,
 		"cache_keep_warm_minutes": 8,
-		"tool_overrides": map[string]string{
-			"message_user":     "on",
-			"compact_in_place": "on", // idle compaction needs it, whatever the default
-			"llm_one_shot":     "off",
-			"output_iframe":    "off",
-		},
+		"tool_overrides":          overrides,
 	})
 	if err != nil {
 		panic(err)
