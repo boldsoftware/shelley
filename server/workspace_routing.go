@@ -584,7 +584,7 @@ func (s *Server) conversationVMPrompt(ctx context.Context, id string) (string, e
 		for i, action := range actionList {
 			labels[i] = action.Label
 		}
-		actions = fmt.Sprintf("\n- The project's actions (%s) run on the VM, in %s, when the user starts one; they can't start during your turn, so to run one yourself, run its command with ssh_target %q.", strings.Join(labels, ", "), dir, vm.Name)
+		actions = fmt.Sprintf("\n- The project's actions (%s) run on the VM, in your working directory there, when the user starts one; they can't start during your turn, so to run one yourself, run its command with ssh_target %q.", strings.Join(labels, ", "), vm.Name)
 	}
 	return fmt.Sprintf(`
 <project_vm>

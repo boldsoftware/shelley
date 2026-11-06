@@ -550,7 +550,7 @@ func (s *Server) reserveAction(ctx context.Context, manager *ConversationManager
 	if err != nil {
 		return nil, nil, "", err
 	}
-	// A VM conversation's actions run in the project's directory on the VM, checked
+	// A VM conversation's actions run in its working directory on the VM, checked
 	// there when the action runs.
 	if _, err := s.db.GetConversationVM(ctx, id); errors.Is(err, sql.ErrNoRows) {
 		if err := validateConversationDirectory(derefString(conversation.Cwd)); err != nil {
@@ -762,8 +762,8 @@ func (s *Server) finishAction(ctx context.Context, run *db.ActionRun, exitCode *
 	return nil
 }
 
-// actionCommand returns the command that runs an action in cwd here, or
-// in the conversation's directory on its VM. Call closeStdin after it
+// actionCommand returns the command that runs an action in the
+// conversation's working directory cwd, here or on its VM. Call closeStdin after it
 // exits: a VM action's stdin stays open while it runs, and the remote command
 // ends when it closes, so stopping or killing ssh, or this process dying,
 // ends it (see claudetool.VMJobScript).
@@ -794,7 +794,7 @@ func (s *Server) actionCommand(ctx context.Context, run *db.ActionRun, conversat
 			remoteEnv = append(remoteEnv, kv)
 		}
 	}
-	argv := target.Command(claudetool.VMJobScript, append([]string{vm.Dir, command}, remoteEnv...)...)
+	argv := target.Command(claudetool.VMJobScript, append([]string{cwd, command}, remoteEnv...)...)
 	stdin, stdinWriter, err := os.Pipe()
 	if err != nil {
 		return nil, nil, err

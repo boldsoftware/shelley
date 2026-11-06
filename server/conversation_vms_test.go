@@ -203,7 +203,7 @@ func TestProjectVMConfig(t *testing.T) {
 
 // A VM conversation's tools run here, from its scratch directory; bash and patch
 // target the VM (over SSH, in the project's directory) or this host. Its
-// actions run on the VM, in the project's directory.
+// actions run on the VM, in the conversation's working directory there.
 func TestConversationVMWorksOverSSH(t *testing.T) {
 	t.Parallel()
 	s, database, id, cwd, ssh, _ := newConversationVMFixture(t,
@@ -269,13 +269,20 @@ func TestConversationVMWorksOverSSH(t *testing.T) {
 		t.Fatalf("patched VM file: %q %v", data, err)
 	}
 
+	sub := filepath.Join(cwd, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.SetCwd(t.Context(), sub); err != nil {
+		t.Fatal(err)
+	}
 	run := workspaceResponse[db.ActionRun](t, workspaceAPI(s, "POST", "/api/conversation/"+id+"/actions/run", ""), 202)
 	waitForActions(t, s)
 	finished, err := database.GetActionRun(t.Context(), run.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "1|" + cwd + "|" + id + "||"; finished.Status != "succeeded" || finished.Output != want {
+	if want := "1|" + sub + "|" + id + "||"; finished.Status != "succeeded" || finished.Output != want {
 		t.Fatalf("action: %s %q %s, want %q", finished.Status, finished.Output, finished.Error, want)
 	}
 	if masters := ssh.calls(t, "master"); len(masters) != 1 || masters[0] != name {
