@@ -175,11 +175,17 @@ const props = defineProps<{
 const mountPlaceholderEl = ref<HTMLElement | null>(null);
 const nearViewport = useNearViewport(mountPlaceholderEl);
 const startedEager = !props.hasResult;
-// message_user calls are the conversation itself in brief view; a placeholder
-// would make every bubble pop in while scrolling.
+// message_user calls are the conversation itself in brief view, and Slack
+// posts are the Slack Assistant's side of its conversation; a placeholder would
+// make every bubble pop in while scrolling.
+const CHAT_TOOLS = new Set([
+  MESSAGE_USER_TOOL,
+  "send_to_thread",
+  "send_to_channel",
+  "add_reaction",
+]);
 const mountSpecializedCard = computed(
-  () =>
-    startedEager || !props.hasResult || nearViewport.value || props.toolName === MESSAGE_USER_TOOL,
+  () => startedEager || !props.hasResult || nearViewport.value || CHAT_TOOLS.has(props.toolName),
 );
 
 const placeholderKind = computed(() =>
@@ -263,6 +269,9 @@ const toolComponentProps = computed<Record<string, unknown>>(() => {
   }
   if (props.toolName === MESSAGE_USER_TOOL) {
     base.resultMessageId = props.toolResultMessageId;
+  }
+  if (toolComponent.value === SlackSendTool) {
+    base.toolName = props.toolName;
   }
   return base;
 });

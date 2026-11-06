@@ -56,7 +56,8 @@ func TestSlackAssistantRoundTrip(t *testing.T) {
 	if again := deliver("1.0", "retry"); again != id {
 		t.Fatalf("retry went to %s, not %s", again, id)
 	}
-	if other := deliver("2.0", `send_to_channel: {"channel":"C2","thread_ts":"ignored","text":"news"}`); other != id {
+	// Slack text is not XML: it goes to the model as it came.
+	if other := deliver("2.0", `send_to_channel: {"channel":"C2","thread_ts":"ignored","text":"news for <@U1> &amp; <#C3>"}`); other != id {
 		t.Fatalf("second message went to %s, not %s", other, id)
 	}
 	mu.Lock()
@@ -71,7 +72,7 @@ func TestSlackAssistantRoundTrip(t *testing.T) {
 	u := server.conversationURL("slack-app")
 	want := []map[string]any{
 		{"channel": "C1", "thread_ts": "1.0", "text": "hi", "link": u + "?message_id=" + firstID},
-		{"channel": "C2", "text": "news", "link": u},
+		{"channel": "C2", "text": "news for <@U1> &amp; <#C3>", "link": u},
 	}
 	if len(got) != 2 || !maps.Equal(got[0], want[0]) || !maps.Equal(got[1], want[1]) {
 		t.Fatalf("sent = %v, want %v", got, want)

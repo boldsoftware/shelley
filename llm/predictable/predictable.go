@@ -178,7 +178,14 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 	// The real LLM sees the sequence marker or the parent's provenance; for
 	// this test fixture, unwrap the text so its deterministic commands still
 	// work in channel chats and subagents.
-	if strings.HasPrefix(inputText, "<external_message ") || strings.HasPrefix(inputText, "<user_message ") || strings.HasPrefix(inputText, "<parent_message ") || strings.HasPrefix(inputText, "<slack_message ") {
+	if strings.HasPrefix(inputText, "<slack_") {
+		// A Slack event's body is Slack text, not XML: take the lines between
+		// the tag's.
+		_, body, _ := strings.Cut(inputText, "\n")
+		if i := strings.LastIndex(body, "\n</slack_"); i >= 0 {
+			inputText = strings.TrimSpace(body[:i])
+		}
+	} else if strings.HasPrefix(inputText, "<external_message ") || strings.HasPrefix(inputText, "<user_message ") || strings.HasPrefix(inputText, "<parent_message ") {
 		var external struct {
 			SequenceID int64  `xml:"sequence_id,attr"`
 			Text       string `xml:",chardata"`

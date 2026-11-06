@@ -933,6 +933,8 @@ import {
 import ChunkHost from "./ChunkHost.vue";
 import { chunkMountKey } from "./chunkMount";
 import { collectReactions, messageUserContextKey, targetResolver } from "./messageUserContext";
+import { slackDirectoryKey } from "./slackDirectory";
+import { sameSlackDirectory, slackDirectory } from "../../utils/slack";
 import QueuedGhostMessage from "./QueuedGhostMessage.vue";
 import { useVisibleQueuedMessages } from "../composables/visibleQueuedMessages";
 import { useStatusBar } from "../composables/statusBar";
@@ -2664,6 +2666,13 @@ provide(messageUserContextKey, {
   resolveTarget: messageUserResolveTarget,
   jumpTo: jumpToMessage,
 });
+provide(
+  slackDirectoryKey,
+  computed((previous) => {
+    const directory = slackDirectory(messages.value);
+    return previous && sameSlackDirectory(previous, directory) ? previous : directory;
+  }),
+);
 const visibleMessages = computed(() =>
   messages.value.filter((message) =>
     isVisibleConversationMessage(message, conversationViewMode.value),

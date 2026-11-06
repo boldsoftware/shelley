@@ -146,6 +146,8 @@
 
 <script setup lang="ts">
 import { computed, inject, nextTick, onUnmounted, ref, watch } from "vue";
+import { slackEventNames, slackEventOf, slackEventSummary } from "../../utils/slack";
+import { excerpt } from "../../utils/slackMrkdwn";
 import Popover from "primevue/popover";
 import {
   compactsSomething,
@@ -207,6 +209,8 @@ function parseLLMMessage(message: Message): LLMMessage | null {
 }
 
 function extractMessageLabel(message: Message, maxLen = 70): string {
+  const slack = slackEventOf(message);
+  if (slack) return excerpt(slackEventSummary(slack, slackEventNames(slack)), maxLen);
   const llm = parseLLMMessage(message);
   if (!llm?.Content) return "";
   const parts: string[] = [];

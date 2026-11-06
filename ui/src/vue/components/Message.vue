@@ -200,6 +200,10 @@
             />
           </template>
 
+          <template v-else-if="slackEvent">
+            <SlackEventCard v-if="entityIndex === 0" :event="slackEvent" :text="messageText" />
+          </template>
+
           <template v-else-if="mcpNotice">
             <McpServerNoticeCard v-if="entityIndex === 0" :source="mcpNotice" :text="messageText" />
           </template>
@@ -296,9 +300,11 @@ import CitedText from "./CitedText.vue";
 import { coalesceContent, splitContentEntities } from "../../utils/coalesceContent";
 import { perfCount } from "../../utils/perf";
 import { messageSource, mcpNoticeSource, actionReportSource } from "../../utils/messageSource";
+import { slackEventOf } from "../../utils/slack";
 import ConversationMessageCard from "./ConversationMessageCard.vue";
 import BackgroundJobNoticeCard from "./BackgroundJobNoticeCard.vue";
 import McpServerNoticeCard from "./McpServerNoticeCard.vue";
+import SlackEventCard from "./SlackEventCard.vue";
 import ActionRunCard from "./ActionRunCard.vue";
 import MessageDisplayData from "./MessageDisplayData.vue";
 
@@ -436,6 +442,10 @@ const conversationSender = computed(() =>
 // Project action reports render as the run's card.
 const actionReport = computed(() =>
   isUser.value && !isDistilledUser.value ? actionReportSource(props.message.user_data) : null,
+);
+// A Slack event delivered to the Slack Assistant.
+const slackEvent = computed(() =>
+  isUser.value && !isDistilledUser.value ? slackEventOf(props.message) : null,
 );
 // Notices that the registered MCP servers changed render as a system card.
 const mcpNotice = computed(() =>
