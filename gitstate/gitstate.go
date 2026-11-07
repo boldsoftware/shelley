@@ -253,10 +253,14 @@ func (g *GitState) Equal(other *GitState) bool {
 		g.IsRepo == other.IsRepo
 }
 
-// tildeReplace replaces the home directory prefix with ~ for display.
-func tildeReplace(path string) string {
-	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(path, home) {
-		return "~" + path[len(home):]
+// TildeReplace replaces the home directory prefix with ~ for display.
+func TildeReplace(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	if rest, ok := strings.CutPrefix(path, home); ok && (rest == "" || rest[0] == '/') {
+		return "~" + rest
 	}
 	return path
 }
@@ -268,7 +272,7 @@ func (g *GitState) String() string {
 		return ""
 	}
 
-	worktreePath := tildeReplace(g.Worktree)
+	worktreePath := TildeReplace(g.Worktree)
 	subject := g.Subject
 	if len(subject) > 50 {
 		subject = subject[:47] + "..."

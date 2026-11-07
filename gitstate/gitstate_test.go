@@ -213,12 +213,13 @@ func TestTildeReplace(t *testing.T) {
 		{"subdir of home", home + "/projects/foo", "~/projects/foo"},
 		{"not in home", "/var/log", "/var/log"},
 		{"root", "/", "/"},
+		{"sibling sharing the home prefix", home + "x/foo", home + "x/foo"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tildeReplace(tt.path); got != tt.expected {
-				t.Errorf("tildeReplace(%q) = %q, want %q", tt.path, got, tt.expected)
+			if got := TildeReplace(tt.path); got != tt.expected {
+				t.Errorf("TildeReplace(%q) = %q, want %q", tt.path, got, tt.expected)
 			}
 		})
 	}
