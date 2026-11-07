@@ -381,14 +381,7 @@ func runUnpackTemplate(args []string) {
 		fmt.Fprintf(os.Stderr, "Error listing templates: %v\n", err)
 		os.Exit(1)
 	}
-	found := false
-	for _, name := range names {
-		if name == templateName {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(names, templateName) {
 		fmt.Fprintf(os.Stderr, "Error: template %q not found\n", templateName)
 		fmt.Fprintf(os.Stderr, "Available templates: %s\n", strings.Join(names, ", "))
 		os.Exit(1)
