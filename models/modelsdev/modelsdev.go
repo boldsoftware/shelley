@@ -734,3 +734,26 @@ func entryHasImage(m modelEntry) bool {
 	}
 	return false
 }
+
+// Modalities are the input and output modalities models.dev records for a
+// model (e.g. Input: ["text", "image"], Output: ["text"]).
+type Modalities struct {
+	Input  []string
+	Output []string
+}
+
+// LookupModalities returns the input/output modalities models.dev records for
+// (endpoint, modelName). The second return value is false when the model is
+// unknown or has no recorded modalities. Matching follows the same strategy
+// as LookupImageSupport: endpoint host with path affinity, then the
+// OpenRouter catalog.
+func LookupModalities(endpoint, modelName string) (Modalities, bool) {
+	m, found := lookup(endpoint, modelName)
+	if !found || (len(m.Modalities.Input) == 0 && len(m.Modalities.Output) == 0) {
+		return Modalities{}, false
+	}
+	return Modalities{
+		Input:  append([]string(nil), m.Modalities.Input...),
+		Output: append([]string(nil), m.Modalities.Output...),
+	}, true
+}
