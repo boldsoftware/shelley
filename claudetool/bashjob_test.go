@@ -127,7 +127,7 @@ func TestBashBackgroundsLongCommand(t *testing.T) {
 	g := newGate(t)
 	command := "echo started; " + g.wait() + "; echo finished; exit 3"
 	input, _ := json.Marshal(bashInput{Command: command})
-	ctx, cancel := context.WithCancel(WithToolUseID(t.Context(), "toolu_1"))
+	ctx, cancel := context.WithCancel(llm.WithToolUseID(t.Context(), "toolu_1"))
 
 	out := tool.Run(ctx, input)
 	if out.Error != nil {

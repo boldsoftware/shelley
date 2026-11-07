@@ -1,3 +1,5 @@
+// Package claudetool implements the tools Shelley exposes to models.
+// Tool changes need matching UI widget updates (see AGENTS.md).
 package claudetool
 
 import (

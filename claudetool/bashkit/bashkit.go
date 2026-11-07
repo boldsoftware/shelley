@@ -52,33 +52,6 @@ func Check(bashScript string) error {
 	return err
 }
 
-// WillRunGitCommit reports whether bashScript contains a git commit command.
-func WillRunGitCommit(bashScript string) (bool, error) {
-	r := strings.NewReader(bashScript)
-	parser := syntax.NewParser()
-	file, err := parser.Parse(r, "")
-	if err != nil {
-		// Parsing failed, but let's not consider this an error for the same reasons as in Check
-		return false, nil
-	}
-
-	willCommit := false
-
-	syntax.Walk(file, func(node syntax.Node) bool {
-		callExpr, ok := node.(*syntax.CallExpr)
-		if !ok {
-			return true
-		}
-		if isGitCommitCommand(callExpr) {
-			willCommit = true
-			return false
-		}
-		return true
-	})
-
-	return willCommit, nil
-}
-
 // ChainedCdPaths reports the literal paths from top-level `cd <path>` commands
 // chained with a subsequent command via `&&` or `;`, e.g. `cd /tmp && ls` or
 // `cd /tmp; ls`. Such patterns are better expressed by calling the change_dir
