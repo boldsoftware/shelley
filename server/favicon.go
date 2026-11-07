@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"html"
 	"math/rand/v2"
@@ -134,8 +133,7 @@ func (s *Server) handleSetFaviconEmoji(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Emoji string `json:"emoji"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	emoji := strings.TrimSpace(req.Emoji)

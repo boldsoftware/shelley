@@ -241,8 +241,7 @@ func (s *Server) handleListNotificationChannels(w http.ResponseWriter, r *http.R
 
 func (s *Server) handleCreateNotificationChannel(w http.ResponseWriter, r *http.Request) {
 	var req CreateNotificationChannelRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -322,8 +321,7 @@ func (s *Server) handleUpdateNotificationChannel(w http.ResponseWriter, r *http.
 	}
 
 	var req UpdateNotificationChannelRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 

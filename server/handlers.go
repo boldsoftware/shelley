@@ -150,8 +150,7 @@ func (s *Server) handleWriteFile(w http.ResponseWriter, r *http.Request) {
 		Path    string `json:"path"`
 		Content string `json:"content"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -1078,8 +1077,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 
 	// Parse request
 	var req ChatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -1540,8 +1538,7 @@ func (s *Server) runChatMessageHook(r *http.Request, conversationID, modelID, re
 func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 	// Parse request
 	var req NewConversationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -3158,8 +3155,7 @@ func (s *Server) handleUpgradeAllModels(w http.ResponseWriter, r *http.Request) 
 		From string `json:"from"`
 		To   string `json:"to"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	ready := readyBuiltinModels(s.getModelList())
@@ -3477,8 +3473,7 @@ func (s *Server) handleRenameConversation(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 
 	var req RenameRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -3524,8 +3519,7 @@ func (s *Server) handleSetConversationCwd(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 
 	var req SetCwdRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -3647,8 +3641,7 @@ func normalizeTags(in []string) []string {
 // handleUpdateConversationTags handles POST /conversation/<id>/tags
 func (s *Server) handleUpdateConversationTags(w http.ResponseWriter, r *http.Request, conversationID string) {
 	var req TagsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -3953,8 +3946,7 @@ func (s *Server) handleSetSetting(w http.ResponseWriter, r *http.Request) {
 		Value string `json:"value"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -4069,8 +4061,7 @@ type RegisterConversationHookRequest struct {
 
 func (s *Server) handleRegisterConversationHook(w http.ResponseWriter, r *http.Request, conversationID string) {
 	var req RegisterConversationHookRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if err := validateConversationHookURL(req.URL); err != nil {
@@ -4500,8 +4491,7 @@ type CreateDraftRequest struct {
 func (s *Server) handleCreateDraft(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req CreateDraftRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	// A draft is autosaved composer text, not a turn, so it must not require a
@@ -4566,8 +4556,7 @@ type UpdateDraftRequest struct {
 func (s *Server) handleUpdateDraft(w http.ResponseWriter, r *http.Request, conversationID string) {
 	ctx := r.Context()
 	var req UpdateDraftRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	// Empty string is meaningful for draft (clear the text) but nonsense

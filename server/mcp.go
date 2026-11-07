@@ -382,8 +382,7 @@ func (s *Server) handleCallMCPTool(w http.ResponseWriter, r *http.Request) {
 		Arguments map[string]json.RawMessage `json:"arguments"`
 		TimeoutMS int64                      `json:"timeout_ms"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Tool == "" {

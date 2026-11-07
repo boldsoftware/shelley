@@ -179,8 +179,7 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateModel(w http.ResponseWriter, r *http.Request) {
 	var req CreateModelRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -275,8 +274,7 @@ func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request, model
 	}
 
 	var req UpdateModelRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -439,8 +437,7 @@ func (s *Server) handleDuplicateModel(w http.ResponseWriter, r *http.Request, mo
 
 func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 	var req TestModelRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 

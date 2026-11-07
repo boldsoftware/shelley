@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"sort"
 
@@ -18,8 +17,7 @@ func (s *Server) handleModelCosts(w http.ResponseWriter, r *http.Request) {
 			URL   string `json:"url"`
 		} `json:"models"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	costs := make(map[string]*modelsdev.Cost, len(req.Models))

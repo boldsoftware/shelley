@@ -2,7 +2,6 @@ package server
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -982,8 +981,7 @@ func (s *Server) handleGitAmendMessage(w http.ResponseWriter, r *http.Request) {
 		Cwd     string `json:"cwd"`
 		Message string `json:"message"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	req.Cwd = m.dir(req.Cwd)
@@ -1014,8 +1012,7 @@ func (s *Server) handleGitCreateWorktree(w http.ResponseWriter, r *http.Request)
 	var req struct {
 		Cwd string `json:"cwd"` // current working directory (must be in a git repo)
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Cwd == "" {

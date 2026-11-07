@@ -922,8 +922,7 @@ type CompactRequest struct {
 func (s *Server) handleCompactRequest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req CompactRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	conversation, err := s.db.GetConversationByID(ctx, req.SourceConversationID)

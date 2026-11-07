@@ -45,8 +45,7 @@ func (s *Server) handleSetFeatureFlag(w http.ResponseWriter, r *http.Request) {
 		Name  string          `json:"name"`
 		Value json.RawMessage `json:"value"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if !featureflags.Known(req.Name) {
@@ -81,8 +80,7 @@ func (s *Server) handleDeleteFeatureFlag(w http.ResponseWriter, r *http.Request)
 	var req struct {
 		Name string `json:"name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Name == "" {

@@ -39,8 +39,7 @@ type customizationState struct {
 // handleReportCustomization records a step of a task's install-custom run.
 func (s *Server) handleReportCustomization(w http.ResponseWriter, r *http.Request) {
 	var req struct{ Status, Commit, Error string }
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	switch req.Status {
@@ -127,8 +126,7 @@ func (s *Server) installedCustomization(id string) (*customization, error) {
 // POST /exit?resume=true does.
 func (s *Server) handleRestartCustomization(w http.ResponseWriter, r *http.Request) {
 	var req struct{ Commit string }
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	s.customizations.mu.Lock()
