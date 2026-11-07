@@ -41,10 +41,6 @@ func lineTokens(id string) []string {
 	return out
 }
 
-// Line is the model family an id belongs to, e.g. "claude-opus" or
-// "gpt-sol": successive versions of the same thing share it.
-func Line(id string) string { return lineOf(id) }
-
 // lineOf is the model class: two ids with the same line are successive
 // versions of the same thing.
 func lineOf(id string) string { return strings.Join(lineTokens(id), "-") }

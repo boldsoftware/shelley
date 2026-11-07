@@ -50,25 +50,6 @@ const (
 // max_tokens, so unknown models cannot omit it.
 const unknownAnthropicMaxOutputTokens = 64000
 
-// IsClaudeModel reports whether userName is a user-friendly Claude model.
-// It uses ClaudeModelName under the hood.
-func IsClaudeModel(userName string) bool {
-	return ClaudeModelName(userName) != ""
-}
-
-// ClaudeModelName returns the Anthropic Claude model name for userName.
-// It returns an empty string if userName is not a recognized Claude model.
-func ClaudeModelName(userName string) string {
-	switch userName {
-	case "claude", "sonnet":
-		return Claude46Sonnet
-	case "opus":
-		return Claude48Opus
-	default:
-		return ""
-	}
-}
-
 func (s *Service) Provider() string { return "anthropic" }
 
 // SetReasoningOverride configures endpoint controls before the service is used.

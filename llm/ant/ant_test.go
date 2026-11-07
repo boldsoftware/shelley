@@ -15,52 +15,6 @@ import (
 	"shelley.exe.dev/models/modelsdev"
 )
 
-func TestIsClaudeModel(t *testing.T) {
-	tests := []struct {
-		name     string
-		userName string
-		want     bool
-	}{
-		{"claude model", "claude", true},
-		{"sonnet model", "sonnet", true},
-		{"opus model", "opus", true},
-		{"unknown model", "gpt-4", false},
-		{"empty string", "", false},
-		{"random string", "random", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := IsClaudeModel(tt.userName); got != tt.want {
-				t.Errorf("IsClaudeModel(%q) = %v, want %v", tt.userName, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestClaudeModelName(t *testing.T) {
-	tests := []struct {
-		name     string
-		userName string
-		want     string
-	}{
-		{"claude model", "claude", Claude46Sonnet},
-		{"sonnet model", "sonnet", Claude46Sonnet},
-		{"opus model", "opus", Claude48Opus},
-		{"unknown model", "gpt-4", ""},
-		{"empty string", "", ""},
-		{"random string", "random", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := ClaudeModelName(tt.userName); got != tt.want {
-				t.Errorf("ClaudeModelName(%q) = %v, want %v", tt.userName, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestSupportsServerSideWebSearch(t *testing.T) {
 	tests := []struct {
 		name  string

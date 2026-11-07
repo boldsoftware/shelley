@@ -32,12 +32,6 @@ func newGroupHarness(cancel context.CancelFunc, blocked ...string) *groupHarness
 	return h
 }
 
-func (h *groupHarness) record(format string, args ...any) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.log = append(h.log, fmt.Sprintf(format, args...))
-}
-
 func (h *groupHarness) assertLog(t *testing.T, want ...string) {
 	t.Helper()
 	h.mu.Lock()
