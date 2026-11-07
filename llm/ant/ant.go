@@ -1,7 +1,6 @@
 package ant
 
 import (
-	"bufio"
 	"bytes"
 	"cmp"
 	"context"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/llm/llmhttp"
 	"shelley.exe.dev/models/modelsdev"
 )
 
@@ -996,93 +996,6 @@ type streamDelta struct {
 	StopDetails  *stopDetails `json:"stop_details,omitempty"`
 }
 
-// sseEvent represents a parsed Server-Sent Event per the SSE spec.
-// See https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation
-type sseEvent struct {
-	EventType string // from "event:" field; empty if not set
-	Data      string // from "data:" field(s); multiple data lines joined with "\n"
-}
-
-// iterSSEEvents reads an SSE stream and yields parsed events.
-// It follows the SSE spec: events are delimited by blank lines,
-// multiple "data:" lines are joined with "\n", and the "event:" field
-// sets the event type.
-func iterSSEEvents(r io.Reader, yield func(sseEvent) error) error {
-	scanner := bufio.NewScanner(r)
-	// SSE lines can be large (e.g. tool input JSON).
-	// Max buffer: 10MB to handle very large content blocks.
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-
-	var (
-		eventType string
-		dataLines []string
-		hasData   bool
-	)
-
-	dispatch := func() error {
-		if !hasData {
-			// Reset and skip — no data fields means no event to dispatch
-			eventType = ""
-			return nil
-		}
-		ev := sseEvent{
-			EventType: eventType,
-			Data:      strings.Join(dataLines, "\n"),
-		}
-		// Reset state
-		eventType = ""
-		dataLines = dataLines[:0]
-		hasData = false
-		return yield(ev)
-	}
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Blank line dispatches the event
-		if line == "" {
-			if err := dispatch(); err != nil {
-				return err
-			}
-			continue
-		}
-
-		// Lines starting with ':' are comments
-		if strings.HasPrefix(line, ":") {
-			continue
-		}
-
-		// Split into field name and value
-		var field, value string
-		if idx := strings.IndexByte(line, ':'); idx >= 0 {
-			field = line[:idx]
-			value = line[idx+1:]
-			// SSE spec: if value starts with a space, remove it
-			if strings.HasPrefix(value, " ") {
-				value = value[1:]
-			}
-		} else {
-			field = line
-		}
-
-		switch field {
-		case "event":
-			eventType = value
-		case "data":
-			dataLines = append(dataLines, value)
-			hasData = true
-			// "id" and "retry" fields are ignored for our use case
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("reading SSE stream: %w", err)
-	}
-
-	// Dispatch any trailing event (stream ended without final blank line)
-	return dispatch()
-}
-
 // truncateForError returns a string representation of data suitable for error messages,
 // truncating to a reasonable length.
 func truncateForError(data string, maxLen int) string {
@@ -1109,7 +1022,7 @@ func parseSSEStream(ctx context.Context, r io.Reader, onStream func(llm.StreamDe
 		transformations []inputTransformation
 	)
 
-	err := iterSSEEvents(r, func(sse sseEvent) error {
+	err := llmhttp.ReadSSE(r, func(sse llmhttp.SSEEvent) error {
 		data := sse.Data
 		if data == "[DONE]" {
 			return nil

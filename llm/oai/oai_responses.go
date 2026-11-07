@@ -1,7 +1,6 @@
 package oai
 
 import (
-	"bufio"
 	"bytes"
 	"cmp"
 	"context"
@@ -1156,11 +1155,6 @@ func (s *ResponsesService) supportsReasoningSummaries() bool {
 	return s.isOpenAIResponses() || s.ProviderName == "xai"
 }
 
-type responsesSSEEvent struct {
-	EventType string
-	Data      string
-}
-
 type responsesStreamEvent struct {
 	Type         string               `json:"type"`
 	Response     *responsesResponse   `json:"response,omitempty"`
@@ -1190,73 +1184,13 @@ func responsesShouldParseStream(req responsesRequest, h http.Header) bool {
 	return !strings.Contains(strings.ToLower(h.Get("Content-Type")), "json")
 }
 
-func iterResponsesSSEEvents(r io.Reader, yield func(responsesSSEEvent) error) error {
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-
-	var (
-		eventType string
-		dataLines []string
-		hasData   bool
-	)
-
-	dispatch := func() error {
-		if !hasData {
-			eventType = ""
-			return nil
-		}
-		ev := responsesSSEEvent{
-			EventType: eventType,
-			Data:      strings.Join(dataLines, "\n"),
-		}
-		eventType = ""
-		dataLines = dataLines[:0]
-		hasData = false
-		return yield(ev)
-	}
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			if err := dispatch(); err != nil {
-				return err
-			}
-			continue
-		}
-		if strings.HasPrefix(line, ":") {
-			continue
-		}
-
-		field, value, ok := strings.Cut(line, ":")
-		if ok && strings.HasPrefix(value, " ") {
-			value = value[1:]
-		}
-		if !ok {
-			field = line
-			value = ""
-		}
-
-		switch field {
-		case "event":
-			eventType = value
-		case "data":
-			dataLines = append(dataLines, value)
-			hasData = true
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("reading SSE stream: %w", err)
-	}
-	return dispatch()
-}
-
 func parseResponsesSSEStream(ctx context.Context, r io.Reader, onStream func(llm.StreamDelta)) (*responsesResponse, error) {
 	var completed *responsesResponse
 	// Responses streams finalize message/tool output in output_item.done.
 	// response.completed may only carry completion metadata and usage.
 	outputItems := make(map[int]responsesOutputItem)
 	citeFilter := llm.NewCitationStreamFilter()
-	err := iterResponsesSSEEvents(r, func(sse responsesSSEEvent) error {
+	err := llmhttp.ReadSSE(r, func(sse llmhttp.SSEEvent) error {
 		if sse.Data == "[DONE]" {
 			return nil
 		}

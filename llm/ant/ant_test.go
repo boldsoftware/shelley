@@ -2404,41 +2404,6 @@ func TestParseSSEStreamTruncatedJSON(t *testing.T) {
 	}
 }
 
-func TestIterSSEEventsComments(t *testing.T) {
-	// Comments (lines starting with ':') should be ignored.
-	stream := ": this is a comment\nevent: ping\ndata: {}\n\n"
-	var events []sseEvent
-	err := iterSSEEvents(strings.NewReader(stream), func(ev sseEvent) error {
-		events = append(events, ev)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("iterSSEEvents() error = %v", err)
-	}
-	if len(events) != 1 {
-		t.Fatalf("got %d events, want 1", len(events))
-	}
-	if events[0].EventType != "ping" {
-		t.Errorf("event type = %q, want %q", events[0].EventType, "ping")
-	}
-}
-
-func TestIterSSEEventsNoTrailingNewline(t *testing.T) {
-	// Stream that ends without a trailing blank line should still dispatch.
-	stream := "event: ping\ndata: {}"
-	var events []sseEvent
-	err := iterSSEEvents(strings.NewReader(stream), func(ev sseEvent) error {
-		events = append(events, ev)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("iterSSEEvents() error = %v", err)
-	}
-	if len(events) != 1 {
-		t.Fatalf("got %d events, want 1", len(events))
-	}
-}
-
 func TestParseSSEStreamInvalidCharInJSON(t *testing.T) {
 	// Simulate the "invalid character '\"' after object key:value pair" error
 	// mentioned in the bug report. This can happen when JSON is split across
