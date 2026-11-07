@@ -2562,7 +2562,6 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 		RecordRoutingWarning: cm.recordRoutingWarning,
 		Logger:               logger,
 		System:               system,
-		WorkingDir:           cwd,
 		GitTracker:           toolSet.GitTracker(),
 		OnGitStateChange: func(ctx context.Context, state *gitstate.GitState) {
 			cm.recordGitStateChange(ctx, state)

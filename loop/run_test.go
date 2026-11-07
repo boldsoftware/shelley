@@ -406,21 +406,6 @@ func TestRunDoesNotRequestModelWithUnpersistedToolResult(t *testing.T) {
 	}
 }
 
-func TestRunPassesWorkingDirToTools(t *testing.T) {
-	service := &runTestService{}
-	var got string
-	err := Run(t.Context(), RunConfig{
-		LLM: service, WorkingDir: "/workspace/project",
-		Tools: []*llm.Tool{{Name: "work", Run: func(ctx context.Context, _ json.RawMessage) llm.ToolOut {
-			got = llm.WorkingDir(ctx)
-			return llm.ToolOut{LLMContent: llm.TextContent("done")}
-		}}},
-	})
-	if err != nil || got != "/workspace/project" {
-		t.Fatalf("error = %v, tool working dir = %q", err, got)
-	}
-}
-
 func TestRunRefusalCarriesModelChoice(t *testing.T) {
 	for _, tc := range []struct{ configured, want string }{
 		{configured: "chosen-model", want: "chosen-model"},

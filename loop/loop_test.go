@@ -823,7 +823,6 @@ func TestGitStateTracking(t *testing.T) {
 	loop := NewLoop(Config{
 		LLM:        predictable.NewService(),
 		History:    []llm.Message{},
-		WorkingDir: tmpDir,
 		GitTracker: gitstate.NewTracker(func() string { return tmpDir }),
 		OnGitStateChange: func(ctx context.Context, state *gitstate.GitState) {
 			mu.Lock()
@@ -918,7 +917,6 @@ func TestGitStateTrackingWorktree(t *testing.T) {
 	loop := NewLoop(Config{
 		LLM:        predictable.NewService(),
 		History:    []llm.Message{},
-		WorkingDir: worktreeDir,
 		GitTracker: gitstate.NewTracker(func() string { return worktreeDir }),
 		OnGitStateChange: func(ctx context.Context, state *gitstate.GitState) {
 			mu.Lock()
@@ -1648,7 +1646,6 @@ func TestCheckGitStateChange(t *testing.T) {
 	loop := NewLoop(Config{
 		LLM:        predictable.NewService(),
 		History:    []llm.Message{},
-		WorkingDir: tmpDir,
 		GitTracker: gitstate.NewTracker(func() string { return tmpDir }),
 		// OnGitStateChange is nil
 		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
@@ -1664,7 +1661,6 @@ func TestCheckGitStateChange(t *testing.T) {
 	loop = NewLoop(Config{
 		LLM:        predictable.NewService(),
 		History:    []llm.Message{},
-		WorkingDir: tmpDir,
 		GitTracker: gitstate.NewTracker(func() string { return tmpDir }),
 		OnGitStateChange: func(ctx context.Context, state *gitstate.GitState) {
 			gitStateChanges = append(gitStateChanges, state)
@@ -3206,6 +3202,6 @@ func TestExecuteToolCallsAbandonsContextIgnoringTool(t *testing.T) {
 // Loop's tools and hooks, so tool-execution tests can drive it directly.
 func (l *Loop) executeToolCalls(ctx context.Context, content []llm.Content) error {
 	messages := l.GetHistory()
-	config := RunConfig{Tools: l.tools, WorkingDir: l.workingDir, Hooks: l.hooks(), Logger: l.logger}
+	config := RunConfig{Tools: l.tools, Hooks: l.hooks(), Logger: l.logger}
 	return config.executeToolCalls(ctx, content, &messages)
 }

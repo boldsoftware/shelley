@@ -62,7 +62,6 @@ type RunConfig struct {
 	Tools         []*llm.Tool
 	System        []llm.SystemContent
 	ThinkingLevel llm.ThinkingLevel
-	WorkingDir    string
 	// PromptCacheKey, when set, overrides provider prompt-cache affinity for
 	// model requests. Tool-initiated model calls keep the context's key.
 	PromptCacheKey string
@@ -857,9 +856,6 @@ func (l *RunConfig) executeToolCall(ctx context.Context, call llm.Content, tool 
 	}
 
 	toolCtx := ctx
-	if l.WorkingDir != "" {
-		toolCtx = llm.WithWorkingDir(toolCtx, l.WorkingDir)
-	}
 	if l.Hooks.OnToolProgress != nil {
 		toolCtx = llm.WithToolProgress(toolCtx, func(progress llm.ToolProgress) {
 			l.Hooks.OnToolProgress(ctx, progress)

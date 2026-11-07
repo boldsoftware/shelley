@@ -60,7 +60,6 @@ type Config struct {
 	RecordWarning WarningRecordFunc
 	Logger        *slog.Logger
 	System        []llm.SystemContent
-	WorkingDir    string // working directory for tools
 	// GitTracker, if set, is checked for git state changes at the end of
 	// each turn, and OnGitStateChange is called with each change.
 	GitTracker       *gitstate.Tracker
@@ -130,7 +129,6 @@ type Loop struct {
 	mu               sync.Mutex
 	logger           *slog.Logger
 	system           []llm.SystemContent
-	workingDir       string
 	gitTracker       *gitstate.Tracker
 	onGitStateChange GitStateChangeFunc
 	onToolProgress   llm.ToolProgressFunc
@@ -167,7 +165,6 @@ func NewLoop(config Config) *Loop {
 		messageQueue:     make([]queuedMessage, 0),
 		logger:           logger,
 		system:           config.System,
-		workingDir:       config.WorkingDir,
 		gitTracker:       config.GitTracker,
 		onGitStateChange: config.OnGitStateChange,
 		onToolProgress:   config.OnToolProgress,
@@ -401,7 +398,6 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 		Tools:          l.tools,
 		CurrentSystem:  l.currentSystem,
 		ThinkingLevel:  thinkingLevel,
-		WorkingDir:     l.workingDir,
 		PromptCacheKey: l.promptCacheKey,
 		Pending:        l.pending,
 		Hooks:          l.hooks(),

@@ -2,19 +2,6 @@ package llm
 
 import "context"
 
-type workingDirCtxKeyType string
-
-const workingDirCtxKey workingDirCtxKeyType = "workingDir"
-
-func WithWorkingDir(ctx context.Context, wd string) context.Context {
-	return context.WithValue(ctx, workingDirCtxKey, wd)
-}
-
-func WorkingDir(ctx context.Context) string {
-	wd, _ := ctx.Value(workingDirCtxKey).(string)
-	return wd
-}
-
 type toolProgressCtxKeyType string
 
 const toolProgressCtxKey toolProgressCtxKeyType = "toolProgress"
