@@ -155,11 +155,6 @@ func (p *PatchTool) getClipboard(name string) (string, bool) {
 	return text, ok
 }
 
-// getWorkingDir returns the current working directory.
-func (p *PatchTool) getWorkingDir() string {
-	return p.WorkingDir.Get()
-}
-
 // dirFor is where relative paths on vm (nil for this host) resolve.
 func (p *PatchTool) dirFor(vm VM) string {
 	if vm == nil && p.HostDir != nil {
@@ -471,7 +466,7 @@ func (p *PatchTool) runApplyPatch(ctx context.Context, text string) llm.ToolOut 
 				continue
 			}
 			if !filepath.IsAbs(path) {
-				path = filepath.Join(p.getWorkingDir(), path)
+				path = filepath.Join(p.WorkingDir.Get(), path)
 			}
 			pathSet[filepath.Clean(path)] = struct{}{}
 		}
@@ -498,7 +493,7 @@ func (p *PatchTool) runApplyPatch(ctx context.Context, text string) llm.ToolOut 
 	for _, file := range files {
 		path := file.path
 		if !filepath.IsAbs(path) {
-			path = filepath.Join(p.getWorkingDir(), path)
+			path = filepath.Join(p.WorkingDir.Get(), path)
 		}
 		path = filepath.Clean(path)
 		old, readErr := os.ReadFile(path)
@@ -509,7 +504,7 @@ func (p *PatchTool) runApplyPatch(ctx context.Context, text string) llm.ToolOut 
 		if file.movePath != "" {
 			movePath := file.movePath
 			if !filepath.IsAbs(movePath) {
-				movePath = filepath.Join(p.getWorkingDir(), movePath)
+				movePath = filepath.Join(p.WorkingDir.Get(), movePath)
 			}
 			movePath = filepath.Clean(movePath)
 			if movePath != path {

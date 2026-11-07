@@ -288,7 +288,7 @@ func TestBashChainedCdHint(t *testing.T) {
 func TestExecuteBashInDirUsesSnapshot(t *testing.T) {
 	original := sockpath.TempDir(t)
 	bashTool := &BashTool{WorkingDir: NewMutableWorkingDir(original)}
-	snapshot := bashTool.getWorkingDir()
+	snapshot := bashTool.WorkingDir.Get()
 	bashTool.WorkingDir.Set(t.TempDir())
 
 	res, err := bashTool.executeBashInDir(t.Context(), bashInput{Command: "pwd"}, snapshot)
@@ -310,7 +310,7 @@ func TestExecuteBash(t *testing.T) {
 			Command: "echo 'Success'",
 		}
 
-		res, err := bashTool.executeBash(ctx, req)
+		res, err := bashTool.executeBashInDir(ctx, req, bashTool.WorkingDir.Get())
 		output := res.out
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
@@ -332,7 +332,7 @@ func TestExecuteBash(t *testing.T) {
 			Command: "echo $SHELLEY_CONVERSATION_ID",
 		}
 
-		res, err := bashWithConvID.executeBash(ctx, req)
+		res, err := bashWithConvID.executeBashInDir(ctx, req, bashWithConvID.WorkingDir.Get())
 		output := res.out
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
@@ -360,7 +360,7 @@ func TestExecuteBash(t *testing.T) {
 		req := bashInput{
 			Command: `printf '%s|%s|%s|%s|%s|%s' "$SHELLEY_CONVERSATION_ID" "$SHELLEY_CONVERSATION_SLUG" "$SHELLEY_MODEL" "$SHELLEY_USER_EMAIL" "$SHELLEY_PORT" "$SHELLEY_URL"`,
 		}
-		res, err := bashWithEnv.executeBash(ctx, req)
+		res, err := bashWithEnv.executeBashInDir(ctx, req, bashWithEnv.WorkingDir.Get())
 		output := res.out
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
@@ -377,7 +377,7 @@ func TestExecuteBash(t *testing.T) {
 			Command: "echo \"conv_id:$SHELLEY_CONVERSATION_ID:\"",
 		}
 
-		res, err := bashTool.executeBash(ctx, req)
+		res, err := bashTool.executeBashInDir(ctx, req, bashTool.WorkingDir.Get())
 		output := res.out
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
@@ -396,7 +396,7 @@ func TestExecuteBash(t *testing.T) {
 			Command: "shopt login_shell | grep -q on && echo login",
 		}
 
-		res, err := bashTool.executeBash(ctx, req)
+		res, err := bashTool.executeBashInDir(ctx, req, bashTool.WorkingDir.Get())
 		output := res.out
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
@@ -414,7 +414,7 @@ func TestExecuteBash(t *testing.T) {
 			Command: "echo 'Error message' >&2 && echo 'Success'",
 		}
 
-		res, err := bashTool.executeBash(ctx, req)
+		res, err := bashTool.executeBashInDir(ctx, req, bashTool.WorkingDir.Get())
 		output := res.out
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
@@ -432,7 +432,7 @@ func TestExecuteBash(t *testing.T) {
 			Command: "echo 'Error message' >&2 && exit 1",
 		}
 
-		_, err := bashTool.executeBash(ctx, req)
+		_, err := bashTool.executeBashInDir(ctx, req, bashTool.WorkingDir.Get())
 		if err == nil {
 			t.Errorf("Expected error for failed command, got none")
 		} else if !strings.Contains(err.Error(), "Error message") {

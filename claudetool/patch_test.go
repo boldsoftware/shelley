@@ -1615,7 +1615,7 @@ func TestPatchToolExposesAndAcceptsNestedInput(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
-	content, err := os.ReadFile(filepath.Join(patch.getWorkingDir(), "nested.txt"))
+	content, err := os.ReadFile(filepath.Join(patch.WorkingDir.Get(), "nested.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}

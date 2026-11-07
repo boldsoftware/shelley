@@ -90,11 +90,6 @@ func (b *BashTool) Tool() *llm.Tool {
 	}
 }
 
-// getWorkingDir returns the current working directory.
-func (b *BashTool) getWorkingDir() string {
-	return b.WorkingDir.Get()
-}
-
 // dirFor is where a command on vm (nil for this host) starts: with a VM the
 // conversation's working directory is there, and this host's is HostDir.
 func (b *BashTool) dirFor(vm VM) string {
@@ -353,10 +348,6 @@ const (
 type bashResult struct {
 	out string
 	job *BackgroundJob
-}
-
-func (b *BashTool) executeBash(ctx context.Context, req bashInput) (bashResult, error) {
-	return b.executeBashInDir(ctx, req, b.getWorkingDir())
 }
 
 func (b *BashTool) executeBashInDir(ctx context.Context, req bashInput, wd string) (bashResult, error) {
