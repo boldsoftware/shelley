@@ -103,6 +103,11 @@ type ToolSetConfig struct {
 	// terminals. ConversationID above is authoritative for
 	// SHELLEY_CONVERSATION_ID and overrides Env.ConversationID.
 	Env ShelleyEnv
+	// CommitEnv, if set, returns environment assignments for every bash
+	// command, wherever it runs, that make git commit as the conversation's
+	// commit identity (GIT_AUTHOR_* and GIT_COMMITTER_*), read for each
+	// command so a changed identity applies at once.
+	CommitEnv func(context.Context) ([]string, error)
 	// SubagentDepth is the nesting depth of this conversation.
 	// 0 = top-level conversation, 1 = subagent, 2 = sub-subagent, etc.
 	SubagentDepth int
@@ -236,6 +241,7 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		ModelID:          cfg.ModelID,
 		EnableJITInstall: cfg.EnableJITInstall,
 		Env:              env,
+		CommitEnv:        cfg.CommitEnv,
 		Jobs:             cfg.BackgroundJobs,
 		BackgroundAfter:  cfg.BashBackgroundAfter,
 		VM:               cfg.VM,

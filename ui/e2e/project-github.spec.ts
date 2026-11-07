@@ -141,6 +141,7 @@ test("stock mode keeps the editor's host repositories, without the exe.dev accou
   await expect(editor.locator(".project-section-heading h3")).toHaveText([
     "Repositories",
     "Conversations run on",
+    "Commit identity",
     "Actions",
     "Position in the sidebar",
   ]);
@@ -171,6 +172,7 @@ test.describe("in workspace mode", () => {
       "Tasks run on",
       "GitHub repositories",
       "Integrations",
+      "Commit identity",
       "Actions",
       "Position in the sidebar",
     ]);
@@ -265,12 +267,35 @@ test.describe("in workspace mode", () => {
   test("first-run onboarding starts a project for the picked repositories", async ({ page }) => {
     await mockExeDev(page, { value: true });
     // The onboarding card, even if an earlier spec dismissed it.
+    // No default commit identity yet: the GitHub account suggests one.
     await page.route("**/api/workspace", async (route) => {
       const response = await route.fetch();
       await route.fulfill({
         response,
-        json: { ...(await response.json()), onboarding_dismissed: false },
+        json: {
+          ...(await response.json()),
+          onboarding_dismissed: false,
+          commit_identity: { name: "", email: "" },
+        },
       });
+    });
+    await page.route("**/api/commit-identity/suggestions?*", (route) => {
+      expect(new URL(route.request().url()).searchParams.getAll("login")).toEqual(["ann"]);
+      return route.fulfill({
+        json: {
+          names: ["Ann Example"],
+          emails: [
+            { email: "ann@example.com", source: "github" },
+            { email: "9+ann@users.noreply.github.com", source: "github_noreply" },
+          ],
+          errors: [],
+        },
+      });
+    });
+    const identities: unknown[] = [];
+    await page.route("**/api/commit-identity", (route) => {
+      identities.push(route.request().postDataJSON());
+      return route.fulfill({ json: route.request().postDataJSON() });
     });
     const saved: unknown[] = [];
     await page.route("**/api/projects", (route) => {
@@ -289,8 +314,17 @@ test.describe("in workspace mode", () => {
     const list = page.getByTestId("github-repo-list");
     await page.getByLabel("Search repositories").fill("acme/repo-007");
     await list.getByRole("button", { name: "Add" }).click();
+    // It asks who the tasks commit as, prefilled from GitHub.
+    const commitName = page.getByTestId("commit-identity-name");
+    await expect(commitName).toHaveValue("Ann Example");
+    await expect(page.getByTestId("commit-identity-email")).toHaveValue("ann@example.com");
+    await commitName.fill("");
+    await expect(page.getByTestId("github-start")).toBeDisabled();
+    await commitName.fill("Ann E.");
     await page.getByTestId("github-start").click();
     await expect(page).toHaveURL(/\/c\/setup-id$/);
+    // With no default yet, it becomes the default.
+    expect(identities).toEqual([{ name: "Ann E.", email: "ann@example.com" }]);
     expect(saved).toEqual([
       { name: "repo-007", instructions: "", cwd: "", actions: [], vm: null, repos: [] },
       expect.objectContaining({
@@ -304,7 +338,33 @@ test.describe("in workspace mode", () => {
           setup_conversation_id: "",
         },
         repos: [{ integration: "acme-repo-007", repository: "acme/repo-007" }],
+        commit_identity: { name: "", email: "" },
       }),
     ]);
+  });
+
+  test("a project's settings give it its own commit identity", async ({ page, request }) => {
+    const name = await newProject(request);
+    await mockExeDev(page, { value: true });
+    await page.route("**/api/commit-identity/suggestions?*", (route) =>
+      route.fulfill({ json: { names: [], emails: [], errors: [] } }),
+    );
+    const editor = await openEditor(page, name);
+    const useDefault = editor.getByTestId("commit-identity-default");
+    await expect(useDefault).toBeChecked();
+    await useDefault.uncheck();
+    await editor.getByTestId("commit-identity-name").fill("Grace Hopper");
+    await editor.getByTestId("commit-identity-email").fill("grace@example.com");
+    await page.setViewportSize({ width: 1100, height: 1400 });
+    await page.screenshot({ path: "test-results/project-commit-identity.png" });
+    await page.getByRole("button", { name: "Save project" }).click();
+    await expect(page.getByRole("status")).toContainText("Saved");
+    const workspace = (await (await request.get("/api/workspace", { headers })).json()) as {
+      projects: { name: string; commit_identity: object }[];
+    };
+    expect(workspace.projects.find((p) => p.name === name)?.commit_identity).toEqual({
+      name: "Grace Hopper",
+      email: "grace@example.com",
+    });
   });
 });

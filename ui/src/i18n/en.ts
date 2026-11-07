@@ -648,6 +648,20 @@ export const en: TranslationKeys = {
     "Starting creates a VM with these repositories set up; each task then works on its own copy.",
   githubStartCreatesProject: "Starting creates a project for these repositories.",
   githubStartWorking: "Start working",
+  commitIdentityHeading: "Commit identity",
+  commitIdentityName: "Name",
+  commitIdentityEmail: "Email",
+  commitIdentityHint:
+    "Who the project's tasks commit as: each task's own VM gets it as git's global identity; elsewhere the agent's commands and actions carry it.",
+  commitIdentityUseDefault: "Use the default, shared by all projects without their own",
+  commitIdentityDefaultHint: "Changing it changes the default for every project without its own.",
+  commitIdentityNone:
+    "No identity is set, so git's configuration on the machine decides, e.g. a VM's placeholder name.",
+  commitIdentityStartHint:
+    "The project's tasks commit as this. With no default yet, it becomes the default for your projects.",
+  commitEmailGithub: "GitHub public email",
+  commitEmailGithubNoreply: "GitHub no-reply address",
+  commitEmailExeDev: "exe.dev account",
   githubStartNoIntegration: "exe.dev added no integration for {repository}.",
   onboardingHeading: "What would you like to get done?",
   onboardingGithub: "Work on a GitHub project",

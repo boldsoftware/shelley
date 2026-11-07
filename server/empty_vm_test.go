@@ -15,7 +15,10 @@ import (
 func TestEmptyProjectVMs(t *testing.T) {
 	t.Parallel()
 	s, _, _, _ := newActionFixture(t, "true", false)
-	newFakeSSH(t, s)
+	ssh := newFakeSSH(t, s)
+	if err := s.db.SetDefaultCommitIdentity(t.Context(), db.CommitIdentity{Name: "Ada Lovelace", Email: "ada@example.com"}); err != nil {
+		t.Fatal(err)
+	}
 	// An integration added in Edit project reaches a new VM through the
 	// project's tag.
 	exe := &fakeExeDev{vms: map[string]string{}, integrations: `[{"name":"gh","attachments":["tag:shelley-empty"]}]`}
@@ -48,6 +51,10 @@ func TestEmptyProjectVMs(t *testing.T) {
 	}
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		t.Fatalf("project directory on the empty VM: %v", err)
+	}
+	// Commits on it are the user's, whoever makes them.
+	if name, email := ssh.gitConfig(t, "user.name"), ssh.gitConfig(t, "user.email"); name != "Ada Lovelace" || email != "ada@example.com" {
+		t.Fatalf("VM's git identity %q <%s>", name, email)
 	}
 	if prompt, err := conversationPrompt(t, s, conversation.ConversationID); err != nil || !strings.Contains(prompt, "a new exe.dev VM that started empty") {
 		t.Fatalf("prompt lacks the empty VM: %v %q", err, prompt)

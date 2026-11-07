@@ -75,6 +75,9 @@ type Workspace struct {
 	// OnboardingDismissed is whether the user dismissed the Assistant's
 	// onboarding card.
 	OnboardingDismissed bool `json:"onboarding_dismissed"`
+	// CommitIdentity is the default commit identity, the zero value for
+	// none.
+	CommitIdentity CommitIdentity `json:"commit_identity"`
 }
 
 // The server adds the rules of customizing Shelley to its project's prompt.

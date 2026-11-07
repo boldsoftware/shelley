@@ -649,6 +649,20 @@ export const ru: TranslationKeys = {
     "Запуск создаст ВМ с этими репозиториями; затем каждая задача работает на своей копии.",
   githubStartCreatesProject: "Запуск создаст проект для этих репозиториев.",
   githubStartWorking: "Начать работу",
+  commitIdentityHeading: "Автор коммитов",
+  commitIdentityName: "Имя",
+  commitIdentityEmail: "Email",
+  commitIdentityHint:
+    "От чьего имени задачи проекта делают коммиты: собственная ВМ каждой задачи получает его как глобальную настройку git, в остальных случаях его передают команды агента и действия.",
+  commitIdentityUseDefault: "Использовать автора по умолчанию, общего для проектов без своего",
+  commitIdentityDefaultHint: "Изменение меняет автора по умолчанию для всех проектов без своего.",
+  commitIdentityNone:
+    "Автор не задан, поэтому решает настройка git на машине, например временное имя ВМ.",
+  commitIdentityStartHint:
+    "Задачи проекта делают коммиты от этого имени. Если автора по умолчанию ещё нет, он станет им.",
+  commitEmailGithub: "Публичный email GitHub",
+  commitEmailGithubNoreply: "Адрес no-reply GitHub",
+  commitEmailExeDev: "Аккаунт exe.dev",
   githubStartNoIntegration: "exe.dev не добавил интеграцию для {repository}.",
   onboardingHeading: "Что вы хотите сделать?",
   onboardingGithub: "Работать над проектом на GitHub",

@@ -130,16 +130,25 @@ func (s *Server) baseVMSetupPrompt(ctx context.Context, project *db.Project) (st
 	if err != nil {
 		return "", err
 	}
+	identity, err := s.db.ConversationCommitIdentity(ctx, project.VM.SetupConversationID)
+	if err != nil {
+		return "", err
+	}
+	gitIdentity := "No commit identity is set: leave git's user.name and user.email on the base unset rather than inventing them."
+	if !identity.IsZero() {
+		gitIdentity = fmt.Sprintf("Give git on the base the project's commit identity, which its copies keep: `git config --global user.name %s && git config --global user.email %s`.",
+			shellJoin([]string{identity.Name}), shellJoin([]string{identity.Email}))
+	}
 	return fmt.Sprintf(`<base_vm_setup>
 This conversation prepares the base VM of project %[1]q. Each conversation in the project works on its own exe.dev VM copied (exe.dev cp) from the base, with the base's files, toolchains, caches, and tags. The project refuses new conversations until you set its vm.base. You run on the Shelley host, not on a VM. The user approved creating this base VM; never modify or delete any other VM.
 1. Integration %[3]q acts as the user: `+"`curl https://%[8]s/`"+` says what it may do (e.g. a tag-scoped key reaches only VMs with its tag, so the base needs that tag), and `+"`curl -X POST https://%[8]s/exec -d 'COMMAND'`"+` runs an exe.dev CLI command (`+"`help new`"+` lists flags).
 2. Name the VM %[4]q, or %[4]s-2, -3, … if `+"`ls NAME --json`"+` lists it already. Create it only through Shelley, which records it so deleting the project deletes it (never with the integration's `+"`new`"+`): POST $SHELLEY_API/api/projects/%[2]s/base-vm with {"name":"NAME","flags":["--cpu=4","--memory=16GB","--disk=50GB","--tag=TAG"]}, sized for the work, with the tags and integrations the work needs (the reflection-integration skill shows this host's; e.g. GitHub or CI integrations are usually granted through tags). Allowed flags: --cpu, --memory, --disk, --tag, --integration, --image, --allow-nested-virt. It returns the VM's ssh_dest and https_url.
 3. SSH to its ssh_dest with the integration's ssh-agent: `+"`SSH_AUTH_SOCK=%[5]s ssh -o StrictHostKeyChecking=accept-new SSH_DEST`"+`. A new VM's SSH can take a few seconds to come up.
 4. %[7]s
-5. Find out what the work needs from the project's instructions, repositories, and actions, its directory %[6]q (a path on the base and every conversation VM), and any checkout at that path on this host: its real remote, guidance (AGENTS.md, README), setup/bootstrap scripts, and toolchain pins. Clone from real remotes, using credentials the VM gets through exe.dev integrations or tags. Install the toolchains, run the repositories' setup/bootstrap scripts, build once to warm caches, and check that each project action can run there (its command and prerequisites exist); run only actions without external side effects, never publishing (archive_on_success) ones.
+5. Find out what the work needs from the project's instructions, repositories, and actions, its directory %[6]q (a path on the base and every conversation VM), and any checkout at that path on this host: its real remote, guidance (AGENTS.md, README), setup/bootstrap scripts, and toolchain pins. Clone from real remotes, using credentials the VM gets through exe.dev integrations or tags. Install the toolchains, run the repositories' setup/bootstrap scripts, build once to warm caches, and check that each project action can run there (its command and prerequisites exist); run only actions without external side effects, never publishing (archive_on_success) ones. %[9]s
 6. Never copy private keys, tokens, or other secrets to the VM without the user's explicit approval in this conversation: ask and wait. Don't edit, commit, or push the repositories on this host or the VM: setup installs tools and warms caches, and the base's checkouts should match their remotes. If the work seems to need a code change, report it instead.
 7. When the base is ready, GET $SHELLEY_API/api/workspace and PUT $SHELLEY_API/api/projects/%[2]s with the project's complete body and "vm":{"base":"NAME","managed_base_vm":true,"integration":%[3]q}. That ends the setup; new conversations are then copied from the base.
 8. Report briefly: the VM and its link (its https_url), what you set up and checked, and anything you could not set up and why (e.g. secrets left for the user). If you cannot finish, say why and leave vm.base unset; the user can switch the project's conversations to run on this host instead.
 </base_vm_setup>
-`, project.Name, url.PathEscape(project.Name), project.VM.Integration, baseVMName(project), agent, project.Cwd, repos, host), nil
+`, project.Name, url.PathEscape(project.Name), project.VM.Integration, baseVMName(project), agent, project.Cwd, repos, host, gitIdentity), nil
 }

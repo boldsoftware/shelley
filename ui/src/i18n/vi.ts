@@ -649,6 +649,21 @@ export const vi: TranslationKeys = {
     "Bắt đầu sẽ tạo một VM đã thiết lập các kho mã này; mỗi tác vụ sau đó làm việc trên bản sao riêng.",
   githubStartCreatesProject: "Bắt đầu sẽ tạo một dự án cho các kho mã này.",
   githubStartWorking: "Bắt đầu làm việc",
+  commitIdentityHeading: "Danh tính commit",
+  commitIdentityName: "Tên",
+  commitIdentityEmail: "Email",
+  commitIdentityHint:
+    "Danh tính mà các tác vụ của dự án dùng để commit: VM riêng của mỗi tác vụ nhận nó làm danh tính git toàn cục; ở nơi khác, lệnh của tác tử và các hành động mang nó theo.",
+  commitIdentityUseDefault: "Dùng danh tính mặc định, chung cho các dự án không có danh tính riêng",
+  commitIdentityDefaultHint:
+    "Thay đổi nó sẽ thay đổi mặc định cho mọi dự án không có danh tính riêng.",
+  commitIdentityNone:
+    "Chưa đặt danh tính, nên cấu hình git của máy quyết định, ví dụ tên tạm của một VM.",
+  commitIdentityStartHint:
+    "Các tác vụ của dự án commit bằng danh tính này. Nếu chưa có mặc định, nó sẽ trở thành mặc định.",
+  commitEmailGithub: "Email công khai trên GitHub",
+  commitEmailGithubNoreply: "Địa chỉ no-reply của GitHub",
+  commitEmailExeDev: "Tài khoản exe.dev",
   githubStartNoIntegration: "exe.dev không thêm tích hợp nào cho {repository}.",
   onboardingHeading: "Bạn muốn làm gì?",
   onboardingGithub: "Làm việc với một dự án GitHub",

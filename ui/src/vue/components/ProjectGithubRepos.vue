@@ -153,7 +153,11 @@ const props = defineProps<{
   account: ExeAccount;
   disabled?: boolean;
 }>();
-const emit = defineEmits<{ (e: "update:modelValue", repos: ProjectRepo[]): void }>();
+const emit = defineEmits<{
+  (e: "update:modelValue", repos: ProjectRepo[]): void;
+  /** The GitHub logins of the account's connections, once listed. */
+  (e: "logins", logins: string[]): void;
+}>();
 const { t } = useI18n();
 const PAGE = 50;
 // The account's GitHub connections, or null where they can't be listed
@@ -169,6 +173,11 @@ const query = ref("");
 const owner = ref("");
 const limit = ref(PAGE);
 watch([query, owner], () => (limit.value = PAGE));
+
+watch(accounts, (list) => {
+  const logins = (list ?? []).map((a) => a.github_login).filter(Boolean);
+  emit("logins", [...new Set(logins)]);
+});
 
 const view = computed(() => props.account.view.value);
 const integrationName = computed(() => view.value?.integration || props.placement.integration);

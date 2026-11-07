@@ -224,3 +224,29 @@ func (j testJobs) Background(_ context.Context, job BackgroundJob, exited <-chan
 	}()
 	return nil
 }
+
+// Commands get the commit identity's environment on the VM and here, read
+// for each command.
+func TestBashCommitEnv(t *testing.T) {
+	t.Parallel()
+	here, there := t.TempDir(), t.TempDir()
+	name := "Ada"
+	var bash *llm.Tool
+	for _, tool := range NewToolSet(t.Context(), ToolSetConfig{
+		WorkingDir: there, HostDir: here, VM: localVM{},
+		CommitEnv: func(context.Context) ([]string, error) {
+			return []string{"GIT_AUTHOR_NAME=" + name}, nil
+		},
+	}).Tools() {
+		if tool.Name == "bash" {
+			bash = tool
+		}
+	}
+	for _, target := range []string{"box", "localhost"} {
+		out := bash.Run(t.Context(), json.RawMessage(`{"command":"printf %s \"$GIT_AUTHOR_NAME\"","ssh_target":"`+target+`"}`))
+		if out.Error != nil || out.LLMContent[0].Text != name {
+			t.Fatalf("%s: %v %+v", target, out.Error, out.LLMContent)
+		}
+		name = "Grace"
+	}
+}

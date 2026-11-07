@@ -27,6 +27,7 @@ const empty = (): Workspace => ({
       vm: null,
       repos: [],
       page_url: "",
+      commit_identity: { name: "", email: "" },
     },
   ],
   conversations: [
@@ -37,6 +38,7 @@ const empty = (): Workspace => ({
   base_vms: [],
   shelley_project: "",
   onboarding_dismissed: false,
+  commit_identity: { name: "", email: "" },
 });
 const run = (): ActionRunSummary => ({
   id: "run",

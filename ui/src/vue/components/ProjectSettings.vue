@@ -24,9 +24,50 @@
             :placement="placement"
             :account="account"
             :disabled="saving"
+            @logins="logins = $event"
           />
           <ProjectIntegrations :account="account" :placement="placement" :disabled="saving" />
         </template>
+        <div class="project-section-heading">
+          <h3>{{ t("commitIdentityHeading") }}</h3>
+        </div>
+        <label class="project-checkbox"
+          ><input
+            type="checkbox"
+            :checked="usesDefault"
+            :disabled="saving"
+            data-testid="commit-identity-default"
+            @change="setUsesDefault(($event.target as HTMLInputElement).checked)"
+          />
+          {{ t("commitIdentityUseDefault") }}</label
+        >
+        <CommitIdentityFields
+          v-if="usesDefault"
+          v-model="defaultDraft"
+          :logins="logins"
+          :prefill="reposAdded && !hasCommitIdentity(defaultDraft)"
+          :disabled="saving"
+        />
+        <CommitIdentityFields
+          v-else
+          v-model="draft.commit_identity"
+          :logins="logins"
+          :placeholder="defaultIdentity"
+          required
+          :disabled="saving"
+        />
+        <p class="project-muted">
+          {{ t("commitIdentityHint") }}
+          {{
+            usesDefault && hasCommitIdentity(defaultIdentity) ? t("commitIdentityDefaultHint") : ""
+          }}
+        </p>
+        <p
+          v-if="!hasCommitIdentity(usesDefault ? defaultDraft : draft.commit_identity)"
+          class="project-muted"
+        >
+          {{ t("commitIdentityNone") }}
+        </p>
         <label for="project-cwd">{{ t("workingDirectory") }}</label>
         <input
           id="project-cwd"
@@ -204,7 +245,13 @@ import ProjectRepoPicker from "./ProjectRepoPicker.vue";
 import ProjectGithubRepos from "./ProjectGithubRepos.vue";
 import ProjectVMFields from "./ProjectVMFields.vue";
 import ProjectIntegrations from "./ProjectIntegrations.vue";
-import { workspaceApi, type Project, type ProjectPlacement } from "../../services/workspace";
+import CommitIdentityFields from "./CommitIdentityFields.vue";
+import {
+  workspaceApi,
+  type CommitIdentity,
+  type Project,
+  type ProjectPlacement,
+} from "../../services/workspace";
 import { useExeAccount } from "../composables/exeAccount";
 import { useWorkspace } from "../composables/workspace";
 import { useI18n } from "../composables/i18n";
@@ -212,6 +259,11 @@ import { errorMessage } from "../../utils/errorMessage";
 import { navigateToConversationSlug } from "../composables/subagentLive";
 import { projectCwd, VM_HOME } from "../../utils/projectSetup";
 import { workspaceMode } from "../../utils/workspaceMode";
+import {
+  NO_COMMIT_IDENTITY,
+  hasCommitIdentity,
+  sameCommitIdentity,
+} from "../../utils/commitIdentity";
 
 const props = defineProps<{
   project: Project;
@@ -234,9 +286,34 @@ function copy(project: Project): Project {
 function settings(project: Project) {
   return JSON.stringify({ ...project, name: "", position: 0 });
 }
-const dirty = computed(() => settings(draft.value) !== settings(props.project));
+// The default commit identity, which the project uses unless it has its
+// own; while it does, the fields edit the default, saved with the project.
+const defaultIdentity = computed(() => workspace.data.value?.commit_identity ?? NO_COMMIT_IDENTITY);
+const defaultDraft = ref<CommitIdentity>({ ...defaultIdentity.value });
+const usesDefault = ref(true);
+const logins = ref<string[]>([]);
+// An edit that hasn't touched the default follows its changes.
+watch(
+  () => ({ ...defaultIdentity.value }),
+  (now, before) => {
+    if (sameCommitIdentity(defaultDraft.value, before)) defaultDraft.value = now;
+  },
+);
+function setUsesDefault(on: boolean) {
+  usesDefault.value = on;
+  draft.value.commit_identity = on ? { ...NO_COMMIT_IDENTITY } : { ...defaultDraft.value };
+}
+// Repositories added in this edit: the identity is asked for along with them.
+const reposAdded = computed(() => draft.value.repos.length > props.project.repos.length);
+const dirty = computed(
+  () =>
+    settings(draft.value) !== settings(props.project) ||
+    !sameCommitIdentity(defaultDraft.value, defaultIdentity.value),
+);
 function load(project: Project) {
   draft.value = copy(project);
+  usesDefault.value = !hasCommitIdentity(project.commit_identity);
+  defaultDraft.value = { ...defaultIdentity.value };
   // A project without a directory gets one that follows its repositories
   // and VMs, until edited.
   cwdTouched.value = !!project.cwd;
@@ -318,6 +395,8 @@ async function saveProject() {
     await props.renamed().catch(() => undefined); // its error shows in the title
     const before = props.project.vm?.setup_conversation_id;
     const name = props.project.name;
+    if (!sameCommitIdentity(defaultDraft.value, defaultIdentity.value))
+      await workspaceApi.setCommitIdentity(defaultDraft.value);
     const result = await workspaceApi.updateProject(name, { ...draft.value, name });
     await workspace.refresh();
     load(props.project);

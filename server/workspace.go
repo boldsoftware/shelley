@@ -162,6 +162,8 @@ func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/workspace", s.handleWorkspace)
 	api.HandleFunc("GET /api/exe-dev-integrations", s.handleExeDevIntegrations)
 	api.HandleFunc("GET /api/github-repos", s.handleGithubRepos)
+	api.HandleFunc("PUT /api/commit-identity", s.handleSetCommitIdentity)
+	api.HandleFunc("GET /api/commit-identity/suggestions", s.handleCommitIdentitySuggestions)
 	api.HandleFunc("GET /api/github-accounts", s.workspaceOnly(s.handleGithubAccounts))
 	api.HandleFunc("GET /api/onboarding", s.workspaceOnly(s.handleOnboarding))
 	api.HandleFunc("POST /api/onboarding/dismiss", s.workspaceOnly(s.handleDismissOnboarding))
@@ -247,6 +249,10 @@ func (s *Server) handleWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	workspace.OnboardingDismissed = dismissed != ""
+	if workspace.CommitIdentity, err = s.db.DefaultCommitIdentity(r.Context()); err != nil {
+		s.workspaceHTTPError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, workspace)
 }
 
@@ -770,6 +776,11 @@ func (s *Server) finishAction(ctx context.Context, run *db.ActionRun, exitCode *
 func (s *Server) actionCommand(ctx context.Context, run *db.ActionRun, conversation *generated.Conversation, command, cwd, userEmail string) (*exec.Cmd, func(), error) {
 	env := buildTerminalEnv(run.ConversationID, derefString(conversation.Slug), derefString(conversation.Model),
 		userEmail, cwd, s.listenPort, s.socketPath)
+	identity, err := s.db.ConversationCommitIdentity(ctx, run.ConversationID)
+	if err != nil {
+		return nil, nil, err
+	}
+	env = append(env, identity.Environ()...)
 	vm, err := s.db.GetConversationVM(ctx, run.ConversationID)
 	if errors.Is(err, sql.ErrNoRows) {
 		cmd := exec.Command("/bin/sh", "-c", command)

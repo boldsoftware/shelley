@@ -660,6 +660,21 @@ export const fr: TranslationKeys = {
     "Démarrer crée une VM avec ces dépôts installés ; chaque tâche travaille ensuite sur sa propre copie.",
   githubStartCreatesProject: "Démarrer crée un projet pour ces dépôts.",
   githubStartWorking: "Commencer à travailler",
+  commitIdentityHeading: "Identité des commits",
+  commitIdentityName: "Nom",
+  commitIdentityEmail: "E-mail",
+  commitIdentityHint:
+    "Au nom de qui les tâches du projet font leurs commits : la VM propre à chaque tâche la reçoit comme identité git globale ; ailleurs, les commandes de l'agent et les actions la portent.",
+  commitIdentityUseDefault: "Utiliser l'identité par défaut, partagée par les projets sans la leur",
+  commitIdentityDefaultHint:
+    "La modifier change l'identité par défaut de tous les projets sans la leur.",
+  commitIdentityNone:
+    "Aucune identité : la configuration git de la machine décide, p. ex. le nom provisoire d'une VM.",
+  commitIdentityStartHint:
+    "Les tâches du projet font leurs commits sous cette identité. S'il n'y a pas encore d'identité par défaut, elle le devient.",
+  commitEmailGithub: "E-mail public GitHub",
+  commitEmailGithubNoreply: "Adresse no-reply GitHub",
+  commitEmailExeDev: "Compte exe.dev",
   githubStartNoIntegration: "exe.dev n'a ajouté aucune intégration pour {repository}.",
   onboardingHeading: "Que voulez-vous accomplir ?",
   onboardingGithub: "Travailler sur un projet GitHub",

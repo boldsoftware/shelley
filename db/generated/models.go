@@ -199,6 +199,12 @@ type ProfileBaseVm struct {
 	RequestedAt string `json:"requested_at"`
 }
 
+type ProfileCommitIdentity struct {
+	Profile string `json:"profile"`
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+}
+
 type ProfilePage struct {
 	Profile string `json:"profile"`
 	Url     string `json:"url"`

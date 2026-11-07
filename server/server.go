@@ -410,6 +410,7 @@ type Server struct {
 	conversationVMs          conversationVMState
 	secrets                  *secretStore
 	baseVMSetupMu            sync.Mutex // serializes starting base VM setup conversations
+	githubAPI                string     // GitHub's REST API, "" for api.github.com (tests)
 	customizations           customizationState
 	integrationSkills        *integrationSkillCache
 	listIntegrations         integrationLister
@@ -1196,6 +1197,10 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		config := s.toolSetConfig
 		config.VM = vm
 		config.HostDir = scratch
+		config.CommitEnv = func(ctx context.Context) ([]string, error) {
+			identity, err := s.db.ConversationCommitIdentity(ctx, conversationID)
+			return identity.Environ(), err
+		}
 		if role != roleTopLevel {
 			// Only top-level conversations can spawn subagents.
 			config.SubagentDepth++

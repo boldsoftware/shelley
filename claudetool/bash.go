@@ -48,6 +48,9 @@ type BashTool struct {
 	// Env holds the conversation context exposed to invoked commands as
 	// SHELLEY_* environment variables.
 	Env ShelleyEnv
+	// CommitEnv, if set, returns assignments added to every command's
+	// environment, here or on the VM (see ToolSetConfig.CommitEnv).
+	CommitEnv func(context.Context) ([]string, error)
 	// VM, if set, is where the conversation's project work happens: each
 	// call names its target, the VM or this host (see VM).
 	VM VM
@@ -313,12 +316,12 @@ const (
 //
 // On a VM, the wrapper runs the command there (see VMJobScript) with the
 // same environment, minus this host's SHELLEY_* variables.
-func (b *BashTool) makeBashCommand(vm VM, command, wd string, log *os.File, exitPath string) *exec.Cmd {
-	commandEnv := []string{
+func (b *BashTool) makeBashCommand(vm VM, command, wd string, extraEnv []string, log *os.File, exitPath string) *exec.Cmd {
+	commandEnv := append([]string{
 		"SKETCH=1",          // signal that this has been run by Sketch, sometimes useful for scripts
 		"EDITOR=/bin/false", // interactive editors won't work
 		`GIT_SEQUENCE_EDITOR=echo "To do an interactive rebase, run it in a tmux session." && exit 1`,
-	}
+	}, extraEnv...)
 	// Strip any inherited SHELLEY_* vars so we control them explicitly below.
 	env := stripShelleyEnv(os.Environ())
 	var cmd *exec.Cmd
@@ -357,6 +360,13 @@ func (b *BashTool) executeBash(ctx context.Context, req bashInput) (bashResult, 
 }
 
 func (b *BashTool) executeBashInDir(ctx context.Context, req bashInput, wd string) (bashResult, error) {
+	var extraEnv []string
+	if b.CommitEnv != nil {
+		var err error
+		if extraEnv, err = b.CommitEnv(ctx); err != nil {
+			return bashResult{}, fmt.Errorf("commit identity: %w", err)
+		}
+	}
 	dir := bashJobDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return bashResult{}, fmt.Errorf("create job dir: %w", err)
@@ -373,7 +383,7 @@ func (b *BashTool) executeBashInDir(ctx context.Context, req bashInput, wd strin
 	if err != nil {
 		return bashResult{}, fmt.Errorf("create job log: %w", err)
 	}
-	cmd := b.makeBashCommand(req.vm, req.Command, wd, log, job.ExitPath)
+	cmd := b.makeBashCommand(req.vm, req.Command, wd, extraEnv, log, job.ExitPath)
 	// The git tracker watches where the command runs git until it exits,
 	// even if that is after it moves to the background.
 	releaseGitDirs := func() {}

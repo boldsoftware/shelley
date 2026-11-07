@@ -622,6 +622,17 @@ export interface TranslationKeys {
   githubStartCreatesVM: string;
   githubStartCreatesProject: string;
   githubStartWorking: string;
+  commitIdentityHeading: string;
+  commitIdentityName: string;
+  commitIdentityEmail: string;
+  commitIdentityHint: string;
+  commitIdentityUseDefault: string;
+  commitIdentityDefaultHint: string;
+  commitIdentityNone: string;
+  commitIdentityStartHint: string;
+  commitEmailGithub: string;
+  commitEmailGithubNoreply: string;
+  commitEmailExeDev: string;
   githubStartNoIntegration: string;
   onboardingHeading: string;
   onboardingGithub: string;

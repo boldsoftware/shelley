@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -258,7 +259,7 @@ func (s *Server) startConversationVMMaster(ctx context.Context, vm *db.Conversat
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil
 		err := cmd.Run()
 		if err == nil {
-			return s.createConversationVMDir(ctx, vm)
+			return s.setUpConversationVM(ctx, vm)
 		}
 		log, _ := os.ReadFile(logPath)
 		err = fmt.Errorf("ssh %s: %w: %s", vm.Name, err, bytes.TrimSpace(log))
@@ -274,23 +275,44 @@ func (s *Server) startConversationVMMaster(ctx context.Context, vm *db.Conversat
 	}
 }
 
-// createConversationVMDir creates the working directory on a new, empty VM,
-// which lacks it; a copy of a base or a shared VM has it already.
-func (s *Server) createConversationVMDir(ctx context.Context, vm *db.ConversationVM) error {
-	if vm.Shared || vm.Base != "" {
+// setUpConversationVM readies an own VM once its master runs: a new, empty
+// VM gets its working directory, which a copy of a base has already, and
+// both get git's global identity set to the conversation's commit identity,
+// if any, so every commit there is the user's, whoever runs git. A shared VM
+// or SSH host is someone else's to configure: there the agent's commands
+// carry the identity in their environment instead.
+func (s *Server) setUpConversationVM(ctx context.Context, vm *db.ConversationVM) error {
+	if vm.Shared {
+		return nil
+	}
+	identity, err := s.db.ConversationCommitIdentity(ctx, vm.ConversationID)
+	if err != nil {
+		return err
+	}
+	if vm.Base != "" && identity.IsZero() {
 		return nil
 	}
 	target, err := s.conversationVMTarget(vm)
 	if err != nil {
 		return err
 	}
-	argv := target.Command(`mkdir -p -- "$1"`, vm.Dir)
+	argv := target.Command(conversationVMSetupScript, strconv.FormatBool(vm.Base == ""), vm.Dir, identity.Name, identity.Email)
 	out, err := exec.CommandContext(ctx, argv[0], argv[1:]...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("create %s on VM %s: %w: %s", vm.Dir, vm.Name, err, bytes.TrimSpace(out))
+		return fmt.Errorf("set up VM %s: %w: %s", vm.Name, err, bytes.TrimSpace(out))
 	}
 	return nil
 }
+
+// conversationVMSetupScript: arguments new ("true" for a new, empty VM),
+// dir, then the commit name and email ("" for none). A VM without git has
+// no identity to set.
+const conversationVMSetupScript = `set -e
+if [ "$1" = true ]; then mkdir -p -- "$2"; fi
+if [ -n "$3" ] && command -v git >/dev/null; then
+  git config --global user.name "$3"
+  git config --global user.email "$4"
+fi`
 
 func (s *Server) sshProgram() string {
 	if s.conversationVMs.ssh != "" {

@@ -12,7 +12,21 @@
       :placement="placement"
       :account="account"
       :disabled="starting"
+      @logins="logins = $event"
     />
+    <template v-if="repos.length">
+      <div class="project-section-heading">
+        <h3>{{ t("commitIdentityHeading") }}</h3>
+      </div>
+      <CommitIdentityFields
+        v-model="identity"
+        :logins="logins"
+        :prefill="!hasCommitIdentity(defaultIdentity)"
+        required
+        :disabled="starting"
+      />
+      <p class="project-muted">{{ t("commitIdentityStartHint") }}</p>
+    </template>
     <p v-if="repos.length" class="project-muted">
       {{ t(integration ? "githubStartCreatesVM" : "githubStartCreatesProject") }}
     </p>
@@ -21,7 +35,7 @@
       :label="t('githubStartWorking')"
       icon="pi pi-arrow-right"
       icon-pos="right"
-      :disabled="!repos.length"
+      :disabled="!repos.length || !identity.name.trim() || !identity.email.trim()"
       :loading="starting"
       data-testid="github-start"
       @click="start"
@@ -30,21 +44,43 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
 import ProjectGithubRepos from "./ProjectGithubRepos.vue";
-import { workspaceApi, type ProjectPlacement, type ProjectRepo } from "../../services/workspace";
+import CommitIdentityFields from "./CommitIdentityFields.vue";
+import {
+  workspaceApi,
+  type CommitIdentity,
+  type ProjectPlacement,
+  type ProjectRepo,
+} from "../../services/workspace";
 import { useExeAccount } from "../composables/exeAccount";
 import { useWorkspace } from "../composables/workspace";
 import { useI18n } from "../composables/i18n";
 import { navigateToConversationSlug } from "../composables/subagentLive";
 import { errorMessage } from "../../utils/errorMessage";
 import { projectCwd, uniqueProjectName } from "../../utils/projectSetup";
+import {
+  NO_COMMIT_IDENTITY,
+  hasCommitIdentity,
+  newProjectCommitIdentity,
+} from "../../utils/commitIdentity";
 
 const emit = defineEmits<{ (e: "back"): void }>();
 const workspace = useWorkspace();
 const { t } = useI18n();
 const repos = ref<ProjectRepo[]>([]);
+// Who the project's tasks commit as: the default, if there is one, else
+// what the user's GitHub and exe.dev accounts suggest, which they confirm.
+const defaultIdentity = computed(() => workspace.data.value?.commit_identity ?? NO_COMMIT_IDENTITY);
+const identity = ref<CommitIdentity>({ ...defaultIdentity.value });
+watch(
+  () => `${defaultIdentity.value.name}\n${defaultIdentity.value.email}`,
+  () => {
+    if (hasCommitIdentity(defaultIdentity.value)) identity.value = { ...defaultIdentity.value };
+  },
+);
+const logins = ref<string[]>([]);
 // The exe-dev integration the project's VMs use: this host's default, or
 // none (tasks run on this host).
 const integration = ref("");
@@ -71,6 +107,8 @@ async function start() {
   starting.value = true;
   error.value = "";
   try {
+    const commit = newProjectCommitIdentity(defaultIdentity.value, identity.value);
+    if (commit.setDefault) await workspaceApi.setCommitIdentity(identity.value);
     if (!created) {
       const name = uniqueProjectName(
         repos.value[0].repository.split("/")[1],
@@ -105,6 +143,7 @@ async function start() {
       actions: [],
       vm,
       repos: repos.value,
+      commit_identity: commit.project,
     });
     await workspace.refresh();
     const setup = result.vm?.setup_conversation_id;

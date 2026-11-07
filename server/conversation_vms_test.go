@@ -18,7 +18,8 @@ import (
 // fakeSSH stands in for ssh: it runs commands on this machine, marked
 // VIA_VM=1, keeps control masters as marker files, and logs each call as
 // "MODE HOST" (run, master, check, exit). A master fails with the contents
-// of its fail file, if there is one.
+// of its fail file, if there is one. Git's global configuration there is its
+// gitconfig file, never the user's.
 type fakeSSH struct{ dir string }
 
 func newFakeSSH(t *testing.T, s *Server) *fakeSSH {
@@ -59,7 +60,7 @@ master)
 	if [ -e "$dir/fail" ]; then cat "$dir/fail" >>"$errlog"; exit 255; fi
 	touch "$ctl"; exit 0;;
 esac
-exec env VIA_VM=1 sh -c "$*"
+exec env VIA_VM=1 GIT_CONFIG_GLOBAL="$dir/gitconfig" sh -c "$*"
 `
 	if err := os.WriteFile(filepath.Join(f.dir, "ssh"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -105,6 +106,13 @@ func (f *fakeSSH) calls(t *testing.T, mode string) []string {
 		}
 	}
 	return hosts
+}
+
+// gitConfig is the VM's global git configuration value of key, "" if unset.
+func (f *fakeSSH) gitConfig(t *testing.T, key string) string {
+	t.Helper()
+	out, _ := exec.Command("git", "config", "--file", filepath.Join(f.dir, "gitconfig"), key).Output()
+	return strings.TrimSpace(string(out))
 }
 
 func (f *fakeSSH) fail(t *testing.T, message string) {

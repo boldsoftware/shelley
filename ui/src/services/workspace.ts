@@ -29,11 +29,33 @@ export interface Project {
   repos: ProjectRepo[];
   /** The web page the project's view opens on, "" for none. */
   page_url: string;
+  /** Who the project's tasks commit as; both "" for the default commit
+   * identity (Workspace.commit_identity). */
+  commit_identity: CommitIdentity;
 }
 
 /** A project as created or saved: the server assigns its id and position,
- * and keeps its page_url when it is left out. */
-export type ProjectInput = Omit<Project, "id" | "position" | "page_url"> & { page_url?: string };
+ * and keeps its page_url and commit_identity when they are left out. */
+export type ProjectInput = Omit<Project, "id" | "position" | "page_url" | "commit_identity"> & {
+  page_url?: string;
+  commit_identity?: CommitIdentity;
+};
+
+/** The name and email git commits are made as; both "" for none. */
+export interface CommitIdentity {
+  name: string;
+  email: string;
+}
+
+/** Names and emails to offer as a commit identity. */
+export interface CommitIdentitySuggestions {
+  names: string[];
+  /** source: a GitHub account's public email ("github"), its no-reply
+   * address ("github_noreply"), or the exe.dev account's ("exe_dev"). */
+  emails: { email: string; source: "github" | "github_noreply" | "exe_dev" }[];
+  /** Sources that couldn't be read. */
+  errors: string[];
+}
 
 export interface ProjectRepo {
   integration: string;
@@ -205,6 +227,8 @@ export interface Workspace {
   shelley_project: string;
   /** Whether the user dismissed the Assistant's onboarding card. */
   onboarding_dismissed: boolean;
+  /** The default commit identity, both "" for none. */
+  commit_identity: CommitIdentity;
 }
 
 export const workspaceApi = {
@@ -245,6 +269,21 @@ export const workspaceApi = {
     apiJSON<{ accounts: GithubAccount[] | null; error: string; setup_url: string }>(
       `/api/github-accounts?${new URLSearchParams({ integration })}`,
       "Failed to load GitHub repositories",
+    ),
+  /** Sets the default commit identity; both "" removes it. */
+  setCommitIdentity: (identity: CommitIdentity) =>
+    apiJSON<CommitIdentity>(
+      "/api/commit-identity",
+      "Failed to save the commit identity",
+      "PUT",
+      identity,
+    ),
+  /** Commit identities to offer, from the public profiles of GitHub
+   * accounts logins and the exe.dev account. */
+  commitIdentitySuggestions: (logins: string[]) =>
+    apiJSON<CommitIdentitySuggestions>(
+      `/api/commit-identity/suggestions?${new URLSearchParams(logins.map((login) => ["login", login]))}`,
+      "Failed to load commit identity suggestions",
     ),
   /** What the first-run cards need from the exe.dev environment. */
   onboarding: () => apiJSON<Onboarding>("/api/onboarding", "Failed to load onboarding"),

@@ -41,6 +41,10 @@ type Project struct {
 	// PageURL is the web page the project's view opens on, "" for none. On
 	// input, nil (absent) keeps the current one.
 	PageURL *string `json:"page_url"`
+	// CommitIdentity is who the project's tasks commit as, the zero value
+	// for the default commit identity. On input, nil (absent) keeps the
+	// current one.
+	CommitIdentity *CommitIdentity `json:"commit_identity"`
 }
 
 // ProfileNameProblem says what's wrong with a profile name, or "". Names are
@@ -81,6 +85,11 @@ func validateProject(project *Project) error {
 	}
 	if err := validateProjectPage(project.PageURL); err != nil {
 		return err
+	}
+	if project.CommitIdentity != nil {
+		if err := ValidateCommitIdentity(project.CommitIdentity); err != nil {
+			return err
+		}
 	}
 	seen := map[string]bool{}
 	for _, action := range project.Actions {
@@ -143,6 +152,9 @@ func createProject(ctx context.Context, q *generated.Queries, project Project, f
 	if err := setProjectPage(ctx, q, project.Name, project.PageURL); err != nil {
 		return err
 	}
+	if err := setProjectCommitIdentity(ctx, q, project.Name, project.CommitIdentity); err != nil {
+		return err
+	}
 	return setProjectVM(ctx, q, project.Name, project.VM)
 }
 
@@ -168,6 +180,9 @@ func (db *DB) UpdateProject(ctx context.Context, name string, project Project) e
 			return err
 		}
 		if err := setProjectPage(ctx, q, name, project.PageURL); err != nil {
+			return err
+		}
+		if err := setProjectCommitIdentity(ctx, q, name, project.CommitIdentity); err != nil {
 			return err
 		}
 		if err := setProjectVM(ctx, q, name, project.VM); err != nil {
@@ -281,6 +296,9 @@ func attachProjectDetails(ctx context.Context, q *generated.Queries, projects []
 		return err
 	}
 	if err := attachProjectPages(ctx, q, projects); err != nil {
+		return err
+	}
+	if err := attachProjectCommitIdentities(ctx, q, projects); err != nil {
 		return err
 	}
 	return attachProjectRepos(ctx, q, projects)

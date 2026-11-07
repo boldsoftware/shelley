@@ -653,6 +653,21 @@ export const es: TranslationKeys = {
     "Al empezar se crea una VM con estos repositorios preparados; luego cada tarea trabaja en su propia copia.",
   githubStartCreatesProject: "Al empezar se crea un proyecto para estos repositorios.",
   githubStartWorking: "Empezar a trabajar",
+  commitIdentityHeading: "Identidad de commits",
+  commitIdentityName: "Nombre",
+  commitIdentityEmail: "Correo",
+  commitIdentityHint:
+    "Con quién firman los commits las tareas del proyecto: la VM propia de cada tarea la recibe como identidad global de git; en otros casos, los comandos del agente y las acciones la llevan.",
+  commitIdentityUseDefault: "Usar la predeterminada, compartida por los proyectos sin una propia",
+  commitIdentityDefaultHint:
+    "Cambiarla cambia la predeterminada de todos los proyectos sin una propia.",
+  commitIdentityNone:
+    "No hay identidad: decide la configuración de git de la máquina, p. ej. el nombre provisional de una VM.",
+  commitIdentityStartHint:
+    "Las tareas del proyecto firman los commits así. Si aún no hay predeterminada, se convierte en la de tus proyectos.",
+  commitEmailGithub: "Correo público de GitHub",
+  commitEmailGithubNoreply: "Dirección no-reply de GitHub",
+  commitEmailExeDev: "Cuenta de exe.dev",
   githubStartNoIntegration: "exe.dev no añadió ninguna integración para {repository}.",
   onboardingHeading: "¿Qué te gustaría hacer?",
   onboardingGithub: "Trabajar en un proyecto de GitHub",
