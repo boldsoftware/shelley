@@ -8,6 +8,7 @@ import {
 } from "../../types";
 import { isTypedUserMessage } from "../../utils/conversationView";
 import { isCancelledToolResult } from "../utils/toolStatus";
+import { llmData } from "../../utils/llmData";
 
 export interface CoalescedItem {
   type: "message" | "tool";
@@ -92,14 +93,13 @@ export function coalesceMessages(
   messages.forEach((message) => {
     if (message.llm_data) {
       try {
-        const llmData =
-          typeof message.llm_data === "string" ? JSON.parse(message.llm_data) : message.llm_data;
-        if (llmData && llmData.Content && Array.isArray(llmData.Content)) {
+        const llm = llmData(message);
+        if (llm && llm.Content && Array.isArray(llm.Content)) {
           const userData =
             typeof message.user_data === "string"
               ? JSON.parse(message.user_data)
               : message.user_data;
-          llmData.Content.forEach((content: LLMContent) => {
+          llm.Content.forEach((content: LLMContent) => {
             if (content && content.Type === 6 && content.ToolUseID) {
               toolResultMap[content.ToolUseID] = {
                 result: content.ToolResult || [],
@@ -159,10 +159,9 @@ export function coalesceMessages(
     let hasToolResult = false;
     if (message.llm_data) {
       try {
-        const llmData =
-          typeof message.llm_data === "string" ? JSON.parse(message.llm_data) : message.llm_data;
-        if (llmData && llmData.Content && Array.isArray(llmData.Content)) {
-          hasToolResult = llmData.Content.some((c: LLMContent) => c.Type === 6);
+        const llm = llmData(message);
+        if (llm && llm.Content && Array.isArray(llm.Content)) {
+          hasToolResult = llm.Content.some((c: LLMContent) => c.Type === 6);
         }
       } catch (err) {
         console.error("Failed to parse message LLM data:", err);
@@ -179,9 +178,8 @@ export function coalesceMessages(
 
     if (message.llm_data) {
       try {
-        const llmData =
-          typeof message.llm_data === "string" ? JSON.parse(message.llm_data) : message.llm_data;
-        if (llmData && llmData.Content && Array.isArray(llmData.Content)) {
+        const llm = llmData(message);
+        if (llm && llm.Content && Array.isArray(llm.Content)) {
           const textContents: LLMContent[] = [];
           const toolUses: LLMContent[] = [];
           const serverToolResults: Record<string, LLMContent[]> = {};
@@ -195,7 +193,7 @@ export function coalesceMessages(
           let lastToolIndex = -1;
           let firstTextIndex = -1;
 
-          llmData.Content.forEach((content: LLMContent, index: number) => {
+          llm.Content.forEach((content: LLMContent, index: number) => {
             if (content.Type === 2) {
               textContents.push(content);
               if (firstTextIndex < 0 && (content.Text || "").trim()) firstTextIndex = index;
@@ -229,7 +227,7 @@ export function coalesceMessages(
             items.push(messageItem(message, carried));
           }
 
-          const wasTruncated = llmData.ExcludedFromContext === true;
+          const wasTruncated = llm.ExcludedFromContext === true;
 
           toolUses.forEach((toolUse) => {
             const resultData = toolUse.ID ? toolResultMap[toolUse.ID] : undefined;

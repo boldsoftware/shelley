@@ -26,6 +26,7 @@ import { api } from "./api";
 import type { Customization } from "./customizations";
 import { UNREACHABLE_ERROR_MS } from "./unreachable";
 import { messageStore } from "./messageStore";
+import { llmData } from "../utils/llmData";
 
 export type StreamStatus = "connected" | "reconnecting" | "disconnected";
 
@@ -103,14 +104,9 @@ export interface GlobalStreamHandle {
 function extractToolUseIds(msg: Message): string[] {
   if (msg.type !== "tool" && msg.type !== "user") return [];
   try {
-    const raw = msg.llm_data;
-    const llmData = raw
-      ? typeof raw === "string"
-        ? (JSON.parse(raw) as { Content?: Array<{ Type: number; ToolUseID?: string }> })
-        : (raw as { Content?: Array<{ Type: number; ToolUseID?: string }> })
-      : null;
-    if (!llmData?.Content) return [];
-    return llmData.Content.filter((c) => c.Type === 6 && c.ToolUseID)
+    const llm = llmData(msg);
+    if (!llm?.Content) return [];
+    return llm.Content.filter((c) => c.Type === 6 && c.ToolUseID)
       .map((c) => c.ToolUseID!)
       .filter(Boolean);
   } catch {

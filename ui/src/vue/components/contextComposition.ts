@@ -3,6 +3,7 @@
 // hides) are replayed, so the estimate follows what the model actually saw.
 import type { InPlaceCompaction } from "../../generated-types";
 import type { LLMContent, Message, Usage } from "../../types";
+import { llmData } from "../../utils/llmData";
 
 const TYPE_TEXT = 2;
 const TYPE_THINKING = 3;
@@ -175,8 +176,7 @@ export function contextCompositionPoints(messages: Message[]): Point[] {
 function addMessage(toolKeys: Map<string, Attribution>, message: Message, add: AddTokens): boolean {
   if (!message.llm_data) return false;
   try {
-    const llm =
-      typeof message.llm_data === "string" ? JSON.parse(message.llm_data) : message.llm_data;
+    const llm = llmData(message);
     const fallback = { key: message.type === "user" ? "user" : "assistant" };
     let hasMedia = false;
     for (const content of (llm?.Content || []) as LLMContent[]) {

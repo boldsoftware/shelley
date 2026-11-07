@@ -9,6 +9,7 @@ import {
   type OtherUsageRow,
   type UsageEntry,
 } from "./tokenCostGraph";
+import { llmData } from "./llmData";
 
 export interface UsageData {
   entries: UsageEntry[];
@@ -30,7 +31,7 @@ function messageSnippet(m: Message): string {
   let snippet = "";
   if (m.llm_data) {
     try {
-      const llm = typeof m.llm_data === "string" ? JSON.parse(m.llm_data) : m.llm_data;
+      const llm = llmData(m);
       const content: LLMContent[] = llm?.Content || [];
       for (const c of content) {
         if (c.Type === LLM_TYPE_TEXT && c.Text?.trim()) {

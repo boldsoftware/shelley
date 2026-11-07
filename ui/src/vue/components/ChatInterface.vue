@@ -766,6 +766,7 @@ import {
   provide,
   reactive,
   ref,
+  shallowRef,
   toRef,
   useId,
   watch,
@@ -1129,7 +1130,10 @@ defineExpose({
   beginRecording: (mode: RecordingMode) => messageInputRef.value?.beginRecording(mode),
 });
 
-const messages = ref<Message[]>([]);
+// Shallow: rows are immutable and the list is only ever replaced whole. Deep
+// proxies made every computed walking a large conversation track each field
+// it read, which dominated opening one.
+const messages = shallowRef<Message[]>([]);
 const btwExchanges = ref<BtwExchange[]>([]);
 
 // The id of the bottom-most message in the conversation. Provided to

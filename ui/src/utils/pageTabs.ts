@@ -1,5 +1,6 @@
-import type { LLMContent, LLMMessage, Message } from "../types";
+import type { LLMContent, Message } from "../types";
 import { MESSAGE_USER_TOOL } from "./conversationView";
+import { llmData } from "./llmData";
 
 /** A link to a web page, as a page tab may show it. declared: the agent
  *  asked for a tab; otherwise the link only moves an existing tab. */
@@ -38,8 +39,7 @@ function linksIn(message: Message): PageLink[] {
   const mentioned: PageLink[] = [];
   const declared: PageLink[] = [];
   if (message.type === "agent" && message.llm_data) {
-    const llm = JSON.parse(message.llm_data) as LLMMessage;
-    for (const content of llm.Content ?? []) {
+    for (const content of llmData(message)?.Content ?? []) {
       const text = contentText(content).replace(DECLARED, (_, title: string, url: string) => {
         declared.push({ title: title.trim(), url, declared: true });
         return "";

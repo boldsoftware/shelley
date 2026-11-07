@@ -3,6 +3,7 @@
 // llm_data structure the chat UI renders and flattens it into headings,
 // prose, thinking blocks, and fenced tool-call / tool-result sections.
 import { Conversation, Message, LLMContent } from "../types";
+import { llmData } from "./llmData";
 
 // Content type constants mirror llm/llm.go (see Message.tsx getContentType).
 const TYPE_TEXT = 2;
@@ -13,14 +14,6 @@ const TYPE_TOOL_RESULT = 6;
 const TYPE_SERVER_TOOL_USE = 7;
 const TYPE_WEB_SEARCH_TOOL_RESULT = 8;
 
-function parseLLMData(message: Message): { Content?: LLMContent[] } | null {
-  if (!message.llm_data) return null;
-  try {
-    return typeof message.llm_data === "string" ? JSON.parse(message.llm_data) : message.llm_data;
-  } catch {
-    return null;
-  }
-}
 
 function parseUserData(message: Message): Record<string, unknown> | null {
   if (!message.user_data) return null;
@@ -105,7 +98,7 @@ function renderMessage(message: Message, opts: Required<ConversationMarkdownOpti
     const ud = parseUserData(message);
     let text = (ud?.text as string) || "";
     if (!text) {
-      const llm = parseLLMData(message);
+      const llm = llmData(message);
       const tc = llm?.Content?.find((c) => c.Type === TYPE_TEXT);
       text = tc?.Text || (message.type === "error" ? "An error occurred" : "Warning");
     }
@@ -117,7 +110,7 @@ function renderMessage(message: Message, opts: Required<ConversationMarkdownOpti
     return out;
   }
 
-  const llm = parseLLMData(message);
+  const llm = llmData(message);
   if (!llm?.Content) return out;
 
   // Decide a role heading. User messages that carry tool results are

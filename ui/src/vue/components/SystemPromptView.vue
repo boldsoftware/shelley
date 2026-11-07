@@ -137,6 +137,7 @@
 </template>
 
 <script setup lang="ts">
+import { llmData } from "../../utils/llmData";
 import { computed, reactive, ref } from "vue";
 import type { Message, LLMContent } from "../../types";
 import type { ToolSchema } from "../../services/api";
@@ -189,24 +190,11 @@ function metadataEntries(skill: SystemPromptSkill): [string, string][] {
   return Object.entries(skill.metadata ?? {});
 }
 
-const systemPromptText = computed<string>(() => {
-  if (!props.message.llm_data) return "";
-  try {
-    const llmData =
-      typeof props.message.llm_data === "string"
-        ? JSON.parse(props.message.llm_data)
-        : props.message.llm_data;
-    if (llmData && llmData.Content && Array.isArray(llmData.Content)) {
-      const textContent = llmData.Content.find(
-        (content: LLMContent) => content.Type === 2 && content.Text,
-      );
-      if (textContent) return textContent.Text;
-    }
-  } catch (err) {
-    console.error("Failed to parse system prompt:", err);
-  }
-  return "";
-});
+const systemPromptText = computed<string>(
+  () =>
+    llmData(props.message)?.Content?.find((content: LLMContent) => content.Type === 2 && content.Text)
+      ?.Text ?? "",
+);
 
 const displayData = computed<SystemPromptDisplayData>(() => {
   if (!props.message.display_data) return {};

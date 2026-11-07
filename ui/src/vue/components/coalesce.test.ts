@@ -382,7 +382,7 @@ function serverToolUse(id: string): LLMContent {
     {
       ...agentMessage([text("done")]),
       end_of_turn: true,
-      llm_data: { Role: 1, Content: [text("done")], EndOfTurn: true },
+      llm_data: JSON.stringify({ Role: 1, Content: [text("done")], EndOfTurn: true }),
     },
     { ...agentMessage([text("failed")]), type: "error" },
     { ...agentMessage([text("cancelled")]), end_of_turn: true },

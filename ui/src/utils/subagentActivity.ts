@@ -12,6 +12,7 @@
 import type { Message, ToolProgress, LLMContent } from "../types";
 import { lastLine } from "./lastLine";
 import { toolEmoji, toolHeadline } from "./toolMeta";
+import { llmData } from "./llmData";
 
 export interface SubagentActivityInput {
   /** In-flight assistant text (messageStore transient streamingText). */
@@ -25,16 +26,8 @@ export interface SubagentActivityInput {
 }
 
 function parseContent(msg: Message): LLMContent[] | null {
-  if (!msg.llm_data) return null;
-  try {
-    const data =
-      typeof msg.llm_data === "string"
-        ? (JSON.parse(msg.llm_data) as { Content?: LLMContent[] })
-        : (msg.llm_data as { Content?: LLMContent[] });
-    return Array.isArray(data?.Content) ? data.Content : null;
-  } catch {
-    return null;
-  }
+  const data = llmData(msg);
+  return Array.isArray(data?.Content) ? data.Content : null;
 }
 
 // Scan messages newest-first for something displayable: a tool_use

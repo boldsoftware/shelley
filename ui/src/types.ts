@@ -10,6 +10,7 @@ import {
   Usage as GeneratedUsage,
   MessageType as GeneratedMessageType,
 } from "./generated-types";
+import { llmData } from "./utils/llmData";
 
 // Re-export generated types
 export type Conversation = GeneratedConversation;
@@ -76,6 +77,7 @@ export interface LLMMessage {
   Content: LLMContent[];
   ToolUse?: unknown;
   EndOfTurn?: boolean;
+  ExcludedFromContext?: boolean;
 }
 
 export interface LLMContent {
@@ -502,9 +504,8 @@ export function contextNudge(message: Message): { size: string; index: string } 
     const userData =
       typeof message.user_data === "string" ? JSON.parse(message.user_data) : message.user_data;
     if (!userData?.context_nudge) return null;
-    const llmData =
-      typeof message.llm_data === "string" ? JSON.parse(message.llm_data) : message.llm_data;
-    return { size: llmData?.Content?.[0]?.Text ?? "", index: llmData?.Content?.[1]?.Text ?? "" };
+    const llm = llmData(message);
+    return { size: llm?.Content?.[0]?.Text ?? "", index: llm?.Content?.[1]?.Text ?? "" };
   } catch {
     return null;
   }

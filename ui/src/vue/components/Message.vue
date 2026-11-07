@@ -265,6 +265,7 @@
 </template>
 
 <script setup lang="ts">
+import { llmData } from "../../utils/llmData";
 import { computed, inject, onUnmounted, ref, watch, type ComputedRef } from "vue";
 import {
   type Message as MessageType,
@@ -378,7 +379,7 @@ function safeParse<T>(value: unknown, label: string): T | null {
 
 const llmMessage = computed<LLMMessage | null>(() => {
   perfCount("message.parseLlmData");
-  return safeParse<LLMMessage>(props.message.llm_data, "LLM data");
+  return llmData(props.message);
 });
 
 const usage = computed<Usage | null>(() => {

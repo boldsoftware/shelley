@@ -2,8 +2,9 @@
 // delivered to it (user messages in the tag server/slack_channel.go's
 // slackEvent.tagged writes, which the model reads), the names they carry, and
 // the Block Kit blocks of its replies.
-import type { LLMMessage, Message } from "../types";
+import type { Message } from "../types";
 import { mrkdwnText, slackEmoji, type SlackNames } from "./slackMrkdwn";
+import { llmData } from "./llmData";
 
 export type SlackEventKind = "message" | "reaction" | "action";
 
@@ -112,8 +113,7 @@ export function slackEventOf(message: Message): SlackEvent | null {
   if (cached !== undefined) return cached;
   let event: SlackEvent | null = null;
   try {
-    const llm: LLMMessage | null =
-      typeof message.llm_data === "string" ? JSON.parse(message.llm_data) : message.llm_data;
+    const llm = llmData(message);
     const content = llm?.Content ?? [];
     if (content.length === 1 && content[0].Type === 2 && content[0].Text) {
       event = parseSlackEvent(content[0].Text);

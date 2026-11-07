@@ -1,6 +1,7 @@
 import type { LLMContent, Message } from "../types";
 import { isDistillStatusMessage } from "../types";
 import type { ConversationViewMode } from "../services/settings";
+import { llmData } from "./llmData";
 
 const LLM_TYPE_TOOL_RESULT = 6;
 const humanUserCache = new Map<string, boolean>();
@@ -26,8 +27,7 @@ export function isHumanUserMessage(message: Message): boolean {
   }
   if (human && message.llm_data) {
     try {
-      const llm =
-        typeof message.llm_data === "string" ? JSON.parse(message.llm_data) : message.llm_data;
+      const llm = llmData(message);
       const content: LLMContent[] = llm?.Content || [];
       human = !content.some((item) => item.Type === LLM_TYPE_TOOL_RESULT);
     } catch {

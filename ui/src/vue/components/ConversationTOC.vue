@@ -145,6 +145,7 @@
 </template>
 
 <script setup lang="ts">
+import { llmData } from "../../utils/llmData";
 import { computed, inject, nextTick, onUnmounted, ref, watch } from "vue";
 import { slackEventNames, slackEventOf, slackEventSummary } from "../../utils/slack";
 import { excerpt } from "../../utils/slackMrkdwn";
@@ -197,21 +198,10 @@ const popoverRef = ref<InstanceType<typeof Popover> | null>(null);
 const listRef = ref<HTMLElement | null>(null);
 const renderedThumbnails = ref<Map<string, TOCThumbnail[]>>(new Map());
 
-function parseLLMMessage(message: Message): LLMMessage | null {
-  if (!message.llm_data) return null;
-  try {
-    return typeof message.llm_data === "string"
-      ? (JSON.parse(message.llm_data) as LLMMessage)
-      : (message.llm_data as LLMMessage);
-  } catch {
-    return null;
-  }
-}
-
 function extractMessageLabel(message: Message, maxLen = 70): string {
   const slack = slackEventOf(message);
   if (slack) return excerpt(slackEventSummary(slack, slackEventNames(slack)), maxLen);
-  const llm = parseLLMMessage(message);
+  const llm = llmData(message);
   if (!llm?.Content) return "";
   const parts: string[] = [];
   for (const c of llm.Content as LLMContent[]) {
@@ -385,7 +375,7 @@ function buildEntries(
 
   const toolResultsById = new Map<string, LLMContent>();
   for (const message of messages) {
-    for (const content of parseLLMMessage(message)?.Content || []) {
+    for (const content of llmData(message)?.Content || []) {
       if ((content.Type === 6 || content.Type === 8) && content.ToolUseID) {
         toolResultsById.set(content.ToolUseID, content);
       }
@@ -420,7 +410,7 @@ function buildEntries(
     }
     if (contextNudge(m)) continue;
 
-    const llm = parseLLMMessage(m);
+    const llm = llmData(m);
     const content = (llm?.Content || []) as LLMContent[];
     const messageThumbnails = thumbnailsByTarget.get(targetKey("message", m.message_id)) || [];
     const text = extractMessageLabel(m);
