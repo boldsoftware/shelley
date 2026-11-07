@@ -256,7 +256,7 @@ func getConversationProject(ctx context.Context, q *generated.Queries, conversat
 }
 
 func (db *DB) GetProject(ctx context.Context, name string) (*Project, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) (*Project, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) (*Project, error) {
 		return getProject(ctx, q, name)
 	})
 }
@@ -264,7 +264,7 @@ func (db *DB) GetProject(ctx context.Context, name string) (*Project, error) {
 // GetConversationProject returns the project of conversation conversationID, or
 // sql.ErrNoRows if it is in none.
 func (db *DB) GetConversationProject(ctx context.Context, conversationID string) (*Project, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) (*Project, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) (*Project, error) {
 		return getConversationProject(ctx, q, conversationID)
 	})
 }
@@ -299,7 +299,7 @@ func attachProjectDetails(ctx context.Context, q *generated.Queries, projects []
 }
 
 func (db *DB) ListProjects(ctx context.Context) ([]Project, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]Project, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]Project, error) {
 		return listProjects(ctx, q)
 	})
 }

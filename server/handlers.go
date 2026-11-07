@@ -4328,7 +4328,7 @@ func (s *Server) startNewGeneration(ctx context.Context, conversationID string) 
 	var conversation generated.Conversation
 	err = manager.StartNewGeneration(ctx, func() error {
 		var err error
-		conversation, err = db.QueriesTxRes(s.db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		conversation, err = s.db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 			return q.IncrementConversationGeneration(ctx, conversationID)
 		})
 		return err

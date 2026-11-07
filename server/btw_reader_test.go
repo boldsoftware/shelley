@@ -358,7 +358,7 @@ func TestWedgedBtwReaderRecoversAfterServerReload(t *testing.T) {
 	releaseAndWaitIdle(t, server, reader.ConversationID, held.waitCall(t, "echo: before reload"))
 	initialPrompt := btwSystemData(t, database, reader.ConversationID, 1)
 
-	if _, err := db.QueriesTxRes(database, t.Context(), func(q *generated.Queries) (generated.Conversation, error) {
+	if _, err := database.QueriesTxRes(t.Context(), func(q *generated.Queries) (generated.Conversation, error) {
 		return q.IncrementConversationGeneration(t.Context(), reader.ConversationID)
 	}); err != nil {
 		t.Fatal(err)

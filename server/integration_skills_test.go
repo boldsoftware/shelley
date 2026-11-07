@@ -315,7 +315,7 @@ func systemPromptSkillNames(t *testing.T, h *TestHarness, subagent bool) []strin
 		conversationID = h.NewConversation("Hello", "").convID
 	}
 
-	messages, err := db.QueriesTxRes(h.db, t.Context(), func(q *generated.Queries) ([]generated.Message, error) {
+	messages, err := h.db.QueriesTxRes(t.Context(), func(q *generated.Queries) ([]generated.Message, error) {
 		return q.ListMessages(t.Context(), conversationID)
 	})
 	if err != nil {

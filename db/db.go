@@ -409,7 +409,7 @@ func (db *DB) CreateConversation(ctx context.Context, slug *string, userInitiate
 		return nil, fmt.Errorf("failed to marshal conversation options: %w", err)
 	}
 	var conversation generated.Conversation
-	conversation, err = QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+	conversation, err = db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 		return q.CreateConversation(ctx, generated.CreateConversationParams{
 			ConversationID:      conversationID,
 			Slug:                slug,
@@ -439,7 +439,7 @@ func (db *DB) CreateChannelConversation(ctx context.Context, externalID, endpoin
 		ep = &endpoint
 	}
 	var conversation generated.Conversation
-	conversation, err = QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+	conversation, err = db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 		return q.CreateChannelConversation(ctx, generated.CreateChannelConversationParams{
 			ConversationID:         conversationID,
 			Model:                  &model,
@@ -465,7 +465,7 @@ func (db *DB) CreateDraftConversation(ctx context.Context, cwd, model *string, o
 		return nil, fmt.Errorf("failed to marshal conversation options: %w", err)
 	}
 	var conversation generated.Conversation
-	conversation, err = QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+	conversation, err = db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 		return q.CreateDraftConversation(ctx, generated.CreateDraftConversationParams{
 			ConversationID:      conversationID,
 			Slug:                nil,
@@ -869,7 +869,7 @@ var ErrConversationNotDraft = errors.New("conversation is not a draft")
 
 // GetConversationByID retrieves a conversation by its ID
 func (db *DB) GetConversationByID(ctx context.Context, conversationID string) (*generated.Conversation, error) {
-	conversation, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+	conversation, err := db.QueriesRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 		return q.GetConversation(ctx, conversationID)
 	})
 	if err == sql.ErrNoRows {
@@ -880,7 +880,7 @@ func (db *DB) GetConversationByID(ctx context.Context, conversationID string) (*
 
 // GetConversationBySlug retrieves a conversation by its slug
 func (db *DB) GetConversationBySlug(ctx context.Context, slug string) (*generated.Conversation, error) {
-	conversation, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+	conversation, err := db.QueriesRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 		return q.GetConversationBySlug(ctx, &slug)
 	})
 	if err == sql.ErrNoRows {
@@ -1234,7 +1234,7 @@ func centerOnMark(s string, budget int) string {
 
 // UpdateConversationSlug updates the slug of a conversation
 func (db *DB) UpdateConversationSlug(ctx context.Context, conversationID, slug string) (*generated.Conversation, error) {
-	conversation, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+	conversation, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 		return q.UpdateConversationSlug(ctx, generated.UpdateConversationSlugParams{
 			Slug:           &slug,
 			ConversationID: conversationID,
@@ -1284,7 +1284,7 @@ func (db *DB) UpdateConversationTags(ctx context.Context, conversationID string,
 		return nil, fmt.Errorf("failed to marshal tags: %w", err)
 	}
 	var conversation generated.Conversation
-	conversation, err = QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+	conversation, err = db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 		return q.UpdateConversationTags(ctx, generated.UpdateConversationTagsParams{
 			Tags:           string(tagsJSON),
 			ConversationID: conversationID,
@@ -1320,7 +1320,7 @@ func (db *DB) ResetAllAgentWorking(ctx context.Context) error {
 // conversation into a working conversation. A false result means another
 // request already claimed it or it is no longer eligible.
 func (db *DB) ClaimInterruptedTurn(ctx context.Context, conversationID string) (bool, error) {
-	rows, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (int64, error) {
+	rows, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (int64, error) {
 		return q.ClaimInterruptedTurn(ctx, conversationID)
 	})
 	return rows == 1, err
@@ -1339,7 +1339,7 @@ type UpgradeResume struct {
 // still names the current stale working turn. A fresh turn changes its durable
 // version before a late worker can claim it.
 func (db *DB) ClaimUpgradeInterruptedTurn(ctx context.Context, resume UpgradeResume) (bool, error) {
-	rows, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (int64, error) {
+	rows, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (int64, error) {
 		return q.ClaimUpgradeInterruptedTurn(ctx, generated.ClaimUpgradeInterruptedTurnParams{
 			ConversationID:    resume.ConversationID,
 			CurrentGeneration: resume.CurrentGeneration,
@@ -1352,7 +1352,7 @@ func (db *DB) ClaimUpgradeInterruptedTurn(ctx context.Context, resume UpgradeRes
 // FinishUpgradeInterruptedTurn clears the hidden claim immediately before the
 // automatic retry. A false result means the claimed state changed unexpectedly.
 func (db *DB) FinishUpgradeInterruptedTurn(ctx context.Context, conversationID string) (bool, error) {
-	rows, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (int64, error) {
+	rows, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (int64, error) {
 		return q.FinishUpgradeInterruptedTurn(ctx, conversationID)
 	})
 	return rows == 1, err
@@ -1362,7 +1362,7 @@ func (db *DB) FinishUpgradeInterruptedTurn(ctx context.Context, conversationID s
 // ordinary manual-recovery state only if its startup token still names the same
 // durable turn. A false result means newer work or cancellation won the race.
 func (db *DB) MarkUpgradeResumeInterrupted(ctx context.Context, resume UpgradeResume) (bool, error) {
-	rows, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (int64, error) {
+	rows, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (int64, error) {
 		return q.MarkUpgradeResumeInterrupted(ctx, generated.MarkUpgradeResumeInterruptedParams{
 			ConversationID:    resume.ConversationID,
 			CurrentGeneration: resume.CurrentGeneration,
@@ -2089,7 +2089,7 @@ func marshalJSON(v interface{}) (*string, error) {
 
 // GetMessageByID retrieves a message by its ID
 func (db *DB) GetMessageByID(ctx context.Context, messageID string) (*generated.Message, error) {
-	message, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Message, error) {
+	message, err := db.QueriesRes(ctx, func(q *generated.Queries) (generated.Message, error) {
 		return q.GetMessage(ctx, messageID)
 	})
 	if err == sql.ErrNoRows {
@@ -2100,7 +2100,7 @@ func (db *DB) GetMessageByID(ctx context.Context, messageID string) (*generated.
 
 // ListMessagesByConversationPaginated retrieves messages in a conversation with pagination
 func (db *DB) ListMessagesByConversationPaginated(ctx context.Context, conversationID string, limit, offset int64) ([]generated.Message, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Message, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.Message, error) {
 		return q.ListMessagesPaginated(ctx, generated.ListMessagesPaginatedParams{
 			ConversationID: conversationID,
 			Limit:          limit,
@@ -2111,21 +2111,21 @@ func (db *DB) ListMessagesByConversationPaginated(ctx context.Context, conversat
 
 // ListMessages retrieves all messages in a conversation ordered by sequence
 func (db *DB) ListMessages(ctx context.Context, conversationID string) ([]generated.Message, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Message, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.Message, error) {
 		return q.ListMessages(ctx, conversationID)
 	})
 }
 
 // ListMessagesForContext retrieves messages that should be sent to the LLM (excludes excluded_from_context=true)
 func (db *DB) ListMessagesForContext(ctx context.Context, conversationID string) ([]generated.Message, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Message, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.Message, error) {
 		return q.ListMessagesForContext(ctx, conversationID)
 	})
 }
 
 // ListMessagesByType retrieves messages of a specific type in a conversation
 func (db *DB) ListMessagesByType(ctx context.Context, conversationID string, messageType MessageType) ([]generated.Message, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Message, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.Message, error) {
 		return q.ListMessagesByType(ctx, generated.ListMessagesByTypeParams{
 			ConversationID: conversationID,
 			Type:           string(messageType),
@@ -2136,7 +2136,7 @@ func (db *DB) ListMessagesByType(ctx context.Context, conversationID string, mes
 // ListTypedUserMessages returns the messages the user typed in a
 // conversation, newest first.
 func (db *DB) ListTypedUserMessages(ctx context.Context, conversationID string) ([]generated.Message, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Message, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.Message, error) {
 		return q.ListTypedUserMessages(ctx, conversationID)
 	})
 }
@@ -2144,7 +2144,7 @@ func (db *DB) ListTypedUserMessages(ctx context.Context, conversationID string) 
 // GetAgentMessageBefore returns the newest agent message of a conversation
 // before sequenceID.
 func (db *DB) GetAgentMessageBefore(ctx context.Context, conversationID string, sequenceID int64) (*generated.Message, error) {
-	message, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Message, error) {
+	message, err := db.QueriesRes(ctx, func(q *generated.Queries) (generated.Message, error) {
 		return q.GetAgentMessageBefore(ctx, generated.GetAgentMessageBeforeParams{
 			ConversationID: conversationID,
 			SequenceID:     sequenceID,
@@ -2162,7 +2162,7 @@ func (db *DB) GetAgentMessageBefore(ctx context.Context, conversationID string, 
 // notification body that walks back through a tail of tool-only turns up
 // to the previous user turn boundary.
 func (db *DB) ListAgentMessagesSinceLastUser(ctx context.Context, conversationID string) ([]generated.Message, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Message, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.Message, error) {
 		return q.ListAgentMessagesSinceLastUser(ctx, generated.ListAgentMessagesSinceLastUserParams{
 			ConversationID:   conversationID,
 			ConversationID_2: conversationID,
@@ -2173,7 +2173,7 @@ func (db *DB) ListAgentMessagesSinceLastUser(ctx context.Context, conversationID
 // GetLatestActionableMessage retrieves the latest message a user could act on.
 // Slug markers are skipped; see the query comment for why.
 func (db *DB) GetLatestActionableMessage(ctx context.Context, conversationID string) (*generated.Message, error) {
-	message, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Message, error) {
+	message, err := db.QueriesRes(ctx, func(q *generated.Queries) (generated.Message, error) {
 		return q.GetLatestActionableMessage(ctx, conversationID)
 	})
 	if err == sql.ErrNoRows {
@@ -2184,7 +2184,7 @@ func (db *DB) GetLatestActionableMessage(ctx context.Context, conversationID str
 
 // CountMessagesByType returns the number of messages of a specific type in a conversation
 func (db *DB) CountMessagesByType(ctx context.Context, conversationID string, messageType MessageType) (int64, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) (int64, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) (int64, error) {
 		return q.CountMessagesByType(ctx, generated.CountMessagesByTypeParams{
 			ConversationID: conversationID,
 			Type:           string(messageType),
@@ -2207,7 +2207,7 @@ func (db *DB) QueriesTx(ctx context.Context, fn func(*generated.Queries) error) 
 }
 
 // QueriesRes is Queries for a fn that returns a value.
-func QueriesRes[T any](db *DB, ctx context.Context, fn func(*generated.Queries) (T, error)) (T, error) {
+func (db *DB) QueriesRes[T any](ctx context.Context, fn func(*generated.Queries) (T, error)) (T, error) {
 	var res T
 	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
 		var err error
@@ -2218,7 +2218,7 @@ func QueriesRes[T any](db *DB, ctx context.Context, fn func(*generated.Queries) 
 }
 
 // QueriesTxRes is QueriesTx for a fn that returns a value.
-func QueriesTxRes[T any](db *DB, ctx context.Context, fn func(*generated.Queries) (T, error)) (T, error) {
+func (db *DB) QueriesTxRes[T any](ctx context.Context, fn func(*generated.Queries) (T, error)) (T, error) {
 	var res T
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
 		var err error
@@ -2231,14 +2231,14 @@ func QueriesTxRes[T any](db *DB, ctx context.Context, fn func(*generated.Queries
 // ListConversationsWithQueuedTranscriptions returns every conversation, archived
 // or not, whose queued_messages array holds a transcription item.
 func (db *DB) ListConversationsWithQueuedTranscriptions(ctx context.Context) ([]generated.Conversation, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Conversation, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.Conversation, error) {
 		return q.ListConversationsWithQueuedTranscriptions(ctx)
 	})
 }
 
 // ListArchivedConversations retrieves archived conversations with pagination
 func (db *DB) ListArchivedConversations(ctx context.Context, limit, offset int64) ([]generated.Conversation, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Conversation, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.Conversation, error) {
 		return q.ListArchivedConversations(ctx, generated.ListArchivedConversationsParams{
 			Limit:  limit,
 			Offset: offset,
@@ -2249,7 +2249,7 @@ func (db *DB) ListArchivedConversations(ctx context.Context, limit, offset int64
 // SearchArchivedConversations searches for archived conversations containing the given query in their slug
 func (db *DB) SearchArchivedConversations(ctx context.Context, query string, limit, offset int64) ([]generated.Conversation, error) {
 	queryPtr := &query
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Conversation, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.Conversation, error) {
 		return q.SearchArchivedConversations(ctx, generated.SearchArchivedConversationsParams{
 			Column1: queryPtr,
 			Limit:   limit,
@@ -2260,7 +2260,7 @@ func (db *DB) SearchArchivedConversations(ctx context.Context, query string, lim
 
 // ArchiveConversation archives a conversation
 func (db *DB) ArchiveConversation(ctx context.Context, conversationID string) (*generated.Conversation, error) {
-	conversation, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+	conversation, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 		return q.ArchiveConversation(ctx, conversationID)
 	})
 	return &conversation, err
@@ -2268,7 +2268,7 @@ func (db *DB) ArchiveConversation(ctx context.Context, conversationID string) (*
 
 // UnarchiveConversation unarchives a conversation
 func (db *DB) UnarchiveConversation(ctx context.Context, conversationID string) (*generated.Conversation, error) {
-	conversation, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+	conversation, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 		return q.UnarchiveConversation(ctx, conversationID)
 	})
 	return &conversation, err
@@ -2373,7 +2373,7 @@ func (db *DB) CreateSubagentConversation(ctx context.Context, slug, parentID str
 		return nil, fmt.Errorf("failed to generate conversation ID: %w", err)
 	}
 	var conversation generated.Conversation
-	conversation, err = QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+	conversation, err = db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 		return q.CreateSubagentConversation(ctx, generated.CreateSubagentConversationParams{
 			ConversationID:       conversationID,
 			Slug:                 &slug,
@@ -2388,7 +2388,7 @@ func (db *DB) CreateSubagentConversation(ctx context.Context, slug, parentID str
 // conversations of parentID (recursively), one row per call so the caller can
 // price each by its context-size tier.
 func (db *DB) GetSubagentUsage(ctx context.Context, parentID string) ([]generated.GetSubagentUsageRow, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.GetSubagentUsageRow, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.GetSubagentUsageRow, error) {
 		return q.GetSubagentUsage(ctx, &parentID)
 	})
 }
@@ -2397,14 +2397,14 @@ func (db *DB) GetSubagentUsage(ctx context.Context, parentID string) ([]generate
 // entries) across all descendant conversations of parentID (recursively), one
 // row per entry so the caller can price each by its context-size tier.
 func (db *DB) GetSubagentOtherUsage(ctx context.Context, parentID string) ([]generated.GetSubagentOtherUsageRow, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.GetSubagentOtherUsageRow, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.GetSubagentOtherUsageRow, error) {
 		return q.GetSubagentOtherUsage(ctx, &parentID)
 	})
 }
 
 // GetMaxSequenceIDsForAllConversations returns a map of conversation_id -> max sequence_id.
 func (db *DB) GetMaxSequenceIDsForAllConversations(ctx context.Context) (map[string]int64, error) {
-	rows, err := QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.GetMaxSequenceIDsForAllConversationsRow, error) {
+	rows, err := db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.GetMaxSequenceIDsForAllConversationsRow, error) {
 		return q.GetMaxSequenceIDsForAllConversations(ctx)
 	})
 	if err != nil {
@@ -2419,7 +2419,7 @@ func (db *DB) GetMaxSequenceIDsForAllConversations(ctx context.Context) (map[str
 
 // UpdateConversationParent sets the parent_conversation_id for a conversation
 func (db *DB) UpdateConversationParent(ctx context.Context, conversationID, parentID string) (*generated.Conversation, error) {
-	conversation, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+	conversation, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 		return q.UpdateConversationParent(ctx, generated.UpdateConversationParentParams{
 			ParentConversationID: &parentID,
 			ConversationID:       conversationID,
@@ -2430,14 +2430,14 @@ func (db *DB) UpdateConversationParent(ctx context.Context, conversationID, pare
 
 // GetSubagents retrieves all subagent conversations for a parent conversation
 func (db *DB) GetSubagents(ctx context.Context, parentID string) ([]generated.Conversation, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Conversation, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.Conversation, error) {
 		return q.GetSubagents(ctx, &parentID)
 	})
 }
 
 // GetConversationBySlugAndParent retrieves a subagent conversation by slug and parent ID
 func (db *DB) GetConversationBySlugAndParent(ctx context.Context, slug, parentID string) (*generated.Conversation, error) {
-	conversation, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+	conversation, err := db.QueriesRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
 		return q.GetConversationBySlugAndParent(ctx, generated.GetConversationBySlugAndParentParams{
 			Slug:                 &slug,
 			ParentConversationID: &parentID,
@@ -2483,14 +2483,14 @@ func (a *SubagentDBAdapter) GetOrCreateSubagentConversation(ctx context.Context,
 
 // GetModels returns all models from the database
 func (db *DB) GetModels(ctx context.Context) ([]generated.Model, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Model, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.Model, error) {
 		return q.GetModels(ctx)
 	})
 }
 
 // GetModel returns a model by ID
 func (db *DB) GetModel(ctx context.Context, modelID string) (*generated.Model, error) {
-	model, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Model, error) {
+	model, err := db.QueriesRes(ctx, func(q *generated.Queries) (generated.Model, error) {
 		return q.GetModel(ctx, modelID)
 	})
 	if err != nil {
@@ -2504,7 +2504,7 @@ func (db *DB) CreateModel(ctx context.Context, params generated.CreateModelParam
 	if params.ReasoningReplay == "" {
 		params.ReasoningReplay = "auto"
 	}
-	model, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Model, error) {
+	model, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Model, error) {
 		return q.CreateModel(ctx, params)
 	})
 	if err != nil {
@@ -2518,7 +2518,7 @@ func (db *DB) UpdateModel(ctx context.Context, params generated.UpdateModelParam
 	if params.ReasoningReplay == "" {
 		params.ReasoningReplay = "auto"
 	}
-	model, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Model, error) {
+	model, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Model, error) {
 		return q.UpdateModel(ctx, params)
 	})
 	if err != nil {
@@ -2535,19 +2535,19 @@ func (db *DB) DeleteModel(ctx context.Context, modelID string) error {
 }
 
 func (db *DB) GetNotificationChannels(ctx context.Context) ([]generated.NotificationChannel, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.NotificationChannel, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.NotificationChannel, error) {
 		return q.GetNotificationChannels(ctx)
 	})
 }
 
 func (db *DB) GetEnabledNotificationChannels(ctx context.Context) ([]generated.NotificationChannel, error) {
-	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.NotificationChannel, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.NotificationChannel, error) {
 		return q.GetEnabledNotificationChannels(ctx)
 	})
 }
 
 func (db *DB) GetNotificationChannel(ctx context.Context, channelID string) (*generated.NotificationChannel, error) {
-	ch, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.NotificationChannel, error) {
+	ch, err := db.QueriesRes(ctx, func(q *generated.Queries) (generated.NotificationChannel, error) {
 		return q.GetNotificationChannel(ctx, channelID)
 	})
 	if err != nil {
@@ -2557,7 +2557,7 @@ func (db *DB) GetNotificationChannel(ctx context.Context, channelID string) (*ge
 }
 
 func (db *DB) CreateNotificationChannel(ctx context.Context, params generated.CreateNotificationChannelParams) (*generated.NotificationChannel, error) {
-	ch, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.NotificationChannel, error) {
+	ch, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.NotificationChannel, error) {
 		return q.CreateNotificationChannel(ctx, params)
 	})
 	if err != nil {
@@ -2567,7 +2567,7 @@ func (db *DB) CreateNotificationChannel(ctx context.Context, params generated.Cr
 }
 
 func (db *DB) UpdateNotificationChannel(ctx context.Context, params generated.UpdateNotificationChannelParams) (*generated.NotificationChannel, error) {
-	ch, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.NotificationChannel, error) {
+	ch, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.NotificationChannel, error) {
 		return q.UpdateNotificationChannel(ctx, params)
 	})
 	if err != nil {
@@ -2636,7 +2636,7 @@ func (db *DB) InitSetting(ctx context.Context, key, value string) (string, error
 
 // GetAllSettings retrieves all settings
 func (db *DB) GetAllSettings(ctx context.Context) (map[string]string, error) {
-	rows, err := QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.GetAllSettingsRow, error) {
+	rows, err := db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.GetAllSettingsRow, error) {
 		return q.GetAllSettings(ctx)
 	})
 	if err != nil {
@@ -2710,7 +2710,7 @@ func (db *DB) DeleteCacheSession(ctx context.Context, tokenHash string) error {
 // keyed by flag name. Callers are responsible for filtering out names not
 // recognized by the in-code registry.
 func (db *DB) GetAllFeatureFlagOverrides(ctx context.Context) (map[string]string, error) {
-	rows, err := QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.GetAllFeatureFlagsRow, error) {
+	rows, err := db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.GetAllFeatureFlagsRow, error) {
 		return q.GetAllFeatureFlags(ctx)
 	})
 	if err != nil {
