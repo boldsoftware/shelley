@@ -85,13 +85,29 @@ type Model struct {
 	// see exactly which endpoint each model will be reached at.
 	DefaultBaseURL string
 
-	// Build constructs an llm.Service for this model given a BARE base
-	// URL (origin + any non-API prefix, e.g. "https://llm.int.exe.xyz"
-	// or "" for the provider package default), an API key, and an HTTP
-	// client. The function is responsible for appending its own
-	// API-protocol path ("/v1", "/v1/messages", "/v1beta", ...) — the
-	// caller never encodes those.
-	Build func(baseURL, apiKey string, httpc *http.Client) llm.Service
+	// OpenAI is the client metadata (verbosity, apply_patch, canonical URL,
+	// image support) for OpenAI-protocol models; zero for other APIs.
+	OpenAI oai.Model
+}
+
+// Build constructs an llm.Service for this model given a BARE base URL
+// (origin + any non-API prefix, e.g. "https://llm.int.exe.xyz", or "" for
+// the provider package default), an API key, and an HTTP client.
+// APIEndpoint appends the protocol path; callers never encode it.
+func (m Model) Build(baseURL, apiKey string, httpc *http.Client) llm.Service {
+	if m.APIType == APITypeBuiltIn {
+		return predictable.NewService()
+	}
+	cfg := ServiceConfig{
+		APIType: m.APIType, URL: APIEndpoint(m.APIType, baseURL), APIKey: apiKey, HTTPC: httpc,
+		Model: m.APIModelName, SupportsImages: true,
+		OpenAIModel: m.OpenAI, ProviderName: string(m.Provider),
+		ThinkingBinding: m.Provider == ProviderAnthropic,
+	}
+	if m.APIType == APITypeOpenAIResponses || m.APIType == APITypeOpenAIChat {
+		cfg.SupportsImages = m.OpenAI.SupportsImages
+	}
+	return NewService(cfg)
 }
 
 // Built is a ready-to-use model, shaped to mirror a row in the custom
@@ -191,212 +207,196 @@ func All() []Model {
 			ID: "claude-opus-5.5", Provider: ProviderAnthropic,
 			Description: "Claude Opus 5.5", APIModelName: ant.Claude55Opus,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.Claude55Opus),
 		},
 		{
 			ID: "claude-sonnet-5.5", Provider: ProviderAnthropic,
 			Description: "Claude Sonnet 5.5", APIModelName: ant.Claude55Sonnet,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.Claude55Sonnet),
 		},
 		{
 			ID: "claude-haiku-5.5", Provider: ProviderAnthropic,
 			Description: "Claude Haiku 5.5", APIModelName: ant.Claude55Haiku,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.Claude55Haiku),
 		},
 		{
 			ID: "claude-opus-5", Provider: ProviderAnthropic,
 			Description: "Claude Opus 5", APIModelName: ant.Claude5Opus,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.Claude5Opus),
 		},
 		{
 			ID: "claude-fable-5.1", Provider: ProviderAnthropic,
 			Description: "Claude Fable 5.1", APIModelName: ant.ClaudeFable51,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.ClaudeFable51),
 		},
 		{
 			ID: "claude-fable-5", Provider: ProviderAnthropic,
 			Description: "Claude Fable 5", APIModelName: ant.ClaudeFable5,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.ClaudeFable5),
 		},
 		{
 			ID: "gpt-6-astra", Provider: ProviderOpenAI,
 			Description: "GPT-6 Astra", APIModelName: oai.GPT6Astra.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT6Astra, "openai"),
+			OpenAI: oai.GPT6Astra,
 		},
 		{
 			ID: "gpt-6.1-sol", Provider: ProviderOpenAI,
 			Description: "GPT-6.1 Sol", APIModelName: oai.GPT61Sol.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT61Sol, "openai"),
+			OpenAI: oai.GPT61Sol,
 		},
 		{
 			ID: "gpt-6.1-terra", Provider: ProviderOpenAI,
 			Description: "GPT-6.1 Terra", APIModelName: oai.GPT61Terra.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT61Terra, "openai"),
+			OpenAI: oai.GPT61Terra,
 		},
 		{
 			ID: "gpt-6-sol", Provider: ProviderOpenAI,
 			Description: "GPT-6 Sol", APIModelName: oai.GPT6Sol.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT6Sol, "openai"),
+			OpenAI: oai.GPT6Sol,
 		},
 		{
 			ID: "gpt-6-luna", Provider: ProviderOpenAI,
 			Description: "GPT-6 Luna", APIModelName: oai.GPT6Luna.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT6Luna, "openai"),
+			OpenAI: oai.GPT6Luna,
 		},
 		{
 			ID: "gpt-5.6-sol", Provider: ProviderOpenAI,
 			Description: "GPT-5.6 Sol", APIModelName: oai.GPT56Sol.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT56Sol, "openai"),
+			OpenAI: oai.GPT56Sol,
 		},
 		{
 			ID: "gpt-5.6-terra", Provider: ProviderOpenAI,
 			Description: "GPT-5.6 Terra", APIModelName: oai.GPT56Terra.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT56Terra, "openai"),
+			OpenAI: oai.GPT56Terra,
 		},
 		{
 			ID: "gpt-5.6-luna", Provider: ProviderOpenAI,
 			Description: "GPT-5.6 Luna", APIModelName: oai.GPT56Luna.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT56Luna, "openai"),
+			OpenAI: oai.GPT56Luna,
 		},
 		{
 			ID: "gpt-5.5", Provider: ProviderOpenAI,
 			Description: "GPT-5.5", APIModelName: oai.GPT55.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT55, "openai"),
+			OpenAI: oai.GPT55,
 		},
 		{
 			ID: "glm-5.3-fireworks", Provider: ProviderFireworks,
 			Description: "GLM-5.3 on Fireworks", APIModelName: oai.GLM53Fireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
-			Build: oaiSvc(APITypeOpenAIChat, oai.GLM53Fireworks, "fireworks"),
+			OpenAI: oai.GLM53Fireworks,
 		},
 		{
 			ID: "glm-5.3-flash-fireworks", Provider: ProviderFireworks,
 			Description: "GLM-5.3 Flash on Fireworks", APIModelName: oai.GLM53FlashFireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
-			Build: oaiSvc(APITypeOpenAIChat, oai.GLM53FlashFireworks, "fireworks"),
+			OpenAI: oai.GLM53FlashFireworks,
 		},
 		{
 			ID: "gemini-3.1-pro", Provider: ProviderGemini,
 			Description: "Gemini 3.1 Pro", APIModelName: "gemini-3.1-pro-preview",
 			APIType: APITypeGemini, DefaultBaseURL: DefaultGeminiBaseURL,
-			Build: gemSvc("gemini-3.1-pro-preview"),
 		},
 		{
 			ID: "gemini-3.8-flash", Provider: ProviderGemini,
 			Description: "Gemini 3.8 Flash", APIModelName: "gemini-3.8-flash",
 			APIType: APITypeGemini, DefaultBaseURL: DefaultGeminiBaseURL,
-			Build: gemSvc("gemini-3.8-flash"),
 		},
 		{
 			ID: "grok-4.5", Provider: ProviderXAI,
 			Description: "Grok 4.5", APIModelName: oai.Grok45.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultXAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.Grok45, "xai"),
+			OpenAI: oai.Grok45,
 		},
 		{
 			ID: "kimi-k3-fireworks", Provider: ProviderFireworks,
 			Description: "Kimi K3 on Fireworks", APIModelName: oai.KimiK3Fireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
-			Build: oaiSvc(APITypeOpenAIChat, oai.KimiK3Fireworks, "fireworks"),
+			OpenAI: oai.KimiK3Fireworks,
 		},
 		{
 			ID: "claude-opus-4.8", Provider: ProviderAnthropic,
 			Description: "Claude Opus 4.8 (default)", APIModelName: ant.Claude48Opus,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.Claude48Opus),
 		},
 		{
 			ID: "claude-opus-4.7", Provider: ProviderAnthropic,
 			Description: "Claude Opus 4.7", APIModelName: ant.Claude47Opus,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.Claude47Opus),
 		},
 		{
 			ID: "claude-opus-4.5", Provider: ProviderAnthropic,
 			Description: "Claude Opus 4.5", APIModelName: ant.Claude45Opus,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.Claude45Opus),
 		},
 		{
 			ID: "claude-sonnet-5", Provider: ProviderAnthropic,
 			Description: "Claude Sonnet 5", APIModelName: ant.Claude5Sonnet,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.Claude5Sonnet),
 		},
 		{
 			ID: "claude-sonnet-4.6", Provider: ProviderAnthropic,
 			Description: "Claude Sonnet 4.6", APIModelName: ant.Claude46Sonnet,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.Claude46Sonnet),
 		},
 		{
 			ID: "claude-sonnet-4.5", Provider: ProviderAnthropic,
 			Description: "Claude Sonnet 4.5", APIModelName: ant.Claude45Sonnet,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.Claude45Sonnet),
 		},
 		{
 			ID: "claude-haiku-4.5", Provider: ProviderAnthropic,
 			Description: "Claude Haiku 4.5", APIModelName: ant.Claude45Haiku,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
-			Build: antSvc(ant.Claude45Haiku),
 		},
 		{
 			ID: "gpt-5.4", Provider: ProviderOpenAI,
 			Description: "GPT-5.4", APIModelName: oai.GPT54.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT54, "openai"),
+			OpenAI: oai.GPT54,
 		},
 		{
 			ID: "gpt-5.4-mini", Provider: ProviderOpenAI,
 			Description: "GPT-5.4 mini", APIModelName: oai.GPT54Mini.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT54Mini, "openai"),
+			OpenAI: oai.GPT54Mini,
 		},
 		{
 			ID: "gpt-5.4-nano", Provider: ProviderOpenAI,
 			Description: "GPT-5.4 nano", APIModelName: oai.GPT54Nano.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT54Nano, "openai"),
+			OpenAI: oai.GPT54Nano,
 		},
 		{
 			ID: "gpt-5.3-codex", Provider: ProviderOpenAI,
 			Description: "GPT-5.3 Codex", APIModelName: oai.GPT53Codex.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT53Codex, "openai"),
+			OpenAI: oai.GPT53Codex,
 		},
 		{
 			ID: "deepseek-v4.1-flash-1017-fireworks", Provider: ProviderFireworks,
 			Description: "DeepSeek V4.1 Flash 1017 on Fireworks", APIModelName: oai.DeepseekV41Flash1017Fireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
-			Build: oaiSvc(APITypeOpenAIChat, oai.DeepseekV41Flash1017Fireworks, "fireworks"),
+			OpenAI: oai.DeepseekV41Flash1017Fireworks,
 		},
 		{
 			ID: "deepseek-v4.1-flash-fireworks", Provider: ProviderFireworks,
 			Description: "DeepSeek V4.1 Flash on Fireworks", APIModelName: oai.DeepseekV41FlashFireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
-			Build: oaiSvc(APITypeOpenAIChat, oai.DeepseekV41FlashFireworks, "fireworks"),
+			OpenAI: oai.DeepseekV41FlashFireworks,
 		},
 		{
 			ID: "predictable", Provider: ProviderBuiltIn,
 			Description:    "Deterministic test model (no API key)",
 			APIType:        APITypeBuiltIn,
 			DefaultBaseURL: "-",
-			Build:          func(url, apiKey string, httpc *http.Client) llm.Service { return predictable.NewService() },
 		},
 	}
 }

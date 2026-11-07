@@ -143,14 +143,10 @@ func TestIntegrationUnspecifiedControlsUseCatalogBuild(t *testing.T) {
 	client := &http.Client{}
 	catalog := append(models.All(), models.Model{
 		ID: "configured-chat", APIModelName: "unknown-configured-chat", Provider: models.ProviderOpenAI, APIType: models.APITypeOpenAIChat,
-		Build: func(base, key string, httpc *http.Client) llm.Service {
-			return &oai.Service{Model: oai.Model{ModelName: "unknown-configured-chat"}, ModelURL: base + "/v1", APIKey: key, HTTPC: httpc, ReasoningEffort: "none", ThinkingLevel: llm.ThinkingLevelXHigh, MaxTokens: 1234}
-		},
+		OpenAI: oai.Model{ModelName: "unknown-configured-chat", TextVerbosity: "low"},
 	}, models.Model{
 		ID: "configured-responses", APIModelName: "unknown-configured-responses", Provider: models.ProviderOpenAI, APIType: models.APITypeOpenAIResponses,
-		Build: func(base, key string, httpc *http.Client) llm.Service {
-			return &oai.ResponsesService{Model: oai.Model{ModelName: "unknown-configured-responses"}, ModelURL: base + "/v1", APIKey: key, HTTPC: httpc, ReasoningEffort: "custom-effort", ThinkingLevel: llm.ThinkingLevelHigh, MaxTokens: 4321}
-		},
+		OpenAI: oai.Model{ModelName: "unknown-configured-responses", TextVerbosity: "high", SupportsApplyPatch: true},
 	})
 	for _, entry := range catalog {
 		if entry.APIType != models.APITypeAnthropicMessages && entry.APIType != models.APITypeOpenAIResponses && entry.APIType != models.APITypeOpenAIChat {

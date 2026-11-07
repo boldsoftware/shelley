@@ -10,7 +10,6 @@ import (
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
-	"shelley.exe.dev/llm/oai"
 	"shelley.exe.dev/models/modelsdev"
 )
 
@@ -176,9 +175,7 @@ func (m *Manager) providerEntry(row db.ModelProvider, wire string) (serviceEntry
 	cfg, _ := customServiceConfig(&model, m.httpc)
 	cfg.DisableReasoning = model.ReasoningSupport == "no"
 	if catalog := ByID(wire); exact && catalog != nil && apiType == APITypeOpenAIResponses && catalog.APIType == apiType {
-		if base, ok := catalog.Build("", "", m.httpc).(*oai.ResponsesService); ok {
-			cfg.OpenAIModel.TextVerbosity, cfg.OpenAIModel.SupportsApplyPatch = base.Model.TextVerbosity, base.Model.SupportsApplyPatch
-		}
+		cfg.OpenAIModel.TextVerbosity, cfg.OpenAIModel.SupportsApplyPatch = catalog.OpenAI.TextVerbosity, catalog.OpenAI.SupportsApplyPatch
 	}
 	service := wrapReasoningService(NewService(cfg), &model).(*reasoningService)
 	service.disableWebSearch = true

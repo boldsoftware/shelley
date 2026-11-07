@@ -43,9 +43,6 @@ func TestAll(t *testing.T) {
 		if m.Provider == "" {
 			t.Errorf("model %s missing Provider", m.ID)
 		}
-		if m.Build == nil {
-			t.Errorf("model %s missing Build", m.ID)
-		}
 	}
 }
 
@@ -54,7 +51,7 @@ func TestGPT61SolInBuiltInCatalog(t *testing.T) {
 		if m.ID != "gpt-6.1-sol" {
 			continue
 		}
-		if m.APIModelName != "gpt-6.1-sol" || m.Description != "GPT-6.1 Sol" || m.APIType != APITypeOpenAIResponses || m.Build == nil {
+		if m.APIModelName != "gpt-6.1-sol" || m.Description != "GPT-6.1 Sol" || m.APIType != APITypeOpenAIResponses {
 			t.Fatalf("GPT-6.1 Sol = %+v", m)
 		}
 		return
@@ -67,7 +64,7 @@ func TestGPT61TerraInBuiltInCatalog(t *testing.T) {
 		if m.ID != "gpt-6.1-terra" {
 			continue
 		}
-		if m.APIModelName != "gpt-6.1-terra" || m.Description != "GPT-6.1 Terra" || m.APIType != APITypeOpenAIResponses || m.Build == nil {
+		if m.APIModelName != "gpt-6.1-terra" || m.Description != "GPT-6.1 Terra" || m.APIType != APITypeOpenAIResponses {
 			t.Fatalf("GPT-6.1 Terra = %+v", m)
 		}
 		svc, ok := m.Build("", "", nil).(*oai.ResponsesService)
@@ -86,7 +83,7 @@ func TestSonnet55InBuiltInCatalog(t *testing.T) {
 			continue
 		}
 		found = true
-		if m.APIModelName != "claude-sonnet-5-5" || m.Description != "Claude Sonnet 5.5" || m.APIType != APITypeAnthropicMessages || m.Build == nil {
+		if m.APIModelName != "claude-sonnet-5-5" || m.Description != "Claude Sonnet 5.5" || m.APIType != APITypeAnthropicMessages {
 			t.Fatalf("Sonnet 5.5 = %+v", m)
 		}
 	}
@@ -103,7 +100,7 @@ func TestHaiku55InBuiltInCatalog(t *testing.T) {
 		}
 		if m.Provider != ProviderAnthropic || m.APIModelName != "claude-haiku-5-5" ||
 			m.Description != "Claude Haiku 5.5" || m.APIType != APITypeAnthropicMessages ||
-			m.DefaultBaseURL != DefaultAnthropicBaseURL || m.Build == nil {
+			m.DefaultBaseURL != DefaultAnthropicBaseURL {
 			t.Fatalf("Haiku 5.5 = %+v", m)
 		}
 		for j, old := range models {
@@ -656,7 +653,7 @@ func TestGeminiFactoryUsesStreamingLimit(t *testing.T) {
 		_, _ = w.Write([]byte("data: " + `{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"ok"}]}}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1}}` + "\n\n"))
 	}))
 	defer server.Close()
-	service := gemSvc("gemini-4-argon")(server.URL, "key", server.Client())
+	service := Model{APIType: APITypeGemini, APIModelName: "gemini-4-argon"}.Build(server.URL, "key", server.Client())
 	if _, err := service.Do(t.Context(), simpleRequest()); err != nil {
 		t.Fatal(err)
 	}
@@ -691,7 +688,7 @@ func TestGeminiUnconfigurableThinkingDefaults(t *testing.T) {
 				_, _ = w.Write([]byte("data: " + `{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"ok"}]}}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1}}` + "\n\n"))
 			}))
 			defer server.Close()
-			service := gemSvc(tt.model)(server.URL, "key", server.Client())
+			service := Model{APIType: APITypeGemini, APIModelName: tt.model}.Build(server.URL, "key", server.Client())
 			service = WrapReasoningConfig(service, server.URL, tt.model, "auto", tt.mapping)
 			if got, want := llm.SupportsReasoning(service), tt.mapping != ""; got != want {
 				t.Errorf("thinking controls advertised = %v, want %v", got, want)
@@ -733,7 +730,7 @@ func TestGeminiRequiredThinkingRejectsDisabledConfig(t *testing.T) {
 		level  llm.ThinkingLevel
 		effort string
 	}{{}, {level: llm.ThinkingLevelHigh}, {effort: "high"}, {effort: "off"}} {
-		service := WrapReasoningConfig(gemSvc("gemini-4-argon")(server.URL, "key", server.Client()), server.URL, "gemini-4-argon", "no", "")
+		service := WrapReasoningConfig(Model{APIType: APITypeGemini, APIModelName: "gemini-4-argon"}.Build(server.URL, "key", server.Client()), server.URL, "gemini-4-argon", "no", "")
 		if got := llm.ServiceDefaultReasoningLevel(service); got != "" {
 			t.Errorf("invalid disabled config advertises %q", got)
 		}
@@ -743,7 +740,7 @@ func TestGeminiRequiredThinkingRejectsDisabledConfig(t *testing.T) {
 			t.Errorf("disabled Argon config error = %v", err)
 		}
 	}
-	service := WrapReasoningConfig(gemSvc("gemini-2.5-flash")("", "key", nil), "", "gemini-2.5-flash", "no", "")
+	service := WrapReasoningConfig(Model{APIType: APITypeGemini, APIModelName: "gemini-2.5-flash"}.Build("", "key", nil), "", "gemini-2.5-flash", "no", "")
 	request, err := service.(*reasoningService).mapRequest(&llm.Request{ReasoningEffort: "high"})
 	if err != nil || request.ThinkingLevel != llm.ThinkingLevelOff || request.ReasoningEffort != "" {
 		t.Fatalf("disabled Flash config was bypassed: %+v, error=%v", request, err)

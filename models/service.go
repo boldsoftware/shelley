@@ -96,32 +96,6 @@ func NewService(cfg ServiceConfig) llm.Service {
 	return nil
 }
 
-// catalogService returns a Model.Build for a built-in catalog entry.
-func catalogService(cfg ServiceConfig) func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-	return func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-		cfg := cfg
-		cfg.URL, cfg.APIKey, cfg.HTTPC = APIEndpoint(cfg.APIType, baseURL), apiKey, httpc
-		return NewService(cfg)
-	}
-}
-
-func antSvc(modelName string) func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-	return catalogService(ServiceConfig{
-		APIType: APITypeAnthropicMessages, Model: modelName, SupportsImages: true, ThinkingBinding: true,
-	})
-}
-
-func oaiSvc(apiType APIType, model oai.Model, providerName string) func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-	return catalogService(ServiceConfig{
-		APIType: apiType, Model: model.ModelName, SupportsImages: model.SupportsImages,
-		OpenAIModel: model, ProviderName: providerName,
-	})
-}
-
-func gemSvc(modelName string) func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-	return catalogService(ServiceConfig{APIType: APITypeGemini, Model: modelName, SupportsImages: true})
-}
-
 // customAPITypes maps a stored custom-model provider_type to its protocol.
 var customAPITypes = map[string]APIType{
 	"anthropic":        APITypeAnthropicMessages,
