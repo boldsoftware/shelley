@@ -525,9 +525,8 @@ func (l *Loop) checkGitStateChange(ctx context.Context) {
 	}
 }
 
-// handleMaxTokensTruncation handles the case where the LLM response was truncated
-// due to hitting the maximum output token limit. It records the truncated message
-// for cost tracking (excluded from context) and an error message for the user.
+// userFacingLLMError explains a failed LLM request to the user, naming
+// Shelley's own stall and duration limits and the request trace IDs.
 func userFacingLLMError(err error, trace *llm.RequestTrace) string {
 	var msg string
 	var tooLong *tooLongError
