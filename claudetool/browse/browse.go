@@ -65,9 +65,6 @@ type BrowseTools struct {
 	browserCtx       context.Context
 	browserCtxCancel context.CancelFunc
 	mux              sync.Mutex
-	// Map to track screenshots by ID and their creation time
-	screenshots      map[string]time.Time
-	screenshotsMutex sync.Mutex
 	// Console logs storage
 	consoleLogs      []*runtime.EventConsoleAPICalled
 	consoleLogsMutex sync.Mutex
@@ -113,7 +110,6 @@ func NewBrowseTools(ctx context.Context, idleTimeout time.Duration) *BrowseTools
 
 	bt := &BrowseTools{
 		ctx:            ctx,
-		screenshots:    make(map[string]time.Time),
 		consoleLogs:    make([]*runtime.EventConsoleAPICalled, 0),
 		maxConsoleLogs: 100,
 		idleTimeout:    idleTimeout,
@@ -1004,18 +1000,10 @@ func (b *BrowseTools) SaveScreenshot(data []byte) string {
 	// Generate a unique ID
 	id := uuid.New().String()
 
-	// Save the file
-	filePath := filepath.Join(ScreenshotDir, id+".png")
-	if err := os.WriteFile(filePath, data, 0o644); err != nil {
+	if err := os.WriteFile(GetScreenshotPath(id), data, 0o644); err != nil {
 		log.Printf("Failed to save screenshot: %v", err)
 		return ""
 	}
-
-	// Track this screenshot
-	b.screenshotsMutex.Lock()
-	b.screenshots[id] = time.Now()
-	b.screenshotsMutex.Unlock()
-
 	return id
 }
 
