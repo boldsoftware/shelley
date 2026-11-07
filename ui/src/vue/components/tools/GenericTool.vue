@@ -1,74 +1,46 @@
-<!-- Vue port of components/GenericTool.tsx. Fallback tool renderer.
-     Preserves: .tool, .tool-header, .tool-summary, .tool-emoji, .tool-command,
-     .tool-toggle, .tool-details, .tool-section, .tool-label, .tool-code,
-     data-testid tool-call-running/completed. -->
+<!-- Fallback renderer for tools without their own component: the tool name in
+     the header, the raw input and output in the details. -->
 <template>
-  <div class="tool" :data-testid="isComplete ? 'tool-call-completed' : 'tool-call-running'">
-    <div class="tool-header" @click="isExpanded = !isExpanded">
-      <div :class="['tool-summary', { 'generic-tool-summary--complete': isComplete }]">
-        <span class="tool-emoji" :class="{ running: isRunning }">⚙️</span>
-        <span class="generic-tool-copy">
-          <span class="tool-command">{{ toolName }}</span>
-          <GenericToolWarning
-            v-if="isComplete && warnMissingUi"
-            :tool-name="toolName"
-          />
-        </span>
-      </div>
-      <button
-        class="tool-toggle"
-        :aria-label="isExpanded ? 'Collapse' : 'Expand'"
-        :aria-expanded="isExpanded"
-      >
-        <ToolChevron :expanded="isExpanded" />
-      </button>
+  <ToolCard
+    emoji="⚙️"
+    :complete="complete"
+    :is-running="isRunning"
+    :tool-invoked-at="toolInvokedAt"
+    :summary-class="{ 'generic-tool-summary--complete': complete }"
+  >
+    <template #summary>
+      <span class="generic-tool-copy">
+        <span class="tool-command">{{ toolName }}</span>
+        <GenericToolWarning v-if="complete && warnMissingUi" :tool-name="toolName" />
+      </span>
+    </template>
+    <ToolSection v-if="toolInput !== undefined" label="Input" :text="formatData(toolInput)" />
+
+    <div v-if="isRunning" class="tool-section">
+      <div class="tool-label">Status:</div>
+      <div class="tool-running-text">running...</div>
     </div>
 
-    <div v-if="isExpanded" class="tool-details">
-      <RunningToolTime v-if="isRunning" :start-time="toolInvokedAt" />
-      <div v-if="toolInput !== undefined" class="tool-section">
-        <div class="tool-label">Input:</div>
-        <pre class="tool-code">{{ formatData(toolInput) }}</pre>
-      </div>
-
-      <div v-if="isRunning" class="tool-section">
-        <div class="tool-label">Status:</div>
-        <div class="tool-running-text">running...</div>
-      </div>
-
-      <div v-if="isComplete" class="tool-section">
-        <div class="tool-label">
-          Output{{ hasError ? " (Error)" : "" }}:
-          <span v-if="executionTime" class="tool-time">{{ executionTime }}</span>
-        </div>
-        <pre :class="`tool-code ${hasError ? 'error' : ''}`">{{ output || "(no output)" }}</pre>
-      </div>
-    </div>
-  </div>
+    <ToolSection
+      v-if="complete"
+      label="Output"
+      :text="output || '(no output)'"
+      :has-error="hasError"
+      :execution-time="executionTime"
+    />
+  </ToolCard>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import type { LLMContent } from "../../../types";
+import { computed } from "vue";
 import GenericToolWarning from "./GenericToolWarning.vue";
-import ToolChevron from "./ToolChevron.vue";
-import RunningToolTime from "./RunningToolTime.vue";
+import ToolCard from "./ToolCard.vue";
+import ToolSection from "./ToolSection.vue";
+import { toolComplete, type ToolProps } from "./toolProps";
 
-const props = withDefaults(
-  defineProps<{
-    toolName: string;
-    warnMissingUi?: boolean;
-    toolInput?: unknown;
-    isRunning?: boolean;
-    toolInvokedAt?: string | null;
-    toolResult?: LLMContent[];
-    hasError?: boolean;
-    executionTime?: string;
-  }>(),
-  { warnMissingUi: true },
-);
-
-const isExpanded = ref(false);
+const props = withDefaults(defineProps<ToolProps & { toolName: string; warnMissingUi?: boolean }>(), {
+  warnMissingUi: true,
+});
 
 const formatData = (data: unknown): string => {
   if (data === undefined || data === null) return "";
@@ -86,5 +58,5 @@ const output = computed(() =>
     : "",
 );
 
-const isComplete = computed(() => !props.isRunning && props.toolResult !== undefined);
+const complete = computed(() => toolComplete(props));
 </script>

@@ -1,78 +1,36 @@
-<!-- Vue port of components/ChangeDirTool.tsx.
-     Preserves: .tool, .tool-header, .tool-summary, .tool-emoji, .tool-command,
-     .tool-toggle, .tool-details, .tool-section, .tool-label, .tool-code,
-     data-testid tool-call-running/completed. -->
+<!-- change_dir tool: "cd <path>" in the header, the path and result in the
+     details. -->
 <template>
-  <div class="tool" :data-testid="isComplete ? 'tool-call-completed' : 'tool-call-running'">
-    <div class="tool-header" @click="isExpanded = !isExpanded">
-      <div class="tool-summary">
-        <span class="tool-emoji" :class="{ running: isRunning }">📂</span>
-        <span class="tool-command change-dir-command">cd <PathText :text="path || '...'" /></span>
+  <ToolCard emoji="📂" :complete="complete" :is-running="isRunning" :tool-invoked-at="toolInvokedAt">
+    <template #summary>
+      <span class="tool-command change-dir-command">cd <PathText :text="path || '...'" /></span>
+    </template>
+    <div class="tool-section">
+      <div class="tool-label">
+        Path:
+        <span v-if="executionTime" class="tool-time">{{ executionTime }}</span>
       </div>
-      <button
-        class="tool-toggle"
-        :aria-label="isExpanded ? 'Collapse' : 'Expand'"
-        :aria-expanded="isExpanded"
-      >
-        <ToolChevron :expanded="isExpanded" />
-      </button>
+      <div :class="['tool-code', { error: hasError }]">{{ path || "(no path)" }}</div>
     </div>
-
-    <div v-if="isExpanded" class="tool-details">
-      <RunningToolTime v-if="isRunning" :start-time="toolInvokedAt" />
-      <div class="tool-section">
-        <div class="tool-label">
-          Path:
-          <span v-if="executionTime" class="tool-time">{{ executionTime }}</span>
-        </div>
-        <div :class="`tool-code ${hasError ? 'error' : ''}`">{{ path || "(no path)" }}</div>
-      </div>
-      <div v-if="isComplete" class="tool-section">
-        <div class="tool-label">Result{{ hasError ? " (Error)" : "" }}:</div>
-        <div :class="`tool-code ${hasError ? 'error' : ''}`">{{ resultText || "(no output)" }}</div>
-      </div>
-    </div>
-  </div>
+    <ToolSection
+      v-if="complete"
+      label="Result"
+      :text="result || '(no output)'"
+      :has-error="hasError"
+    />
+  </ToolCard>
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import PathText from "../PathText.vue";
-import { computed, ref } from "vue";
-import type { LLMContent } from "../../../types";
-import ToolChevron from "./ToolChevron.vue";
-import RunningToolTime from "./RunningToolTime.vue";
+import ToolCard from "./ToolCard.vue";
+import ToolSection from "./ToolSection.vue";
+import { inputString, resultText, toolComplete, type ToolProps } from "./toolProps";
 
-const props = defineProps<{
-  toolInput?: unknown;
-  isRunning?: boolean;
-  toolInvokedAt?: string | null;
-  toolResult?: LLMContent[];
-  hasError?: boolean;
-  executionTime?: string;
-}>();
+const props = defineProps<ToolProps>();
 
-const isExpanded = ref(false);
-
-const path = computed(() => {
-  const ti = props.toolInput;
-  if (
-    typeof ti === "object" &&
-    ti !== null &&
-    "path" in ti &&
-    typeof (ti as { path: unknown }).path === "string"
-  ) {
-    return (ti as { path: string }).path;
-  }
-  return "";
-});
-
-const resultText = computed(
-  () =>
-    props.toolResult
-      ?.map((r) => r.Text)
-      .filter(Boolean)
-      .join("") || "",
-);
-
-const isComplete = computed(() => !props.isRunning && props.toolResult !== undefined);
+const path = computed(() => inputString(props.toolInput, "path"));
+const result = computed(() => resultText(props.toolResult));
+const complete = computed(() => toolComplete(props));
 </script>

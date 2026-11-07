@@ -1,103 +1,49 @@
-<!-- Vue port of components/BrowserAccessibilityTool.tsx. Preserves the exact
-     DOM classes, data-testid, and aria contracts the e2e tests rely on. -->
+<!-- browser accessibility_* actions: the query in the header, its fields and
+     the tree in the details. -->
 <template>
-  <div class="tool" :data-testid="isComplete ? 'tool-call-completed' : 'tool-call-running'">
-    <div class="tool-header" @click="isExpanded = !isExpanded">
-      <div class="tool-summary">
-        <span class="tool-emoji" :class="{ running: isRunning }">🌳</span>
-        <span class="tool-command">{{ summary }}</span>
-      </div>
-      <button
-        class="tool-toggle"
-        :aria-label="isExpanded ? 'Collapse' : 'Expand'"
-        :aria-expanded="isExpanded"
-      >
-        <ToolChevron :expanded="isExpanded" />
-      </button>
-    </div>
-
-    <div v-if="isExpanded" class="tool-details">
-      <RunningToolTime v-if="isRunning" :start-time="toolInvokedAt" />
-      <div class="tool-section">
-        <div class="tool-label">Action:</div>
-        <pre class="tool-code">{{ action || "(none)" }}</pre>
-      </div>
-
-      <div v-if="input.name" class="tool-section">
-        <div class="tool-label">Name:</div>
-        <pre class="tool-code">{{ input.name }}</pre>
-      </div>
-
-      <div v-if="input.role" class="tool-section">
-        <div class="tool-label">Role:</div>
-        <pre class="tool-code">{{ input.role }}</pre>
-      </div>
-
-      <div v-if="input.selector" class="tool-section">
-        <div class="tool-label">Selector:</div>
-        <pre class="tool-code">{{ input.selector }}</pre>
-      </div>
-
-      <div v-if="input.depth !== undefined" class="tool-section">
-        <div class="tool-label">Depth:</div>
-        <pre class="tool-code">{{ input.depth }}</pre>
-      </div>
-
-      <div v-if="isComplete && output" class="tool-section">
-        <div class="tool-label">
-          Output{{ hasError ? " (Error)" : "" }}:
-          <span v-if="executionTime" class="tool-time">{{ executionTime }}</span>
-        </div>
-        <pre :class="`tool-code ${hasError ? 'error' : ''}`">{{ output }}</pre>
-      </div>
-    </div>
-  </div>
+  <ToolCard
+    emoji="🌳"
+    :complete="complete"
+    :is-running="isRunning"
+    :tool-invoked-at="toolInvokedAt"
+  >
+    <template #summary>
+      <span class="tool-command">{{ summary }}</span>
+    </template>
+    <ToolSection label="Action" :text="input.action || '(none)'" />
+    <ToolSection v-if="input.name" label="Name" :text="input.name" />
+    <ToolSection v-if="input.role" label="Role" :text="input.role" />
+    <ToolSection v-if="input.selector" label="Selector" :text="input.selector" />
+    <ToolSection v-if="input.depth !== undefined" label="Depth" :text="input.depth" />
+    <ToolSection
+      v-if="complete && output"
+      label="Output"
+      :text="output"
+      :has-error="hasError"
+      :execution-time="executionTime"
+    />
+  </ToolCard>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import type { LLMContent } from "../../../types";
-import ToolChevron from "./ToolChevron.vue";
-import RunningToolTime from "./RunningToolTime.vue";
+import { computed } from "vue";
+import ToolCard from "./ToolCard.vue";
+import ToolSection from "./ToolSection.vue";
+import { firstResultText, inputFields, toolComplete, type ToolProps } from "./toolProps";
 
-interface AccessibilityInput {
-  action?: string;
-  depth?: number;
-  name?: string;
-  role?: string;
-  selector?: string;
-}
+const props = defineProps<ToolProps>();
 
-const props = defineProps<{
-  toolInput?: unknown;
-  isRunning?: boolean;
-  toolInvokedAt?: string | null;
-  toolResult?: LLMContent[];
-  hasError?: boolean;
-  executionTime?: string;
-}>();
-
-const isExpanded = ref(false);
-
-const input = computed<AccessibilityInput>(() =>
-  typeof props.toolInput === "object" && props.toolInput !== null
-    ? (props.toolInput as AccessibilityInput)
-    : {},
+const input = computed(() =>
+  inputFields<{ action: string; depth: number; name: string; role: string; selector: string }>(
+    props.toolInput,
+  ),
 );
-
-const action = computed(() => input.value.action || "");
-
-const output = computed(() =>
-  props.toolResult && props.toolResult.length > 0 && props.toolResult[0].Text
-    ? props.toolResult[0].Text
-    : "",
-);
-
-const isComplete = computed(() => !props.isRunning && props.toolResult !== undefined);
+const output = computed(() => firstResultText(props.toolResult));
+const complete = computed(() => toolComplete(props));
 
 const summary = computed(() => {
   const i = input.value;
-  const summaryParts: string[] = [action.value];
+  const summaryParts: string[] = [i.action ?? ""];
   if (i.name) summaryParts.push(`name="${i.name}"`);
   if (i.role) summaryParts.push(`role=${i.role}`);
   if (i.selector) summaryParts.push(i.selector);

@@ -1,90 +1,44 @@
-<!-- Vue port of components/BrowserNetworkTool.tsx. Preserves the exact DOM
-     classes, data-testid, and aria contracts the e2e tests rely on. -->
+<!-- browser network_* actions: the action and filter in the header, the
+     captured requests in the details. -->
 <template>
-  <div class="tool" :data-testid="isComplete ? 'tool-call-completed' : 'tool-call-running'">
-    <div class="tool-header" @click="isExpanded = !isExpanded">
-      <div class="tool-summary">
-        <span class="tool-emoji" :class="{ running: isRunning }">📡</span>
-        <span class="tool-command">{{ summary }}</span>
-      </div>
-      <button
-        class="tool-toggle"
-        :aria-label="isExpanded ? 'Collapse' : 'Expand'"
-        :aria-expanded="isExpanded"
-      >
-        <ToolChevron :expanded="isExpanded" />
-      </button>
-    </div>
-
-    <div v-if="isExpanded" class="tool-details">
-      <RunningToolTime v-if="isRunning" :start-time="toolInvokedAt" />
-      <div class="tool-section">
-        <div class="tool-label">Action:</div>
-        <pre class="tool-code">{{ action || "(none)" }}</pre>
-      </div>
-
-      <div v-if="input.filter" class="tool-section">
-        <div class="tool-label">Filter:</div>
-        <pre class="tool-code">{{ input.filter }}</pre>
-      </div>
-
-      <div v-if="input.limit !== undefined" class="tool-section">
-        <div class="tool-label">Limit:</div>
-        <pre class="tool-code">{{ input.limit }}</pre>
-      </div>
-
-      <div v-if="isComplete && output" class="tool-section">
-        <div class="tool-label">
-          Output{{ hasError ? " (Error)" : "" }}:
-          <span v-if="executionTime" class="tool-time">{{ executionTime }}</span>
-        </div>
-        <pre :class="`tool-code ${hasError ? 'error' : ''}`">{{ output }}</pre>
-      </div>
-    </div>
-  </div>
+  <ToolCard
+    emoji="📡"
+    :complete="complete"
+    :is-running="isRunning"
+    :tool-invoked-at="toolInvokedAt"
+  >
+    <template #summary>
+      <span class="tool-command">{{ summary }}</span>
+    </template>
+    <ToolSection label="Action" :text="input.action || '(none)'" />
+    <ToolSection v-if="input.filter" label="Filter" :text="input.filter" />
+    <ToolSection v-if="input.limit !== undefined" label="Limit" :text="input.limit" />
+    <ToolSection
+      v-if="complete && output"
+      label="Output"
+      :text="output"
+      :has-error="hasError"
+      :execution-time="executionTime"
+    />
+  </ToolCard>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import type { LLMContent } from "../../../types";
-import ToolChevron from "./ToolChevron.vue";
-import RunningToolTime from "./RunningToolTime.vue";
+import { computed } from "vue";
+import ToolCard from "./ToolCard.vue";
+import ToolSection from "./ToolSection.vue";
+import { firstResultText, inputFields, toolComplete, type ToolProps } from "./toolProps";
 
-interface NetworkInput {
-  action?: string;
-  filter?: string;
-  limit?: number;
-}
+const props = defineProps<ToolProps>();
 
-const props = defineProps<{
-  toolInput?: unknown;
-  isRunning?: boolean;
-  toolInvokedAt?: string | null;
-  toolResult?: LLMContent[];
-  hasError?: boolean;
-  executionTime?: string;
-}>();
-
-const isExpanded = ref(false);
-
-const input = computed<NetworkInput>(() =>
-  typeof props.toolInput === "object" && props.toolInput !== null
-    ? (props.toolInput as NetworkInput)
-    : {},
+const input = computed(() =>
+  inputFields<{ action: string; filter: string; limit: number }>(props.toolInput),
 );
-
-const action = computed(() => input.value.action || "");
-
-const output = computed(() =>
-  props.toolResult && props.toolResult.length > 0 && props.toolResult[0].Text
-    ? props.toolResult[0].Text
-    : "",
-);
-
-const isComplete = computed(() => !props.isRunning && props.toolResult !== undefined);
+const output = computed(() => firstResultText(props.toolResult));
+const complete = computed(() => toolComplete(props));
 
 const summary = computed(() => {
-  const summaryParts: string[] = [action.value];
+  const summaryParts: string[] = [input.value.action ?? ""];
   if (input.value.filter) summaryParts.push(`filter: ${input.value.filter}`);
   return summaryParts.filter(Boolean).join(" ") || "network";
 });

@@ -20,13 +20,7 @@
   <ScreenshotTool v-else-if="action === 'screenshot'" v-bind="props" />
   <BrowserPdfTool v-else-if="action === 'pdf'" v-bind="props" />
   <BrowserConsoleLogsTool
-    v-else-if="action === 'console_logs'"
-    tool-name="browser_recent_console_logs"
-    v-bind="props"
-  />
-  <BrowserConsoleLogsTool
-    v-else-if="action === 'clear_console_logs'"
-    tool-name="browser_clear_console_logs"
+    v-else-if="action === 'console_logs' || action === 'clear_console_logs'"
     v-bind="props"
   />
   <BrowserScreencastTool
@@ -72,7 +66,6 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import type { LLMContent } from "../../../types";
 import BrowserNavigateTool from "./BrowserNavigateTool.vue";
 import BrowserEvalTool from "./BrowserEvalTool.vue";
 import BrowserResizeTool from "./BrowserResizeTool.vue";
@@ -85,30 +78,11 @@ import BrowserAccessibilityTool from "./BrowserAccessibilityTool.vue";
 import BrowserProfileTool from "./BrowserProfileTool.vue";
 import ScreenshotTool from "./ScreenshotTool.vue";
 import GenericTool from "./GenericTool.vue";
+import { inputString, type ToolProps } from "./toolProps";
 
-const props = defineProps<{
-  toolInput?: unknown;
-  isRunning?: boolean;
-  toolInvokedAt?: string | null;
-  toolResult?: LLMContent[];
-  hasError?: boolean;
-  executionTime?: string;
-  display?: unknown;
-}>();
+const props = defineProps<ToolProps>();
 
-function getAction(toolInput: unknown): string {
-  if (
-    typeof toolInput === "object" &&
-    toolInput !== null &&
-    "action" in toolInput &&
-    typeof (toolInput as Record<string, unknown>).action === "string"
-  ) {
-    return (toolInput as Record<string, unknown>).action as string;
-  }
-  return "";
-}
-
-const action = computed(() => getAction(props.toolInput));
+const action = computed(() => inputString(props.toolInput, "action"));
 const familyActions: Record<string, readonly string[]> = {
   emulate: ["help", "device", "custom", "reset", "dark_mode", "media"],
   network: ["help", "enable", "disable", "get_log", "clear", "cookies", "clear_cache"],

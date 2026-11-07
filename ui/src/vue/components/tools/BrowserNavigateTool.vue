@@ -1,77 +1,40 @@
-<!-- Vue port of components/BrowserNavigateTool.tsx. Preserves the exact DOM
-     classes, data-testid, and aria contracts the e2e tests rely on. -->
+<!-- browser navigate action: the URL in the header, a link to it and the
+     output in the details. -->
 <template>
-  <div class="tool" :data-testid="isComplete ? 'tool-call-completed' : 'tool-call-running'">
-    <div class="tool-header" @click="isExpanded = !isExpanded">
-      <div class="tool-summary">
-        <span class="tool-emoji" :class="{ running: isRunning }">🌐</span>
-        <span class="tool-command">{{ displayUrl }}</span>
-      </div>
-      <button
-        class="tool-toggle"
-        :aria-label="isExpanded ? 'Collapse' : 'Expand'"
-        :aria-expanded="isExpanded"
-      >
-        <ToolChevron :expanded="isExpanded" />
-      </button>
-    </div>
-
-    <div v-if="isExpanded" class="tool-details">
-      <RunningToolTime v-if="isRunning" :start-time="toolInvokedAt" />
-      <div class="tool-section">
-        <div class="tool-label">URL:</div>
-        <div class="tool-code">
-          <a :href="externalUrl" target="_blank" rel="noopener noreferrer">{{ externalUrl }}</a>
-        </div>
-      </div>
-
-      <div v-if="isComplete && output" class="tool-section">
-        <div class="tool-label">
-          Output{{ hasError ? " (Error)" : "" }}:
-          <span v-if="executionTime" class="tool-time">{{ executionTime }}</span>
-        </div>
-        <pre :class="`tool-code ${hasError ? 'error' : ''}`">{{ output }}</pre>
+  <ToolCard emoji="🌐" :complete="complete" :is-running="isRunning" :tool-invoked-at="toolInvokedAt">
+    <template #summary>
+      <span class="tool-command">{{ displayUrl }}</span>
+    </template>
+    <div class="tool-section">
+      <div class="tool-label">URL:</div>
+      <div class="tool-code">
+        <a :href="externalUrl" target="_blank" rel="noopener noreferrer">{{ externalUrl }}</a>
       </div>
     </div>
-  </div>
+    <ToolSection
+      v-if="complete && output"
+      label="Output"
+      :text="output"
+      :has-error="hasError"
+      :execution-time="executionTime"
+    />
+  </ToolCard>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import type { LLMContent } from "../../../types";
+import { computed } from "vue";
 import { localhostLinkOptionsFromInit, rewriteLocalhostLink } from "../../../utils/linkify";
-import ToolChevron from "./ToolChevron.vue";
-import RunningToolTime from "./RunningToolTime.vue";
+import ToolCard from "./ToolCard.vue";
+import ToolSection from "./ToolSection.vue";
+import { firstResultText, inputString, toolComplete, type ToolProps } from "./toolProps";
 
-const props = defineProps<{
-  toolInput?: unknown;
-  isRunning?: boolean;
-  toolInvokedAt?: string | null;
-  toolResult?: LLMContent[];
-  hasError?: boolean;
-  executionTime?: string;
-}>();
+const props = defineProps<ToolProps>();
 
-const isExpanded = ref(false);
-
-const url = computed(() => {
-  const ti = props.toolInput;
-  if (
-    typeof ti === "object" &&
-    ti !== null &&
-    "url" in ti &&
-    typeof (ti as { url: unknown }).url === "string"
-  ) {
-    return (ti as { url: string }).url;
-  }
-  return typeof ti === "string" ? ti : "";
-});
-
-const output = computed(() =>
-  props.toolResult && props.toolResult.length > 0 && props.toolResult[0].Text
-    ? props.toolResult[0].Text
-    : "",
+const url = computed(() =>
+  typeof props.toolInput === "string" ? props.toolInput : inputString(props.toolInput, "url"),
 );
+const output = computed(() => firstResultText(props.toolResult));
+const complete = computed(() => toolComplete(props));
 
 const externalUrl = computed(() => rewriteLocalhostLink(url.value, localhostLinkOptionsFromInit()));
 
@@ -80,6 +43,4 @@ const displayUrl = computed(() => {
   const maxLen = 300;
   return u.length <= maxLen ? u : u.substring(0, maxLen) + "...";
 });
-
-const isComplete = computed(() => !props.isRunning && props.toolResult !== undefined);
 </script>

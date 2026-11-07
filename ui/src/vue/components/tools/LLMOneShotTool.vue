@@ -1,80 +1,50 @@
-<!-- Vue port of components/LLMOneShotTool.tsx.
-     Preserves: .tool, .tool-header, .tool-summary, .tool-emoji 🤖, .tool-name,
-     .tool-command, .tool-toggle, .tool-details, .tool-section, .tool-label,
-     .tool-code, .tool-time,
-     data-testid tool-call-running/completed. -->
+<!-- llm_one_shot tool: the prompt files and model in the header, images the
+     model produced always visible below it, the request and result in the
+     details. -->
 <template>
-  <div class="tool" :data-testid="isComplete ? 'tool-call-completed' : 'tool-call-running'">
-    <div class="tool-header" @click="isExpanded = !isExpanded">
-      <div class="tool-summary">
-        <span class="tool-emoji" :class="{ running: isRunning }">🤖</span>
-        <span class="tool-name">llm_one_shot</span>
-        <span class="tool-command">{{ summary }}</span>
-      </div>
-      <button
-        class="tool-toggle"
-        :aria-label="isExpanded ? 'Collapse' : 'Expand'"
-        :aria-expanded="isExpanded"
-      >
-        <ToolChevron :expanded="isExpanded" />
-      </button>
-    </div>
+  <ToolCard emoji="🤖" :complete="complete" :is-running="isRunning" :tool-invoked-at="toolInvokedAt">
+    <template #summary>
+      <span class="tool-name">llm_one_shot</span>
+      <span class="tool-command">{{ summary }}</span>
+    </template>
 
-    <!-- Images are always visible, even when the card is collapsed. -->
-    <div v-if="displayImages.length" class="tool-section llm-one-shot-images">
-      <div v-for="img in displayImages" :key="img.url" class="screenshot-tool-image-container">
-        <CommentableImage
-          :src="img.url"
-          :alt="`Image: ${img.path || 'attachment'}`"
-          :path="img.path"
-          :width="img.width"
-          :height="img.height"
-          :source-width="img.source_width"
-          :source-height="img.source_height"
-          :needs-auto-orient="(img.source_orientation ?? 1) > 1"
-        />
-      </div>
-    </div>
-
-    <div v-if="isExpanded" class="tool-details">
-      <RunningToolTime v-if="isRunning" :start-time="toolInvokedAt" />
-      <div class="tool-section">
-        <div class="tool-label">Prompt files:</div>
-        <pre class="tool-code">{{ promptFiles.join("\n") || "(none)" }}</pre>
-      </div>
-
-      <div v-if="model" class="tool-section">
-        <div class="tool-label">Model:</div>
-        <pre class="tool-code">{{ model }}</pre>
-      </div>
-
-      <div v-if="input.system_prompt" class="tool-section">
-        <div class="tool-label">System prompt:</div>
-        <pre class="tool-code">{{ input.system_prompt }}</pre>
-      </div>
-
-      <div v-if="input.output_file" class="tool-section">
-        <div class="tool-label">Output file:</div>
-        <pre class="tool-code">{{ input.output_file }}</pre>
-      </div>
-
-      <div v-if="isComplete" class="tool-section">
-        <div class="tool-label">
-          Result{{ hasError ? " (Error)" : "" }}:
-          <span v-if="executionTime" class="tool-time">{{ executionTime }}</span>
+    <template #always>
+      <div v-if="displayImages.length" class="tool-section llm-one-shot-images">
+        <div v-for="img in displayImages" :key="img.url" class="screenshot-tool-image-container">
+          <CommentableImage
+            :src="img.url"
+            :alt="`Image: ${img.path || 'attachment'}`"
+            :path="img.path"
+            :width="img.width"
+            :height="img.height"
+            :source-width="img.source_width"
+            :source-height="img.source_height"
+            :needs-auto-orient="(img.source_orientation ?? 1) > 1"
+          />
         </div>
-        <pre :class="`tool-code ${hasError ? 'error' : ''}`">{{ resultText || "(no output)" }}</pre>
       </div>
-    </div>
-  </div>
+    </template>
+
+    <ToolSection label="Prompt files" :text="promptFiles.join('\n') || '(none)'" />
+    <ToolSection v-if="model" label="Model" :text="model" />
+    <ToolSection v-if="input.system_prompt" label="System prompt" :text="input.system_prompt" />
+    <ToolSection v-if="input.output_file" label="Output file" :text="input.output_file" />
+    <ToolSection
+      v-if="complete"
+      label="Result"
+      :text="resultText || '(no output)'"
+      :has-error="hasError"
+      :execution-time="executionTime"
+    />
+  </ToolCard>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import type { LLMContent } from "../../../types";
+import { computed } from "vue";
 import CommentableImage from "../CommentableImage.vue";
-import ToolChevron from "./ToolChevron.vue";
-import RunningToolTime from "./RunningToolTime.vue";
+import ToolCard from "./ToolCard.vue";
+import ToolSection from "./ToolSection.vue";
+import { toolComplete, type ToolProps } from "./toolProps";
 
 interface LLMOneShotInput {
   prompt_files?: string[] | string;
@@ -98,17 +68,7 @@ interface LLMOneShotDisplayImage {
   source_orientation?: number;
 }
 
-const props = defineProps<{
-  toolInput?: unknown;
-  isRunning?: boolean;
-  toolInvokedAt?: string | null;
-  toolResult?: LLMContent[];
-  hasError?: boolean;
-  executionTime?: string;
-  display?: unknown; // Display data from the tool_result Content
-}>();
-
-const isExpanded = ref(false);
+const props = defineProps<ToolProps>();
 
 const input = computed<LLMOneShotInput>(() =>
   typeof props.toolInput === "object" && props.toolInput !== null
@@ -143,7 +103,7 @@ const resultText = computed(
       .join("\n") || "",
 );
 
-const isComplete = computed(() => !props.isRunning && props.toolResult !== undefined);
+const complete = computed(() => toolComplete(props));
 
 const summary = computed(() => {
   const parts: string[] = [];

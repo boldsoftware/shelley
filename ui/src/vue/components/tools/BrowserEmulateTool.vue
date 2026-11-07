@@ -1,104 +1,58 @@
-<!-- Vue port of components/BrowserEmulateTool.tsx. Preserves the exact DOM
-     classes, data-testid, and aria contracts the e2e tests rely on. -->
+<!-- browser emulate_* actions: the device, size and media in the header and
+     the details. -->
 <template>
-  <div class="tool" :data-testid="isComplete ? 'tool-call-completed' : 'tool-call-running'">
-    <div class="tool-header" @click="isExpanded = !isExpanded">
-      <div class="tool-summary">
-        <span class="tool-emoji" :class="{ running: isRunning }">📱</span>
-        <span class="tool-command">{{ summary }}</span>
-      </div>
-      <button
-        class="tool-toggle"
-        :aria-label="isExpanded ? 'Collapse' : 'Expand'"
-        :aria-expanded="isExpanded"
-      >
-        <ToolChevron :expanded="isExpanded" />
-      </button>
-    </div>
-
-    <div v-if="isExpanded" class="tool-details">
-      <RunningToolTime v-if="isRunning" :start-time="toolInvokedAt" />
-      <div class="tool-section">
-        <div class="tool-label">Action:</div>
-        <pre class="tool-code">{{ action || "(none)" }}</pre>
-      </div>
-
-      <div v-if="device" class="tool-section">
-        <div class="tool-label">Device:</div>
-        <pre class="tool-code">{{ device }}</pre>
-      </div>
-
-      <div v-if="input.width !== undefined && input.height !== undefined" class="tool-section">
-        <div class="tool-label">Dimensions:</div>
-        <pre class="tool-code">{{ input.width }} × {{ input.height }}</pre>
-      </div>
-
-      <div v-if="input.media" class="tool-section">
-        <div class="tool-label">Media:</div>
-        <pre class="tool-code">{{ input.media }}</pre>
-      </div>
-
-      <div v-if="isComplete && output" class="tool-section">
-        <div class="tool-label">
-          Output{{ hasError ? " (Error)" : "" }}:
-          <span v-if="executionTime" class="tool-time">{{ executionTime }}</span>
-        </div>
-        <pre :class="`tool-code ${hasError ? 'error' : ''}`">{{ output }}</pre>
-      </div>
-    </div>
-  </div>
+  <ToolCard
+    emoji="📱"
+    :complete="complete"
+    :is-running="isRunning"
+    :tool-invoked-at="toolInvokedAt"
+  >
+    <template #summary>
+      <span class="tool-command">{{ summary }}</span>
+    </template>
+    <ToolSection label="Action" :text="input.action || '(none)'" />
+    <ToolSection v-if="input.device" label="Device" :text="input.device" />
+    <ToolSection
+      v-if="input.width !== undefined && input.height !== undefined"
+      label="Dimensions"
+      :text="`${input.width} × ${input.height}`"
+    />
+    <ToolSection v-if="input.media" label="Media" :text="input.media" />
+    <ToolSection
+      v-if="complete && output"
+      label="Output"
+      :text="output"
+      :has-error="hasError"
+      :execution-time="executionTime"
+    />
+  </ToolCard>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import type { LLMContent } from "../../../types";
-import ToolChevron from "./ToolChevron.vue";
-import RunningToolTime from "./RunningToolTime.vue";
+import { computed } from "vue";
+import ToolCard from "./ToolCard.vue";
+import ToolSection from "./ToolSection.vue";
+import { firstResultText, inputFields, toolComplete, type ToolProps } from "./toolProps";
 
-interface EmulateInput {
-  action?: string;
-  device?: string;
-  width?: number;
-  height?: number;
-  mobile?: boolean;
-  touch?: boolean;
-  device_scale_factor?: number;
-  enabled?: boolean;
-  media?: string;
-}
+const props = defineProps<ToolProps>();
 
-const props = defineProps<{
-  toolInput?: unknown;
-  isRunning?: boolean;
-  toolInvokedAt?: string | null;
-  toolResult?: LLMContent[];
-  hasError?: boolean;
-  executionTime?: string;
-}>();
-
-const isExpanded = ref(false);
-
-const input = computed<EmulateInput>(() =>
-  typeof props.toolInput === "object" && props.toolInput !== null
-    ? (props.toolInput as EmulateInput)
-    : {},
+const input = computed(() =>
+  inputFields<{
+    action: string;
+    device: string;
+    width: number;
+    height: number;
+    enabled: boolean;
+    media: string;
+  }>(props.toolInput),
 );
-
-const action = computed(() => input.value.action || "");
-const device = computed(() => input.value.device || "");
-
-const output = computed(() =>
-  props.toolResult && props.toolResult.length > 0 && props.toolResult[0].Text
-    ? props.toolResult[0].Text
-    : "",
-);
-
-const isComplete = computed(() => !props.isRunning && props.toolResult !== undefined);
+const output = computed(() => firstResultText(props.toolResult));
+const complete = computed(() => toolComplete(props));
 
 const summary = computed(() => {
   const i = input.value;
-  const summaryParts: string[] = [action.value];
-  if (device.value) summaryParts.push(device.value);
+  const summaryParts: string[] = [i.action ?? ""];
+  if (i.device) summaryParts.push(i.device);
   if (i.width && i.height) summaryParts.push(`${i.width}×${i.height}`);
   if (i.media) summaryParts.push(i.media);
   if (i.enabled !== undefined) summaryParts.push(i.enabled ? "on" : "off");

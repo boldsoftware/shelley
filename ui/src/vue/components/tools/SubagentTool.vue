@@ -1,8 +1,4 @@
-<!-- Vue port of components/SubagentTool.tsx.
-     Preserves: .tool, .tool-header, .tool-summary, .tool-emoji ⚡,
-     .tool-badge, .subagent-model-badge, .tool-command, .tool-toggle, .tool-details, .tool-section,
-     .tool-label, .tool-code, .tool-time, .subagent-link,
-     data-testid tool-call-running/completed.
+<!-- subagent tool.
 
      Header: the subagent's slug, its model as a muted tag, and the first line
      of the prompt, laid out like the bash card's command line.
@@ -19,64 +15,52 @@
      callback prop). This port replicates that behavior verbatim in onLinkClick;
      it does not introduce a new prop or emit. -->
 <template>
-  <div class="tool" :data-testid="isComplete ? 'tool-call-completed' : 'tool-call-running'">
-    <div class="tool-header" @click="isExpanded = !isExpanded">
-      <div class="tool-summary">
-        <span class="tool-emoji" :class="{ running: isRunning }">⚡</span>
-        <span class="tool-command subagent-tool-slug">{{ slug }}</span>
-        <span v-if="model" class="tool-tag">{{ model }}</span>
-        <span class="tool-command">{{ firstLine }}</span>
+  <ToolCard emoji="⚡" :complete="complete" :is-running="isRunning" :tool-invoked-at="toolInvokedAt">
+    <template #summary>
+      <span class="tool-command subagent-tool-slug">{{ slug }}</span>
+      <span v-if="model" class="tool-tag">{{ model }}</span>
+      <span class="tool-command">{{ firstLine }}</span>
+    </template>
+
+    <template #always>
+      <SubagentLiveStrip v-if="showLive" :slug="liveSlug" :activity="activity" />
+    </template>
+
+    <div class="tool-section">
+      <div class="tool-label">
+        Prompt to '{{ slug }}':
+        <span v-if="model" class="tool-badge subagent-model-badge">{{ model }}</span>
       </div>
-      <button
-        class="tool-toggle"
-        :aria-label="isExpanded ? 'Collapse' : 'Expand'"
-        :aria-expanded="isExpanded"
-      >
-        <ToolChevron :expanded="isExpanded" />
-      </button>
+      <div class="tool-code">{{ prompt || "(no prompt)" }}</div>
     </div>
 
-    <SubagentLiveStrip v-if="showLive" :slug="liveSlug" :activity="activity" />
-
-    <div v-if="isExpanded" class="tool-details">
-      <RunningToolTime v-if="isRunning" :start-time="toolInvokedAt" />
-      <div class="tool-section">
-        <div class="tool-label">
-          Prompt to '{{ slug }}':
-          <span v-if="model" class="tool-badge subagent-model-badge">{{ model }}</span>
-        </div>
-        <div class="tool-code">{{ prompt || "(no prompt)" }}</div>
+    <div v-if="complete" class="tool-section">
+      <div class="tool-label">
+        Response{{ hasError ? " (Error)" : "" }}:
+        <span v-if="executionTime" class="tool-time">{{ executionTime }}</span>
       </div>
-
-      <div v-if="isComplete" class="tool-section">
-        <div class="tool-label">
-          Response{{ hasError ? " (Error)" : "" }}:
-          <span v-if="executionTime" class="tool-time">{{ executionTime }}</span>
-        </div>
-        <div :class="`tool-code ${hasError ? 'error' : ''}`">
-          {{ resultText || "(no response)" }}
-        </div>
-      </div>
-
-      <div v-if="displayData?.conversation_id" class="tool-section">
-        <div class="tool-label">Conversation:</div>
-        <div class="tool-code">
-          <a :href="`/c/${liveSlug}`" class="subagent-link" @click="onLinkClick">
-            View subagent conversation →
-          </a>
-        </div>
+      <div :class="`tool-code ${hasError ? 'error' : ''}`">
+        {{ resultText || "(no response)" }}
       </div>
     </div>
-  </div>
+
+    <div v-if="displayData?.conversation_id" class="tool-section">
+      <div class="tool-label">Conversation:</div>
+      <div class="tool-code">
+        <a :href="`/c/${liveSlug}`" class="subagent-link" @click="onLinkClick">
+          View subagent conversation →
+        </a>
+      </div>
+    </div>
+  </ToolCard>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import type { LLMContent } from "../../../types";
+import { computed } from "vue";
 import { useSubagentLive, navigateToConversationSlug } from "../../composables/subagentLive";
 import SubagentLiveStrip from "../SubagentLiveStrip.vue";
-import ToolChevron from "./ToolChevron.vue";
-import RunningToolTime from "./RunningToolTime.vue";
+import ToolCard from "./ToolCard.vue";
+import { toolComplete, type ToolProps } from "./toolProps";
 
 interface SubagentInput {
   slug?: string;
@@ -84,17 +68,9 @@ interface SubagentInput {
   model?: string;
 }
 
-const props = defineProps<{
-  toolInput?: unknown;
-  isRunning?: boolean;
-  toolInvokedAt?: string | null;
-  toolResult?: LLMContent[];
-  hasError?: boolean;
-  executionTime?: string;
-  displayData?: { slug?: string; conversation_id?: string; status?: string };
-}>();
-
-const isExpanded = ref(false);
+const props = defineProps<
+  ToolProps & { displayData?: { slug?: string; conversation_id?: string; status?: string } }
+>();
 
 const input = computed<SubagentInput>(() =>
   typeof props.toolInput === "object" && props.toolInput !== null
@@ -129,7 +105,7 @@ const resultText = computed(
 );
 
 const firstLine = computed(() => prompt.value.trim().split(/\r?\n/)[0]);
-const isComplete = computed(() => !props.isRunning && props.toolResult !== undefined);
+const complete = computed(() => toolComplete(props));
 
 function onLinkClick(e: MouseEvent) {
   // Let the browser handle cmd/ctrl/shift/middle-click (open in new tab/window).
