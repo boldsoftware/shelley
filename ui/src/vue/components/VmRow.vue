@@ -9,22 +9,20 @@
       :href="`/vm/${encodeURIComponent(vm.name)}`"
       class="vm-row-link drawer-conversation-item-flex-container"
       :aria-current="active ? 'page' : undefined"
-      :title="vm.comment || vm.name"
+      :title="summary"
+      :aria-label="summary"
       @click.exact.prevent="emit('select')"
     >
-      <div class="conversation-title">
-        <span class="vm-emoji" aria-hidden="true">{{ vm.emoji }}</span
-        >{{ vm.name }}
-      </div>
-      <div class="conversation-preview" role="status">
-        <template v-if="note">{{ note }}</template>
-        <template v-else>
-          <span :class="`vm-status vm-status-${vm.status === 'running' ? 'up' : 'down'}`" />
-          {{ vm.status }} · {{ vm.public ? "public" : "private" }}
-        </template>
-      </div>
+      <span class="vm-emoji" aria-hidden="true">{{ vm.emoji }}</span>
+      <span class="conversation-title vm-name" role="status">{{ note || vm.name }}</span>
+      <span v-if="vm.status !== 'running'" class="vm-meta">{{ vm.status }}</span>
+      <i v-if="vm.public" class="pi pi-globe vm-meta" aria-hidden="true" />
+      <span
+        :class="`vm-status vm-status-${vm.status === 'running' ? 'up' : 'down'}`"
+        aria-hidden="true"
+      />
     </a>
-    <div class="conversation-actions drawer-actions-row drawer-actions-top">
+    <div class="conversation-actions drawer-actions-row">
       <NavActionsMenu
         ref="menu"
         :items="items"
@@ -46,7 +44,17 @@ const props = defineProps<{ vm: ExeVM; active: boolean }>();
 const emit = defineEmits<{ select: [] }>();
 
 const menu = ref<InstanceType<typeof NavActionsMenu> | null>(null);
-// Briefly replaces the status line: what was copied, or why it wasn't.
+// One line per VM: running and private are the norm, so only the exceptions
+// show (the status word, a globe for public); the tooltip spells it all out.
+const summary = computed(() =>
+  [
+    `${props.vm.name} · ${props.vm.status} · ${props.vm.public ? "public" : "private"}`,
+    props.vm.comment,
+  ]
+    .filter(Boolean)
+    .join("\n"),
+);
+// Briefly replaces the name: what was copied, or why it wasn't.
 const note = ref("");
 let noteTimer: ReturnType<typeof setTimeout> | undefined;
 onUnmounted(() => clearTimeout(noteTimer));
@@ -87,23 +95,43 @@ const items = computed<MenuItem[]>(() => [
 
 <style scoped>
 .vm-row-link {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
   color: inherit;
   text-decoration: none;
 }
 .vm-emoji {
-  margin-right: 0.375rem;
+  flex-shrink: 0;
+  width: 1.25em;
+  text-align: center;
+}
+.vm-name {
+  flex: 1;
+  min-width: 0;
+}
+.vm-meta {
+  flex-shrink: 0;
+  font-size: var(--font-size-12);
+  color: var(--text-tertiary);
+}
+.active .vm-meta {
+  color: rgba(255, 255, 255, 0.8);
 }
 .vm-status {
   display: inline-block;
   width: 0.5rem;
   height: 0.5rem;
+  flex-shrink: 0;
   border-radius: 50%;
-  margin-right: 0.25rem;
 }
 .vm-status-up {
   background: #22c55e;
 }
 .vm-status-down {
   background: var(--text-tertiary);
+}
+.active .vm-status-down {
+  background: rgba(255, 255, 255, 0.8);
 }
 </style>
