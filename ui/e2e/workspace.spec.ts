@@ -1,7 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import {
+  clearConversationQuery,
   createConversationViaAPIWithDetails,
+  fillConversationQuery,
   editProject,
   installServerLinks,
   openProjectSettings,
@@ -522,6 +524,70 @@ test("project folds survive reloads and renames; a deleted project's goes", asyn
   const stored = JSON.parse(folds ?? "{}") as Record<string, boolean>;
   expect(stored[`project:${busy.id}`]).toBe(true);
   expect(`project:${empty.id}` in stored).toBe(false);
+});
+
+test("a search shows matches in folded projects without unfolding them", async ({
+  page,
+  request,
+}) => {
+  const headers = { "X-Shelley-Request": "1" };
+  const word = `foldsearch${randomUUID().slice(0, 8)}`;
+  const response = await request.post("/api/projects", {
+    headers,
+    data: {
+      name: `Folded ${word}`,
+      instructions: "",
+      cwd: testWorkingDirectory(),
+      actions: [],
+      repos: [],
+      vm: null,
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+  const project = (await response.json()) as { id: number; name: string };
+  const created = await request.post("/api/conversations/new", {
+    headers,
+    data: { project: project.name, title: `Find me ${word}`, message: `echo: ${word}` },
+  });
+  expect(created.ok()).toBeTruthy();
+  const { conversation_id: id } = (await created.json()) as { conversation_id: string };
+
+  await page.goto("/");
+  await openWorkspace(page);
+  const toggle = page.locator(`section[aria-label="${project.name}"] .project-toggle`);
+  const row = page.locator(`[data-conversation-id="${id}"]`);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(row).toHaveCount(0);
+  const saved = () => page.evaluate(() => localStorage.getItem("shelley-project-folds"));
+  const folds = await saved();
+  expect(JSON.parse(folds!)[`project:${project.id}`]).toBe(true);
+
+  const search = page.getByTestId("conversation-query-editor");
+  await page.getByRole("button", { name: "Search tasks..." }).click();
+  await fillConversationQuery(search, word);
+  await expect(row).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  // Folding during a search lasts only as long as the search.
+  await toggle.click();
+  await expect(row).toHaveCount(0);
+  await toggle.click();
+  await expect(row).toBeVisible();
+  expect(await saved()).toBe(folds);
+
+  // A reload mid-search leaves the saved fold as it was.
+  await page.reload();
+  await openWorkspace(page);
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(await saved()).toBe(folds);
+
+  await page.getByRole("button", { name: "Search tasks..." }).click();
+  await fillConversationQuery(search, word);
+  await expect(row).toBeVisible();
+  await clearConversationQuery(search);
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(row).toHaveCount(0);
+  expect(await saved()).toBe(folds);
 });
 
 test("the Assistant shows no host or working directory; conversations still do", async ({

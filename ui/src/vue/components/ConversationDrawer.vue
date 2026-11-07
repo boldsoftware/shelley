@@ -1768,14 +1768,13 @@ function handleCopyGitHash(e: MouseEvent, hash: string, convId: string) {
 }
 
 function projectGroupCollapsed(group: { id: string; conversations: unknown[] }) {
+  if (searchingProjects.value) return searchFolds.value.get(group.id) ?? false;
   return groupFoldChoices.value.get(group.id) ?? group.conversations.length === 0;
 }
 
 function toggleProjectGroup(group: { id: string; conversations: unknown[] }) {
-  groupFoldChoices.value = new Map(groupFoldChoices.value).set(
-    group.id,
-    !projectGroupCollapsed(group),
-  );
+  const folds = searchingProjects.value ? searchFolds : groupFoldChoices;
+  folds.value = new Map(folds.value).set(group.id, !projectGroupCollapsed(group));
 }
 
 function handleGroupByChange(value: GroupBy) {
@@ -1984,6 +1983,15 @@ const stableArchivedConversations = computed(() => {
 // is a filter over the normal list, not a search — so the list keeps its
 // grouping and ordering instead of collapsing into flat search results.
 const isSearching = computed(() => searchText.value.trim().length > 0);
+
+// A search or filter shows every matching project unfolded, whatever its saved
+// fold. Folding one then lasts only as long as the search: searchFolds, never
+// saved, goes when it ends, and each project returns to its saved fold.
+const searchingProjects = computed(
+  () => isSearching.value || structuredFiltersActive.value || (showArchived.value && workspaceMode),
+);
+const searchFolds = ref(new Map<string, boolean>());
+watch(searchingProjects, () => (searchFolds.value = new Map()));
 
 // The top-level rows the list shows before any search or filter.
 const listPool = computed<ConversationWithParticipants[]>(() => {
@@ -2427,8 +2435,16 @@ function groupTitle(key: string, group: Group): string | undefined {
 
 // Maintain the flat visual order for archive-based next-selection.
 watch(
-  [groupBy, projectGroups, groupFoldChoices, groupedConversations, displayedConversations],
-  ([by, projects, , grouped, displayed]) => {
+  [
+    groupBy,
+    projectGroups,
+    groupFoldChoices,
+    searchFolds,
+    searchingProjects,
+    groupedConversations,
+    displayedConversations,
+  ],
+  ([by, projects, , , , grouped, displayed]) => {
     flatVisualOrder =
       by === "project" && projects
         ? projects.flatMap((group) => (projectGroupCollapsed(group) ? [] : group.conversations))
