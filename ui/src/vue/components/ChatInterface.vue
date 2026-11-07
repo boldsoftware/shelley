@@ -934,6 +934,7 @@ import { chunkMountKey } from "./chunkMount";
 import { collectReactions, messageUserContextKey, targetResolver } from "./messageUserContext";
 import { slackDirectoryKey } from "./slackDirectory";
 import { sameSlackDirectory, slackDirectory } from "../../utils/slack";
+import { storedSelectedCwd, storeSelectedCwd } from "../../utils/selectedCwd";
 import QueuedGhostMessage from "./QueuedGhostMessage.vue";
 import { useVisibleQueuedMessages } from "../composables/visibleQueuedMessages";
 import { useStatusBar } from "../composables/statusBar";
@@ -1599,7 +1600,7 @@ watch(
 );
 function setSelectedCwd(cwd: string) {
   selectedCwd.value = cwd;
-  localStorage.setItem("shelley_selected_cwd", cwd);
+  storeSelectedCwd(cwd);
 }
 
 const cwdError = ref<string | null>(null);
@@ -4767,7 +4768,7 @@ watch(
   () => props.cwdSyncTrigger,
   (trigger) => {
     if (!trigger) return;
-    const stored = localStorage.getItem("shelley_selected_cwd");
+    const stored = storedSelectedCwd();
     if (stored) {
       selectedCwd.value = stored;
       cwdInitialized.value = true;
@@ -4781,7 +4782,7 @@ watch(
   [() => props.mostRecentCwd, cwdInitialized],
   () => {
     if (cwdInitialized.value) return;
-    const storedCwd = localStorage.getItem("shelley_selected_cwd");
+    const storedCwd = storedSelectedCwd();
     if (storedCwd) {
       selectedCwd.value = storedCwd;
       cwdInitialized.value = true;

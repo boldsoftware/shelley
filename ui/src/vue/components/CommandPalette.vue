@@ -132,6 +132,7 @@ import { tildifyPath } from "../../utils/tildify";
 import { isImeComposing } from "../../utils/imeComposing";
 import { highlightSearchMatches } from "../../utils/searchHighlight";
 import { menuShortcutLabel } from "../../utils/menuShortcuts";
+import { storedSelectedCwd } from "../../utils/selectedCwd";
 import type { RecordingMode } from "./recordingDestination";
 
 interface CommandItem {
@@ -280,7 +281,7 @@ watch(
     }
     const cwd =
       props.currentConversation?.cwd ||
-      localStorage.getItem("shelley_selected_cwd") ||
+      storedSelectedCwd() ||
       window.__SHELLEY_INIT__?.default_cwd ||
       null;
     if (!cwd) return;
@@ -599,7 +600,7 @@ const actionItems = computed<CommandItem[]>(() => {
     props.currentConversation?.git_worktree_root || newConvGitWorktreeRoot.value;
   const cwdNow =
     props.currentConversation?.cwd ||
-    localStorage.getItem("shelley_selected_cwd") ||
+    storedSelectedCwd() ||
     window.__SHELLEY_INIT__?.default_cwd ||
     null;
 

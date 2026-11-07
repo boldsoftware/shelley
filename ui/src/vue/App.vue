@@ -397,6 +397,7 @@ import { errorMessage } from "../utils/errorMessage";
 import { handleNotificationEvent } from "../services/notifications";
 import { initialDrawerCollapsed, saveDrawerCollapsedPreference } from "../utils/drawerStartup";
 import { perfCount } from "../utils/perf";
+import { storedSelectedCwd, storeSelectedCwd } from "../utils/selectedCwd";
 import { useI18n } from "./composables/i18n";
 import { ConversationsListKey, CurrentConversationIdKey } from "./composables/subagentLive";
 import {
@@ -863,7 +864,7 @@ const commandPaletteHasCwd = computed(
     !!(
       currentConversation.value?.cwd ||
       mostRecentCwd.value ||
-      localStorage.getItem("shelley_selected_cwd") ||
+      storedSelectedCwd() ||
       window.__SHELLEY_INIT__?.default_cwd
     ),
 );
@@ -874,7 +875,7 @@ const finderDir = computed(
   () =>
     currentConversation.value?.cwd ||
     mostRecentCwd.value ||
-    localStorage.getItem("shelley_selected_cwd") ||
+    storedSelectedCwd() ||
     window.__SHELLEY_INIT__?.default_cwd ||
     "",
 );
@@ -1082,7 +1083,7 @@ async function startNewConversation(project: string): Promise<boolean> {
     }
   }
   if (cwd) {
-    localStorage.setItem("shelley_selected_cwd", cwd);
+    storeSelectedCwd(cwd);
   }
   currentConversationId.value = null;
   viewedConversation.value = null;
@@ -1101,7 +1102,7 @@ async function startNewConversation(project: string): Promise<boolean> {
 }
 
 function startNewConversationWithCwd(cwd: string | null) {
-  if (cwd) localStorage.setItem("shelley_selected_cwd", cwd);
+  if (cwd) storeSelectedCwd(cwd);
   currentConversationId.value = null;
   viewedConversation.value = null;
   currentVm.value = null;
@@ -1120,7 +1121,7 @@ function reopenLingering() {
 }
 
 function setConversationCwd(cwd: string) {
-  localStorage.setItem("shelley_selected_cwd", cwd);
+  storeSelectedCwd(cwd);
   const conv =
     conversations.value.find((c) => c.conversation_id === currentConversationId.value) ||
     (viewedConversation.value?.conversation_id === currentConversationId.value
