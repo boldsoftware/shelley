@@ -346,6 +346,42 @@ test.describe("media recording composer", () => {
     await installMediaMocks(page);
   });
 
+  test("mobile TOC survives opening and cancelling the recorder", async ({ page, request }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    const conversation = await createConversationViaAPIWithDetails(
+      request,
+      "echo: recording contents",
+    );
+    await page.goto(`/c/${conversation.slug}`);
+    const toc = page.getByRole("button", {
+      name: "Conversation table of contents",
+      exact: true,
+      includeHidden: true,
+    });
+    await expect(toc).toBeVisible();
+    await toc.evaluate((el) => {
+      el.dataset.mountIdentity = "original";
+    });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await page.getByTestId("voice-button").click();
+      await expect(page.getByTestId("recording-inline")).toBeVisible();
+      await expect(page.getByTestId("message-input")).toBeHidden();
+      await expect(toc).toBeHidden();
+      await expect(toc).toHaveAttribute("data-mount-identity", "original");
+
+      await page.getByTestId("recording-cancel-button").click();
+      await expect(page.getByTestId("recording-panel")).toHaveCount(0);
+      await expect(page.getByTestId("message-input")).toBeVisible();
+      await expect(page.getByTestId("message-input")).toBeFocused();
+      await expect(toc).toBeVisible();
+      await expect(toc).toHaveAttribute("data-mount-identity", "original");
+      await toc.click();
+      await expect(page.locator(".toc-popover")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.locator(".toc-popover")).toBeHidden();
+    }
+  });
+
   test("offers exact palette actions and starts audio by click and screen by Enter", async ({
     page,
     request,
@@ -2082,7 +2118,7 @@ test.describe("media recording composer", () => {
     expect(recordingHeight).toBeLessThanOrEqual(46);
     expect(recordingHeight).toBeLessThan(composerHeight ?? Number.POSITIVE_INFINITY);
     await expect(page.getByRole("dialog", { name: "Record media" })).toHaveCount(0);
-    await expect(page.getByTestId("message-input")).toHaveCount(0);
+    await expect(page.getByTestId("message-input")).toBeHidden();
     await expect.poll(() => page.evaluate(() => window.__recordingMock.recorderStarts)).toBe(1);
     await expect(page.getByTestId("recording-status")).toHaveText("Recording…");
     await expect(page.locator(".recording-status")).toHaveAttribute("data-state", "preroll");

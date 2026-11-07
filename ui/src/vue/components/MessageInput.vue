@@ -73,8 +73,7 @@
       </div>
     </Teleport>
     <form
-      v-if="!recordingActive || recordingFloating"
-      v-show="!composerHidden"
+      v-show="!composerHidden && (!recordingActive || recordingFloating)"
       class="message-input-form"
       @submit="handleSubmit"
     >
