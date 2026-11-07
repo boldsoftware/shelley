@@ -1083,7 +1083,6 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 			ModelURL:  model.Endpoint,
 			MaxTokens: int(model.MaxTokens),
 			Model: oai.Model{
-				UserName:         "",
 				ModelName:        model.ModelName,
 				TextVerbosity:    "",
 				URL:              model.Endpoint,
@@ -1102,7 +1101,6 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 			ModelURL:  model.Endpoint,
 			MaxTokens: int(model.MaxTokens),
 			Model: oai.Model{
-				UserName:         "",
 				ModelName:        model.ModelName,
 				TextVerbosity:    "",
 				URL:              model.Endpoint,

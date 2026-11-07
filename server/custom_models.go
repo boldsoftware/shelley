@@ -510,7 +510,6 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			ReasoningEffort: reasoningEffort,
 			ReasoningReplay: reasoningReplay,
 			Model: oai.Model{
-				UserName:         "",
 				ModelName:        req.ModelName,
 				TextVerbosity:    "",
 				URL:              req.Endpoint,
@@ -532,7 +531,6 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			APIKey:    req.APIKey,
 			MaxTokens: int(maxTokens),
 			Model: oai.Model{
-				UserName:         "",
 				ModelName:        req.ModelName,
 				TextVerbosity:    "",
 				URL:              req.Endpoint,

@@ -39,7 +39,6 @@ const (
 
 //exe:completeinit
 type Model struct {
-	UserName           string // provided by the user to identify this model (e.g. "gpt4.1")
 	ModelName          string // provided to the service provide to specify which model to use (e.g. "gpt-4.1-2025-04-14")
 	TextVerbosity      string // Responses API default text verbosity; empty omits the field
 	URL                string
@@ -53,7 +52,6 @@ var (
 	DefaultModel = GPT54
 
 	GPT41 = Model{
-		UserName:         "gpt4.1",
 		ModelName:        "gpt-4.1-2025-04-14",
 		TextVerbosity:    "",
 		URL:              OpenAIURL,
@@ -63,7 +61,6 @@ var (
 	}
 
 	GPT4o = Model{
-		UserName:         "gpt4o",
 		ModelName:        "gpt-4o-2024-08-06",
 		TextVerbosity:    "",
 		URL:              OpenAIURL,
@@ -73,7 +70,6 @@ var (
 	}
 
 	DeepseekV41FlashFireworks = Model{
-		UserName:         "deepseek-v4.1-flash-fireworks",
 		ModelName:        "accounts/fireworks/models/deepseek-v4p1-flash",
 		TextVerbosity:    "",
 		URL:              FireworksURL,
@@ -83,7 +79,6 @@ var (
 	}
 
 	DeepseekV41Flash1017Fireworks = Model{
-		UserName:         "deepseek-v4.1-flash-1017-fireworks",
 		ModelName:        "accounts/fireworks/models/deepseek-v4p1-flash-1017",
 		TextVerbosity:    "",
 		URL:              FireworksURL,
@@ -93,7 +88,6 @@ var (
 	}
 
 	GLM53Fireworks = Model{
-		UserName:         "glm-5.3-fireworks",
 		ModelName:        "accounts/fireworks/models/glm-5p3",
 		TextVerbosity:    "",
 		URL:              FireworksURL,
@@ -103,7 +97,6 @@ var (
 	}
 
 	GLM53FlashFireworks = Model{
-		UserName:         "glm-5.3-flash-fireworks",
 		ModelName:        "accounts/fireworks/models/glm-5p3-flash",
 		TextVerbosity:    "",
 		URL:              FireworksURL,
@@ -113,7 +106,6 @@ var (
 	}
 
 	KimiK3Fireworks = Model{
-		UserName:         "kimi-k3-fireworks",
 		ModelName:        "accounts/fireworks/models/kimi-k3",
 		TextVerbosity:    "",
 		URL:              FireworksURL,
@@ -123,7 +115,6 @@ var (
 	}
 
 	Grok45 = Model{
-		UserName:         "grok-4.5",
 		ModelName:        "grok-4.5",
 		TextVerbosity:    "",
 		URL:              XAIURL,
@@ -133,7 +124,6 @@ var (
 	}
 
 	GPT6Astra = Model{
-		UserName:           "gpt-6-astra",
 		ModelName:          "gpt-6-astra",
 		TextVerbosity:      "low",
 		URL:                OpenAIURL,
@@ -144,7 +134,6 @@ var (
 	}
 
 	GPT61Sol = Model{
-		UserName:           "gpt-6.1-sol",
 		ModelName:          "gpt-6.1-sol",
 		TextVerbosity:      "low",
 		URL:                OpenAIURL,
@@ -155,7 +144,6 @@ var (
 	}
 
 	GPT61Terra = Model{
-		UserName:           "gpt-6.1-terra",
 		ModelName:          "gpt-6.1-terra",
 		TextVerbosity:      "low",
 		URL:                OpenAIURL,
@@ -166,7 +154,6 @@ var (
 	}
 
 	GPT6Sol = Model{
-		UserName:           "gpt-6-sol",
 		ModelName:          "gpt-6-sol",
 		TextVerbosity:      "low",
 		URL:                OpenAIURL,
@@ -177,7 +164,6 @@ var (
 	}
 
 	GPT6Luna = Model{
-		UserName:           "gpt-6-luna",
 		ModelName:          "gpt-6-luna",
 		TextVerbosity:      "low",
 		URL:                OpenAIURL,
@@ -188,7 +174,6 @@ var (
 	}
 
 	GPT56Sol = Model{
-		UserName:           "gpt-5.6-sol",
 		ModelName:          "gpt-5.6-sol",
 		TextVerbosity:      "low",
 		URL:                OpenAIURL,
@@ -199,7 +184,6 @@ var (
 	}
 
 	GPT56Terra = Model{
-		UserName:           "gpt-5.6-terra",
 		ModelName:          "gpt-5.6-terra",
 		TextVerbosity:      "low",
 		URL:                OpenAIURL,
@@ -210,7 +194,6 @@ var (
 	}
 
 	GPT56Luna = Model{
-		UserName:           "gpt-5.6-luna",
 		ModelName:          "gpt-5.6-luna",
 		TextVerbosity:      "low",
 		URL:                OpenAIURL,
@@ -221,7 +204,6 @@ var (
 	}
 
 	GPT55 = Model{
-		UserName:           "gpt-5.5",
 		ModelName:          "gpt-5.5",
 		TextVerbosity:      "low",
 		URL:                OpenAIURL,
@@ -232,7 +214,6 @@ var (
 	}
 
 	GPT54 = Model{
-		UserName:           "gpt-5.4",
 		ModelName:          "gpt-5.4",
 		TextVerbosity:      "low",
 		URL:                OpenAIURL,
@@ -243,7 +224,6 @@ var (
 	}
 
 	GPT54Mini = Model{
-		UserName:           "gpt-5.4-mini",
 		ModelName:          "gpt-5.4-mini",
 		TextVerbosity:      "medium",
 		URL:                OpenAIURL,
@@ -254,7 +234,6 @@ var (
 	}
 
 	GPT54Nano = Model{
-		UserName:           "gpt-5.4-nano",
 		ModelName:          "gpt-5.4-nano",
 		TextVerbosity:      "medium",
 		URL:                OpenAIURL,
@@ -265,7 +244,6 @@ var (
 	}
 
 	GPT53Codex = Model{
-		UserName:           "gpt-5.3-codex",
 		ModelName:          "gpt-5.3-codex",
 		TextVerbosity:      "low",
 		URL:                OpenAIURL,
