@@ -62,7 +62,7 @@ var _ llm.Service = (*ResponsesService)(nil)
 func (s *ResponsesService) messageOrigin(model Model) llm.MessageOrigin {
 	return llm.MessageOrigin{
 		Provider:  cmp.Or(s.ProviderName, "openai"),
-		Transport: "openai-responses:" + oaiTransportIdentity(cmp.Or(s.ModelURL, model.URL, OpenAIURL)),
+		Transport: "openai-responses:" + llm.TransportEndpoint(cmp.Or(s.ModelURL, model.URL, OpenAIURL)),
 		Model:     model.ModelName,
 	}
 }
@@ -729,7 +729,7 @@ func (s *ResponsesService) buildRequest(ctx context.Context, ir *llm.Request) (r
 	}
 	origin := s.messageOrigin(model)
 	for i, msg := range messages {
-		msg = filterReasoningForOrigin(msg, origin)
+		msg = llm.StripForeignThinking(msg, origin)
 		for j, c := range msg.Content {
 			if len(c.Citations) > 0 && c.Text == "" {
 				return responsesRequest{}, "", llm.MessageOrigin{}, fmt.Errorf("openai-responses messages[%d].content[%d]: cannot replay citations on empty assistant text", i, j)

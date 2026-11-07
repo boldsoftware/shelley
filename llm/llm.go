@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -320,6 +321,47 @@ func (o *MessageOrigin) Matches(other MessageOrigin) bool {
 
 func (o *MessageOrigin) Known() bool {
 	return o != nil && o.Provider != "" && o.Transport != "" && o.Model != ""
+}
+
+// TransportEndpoint normalizes endpoint for use in MessageOrigin.Transport:
+// credentials, query and fragment are dropped, scheme and host lowercased,
+// and a trailing slash trimmed. It returns "unknown" for unparseable URLs.
+func TransportEndpoint(endpoint string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" {
+		return "unknown"
+	}
+	u.User = nil
+	u.RawQuery = ""
+	u.ForceQuery = false
+	u.Fragment = ""
+	u.Scheme = strings.ToLower(u.Scheme)
+	u.Host = strings.ToLower(u.Host)
+	u.Path = strings.TrimSuffix(u.Path, "/")
+	return u.String()
+}
+
+// WithoutThinking returns a copy of msg without its thinking and redacted
+// thinking blocks.
+func WithoutThinking(msg Message) Message {
+	content := make([]Content, 0, len(msg.Content))
+	for _, c := range msg.Content {
+		if c.Type != ContentTypeThinking && c.Type != ContentTypeRedactedThinking {
+			content = append(content, c)
+		}
+	}
+	msg.Content = content
+	return msg
+}
+
+// StripForeignThinking drops thinking from an assistant message produced by a
+// known origin other than origin: providers only accept reasoning they
+// produced themselves. Messages of unknown origin are returned unchanged.
+func StripForeignThinking(msg Message, origin MessageOrigin) Message {
+	if msg.Role != MessageRoleAssistant || !msg.Origin.Known() || msg.Origin.Matches(origin) {
+		return msg
+	}
+	return WithoutThinking(msg)
 }
 
 // ToolUse represents a tool use in the message content.

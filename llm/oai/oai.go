@@ -320,39 +320,9 @@ var _ llm.Service = (*Service)(nil)
 func (s *Service) messageOrigin(model Model) llm.MessageOrigin {
 	return llm.MessageOrigin{
 		Provider:  cmp.Or(s.ProviderName, "openai"),
-		Transport: "openai-chat:" + oaiTransportIdentity(cmp.Or(s.ModelURL, model.URL, OpenAIURL)),
+		Transport: "openai-chat:" + llm.TransportEndpoint(cmp.Or(s.ModelURL, model.URL, OpenAIURL)),
 		Model:     model.ModelName,
 	}
-}
-
-func oaiTransportIdentity(endpoint string) string {
-	u, err := url.Parse(endpoint)
-	if err != nil || u.Host == "" {
-		return "unknown"
-	}
-	u.User = nil
-	u.RawQuery = ""
-	u.ForceQuery = false
-	u.Fragment = ""
-	u.Scheme = strings.ToLower(u.Scheme)
-	u.Host = strings.ToLower(u.Host)
-	u.Path = strings.TrimSuffix(u.Path, "/")
-	return u.String()
-}
-
-func filterReasoningForOrigin(msg llm.Message, origin llm.MessageOrigin) llm.Message {
-	if msg.Role != llm.MessageRoleAssistant || !msg.Origin.Known() || msg.Origin.Matches(origin) {
-		return msg
-	}
-	content := make([]llm.Content, 0, len(msg.Content))
-	for _, item := range msg.Content {
-		if item.Type == llm.ContentTypeThinking || item.Type == llm.ContentTypeRedactedThinking {
-			continue
-		}
-		content = append(content, item)
-	}
-	msg.Content = content
-	return msg
 }
 
 var (
@@ -1198,7 +1168,7 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 	// portable text and tool transcript but not another origin's reasoning.
 	origin := s.messageOrigin(model)
 	for _, msg := range ir.Messages {
-		msg = filterReasoningForOrigin(msg, origin)
+		msg = llm.StripForeignThinking(msg, origin)
 		msgs := fromLLMMessage(msg)
 		allMessages = append(allMessages, msgs...)
 	}

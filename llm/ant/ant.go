@@ -380,24 +380,9 @@ func atLeastVersion(model string, minVersions map[string][2]int) bool {
 func (s *Service) messageOrigin(model string) llm.MessageOrigin {
 	return llm.MessageOrigin{
 		Provider:  "anthropic",
-		Transport: "anthropic-messages:" + transportIdentity(cmp.Or(s.URL, DefaultURL)),
+		Transport: "anthropic-messages:" + llm.TransportEndpoint(cmp.Or(s.URL, DefaultURL)),
 		Model:     model,
 	}
-}
-
-func transportIdentity(endpoint string) string {
-	u, err := url.Parse(endpoint)
-	if err != nil || u.Host == "" {
-		return "unknown"
-	}
-	u.User = nil
-	u.RawQuery = ""
-	u.ForceQuery = false
-	u.Fragment = ""
-	u.Scheme = strings.ToLower(u.Scheme)
-	u.Host = strings.ToLower(u.Host)
-	u.Path = strings.TrimSuffix(u.Path, "/")
-	return u.String()
 }
 
 func (s *Service) supportsThinkingBinding() bool {
@@ -620,32 +605,6 @@ func fromLLMToolUse(tu *llm.ToolUse) *toolUse {
 	}
 }
 
-// stripThinkingBlocks returns a copy of the message with thinking and
-// redacted_thinking content blocks removed. Used to strip stale thinking
-// from older assistant turns before sending to the API.
-func stripThinkingBlocks(msg llm.Message) llm.Message {
-	var filtered []llm.Content
-	for _, c := range msg.Content {
-		if c.Type == llm.ContentTypeThinking || c.Type == llm.ContentTypeRedactedThinking {
-			continue
-		}
-		filtered = append(filtered, c)
-	}
-	msg.Content = filtered
-	return msg
-}
-
-// filterThinkingForOrigin strips thinking from a known different origin.
-func filterThinkingForOrigin(msg llm.Message, origin llm.MessageOrigin) llm.Message {
-	if msg.Role != llm.MessageRoleAssistant {
-		return msg
-	}
-	if msg.Origin.Known() && !msg.Origin.Matches(origin) {
-		return stripThinkingBlocks(msg)
-	}
-	return msg
-}
-
 // sanitizeServerToolBlocks removes orphaned server-side tool blocks that would
 // cause Anthropic to reject the request with errors like:
 //
@@ -801,9 +760,9 @@ func (s *Service) buildRequest(r *llm.Request, stripThinking bool) *request {
 	var messages []message
 	origin := s.messageOrigin(model)
 	for _, m := range srcMessages {
-		m = filterThinkingForOrigin(m, origin)
+		m = llm.StripForeignThinking(m, origin)
 		if stripThinking && m.Role == llm.MessageRoleAssistant {
-			m = stripThinkingBlocks(m)
+			m = llm.WithoutThinking(m)
 		}
 		msg := fromLLMMessage(m)
 		if len(msg.Content) > 0 {
