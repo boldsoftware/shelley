@@ -1595,3 +1595,77 @@ export const secretsApi = {
     return (await (await secretsRequest("POST", `/${encodeURIComponent(id)}/reveal`)).json()).value;
   },
 };
+
+export interface ChatGPTAccount {
+  id: string;
+  label: string;
+  name?: string;
+  signed_in: boolean;
+  plan_usage: boolean;
+}
+
+export interface ChatGPTAccounts {
+  enabled: boolean;
+  accounts: ChatGPTAccount[];
+}
+
+export interface ChatGPTSignIn {
+  id: string;
+  authorize_url: string;
+  redirect_uri: string;
+}
+
+export interface ChatGPTSignInResult {
+  account: ChatGPTAccount;
+  new_registration: boolean;
+}
+
+export interface ChatGPTSignInStatus {
+  done: boolean;
+  result?: ChatGPTSignInResult;
+  error?: string;
+}
+
+async function chatgptPost<T>(path: string, body: unknown, fallback: string): Promise<T> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw await responseError(response, fallback);
+  return response.json();
+}
+
+export const chatgptApi = {
+  async accounts(): Promise<ChatGPTAccounts> {
+    const response = await fetch("/api/chatgpt/accounts");
+    if (!response.ok) throw await responseError(response, "Failed to load ChatGPT accounts");
+    return response.json();
+  },
+
+  startSignIn(accountId?: string, consent = false): Promise<ChatGPTSignIn> {
+    return chatgptPost(
+      "/api/chatgpt/sign-in",
+      { account_id: accountId ?? "", consent },
+      "Failed to start sign-in",
+    );
+  },
+
+  async status(id: string): Promise<ChatGPTSignInStatus> {
+    const response = await fetch(`/api/chatgpt/sign-in/${encodeURIComponent(id)}`);
+    if (!response.ok) throw await responseError(response, "Failed to check sign-in");
+    return response.json();
+  },
+
+  complete(url: string): Promise<ChatGPTSignInResult> {
+    return chatgptPost("/api/chatgpt/sign-in/complete", { url }, "Failed to finish sign-in");
+  },
+
+  signOut(id: string, remove: boolean): Promise<{ warning?: string }> {
+    return chatgptPost(
+      `/api/chatgpt/accounts/${encodeURIComponent(id)}/sign-out`,
+      { remove },
+      "Failed to sign out",
+    );
+  },
+};

@@ -675,4 +675,27 @@ export const ru: TranslationKeys = {
   onboardingPhoneConnect: "Напишите на {number}, затем подключите эту ВМ",
   onboardingAskBelow: "Или просто спросите меня о чём-нибудь ниже.",
   onboardingDismiss: "Скрыть",
+  // Sign in with ChatGPT
+  chatgptPlanIntro:
+    "Используйте модели из вашего плана ChatGPT. Данные входа хранятся на этой машине, а Shelley отправляет запросы напрямую в OpenAI.",
+  addChatGPTAccount: "Добавить аккаунт ChatGPT",
+  chatgptUsingPlan: "Используется план ChatGPT",
+  chatgptPlanUsageOff: "Использование плана не разрешено",
+  chatgptEnablePlanUsage: "Разрешить использование плана",
+  chatgptSignedOut: "Выполнен выход",
+  chatgptSignInAgain: "Войти снова",
+  chatgptManageUsage: "Управлять использованием",
+  chatgptSignOut: "Выйти",
+  chatgptRemoveAccount: "Удалить",
+  chatgptWaiting: "Завершите вход в ChatGPT в открывшейся вкладке.",
+  chatgptPasteHint:
+    "Если вкладка остановится на странице 127.0.0.1, которая не загружается, скопируйте её полный адрес и вставьте сюда.",
+  chatgptFinish: "Завершить вход",
+  chatgptOpenAgain: "Снова открыть страницу входа",
+  chatgptWelcomeTitle: "Вы используете свой план ChatGPT",
+  chatgptWelcomeBody:
+    "Теперь Shelley использует модели из вашего плана ChatGPT. Использование учитывается в лимитах плана, которые можно посмотреть и настроить в ChatGPT.",
+  chatgptGotIt: "Понятно",
+  chatgptSignOutUnconfirmed:
+    "Выход выполнен здесь, но ChatGPT его не подтвердил. Для надёжности отключите Shelley в настройках ChatGPT.",
 };

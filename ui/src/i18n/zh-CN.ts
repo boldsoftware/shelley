@@ -656,4 +656,26 @@ export const zhCN: TranslationKeys = {
   onboardingPhoneConnect: "发短信到 {number}，然后连接此 VM",
   onboardingAskBelow: "或者直接在下方问我。",
   onboardingDismiss: "关闭",
+  // Sign in with ChatGPT
+  chatgptPlanIntro:
+    "使用 ChatGPT 套餐中包含的模型。登录信息保存在本机，Shelley 直接向 OpenAI 发送请求。",
+  addChatGPTAccount: "添加 ChatGPT 账户",
+  chatgptUsingPlan: "正在使用 ChatGPT 套餐",
+  chatgptPlanUsageOff: "未允许使用套餐",
+  chatgptEnablePlanUsage: "允许使用套餐",
+  chatgptSignedOut: "已退出登录",
+  chatgptSignInAgain: "重新登录",
+  chatgptManageUsage: "管理用量",
+  chatgptSignOut: "退出登录",
+  chatgptRemoveAccount: "移除",
+  chatgptWaiting: "请在打开的标签页中完成 ChatGPT 登录。",
+  chatgptPasteHint: "如果该标签页停在无法加载的 127.0.0.1 页面，请复制完整地址并粘贴到这里。",
+  chatgptFinish: "完成登录",
+  chatgptOpenAgain: "重新打开登录页面",
+  chatgptWelcomeTitle: "你正在使用 ChatGPT 套餐",
+  chatgptWelcomeBody:
+    "Shelley 现在使用你 ChatGPT 套餐中的模型。用量计入套餐限额，可在 ChatGPT 中查看和管理。",
+  chatgptGotIt: "知道了",
+  chatgptSignOutUnconfirmed:
+    "已在此处退出登录，但 ChatGPT 未确认。请在 ChatGPT 设置中断开 Shelley 以确保安全。",
 };

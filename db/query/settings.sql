@@ -14,3 +14,8 @@ SELECT key, value FROM settings;
 
 -- name: DeleteSetting :execrows
 DELETE FROM settings WHERE key = ?;
+
+-- name: SetSettingIfAbsent :exec
+INSERT INTO settings (key, value, updated_at)
+VALUES (?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(key) DO NOTHING;

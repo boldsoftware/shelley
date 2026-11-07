@@ -989,7 +989,10 @@ function isSubscriptionUsage(name: string, url?: string): boolean {
       model.base_url &&
       (url === model.base_url || url?.startsWith(`${model.base_url}/`)),
   );
-  return sources.length > 0 && sources.every((model) => model.mode === "chatgpt");
+  return (
+    sources.length > 0 &&
+    sources.every((model) => model.mode === "chatgpt" || model.mode === "chatgpt-plan")
+  );
 }
 
 // Pointer position as a plot fraction. The hovered call is derived from it,

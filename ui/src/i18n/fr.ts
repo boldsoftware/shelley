@@ -687,4 +687,27 @@ export const fr: TranslationKeys = {
   onboardingPhoneConnect: "Écrivez au {number}, puis connectez cette VM",
   onboardingAskBelow: "Ou posez-moi simplement une question ci-dessous.",
   onboardingDismiss: "Masquer",
+  // Sign in with ChatGPT
+  chatgptPlanIntro:
+    "Utilisez les modèles inclus dans votre forfait ChatGPT. Votre connexion reste sur cette machine et Shelley envoie les requêtes directement à OpenAI.",
+  addChatGPTAccount: "Ajouter un compte ChatGPT",
+  chatgptUsingPlan: "Utilise le forfait ChatGPT",
+  chatgptPlanUsageOff: "Utilisation du forfait non autorisée",
+  chatgptEnablePlanUsage: "Autoriser l'utilisation du forfait",
+  chatgptSignedOut: "Déconnecté",
+  chatgptSignInAgain: "Se reconnecter",
+  chatgptManageUsage: "Gérer l'utilisation",
+  chatgptSignOut: "Se déconnecter",
+  chatgptRemoveAccount: "Retirer",
+  chatgptWaiting: "Terminez la connexion à ChatGPT dans l'onglet qui s'est ouvert.",
+  chatgptPasteHint:
+    "Si cet onglet aboutit à une page 127.0.0.1 qui ne se charge pas, copiez son adresse complète et collez-la ici.",
+  chatgptFinish: "Terminer la connexion",
+  chatgptOpenAgain: "Rouvrir la page de connexion",
+  chatgptWelcomeTitle: "Vous utilisez votre forfait ChatGPT",
+  chatgptWelcomeBody:
+    "Shelley utilise désormais les modèles de votre forfait ChatGPT. L'utilisation compte dans les limites de votre forfait, que vous pouvez consulter et gérer dans ChatGPT.",
+  chatgptGotIt: "Compris",
+  chatgptSignOutUnconfirmed:
+    "Déconnecté ici, mais ChatGPT ne l'a pas confirmé. Déconnectez Shelley dans les paramètres de ChatGPT pour en être sûr.",
 };

@@ -71,6 +71,18 @@
           :conversation-id="message.conversation_id"
           :refusal-model="errorMeta.refusalModel"
         />
+        <!-- OpenAI's guidelines make Manage usage the primary action at a plan's limit. -->
+        <div v-if="chatgptUsageLimit" class="error-retry-row">
+          <a
+            class="error-retry-button"
+            :href="CHATGPT_USAGE_URL"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="chatgpt-manage-usage"
+            @click.stop
+            >Manage usage ↗</a
+          >
+        </div>
         <ErrorRetryButton
           v-if="errorRetryable && isLastMessage"
           :conversation-id="message.conversation_id"
@@ -292,6 +304,7 @@ import DistillStatusMessage from "./DistillStatusMessage.vue";
 import CwdChangeMessage from "./CwdChangeMessage.vue";
 import ContextNudgeMessage from "./ContextNudgeMessage.vue";
 import ErrorRetryButton from "./ErrorRetryButton.vue";
+import { CHATGPT_USAGE_URL } from "./chatgptPlan";
 import RefusalContinueButton from "./RefusalContinueButton.vue";
 import { RefusalContinueKey } from "./refusalContinue";
 import { messageUserContextKey, type MessageReaction } from "./messageUserContext";
@@ -534,6 +547,10 @@ const errorText = computed(() => {
   }
   return text;
 });
+// The server names this page in errors for a ChatGPT plan's usage limit.
+const chatgptUsageLimit = computed(() =>
+  errorText.value.includes("usage limit reached; manage usage at " + CHATGPT_USAGE_URL),
+);
 const refusalContinue = inject(RefusalContinueKey);
 const errorMeta = computed(() => {
   let retryable = false;

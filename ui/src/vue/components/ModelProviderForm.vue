@@ -11,82 +11,120 @@
           v-for="option in providerTypes"
           :key="option.value"
           type="button"
-          :class="`provider-btn ${providerType === option.value ? 'selected' : ''}`"
-          :aria-pressed="providerType === option.value"
+          :class="`provider-btn ${!useChatGPT && providerType === option.value ? 'selected' : ''}`"
+          :aria-pressed="!useChatGPT && providerType === option.value"
           :aria-label="PROVIDER_LABELS[option.value]"
           @click="changeProvider(option.value)"
         >
           {{ PROVIDER_TAB_LABELS[option.value] }}
         </button>
+        <!-- A ChatGPT plan connects by signing in instead of with an API key. -->
+        <button
+          v-if="chatgpt && !provider"
+          type="button"
+          :class="`provider-btn provider-btn-chatgpt ${useChatGPT ? 'selected' : ''}`"
+          :aria-pressed="useChatGPT"
+          data-testid="provider-chatgpt"
+          @click="useChatGPT = true"
+        >
+          <ChatGPTLogo :size="14" />
+          <span>ChatGPT</span>
+        </button>
       </div>
     </div>
 
-    <div class="form-group">
-      <label for="provider-endpoint">{{ t("endpoint") }}</label>
-      <ModelEndpointInput
-        v-model="endpoint"
-        input-id="provider-endpoint"
-        :presets="endpointPresets"
+    <template v-if="useChatGPT">
+      <ChatGPTSignInPending
+        v-if="chatgptPending"
+        :pending="chatgptPending"
+        :busy="!!chatgptBusy"
+        @complete="emit('chatgptComplete', $event)"
+        @cancel="emit('chatgptCancel')"
       />
-    </div>
+      <p v-else class="chatgpt-connect-hint">{{ t("chatgptPlanIntro") }}</p>
+      <div v-if="chatgptMessage" class="models-error">{{ chatgptMessage }}</div>
+      <div v-if="!chatgptPending" class="form-actions">
+        <Button type="button" severity="secondary" :label="t('cancel')" @click="emit('close')" />
+        <Button
+          type="button"
+          :disabled="chatgptBusy"
+          data-testid="continue-with-chatgpt"
+          @click="emit('chatgptSignIn')"
+        >
+          <ChatGPTLogo :size="14" />
+          <span>{{ t("addChatGPTAccount") }}</span>
+        </Button>
+      </div>
+    </template>
 
-    <div class="form-group">
-      <label for="model-provider-api-key">{{ t("apiKey") }}</label>
-      <InputText
-        id="model-provider-api-key"
-        v-model="apiKey"
-        data-testid="provider-api-key"
-        :placeholder="provider?.has_api_key ? t('providerApiKeyKeepExisting') : t('enterApiKey')"
-        type="password"
-        fluid
-        :dt="inputFieldDt"
-        autocomplete="new-password"
-      />
-    </div>
+    <template v-else>
+      <div class="form-group">
+        <label for="provider-endpoint">{{ t("endpoint") }}</label>
+        <ModelEndpointInput
+          v-model="endpoint"
+          input-id="provider-endpoint"
+          :presets="endpointPresets"
+        />
+      </div>
 
-    <div class="form-group">
-      <label for="model-provider-display-name">{{ t("providerDisplayName") }}</label>
-      <InputText
-        id="model-provider-display-name"
-        v-model="displayName"
-        data-testid="provider-display-name"
-        :placeholder="t('accountLabelPlaceholder')"
-        fluid
-        :dt="inputFieldDt"
-        autocomplete="organization"
-      />
-    </div>
+      <div class="form-group">
+        <label for="model-provider-api-key">{{ t("apiKey") }}</label>
+        <InputText
+          id="model-provider-api-key"
+          v-model="apiKey"
+          data-testid="provider-api-key"
+          :placeholder="provider?.has_api_key ? t('providerApiKeyKeepExisting') : t('enterApiKey')"
+          type="password"
+          fluid
+          :dt="inputFieldDt"
+          autocomplete="new-password"
+        />
+      </div>
 
-    <div
-      v-if="checkResult"
-      :class="['test-result', checkResult.success ? 'success' : 'error']"
-      role="status"
-    >
-      {{ checkResult.message }}
-    </div>
+      <div class="form-group">
+        <label for="model-provider-display-name">{{ t("providerDisplayName") }}</label>
+        <InputText
+          id="model-provider-display-name"
+          v-model="displayName"
+          data-testid="provider-display-name"
+          :placeholder="t('accountLabelPlaceholder')"
+          fluid
+          :dt="inputFieldDt"
+          autocomplete="organization"
+        />
+      </div>
 
-    <div class="form-actions">
-      <Button
-        type="button"
-        severity="secondary"
-        :label="t('cancel')"
-        :disabled="saving"
-        @click="emit('close')"
-      />
-      <Button
-        type="button"
-        severity="secondary"
-        data-testid="provider-check-models"
-        :label="checking ? t('checkingModels') : t('checkModels')"
-        :disabled="saving || checking || !canCheck"
-        @click="checkModels"
-      />
-      <Button
-        type="submit"
-        :label="saving ? t('providerSaving') : provider ? t('save') : t('connectProvider')"
-        :disabled="saving || checking || !canCheck"
-      />
-    </div>
+      <div
+        v-if="checkResult"
+        :class="['test-result', checkResult.success ? 'success' : 'error']"
+        role="status"
+      >
+        {{ checkResult.message }}
+      </div>
+
+      <div class="form-actions">
+        <Button
+          type="button"
+          severity="secondary"
+          :label="t('cancel')"
+          :disabled="saving"
+          @click="emit('close')"
+        />
+        <Button
+          type="button"
+          severity="secondary"
+          data-testid="provider-check-models"
+          :label="checking ? t('checkingModels') : t('checkModels')"
+          :disabled="saving || checking || !canCheck"
+          @click="checkModels"
+        />
+        <Button
+          type="submit"
+          :label="saving ? t('providerSaving') : provider ? t('save') : t('connectProvider')"
+          :disabled="saving || checking || !canCheck"
+        />
+      </div>
+    </template>
   </form>
 </template>
 
@@ -97,9 +135,12 @@ import InputText from "primevue/inputtext";
 import { useI18n } from "../composables/i18n";
 import { inputFieldDt } from "./configFieldDt";
 import ModelEndpointInput from "./ModelEndpointInput.vue";
+import ChatGPTLogo from "./ChatGPTLogo.vue";
+import ChatGPTSignInPending from "./ChatGPTSignInPending.vue";
 import { endpointPresetsFor, PROVIDER_LABELS, PROVIDER_TAB_LABELS } from "./customModelConstants";
 import {
   modelProvidersApi,
+  type ChatGPTSignIn,
   type ModelProviderConnection,
   type ModelProviderInput,
   type ModelProviderType,
@@ -107,11 +148,27 @@ import {
 
 const props = defineProps<{
   provider: ModelProviderConnection | null;
+  // chatgpt offers ChatGPT, which signs in, beside the API key providers.
+  chatgpt?: boolean;
+  chatgptBusy?: boolean;
+  chatgptPending?: ChatGPTSignIn | null;
+  chatgptMessage?: string | null;
 }>();
 const emit = defineEmits<{
   (e: "saved", provider: ModelProviderConnection): void;
   (e: "close"): void;
+  (e: "chatgptSignIn"): void;
+  (e: "chatgptComplete", url: string): void;
+  (e: "chatgptCancel"): void;
 }>();
+const useChatGPT = ref(false);
+// A sign-in in progress shows under ChatGPT when the dialog reopens.
+watch(
+  () => props.chatgptPending,
+  (pending) => {
+    if (pending) useChatGPT.value = true;
+  },
+);
 const { t } = useI18n();
 
 const endpoints: Record<ModelProviderType, string> = {
@@ -148,11 +205,13 @@ function reset() {
   apiKey.value = "";
   error.value = null;
   checkResult.value = null;
+  useChatGPT.value = !props.provider && !!props.chatgptPending;
 }
 
 watch(() => props.provider, reset, { immediate: true });
 
 function changeProvider(value: ModelProviderType) {
+  useChatGPT.value = false;
   const wasPreset = endpointPresets.value.some((preset) => preset.url === endpoint.value);
   providerType.value = value;
   if (wasPreset && !endpointPresets.value.some((preset) => preset.url === endpoint.value)) {

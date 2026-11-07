@@ -37,6 +37,7 @@ import (
 	"shelley.exe.dev/models"
 	"shelley.exe.dev/server/notifications"
 	"shelley.exe.dev/server/resource"
+	"shelley.exe.dev/siwc"
 	"shelley.exe.dev/subpub"
 	"shelley.exe.dev/ui"
 )
@@ -386,6 +387,7 @@ func calculateContextWindowSizeFromMsg(msg *generated.Message) uint64 {
 // Server manages the HTTP API and active conversations
 type Server struct {
 	modelProviders      *modelproviders.Manager
+	chatGPTPlans        *siwc.Manager
 	db                  *db.DB
 	llmManager          LLMProvider
 	toolSetConfig       claudetool.ToolSetConfig
@@ -696,6 +698,11 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/custom-models-test", s.handleTestModel)
 
 	api.HandleFunc("GET /api/model-providers", s.handleListModelProviders)
+	api.HandleFunc("GET /api/chatgpt/accounts", s.handleListChatGPTAccounts)
+	api.HandleFunc("POST /api/chatgpt/sign-in", s.handleStartChatGPTSignIn)
+	api.HandleFunc("GET /api/chatgpt/sign-in/{id}", s.handleChatGPTSignInStatus)
+	api.HandleFunc("POST /api/chatgpt/sign-in/complete", s.handleCompleteChatGPTSignIn)
+	api.HandleFunc("POST /api/chatgpt/accounts/{id}/sign-out", s.handleSignOutChatGPTAccount)
 	api.HandleFunc("POST /api/model-providers", s.handleCreateModelProvider)
 	api.HandleFunc("POST /api/model-providers/check", s.handleCheckModelProvider)
 	api.HandleFunc("POST /api/model-providers/{id}/check", s.handleCheckModelProvider)

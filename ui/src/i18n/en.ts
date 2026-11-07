@@ -674,4 +674,27 @@ export const en: TranslationKeys = {
   onboardingPhoneConnect: "Text {number}, then connect this VM",
   onboardingAskBelow: "Or just ask me something below.",
   onboardingDismiss: "Dismiss",
+  // Sign in with ChatGPT
+  chatgptPlanIntro:
+    "Use the models included in your ChatGPT plan. Your sign-in is kept on this machine, and Shelley sends requests straight to OpenAI.",
+  addChatGPTAccount: "Add ChatGPT account",
+  chatgptUsingPlan: "Using ChatGPT plan",
+  chatgptPlanUsageOff: "Plan usage not allowed",
+  chatgptEnablePlanUsage: "Allow plan usage",
+  chatgptSignedOut: "Signed out",
+  chatgptSignInAgain: "Sign in again",
+  chatgptManageUsage: "Manage usage",
+  chatgptSignOut: "Sign out",
+  chatgptRemoveAccount: "Remove",
+  chatgptWaiting: "Finish signing in to ChatGPT in the tab that opened.",
+  chatgptPasteHint:
+    "If that tab ends on a 127.0.0.1 page that doesn't load, copy its full address and paste it here.",
+  chatgptFinish: "Finish sign-in",
+  chatgptOpenAgain: "Open sign-in page again",
+  chatgptWelcomeTitle: "You're using your ChatGPT plan",
+  chatgptWelcomeBody:
+    "Shelley now uses models from your ChatGPT plan. Usage counts toward your plan's limits, which you can review and manage in ChatGPT.",
+  chatgptGotIt: "Got it",
+  chatgptSignOutUnconfirmed:
+    "Signed out here, but ChatGPT didn't confirm it. Disconnect Shelley in ChatGPT settings to be sure.",
 };

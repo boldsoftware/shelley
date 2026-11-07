@@ -30,6 +30,13 @@
     </template>
 
     <div class="models-modal" :class="{ 'models-modal-list': showList }">
+      <ChatGPTPlanPanel
+        ref="chatgptPanel"
+        :listed="listedPlanAccounts"
+        :hide-message="formOpen"
+        @models-changed="handleChatGPTChanged"
+        @signed-in="formOpen = false"
+      />
       <div v-if="error" class="models-error">
         {{ error }}
         <button class="models-error-dismiss" @click="error = null">×</button>
@@ -143,6 +150,28 @@
               </span>
             </div>
           </div>
+          <div
+            v-else-if="planAccount(data.groupKey)"
+            class="models-provider-line"
+            :data-testid="`chatgpt-account-${planAccount(data.groupKey)!.id}`"
+          >
+            <ChatGPTLogo :size="14" />
+            <span class="models-group-name">{{ data.groupLabel }}</span>
+            <span class="models-group-count">({{ groupCounts[data.groupKey] }})</span>
+            <a class="models-plan-link" :href="CHATGPT_USAGE_URL" target="_blank" rel="noopener noreferrer"
+              >{{ t("chatgptManageUsage") }} ↗</a
+            >
+            <span class="models-provider-actions">
+              <Button
+                size="small"
+                severity="secondary"
+                text
+                :label="t('chatgptSignOut')"
+                :disabled="chatgptPanel?.busy"
+                @click="chatgptPanel?.signOut(planAccount(data.groupKey)!)"
+              />
+            </span>
+          </div>
           <template v-else>
             <span class="models-group-name">{{ data.groupLabel }}</span>
             <span class="models-group-count">({{ groupCounts[data.groupKey] }})</span>
@@ -255,6 +284,13 @@
     :edit-model="editModel"
     :edit-provider="editingProvider"
     :existing-models="builtInModelsFiltered"
+    :chatgpt="chatgptPanel?.enabled"
+    :chatgpt-busy="chatgptPanel?.busy"
+    :chatgpt-pending="chatgptPanel?.pending"
+    :chatgpt-message="chatgptPanel?.message"
+    @chatgpt-sign-in="handleChatGPTSignIn"
+    @chatgpt-complete="(url: string) => chatgptPanel?.complete(url)"
+    @chatgpt-cancel="chatgptPanel?.cancel()"
     @saved="handleFormSaved"
     @provider-saved="handleProviderSaved"
     @close="formOpen = false"
@@ -303,6 +339,9 @@ import Column from "primevue/column";
 import Button from "primevue/button";
 import Modal from "./Modal.vue";
 import ModelFormModal from "./ModelFormModal.vue";
+import ChatGPTPlanPanel from "./ChatGPTPlanPanel.vue";
+import ChatGPTLogo from "./ChatGPTLogo.vue";
+import { CHATGPT_USAGE_URL } from "./chatgptPlan";
 import { modelsTableDt } from "./modelsTableDt";
 import { prettyModelLabels } from "../../utils/modelNames";
 import { accountSuffixes } from "../../utils/providerAccounts";
@@ -315,6 +354,7 @@ import {
   type AvailableModel,
   type CustomModel,
   type ModelProviderConnection,
+  type ChatGPTAccount,
 } from "../../services/api";
 
 const props = defineProps<{ mode: "manage" | "add" | null }>();
@@ -417,8 +457,12 @@ const tableRows = computed<TableRow[]>(() => {
     }
     groups.get(key)!.models.push(m);
   }
+  // Signed-in ChatGPT plans lead, as in the model picker.
+  const isPlan = ([, g]: [string, { models: AvailableModel[] }]) =>
+    Number(g.models[0]?.mode === "chatgpt-plan");
+  const ordered = [...groups].sort((a, b) => isPlan(b) - isPlan(a));
   const rows: TableRow[] = [];
-  for (const [groupKey, { label, models: group }] of groups) {
+  for (const [groupKey, { label, models: group }] of ordered) {
     const provider = groupKey.startsWith("provider:")
       ? providersByID.get(groupKey.slice("provider:".length)) ?? null
       : null;
@@ -568,6 +612,37 @@ async function refreshModelList() {
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err);
   }
+}
+
+const chatgptPanel = ref<InstanceType<typeof ChatGPTPlanPanel> | null>(null);
+
+// ChatGPT accounts whose plan models are listed show their status and
+// actions in their table group header; the panel shows the rest.
+const PLAN_GROUP = "provider:chatgpt:";
+function planAccount(groupKey: string): ChatGPTAccount | undefined {
+  if (!groupKey.startsWith(PLAN_GROUP)) return undefined;
+  const id = groupKey.slice(PLAN_GROUP.length);
+  return chatgptPanel.value?.accounts.find((a) => a.id === id && a.signed_in && a.plan_usage);
+}
+const listedPlanAccounts = computed(() => {
+  const ids = new Set<string>();
+  for (const m of builtInModels.value) {
+    if (m.mode === "chatgpt-plan" && m.source_id?.startsWith("chatgpt:")) {
+      ids.add(m.source_id.slice("chatgpt:".length));
+    }
+  }
+  return [...ids];
+});
+
+// Sign-in progress shows in Manage models, so the add dialog closes.
+// Add Models keeps the sign-in's progress until it finishes.
+function handleChatGPTSignIn() {
+  chatgptPanel.value?.signIn();
+}
+
+async function handleChatGPTChanged() {
+  await refreshModelList();
+  emit("modelsChanged");
 }
 
 async function handleProviderSaved(provider: ModelProviderConnection) {

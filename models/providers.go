@@ -71,7 +71,7 @@ func (m *Manager) RefreshProviders() error {
 	previous := append([]string(nil), m.modelOrder...)
 	kept := m.modelOrder[:0]
 	for _, id := range m.modelOrder {
-		if m.services[id].sourceID != "" {
+		if sourceID := m.services[id].sourceID; sourceID != "" && !strings.HasPrefix(sourceID, chatGPTPlanPrefix) {
 			delete(m.services, id)
 		} else {
 			kept = append(kept, id)
@@ -107,7 +107,7 @@ func (m *Manager) preserveProviderOrder(previous []string) {
 	m.modelOrder = order
 }
 
-// Listed routes use the registry; unlisted routes still resolve their saved account.
+// Listed routes use the registry; unlisted provider routes still resolve their saved connection.
 func (m *Manager) lookupService(id string) (serviceEntry, error) {
 	m.mu.RLock()
 	entry, ok := m.services[id]

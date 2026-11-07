@@ -30,6 +30,8 @@ export function pickReadyModel(
     if (providerIds === undefined) return ready(preferred) ? preferred : "";
     return canSendWithModel(preferred, undefined, providerIds) ? preferred : "";
   }
+  // A ChatGPT account's model is never swapped for one billed elsewhere.
+  if (preferred?.startsWith("chatgpt:")) return ready(preferred) ? preferred : "";
   if (ready(preferred)) return preferred as string;
   if (ready(serverDefaultModel())) return serverDefaultModel();
   return models.find((m) => m.ready)?.id || "";

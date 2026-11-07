@@ -656,4 +656,26 @@ export const zhTW: TranslationKeys = {
   onboardingPhoneConnect: "傳簡訊到 {number}，然後連接此 VM",
   onboardingAskBelow: "或者直接在下方問我。",
   onboardingDismiss: "關閉",
+  // Sign in with ChatGPT
+  chatgptPlanIntro:
+    "使用 ChatGPT 方案中包含的模型。登入資訊保存在本機，Shelley 直接向 OpenAI 傳送請求。",
+  addChatGPTAccount: "新增 ChatGPT 帳戶",
+  chatgptUsingPlan: "正在使用 ChatGPT 方案",
+  chatgptPlanUsageOff: "未允許使用方案",
+  chatgptEnablePlanUsage: "允許使用方案",
+  chatgptSignedOut: "已登出",
+  chatgptSignInAgain: "重新登入",
+  chatgptManageUsage: "管理用量",
+  chatgptSignOut: "登出",
+  chatgptRemoveAccount: "移除",
+  chatgptWaiting: "請在開啟的分頁中完成 ChatGPT 登入。",
+  chatgptPasteHint: "如果該分頁停在無法載入的 127.0.0.1 頁面，請複製完整網址並貼到這裡。",
+  chatgptFinish: "完成登入",
+  chatgptOpenAgain: "重新開啟登入頁面",
+  chatgptWelcomeTitle: "你正在使用 ChatGPT 方案",
+  chatgptWelcomeBody:
+    "Shelley 現在使用你 ChatGPT 方案中的模型。用量計入方案限額，可在 ChatGPT 中查看和管理。",
+  chatgptGotIt: "知道了",
+  chatgptSignOutUnconfirmed:
+    "已在此處登出，但 ChatGPT 未確認。請在 ChatGPT 設定中中斷 Shelley 的連線以確保安全。",
 };

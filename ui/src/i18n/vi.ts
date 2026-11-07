@@ -676,4 +676,27 @@ export const vi: TranslationKeys = {
   onboardingPhoneConnect: "Nhắn tin tới {number}, rồi kết nối VM này",
   onboardingAskBelow: "Hoặc cứ hỏi tôi điều gì đó bên dưới.",
   onboardingDismiss: "Ẩn",
+  // Sign in with ChatGPT
+  chatgptPlanIntro:
+    "Dùng các model có trong gói ChatGPT của bạn. Thông tin đăng nhập được lưu trên máy này và Shelley gửi yêu cầu trực tiếp tới OpenAI.",
+  addChatGPTAccount: "Thêm tài khoản ChatGPT",
+  chatgptUsingPlan: "Đang dùng gói ChatGPT",
+  chatgptPlanUsageOff: "Chưa cho phép dùng gói",
+  chatgptEnablePlanUsage: "Cho phép dùng gói",
+  chatgptSignedOut: "Đã đăng xuất",
+  chatgptSignInAgain: "Đăng nhập lại",
+  chatgptManageUsage: "Quản lý mức sử dụng",
+  chatgptSignOut: "Đăng xuất",
+  chatgptRemoveAccount: "Xóa",
+  chatgptWaiting: "Hoàn tất đăng nhập ChatGPT trong tab vừa mở.",
+  chatgptPasteHint:
+    "Nếu tab đó dừng ở trang 127.0.0.1 không tải được, hãy sao chép toàn bộ địa chỉ và dán vào đây.",
+  chatgptFinish: "Hoàn tất đăng nhập",
+  chatgptOpenAgain: "Mở lại trang đăng nhập",
+  chatgptWelcomeTitle: "Bạn đang dùng gói ChatGPT",
+  chatgptWelcomeBody:
+    "Shelley giờ dùng các model trong gói ChatGPT của bạn. Mức sử dụng được tính vào giới hạn của gói, bạn có thể xem và quản lý trong ChatGPT.",
+  chatgptGotIt: "Đã hiểu",
+  chatgptSignOutUnconfirmed:
+    "Đã đăng xuất ở đây nhưng ChatGPT chưa xác nhận. Hãy ngắt kết nối Shelley trong cài đặt ChatGPT cho chắc.",
 };

@@ -8,12 +8,14 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/client"
@@ -25,6 +27,7 @@ import (
 	"shelley.exe.dev/modelsources"
 	"shelley.exe.dev/server"
 	_ "shelley.exe.dev/server/notifications/channels" // register channel types
+	"shelley.exe.dev/siwc"
 	"shelley.exe.dev/skills"
 	"shelley.exe.dev/templates"
 	"shelley.exe.dev/version"
@@ -225,6 +228,7 @@ func runServe(global GlobalConfig, args []string) {
 	// Initialize LLM service manager (includes custom model support via database)
 	llmManager := server.NewLLMServiceManager(llmConfig)
 	var providerManager *modelproviders.Manager
+	var chatGPTPlans *siwc.Manager
 	if !global.PredictableOnly {
 		registry := llmManager.(*models.Manager)
 		if err := registry.RefreshProviders(); err != nil {
@@ -232,6 +236,7 @@ func runServe(global GlobalConfig, args []string) {
 			os.Exit(1)
 		}
 		providerManager = modelproviders.New(database, registry, llmConfig.HTTPC)
+		chatGPTPlans = setupChatGPTPlans(registry, database, logger)
 	}
 
 	// Log available models
@@ -244,6 +249,9 @@ func runServe(global GlobalConfig, args []string) {
 	svr := server.NewServer(database, llmManager, toolSetConfig, logger, global.PredictableOnly, llmConfig.DefaultModel, *requireHeader)
 	svr.SetModelRefresher(llmConfig.RefreshBuiltModels)
 	svr.SetModelProviderManager(providerManager)
+	if chatGPTPlans != nil {
+		svr.SetChatGPTPlans(chatGPTPlans, llmManager.(*models.Manager).RefreshChatGPTPlans)
+	}
 	svr.Banner = *banner
 	svr.SocketActivated = *systemdActivation
 
@@ -857,4 +865,15 @@ func splitActivatedListeners(listeners []net.Listener, socketPath string) (web, 
 		return nil, nil, nil, fmt.Errorf("no web listener among socket-activated listeners")
 	}
 	return web, cli, extra, nil
+}
+
+// setupChatGPTPlans enables Sign in with ChatGPT, keeping its accounts in
+// the database.
+func setupChatGPTPlans(registry *models.Manager, database *db.DB, logger *slog.Logger) *siwc.Manager {
+	plans := siwc.NewManager(siwc.NewStore(database), siwc.NewClient(&http.Client{Timeout: time.Minute}))
+	registry.SetChatGPTPlans(plans)
+	if err := registry.RefreshChatGPTPlans(); err != nil {
+		logger.Error("Failed to load ChatGPT plan models", "error", err)
+	}
+	return plans
 }

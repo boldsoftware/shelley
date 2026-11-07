@@ -82,3 +82,19 @@ func (q *Queries) SetSetting(ctx context.Context, arg SetSettingParams) error {
 	_, err := q.db.ExecContext(ctx, setSetting, arg.Key, arg.Value)
 	return err
 }
+
+const setSettingIfAbsent = `-- name: SetSettingIfAbsent :exec
+INSERT INTO settings (key, value, updated_at)
+VALUES (?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(key) DO NOTHING
+`
+
+type SetSettingIfAbsentParams struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func (q *Queries) SetSettingIfAbsent(ctx context.Context, arg SetSettingIfAbsentParams) error {
+	_, err := q.db.ExecContext(ctx, setSettingIfAbsent, arg.Key, arg.Value)
+	return err
+}

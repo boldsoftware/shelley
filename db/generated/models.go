@@ -55,6 +55,12 @@ type ChannelMessageRoute struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
+type ChatgptAccount struct {
+	AccountID string    `json:"account_id"`
+	Account   string    `json:"account"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type Conversation struct {
 	ConversationID          string    `json:"conversation_id"`
 	Slug                    *string   `json:"slug"`

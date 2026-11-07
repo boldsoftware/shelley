@@ -64,6 +64,17 @@ check(
 check("known account permits an unlisted route", pickReadyModel([], saved, ["a"]) === saved);
 check("removed account does not switch to another model", pickReadyModel(models, saved, []) === "");
 
+// Falling back would silently move a conversation off the user's ChatGPT plan.
+const plan = "chatgpt:0123456789abcdef0123456789abcdef:Z3B0";
+check(
+  "signed-out ChatGPT plan does not switch to another model",
+  pickReadyModel(models, plan, []) === "",
+);
+check(
+  "signed-in ChatGPT plan is kept",
+  pickReadyModel([...models, { id: plan, ready: true }], plan, []) === plan,
+);
+
 console.log(`selectedModel: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   console.error(failures.join("\n"));

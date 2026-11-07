@@ -20,6 +20,7 @@ import (
 	"shelley.exe.dev/llm/oai"
 	"shelley.exe.dev/llm/predictable"
 	"shelley.exe.dev/models/modelsdev"
+	"shelley.exe.dev/siwc"
 )
 
 // Provider identifies an LLM upstream API family.
@@ -441,6 +442,7 @@ type Manager struct {
 	db                  *db.DB
 	httpc               *http.Client
 	providersEnabled    bool
+	chatGPT             *siwc.Manager
 }
 
 // GetWorkhorseService returns a service that uses a cheap model from the

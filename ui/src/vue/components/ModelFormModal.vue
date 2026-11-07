@@ -31,6 +31,13 @@
       v-if="isOpen && !editModel"
       v-show="providerMode"
       :provider="editProvider"
+      :chatgpt="chatgpt"
+      :chatgpt-busy="chatgptBusy"
+      :chatgpt-pending="chatgptPending"
+      :chatgpt-message="chatgptMessage"
+      @chatgpt-sign-in="emit('chatgptSignIn')"
+      @chatgpt-complete="emit('chatgptComplete', $event)"
+      @chatgpt-cancel="emit('chatgptCancel')"
       @saved="emit('providerSaved', $event)"
       @close="requestClose"
     />
@@ -281,6 +288,7 @@ import {
   customModelsApi,
   type AvailableModel,
   type CustomModel,
+  type ChatGPTSignIn,
   type ModelProviderConnection,
   type CreateCustomModelRequest,
   type TestCustomModelRequest,
@@ -306,6 +314,11 @@ const props = withDefaults(
     editModel: CustomModel | null;
     editProvider: ModelProviderConnection | null;
     existingModels?: AvailableModel[];
+    // chatgpt offers Sign in with ChatGPT under Connect a provider.
+    chatgpt?: boolean;
+    chatgptBusy?: boolean;
+    chatgptPending?: ChatGPTSignIn | null;
+    chatgptMessage?: string | null;
   }>(),
   { existingModels: () => [] },
 );
@@ -314,6 +327,9 @@ const emit = defineEmits<{
   (e: "close"): void;
   (e: "saved"): void;
   (e: "providerSaved", provider: ModelProviderConnection): void;
+  (e: "chatgptSignIn"): void;
+  (e: "chatgptComplete", url: string): void;
+  (e: "chatgptCancel"): void;
 }>();
 const providerForm = ref<InstanceType<typeof ModelProviderForm> | null>(null);
 const providerSaving = computed(() => providerForm.value?.saving ?? false);

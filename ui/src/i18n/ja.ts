@@ -673,4 +673,27 @@ export const ja: TranslationKeys = {
   onboardingPhoneConnect: "{number} にメッセージを送り、この VM を接続",
   onboardingAskBelow: "または、下で何でも聞いてください。",
   onboardingDismiss: "閉じる",
+  // Sign in with ChatGPT
+  chatgptPlanIntro:
+    "ChatGPT プランに含まれるモデルを使います。サインイン情報はこのマシンに保存され、Shelley は OpenAI に直接リクエストを送ります。",
+  addChatGPTAccount: "ChatGPT アカウントを追加",
+  chatgptUsingPlan: "ChatGPT プランを使用中",
+  chatgptPlanUsageOff: "プランの利用は許可されていません",
+  chatgptEnablePlanUsage: "プランの利用を許可",
+  chatgptSignedOut: "サインアウト済み",
+  chatgptSignInAgain: "再度サインイン",
+  chatgptManageUsage: "利用状況を管理",
+  chatgptSignOut: "サインアウト",
+  chatgptRemoveAccount: "削除",
+  chatgptWaiting: "開いたタブで ChatGPT へのサインインを完了してください。",
+  chatgptPasteHint:
+    "そのタブが読み込めない 127.0.0.1 のページで終わった場合は、そのアドレス全体をコピーしてここに貼り付けてください。",
+  chatgptFinish: "サインインを完了",
+  chatgptOpenAgain: "サインインページを再度開く",
+  chatgptWelcomeTitle: "ChatGPT プランを使用しています",
+  chatgptWelcomeBody:
+    "Shelley は ChatGPT プランのモデルを使うようになりました。利用量はプランの上限に含まれ、ChatGPT で確認・管理できます。",
+  chatgptGotIt: "OK",
+  chatgptSignOutUnconfirmed:
+    "ここではサインアウトしましたが、ChatGPT で確認できませんでした。念のため ChatGPT の設定で Shelley の接続を解除してください。",
 };

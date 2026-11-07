@@ -645,4 +645,23 @@ export interface TranslationKeys {
   onboardingPhoneConnect: string;
   onboardingAskBelow: string;
   onboardingDismiss: string;
+  // Sign in with ChatGPT
+  chatgptPlanIntro: string;
+  addChatGPTAccount: string;
+  chatgptUsingPlan: string;
+  chatgptPlanUsageOff: string;
+  chatgptEnablePlanUsage: string;
+  chatgptSignedOut: string;
+  chatgptSignInAgain: string;
+  chatgptManageUsage: string;
+  chatgptSignOut: string;
+  chatgptRemoveAccount: string;
+  chatgptWaiting: string;
+  chatgptPasteHint: string;
+  chatgptFinish: string;
+  chatgptOpenAgain: string;
+  chatgptWelcomeTitle: string;
+  chatgptWelcomeBody: string;
+  chatgptGotIt: string;
+  chatgptSignOutUnconfirmed: string;
 }

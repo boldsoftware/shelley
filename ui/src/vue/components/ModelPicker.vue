@@ -179,6 +179,19 @@
            finding the clicked element gone from it, would take the click for
            one outside and close the panel. -->
       <div class="model-picker-footer" @click.stop>
+        <!-- OpenAI asks that plan usage be visible next to the model choice. -->
+        <div
+          v-if="selectedModelObj?.mode === 'chatgpt-plan'"
+          class="model-picker-section chatgpt-plan-usage"
+          data-testid="chatgpt-plan-usage"
+        >
+          <ChatGPTLogo :size="14" />
+          <span>{{ t("chatgptUsingPlan") }}</span>
+          <span aria-hidden="true">·</span>
+          <a :href="CHATGPT_USAGE_URL" target="_blank" rel="noopener noreferrer"
+            >{{ t("chatgptManageUsage") }} ↗</a
+          >
+        </div>
         <button
           v-if="tier2Models.length > 0 && !filterValue"
           class="model-picker-more"
@@ -403,6 +416,8 @@ import { ConversationsListKey } from "../composables/subagentLive";
 import { recentModelCombinations, type RecentThinkingLevel } from "./recentModelCombinations";
 import type { SettingsDifference, SettingsKnob } from "../composables/profiles";
 import { COMPACT_IN_PLACE_TOOL, compactNudgeChoices } from "./autoCompaction";
+import ChatGPTLogo from "./ChatGPTLogo.vue";
+import { CHATGPT_USAGE_URL } from "./chatgptPlan";
 
 type PickerModel = Model & { label: string };
 type PickerOption = PickerModel & {
@@ -504,15 +519,19 @@ const sourceSuffixes = computed(() => {
   }
   return accountSuffixes([...accounts].map(([id, label]) => ({ id, label })));
 });
+// A signed-in ChatGPT plan's models lead the list: the user connected that
+// account to use it.
 const decorated = computed<PickerModel[]>(() =>
-  props.models.map((model) => {
-    const suffix = model.source_id ? sourceSuffixes.value.get(model.source_id) : undefined;
-    return {
-      ...model,
-      source: suffix ? `${model.source} ${suffix}` : model.source,
-      label: labels.value.get(model.id) || model.id,
-    };
-  }),
+  props.models
+    .map((model) => {
+      const suffix = model.source_id ? sourceSuffixes.value.get(model.source_id) : undefined;
+      return {
+        ...model,
+        source: suffix ? `${model.source} ${suffix}` : model.source,
+        label: labels.value.get(model.id) || model.id,
+      };
+    })
+    .sort((a, b) => Number(b.mode === "chatgpt-plan") - Number(a.mode === "chatgpt-plan")),
 );
 
 // Source sub-labels are pure noise when every model comes from the same

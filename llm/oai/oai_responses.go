@@ -55,14 +55,21 @@ type ResponsesService struct {
 	// ReasoningReplay controls persisted reasoning replay. The zero value and
 	// "auto" resolve from models.dev; "none" disables replay explicitly.
 	ReasoningReplay ReasoningReplay
+
+	// ChatGPTPlan, if set, authenticates with a ChatGPT plan instead of APIKey.
+	ChatGPTPlan *ChatGPTPlan
 }
 
 var _ llm.Service = (*ResponsesService)(nil)
 
 func (s *ResponsesService) messageOrigin(model Model) llm.MessageOrigin {
+	transport := "openai-responses:" + llm.TransportEndpoint(cmp.Or(s.ModelURL, model.URL, OpenAIURL))
+	if s.ChatGPTPlan != nil {
+		transport = "chatgpt-plan:" + s.ChatGPTPlan.Account
+	}
 	return llm.MessageOrigin{
 		Provider:  cmp.Or(s.ProviderName, "openai"),
-		Transport: "openai-responses:" + llm.TransportEndpoint(cmp.Or(s.ModelURL, model.URL, OpenAIURL)),
+		Transport: transport,
 		Model:     model.ModelName,
 	}
 }
@@ -160,6 +167,7 @@ type responsesInputItem struct {
 	Content          []responsesContent  `json:"content,omitempty"`           // for messages
 	CallID           string              `json:"call_id,omitempty"`           // for function_call and function_call_output
 	Name             string              `json:"name,omitempty"`              // for function_call
+	Namespace        string              `json:"namespace,omitempty"`         // for calls to namespaced tools
 	Arguments        string              `json:"arguments,omitempty"`         // for function_call
 	Input            string              `json:"input,omitempty"`             // for custom_tool_call
 	Output           string              `json:"output,omitempty"`            // for tool outputs
@@ -185,6 +193,7 @@ type responsesTool struct {
 	Description string                `json:"description,omitempty"`
 	Parameters  json.RawMessage       `json:"parameters,omitempty"`
 	Format      *responsesToolGrammar `json:"format,omitempty"`
+	Tools       []responsesTool       `json:"tools,omitempty"` // for namespace
 }
 
 type responsesToolGrammar struct {
@@ -295,9 +304,14 @@ func classifyResponsesError(apiErr *responsesError) (retryable, classified bool)
 
 	var code string
 	_ = json.Unmarshal(apiErr.Code, &code)
-	switch strings.ToLower(code) {
+	switch normalizePlanCode(strings.ToLower(code)) {
 	case "server_error", "rate_limit_exceeded", "overloaded_error", "vector_store_timeout":
 		return true, true
+	case "subscription_sharing_usage_unavailable", "subscription_sharing_user_unavailable":
+		return true, true
+	case "subscription_sharing_usage_limit_exceeded", "subscription_sharing_user_not_eligible", "subscription_sharing_unsupported_capability",
+		"subscription_sharing_route_not_supported", "subscription_sharing_invalid_user", "chatpass_v2_scope_not_authorized", "chatpass_v2_invalid_authorization_context":
+		return false, true
 	case "unsupported_value", "invalid_value", "invalid_request_error", "model_not_found", "insufficient_quota", "context_length_exceeded", "invalid_api_key",
 		"invalid_prompt", "data_residency_mismatch", "bio_policy", "misalignment_policy_violation", "invalid_image", "invalid_image_format", "invalid_base64_image", "invalid_image_url",
 		"image_too_large", "image_too_small", "image_parse_error", "image_content_policy_violation", "invalid_image_mode", "image_file_too_large",
@@ -720,6 +734,13 @@ func (s *ResponsesService) buildRequest(ctx context.Context, ir *llm.Request) (r
 			}
 		}
 		items := fromLLMMessageResponses(msg, reasoningReplay)
+		if s.ChatGPTPlan != nil {
+			for i := range items {
+				if items[i].Type == "function_call" || items[i].Type == "custom_tool_call" {
+					items[i].Namespace = chatGPTToolNamespace
+				}
+			}
+		}
 		allInput = append(allInput, items...)
 	}
 
@@ -735,6 +756,9 @@ func (s *ResponsesService) buildRequest(ctx context.Context, ir *llm.Request) (r
 		}
 		tools = append(tools, fromLLMToolResponses(t))
 	}
+	if s.ChatGPTPlan != nil {
+		tools = chatGPTNamespace(tools)
+	}
 
 	// Construct the full URL
 	baseURL := cmp.Or(s.ModelURL, model.URL, OpenAIURL)
@@ -742,13 +766,15 @@ func (s *ResponsesService) buildRequest(ctx context.Context, ir *llm.Request) (r
 
 	// Create the request
 	req := responsesRequest{
-		Model:           model.ModelName,
-		Instructions:    responsesInstructionsFromLLMSystem(ir.System),
-		Store:           false,
-		Stream:          true,
-		Input:           allInput,
-		Tools:           tools,
-		MaxOutputTokens: maxOutputTokens(baseURL, model.ModelName, s.MaxTokens),
+		Model:        model.ModelName,
+		Instructions: responsesInstructionsFromLLMSystem(ir.System),
+		Store:        false,
+		Stream:       true,
+		Input:        allInput,
+		Tools:        tools,
+	}
+	if s.ChatGPTPlan == nil {
+		req.MaxOutputTokens = maxOutputTokens(baseURL, model.ModelName, s.MaxTokens)
 	}
 	if openAIResponses {
 		req.Include = []string{"reasoning.encrypted_content"}
@@ -855,6 +881,13 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 	var lastErrStatus int     // HTTP status of the most recent attempt failure, 0 if none
 	var lastRequestErrorInfo llm.RequestErrorInfo
 	var retryAfter time.Duration // hint from upstream Retry-After header, reset each attempt
+	token := s.APIKey
+	if s.ChatGPTPlan != nil {
+		if token, err = s.ChatGPTPlan.Credentials.Token(ctx); err != nil {
+			return nil, newRequestError(err, false)
+		}
+	}
+	refreshed := false // after a 401, the token is refreshed and the request retried once
 	for attempts := 0; ; attempts++ {
 		if attempts > 15 {
 			return nil, &requestError{
@@ -864,7 +897,7 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 				idleStallDuration: lastRequestErrorInfo.IdleStallDuration,
 			}
 		}
-		if attempts > 0 {
+		if attempts > 0 && !(refreshed && lastErrStatus == http.StatusUnauthorized) {
 			if ctx.Err() != nil {
 				return nil, fmt.Errorf("responses request failed after %d attempts (context cancelled): %w", attempts, errs)
 			}
@@ -884,7 +917,7 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 		}
 
 		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("Authorization", "Bearer "+s.APIKey)
+		httpReq.Header.Set("Authorization", "Bearer "+token)
 		if s.Org != "" {
 			httpReq.Header.Set("OpenAI-Organization", s.Org)
 		}
@@ -913,6 +946,15 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 			errMessage := strings.TrimSpace(string(body))
 			if apiErr.Message != "" {
 				errMessage = apiErr.Message
+			}
+			planCode := ""
+			if s.ChatGPTPlan != nil {
+				planCode = chatGPTPlanErrorCode(&apiErr)
+				if note := chatGPTPlanErrorNote(planCode); note != "" {
+					errMessage = note + ": " + errMessage
+				} else if httpResp.StatusCode == http.StatusUnauthorized && refreshed {
+					errMessage = "ChatGPT rejected this connection; sign in with ChatGPT again: " + errMessage
+				}
 			}
 			// io.ReadAll returns whatever it managed to read alongside the error, so
 			// a severed body still yields a (possibly empty) partial message. Keep it
@@ -945,7 +987,20 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 				errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: status %d (url=%s, model=%s): %s", attempts+1, now, httpResp.StatusCode, fullURL, model.ModelName, retryErrMessage))
 				continue
 
-			case httpResp.StatusCode == http.StatusTooManyRequests:
+			case s.ChatGPTPlan != nil && httpResp.StatusCode == http.StatusUnauthorized && !refreshed:
+				// The access token may have been revoked or expired early.
+				refreshed = true
+				lastErrStatus = httpResp.StatusCode
+				lastErrSummary = "unauthorized: " + llm.Truncate(errMessage, 160)
+				errs = errors.Join(errs, fmt.Errorf("attempt %d at %s: status %d (url=%s, model=%s): %s", attempts+1, now, httpResp.StatusCode, fullURL, model.ModelName, retryErrMessage))
+				if token, err = s.ChatGPTPlan.Credentials.Refresh(ctx, token); err != nil {
+					// Lead with what the user must do; the upstream 401 text
+					// talks about API keys.
+					return nil, newRequestError(errors.Join(err, errs), false)
+				}
+				continue
+
+			case httpResp.StatusCode == http.StatusTooManyRequests && planCode != "subscription_sharing_usage_limit_exceeded":
 				retryAfter = llm.ParseRetryAfter(httpResp.Header.Get("Retry-After"))
 				lastErrSummary = "rate limited: " + llm.Truncate(errMessage, 160)
 				lastErrStatus = httpResp.StatusCode
@@ -1052,7 +1107,7 @@ var prewarmModel = regexp.MustCompile(`^gpt-(\d+)(?:\.(\d+))?(?:$|-)`)
 
 func (s *ResponsesService) supportsPrewarm() bool {
 	m := prewarmModel.FindStringSubmatch(cmp.Or(s.Model, DefaultModel).ModelName)
-	if !s.isOpenAIResponses() || m == nil {
+	if !s.isOpenAIResponses() || s.ChatGPTPlan != nil || m == nil {
 		return false
 	}
 	major, _ := strconv.Atoi(m[1])
@@ -1222,8 +1277,12 @@ func parseResponsesSSEStream(ctx context.Context, r io.Reader, onStream func(llm
 			completed.Output = mergeResponsesStreamOutput(completed.Output, outputItems)
 		case "response.failed":
 			if event.Response != nil && event.Response.Error != nil {
+				message := event.Response.Error.Message
+				if note := chatGPTPlanErrorNote(chatGPTPlanErrorCode(event.Response.Error)); note != "" {
+					message = note + ": " + message
+				}
 				return newRequestError(
-					fmt.Errorf("response failed: %s", event.Response.Error.Message),
+					fmt.Errorf("response failed: %s", message),
 					responsesErrorRetryable(event.Response.Error),
 				)
 			}
