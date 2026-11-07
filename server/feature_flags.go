@@ -23,8 +23,7 @@ type FeatureFlagDTO struct {
 func (s *Server) handleGetFeatureFlags(w http.ResponseWriter, r *http.Request) {
 	overrides, err := s.db.GetAllFeatureFlagOverrides(r.Context())
 	if err != nil {
-		s.logger.Error("Failed to get feature flag overrides", "error", err)
-		http.Error(w, fmt.Sprintf("Failed to get feature flags: %v", err), http.StatusInternalServerError)
+		s.internalError(w, "Failed to get feature flags", err)
 		return
 	}
 	flags := featureflags.All()
@@ -63,8 +62,7 @@ func (s *Server) handleSetFeatureFlag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.db.SetFeatureFlagOverride(r.Context(), req.Name, string(req.Value)); err != nil {
-		s.logger.Error("Failed to set feature flag", "error", err, "name", req.Name)
-		http.Error(w, fmt.Sprintf("Failed to set feature flag: %v", err), http.StatusInternalServerError)
+		s.internalError(w, "Failed to set feature flag", err, "name", req.Name)
 		return
 	}
 	if req.Name == db.WorkspaceFlag {
@@ -89,8 +87,7 @@ func (s *Server) handleDeleteFeatureFlag(w http.ResponseWriter, r *http.Request)
 	}
 	// Allow deletion of unknown names too (cleans up stale rows).
 	if err := s.db.DeleteFeatureFlagOverride(r.Context(), req.Name); err != nil {
-		s.logger.Error("Failed to delete feature flag", "error", err, "name", req.Name)
-		http.Error(w, fmt.Sprintf("Failed to delete feature flag: %v", err), http.StatusInternalServerError)
+		s.internalError(w, "Failed to delete feature flag", err, "name", req.Name)
 		return
 	}
 	if req.Name == db.WorkspaceFlag {

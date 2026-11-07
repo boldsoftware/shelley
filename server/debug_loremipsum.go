@@ -91,8 +91,7 @@ func (s *Server) handleDebugLoremIpsum(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithoutCancel(r.Context())
 	convID, err := s.generateLoremConversation(ctx, turns, model)
 	if err != nil {
-		s.logger.Error("loremipsum generation failed", "error", err)
-		http.Error(w, fmt.Sprintf("failed to generate conversation: %v", err), http.StatusInternalServerError)
+		s.internalError(w, "failed to generate conversation", err)
 		return
 	}
 

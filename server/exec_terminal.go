@@ -347,8 +347,7 @@ func (s *Server) handleTerminalScope(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.logger.Error("failed to update terminal scope", "id", id, "error", err)
-		http.Error(w, "failed to update terminal scope", http.StatusInternalServerError)
+		s.internalError(w, "failed to update terminal scope", err, "id", id)
 		return
 	}
 	writeJSON(w, http.StatusOK, newTerminalDTO(sess))

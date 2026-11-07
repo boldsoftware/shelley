@@ -1205,8 +1205,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		} else if err != nil {
-			s.logger.Error("Failed to resolve transcription models", "conversationID", conversationID, "error", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			s.internalError(w, "Failed to resolve transcription models", err, "conversationID", conversationID)
 			return
 		}
 	}
@@ -1247,8 +1246,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 			}
 			question, err = s.runChatMessageHook(r, conversationID, modelID, reasoningLevel, false, question)
 			if err != nil {
-				s.logger.Error("chat-message hook failed", "conversationID", conversationID, "error", err)
-				http.Error(w, "chat-message hook failed", http.StatusInternalServerError)
+				s.internalError(w, "chat-message hook failed", err, "conversationID", conversationID)
 				return
 			}
 			descriptor, err := s.createBtwReader(ctx, conversationID, question)
@@ -1257,8 +1255,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 				return
 			}
 			if err != nil {
-				s.logger.Error("Failed to create BTW reader", "conversationID", conversationID, "error", err)
-				http.Error(w, "Failed to create BTW reader", http.StatusInternalServerError)
+				s.internalError(w, "Failed to create BTW reader", err, "conversationID", conversationID)
 				return
 			}
 			writeJSON(w, http.StatusAccepted, map[string]any{"status": "accepted", "btw": descriptor})
@@ -1457,8 +1454,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	}
 	newMsg, err := s.runChatMessageHook(r, conversationID, modelID, reasoningLevel, willQueue, req.Message)
 	if err != nil {
-		s.logger.Error("chat-message hook failed", "conversationID", conversationID, "error", err)
-		http.Error(w, "chat-message hook failed", http.StatusInternalServerError)
+		s.internalError(w, "chat-message hook failed", err, "conversationID", conversationID)
 		return
 	}
 	req.Message = newMsg
@@ -1633,8 +1629,7 @@ func (s *Server) newConversation(w http.ResponseWriter, r *http.Request, req New
 		},
 	})
 	if hookErr != nil {
-		s.logger.Error("new-conversation hook failed", "conversationID", conversationID, "error", hookErr)
-		http.Error(w, "new-conversation hook failed", http.StatusInternalServerError)
+		s.internalError(w, "new-conversation hook failed", hookErr, "conversationID", conversationID)
 		return
 	}
 	if hookResult.Cwd != derefString(cwdPtr) {
@@ -1784,8 +1779,7 @@ func (s *Server) handleCancelConversation(w http.ResponseWriter, r *http.Request
 			return
 		}
 		if err != nil {
-			s.logger.Error("Failed to load conversation for cancellation", "conversationID", conversationID, "error", err)
-			http.Error(w, "Failed to cancel conversation", http.StatusInternalServerError)
+			s.internalError(w, "Failed to load conversation for cancellation", err, "conversationID", conversationID)
 			return
 		}
 		if conversation.AgentWorking {
@@ -1797,8 +1791,7 @@ func (s *Server) handleCancelConversation(w http.ResponseWriter, r *http.Request
 			} else {
 				s.logger.Warn("Failed to load working conversation for cancellation", "conversationID", conversationID, "error", err)
 				if clearErr := s.db.ClearConversationRuntimeState(ctx, conversationID); clearErr != nil {
-					s.logger.Error("Failed to clear conversation runtime state", "conversationID", conversationID, "error", clearErr)
-					http.Error(w, "Failed to cancel conversation", http.StatusInternalServerError)
+					s.internalError(w, "Failed to clear conversation runtime state", clearErr, "conversationID", conversationID)
 					return
 				}
 			}
@@ -1822,8 +1815,7 @@ func (s *Server) handleCancelConversation(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err != nil {
-		s.logger.Error("Failed to cancel conversation", "conversationID", conversationID, "error", err)
-		http.Error(w, "Failed to cancel conversation", http.StatusInternalServerError)
+		s.internalError(w, "Failed to cancel conversation", err, "conversationID", conversationID)
 		return
 	}
 	s.cancelSubagentTree(ctx, conversationID)
@@ -3661,8 +3653,7 @@ func (s *Server) handleVersionCheck(w http.ResponseWriter, r *http.Request) {
 
 	cached, err := s.versionChecker.Check(r.Context(), forceRefresh)
 	if err != nil {
-		s.logger.Error("Version check failed", "error", err)
-		http.Error(w, "Version check failed", http.StatusInternalServerError)
+		s.internalError(w, "Version check failed", err)
 		return
 	}
 	info := *cached
@@ -3683,8 +3674,7 @@ func (s *Server) handleVersionChangelog(w http.ResponseWriter, r *http.Request) 
 
 	commits, err := s.versionChecker.FetchChangelog(r.Context(), currentTag, latestTag)
 	if err != nil {
-		s.logger.Error("Failed to fetch changelog", "error", err, "current", currentTag, "latest", latestTag)
-		http.Error(w, "Failed to fetch changelog", http.StatusInternalServerError)
+		s.internalError(w, "Failed to fetch changelog", err, "current", currentTag, "latest", latestTag)
 		return
 	}
 
@@ -3707,8 +3697,7 @@ func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 		if restart {
 			s.releaseRestart()
 		}
-		s.logger.Error("Upgrade failed", "error", err)
-		http.Error(w, fmt.Sprintf("Upgrade failed: %v", err), http.StatusInternalServerError)
+		s.internalError(w, "Upgrade failed", err)
 		return
 	}
 
@@ -3826,8 +3815,7 @@ func (s *Server) handleUpgradeHeadlessShell(w http.ResponseWriter, r *http.Reque
 	cmd = exec.CommandContext(ctx, extractedBin, "--version")
 	versionOutput, err := cmd.Output()
 	if err != nil {
-		s.logger.Error("Extracted headless-shell --version failed", "error", err)
-		http.Error(w, fmt.Sprintf("Extracted binary failed --version: %v", err), http.StatusInternalServerError)
+		s.internalError(w, "Extracted binary failed --version", err)
 		return
 	}
 	newVersion := info.HeadlessShellLatest
@@ -3837,8 +3825,7 @@ func (s *Server) handleUpgradeHeadlessShell(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := recordHeadlessShellVersion(extractedBin, newVersion); err != nil {
-		s.logger.Error("Failed to record headless-shell version", "error", err)
-		http.Error(w, fmt.Sprintf("Failed to record version: %v", err), http.StatusInternalServerError)
+		s.internalError(w, "Failed to record version", err)
 		return
 	}
 	s.logger.Info("New headless-shell version verified", "version", newVersion)
@@ -3908,8 +3895,7 @@ func (s *Server) handleExit(w http.ResponseWriter, r *http.Request) {
 	if resume {
 		if err := s.markResumeAfterRestart(r.Context()); err != nil {
 			s.releaseRestart()
-			s.logger.Error("Failed to mark conversations for resume after restart", "error", err)
-			http.Error(w, fmt.Sprintf("Failed to prepare conversations for restart: %v", err), http.StatusInternalServerError)
+			s.internalError(w, "Failed to prepare conversations for restart", err)
 			return
 		}
 		message = "Exiting; active conversations will resume after restart..."
@@ -3931,8 +3917,7 @@ func (s *Server) handleExit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := s.db.GetAllSettings(r.Context())
 	if err != nil {
-		s.logger.Error("Failed to get settings", "error", err)
-		http.Error(w, fmt.Sprintf("Failed to get settings: %v", err), http.StatusInternalServerError)
+		s.internalError(w, "Failed to get settings", err)
 		return
 	}
 
@@ -3966,8 +3951,7 @@ func (s *Server) handleSetSetting(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.db.SetSetting(r.Context(), req.Key, req.Value); err != nil {
-		s.logger.Error("Failed to set setting", "error", err, "key", req.Key)
-		http.Error(w, fmt.Sprintf("Failed to set setting: %v", err), http.StatusInternalServerError)
+		s.internalError(w, "Failed to set setting", err, "key", req.Key)
 		return
 	}
 
