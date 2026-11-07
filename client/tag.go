@@ -69,25 +69,13 @@ func parseTagsField(raw string) []string {
 
 // fetchConversationTags reads the current tag list for a conversation.
 func fetchConversationTags(cc *clientConfig, client *http.Client, baseURL, conversationID string) ([]string, error) {
-	req, err := cc.newRequest("GET", baseURL+"/api/conversation/"+conversationID, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d fetching conversation %s", resp.StatusCode, conversationID)
-	}
 	var body struct {
 		Conversation struct {
 			Tags string `json:"tags"`
 		} `json:"conversation"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return nil, fmt.Errorf("parsing conversation: %w", err)
+	if err := cc.doJSON(client, http.MethodGet, baseURL+"/api/conversation/"+conversationID, nil, &body); err != nil {
+		return nil, fmt.Errorf("fetching conversation %s: %w", conversationID, err)
 	}
 	return parseTagsField(body.Conversation.Tags), nil
 }
@@ -95,28 +83,12 @@ func fetchConversationTags(cc *clientConfig, client *http.Client, baseURL, conve
 // setConversationTags replaces a conversation's tags and returns the
 // server-normalized result.
 func setConversationTags(cc *clientConfig, client *http.Client, baseURL, conversationID string, tags []string) ([]string, error) {
-	payload, err := json.Marshal(map[string]any{"tags": normalizeTagList(tags)})
-	if err != nil {
-		return nil, err
-	}
-	req, err := cc.newRequest("POST", baseURL+"/api/conversation/"+conversationID+"/tags", strings.NewReader(string(payload)))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d updating tags on %s", resp.StatusCode, conversationID)
-	}
 	var body struct {
 		Tags string `json:"tags"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return nil, fmt.Errorf("parsing response: %w", err)
+	payload := map[string]any{"tags": normalizeTagList(tags)}
+	if err := cc.doJSON(client, http.MethodPost, baseURL+"/api/conversation/"+conversationID+"/tags", payload, &body); err != nil {
+		return nil, fmt.Errorf("updating tags on %s: %w", conversationID, err)
 	}
 	return parseTagsField(body.Tags), nil
 }
@@ -134,25 +106,11 @@ type tagCount struct {
 func listAllTags(cc *clientConfig, client *http.Client, baseURL string, limit int) ([]tagCount, error) {
 	counts := map[string]int{}
 	for _, endpoint := range []string{"/api/conversations", "/api/conversations/archived"} {
-		req, err := cc.newRequest("GET", baseURL+endpoint+fmt.Sprintf("?limit=%d", limit), nil)
-		if err != nil {
-			return nil, err
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, err
-		}
 		var rows []struct {
 			Tags string `json:"tags"`
 		}
-		decodeErr := json.NewDecoder(resp.Body).Decode(&rows)
-		status := resp.StatusCode
-		resp.Body.Close()
-		if status != http.StatusOK {
-			return nil, fmt.Errorf("HTTP %d listing %s", status, endpoint)
-		}
-		if decodeErr != nil {
-			return nil, fmt.Errorf("parsing %s: %w", endpoint, decodeErr)
+		if err := cc.doJSON(client, http.MethodGet, baseURL+endpoint+fmt.Sprintf("?limit=%d", limit), nil, &rows); err != nil {
+			return nil, fmt.Errorf("listing %s: %w", endpoint, err)
 		}
 		for _, row := range rows {
 			for _, tag := range parseTagsField(row.Tags) {
@@ -192,16 +150,14 @@ func cmdTag(cc *clientConfig, args []string) {
 		os.Exit(1)
 	}
 	if *remove && *set {
-		fmt.Fprintf(os.Stderr, "Error: -rm and -set are mutually exclusive\n")
-		os.Exit(1)
+		fatalf("Error: -rm and -set are mutually exclusive")
 	}
 	conversationID := fs.Arg(0)
 	tagArgs := fs.Args()[1:]
 
 	client, baseURL, err := cc.newHTTPClient()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
 
 	var tags []string
@@ -222,8 +178,7 @@ func cmdTag(cc *clientConfig, args []string) {
 		}
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
 	if tags == nil {
 		tags = []string{}
@@ -249,13 +204,11 @@ func cmdTags(cc *clientConfig, args []string) {
 
 	client, baseURL, err := cc.newHTTPClient()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
 	tags, err := listAllTags(cc, client, baseURL, *limit)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
 	enc := json.NewEncoder(os.Stdout)
 	for _, t := range tags {

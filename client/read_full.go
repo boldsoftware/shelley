@@ -322,42 +322,16 @@ func aggregateMessageUsage(summary *conversationUsage, messages []messageWire, c
 }
 
 func fetchConversationSnapshot(cc *clientConfig, client *http.Client, baseURL, conversationID string) (streamResponseWire, error) {
-	req, err := cc.newRequest(http.MethodGet, baseURL+"/api/conversation/"+conversationID, nil)
-	if err != nil {
-		return streamResponseWire{}, err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return streamResponseWire{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return streamResponseWire{}, httpResponseError(resp)
-	}
 	var snapshot streamResponseWire
-	if err := json.NewDecoder(resp.Body).Decode(&snapshot); err != nil {
-		return streamResponseWire{}, err
-	}
-	return snapshot, nil
+	err := cc.doJSON(client, http.MethodGet, baseURL+"/api/conversation/"+conversationID, nil, &snapshot)
+	return snapshot, err
 }
 
 func fetchSubagentIDs(cc *clientConfig, client *http.Client, baseURL, conversationID string) ([]string, error) {
-	req, err := cc.newRequest(http.MethodGet, baseURL+"/api/conversation/"+conversationID+"/subagents", nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, httpResponseError(resp)
-	}
 	var rows []struct {
 		ConversationID string `json:"conversation_id"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+	if err := cc.doJSON(client, http.MethodGet, baseURL+"/api/conversation/"+conversationID+"/subagents", nil, &rows); err != nil {
 		return nil, err
 	}
 	ids := make([]string, len(rows))

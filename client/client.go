@@ -4,6 +4,7 @@ package client
 
 import (
 	"bufio"
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -85,14 +86,8 @@ func (cc *clientConfig) newHTTPClient() (*http.Client, string, error) {
 	}
 }
 
-func (cc *clientConfig) newRequest(method, url string, body *strings.Reader) (*http.Request, error) {
-	var req *http.Request
-	var err error
-	if body != nil {
-		req, err = http.NewRequest(method, url, body)
-	} else {
-		req, err = http.NewRequest(method, url, nil)
-	}
+func (cc *clientConfig) newRequest(method, url string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -103,6 +98,81 @@ func (cc *clientConfig) newRequest(method, url string, body *strings.Reader) (*h
 		req.Header.Set(k, v)
 	}
 	return req, nil
+}
+
+// doJSON sends body, if non-nil, as JSON and decodes a 2xx response into
+// out, if non-nil. Other statuses become httpResponseError errors.
+func (cc *clientConfig) doJSON(client *http.Client, method, url string, body, out any) error {
+	var r io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		r = bytes.NewReader(b)
+	}
+	req, err := cc.newRequest(method, url, r)
+	if err != nil {
+		return err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return httpResponseError(resp)
+	}
+	if out == nil {
+		return nil
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// streamConversation calls handle with each event of the conversation's
+// stream until handle returns true or the stream ends.
+func streamConversation(cc *clientConfig, client *http.Client, baseURL, conversationID string, handle func(streamResponseWire) bool) error {
+	req, err := cc.newRequest(http.MethodGet, baseURL+"/api/conversation/"+conversationID+"/stream", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return httpResponseError(resp)
+	}
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	for scanner.Scan() {
+		data, ok := strings.CutPrefix(scanner.Text(), "data: ")
+		if !ok {
+			continue
+		}
+		var sr streamResponseWire
+		if json.Unmarshal([]byte(data), &sr) != nil {
+			continue
+		}
+		if handle(sr) {
+			return nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("reading stream: %w", err)
+	}
+	return nil
+}
+
+// fatalf prints an error line to stderr and exits with status 1.
+func fatalf(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	os.Exit(1)
 }
 
 // Run is the entry point for "shelley client [args...]".
@@ -133,8 +203,7 @@ func Run(args []string) {
 	for _, h := range headerFlags {
 		parts := strings.SplitN(h, ":", 2)
 		if len(parts) != 2 {
-			fmt.Fprintf(os.Stderr, "Error: invalid header %q (expected \"Name: Value\")\n", h)
-			os.Exit(1)
+			fatalf("Error: invalid header %q (expected \"Name: Value\")", h)
 		}
 		headers[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 	}
@@ -213,24 +282,20 @@ func cmdChat(cc *clientConfig, args []string) {
 	fs.Parse(args)
 
 	if *prompt == "" {
-		fmt.Fprintf(os.Stderr, "Error: -p PROMPT is required\n")
-		os.Exit(1)
+		fatalf("Error: -p PROMPT is required")
 	}
 
 	conversationOptions, err := buildConversationOptions(*reasoning, toolOverrides, *noTools, *noNotify)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
 	if err := validateChatTarget(*convID, conversationOptions); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
 
 	client, baseURL, err := cc.newHTTPClient()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
 
 	// Default cwd to the caller's working directory for new conversations,
@@ -248,42 +313,15 @@ func cmdChat(cc *clientConfig, args []string) {
 		reqBody["conversation_options"] = conversationOptions
 	}
 
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
 	var apiURL string
 	if *convID != "" {
 		apiURL = baseURL + "/api/conversation/" + *convID + "/chat"
 	} else {
 		apiURL = baseURL + "/api/conversations/new"
 	}
-
-	req, err := cc.newRequest("POST", apiURL, strings.NewReader(string(bodyBytes)))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
-		os.Exit(1)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", httpResponseError(resp))
-		os.Exit(1)
-	}
-
 	var respBody map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing response: %v\n", err)
-		os.Exit(1)
+	if err := cc.doJSON(client, http.MethodPost, apiURL, reqBody, &respBody); err != nil {
+		fatalf("Error: %v", err)
 	}
 
 	cid := respBody["conversation_id"]
@@ -323,18 +361,15 @@ func cmdChat(cc *clientConfig, args []string) {
 	}
 
 	if err := json.NewEncoder(os.Stdout).Encode(output); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing response: %v\n", err)
-		os.Exit(1)
+		fatalf("Error writing response: %v", err)
 	}
 	if postSendErr != nil {
-		fmt.Fprintln(os.Stderr, postSendErr)
-		os.Exit(1)
+		fatalf("%v", postSendErr)
 	}
 
 	if *ephemeral {
 		if cidStr == "" {
-			fmt.Fprintf(os.Stderr, "Error: -ephemeral could not determine conversation ID\n")
-			os.Exit(1)
+			fatalf("Error: -ephemeral could not determine conversation ID")
 		}
 		waitForEndOfTurn(cc, client, baseURL, cidStr)
 		archiveConversation(cc, client, baseURL, cidStr)
@@ -344,66 +379,22 @@ func cmdChat(cc *clientConfig, args []string) {
 // waitForEndOfTurn streams the conversation until the agent's turn ends.
 // Stream events are discarded; only end-of-turn detection is performed.
 func waitForEndOfTurn(cc *clientConfig, client *http.Client, baseURL, conversationID string) {
-	req, err := cc.newRequest("GET", baseURL+"/api/conversation/"+conversationID+"/stream", nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
-		os.Exit(1)
-	}
-	req.Header.Set("Accept", "text/event-stream")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "Error: HTTP %d\n", resp.StatusCode)
-		os.Exit(1)
-	}
-
-	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		var sr streamResponseWire
-		if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &sr); err != nil {
-			continue
-		}
-		if sr.Heartbeat {
-			continue
-		}
+	err := streamConversation(cc, client, baseURL, conversationID, func(sr streamResponseWire) bool {
 		for _, msg := range sr.Messages {
 			if (msg.Type == "agent" || msg.Type == "error") && msg.EndOfTurn != nil && *msg.EndOfTurn {
-				return
+				return true
 			}
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading stream: %v\n", err)
-		os.Exit(1)
+		return false
+	})
+	if err != nil {
+		fatalf("Error: %v", err)
 	}
 }
 
 func archiveConversation(cc *clientConfig, client *http.Client, baseURL, conversationID string) {
-	req, err := cc.newRequest("POST", baseURL+"/api/conversation/"+conversationID+"/archive", nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating archive request: %v\n", err)
-		os.Exit(1)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error archiving: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "Error archiving: HTTP %d\n", resp.StatusCode)
-		os.Exit(1)
+	if err := cc.doJSON(client, http.MethodPost, baseURL+"/api/conversation/"+conversationID+"/archive", nil, nil); err != nil {
+		fatalf("Error archiving: %v", err)
 	}
 }
 
@@ -424,31 +415,26 @@ func cmdRead(cc *clientConfig, args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: shelley client read [-wait] [-full | -usage] CONVERSATION_ID\n")
-		os.Exit(1)
+		fatalf("Usage: shelley client read [-wait] [-full | -usage] CONVERSATION_ID")
 	}
 	if *usage && (*wait || *full) {
-		fmt.Fprintf(os.Stderr, "Error: -usage cannot be combined with -wait or -full\n")
-		os.Exit(1)
+		fatalf("Error: -usage cannot be combined with -wait or -full")
 	}
 	conversationID := fs.Arg(0)
 
 	client, baseURL, err := cc.newHTTPClient()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
 
 	switch {
 	case *usage:
 		summary, err := collectConversationUsage(cc, client, baseURL, conversationID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			fatalf("Error: %v", err)
 		}
 		if err := json.NewEncoder(os.Stdout).Encode(summary); err != nil {
-			fmt.Fprintf(os.Stderr, "Error writing usage: %v\n", err)
-			os.Exit(1)
+			fatalf("Error writing usage: %v", err)
 		}
 	case *wait:
 		readStream(cc, client, baseURL, conversationID, *full)
@@ -460,25 +446,21 @@ func cmdRead(cc *clientConfig, args []string) {
 func readSnapshot(cc *clientConfig, client *http.Client, baseURL, conversationID string, full bool) {
 	sr, err := fetchConversationSnapshot(cc, client, baseURL, conversationID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
 
 	if full {
 		conversation, err := decodeRawJSON(sr.Conversation)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error parsing conversation metadata: %v\n", err)
-			os.Exit(1)
+			fatalf("Error parsing conversation metadata: %v", err)
 		}
 		for _, msg := range sr.Messages {
 			record, err := fullMessage(msg, conversation)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error parsing response: %v\n", err)
-				os.Exit(1)
+				fatalf("Error parsing response: %v", err)
 			}
 			if err := json.NewEncoder(os.Stdout).Encode(record); err != nil {
-				fmt.Fprintf(os.Stderr, "Error writing response: %v\n", err)
-				os.Exit(1)
+				fatalf("Error writing response: %v", err)
 			}
 		}
 		return
@@ -490,87 +472,44 @@ func readSnapshot(cc *clientConfig, client *http.Client, baseURL, conversationID
 }
 
 func readStream(cc *clientConfig, client *http.Client, baseURL, conversationID string, full bool) {
-	req, err := cc.newRequest("GET", baseURL+"/api/conversation/"+conversationID+"/stream", nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
-		os.Exit(1)
-	}
-	req.Header.Set("Accept", "text/event-stream")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", httpResponseError(resp))
-		os.Exit(1)
-	}
-
 	var conversation any
 	seenSeqIDs := make(map[int64]bool)
-	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		data := strings.TrimPrefix(line, "data: ")
-
-		var sr streamResponseWire
-		if err := json.Unmarshal([]byte(data), &sr); err != nil {
-			continue
-		}
-
+	err := streamConversation(cc, client, baseURL, conversationID, func(sr streamResponseWire) bool {
 		if len(sr.Conversation) > 0 {
-			conversation, err = decodeRawJSON(sr.Conversation)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error parsing conversation metadata: %v\n", err)
-				os.Exit(1)
+			var err error
+			if conversation, err = decodeRawJSON(sr.Conversation); err != nil {
+				fatalf("Error parsing conversation metadata: %v", err)
 			}
 		}
-		if sr.Heartbeat || len(sr.Messages) == 0 {
-			continue
-		}
-
 		for _, msg := range sr.Messages {
 			if seenSeqIDs[msg.SequenceID] {
 				continue
 			}
 			seenSeqIDs[msg.SequenceID] = true
 
+			var record any
+			var endOfTurn bool
 			if full {
-				record, err := fullMessage(msg, conversation)
+				r, err := fullMessage(msg, conversation)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error parsing response: %v\n", err)
-					os.Exit(1)
+					fatalf("Error parsing response: %v", err)
 				}
-				if err := json.NewEncoder(os.Stdout).Encode(record); err != nil {
-					fmt.Fprintf(os.Stderr, "Error writing response: %v\n", err)
-					os.Exit(1)
-				}
-				if (msg.Type == "agent" || msg.Type == "error") && record.EndOfTurn {
-					return
-				}
-				continue
+				record, endOfTurn = r, r.EndOfTurn
+			} else {
+				e := simplifyMessage(msg)
+				record, endOfTurn = e, e.EndOfTurn
 			}
-
-			event := simplifyMessage(msg)
-			json.NewEncoder(os.Stdout).Encode(event)
-
-			if (msg.Type == "agent" || msg.Type == "error") && event.EndOfTurn {
-				return
+			if err := json.NewEncoder(os.Stdout).Encode(record); err != nil {
+				fatalf("Error writing response: %v", err)
+			}
+			if (msg.Type == "agent" || msg.Type == "error") && endOfTurn {
+				return true
 			}
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading stream: %v\n", err)
-		os.Exit(1)
+		return false
+	})
+	if err != nil {
+		fatalf("Error: %v", err)
 	}
 }
 
@@ -581,59 +520,15 @@ func cmdList(cc *clientConfig, args []string) {
 	query := fs.String("q", "", "Search query")
 	fs.Parse(args)
 
-	client, baseURL, err := cc.newHTTPClient()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
 	endpoint := "/api/conversations"
 	if *archived {
 		endpoint = "/api/conversations/archived"
 	}
-
 	params := fmt.Sprintf("?limit=%d", *limit)
 	if *query != "" {
 		params += "&q=" + url.QueryEscape(*query)
 	}
-
-	req, err := cc.newRequest("GET", baseURL+endpoint+params, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
-		os.Exit(1)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "Error: HTTP %d\n", resp.StatusCode)
-		os.Exit(1)
-	}
-
-	var conversations []json.RawMessage
-	if err := json.NewDecoder(resp.Body).Decode(&conversations); err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing response: %v\n", err)
-		os.Exit(1)
-	}
-
-	for _, conv := range conversations {
-		var c struct {
-			ConversationID string  `json:"conversation_id"`
-			Slug           *string `json:"slug"`
-			CreatedAt      string  `json:"created_at"`
-			UpdatedAt      string  `json:"updated_at"`
-			Working        bool    `json:"working"`
-			Model          *string `json:"model"`
-		}
-		if json.Unmarshal(conv, &c) == nil {
-			json.NewEncoder(os.Stdout).Encode(c)
-		}
-	}
+	printConversations(cc, endpoint+params)
 }
 
 func cmdSearch(cc *clientConfig, args []string) {
@@ -652,50 +547,29 @@ func cmdSearch(cc *clientConfig, args []string) {
 		os.Exit(1)
 	}
 	query := strings.Join(fs.Args(), " ")
+	printConversations(cc, fmt.Sprintf("/api/conversations?q=%s&search_content=true&limit=%d", url.QueryEscape(query), *limit))
+}
 
+// printConversations prints one JSON summary line per conversation listed
+// at path.
+func printConversations(cc *clientConfig, path string) {
 	client, baseURL, err := cc.newHTTPClient()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
-
-	params := fmt.Sprintf("?q=%s&search_content=true&limit=%d", url.QueryEscape(query), *limit)
-	req, err := cc.newRequest("GET", baseURL+"/api/conversations"+params, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
-		os.Exit(1)
+	var conversations []struct {
+		ConversationID string  `json:"conversation_id"`
+		Slug           *string `json:"slug"`
+		CreatedAt      string  `json:"created_at"`
+		UpdatedAt      string  `json:"updated_at"`
+		Working        bool    `json:"working"`
+		Model          *string `json:"model"`
 	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+	if err := cc.doJSON(client, http.MethodGet, baseURL+path, nil, &conversations); err != nil {
+		fatalf("Error: %v", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "Error: HTTP %d\n", resp.StatusCode)
-		os.Exit(1)
-	}
-
-	var conversations []json.RawMessage
-	if err := json.NewDecoder(resp.Body).Decode(&conversations); err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing response: %v\n", err)
-		os.Exit(1)
-	}
-
-	for _, conv := range conversations {
-		var c struct {
-			ConversationID string  `json:"conversation_id"`
-			Slug           *string `json:"slug"`
-			CreatedAt      string  `json:"created_at"`
-			UpdatedAt      string  `json:"updated_at"`
-			Working        bool    `json:"working"`
-			Model          *string `json:"model"`
-		}
-		if json.Unmarshal(conv, &c) == nil {
-			json.NewEncoder(os.Stdout).Encode(c)
-		}
+	for _, c := range conversations {
+		json.NewEncoder(os.Stdout).Encode(c)
 	}
 }
 
@@ -704,35 +578,15 @@ func cmdArchive(cc *clientConfig, args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: shelley client archive CONVERSATION_ID\n")
-		os.Exit(1)
+		fatalf("Usage: shelley client archive CONVERSATION_ID")
 	}
 	conversationID := fs.Arg(0)
 
 	client, baseURL, err := cc.newHTTPClient()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
-
-	req, err := cc.newRequest("POST", baseURL+"/api/conversation/"+conversationID+"/archive", nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
-		os.Exit(1)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "Error: HTTP %d\n", resp.StatusCode)
-		os.Exit(1)
-	}
-
+	archiveConversation(cc, client, baseURL, conversationID)
 	fmt.Fprintf(os.Stderr, "Archived %s\n", conversationID)
 }
 
@@ -741,18 +595,15 @@ func cmdCallTranscript(cc *clientConfig, args []string) {
 	conversationID := fs.String("c", os.Getenv("SHELLEY_CONVERSATION_ID"), "conversation (default: $SHELLEY_CONVERSATION_ID)")
 	fs.Parse(args)
 	if fs.NArg() != 1 || *conversationID == "" {
-		fmt.Fprintf(os.Stderr, "Usage: shelley client call-transcript [-c CONVERSATION_ID] CALL\n")
-		os.Exit(1)
+		fatalf("Usage: shelley client call-transcript [-c CONVERSATION_ID] CALL")
 	}
 	client, baseURL, err := cc.newHTTPClient()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
 	transcript, err := fetchCallTranscript(cc, client, baseURL, *conversationID, fs.Arg(0))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalf("Error: %v", err)
 	}
 	fmt.Print(transcript)
 }
