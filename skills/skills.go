@@ -8,8 +8,10 @@ import (
 	"html"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -604,55 +606,38 @@ func ListAllWithIntegrations(workingDir, gitRoot string, integrationSkills []Ski
 	if gitRoot == "" {
 		gitRoot = findGitRoot(workingDir)
 	}
+	_, all, claimed := filesystemSkills(workingDir, gitRoot)
+	for _, s := range slices.Concat(integrationSkills, BuiltinSkills()) {
+		if !claimed[s.Name] {
+			all = append(all, s)
+			claimed[s.Name] = true
+		}
+	}
+	return all
+}
 
-	dirs := DefaultDirs()
-	dirs = append(dirs, ProjectSkillsDirs(workingDir, gitRoot)...)
-
-	all := Discover(dirs)
-
-	// Add tree-discovered skills, deduplicated by name (first-seen wins).
-	// DiscoverInTree also returns all SKILL.md names it encountered
-	// (including unparseable/empty ones) so we don't need a second walk.
-	seen := make(map[string]bool)
-	for _, s := range all {
-		seen[s.Name] = true
+// filesystemSkills returns the skill directories searched, the skills parsed
+// from them followed by those found in the project tree (deduplicated by
+// name, first-seen wins), and every name claimed by a filesystem SKILL.md.
+// Claims include empty or unparseable files: a filesystem SKILL.md, even an
+// empty one, takes precedence over a built-in skill of the same name, which
+// lets users suppress a built-in skill.
+func filesystemSkills(workingDir, gitRoot string) (dirs []string, found []Skill, claimed map[string]bool) {
+	dirs = append(DefaultDirs(), ProjectSkillsDirs(workingDir, gitRoot)...)
+	found = Discover(dirs)
+	claimed = dirSkillNames(dirs)
+	for _, s := range found {
+		claimed[s.Name] = true
 	}
 	treeSkills, treeNames := DiscoverInTree(workingDir, gitRoot)
 	for _, s := range treeSkills {
-		if !seen[s.Name] {
-			all = append(all, s)
-			seen[s.Name] = true
+		if !claimed[s.Name] {
+			found = append(found, s)
+			claimed[s.Name] = true
 		}
 	}
-
-	// Collect all skill names claimed on the filesystem (including empty
-	// SKILL.md files that wouldn't survive Parse). A filesystem SKILL.md —
-	// even an empty one — takes precedence over a built-in skill of the
-	// same name. This lets users suppress a built-in skill by placing an
-	// empty SKILL.md in the matching directory.
-	fsNames := dirSkillNames(dirs)
-	for name := range treeNames {
-		fsNames[name] = true
-	}
-	for _, s := range all {
-		fsNames[s.Name] = true
-	}
-
-	for _, s := range integrationSkills {
-		if !fsNames[s.Name] && !seen[s.Name] {
-			all = append(all, s)
-			seen[s.Name] = true
-		}
-	}
-
-	for _, s := range BuiltinSkills() {
-		if !fsNames[s.Name] && !seen[s.Name] {
-			all = append(all, s)
-			seen[s.Name] = true
-		}
-	}
-
-	return all
+	maps.Copy(claimed, treeNames)
+	return dirs, found, claimed
 }
 
 // Env describes the runtime environment used to gate skills with a `when:`
@@ -692,22 +677,8 @@ func matchWhen(when string, env Env) bool {
 // same name exists. An empty filesystem SKILL.md suppresses the built-in
 // skill — this lets users delete built-in skills they don't want.
 func FindByName(name, workingDir string) (string, error) {
-	gitRoot := findGitRoot(workingDir)
-	dirs := DefaultDirs()
-	dirs = append(dirs, ProjectSkillsDirs(workingDir, gitRoot)...)
-
-	// Filesystem first: check directory-based discovery, then tree discovery.
-	for _, s := range Discover(dirs) {
-		if s.Name == name {
-			content, err := os.ReadFile(s.Path)
-			if err != nil {
-				return "", fmt.Errorf("reading skill %q: %w", name, err)
-			}
-			return string(content), nil
-		}
-	}
-	treeSkills, treeNames := DiscoverInTree(workingDir, gitRoot)
-	for _, s := range treeSkills {
+	dirs, found, claimed := filesystemSkills(workingDir, findGitRoot(workingDir))
+	for _, s := range found {
 		if s.Name == name {
 			content, err := os.ReadFile(s.Path)
 			if err != nil {
@@ -720,11 +691,7 @@ func FindByName(name, workingDir string) (string, error) {
 	// If a SKILL.md exists on the filesystem for this name but didn't
 	// parse (e.g. it's empty), the user is deliberately suppressing
 	// the built-in skill. Don't fall through.
-	fsNames := dirSkillNames(dirs)
-	for n := range treeNames {
-		fsNames[n] = true
-	}
-	if fsNames[name] {
+	if claimed[name] {
 		// Distinguish intentional suppression (empty file) from parse errors.
 		for _, dir := range dirs {
 			dir = expandPath(dir)
