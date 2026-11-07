@@ -50,7 +50,7 @@ var fromLLMRole = map[llm.MessageRole]string{
 	llm.MessageRoleUser:      "user",
 }
 
-// convertToolSchemas converts Sketch's llm.Tool schemas to Gemini's schema format
+// convertToolSchemas preserves JSON schemas in Gemini function declarations.
 func convertToolSchemas(tools []*llm.Tool) ([]gemini.FunctionDeclaration, error) {
 	if len(tools) == 0 {
 		return nil, nil
@@ -58,99 +58,21 @@ func convertToolSchemas(tools []*llm.Tool) ([]gemini.FunctionDeclaration, error)
 
 	var decls []gemini.FunctionDeclaration
 	for _, tool := range tools {
-		// Parse the schema from raw JSON
-		var schemaJSON map[string]any
+		var schemaJSON map[string]json.RawMessage
 		if err := json.Unmarshal(tool.InputSchema, &schemaJSON); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal tool %s schema: %w", tool.Name, err)
 		}
+		if schemaJSON == nil {
+			return nil, fmt.Errorf("tool %s schema must be a JSON object", tool.Name)
+		}
 		decls = append(decls, gemini.FunctionDeclaration{
-			Name:        tool.Name,
-			Description: tool.Description,
-			Parameters:  convertJSONSchemaToGeminiSchema(schemaJSON),
+			Name:                 tool.Name,
+			Description:          tool.Description,
+			ParametersJSONSchema: tool.InputSchema,
 		})
 	}
 
 	return decls, nil
-}
-
-// convertJSONSchemaToGeminiSchema converts a JSON schema to Gemini's schema format
-func convertJSONSchemaToGeminiSchema(schemaJSON map[string]any) gemini.Schema {
-	schema := gemini.Schema{}
-
-	// Set the type based on the JSON schema type
-	if typeVal, ok := schemaJSON["type"].(string); ok {
-		switch typeVal {
-		case "string":
-			schema.Type = gemini.DataTypeSTRING
-		case "number":
-			schema.Type = gemini.DataTypeNUMBER
-		case "integer":
-			schema.Type = gemini.DataTypeINTEGER
-		case "boolean":
-			schema.Type = gemini.DataTypeBOOLEAN
-		case "array":
-			schema.Type = gemini.DataTypeARRAY
-		case "object":
-			schema.Type = gemini.DataTypeOBJECT
-		default:
-			schema.Type = gemini.DataTypeSTRING // Default to string for unknown types
-		}
-	}
-
-	// Set description if available
-	if desc, ok := schemaJSON["description"].(string); ok {
-		schema.Description = desc
-	}
-
-	// Handle enum values
-	if enumValues, ok := schemaJSON["enum"].([]any); ok {
-		schema.Enum = make([]string, len(enumValues))
-		for i, v := range enumValues {
-			if strVal, ok := v.(string); ok {
-				schema.Enum[i] = strVal
-			} else {
-				// Convert non-string values to string
-				valBytes, _ := json.Marshal(v)
-				schema.Enum[i] = string(valBytes)
-			}
-		}
-	}
-
-	// Handle object properties
-	if properties, ok := schemaJSON["properties"].(map[string]any); ok && schema.Type == gemini.DataTypeOBJECT {
-		schema.Properties = make(map[string]gemini.Schema)
-		for propName, propSchema := range properties {
-			if propSchemaMap, ok := propSchema.(map[string]any); ok {
-				schema.Properties[propName] = convertJSONSchemaToGeminiSchema(propSchemaMap)
-			}
-		}
-	}
-
-	// Handle required properties
-	if required, ok := schemaJSON["required"].([]any); ok {
-		schema.Required = make([]string, len(required))
-		for i, r := range required {
-			if strVal, ok := r.(string); ok {
-				schema.Required[i] = strVal
-			}
-		}
-	}
-
-	// Handle array items
-	if items, ok := schemaJSON["items"].(map[string]any); ok && schema.Type == gemini.DataTypeARRAY {
-		itemSchema := convertJSONSchemaToGeminiSchema(items)
-		schema.Items = &itemSchema
-	}
-
-	// Handle minimum/maximum items for arrays
-	if minItems, ok := schemaJSON["minItems"].(float64); ok {
-		schema.MinItems = fmt.Sprintf("%d", int(minItems))
-	}
-	if maxItems, ok := schemaJSON["maxItems"].(float64); ok {
-		schema.MaxItems = fmt.Sprintf("%d", int(maxItems))
-	}
-
-	return schema
 }
 
 // buildGeminiRequest converts Sketch's llm.Request to Gemini's request format

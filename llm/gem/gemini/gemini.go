@@ -176,9 +176,9 @@ type Tool struct {
 
 // https://ai.google.dev/api/caching#FunctionDeclaration
 type FunctionDeclaration struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Parameters  Schema `json:"parameters"`
+	Name                 string          `json:"name"`
+	Description          string          `json:"description"`
+	ParametersJSONSchema json.RawMessage `json:"parametersJsonSchema"`
 }
 
 // https://ai.google.dev/api/caching#Schema

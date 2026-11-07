@@ -156,21 +156,8 @@ func TestConvertToolSchemas(t *testing.T) {
 		t.Fatalf("Expected description 'Get information about a person', got '%s'", decls[0].Description)
 	}
 
-	// Verify the schema properties
-	if decls[0].Parameters.Type != 6 { // DataTypeOBJECT
-		t.Fatalf("Expected type OBJECT (6), got %d", decls[0].Parameters.Type)
-	}
-	if len(decls[0].Parameters.Properties) != 2 {
-		t.Fatalf("Expected 2 properties, got %d", len(decls[0].Parameters.Properties))
-	}
-	if decls[0].Parameters.Properties["name"].Type != 1 { // DataTypeSTRING
-		t.Fatalf("Expected name type STRING (1), got %d", decls[0].Parameters.Properties["name"].Type)
-	}
-	if decls[0].Parameters.Properties["age"].Type != 3 { // DataTypeINTEGER
-		t.Fatalf("Expected age type INTEGER (3), got %d", decls[0].Parameters.Properties["age"].Type)
-	}
-	if len(decls[0].Parameters.Required) != 1 || decls[0].Parameters.Required[0] != "name" {
-		t.Fatalf("Expected required field 'name', got %v", decls[0].Parameters.Required)
+	if string(decls[0].ParametersJSONSchema) != schema {
+		t.Fatalf("tool schema changed: %s", decls[0].ParametersJSONSchema)
 	}
 }
 
