@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -93,11 +92,7 @@ func (c *ChangeDirTool) run(ctx context.Context, req changeDirInput) llm.ToolOut
 	}
 
 	// Resolve the path
-	targetPath := req.Path
-	if !filepath.IsAbs(targetPath) {
-		targetPath = filepath.Join(wd.Get(), targetPath)
-	}
-	targetPath = filepath.Clean(targetPath)
+	targetPath := resolvePath(wd.Get(), req.Path)
 	if vm != nil {
 		return c.changeVMDir(ctx, vm, targetPath)
 	}

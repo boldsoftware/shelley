@@ -108,11 +108,7 @@ func (w *WriteSecretTool) run(ctx context.Context, in writeSecretInput) llm.Tool
 	} else if w.HostDir != nil {
 		dir = w.HostDir.Get()
 	}
-	path := in.Path
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(dir, path)
-	}
-	path = filepath.Clean(path)
+	path := resolvePath(dir, in.Path)
 	if vm != nil {
 		_, err = vmFS{vm}.run(ctx, "open", path, []byte(value), vmWriteSecretScript)
 	} else {

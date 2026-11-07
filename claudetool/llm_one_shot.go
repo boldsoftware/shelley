@@ -175,10 +175,7 @@ func (t *LLMOneShotTool) run(ctx context.Context, req llmOneShotInput) llm.ToolO
 	var images []llm.Content
 	var displayImages []map[string]any
 	for _, pf := range promptFiles {
-		path := pf
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(wd, path)
-		}
+		path := resolvePath(wd, pf)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return llm.ErrorfToolOut("failed to read prompt file: %w", err)
@@ -268,8 +265,8 @@ func (t *LLMOneShotTool) run(ctx context.Context, req llmOneShotInput) llm.ToolO
 
 	// Determine where to put the result
 	outputPath := req.OutputFile
-	if !filepath.IsAbs(outputPath) && outputPath != "" {
-		outputPath = filepath.Join(wd, outputPath)
+	if outputPath != "" {
+		outputPath = resolvePath(wd, outputPath)
 	}
 
 	// If no explicit output file but result is long, write to temp file

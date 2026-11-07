@@ -5,6 +5,7 @@ package claudetool
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -12,6 +13,14 @@ import (
 	"shelley.exe.dev/gitstate"
 	"shelley.exe.dev/llm"
 )
+
+// resolvePath resolves path against dir unless it is absolute, and cleans it.
+func resolvePath(dir, path string) string {
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(dir, path)
+	}
+	return filepath.Clean(path)
+}
 
 // LLMServiceProvider is what tools need from the model layer.
 type LLMServiceProvider interface {

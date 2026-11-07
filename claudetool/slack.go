@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"shelley.exe.dev/llm"
 )
@@ -148,9 +147,7 @@ func SlackTools(s Slack, wd *MutableWorkingDir) []*llm.Tool {
 }
 
 func readSlackFile(cwd, path string) (SlackFile, error) {
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(cwd, path)
-	}
+	path = resolvePath(cwd, path)
 	fi, err := os.Stat(path)
 	if err != nil {
 		return SlackFile{}, err

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"unicode"
@@ -236,10 +235,7 @@ func messageUserAttachment(cwd, p string) (MessageUserAttachment, error) {
 	if strings.TrimSpace(p) == "" {
 		return MessageUserAttachment{}, fmt.Errorf("empty attachment path; nothing was sent")
 	}
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(cwd, p)
-	}
-	p = filepath.Clean(p)
+	p = resolvePath(cwd, p)
 	fi, err := os.Stat(p)
 	if err != nil {
 		return MessageUserAttachment{}, fmt.Errorf("attachment %s: %w; nothing was sent", p, err)
