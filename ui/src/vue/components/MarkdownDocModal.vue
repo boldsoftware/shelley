@@ -52,6 +52,7 @@
 </template>
 
 <script setup lang="ts">
+import { responseDetail } from "../../services/responseDetail";
 import { onBeforeUnmount, ref } from "vue";
 import type { MarkdownDoc } from "../composables/markdownDoc";
 import { popModalEscape, pushModalEscape } from "../composables/modalEscapeStack";
@@ -71,7 +72,7 @@ onBeforeUnmount(() => popModalEscape(close));
 void (async () => {
   try {
     const res = await fetch(props.doc.url);
-    if (!res.ok) throw new Error((await res.text()).trim() || res.statusText);
+    if (!res.ok) throw new Error(await responseDetail(res));
     text.value = await res.text();
   } catch (e) {
     error.value = `Could not load document: ${e instanceof Error ? e.message : e}`;

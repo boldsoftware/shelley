@@ -135,6 +135,7 @@
 </template>
 
 <script setup lang="ts">
+import { responseDetail } from "../../services/responseDetail";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { useI18n } from "../composables/i18n";
 import type { RecordingMode } from "./recordingDestination";
@@ -302,17 +303,7 @@ function recordingFilename(extension: string): string {
 }
 
 async function responseError(response: Response, action: string): Promise<Error> {
-  const detail = (await response.text()).trim();
-  if (!detail) return new Error(`${action}: ${response.statusText}`);
-  try {
-    const payload = JSON.parse(detail) as { message?: unknown };
-    if (typeof payload.message === "string" && payload.message.trim()) {
-      return new Error(`${action}: ${payload.message.trim()}`);
-    }
-  } catch {
-    // Use the plain response body below.
-  }
-  return new Error(`${action}: ${detail}`);
+  return new Error(`${action}: ${await responseDetail(response)}`);
 }
 
 async function createScreenStream(screen: MediaStream): Promise<MediaStream> {

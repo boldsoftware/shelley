@@ -19,6 +19,7 @@
 </template>
 
 <script setup lang="ts">
+import { responseDetail } from "../../services/responseDetail";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { highlightCode, normalizeCodeLanguage } from "../../services/markdownHighlight";
 import { addCodeBlockHeaders, codeBlockText, setCodeBlockCopied } from "../../utils/codeBlockCopy";
@@ -279,7 +280,7 @@ async function onImageError(e: Event) {
     const response = await fetch(src);
     reason = response.ok
       ? t("imageBrowserCannotShow")
-      : (await response.text()).trim() || `HTTP ${response.status}`;
+      : await responseDetail(response);
   } catch (err) {
     reason = errorMessage(err);
   }

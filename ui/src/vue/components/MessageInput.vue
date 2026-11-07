@@ -645,6 +645,7 @@
 </template>
 
 <script setup lang="ts">
+import { responseDetail } from "../../services/responseDetail";
 import PathText from "./PathText.vue";
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowReactive, shallowRef, useId, watch } from "vue";
 import { useFileCompletion } from "../composables/fileCompletion";
@@ -1113,19 +1114,7 @@ async function uploadFile(file: File) {
     formData.append("file", file);
     const response = await fetch("/api/upload", { method: "POST", body: formData });
     if (!response.ok) {
-      const errorText = await response.text();
-      let msg = response.statusText;
-      if (errorText.trim()) {
-        try {
-          const payload = JSON.parse(errorText) as { message?: unknown };
-          if (typeof payload.message === "string" && payload.message.trim()) {
-            msg = payload.message.trim();
-          }
-        } catch {
-          msg = errorText.trim();
-        }
-      }
-      throw new Error(`Upload failed: ${msg}`);
+      throw new Error(`Upload failed: ${await responseDetail(response)}`);
     }
     const data = await response.json();
     updateAttachments(session, (current) =>

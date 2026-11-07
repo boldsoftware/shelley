@@ -21,12 +21,11 @@ import {
   TemplateProblem,
 } from "../types";
 import type { CostTier } from "../utils/tokenCostGraph";
+import { ownError, responseDetail } from "./responseDetail";
 
 export type LiveConversationSettings = Pick<ChatRequest, "model" | "cwd" | "conversation_options">;
 
-// Extract a useful error message from a failed fetch response. Prefers the
-// response body (which may contain a server-side detail like a hook error),
-// falls back to statusText, then to the numeric status.
+// A failed request's error, its message "<prefix>: <responseDetail>".
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -37,16 +36,7 @@ export class ApiError extends Error {
 }
 
 export async function responseError(response: Response, prefix: string): Promise<ApiError> {
-  let detail = "";
-  try {
-    detail = (await response.text()).trim();
-  } catch {
-    // ignore
-  }
-  if (!detail) {
-    detail = response.statusText || `HTTP ${response.status}`;
-  }
-  return new ApiError(`${prefix}: ${detail}`, response.status);
+  return new ApiError(`${prefix}: ${await responseDetail(response)}`, response.status);
 }
 
 // A backgrounded bash command that has not exited (server BackgroundJobInfo).
@@ -632,13 +622,7 @@ class ApiService {
       method: "POST",
     });
     if (!response.ok) {
-      let detail = "";
-      try {
-        detail = (await response.text()).trim();
-      } catch {
-        // ignore
-      }
-      throw new Error(detail || `Failed to resume conversation: ${response.statusText}`);
+      throw await ownError(response, "Failed to resume conversation");
     }
     const body = (await response.json()) as { status?: string };
     return body.status === "resuming" ? "resuming" : "not_applicable";
@@ -649,13 +633,7 @@ class ApiService {
       method: "POST",
     });
     if (!response.ok) {
-      let detail = "";
-      try {
-        detail = (await response.text()).trim();
-      } catch {
-        // ignore
-      }
-      throw new Error(detail || `Failed to retry conversation: ${response.statusText}`);
+      throw await ownError(response, "Failed to retry conversation");
     }
   }
 
@@ -667,13 +645,7 @@ class ApiService {
       body: JSON.stringify({ model: model || "" }),
     });
     if (!response.ok) {
-      let detail = "";
-      try {
-        detail = (await response.text()).trim();
-      } catch {
-        // ignore
-      }
-      throw new Error(detail || `Failed to continue conversation: ${response.statusText}`);
+      throw await ownError(response, "Failed to continue conversation");
     }
   }
 
@@ -837,8 +809,7 @@ class ApiService {
     if (!includeStats) params.set("stats", "false");
     const response = await fetch(`${this.baseUrl}/git/diffs?${params}`);
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || response.statusText);
+      throw new Error(await responseDetail(response));
     }
     return response.json();
   }
@@ -867,8 +838,7 @@ class ApiService {
     const params = machineParams(conversationId, { cwd, limit: String(limit), scope });
     const response = await fetch(`${this.baseUrl}/git/graph?${params}`);
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || response.statusText);
+      throw new Error(await responseDetail(response));
     }
     return response.json();
   }
@@ -881,8 +851,7 @@ class ApiService {
     const params = machineParams(conversationId, { cwd, hash });
     const response = await fetch(`${this.baseUrl}/git/commit-detail?${params}`);
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || response.statusText);
+      throw new Error(await responseDetail(response));
     }
     return response.json();
   }
@@ -948,8 +917,7 @@ class ApiService {
       body: JSON.stringify({ cwd, message }),
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Failed to amend: ${response.statusText}`);
+      throw new Error(`Failed to amend: ${await responseDetail(response)}`);
     }
   }
 
@@ -1079,8 +1047,7 @@ class ApiService {
       body: JSON.stringify({ slug }),
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text.trim() || `Failed to rename conversation: ${response.statusText}`);
+      throw new Error(`Failed to rename conversation: ${await responseDetail(response)}`);
     }
     return response.json();
   }
@@ -1097,8 +1064,7 @@ class ApiService {
       body: JSON.stringify({ cwd }),
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text.trim() || `Failed to change directory: ${response.statusText}`);
+      throw new Error(`Failed to change directory: ${await responseDetail(response)}`);
     }
     return response.json();
   }
@@ -1111,10 +1077,7 @@ class ApiService {
       { method: "POST", headers: this.postHeaders },
     );
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(
-        text.trim() || `Failed to enable compacting in place: ${response.statusText}`,
-      );
+      throw new Error(`Failed to enable compacting in place: ${await responseDetail(response)}`);
     }
     return response.json();
   }
@@ -1203,8 +1166,7 @@ class ApiService {
       headers: { "X-Shelley-Request": "1" },
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new ApiError(text || response.statusText, response.status);
+      throw new ApiError(await responseDetail(response), response.status);
     }
     return response.json();
   }
@@ -1231,8 +1193,7 @@ class ApiService {
       headers: { "X-Shelley-Request": "1" },
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || response.statusText);
+      throw new Error(await responseDetail(response));
     }
     return response.json();
   }
@@ -1265,8 +1226,7 @@ class ApiService {
       body: JSON.stringify({ key, value }),
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || response.statusText);
+      throw new Error(await responseDetail(response));
     }
     return response.json();
   }
@@ -1281,8 +1241,7 @@ class ApiService {
       body: JSON.stringify({ episode_id: episodeId }),
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || response.statusText);
+      throw new Error(await responseDetail(response));
     }
     return response.json();
   }
@@ -1312,7 +1271,7 @@ export const featureFlagsApi = {
       headers: { "Content-Type": "application/json", "X-Shelley-Request": "1" },
       body: JSON.stringify({ name, value }),
     });
-    if (!r.ok) throw new Error((await r.text()) || r.statusText);
+    if (!r.ok) throw new Error(await responseDetail(r));
   },
   async clear(name: string): Promise<void> {
     const r = await fetch("/feature-flags", {
@@ -1320,7 +1279,7 @@ export const featureFlagsApi = {
       headers: { "Content-Type": "application/json", "X-Shelley-Request": "1" },
       body: JSON.stringify({ name }),
     });
-    if (!r.ok) throw new Error((await r.text()) || r.statusText);
+    if (!r.ok) throw new Error(await responseDetail(r));
   },
 };
 
@@ -1829,8 +1788,7 @@ class NotificationChannelsApi {
 
   private async throwIfNotOk(response: Response, fallback: string): Promise<void> {
     if (response.ok) return;
-    const body = await response.text().catch(() => "");
-    throw new Error(body.trim() || `${fallback}: ${response.statusText}`);
+    throw new Error(`${fallback}: ${await responseDetail(response)}`);
   }
 
   async getChannels(): Promise<NotificationChannelAPI[]> {

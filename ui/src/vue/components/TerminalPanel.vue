@@ -242,6 +242,7 @@
 </template>
 
 <script setup lang="ts">
+import { responseDetail } from "../../services/responseDetail";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Popover from "primevue/popover";
 import type { TerminalHandle, TerminalRenderer } from "./terminalBackend";
@@ -382,7 +383,7 @@ async function toggleScope(t: EphemeralTerminal) {
       body: JSON.stringify({ conversation_id: next }),
     });
     if (!res.ok) {
-      throw new Error((await res.text()).trim() || `Request failed with status ${res.status}`);
+      throw new Error(await responseDetail(res));
     }
     emit("scope-change", t.id, next);
   } catch (err) {
