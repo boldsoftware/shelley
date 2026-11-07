@@ -24,8 +24,8 @@ export function useVersionChecker(options: UseVersionCheckerOptions = {}) {
       // Always force refresh when checking.
       const info = await api.checkVersion(true);
       versionInfo.value = info;
-      shouldNotify.value = info.should_notify;
-      onUpdateAvailable?.(info.should_notify);
+      shouldNotify.value = info.should_notify || info.restart_pending;
+      onUpdateAvailable?.(shouldNotify.value);
     } catch (err) {
       console.error("Failed to check version:", err);
     } finally {
@@ -38,8 +38,8 @@ export function useVersionChecker(options: UseVersionCheckerOptions = {}) {
     try {
       const info = await api.checkVersion(false);
       versionInfo.value = info;
-      shouldNotify.value = info.should_notify;
-      onUpdateAvailable?.(info.should_notify);
+      shouldNotify.value = info.should_notify || info.restart_pending;
+      onUpdateAvailable?.(shouldNotify.value);
     } catch (err) {
       console.error("Failed to check version:", err);
     }

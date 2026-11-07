@@ -2,7 +2,7 @@
      (picker and editor), the project's action buttons, and its VM. Workspace
      mode, whose title row says where the task runs and whose drawer moves and
      edits projects: only the action buttons and the state of a Shelley build
-     the task verified, and no row without them. -->
+     the task installs, and no row without them. -->
 <template>
   <section
     v-if="
@@ -72,7 +72,6 @@
         :pending-conversation="customizations.pendingConversation.value"
         :unavailable="customizations.unavailable.value"
         @restart="customizations.mutate(build, 'restart', 'header')"
-        @verify="customizations.mutate(build, 'verify', 'header')"
         @cancel-auto-restart="customizations.mutate(build, 'cancelAutoRestart', 'header')"
       />
     </div>
@@ -131,7 +130,6 @@ import { errorMessage } from "../../utils/errorMessage";
 import { workspaceMode } from "../../utils/workspaceMode";
 import { vmPlace, vmStatus } from "../../utils/vmStatus";
 import { useCustomizations } from "../composables/customizations";
-import { notRunning } from "../../services/customizations";
 import CustomizationStatus from "./CustomizationStatus.vue";
 // assignable: a top-level user conversation, which may be in no project.
 const props = defineProps<{
@@ -148,11 +146,9 @@ const vm = computed(() => workspace.vmFor(props.conversationId));
 const status = computed(() => vm.value && vmStatus(vm.value, t));
 // Only workspace mode has Shelley builds.
 const customizations = workspaceMode ? useCustomizations() : null;
-// A Shelley build this task verified that the server doesn't run yet.
+// The Shelley build this task installs or installed.
 const build = computed(() =>
-  customizations?.entries.value
-    .filter(notRunning)
-    .find((entry) => entry.conversation_id === props.conversationId),
+  customizations?.entries.value.find((entry) => entry.conversation_id === props.conversationId),
 );
 // A failed click on this task's build buttons here; the drawer shows its own.
 const buildError = computed(() => {

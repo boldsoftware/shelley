@@ -102,7 +102,6 @@ func (s *Server) receiveSlackEvent(ctx context.Context, endpoint string, ev slac
 	if !slices.Contains([]string{"message", "reaction", "action"}, ev.Kind) || ev.ID == "" || ev.Channel == "" || ev.TS == "" || ev.ThreadTS == "" || (strings.TrimSpace(ev.Text) == "" && len(ev.Files) == 0) {
 		return "", errInvalidSlackEvent
 	}
-	s.noteUserActivity()
 	unlock, err := s.lockChannelChat(ctx, slackChatID)
 	if err != nil {
 		return "", err

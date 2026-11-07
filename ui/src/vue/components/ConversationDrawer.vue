@@ -210,14 +210,6 @@
       <button type="button" class="text-button" @click="rowError = ''">{{ t("dismiss") }}</button>
     </p>
     <p
-      v-if="customizations.error.value"
-      class="error-line drawer-error drawer-one-line"
-      role="status"
-      :title="customizations.error.value"
-    >
-      {{ customizations.error.value }}
-    </p>
-    <p
       v-if="customizations.requestError.value?.place === 'drawer'"
       class="error-line drawer-error"
       role="alert"
@@ -644,9 +636,6 @@
                     'drawer',
                   )
                 "
-                @verify="
-                  customizations.mutate(customizationFor(conv.conversation_id)!, 'verify', 'drawer')
-                "
                 @cancel-auto-restart="
                   customizations.mutate(
                     customizationFor(conv.conversation_id)!,
@@ -820,7 +809,6 @@ import ProjectVMSetup from "./ProjectVMSetup.vue";
 import NameField from "./NameField.vue";
 import CustomizationStatus from "./CustomizationStatus.vue";
 import { useCustomizations } from "../composables/customizations";
-import { notRunning } from "../../services/customizations";
 import ServerReachability from "./ServerReachability.vue";
 import ConversationQueryEditor from "./ConversationQueryEditor.vue";
 import Button from "primevue/button";
@@ -898,14 +886,8 @@ const restarting = computed(() =>
     (entry) => entry.status === "restarting" || entry.auto_restart === "pending",
   ),
 );
-// A build the server already runs needs nothing more; its task shows no build line.
 const customizationByConversation = computed(
-  () =>
-    new Map(
-      customizations.entries.value
-        .filter(notRunning)
-        .map((entry) => [entry.conversation_id, entry]),
-    ),
+  () => new Map(customizations.entries.value.map((entry) => [entry.conversation_id, entry])),
 );
 const customizationFor = (id: string) => customizationByConversation.value.get(id);
 const rowError = ref("");

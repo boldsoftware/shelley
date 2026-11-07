@@ -776,8 +776,11 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
   const { conversationId } = await createConversationViaAPIWithDetails(request, "Hello");
   const row = page.locator(`.conversation-item[data-conversation-id="${conversationId}"]`);
   const assistant = page.getByTestId("assistant-row");
-  const build = { conversation_id: conversationId, status: "installed", commit: "1", error: "" };
-  await page.route("**/api/customizations", (route) => route.fulfill({ json: [build] }));
+  const build = await request.post(`/api/conversation/${conversationId}/customization`, {
+    headers: { "X-Shelley-Request": "1" },
+    data: { status: "installed", commit: "1" },
+  });
+  expect(build.ok()).toBeTruthy();
   await page.goto("/");
   await openWorkspace(page);
   await expect(row.locator(".conversation-title")).toBeVisible();

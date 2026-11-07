@@ -1,21 +1,11 @@
 import { apiJSON } from "./api";
 
+/** A task's latest scripts/install-custom run, kept in memory by the server. */
 export interface Customization {
   conversation_id: string;
-  /** installed: on disk, waiting for a restart; running: the server runs it. */
-  status:
-    | "waiting"
-    | "verifying"
-    | "ready"
-    | "stale"
-    | "failed"
-    | "installed"
-    | "restarting"
-    | "running";
+  /** installed: on disk, waiting for a restart. */
+  status: "verifying" | "failed" | "installed" | "restarting";
   commit: string;
-  artifact_sha256: string;
-  /** The conversation's work is done: running this build archives it. */
-  finished: boolean;
   error: string;
   updated_at: string;
   running_under_systemd: boolean;
@@ -25,33 +15,22 @@ export interface Customization {
    */
   auto_restart?: "pending" | "busy";
   auto_restart_in_ms?: number;
+  /** When the automatic restart is due, by this browser's clock. */
+  auto_restart_at?: number;
 }
 
-export type NotRunning = Customization & { status: Exclude<Customization["status"], "running"> };
-export const notRunning = (c: Customization): c is NotRunning => c.status !== "running";
-
 export const customizationsApi = {
-  list: () => apiJSON<Customization[]>("/api/customizations", "Failed to load build status"),
-  /** Verifies again, keeping the conversation's finished claim. */
-  verify: (state: Customization) =>
-    apiJSON<Customization>(
-      `/api/conversation/${encodeURIComponent(state.conversation_id)}/customization/verify`,
-      "Failed to verify",
-      "POST",
-      { finished: state.finished },
-    ),
   restart: (state: Customization) =>
     apiJSON<Customization>(
       `/api/conversation/${encodeURIComponent(state.conversation_id)}/customization/restart`,
       "Failed to restart Shelley",
       "POST",
-      { commit: state.commit, artifact_sha256: state.artifact_sha256 },
+      { commit: state.commit },
     ),
   cancelAutoRestart: (state: Customization) =>
     apiJSON<Customization>(
       `/api/conversation/${encodeURIComponent(state.conversation_id)}/customization/auto-restart/cancel`,
       "Failed to cancel the automatic restart",
       "POST",
-      { artifact_sha256: state.artifact_sha256 },
     ),
 };

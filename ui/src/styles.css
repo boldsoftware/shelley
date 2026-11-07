@@ -19156,3 +19156,26 @@ kbd {
   opacity: 0.5;
   cursor: default;
 }
+
+/* A title-only drawer row's build status: a pill tinted by its own text
+   color, so it reads on plain, hovered and selected (accent) rows alike. */
+.customization-badge {
+  flex-shrink: 0;
+  max-width: 45%;
+  align-self: center;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  font-size: var(--font-size-11);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.drawer-working-indicator + .customization-badge {
+  margin-left: 8px;
+}
+
+.conversation-item.active .customization-badge {
+  color: white;
+  background: rgba(255, 255, 255, 0.22);
+}

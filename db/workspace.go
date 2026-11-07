@@ -70,8 +70,6 @@ type Workspace struct {
 	// BaseVMs are the base VMs Shelley created for projects, which deleting
 	// the project deletes.
 	BaseVMs []ProjectBaseVM `json:"base_vms"`
-	// ShelleyProject names the project that customizes Shelley, if any.
-	ShelleyProject string `json:"shelley_project"`
 	// OnboardingDismissed is whether the user dismissed the Assistant's
 	// onboarding card.
 	OnboardingDismissed bool `json:"onboarding_dismissed"`

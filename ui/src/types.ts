@@ -244,6 +244,7 @@ export interface StreamResponse extends Omit<StreamResponseForTS, "messages"> {
   resource_status?: ResourceStatus;
   models_changed?: boolean;
   workspace_changed?: boolean;
+  customizations?: import("./services/customizations").Customization[];
   tool_progress?: ToolProgress;
   stream_delta?: StreamDelta;
 }
@@ -426,6 +427,7 @@ export interface VersionInfo {
   commits?: CommitInfo[];
   checked_at: string;
   error?: string;
+  restart_pending: boolean; // True if a different binary was installed since Shelley started
   running_under_systemd: boolean; // True if INVOCATION_ID env var is set
   headless_shell_current?: string; // e.g. "Chromium 141.0.7390.55"
   headless_shell_latest?: string; // e.g. "Chromium 147.0.7727.24"

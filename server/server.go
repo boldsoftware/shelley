@@ -106,6 +106,9 @@ type ConversationWithState struct {
 type StreamResponse struct {
 	ModelsChanged    bool `json:"models_changed,omitempty"`
 	WorkspaceChanged bool `json:"workspace_changed,omitempty"`
+	// Customizations is every task's install-custom state, sent on connect
+	// and whenever it changes.
+	Customizations *[]customization `json:"customizations,omitempty"`
 	// ConversationID identifies which conversation this per-conversation
 	// event belongs to. The unified /api/stream2 delivers events for all
 	// active conversations on a single connection; clients route by this
@@ -438,14 +441,18 @@ type Server struct {
 	// channelClient sends replies and downloads inbound channel attachments.
 	channelClient *http.Client
 	// channelDebug is the in-memory chat service behind /debug/channels.
-	channelDebug      channelDebug
-	listenPort        int                    // TCP port the server is listening on
-	webOrigin         atomic.Pointer[string] // see rememberWebOrigin
-	socketPath        string                 // Unix socket the server listens on, or ""
-	terminals         *TerminalSessions
-	mcp               *mcp.Manager
-	exitDelay         time.Duration
-	exitProcess       func(int)
+	channelDebug channelDebug
+	listenPort   int                    // TCP port the server is listening on
+	webOrigin    atomic.Pointer[string] // see rememberWebOrigin
+	socketPath   string                 // Unix socket the server listens on, or ""
+	terminals    *TerminalSessions
+	mcp          *mcp.Manager
+	exitDelay    time.Duration
+	exitProcess  func(int)
+
+	// lastUserActivity is the UnixNano of the UI's last activity heartbeat.
+	lastUserActivity  atomic.Int64
+	restartPendingNow func() bool
 	mediaRun          mediaCommandRunner
 	transcriber       recordingTranscriber
 	transcriptionMu   sync.Mutex
@@ -527,10 +534,10 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		shutdownCh:            make(chan struct{}),
 		conversationVMs:       conversationVMState{cleanup: make(chan struct{}, 1), active: make(chan struct{})},
 		workspace:             workspaceState{reports: make(chan struct{}, 1)},
-		customizations:        customizationState{deps: defaultCustomizationDependencies(), kick: make(chan struct{}, 1)},
 		hooksDir:              defaultHooksDir(),
 		exitDelay:             500 * time.Millisecond,
 		exitProcess:           os.Exit,
+		restartPendingNow:     defaultRestartPending,
 		mediaRun:              runMediaCommand,
 		transcriber:           newOpenAIRecordingTranscriber(llmManager, predictableOnly),
 		transcriptionJobs:     make(map[string]transcriptionJob),
@@ -597,6 +604,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	s.toolSetConfig.BackgroundJobs = backgroundJobs{server: s}
 	s.toolSetConfig.MaxSubagentDepth = 1 // Only top-level conversations can spawn subagents
 	s.toolSetConfig.Secrets = s.secrets
+	s.noteUserActivity()
 
 	return s
 }
@@ -633,6 +641,11 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/conversations/search/enhance", s.handleEnhanceSearch)
 	api.HandleFunc("GET /api/stream2", s.handleStream)
 	api.HandleFunc("POST /api/resources/{kind}/dismiss", s.handleDismissResource)
+	api.HandleFunc("POST /api/activity", s.handleActivity)
+	api.HandleFunc("GET /api/customizations", s.handleListCustomizations)
+	api.HandleFunc("POST /api/conversation/{id}/customization", s.handleReportCustomization)
+	api.HandleFunc("POST /api/conversation/{id}/customization/restart", s.handleRestartCustomization)
+	api.HandleFunc("POST /api/conversation/{id}/customization/auto-restart/cancel", s.handleCancelAutoRestart)
 	api.Handle("GET /api/conversations/archived", compressionHandler(http.HandlerFunc(s.handleArchivedConversations)))
 	api.HandleFunc("POST /api/conversations/new", s.handleNewConversation)                   // Small response
 	api.HandleFunc("POST /api/conversations/draft", s.handleCreateDraft)                     // Small response
@@ -1867,7 +1880,6 @@ func (s *Server) publishConversationState(state ConversationState) {
 		delete(s.owedTurnEnds, state.ConversationID)
 		s.mu.Unlock()
 	} else {
-		s.reconcileCustomizationsAfterTurn(state.ConversationID)
 		notifEvent = s.announceTurnEnd(state.ConversationID, state.Model)
 	}
 	s.broadcast(StreamResponse{
@@ -2176,7 +2188,6 @@ func (s *Server) Start(port string) error {
 func (s *Server) tcpHandler(mux http.Handler) http.Handler {
 	h := LoggerMiddleware(s.logger)(mux)
 	h = s.rememberWebOrigin(h)
-	h = s.trackUserActivity(h)
 	h = http.NewCrossOriginProtection().Handler(h)
 	if s.requireHeader != "" {
 		h = RequireHeaderMiddleware(s.requireHeader)(h)
@@ -2270,6 +2281,7 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 
 	// Start auto-upgrade routine
 	go s.autoUpgradeRoutine()
+	go s.idleRestartRoutine()
 
 	// Get actual port from listener. With -listen-unix the web UI is reachable
 	// only through a Unix socket; there is no port then, and
@@ -2336,8 +2348,6 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	go s.recoverQueuedTranscriptions(context.Background())
 	s.startConversationVMCleanup()
 	s.startActionReports()
-	s.startAutoRestart()
-	s.startCustomizations()
 
 	// Wait for shutdown signal or server error
 	quit := make(chan os.Signal, 1)

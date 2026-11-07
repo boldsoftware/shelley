@@ -23,6 +23,7 @@ import type {
   Message,
 } from "../types";
 import { api } from "./api";
+import type { Customization } from "./customizations";
 import { UNREACHABLE_ERROR_MS } from "./unreachable";
 import { messageStore } from "./messageStore";
 
@@ -70,6 +71,8 @@ export interface GlobalStreamOptions {
   onModelsChanged?: () => void;
   /** Projects, conversation memberships, or action runs changed on the server. */
   onWorkspaceChanged?: () => void;
+  /** Every task's install-custom state: on connect and on every change. */
+  onCustomizations?: (states: Customization[]) => void;
   onStatusChange?: (status: StreamStatus) => void;
   /**
    * Called once after every successful re-establishment of the EventSource
@@ -138,6 +141,7 @@ export function connectGlobalStream({
   onNotificationEvent,
   onModelsChanged,
   onWorkspaceChanged,
+  onCustomizations,
   onStatusChange,
   onReconnect,
   onResourceSnapshot,
@@ -275,6 +279,7 @@ export function connectGlobalStream({
       onModelsChanged?.();
     }
     if (data.workspace_changed) onWorkspaceChanged?.();
+    if (data.customizations) onCustomizations?.(data.customizations);
     const resource = data.resource_status;
     if (resourceSnapshot && resource) {
       resourceSnapshot.push(resource);

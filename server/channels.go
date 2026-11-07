@@ -141,8 +141,6 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	if ev.ID == "" {
 		return errChannelEventNoID
 	}
-	s.noteUserActivity()
-
 	// One delivery per chat at a time, so that a retry racing its original
 	// is seen as delivered.
 	unlock, err := s.lockChannelChat(ctx, ev.ChatID)

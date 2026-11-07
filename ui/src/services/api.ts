@@ -1172,7 +1172,7 @@ class ApiService {
     return response.json();
   }
 
-  async getVersion(): Promise<{ tag?: string }> {
+  async getVersion(): Promise<{ tag?: string; commit?: string }> {
     // A hard deadline, kept through the body. AbortSignal.timeout() isn't
     // available in every browser we support.
     const ctl = new AbortController();
@@ -1199,12 +1199,15 @@ class ApiService {
     return response.json();
   }
 
-  async exit(): Promise<{ status: string; message: string }> {
-    const response = await fetch("/exit", {
+  // restart exits Shelley for systemd to start the installed binary;
+  // active conversations resume.
+  async restart(): Promise<{ status: string; message: string }> {
+    const response = await fetch("/exit?resume=true", {
       method: "POST",
+      headers: { "X-Shelley-Request": "1" },
     });
     if (!response.ok) {
-      throw await responseError(response, "Failed to exit");
+      throw await responseError(response, "Failed to restart");
     }
     return response.json();
   }

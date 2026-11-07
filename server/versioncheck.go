@@ -57,6 +57,7 @@ type VersionInfo struct {
 	CustomCommits       []CommitInfo `json:"custom_commits,omitempty"` // Commits the customization branch carries on top of mainline
 	DownloadURL         string       `json:"download_url,omitempty"`
 	ExecutablePath      string       `json:"executable_path,omitempty"`
+	RestartPending      bool         `json:"restart_pending"` // True if a different binary was installed at ExecutablePath since Shelley started
 	Commits             []CommitInfo `json:"commits,omitempty"`
 	CheckedAt           time.Time    `json:"checked_at"`
 	Error               string       `json:"error,omitempty"`

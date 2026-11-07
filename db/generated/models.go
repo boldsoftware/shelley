@@ -226,14 +226,6 @@ type ProfileRepo struct {
 	Repository  string `json:"repository"`
 }
 
-type ShelleyCustomization struct {
-	ConversationID string `json:"conversation_id"`
-	Status         string `json:"status"`
-	Generation     string `json:"generation"`
-	ArtifactPath   string `json:"artifact_path"`
-	Data           string `json:"data"`
-}
-
 type Workspace struct {
 	Singleton   int64  `json:"singleton"`
 	AssistantID string `json:"assistant_id"`

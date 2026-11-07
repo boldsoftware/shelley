@@ -1,0 +1,71 @@
+#!/bin/bash
+# install-custom builds the tip of the custom branch of the checkout it is
+# run from, in a temporary worktree, runs the checks, and installs the binary
+# over the running Shelley's executable. It prints only its steps; the
+# tools' output goes to a log, whose tail it prints on failure. Run by a
+# Shelley conversation, it reports its progress there for the UI.
+set -euo pipefail
+
+src=$(git rev-parse --show-toplevel)
+commit=$(git -C "$src" rev-parse --verify 'custom^{commit}')
+log=$HOME/.config/shelley/customization-build.log
+exec 3>&1 >"$log" 2>&1
+current=setup
+step() {
+	current=$*
+	echo "==> [$(date +%T) +${SECONDS}s] $*" >&3
+}
+report() { # status [error]
+	[ -n "${SHELLEY_CONVERSATION_ID:-}" ] && [ -S "${SHELLEY_SOCKET:-}" ] || return 0
+	jq -nc --arg status "$1" --arg commit "$commit" --arg error "${2:-}" '{$status, $commit, $error}' |
+		curl -fsS --unix-socket "$SHELLEY_SOCKET" -H 'X-Shelley-Request: 1' -H 'Content-Type: application/json' \
+			--data-binary @- "http://localhost/api/conversation/$SHELLEY_CONVERSATION_ID/customization" || true
+}
+fail() {
+	echo "install-custom failed; the end of $log:" >&3
+	tail -n 40 "$log" >&3
+	report failed "$current failed; see $log"
+}
+trap fail ERR
+report verifying
+
+# The binary's UI staleness check looks at the sources it was built from;
+# removing them afterwards keeps later checkouts from failing its start.
+build=$(mktemp -d)
+trap 'git -C "$src" worktree remove --force "$build"' EXIT
+git -C "$src" worktree add -q --detach "$build" "$commit"
+cd "$build"
+step "Building custom at $(git log -1 --format='%h %s')"
+
+step "pnpm install"
+scripts/with-node pnpm --dir ui install --frozen-lockfile
+step "type-check"
+scripts/with-node pnpm --dir ui run type-check
+scripts/with-node pnpm --dir ui run type-check:vue
+step "lint"
+scripts/with-node pnpm --dir ui run lint
+step "make build-custom"
+rm -f bin/shelley
+make build-custom
+step "go test ./server ./db"
+go test ./server ./db
+if [ -n "$(git status --porcelain)" ]; then
+	echo "the build changed the sources:" >&3
+	git status --short >&3
+	report failed "the build changed the sources"
+	exit 1
+fi
+
+# Install side by side, keeping the live file's owner and mode, then
+# rename over it: a running binary cannot be overwritten in place.
+step "Installing"
+dest=$(curl -fsS --retry 30 --retry-all-errors --retry-delay 1 "$SHELLEY_URL/version-check" | jq -er .executable_path)
+sudo=
+if [ ! -w "$(dirname "$dest")" ] || [ ! -O "$dest" ]; then
+	sudo="sudo -n"
+fi
+$sudo cp -p "$dest" "$dest.new"
+$sudo cp bin/shelley "$dest.new"
+$sudo mv "$dest.new" "$dest"
+report installed
+step "Installed $commit at $dest; Shelley restarts into it once idle."

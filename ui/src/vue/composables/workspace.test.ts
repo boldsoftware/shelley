@@ -36,7 +36,6 @@ const empty = (): Workspace => ({
   runs: [],
   vms: [],
   base_vms: [],
-  shelley_project: "",
   onboarding_dismissed: false,
   commit_identity: { name: "", email: "" },
 });

@@ -223,8 +223,6 @@ export interface Workspace {
   runs: ActionRunSummary[];
   vms: ConversationVM[];
   base_vms: ProjectBaseVM[];
-  /** The project that customizes Shelley, or "". */
-  shelley_project: string;
   /** Whether the user dismissed the Assistant's onboarding card. */
   onboarding_dismissed: boolean;
   /** The default commit identity, both "" for none. */

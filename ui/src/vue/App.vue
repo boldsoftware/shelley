@@ -358,6 +358,7 @@ import {
   unreachableSince,
 } from "../services/serverReachability";
 import { startActivityHeartbeat } from "../services/activityHeartbeat";
+import { applyCustomizations } from "./composables/customizations";
 import { btwStore } from "../services/btwStore";
 import { messageStore } from "../services/messageStore";
 import {
@@ -1434,8 +1435,8 @@ watch(
 // ---- lifecycle ----
 let stopActivityHeartbeat: (() => void) | null = null;
 onMounted(() => {
-  // Activity only matters for auto-restarting into a verified build.
-  if (workspaceMode) stopActivityHeartbeat = startActivityHeartbeat();
+  // Shelley restarts into an installed binary only once the user is idle.
+  stopActivityHeartbeat = startActivityHeartbeat();
   // Hydrate persistent terminals from the server.
   let cancelled = false;
   fetch("/api/terminals")
@@ -1483,6 +1484,7 @@ onMounted(() => {
     onNotificationEvent: handleNotificationEvent,
     onModelsChanged: () => modelsRefreshTrigger.value++,
     onWorkspaceChanged: refreshWorkspace,
+    onCustomizations: applyCustomizations,
     onStatusChange: (status) => {
       streamStatus.value = status;
       if (status === "connected") serverReachable();

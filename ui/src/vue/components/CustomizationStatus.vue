@@ -55,76 +55,72 @@
           Cancel
         </button>
       </template>
-      <button
-        v-if="state.status === 'failed' || state.status === 'stale'"
-        type="button"
-        class="text-button"
-        :disabled="!!pendingConversation || unavailable"
-        @click="emit('verify')"
-      >
-        Verify again
-      </button>
     </div>
     <p v-if="state.error" class="error-line" role="alert">{{ state.error }}</p>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
-import type { NotRunning } from "../../services/customizations";
+import { computed, onUnmounted, ref, watch } from "vue";
+import type { Customization } from "../../services/customizations";
 
 const props = defineProps<{
-  state: NotRunning;
+  state: Customization;
   pendingConversation: string;
   unavailable: boolean;
   compact?: boolean;
 }>();
-const emit = defineEmits<{ restart: []; verify: []; cancelAutoRestart: [] }>();
+const emit = defineEmits<{ restart: []; cancelAutoRestart: [] }>();
 const UNAVAILABLE_TITLE = "Build status unavailable; this is the last known";
 const labelClass = computed(() => ({
   "customization-ready": props.state.status === "installed" && !props.unavailable,
   "customization-unavailable": props.unavailable,
 }));
 const IDLE_TITLE =
-  "Shelley restarts into this build by itself once every conversation, action and build is done and you have left the UI alone for 30 seconds";
+  "Shelley restarts into this build by itself once every conversation and action is done and you have left the UI alone for 10 seconds";
+// The countdown runs here to the deadline the stream last sent.
+const deadline = computed(() => props.state.auto_restart_at ?? null);
+const now = ref(Date.now());
+let tick: ReturnType<typeof setInterval> | null = null;
+watch(
+  deadline,
+  (at) => {
+    if (tick !== null) clearInterval(tick);
+    tick = null;
+    now.value = Date.now();
+    if (at !== null) tick = setInterval(() => (now.value = Date.now()), 250);
+  },
+  { immediate: true },
+);
+onUnmounted(() => {
+  if (tick !== null) clearInterval(tick);
+});
 const autoRestart = computed(() => {
-  const { auto_restart: plan, auto_restart_in_ms: ms } = props.state;
+  const plan = props.state.auto_restart;
   if (props.state.status !== "installed" || (plan !== "pending" && plan !== "busy")) return null;
-  if (plan === "busy" || ms === undefined)
+  if (plan === "busy" || deadline.value === null)
     return { label: "Restarts when idle", title: IDLE_TITLE + "; waiting for work to finish" };
-  const seconds = Math.ceil(ms / 1000);
+  const seconds = Math.ceil((deadline.value - now.value) / 1000);
   return {
     label: seconds > 0 ? `Restarting in ${seconds}s` : "Restarting…",
     title: IDLE_TITLE + "; any activity in the UI postpones it",
   };
 });
-// A verified build that failed to install stays ready, and installing is
-// retried after the next turn.
-const status = computed(() =>
-  props.state.status === "ready" && props.state.error
-    ? {
-        label: "Not installed",
-        title: "Verified, but installing failed; retrying after the next turn",
-      }
-    : { label: labels[props.state.status], title: titles[props.state.status] },
-);
-const labels: Record<NotRunning["status"], string> = {
-  waiting: "Waiting…",
+const status = computed(() => ({
+  label: labels[props.state.status],
+  title: titles[props.state.status],
+}));
+const labels: Record<Customization["status"], string> = {
   verifying: "Verifying…",
-  ready: "Installing…",
-  stale: "Out of date",
   failed: "Failed",
   installed: "Installed",
   restarting: "Restarting…",
 };
-const titles: Record<NotRunning["status"], string> = {
-  waiting: "Waiting to verify the Shelley build",
-  verifying: "Verifying the Shelley build",
-  ready: "Verified; installing the build",
-  stale: "This build changed since it was verified; verifying again",
-  failed: "Verification failed",
-  installed: "Verified build installed; restart Shelley to run it",
-  restarting: "Reconnecting; waiting for the verified build to start",
+const titles: Record<Customization["status"], string> = {
+  verifying: "Checking, building and installing the Shelley build (scripts/install-custom)",
+  failed: "Installing the Shelley build failed",
+  installed: "Build installed; restart Shelley to run it",
+  restarting: "Reconnecting; waiting for the installed build to start",
 };
 </script>
 
@@ -143,15 +139,6 @@ const titles: Record<NotRunning["status"], string> = {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.customization-badge {
-  flex-shrink: 0;
-  max-width: 45%;
-  font-size: var(--font-size-11);
-  color: var(--text-secondary);
-}
-:global(.conversation-item.active) .customization-badge {
-  color: white;
 }
 .customization-auto {
   color: var(--text-secondary);

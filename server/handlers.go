@@ -2415,7 +2415,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 		}
 	}
 
-	if includeConversationListPatches && !writeStreamData(StreamResponse{ModelsChanged: true, UIBuild: s.uiBuild()}) {
+	if includeConversationListPatches && !writeStreamData(StreamResponse{ModelsChanged: true, UIBuild: s.uiBuild(), Customizations: s.customizationList()}) {
 		return
 	}
 
@@ -3696,12 +3696,14 @@ func (s *Server) handleUpdateConversationTags(w http.ResponseWriter, r *http.Req
 func (s *Server) handleVersionCheck(w http.ResponseWriter, r *http.Request) {
 	forceRefresh := r.URL.Query().Get("refresh") == "true"
 
-	info, err := s.versionChecker.Check(r.Context(), forceRefresh)
+	cached, err := s.versionChecker.Check(r.Context(), forceRefresh)
 	if err != nil {
 		s.logger.Error("Version check failed", "error", err)
 		http.Error(w, "Version check failed", http.StatusInternalServerError)
 		return
 	}
+	info := *cached
+	info.RestartPending = restartPending(info.ExecutablePath)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(info)
@@ -4639,4 +4641,25 @@ func (s *Server) handleUpdateDraft(w http.ResponseWriter, r *http.Request, conve
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(conv)
+}
+
+// restartPending reports whether the file at executable is no longer the
+// one this process runs, as after an install over it.
+func restartPending(executable string) bool {
+	running, err := os.Stat("/proc/self/exe")
+	if err != nil || executable == "" {
+		return false
+	}
+	installed, err := os.Stat(executable)
+	return err == nil && !os.SameFile(running, installed)
+}
+
+// scheduleExit exits after a short delay, which lets an in-flight tool
+// persist its result; the durable resume marker is consumed by the
+// replacement process.
+func (s *Server) scheduleExit(code int) {
+	time.AfterFunc(s.exitDelay, func() {
+		s.logger.Info("Exiting Shelley", "exit_code", code)
+		s.exitProcess(code)
+	})
 }

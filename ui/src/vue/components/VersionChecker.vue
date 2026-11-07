@@ -88,6 +88,22 @@
     <!-- Footer: auto-upgrade + upgrade button -->
     <template v-if="!isLoading && versionInfo" #footer>
       <div class="version-modal-footer-content">
+        <div
+          v-if="versionInfo.restart_pending && versionInfo.running_under_systemd"
+          class="version-actions"
+        >
+          <div class="version-customized-note">
+            A new Shelley binary is installed; restart to run it.
+          </div>
+          <div v-if="restartError" class="version-error">{{ restartError }}</div>
+          <button
+            :disabled="restarting"
+            class="version-btn version-btn-primary"
+            @click="handleRestart"
+          >
+            {{ restarting ? "Restarting Shelley..." : "Restart Shelley" }}
+          </button>
+        </div>
         <!-- Customized builds: upgrading means rebasing, not a binary swap -->
         <template v-if="versionInfo.customized">
           <div class="version-customized-note">
@@ -225,6 +241,8 @@ const loadingCommits = ref(false);
 const commitsError = ref(false);
 const upgrading = ref(false);
 const upgradeError = ref<string | null>(null);
+const restarting = ref(false);
+const restartError = ref<string | null>(null);
 const startingRebase = ref(false);
 const autoUpgrade = ref(false);
 const loadingAutoUpgrade = ref(true);
@@ -321,24 +339,52 @@ async function handleUpgradeAndRestart() {
     // A dropped connection means the server is already restarting.
     console.log("Upgrade response failed (expected during restart):", err);
   }
-  // Reload once the new binary answers; until it binds its port, a reload
-  // would land on the browser's connection error page.
+  if (!(await reloadOnceRestarted((v) => !!v.tag && v.tag !== oldTag))) {
+    upgradeError.value =
+      "Shelley didn't come back with the new version. Check its logs, then reload.";
+    upgrading.value = false;
+  }
+}
+
+async function handleRestart() {
+  restarting.value = true;
+  restartError.value = null;
+  const oldCommit = props.versionInfo?.current_commit;
+  try {
+    await api.restart();
+  } catch (err) {
+    if (err instanceof ApiError) {
+      restartError.value = err.message;
+      restarting.value = false;
+      return;
+    }
+    // A dropped connection means the server is already restarting.
+  }
+  if (!(await reloadOnceRestarted((v) => !!v.commit && v.commit !== oldCommit))) {
+    restartError.value = "Shelley didn't come back. Check its logs, then reload.";
+    restarting.value = false;
+  }
+}
+
+// reloadOnceRestarted reloads the page once the new binary answers with
+// done(version); until it binds its port, a reload would land on the
+// browser's connection error page. It returns false after a minute.
+async function reloadOnceRestarted(
+  done: (version: { tag?: string; commit?: string }) => boolean,
+): Promise<boolean> {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 500));
     try {
-      const { tag } = await api.getVersion();
-      if (tag && tag !== oldTag) {
+      if (done(await api.getVersion())) {
         window.location.reload();
-        return;
+        return true;
       }
     } catch {
       // Still restarting.
     }
   }
-  upgradeError.value =
-    "Shelley didn't come back with the new version. Check its logs, then reload.";
-  upgrading.value = false;
+  return false;
 }
 
 // For customized builds, "upgrade" means starting a Shelley conversation that

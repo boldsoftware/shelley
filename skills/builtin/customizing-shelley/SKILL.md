@@ -36,9 +36,9 @@ Requires Go and make (make installs the Node.js and pnpm pinned in `ui/mise.toml
 
 ## Trying it out and installing
 
-After a successful build, offer the user both options:
+After a successful build, install it and restart (step 2) unless the user asked only for a preview.
 
-1. **Run it off to the side** (safe preview): start the new binary on a spare port with a separate database and give the user the URL to try:
+1. **Run it off to the side**, only when the user asks for a preview: start the new binary on a spare port with a separate database and give the user the URL to try:
 
    ```
    ~/.config/shelley/shelley-customization/bin/shelley -db /tmp/shelley-custom-preview.db serve -port 8010
@@ -46,32 +46,23 @@ After a successful build, offer the user both options:
 
    Run it in tmux so it survives the turn. On exe.dev VMs the user reaches it at `https://<host>.exe.xyz:8010/`.
 
-2. **Install over the running binary and restart**: find where the running Shelley lives — don't guess:
+2. **Install over the running binary and restart** (the default): commit to `custom`, then run
 
    ```
-   curl -s "$SHELLEY_URL/version-check" | jq -r .executable_path
+   ~/.config/shelley/shelley-customization/scripts/install-custom
    ```
 
-   (`SHELLEY_URL` is set in your environment; typically the path is `/usr/local/bin/shelley`.) You cannot copy over a running binary ("Text file busy"), so install side-by-side and rename. Copying the installed binary first gives `$DEST.new` its owner and mode; the second copy keeps them and replaces the contents (this works on macOS too):
+   It builds the tip of `custom` in a clean worktree (so uncommitted work in the shared checkout never gets in), runs the type-checks, lint and `go test ./server ./db`, and installs the binary side by side over the executable `$SHELLEY_URL/version-check` reports, then renames it into place. It prints one line per step and, on failure, the end of its log; run it as is, without filtering its output. It reports its progress to this conversation, whose sidebar row shows it.
 
-   ```
-   DEST=$(curl -s "$SHELLEY_URL/version-check" | jq -r .executable_path)
-   sudo cp -p "$DEST" "$DEST.new"
-   sudo cp ~/.config/shelley/shelley-customization/bin/shelley "$DEST.new"
-   sudo mv "$DEST.new" "$DEST"
-   ```
-
-   You are likely running *inside* the server you're replacing. When the version check reports `running_under_systemd: true`, install the binary, then make this the final tool action of the turn:
+   Under systemd (`running_under_systemd: true` in the version check), Shelley then restarts into the new binary by itself once no conversation or action is working and the user has left the UI alone for 10 seconds; in-flight conversations continue afterwards. So finish your turn with a short reply; don't restart yourself. Only when the user asks to restart right away, make this the final tool action of the turn:
 
    ```
    curl -fsS -X POST -H 'X-Shelley-Request: 1' "$SHELLEY_URL/exit?resume=true"
    ```
 
-   The endpoint marks every in-flight conversation for one-shot continuation, exits the old process, and lets systemd start the newly installed binary. Shelley will continue this installation conversation after the restart, so do not send a final reply first and do not separately run `systemctl restart shelley`.
+   Shelley will continue this conversation after that restart, so do not send a final reply first and do not separately run `systemctl restart shelley`.
 
-   If Shelley is not under systemd or another restart-on-exit supervisor, do not call `/exit`; tell the user to restart it themselves.
-
-Never install without the user explicitly choosing option 2.
+   If Shelley is not under systemd or another restart-on-exit supervisor, it does not restart by itself, and you must not call `/exit`; tell the user to restart it.
 
 ## Upgrading a customized build (rebase flow)
 
@@ -83,6 +74,6 @@ git fetch origin main --tags
 git rebase origin/main custom
 ```
 
-Resolve conflicts thoughtfully — you have the user's customization commits and their messages for context; ask the user when intent is unclear. Then rebuild with `make build-custom`, run relevant tests, and offer the same run-aside/install choice as above.
+Resolve conflicts thoughtfully — you have the user's customization commits and their messages for context; ask the user when intent is unclear. Then install and restart as above.
 
 If the user instead wants to abandon their customizations and return to mainline releases, download the latest release binary for this platform (URLs in https://boldsoftware.github.io/shelley/release.json), install it the same side-by-side way as above, and leave the checkout in place.

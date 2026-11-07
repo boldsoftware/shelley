@@ -158,7 +158,6 @@ func (s *Server) uiBuild() string {
 }
 
 func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
-	s.registerCustomizationRoutes(api)
 	api.HandleFunc("GET /api/workspace", s.handleWorkspace)
 	api.HandleFunc("GET /api/exe-dev-integrations", s.handleExeDevIntegrations)
 	api.HandleFunc("GET /api/github-repos", s.handleGithubRepos)
@@ -232,16 +231,6 @@ func (s *Server) handleWorkspace(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.workspaceHTTPError(w, err)
 		return
-	}
-	for i := range workspace.Projects {
-		shelley, err := s.isShelleyProject(r.Context(), &workspace.Projects[i])
-		if err != nil {
-			s.workspaceHTTPError(w, err)
-			return
-		}
-		if shelley {
-			workspace.ShelleyProject = workspace.Projects[i].Name
-		}
 	}
 	dismissed, err := s.db.GetSetting(r.Context(), onboardingDismissedKey)
 	if err != nil {

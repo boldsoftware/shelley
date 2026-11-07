@@ -8,7 +8,7 @@ export const ACTIVITY_EVENTS = [
   "touchstart",
   "focus",
 ] as const;
-export const ACTIVITY_THROTTLE_MS = 5000;
+export const ACTIVITY_THROTTLE_MS = 2000;
 
 function sendActivity() {
   fetch("/api/activity", { method: "POST", headers: { "X-Shelley-Request": "1" } }).catch(
@@ -18,7 +18,7 @@ function sendActivity() {
 
 /**
  * Tells the server, at most every ACTIVITY_THROTTLE_MS, that the user is
- * interacting, so Shelley never auto-restarts mid-read. Returns a stop function.
+ * interacting, so Shelley never restarts into an installed binary mid-read. Returns a stop function.
  */
 export function startActivityHeartbeat(target: EventTarget = window, send = sendActivity) {
   let last = -Infinity;
