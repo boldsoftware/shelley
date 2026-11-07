@@ -242,6 +242,7 @@
                 :text="item.text"
                 :markdown-text="item.markdownText"
                 :citations="item.citations"
+                :google-search-suggestions="item.googleSearchSuggestions"
                 :render-markdown="
                   shouldRenderMarkdown(markdownMode, isUser && !sender, isDistilledUser)
                 "

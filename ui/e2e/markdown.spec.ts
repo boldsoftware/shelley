@@ -245,6 +245,17 @@ test.describe("Markdown rendering", () => {
     await expect(sources.first().locator("a")).toHaveAttribute("href", /^https?:\/\//);
   });
 
+  test("shows Gemini search suggestions and cites each claim inline", async ({ page, request }) => {
+    const slug = await createConversationViaAPI(request, "gemini grounded search");
+    await page.goto(`/c/${slug}`);
+    const tool = page.getByTestId("tool-call-completed");
+    await expect(tool.frameLocator("iframe").getByText("Olympic hosts")).toBeVisible();
+    const answer = page
+      .locator(".message-agent .markdown-content p")
+      .filter({ hasText: "Paris hosted" });
+    await expect(answer).toHaveText("🏟 Paris hosted.1 Los Angeles follows.2");
+  });
+
   test("expands web search queries without structured results", async ({ page, request }) => {
     const slug = await createConversationViaAPI(request, "web search without results");
     await page.goto(`/c/${slug}`);

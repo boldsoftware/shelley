@@ -110,6 +110,21 @@ func TestGenerateContentSSEPreservesSignedBoundaries(t *testing.T) {
 	}
 }
 
+func TestGenerateContentSSEPreservesGroundingPartIndexes(t *testing.T) {
+	response, err := streamModel(strings.NewReader(streamData(
+		`{"candidates":[{"content":{"parts":[{"text":"First."},{"text":"Second."}]}}]}`,
+		`{"candidates":[{"finishReason":"STOP","groundingMetadata":{"groundingSupports":[{"segment":{"partIndex":1,"endIndex":7}}]}}]}`,
+	))).GenerateContent(t.Context(), &Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate := response.Candidates[0]
+	if len(candidate.Content.Parts) != 2 || candidate.Content.Parts[1].Text != "Second." ||
+		candidate.GroundingMetadata.GroundingSupports[0].Segment.PartIndex != 1 {
+		t.Fatalf("distinct content parts must retain their grounding indexes: %+v", candidate)
+	}
+}
+
 func TestGenerateContentSSEFraming(t *testing.T) {
 	text := strings.Repeat("☃", 32*1024)
 	data, err := json.Marshal(text)

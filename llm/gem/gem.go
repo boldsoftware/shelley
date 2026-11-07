@@ -76,6 +76,11 @@ func convertToolSchemas(tools []*llm.Tool) ([]gemini.FunctionDeclaration, error)
 
 // buildGeminiRequest converts Sketch's llm.Request to Gemini's request format
 func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) {
+	var err error
+	req, err = prepareCitations(context.Background(), req)
+	if err != nil {
+		return nil, err
+	}
 	if s.MaxTokens < 0 {
 		return nil, fmt.Errorf("max output tokens must not be negative: %d", s.MaxTokens)
 	}
@@ -122,6 +127,23 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 
 		// Map each content item to Gemini's format
 		for _, c := range msg.Content {
+			if msg.Origin.Known() && msg.Origin.Provider != "gemini" {
+				if c.Type == llm.ContentTypeThinking || c.Type == llm.ContentTypeRedactedThinking {
+					continue
+				}
+				c.Signature = ""
+			}
+			if len(c.GeminiServerTool) != 0 {
+				var part gemini.Part
+				if err := json.Unmarshal(c.GeminiServerTool, &part); err != nil {
+					return nil, fmt.Errorf("invalid Gemini server tool: %w", err)
+				}
+				if part.ToolCall == nil && part.ToolResponse == nil {
+					return nil, errors.New("Gemini server tool has no call or response")
+				}
+				content.Parts = append(content.Parts, part)
+				continue
+			}
 			if c.OpenAIResponsesReasoning != nil {
 				continue
 			}
@@ -243,18 +265,39 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 			}
 		}
 
-		gemReq.Contents = append(gemReq.Contents, content)
+		if len(content.Parts) > 0 {
+			gemReq.Contents = append(gemReq.Contents, content)
+		}
 	}
 
 	// Handle tools/functions
 	if len(req.Tools) > 0 {
+		var functions []*llm.Tool
+		search := false
+		for _, tool := range req.Tools {
+			if !tool.ServerSide {
+				functions = append(functions, tool)
+				continue
+			}
+			if tool.Type != "google_search" || !s.SupportsServerSideWebSearch() {
+				return nil, fmt.Errorf("unsupported Gemini server tool %q for model %q", tool.Type, s.modelName())
+			}
+			search = true
+		}
 		// Convert tool schemas
-		decls, err := convertToolSchemas(req.Tools)
+		decls, err := convertToolSchemas(functions)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert tool schemas: %w", err)
 		}
 		if len(decls) > 0 {
 			gemReq.Tools = []gemini.Tool{{FunctionDeclarations: decls}}
+		}
+		if search {
+			gemReq.Tools = append(gemReq.Tools, gemini.Tool{GoogleSearch: &struct{}{}})
+			gemReq.ToolConfig = &gemini.ToolConfig{
+				IncludeServerSideToolInvocations: true,
+				FunctionCallingConfig:            &gemini.FunctionCallingConfig{Mode: "VALIDATED"},
+			}
 		}
 	}
 
@@ -433,7 +476,10 @@ func convertGeminiResponse(res *gemini.Response) (*llm.Response, error) {
 			return nil, fmt.Errorf("gemini: unexpected finish reason %q (%s)", candidate.FinishReason, candidate.FinishMessage)
 		}
 	}
-	response.Content = convertGeminiResponseToContent(res)
+	response.Content, err = convertSearchResponse(res)
+	if err != nil {
+		return nil, err
+	}
 	ensureToolIDs(response.Content)
 	if response.StopReason == llm.StopReasonEndTurn {
 		for _, part := range response.Content {
@@ -447,6 +493,12 @@ func convertGeminiResponse(res *gemini.Response) (*llm.Response, error) {
 }
 
 func (s *Service) Provider() string { return "gemini" }
+
+func (s *Service) SupportsServerSideWebSearch() bool {
+	model := s.modelKey()
+	return strings.HasPrefix(model, "gemini-3.") || strings.HasPrefix(model, "gemini-3-") ||
+		strings.HasPrefix(model, "gemini-4-") || strings.HasPrefix(model, "gemini-4.")
+}
 
 // DefaultReasoningLevel reports the effective configured level, or the documented
 // model default. Dynamic and unknown defaults return "".
@@ -642,5 +694,8 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 	response.StartTime = &startTime
 	response.EndTime = &endTime
 	response.URL = cmp.Or(s.URL, gemini.DefaultEndpoint)
+	response.Origin = &llm.MessageOrigin{
+		Provider: "gemini", Transport: "gemini-generate-content", Model: s.modelName(),
+	}
 	return response, nil
 }

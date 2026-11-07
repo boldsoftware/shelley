@@ -256,6 +256,17 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 		// citations render as inline source markers).
 		return s.makeWebSearchCitationsResponse(inputTokens), nil
 
+	case "gemini grounded search":
+		resp := s.makeResponse("🏟 Paris hosted. Los Angeles follows.", inputTokens)
+		answer := resp.Content[0]
+		answer.Citations = json.RawMessage(`[{"type":"google_grounding","url":"https://example.org/paris","end_utf16":16},{"type":"google_grounding","url":"https://example.org/la","end_utf16":37}]`)
+		resp.Content = []llm.Content{
+			{Type: llm.ContentTypeServerToolUse, ID: "search-1", ToolName: "web_search", ToolInput: json.RawMessage(`{"queries":["Olympic hosts"]}`)},
+			{Type: llm.ContentTypeWebSearchToolResult, ToolUseID: "search-1", ToolResult: []llm.Content{{Type: llm.ContentTypeText, GoogleSearchSuggestions: "<p>Olympic hosts</p>"}}},
+			answer,
+		}
+		return resp, nil
+
 	case "web search without results":
 		return s.makeWebSearchWithoutResultsResponse(inputTokens), nil
 

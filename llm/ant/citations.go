@@ -14,7 +14,7 @@ func adaptCitation(_ llm.CitationContext, kind string, fields map[string]json.Ra
 	switch kind {
 	case "char_location", "page_location", "content_block_location", "search_result_location", "web_search_result_location":
 		return "", true, nil
-	case "url_citation":
+	case "url_citation", "google_grounding":
 	default:
 		return "", false, fmt.Errorf("unsupported citation type %q", kind)
 	}

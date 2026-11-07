@@ -22,6 +22,7 @@ func TestAdaptCitation(t *testing.T) {
 	native := " [ \n" + anthropicWebCitation + `, {"type":"char_location","opaque":true}, {"type":"page_location"}, {"type":"content_block_location"}, {"type":"search_result_location"} ] `
 	for _, tt := range []struct{ name, raw, wantRaw, wantText string }{
 		{"original OpenAI bug", "[" + openAICitation + "]", "", "Answer\n\nSource: Source title — https://example.com/source"},
+		{"Gemini grounding", `[{"type":"google_grounding","url":"https://example.com","title":"Source","cited_text":"Evidence","end_utf16":6}]`, "", "Answer\n\nSource: Source — https://example.com\nCited text: Evidence"},
 		{"native byte preservation and provider validation boundary", native, native, "Answer"},
 		{"mixed retains native", "[" + anthropicWebCitation + "," + openAICitation + "]", "[" + anthropicWebCitation + "]", "Answer\n\nSource: Source title — https://example.com/source"},
 		{"omitted local zero ranges and title", `[{"type":"url_citation","url":"https://example.com"}]`, "", "Answer\n\nSource: https://example.com"},

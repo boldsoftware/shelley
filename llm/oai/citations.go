@@ -11,7 +11,7 @@ import (
 func adaptCitation(_ llm.CitationContext, kind string, fields map[string]json.RawMessage) (reference string, retain bool, err error) {
 	// Chat and non-OpenAI Responses serialize both web citation shapes as text references.
 	switch kind {
-	case "url_citation", "web_search_result_location":
+	case "url_citation", "web_search_result_location", "google_grounding":
 	case "char_location", "page_location", "content_block_location", "search_result_location":
 		return "", false, fmt.Errorf("cannot convert %q to text URL references; document/search locators are unsupported", kind)
 	default:

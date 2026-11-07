@@ -220,6 +220,10 @@ func serverSideTools(svc llm.Service) []*llm.Tool {
 				ServerSide: true,
 			},
 		}
+	case "gemini":
+		return []*llm.Tool{
+			{Name: "web_search", Type: "google_search", ServerSide: true},
+		}
 	}
 	return nil
 }

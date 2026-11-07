@@ -30,6 +30,7 @@
         <ToolChevron :expanded="isExpanded" />
       </button>
     </div>
+    <GoogleSearchSuggestions v-for="(html, index) in suggestions" :key="index" :html="html" />
     <div v-if="isExpanded" class="web-search-details">
       <RunningToolTime v-if="isRunning" :start-time="toolInvokedAt" />
       <div v-if="hasQueries" class="web-search-queries">
@@ -61,6 +62,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import type { LLMContent } from "../../../types";
+import GoogleSearchSuggestions from "../GoogleSearchSuggestions.vue";
 import ToolChevron from "./ToolChevron.vue";
 import RunningToolTime from "./RunningToolTime.vue";
 
@@ -88,7 +90,13 @@ const queries = computed(() => {
   return values.filter((value) => value.trim() !== "");
 });
 
-const results = computed<LLMContent[]>(() => props.searchResults || props.toolResult || []);
+const blocks = computed(() => props.searchResults || props.toolResult || []);
+const results = computed(() => blocks.value.filter((block) => !block.GoogleSearchSuggestions));
+const suggestions = computed(() =>
+  blocks.value.flatMap((block) =>
+    block.GoogleSearchSuggestions ? [block.GoogleSearchSuggestions] : [],
+  ),
+);
 // OpenAI's server-side search doesn't deliver structured results to us;
 // the citations are attached to the assistant's message text instead.
 // So "complete with 0 results" is normal for OpenAI — only mark running

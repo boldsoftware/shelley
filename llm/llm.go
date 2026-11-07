@@ -496,6 +496,11 @@ type Content struct {
 
 	OpenAIResponsesReasoning *OpenAIResponsesReasoningMetadata `json:",omitempty"`
 
+	// Opaque native server-tool part, replayed only to Gemini.
+	GeminiServerTool json.RawMessage `json:",omitempty"`
+	// Provider-supplied Google Search attribution, displayed with the answer.
+	GoogleSearchSuggestions string `json:",omitempty"`
+
 	// for tool_use
 	ToolName  string
 	ToolInput json.RawMessage

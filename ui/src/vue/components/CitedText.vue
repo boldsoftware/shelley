@@ -31,9 +31,15 @@
       </li>
     </ol>
   </template>
+  <GoogleSearchSuggestions
+    v-for="(html, index) in googleSearchSuggestions"
+    :key="index"
+    :html="html"
+  />
 </template>
 
 <script setup lang="ts">
+import GoogleSearchSuggestions from "./GoogleSearchSuggestions.vue";
 import InlineText from "./InlineText.vue";
 import MarkdownContent from "./MarkdownContent.vue";
 import type { Citation } from "../../utils/coalesceContent";
@@ -49,5 +55,6 @@ defineProps<{
   cacheOwner?: object;
   runKey?: string;
   rewriteLocalhostLinks?: boolean;
+  googleSearchSuggestions?: string[];
 }>();
 </script>

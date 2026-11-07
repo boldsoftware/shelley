@@ -22,6 +22,7 @@ func TestAdaptCitation(t *testing.T) {
 	for _, tt := range []struct{ name, raw, wantRaw, wantText string }{
 		{"reverse chat", "[" + anthropicWebCitation + "]", "", "Answer\n\nSource: Web title — https://example.com/web\nCited text: Original cited passage"},
 		{"same provider chat", "[" + openAICitation + "]", "", "Answer\n\nSource: Source title — https://example.com/source"},
+		{"Gemini grounding", `[{"type":"google_grounding","url":"https://example.com","title":"Source","cited_text":"Evidence","end_utf16":6}]`, "", "Answer\n\nSource: Source — https://example.com\nCited text: Evidence"},
 		{"nullable web title", `[{"type":"web_search_result_location","url":"https://example.com","title":null,"cited_text":"quote","encrypted_index":"sig"}]`, "", "Answer\n\nSource: https://example.com\nCited text: quote"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

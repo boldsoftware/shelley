@@ -109,6 +109,9 @@ export interface LLMContent {
   // Citations attached to a text block (Anthropic web search). Serialized as a
   // JSON array on the wire; may arrive as the parsed array or a raw string.
   Citations?: unknown;
+  // Provider-supplied Google Search Suggestions markup (rendered in a sandboxed
+  // iframe; never inserted into the application DOM).
+  GoogleSearchSuggestions?: string;
 }
 
 // API types

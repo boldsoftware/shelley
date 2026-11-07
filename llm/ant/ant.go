@@ -687,6 +687,9 @@ func sanitizeServerToolBlocks(msgs []llm.Message) []llm.Message {
 func fromLLMMessage(msg llm.Message) message {
 	var contents []content
 	for _, c := range msg.Content {
+		if len(c.GeminiServerTool) != 0 {
+			continue
+		}
 		// Skip thinking blocks with no signature — they're corrupt/incomplete
 		// and the API rejects them.
 		if c.Type == llm.ContentTypeThinking && c.Signature == "" {

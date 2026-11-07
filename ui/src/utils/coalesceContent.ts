@@ -37,6 +37,8 @@ export interface CoalescedItem {
   // For "text": the de-duplicated, numbered list of cited sources, in the
   // order they were first referenced. Empty when there are no citations.
   citations: Citation[];
+  // Provider-supplied Search Suggestions HTML, kept in order across blocks.
+  googleSearchSuggestions: string[];
   // For "other": the original block to dispatch on.
   content?: LLMContent;
 }
@@ -79,6 +81,7 @@ interface RawCitation {
   url?: string;
   title?: string;
   cited_text?: string;
+  end_utf16?: number;
 }
 
 function parseCitations(raw: unknown): RawCitation[] {
@@ -137,6 +140,7 @@ export function coalesceContent(blocks: LLMContent[]): CoalescedItem[] {
   let runRaw: string[] = [];
   let runMd: string[] = [];
   let runCites: Citation[] = [];
+  let runSuggestions: string[] = [];
 
   const flush = () => {
     if (runRaw.length === 0) return;
@@ -145,45 +149,69 @@ export function coalesceContent(blocks: LLMContent[]): CoalescedItem[] {
       text: runRaw.join(""),
       markdownText: runMd.join(""),
       citations: runCites,
+      googleSearchSuggestions: runSuggestions,
     });
     runRaw = [];
     runMd = [];
     runCites = [];
+    runSuggestions = [];
   };
 
   for (const block of blocks) {
     if (block.Type === 2) {
       const text = block.Text || "";
       runRaw.push(text);
-      runMd.push(text);
+
+      if (block.GoogleSearchSuggestions) runSuggestions.push(block.GoogleSearchSuggestions);
       const cites = parseCitations(block.Citations);
-      const refs: Citation[] = [];
+      const byEnd = new Map<number, RawCitation[]>();
       for (const rc of cites) {
-        const url = rc.url || "";
-        if (!url) continue;
-        let cit = citationByURL.get(url);
-        if (cit === undefined) {
-          cit = {
-            num: citationByURL.size + 1,
-            url,
-            title: rc.title || url,
-            citedText: rc.cited_text || "",
-          };
-          citationByURL.set(url, cit);
-          // Surface each source in the run where it is first referenced.
-          runCites.push(cit);
+        const end =
+          rc.type === "google_grounding" && rc.end_utf16 !== undefined ? rc.end_utf16 : text.length;
+        const group = byEnd.get(end) ?? [];
+        group.push(rc);
+        byEnd.set(end, group);
+      }
+      let start = 0;
+      for (const [end, group] of [...byEnd].sort(([a], [b]) => a - b)) {
+        runMd.push(text.slice(start, end));
+        start = end;
+        const refs: Citation[] = [];
+        for (const rc of group) {
+          const url = rc.url || "";
+          if (!url) continue;
+          let cit = citationByURL.get(url);
+          if (cit === undefined) {
+            cit = {
+              num: citationByURL.size + 1,
+              url,
+              title: rc.title || url,
+              citedText: rc.cited_text || "",
+            };
+            citationByURL.set(url, cit);
+            // Surface each source in the run where it is first referenced.
+            runCites.push(cit);
+          }
+          if (!refs.includes(cit)) refs.push(cit);
         }
-        refs.push(cit);
+        // Citation HTML on a closing fence's line would make it part of the code.
+        const lastLine = text.slice(text.lastIndexOf("\n", end - 1) + 1, end);
+        if (refs.length > 0 && /^ {0,3}(?:`{3,}|~{3,})[ \t]*$/.test(lastLine)) {
+          runMd.push("\n");
+        }
+        runMd.push(markerHTML(refs));
       }
-      // Citation HTML on a closing fence's line would make it part of the code.
-      const lastLine = text.slice(text.lastIndexOf("\n") + 1);
-      if (refs.length > 0 && /^ {0,3}(?:`{3,}|~{3,})[ \t]*$/.test(lastLine)) {
-        runMd.push("\n");
-      }
-      runMd.push(markerHTML(refs));
+      runMd.push(text.slice(start));
     } else {
       flush();
-      items.push({ kind: "other", text: "", markdownText: "", citations: [], content: block });
+      items.push({
+        kind: "other",
+        text: "",
+        markdownText: "",
+        citations: [],
+        googleSearchSuggestions: [],
+        content: block,
+      });
     }
   }
   flush();
