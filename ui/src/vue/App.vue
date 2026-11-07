@@ -351,6 +351,12 @@ import {
   type ChatRequest,
 } from "../types";
 import { api, ApiError, machineParams } from "../services/api";
+import {
+  absorbUnreachable,
+  serverReachable,
+  serverUnreachable,
+  unreachableSince,
+} from "../services/serverReachability";
 import { startActivityHeartbeat } from "../services/activityHeartbeat";
 import { btwStore } from "../services/btwStore";
 import { messageStore } from "../services/messageStore";
@@ -911,7 +917,17 @@ async function resolveInitialSlug(convs: Conversation[]): Promise<Conversation |
   return null;
 }
 
+let loadWhenReachable = false;
+// Shelley answers again (e.g. restarted), seen by a poll before the stream's
+// next retry: reconnect the stream now, and load what failed meanwhile.
+watch(unreachableSince, (since) => {
+  if (since !== null) return;
+  if (streamStatus.value !== "connected") globalStreamHandle?.forceReconnect();
+  if (loadWhenReachable) void loadConversations();
+});
+
 async function loadConversations() {
+  loadWhenReachable = false;
   try {
     loading.value = true;
     error.value = null;
@@ -937,6 +953,11 @@ async function loadConversations() {
       viewedConversation.value = topLevel[0];
     }
   } catch (err) {
+    // Shown once for the page; loads again when Shelley answers.
+    if (absorbUnreachable(err)) {
+      loadWhenReachable = true;
+      return;
+    }
     console.error("Failed to load conversations:", err);
     // The server's reason (e.g. a full disk) beats a generic line.
     error.value = err instanceof ApiError ? err.message : t("failedToLoadConversations");
@@ -1462,7 +1483,11 @@ onMounted(() => {
     onNotificationEvent: handleNotificationEvent,
     onModelsChanged: () => modelsRefreshTrigger.value++,
     onWorkspaceChanged: refreshWorkspace,
-    onStatusChange: (status) => (streamStatus.value = status),
+    onStatusChange: (status) => {
+      streamStatus.value = status;
+      if (status === "connected") serverReachable();
+      else serverUnreachable();
+    },
     onResourceSnapshot: replaceResourceStatuses,
     onResourceStatus: applyResourceStatus,
     onStaleBuild: () => (uiUpdated.value = true),

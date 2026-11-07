@@ -191,7 +191,9 @@ test("Daily grouping pages and counts last-touched chats and selects calendar da
   await page.route("**/api/conversations/archived", (route) =>
     route.fulfill({ json: fixtures.map((c) => ({ ...c, archived: true })) }),
   );
-  await page.route("**/api/stream2*", (route) => route.abort());
+  // The stream stays open and quiet: a failing one would put "Reconnecting…"
+  // above the search, whose inset this measures.
+  await page.route("**/api/stream2*", () => {});
   await page.goto("/");
   await page.getByRole("button", { name: "Open conversations", exact: true }).click();
   const picker = page.getByTestId("conversation-day-filter");

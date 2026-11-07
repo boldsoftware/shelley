@@ -4,15 +4,18 @@
       <span
         role="status"
         class="customization-label"
-        :class="{ 'customization-ready': state.status === 'installed' && !unavailable }"
-        :title="unavailable ? 'Build status unavailable' : status.title"
+        :class="{
+          'customization-ready': state.status === 'installed' && !unavailable,
+          'customization-unavailable': unavailable,
+        }"
+        :title="unavailable ? 'Build status unavailable; this is the last known' : status.title"
       >
         <i
           v-if="state.status === 'installed' && !unavailable"
           class="pi pi-check"
           aria-hidden="true"
         />
-        {{ unavailable ? "Unavailable" : status.label }}
+        {{ status.label }}
       </span>
       <button
         v-if="state.status === 'installed'"
@@ -127,6 +130,9 @@ const titles: Record<NotRunning["status"], string> = {
 .customization-ready {
   color: var(--success-text);
   font-weight: 600;
+}
+.customization-unavailable {
+  color: var(--text-secondary);
 }
 .customization-ready .pi {
   font-size: inherit;

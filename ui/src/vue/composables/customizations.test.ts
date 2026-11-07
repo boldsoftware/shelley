@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
+import { ApiError } from "../../services/api";
 import { customizationsApi, type Customization } from "../../services/customizations";
+import { serverReachable, unreachableSince } from "../../services/serverReachability";
 import { createCustomizationsState } from "./customizations";
 
 const installed = (): Customization => ({
@@ -129,4 +131,46 @@ test("cancelling an auto-restart posts the build and refreshes", async (t) => {
   await state.mutate(current, "cancelAutoRestart", "drawer");
   assert.equal(cancel.mock.callCount(), 1);
   assert.equal(state.entries.value[0].auto_restart, undefined);
+});
+
+test("while Shelley restarts, polls back off and show no error; its answer clears the state", async (t) => {
+  const { state } = harness(t);
+  t.after(serverReachable);
+  let down = true;
+  const fetch = t.mock.method(customizationsApi, "list", async () => {
+    if (down) throw new ApiError("Failed to load build status: HTTP 503", 503);
+    return [installed()];
+  });
+  t.mock.method(console, "warn", () => {});
+  await state.refresh();
+  assert.equal(state.error.value, "");
+  assert.notEqual(unreachableSince.value, null);
+  assert.equal(state.unavailable.value, true);
+  // Retries after 1s, then 2s, then 4s.
+  for (const [wait, calls] of [
+    [1000, 2],
+    [1999, 2],
+    [1, 3],
+    [4000, 4],
+  ] as const) {
+    t.mock.timers.tick(wait);
+    await settle();
+    assert.equal(fetch.mock.callCount(), calls);
+  }
+  down = false;
+  t.mock.timers.tick(8000);
+  await settle();
+  assert.equal(unreachableSince.value, null);
+  assert.equal(state.unavailable.value, false);
+  assert.equal(state.entries.value[0].status, "installed");
+});
+
+test("a failure other than unreachable shows as the poll's error", async (t) => {
+  const { state } = harness(t);
+  t.mock.method(customizationsApi, "list", async () => {
+    throw new ApiError("Failed to load build status: database is locked", 500);
+  });
+  await state.refresh();
+  assert.equal(state.error.value, "Failed to load build status: database is locked");
+  assert.equal(unreachableSince.value, null);
 });

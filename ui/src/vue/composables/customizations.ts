@@ -1,5 +1,10 @@
-import { onScopeDispose, ref, shallowRef } from "vue";
+import { computed, onScopeDispose, ref, shallowRef } from "vue";
 import { customizationsApi, type Customization } from "../../services/customizations";
+import {
+  absorbUnreachable,
+  serverReachable,
+  unreachableSince,
+} from "../../services/serverReachability";
 import { errorMessage } from "../../utils/errorMessage";
 import { workspaceMode } from "../../utils/workspaceMode";
 
@@ -17,6 +22,10 @@ export function createCustomizationsState(isVisible: () => boolean = () => true)
     place: CustomizationsPlace;
   } | null>(null);
   const pendingConversation = ref("");
+  /** Whether entries may be out of date, so their buttons are off. */
+  const unavailable = computed(() => !!error.value || unreachableSince.value !== null);
+  /** Consecutive polls that found Shelley unreachable; they back off. */
+  let unreachable = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let pending: Promise<void> | null = null;
   let stopped = false;
@@ -32,14 +41,16 @@ export function createCustomizationsState(isVisible: () => boolean = () => true)
     if (!stopped && isVisible())
       timer = setTimeout(
         () => void refresh(),
-        entries.value.some(
-          (entry) =>
-            entry.status === "verifying" ||
-            entry.status === "waiting" ||
-            entry.auto_restart === "pending",
-        )
-          ? 1500
-          : 5000,
+        unreachable
+          ? Math.min(1000 * 2 ** (unreachable - 1), 15_000)
+          : entries.value.some(
+                (entry) =>
+                  entry.status === "verifying" ||
+                  entry.status === "waiting" ||
+                  entry.auto_restart === "pending",
+              )
+            ? 1500
+            : 5000,
       );
   }
 
@@ -49,13 +60,23 @@ export function createCustomizationsState(isVisible: () => boolean = () => true)
     pending = customizationsApi
       .list()
       .then((next) => {
+        unreachable = 0;
+        serverReachable();
         if (stopped || requestedRevision !== revision) return;
         entries.value = next;
         error.value = "";
       })
       .catch((err: unknown) => {
         if (stopped) return;
-        error.value = errorMessage(err);
+        // The page shows Shelley unreachable (e.g. restarting) once, and the
+        // last entries meanwhile.
+        if (absorbUnreachable(err)) {
+          unreachable++;
+          error.value = "";
+        } else {
+          unreachable = 0;
+          error.value = errorMessage(err);
+        }
       })
       .finally(() => {
         pending = null;
@@ -101,7 +122,17 @@ export function createCustomizationsState(isVisible: () => boolean = () => true)
     pause();
   }
 
-  return { entries, error, requestError, pendingConversation, refresh, mutate, pause, dispose };
+  return {
+    entries,
+    error,
+    unavailable,
+    requestError,
+    pendingConversation,
+    refresh,
+    mutate,
+    pause,
+    dispose,
+  };
 }
 
 type CustomizationsState = ReturnType<typeof createCustomizationsState>;

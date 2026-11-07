@@ -38,7 +38,17 @@ test("installed build restarts on one click", async ({ page, request }) => {
     finished: false,
   };
   let restartCount = 0;
-  await page.route("**/api/customizations", (route) => route.fulfill({ json: [state] }));
+  // Shelley down mid-restart, as the exe.dev proxy answers then.
+  let down = false;
+  await page.route("**/api/customizations", (route) =>
+    down
+      ? route.fulfill({
+          status: 503,
+          contentType: "text/html",
+          body: "<!doctype html><html><head><title>Service unavailable</title></head></html>",
+        })
+      : route.fulfill({ json: [state] }),
+  );
   // This test NEVER reaches the real install endpoint.
   await page.route(
     `**/api/conversation/${conversation.conversationId}/customization/restart`,
@@ -65,8 +75,15 @@ test("installed build restarts on one click", async ({ page, request }) => {
   await page.reload();
   await openWorkspace(page);
   await expect(build).toContainText("Restarting…");
+  down = true;
+  const reachability = page.getByTestId("server-reachability");
+  await expect(reachability).toHaveText("Restarting…", { timeout: 12_000 });
+  await expect(page.getByText("Service unavailable")).toHaveCount(0);
+  await expect(page.locator(".drawer .error-line")).toHaveCount(0);
+  down = false;
   state = { ...state, status: "running" };
-  await expect(build).toHaveCount(0, { timeout: 12_000 });
+  await expect(reachability).toHaveCount(0, { timeout: 12_000 });
+  await expect(build).toHaveCount(0);
   expect(restartCount).toBe(1);
 });
 

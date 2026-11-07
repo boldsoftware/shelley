@@ -5,6 +5,7 @@ import {
   type Project,
   type Workspace,
 } from "../../services/workspace";
+import { absorbUnreachable, serverReachable } from "../../services/serverReachability";
 import { errorMessage } from "../../utils/errorMessage";
 import { workspaceMode } from "../../utils/workspaceMode";
 import { useI18n, type TranslationKeys } from "./i18n";
@@ -49,6 +50,7 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
         refreshAgain = false;
         const requestedRevision = revision;
         const next = await workspaceApi.workspace();
+        serverReachable();
         if (stopped) return;
         if (requestedRevision !== revision) {
           refreshAgain = true;
@@ -70,7 +72,9 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
       } while (refreshAgain);
     })()
       .catch((err: unknown) => {
-        error.value = errorMessage(err);
+        // The page shows Shelley unreachable (e.g. restarting) once; the
+        // stream's reconnect refreshes again.
+        if (!absorbUnreachable(err)) error.value = errorMessage(err);
         throw err;
       })
       .finally(() => {

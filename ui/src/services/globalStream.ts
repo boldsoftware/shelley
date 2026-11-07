@@ -23,6 +23,7 @@ import type {
   Message,
 } from "../types";
 import { api } from "./api";
+import { UNREACHABLE_ERROR_MS } from "./unreachable";
 import { messageStore } from "./messageStore";
 
 export type StreamStatus = "connected" | "reconnecting" | "disconnected";
@@ -177,6 +178,9 @@ export function connectGlobalStream({
   // after a disconnect. Set on error, cleared on the next successful open.
   let isReconnecting = false;
   let connectionAttempt = 0;
+  // When the current run of failed connections began, 0 while connected:
+  // a restart's few failures are reconnecting, a long run is disconnected.
+  let failingSince = 0;
 
   const setStatus = (s: StreamStatus) => {
     if (s === lastStatus) return;
@@ -371,6 +375,7 @@ export function connectGlobalStream({
       // pin the client at the minimum 1s delay forever.
       if (connectionOpenedAt === 0) connectionOpenedAt = Date.now();
       lastFrameAt = Date.now();
+      failingSince = 0;
       setStatus("connected");
       if (isReconnecting) {
         // We just re-established after a disconnect. Any conversation could
@@ -420,7 +425,10 @@ export function connectGlobalStream({
       // Only mark stale on the first reconnect attempt after a confirmed
       // disconnect, not on every retry.
       if (hasEverConnected) isReconnecting = true;
-      setStatus(attempts > 3 ? "disconnected" : "reconnecting");
+      failingSince ||= Date.now();
+      setStatus(
+        Date.now() - failingSince >= UNREACHABLE_ERROR_MS ? "disconnected" : "reconnecting",
+      );
       void probeAuthentication()
         .then((required) => {
           if (closed || attemptID !== connectionAttempt || !required) return;

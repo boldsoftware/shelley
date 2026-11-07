@@ -70,7 +70,7 @@
         v-if="customizations && build"
         :state="build"
         :pending-conversation="customizations.pendingConversation.value"
-        :unavailable="!!customizations.error.value"
+        :unavailable="customizations.unavailable.value"
         @restart="customizations.mutate(build, 'restart', 'header')"
         @verify="customizations.mutate(build, 'verify', 'header')"
         @cancel-auto-restart="customizations.mutate(build, 'cancelAutoRestart', 'header')"

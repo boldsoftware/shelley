@@ -586,8 +586,13 @@ await run("online event recovers from the long backoff fast", () => {
   advance(2000);
   latest().emitError(); // attempt 3
   advance(5000);
-  latest().emitError(); // attempt 4 -> 30s tier, status disconnected
-  assert(s.statuses.includes("disconnected"), "status went disconnected");
+  latest().emitError(); // attempt 4 -> 30s tier, still reconnecting
+  assert(!s.statuses.includes("disconnected"), "a restart's failures stay reconnecting");
+  for (let i = 0; i < 4; i++) {
+    advance(30000);
+    latest().emitError();
+  }
+  assert(s.statuses.includes("disconnected"), "two minutes of failures are disconnected");
   const beforeOnline = FakeEventSource.instances.length;
 
   // Network returns: reconnect immediately rather than waiting out the 30s.
@@ -631,7 +636,6 @@ await run("accept-then-drop cycles keep escalating backoff", () => {
   latest().emitOpen();
   advance(3000);
   latest().emitError(); // attempt 4 -> 30s tier
-  assert(s.statuses.includes("disconnected"), "status reflects the persistent failure");
   advance(29000);
   assert(FakeEventSource.instances.length === 4, "fourth retry not due before 30s");
   advance(1000);

@@ -202,12 +202,18 @@
         <div class="conversation-preview">Your permanent workspace companion</div>
       </div>
     </a>
+    <ServerReachability :restarting="restarting" />
     <p v-if="rowError" class="error-line drawer-error" role="alert">
       {{ rowError }}
       <button type="button" class="text-button" @click="rowError = ''">{{ t("dismiss") }}</button>
     </p>
-    <p v-if="customizations.error.value" class="error-line drawer-error" role="status">
-      Shelley build status unavailable. Reconnecting… {{ customizations.error.value }}
+    <p
+      v-if="customizations.error.value"
+      class="error-line drawer-error drawer-one-line"
+      role="status"
+      :title="customizations.error.value"
+    >
+      {{ customizations.error.value }}
     </p>
     <p
       v-if="customizations.requestError.value?.place === 'drawer'"
@@ -620,7 +626,7 @@
                 v-if="customizationFor(conv.conversation_id)"
                 :state="customizationFor(conv.conversation_id)!"
                 :pending-conversation="customizations.pendingConversation.value"
-                :unavailable="!!customizations.error.value"
+                :unavailable="customizations.unavailable.value"
                 @restart="
                   customizations.mutate(
                     customizationFor(conv.conversation_id)!,
@@ -805,6 +811,7 @@ import NameField from "./NameField.vue";
 import CustomizationStatus from "./CustomizationStatus.vue";
 import { useCustomizations } from "../composables/customizations";
 import { notRunning } from "../../services/customizations";
+import ServerReachability from "./ServerReachability.vue";
 import ConversationQueryEditor from "./ConversationQueryEditor.vue";
 import Button from "primevue/button";
 import ContextMenu from "primevue/contextmenu";
@@ -874,6 +881,13 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const workspace = useWorkspace();
 const customizations = useCustomizations();
+// Shelley restarts into a build (asked to, or by itself once idle): while it
+// is unreachable that's what the drawer says.
+const restarting = computed(() =>
+  customizations.entries.value.some(
+    (entry) => entry.status === "restarting" || entry.auto_restart === "pending",
+  ),
+);
 // A build the server already runs needs nothing more; its task shows no build line.
 const customizationByConversation = computed(
   () =>
@@ -2510,5 +2524,10 @@ button.drawer-search-shelley:hover:not(:disabled) {
 }
 button.drawer-search-shelley:disabled {
   opacity: 0.5;
+}
+.drawer-one-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 </style>

@@ -25,7 +25,8 @@ import { ownError, responseDetail } from "./responseDetail";
 
 export type LiveConversationSettings = Pick<ChatRequest, "model" | "cwd" | "conversation_options">;
 
-// A failed request's error, its message "<prefix>: <responseDetail>".
+// A failed request's error, its message "<prefix>: <responseDetail>"; status
+// 0 when no response came.
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -1648,7 +1649,8 @@ async function profilesFetch(path: string, failure: string, init?: RequestInit) 
 }
 
 /** Calls path, sending body as JSON if given, and returns the JSON reply
- *  (undefined for 204 No Content); a failure throws "<failure>: <reason>". */
+ *  (undefined for 204 No Content); a failure throws an ApiError
+ *  "<failure>: <reason>", status 0 when no response came. */
 export async function apiJSON<T>(
   path: string,
   failure: string,
@@ -1660,7 +1662,10 @@ export async function apiJSON<T>(
     body === undefined
       ? { method }
       : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
-  );
+  ).catch((err: unknown) => {
+    console.warn(`${path}:`, err);
+    throw new ApiError(`${failure}: no response`, 0);
+  });
   if (!response.ok) throw await responseError(response, failure);
   return response.status === 204 ? (undefined as T) : response.json();
 }
