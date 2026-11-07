@@ -54,6 +54,10 @@
               </template>
             </template>
           </div>
+          <!-- Title-only rows show when the conversation last changed on hover. -->
+          <span v-if="compactNav" class="conversation-hover-date">{{
+            ctx.formatDate(conversation.updated_at)
+          }}</span>
         </div>
         <span
           v-if="ctx.workingIds.value.has(conversation.conversation_id)"
@@ -66,6 +70,11 @@
           title="Interrupted — open to continue"
           aria-label="Conversation interrupted"
         />
+        <!-- Title-only rows: the drawer's build status, and a draft's delete. -->
+        <slot />
+        <div v-if="compactNav && deletable" class="conversation-actions drawer-actions-row">
+          <DeleteButton :conversation-id="conversation.conversation_id" />
+        </div>
         <div v-if="hasActions" class="conversation-actions drawer-actions-row drawer-actions-top">
           <NavActionsMenu
             ref="actionsMenuRef"
@@ -78,7 +87,7 @@
 
       <!-- Tags / tag editor -->
       <div
-        v-if="tagsEditing || conversationTags.length > 0"
+        v-if="tagsEditing || (!compactNav && conversationTags.length > 0)"
         :ref="setTagEditorRefMaybe"
         :class="`conversation-tags${tagsEditing ? ' conversation-tags-editing' : ''}`"
         @click="tagsEditing ? $event.stopPropagation() : undefined"
@@ -167,9 +176,9 @@
         </form>
       </div>
 
-      <!-- Preview / snippet -->
+      <!-- Preview / snippet; title-only rows (compactNav) have no lines below. -->
       <div
-        v-if="convState.search_snippet"
+        v-if="!compactNav && convState.search_snippet"
         class="conversation-preview conversation-snippet"
         :title="stripSnippetMarks(convState.search_snippet)"
       >
@@ -178,14 +187,22 @@
           <template v-else>{{ seg.text }}</template>
         </template>
       </div>
-      <div v-else-if="isDraft" class="conversation-preview" :title="draftText?.trim() || undefined">
+      <div
+        v-else-if="!compactNav && isDraft"
+        class="conversation-preview"
+        :title="draftText?.trim() || undefined"
+      >
         {{ draftText?.trim() || "\u00a0" }}
       </div>
-      <div v-else class="conversation-preview" :title="convState.preview || undefined">
+      <div
+        v-else-if="!compactNav"
+        class="conversation-preview"
+        :title="convState.preview || undefined"
+      >
         {{ convState.preview || "\u00a0" }}
       </div>
 
-      <div class="conversation-meta">
+      <div v-if="!compactNav" class="conversation-meta">
         <span class="conversation-date">{{ ctx.formatDate(conversation.updated_at) }}</span>
         <PathText
           v-if="workingDirectory && ctx.groupBy.value !== 'cwd'"
@@ -301,7 +318,7 @@
       </div>
 
       <div
-        v-if="convState.git_commit"
+        v-if="!compactNav && convState.git_commit"
         :class="`conversation-git drawer-git-info ${isActive ? 'drawer-git-info-active' : ''}`"
       >
         <button
@@ -374,7 +391,7 @@
 
   <!-- Subagents -->
   <div
-    v-if="!itemArchived && isExpanded && conversationSubagents.length > 0"
+    v-if="!compactNav && !itemArchived && isExpanded && conversationSubagents.length > 0"
     class="subagent-list drawer-subagent-list"
   >
     <template v-for="sub in conversationSubagents" :key="sub.conversation_id">
@@ -454,7 +471,7 @@ import {
 import { isTagSelected } from "../../utils/tagFilter";
 import { perfCount } from "../../utils/perf";
 import { COMPOSER_ROW_ID, ComposerPreviewKey } from "../../utils/composerRow";
-import { workspaceMode } from "../../utils/workspaceMode";
+import { compactNav, workspaceMode } from "../../utils/workspaceMode";
 import GearIcon from "./GearIcon.vue";
 
 const props = defineProps<{

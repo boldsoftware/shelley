@@ -635,9 +635,15 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		s.internalError(w, "Failed to read settings", err)
 		return
 	}
+	compactNav, err := s.flagOn(r.Context(), FlagCompactNav)
+	if err != nil {
+		s.internalError(w, "Failed to read feature flags", err)
+		return
+	}
 	initData := map[string]interface{}{
 		// workspace mode: see FlagWorkspace.
 		"workspace":                 s.workspaceMode(),
+		"compact_nav":               compactNav,
 		"models":                    modelList,
 		"model_upgrade_prompt_done": promptDone != "",
 		"default_model":             defaultModel,

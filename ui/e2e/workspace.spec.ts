@@ -765,3 +765,45 @@ test("a task moves to another machine from where it runs, and back", async ({ pa
   await expect(dialog).toHaveCount(0);
   await expect(place).toHaveAccessibleName(/^This host/);
 });
+
+test("workspace mode's sidebar rows are their title alone, unless compact-nav is off", async ({
+  page,
+  request,
+}) => {
+  const { conversationId } = await createConversationViaAPIWithDetails(request, "Hello");
+  const row = page.locator(`.conversation-item[data-conversation-id="${conversationId}"]`);
+  const assistant = page.getByTestId("assistant-row");
+  const build = { conversation_id: conversationId, status: "installed", commit: "1", error: "" };
+  await page.route("**/api/customizations", (route) => route.fulfill({ json: [build] }));
+  await page.goto("/");
+  await openWorkspace(page);
+  await expect(row.locator(".conversation-title")).toBeVisible();
+  // Its time shows beside the title on hover.
+  const time = row.locator(".conversation-hover-date");
+  await expect(time).toBeHidden();
+  await row.hover();
+  await expect(time).toBeVisible();
+  // A task's build status is a label on its title line.
+  await expect(row.getByRole("status", { name: "Shelley build" })).toHaveText("Installed");
+  await expect(row.locator(".conversation-preview, .conversation-meta")).toHaveCount(0);
+  await expect(assistant.locator(".conversation-preview")).toHaveCount(0);
+  const short = (await row.boundingBox())!.height;
+  // Titles line up with their project's name, past its chevron.
+  const label = page.locator(".project-group", { has: row }).locator(".conversation-group-label");
+  const titleX = (await row.locator(".conversation-title").boundingBox())!.x;
+  expect(Math.abs(titleX - (await label.boundingBox())!.x)).toBeLessThan(1);
+
+  const off = await request.post("/feature-flags", { data: { name: "compact-nav", value: false } });
+  expect(off.ok()).toBeTruthy();
+  try {
+    await page.reload();
+    await openWorkspace(page);
+    await expect(row.locator(".conversation-preview")).toHaveCount(1);
+    await expect(row.locator(".conversation-meta")).toHaveCount(1);
+    await expect(assistant.locator(".conversation-preview")).toHaveCount(1);
+    expect((await row.boundingBox())!.height).toBeGreaterThan(short * 1.5);
+  } finally {
+    const reset = await request.delete("/feature-flags", { data: { name: "compact-nav" } });
+    expect(reset.ok()).toBeTruthy();
+  }
+});

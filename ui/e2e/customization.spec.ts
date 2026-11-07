@@ -4,13 +4,22 @@ import type { Customization } from "../src/services/customizations";
 
 // These specs exercise workspace mode, which each test turns on before its
 // page loads and off again so the worker's other specs see stock Shelley.
+// They drive the drawer's full build line, which title-only rows (the
+// compact-nav flag, on by default) shrink to a label.
 test.beforeEach(async ({ request }) => {
-  const resp = await request.post("/feature-flags", { data: { name: "workspace", value: true } });
-  expect(resp.ok()).toBeTruthy();
+  for (const [name, value] of [
+    ["workspace", true],
+    ["compact-nav", false],
+  ]) {
+    const resp = await request.post("/feature-flags", { data: { name, value } });
+    expect(resp.ok()).toBeTruthy();
+  }
 });
 test.afterEach(async ({ request }) => {
-  const resp = await request.delete("/feature-flags", { data: { name: "workspace" } });
-  expect(resp.ok()).toBeTruthy();
+  for (const name of ["workspace", "compact-nav"]) {
+    const resp = await request.delete("/feature-flags", { data: { name } });
+    expect(resp.ok()).toBeTruthy();
+  }
 });
 
 async function openWorkspace(page: Page) {

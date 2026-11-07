@@ -40,8 +40,26 @@ var FlagNextPromptSuggestions = featureflags.Register(featureflags.Flag{
 	Default:     false,
 })
 
+// FlagCompactNav shows the sidebar's conversation rows as their title alone:
+// no preview, date, path, tags or status lines under it. Workspace mode turns
+// it on unless it is set.
+var FlagCompactNav = featureflags.Register(featureflags.Flag{
+	Name:             "compact-nav",
+	Description:      "Sidebar conversation rows show only their title, its time on hover. On by default in workspace mode.",
+	Default:          false,
+	WorkspaceDefault: true,
+})
+
+// flagDefault is f's value on this server when no override is stored.
+func (s *Server) flagDefault(f featureflags.Flag) any {
+	if f.WorkspaceDefault != nil && s.workspaceMode() {
+		return f.WorkspaceDefault
+	}
+	return f.Default
+}
+
 // flagOn reports whether the boolean flag f is on: its stored override, or
-// else its default.
+// else its default (see flagDefault).
 func (s *Server) flagOn(ctx context.Context, f featureflags.Flag) (bool, error) {
 	overrides, err := s.db.GetAllFeatureFlagOverrides(ctx)
 	if err != nil {
@@ -49,7 +67,7 @@ func (s *Server) flagOn(ctx context.Context, f featureflags.Flag) (bool, error) 
 	}
 	raw, ok := overrides[f.Name]
 	if !ok {
-		return f.Default == true, nil
+		return s.flagDefault(f) == true, nil
 	}
 	var on bool
 	if err := json.Unmarshal([]byte(raw), &on); err != nil {

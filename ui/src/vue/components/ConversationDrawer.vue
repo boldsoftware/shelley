@@ -199,7 +199,9 @@
             aria-label="Assistant is working"
           />
         </div>
-        <div class="conversation-preview">Your permanent workspace companion</div>
+        <div v-if="!compactNav" class="conversation-preview">
+          Your permanent workspace companion
+        </div>
       </div>
     </a>
     <ServerReachability :restarting="restarting" />
@@ -621,9 +623,17 @@
           </p>
           <template v-if="!projectGroupCollapsed(group)">
             <template v-for="conv in group.conversations" :key="conv.conversation_id">
-              <ConversationRow :conversation="conv" />
+              <ConversationRow :conversation="conv">
+                <CustomizationStatus
+                  v-if="compactNav && customizationFor(conv.conversation_id)"
+                  compact
+                  :state="customizationFor(conv.conversation_id)!"
+                  :pending-conversation="customizations.pendingConversation.value"
+                  :unavailable="customizations.unavailable.value"
+                />
+              </ConversationRow>
               <CustomizationStatus
-                v-if="customizationFor(conv.conversation_id)"
+                v-if="!compactNav && customizationFor(conv.conversation_id)"
                 :state="customizationFor(conv.conversation_id)!"
                 :pending-conversation="customizations.pendingConversation.value"
                 :unavailable="customizations.unavailable.value"
@@ -822,7 +832,7 @@ import { workspaceApi, type Project } from "../../services/workspace";
 import DatePicker from "primevue/datepicker";
 import Popover from "primevue/popover";
 import { DrawerCtxKey, type GroupBy, parseTags } from "./conversationDrawerShared";
-import { workspaceMode } from "../../utils/workspaceMode";
+import { compactNav, workspaceMode } from "../../utils/workspaceMode";
 import { workingConversationIds } from "../../utils/workingConversations";
 import type { EphemeralTerminal } from "./terminalTypes";
 import {

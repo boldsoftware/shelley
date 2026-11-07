@@ -1,14 +1,26 @@
 <template>
-  <section class="customization-status" aria-label="Shelley build">
+  <!-- Compact: the status alone, on a title-only sidebar row; the task's
+       header keeps the buttons and the error. -->
+  <span
+    v-if="compact"
+    role="status"
+    aria-label="Shelley build"
+    class="customization-label customization-badge"
+    :class="labelClass"
+    :title="
+      unavailable ? UNAVAILABLE_TITLE : [status.title, state.error].filter(Boolean).join(': ')
+    "
+  >
+    <i v-if="state.status === 'installed' && !unavailable" class="pi pi-check" aria-hidden="true" />
+    {{ status.label }}
+  </span>
+  <section v-else class="customization-status" aria-label="Shelley build">
     <div class="customization-line">
       <span
         role="status"
         class="customization-label"
-        :class="{
-          'customization-ready': state.status === 'installed' && !unavailable,
-          'customization-unavailable': unavailable,
-        }"
-        :title="unavailable ? 'Build status unavailable; this is the last known' : status.title"
+        :class="labelClass"
+        :title="unavailable ? UNAVAILABLE_TITLE : status.title"
       >
         <i
           v-if="state.status === 'installed' && !unavailable"
@@ -65,8 +77,14 @@ const props = defineProps<{
   state: NotRunning;
   pendingConversation: string;
   unavailable: boolean;
+  compact?: boolean;
 }>();
 const emit = defineEmits<{ restart: []; verify: []; cancelAutoRestart: [] }>();
+const UNAVAILABLE_TITLE = "Build status unavailable; this is the last known";
+const labelClass = computed(() => ({
+  "customization-ready": props.state.status === "installed" && !props.unavailable,
+  "customization-unavailable": props.unavailable,
+}));
 const IDLE_TITLE =
   "Shelley restarts into this build by itself once every conversation, action and build is done and you have left the UI alone for 30 seconds";
 const autoRestart = computed(() => {
@@ -84,7 +102,10 @@ const autoRestart = computed(() => {
 // retried after the next turn.
 const status = computed(() =>
   props.state.status === "ready" && props.state.error
-    ? { label: "Not installed", title: "Verified, but installing failed; retrying after the next turn" }
+    ? {
+        label: "Not installed",
+        title: "Verified, but installing failed; retrying after the next turn",
+      }
     : { label: labels[props.state.status], title: titles[props.state.status] },
 );
 const labels: Record<NotRunning["status"], string> = {
@@ -122,6 +143,15 @@ const titles: Record<NotRunning["status"], string> = {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.customization-badge {
+  flex-shrink: 0;
+  max-width: 45%;
+  font-size: var(--font-size-11);
+  color: var(--text-secondary);
+}
+:global(.conversation-item.active) .customization-badge {
+  color: white;
 }
 .customization-auto {
   color: var(--text-secondary);

@@ -46,8 +46,8 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 	if workspace.AssistantID != "" || len(workspace.Conversations) != 0 {
 		t.Fatalf("GET /api/workspace created the Assistant: %+v", workspace)
 	}
-	if init := indexInitData(t, s); init["workspace"] != false || init["ui_build"] != ui.BuildID() {
-		t.Fatalf("stock init data: workspace=%v ui_build=%v", init["workspace"], init["ui_build"])
+	if init := indexInitData(t, s); init["workspace"] != false || init["ui_build"] != ui.BuildID() || init["compact_nav"] != false {
+		t.Fatalf("stock init data: workspace=%v ui_build=%v compact_nav=%v", init["workspace"], init["ui_build"], init["compact_nav"])
 	}
 
 	builds := func(change func()) []string {
@@ -72,8 +72,12 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 		!workspace.Conversations[0].IsAssistant || len(workspace.Projects) != 1 || workspace.Projects[0].Name != db.SelfProject {
 		t.Fatalf("workspace mode: %+v, cached Assistant %q", workspace, s.assistantID())
 	}
-	if init := indexInitData(t, s); init["workspace"] != true || init["ui_build"] != workspaceBuild {
-		t.Fatalf("workspace init data: workspace=%v ui_build=%v", init["workspace"], init["ui_build"])
+	// Workspace mode's rows are title-only (compact-nav) unless it is set.
+	if init := indexInitData(t, s); init["workspace"] != true || init["ui_build"] != workspaceBuild || init["compact_nav"] != true {
+		t.Fatalf("workspace init data: workspace=%v ui_build=%v compact_nav=%v", init["workspace"], init["ui_build"], init["compact_nav"])
+	}
+	if got := s.flagDefault(FlagCompactNav); got != true {
+		t.Fatalf("compact-nav's default in workspace mode: %v", got)
 	}
 	assistant, err := database.GetConversationByID(t.Context(), workspace.AssistantID)
 	if err != nil {
@@ -100,8 +104,8 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 	if !s.isAssistant(workspace.AssistantID) {
 		t.Fatal("the Assistant went with workspace mode")
 	}
-	if init := indexInitData(t, s); init["workspace"] != false {
-		t.Fatalf("init data after workspace mode: workspace=%v", init["workspace"])
+	if init := indexInitData(t, s); init["workspace"] != false || init["compact_nav"] != false {
+		t.Fatalf("init data after workspace mode: workspace=%v compact_nav=%v", init["workspace"], init["compact_nav"])
 	}
 }
 

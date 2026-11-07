@@ -282,6 +282,8 @@ export interface InitData {
   user_email?: string;
   // workspace mode: see utils/workspaceMode.ts.
   workspace?: boolean;
+  // title-only sidebar rows: see utils/workspaceMode.ts.
+  compact_nav?: boolean;
   // True once the "upgrade your other conversations too?" offer has been
   // answered, so it is never made again.
   model_upgrade_prompt_done?: boolean;

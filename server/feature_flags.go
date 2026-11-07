@@ -9,8 +9,8 @@ import (
 	"shelley.exe.dev/featureflags"
 )
 
-// FeatureFlagDTO is the API shape: the static registry entry plus an optional
-// override (raw JSON string). Unknown overrides in the DB are silently skipped.
+// FeatureFlagDTO is the API shape: the registry entry, with its default on
+// this server (see flagDefault), plus an optional override (raw JSON string). Unknown overrides in the DB are silently skipped.
 type FeatureFlagDTO struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -30,7 +30,7 @@ func (s *Server) handleGetFeatureFlags(w http.ResponseWriter, r *http.Request) {
 	flags := featureflags.All()
 	out := make([]FeatureFlagDTO, 0, len(flags))
 	for _, f := range flags {
-		dto := FeatureFlagDTO{Name: f.Name, Description: f.Description, Default: f.Default}
+		dto := FeatureFlagDTO{Name: f.Name, Description: f.Description, Default: s.flagDefault(f)}
 		if raw, ok := overrides[f.Name]; ok {
 			m := json.RawMessage(raw)
 			dto.Override = &m

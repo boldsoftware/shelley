@@ -5,6 +5,12 @@
 export const workspaceMode =
   typeof window !== "undefined" && window.__SHELLEY_INIT__?.workspace === true;
 
+// The sidebar's conversation rows show only their title (the server's
+// "compact-nav" feature flag, on by default in workspace mode). Read once per
+// page load.
+export const compactNav =
+  typeof window !== "undefined" && window.__SHELLEY_INIT__?.compact_nav === true;
+
 // Picks the workspace mode wording over stock Shelley's.
 export function wording(stock: string, workspace: string): string {
   return workspaceMode ? workspace : stock;
