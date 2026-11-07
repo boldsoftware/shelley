@@ -231,25 +231,6 @@ func TestCompactDebugEndToEnd(t *testing.T) {
 	}
 }
 
-// squishFirstTurn squishes the conversation's first user message through the
-// agent reply that follows it into summary, via /compact-debug.
-func squishFirstTurn(t *testing.T, srv *Server, database *db.DB, convID, summary string) {
-	t.Helper()
-	var from, to int64
-	for _, m := range listMessages(t, database, convID) {
-		switch {
-		case from == 0 && m.Type == string(db.MessageTypeUser):
-			from = m.SequenceID
-		case from != 0 && to == 0 && m.Type == string(db.MessageTypeAgent):
-			to = m.SequenceID
-		}
-	}
-	cmd := "/compact-debug squish " + strconv.FormatInt(from, 10) + "-" + strconv.FormatInt(to, 10) + " " + summary
-	if w := postChat(t, srv, convID, cmd); w.Code != http.StatusAccepted {
-		t.Fatalf("%s: got %d: %s", cmd, w.Code, w.Body.String())
-	}
-}
-
 // TestBtwFrozenReferenceUsesInPlaceCompactedView: a /btw reader sees the
 // parent's compacted view, including only compaction records up to the
 // frozen pointer.

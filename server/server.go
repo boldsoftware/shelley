@@ -1580,35 +1580,6 @@ func (s *Server) resumeParentCompletions(conversationID string) {
 	s.mu.Unlock()
 }
 
-// recordMessages records several messages for one conversation in a single
-// transaction and one stream event. Compaction uses it to copy a whole tail
-// of messages forward.
-func (s *Server) recordMessages(ctx context.Context, conversationID string, msgs []recordMessageInput) error {
-	if len(msgs) == 0 {
-		return nil
-	}
-	paramsList := make([]db.CreateMessageParams, 0, len(msgs))
-	for _, m := range msgs {
-		params, err := s.buildCreateMessageParams(conversationID, m.message, m.usage, m.otherUsage, m.userData...)
-		if err != nil {
-			return err
-		}
-		params.ExternalMessageID = m.externalMessageID
-		paramsList = append(paramsList, params)
-	}
-	_, err := s.insertMessages(ctx, conversationID, paramsList)
-	return err
-}
-
-// recordMessageInput is one message to record via recordMessages.
-type recordMessageInput struct {
-	message           llm.Message
-	usage             llm.Usage
-	otherUsage        []llm.PurposedUsage
-	userData          []interface{}
-	externalMessageID string
-}
-
 // getMessageType determines the message type from an LLM message
 func (s *Server) getMessageType(message llm.Message) (db.MessageType, error) {
 	// System-generated errors are stored as error type

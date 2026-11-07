@@ -269,11 +269,3 @@ func wrapMessageForLLM(message llm.Message, tag string, attrs ...xml.Attr) (llm.
 	message.Content[lastText].Text += "\n" + closing
 	return message, nil
 }
-
-func messageWithContextSenderProvenance(ctx context.Context, message llm.Message) (llm.Message, error) {
-	raw, err := marshalTurnUserData(ctx)
-	if err != nil {
-		return message, err
-	}
-	return messageWithSenderProvenance(message, raw)
-}
