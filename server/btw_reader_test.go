@@ -166,15 +166,20 @@ func requireBtwStatus(t *testing.T, response *httptest.ResponseRecorder, status 
 	}
 }
 
-func btwResponseMessageID(t *testing.T, response *httptest.ResponseRecorder) string {
+func btwResponseSummaryID(t *testing.T, response *httptest.ResponseRecorder) string {
 	t.Helper()
 	var body struct {
-		MessageID string `json:"message_id"`
+		SummaryID string `json:"summary_id"`
 	}
-	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || body.MessageID == "" {
-		t.Fatalf("message receipt=%#v err=%v body=%s", body, err, response.Body.String())
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || body.SummaryID == "" {
+		t.Fatalf("summary receipt=%#v err=%v body=%s", body, err, response.Body.String())
 	}
-	return body.MessageID
+	return body.SummaryID
+}
+
+// btwSummaryUserData is the user data of the summary request with id.
+func btwSummaryUserData(id string) string {
+	return `{"btw_summary_id":"` + id + `","btw_turn_kind":"summary"}`
 }
 
 func evictBtwManager(t *testing.T, server *Server, conversationID string) {
@@ -587,7 +592,7 @@ func TestBtwSummaryIsOrdinaryMarkedChildTurn(t *testing.T) {
 	w := httptest.NewRecorder()
 	server.handleSummarizeBtwReader(w, httptest.NewRequest(http.MethodPost, "/", nil), parent.ConversationID, descriptor.ConversationID)
 	requireBtwStatus(t, w, http.StatusAccepted)
-	messageID := btwResponseMessageID(t, w)
+	summaryID := btwResponseSummaryID(t, w)
 	summaryText := "Provide a concise, self-contained summary of this BTW discussion suitable for the parent composer. Include the answer and important supporting context; do not address the parent directly."
 	held.waitCall(t, summaryText)
 	rows := listMessages(t, database, descriptor.ConversationID)
@@ -597,11 +602,8 @@ func TestBtwSummaryIsOrdinaryMarkedChildTurn(t *testing.T) {
 			users = append(users, row)
 		}
 	}
-	if len(users) != 2 || users[0].UserData != nil || users[1].UserData == nil || *users[1].UserData != `{"btw_turn_kind":"summary"}` {
+	if len(users) != 2 || users[0].UserData != nil || users[1].UserData == nil || *users[1].UserData != btwSummaryUserData(summaryID) {
 		t.Fatalf("summary user metadata=%#v", users)
-	}
-	if messageID != users[1].MessageID {
-		t.Fatalf("summary receipt message=%q want %q", messageID, users[1].MessageID)
 	}
 
 	otherParent, err := database.CreateConversation(t.Context(), nil, true, nil, strPtr("predictable"), db.ConversationOptions{})
@@ -836,7 +838,7 @@ func requestHasText(request *llm.Request, text string) bool {
 	return false
 }
 
-func TestBtwSummaryReceiptSurvivesConcurrentFollowup(t *testing.T) {
+func TestBtwSummaryWhileReaderIsBusy(t *testing.T) {
 	server, database, held, parent := newBtwTest(t)
 	reader := postBtw(t, server, parent.ConversationID, "echo: discuss", false)
 	releaseAndWaitIdle(t, server, reader.ConversationID, held.waitCall(t, "echo: discuss"))
@@ -844,45 +846,28 @@ func TestBtwSummaryReceiptSurvivesConcurrentFollowup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := manager.AcceptUserMessage(t.Context(), held, "predictable", llm.UserStringMessage("echo: followup")); err != nil {
+		t.Fatal(err)
+	}
+	followup := held.waitCall(t, "echo: followup")
 
-	start := make(chan struct{})
-	var summary *httptest.ResponseRecorder
-	var followID string
-	var calls sync.WaitGroup
-	calls.Add(2)
-	go func() {
-		defer calls.Done()
-		<-start
-		summary = httptest.NewRecorder()
-		server.handleSummarizeBtwReader(summary, httptest.NewRequest(http.MethodPost, "/", nil), parent.ConversationID, reader.ConversationID)
-	}()
-	go func() {
-		defer calls.Done()
-		<-start
-		_, followID, err = manager.AcceptUserMessageWithID(t.Context(), held, "predictable", llm.UserStringMessage("echo: followup"))
-	}()
-	close(start)
-	calls.Wait()
-	if err != nil || followID == "" {
-		t.Fatalf("followup receipt=%q err=%v", followID, err)
+	// The request waits for the followup's turn; its receipt finds it once
+	// it is recorded.
+	w := httptest.NewRecorder()
+	server.handleSummarizeBtwReader(w, httptest.NewRequest(http.MethodPost, "/", nil), parent.ConversationID, reader.ConversationID)
+	requireBtwStatus(t, w, http.StatusAccepted)
+	summaryID := btwResponseSummaryID(t, w)
+	followup.Release()
+	summaryText := "Provide a concise, self-contained summary of this BTW discussion suitable for the parent composer. Include the answer and important supporting context; do not address the parent directly."
+	releaseAndWaitIdle(t, server, reader.ConversationID, held.waitCall(t, summaryText))
+	var found []string
+	for _, row := range listMessages(t, database, reader.ConversationID) {
+		if row.UserData != nil && *row.UserData == btwSummaryUserData(summaryID) {
+			found = append(found, *row.LlmData)
+		}
 	}
-	if summary.Code != http.StatusAccepted {
-		t.Fatalf("summary status=%d body=%s", summary.Code, summary.Body.String())
-	}
-	messageID := btwResponseMessageID(t, summary)
-	if messageID == followID {
-		t.Fatalf("summary receipt reused followup ID %q", followID)
-	}
-	rows := listMessages(t, database, reader.ConversationID)
-	byID := make(map[string]generated.Message)
-	for _, row := range rows {
-		byID[row.MessageID] = row
-	}
-	if byID[messageID].UserData == nil || *byID[messageID].UserData != `{"btw_turn_kind":"summary"}` {
-		t.Fatalf("summary receipt resolved to wrong row: %#v", byID[messageID])
-	}
-	if row := byID[followID]; row.LlmData == nil || !strings.Contains(*row.LlmData, "echo: followup") || row.UserData != nil {
-		t.Fatalf("followup receipt resolved to wrong row: %#v", row)
+	if len(found) != 1 || !strings.Contains(found[0], summaryText) {
+		t.Fatalf("summary rows with its id: %q", found)
 	}
 }
 

@@ -145,8 +145,8 @@ export class BtwStore {
     this.pendingSummaryResponses.add(exchange.exchange_id);
   }
 
-  resolveSummary(exchange: BtwExchange, messageID?: string): void {
-    if (messageID) summaryIntent.resolveSummaryIntent(this.storage, exchange, messageID);
+  resolveSummary(exchange: BtwExchange, summaryID?: string): void {
+    if (summaryID) summaryIntent.resolveSummaryIntent(this.storage, exchange, summaryID);
     this.pendingSummaryResponses.delete(exchange.exchange_id);
   }
 

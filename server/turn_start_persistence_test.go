@@ -38,19 +38,18 @@ func TestAcceptUserMessageRejectsUnpersistedTurn(t *testing.T) {
 	manager.mu.Unlock()
 
 	type result struct {
-		first     bool
-		messageID string
-		err       error
+		first bool
+		err   error
 	}
 	resultCh := make(chan result, 1)
 	go func() {
-		first, messageID, err := manager.AcceptUserMessageWithID(
+		first, err := manager.AcceptUserMessage(
 			ctx,
 			service,
 			"predictable",
 			llm.UserStringMessage("must be persisted before it runs"),
 		)
-		resultCh <- result{first: first, messageID: messageID, err: err}
+		resultCh <- result{first: first, err: err}
 	}()
 
 	<-recordStarted
@@ -64,10 +63,10 @@ func TestAcceptUserMessageRejectsUnpersistedTurn(t *testing.T) {
 		t.Fatal("turn was not reserved as working while its user message was being persisted")
 	}
 	if !errors.Is(got.err, context.Canceled) {
-		t.Fatalf("AcceptUserMessageWithID error = %v, want context.Canceled", got.err)
+		t.Fatalf("AcceptUserMessage error = %v, want context.Canceled", got.err)
 	}
-	if got.first || got.messageID != "" {
-		t.Fatalf("failed turn reported accepted: first=%v messageID=%q", got.first, got.messageID)
+	if got.first {
+		t.Fatal("failed turn reported accepted")
 	}
 	if manager.IsAgentWorking() {
 		t.Fatal("agent stayed working after the user message failed to persist")
@@ -127,8 +126,8 @@ func TestAcceptUserMessageClearsStaleWorkingWithoutPriorLoop(t *testing.T) {
 	}
 	manager.mu.Unlock()
 
-	if _, _, err := manager.AcceptUserMessageWithID(ctx, service, model, llm.UserStringMessage("retry")); !errors.Is(err, context.Canceled) {
-		t.Fatalf("AcceptUserMessageWithID error = %v, want context.Canceled", err)
+	if _, err := manager.AcceptUserMessage(ctx, service, model, llm.UserStringMessage("retry")); !errors.Is(err, context.Canceled) {
+		t.Fatalf("AcceptUserMessage error = %v, want context.Canceled", err)
 	}
 	if manager.IsAgentWorking() {
 		t.Fatal("failed send preserved working=true despite having no prior loop")

@@ -53,9 +53,7 @@ func testMessageQueuedDuringThinking(t *testing.T) {
 	// something sleeps.
 	synctest.Wait()
 
-	// Now send a SECOND message while the first is still processing
-	// This is the bug: this message should be immediately recorded and visible,
-	// not lost until the first message finishes processing
+	// Now send a SECOND message while the first is still processing.
 	secondReq := ChatRequest{
 		Message: "echo: second message while thinking",
 		Model:   "predictable",
@@ -71,50 +69,18 @@ func testMessageQueuedDuringThinking(t *testing.T) {
 		t.Fatalf("expected status 202 for second message, got %d: %s", w2.Code, w2.Body.String())
 	}
 
-	// The second message must be recorded without waiting for the first
-	// turn to finish. Wait only for the server's goroutines to settle; the
-	// fake clock has not moved, so the first turn is still in its delay.
+	// The second message must not be lost: until the running turn takes it
+	// at its next model request, it waits in the queue, for the turn.
 	synctest.Wait()
+	queued, err := database.GetQueuedMessages(t.Context(), conversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(queued) != 1 || !queued[0].Inject || !strings.Contains(string(queued[0].Llm), "second message while thinking") {
+		t.Fatalf("second message is not queued for the running turn: %+v", queued)
+	}
 
 	var messages []generated.Message
-	err = database.Queries(t.Context(), func(q *generated.Queries) error {
-		var qerr error
-		messages, qerr = q.ListMessages(t.Context(), conversationID)
-		return qerr
-	})
-	if err != nil {
-		t.Fatalf("failed to get messages: %v", err)
-	}
-
-	// Look for the second user message in the database
-	foundSecondUserMessage := false
-	for _, msg := range messages {
-		if msg.Type != string(db.MessageTypeUser) {
-			continue
-		}
-		if msg.LlmData == nil {
-			continue
-		}
-		var llmMsg llm.Message
-		if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err != nil {
-			continue
-		}
-		for _, content := range llmMsg.Content {
-			if content.Type == llm.ContentTypeText && strings.Contains(content.Text, "second message while thinking") {
-				foundSecondUserMessage = true
-				break
-			}
-		}
-	}
-
-	if !foundSecondUserMessage {
-		t.Error("BUG: second user message sent during LLM processing was not immediately recorded to database")
-		t.Logf("Found %d messages total:", len(messages))
-		for i, msg := range messages {
-			t.Logf("  Message %d: type=%s", i, msg.Type)
-		}
-	}
-
 	// Wait for everything to complete
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {

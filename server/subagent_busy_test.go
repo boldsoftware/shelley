@@ -170,8 +170,8 @@ func testSubagentBusy_DeliversMidTurn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunSubagent(steer): %v", err)
 	}
-	if !strings.Contains(res, "current turn") {
-		t.Fatalf("expected a mid-turn delivery status, got %q", res)
+	if !strings.Contains(res, "message sent") {
+		t.Fatalf("unexpected delivery status %q", res)
 	}
 	requireSteeredMidTurn(t, f)
 	// The steering message is the parent's, like a prompt to an idle subagent.

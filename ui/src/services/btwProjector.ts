@@ -57,6 +57,11 @@ function turnKind(message: Message): BtwTurnKind {
   return data?.btw_turn_kind === "summary" ? "summary" : "question";
 }
 
+function summaryID(message: Message): string | undefined {
+  const id = json<{ btw_summary_id?: unknown }>(message.user_data)?.btw_summary_id;
+  return typeof id === "string" ? id : undefined;
+}
+
 function retryable(message: Message): boolean {
   return json<{ retryable?: unknown }>(message.user_data)?.retryable === true;
 }
@@ -71,6 +76,7 @@ function toolCall(content: LLMContent): BtwToolCall {
 
 function newTurn(message: Message, content: readonly LLMContent[]): ProjectedTurn {
   const kind = turnKind(message);
+  const summary_id = summaryID(message);
   return {
     id: message.message_id,
     question: kind === "summary" ? "Summary for main chat" : text(content),
@@ -79,6 +85,7 @@ function newTurn(message: Message, content: readonly LLMContent[]): ProjectedTur
     error: null,
     retryable: false,
     kind,
+    ...(summary_id ? { summary_id } : {}),
     tool_call_count: 0,
     tool_calls: [],
     unresolved_tool_call_count: 0,
@@ -117,6 +124,7 @@ function presentTurn(turn: ProjectedTurn): BtwTurn {
     status: turn.status,
     error: turn.error,
     kind: turn.kind,
+    ...(turn.summary_id ? { summary_id: turn.summary_id } : {}),
     tool_call_count: turn.tool_call_count,
     tool_calls: turn.tool_calls,
     unresolved_tool_call_count: turn.unresolved_tool_call_count,

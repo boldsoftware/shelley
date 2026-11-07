@@ -444,14 +444,6 @@ func (l *Loop) WillRunTurn() bool {
 }
 
 func (l *Loop) pending(ctx context.Context, messages []llm.Message) ([]llm.Message, error) {
-	l.mu.Lock()
-	var queued []llm.Message
-	if l.turnRunner == nil && len(l.messageQueue) > 0 && l.messageQueue[0].run == nil {
-		queued = l.takeQueuedLocked(false)
-	}
-	l.history = append(l.history, queued...)
-	l.mu.Unlock()
-	messages = append(messages, queued...)
 	if l.injectMessages == nil {
 		return messages, nil
 	}

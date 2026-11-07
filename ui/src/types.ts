@@ -42,6 +42,8 @@ export interface BtwTurn {
   status: BtwTurnStatus;
   error?: string | null;
   kind: BtwTurnKind;
+  // summary_id identifies a summary request (see the summarize endpoint).
+  summary_id?: string;
   tool_call_count?: number;
   tool_calls?: BtwToolCall[];
   unresolved_tool_call_count?: number;
@@ -539,6 +541,8 @@ export interface QueuedMessage {
   created_at: string;
   model: string;
   user_data?: unknown;
+  // inject: the running turn takes it after its current tool call.
+  inject?: boolean;
   kind?: QueuedMessageKind;
   state?: QueuedMessageState;
   transcription?: QueuedTranscription;

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/llm"
@@ -281,16 +282,18 @@ func (s *Server) handleSummarizeBtwReader(w http.ResponseWriter, r *http.Request
 		return
 	}
 	summary := "Provide a concise, self-contained summary of this BTW discussion suitable for the parent composer. Include the answer and important supporting context; do not address the parent directly."
-	ctx := contextWithTurnUserData(r.Context(), map[string]string{"btw_turn_kind": "summary"})
-	_, messageID, err := manager.AcceptUserMessageWithID(ctx, service, modelID, llm.UserStringMessage(summary))
-	if err != nil || messageID == "" {
+	// The request may wait in the queue behind a running turn, so it has no
+	// message id yet; the UI finds it by this one, in its user data.
+	summaryID := uuid.New().String()
+	ctx := contextWithTurnUserData(r.Context(), map[string]string{"btw_turn_kind": "summary", "btw_summary_id": summaryID})
+	if _, err := manager.AcceptUserMessage(ctx, service, modelID, llm.UserStringMessage(summary)); err != nil {
 		http.Error(w, "Failed to start BTW summary", http.StatusInternalServerError)
 		return
 	}
 	writeBtwReaderJSON(w, http.StatusAccepted, map[string]any{
 		"status":     "accepted",
 		"btw":        identity,
-		"message_id": messageID,
+		"summary_id": summaryID,
 	})
 }
 

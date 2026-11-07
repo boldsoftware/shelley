@@ -105,7 +105,7 @@ type ConversationManager struct {
 	turnToolConfig        claudetool.ToolSetConfig
 	profileMention        func(context.Context, string) (*Profile, error)
 	profileModelService   func(string) (llm.Service, error)
-	deferUserMessage      func(context.Context, string, llm.Message) error
+	queueUserMessage      func(ctx context.Context, model string, message llm.Message, inject bool) error
 	profileTurn           bool // guarded by mu; the current turn has an override
 
 	subpub *subpub.SubPub[StreamResponse]
@@ -600,27 +600,19 @@ func (cm *ConversationManager) Hydrate(ctx context.Context) error {
 	return nil
 }
 
-// AcceptUserMessage enqueues a user message, ensuring the loop is ready first.
-// The message is recorded to the database immediately so it appears in the UI,
-// even if the loop is busy processing a previous request.
+// AcceptUserMessage starts a turn with message, recording it first. While a
+// turn runs, it queues message instead: the turn takes it at its next model
+// request, after the current tool round, and records it then, so the
+// transcript keeps the order the model sees (a message recorded between a
+// tool call and its result would split them). A turn with a settings
+// override takes nothing mid-turn; the message waits for it to end.
 func (cm *ConversationManager) AcceptUserMessage(ctx context.Context, service llm.Service, modelID string, message llm.Message) (bool, error) {
-	first, _, err := cm.acceptUserMessage(ctx, service, modelID, message)
-	return first, err
-}
-
-// AcceptUserMessageWithID returns the exact turn-start row ID while preserving
-// AcceptUserMessage's behavior for ordinary callers.
-func (cm *ConversationManager) AcceptUserMessageWithID(ctx context.Context, service llm.Service, modelID string, message llm.Message) (bool, string, error) {
-	return cm.acceptUserMessage(ctx, service, modelID, message)
-}
-
-func (cm *ConversationManager) acceptUserMessage(ctx context.Context, service llm.Service, modelID string, message llm.Message) (bool, string, error) {
 	if service == nil {
-		return false, "", fmt.Errorf("llm service is required")
+		return false, fmt.Errorf("llm service is required")
 	}
 	cm.cancelIdleCompaction()
 	if svc, id, err := cm.takeProfileEdits(ctx); err != nil {
-		return false, "", err
+		return false, err
 	} else if svc != nil {
 		service, modelID = svc, id
 	}
@@ -629,25 +621,25 @@ func (cm *ConversationManager) acceptUserMessage(ctx context.Context, service ll
 	defer cm.loopLifecycleMu.Unlock()
 	cm.waitForLoopTeardownLocked()
 	if err := cm.checkProjectTurn(ctx); err != nil {
-		return false, "", err
+		return false, err
 	}
 
 	if err := cm.Hydrate(ctx); err != nil {
-		return false, "", err
+		return false, err
 	}
 
 	cm.mu.Lock()
 	hadLoop := cm.loop != nil
 	cm.mu.Unlock()
 	if _, err := cm.recordInterruptedToolResults(ctx); err != nil {
-		return false, "", fmt.Errorf("failed to record interrupted tool results: %w", err)
+		return false, fmt.Errorf("failed to record interrupted tool results: %w", err)
 	}
 	userData, err := marshalTurnUserData(ctx)
 	if err != nil {
-		return false, "", err
+		return false, err
 	}
 	if err := cm.ensureLoopLocked(service, modelID); err != nil {
-		return false, "", err
+		return false, err
 	}
 	run, err := cm.prepareProfileTurn(ctx, message, userData)
 	if err != nil {
@@ -657,7 +649,7 @@ func (cm *ConversationManager) acceptUserMessage(ctx context.Context, service ll
 			cm.mu.Unlock()
 			cm.discardUnstartedLoopLocked(loopInstance)
 		}
-		return false, "", err
+		return false, err
 	}
 
 	cm.mu.Lock()
@@ -667,18 +659,21 @@ func (cm *ConversationManager) acceptUserMessage(ctx context.Context, service ll
 	loopInstance := cm.loop
 	recordTurnStart := cm.recordTurnStartMessage
 	cm.mu.Unlock()
-	if wasWorking && (isolated || run != nil) {
-		return false, "", cm.deferUserMessage(ctx, modelID, message)
+	// A working flag without a loop is stale (see
+	// TestAcceptUserMessageClearsStaleWorkingWithoutPriorLoop): no turn would
+	// take the message, so it starts one.
+	if wasWorking && (hadLoop || isolated || run != nil) {
+		return false, cm.queueUserMessage(ctx, modelID, message, !isolated && run == nil)
 	}
 
 	if loopInstance == nil {
-		return false, "", fmt.Errorf("conversation loop not initialized")
+		return false, fmt.Errorf("conversation loop not initialized")
 	}
 	if recordTurnStart == nil {
 		if !hadLoop {
 			cm.discardUnstartedLoopLocked(loopInstance)
 		}
-		return false, "", fmt.Errorf("turn-start recorder not configured")
+		return false, fmt.Errorf("turn-start recorder not configured")
 	}
 
 	modelMessage, err := messageWithSenderProvenance(message, userData)
@@ -686,7 +681,7 @@ func (cm *ConversationManager) acceptUserMessage(ctx context.Context, service ll
 		if !hadLoop {
 			cm.discardUnstartedLoopLocked(loopInstance)
 		}
-		return false, "", fmt.Errorf("prepare user message provenance: %w", err)
+		return false, fmt.Errorf("prepare user message provenance: %w", err)
 	}
 
 	// Reserve the working state before the fallible write. Other request paths
@@ -704,19 +699,19 @@ func (cm *ConversationManager) acceptUserMessage(ctx context.Context, service ll
 		if !hadLoop {
 			cm.discardUnstartedLoopLocked(loopInstance)
 		}
-		return false, "", fmt.Errorf("record user message: %w", err)
+		return false, fmt.Errorf("record user message: %w", err)
 	}
 	if created == nil {
 		cm.rejectTurnStart(wasWorking && hadLoop)
 		if !hadLoop {
 			cm.discardUnstartedLoopLocked(loopInstance)
 		}
-		return false, "", fmt.Errorf("turn-start recorder returned no message")
+		return false, fmt.Errorf("turn-start recorder returned no message")
 	}
 	if (turnUserDataFromContext(ctx) == nil || liveDeliveryIDFromContext(ctx) != "") && cm.showsSequenceIDs() && typedUserForLLM(message, nil) {
 		modelMessage, err = messageWithSequenceID(modelMessage, derefString(created.ExternalMessageID), created.SequenceID)
 		if err != nil {
-			return false, created.MessageID, fmt.Errorf("render user message: %w", err)
+			return false, fmt.Errorf("render user message: %w", err)
 		}
 	}
 
@@ -727,7 +722,7 @@ func (cm *ConversationManager) acceptUserMessage(ctx context.Context, service ll
 	cm.mu.Unlock()
 	loopInstance.QueueTurn(modelMessage, run)
 
-	return isFirst, created.MessageID, nil
+	return isFirst, nil
 }
 
 // rejectTurnStart restores an idle manager after a turn-start write fails.

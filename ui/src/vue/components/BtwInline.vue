@@ -313,7 +313,7 @@ async function summarize() {
       props.exchange.parent_conversation_id,
       props.exchange.exchange_id,
     );
-    btwStore.resolveSummary(props.exchange, receipt.message_id);
+    btwStore.resolveSummary(props.exchange, receipt.summary_id);
     await btwStore.refreshChild(props.exchange.exchange_id);
   } catch (err) {
     btwStore.resolveSummary(props.exchange);

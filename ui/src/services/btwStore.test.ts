@@ -305,7 +305,7 @@ for (const reload of [false, true]) {
   });
   const interloperAnswer = agent(4, "interloper summary");
   const acceptedSummary = user(5, "summary prompt", {
-    userData: { btw_turn_kind: "summary" },
+    userData: { btw_summary_id: "s5", btw_turn_kind: "summary" },
   });
   const acceptedAnswer = agent(6, "accepted summary");
   const exact = new BtwStore(
@@ -335,11 +335,11 @@ for (const reload of [false, true]) {
     null,
     "positional recovery waits while the summary receipt is still in flight",
   );
-  exact.resolveSummary(priorExchange, "m5");
+  exact.resolveSummary(priorExchange, "s5");
   assert.equal(
     exact.claimSummary(exchange)?.id,
     "m5",
-    "the server-returned summary message ID wins over positional matching",
+    "the server-returned summary ID wins over positional matching",
   );
   assert.equal(exact.claimSummary(exchange), null, "the exact summary is claimed once");
 }

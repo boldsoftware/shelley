@@ -142,9 +142,6 @@ func (s *Server) receiveSlackEvent(ctx context.Context, endpoint string, ev slac
 	}
 	ctx = contextWithExternalMessageID(ctx, externalID)
 	message := llm.UserStringMessage(ev.tagged())
-	if manager.IsAgentWorking() {
-		return id, manager.InjectMessage(ctx, s, modelID, message)
-	}
 	_, err = manager.AcceptUserMessage(ctx, service, modelID, message)
 	return id, err
 }

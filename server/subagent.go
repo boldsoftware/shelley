@@ -140,17 +140,11 @@ func (r *SubagentRunner) RunSubagent(ctx context.Context, conversationID, prompt
 	}
 
 	// A busy subagent receives the message at its current turn's next LLM
-	// round, without interrupting the turn (see InjectMessage).
-	if manager.IsAgentWorking() {
-		if err := manager.InjectMessage(ctx, s, modelID, userMessage); err != nil {
-			return "", fmt.Errorf("failed to send message to busy subagent: %w", err)
-		}
-		return "message sent into the subagent's current turn; it reports back with message_parent.", nil
-	}
+	// round, without interrupting the turn (see AcceptUserMessage).
 	if _, err := manager.AcceptUserMessage(ctx, llmService, modelID, userMessage); err != nil {
 		return "", fmt.Errorf("failed to accept user message: %w", err)
 	}
-	return "message sent; the subagent works in the background and reports back with message_parent.", nil
+	return "message sent; a busy subagent takes it right after its current tool call. It works in the background and reports back with message_parent.", nil
 }
 
 // inheritedSubagentModel returns the model of the subagent conversation, else

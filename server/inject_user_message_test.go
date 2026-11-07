@@ -44,8 +44,9 @@ func TestUserMessageDeliveredDespiteQueuedWork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(queued) != 1 {
-		t.Fatalf("only the injection should be queued: %+v", queued)
+	// The running turn takes them all, in order, at its next round.
+	if len(queued) != 3 || !queued[0].Inject || !queued[1].Inject || !queued[2].Inject {
+		t.Fatalf("want the injection and both messages queued for the turn: %+v", queued)
 	}
 	gate.release("bash: true")
 	waitFor(t, 5*time.Second, func() bool {

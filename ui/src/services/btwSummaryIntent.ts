@@ -1,7 +1,7 @@
 import type { BtwExchange, BtwTurn } from "../types";
 
 export type SummaryStorage = Pick<Storage, "getItem" | "setItem">;
-type Intent = { after?: string; messageID?: string };
+type Intent = { after?: string; summaryID?: string };
 
 function key(parentID: string): string {
   return `shelley:btw-summary:${parentID}`;
@@ -35,13 +35,13 @@ export function requestSummaryIntent(storage: SummaryStorage | null, exchange: B
 export function resolveSummaryIntent(
   storage: SummaryStorage | null,
   exchange: BtwExchange,
-  messageID: string,
+  summaryID: string,
 ): void {
   const parentID = exchange.parent_conversation_id;
   const intents = load(storage, parentID);
   const intent = intents[exchange.exchange_id];
   if (!intent) return;
-  intent.messageID = messageID;
+  intent.summaryID = summaryID;
   save(storage, parentID, intents);
 }
 
@@ -56,8 +56,8 @@ export function claimSummaryIntent(
 
   const turns = exchange.turns.filter((turn) => turn.kind === "summary");
   let turn: BtwTurn | undefined;
-  if (intent.messageID) {
-    turn = turns.find((candidate) => candidate.id === intent.messageID);
+  if (intent.summaryID) {
+    turn = turns.find((candidate) => candidate.summary_id === intent.summaryID);
   } else {
     const priorIndex = intent.after
       ? turns.findIndex((candidate) => candidate.id === intent.after)

@@ -168,7 +168,7 @@ export interface ChatAcceptedResponse {
 
 export interface BtwSummaryReceipt {
   status?: string;
-  message_id: string;
+  summary_id: string;
   btw: BtwReaderDescriptor;
 }
 
