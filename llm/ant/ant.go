@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"slices"
@@ -1318,20 +1317,10 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			if ctx.Err() != nil {
 				return nil, fmt.Errorf("anthropic request failed after %d attempts (context cancelled): %w", attempts, errs)
 			}
-			base := backoff[min(attempts-1, len(backoff)-1)]
-			jitter := time.Duration(rand.Int64N(max(min(int64(base), int64(time.Second)), 1)))
-			sleep := base + jitter
-			if retryAfter > sleep {
-				sleep = retryAfter
-			}
+			sleep := llm.RetryDelay(backoff, attempts, retryAfter)
 			retryAfter = 0
 			slog.WarnContext(ctx, "anthropic request sleep before retry", "sleep", sleep, "attempts", attempts, "elapsed", time.Since(retryStart).Round(time.Second), "last_error", lastErrSummary)
-			if ir.OnRetry != nil {
-				ir.OnRetry(llm.RetryEvent{Attempt: attempts + 1, Sleep: sleep, Err: lastErrSummary, Provider: "anthropic", Model: cmp.Or(s.Model, DefaultModel)})
-			}
-			select {
-			case <-time.After(sleep):
-			case <-ctx.Done():
+			if llm.WaitRetry(ctx, ir, llm.RetryEvent{Attempt: attempts + 1, Sleep: sleep, Err: lastErrSummary, Provider: "anthropic", Model: cmp.Or(s.Model, DefaultModel)}) != nil {
 				return nil, fmt.Errorf("anthropic request failed after %d attempts (context cancelled during backoff): %w", attempts, errs)
 			}
 		}

@@ -65,3 +65,24 @@ func TestTruncate(t *testing.T) {
 		}
 	}
 }
+
+func TestRetryDelay(t *testing.T) {
+	backoff := []time.Duration{2 * time.Second, 10 * time.Second}
+	for _, tc := range []struct {
+		n          int
+		retryAfter time.Duration
+		lo, hi     time.Duration
+	}{
+		{1, 0, 2 * time.Second, 3 * time.Second},
+		{5, 0, 10 * time.Second, 11 * time.Second},               // the last entry repeats
+		{1, time.Minute, time.Minute, time.Minute},               // Retry-After wins when longer
+		{2, 5 * time.Second, 10 * time.Second, 11 * time.Second}, // but never shortens the wait
+	} {
+		if got := RetryDelay(backoff, tc.n, tc.retryAfter); got < tc.lo || got > tc.hi {
+			t.Errorf("RetryDelay(n=%d, retryAfter=%v) = %v, want in [%v, %v]", tc.n, tc.retryAfter, got, tc.lo, tc.hi)
+		}
+	}
+	if got := RetryDelay([]time.Duration{0}, 3, 0); got != 0 {
+		t.Errorf("RetryDelay with zero backoff = %v, want 0", got)
+	}
+}

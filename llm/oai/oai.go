@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"strings"
@@ -290,7 +289,7 @@ type Service struct {
 	MaxTokens    int             // defaults to DefaultMaxTokens if zero
 	ProviderName string          // e.g., "openai", "fireworks"
 	Org          string          // optional - organization ID
-	Backoff      []time.Duration // retry backoff durations; defaults to {1s, 2s, 5s, 10s, 15s} if nil
+	Backoff      []time.Duration // retry backoff durations; llm.DefaultBackoff if empty
 
 	// ThinkingLevel is the service-level default reasoning level. Most providers
 	// behind the chat-completions API (Fireworks GLM, GPT-OSS, etc.) accept
@@ -1297,21 +1296,7 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 	// Retry mechanism
 	backoff := s.Backoff
 	if len(backoff) == 0 {
-		// Long tail: many model providers have multi-hour incidents, and it is
-		// a much worse UX to return after a couple of minutes than to keep waiting.
-		backoff = []time.Duration{
-			1 * time.Second,
-			2 * time.Second,
-			5 * time.Second,
-			10 * time.Second,
-			30 * time.Second,
-			1 * time.Minute,
-			2 * time.Minute,
-			5 * time.Minute,
-			10 * time.Minute,
-			20 * time.Minute,
-			30 * time.Minute,
-		}
+		backoff = llm.DefaultBackoff
 	}
 
 	// retry loop
@@ -1332,17 +1317,10 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			if ctx.Err() != nil {
 				return nil, fmt.Errorf("openai request failed after %d attempts (%w): %w", attempts, ctx.Err(), errs)
 			}
-			base := backoff[min(attempts-1, len(backoff)-1)]
-			jitter := time.Duration(rand.Int64N(max(min(int64(base), int64(time.Second)), 1)))
-			sleep := base + jitter
+			sleep := llm.RetryDelay(backoff, attempts, 0)
 			slog.WarnContext(ctx, "openai request sleep before retry", "sleep", sleep, "attempts", attempts, "elapsed", time.Since(retryStart).Round(time.Second), "last_error", lastErrSummary)
-			if ir.OnRetry != nil {
-				ir.OnRetry(llm.RetryEvent{Attempt: attempts + 1, Sleep: sleep, Err: lastErrSummary, Provider: "openai", Model: model.ModelName})
-			}
-			select {
-			case <-time.After(sleep):
-			case <-ctx.Done():
-				return nil, fmt.Errorf("openai request failed after %d attempts (%w during backoff): %w", attempts, ctx.Err(), errs)
+			if err := llm.WaitRetry(ctx, ir, llm.RetryEvent{Attempt: attempts + 1, Sleep: sleep, Err: lastErrSummary, Provider: "openai", Model: model.ModelName}); err != nil {
+				return nil, fmt.Errorf("openai request failed after %d attempts (%w during backoff): %w", attempts, err, errs)
 			}
 		}
 

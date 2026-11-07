@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -601,22 +600,6 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 	endTime := startTime // Initialize endTime
 	var gemRes *gemini.Response
 
-	// Retry mechanism for handling server errors and rate limiting. Long tail
-	// because providers regularly have multi-hour incidents and returning after
-	// twenty seconds is a worse UX than waiting.
-	backoff := []time.Duration{
-		1 * time.Second,
-		3 * time.Second,
-		5 * time.Second,
-		10 * time.Second,
-		30 * time.Second,
-		1 * time.Minute,
-		2 * time.Minute,
-		5 * time.Minute,
-		10 * time.Minute,
-		20 * time.Minute,
-		30 * time.Minute,
-	}
 	const maxAttempts = 16
 	for attempts := 0; attempts < maxAttempts; attempts++ {
 		gemApiErr := error(nil)
@@ -643,21 +626,11 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 		if !retryable {
 			return nil, fmt.Errorf("gemini: API error: %w", gemApiErr)
 		}
-		random := time.Duration(rand.Int63n(int64(time.Second)))
-		sleep := backoff[min(attempts, len(backoff)-1)] + random
-		if retryAfter := llm.ParseRetryAfter(apiErr.Header.Get("Retry-After")); retryAfter > sleep {
-			sleep = retryAfter
-		}
+		sleep := llm.RetryDelay(llm.DefaultBackoff, attempts+1, llm.ParseRetryAfter(apiErr.Header.Get("Retry-After")))
 		slog.WarnContext(ctx, "gemini_request_retry", "error", gemApiErr.Error(), "status_code", apiErr.StatusCode, "attempt", attempts+1, "sleep", sleep, "elapsed", time.Since(retryStart).Round(time.Second))
-		if ir.OnRetry != nil {
-			ir.OnRetry(llm.RetryEvent{Attempt: attempts + 1, Sleep: sleep, Err: llm.Truncate(gemApiErr.Error(), 160), Status: apiErr.StatusCode, Provider: "gemini", Model: cmp.Or(s.Model, DefaultModel)})
-		}
-		select {
-		case <-time.After(sleep):
-		case <-ctx.Done():
+		if llm.WaitRetry(ctx, ir, llm.RetryEvent{Attempt: attempts + 1, Sleep: sleep, Err: llm.Truncate(gemApiErr.Error(), 160), Status: apiErr.StatusCode, Provider: "gemini", Model: cmp.Or(s.Model, DefaultModel)}) != nil {
 			return nil, fmt.Errorf("gemini: context cancelled during backoff after %d attempts: %w", attempts+1, gemApiErr)
 		}
-		continue
 	}
 
 	response, err := convertGeminiResponse(gemRes)
