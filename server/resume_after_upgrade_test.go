@@ -437,6 +437,7 @@ func TestPreclaimFailureBecomesManualInterruption(t *testing.T) {
 	}
 	resume := reserveUpgradeResume(t, database, conversation.ConversationID)
 	manager := NewConversationManager(
+		srv,
 		conversation.ConversationID,
 		database,
 		srv.logger,

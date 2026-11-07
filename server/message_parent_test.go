@@ -182,7 +182,7 @@ func TestQueuedParentWorkReopensChildReportsAfterStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := manager.QueueMessage(t.Context(), server, "predictable", llm.UserStringMessage("echo: queued restart")); err != nil {
+	if err := manager.QueueMessage(t.Context(), "predictable", llm.UserStringMessage("echo: queued restart")); err != nil {
 		t.Fatal(err)
 	}
 	releaseAndWaitIdle(t, server, parent.ConversationID, held.waitCall(t, "echo: queued restart"))
@@ -275,7 +275,7 @@ func TestSubagentReportAdmissionIsAtomicWithParentStop(t *testing.T) {
 		SenderRelationship:   senderRelationshipSubagent,
 		Text:                 "late report",
 	})
-	if err := manager.InjectMessage(ctx, server, "predictable", llm.UserStringMessage("late report")); err == nil {
+	if err := manager.InjectMessage(ctx, "predictable", llm.UserStringMessage("late report")); err == nil {
 		t.Fatal("late report entered the parent queue after Stop")
 	}
 	conv, err := database.GetConversationByID(t.Context(), parent.ConversationID)

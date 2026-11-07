@@ -35,7 +35,7 @@ func TestUserMessageDeliveredDespiteQueuedWork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := manager.InjectMessage(t.Context(), server, "predictable", llm.UserStringMessage("report")); err != nil {
+	if err := manager.InjectMessage(t.Context(), "predictable", llm.UserStringMessage("report")); err != nil {
 		t.Fatal(err)
 	}
 	chat("second")

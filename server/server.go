@@ -1203,7 +1203,7 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		if role != roleSubagent {
 			config.ParentMessenger = nil
 		}
-		manager := NewConversationManager(conversationID, s.db, s.logger, config, s.integrationSkills, s.listIntegrations, recordMessage, recordTurnStart, onStateChange, s.streamPub)
+		manager := NewConversationManager(s, conversationID, s.db, s.logger, config, s.integrationSkills, s.listIntegrations, recordMessage, recordTurnStart, onStateChange, s.streamPub)
 		if snapshots, ok := s.llmManager.(interface {
 			GetServiceSnapshot(string) (llm.Service, string, uint64, error)
 		}); ok {
@@ -1214,14 +1214,7 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 			manager.profileMention = s.profileMention
 			manager.profileModelService = s.llmManager.GetService
 		}
-		manager.queueUserMessage = func(ctx context.Context, model string, message llm.Message, inject bool) error {
-			return manager.queueMessageLocked(ctx, s, model, message, inject)
-		}
-		manager.prepareConversationVM = func() { s.prepareConversationVM(conversationID) }
-		manager.onTurnStartRejected = func() { go manager.drainPendingMessages(s) }
-		manager.followProfile = func(ctx context.Context) (llm.Service, string, error) {
-			return s.followProfile(ctx, manager)
-		}
+		manager.onTurnStartRejected = func() { go manager.drainPendingMessages() }
 		manager.recordDrainedQueued = func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message) (int64, error) {
 			return s.recordDrainedQueuedMessages(ctx, conversationID, qm, messages)
 		}
@@ -1422,7 +1415,7 @@ func (s *Server) insertMessages(ctx context.Context, conversationID string, para
 			if i := slices.IndexFunc(params, func(p db.CreateMessageParams) bool {
 				return p.MarkAgentDone && p.Type == db.MessageTypeAgent
 			}); i >= 0 {
-				mgr.scheduleIdleWork(s, created[i].SequenceID)
+				mgr.scheduleIdleWork(created[i].SequenceID)
 			}
 		}
 		mgr.Touch()
@@ -1685,7 +1678,7 @@ func (s *Server) notifySubscribers(ctx context.Context, conversationID string, n
 		// The end-of-turn agent_working flip already happened in the INSERT
 		// Tx. Drain any queued messages now that we're idle.
 		if slices.ContainsFunc(newMsgs, func(m generated.Message) bool { return isAgentEndOfTurn(&m) }) {
-			go manager.drainPendingMessages(s)
+			go manager.drainPendingMessages()
 		}
 		// Context window from the last message that carries usage. Zero is
 		// omitted from JSON, so the client keeps its cached value.

@@ -389,7 +389,7 @@ func TestTranscriptionCommandPersistsBeforeDetachedWork(t *testing.T) {
 		t.Fatalf("audited audio result has timestamps: %#v", audit[1])
 	}
 	parentManager.SetAgentWorking(false)
-	if _, err := parentManager.CancelQueuedMessages(t.Context(), server); err != nil {
+	if _, err := parentManager.CancelQueuedMessages(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -500,7 +500,7 @@ func TestQueuedTranscriptionPreservesFIFOAndVideoPaths(t *testing.T) {
 	}
 
 	manager.SetAgentWorking(false)
-	manager.drainPendingMessages(server)
+	manager.drainPendingMessages()
 	if got := queuedMessages(t, database, conversation.ConversationID); len(got) != 0 {
 		t.Fatalf("queue after drain = %#v", got)
 	}
@@ -614,7 +614,7 @@ func TestFailedTranscriptionBlocksUntilRetry(t *testing.T) {
 		t.Fatalf("retried queue = %#v", queued)
 	}
 	manager.SetAgentWorking(false)
-	<-manager.drainPendingMessages(server)
+	<-manager.drainPendingMessages()
 	if !userMessageRowExists(t, database, conversation.ConversationID, "held behind failure") {
 		t.Fatal("ordinary message did not drain after retry became ready")
 	}
@@ -991,7 +991,7 @@ func TestQueuedTranscriptionRecoveryIsIdempotent(t *testing.T) {
 	manager := server.activeConversations[parent.ConversationID]
 	server.mu.Unlock()
 	manager.SetAgentWorking(false)
-	manager.drainPendingMessages(server)
+	manager.drainPendingMessages()
 	if queued := queuedMessages(t, database, parent.ConversationID); len(queued) != 0 {
 		t.Fatalf("queue after recovered drain = %#v", queued)
 	}

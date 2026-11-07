@@ -221,7 +221,7 @@ func TestNextPromptSuggestionSkipsQueuedWork(t *testing.T) {
 		h.llm.SetResponseDelay(10 * time.Second)
 		h.Chat("echo: prune the rosemary")
 		synctest.Wait()
-		if err := cm.QueueMessage(t.Context(), h.server, "predictable", llm.UserStringMessage("echo: repot the mint")); err != nil {
+		if err := cm.QueueMessage(t.Context(), "predictable", llm.UserStringMessage("echo: repot the mint")); err != nil {
 			t.Fatal(err)
 		}
 		<-time.After(time.Minute)

@@ -212,7 +212,7 @@ func (s *Server) messageParent(ctx context.Context, conv generated.Conversation,
 		SenderRelationship:   senderRelationshipSubagent,
 		Text:                 text,
 	})
-	return parent.InjectMessage(ctx, s, modelID, llm.UserStringMessage(text))
+	return parent.InjectMessage(ctx, modelID, llm.UserStringMessage(text))
 }
 
 // reportedReplyWarning notes, in a subagent, each turn-ending reply that

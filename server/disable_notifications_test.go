@@ -332,7 +332,7 @@ func TestOwedTurnEndIsAnnouncedOnceIdle(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				cm.drainQueueIfIdle(s)
+				cm.drainQueueIfIdle()
 			},
 			want: 1,
 		},
@@ -528,7 +528,7 @@ func TestBackgroundJobTurnEndIsAnnouncedAfterItsNotice(t *testing.T) {
 	}
 
 	hold(false)
-	cm.drainQueueIfIdle(server)
+	cm.drainQueueIfIdle()
 	waitFor(t, 10*time.Second, func() bool { return ch.count() > 0 })
 	if notices := backgroundJobNotices(t, database, id); len(notices) != 1 {
 		t.Fatalf("notices = %+v, want 1", notices)
@@ -566,7 +566,7 @@ func TestJobNoticeRetriesUndrainableQueue(t *testing.T) {
 	s.publishConversationState(ConversationState{ConversationID: id, Model: "predictable"})
 	available := s.llmManager
 	s.llmManager = &unavailableLLM{}
-	<-cm.drainPendingMessages(s)
+	<-cm.drainPendingMessages()
 	s.llmManager = available
 
 	// Hold the retry to look in between.
@@ -586,7 +586,7 @@ func TestJobNoticeRetriesUndrainableQueue(t *testing.T) {
 	cm.mu.Lock()
 	cm.changingSettings = false
 	cm.mu.Unlock()
-	cm.drainQueueIfIdle(s)
+	cm.drainQueueIfIdle()
 	waitFor(t, 10*time.Second, func() bool { return ch.count() > 0 })
 	waitForIdle(t, s, id)
 	if n := ch.count(); n != 1 {
@@ -615,7 +615,7 @@ func TestQueueHeldByActionDrainsAfterIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.publishConversationState(ConversationState{ConversationID: id, Model: "predictable"})
-	<-cm.drainPendingMessages(s)
+	<-cm.drainPendingMessages()
 	s.settleTurnEnds(id)
 	if n := ch.count(); n != 0 {
 		t.Fatalf("announced %d times while the action runs", n)
@@ -624,7 +624,7 @@ func TestQueueHeldByActionDrainsAfterIt(t *testing.T) {
 	if err := database.FinishAction(t.Context(), run.ID, &code, ""); err != nil {
 		t.Fatal(err)
 	}
-	cm.drainPendingMessages(s) // as finishAction does
+	cm.drainPendingMessages() // as finishAction does
 	waitFor(t, 10*time.Second, func() bool { return ch.count() > 0 })
 	waitForIdle(t, s, id)
 	if n := ch.count(); n != 1 {
@@ -679,7 +679,7 @@ func TestUndrainableQueueIsRetriedAfterTheNextTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.llmManager = &unavailableLLM{}
-	<-cm.drainPendingMessages(s)
+	<-cm.drainPendingMessages()
 	s.llmManager = &testLLMManager{service: held}
 
 	if _, err := cm.AcceptUserMessage(t.Context(), held, "predictable", llm.UserStringMessage("echo: first")); err != nil {

@@ -975,7 +975,7 @@ func (s *Server) handleCompactRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if manager.IsAgentWorking() {
-		err = manager.QueueMessage(ctx, s, modelID, message)
+		err = manager.QueueMessage(ctx, modelID, message)
 	} else {
 		_, err = manager.AcceptUserMessage(ctx, service, modelID, message)
 	}

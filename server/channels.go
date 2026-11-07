@@ -170,7 +170,7 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	if delivered {
 		// The original may wait in a queue nothing drains, as after a
 		// restart.
-		manager.drainQueueIfIdle(s)
+		manager.drainQueueIfIdle()
 		return nil
 	}
 	if conv.Model == nil {
@@ -195,7 +195,7 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	// the current tool round finishes, even with UI messages queued for later.
 	message := llm.UserStringMessage(ev.Text)
 	if manager.IsAgentWorking() {
-		return manager.InjectMessage(ctx, s, modelID, message)
+		return manager.InjectMessage(ctx, modelID, message)
 	}
 	if ev.FirstReaction != "" || ev.FirstReply != "" {
 		answered, err := manager.answerFirstMessage(ctx, message, ev.FirstReaction, ev.FirstReply)
@@ -361,7 +361,7 @@ func (s *Server) recoverChannelQueues(ctx context.Context) {
 			s.logger.Error("Failed to restore channel conversation", "conversationID", conv.ConversationID, "error", err)
 			continue
 		}
-		manager.drainQueueIfIdle(s)
+		manager.drainQueueIfIdle()
 	}
 	if err := s.recoverAssistantChannelQueue(ctx); err != nil {
 		s.logger.Error("Failed to drain the Assistant's channel queue", "error", err)

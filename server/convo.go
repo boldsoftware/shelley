@@ -58,6 +58,7 @@ func conversationRoleOf(conv generated.Conversation) conversationRole {
 
 // ConversationManager manages a single active conversation
 type ConversationManager struct {
+	server              *Server
 	conversationID      string
 	conversationOptions db.ConversationOptions
 	role                conversationRole
@@ -98,15 +99,13 @@ type ConversationManager struct {
 	toolSetConfig          claudetool.ToolSetConfig
 	// prepareConversationVM starts preparing the VM of a VM conversation (or a
 	// subagent's parent) at each turn; see Server.prepareConversationVM.
-	prepareConversationVM func()
-	integrationSkills     *integrationSkillCache
-	listIntegrations      integrationLister
-	toolSet               *claudetool.ToolSet // created per-conversation when loop starts
-	turnToolConfig        claudetool.ToolSetConfig
-	profileMention        func(context.Context, string) (*Profile, error)
-	profileModelService   func(string) (llm.Service, error)
-	queueUserMessage      func(ctx context.Context, model string, message llm.Message, inject bool) error
-	profileTurn           bool // guarded by mu; the current turn has an override
+	integrationSkills   *integrationSkillCache
+	listIntegrations    integrationLister
+	toolSet             *claudetool.ToolSet // created per-conversation when loop starts
+	turnToolConfig      claudetool.ToolSetConfig
+	profileMention      func(context.Context, string) (*Profile, error)
+	profileModelService func(string) (llm.Service, error)
+	profileTurn         bool // guarded by mu; the current turn has an override
 
 	subpub *subpub.SubPub[StreamResponse]
 	// streamPub mirrors per-conversation events to the server-wide /api/stream2
@@ -218,9 +217,6 @@ type ConversationManager struct {
 	// onTurnStartRejected restarts queue draining after a failed turn-start
 	// write rolls the manager back to idle.
 	onTurnStartRejected func()
-	// followProfile is Server.followProfile for this conversation; see
-	// takeProfileEdits.
-	followProfile func(ctx context.Context) (llm.Service, string, error)
 	// rewriteFinalReply, if set, may turn a turn-ending reply into tool calls;
 	// see loop.Config.RewriteFinalReply.
 	rewriteFinalReply func(context.Context, llm.Message) (llm.Message, bool)
@@ -260,7 +256,7 @@ type ConversationManager struct {
 // NewConversationManager constructs a manager with dependencies but defers hydration until needed.
 type turnStartRecordFunc func(context.Context, llm.Message, llm.Usage, []llm.PurposedUsage) (*generated.Message, error)
 
-func NewConversationManager(conversationID string, database *db.DB, baseLogger *slog.Logger, toolSetConfig claudetool.ToolSetConfig, integrationSkills *integrationSkillCache, listIntegrations integrationLister, recordMessage loop.MessageRecordFunc, recordTurnStartMessage turnStartRecordFunc, onStateChange func(ConversationState), streamPub *subpub.SubPub[StreamResponse]) *ConversationManager {
+func NewConversationManager(server *Server, conversationID string, database *db.DB, baseLogger *slog.Logger, toolSetConfig claudetool.ToolSetConfig, integrationSkills *integrationSkillCache, listIntegrations integrationLister, recordMessage loop.MessageRecordFunc, recordTurnStartMessage turnStartRecordFunc, onStateChange func(ConversationState), streamPub *subpub.SubPub[StreamResponse]) *ConversationManager {
 	logger := baseLogger
 	if logger == nil {
 		logger = slog.Default()
@@ -268,6 +264,7 @@ func NewConversationManager(conversationID string, database *db.DB, baseLogger *
 	logger = logger.With("conversationID", conversationID)
 
 	return &ConversationManager{
+		server:                 server,
 		conversationID:         conversationID,
 		db:                     database,
 		lastActivity:           time.Now(),
@@ -663,7 +660,7 @@ func (cm *ConversationManager) AcceptUserMessage(ctx context.Context, service ll
 	// TestAcceptUserMessageClearsStaleWorkingWithoutPriorLoop): no turn would
 	// take the message, so it starts one.
 	if wasWorking && (hadLoop || isolated || run != nil) {
-		return false, cm.queueUserMessage(ctx, modelID, message, !isolated && run == nil)
+		return false, cm.queueMessageLocked(ctx, modelID, message, !isolated && run == nil)
 	}
 
 	if loopInstance == nil {
@@ -1229,30 +1226,30 @@ func (cm *ConversationManager) HasQueuedTranscription(ctx context.Context) (bool
 // never drains immediately: until the item is ready it blocks every later
 // queued message, and only its ready transition (see drainQueueIfIdle) makes
 // it deliverable.
-func (cm *ConversationManager) QueueTranscription(ctx context.Context, s *Server, qm db.QueuedMessage) (db.QueuedMessage, error) {
+func (cm *ConversationManager) QueueTranscription(ctx context.Context, qm db.QueuedMessage) (db.QueuedMessage, error) {
 	cm.cancelIdleCompaction()
 	cm.loopLifecycleMu.Lock()
 	defer cm.loopLifecycleMu.Unlock()
 	cm.waitForLoopTeardownLocked()
 
-	_, queued, err := s.db.CreateQueuedTranscription(ctx, cm.conversationID, qm)
+	_, queued, err := cm.db.CreateQueuedTranscription(ctx, cm.conversationID, qm)
 	if err != nil {
 		return db.QueuedMessage{}, err
 	}
 	cm.Touch()
-	go s.notifySubscribers(context.WithoutCancel(ctx), cm.conversationID)
+	go cm.server.notifySubscribers(context.WithoutCancel(ctx), cm.conversationID)
 	return queued, nil
 }
 
 // drainQueueIfIdle starts the queue drainer unless a running turn will start
 // it when it ends.
-func (cm *ConversationManager) drainQueueIfIdle(s *Server) {
+func (cm *ConversationManager) drainQueueIfIdle() {
 	cm.mu.Lock()
 	needsDrain := !cm.agentWorking
 	cm.undrainable = "" // either drain retries it
 	cm.mu.Unlock()
 	if needsDrain {
-		go cm.drainPendingMessages(s)
+		go cm.drainPendingMessages()
 	}
 }
 
@@ -1311,26 +1308,27 @@ func (cm *ConversationManager) recoverFailedUpgradeResume(ctx context.Context, r
 // only when it drains. The append bumps updated_at, which re-sorts the
 // conversation and fires the conversation-list patch + per-conversation
 // broadcast so the new queued entry reaches subscribers via stream2 diffs.
-func (cm *ConversationManager) QueueMessage(ctx context.Context, s *Server, modelID string, message llm.Message) error {
-	return cm.queueMessage(ctx, s, modelID, message, false)
+func (cm *ConversationManager) QueueMessage(ctx context.Context, modelID string, message llm.Message) error {
+	return cm.queueMessage(ctx, modelID, message, false)
 }
 
 // InjectMessage queues message like QueueMessage, but a running turn takes
 // it at its next LLM round instead of after the turn ends.
-func (cm *ConversationManager) InjectMessage(ctx context.Context, s *Server, modelID string, message llm.Message) error {
-	return cm.queueMessage(ctx, s, modelID, message, true)
+func (cm *ConversationManager) InjectMessage(ctx context.Context, modelID string, message llm.Message) error {
+	return cm.queueMessage(ctx, modelID, message, true)
 }
 
-func (cm *ConversationManager) queueMessage(ctx context.Context, s *Server, modelID string, message llm.Message, midTurn bool) error {
+func (cm *ConversationManager) queueMessage(ctx context.Context, modelID string, message llm.Message, midTurn bool) error {
 	cm.cancelIdleCompaction()
 
 	cm.loopLifecycleMu.Lock()
 	defer cm.loopLifecycleMu.Unlock()
 	cm.waitForLoopTeardownLocked()
-	return cm.queueMessageLocked(ctx, s, modelID, message, midTurn)
+	return cm.queueMessageLocked(ctx, modelID, message, midTurn)
 }
 
-func (cm *ConversationManager) queueMessageLocked(ctx context.Context, s *Server, modelID string, message llm.Message, midTurn bool) error {
+func (cm *ConversationManager) queueMessageLocked(ctx context.Context, modelID string, message llm.Message, midTurn bool) error {
+	s := cm.server
 	// A subagent report must not slip between Stop's initial check and its
 	// queue clear. Stop raises this fence before taking the same lifecycle
 	// lock; whichever obtains it first determines whether the report lands
@@ -1371,7 +1369,7 @@ func (cm *ConversationManager) queueMessageLocked(ctx context.Context, s *Server
 	cm.Touch()
 	cm.logger.Info("Queued user message", "queued_id", qm.ID, "midTurn", midTurn)
 	// Before notifying, which settles turn ends: the queue is to drain.
-	cm.drainQueueIfIdle(s)
+	cm.drainQueueIfIdle()
 
 	// Broadcast the updated conversation (with the new queued_messages array)
 	// to per-conversation subscribers. The list-patch stream is refreshed
@@ -1503,33 +1501,33 @@ func (cm *ConversationManager) takeInjectable(ctx context.Context, generation ui
 }
 
 // CancelQueuedMessages clears the conversation's queued_messages array.
-func (cm *ConversationManager) CancelQueuedMessages(ctx context.Context, s *Server) (*generated.Conversation, error) {
+func (cm *ConversationManager) CancelQueuedMessages(ctx context.Context) (*generated.Conversation, error) {
 	cm.loopLifecycleMu.Lock()
 	defer cm.loopLifecycleMu.Unlock()
 	cm.waitForLoopTeardownLocked()
-	conv, err := s.db.ClearQueuedMessages(ctx, cm.conversationID)
+	conv, err := cm.db.ClearQueuedMessages(ctx, cm.conversationID)
 	if err != nil {
 		return nil, err
 	}
 	cm.logger.Info("Cancelled queued messages")
-	go s.notifySubscribers(context.WithoutCancel(ctx), cm.conversationID)
+	go cm.server.notifySubscribers(context.WithoutCancel(ctx), cm.conversationID)
 	return conv, nil
 }
 
 // CancelQueuedMessage removes a single queued message by its QueuedMessage id.
 // Used by the per-ghost cancel affordance in the UI. Removing a pending
 // transcription can unblock the messages queued behind it.
-func (cm *ConversationManager) CancelQueuedMessage(ctx context.Context, s *Server, queuedID string) (*generated.Conversation, error) {
+func (cm *ConversationManager) CancelQueuedMessage(ctx context.Context, queuedID string) (*generated.Conversation, error) {
 	cm.loopLifecycleMu.Lock()
 	defer cm.loopLifecycleMu.Unlock()
 	cm.waitForLoopTeardownLocked()
-	conv, err := s.db.RemoveQueuedMessages(ctx, cm.conversationID, queuedID)
+	conv, err := cm.db.RemoveQueuedMessages(ctx, cm.conversationID, queuedID)
 	if err != nil {
 		return nil, err
 	}
 	cm.logger.Info("Cancelled queued message", "queued_id", queuedID)
-	go s.notifySubscribers(context.WithoutCancel(ctx), cm.conversationID)
-	cm.drainQueueIfIdle(s)
+	go cm.server.notifySubscribers(context.WithoutCancel(ctx), cm.conversationID)
+	cm.drainQueueIfIdle()
 	return conv, nil
 }
 
@@ -1604,13 +1602,13 @@ func (s *Server) generateSlugAsync(conversationID, source, modelID string) {
 // drainPendingMessages feeds the conversation's durable queued_messages to
 // the loop in FIFO order. Must be called when agentWorking transitions to false
 // (and after a settings change releases changingSettings).
-func (cm *ConversationManager) drainPendingMessages(s *Server) <-chan struct{} {
+func (cm *ConversationManager) drainPendingMessages() <-chan struct{} {
 	owner, done := cm.beginPendingDrain()
 	if !owner {
 		return done
 	}
 	for {
-		cm.drainPendingMessagesOwned(s)
+		cm.drainPendingMessagesOwned()
 		if !cm.finishPendingDrainPass(done) {
 			return done
 		}
@@ -1651,14 +1649,11 @@ func (cm *ConversationManager) finishPendingDrainPass(done chan struct{}) bool {
 // returns the service and model it followed to, or nil. It must precede the
 // lifecycle lock, which applying settings takes.
 func (cm *ConversationManager) takeProfileEdits(ctx context.Context) (llm.Service, string, error) {
-	if cm.followProfile == nil {
-		return nil, "", nil
-	}
-	return cm.followProfile(ctx)
+	return cm.server.followProfile(ctx, cm)
 }
 
 // drainPendingMessagesOwned performs one drain pass. The caller owns draining.
-func (cm *ConversationManager) drainPendingMessagesOwned(s *Server) {
+func (cm *ConversationManager) drainPendingMessagesOwned() {
 	ctx := context.Background()
 	// feedQueued reads the model the conversation follows to.
 	if _, _, err := cm.takeProfileEdits(ctx); err != nil {
@@ -1700,11 +1695,11 @@ func (cm *ConversationManager) drainPendingMessagesOwned(s *Server) {
 		// to record here. Without a recorded message, the next queued message
 		// drains again. Retrying immediately would hot-spin on a persistent
 		// failure such as a DB outage.
-		if err := cm.feedQueued(ctx, s, queued); err != nil {
+		if err := cm.feedQueued(ctx, queued); err != nil {
 			cm.logger.Error("Failed to drain queued messages", "error", err)
 			if !errors.Is(err, errActionRunning) {
 				cm.markUndrainable(ctx)
-				go s.settleTurnEnds(cm.conversationID)
+				go cm.server.settleTurnEnds(cm.conversationID)
 			}
 			return
 		}
@@ -1741,7 +1736,7 @@ func (cm *ConversationManager) undrainableID() string {
 // feedQueued records queued items in order and feeds them to the loop,
 // starting one from the DB if none is running. It stops at the first item that
 // fails so later items never overtake it. The caller holds loopLifecycleMu.
-func (cm *ConversationManager) feedQueued(ctx context.Context, s *Server, queued []db.QueuedMessage) error {
+func (cm *ConversationManager) feedQueued(ctx context.Context, queued []db.QueuedMessage) error {
 	if err := cm.checkProjectTurn(ctx); err != nil {
 		return err
 	}
@@ -1759,7 +1754,7 @@ func (cm *ConversationManager) feedQueued(ctx context.Context, s *Server, queued
 		// gets a fresh loop; a deleted one fails here and leaves the queue
 		// intact. A running turn is never interrupted, and routes without a
 		// saved source keep their existing behavior.
-		svc, err := s.llmManager.GetService(warmModelID)
+		svc, err := cm.server.llmManager.GetService(warmModelID)
 		if err != nil {
 			return fmt.Errorf("failed to get LLM service %q: %w", warmModelID, err)
 		}
@@ -1787,7 +1782,7 @@ func (cm *ConversationManager) feedQueued(ctx context.Context, s *Server, queued
 		if i := slices.IndexFunc(queued, func(qm db.QueuedMessage) bool { return qm.Model != "" }); modelID == "" && i >= 0 {
 			modelID = queued[i].Model
 		}
-		svc, err := s.llmManager.GetService(modelID)
+		svc, err := cm.server.llmManager.GetService(modelID)
 		if err != nil {
 			return fmt.Errorf("failed to get LLM service %q: %w", modelID, err)
 		}
@@ -1833,7 +1828,7 @@ func (cm *ConversationManager) feedQueued(ctx context.Context, s *Server, queued
 			return err
 		}
 		if qm.Kind == db.QueuedMessageKindTranscription {
-			s.generateSlugAsync(cm.conversationID, messageText(user), qm.Model)
+			cm.server.generateSlugAsync(cm.conversationID, messageText(user), qm.Model)
 		}
 		// notifySubscribers (fired by the record) already carried the cleaned
 		// array, so the ghost clears live.
@@ -2797,11 +2792,11 @@ func (cm *ConversationManager) CancelConversation(ctx context.Context) error {
 
 // SendQueuedNow interrupts the active turn without clearing its durable queue,
 // then starts draining from the FIFO head.
-func (cm *ConversationManager) SendQueuedNow(ctx context.Context, s *Server, queuedID string) error {
+func (cm *ConversationManager) SendQueuedNow(ctx context.Context, queuedID string) error {
 	if err := cm.cancelConversation(ctx, false, queuedID); err != nil {
 		return err
 	}
-	go cm.drainPendingMessages(s)
+	go cm.drainPendingMessages()
 	return nil
 }
 

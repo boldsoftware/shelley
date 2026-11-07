@@ -239,7 +239,7 @@ func (s *Server) queueTranscription(ctx context.Context, w http.ResponseWriter, 
 			Context:   strings.TrimSpace(transcriptionContext),
 		},
 	}
-	queued, err = manager.QueueTranscription(ctx, s, queued)
+	queued, err = manager.QueueTranscription(ctx, queued)
 	if err != nil {
 		s.internalError(w, "Failed to queue transcription", err, "conversationID", manager.conversationID)
 		return
@@ -572,7 +572,7 @@ func (s *Server) finalizeQueuedTranscription(parentID string, queued db.QueuedMe
 		s.logQueuedTranscriptionError("Failed to finalize queued transcription", parentID, queued.ID, err)
 		return
 	}
-	manager.drainQueueIfIdle(s)
+	manager.drainQueueIfIdle()
 }
 
 func readyTranscriptionMessages(queued db.QueuedMessage) ([]llm.Message, error) {
@@ -703,7 +703,7 @@ func (s *Server) recoverQueuedTranscriptions(ctx context.Context) {
 					s.logger.Error("Failed to restore transcription parent", "conversationID", conversation.ConversationID, "error", err)
 					continue
 				}
-				manager.drainQueueIfIdle(s)
+				manager.drainQueueIfIdle()
 			case db.QueuedMessageStateWorking:
 				s.launchQueuedTranscription(conversation.ConversationID, queued)
 			}

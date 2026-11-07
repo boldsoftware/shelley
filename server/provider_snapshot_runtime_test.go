@@ -96,7 +96,7 @@ func TestProviderSnapshotWarmLoopLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-cm.drainPendingMessages(s)
+	<-cm.drainPendingMessages()
 	if pending := queuedMessages(t, database, conversation.ConversationID); len(pending) != 1 {
 		t.Fatalf("deleted account lost queued work: %+v", pending)
 	}

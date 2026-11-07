@@ -756,7 +756,7 @@ func (s *Server) finishAction(ctx context.Context, run *db.ActionRun, exitCode *
 		if conversation.Archived {
 			manager.cancelIdleCompaction()
 		} else {
-			manager.drainPendingMessages(s)
+			manager.drainPendingMessages()
 		}
 	}
 	return nil

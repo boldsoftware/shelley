@@ -440,7 +440,7 @@ func TestQueuedProvenanceWrapsAfterHydrationAndDrain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manager.drainPendingMessages(server)
+	manager.drainPendingMessages()
 	wrapped := `<subagent_message conversation_id="` + child.ConversationID + `" slug="backend">` +
 		"\nqueued &lt;progress&gt;\n</subagent_message>"
 	call := held.waitCall(t, wrapped)
@@ -510,7 +510,7 @@ func TestTranscriptionSenderProvenanceAppliesOnlyToFinalUserMessage(t *testing.T
 	assertSenderSource(t, queued[0].UserData, child.ConversationID, "backend", "subagent", finalText)
 
 	manager.SetAgentWorking(false)
-	<-manager.drainPendingMessages(server)
+	<-manager.drainPendingMessages()
 	wrapped, err := messageWithSenderProvenance(final, queued[0].UserData)
 	if err != nil {
 		t.Fatal(err)

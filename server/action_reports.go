@@ -156,7 +156,7 @@ func (s *Server) queueActionReport(ctx context.Context, run *db.ActionRun) error
 	cm.logger.Info("Queued action report", "runID", run.ID, "queued_id", qm.ID)
 	cm.Touch()
 	go s.notifySubscribers(context.WithoutCancel(ctx), run.ConversationID)
-	cm.drainQueueIfIdle(s)
+	cm.drainQueueIfIdle()
 	return nil
 }
 

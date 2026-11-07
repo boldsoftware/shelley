@@ -87,7 +87,7 @@ func (cm *ConversationManager) idleWorkBlockedLocked() bool {
 // ended at sequence id endSeq: a next prompt suggestion, one compaction
 // attempt, and cache refreshes until then or the keep-warm window ends,
 // whichever is first: compaction replaces the context the cache holds.
-func (cm *ConversationManager) scheduleIdleWork(s *Server, endSeq int64) {
+func (cm *ConversationManager) scheduleIdleWork(endSeq int64) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 	if cm.role != roleTopLevel || cm.idleWorkBlockedLocked() {
@@ -107,26 +107,26 @@ func (cm *ConversationManager) scheduleIdleWork(s *Server, endSeq int64) {
 			warmFor = compactAfter
 		}
 		cm.idleCompactionTimer = time.AfterFunc(compactAfter, func() {
-			if err := s.compactIdleConversation(cm, version); err != nil {
+			if err := cm.server.compactIdleConversation(cm, version); err != nil {
 				cm.logger.Error("idle compaction failed", "error", err)
 			}
 		})
 	}
 	now := time.Now()
-	cm.scheduleCacheWarmLocked(s, version, now.Add(warmFor), now)
-	cm.suggestNextPromptLocked(s, endSeq)
+	cm.scheduleCacheWarmLocked(version, now.Add(warmFor), now)
+	cm.suggestNextPromptLocked(endSeq)
 }
 
 // scheduleCacheWarmLocked arms a refresh shortly before the cache last
 // refreshed at refreshed expires, if that happens before warmUntil. A provider
 // whose cache outlives the window, or that cannot warm it, is never called.
-func (cm *ConversationManager) scheduleCacheWarmLocked(s *Server, version uint64, warmUntil, refreshed time.Time) {
+func (cm *ConversationManager) scheduleCacheWarmLocked(version uint64, warmUntil, refreshed time.Time) {
 	ttl := llm.CacheTTL(cm.cacheWarmService)
 	if ttl == 0 || cm.cacheWarmRequest == nil || !refreshed.Add(ttl).Before(warmUntil) {
 		return
 	}
 	cm.cacheWarmTimer = time.AfterFunc(time.Until(refreshed.Add(ttl-ttl/5)), func() {
-		if err := cm.warmCache(s, version, warmUntil); err != nil {
+		if err := cm.warmCache(version, warmUntil); err != nil {
 			cm.logger.Error("prompt cache warm failed", "error", err)
 		}
 	})
@@ -135,7 +135,7 @@ func (cm *ConversationManager) scheduleCacheWarmLocked(s *Server, version uint64
 // warmCache replays the last successful request without generating output,
 // records its usage, then arms the next refresh. A failed or unsupported
 // refresh ends the sequence.
-func (cm *ConversationManager) warmCache(s *Server, version uint64, warmUntil time.Time) error {
+func (cm *ConversationManager) warmCache(version uint64, warmUntil time.Time) error {
 	cm.mu.Lock()
 	if cm.idleCompactionVersion != version || cm.idleWorkBlockedLocked() {
 		cm.mu.Unlock()
@@ -158,18 +158,18 @@ func (cm *ConversationManager) warmCache(s *Server, version uint64, warmUntil ti
 	if err != nil {
 		return err
 	}
-	marker, err := s.db.CreateUsageMessage(ctx, cm.conversationID, []llm.PurposedUsage{{Purpose: "cache_warm", Usage: usage}})
+	marker, err := cm.db.CreateUsageMessage(ctx, cm.conversationID, []llm.PurposedUsage{{Purpose: "cache_warm", Usage: usage}})
 	if err != nil {
 		return err
 	}
-	s.notifySubscribers(ctx, cm.conversationID, *marker)
+	cm.server.notifySubscribers(ctx, cm.conversationID, *marker)
 	if current, err := cm.cacheWarmConnectionCurrent(modelID, revision); err != nil || !current {
 		return err
 	}
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 	if cm.idleCompactionVersion == version {
-		cm.scheduleCacheWarmLocked(s, version, warmUntil, refreshed)
+		cm.scheduleCacheWarmLocked(version, warmUntil, refreshed)
 	}
 	return nil
 }

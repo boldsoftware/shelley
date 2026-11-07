@@ -369,7 +369,7 @@ func (s *Server) changeSettings(ctx context.Context, manager *ConversationManage
 		return s.resolveSettings(ctx, cur, change, modelList)
 	})
 	// Messages queued behind an interrupted turn go out now.
-	manager.drainQueueIfIdle(s)
+	manager.drainQueueIfIdle()
 	return settings, err
 }
 

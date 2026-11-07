@@ -631,7 +631,7 @@ func TestQueuedMessageFollowsModelSwitch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-manager.drainPendingMessages(e.srv)
+	<-manager.drainPendingMessages()
 	if q := queuedMessages(t, e.database, id); len(q) != 0 {
 		t.Fatalf("still queued: %+v", q)
 	}

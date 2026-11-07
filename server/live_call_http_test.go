@@ -346,7 +346,7 @@ func TestLiveDeliveryIdentitySurvivesQueueDrainAsTypedUserWork(t *testing.T) {
 	e.s.mu.Unlock()
 	ctx := contextWithTurnUserData(t.Context(), liveDeliveryUserData{DeliveryID: deliveryID})
 	message := llm.UserStringMessage("Spoken request:\nRun tests")
-	if err := manager.QueueMessage(ctx, e.s, "predictable", message); err != nil {
+	if err := manager.QueueMessage(ctx, "predictable", message); err != nil {
 		t.Fatal(err)
 	}
 	queued, err := e.database.GetQueuedMessages(t.Context(), conv.ConversationID)
@@ -363,7 +363,7 @@ func TestLiveDeliveryIdentitySurvivesQueueDrainAsTypedUserWork(t *testing.T) {
 		t.Fatal("queued Live delivery did not reopen parent completions")
 	}
 	manager.SetAgentWorking(false)
-	<-manager.drainPendingMessages(e.s)
+	<-manager.drainPendingMessages()
 	rows, err := e.database.ListTypedUserMessages(t.Context(), conv.ConversationID)
 	if err != nil || len(rows) != 1 || liveDeliveryIDFromUserData([]byte(derefString(rows[0].UserData))) != deliveryID {
 		t.Fatalf("saved typed delivery identity = %+v, %v", rows, err)

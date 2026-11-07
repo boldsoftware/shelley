@@ -32,7 +32,7 @@ func (s *Server) recoverAssistantChannelQueue(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	manager.drainQueueIfIdle(s)
+	manager.drainQueueIfIdle()
 	return nil
 }
 

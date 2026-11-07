@@ -271,7 +271,7 @@ func testQueuedMessageNoDoubleFeedOnRestart(t *testing.T) {
 	}
 
 	// Drain: creates the real row + atomically removes the array entry.
-	mgr.drainPendingMessages(server)
+	mgr.drainPendingMessages()
 
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
@@ -300,7 +300,7 @@ func testQueuedMessageNoDoubleFeedOnRestart(t *testing.T) {
 
 	// A SECOND drain must be a no-op (nothing left in array or memory).
 	// Wait for everything it could have kicked off to run to completion.
-	mgr.drainPendingMessages(server)
+	mgr.drainPendingMessages()
 	synctest.Wait()
 	msgs, _ = database.ListMessages(ctx, convID)
 	count = 0
@@ -443,7 +443,7 @@ func TestDrainWithoutLoopFeedsQueuedMessageOnce(t *testing.T) {
 	mgr.hydrated = false
 	mgr.mu.Unlock()
 
-	mgr.drainPendingMessages(server)
+	mgr.drainPendingMessages()
 
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {

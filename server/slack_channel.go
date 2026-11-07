@@ -124,7 +124,7 @@ func (s *Server) receiveSlackEvent(ctx context.Context, endpoint string, ev slac
 		return "", err
 	}
 	if delivered {
-		manager.drainQueueIfIdle(s)
+		manager.drainQueueIfIdle()
 		return id, nil
 	}
 	if conv.Model == nil {

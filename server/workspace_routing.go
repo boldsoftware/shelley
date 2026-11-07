@@ -302,7 +302,7 @@ func (cm *ConversationManager) checkProjectTurn(ctx context.Context) error {
 	}
 	// Copies a fresh VM after unarchiving, retries a failure, and restarts
 	// a stopped SSH master.
-	cm.prepareConversationVM()
+	cm.server.prepareConversationVM(cm.conversationID)
 	return nil
 }
 

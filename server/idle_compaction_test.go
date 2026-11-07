@@ -198,7 +198,7 @@ func TestIdleCompactionActivityAndSettingsInvalidateCallback(t *testing.T) {
 					cm.mu.Lock()
 					cm.changingSettings = true
 					cm.mu.Unlock()
-					if err := cm.QueueMessage(t.Context(), h.server, "predictable", llm.UserStringMessage("echo: queued")); err != nil {
+					if err := cm.QueueMessage(t.Context(), "predictable", llm.UserStringMessage("echo: queued")); err != nil {
 						t.Fatal(err)
 					}
 					if _, err := h.db.ClearQueuedMessages(t.Context(), h.convID); err != nil {
@@ -208,7 +208,7 @@ func TestIdleCompactionActivityAndSettingsInvalidateCallback(t *testing.T) {
 					cm.changingSettings = false
 					cm.mu.Unlock()
 				case "transcription":
-					if _, err := cm.QueueTranscription(t.Context(), h.server, db.QueuedMessage{
+					if _, err := cm.QueueTranscription(t.Context(), db.QueuedMessage{
 						ID: "audio", Kind: db.QueuedMessageKindTranscription, State: db.QueuedMessageStateWorking,
 						CreatedAt: time.Now(), Model: "predictable",
 						Transcription: &db.QueuedTranscription{MediaPath: "/unused/audio.webm"},

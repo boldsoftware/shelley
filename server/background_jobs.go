@@ -204,7 +204,7 @@ func (s *Server) deliverBackgroundJobNotice(ctx context.Context, job claudetool.
 		data.Duration = outcome.Elapsed.String()
 	}
 	ctx = contextWithTurnUserData(ctx, data)
-	return cm.InjectMessage(ctx, s, modelID, llm.UserStringMessage(text))
+	return cm.InjectMessage(ctx, modelID, llm.UserStringMessage(text))
 }
 
 // BackgroundJobInfo describes a running background job to the UI.

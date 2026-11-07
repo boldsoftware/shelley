@@ -29,7 +29,7 @@ const (
 // turn's would-be prefix, the turn's last request and what followed it, plus
 // the suggestion prompt, so the provider's prompt cache covers nearly all of
 // it. Idle work cancellation stops it. The caller holds mu.
-func (cm *ConversationManager) suggestNextPromptLocked(s *Server, endSeq int64) {
+func (cm *ConversationManager) suggestNextPromptLocked(endSeq int64) {
 	tail := cm.cacheWarmTail
 	// Providers reject empty messages, and an empty reply leaves nothing to
 	// follow up on anyway.
@@ -43,13 +43,14 @@ func (cm *ConversationManager) suggestNextPromptLocked(s *Server, endSeq int64) 
 	cm.cancelSuggestion = cancel
 	go func() {
 		defer cancel()
-		if err := cm.suggestNextPrompt(ctx, s, endSeq, service, &req); err != nil && !errors.Is(ctx.Err(), context.Canceled) {
+		if err := cm.suggestNextPrompt(ctx, endSeq, service, &req); err != nil && !errors.Is(ctx.Err(), context.Canceled) {
 			cm.logger.Warn("next prompt suggestion failed", "error", err)
 		}
 	}()
 }
 
-func (cm *ConversationManager) suggestNextPrompt(ctx context.Context, s *Server, endSeq int64, service llm.Service, req *llm.Request) error {
+func (cm *ConversationManager) suggestNextPrompt(ctx context.Context, endSeq int64, service llm.Service, req *llm.Request) error {
+	s := cm.server
 	if on, err := s.flagOn(ctx, FlagNextPromptSuggestions); err != nil || !on {
 		return err
 	}

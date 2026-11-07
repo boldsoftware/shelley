@@ -1486,7 +1486,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		if !req.Queue {
 			queue = manager.InjectMessage
 		}
-		if err := queue(ctx, s, modelID, userMessage); err != nil {
+		if err := queue(ctx, modelID, userMessage); err != nil {
 			s.internalError(w, "Failed to queue user message", err, "conversationID", conversationID)
 			return
 		}
@@ -4042,7 +4042,7 @@ func (s *Server) handleSendQueuedNow(w http.ResponseWriter, r *http.Request, con
 		s.internalError(w, "Failed to initialize conversation for send now", err, "conversationID", conversationID)
 		return
 	}
-	if err := manager.SendQueuedNow(r.Context(), s, queuedID); err != nil {
+	if err := manager.SendQueuedNow(r.Context(), queuedID); err != nil {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
@@ -4067,9 +4067,9 @@ func (s *Server) handleCancelQueued(w http.ResponseWriter, r *http.Request, conv
 	err := s.cancelQueuedTranscriptions(ctx, conversationID, queuedID, func() (err error) {
 		switch {
 		case active && queuedID != "":
-			_, err = manager.CancelQueuedMessage(ctx, s, queuedID)
+			_, err = manager.CancelQueuedMessage(ctx, queuedID)
 		case active:
-			_, err = manager.CancelQueuedMessages(ctx, s)
+			_, err = manager.CancelQueuedMessages(ctx)
 		case queuedID != "":
 			_, err = s.db.RemoveQueuedMessages(ctx, conversationID, queuedID)
 		default:
@@ -4415,7 +4415,7 @@ func (s *Server) startNewGeneration(ctx context.Context, conversationID string) 
 
 	manager.broadcastStream(StreamResponse{Conversation: &conversation})
 	// Messages queued while it stopped the turn go out in the new generation.
-	manager.drainQueueIfIdle(s)
+	manager.drainQueueIfIdle()
 
 	return conversation, nil
 }

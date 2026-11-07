@@ -97,7 +97,7 @@ func TestBackgroundJobExitDoesNotWaitForConversation(t *testing.T) {
 					cm.mu.Lock()
 					cm.changingSettings = false
 					cm.mu.Unlock()
-					cm.drainQueueIfIdle(s)
+					cm.drainQueueIfIdle()
 				}
 				defer func() {
 					if release != nil {

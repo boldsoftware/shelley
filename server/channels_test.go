@@ -413,7 +413,7 @@ func TestChannelMessageInjectsAfterCurrentTool(t *testing.T) {
 				t.Fatal(err)
 			}
 			if queuedUI {
-				if err := manager.QueueMessage(t.Context(), server, "predictable", llm.UserStringMessage("from the UI")); err != nil {
+				if err := manager.QueueMessage(t.Context(), "predictable", llm.UserStringMessage("from the UI")); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -501,7 +501,7 @@ func TestChannelMessagesDeliverToAssistant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := manager.QueueMessage(t.Context(), server, "predictable", llm.UserStringMessage("from the UI")); err != nil {
+	if err := manager.QueueMessage(t.Context(), "predictable", llm.UserStringMessage("from the UI")); err != nil {
 		t.Fatal(err)
 	}
 	media := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -69,7 +69,7 @@ func (s *Server) notifyMCPServersChanged(ctx context.Context, action, name strin
 		modelID := cm.modelID
 		cm.mu.Unlock()
 		data := mcpNoticeUserData{MCPServerChange: action, ServerName: name, Text: text}
-		if err := cm.InjectMessage(contextWithTurnUserData(ctx, data), s, modelID, llm.UserStringMessage(text)); err != nil {
+		if err := cm.InjectMessage(contextWithTurnUserData(ctx, data), modelID, llm.UserStringMessage(text)); err != nil {
 			s.logger.Warn("failed to inject MCP server change notice", "conversation", cm.conversationID, "error", err)
 		}
 	}
