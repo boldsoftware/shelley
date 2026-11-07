@@ -1031,19 +1031,7 @@ func (s *Service) PatchProfile() string {
 // emitted and the provider applies its own default (often not "off" for
 // reasoning models), which Shelley cannot name — so it returns "".
 func (s *Service) DefaultReasoningLevel() string {
-	if s.DisableReasoning {
-		return ""
-	}
-	if effort, ok := overrideReasoningEffort(s.ReasoningOverride, &llm.Request{}, s.ThinkingLevel, s.ReasoningEffort); ok {
-		return defaultReasoningLevel(effort)
-	}
-	if s.ReasoningEffort != "" {
-		return s.ReasoningEffort
-	}
-	if s.ThinkingLevel != llm.ThinkingLevelDefault && s.ThinkingLevel != llm.ThinkingLevelOff {
-		return s.ThinkingLevel.Name()
-	}
-	return ""
+	return defaultReasoningLevel(s.DisableReasoning, s.ReasoningOverride, s.ThinkingLevel, s.ReasoningEffort)
 }
 
 // SupportsImages reports whether this model accepts image inputs. Defaults
@@ -1057,19 +1045,32 @@ func (s *Service) MaxImageDimension() int {
 }
 
 // MaxImageBytes returns the maximum allowed encoded size for a single image.
-// OpenAI's vision docs cap image inputs at 20 MB per image
-// (https://platform.openai.com/docs/guides/images-vision).
-func (s *Service) MaxImageBytes() int {
-	return 20 * 1024 * 1024
-}
+func (s *Service) MaxImageBytes() int { return maxImageBytes }
 
-// defaultReasoningLevel translates the wire spelling to the canonical API/UI
-// name. Provider-verbatim values otherwise remain untouched.
-func defaultReasoningLevel(effort string) string {
-	if effort == "none" {
-		return "off"
+// maxImageBytes is OpenAI's 20 MB per-image input cap
+// (https://platform.openai.com/docs/guides/images-vision).
+const maxImageBytes = 20 * 1024 * 1024
+
+// defaultReasoningLevel implements DefaultReasoningLevel for both OpenAI
+// services. Endpoint overrides report "none" by its canonical API/UI name,
+// "off"; provider-verbatim efforts are otherwise returned untouched.
+func defaultReasoningLevel(disabled bool, override *modelsdev.ReasoningCapabilities, level llm.ThinkingLevel, effort string) string {
+	if disabled {
+		return ""
 	}
-	return effort
+	if e, ok := overrideReasoningEffort(override, &llm.Request{}, level, effort); ok {
+		if e == "none" {
+			return "off"
+		}
+		return e
+	}
+	if effort != "" {
+		return effort
+	}
+	if level != llm.ThinkingLevelDefault && level != llm.ThinkingLevelOff {
+		return level.Name()
+	}
+	return ""
 }
 
 func modelReasoningCapabilities(override *modelsdev.ReasoningCapabilities, endpoint string, model Model) (modelsdev.ReasoningCapabilities, bool) {

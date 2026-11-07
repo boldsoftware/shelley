@@ -636,19 +636,7 @@ func (s *ResponsesService) Provider() string { return s.ProviderName }
 // neither is set, no reasoning field is emitted and the provider applies its
 // own default (which Shelley cannot name), so it returns "".
 func (s *ResponsesService) DefaultReasoningLevel() string {
-	if s.DisableReasoning {
-		return ""
-	}
-	if effort, ok := overrideReasoningEffort(s.ReasoningOverride, &llm.Request{}, s.ThinkingLevel, s.ReasoningEffort); ok {
-		return defaultReasoningLevel(effort)
-	}
-	if s.ReasoningEffort != "" {
-		return s.ReasoningEffort
-	}
-	if s.ThinkingLevel != llm.ThinkingLevelDefault && s.ThinkingLevel != llm.ThinkingLevelOff {
-		return s.ThinkingLevel.Name()
-	}
-	return ""
+	return defaultReasoningLevel(s.DisableReasoning, s.ReasoningOverride, s.ThinkingLevel, s.ReasoningEffort)
 }
 
 func (s *ResponsesService) SupportsServerSideWebSearch() bool { return true }
@@ -691,11 +679,7 @@ func (s *ResponsesService) MaxImageDimension() int {
 }
 
 // MaxImageBytes returns the maximum allowed encoded size for a single image.
-// OpenAI's vision docs cap image inputs at 20 MB per image
-// (https://platform.openai.com/docs/guides/images-vision).
-func (s *ResponsesService) MaxImageBytes() int {
-	return 20 * 1024 * 1024
-}
+func (s *ResponsesService) MaxImageBytes() int { return maxImageBytes }
 
 // Do sends a request to OpenAI using the Responses API.
 // buildRequest converts ir into a streaming Responses API request.
