@@ -1145,37 +1145,25 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 // into a SupportsImages bool. "auto" is resolved from the model's endpoint URL
 // and name; unknown models default to allowing images.
 func ResolveSupportsImages(endpoint, modelName, imageSupport string) bool {
-	switch imageSupport {
-	case "yes":
-		return true
-	case "no":
-		return false
-	case "auto", "":
-		supported, found := modelsdev.LookupImageSupport(endpoint, modelName)
-		if !found {
-			return true
-		}
-		return supported
-	default:
-		return true
-	}
+	return resolveSupport(imageSupport, func() (bool, bool) { return modelsdev.LookupImageSupport(endpoint, modelName) })
 }
 
 // ResolveSupportsReasoning turns a stored reasoning_support value
 // ("auto"|"yes"|"no") into a capability boolean. Unknown models default to
 // supporting reasoning so custom endpoints remain configurable.
 func ResolveSupportsReasoning(endpoint, modelName, reasoningSupport string) bool {
-	switch reasoningSupport {
-	case "yes":
-		return true
+	return resolveSupport(reasoningSupport, func() (bool, bool) { return modelsdev.LookupReasoningSupport(endpoint, modelName) })
+}
+
+// resolveSupport resolves a stored "auto"|"yes"|"no" capability; "auto"
+// asks lookup, and anything lookup doesn't know counts as supported.
+func resolveSupport(setting string, lookup func() (supported, found bool)) bool {
+	switch setting {
 	case "no":
 		return false
 	case "auto", "":
-		supported, found := modelsdev.LookupReasoningSupport(endpoint, modelName)
-		if !found {
-			return true
-		}
-		return supported
+		supported, found := lookup()
+		return supported || !found
 	default:
 		return true
 	}
