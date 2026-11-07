@@ -820,6 +820,7 @@ func (s *ResponsesService) buildRequest(ctx context.Context, ir *llm.Request) (r
 }
 
 func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error) {
+	ctx = llmhttp.WithOpenAIProtocol(ctx)
 	req, fullURL, origin, err := s.buildRequest(ctx, ir)
 	if err != nil {
 		return nil, err
@@ -1076,6 +1077,7 @@ const prewarmOutputCap = 16
 // refreshes the cached prefix without generating output. It makes one
 // non-streaming attempt; any output is an error.
 func (s *ResponsesService) WarmCache(ctx context.Context, ir *llm.Request) (llm.Usage, error) {
+	ctx = llmhttp.WithOpenAIProtocol(ctx)
 	if !s.supportsPrewarm() {
 		return llm.Usage{}, fmt.Errorf("%w: %s cannot prewarm", llm.ErrCacheWarmUnsupported, cmp.Or(s.Model, DefaultModel).ModelName)
 	}

@@ -27,6 +27,7 @@ const (
 	promptCacheKey
 	modelIDKey
 	providerKey
+	openAIProtocolKey
 )
 
 // shelleyRequestIDHeader is the header Shelley sets on every LLM request with a
@@ -124,6 +125,17 @@ func ProviderFromContext(ctx context.Context) string {
 	return ""
 }
 
+// WithOpenAIProtocol marks requests made by an OpenAI-compatible adapter.
+func WithOpenAIProtocol(ctx context.Context) context.Context {
+	return context.WithValue(ctx, openAIProtocolKey, true)
+}
+
+// IsOpenAIProtocol reports whether an OpenAI-compatible adapter marked the context.
+func IsOpenAIProtocol(ctx context.Context) bool {
+	v, _ := ctx.Value(openAIProtocolKey).(bool)
+	return v
+}
+
 const idleTimeoutMessage = "llm stream idle timeout: no data received within idle window"
 
 type idleTimeoutError struct {
@@ -196,13 +208,12 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		switch ProviderFromContext(req.Context()) {
 		case "fireworks":
 			req.Header.Set("x-session-affinity", cacheKey)
-		case "openai":
-			// The Responses request body also carries the cache key as
-			// prompt_cache_key, but the ChatGPT Codex backend (behind
-			// subscription proxies) ignores it and mints a random key per
-			// request unless session-id is set, which then becomes the cache
-			// key. Codex CLI does the same. api.openai.com ignores the header.
-			req.Header.Set("session-id", cacheKey)
+		default:
+			// Codex and some OpenAI-compatible gateways need the header
+			// even when the body carries prompt_cache_key.
+			if IsOpenAIProtocol(req.Context()) {
+				req.Header.Set("session-id", cacheKey)
+			}
 		}
 	}
 

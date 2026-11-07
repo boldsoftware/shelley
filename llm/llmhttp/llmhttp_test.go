@@ -51,8 +51,16 @@ func TestContextFunctions(t *testing.T) {
 		t.Errorf("ProviderFromContext() = %q, want %q", got, "anthropic")
 	}
 
+	ctx = WithOpenAIProtocol(ctx)
+	if !IsOpenAIProtocol(ctx) {
+		t.Error("IsOpenAIProtocol() = false, want true")
+	}
+
 	// Test empty context
 	emptyCtx := t.Context()
+	if IsOpenAIProtocol(emptyCtx) {
+		t.Error("IsOpenAIProtocol(empty) = true, want false")
+	}
 	if got := ConversationIDFromContext(emptyCtx); got != "" {
 		t.Errorf("ConversationIDFromContext(empty) = %q, want empty", got)
 	}
@@ -101,14 +109,13 @@ func TestTransportAddsHeaders(t *testing.T) {
 		t.Errorf("x-session-affinity = %q, want empty for non-fireworks", got)
 	}
 	if got := receivedHeaders.Get("session-id"); got != "" {
-		t.Errorf("session-id = %q, want empty for non-openai", got)
+		t.Errorf("session-id = %q, want empty without OpenAI protocol", got)
 	}
 }
 
 // TestTransportProviderCacheAffinityHeaders covers the per-provider prompt-cache
-// affinity headers: x-session-affinity for Fireworks, and session-id for the
-// ChatGPT Codex backend, which otherwise ignores the body's prompt_cache_key and
-// mints a fresh cache key per request.
+// affinity headers: x-session-affinity for Fireworks, and session-id for
+// OpenAI-compatible requests regardless of provider name.
 func TestTransportProviderCacheAffinityHeaders(t *testing.T) {
 	var receivedHeaders http.Header
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -117,15 +124,27 @@ func TestTransportProviderCacheAffinityHeaders(t *testing.T) {
 	defer server.Close()
 
 	tests := []struct {
+		name                                 string
 		provider, sessionAffinity, sessionID string
+		openAI                               bool
 	}{
-		{"fireworks", "shared-prefix", ""},
-		{"openai", "", "shared-prefix"},
-		{"anthropic", "", ""},
+		{"fireworks", "fireworks", "shared-prefix", "", true},
+		{"openai", "openai", "", "shared-prefix", true},
+		{"custom-openai", "zen-go", "", "shared-prefix", true},
+		{"unnamed-openai", "", "", "shared-prefix", true},
+		{"provider-name-alone", "openai", "", "", false},
+		{"unknown-protocol", "zen-go", "", "", false},
+		{"anthropic", "anthropic", "", "", false},
+		{"gemini", "gemini", "", "", false},
+		{"builtin", "builtin", "", "", false},
+		{"unnamed", "", "", "", false},
 	}
 	for _, tt := range tests {
-		t.Run(tt.provider, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			ctx := WithProvider(WithPromptCacheKey(t.Context(), "shared-prefix"), tt.provider)
+			if tt.openAI {
+				ctx = WithOpenAIProtocol(ctx)
+			}
 			req, _ := http.NewRequestWithContext(ctx, "POST", server.URL, nil)
 			resp, err := NewClient(nil).Do(req)
 			if err != nil {
