@@ -411,6 +411,7 @@ type Server struct {
 	conversationListGitCache *conversationListGitCache
 	workspace                workspaceState
 	conversationVMs          conversationVMState
+	exeVMCache               exeVMCache
 	secrets                  *secretStore
 	baseVMSetupMu            sync.Mutex // serializes starting base VM setup conversations
 	githubAPI                string     // GitHub's REST API, "" for api.github.com (tests)

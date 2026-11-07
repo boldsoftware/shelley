@@ -58,6 +58,8 @@ type conversationVMState struct {
 	configMu sync.Mutex
 	// exe, if set, replaces the exe.dev integration (tests).
 	exe func(ctx context.Context, integration, command string) ([]byte, error)
+	// page, if set, replaces an exe.dev integration's page, GET / (tests).
+	page func(integration string) string
 	// ssh, if set, replaces the ssh program, and sshConfigDir the directory
 	// ~/.ssh/config includes (tests).
 	ssh, sshConfigDir string

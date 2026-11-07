@@ -30,14 +30,32 @@
          (e: "unarchived", c: Conversation): void   // onConversationUnarchived
          (e: "renamed", c: Conversation): void      // onConversationRenamed -->
 <template>
-  <div :class="`drawer ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''}`">
+  <div :class="`drawer ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''} nav-${navTab}`">
     <!-- Header -->
     <div class="drawer-header">
       <ExeBrand v-if="workspaceMode" />
-      <h2 v-if="archivedOnly" class="app-bar-title drawer-title">{{ t("archived") }}</h2>
+      <h2 v-if="archivedOnly && navTab === 'dev'" class="app-bar-title drawer-title">
+        {{ t("archived") }}
+      </h2>
+      <div v-else-if="devProdTabs" class="nav-tabs" role="tablist" aria-label="Sidebar">
+        <button
+          v-for="tab in ['dev', 'prod'] as const"
+          :key="tab"
+          type="button"
+          role="tab"
+          class="nav-tab"
+          :class="{ active: navTab === tab }"
+          :aria-selected="navTab === tab"
+          :data-testid="`nav-tab-${tab}`"
+          @click="emit('update:navTab', tab)"
+        >
+          {{ tab }}
+        </button>
+      </div>
       <div class="drawer-header-actions">
         <!-- Search toggle button -->
         <Button
+          v-if="navTab === 'dev'"
           :class="`btn-icon${searchToolbarActive ? ' search-toggle-active' : ''}`"
           text
           severity="secondary"
@@ -55,7 +73,11 @@
           </svg>
         </Button>
         <!-- Group by button; workspace mode always groups by project -->
-        <div v-if="!workspaceMode && !showArchived" ref="groupMenuRef" class="group-by-wrapper">
+        <div
+          v-if="!workspaceMode && !showArchived && navTab === 'dev'"
+          ref="groupMenuRef"
+          class="group-by-wrapper"
+        >
           <Button
             :class="`btn-icon${groupBy !== 'none' ? ' group-by-active' : ''}`"
             text
@@ -112,7 +134,7 @@
           </div>
         </div>
         <Button
-          v-if="groupBy === 'project'"
+          v-if="navTab === 'dev' && groupBy === 'project'"
           class="btn-icon"
           text
           severity="secondary"
@@ -182,8 +204,8 @@
       v-if="workspaceMode && workspace.data.value?.assistant_id"
       href="/"
       class="workspace-assistant-row"
-      :class="{ active: workspace.isAssistant(currentConversationId) }"
-      :aria-current="workspace.isAssistant(currentConversationId) ? 'page' : undefined"
+      :class="{ active: assistantActive }"
+      :aria-current="assistantActive ? 'page' : undefined"
       data-testid="assistant-row"
       @click="selectAssistant"
     >
@@ -205,10 +227,16 @@
       </div>
     </a>
     <ServerReachability :restarting="restarting" />
-    <p v-if="rowError" class="error-line drawer-error" role="alert">
+    <p v-if="rowError" class="error-line drawer-error drawer-row-error" role="alert">
       {{ rowError }}
       <button type="button" class="text-button" @click="rowError = ''">{{ t("dismiss") }}</button>
     </p>
+    <!-- The prod tab hides the rest of the drawer but the Assistant (see
+         .nav-prod) rather than unmounting it, so dev keeps its search and
+         scroll state. -->
+    <div v-if="navTab === 'prod'" class="vm-pane">
+      <VmList :current-vm="currentVm" @select="(name) => emit('select-vm', name)" />
+    </div>
     <p
       v-if="customizations.requestError.value?.place === 'drawer'"
       class="error-line drawer-error"
@@ -805,6 +833,8 @@ import {
   saveProjectFolds,
 } from "../../utils/drawerFolds";
 import ConversationRow from "./ConversationDrawerRow.vue";
+import VmList from "./VmList.vue";
+import { devProdTabs, type NavTab } from "../../services/exeVms";
 import ProjectVMSetup from "./ProjectVMSetup.vue";
 import NameField from "./NameField.vue";
 import CustomizationStatus from "./CustomizationStatus.vue";
@@ -863,6 +893,9 @@ const props = defineProps<{
   viewedConversation?: Conversation | null;
   showActiveTrigger?: number;
   messageSentTrigger?: number;
+  navTab: NavTab;
+  // The VM shown in the main pane (from the prod tab), if any.
+  currentVm: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -874,6 +907,8 @@ const emit = defineEmits<{
   (e: "removed", id: string, next?: Conversation | null): void;
   (e: "unarchived", c: Conversation): void;
   (e: "renamed", c: Conversation): void;
+  (e: "update:navTab", tab: NavTab): void;
+  (e: "select-vm", name: string): void;
 }>();
 
 const { t } = useI18n();
@@ -893,6 +928,10 @@ const customizationFor = (id: string) => customizationByConversation.value.get(i
 const rowError = ref("");
 // In workspace mode the Assistant is pinned above the lists, not in them.
 const pinnedAssistant = (id: string) => workspaceMode && workspace.isAssistant(id);
+// A VM framed over the Assistant is what's on screen, not the Assistant.
+const assistantActive = computed(
+  () => !props.currentVm && workspace.isAssistant(props.currentConversationId),
+);
 const assistantWorking = computed(() =>
   props.conversations.some(
     (conversation) => workspace.isAssistant(conversation.conversation_id) && conversation.working,
@@ -2537,5 +2576,43 @@ button.drawer-search-shelley:disabled {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.drawer.nav-prod
+  > :not(
+    .drawer-header,
+    .workspace-assistant-row,
+    .server-reachability,
+    .drawer-row-error,
+    .vm-pane
+  ) {
+  display: none;
+}
+.vm-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.nav-tabs {
+  display: flex;
+  gap: 0.125rem;
+  padding: 0.125rem;
+  border-radius: 0.5rem;
+  background: var(--bg-secondary);
+}
+.nav-tab {
+  padding: 0.125rem 0.625rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: none;
+  color: var(--text-secondary);
+  font-size: var(--font-size-13);
+  font-weight: 500;
+  cursor: pointer;
+}
+.nav-tab.active {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 </style>

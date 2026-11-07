@@ -75,3 +75,11 @@ func (s *Server) flagOn(ctx context.Context, f featureflags.Flag) (bool, error) 
 	}
 	return on, nil
 }
+
+// FlagDevProdTabs gives workspace mode's sidebar dev and prod tabs: prod
+// lists the user's exe.dev VMs (see exe_vms.go).
+var FlagDevProdTabs = featureflags.Register(featureflags.Flag{
+	Name:        "dev-prod-tabs",
+	Description: "Workspace mode: sidebar dev/prod tabs; prod lists your exe.dev VMs.",
+	Default:     false,
+})

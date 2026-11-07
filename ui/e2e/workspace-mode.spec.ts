@@ -18,6 +18,7 @@ test("workspace mode pins the Assistant and always groups by project", async ({
     await expect(page.locator("h1.header-title")).toHaveText("Assistant");
     await page.getByRole("button", { name: "Open tasks", exact: true }).click();
     await expect(page.getByTestId("assistant-row")).toBeVisible();
+    await expect(page.getByTestId("nav-tab-dev")).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Self", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Group conversations" })).toHaveCount(0);
   } finally {

@@ -452,8 +452,8 @@ func isConversationSlugPath(path string) bool {
 }
 
 func isSPARoute(path string) bool {
-	return path == "/new" || strings.HasPrefix(path, "/export/") || strings.HasPrefix(path, "/project/") ||
-		path == "/secrets"
+	return path == "/new" || strings.HasPrefix(path, "/export/") || strings.HasPrefix(path, "/vm/") ||
+		strings.HasPrefix(path, "/project/") || path == "/secrets"
 }
 
 // acceptsGzip reports whether r accepts gzip encoding.
@@ -635,6 +635,11 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		s.internalError(w, "Failed to read settings", err)
 		return
 	}
+	devProdTabs, err := s.devProdTabs(r.Context())
+	if err != nil {
+		s.internalError(w, "Failed to read feature flags", err)
+		return
+	}
 	compactNav, err := s.flagOn(r.Context(), FlagCompactNav)
 	if err != nil {
 		s.internalError(w, "Failed to read feature flags", err)
@@ -643,6 +648,7 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 	initData := map[string]interface{}{
 		// workspace mode: see FlagWorkspace.
 		"workspace":                 s.workspaceMode(),
+		"dev_prod_tabs":             devProdTabs,
 		"compact_nav":               compactNav,
 		"models":                    modelList,
 		"model_upgrade_prompt_done": promptDone != "",

@@ -52,6 +52,9 @@
         :viewed-conversation="viewedConversation"
         :show-active-trigger="showActiveTrigger"
         :message-sent-trigger="messageSentTrigger"
+        v-model:nav-tab="navTab"
+        :current-vm="currentVm"
+        @select-vm="selectVm"
         @open="drawerOpen = true"
         @close="drawerOpen = false"
         @toggle-collapse="toggleDrawerCollapsed"
@@ -65,17 +68,29 @@
       />
 
       <div class="main-content">
+        <VmView
+          v-if="currentVm"
+          :name="currentVm"
+          :tab="vmTab"
+          :is-drawer-collapsed="drawerCollapsed"
+          @show="showVmTab"
+          @renamed="vmRenamed"
+          @deleted="leaveVm"
+          @open="openVm"
+          @open-drawer="drawerOpen = true"
+          @toggle-drawer-collapse="toggleDrawerCollapsed"
+        />
         <ProjectView
-          v-if="workspace.projectView.value"
+          v-else-if="workspace.projectView.value"
           :key="workspace.projectView.value.id"
           :is-drawer-collapsed="drawerCollapsed"
           @open-drawer="drawerOpen = true"
           @toggle-drawer-collapse="toggleDrawerCollapsed"
         />
-        <!-- Hidden, not unmounted, behind a project, so the chat keeps its
-             scroll, draft and terminals. -->
+        <!-- Hidden, not unmounted, behind a VM or a project, so the chat
+             keeps its scroll, draft and terminals. -->
         <ChatInterface
-          v-show="!workspace.projectView.value"
+          v-show="!currentVm && !workspace.projectView.value"
           ref="chatInterfaceRef"
           :conversation-id="currentConversationId"
           :stream-status="streamStatus"
@@ -323,6 +338,16 @@
 import { computed, onMounted, onUnmounted, provide, ref, watch, shallowRef } from "vue";
 import ChatInterface from "./components/ChatInterface.vue";
 import ProjectView from "./components/ProjectView.vue";
+import VmView from "./components/VmView.vue";
+import {
+  devProdTabs,
+  savedNavTab,
+  saveNavTab,
+  vmFromPath,
+  vmPath,
+  vmTabFromPath,
+  type NavTab,
+} from "../services/exeVms";
 import type { RecordingMode } from "./components/recordingDestination";
 import { isImeComposing } from "../utils/imeComposing";
 import { conversationTitle } from "../utils/conversationTitle";
@@ -483,6 +508,41 @@ const currentConversationId = ref<string | null>(null);
 provide(ConversationsListKey, conversations);
 provide(CurrentConversationIdKey, currentConversationId);
 const viewedConversation = ref<Conversation | null>(null);
+// A VM from the sidebar's prod tab, shown at /vm/<name> instead of the
+// conversation (which stays selected underneath).
+// The dev/prod tabs are workspace mode's, with the dev-prod-tabs flag.
+const currentVm = ref<string | null>(devProdTabs ? vmFromPath(window.location.pathname) : null);
+const vmTab = ref(vmTabFromPath(window.location.pathname));
+const navTab = ref<NavTab>(!devProdTabs ? "dev" : currentVm.value ? "prod" : savedNavTab());
+watch(navTab, saveNavTab);
+function selectVm(name: string) {
+  drawerOpen.value = false;
+  workspace.projectView.value = null;
+  if (currentVm.value === name) return;
+  currentVm.value = name;
+  vmTab.value = "page";
+  window.history.pushState({}, "", vmPath(name, "page"));
+}
+function showVmTab(tab: "page" | "settings") {
+  if (!currentVm.value || vmTab.value === tab) return;
+  vmTab.value = tab;
+  window.history.pushState({}, "", vmPath(currentVm.value, tab));
+}
+// A renamed VM keeps its view under its new name.
+function vmRenamed(name: string) {
+  currentVm.value = name;
+  window.history.replaceState({}, "", vmPath(name, vmTab.value));
+}
+// A new VM, e.g. a copy, opens on the same tab.
+function openVm(name: string) {
+  currentVm.value = name;
+  window.history.pushState({}, "", vmPath(name, vmTab.value));
+}
+// A deleted VM leaves for the conversation behind it.
+function leaveVm() {
+  currentVm.value = null;
+  window.history.replaceState({}, "", behindPath());
+}
 // Loaded alongside the conversation list, and again on workspace_changed;
 // a failure shows in workspace.error.
 const workspace = createWorkspace((run: ActionRunSummary) => {
@@ -501,10 +561,12 @@ const refreshWorkspace = () => void workspace.refresh().catch(() => {});
 workspace.projectView.value = projectViewFromPath(window.location.pathname);
 const drawerOpen = ref(false);
 // A project's view takes the main pane at its own path: opening it closes
-// the mobile drawer; choosing a conversation, or a new one, closes it.
+// the mobile drawer and a VM's page; choosing a conversation, a new one or a
+// VM closes it.
 watch(workspace.projectView, (view) => {
   if (!view) return;
   drawerOpen.value = false;
+  currentVm.value = null;
   const path = projectViewPath(view);
   if (window.location.pathname !== path) window.history.pushState({}, "", path);
 });
@@ -522,7 +584,7 @@ watch([workspace.projectView, workspace.data], ([view, data]) => {
     workspace.projectView.value = settings;
   }
 });
-// The path of the conversation behind a project's view.
+// The path of the conversation behind a VM's page or a project's view.
 function behindPath() {
   const behind = viewedConversation.value;
   return behind ? conversationPath(behind) : "/new";
@@ -678,7 +740,7 @@ const drawerConversations = computed(() => {
   return lingering.value ? withComposerRow(list, lingering.value, null) : list;
 });
 const drawerCurrentConversationId = computed(() =>
-  workspace.projectView.value
+  currentVm.value || workspace.projectView.value
     ? null
     : (currentConversationId.value ?? (composer.value ? COMPOSER_ROW_ID : null)),
 );
@@ -974,8 +1036,9 @@ function retryWorkspace() {
   else refreshWorkspace();
 }
 
-// The Assistant needs the workspace, which loads next to the conversation
-// list.
+// Shows the Assistant at "/" on load and on back/forward; it needs the
+// workspace, which loads next to the conversation list. It leaves a VM
+// from /vm/<name> on screen: the Assistant is selected beneath it.
 async function selectAssistant() {
   if (!workspace.data.value) await workspace.refresh();
   const id = workspace.data.value?.assistant_id;
@@ -984,7 +1047,8 @@ async function selectAssistant() {
     conversations.value.find((conversation) => conversation.conversation_id === id) ??
     (await api.getConversationBySlug(id));
   if (!assistant) throw new Error("Assistant could not be loaded");
-  selectConversation(assistant);
+  currentConversationId.value = assistant.conversation_id;
+  viewedConversation.value = assistant;
 }
 
 // ---- conversation actions ----
@@ -1022,6 +1086,7 @@ async function startNewConversation(project: string): Promise<boolean> {
   }
   currentConversationId.value = null;
   viewedConversation.value = null;
+  currentVm.value = null;
   workspace.projectView.value = null;
   // An unsent new conversation's row stays, now in project.
   const row = composer.value;
@@ -1039,6 +1104,7 @@ function startNewConversationWithCwd(cwd: string | null) {
   if (cwd) localStorage.setItem("shelley_selected_cwd", cwd);
   currentConversationId.value = null;
   viewedConversation.value = null;
+  currentVm.value = null;
   workspace.projectView.value = null;
   window.history.replaceState({}, "", "/new");
   drawerOpen.value = false;
@@ -1076,7 +1142,8 @@ function selectConversation(conversation: Conversation) {
     else reopenLingering();
     return;
   }
-  if (workspace.projectView.value) {
+  if (currentVm.value || workspace.projectView.value) {
+    currentVm.value = null;
     workspace.projectView.value = null;
     window.history.pushState({}, "", conversationPath(conversation));
   }
@@ -1374,8 +1441,10 @@ function handleKeyDown(e: KeyboardEvent) {
 
 // ---- popstate (back/forward + SubagentTool navigation) ----
 async function handlePopState() {
+  currentVm.value = devProdTabs ? vmFromPath(window.location.pathname) : null;
+  vmTab.value = vmTabFromPath(window.location.pathname);
   workspace.projectView.value = projectViewFromPath(window.location.pathname);
-  if (workspace.projectView.value) return;
+  if (currentVm.value || workspace.projectView.value) return;
   if (isNewPath()) {
     currentConversationId.value = null;
     viewedConversation.value = null;
@@ -1412,10 +1481,17 @@ async function handlePopState() {
 
 // ---- page title + URL sync ----
 watch(
-  [currentConversationId, viewedConversation, conversations, workspace.projectView, workspace.data],
+  [
+    currentConversationId,
+    viewedConversation,
+    conversations,
+    currentVm,
+    workspace.projectView,
+    workspace.data,
+  ],
   () => {
     const view = workspace.projectView.value;
-    const page = view && (workspace.projectById(view.id)?.name ?? "Project");
+    const page = currentVm.value || (view && (workspace.projectById(view.id)?.name ?? "Project"));
     if (page) {
       const hostname = window.__SHELLEY_INIT__?.hostname;
       document.title = [page, hostname, "Shelley Agent"].filter(Boolean).join(" - ");

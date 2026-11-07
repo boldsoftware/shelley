@@ -283,6 +283,8 @@ export interface InitData {
   user_email?: string;
   // workspace mode: see utils/workspaceMode.ts.
   workspace?: boolean;
+  // workspace mode's sidebar dev/prod tabs: see services/exeVms.ts.
+  dev_prod_tabs?: boolean;
   // title-only sidebar rows: see utils/workspaceMode.ts.
   compact_nav?: boolean;
   // True once the "upgrade your other conversations too?" offer has been

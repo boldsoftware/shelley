@@ -30,6 +30,36 @@ async function openWorkspace(page: Page) {
   await expect(page.getByTestId("assistant-row")).toBeVisible();
 }
 
+test("the dev-prod-tabs flag adds a prod tab that links to exe.dev integration setup", async ({
+  page,
+  request,
+}) => {
+  const on = await request.post("/feature-flags", { data: { name: "dev-prod-tabs", value: true } });
+  expect(on.ok()).toBeTruthy();
+  try {
+    // A host without an exe.dev integration (as in CI).
+    const setupUrl =
+      "https://exe.dev/integrations/add?service=exe-dev&attach=vm%3Ahost&source=shelley";
+    await page.route("**/api/exe-vms", (route) =>
+      route.fulfill({ json: { vms: [], setup_url: setupUrl } }),
+    );
+    await page.goto("/");
+    await openWorkspace(page);
+    // prod keeps the pinned Assistant above its VM list.
+    await page.getByTestId("nav-tab-prod").click();
+    await expect(page.getByTestId("assistant-row")).toBeVisible();
+    await expect(page.getByTestId("assistant-row")).toHaveAttribute("href", "/");
+    await expect(page.getByTestId("assistant-row").getByRole("button")).toHaveCount(0);
+    const link = page.getByRole("link", { name: "Set up an exe.dev integration" });
+    await expect(link).toHaveAttribute("href", setupUrl);
+    await expect(page.getByText("No VMs.")).toHaveCount(0);
+    await page.getByTestId("nav-tab-dev").click();
+  } finally {
+    const off = await request.delete("/feature-flags", { data: { name: "dev-prod-tabs" } });
+    expect(off.ok()).toBeTruthy();
+  }
+});
+
 test("the onboarding card tops the Assistant's transcript until dismissed", async ({
   page,
   request,
@@ -118,6 +148,8 @@ test("root opens the pinned Assistant; explicit conversation links remain select
   await openWorkspace(page);
   await expect(page.getByTestId("assistant-row")).toHaveCount(1);
   await expect(page.locator(".conversation-group").getByTestId("assistant-row")).toHaveCount(0);
+  // The dev/prod tabs need their own flag.
+  await expect(page.getByTestId("nav-tab-prod")).toHaveCount(0);
   // Archived tasks are behind search's Archived toggle, listed with the
   // active ones; the footer button is stock Shelley's.
   await expect(page.getByRole("button", { name: "View Archived", exact: true })).toHaveCount(0);

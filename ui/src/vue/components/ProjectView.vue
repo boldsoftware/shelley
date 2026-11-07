@@ -35,30 +35,13 @@
             :submit="renameProject"
           />
         </h1>
-        <nav v-if="project" class="project-tabs" :aria-label="t('projectTabs')">
-          <button
-            v-if="pageTab"
-            type="button"
-            class="project-tab"
-            :class="{ active: tab === 'page' }"
-            :title="pageTab.url"
-            :aria-current="tab === 'page' ? 'page' : undefined"
-            @click="show('page')"
-          >
-            <i class="pi pi-globe" aria-hidden="true" />
-            <span class="project-tab-title">{{ pageTab.title }}</span>
-          </button>
-          <button
-            type="button"
-            class="project-tab"
-            :class="{ active: tab === 'settings' }"
-            :aria-current="tab === 'settings' ? 'page' : undefined"
-            @click="show('settings')"
-          >
-            <i class="pi pi-cog" aria-hidden="true" />
-            <span class="project-tab-title">{{ t("projectSettingsTab") }}</span>
-          </button>
-        </nav>
+        <ViewTabs
+          v-if="project"
+          :tabs="tabs"
+          :active="tab"
+          :label="t('projectTabs')"
+          @show="show"
+        />
       </div>
       <div v-if="pageTab && tab === 'page'" class="header-actions">
         <Button
@@ -98,6 +81,7 @@ import Button from "primevue/button";
 import ExeBrand from "./ExeBrand.vue";
 import PageFrames from "./PageFrames.vue";
 import EditableTitle from "./EditableTitle.vue";
+import ViewTabs, { type ViewTab } from "./ViewTabs.vue";
 import ProjectSettings from "./ProjectSettings.vue";
 import { workspaceApi } from "../../services/workspace";
 import { useFrameChecks } from "../composables/pageTabs";
@@ -135,6 +119,17 @@ const pageTab = computed(() => {
     // The server only saves http(s) URLs.
   }
   return view({ key: PAGE, url, title, linked: 1 }, reloadedAt.value);
+});
+const tabs = computed(() => {
+  const settings: ViewTab<ProjectTab> = {
+    key: "settings",
+    icon: "pi-cog",
+    title: t("projectSettingsTab"),
+  };
+  const page = pageTab.value;
+  return page
+    ? [{ key: "page" as const, icon: "pi-globe", title: page.title, tooltip: page.url }, settings]
+    : [settings];
 });
 // The frame mounts once the page is first shown, and stays mounted.
 const mounted = ref(new Set<string>());
@@ -192,46 +187,5 @@ async function rename(name: string) {
 }
 .project-view-loading {
   margin: auto;
-}
-.project-tabs {
-  display: flex;
-  align-items: stretch;
-  gap: 0.25rem;
-  min-width: 0;
-  flex: 0 1 auto;
-}
-.project-tab {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex: none;
-  max-width: 14rem;
-  /* No taller than the title row's buttons. */
-  height: 1.875rem;
-  padding: 0 0.25rem;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: var(--font-size-13);
-  white-space: nowrap;
-  cursor: pointer;
-}
-/* On a narrow screen the page's host gives way, Settings stays whole. */
-.project-tab:first-child:not(:last-child) {
-  flex: 0 1 auto;
-  min-width: 2rem;
-}
-.project-tab.active {
-  border-bottom-color: var(--primary, currentColor);
-  color: var(--text-primary);
-}
-.project-tab i {
-  font-size: 0.7rem;
-}
-.project-tab-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 </style>

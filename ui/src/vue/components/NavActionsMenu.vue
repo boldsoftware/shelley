@@ -1,5 +1,5 @@
-<!-- The sidebar's ⋯: one trigger and menu for conversation rows and project
-     headings. Items may nest (a submenu); a disabled item's `title` says why.
+<!-- The sidebar's ⋯: one trigger and menu for conversation rows, project headings and
+     VM rows. Items may nest (a submenu); a disabled item's `title` says why.
      open() shows it anchored to the trigger, for right-clicks. -->
 <template>
   <Button
