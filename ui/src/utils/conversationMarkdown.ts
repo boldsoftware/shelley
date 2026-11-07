@@ -14,7 +14,6 @@ const TYPE_TOOL_RESULT = 6;
 const TYPE_SERVER_TOOL_USE = 7;
 const TYPE_WEB_SEARCH_TOOL_RESULT = 8;
 
-
 function parseUserData(message: Message): Record<string, unknown> | null {
   if (!message.user_data) return null;
   try {
