@@ -29,15 +29,12 @@ type Service struct {
 	HTTPC         *http.Client      // defaults to http.DefaultClient if nil
 	URL           string            // Gemini API URL, uses the gemini package default if empty
 	APIKey        string            // must be non-empty
-	Model         string            // defaults to DefaultModel if empty
-	MaxTokens     int               // defaults to DefaultMaxTokens if zero
+	Model         string            // model name or models/name; defaults to DefaultModel if empty
+	MaxTokens     int               // zero uses the model limit, or DefaultMaxTokens if unknown
 	ThinkingLevel llm.ThinkingLevel // service-level default; zero (ThinkingLevelDefault) leaves thinkingConfig at the model default
 
-	// ReasoningEffort, if non-empty, is used as the thinkingConfig.thinkingLevel
-	// value sent to Gemini 3.x verbatim, overriding ThinkingLevel. Ignored for
-	// Gemini 2.5 (which uses thinkingBudget). This mirrors oai.ResponsesService
-	// so custom-model configurations can pass provider-specific values through
-	// without Shelley needing to know them.
+	// ReasoningEffort overrides ThinkingLevel. Known models validate the value;
+	// budget-based models translate it to tokens. Unknown models send it verbatim.
 	ReasoningEffort string
 
 	// SupportsImages_ controls whether this service advertises image-input support.
@@ -158,6 +155,9 @@ func convertJSONSchemaToGeminiSchema(schemaJSON map[string]any) gemini.Schema {
 
 // buildGeminiRequest converts Sketch's llm.Request to Gemini's request format
 func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) {
+	if s.MaxTokens < 0 {
+		return nil, fmt.Errorf("max output tokens must not be negative: %d", s.MaxTokens)
+	}
 	gemReq := &gemini.Request{}
 
 	// Add system instruction if provided
@@ -178,6 +178,8 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 		}
 	}
 
+	toolNamesByID := make(map[string]string)
+
 	// Convert messages to Gemini content format
 	for _, msg := range req.Messages {
 		// Set the role based on the message role
@@ -190,13 +192,10 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 			Role: role,
 		}
 
-		// Store tool usage information to correlate tool uses with responses
-		toolNameToID := make(map[string]string)
-
 		// First pass: collect tool use IDs for correlation
 		for _, c := range msg.Content {
 			if c.Type == llm.ContentTypeToolUse && c.ID != "" {
-				toolNameToID[c.ToolName] = c.ID
+				toolNamesByID[c.ID] = c.ToolName
 			}
 		}
 
@@ -248,8 +247,7 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 					c.ID = fmt.Sprintf("gemini_tool_%s_%d", c.ToolName, time.Now().UnixNano())
 				}
 
-				// Save the ID for this tool name for future correlation
-				toolNameToID[c.ToolName] = c.ID
+				toolNamesByID[c.ID] = c.ToolName
 
 				slog.DebugContext(context.Background(), "gemini_preparing_tool_use",
 					"tool_name", c.ToolName,
@@ -259,6 +257,7 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 
 				content.Parts = append(content.Parts, gemini.Part{
 					FunctionCall: &gemini.FunctionCall{
+						ID:   c.ID,
 						Name: c.ToolName,
 						Args: args,
 					},
@@ -287,29 +286,12 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 				}
 				response["result"] = resultText
 
-				// Determine the function name to use - this is critical
-				funcName := ""
-
-				// First try to find the function name from a stored toolUseID if we have one
-				if c.ToolUseID != "" {
-					// Try to derive the tool name from the previous tools we've seen
-					for name, id := range toolNameToID {
-						if id == c.ToolUseID {
-							funcName = name
-							break
-						}
-					}
-				}
-
-				// Fallback options if we couldn't find the tool name
+				funcName := toolNamesByID[c.ToolUseID]
 				if funcName == "" {
-					// Try the tool name directly
-					if c.ToolName != "" {
-						funcName = c.ToolName
-					} else {
-						// Last resort fallback
-						funcName = "default_tool"
-					}
+					funcName = c.ToolName
+				}
+				if funcName == "" {
+					return nil, fmt.Errorf("missing tool name for result %q", c.ToolUseID)
 				}
 
 				slog.DebugContext(context.Background(), "gemini_preparing_tool_result",
@@ -319,6 +301,7 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 
 				content.Parts = append(content.Parts, gemini.Part{
 					FunctionResponse: &gemini.FunctionResponse{
+						ID:       c.ToolUseID,
 						Name:     funcName,
 						Response: response,
 					},
@@ -354,7 +337,10 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 		}
 	}
 
-	tc := s.thinkingConfig(req)
+	tc, err := s.thinkingConfig(req)
+	if err != nil {
+		return nil, err
+	}
 	if gemReq.GenerationConfig == nil {
 		gemReq.GenerationConfig = &gemini.GenerationConfig{}
 	}
@@ -364,73 +350,6 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 	}
 
 	return gemReq, nil
-}
-
-// thinkingConfig builds the Gemini ThinkingConfig from the service settings
-// and request-level overrides.
-//
-// Precedence:
-//  1. req.ThinkingLevel (request-level override)
-//  2. s.ReasoningEffort (verbatim per-model config; Gemini 3.x only)
-//  3. s.ThinkingLevel (service-level default)
-//
-// Returns nil when no thinking config should be sent (use the model default).
-func (s *Service) thinkingConfig(req *llm.Request) *gemini.ThinkingConfig {
-	var reqLevel llm.ThinkingLevel
-	if req != nil {
-		reqLevel = req.ThinkingLevel
-	}
-	level := llm.EffectiveThinkingLevel(s.ThinkingLevel, reqLevel)
-	if level == llm.ThinkingLevelDefault && s.ReasoningEffort == "" {
-		return nil
-	}
-
-	model := cmp.Or(s.Model, DefaultModel)
-	if strings.HasPrefix(model, "gemini-3") {
-		caps, found := modelsdev.LookupReasoningCapabilities(s.URL, model)
-		var effort string
-		genericLevel := llm.ThinkingLevelDefault
-		switch {
-		case req != nil && req.ReasoningEffort != "":
-			effort = req.ReasoningEffort
-		case reqLevel != llm.ThinkingLevelDefault:
-			genericLevel = reqLevel
-		case s.ReasoningEffort != "":
-			effort = s.ReasoningEffort
-		default:
-			genericLevel = level
-		}
-		includeThoughts := genericLevel != llm.ThinkingLevelOff && effort != "none" && effort != "off"
-		if effort == "" && genericLevel != llm.ThinkingLevelDefault {
-			if found && len(caps.Levels) > 0 {
-				genericLevel = llm.ClampThinkingLevel(genericLevel, caps.Levels)
-			}
-			if genericLevel == llm.ThinkingLevelOff {
-				// Historical fallback: Gemini 3 has no explicit off value.
-				effort = "low"
-			} else {
-				effort = genericLevel.ThinkingEffort()
-			}
-			if len(caps.Levels) == 0 && (effort == "xhigh" || effort == "max") {
-				effort = "high"
-			}
-		}
-		if effort == "" {
-			return nil
-		}
-		return &gemini.ThinkingConfig{ThinkingLevel: effort, IncludeThoughts: includeThoughts}
-	}
-
-	// Gemini 2.5 (and earlier) uses an integer thinkingBudget. Explicit off
-	// sends a 0 budget; default returns nil.
-	if level == llm.ThinkingLevelDefault {
-		return nil
-	}
-	budget := level.ThinkingBudgetTokens()
-	// includeThoughts asks the API to return thought summaries; without it,
-	// no thinking text comes back and the UI never shows the model's
-	// reasoning. Skip it when thinking is off (budget 0).
-	return &gemini.ThinkingConfig{ThinkingBudget: &budget, IncludeThoughts: budget != 0}
 }
 
 // convertGeminiResponsesToContent converts a Gemini response to llm.Content
@@ -453,7 +372,7 @@ func convertGeminiResponseToContent(res *gemini.Response) []llm.Content {
 			"has_function_call", part.FunctionCall != nil,
 			"has_function_response", part.FunctionResponse != nil)
 
-		if part.Text != "" {
+		if part.IsText() && (part.Text != "" || part.ThoughtSignature != "") {
 			// A part is a thought summary only when thought=true. Gemini 3 attaches
 			// thoughtSignature to ordinary final-answer text too, for round-tripping
 			// reasoning state — that signature alone does not make the text a thought.
@@ -487,9 +406,10 @@ func convertGeminiResponseToContent(res *gemini.Response) []llm.Content {
 				args = []byte("{}")
 			}
 
-			// Generate a unique ID for this tool use that includes the function name
-			// to make it easier to correlate with responses
-			toolID := fmt.Sprintf("gemini_tool_%s_%d", part.FunctionCall.Name, time.Now().UnixNano())
+			toolID := part.FunctionCall.ID
+			if toolID == "" {
+				toolID = fmt.Sprintf("gemini_tool_%s_%d", part.FunctionCall.Name, time.Now().UnixNano())
+			}
 
 			contents = append(contents, llm.Content{
 				ID:        toolID,
@@ -526,7 +446,6 @@ func convertGeminiResponseToContent(res *gemini.Response) []llm.Content {
 	return contents
 }
 
-// Gemini doesn't provide usage info directly, so we need to estimate it
 // ensureToolIDs makes sure all tool uses have proper IDs
 func ensureToolIDs(contents []llm.Content) {
 	for i, content := range contents {
@@ -540,95 +459,130 @@ func ensureToolIDs(contents []llm.Content) {
 	}
 }
 
-func calculateUsage(req *gemini.Request, res *gemini.Response) llm.Usage {
-	// Very rough estimation of token counts
-	var inputTokens uint64
-	var outputTokens uint64
-
-	// Count system tokens
-	if req.SystemInstruction != nil {
-		for _, part := range req.SystemInstruction.Parts {
-			if part.Text != "" {
-				// Very rough estimation: 1 token per 4 characters
-				inputTokens += uint64(len(part.Text)) / 4
-			}
-		}
+func calculateUsage(res *gemini.Response) (llm.Usage, error) {
+	if res == nil || res.UsageMetadata == nil {
+		return llm.Usage{}, errors.New("gemini: missing usage metadata")
 	}
-
-	// Count input tokens
-	for _, content := range req.Contents {
-		for _, part := range content.Parts {
-			if part.Text != "" {
-				inputTokens += uint64(len(part.Text)) / 4
-			} else if part.FunctionCall != nil {
-				// Estimate function call tokens
-				argBytes, _ := json.Marshal(part.FunctionCall.Args)
-				inputTokens += uint64(len(part.FunctionCall.Name)+len(argBytes)) / 4
-			} else if part.FunctionResponse != nil {
-				// Estimate function response tokens
-				resBytes, _ := json.Marshal(part.FunctionResponse.Response)
-				inputTokens += uint64(len(part.FunctionResponse.Name)+len(resBytes)) / 4
-			}
-		}
+	u := res.UsageMetadata
+	if min(u.PromptTokenCount, u.CachedContentTokenCount, u.CandidatesTokenCount, u.ThoughtsTokenCount, u.ToolUsePromptTokenCount) < 0 {
+		return llm.Usage{}, errors.New("gemini: negative token count in usage metadata")
 	}
-
-	// Count output tokens
-	if res != nil && len(res.Candidates) > 0 {
-		for _, part := range res.Candidates[0].Content.Parts {
-			if part.Text != "" {
-				outputTokens += uint64(len(part.Text)) / 4
-			} else if part.FunctionCall != nil {
-				// Estimate function call tokens
-				argBytes, _ := json.Marshal(part.FunctionCall.Args)
-				outputTokens += uint64(len(part.FunctionCall.Name)+len(argBytes)) / 4
-			}
-		}
+	if u.CachedContentTokenCount > u.PromptTokenCount {
+		return llm.Usage{}, errors.New("gemini: cached token count exceeds prompt token count")
 	}
 
 	return llm.Usage{
-		InputTokens:  inputTokens,
-		OutputTokens: outputTokens,
+		InputTokens:          uint64(u.PromptTokenCount-u.CachedContentTokenCount) + uint64(u.ToolUsePromptTokenCount),
+		CacheReadInputTokens: uint64(u.CachedContentTokenCount),
+		OutputTokens:         uint64(u.CandidatesTokenCount) + uint64(u.ThoughtsTokenCount),
+	}, nil
+}
+
+func convertGeminiResponse(res *gemini.Response) (*llm.Response, error) {
+	usage, err := calculateUsage(res)
+	if err != nil {
+		return nil, err
 	}
+	response := &llm.Response{
+		Role:       llm.MessageRoleAssistant,
+		StopReason: llm.StopReasonEndTurn,
+		Usage:      usage,
+	}
+	if feedback := res.PromptFeedback; feedback != nil && feedback.BlockReason != "" && feedback.BlockReason != "BLOCK_REASON_UNSPECIFIED" {
+		response.StopReason = llm.StopReasonRefusal
+		response.RefusalDetails = &llm.RefusalDetails{
+			Category: feedback.BlockReason, Explanation: feedback.BlockReasonMessage,
+		}
+	} else {
+		if len(res.Candidates) == 0 {
+			return nil, errors.New("gemini: response has no candidates")
+		}
+		candidate := res.Candidates[0]
+		switch candidate.FinishReason {
+		case "STOP":
+		case "MAX_TOKENS", "CONTINUATION":
+			response.StopReason = llm.StopReasonMaxTokens
+		case "SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII",
+			"IMAGE_SAFETY", "IMAGE_PROHIBITED_CONTENT", "IMAGE_RECITATION":
+			response.StopReason = llm.StopReasonRefusal
+			response.RefusalDetails = &llm.RefusalDetails{
+				Category: candidate.FinishReason, Explanation: candidate.FinishMessage,
+			}
+		default:
+			return nil, fmt.Errorf("gemini: unexpected finish reason %q (%s)", candidate.FinishReason, candidate.FinishMessage)
+		}
+	}
+	response.Content = convertGeminiResponseToContent(res)
+	ensureToolIDs(response.Content)
+	if response.StopReason == llm.StopReasonEndTurn {
+		for _, part := range response.Content {
+			if part.Type == llm.ContentTypeToolUse {
+				response.StopReason = llm.StopReasonToolUse
+				break
+			}
+		}
+	}
+	return response, nil
 }
 
 func (s *Service) Provider() string { return "gemini" }
 
-// DefaultReasoningLevel reports the reasoning level applied to un-overridden
-// requests. A verbatim per-model ReasoningEffort or a configured service-level
-// ThinkingLevel surfaces by name; otherwise Gemini is left to its own dynamic
-// default, which Shelley cannot name, so it returns "".
+// DefaultReasoningLevel reports the effective configured level, or the documented
+// model default. Dynamic and unknown defaults return "".
 func (s *Service) DefaultReasoningLevel() string {
-	if s.ReasoningEffort != "" {
-		return s.ReasoningEffort
+	tc, err := s.thinkingConfig(nil)
+	if err != nil {
+		return ""
 	}
-	if s.ThinkingLevel != llm.ThinkingLevelDefault {
-		return s.ThinkingLevel.Name()
+	caps, found := s.thinkingCapabilities()
+	if tc != nil {
+		if tc.ThinkingLevel != "" {
+			return tc.ThinkingLevel
+		}
+		for _, level := range caps.Levels {
+			if level.ThinkingBudgetTokens() == *tc.ThinkingBudget {
+				return level.Name()
+			}
+		}
+	}
+	if found && !caps.Supported {
+		return "off"
+	}
+	switch s.modelKey() {
+	case "gemini-4-argon", "gemini-3.8-flash", "gemini-3.6-flash":
+		return "medium"
+	case "gemini-3-flash-preview":
+		return "high"
+	case "gemini-2.5-flash-lite":
+		return "off"
 	}
 	return ""
 }
 
-// maxOutputTokens returns the maxOutputTokens to send. As in
-// ant.Service.requestMaxTokens, s.MaxTokens may hold a stale 200000 from the
-// custom-model column, so it can only lower the catalog limit, never raise it.
-// Models missing from the catalog keep the configured value or DefaultMaxTokens.
+// maxOutputTokens applies the native model limit, including streaming overrides.
+// MaxTokens can lower that limit, never raise it. Unknown models use MaxTokens or
+// DefaultMaxTokens.
 func (s *Service) maxOutputTokens() int {
-	limit, found := modelsdev.LookupOutputLimit(s.URL, cmp.Or(s.Model, DefaultModel))
+	limit, found := modelsdev.LookupOutputLimit(s.URL, s.modelName())
+	if s.modelKey() == "gemini-4-argon" {
+		// The catalog's 32K limit is non-streaming; this adapter always streams.
+		limit, found = 65536, true
+	}
 	if !found {
 		return cmp.Or(s.MaxTokens, DefaultMaxTokens)
 	}
 	return min(cmp.Or(s.MaxTokens, limit), limit)
 }
 
+// SupportsReasoning reports whether generic thinking controls are known.
 func (s *Service) SupportsReasoning() bool {
-	caps, found := modelsdev.LookupReasoningCapabilities(s.URL, cmp.Or(s.Model, DefaultModel))
-	return !found || caps.Supported
+	caps, found := s.thinkingCapabilities()
+	return found && caps.Supported && len(caps.Levels) > 0
 }
 
-// SupportedReasoningLevels advertises exact effort levels from models.dev.
-// Budget-token and unknown models return nil and retain the historical
-// standard-level fallback.
+// SupportedReasoningLevels advertises native effort or budget presets.
 func (s *Service) SupportedReasoningLevels() []llm.ThinkingLevel {
-	caps, found := modelsdev.LookupReasoningCapabilities(s.URL, cmp.Or(s.Model, DefaultModel))
+	caps, found := s.thinkingCapabilities()
 	if !found {
 		return nil
 	}
@@ -712,10 +666,11 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 
 	// Create a Gemini model instance
 	model := gemini.Model{
-		Model:    "models/" + cmp.Or(s.Model, DefaultModel),
+		Model:    "models/" + s.modelName(),
 		Endpoint: s.URL,
 		APIKey:   s.APIKey,
 		HTTPC:    cmp.Or(s.HTTPC, http.DefaultClient),
+		OnStream: ir.OnStream,
 	}
 
 	// Send the request to Gemini with retry logic
@@ -783,32 +738,14 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 		continue
 	}
 
-	content := convertGeminiResponseToContent(gemRes)
-
-	ensureToolIDs(content)
-
-	usage := calculateUsage(gemReq, gemRes)
-	usage.CostUSD = llm.CostUSDFromResponse(gemRes.Header())
-
-	stopReason := llm.StopReasonEndTurn
-	for _, part := range content {
-		if part.Type == llm.ContentTypeToolUse {
-			stopReason = llm.StopReasonToolUse
-			slog.DebugContext(ctx, "gemini_tool_use_detected",
-				"setting_stop_reason", "llm.StopReasonToolUse",
-				"tool_name", part.ToolName)
-			break
-		}
+	response, err := convertGeminiResponse(gemRes)
+	if err != nil {
+		return nil, err
 	}
-
-	return &llm.Response{
-		Role:       llm.MessageRoleAssistant,
-		Model:      s.Model,
-		Content:    content,
-		StopReason: stopReason,
-		Usage:      usage,
-		StartTime:  &startTime,
-		EndTime:    &endTime,
-		URL:        cmp.Or(s.URL, gemini.DefaultEndpoint),
-	}, nil
+	response.Model = s.Model
+	response.Usage.CostUSD = llm.CostUSDFromResponse(gemRes.Header())
+	response.StartTime = &startTime
+	response.EndTime = &endTime
+	response.URL = cmp.Or(s.URL, gemini.DefaultEndpoint)
+	return response, nil
 }

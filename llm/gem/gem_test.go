@@ -1,7 +1,6 @@
 package gem
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -271,18 +270,19 @@ func TestGeminiHeaderCapture(t *testing.T) {
 			response: &http.Response{
 				StatusCode: http.StatusOK,
 				Header: http.Header{
-					"Content-Type":        []string{"application/json"},
+					"Content-Type":        []string{"text/event-stream"},
 					"Exedev-Gateway-Cost": []string{"0.00123456"},
 				},
-				Body: io.NopCloser(bytes.NewBufferString(`{
+				Body: io.NopCloser(strings.NewReader(geminiSSE(`{
 					"candidates": [{
+						"finishReason": "STOP",
 						"content": {
 							"parts": [{
 								"text": "Hello!"
 							}]
 						}
 					}]
-				}`)),
+				}`))),
 			},
 		},
 	}
@@ -347,18 +347,25 @@ func TestHeaderCostIntegration(t *testing.T) {
 			response: &http.Response{
 				StatusCode: http.StatusOK,
 				Header: http.Header{
-					"Content-Type":        []string{"application/json"},
+					"Content-Type":        []string{"text/event-stream"},
 					"Exedev-Gateway-Cost": []string{"0.000500"},
 				},
-				Body: io.NopCloser(bytes.NewBufferString(`{
+				Body: io.NopCloser(strings.NewReader(geminiSSE(`{
 					"candidates": [{
+						"finishReason": "STOP",
 						"content": {
 							"parts": [{
 								"text": "Test response"
 							}]
 						}
-					}]
-				}`)),
+					}],
+					"usageMetadata": {
+						"promptTokenCount": 10,
+						"cachedContentTokenCount": 2,
+						"candidatesTokenCount": 4,
+						"thoughtsTokenCount": 3
+					}
+				}`))),
 			},
 		},
 	}
@@ -399,12 +406,10 @@ func TestHeaderCostIntegration(t *testing.T) {
 		t.Fatalf("Expected cost USD %.8f, got %.8f", expectedCost, res.Usage.CostUSD)
 	}
 
-	// Verify token counts are still estimated
-	if res.Usage.InputTokens == 0 {
-		t.Fatalf("Expected input tokens to be estimated, got 0")
-	}
-	if res.Usage.OutputTokens == 0 {
-		t.Fatalf("Expected output tokens to be estimated, got 0")
+	if got, want := res.Usage, (llm.Usage{
+		InputTokens: 8, CacheReadInputTokens: 2, OutputTokens: 7, CostUSD: expectedCost,
+	}); got != want {
+		t.Fatalf("usage = %#v, want %#v", got, want)
 	}
 }
 
@@ -514,233 +519,13 @@ func TestEnsureToolIDs(t *testing.T) {
 	}
 }
 
-func TestCalculateUsage(t *testing.T) {
-	// Test with a simple request and response
-	req := &gemini.Request{
-		SystemInstruction: &gemini.Content{
-			Parts: []gemini.Part{
-				{Text: "You are a helpful assistant."},
-			},
-		},
-		Contents: []gemini.Content{
-			{
-				Parts: []gemini.Part{
-					{Text: "Hello, how are you?"},
-				},
-				Role: "user",
-			},
-		},
+func TestCalculateUsageMissingResponse(t *testing.T) {
+	usage, err := calculateUsage(nil)
+	if err == nil || !strings.Contains(err.Error(), "missing usage metadata") {
+		t.Fatalf("calculateUsage error = %v, want missing usage metadata", err)
 	}
-
-	res := &gemini.Response{
-		Candidates: []gemini.Candidate{
-			{
-				Content: gemini.Content{
-					Parts: []gemini.Part{
-						{Text: "I'm doing well, thank you for asking!"},
-					},
-				},
-			},
-		},
-	}
-
-	usage := calculateUsage(req, res)
-
-	// Verify that we got some token counts (they'll be estimated)
-	if usage.InputTokens == 0 {
-		t.Errorf("Expected input tokens to be greater than 0, got %d", usage.InputTokens)
-	}
-	if usage.OutputTokens == 0 {
-		t.Errorf("Expected output tokens to be greater than 0, got %d", usage.OutputTokens)
-	}
-
-	// Test with nil response
-	usageNil := calculateUsage(req, nil)
-	if usageNil.InputTokens == 0 {
-		t.Errorf("Expected input tokens with nil response to be greater than 0, got %d", usageNil.InputTokens)
-	}
-	if usageNil.OutputTokens != 0 {
-		t.Errorf("Expected output tokens with nil response to be 0, got %d", usageNil.OutputTokens)
-	}
-
-	// Test with function calls
-	reqWithFunction := &gemini.Request{
-		Contents: []gemini.Content{
-			{
-				Parts: []gemini.Part{
-					{
-						FunctionCall: &gemini.FunctionCall{
-							Name: "test_function",
-							Args: map[string]any{
-								"param1": "value1",
-							},
-						},
-					},
-				},
-				Role: "user",
-			},
-		},
-	}
-
-	resWithFunction := &gemini.Response{
-		Candidates: []gemini.Candidate{
-			{
-				Content: gemini.Content{
-					Parts: []gemini.Part{
-						{
-							FunctionCall: &gemini.FunctionCall{
-								Name: "response_function",
-								Args: map[string]any{
-									"result": "success",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	usageWithFunction := calculateUsage(reqWithFunction, resWithFunction)
-	if usageWithFunction.InputTokens == 0 {
-		t.Errorf("Expected input tokens with function calls to be greater than 0, got %d", usageWithFunction.InputTokens)
-	}
-	if usageWithFunction.OutputTokens == 0 {
-		t.Errorf("Expected output tokens with function calls to be greater than 0, got %d", usageWithFunction.OutputTokens)
-	}
-}
-
-func TestCalculateUsageWithFunctionResponse(t *testing.T) {
-	// Test with function response in input (tool result)
-	reqWithFunctionResponse := &gemini.Request{
-		Contents: []gemini.Content{
-			{
-				Parts: []gemini.Part{
-					{
-						FunctionResponse: &gemini.FunctionResponse{
-							Name: "test_function",
-							Response: map[string]any{
-								"result": "success",
-								"error":  nil,
-							},
-						},
-					},
-				},
-				Role: "user",
-			},
-		},
-	}
-
-	res := &gemini.Response{
-		Candidates: []gemini.Candidate{
-			{
-				Content: gemini.Content{
-					Parts: []gemini.Part{
-						{Text: "Hello"},
-					},
-				},
-			},
-		},
-	}
-
-	usage := calculateUsage(reqWithFunctionResponse, res)
-	// Should have some input tokens from the function response
-	if usage.InputTokens == 0 {
-		t.Errorf("Expected input tokens with function response to be greater than 0, got %d", usage.InputTokens)
-	}
-	if usage.OutputTokens == 0 {
-		t.Errorf("Expected output tokens to be greater than 0, got %d", usage.OutputTokens)
-	}
-}
-
-func TestCalculateUsageWithEmptyText(t *testing.T) {
-	// Test with empty text parts
-	req := &gemini.Request{
-		Contents: []gemini.Content{
-			{
-				Parts: []gemini.Part{
-					{Text: ""}, // Empty text
-				},
-				Role: "user",
-			},
-		},
-	}
-
-	res := &gemini.Response{
-		Candidates: []gemini.Candidate{
-			{
-				Content: gemini.Content{
-					Parts: []gemini.Part{
-						{Text: ""}, // Empty text
-					},
-				},
-			},
-		},
-	}
-
-	usage := calculateUsage(req, res)
-	// Should have 0 tokens for empty text
-	if usage.InputTokens != 0 {
-		t.Errorf("Expected input tokens to be 0 for empty text, got %d", usage.InputTokens)
-	}
-	if usage.OutputTokens != 0 {
-		t.Errorf("Expected output tokens to be 0 for empty text, got %d", usage.OutputTokens)
-	}
-}
-
-func TestCalculateUsageWithComplexFunctionCall(t *testing.T) {
-	// Test with complex function call arguments
-	req := &gemini.Request{
-		Contents: []gemini.Content{
-			{
-				Parts: []gemini.Part{
-					{
-						FunctionCall: &gemini.FunctionCall{
-							Name: "complex_function",
-							Args: map[string]any{
-								"string_param": "value",
-								"int_param":    42,
-								"array_param":  []any{"item1", "item2"},
-								"object_param": map[string]any{
-									"nested": "value",
-								},
-							},
-						},
-					},
-				},
-				Role: "user",
-			},
-		},
-	}
-
-	res := &gemini.Response{
-		Candidates: []gemini.Candidate{
-			{
-				Content: gemini.Content{
-					Parts: []gemini.Part{
-						{
-							FunctionCall: &gemini.FunctionCall{
-								Name: "response_function",
-								Args: map[string]any{
-									"complex_result": map[string]any{
-										"status": "success",
-										"data":   []any{1, 2, 3},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	usage := calculateUsage(req, res)
-	if usage.InputTokens == 0 {
-		t.Errorf("Expected input tokens with complex function call to be greater than 0, got %d", usage.InputTokens)
-	}
-	if usage.OutputTokens == 0 {
-		t.Errorf("Expected output tokens with complex function call to be greater than 0, got %d", usage.OutputTokens)
+	if usage != (llm.Usage{}) {
+		t.Fatalf("unexpected guessed usage: %#v", usage)
 	}
 }
 
@@ -1336,7 +1121,11 @@ func TestSupportedReasoningLevelsFromModelsDev(t *testing.T) {
 	}{
 		{model: "gemini-3-flash-preview", want: "minimal,low,medium,high"},
 		{model: "gemini-3.1-pro-preview", want: "low,medium,high"},
-		{model: "gemini-2.5-pro", want: ""},
+		{model: "gemini-2.5-pro", want: "minimal,low,medium,high"},
+		{model: "gemini-2.5-flash", want: "off,minimal,low,medium,high"},
+		{model: "gemini-4-argon", want: "low,medium,high"},
+		{model: "models/gemini-4-argon", want: "low,medium,high"},
+		{model: "gemini-flash-latest", want: "low,medium,high"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
@@ -1358,25 +1147,38 @@ func TestThinkingConfigRequestOverride(t *testing.T) {
 		name        string
 		svc         *Service
 		reqLevel    llm.ThinkingLevel
+		reqEffort   string
 		wantLevel   string
 		wantBudget  *int
 		wantOmitted bool
+		wantErr     string
 	}{
 		{name: "req high beats svc medium on 3-flash", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium}, reqLevel: llm.ThinkingLevelHigh, wantLevel: "high"},
 		{name: "req xhigh on 3-flash clamps to high", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x"}, reqLevel: llm.ThinkingLevelXHigh, wantLevel: "high"},
 		{name: "req high on 3.1-pro", svc: &Service{Model: "gemini-3.1-pro-preview", APIKey: "x"}, reqLevel: llm.ThinkingLevelHigh, wantLevel: "high"},
 		{name: "req medium on 3.1-pro", svc: &Service{Model: "gemini-3.1-pro-preview", APIKey: "x"}, reqLevel: llm.ThinkingLevelMedium, wantLevel: "medium"},
-		{name: "req off on 3-flash rounds to minimal", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium}, reqLevel: llm.ThinkingLevelOff, wantLevel: "minimal"},
+		{name: "req off on 3-flash cannot disable thinking", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium}, reqLevel: llm.ThinkingLevelOff, wantErr: "cannot disable"},
 		{name: "req beats verbatim", svc: &Service{Model: "gemini-3-flash-preview", APIKey: "x", ReasoningEffort: "medium"}, reqLevel: llm.ThinkingLevelHigh, wantLevel: "high"},
+		{name: "verbatim req without service defaults", svc: &Service{Model: DefaultModel}, reqEffort: "high", wantLevel: "high"},
+		{name: "verbatim req beats verbatim service", svc: &Service{Model: DefaultModel, ReasoningEffort: "medium"}, reqEffort: "low", wantLevel: "low"},
+		{name: "verbatim req beats generic req", svc: &Service{Model: DefaultModel}, reqLevel: llm.ThinkingLevelHigh, reqEffort: "low", wantLevel: "low"},
 		{name: "req low on 2.5", svc: &Service{Model: "gemini-2.5-pro", APIKey: "x"}, reqLevel: llm.ThinkingLevelLow, wantBudget: ptr(2048)},
-		{name: "req off on 2.5 zero budget", svc: &Service{Model: "gemini-2.5-pro", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium}, reqLevel: llm.ThinkingLevelOff, wantBudget: ptr(0)},
+		{name: "req off on 2.5 Pro cannot disable thinking", svc: &Service{Model: "gemini-2.5-pro", APIKey: "x", ThinkingLevel: llm.ThinkingLevelMedium}, reqLevel: llm.ThinkingLevelOff, wantErr: "cannot disable"},
+		{name: "verbatim req sets a 2.5 budget", svc: &Service{Model: "gemini-2.5-pro"}, reqEffort: "high", wantBudget: ptr(16384)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gemReq, err := tt.svc.buildGeminiRequest(&llm.Request{
-				Messages:      []llm.Message{{Role: llm.MessageRoleUser, Content: []llm.Content{{Type: llm.ContentTypeText, Text: "hi"}}}},
-				ThinkingLevel: tt.reqLevel,
+				Messages:        []llm.Message{{Role: llm.MessageRoleUser, Content: []llm.Content{{Type: llm.ContentTypeText, Text: "hi"}}}},
+				ThinkingLevel:   tt.reqLevel,
+				ReasoningEffort: tt.reqEffort,
 			})
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error = %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("buildGeminiRequest: %v", err)
 			}

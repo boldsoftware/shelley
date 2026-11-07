@@ -528,8 +528,8 @@ func TestCustomGeminiModelCapsConfiguredOutputLimit(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}`))
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: " + `{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"ok"}]}}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1}}` + "\n\n"))
 	}))
 	defer server.Close()
 
@@ -564,6 +564,192 @@ func TestCustomGeminiModelCapsConfiguredOutputLimit(t *testing.T) {
 	}
 	if generationConfig.MaxOutputTokens != wantMax {
 		t.Fatalf("maxOutputTokens = %d, want %d", generationConfig.MaxOutputTokens, wantMax)
+	}
+}
+
+// The full identity map saved by the custom-model form.
+const identityReasoningMap = `{"off":"off","minimal":"minimal","low":"low","medium":"medium","high":"high","xhigh":"xhigh","max":"max"}`
+
+func TestCustomGeminiModelThinkingControls(t *testing.T) {
+	for _, tt := range []struct{ model, mapping string }{
+		{"gemini-4-argon", ""},
+		{"models/gemini-4-argon", ""},
+		{"gemini-flash-latest", ""},
+		{"gemini-4-argon", identityReasoningMap},
+	} {
+		modelName := tt.model
+		t.Run(modelName+"/"+tt.mapping, func(t *testing.T) {
+			type requestConfig struct {
+				GenerationConfig struct {
+					MaxOutputTokens int `json:"maxOutputTokens"`
+					ThinkingConfig  struct {
+						ThinkingLevel  string `json:"thinkingLevel"`
+						ThinkingBudget *int   `json:"thinkingBudget"`
+					} `json:"thinkingConfig"`
+				} `json:"generationConfig"`
+			}
+			captured := make(chan requestConfig, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				wantPath := "/models/" + strings.TrimPrefix(modelName, "models/") + ":streamGenerateContent"
+				if r.URL.Path != wantPath {
+					t.Errorf("request path = %s, want %s", r.URL.Path, wantPath)
+				}
+				var got requestConfig
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Error(err)
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				captured <- got
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = w.Write([]byte("data: " + `{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"ok"}]}}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1}}` + "\n\n"))
+			}))
+			defer server.Close()
+			testDB := newTestModelDB(t)
+			if _, err := testDB.CreateModel(t.Context(), generated.CreateModelParams{
+				ModelID: "custom-gemini", DisplayName: "Custom Gemini", ProviderType: "gemini",
+				Endpoint: server.URL, ApiKey: "test-key", ModelName: modelName,
+				MaxTokens: 200000, ReasoningEffort: "high", ReasoningMap: tt.mapping,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			manager, err := NewManager(&Config{DB: testDB, HTTPC: server.Client()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			service, err := manager.GetService("custom-gemini")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := llm.ServiceDefaultReasoningLevel(service); got != "high" {
+				t.Errorf("default reasoning = %q, want high", got)
+			}
+			if got := llm.SupportedReasoningLevels(service); !reflect.DeepEqual(got, []llm.ThinkingLevel{llm.ThinkingLevelLow, llm.ThinkingLevelMedium, llm.ThinkingLevelHigh}) {
+				t.Errorf("advertised native controls = %v, want low/medium/high", got)
+			}
+			request := simpleRequest()
+			request.ThinkingLevel = llm.ThinkingLevelLow
+			if _, err := service.Do(t.Context(), request); err != nil {
+				t.Fatal(err)
+			}
+			got := (<-captured).GenerationConfig
+			if got.MaxOutputTokens != 65536 || got.ThinkingConfig.ThinkingLevel != "low" || got.ThinkingConfig.ThinkingBudget != nil {
+				t.Errorf("wrong native controls through model manager: %+v", got)
+			}
+		})
+	}
+}
+
+func TestGeminiFactoryUsesStreamingLimit(t *testing.T) {
+	var got struct {
+		GenerationConfig struct {
+			MaxOutputTokens int `json:"maxOutputTokens"`
+		} `json:"generationConfig"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Error(err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: " + `{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"ok"}]}}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1}}` + "\n\n"))
+	}))
+	defer server.Close()
+	service := gemSvc("gemini-4-argon")(server.URL, "key", server.Client())
+	if _, err := service.Do(t.Context(), simpleRequest()); err != nil {
+		t.Fatal(err)
+	}
+	if got.GenerationConfig.MaxOutputTokens != 65536 {
+		t.Errorf("factory maxOutputTokens = %d, want 65536", got.GenerationConfig.MaxOutputTokens)
+	}
+}
+
+func TestGeminiUnconfigurableThinkingDefaults(t *testing.T) {
+	tests := []struct{ name, model, mapping, want string }{
+		{"unknown controls", "custom-unknown", "", ""},
+		{"known model without controls", "gemini-2.5-flash-image", "", ""},
+		{"explicit controls", "custom-unknown", `{"high":"future"}`, "future"},
+		{"explicit standard effort", "custom-unknown", `{"high":"high"}`, "high"},
+		{"known model explicit standard effort", "gemini-2.5-flash-image", `{"high":"high"}`, "high"},
+		{"known model explicit custom effort", "gemini-2.5-flash-image", `{"high":"future"}`, "future"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			captured := make(chan map[string]json.RawMessage, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var request struct {
+					GenerationConfig map[string]json.RawMessage `json:"generationConfig"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+					t.Error(err)
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				captured <- request.GenerationConfig
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = w.Write([]byte("data: " + `{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"ok"}]}}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1}}` + "\n\n"))
+			}))
+			defer server.Close()
+			service := gemSvc(tt.model)(server.URL, "key", server.Client())
+			service = WrapReasoningConfig(service, server.URL, tt.model, "auto", tt.mapping)
+			if got, want := llm.SupportsReasoning(service), tt.mapping != ""; got != want {
+				t.Errorf("thinking controls advertised = %v, want %v", got, want)
+			}
+			if got := llm.ServiceDefaultReasoningLevel(service); got != "" {
+				t.Errorf("unknown default = %q, must not claim off", got)
+			}
+			request := simpleRequest()
+			if tt.mapping != "" {
+				request.ThinkingLevel = llm.ThinkingLevelHigh
+			}
+			if _, err := service.Do(t.Context(), request); err != nil {
+				t.Fatal(err)
+			}
+			config := (<-captured)["thinkingConfig"]
+			if tt.mapping == "" {
+				if config != nil {
+					t.Errorf("provider default was overridden: %s", config)
+				}
+			} else {
+				var thinking struct {
+					Level string `json:"thinkingLevel"`
+				}
+				if err := json.Unmarshal(config, &thinking); err != nil || thinking.Level != tt.want {
+					t.Errorf("explicit mapping config = %s, error=%v", config, err)
+				}
+			}
+		})
+	}
+}
+
+func TestGeminiRequiredThinkingRejectsDisabledConfig(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("invalid thinking config contacted provider")
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer server.Close()
+	for _, tt := range []struct {
+		level  llm.ThinkingLevel
+		effort string
+	}{{}, {level: llm.ThinkingLevelHigh}, {effort: "high"}, {effort: "off"}} {
+		service := WrapReasoningConfig(gemSvc("gemini-4-argon")(server.URL, "key", server.Client()), server.URL, "gemini-4-argon", "no", "")
+		if got := llm.ServiceDefaultReasoningLevel(service); got != "" {
+			t.Errorf("invalid disabled config advertises %q", got)
+		}
+		request := simpleRequest()
+		request.ThinkingLevel, request.ReasoningEffort = tt.level, tt.effort
+		if _, err := service.Do(t.Context(), request); err == nil || !strings.Contains(err.Error(), "cannot disable") {
+			t.Errorf("disabled Argon config error = %v", err)
+		}
+	}
+	service := WrapReasoningConfig(gemSvc("gemini-2.5-flash")("", "key", nil), "", "gemini-2.5-flash", "no", "")
+	request, err := service.(*reasoningService).mapRequest(&llm.Request{ReasoningEffort: "high"})
+	if err != nil || request.ThinkingLevel != llm.ThinkingLevelOff || request.ReasoningEffort != "" {
+		t.Fatalf("disabled Flash config was bypassed: %+v, error=%v", request, err)
+	}
+	if got := llm.ServiceDefaultReasoningLevel(service); got != "off" {
+		t.Errorf("disabled Flash default = %q, want off", got)
 	}
 }
 
@@ -821,6 +1007,15 @@ func TestReasoningServiceDelegatesLevelsWithoutMap(t *testing.T) {
 	svc := WrapReasoningConfig(inner, "", "unknown", "yes", "")
 	if got := llm.SupportedReasoningLevels(svc); !reflect.DeepEqual(got, inner.levels) {
 		t.Fatalf("levels = %v, want %v", got, inner.levels)
+	}
+}
+
+func TestReasoningServiceNonNativeIdentityMap(t *testing.T) {
+	inner := &advertisedReasoningService{levels: []llm.ThinkingLevel{llm.ThinkingLevelLow, llm.ThinkingLevelHigh}}
+	svc := WrapReasoningConfig(inner, "", "unknown", "yes", identityReasoningMap)
+	levels := llm.SupportedReasoningLevels(svc)
+	if len(levels) != 7 || levels[0] != llm.ThinkingLevelOff {
+		t.Fatalf("non-native identity mapping changed: %v", levels)
 	}
 }
 

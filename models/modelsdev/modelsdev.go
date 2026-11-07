@@ -304,6 +304,18 @@ func LookupReasoningCapabilities(endpoint, modelName string) (ReasoningCapabilit
 	return parseReasoningCapabilities(m), true
 }
 
+// LookupGeminiReasoningCapabilities uses the native Google catalog, not gateway
+// controls that may expose different effort values through a different API.
+func LookupGeminiReasoningCapabilities(modelName string) (ReasoningCapabilities, bool) {
+	p := load()["google"]
+	for _, name := range modelNames(modelName) {
+		if m, found := lookupInProvider(p, name); found {
+			return parseReasoningCapabilities(m), true
+		}
+	}
+	return ReasoningCapabilities{}, false
+}
+
 // LookupInterleavedReasoningField returns the named assistant-message field
 // when models.dev records one for this model.
 func LookupInterleavedReasoningField(endpoint, modelName string) (string, bool) {

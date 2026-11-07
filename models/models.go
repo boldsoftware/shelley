@@ -221,7 +221,7 @@ func oaiChatSvc(model oai.Model, providerName string) func(baseURL, apiKey strin
 
 func gemSvc(modelName string) func(baseURL, apiKey string, httpc *http.Client) llm.Service {
 	return func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-		s := &gem.Service{APIKey: apiKey, Model: modelName, MaxTokens: outputLimit(baseURL, "", modelName), HTTPC: httpc, SupportsImages_: true}
+		s := &gem.Service{APIKey: apiKey, Model: modelName, HTTPC: httpc, SupportsImages_: true}
 		if baseURL != "" {
 			s.URL = baseURL + "/v1beta"
 		}
@@ -916,6 +916,7 @@ type reasoningService struct {
 	disableWebSearch bool
 	llm.Service
 	supported     bool
+	forceOff      bool
 	levels        []llm.ThinkingLevel
 	mapping       map[llm.ThinkingLevel]reasoningMapping
 	defaultSource llm.ThinkingLevel
@@ -940,7 +941,10 @@ func (s *reasoningService) SupportedReasoningLevels() []llm.ThinkingLevel {
 }
 
 func (s *reasoningService) DefaultReasoningLevel() string {
-	if !s.supported {
+	if s.forceOff {
+		if native, ok := s.Service.(*gem.Service); ok && !native.SupportsThinkingOff() {
+			return ""
+		}
 		return "off"
 	}
 	if mapped, ok := s.mapping[s.defaultSource]; ok {
@@ -974,7 +978,12 @@ func (s *reasoningService) WarmCache(ctx context.Context, req *llm.Request) (llm
 func (s *reasoningService) mapRequest(req *llm.Request) (*llm.Request, error) {
 	copyReq := *req
 	if !s.supported {
-		copyReq.ThinkingLevel = llm.ThinkingLevelOff
+		if s.forceOff {
+			copyReq.ThinkingLevel = llm.ThinkingLevelOff
+			if _, native := s.Service.(*gem.Service); native {
+				copyReq.ReasoningEffort = ""
+			}
+		}
 	} else if copyReq.ThinkingLevel == llm.ThinkingLevelDefault {
 		if mapped, ok := s.mapping[s.defaultSource]; ok {
 			copyReq.ThinkingLevel = mapped.level
@@ -999,8 +1008,36 @@ func wrapReasoningService(service llm.Service, model *generated.Model) llm.Servi
 func WrapReasoningConfig(service llm.Service, endpoint, modelName, support, rawMap string) llm.Service {
 	supported := ResolveSupportsReasoning(endpoint, modelName, support)
 	mapping, levels := parseReasoningMap(rawMap)
+	forceOff := !supported
+	if native, ok := service.(*gem.Service); ok {
+		// A full identity map inherits native controls, not every generic level.
+		identity := true
+		for level := llm.ThinkingLevelOff; level <= llm.ThinkingLevelMax; level++ {
+			mapped, exists := mapping[level]
+			if !exists || mapped.level != level || mapped.effort != "" {
+				identity = false
+				break
+			}
+		}
+		if identity {
+			mapping, levels = nil, nil
+		}
+		if len(native.SupportedReasoningLevels()) == 0 {
+			for level, mapped := range mapping {
+				if mapped.effort == "" && mapped.level != llm.ThinkingLevelDefault {
+					mapped.effort = mapped.level.Name()
+					mapping[level] = mapped
+				}
+			}
+		}
+		if support == "" || support == "auto" {
+			supported = native.SupportsReasoning() || len(mapping) > 0
+			// Unknown controls do not mean the model can disable thinking.
+			forceOff = false
+		}
+	}
 	defaultSource := llm.ParseThinkingLevel(llm.ServiceDefaultReasoningLevel(service))
-	return &reasoningService{Service: service, supported: supported, levels: levels, mapping: mapping, defaultSource: defaultSource}
+	return &reasoningService{Service: service, supported: supported, forceOff: forceOff, levels: levels, mapping: mapping, defaultSource: defaultSource}
 }
 
 func parseReasoningMap(raw string) (map[llm.ThinkingLevel]reasoningMapping, []llm.ThinkingLevel) {

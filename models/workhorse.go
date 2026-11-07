@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/llm/gem"
 )
 
 type workhorseFamily struct {
@@ -52,8 +53,27 @@ func (s *workhorseService) Do(ctx context.Context, req *llm.Request) (*llm.Respo
 func (s *workhorseService) do(ctx context.Context, service llm.Service, req *llm.Request) (*llm.Response, error) {
 	request := *req
 	request.ThinkingLevel = llm.ThinkingLevelOff
+	if isNativeGemini(service) {
+		request.ThinkingLevel = llm.ThinkingLevelDefault
+		if levels := llm.SupportedReasoningLevels(service); llm.SupportsReasoning(service) && len(levels) > 0 {
+			request.ThinkingLevel = llm.ClampThinkingLevel(llm.ThinkingLevelOff, levels)
+		}
+	}
 	request.ReasoningEffort = ""
 	return service.Do(ctx, &request)
+}
+
+func isNativeGemini(service llm.Service) bool {
+	switch s := service.(type) {
+	case *gem.Service:
+		return true
+	case *loggingService:
+		return isNativeGemini(s.service)
+	case *reasoningService:
+		return isNativeGemini(s.Service)
+	default:
+		return false
+	}
 }
 
 func (s *workhorseService) Provider() string       { return s.primary.Provider() }

@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+
+	"shelley.exe.dev/llm"
 )
 
 // https://ai.google.dev/api/generate-content#request-body
@@ -24,8 +27,23 @@ type Request struct {
 
 // https://ai.google.dev/api/generate-content#response-body
 type Response struct {
-	Candidates []Candidate `json:"candidates"`
-	headers    http.Header // captured HTTP response headers
+	Candidates     []Candidate     `json:"candidates"`
+	UsageMetadata  *UsageMetadata  `json:"usageMetadata,omitempty"`
+	PromptFeedback *PromptFeedback `json:"promptFeedback,omitempty"`
+	headers        http.Header     // captured HTTP response headers
+}
+
+type UsageMetadata struct {
+	PromptTokenCount        int64 `json:"promptTokenCount,omitempty"`
+	CachedContentTokenCount int64 `json:"cachedContentTokenCount,omitempty"`
+	CandidatesTokenCount    int64 `json:"candidatesTokenCount,omitempty"`
+	ThoughtsTokenCount      int64 `json:"thoughtsTokenCount,omitempty"`
+	ToolUsePromptTokenCount int64 `json:"toolUsePromptTokenCount,omitempty"`
+}
+
+type PromptFeedback struct {
+	BlockReason        string `json:"blockReason,omitempty"`
+	BlockReasonMessage string `json:"blockReasonMessage,omitempty"`
 }
 
 // Header returns the HTTP response headers.
@@ -34,7 +52,10 @@ func (r *Response) Header() http.Header {
 }
 
 type Candidate struct {
-	Content Content `json:"content"`
+	Index         int     `json:"index,omitempty"`
+	Content       Content `json:"content"`
+	FinishReason  string  `json:"finishReason,omitempty"`
+	FinishMessage string  `json:"finishMessage,omitempty"`
 }
 
 type Content struct {
@@ -64,6 +85,23 @@ type Part struct {
 	// TODO fileData
 }
 
+func (p Part) IsText() bool {
+	return p.FunctionCall == nil && p.FunctionResponse == nil &&
+		p.ExecutableCode == nil && p.CodeExecutionResult == nil && p.InlineData == nil
+}
+
+func (p Part) MarshalJSON() ([]byte, error) {
+	type wirePart Part
+	if p.IsText() {
+		// Empty signed text still needs its text payload type on replay.
+		return json.Marshal(struct {
+			Text string `json:"text"`
+			wirePart
+		}{Text: p.Text, wirePart: wirePart(p)})
+	}
+	return json.Marshal(wirePart(p))
+}
+
 // Blob is inline binary data (e.g. an image).
 // https://ai.google.dev/api/caching#Blob
 type Blob struct {
@@ -73,11 +111,13 @@ type Blob struct {
 }
 
 type FunctionCall struct {
+	ID   string         `json:"id,omitempty"`
 	Name string         `json:"name"`
 	Args map[string]any `json:"args"`
 }
 
 type FunctionResponse struct {
+	ID       string         `json:"id,omitempty"`
 	Name     string         `json:"name"`
 	Response map[string]any `json:"response"`
 }
@@ -118,11 +158,11 @@ type GenerationConfig struct {
 
 // ThinkingConfig controls extended thinking for Gemini models.
 // ThinkingLevel and ThinkingBudget are mutually exclusive: setting both
-// returns a 400 from the API. Use ThinkingLevel for Gemini 3.x and
+// returns a 400 from the API. Use ThinkingLevel for Gemini 3 and later, and
 // ThinkingBudget for Gemini 2.5.
 // https://ai.google.dev/gemini-api/docs/thinking
 type ThinkingConfig struct {
-	ThinkingLevel   string `json:"thinkingLevel,omitempty"`   // Gemini 3.x: "minimal", "low", "medium", "high"
+	ThinkingLevel   string `json:"thinkingLevel,omitempty"`   // Supported effort values depend on the model.
 	ThinkingBudget  *int   `json:"thinkingBudget,omitempty"`  // Gemini 2.5: token count, -1 dynamic, 0 disable
 	IncludeThoughts bool   `json:"includeThoughts,omitempty"` // include thought summaries in response
 }
@@ -186,6 +226,7 @@ type Model struct {
 	APIKey   string
 	HTTPC    *http.Client // if nil, http.DefaultClient is used
 	Endpoint string       // if empty, DefaultEndpoint is used
+	OnStream func(llm.StreamDelta)
 }
 
 func (m Model) GenerateContent(ctx context.Context, req *Request) (*Response, error) {
@@ -193,30 +234,34 @@ func (m Model) GenerateContent(ctx context.Context, req *Request) (*Response, er
 	if err != nil {
 		return nil, fmt.Errorf("marshaling request: %w", err)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/%s:generateContent", m.endpoint(), m.Model), bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/%s:streamGenerateContent?alt=sse", m.endpoint(), m.Model), bytes.NewReader(reqBytes))
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP request: %w", err)
 	}
 	httpReq.Header.Add("Content-Type", "application/json")
+	httpReq.Header.Add("Accept", "text/event-stream")
 	httpReq.Header.Add("x-goog-api-key", m.APIKey)
 	httpResp, err := m.httpc().Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("GenerateContent: do: %w", err)
 	}
 	defer httpResp.Body.Close()
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("GenerateContent: reading response body: %w", err)
-	}
 	if httpResp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(httpResp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("GenerateContent: reading error response: %w", err)
+		}
 		return nil, &APIError{StatusCode: httpResp.StatusCode, Body: string(body), Header: httpResp.Header}
 	}
-	var res Response
-	if err := json.Unmarshal(body, &res); err != nil {
-		return nil, fmt.Errorf("GenerateContent: unmarshaling response: %w, %s", err, string(body))
+	if contentType, _, err := mime.ParseMediaType(httpResp.Header.Get("Content-Type")); err != nil || contentType != "text/event-stream" {
+		return nil, fmt.Errorf("GenerateContent: expected text/event-stream, got %q", httpResp.Header.Get("Content-Type"))
+	}
+	res, err := parseStreamResponse(ctx, httpResp.Body, m.OnStream)
+	if err != nil {
+		return nil, fmt.Errorf("GenerateContent: %w", err)
 	}
 	res.headers = httpResp.Header
-	return &res, nil
+	return res, nil
 }
 
 func (m Model) endpoint() string {

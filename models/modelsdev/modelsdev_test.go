@@ -201,6 +201,21 @@ func TestParseReasoningCapabilities(t *testing.T) {
 	}
 }
 
+func TestLookupGeminiReasoningCapabilities(t *testing.T) {
+	for _, model := range []string{"gemini-4-argon", "models/gemini-4-argon-2026-11-06", "gemini-flash-latest"} {
+		caps, found := LookupGeminiReasoningCapabilities(model)
+		want := []llm.ThinkingLevel{llm.ThinkingLevelLow, llm.ThinkingLevelMedium, llm.ThinkingLevelHigh}
+		if !found || !caps.Supported || !reflect.DeepEqual(caps.Levels, want) {
+			t.Errorf("%s capabilities = %+v, found=%v", model, caps, found)
+		}
+	}
+	for _, model := range []string{"gpt-5.6-sol", "custom-unknown"} {
+		if caps, found := LookupGeminiReasoningCapabilities(model); found {
+			t.Errorf("non-Google model %s inherited capabilities: %+v", model, caps)
+		}
+	}
+}
+
 func TestLookupReasoningCapabilities(t *testing.T) {
 	tests := []struct {
 		name     string
