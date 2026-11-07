@@ -667,7 +667,7 @@ func (l *loggingService) DefaultReasoningLevel() string {
 func NewManager(cfg *Config) (*Manager, error) {
 	logger := cfg.Logger
 	if logger == nil {
-		logger = slog.Default()
+		logger = slog.New(slog.DiscardHandler)
 	}
 	httpc := cfg.HTTPC
 	if httpc == nil {
@@ -676,15 +676,15 @@ func NewManager(cfg *Config) (*Manager, error) {
 	m := &Manager{
 		services:            map[string]serviceEntry{},
 		transcriptionModels: append([]TranscriptionModel(nil), cfg.TranscriptionModels...),
-		logger:              cfg.Logger,
+		logger:              logger,
 		db:                  cfg.DB,
 		httpc:               httpc,
 	}
 
 	m.registerBuiltModelsLocked(cfg.Models)
 
-	if err := m.loadCustomModels(); err != nil && cfg.Logger != nil {
-		cfg.Logger.Warn("Failed to load custom models", "error", err)
+	if err := m.loadCustomModels(); err != nil {
+		logger.Warn("Failed to load custom models", "error", err)
 	}
 	return m, nil
 }
@@ -709,9 +709,7 @@ func (m *Manager) registerBuiltModelsLocked(built []Built) {
 			apiModelName:    b.APIModelName,
 		}
 		m.modelOrder = append(m.modelOrder, b.ID)
-		if m.logger != nil {
-			m.logger.Info("Registered model", "id", b.ID, "source", b.Source)
-		}
+		m.logger.Info("Registered model", "id", b.ID, "source", b.Source)
 	}
 }
 
@@ -826,13 +824,9 @@ func (m *Manager) GetService(modelID string) (llm.Service, error) {
 // loggedService always wraps, even without a logger, so custom-model errors
 // carry their prefix regardless of logging configuration.
 func (m *Manager) loggedService(entry serviceEntry) llm.Service {
-	logger := m.logger
-	if logger == nil {
-		logger = slog.New(slog.DiscardHandler)
-	}
 	return &loggingService{
 		service:     entry.service,
-		logger:      logger,
+		logger:      m.logger,
 		modelID:     entry.modelID,
 		provider:    entry.provider,
 		source:      entry.source,
@@ -1133,9 +1127,7 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 			SupportsImages_: supportsImages,
 		}
 	default:
-		if m.logger != nil {
-			m.logger.Error("Unknown provider type for model", "model_id", model.ModelID, "provider_type", model.ProviderType)
-		}
+		m.logger.Error("Unknown provider type for model", "model_id", model.ModelID, "provider_type", model.ProviderType)
 		return nil
 	}
 	return wrapReasoningService(service, model)

@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -112,7 +113,7 @@ func TestCustomModelErrorWrapsUpstream(t *testing.T) {
 		displayName: "My Model", baseURL: "https://api.example.com/v1",
 	}
 	// A zero Manager has no logger; the wrapper must still apply.
-	_, err := (&Manager{}).loggedService(entry).Do(t.Context(), simpleRequest())
+	_, err := (&Manager{logger: slog.New(slog.DiscardHandler)}).loggedService(entry).Do(t.Context(), simpleRequest())
 	want := `custom model "My Model" (id my-model, host api.example.com) used its own API key; edit or remove it under Model → Add / Remove Models` +
 		"\n" + upstream.Error()
 	if err == nil || err.Error() != want {
@@ -123,7 +124,7 @@ func TestCustomModelErrorWrapsUpstream(t *testing.T) {
 	}
 
 	entry.service = &failingLLMService{err: stalledRequestError{}}
-	_, err = (&Manager{}).loggedService(entry).Do(t.Context(), simpleRequest())
+	_, err = (&Manager{logger: slog.New(slog.DiscardHandler)}).loggedService(entry).Do(t.Context(), simpleRequest())
 	if info, ok := llm.RequestErrorInfoFromError(err); !ok || info.IdleStallDuration != time.Minute || !info.Retryable {
 		t.Fatalf("request error info through the prefix = %+v, %v", info, ok)
 	}
@@ -135,7 +136,7 @@ func TestCustomModelErrorNotOnWarmCache(t *testing.T) {
 		service: &failingLLMService{err: upstream}, modelID: "my-model", source: SourceCustomLabel,
 		displayName: "My Model", baseURL: "https://api.example.com/v1",
 	}
-	if _, err := llm.WarmCache(t.Context(), (&Manager{}).loggedService(entry), simpleRequest()); err != upstream {
+	if _, err := llm.WarmCache(t.Context(), (&Manager{logger: slog.New(slog.DiscardHandler)}).loggedService(entry), simpleRequest()); err != upstream {
 		t.Fatalf("WarmCache error = %v, want upstream error unchanged", err)
 	}
 }
