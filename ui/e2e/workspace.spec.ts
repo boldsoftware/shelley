@@ -306,7 +306,10 @@ test("a project's + composes its new conversation there, in the drawer and on th
   await openWorkspace(page);
   const composerRow = (project: string) =>
     page.locator(`section[aria-label="${project}"] [data-conversation-id="composer"]`);
-  await page.getByRole("button", { name: `New task in ${a}`, exact: true }).click();
+  // Phones, which can't hover, always show a project's +.
+  const plus = page.getByRole("button", { name: `New task in ${a}`, exact: true });
+  await expect(plus).toHaveCSS("opacity", "1");
+  await plus.click();
   await expect(page.locator(".project-picker")).toHaveText(a);
   await openWorkspace(page);
   await expect(composerRow(a)).toBeVisible();

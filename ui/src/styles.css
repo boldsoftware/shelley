@@ -18269,6 +18269,15 @@ kbd {
   height: 1.5rem;
 }
 
+/* Workspace mode shows a project's + while its heading is hovered or
+   focused; touch screens, which can't hover, keep it. */
+@media not (pointer: coarse) {
+  .workspace-mode .project-heading:not(:hover, :focus-within) .project-icon-button {
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+}
+
 /* A new project's row while its name is typed. */
 .project-naming {
   flex-wrap: wrap;
