@@ -259,10 +259,9 @@ func TestCompactInPlaceEndToEnd(t *testing.T) {
 	}
 	seq := func(n int64) claudetool.IndexID { return claudetool.IndexID(fmt.Sprint(n)) }
 	for want, collapse := range map[string]claudetool.CompactCollapse{
-		"unknown id":           {From: "999999", To: seq(hiSeq), Note: "x"},
-		"from comes after to":  {From: seq(hiSeq), To: seq(helloSeq), Note: "x"},
-		"note is not shorter":  {From: seq(hiSeq), To: seq(hiSeq), Note: strings.Repeat("long ", 100)},
-		"only be collapsed on": {From: seq(helloSeq), To: seq(hiSeq), Note: "x"},
+		"unknown id":          {From: "999999", To: seq(hiSeq), Note: "x"},
+		"from comes after to": {From: seq(hiSeq), To: seq(helloSeq), Note: "x"},
+		"note is not shorter": {From: seq(hiSeq), To: seq(hiSeq), Note: strings.Repeat("long ", 100)},
 	} {
 		compact(nil, collapse)
 		if out, isErr := c.lastToolOutput(); !isErr || !strings.Contains(out, want) {
@@ -611,12 +610,10 @@ func TestBuildCompactionOrphans(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Fatalf("got %v", err)
 	}
-	// Suggestions around a row that can only be collapsed on its own leave
-	// them out at the ends.
+	// A range may cover the user's messages.
 	withUser := slices.Insert(slices.Clone(items), 4, textItem(10, llm.MessageRoleUser, "back"))
-	_, err = buildCompaction(withUser, 20_000, piTokenCounter, claudetool.CompactInPlaceInput{Collapse: []claudetool.CompactCollapse{col("2", "5")}})
-	if want := "covers 10, which can only be collapsed on its own; collapse e.g. 2, 5 instead"; err == nil || !strings.Contains(err.Error(), want) {
-		t.Fatalf("want %q, got %v", want, err)
+	if _, err := buildCompaction(withUser, 20_000, piTokenCounter, claudetool.CompactInPlaceInput{Collapse: []claudetool.CompactCollapse{col("2", "5")}}); err != nil {
+		t.Fatal(err)
 	}
 	// Otherwise they go with the range.
 	for _, r := range []claudetool.CompactCollapse{col("2", "5"), col("4", "6"), col("5", "7")} {
@@ -974,9 +971,6 @@ func TestBuildCompaction(t *testing.T) {
 		"at most":               {Collapse: []claudetool.CompactCollapse{col("2", "4")}},
 		"overlaps":              {Collapse: []claudetool.CompactCollapse{col("8", "9"), col("9", "9")}},
 		"note is empty":         {Collapse: []claudetool.CompactCollapse{{From: "8", To: "9"}}},
-		// The user's messages may only be collapsed on their own.
-		"collapse 5-8: covers 6, which can only be collapsed on its own; collapse e.g. 5, 8 instead":             {Collapse: []claudetool.CompactCollapse{col("5", "8")}},
-		"collapse 6-7: covers 6, which can only be collapsed on its own; collapse each of those rows on its own": {Collapse: []claudetool.CompactCollapse{col("6", "7")}},
 	} {
 		if _, err := buildCompaction(items, 20_000, piTokenCounter, in); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("want error %q, got %v", want, err)
@@ -995,8 +989,8 @@ func TestBuildCompaction(t *testing.T) {
 		t.Errorf("want error starting %q, got %v", want, err)
 	}
 	// Over the limit is fine for one row, here a tool call and its output,
-	// and a user message may be collapsed on its own.
-	c, err := buildCompaction(items, 20_000, piTokenCounter, claudetool.CompactInPlaceInput{Collapse: []claudetool.CompactCollapse{col("8", "9"), col("2", "2"), col("6", "6"), col("1", "1")}})
+	// and a range may cover the user's messages.
+	c, err := buildCompaction(items, 20_000, piTokenCounter, claudetool.CompactInPlaceInput{Collapse: []claudetool.CompactCollapse{col("8", "9"), col("2", "2"), col("5", "7"), col("1", "1")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1004,12 +998,12 @@ func TestBuildCompaction(t *testing.T) {
 	for _, s := range c.Squishes {
 		got = append(got, fmt.Sprintf("%d-%d", s.FromSequenceID, s.ToSequenceID))
 	}
-	if g := strings.Join(got, " "); g != "1-1 2-3 6-6 8-9" {
+	if g := strings.Join(got, " "); g != "1-1 2-3 5-7 8-9" {
 		t.Fatalf("squishes %s", g)
 	}
 }
 
-func TestCollapsesAlone(t *testing.T) {
+func TestCarriesTask(t *testing.T) {
 	withUserData := func(it contextItem, ud string) contextItem {
 		it.source.UserData = &ud
 		return it
@@ -1026,12 +1020,12 @@ func TestCollapsesAlone(t *testing.T) {
 		{textItem(1, llm.MessageRoleAssistant, "done"), false},
 		{outputItem(1, "a", "out"), false},
 	} {
-		got, err := collapsesAlone(tc.it)
+		got, err := carriesTask(tc.it)
 		if err != nil || got != tc.want {
 			t.Errorf("%+v: got %v, %v", tc.it, got, err)
 		}
 	}
-	if _, err := collapsesAlone(withUserData(textItem(1, llm.MessageRoleUser, "x"), `{`)); err == nil {
+	if _, err := carriesTask(withUserData(textItem(1, llm.MessageRoleUser, "x"), `{`)); err == nil {
 		t.Error("malformed user data: want an error")
 	}
 }

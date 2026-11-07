@@ -315,10 +315,6 @@ func buildCompaction(history []contextItem, keepRecentTokens int, tc tokenCounte
 		return c, err
 	}
 	rows, recent := splitRows(items, recentStart(items, keepRecentTokens, tc))
-	alone, err := aloneRows(rows)
-	if err != nil {
-		return c, err
-	}
 	var problems []string
 	var trimmed []int
 	for _, id := range in.Trim {
@@ -371,15 +367,6 @@ func buildCompaction(history []contextItem, keepRecentTokens int, tc tokenCounte
 			problem("overlaps another collapse")
 			continue
 		}
-		// A row that can only be collapsed on its own may not share a range.
-		if k := slices.Index(alone[i:j+1], true); k >= 0 && j > i {
-			instead := "collapse each of those rows on its own"
-			if r := suggestRanges(rows, alone, i, j); r != "" {
-				instead = "collapse e.g. " + r + " instead"
-			}
-			problem("covers %s, which can only be collapsed on its own; %s", rowID(rows[i+k]), instead)
-			continue
-		}
 		// The range is sound; whatever else is wrong with it, it is taken.
 		spans = append(spans, span{i, j})
 		tokens := 0
@@ -413,11 +400,11 @@ func buildCompaction(history []contextItem, keepRecentTokens int, tc tokenCounte
 	return c, nil
 }
 
-// collapsesAlone reports whether a collapse may cover it only on its own: a
-// message from the user (or the parent agent), or a note or summary from an
-// earlier compaction. They carry the task and its rules, and the agent
-// tends to fold them into notes that keep little of them.
-func collapsesAlone(it contextItem) (bool, error) {
+// carriesTask reports whether it is a message from the user (or the parent
+// agent), or a note or summary from an earlier compaction. They carry the
+// task and its rules, so the index marks them: a note that covers one must
+// keep what of it still matters.
+func carriesTask(it contextItem) (bool, error) {
 	switch {
 	case it.source == nil:
 		return true, nil
@@ -464,20 +451,20 @@ func indexOfRow(rows [][]contextItem, id claudetool.IndexID) int {
 	return slices.IndexFunc(rows, func(row []contextItem) bool { return rowID(row) == string(id) })
 }
 
-// aloneRows reports for each row whether a collapse may cover it only on its
-// own (see collapsesAlone). Rows of a call and its output never are.
-func aloneRows(rows [][]contextItem) ([]bool, error) {
-	alone := make([]bool, len(rows))
+// taskRows reports for each row whether it carries the task (see
+// carriesTask). Rows of a call and its output never do.
+func taskRows(rows [][]contextItem) ([]bool, error) {
+	task := make([]bool, len(rows))
 	for i, row := range rows {
 		if len(row) > 1 {
 			continue
 		}
 		var err error
-		if alone[i], err = collapsesAlone(row[0]); err != nil {
+		if task[i], err = carriesTask(row[0]); err != nil {
 			return nil, err
 		}
 	}
-	return alone, nil
+	return task, nil
 }
 
 // Rows keep calls with their outputs, but a call can lack its output (the
@@ -490,38 +477,6 @@ func orphanOutput(row []contextItem) bool {
 
 func orphanCall(row []contextItem) bool {
 	return hasContent(row[len(row)-1].message, llm.ContentTypeToolUse)
-}
-
-// suggestRanges lists the ranges of rows[i..j] between the rows that can only
-// be collapsed on their own.
-func suggestRanges(rows [][]contextItem, alone []bool, i, j int) string {
-	var ranges []string
-	start := -1
-	for k := i; k <= j+1; k++ {
-		switch {
-		case k <= j && !alone[k]:
-			if start < 0 {
-				start = k
-			}
-		case start >= 0:
-			end := k - 1
-			for start <= end && orphanOutput(rows[start]) {
-				start++
-			}
-			for start <= end && orphanCall(rows[end]) {
-				end--
-			}
-			if start <= end {
-				r := rowID(rows[start])
-				if start < end {
-					r += "-" + rowID(rows[end])
-				}
-				ranges = append(ranges, r)
-			}
-			start = -1
-		}
-	}
-	return strings.Join(ranges, ", ")
 }
 
 // rowTrims lists the trims of a row's tool outputs not trimmed yet.
@@ -612,8 +567,9 @@ Then call compact_in_place with action "compact": trim lists ids of rows whose
 tool outputs you no longer need; collapse lists {from, to, note} ranges of ids
 from the table. A range may not cover more than ~%dk tokens unless it is a
 single row. Rows marked * are messages from the user or the parent and notes
-and summaries from earlier compactions: they carry the task and its rules, so a
-range may not cover one unless it is just that row.`
+and summaries from earlier compactions: they carry the task and its rules. A
+range may cover them, but its note must keep what of them still matters:
+requests, preferences, corrections, open questions.`
 
 // compactIndex renders the index the agent compacts from. While an earlier
 // index is still in context (nothing was compacted since, so its ids and rows
@@ -667,7 +623,7 @@ func compactIndex(history []contextItem, overhead, keepRecentTokens int, tc toke
 			"for a note from an earlier compaction. tokens are estimated; `→ N` gives the\n" +
 			"tokens of a call's output, or says it is trimmed or missing.\n\n```\n")
 	}
-	alone, err := aloneRows(rows)
+	task, err := taskRows(rows)
 	if err != nil {
 		return "", err
 	}
@@ -688,7 +644,7 @@ func compactIndex(history []contextItem, overhead, keepRecentTokens int, tc toke
 		default:
 			role = "user"
 		}
-		if alone[i] {
+		if task[i] {
 			role += "*"
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", rowID(row), role, tc.items(row), description)
