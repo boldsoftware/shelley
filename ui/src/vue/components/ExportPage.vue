@@ -93,6 +93,7 @@ import { computed, onUnmounted, ref, watch } from "vue";
 import { api } from "../../services/api";
 import type { Conversation, Message } from "../../types";
 import { conversationToMarkdown } from "../../utils/conversationMarkdown";
+import { copyText } from "../../utils/clipboard";
 import MarkdownContent from "./MarkdownContent.vue";
 
 const props = defineProps<{ conversationId: string }>();
@@ -115,21 +116,6 @@ function download(name: string, text: string, mime: string) {
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
-}
-
-async function copyText(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    return navigator.clipboard.writeText(text);
-  }
-  // Fallback for non-secure contexts.
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.style.position = "fixed";
-  ta.style.opacity = "0";
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand("copy");
-  document.body.removeChild(ta);
 }
 
 const conversation = ref<Conversation | null>(null);
@@ -236,18 +222,12 @@ function onEditSource(value: string) {
   edited.value = true;
 }
 
-function onCopySource() {
-  copyText(source.value).then(
-    () => showToast("Markdown copied"),
-    () => showToast("Copy failed"),
-  );
+async function onCopySource() {
+  showToast((await copyText(source.value)) ? "Markdown copied" : "Copy failed");
 }
 
-function onCopyPreview() {
-  copyText(source.value).then(
-    () => showToast("Copied as text"),
-    () => showToast("Copy failed"),
-  );
+async function onCopyPreview() {
+  showToast((await copyText(source.value)) ? "Copied as text" : "Copy failed");
 }
 
 function onDownload() {

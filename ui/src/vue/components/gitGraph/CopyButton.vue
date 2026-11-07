@@ -12,7 +12,7 @@
 
 <script setup lang="ts">
 import { onUnmounted, ref } from "vue";
-import { copyText } from "../gitGraphLayout";
+import { copyText } from "../../../utils/clipboard";
 
 const props = defineProps<{ value: string; label: string; title?: string }>();
 
