@@ -290,8 +290,8 @@ test.describe('Queue Messages', () => {
     // Message appears as a normal user message
     await page.waitForFunction(() => document.body.textContent?.includes('echo: immediate send') ?? false, undefined, { timeout: 10000 });
 
-    // No queued badge should exist
-    const queuedBadges = page.getByTestId('queued-badge');
-    await expect(queuedBadges).toHaveCount(0, { timeout: 3000 });
+    // It waits for the turn's next model request, not for the turn to end.
+    await expect(page.getByTestId('injected-badge')).toHaveCount(1, { timeout: 3000 });
+    await expect(page.getByTestId('queued-badge')).toHaveCount(0);
   });
 });

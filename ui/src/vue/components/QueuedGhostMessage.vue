@@ -20,7 +20,10 @@
         <ConversationMessageAuthor v-if="source" :source="source" />
         <div class="whitespace-pre-wrap break-words">{{ text }}</div>
       </template>
-      <div class="queued-message-badge" data-testid="queued-badge">
+      <div
+        class="queued-message-badge"
+        :data-testid="queued.inject ? 'injected-badge' : 'queued-badge'"
+      >
         <span class="queued-message-badge-label">
           <svg
             fill="currentColor"
