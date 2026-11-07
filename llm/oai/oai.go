@@ -25,11 +25,6 @@ const (
 
 	OpenAIURL    = "https://api.openai.com/v1"
 	FireworksURL = "https://api.fireworks.ai/inference/v1"
-	CerebrasURL  = "https://api.cerebras.ai/v1"
-	LlamaCPPURL  = "http://host.docker.internal:1234/v1"
-	TogetherURL  = "https://api.together.xyz/v1"
-	GeminiURL    = "https://generativelanguage.googleapis.com/v1beta/openai/"
-	MistralURL   = "https://api.mistral.ai/v1"
 	MoonshotURL  = "https://api.moonshot.ai/v1"
 	XAIURL       = "https://api.x.ai/v1"
 
@@ -41,11 +36,6 @@ const (
 	// custom models).
 	OpenAIAPIKeyEnv    = "OPENAI_API_KEY"
 	FireworksAPIKeyEnv = "FIREWORKS_API_KEY"
-	CerebrasAPIKeyEnv  = "CEREBRAS_API_KEY"
-	TogetherAPIKeyEnv  = "TOGETHER_API_KEY"
-	GeminiAPIKeyEnv    = "GEMINI_API_KEY"
-	MistralAPIKeyEnv   = "MISTRAL_API_KEY"
-	MoonshotAPIKeyEnv  = "MOONSHOT_API_KEY"
 )
 
 //exe:completeinit
@@ -83,163 +73,6 @@ var (
 		SupportsImages:   true,
 	}
 
-	GPT4oMini = Model{
-		UserName:         "gpt4o-mini",
-		ModelName:        "gpt-4o-mini-2024-07-18",
-		TextVerbosity:    "",
-		URL:              OpenAIURL,
-		APIKeyEnv:        OpenAIAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   true,
-	}
-
-	GPT41Mini = Model{
-		UserName:         "gpt4.1-mini",
-		ModelName:        "gpt-4.1-mini-2025-04-14",
-		TextVerbosity:    "",
-		URL:              OpenAIURL,
-		APIKeyEnv:        OpenAIAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   true,
-	}
-
-	GPT41Nano = Model{
-		UserName:         "gpt4.1-nano",
-		ModelName:        "gpt-4.1-nano-2025-04-14",
-		TextVerbosity:    "",
-		URL:              OpenAIURL,
-		APIKeyEnv:        OpenAIAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   true,
-	}
-
-	O3 = Model{
-		UserName:         "o3",
-		ModelName:        "o3-2025-04-16",
-		TextVerbosity:    "",
-		URL:              OpenAIURL,
-		APIKeyEnv:        OpenAIAPIKeyEnv,
-		IsReasoningModel: true,
-		SupportsImages:   true,
-	}
-
-	O4Mini = Model{
-		UserName:         "o4-mini",
-		ModelName:        "o4-mini-2025-04-16",
-		TextVerbosity:    "",
-		URL:              OpenAIURL,
-		APIKeyEnv:        OpenAIAPIKeyEnv,
-		IsReasoningModel: true,
-		SupportsImages:   true,
-	}
-
-	Gemini25Flash = Model{
-		UserName:         "gemini-flash-2.5",
-		ModelName:        "gemini-2.5-flash-preview-04-17",
-		TextVerbosity:    "",
-		URL:              GeminiURL,
-		APIKeyEnv:        GeminiAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   true,
-	}
-
-	Gemini25Pro = Model{
-		UserName:      "gemini-pro-2.5",
-		ModelName:     "gemini-2.5-pro-preview-03-25",
-		TextVerbosity: "",
-		URL:           GeminiURL,
-		// GRRRR. Really??
-		// Input is: $1.25, prompts <= 200k tokens, $2.50, prompts > 200k tokens
-		// Output is: $10.00, prompts <= 200k tokens, $15.00, prompts > 200k
-		// Caching is: $0.31, prompts <= 200k tokens, $0.625, prompts > 200k, $4.50 / 1,000,000 tokens per hour
-		// Whatever that means. Are we caching? I have no idea.
-		// How do you always manage to be the annoying one, Google?
-		// I'm not complicating things just for you.
-		APIKeyEnv:        GeminiAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   true,
-	}
-
-	TogetherDeepseekV3 = Model{
-		UserName:         "together-deepseek-v3",
-		ModelName:        "deepseek-ai/DeepSeek-V3",
-		TextVerbosity:    "",
-		URL:              TogetherURL,
-		APIKeyEnv:        TogetherAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   false,
-	}
-
-	TogetherDeepseekR1 = Model{
-		UserName:         "together-deepseek-r1",
-		ModelName:        "deepseek-ai/DeepSeek-R1",
-		TextVerbosity:    "",
-		URL:              TogetherURL,
-		APIKeyEnv:        TogetherAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   false,
-	}
-
-	TogetherLlama4Maverick = Model{
-		UserName:         "together-llama4-maverick",
-		ModelName:        "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
-		TextVerbosity:    "",
-		URL:              TogetherURL,
-		APIKeyEnv:        TogetherAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   true,
-	}
-
-	TogetherLlama3_3_70B = Model{
-		UserName:         "together-llama3-70b",
-		ModelName:        "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-		TextVerbosity:    "",
-		URL:              TogetherURL,
-		APIKeyEnv:        TogetherAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   false,
-	}
-
-	TogetherMistralSmall = Model{
-		UserName:         "together-mistral-small",
-		ModelName:        "mistralai/Mistral-Small-24B-Instruct-2501",
-		TextVerbosity:    "",
-		URL:              TogetherURL,
-		APIKeyEnv:        TogetherAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   false,
-	}
-
-	TogetherQwen3 = Model{
-		UserName:         "together-qwen3",
-		ModelName:        "Qwen/Qwen3-235B-A22B-fp8-tput",
-		TextVerbosity:    "",
-		URL:              TogetherURL,
-		APIKeyEnv:        TogetherAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   false,
-	}
-
-	TogetherGemma2 = Model{
-		UserName:         "together-gemma2",
-		ModelName:        "google/gemma-2-27b-it",
-		TextVerbosity:    "",
-		URL:              TogetherURL,
-		APIKeyEnv:        TogetherAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   false,
-	}
-
-	LlamaCPP = Model{
-		UserName:         "llama.cpp",
-		ModelName:        "llama.cpp local model",
-		TextVerbosity:    "",
-		URL:              LlamaCPPURL,
-		APIKeyEnv:        "NONE",
-		IsReasoningModel: false,
-		SupportsImages:   false,
-	}
-
 	DeepseekV41FlashFireworks = Model{
 		UserName:         "deepseek-v4.1-flash-fireworks",
 		ModelName:        "accounts/fireworks/models/deepseek-v4p1-flash",
@@ -258,36 +91,6 @@ var (
 		APIKeyEnv:        FireworksAPIKeyEnv,
 		IsReasoningModel: true,
 		SupportsImages:   true,
-	}
-
-	MoonshotKimiK2 = Model{
-		UserName:         "moonshot-kimi-k2",
-		ModelName:        "moonshot-v1-auto",
-		TextVerbosity:    "",
-		URL:              MoonshotURL,
-		APIKeyEnv:        MoonshotAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   false,
-	}
-
-	MistralMedium = Model{
-		UserName:         "mistral-medium-3",
-		ModelName:        "mistral-medium-latest",
-		TextVerbosity:    "",
-		URL:              MistralURL,
-		APIKeyEnv:        MistralAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   false,
-	}
-
-	DevstralSmall = Model{
-		UserName:         "devstral-small",
-		ModelName:        "devstral-small-latest",
-		TextVerbosity:    "",
-		URL:              MistralURL,
-		APIKeyEnv:        MistralAPIKeyEnv,
-		IsReasoningModel: false,
-		SupportsImages:   false,
 	}
 
 	GLM53Fireworks = Model{
@@ -328,39 +131,6 @@ var (
 		APIKeyEnv:        "", // gateway-only; no direct XAI_API_KEY env support
 		IsReasoningModel: true,
 		SupportsImages:   true,
-	}
-
-	GPT5 = Model{
-		UserName:           "gpt-5-thinking",
-		ModelName:          "gpt-5.1",
-		TextVerbosity:      "low",
-		URL:                OpenAIURL,
-		APIKeyEnv:          OpenAIAPIKeyEnv,
-		IsReasoningModel:   false,
-		SupportsApplyPatch: true,
-		SupportsImages:     true,
-	}
-
-	GPT5Mini = Model{
-		UserName:           "gpt-5-thinking-mini",
-		ModelName:          "gpt-5.1-mini",
-		TextVerbosity:      "medium",
-		URL:                OpenAIURL,
-		APIKeyEnv:          OpenAIAPIKeyEnv,
-		IsReasoningModel:   false,
-		SupportsApplyPatch: true,
-		SupportsImages:     true,
-	}
-
-	GPT5Nano = Model{
-		UserName:           "gpt-5-thinking-nano",
-		ModelName:          "gpt-5.1-nano",
-		TextVerbosity:      "medium",
-		URL:                OpenAIURL,
-		APIKeyEnv:          OpenAIAPIKeyEnv,
-		IsReasoningModel:   false,
-		SupportsApplyPatch: true,
-		SupportsImages:     true,
 	}
 
 	GPT6Astra = Model{
@@ -462,17 +232,6 @@ var (
 		SupportsImages:     true,
 	}
 
-	GPT55Pro = Model{
-		UserName:           "gpt-5.5-pro",
-		ModelName:          "gpt-5.5-pro",
-		TextVerbosity:      "low",
-		URL:                OpenAIURL,
-		APIKeyEnv:          OpenAIAPIKeyEnv,
-		IsReasoningModel:   false,
-		SupportsApplyPatch: true,
-		SupportsImages:     true,
-	}
-
 	GPT54 = Model{
 		UserName:           "gpt-5.4",
 		ModelName:          "gpt-5.4",
@@ -515,27 +274,6 @@ var (
 		IsReasoningModel:   false,
 		SupportsApplyPatch: true,
 		SupportsImages:     true,
-	}
-
-	// Skaband-specific model names.
-	// Provider details (URL and APIKeyEnv) are handled by skaband
-	Qwen = Model{
-		UserName:         "qwen",
-		ModelName:        "qwen", // skaband will map this to the actual provider model
-		TextVerbosity:    "",
-		URL:              "",
-		APIKeyEnv:        "",
-		IsReasoningModel: false,
-		SupportsImages:   false,
-	}
-	GLM = Model{
-		UserName:         "glm",
-		ModelName:        "glm", // skaband will map this to the actual provider model
-		TextVerbosity:    "",
-		URL:              "",
-		APIKeyEnv:        "",
-		IsReasoningModel: false,
-		SupportsImages:   false,
 	}
 )
 
@@ -616,100 +354,6 @@ func filterReasoningForOrigin(msg llm.Message, origin llm.MessageOrigin) llm.Mes
 	}
 	msg.Content = content
 	return msg
-}
-
-// ModelsRegistry is a registry of all known models with their user-friendly names.
-// Declaration order is display order — keep current models at top, old models at bottom.
-var ModelsRegistry = []Model{
-	// Current OpenAI
-	GPT6Astra,
-	GPT61Sol,
-	GPT61Terra,
-	GPT6Sol,
-	GPT6Luna,
-	GPT56Sol,
-	GPT56Terra,
-	GPT56Luna,
-	GPT55,
-	GPT55Pro,
-	GPT54,
-	GPT54Mini,
-	GPT54Nano,
-	GPT5,
-	GPT5Mini,
-	GPT5Nano,
-	O4Mini,
-	O3,
-	// Codex
-	GPT53Codex,
-	// Gemini
-	Gemini25Flash,
-	Gemini25Pro,
-	// Together
-	TogetherDeepseekV3,
-	TogetherDeepseekR1,
-	TogetherLlama4Maverick,
-	TogetherQwen3,
-	TogetherMistralSmall,
-	// Fireworks / misc providers
-	DeepseekV41Flash1017Fireworks,
-	DeepseekV41FlashFireworks,
-	MoonshotKimiK2,
-	MistralMedium,
-	DevstralSmall,
-	GLM53Fireworks,
-	GLM53FlashFireworks,
-	KimiK3Fireworks,
-	LlamaCPP,
-	// Skaband-supported models
-	Qwen,
-	GLM,
-	// Old models — still work, just not featured
-	GPT41,
-	GPT41Mini,
-	GPT41Nano,
-	GPT4o,
-	GPT4oMini,
-	TogetherLlama3_3_70B,
-	TogetherGemma2,
-}
-
-// ListModels returns a list of all available models with their user-friendly names.
-func ListModels() []string {
-	var names []string
-	for _, model := range ModelsRegistry {
-		if model.UserName != "" {
-			names = append(names, model.UserName)
-		}
-	}
-	return names
-}
-
-// ModelByUserName returns a model by its user-friendly name.
-// Returns nil if no model with the given name is found.
-func ModelByUserName(name string) Model {
-	for _, model := range ModelsRegistry {
-		if model.UserName == name {
-			return model
-		}
-	}
-	return zeroModel()
-}
-
-func zeroModel() Model {
-	return Model{
-		UserName:         "",
-		ModelName:        "",
-		TextVerbosity:    "",
-		URL:              "",
-		APIKeyEnv:        "",
-		IsReasoningModel: false,
-		SupportsImages:   false,
-	}
-}
-
-func (m Model) IsZero() bool {
-	return m == zeroModel()
 }
 
 var (

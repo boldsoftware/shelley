@@ -21,9 +21,7 @@ import (
 )
 
 func modelForTest(name string) Model {
-	model := zeroModel()
-	model.ModelName = name
-	return model
+	return Model{ModelName: name}
 }
 
 func TestToRoleFromString(t *testing.T) {
@@ -873,55 +871,6 @@ func TestFromLLMTool(t *testing.T) {
 	// The important thing is that it's not nil and was assigned
 	if openaiTool.Function.Parameters == nil {
 		t.Errorf("fromLLMTool().Function.Parameters should not be nil")
-	}
-}
-
-func TestListModels(t *testing.T) {
-	models := ListModels()
-	if len(models) == 0 {
-		t.Errorf("ListModels() returned empty slice")
-	}
-	// Check that some known models are in the list
-	expectedModels := []string{"gpt4.1", "gpt4o", "gpt4o-mini", "o3", "o4-mini"}
-	for _, expected := range expectedModels {
-		found := false
-		for _, model := range models {
-			if model == expected {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("ListModels() missing expected model: %s", expected)
-		}
-	}
-}
-
-func TestModelByUserName(t *testing.T) {
-	// Test finding an existing model
-	model := ModelByUserName("gpt4.1")
-	if model.UserName != "gpt4.1" {
-		t.Errorf("ModelByUserName(gpt4.1).UserName = %q, expected %q", model.UserName, "gpt4.1")
-	}
-
-	// Test finding a non-existent model
-	model = ModelByUserName("non-existent")
-	if !model.IsZero() {
-		t.Errorf("ModelByUserName(non-existent) should return zero value, got: %+v", model)
-	}
-}
-
-func TestModelIsZero(t *testing.T) {
-	// Test zero value
-	var zeroModel Model
-	if !zeroModel.IsZero() {
-		t.Errorf("Model{}.IsZero() = false, expected true")
-	}
-
-	// Test non-zero value
-	model := GPT41
-	if model.IsZero() {
-		t.Errorf("GPT41.IsZero() = true, expected false")
 	}
 }
 
