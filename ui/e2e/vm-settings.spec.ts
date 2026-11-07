@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-// The prod tab's VM view: a Page tab and a Settings tab, whose changes go
+// The prod tab's VM view: a Settings tab, first, and a Page tab, whose changes go
 // through Shelley's typed API. exe.dev itself is mocked: no real VM changes.
 test.beforeEach(async ({ request }) => {
   for (const name of ["workspace", "dev-prod-tabs"]) {
@@ -15,7 +15,7 @@ test.afterEach(async ({ request }) => {
   }
 });
 
-test("a VM has Page and Settings tabs, and settings changes confirm first", async ({ page }) => {
+test("a VM opens on its Settings tab, beside its Page tab, and settings changes confirm first", async ({ page }) => {
   const vm = {
     name: "web",
     emoji: "🌐",
@@ -75,11 +75,9 @@ test("a VM has Page and Settings tabs, and settings changes confirm first", asyn
   await page.route("https://web.exe.test/**", (route) => route.fulfill({ body: "the web page" }));
 
   await page.goto("/vm/web");
-  await expect(page.getByTestId("view-tab-page")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByTestId("vm-frame")).toBeVisible();
-
-  await page.getByTestId("view-tab-settings").click();
-  await expect(page).toHaveURL(/\/vm\/web\/settings$/);
+  await expect(page.getByTestId("view-tab-settings")).toHaveAttribute("aria-current", "page");
+  const tabs = page.getByRole("navigation", { name: "VM tabs" }).getByRole("button");
+  await expect(tabs.first()).toHaveAttribute("data-testid", "view-tab-settings");
   await expect(page.getByTestId("vm-status")).toContainText("running");
   await expect(page.getByTestId("vm-denied")).toContainText("tagged scope");
   await expect(page.getByTestId("vm-domain-add")).toBeDisabled();
@@ -111,6 +109,10 @@ test("a VM has Page and Settings tabs, and settings changes confirm first", asyn
   expect(changes).toHaveLength(1);
 
   await page.getByTestId("view-tab-page").click();
-  await expect(page).toHaveURL(/\/vm\/web$/);
+  await expect(page).toHaveURL(/\/vm\/web\/page$/);
   await expect(page.getByTestId("vm-frame")).toBeVisible();
+
+  await page.getByTestId("view-tab-settings").click();
+  await expect(page).toHaveURL(/\/vm\/web$/);
+  await expect(page.getByTestId("vm-status")).toBeVisible();
 });

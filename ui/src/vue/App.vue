@@ -347,6 +347,7 @@ import {
   vmPath,
   vmTabFromPath,
   type NavTab,
+  type VmTab,
 } from "../services/exeVms";
 import type { RecordingMode } from "./components/recordingDestination";
 import { isImeComposing } from "../utils/imeComposing";
@@ -521,10 +522,10 @@ function selectVm(name: string) {
   workspace.projectView.value = null;
   if (currentVm.value === name) return;
   currentVm.value = name;
-  vmTab.value = "page";
-  window.history.pushState({}, "", vmPath(name, "page"));
+  vmTab.value = "settings";
+  window.history.pushState({}, "", vmPath(name, "settings"));
 }
-function showVmTab(tab: "page" | "settings") {
+function showVmTab(tab: VmTab) {
   if (!currentVm.value || vmTab.value === tab) return;
   vmTab.value = tab;
   window.history.pushState({}, "", vmPath(currentVm.value, tab));

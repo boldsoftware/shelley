@@ -143,20 +143,20 @@ export function saveNavTab(tab: NavTab) {
   localStorage.setItem(NAV_TAB_KEY, tab);
 }
 
-/** A VM's view's tabs, like a project's: its web page and its settings. */
-export type VmTab = "page" | "settings";
+/** A VM's view's tabs: its settings, first, and its web page. */
+export type VmTab = "settings" | "page";
 
-/** The VM name in a /vm/<name>[/settings] path, or null. */
+/** The VM name in a /vm/<name>[/page] path, or null. */
 export function vmFromPath(path: string): string | null {
-  const m = path.match(/^\/vm\/([^/]+)(\/settings)?\/?$/);
+  const m = path.match(/^\/vm\/([^/]+)(\/page)?\/?$/);
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-/** The tab of a /vm/<name>[/settings] path. */
+/** The tab of a /vm/<name>[/page] path. */
 export function vmTabFromPath(path: string): VmTab {
-  return /^\/vm\/[^/]+\/settings\/?$/.test(path) ? "settings" : "page";
+  return /^\/vm\/[^/]+\/page\/?$/.test(path) ? "page" : "settings";
 }
 
 export function vmPath(name: string, tab: VmTab): string {
-  return `/vm/${encodeURIComponent(name)}${tab === "settings" ? "/settings" : ""}`;
+  return `/vm/${encodeURIComponent(name)}${tab === "page" ? "/page" : ""}`;
 }

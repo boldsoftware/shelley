@@ -1,6 +1,6 @@
 <!-- The main pane for a VM picked in the sidebar's prod tab, with tabs like a
-     project's: its web page in a frame (or why the page can't be framed
-     here, with a link to open it) and its settings. -->
+     project's: its settings, first, and its web page in a frame (or why the
+     page can't be framed here, with a link to open it). -->
 <template>
   <div class="full-height flex flex-col">
     <div class="header">
@@ -143,8 +143,8 @@ const tabs = computed<ViewTab<VmTab>[]>(() => {
     // exe.dev lists the VM's URL; its name will do.
   }
   return [
-    { key: "page", icon: "pi-globe", title: host, tooltip: vm.value?.url },
     { key: "settings", icon: "pi-cog", title: "Settings" },
+    { key: "page", icon: "pi-globe", title: host, tooltip: vm.value?.url },
   ];
 });
 // A change in the settings may have made the page public or private.
