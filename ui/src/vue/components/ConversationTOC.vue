@@ -674,9 +674,13 @@ function detachScroll() {
   scrollHandler = null;
 }
 
-watch([() => props.containerRef, entries, () => props.nearBottom], attachScroll, {
-  immediate: true,
-});
+// Only an open list shows the active entry, so track it only then: reading
+// entries while closed would build the whole TOC on every conversation open.
+watch(
+  [() => props.containerRef, () => open.value && entries.value, () => props.nearBottom],
+  () => (open.value ? attachScroll() : detachScroll()),
+  { immediate: true },
+);
 
 watch([() => props.messages.length, () => props.containerRef], () => {
   if (open.value) nextTick(refreshRenderedThumbnails);

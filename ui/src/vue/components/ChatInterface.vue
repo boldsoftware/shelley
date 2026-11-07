@@ -1767,8 +1767,8 @@ let lastGeneration: { id: string | null; gen: number } | null = null;
 // swap is height-neutral and needs no scroll compensation. Mounting
 // floor-adjacent chunks first would put them inside the browser's
 // content-visibility proximity margin, where they lay out (and deflate)
-// immediately under the reader. With the 10-chunk tail the floor boundary
-// sits tens of thousands of pixels above the scrollport, so even the final
+// immediately under the reader. With the 4-chunk tail the floor boundary
+// sits many thousands of pixels above the scrollport, so even the final
 // sweep steps stay estimate-booked. Deflation only happens when the user
 // scrolls up to content — the pre-existing clamp machinery's job.
 //
@@ -1783,7 +1783,7 @@ let lastGeneration: { id: string | null; gen: number } | null = null;
 // ~3s Chromium / ~6s Safari, so these are brief): find-in-page and
 // select-all miss unmounted history; printing mid-sweep prints placeholder
 // bands (beforeprint triggers reveals, but the mount is async).
-const INITIAL_TAIL_CHUNKS = 10; // ~500 rows at RENDER_CHUNK_SIZE=50
+const INITIAL_TAIL_CHUNKS = 4; // ~200 rows at RENDER_CHUNK_SIZE=50
 const SWEEP_CHUNKS_PER_STEP = 4;
 const tailFloor = ref(0);
 const sweptTop = ref(0);
@@ -2492,14 +2492,25 @@ const welcomeParts = computed(() =>
   ),
 );
 
-const allCoalescedItems = computed(() =>
-  perfWrap("chat.coalesceMessages", () =>
-    coalesceMessages(
-      messages.value,
-      conversationInterrupted.value ? props.currentConversation?.current_generation : undefined,
-    ),
-  )(),
-);
+// The store hands back the same array until a conversation changes, so
+// reopening one reuses its coalesced items instead of redoing the pass.
+const coalescedByMessages = new WeakMap<
+  Message[],
+  { interruptedGeneration: number | undefined; items: CoalescedItem[] }
+>();
+const allCoalescedItems = computed(() => {
+  const msgs = messages.value;
+  const interruptedGeneration = conversationInterrupted.value
+    ? props.currentConversation?.current_generation
+    : undefined;
+  const hit = coalescedByMessages.get(msgs);
+  if (hit && hit.interruptedGeneration === interruptedGeneration) return hit.items;
+  const items = perfWrap("chat.coalesceMessages", () =>
+    coalesceMessages(msgs, interruptedGeneration),
+  )();
+  coalescedByMessages.set(msgs, { interruptedGeneration, items });
+  return items;
+});
 const coalescedItems = computed(() => {
   const items = allCoalescedItems.value;
   const mode = conversationViewMode.value;
@@ -2535,7 +2546,12 @@ const visibleMessages = computed(() =>
 
 function syncBtwFromStore(conversationId: string) {
   if (conversationId !== currentConversationId) return;
-  btwExchanges.value = btwStore.list(conversationId);
+  const next = btwStore.list(conversationId);
+  // list() builds a new array each call. Hydration lands right after every
+  // open, and for the usual conversation without any it must not rebuild
+  // the render model.
+  if (next.length === 0 && btwExchanges.value.length === 0) return;
+  btwExchanges.value = next;
 }
 
 watch(
@@ -3339,14 +3355,6 @@ async function loadMessages(focusedId: string) {
 
   const wasHydrated = messageStore.isHydrated(focusedId);
   const hadHotMessages = (messageStore.peek(focusedId)?.messages.length ?? 0) > 0;
-  // Hot-memory loads have no asynchronous cache read to give the status a
-  // chance to paint before Vue mounts the large message tree. Yield one paint
-  // explicitly; otherwise status + thousands of rows land in the same flush.
-  if (wasHydrated && loading.value) {
-    await nextTick();
-    await waitForConversationPaint();
-    if (!isCurrent()) return;
-  }
   if (!wasHydrated) {
     const hydrateStarted = performance.now();
     await messageStore.hydrate(focusedId);
@@ -5037,20 +5045,12 @@ watch(
     // conversation) while loadMessages awaits messageStore.hydrate(), so the
     // template renders the "Send a message to start the conversation"
     // empty-state over a conversation that clearly has history — a multi-second
-    // flash on cold loads. If we already have messages in memory we can show
-    // them immediately (no spinner); otherwise show the spinner until
-    // loadMessages resolves, so the empty-state only appears for genuinely
-    // empty conversations.
-    const inMemory = messageStore.peek(focusedId);
-    if (
-      inMemory &&
-      inMemory.messages.length > 0 &&
-      inMemory.messages.length < LARGE_LOAD_STATUS_MESSAGES
-    ) {
-      loading.value = false;
-    } else {
-      loading.value = true;
-    }
+    // flash on cold loads. If we already have messages in memory we show
+    // them immediately, in this same flush (no spinner: loadMessages applies
+    // them synchronously and tail-first mounting bounds the rows); otherwise
+    // show the spinner until loadMessages resolves, so the empty-state only
+    // appears for genuinely empty conversations.
+    loading.value = !messageStore.peek(focusedId)?.messages.length;
     void loadMessages(focusedId);
   },
   { immediate: true },

@@ -51,7 +51,7 @@ test.describe("Performance HUD", () => {
     expect(counters!.length).toBeGreaterThan(0);
   });
 
-  test("cached loads keep useful status visible and reach the HUD", async ({ page, request }) => {
+  test("IndexedDB loads show status, memory loads render at once, both reach the HUD", async ({ page, request }) => {
     await setPageFeatureFlag(page, "performance-hud", true);
 
     const generated = await request.post("/debug/loremipsum?json=1", {
@@ -180,11 +180,8 @@ test.describe("Performance HUD", () => {
           }
         ).__shelleyLoadingStatuses ?? [],
     );
-    expect(
-      memoryStatuses.some(
-        (status) => status.text.includes(expectedMessageText) && status.messageElements === 0,
-      ),
-    ).toBeTruthy();
+    // A memory hit renders in the switch's own flush: no loading status.
+    expect(memoryStatuses).toEqual([]);
     // The load is recorded once it has rendered, which on a busy machine can
     // trail the first message becoming visible; until then the latest entry
     // is still the IndexedDB load above.

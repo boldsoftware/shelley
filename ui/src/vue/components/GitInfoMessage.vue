@@ -83,7 +83,9 @@ onMounted(() => {
   worktreeObserver = new ResizeObserver(updateLabel);
   worktreeObserver.observe(element);
   watch(displayWorktree, updateLabel, { flush: "post" });
-  void document.fonts.ready.then(updateLabel);
+  // The observer measures once on observe; refit only if a webfont was
+  // still loading, rather than queueing a layout-forcing refit per row.
+  if (document.fonts.status !== "loaded") void document.fonts.ready.then(updateLabel);
 });
 
 const canShowDiff = computed(() => !!commitHash.value && !!props.onOpenDiffViewer);
