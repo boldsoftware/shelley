@@ -647,7 +647,7 @@ assert(formatDuration(11_100_000) === "3h 05m", "formatDuration hours");
 // stackedAreaPaths: one path per layer, a subpath per turn, slabs for
 // zero-width turns, all within the plot's pixel bounds.
 {
-  const geom = { left: 10, right: 110, yAt: (v: number) => 100 - v };
+  const geom = { left: 10, right: 110, yAt: (v: number) => 100 - v, slabHalfW: 1 };
   const layers = [
     [0, 10, 20],
     [5, 30, 60],

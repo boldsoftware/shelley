@@ -613,12 +613,14 @@ export function callXLayout(n: number): XLayout {
   return { xs, turns: [[0, n - 1]], activeMs: 0 };
 }
 
-/** Where a stacked area sits: the plot spans [left, right] pixels, and yAt
- *  maps a value to its pixel row. */
+/** Where a stacked area sits: the plot spans [left, right] pixels, yAt
+ *  maps a value to its pixel row, and a zero-width turn is drawn as a slab
+ *  slabHalfW pixels either side of its call. */
 export interface AreaGeometry {
   left: number;
   right: number;
   yAt: (v: number) => number;
+  slabHalfW: number;
 }
 
 /** One path per layer of a stacked area (layers[s][i] is the upper boundary
@@ -635,7 +637,7 @@ export function stackedAreaPaths(layers: number[][], lay: XLayout, g: AreaGeomet
     for (const [a, b] of lay.turns) {
       if (lay.xs[a] === lay.xs[b]) {
         const x = g.left + lay.xs[a] * plotW;
-        const hw = Math.max(1, plotW * 0.006);
+        const hw = g.slabHalfW;
         const x0 = Math.max(g.left, x - hw).toFixed(1);
         const x1 = Math.min(g.right, x + hw).toFixed(1);
         const yT = g.yAt(layer[b]).toFixed(1);
@@ -677,10 +679,13 @@ export interface DeltaBar {
  *  The plot is split into equal cells one bar wide (one per call when they
  *  fit, within the width bounds); each occupied cell is a bar holding the
  *  calls that fall in it. So bars never overlap and every call lies inside
- *  its own bar, wherever calls cluster. */
-export function deltaBars(xs: number[], heights: number[]): DeltaBar[] {
+ *  its own bar, wherever calls cluster. visible is the fraction of the plot
+ *  on screen when zoomed. */
+export function deltaBars(xs: number[], heights: number[], visible = 1): DeltaBar[] {
   const n = xs.length;
-  const w = Math.max(MIN_BAR_FRAC, Math.min(1 / Math.max(n, 1), MAX_BAR_FRAC));
+  // The width bounds are of the visible fraction of the plot, so zooming in
+  // splits merged bars apart.
+  const w = Math.max(MIN_BAR_FRAC * visible, Math.min(1 / Math.max(n, 1), MAX_BAR_FRAC * visible));
   // The epsilons keep exact multiples (1/(1/n), i/(n-1)·(n-1)) from
   // flooring one cell low.
   const cells = Math.floor(1 / w + 1e-9);

@@ -20,7 +20,19 @@
     >
       <div class="usage-popup-header">
         <div class="usage-popup-title">{{ popupTitle }}</div>
-        <UsageGraphSwitch v-if="usageEntries && usageEntries.length > 0" v-model="panes" />
+        <div v-if="usageEntries && usageEntries.length > 0" class="usage-popup-actions">
+          <UsageGraphSwitch v-model="panes" />
+          <a
+            v-if="conversationId"
+            :href="`/debug/context/?id=${encodeURIComponent(conversationId)}`"
+            target="_blank"
+            rel="noopener"
+            class="usage-popup-expand"
+            aria-label="Open the graphs full size"
+            title="Open the graphs full size"
+            ><i class="pi pi-external-link" aria-hidden="true"
+          /></a>
+        </div>
       </div>
       <TokenCostGraph
         v-if="popupOpen"
@@ -47,11 +59,7 @@
         >
           Compact in Place
         </button>
-        <span
-          v-if="compactInPlaceBusy"
-          :id="compactInPlaceHintId"
-          class="token-cost-graph-note"
-        >
+        <span v-if="compactInPlaceBusy" :id="compactInPlaceHintId" class="token-cost-graph-note">
           Finish or stop the current turn to compact in place.
         </span>
       </div>

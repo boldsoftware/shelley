@@ -173,7 +173,7 @@ test("keeps conversations without sub-agents compact", async ({ page, request })
   const popup = await openSpend(page, request);
   await expect(popup.getByTestId("token-cost-total")).toHaveText("Total≈$3.73");
   await expect(popup.getByRole("columnheader", { name: "Sub-agents", exact: true })).toHaveCount(0);
-  expect((await popup.boundingBox())!.width).toBe(440);
+  expect((await popup.boundingBox())!.width).toBe(460);
 });
 
 test("shows a zero total when sub-agent pricing is known and free", async ({ page, request }) => {

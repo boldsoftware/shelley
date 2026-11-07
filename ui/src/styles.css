@@ -13465,7 +13465,7 @@ kbd {
   font-size: var(--font-size-12);
   color: var(--text-secondary);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  width: min(440px, calc(100vw - 1rem));
+  width: min(460px, calc(100vw - 1rem));
   max-width: calc(100vw - 1rem);
 }
 .chat-context-popup.p-popover:before,
@@ -13510,10 +13510,23 @@ kbd {
   color: var(--text-primary);
 }
 
+/* The graph switch and expand link wrap below the title together. */
+.usage-popup-actions {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.usage-popup-expand {
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+  line-height: 1.4;
+}
+
 .usage-graph-switch {
   display: flex;
   gap: 8px;
-  margin-left: auto;
   color: var(--text-secondary);
 }
 
@@ -13526,7 +13539,8 @@ kbd {
   cursor: pointer;
 }
 
-.usage-graph-switch-item:has(:checked) {
+.usage-graph-switch-item:has(:checked),
+.usage-popup-expand:hover {
   color: var(--text-primary);
 }
 
@@ -13631,6 +13645,16 @@ kbd {
   border-radius: 4px;
 }
 
+.token-cost-graph-zoomable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.token-cost-graph-zoomable:active {
+  cursor: grabbing;
+}
+
 .token-cost-axis {
   stroke: var(--border-color);
   stroke-width: 1;
@@ -13667,6 +13691,12 @@ kbd {
 .token-cost-label {
   font-size: 10px;
   fill: var(--text-secondary);
+}
+
+.token-cost-axis-tick {
+  stroke: var(--text-secondary);
+  stroke-width: 1;
+  opacity: 0.6;
 }
 
 .token-cost-pane-label {

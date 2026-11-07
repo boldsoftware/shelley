@@ -17,7 +17,7 @@ assert(
   "incremental cost gets a third of the height",
 );
 
-const all = layoutPanes(["incremental", "context", "cumulative"], 6, 10);
+const all = layoutPanes(["incremental", "context", "cumulative"], 6, 10, 1);
 assert(
   all.map((b) => b.pane).join() === "context,cumulative,incremental",
   `stack order is fixed: ${all.map((b) => b.pane)}`,
@@ -30,9 +30,9 @@ assert(
   "bottom = top + height",
 );
 
-const some = layoutPanes(["incremental", "context"], 6, 10);
+const some = layoutPanes(["incremental", "context"], 6, 10, 1);
 assert(some.length === 2 && some[1].top === some[0].bottom + 10, "hidden panes take no room");
-assert(layoutPanes([], 6, 10).length === 0, "no panes, no boxes");
+assert(layoutPanes([], 6, 10, 1).length === 0, "no panes, no boxes");
 
 // Remembering the choice across page loads.
 const everything = "context,cumulative,incremental";

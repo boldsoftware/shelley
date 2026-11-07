@@ -1,0 +1,36 @@
+main.context-graph-page {
+  max-width: none;
+}
+.context-graph-page-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.context-graph-page-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.context-graph-page-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.context-graph-page-list {
+  list-style: none;
+  padding: 0;
+}
+.context-graph-page-list li {
+  padding: 2px 0;
+}
+.context-graph-page-controls .usage-graph-switch {
+  margin-left: 0;
+}
+/* Keep the hover readout in view below a graph taller than the window. */
+.context-graph-page .token-cost-hover-readout {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-secondary);
+}

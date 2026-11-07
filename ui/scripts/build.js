@@ -208,6 +208,15 @@ async function build() {
       plugins: [vuePlugin()],
     });
 
+    await esbuild.build({
+      entryPoints: ["src/vue/debug-context.ts"],
+      bundle: true,
+      outfile: "dist/debug-context.js",
+      format: "iife",
+      minify: isProd,
+      plugins: [vuePlugin()],
+    });
+
     // /static/excalidraw/skill.js: self-contained Excalidraw + React +
     // skill helper bundle. The host React app fetches it same-origin and
     // streams it into the sandboxed `output_iframe` iframe via
@@ -316,6 +325,7 @@ async function build() {
       "main.js",
       "main.css",
       "debug-timelines.js",
+      "debug-context.js",
       "static/excalidraw/skill.js",
       "SymbolsNerdFontMono.woff2",
     ];

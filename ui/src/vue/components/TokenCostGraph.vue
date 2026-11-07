@@ -48,9 +48,16 @@
           role="group"
           :aria-label="`Usage graphs across ${stack.n} LLM calls`"
           class="token-cost-graph-svg"
+          :class="{ 'token-cost-graph-zoomable': zoomable }"
           @mousemove="onMove"
-          @mouseleave="clearHover"
+          @mouseleave="onLeave"
+          @wheel="onWheel"
+          @pointerdown="onPointerDown"
+          @dblclick="resetView"
         >
+          <clipPath :id="clipId">
+            <rect :x="PADL" y="0" :width="plotW" :height="H" />
+          </clipPath>
           <g v-for="pane in paneViews" :key="pane.id" :data-pane="pane.id">
             <line
               v-for="tick in pane.ticks.filter((t) => t.grid)"
@@ -61,7 +68,9 @@
               :y2="tick.y"
               class="token-cost-gridline"
             />
-            <path v-for="(d, s) in pane.paths" :key="s" :d="d" :fill="pane.colors[s]" />
+            <g :clip-path="`url(#${clipId})`">
+              <path v-for="(d, s) in pane.paths" :key="s" :d="d" :fill="pane.colors[s]" />
+            </g>
             <line
               :x1="PADL"
               :y1="pane.box.top"
@@ -99,18 +108,26 @@
               {{ tick.label }}
             </text>
           </g>
-          <path v-if="missMarks" :d="missMarks" class="token-cost-miss-mark" />
-          <path
-            v-for="(x, i) in compactionMarks"
-            :key="`mark-${i}`"
-            :d="guide(x)"
-            class="token-cost-gen-line"
-          />
-          <path
-            v-if="hoverX !== null && stack.n > 1"
-            :d="guide(hoverX)"
-            class="token-cost-hover-line"
-          />
+          <g :clip-path="`url(#${clipId})`">
+            <path v-if="missMarks" :d="missMarks" class="token-cost-miss-mark" />
+            <path
+              v-for="(x, i) in compactionMarks"
+              :key="`mark-${i}`"
+              :d="guide(x)"
+              class="token-cost-gen-line"
+            />
+            <path
+              v-if="hoverX !== null && stack.n > 1"
+              :d="guide(hoverX)"
+              class="token-cost-hover-line"
+            />
+          </g>
+          <g v-for="t in xTicks" :key="t.x">
+            <path :d="`M${t.x.toFixed(1)},${H - PADB}v4`" class="token-cost-axis-tick" />
+            <text :x="t.x" :y="H - PADB + 14" text-anchor="middle" class="token-cost-label">
+              {{ t.label }}
+            </text>
+          </g>
           <text :x="(PADL + W - PADR) / 2" :y="H - 4" text-anchor="middle" class="token-cost-label">
             {{ xAxisLabel }}
           </text>
@@ -371,12 +388,18 @@ const props = defineProps<{
     compactions: number[];
     label: string;
   };
+  /** Wheel or pinch zooms the x axis, dragging pans, and a double click or
+   *  tap zooms back out; for the full-page view (/debug/context/). */
+  zoomable?: boolean;
+  /** Multiplies every pane's height. */
+  paneScale?: number;
 }>();
 
 // Pixel geometry, drawn 1:1: the viewBox is as wide as the svg actually is
 // (measured below), so the graph stretches with the popup instead of scaling
 // its text. Each pane's label runs down the left edge, in one or two lines
 // (LABEL_X); tick labels sit between it and the plot.
+let graphCount = 0;
 const DEFAULT_W = 420;
 const MIN_W = 200;
 const PADL = 52;
@@ -385,7 +408,8 @@ const PADR = 8;
 // (the incremental strip is shorter than "Incremental" is long).
 const PADT = 12;
 const PANE_GAP = 10;
-const PADB = 18;
+// Zoomable graphs label the x axis with ticks above its title.
+const PADB = props.zoomable ? 36 : 18;
 const LABEL_X = [9, 20];
 
 const W = ref(DEFAULT_W);
@@ -406,7 +430,20 @@ watch(svgRef, (svg) => {
 onBeforeUnmount(() => resizeObserver?.disconnect());
 
 const plotW = computed(() => W.value - PADL - PADR);
-const paneBoxes = computed<PaneBox[]>(() => layoutPanes(props.panes, PADT, PANE_GAP));
+
+// The visible slice of the x axis, as plot fractions; zoomable graphs narrow
+// it. Everything x maps through px, which stretches that slice over the plot
+// (drawing outside it is clipped).
+const view = ref({ from: 0, to: 1 });
+const spanW = computed(() => plotW.value / (view.value.to - view.value.from));
+const spanLeft = computed(() => PADL - view.value.from * spanW.value);
+function px(frac: number): number {
+  return spanLeft.value + frac * spanW.value;
+}
+const clipId = `token-cost-plot-${++graphCount}`;
+const paneBoxes = computed<PaneBox[]>(() =>
+  layoutPanes(props.panes, PADT, PANE_GAP, props.paneScale ?? 1),
+);
 const H = computed(() => (paneBoxes.value.at(-1)?.bottom ?? PADT) + PADB);
 const showsContext = computed(() => props.panes.includes("context"));
 // The context graph needs no pricing, so it need not wait for the lookup.
@@ -662,15 +699,16 @@ const showCostSummary = computed(() => {
   );
 });
 
-const xMode = ref<"calls" | "time">(props.timeline ? "time" : "calls");
+const xMode = ref<"calls" | "time">(props.timeline || props.zoomable ? "time" : "calls");
 
-const layout = computed<XLayout>(() =>
-  props.timeline?.layout ??
-  (xMode.value === "time" ? timeXLayout(props.entries) : callXLayout(stack.value?.n ?? 0)),
+const layout = computed<XLayout>(
+  () =>
+    props.timeline?.layout ??
+    (xMode.value === "time" ? timeXLayout(props.entries) : callXLayout(stack.value?.n ?? 0)),
 );
 
 function xAt(i: number): number {
-  return PADL + layout.value.xs[i] * plotW.value;
+  return px(layout.value.xs[i]);
 }
 
 const unit = computed(() => (stack.value?.weighted ? "cost" : "tokens"));
@@ -687,9 +725,10 @@ const ctxLayers = computed(() => contextLayers(ctxPoints.value, categories.value
 const ctxAligned = computed(
   () => !props.timeline && ctxPoints.value.length === (stack.value?.n ?? 0),
 );
-const ctxLayout = computed<XLayout>(() =>
-  props.timeline?.contextLayout ??
-  (ctxAligned.value ? layout.value : callXLayout(ctxPoints.value.length)),
+const ctxLayout = computed<XLayout>(
+  () =>
+    props.timeline?.contextLayout ??
+    (ctxAligned.value ? layout.value : callXLayout(ctxPoints.value.length)),
 );
 
 // A vertical guide through every pane, skipping the gaps between them.
@@ -707,20 +746,19 @@ const markStarts = computed<number[]>(() => {
 });
 
 function markX(i: number): number {
-  return PADL + generationBoundary(bars.value, layout.value.xs, i) * plotW.value;
+  return px(generationBoundary(bars.value, layout.value.xs, i));
 }
 
 const compactionMarks = computed(() =>
-  props.timeline
-    ? props.timeline.compactions.map((x) => PADL + x * plotW.value)
-    : markStarts.value.map(markX),
+  props.timeline ? props.timeline.compactions.map(px) : markStarts.value.map(markX),
 );
 
 // Non-overlapping per-call bars; each draws (and hovers as) one call.
 const bars = computed<DeltaBar[]>(() => {
   const s = stack.value;
   if (!s || s.n === 0 || s.segments.length === 0) return [];
-  return deltaBars(layout.value.xs, s.deltaLayers[s.segments.length - 1]);
+  const { from, to } = view.value;
+  return deltaBars(layout.value.xs, s.deltaLayers[s.segments.length - 1], to - from);
 });
 
 // What each call's prompt was against the cache; misses are marked above
@@ -732,19 +770,16 @@ const missMarks = computed(() => {
   if (!box) return "";
   return missedBars(bars.value, promptReadings.value)
     .map((b) => {
-      const x = PADL + ((b.left + b.right) / 2) * plotW.value;
+      const x = px((b.left + b.right) / 2);
       return `M${(x - 3).toFixed(1)},${box.top - 6}h6l-3,5z`;
     })
     .join("");
 });
 
 // One path per segment holding a rect per bar with a nonzero share.
-function barPaths(s: TokenCostStack, yAt: (v: number) => number): string[] {
-  if (s.maxDelta === 0) return [];
-  const xs = bars.value.map((b) => [
-    (PADL + b.left * plotW.value).toFixed(2),
-    (PADL + b.right * plotW.value).toFixed(2),
-  ]);
+function barPaths(s: TokenCostStack, yAt: (v: number) => number, max: number): string[] {
+  if (max === 0) return [];
+  const xs = bars.value.map((b) => [px(b.left).toFixed(2), px(b.right).toFixed(2)]);
   return s.segments.map((_, si) => {
     let d = "";
     bars.value.forEach((b, k) => {
@@ -787,6 +822,17 @@ interface PaneView {
   colors: string[];
 }
 
+// The largest value drawn in the visible slice, counting the points just
+// outside it, whose segments reach in. Unzoomed, the largest of all.
+function visibleMax(values: number[], xs: number[]): number {
+  const { from, to } = view.value;
+  let max = 0;
+  for (let i = 0; i < values.length; i++) {
+    if ((xs[i + 1] ?? 1) < from || (xs[i - 1] ?? 0) > to) continue;
+    max = Math.max(max, values[i]);
+  }
+  return max;
+}
 function yScale(box: PaneBox, max: number): (v: number) => number {
   return (v) => box.top + box.height * (1 - v / (max || 1));
 }
@@ -794,11 +840,16 @@ function yScale(box: PaneBox, max: number): (v: number) => number {
 const paneViews = computed<PaneView[]>(() => {
   const s = stack.value;
   if (!s || s.n === 0) return [];
-  const area = (yAt: (v: number) => number) => ({ left: PADL, right: W.value - PADR, yAt });
+  const area = (yAt: (v: number) => number) => ({
+    left: spanLeft.value,
+    right: spanLeft.value + spanW.value,
+    yAt,
+    slabHalfW: Math.max(1, plotW.value * 0.006),
+  });
   return paneBoxes.value.map((box): PaneView => {
     switch (box.pane) {
       case "context": {
-        const max = ctxLayers.value.at(-1)?.reduce((m, v) => Math.max(m, v), 0) ?? 0;
+        const max = visibleMax(ctxLayers.value.at(-1) ?? [], ctxLayout.value.xs);
         const yAt = yScale(box, max);
         return {
           id: box.pane,
@@ -815,38 +866,74 @@ const paneViews = computed<PaneView[]>(() => {
         };
       }
       case "cumulative": {
-        const yAt = yScale(box, s.maxY);
+        const maxY = visibleMax(s.layers.at(-1) ?? [], layout.value.xs);
+        const yAt = yScale(box, maxY);
         return {
           id: box.pane,
           box,
           label: ["Cumulative", unit.value],
-          ticks: yTicks(s.maxY).map((value) => ({
+          ticks: yTicks(maxY).map((value) => ({
             value,
             y: yAt(value),
             label: tickLabel(value),
             grid: true,
           })),
-          paths: s.maxY > 0 ? stackedAreaPaths(s.layers, layout.value, area(yAt)) : [],
+          paths: maxY > 0 ? stackedAreaPaths(s.layers, layout.value, area(yAt)) : [],
           colors: s.segments.map((seg) => seg.color),
         };
       }
       case "incremental": {
         // Too short for gridlines: just the tallest call's value, by the top.
-        const yAt = yScale(box, s.maxDelta);
+        const maxDelta = visibleMax(s.deltaLayers.at(-1) ?? [], layout.value.xs);
+        const yAt = yScale(box, maxDelta);
         return {
           id: box.pane,
           box,
           label: ["Incremental", unit.value],
           ticks:
-            s.maxDelta > 0
-              ? [{ value: s.maxDelta, y: box.top + 3, label: tickLabel(s.maxDelta), grid: false }]
+            maxDelta > 0
+              ? [{ value: maxDelta, y: box.top + 3, label: tickLabel(maxDelta), grid: false }]
               : [],
-          paths: barPaths(s, yAt),
+          paths: barPaths(s, yAt, maxDelta),
           colors: s.segments.map((seg) => seg.color),
         };
       }
     }
   });
+});
+
+// Zoomable graphs label the visible calls, at least 120px apart: by number,
+// or in time mode by clock time.
+const xTicks = computed<{ x: number; label: string }[]>(() => {
+  const s = stack.value;
+  if (!props.zoomable || !s || s.n < 2) return [];
+  const { xs } = layout.value;
+  const { from, to } = view.value;
+  const shown: number[] = [];
+  let lastX = -Infinity;
+  for (let i = 0; i < xs.length; i++) {
+    if (xs[i] < from || xs[i] > to) continue;
+    const x = px(xs[i]);
+    if (x - lastX < 120) continue;
+    if (xMode.value === "time" && !props.entries[i].timestamp) continue;
+    shown.push(i);
+    lastX = x;
+  }
+  if (xMode.value === "calls") return shown.map((i) => ({ x: px(xs[i]), label: String(i + 1) }));
+  const times = shown.map((i) => props.entries[i].timestamp!);
+  const first = times[0];
+  const last = times[times.length - 1];
+  const sameDay = new Date(first).toDateString() === new Date(last).toDateString();
+  const opts: Intl.DateTimeFormatOptions = {
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(last - first < 10 * 60_000 ? { second: "2-digit" } : {}),
+    ...(sameDay ? {} : { month: "short", day: "numeric" }),
+  };
+  return shown.map((i, k) => ({
+    x: px(xs[i]),
+    label: new Date(times[k]).toLocaleString(undefined, opts),
+  }));
 });
 
 const xAxisLabel = computed(() => {
@@ -937,10 +1024,109 @@ const hoverIndex = computed<number | null>(() => {
 
 const hoverX = computed(() => (hoverIndex.value === null ? null : xAt(hoverIndex.value)));
 
-function onMove(ev: MouseEvent) {
+// The pointer's position in viewBox pixels.
+function pointerX(ev: MouseEvent): number {
   const rect = (ev.currentTarget as SVGSVGElement).getBoundingClientRect();
-  const px = ((ev.clientX - rect.left) / rect.width) * W.value;
-  hoverFrac.value = (px - PADL) / plotW.value;
+  return ((ev.clientX - rect.left) / rect.width) * W.value;
+}
+function onMove(ev: MouseEvent) {
+  if (drag) return;
+  hoverFrac.value = (pointerX(ev) - spanLeft.value) / spanW.value;
+}
+function onLeave() {
+  if (!drag) clearHover();
+}
+
+// Zooming (zoomable only). The slice never leaves [0, 1], and never narrows
+// below a few calls' worth.
+function setView(from: number, width: number) {
+  const n = stack.value?.n ?? 1;
+  const w = Math.min(1, Math.max(width, Math.min(1, 4 / n)));
+  const f = Math.min(1 - w, Math.max(0, from));
+  view.value = { from: f, to: f + w };
+}
+function resetView() {
+  if (props.zoomable) view.value = { from: 0, to: 1 };
+}
+watch(
+  () => stack.value?.n,
+  (n, old) => {
+    if (old === undefined || n === undefined || n < old) resetView();
+  },
+);
+function onWheel(ev: WheelEvent) {
+  if (!props.zoomable) return;
+  ev.preventDefault();
+  const { from, to } = view.value;
+  const width = to - from;
+  // Trackpads scroll sideways: pan.
+  if (Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) {
+    setView(from + (ev.deltaX / plotW.value) * width, width);
+    return;
+  }
+  const at = Math.min(1, Math.max(0, (pointerX(ev) - PADL) / plotW.value));
+  const next = width * Math.exp(ev.deltaY * 0.002);
+  setView(from + at * (width - next), next);
+}
+// Pointer gestures: one pointer pans, two pinch. Each gesture is measured
+// from a snapshot taken whenever a pointer comes or goes, so lifting one
+// finger of a pinch carries on as a pan.
+const pointers = new Map<number, number>();
+let drag: { from: number; width: number; xs: number[] } | null = null;
+let svgRect: DOMRect | null = null;
+let lastTap = -Infinity;
+// Plot fraction (0..1 across the visible slice) at a client x.
+function sliceAt(clientX: number): number {
+  const rect = svgRect!;
+  return (((clientX - rect.left) / rect.width) * W.value - PADL) / plotW.value;
+}
+function snapshot() {
+  drag =
+    pointers.size === 0
+      ? null
+      : {
+          from: view.value.from,
+          width: view.value.to - view.value.from,
+          xs: [...pointers.values()],
+        };
+}
+function onPointerDown(ev: PointerEvent) {
+  if (!props.zoomable || ev.button !== 0 || pointers.size >= 2) return;
+  // Touch has no dblclick: a second tap within 300ms zooms out.
+  if (ev.pointerType === "touch" && pointers.size === 0) {
+    if (ev.timeStamp - lastTap < 300) resetView();
+    lastTap = ev.timeStamp;
+  }
+  const svg = ev.currentTarget as SVGSVGElement;
+  svgRect = svg.getBoundingClientRect();
+  svg.setPointerCapture(ev.pointerId);
+  pointers.set(ev.pointerId, ev.clientX);
+  snapshot();
+  if (pointers.size > 1) return;
+  const move = (e: PointerEvent) => {
+    if (!drag || !pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, e.clientX);
+    const now = [...pointers.values()];
+    const { from, width, xs } = drag;
+    if (now.length === 1) {
+      setView(from - (sliceAt(now[0]) - sliceAt(xs[0])) * width, width);
+      return;
+    }
+    const next = width * (Math.abs(xs[1] - xs[0]) / Math.max(1, Math.abs(now[1] - now[0])));
+    const anchor = from + sliceAt((xs[0] + xs[1]) / 2) * width;
+    setView(anchor - sliceAt((now[0] + now[1]) / 2) * next, next);
+  };
+  const up = (e: PointerEvent) => {
+    pointers.delete(e.pointerId);
+    snapshot();
+    if (pointers.size > 0) return;
+    svg.removeEventListener("pointermove", move);
+    svg.removeEventListener("pointerup", up);
+    svg.removeEventListener("pointercancel", up);
+  };
+  svg.addEventListener("pointermove", move);
+  svg.addEventListener("pointerup", up);
+  svg.addEventListener("pointercancel", up);
 }
 
 function amount(v: number): string {

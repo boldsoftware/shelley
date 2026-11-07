@@ -42,13 +42,18 @@ export interface PaneBox {
 }
 
 /** Vertical boxes for the visible panes, in stack order, starting at top and
- *  separated by gap. */
-export function layoutPanes(visible: readonly UsagePane[], top: number, gap: number): PaneBox[] {
+ *  separated by gap, each scale times its PANE_HEIGHT tall. */
+export function layoutPanes(
+  visible: readonly UsagePane[],
+  top: number,
+  gap: number,
+  scale: number,
+): PaneBox[] {
   const boxes: PaneBox[] = [];
   let y = top;
   for (const pane of USAGE_PANES) {
     if (!visible.includes(pane)) continue;
-    const height = PANE_HEIGHT[pane];
+    const height = PANE_HEIGHT[pane] * scale;
     boxes.push({ pane, top: y, height, bottom: y + height });
     y += height + gap;
   }
