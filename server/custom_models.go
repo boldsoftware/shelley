@@ -11,8 +11,6 @@ import (
 
 	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/llm"
-	"shelley.exe.dev/llm/ant"
-	"shelley.exe.dev/llm/gem"
 	"shelley.exe.dev/llm/oai"
 	"shelley.exe.dev/models"
 )
@@ -491,63 +489,6 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// Create the appropriate service based on provider type
-	var service llm.Service
-	switch req.ProviderType {
-	case "anthropic":
-		service = &ant.Service{
-			APIKey:        req.APIKey,
-			URL:           req.Endpoint,
-			Model:         req.ModelName,
-			MaxTokens:     int(maxTokens),
-			ThinkingLevel: llm.ThinkingLevelMedium,
-		}
-	case "openai":
-		service = &oai.Service{
-			APIKey:          req.APIKey,
-			ModelURL:        req.Endpoint,
-			MaxTokens:       int(maxTokens),
-			ReasoningEffort: reasoningEffort,
-			ReasoningReplay: reasoningReplay,
-			Model: oai.Model{
-				ModelName:        req.ModelName,
-				TextVerbosity:    "",
-				URL:              req.Endpoint,
-				APIKeyEnv:        "",
-				IsReasoningModel: false,
-				SupportsImages:   true,
-			},
-		}
-	case "gemini":
-		service = &gem.Service{
-			APIKey:          req.APIKey,
-			URL:             req.Endpoint,
-			Model:           req.ModelName,
-			MaxTokens:       int(maxTokens),
-			ReasoningEffort: reasoningEffort,
-		}
-	case "openai-responses":
-		service = &oai.ResponsesService{
-			APIKey:    req.APIKey,
-			MaxTokens: int(maxTokens),
-			Model: oai.Model{
-				ModelName:        req.ModelName,
-				TextVerbosity:    "",
-				URL:              req.Endpoint,
-				APIKeyEnv:        "",
-				IsReasoningModel: false,
-				SupportsImages:   true,
-			},
-			// Match createServiceFromModel so Test reflects real runtime behavior:
-			// medium is the default when no explicit override is given.
-			ThinkingLevel:   llm.ThinkingLevelMedium,
-			ReasoningEffort: reasoningEffort,
-			ReasoningReplay: reasoningReplay,
-		}
-	default:
-		http.Error(w, "Invalid provider_type", http.StatusBadRequest)
-		return
-	}
 	if _, err := validReasoningSupport(req.ReasoningSupport); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -556,7 +497,22 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	service = models.WrapReasoningConfig(service, req.Endpoint, req.ModelName, req.ReasoningSupport, req.ReasoningMap)
+	// Build the service exactly as the runtime would for a stored model.
+	service := models.NewCustomModelService(&generated.Model{
+		ProviderType:     req.ProviderType,
+		Endpoint:         req.Endpoint,
+		ApiKey:           req.APIKey,
+		ModelName:        req.ModelName,
+		MaxTokens:        maxTokens,
+		ReasoningEffort:  reasoningEffort,
+		ReasoningReplay:  string(reasoningReplay),
+		ReasoningSupport: req.ReasoningSupport,
+		ReasoningMap:     req.ReasoningMap,
+	}, nil)
+	if service == nil {
+		http.Error(w, "Invalid provider_type", http.StatusBadRequest)
+		return
+	}
 
 	// Send a simple test request
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)

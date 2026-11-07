@@ -1064,6 +1064,17 @@ func parseReasoningMap(raw string) (map[llm.ThinkingLevel]reasoningMapping, []ll
 
 // createServiceFromModel creates an LLM service from a database model configuration.
 func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
+	service := NewCustomModelService(model, m.httpc)
+	if service == nil {
+		m.logger.Error("Unknown provider type for model", "model_id", model.ModelID, "provider_type", model.ProviderType)
+	}
+	return service
+}
+
+// NewCustomModelService builds the LLM service for a custom model
+// configuration, or returns nil for an unknown provider type. A nil httpc
+// uses the provider's default client.
+func NewCustomModelService(model *generated.Model, httpc *http.Client) llm.Service {
 	supportsImages := ResolveSupportsImages(model.Endpoint, model.ModelName, model.ImageSupport)
 	var service llm.Service
 	switch model.ProviderType {
@@ -1073,7 +1084,7 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 			URL:             model.Endpoint,
 			Model:           model.ModelName,
 			MaxTokens:       int(model.MaxTokens),
-			HTTPC:           m.httpc,
+			HTTPC:           httpc,
 			ThinkingLevel:   llm.ThinkingLevelMedium,
 			SupportsImages_: supportsImages,
 		}
@@ -1090,7 +1101,7 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 				IsReasoningModel: false,
 				SupportsImages:   supportsImages,
 			},
-			HTTPC:           m.httpc,
+			HTTPC:           httpc,
 			ProviderName:    "openai",
 			ReasoningEffort: model.ReasoningEffort,
 			ReasoningReplay: oai.ReasoningReplay(model.ReasoningReplay),
@@ -1108,7 +1119,7 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 				IsReasoningModel: false,
 				SupportsImages:   supportsImages,
 			},
-			HTTPC:           m.httpc,
+			HTTPC:           httpc,
 			ThinkingLevel:   llm.ThinkingLevelMedium,
 			ReasoningEffort: model.ReasoningEffort,
 			ProviderName:    "openai",
@@ -1120,12 +1131,11 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 			URL:             model.Endpoint,
 			Model:           model.ModelName,
 			MaxTokens:       int(model.MaxTokens),
-			HTTPC:           m.httpc,
+			HTTPC:           httpc,
 			ReasoningEffort: model.ReasoningEffort,
 			SupportsImages_: supportsImages,
 		}
 	default:
-		m.logger.Error("Unknown provider type for model", "model_id", model.ModelID, "provider_type", model.ProviderType)
 		return nil
 	}
 	return wrapReasoningService(service, model)
