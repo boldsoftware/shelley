@@ -92,8 +92,7 @@ func (s *Server) handleSlackEvent(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "Failed to deliver slack event", err, "channel", ev.Channel, "ts", ev.TS)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"conversation_id": id})
+	writeJSON(w, http.StatusOK, map[string]string{"conversation_id": id})
 }
 
 // receiveSlackEvent delivers ev to the Slack Assistant, created on the

@@ -3,7 +3,6 @@ package server
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -425,8 +424,7 @@ func (s *Server) handleFindFiles(w http.ResponseWriter, r *http.Request) {
 		if ctx.Err() != nil {
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
@@ -514,8 +512,7 @@ func (s *Server) handleFindFiles(w http.ResponseWriter, r *http.Request) {
 	if ctx.Err() != nil {
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // writeFindFilesContentOnly answers a content=only request: grep hits alone,
@@ -564,8 +561,7 @@ func (s *Server) writeFindFilesContentOnly(ctx context.Context, w http.ResponseW
 	if ctx.Err() != nil {
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func matchForPath(path string, includeDirs bool) FindFilesMatch {

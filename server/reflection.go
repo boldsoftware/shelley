@@ -377,9 +377,8 @@ func handleIntegrationsIn(w http.ResponseWriter, r *http.Request, env exeenv.Env
 		}
 		integrations = []reflectionIntegration{selected}
 	}
-	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(struct {
+	writeJSON(w, http.StatusOK, struct {
 		Integrations []reflectionIntegration `json:"integrations"`
 	}{integrations})
 }

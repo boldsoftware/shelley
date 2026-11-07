@@ -174,8 +174,7 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 		apiModels[i] = toModelAPI(model)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(apiModels)
+	writeJSON(w, http.StatusOK, apiModels)
 }
 
 func (s *Server) handleCreateModel(w http.ResponseWriter, r *http.Request) {
@@ -254,9 +253,7 @@ func (s *Server) handleCreateModel(w http.ResponseWriter, r *http.Request) {
 		s.notifyModelsChanged()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(toModelAPI(*model))
+	writeJSON(w, http.StatusCreated, toModelAPI(*model))
 }
 
 func (s *Server) handleGetModel(w http.ResponseWriter, r *http.Request, modelID string) {
@@ -266,8 +263,7 @@ func (s *Server) handleGetModel(w http.ResponseWriter, r *http.Request, modelID 
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(toModelAPI(*model))
+	writeJSON(w, http.StatusOK, toModelAPI(*model))
 }
 
 func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request, modelID string) {
@@ -359,8 +355,7 @@ func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request, model
 		s.notifyModelsChanged()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(toModelAPI(*model))
+	writeJSON(w, http.StatusOK, toModelAPI(*model))
 }
 
 func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request, modelID string) {
@@ -439,9 +434,7 @@ func (s *Server) handleDuplicateModel(w http.ResponseWriter, r *http.Request, mo
 		s.notifyModelsChanged()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(toModelAPI(*model))
+	writeJSON(w, http.StatusCreated, toModelAPI(*model))
 }
 
 func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
@@ -587,8 +580,7 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 
 	response, err := service.Do(ctx, request)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"success": false,
 			"message": fmt.Sprintf("Test failed: %v", err),
 		})
@@ -606,16 +598,14 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if responseText == "" {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"success": false,
 			"message": "Test failed: empty response from model",
 		})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": fmt.Sprintf("Test successful! Response: %s", responseText),
 	})

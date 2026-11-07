@@ -290,6 +290,5 @@ func (s *Server) handleConversationStatusBar(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		status = StatusBar{Error: fmt.Sprintf("%s hook failed: %v", hookStatusBar, err)}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
+	writeJSON(w, http.StatusOK, status)
 }

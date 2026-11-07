@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -270,9 +269,8 @@ func (s *Server) handleCacheKey(w http.ResponseWriter, r *http.Request) {
 		Key:   base64.StdEncoding.EncodeToString(key),
 		Alg:   cacheKeyAlg,
 	}
-	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handleCacheSessionClear invalidates the browser's cache session. The next

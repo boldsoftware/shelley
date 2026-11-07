@@ -124,8 +124,7 @@ func (s *Server) handleGetFaviconEmoji(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "Failed to get favicon emoji", err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(faviconEmojiResponse{fe, faviconHref(fe.Emoji)})
+	writeJSON(w, http.StatusOK, faviconEmojiResponse{fe, faviconHref(fe.Emoji)})
 }
 
 // handleSetFaviconEmoji handles PUT /api/favicon-emoji, storing Shelley's

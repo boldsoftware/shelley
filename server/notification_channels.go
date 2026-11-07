@@ -207,9 +207,7 @@ func writeNotificationChannel(w http.ResponseWriter, ch generated.NotificationCh
 		http.Error(w, "Invalid stored notification configuration", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, status, response)
 }
 
 func (s *Server) validateNotificationConfig(config map[string]any, channelType string) error {
@@ -238,8 +236,7 @@ func (s *Server) handleListNotificationChannels(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(apiChannels)
+	writeJSON(w, http.StatusOK, apiChannels)
 }
 
 func (s *Server) handleCreateNotificationChannel(w http.ResponseWriter, r *http.Request) {
@@ -415,8 +412,7 @@ func (s *Server) handleTestNotificationChannel(w http.ResponseWriter, r *http.Re
 
 	ch, err := notifications.CreateFromConfig(config, s.logger)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		writeJSON(w, http.StatusOK, map[string]any{
 			"success": false,
 			"message": "Test notification failed. Check the saved channel configuration.",
 		})
@@ -437,24 +433,21 @@ func (s *Server) handleTestNotificationChannel(w http.ResponseWriter, r *http.Re
 	}
 
 	if err := ch.Send(ctx, testEvent); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		writeJSON(w, http.StatusOK, map[string]any{
 			"success": false,
 			"message": "Test notification failed. Check the saved channel configuration.",
 		})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"message": "Test notification sent successfully",
 	})
 }
 
 func (s *Server) handleNotificationChannelTypes(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s.getNotificationChannelTypes())
+	writeJSON(w, http.StatusOK, s.getNotificationChannelTypes())
 }
 
 // getNotificationChannelTypes returns channel type metadata for the frontend.

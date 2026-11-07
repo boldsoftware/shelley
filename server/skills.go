@@ -56,8 +56,7 @@ func (s *Server) handleSkills(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), status)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(SkillsResponse{Skills: catalog})
+	writeJSON(w, http.StatusOK, SkillsResponse{Skills: catalog})
 }
 
 // skillCatalog returns the skills a conversation's model was told about: the

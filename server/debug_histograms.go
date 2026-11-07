@@ -25,8 +25,7 @@ func (s *Server) handleDebugHistograms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Query().Get("json") == "1" {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(stats)
+		writeJSON(w, http.StatusOK, stats)
 		return
 	}
 	blob, err := json.Marshal(stats)

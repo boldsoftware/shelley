@@ -259,8 +259,7 @@ func (s *Server) handleEnableCompactInPlace(w http.ResponseWriter, r *http.Reque
 		s.internalError(w, "Failed to reload conversation", err, "conversationID", conversationID)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(updated)
+	writeJSON(w, http.StatusOK, updated)
 }
 
 // compactionEvidence returns the context nudges in items, and the
@@ -983,9 +982,7 @@ func (s *Server) handleCompactRequest(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "Failed to send the compaction request", err, "conversationID", conversation.ConversationID)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, http.StatusCreated, map[string]any{
 		"status":             "created",
 		"conversation_id":    conversation.ConversationID,
 		"current_generation": conversation.CurrentGeneration,

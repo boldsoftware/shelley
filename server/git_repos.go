@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"io/fs"
 	"net/http"
 	"os"
@@ -339,6 +338,5 @@ func (s *Server) handleGitRepos(w http.ResponseWriter, r *http.Request) {
 		Truncated: truncated,
 		ElapsedMs: time.Since(start).Milliseconds(),
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }

@@ -290,8 +290,7 @@ func (s *Server) handleTerminalsList(w http.ResponseWriter, r *http.Request) {
 	for _, t := range list {
 		out = append(out, newTerminalDTO(t))
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // handleTerminalScope handles PUT /api/terminals/{id}/scope, moving a terminal
@@ -352,8 +351,7 @@ func (s *Server) handleTerminalScope(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to update terminal scope", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(newTerminalDTO(sess))
+	writeJSON(w, http.StatusOK, newTerminalDTO(sess))
 }
 
 // handleTerminalDelete kills a session and removes its on-disk record.

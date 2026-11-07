@@ -410,6 +410,5 @@ func (s *Server) handleGetSubagents(w http.ResponseWriter, r *http.Request, conv
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(subagents)
+	writeJSON(w, http.StatusOK, subagents)
 }

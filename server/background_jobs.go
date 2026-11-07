@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -226,8 +225,7 @@ func (s *Server) handleListBackgroundJobs(w http.ResponseWriter, r *http.Request
 	for _, j := range jobs {
 		out = append(out, BackgroundJobInfo{JobID: j.ID, Command: j.Command, Tail: j.Tail(), StartedAt: j.StartedAt})
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // handleKillBackgroundJob handles

@@ -10,7 +10,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -100,8 +99,7 @@ func (s *Server) handleDebugLoremIpsum(w http.ResponseWriter, r *http.Request) {
 	// A programmatic client can pass ?json=1 to get the id back; a browser
 	// form submission navigates to the new conversation.
 	if r.URL.Query().Get("json") != "" {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		writeJSON(w, http.StatusOK, map[string]any{
 			"conversation_id": convID,
 			"turns":           turns,
 			"url":             "/c/" + convID,

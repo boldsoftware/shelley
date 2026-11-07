@@ -363,6 +363,5 @@ func (s *Server) handleDismissResource(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "Failed to dismiss resource notice", err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
+	writeJSON(w, http.StatusOK, status)
 }

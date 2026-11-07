@@ -789,8 +789,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 func (s *Server) handleValidateCwd(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if path == "" {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"valid": false,
 			"error": "path is required",
 		})
@@ -799,14 +798,13 @@ func (s *Server) handleValidateCwd(w http.ResponseWriter, r *http.Request) {
 
 	info, err := os.Stat(path)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
 		if os.IsNotExist(err) {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"valid": false,
 				"error": "directory does not exist",
 			})
 		} else {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"valid": false,
 				"error": err.Error(),
 			})
@@ -815,16 +813,14 @@ func (s *Server) handleValidateCwd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !info.IsDir() {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"valid": false,
 			"error": "path is not a directory",
 		})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"valid": true,
 	})
 }
@@ -866,8 +862,7 @@ func (s *Server) handleListDirectory(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		writeJSON(w, http.StatusOK, response)
 		return
 	}
 	if path == "" {
@@ -886,17 +881,16 @@ func (s *Server) handleListDirectory(w http.ResponseWriter, r *http.Request) {
 	// Verify path exists and is a directory
 	info, err := os.Stat(path)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
 		if os.IsNotExist(err) {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"error": "directory does not exist",
 			})
 		} else if os.IsPermission(err) {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"error": "permission denied",
 			})
 		} else {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"error": err.Error(),
 			})
 		}
@@ -904,8 +898,7 @@ func (s *Server) handleListDirectory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !info.IsDir() {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"error": "path is not a directory",
 		})
 		return
@@ -914,13 +907,12 @@ func (s *Server) handleListDirectory(w http.ResponseWriter, r *http.Request) {
 	// Read directory contents
 	dirEntries, err := os.ReadDir(path)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
 		if os.IsPermission(err) {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"error": "permission denied",
 			})
 		} else {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"error": err.Error(),
 			})
 		}
@@ -986,8 +978,7 @@ func (s *Server) handleListDirectory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // sortDirectoryEntries sorts entries non-hidden first, then hidden (.*),
@@ -1078,16 +1069,14 @@ func (s *Server) handleCreateDirectory(w http.ResponseWriter, r *http.Request) {
 		Path string `json:"path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"error": "invalid request body",
 		})
 		return
 	}
 
 	if req.Path == "" {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"error": "path is required",
 		})
 		return
@@ -1104,12 +1093,11 @@ func (s *Server) handleCreateDirectory(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
 		if problem != "" {
-			json.NewEncoder(w).Encode(map[string]string{"error": problem})
+			writeJSON(w, http.StatusOK, map[string]string{"error": problem})
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"path": m.clean(req.Path)})
+		writeJSON(w, http.StatusOK, map[string]string{"path": m.clean(req.Path)})
 		return
 	}
 
@@ -1118,8 +1106,7 @@ func (s *Server) handleCreateDirectory(w http.ResponseWriter, r *http.Request) {
 
 	// Check if path already exists
 	if _, err := os.Stat(path); err == nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"error": "path already exists",
 		})
 		return
@@ -1128,8 +1115,7 @@ func (s *Server) handleCreateDirectory(w http.ResponseWriter, r *http.Request) {
 	// Verify parent directory exists
 	parentDir := filepath.Dir(path)
 	if _, err := os.Stat(parentDir); os.IsNotExist(err) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"error": "parent directory does not exist",
 		})
 		return
@@ -1137,21 +1123,19 @@ func (s *Server) handleCreateDirectory(w http.ResponseWriter, r *http.Request) {
 
 	// Create the directory (only the final directory, not parents)
 	if err := os.Mkdir(path, 0o755); err != nil {
-		w.Header().Set("Content-Type", "application/json")
 		if os.IsPermission(err) {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"error": "permission denied",
 			})
 		} else {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"error": err.Error(),
 			})
 		}
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"path": path,
 	})
 }

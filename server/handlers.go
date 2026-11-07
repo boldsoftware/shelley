@@ -135,8 +135,7 @@ func (s *Server) handleUserAgentsMd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("failed to read file: %v", err), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"path": path, "content": content})
+	writeJSON(w, http.StatusOK, map[string]string{"path": path, "content": content})
 }
 
 // handleWriteFile writes content to a file (for diff viewer edit mode), on the
@@ -184,8 +183,7 @@ func (s *Server) handleWriteFile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // maxEditableFileBytes caps how large a file handleReadFile will load into
@@ -236,8 +234,7 @@ func (s *Server) handleReadFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("failed to read file: %v", err), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"path": clean, "content": string(b)})
+	writeJSON(w, http.StatusOK, map[string]string{"path": clean, "content": string(b)})
 }
 
 const maxUploadBytes = 1 << 30 // 1 GiB
@@ -310,14 +307,11 @@ func (s *Server) handleUploadRaw(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeUploadResponse(w http.ResponseWriter, path string) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"path": path})
+	writeJSON(w, http.StatusOK, map[string]string{"path": path})
 }
 
 func writeUploadError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(uploadErrorResponse{
+	writeJSON(w, status, uploadErrorResponse{
 		Error:   code,
 		Message: message,
 	})
@@ -742,8 +736,7 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(conversations)
+	writeJSON(w, http.StatusOK, conversations)
 }
 
 // ConversationListSnapshot is the seed payload returned by
@@ -772,8 +765,7 @@ func (s *Server) handleConversationsSnapshot(w http.ResponseWriter, r *http.Requ
 	if list == nil {
 		list = []ConversationWithState{}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ConversationListSnapshot{Conversations: list, Hash: hash})
+	writeJSON(w, http.StatusOK, ConversationListSnapshot{Conversations: list, Hash: hash})
 }
 
 func (s *Server) conversationListWithState(ctx context.Context, limit, offset int, query string, searchContent bool) ([]ConversationWithState, error) {
@@ -1031,7 +1023,6 @@ func (s *Server) handleGetConversation(w http.ResponseWriter, r *http.Request, c
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	apiMessages := toAPIMessages(messages)
 	// max_sequence_id lets clients tell whether their cache is up to date
 	// without needing a separate query. Compute from the message list rather
@@ -1043,7 +1034,7 @@ func (s *Server) handleGetConversation(w http.ResponseWriter, r *http.Request, c
 			maxSeq = m.SequenceID
 		}
 	}
-	json.NewEncoder(w).Encode(StreamResponse{
+	writeJSON(w, http.StatusOK, StreamResponse{
 		Messages:     apiMessages,
 		Conversation: &conversation,
 		// ConversationState is sent via the streaming endpoint, not on initial load
@@ -1242,7 +1233,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		}
 		if result.Handled {
 			if result.Message == "" {
-				writeBtwReaderJSON(w, http.StatusAccepted, map[string]string{"status": "handled"})
+				writeJSON(w, http.StatusAccepted, map[string]string{"status": "handled"})
 				return
 			}
 			btwSlashResult = &result
@@ -1272,7 +1263,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 				http.Error(w, "Failed to create BTW reader", http.StatusInternalServerError)
 				return
 			}
-			writeBtwReaderJSON(w, http.StatusAccepted, map[string]any{"status": "accepted", "btw": descriptor})
+			writeJSON(w, http.StatusAccepted, map[string]any{"status": "accepted", "btw": descriptor})
 			return
 		}
 	}
@@ -1502,8 +1493,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 			s.internalError(w, "Failed to queue user message", err, "conversationID", conversationID)
 			return
 		}
-		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(map[string]string{"status": "queued", "message": req.Message})
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued", "message": req.Message})
 		return
 	}
 
@@ -1530,8 +1520,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		s.generateSlugAsync(conversationID, req.Message, modelID)
 	}
 
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"status": "accepted", "message": req.Message})
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted", "message": req.Message})
 }
 
 func (s *Server) runChatMessageHook(r *http.Request, conversationID, modelID, reasoningLevel string, queued bool, message string) (string, error) {
@@ -1764,9 +1753,7 @@ func (s *Server) newConversation(w http.ResponseWriter, r *http.Request, req New
 		s.generateSlugAsync(conversationID, req.Message, modelID)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"status":          "accepted",
 		"conversation_id": conversationID,
 	})
@@ -1847,14 +1834,12 @@ func (s *Server) handleCancelConversation(w http.ResponseWriter, r *http.Request
 	s.settleTurnEnds(conversationID)
 
 	if !exists {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "no_active_conversation"})
+		writeJSON(w, http.StatusOK, map[string]string{"status": "no_active_conversation"})
 		return
 	}
 
 	s.logger.Info("Conversation cancelled", "conversationID", conversationID)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "cancelled"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
 
 // handleResumeConversation handles POST /api/conversation/<id>/resume. It
@@ -1883,8 +1868,7 @@ func (s *Server) handleResumeConversation(w http.ResponseWriter, r *http.Request
 	}
 	if err := manager.ContinueInterruptedTurn(ctx, defaultModelID, serviceForModel); err != nil {
 		if errors.Is(err, errInterruptedTurnNotApplicable) {
-			w.WriteHeader(http.StatusAccepted)
-			json.NewEncoder(w).Encode(map[string]string{"status": "not_applicable"})
+			writeJSON(w, http.StatusAccepted, map[string]string{"status": "not_applicable"})
 			return
 		}
 		s.logger.Warn("Resume rejected", "conversationID", conversationID, "error", err)
@@ -1893,8 +1877,7 @@ func (s *Server) handleResumeConversation(w http.ResponseWriter, r *http.Request
 	}
 
 	s.logger.Info("Interrupted conversation resumed", "conversationID", conversationID)
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"status": "resuming"})
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "resuming"})
 }
 
 // handleRetryConversation handles POST /api/conversation/<id>/retry.
@@ -1921,8 +1904,7 @@ func (s *Server) handleRetryConversation(w http.ResponseWriter, r *http.Request,
 	}
 	if latest.Type != string(db.MessageTypeError) {
 		// No error at the bottom of the conversation: nothing to retry.
-		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(map[string]string{"status": "not_applicable"})
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "not_applicable"})
 		return
 	}
 	// Inspect user_data to enforce retryable=true before spinning up a loop
@@ -1984,8 +1966,7 @@ func (s *Server) handleRetryConversation(w http.ResponseWriter, r *http.Request,
 		if errors.Is(err, errRetryNotApplicable) {
 			// The bottom message is no longer a retryable error (e.g. a
 			// concurrent retry already started a new turn); treat as success.
-			w.WriteHeader(http.StatusAccepted)
-			json.NewEncoder(w).Encode(map[string]string{"status": "not_applicable"})
+			writeJSON(w, http.StatusAccepted, map[string]string{"status": "not_applicable"})
 			return
 		}
 		s.logger.Warn("Retry rejected", "conversationID", conversationID, "error", err)
@@ -1993,8 +1974,7 @@ func (s *Server) handleRetryConversation(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	s.logger.Info("Retry triggered", "conversationID", conversationID)
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"status": "retrying"})
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "retrying"})
 }
 
 // continueRequest is the optional JSON body for POST
@@ -2032,8 +2012,7 @@ func (s *Server) handleContinueConversation(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if latest.Type != string(db.MessageTypeError) {
-		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(map[string]string{"status": "not_applicable"})
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "not_applicable"})
 		return
 	}
 	if latest.UserData != nil && *latest.UserData != "" {
@@ -2079,8 +2058,7 @@ func (s *Server) handleContinueConversation(w http.ResponseWriter, r *http.Reque
 	}
 	if err := manager.ContinueAfterRefusal(ctx, modelList, switchModel, llmService, newModel); err != nil {
 		if errors.Is(err, errNotRefusal) {
-			w.WriteHeader(http.StatusAccepted)
-			json.NewEncoder(w).Encode(map[string]string{"status": "not_applicable"})
+			writeJSON(w, http.StatusAccepted, map[string]string{"status": "not_applicable"})
 			return
 		}
 		s.logger.Warn("Continue rejected", "conversationID", conversationID, "error", err)
@@ -2088,8 +2066,7 @@ func (s *Server) handleContinueConversation(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s.logger.Info("Continue triggered", "conversationID", conversationID, "model", newModel)
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"status": "continuing", "model": newModel})
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "continuing", "model": newModel})
 }
 
 // handleStreamConversation handles GET /conversation/<id>/stream.
@@ -3003,8 +2980,7 @@ func (s *Server) recordModelCommandReply(ctx context.Context, conversationID str
 }
 
 func writeModelCommandAccepted(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"status": "model-command"})
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "model-command"})
 }
 
 // getModelList returns the list of available models
@@ -3112,8 +3088,7 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	markDefaultModel(modelList, s.effectiveDefaultModel(modelList))
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(modelList)
+	writeJSON(w, http.StatusOK, modelList)
 }
 
 // readyBuiltinModels names the ready built-in models, the only ones an
@@ -3265,8 +3240,7 @@ func (s *Server) handleModelRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	markDefaultModel(modelList, s.effectiveDefaultModel(modelList))
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(modelList)
+	writeJSON(w, http.StatusOK, modelList)
 }
 
 // markDefaultModel sets IsDefault=true on the entry matching defaultID.
@@ -3284,8 +3258,7 @@ func markDefaultModel(modelList []ModelInfo, defaultID string) {
 
 // handleTools returns the list of tools available to conversations.
 func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"tools": claudetool.ToolRegistry,
 	})
 }
@@ -3322,8 +3295,7 @@ func (s *Server) handleSearchConversations(w http.ResponseWriter, r *http.Reques
 	if results == nil {
 		results = []ConversationWithState{}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	writeJSON(w, http.StatusOK, results)
 }
 
 // handleArchivedConversations handles GET /api/conversations/archived
@@ -3382,8 +3354,7 @@ func (s *Server) handleArchivedConversations(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(decorated)
+	writeJSON(w, http.StatusOK, decorated)
 }
 
 // handleArchiveConversation handles POST /conversation/<id>/archive
@@ -3415,8 +3386,7 @@ func (s *Server) handleArchiveConversation(w http.ResponseWriter, r *http.Reques
 		s.notifyWorkspaceChanged() // and delete the conversation's VM, if it has one
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(conversation)
+	writeJSON(w, http.StatusOK, conversation)
 }
 
 // handleUnarchiveConversation handles POST /conversation/<id>/unarchive
@@ -3436,8 +3406,7 @@ func (s *Server) handleUnarchiveConversation(w http.ResponseWriter, r *http.Requ
 		s.notifyWorkspaceChanged() // and stop deleting the conversation's VM, if it has one
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(conversation)
+	writeJSON(w, http.StatusOK, conversation)
 }
 
 // handleDeleteConversation handles POST /conversation/<id>/delete
@@ -3463,8 +3432,7 @@ func (s *Server) handleDeleteConversation(w http.ResponseWriter, r *http.Request
 		s.notifyWorkspaceChanged()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 // handleConversationBySlug handles GET /api/conversation-by-slug/<slug>
@@ -3491,8 +3459,7 @@ func (s *Server) handleConversationBySlug(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(conversation)
+	writeJSON(w, http.StatusOK, conversation)
 }
 
 // RenameRequest represents a request to rename a conversation
@@ -3532,8 +3499,7 @@ func (s *Server) handleRenameConversation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(conversation)
+	writeJSON(w, http.StatusOK, conversation)
 }
 
 // SetCwdRequest represents a request to move a conversation to a different
@@ -3650,8 +3616,7 @@ func (s *Server) handleSetConversationCwd(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(updated)
+	writeJSON(w, http.StatusOK, updated)
 }
 
 // TagsRequest represents a request to update a conversation's tags.
@@ -3694,8 +3659,7 @@ func (s *Server) handleUpdateConversationTags(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(conversation)
+	writeJSON(w, http.StatusOK, conversation)
 }
 
 // handleVersionCheck returns version check information including update availability
@@ -3711,8 +3675,7 @@ func (s *Server) handleVersionCheck(w http.ResponseWriter, r *http.Request) {
 	info := *cached
 	info.RestartPending = restartPending(info.ExecutablePath)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(info)
+	writeJSON(w, http.StatusOK, info)
 }
 
 // handleVersionChangelog returns the changelog between current and latest versions
@@ -3732,8 +3695,7 @@ func (s *Server) handleVersionChangelog(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(commits)
+	writeJSON(w, http.StatusOK, commits)
 }
 
 // handleUpgrade performs a self-update of the Shelley binary
@@ -3757,13 +3719,12 @@ func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	if restart {
 		if err := s.markResumeAfterRestart(r.Context()); err != nil {
 			s.logger.Error("Failed to mark resume-after-upgrade; continuing restart", "error", err)
 		}
 
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Upgrade complete. Restarting..."})
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "message": "Upgrade complete. Restarting..."})
 
 		// Flush the response
 		if f, ok := w.(http.Flusher); ok {
@@ -3777,7 +3738,7 @@ func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 			s.restartAfterUpgrade()
 		}()
 	} else {
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Upgrade complete. Restart to apply."})
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "message": "Upgrade complete. Restart to apply."})
 	}
 }
 
@@ -3922,8 +3883,7 @@ func (s *Server) handleUpgradeHeadlessShell(w http.ResponseWriter, r *http.Reque
 
 	s.logger.Info("headless-shell upgraded successfully", "version", newVersion)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, http.StatusOK, map[string]string{
 		"status":  "ok",
 		"message": "Upgraded to " + newVersion,
 		"version": newVersion,
@@ -3963,8 +3923,7 @@ func (s *Server) handleExit(w http.ResponseWriter, r *http.Request) {
 		exitCode = restartExitCode
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": message})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "message": message})
 
 	// Flush the response before exiting. The delay also gives an agent that
 	// invoked this endpoint as a tool time to persist the tool result before
@@ -3984,8 +3943,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(settings)
+	writeJSON(w, http.StatusOK, settings)
 }
 
 // handleSetSetting sets a single setting
@@ -4024,8 +3982,7 @@ func (s *Server) handleSetSetting(w http.ResponseWriter, r *http.Request) {
 	// The exe_notify setting is read on each end-of-turn (see
 	// withExeNotifyHook), so no dispatcher reload is needed here.
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // handleSendQueuedNow interrupts the active turn and drains the durable queue
@@ -4103,8 +4060,7 @@ func (s *Server) handleCancelQueued(w http.ResponseWriter, r *http.Request, conv
 	// too, through notifySubscribers; one of them finds it.)
 	s.settleTurnEnds(conversationID)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 type RegisterConversationHookRequest struct {
@@ -4136,8 +4092,7 @@ func (s *Server) handleRegisterConversationHook(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "registered"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "registered"})
 }
 
 // ForkRequest is the body for POST /conversation/<id>/fork. The fork copies all
@@ -4242,9 +4197,7 @@ func (s *Server) handleForkConversation(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(forked)
+	writeJSON(w, http.StatusCreated, forked)
 }
 
 // applyForkPointModelState rewinds the fork's model and reasoning level to what
@@ -4371,8 +4324,7 @@ func (s *Server) handleStartNewGeneration(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(conversation)
+	writeJSON(w, http.StatusOK, conversation)
 }
 
 func (s *Server) startNewGeneration(ctx context.Context, conversationID string) (generated.Conversation, error) {
@@ -4589,9 +4541,7 @@ func (s *Server) handleCreateDraft(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "Failed to create draft", err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(conv)
+	writeJSON(w, http.StatusCreated, conv)
 }
 
 // UpdateDraftRequest is the body for PUT /api/conversation/<id>/draft.
@@ -4645,8 +4595,7 @@ func (s *Server) handleUpdateDraft(w http.ResponseWriter, r *http.Request, conve
 		s.internalError(w, "Failed to update draft", err, "conversationID", conversationID)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(conv)
+	writeJSON(w, http.StatusOK, conv)
 }
 
 // restartPending reports whether the file at executable is no longer the

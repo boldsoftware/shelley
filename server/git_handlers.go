@@ -357,8 +357,7 @@ func (s *Server) handleGitDiffs(w http.ResponseWriter, r *http.Request) {
 	}
 	diffs = append(diffs, commits...)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"diffs":   diffs,
 		"gitRoot": gitRoot,
 	})
@@ -447,8 +446,7 @@ func (s *Server) handleGitHighlights(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid highlights: "+err.Error(), http.StatusNotFound)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(GitHighlightsResponse{Hash: target.Hash, Highlights: highlights})
+	writeJSON(w, http.StatusOK, GitHighlightsResponse{Hash: target.Hash, Highlights: highlights})
 }
 
 // nameStatusEntry is one record from `git diff --name-status -z`: a status code
@@ -740,8 +738,7 @@ func (s *Server) handleGitDiffFiles(w http.ResponseWriter, r *http.Request) {
 		return files[i].Path < files[j].Path
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(files)
+	writeJSON(w, http.StatusOK, files)
 }
 
 // handleGitFileDiff returns the old and new content for a file
@@ -844,8 +841,7 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 		NewContent: newContent,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(fileDiff)
+	writeJSON(w, http.StatusOK, fileDiff)
 }
 
 // CommitMessage represents a commit's full message for display in the diff viewer.
@@ -972,8 +968,7 @@ func (s *Server) handleGitCommitMessages(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(messages)
+	writeJSON(w, http.StatusOK, messages)
 }
 
 // handleGitAmendMessage amends the most recent commit's message.
@@ -1010,8 +1005,7 @@ func (s *Server) handleGitAmendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // handleGitCreateWorktree creates a new git worktree.
@@ -1032,9 +1026,7 @@ func (s *Server) handleGitCreateWorktree(w http.ResponseWriter, r *http.Request)
 	// Find the repo root (main repo, not worktree)
 	gitRoot, err := getGitRoot(req.Cwd)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "not a git repository"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "not a git repository"})
 		return
 	}
 
@@ -1065,16 +1057,12 @@ func (s *Server) handleGitCreateWorktree(w http.ResponseWriter, r *http.Request)
 			break
 		}
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{"error": "failed to check path: " + err.Error()})
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to check path: " + err.Error()})
 			return
 		}
 	}
 	if worktreePath == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "too many worktrees for today"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "too many worktrees for today"})
 		return
 	}
 
@@ -1095,14 +1083,11 @@ func (s *Server) handleGitCreateWorktree(w http.ResponseWriter, r *http.Request)
 	cmd := localMachine.git(mainRoot, "worktree", "add", "-b", branchName, worktreePath, base)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "failed to create worktree: " + string(output)})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create worktree: " + string(output)})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"path": worktreePath})
+	writeJSON(w, http.StatusOK, map[string]string{"path": worktreePath})
 }
 
 // GitGraphCommit is a single commit node in the graph view.
@@ -1245,8 +1230,7 @@ func (s *Server) handleGitGraph(w http.ResponseWriter, r *http.Request) {
 	remoteOut, _ := remoteCmd.Output()
 	githubBase := githubBaseURL(strings.TrimSpace(string(remoteOut)))
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"commits":       commits,
 		"gitRoot":       gitRoot,
 		"currentBranch": currentBranch,
@@ -1384,8 +1368,7 @@ func (s *Server) handleGitCommitDetail(w http.ResponseWriter, r *http.Request) {
 		files = []GitCommitDetailFile{}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(GitCommitDetail{
+	writeJSON(w, http.StatusOK, GitCommitDetail{
 		Hash:     hash,
 		Subject:  subject,
 		Body:     body,

@@ -37,8 +37,7 @@ func (s *Server) handleGetFeatureFlags(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, dto)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleSetFeatureFlag(w http.ResponseWriter, r *http.Request) {
@@ -75,8 +74,7 @@ func (s *Server) handleSetFeatureFlag(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (s *Server) handleDeleteFeatureFlag(w http.ResponseWriter, r *http.Request) {
@@ -103,6 +101,5 @@ func (s *Server) handleDeleteFeatureFlag(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

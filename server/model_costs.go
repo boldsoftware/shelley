@@ -33,8 +33,7 @@ func (s *Server) handleModelCosts(w http.ResponseWriter, r *http.Request) {
 			costs[m.Model] = nil
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"costs": costs})
+	writeJSON(w, http.StatusOK, map[string]any{"costs": costs})
 }
 
 // handleSubagentUsage aggregates LLM usage across a conversation's subagents
@@ -162,8 +161,7 @@ func (s *Server) handleSubagentUsage(w http.ResponseWriter, r *http.Request, con
 		// Within a model+url, order tiers by input rate (base first).
 		return costInput(a.Cost) < costInput(b.Cost)
 	})
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // costInput is a nil-safe accessor for a row's effective input rate, used only

@@ -103,9 +103,7 @@ func (s *Server) handleEnhanceSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		s.runSearchChat(r.Clone(ctx), conversation.ConversationID, message)
 	}()
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]any{"conversation": ConversationWithState{ConversationListItem: db.ConversationListItem{Conversation: *conversation}}})
+	writeJSON(w, http.StatusAccepted, map[string]any{"conversation": ConversationWithState{ConversationListItem: db.ConversationListItem{Conversation: *conversation}}})
 }
 
 func (s *Server) reuseSearchConversation(ctx context.Context, name, modelID, email string, opts db.ConversationOptions) (*generated.Conversation, error) {

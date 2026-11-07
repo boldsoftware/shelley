@@ -128,11 +128,6 @@ func (s *Server) mcpLoginURL(name string) string {
 	return "/mcp/login/" + name
 }
 
-func writeMCPJSON(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
-}
-
 // mcpError writes err, from talking to an MCP server.
 func mcpError(w http.ResponseWriter, err error) {
 	var lr *mcp.LoginRequiredError
@@ -210,7 +205,7 @@ func (s *Server) handleListMCPServers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("discovering MCP integrations: %v", err), http.StatusBadGateway)
 		return
 	}
-	writeMCPJSON(w, mergeMCPIntegrations(out, integrations))
+	writeJSON(w, http.StatusOK, mergeMCPIntegrations(out, integrations))
 }
 
 // mcpIntegrations returns the MCP integrations attached to this VM. They are
@@ -341,7 +336,7 @@ func (s *Server) writeMCPServer(w http.ResponseWriter, r *http.Request, row gene
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeMCPJSON(w, v)
+	writeJSON(w, http.StatusOK, v)
 }
 
 func (s *Server) handleDeleteMCPServer(w http.ResponseWriter, r *http.Request) {
@@ -378,7 +373,7 @@ func (s *Server) handleListMCPTools(w http.ResponseWriter, r *http.Request) {
 		mcpError(w, err)
 		return
 	}
-	writeMCPJSON(w, tools)
+	writeJSON(w, http.StatusOK, tools)
 }
 
 func (s *Server) handleCallMCPTool(w http.ResponseWriter, r *http.Request) {
@@ -404,7 +399,7 @@ func (s *Server) handleCallMCPTool(w http.ResponseWriter, r *http.Request) {
 		mcpError(w, err)
 		return
 	}
-	writeMCPJSON(w, res)
+	writeJSON(w, http.StatusOK, res)
 }
 
 func (s *Server) handleRestartMCPSession(w http.ResponseWriter, r *http.Request) {

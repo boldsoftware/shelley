@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -51,7 +50,7 @@ func (s *Server) handleListBtwReaders(w http.ResponseWriter, r *http.Request, pa
 		http.Error(w, "Failed to list BTW readers", http.StatusInternalServerError)
 		return
 	}
-	writeBtwReaderJSON(w, http.StatusOK, map[string]any{"readers": readers})
+	writeJSON(w, http.StatusOK, map[string]any{"readers": readers})
 }
 
 func (s *Server) handleDismissBtwReader(w http.ResponseWriter, r *http.Request, parentID, childID string) {
@@ -290,7 +289,7 @@ func (s *Server) handleSummarizeBtwReader(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Failed to start BTW summary", http.StatusInternalServerError)
 		return
 	}
-	writeBtwReaderJSON(w, http.StatusAccepted, map[string]any{
+	writeJSON(w, http.StatusAccepted, map[string]any{
 		"status":     "accepted",
 		"btw":        identity,
 		"summary_id": summaryID,
@@ -329,10 +328,4 @@ func btwReaderSlug(question string) string {
 		return "btw-reader"
 	}
 	return value
-}
-
-func writeBtwReaderJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
 }

@@ -249,9 +249,7 @@ func (s *Server) queueTranscription(ctx context.Context, w http.ResponseWriter, 
 }
 
 func writeQueuedTranscription(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"status": "queued"})
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued"})
 }
 
 func (s *Server) launchQueuedTranscription(parentID string, queued db.QueuedMessage) {

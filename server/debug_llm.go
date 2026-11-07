@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -31,9 +30,8 @@ func (s *Server) handleDebugLLMList(w http.ResponseWriter, r *http.Request) {
 		}
 		out[i] = summary{Exchange: e, Slug: slug}
 	}
-	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	json.NewEncoder(w).Encode(out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleDebugLLMGet(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +46,5 @@ func (s *Server) handleDebugLLMGet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "exchange not found (evicted?)", http.StatusNotFound)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(e)
+	writeJSON(w, http.StatusOK, e)
 }

@@ -161,14 +161,8 @@ func debugChatID(w http.ResponseWriter, r *http.Request) string {
 	return chatID
 }
 
-func writeChannelJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
-}
-
 func writeDebugGatewayError(w http.ResponseWriter, status int, code, message string) {
-	writeChannelJSON(w, status, map[string]string{"error": code, "message": message})
+	writeJSON(w, status, map[string]string{"error": code, "message": message})
 }
 
 // handleDebugChannelGateway serves
@@ -242,7 +236,7 @@ func (s *Server) handleDebugChannelGateway(w http.ResponseWriter, r *http.Reques
 		c.Typing = false
 		c.Unanswered++
 		ev := d.addLocked(c, debugChatEvent{Kind: "out", Text: req.Text, MediaURL: req.MediaURL, ReplyTo: req.ReplyTo})
-		writeChannelJSON(w, http.StatusOK, map[string]string{"message_id": ev.MessageID})
+		writeJSON(w, http.StatusOK, map[string]string{"message_id": ev.MessageID})
 		return
 	case "POST typing":
 		c.Typing = true
@@ -257,7 +251,7 @@ func (s *Server) handleDebugChannelGateway(w http.ResponseWriter, r *http.Reques
 		}
 		d.addLocked(c, debugChatEvent{Kind: "react", MessageID: req.MessageID, Text: text})
 	}
-	writeChannelJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // debugChatView is a chat as GET /api/debug/channels shows it.
@@ -295,7 +289,7 @@ func (s *Server) handleDebugChannelsList(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeChannelJSON(w, http.StatusOK, views)
+	writeJSON(w, http.StatusOK, views)
 }
 
 // handleDebugChannelReceive serves POST /api/debug/channels/{chat}/receive
@@ -339,7 +333,7 @@ func (s *Server) handleDebugChannelReceive(w http.ResponseWriter, r *http.Reques
 		s.internalError(w, "Failed to deliver debug channel message", err, "chat_id", chatID)
 		return
 	}
-	writeChannelJSON(w, http.StatusOK, map[string]string{"message_id": ev.MessageID})
+	writeJSON(w, http.StatusOK, map[string]string{"message_id": ev.MessageID})
 }
 
 // handleDebugChannelSend serves POST /api/debug/channels/{chat}/send
@@ -376,7 +370,7 @@ func (s *Server) handleDebugChannelSend(w http.ResponseWriter, r *http.Request) 
 		s.internalError(w, "Failed to send to debug channel", err, "chat_id", chatID)
 		return
 	}
-	writeChannelJSON(w, http.StatusOK, map[string]string{"message_id": id})
+	writeJSON(w, http.StatusOK, map[string]string{"message_id": id})
 }
 
 // handleDebugChannelRefuse serves POST /api/debug/channels/{chat}/refuse
