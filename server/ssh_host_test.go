@@ -74,7 +74,9 @@ func TestSSHHostProject(t *testing.T) {
 	action := `printf '%s|%s|%s' "${SSH_CLIENT:+ssh}" "$PWD" "$SHELLEY_CONVERSATION_ID"`
 	body, _ := json.Marshal(map[string]any{
 		"name": "Box", "cwd": repo, "vm": map[string]string{"shared_vm": "devbox", "integration": ""},
-		"actions": []map[string]string{{"id": "where", "label": "Where", "command": action}},
+		// Silent: a report would start a turn, whose VM preparation adds a
+		// server worker while waitForActions waits for them.
+		"actions": []map[string]any{{"id": "where", "label": "Where", "command": action, "silent": true}},
 	})
 	created := workspaceResponse[db.Project](t, workspaceAPI(s, "POST", "/api/projects", string(body)), 201)
 	if created.VM == nil || *created.VM != (db.ProjectVM{SharedVM: "devbox"}) {
