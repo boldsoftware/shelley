@@ -124,12 +124,7 @@ Typical workflow:
 	return llm.ToolOut{LLMContent: llm.TextContent(help)}
 }
 
-func (b *BrowseTools) networkEnableRun() llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
+func (b *BrowseTools) networkEnableRun(ctx context.Context, timeout string) llm.ToolOut {
 	b.networkMutex.Lock()
 	alreadyEnabled := b.networkEnabled
 	b.networkMutex.Unlock()
@@ -138,8 +133,8 @@ func (b *BrowseTools) networkEnableRun() llm.ToolOut {
 		return llm.ToolOut{LLMContent: llm.TextContent("Network monitoring is already enabled.")}
 	}
 
-	if err := chromedp.Run(browserCtx, network.Enable()); err != nil {
-		return llm.ErrorfToolOut("failed to enable network monitoring: %w", err)
+	if err := b.browserRun(ctx, timeout, "failed to enable network monitoring", network.Enable()); err != nil {
+		return llm.ErrorToolOut(err)
 	}
 
 	b.networkMutex.Lock()
@@ -149,12 +144,7 @@ func (b *BrowseTools) networkEnableRun() llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent("Network monitoring enabled. Requests will be captured.")}
 }
 
-func (b *BrowseTools) networkDisableRun() llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
+func (b *BrowseTools) networkDisableRun(ctx context.Context, timeout string) llm.ToolOut {
 	b.networkMutex.Lock()
 	wasEnabled := b.networkEnabled
 	b.networkMutex.Unlock()
@@ -163,8 +153,8 @@ func (b *BrowseTools) networkDisableRun() llm.ToolOut {
 		return llm.ToolOut{LLMContent: llm.TextContent("Network monitoring is already disabled.")}
 	}
 
-	if err := chromedp.Run(browserCtx, network.Disable()); err != nil {
-		return llm.ErrorfToolOut("failed to disable network monitoring: %w", err)
+	if err := b.browserRun(ctx, timeout, "failed to disable network monitoring", network.Disable()); err != nil {
+		return llm.ErrorToolOut(err)
 	}
 
 	b.networkMutex.Lock()
@@ -256,20 +246,15 @@ func (b *BrowseTools) networkClearRun() llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf("Cleared %d network requests.", count))}
 }
 
-func (b *BrowseTools) networkCookiesRun() llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
+func (b *BrowseTools) networkCookiesRun(ctx context.Context, timeout string) llm.ToolOut {
 	var cookies []*network.Cookie
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+	err := b.browserRun(ctx, timeout, "failed to get cookies", chromedp.ActionFunc(func(ctx context.Context) error {
 		var err error
 		cookies, err = network.GetCookies().Do(ctx)
 		return err
 	}))
 	if err != nil {
-		return llm.ErrorfToolOut("failed to get cookies: %w", err)
+		return llm.ErrorToolOut(err)
 	}
 
 	cookieData, err := json.MarshalIndent(cookies, "", "  ")
@@ -301,14 +286,9 @@ func (b *BrowseTools) networkCookiesRun() llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent(sb.String())}
 }
 
-func (b *BrowseTools) networkClearCacheRun() llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
+func (b *BrowseTools) networkClearCacheRun(ctx context.Context, timeout string) llm.ToolOut {
+	if err := b.browserRun(ctx, timeout, "failed to clear browser cache", network.ClearBrowserCache()); err != nil {
 		return llm.ErrorToolOut(err)
-	}
-
-	if err := chromedp.Run(browserCtx, network.ClearBrowserCache()); err != nil {
-		return llm.ErrorfToolOut("failed to clear browser cache: %w", err)
 	}
 
 	return llm.ToolOut{LLMContent: llm.TextContent("Browser cache cleared.")}

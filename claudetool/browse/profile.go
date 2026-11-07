@@ -58,14 +58,9 @@ Typical workflows:
 	return llm.ToolOut{LLMContent: llm.TextContent(help)}
 }
 
-func (b *BrowseTools) profileMetrics() llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
+func (b *BrowseTools) profileMetrics(ctx context.Context, timeout string) llm.ToolOut {
 	var metrics []*performance.Metric
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+	err := b.browserRun(ctx, timeout, "failed to get performance metrics", chromedp.ActionFunc(func(ctx context.Context) error {
 		if err := performance.Enable().Do(ctx); err != nil {
 			return err
 		}
@@ -74,7 +69,7 @@ func (b *BrowseTools) profileMetrics() llm.ToolOut {
 		return e
 	}))
 	if err != nil {
-		return llm.ErrorfToolOut("failed to get performance metrics: %w", err)
+		return llm.ErrorToolOut(err)
 	}
 
 	if len(metrics) == 0 {
@@ -98,12 +93,7 @@ func (b *BrowseTools) profileMetrics() llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent(out)}
 }
 
-func (b *BrowseTools) profileCPUStart() llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
+func (b *BrowseTools) profileCPUStart(ctx context.Context, timeout string) llm.ToolOut {
 	b.traceMutex.Lock()
 	if b.profilingActive {
 		b.traceMutex.Unlock()
@@ -111,14 +101,14 @@ func (b *BrowseTools) profileCPUStart() llm.ToolOut {
 	}
 	b.traceMutex.Unlock()
 
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+	err := b.browserRun(ctx, timeout, "failed to start CPU profiling", chromedp.ActionFunc(func(ctx context.Context) error {
 		if err := profiler.Enable().Do(ctx); err != nil {
 			return err
 		}
 		return profiler.Start().Do(ctx)
 	}))
 	if err != nil {
-		return llm.ErrorfToolOut("failed to start CPU profiling: %w", err)
+		return llm.ErrorToolOut(err)
 	}
 
 	b.traceMutex.Lock()
@@ -127,12 +117,7 @@ func (b *BrowseTools) profileCPUStart() llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent("CPU profiling started.")}
 }
 
-func (b *BrowseTools) profileCPUStop() llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
+func (b *BrowseTools) profileCPUStop(ctx context.Context, timeout string) llm.ToolOut {
 	b.traceMutex.Lock()
 	if !b.profilingActive {
 		b.traceMutex.Unlock()
@@ -141,7 +126,7 @@ func (b *BrowseTools) profileCPUStop() llm.ToolOut {
 	b.traceMutex.Unlock()
 
 	var profile *profiler.Profile
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+	err := b.browserRun(ctx, timeout, "failed to stop CPU profiling", chromedp.ActionFunc(func(ctx context.Context) error {
 		var e error
 		profile, e = profiler.Stop().Do(ctx)
 		if e != nil {
@@ -150,7 +135,7 @@ func (b *BrowseTools) profileCPUStop() llm.ToolOut {
 		return profiler.Disable().Do(ctx)
 	}))
 	if err != nil {
-		return llm.ErrorfToolOut("failed to stop CPU profiling: %w", err)
+		return llm.ErrorToolOut(err)
 	}
 
 	b.traceMutex.Lock()
@@ -171,12 +156,7 @@ func (b *BrowseTools) profileCPUStop() llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf("CPU profile saved to: %s", filePath))}
 }
 
-func (b *BrowseTools) profileTraceStart(categories string) llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
+func (b *BrowseTools) profileTraceStart(ctx context.Context, timeout, categories string) llm.ToolOut {
 	b.traceMutex.Lock()
 	if b.tracingActive {
 		b.traceMutex.Unlock()
@@ -187,7 +167,7 @@ func (b *BrowseTools) profileTraceStart(categories string) llm.ToolOut {
 	b.traceCompleteCh = make(chan struct{}, 1)
 	b.traceMutex.Unlock()
 
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+	err := b.browserRun(ctx, timeout, "failed to start tracing", chromedp.ActionFunc(func(ctx context.Context) error {
 		params := tracing.Start()
 		if categories != "" {
 			catList := strings.Split(categories, ",")
@@ -201,7 +181,7 @@ func (b *BrowseTools) profileTraceStart(categories string) llm.ToolOut {
 		return params.Do(ctx)
 	}))
 	if err != nil {
-		return llm.ErrorfToolOut("failed to start tracing: %w", err)
+		return llm.ErrorToolOut(err)
 	}
 
 	b.traceMutex.Lock()
@@ -215,7 +195,10 @@ func (b *BrowseTools) profileTraceStart(categories string) llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent(msg)}
 }
 
-func (b *BrowseTools) profileTraceStop() llm.ToolOut {
+// profileTraceStop runs tracing.End itself rather than via browserRun because
+// it needs the browser context to notice a browser death while waiting for
+// the trace data.
+func (b *BrowseTools) profileTraceStop(ctx context.Context, timeout string) llm.ToolOut {
 	browserCtx, err := b.GetBrowserContext()
 	if err != nil {
 		return llm.ErrorToolOut(err)
@@ -229,10 +212,9 @@ func (b *BrowseTools) profileTraceStop() llm.ToolOut {
 	doneCh := b.traceCompleteCh
 	b.traceMutex.Unlock()
 
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return tracing.End().Do(ctx)
-	}))
-	if err != nil {
+	actionCtx, cancel := browserActionContext(ctx, browserCtx, timeout)
+	defer cancel()
+	if err := chromedp.Run(actionCtx, tracing.End()); err != nil {
 		return llm.ErrorfToolOut("failed to stop tracing: %w", err)
 	}
 
@@ -275,13 +257,8 @@ func (b *BrowseTools) profileTraceStop() llm.ToolOut {
 	))}
 }
 
-func (b *BrowseTools) profileCoverageStart() llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+func (b *BrowseTools) profileCoverageStart(ctx context.Context, timeout string) llm.ToolOut {
+	err := b.browserRun(ctx, timeout, "failed to start coverage", chromedp.ActionFunc(func(ctx context.Context) error {
 		if err := profiler.Enable().Do(ctx); err != nil {
 			return err
 		}
@@ -289,20 +266,15 @@ func (b *BrowseTools) profileCoverageStart() llm.ToolOut {
 		return err
 	}))
 	if err != nil {
-		return llm.ErrorfToolOut("failed to start coverage: %w", err)
+		return llm.ErrorToolOut(err)
 	}
 
 	return llm.ToolOut{LLMContent: llm.TextContent("JavaScript coverage collection started.")}
 }
 
-func (b *BrowseTools) profileCoverageStop() llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
+func (b *BrowseTools) profileCoverageStop(ctx context.Context, timeout string) llm.ToolOut {
 	var coverage []*profiler.ScriptCoverage
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+	err := b.browserRun(ctx, timeout, "failed to stop coverage", chromedp.ActionFunc(func(ctx context.Context) error {
 		var e error
 		coverage, _, e = profiler.TakePreciseCoverage().Do(ctx)
 		if e != nil {
@@ -314,7 +286,7 @@ func (b *BrowseTools) profileCoverageStop() llm.ToolOut {
 		return profiler.Disable().Do(ctx)
 	}))
 	if err != nil {
-		return llm.ErrorfToolOut("failed to stop coverage: %w", err)
+		return llm.ErrorToolOut(err)
 	}
 
 	data, err := json.Marshal(coverage)

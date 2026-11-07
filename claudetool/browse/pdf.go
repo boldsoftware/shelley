@@ -23,15 +23,8 @@ const PDFDir = "/tmp/shelley-pdfs"
 // tagging fields even when unset, so Chrome's own defaults (1cm margins, a
 // tagged PDF) must be restated; the outline turns headings into bookmarks.
 func (b *BrowseTools) pdfRun(ctx context.Context, timeout string) llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-	timeoutCtx, cancel := browserActionContext(ctx, browserCtx, timeout)
-	defer cancel()
-
 	var data []byte
-	err = chromedp.Run(timeoutCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+	err := b.browserRun(ctx, timeout, "", chromedp.ActionFunc(func(ctx context.Context) error {
 		var err error
 		data, _, err = page.PrintToPDF().
 			WithPrintBackground(true).

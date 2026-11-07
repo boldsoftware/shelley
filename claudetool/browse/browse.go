@@ -370,11 +370,6 @@ type navigateInput struct {
 }
 
 func (b *BrowseTools) navigateRun(ctx context.Context, input navigateInput) llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
 	b.downloadActionMu.Lock()
 	defer b.downloadActionMu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -382,15 +377,7 @@ func (b *BrowseTools) navigateRun(ctx context.Context, input navigateInput) llm.
 	}
 	generation := b.beginDownloadAction()
 
-	// Create a timeout context for this operation
-	timeoutCtx, cancel := browserActionContext(ctx, browserCtx, input.Timeout)
-	defer cancel()
-
-	err = chromedp.Run(
-		timeoutCtx,
-		chromedp.Navigate(input.URL),
-		chromedp.WaitReady("body"),
-	)
+	err := b.browserRun(ctx, input.Timeout, "", chromedp.Navigate(input.URL), chromedp.WaitReady("body"))
 	if err != nil {
 		// Navigation to download URLs fails with ERR_ABORTED, but the download may have succeeded.
 		// Wait briefly for download events to be processed, then check if we got any downloads.
@@ -428,19 +415,7 @@ func (b *BrowseTools) resizeRun(ctx context.Context, input resizeInput) llm.Tool
 		return llm.ErrorToolOut(fmt.Errorf("invalid dimensions: width and height must be positive"))
 	}
 
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
-	timeoutCtx, cancel := context.WithTimeout(browserCtx, parseTimeout(input.Timeout))
-	defer cancel()
-
-	err = chromedp.Run(
-		timeoutCtx,
-		chromedp.EmulateViewport(int64(input.Width), int64(input.Height)),
-	)
-	if err != nil {
+	if err := b.browserRun(ctx, input.Timeout, "", chromedp.EmulateViewport(int64(input.Width), int64(input.Height))); err != nil {
 		return llm.ErrorToolOut(err)
 	}
 
@@ -454,21 +429,12 @@ type evalInput struct {
 }
 
 func (b *BrowseTools) evalRun(ctx context.Context, input evalInput) llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
 	b.downloadActionMu.Lock()
 	defer b.downloadActionMu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return llm.ErrorToolOut(err)
 	}
 	generation := b.beginDownloadAction()
-
-	// Create a timeout context for this operation
-	timeoutCtx, cancel := browserActionContext(ctx, browserCtx, input.Timeout)
-	defer cancel()
 
 	var result any
 	var evalOps []chromedp.EvaluateOption
@@ -483,10 +449,7 @@ func (b *BrowseTools) evalRun(ctx context.Context, input evalInput) llm.ToolOut 
 		})
 	}
 
-	evalAction := chromedp.Evaluate(input.Expression, &result, evalOps...)
-
-	err = chromedp.Run(timeoutCtx, evalAction)
-	if err != nil {
+	if err := b.browserRun(ctx, input.Timeout, "", chromedp.Evaluate(input.Expression, &result, evalOps...)); err != nil {
 		return llm.ErrorToolOut(err)
 	}
 
@@ -518,16 +481,6 @@ type screenshotInput struct {
 }
 
 func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) llm.ToolOut {
-	// Try to get a browser context; if unavailable, return an error
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
-	// Create a timeout context for this operation
-	timeoutCtx, cancel := context.WithTimeout(browserCtx, parseTimeout(input.Timeout))
-	defer cancel()
-
 	var buf []byte
 	var actions []chromedp.Action
 
@@ -543,8 +496,7 @@ func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) 
 		actions = append(actions, chromedp.CaptureScreenshot(&buf))
 	}
 
-	err = chromedp.Run(timeoutCtx, actions...)
-	if err != nil {
+	if err := b.browserRun(ctx, input.Timeout, "", actions...); err != nil {
 		return llm.ErrorToolOut(err)
 	}
 
@@ -936,59 +888,59 @@ func (b *BrowseTools) runCombined(ctx context.Context, input combinedInput) llm.
 	case "emulate_help":
 		return b.emulateHelp()
 	case "emulate_device":
-		return b.emulateDevice(emulateInput{Device: input.Device})
+		return b.emulateDevice(ctx, emulateInput{Device: input.Device, Timeout: input.Timeout})
 	case "emulate_custom":
-		return b.emulateCustom(emulateInput{Width: int64(input.Width), Height: int64(input.Height), DeviceScaleFactor: input.DeviceScaleFactor, Mobile: input.Mobile, Touch: input.Touch})
+		return b.emulateCustom(ctx, emulateInput{Width: int64(input.Width), Height: int64(input.Height), DeviceScaleFactor: input.DeviceScaleFactor, Mobile: input.Mobile, Touch: input.Touch, Timeout: input.Timeout})
 	case "emulate_reset":
-		return b.emulateReset()
+		return b.emulateReset(ctx, input.Timeout)
 	case "emulate_dark_mode":
-		return b.emulateDarkMode(emulateInput{Enabled: input.Enabled})
+		return b.emulateDarkMode(ctx, emulateInput{Enabled: input.Enabled, Timeout: input.Timeout})
 	case "emulate_media":
-		return b.emulateMedia(emulateInput{Media: input.Media})
+		return b.emulateMedia(ctx, emulateInput{Media: input.Media, Timeout: input.Timeout})
 
 	// Network actions.
 	case "network_help":
 		return b.networkHelpRun()
 	case "network_enable":
-		return b.networkEnableRun()
+		return b.networkEnableRun(ctx, input.Timeout)
 	case "network_disable":
-		return b.networkDisableRun()
+		return b.networkDisableRun(ctx, input.Timeout)
 	case "network_get_log":
 		return b.networkGetLogRun(input.Limit, input.Filter)
 	case "network_clear":
 		return b.networkClearRun()
 	case "network_cookies":
-		return b.networkCookiesRun()
+		return b.networkCookiesRun(ctx, input.Timeout)
 	case "network_clear_cache":
-		return b.networkClearCacheRun()
+		return b.networkClearCacheRun(ctx, input.Timeout)
 
 	// Accessibility actions.
 	case "accessibility_help":
 		return b.accessibilityHelp()
 	case "accessibility_tree":
-		return b.accessibilityTree(input.Depth)
+		return b.accessibilityTree(ctx, input.Timeout, input.Depth)
 	case "accessibility_query":
-		return b.accessibilityQuery(input.Name, input.Role)
+		return b.accessibilityQuery(ctx, input.Timeout, input.Name, input.Role)
 	case "accessibility_node":
-		return b.accessibilityNode(input.Selector)
+		return b.accessibilityNode(ctx, input.Timeout, input.Selector)
 
 	// Profiling actions.
 	case "profile_help":
 		return b.profileHelp()
 	case "profile_metrics":
-		return b.profileMetrics()
+		return b.profileMetrics(ctx, input.Timeout)
 	case "profile_cpu_start":
-		return b.profileCPUStart()
+		return b.profileCPUStart(ctx, input.Timeout)
 	case "profile_cpu_stop":
-		return b.profileCPUStop()
+		return b.profileCPUStop(ctx, input.Timeout)
 	case "profile_trace_start":
-		return b.profileTraceStart(input.Categories)
+		return b.profileTraceStart(ctx, input.Timeout, input.Categories)
 	case "profile_trace_stop":
-		return b.profileTraceStop()
+		return b.profileTraceStop(ctx, input.Timeout)
 	case "profile_coverage_start":
-		return b.profileCoverageStart()
+		return b.profileCoverageStart(ctx, input.Timeout)
 	case "profile_coverage_stop":
-		return b.profileCoverageStop()
+		return b.profileCoverageStop(ctx, input.Timeout)
 
 	default:
 		return llm.ErrorToolOut(unknownActionError(input.Action))
@@ -1118,6 +1070,26 @@ func browserActionContext(toolCtx, browserCtx context.Context, timeout string) (
 		stop()
 		cancel()
 	}
+}
+
+// browserRun runs actions in the shared browser, starting it if needed. The run
+// is bounded by the tool call's context and by timeout (see parseTimeout).
+// Browser startup errors are returned as is; errors from the actions are
+// prefixed with "failMsg: " unless failMsg is empty.
+func (b *BrowseTools) browserRun(ctx context.Context, timeout, failMsg string, actions ...chromedp.Action) error {
+	browserCtx, err := b.GetBrowserContext()
+	if err != nil {
+		return err
+	}
+	actionCtx, cancel := browserActionContext(ctx, browserCtx, timeout)
+	defer cancel()
+	if err := chromedp.Run(actionCtx, actions...); err != nil {
+		if failMsg != "" {
+			return fmt.Errorf("%s: %w", failMsg, err)
+		}
+		return err
+	}
+	return nil
 }
 
 // captureConsoleLog captures a console log event and stores it

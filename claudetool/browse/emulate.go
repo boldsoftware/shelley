@@ -67,6 +67,7 @@ type emulateInput struct {
 	Touch             bool
 	Enabled           *bool
 	Media             string
+	Timeout           string
 }
 
 func (b *BrowseTools) emulateHelp() llm.ToolOut {
@@ -97,7 +98,7 @@ func (b *BrowseTools) emulateHelp() llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent(sb.String())}
 }
 
-func (b *BrowseTools) emulateDevice(input emulateInput) llm.ToolOut {
+func (b *BrowseTools) emulateDevice(ctx context.Context, input emulateInput) llm.ToolOut {
 	if input.Device == "" {
 		return llm.ErrorfToolOut("device parameter is required")
 	}
@@ -112,10 +113,10 @@ func (b *BrowseTools) emulateDevice(input emulateInput) llm.ToolOut {
 		return llm.ErrorfToolOut("unknown device %q; available: %s", input.Device, strings.Join(names, ", "))
 	}
 
-	return b.applyEmulation(preset.Width, preset.Height, preset.DPR, preset.Mobile, preset.Touch, preset.UserAgent)
+	return b.applyEmulation(ctx, input.Timeout, preset.Width, preset.Height, preset.DPR, preset.Mobile, preset.Touch, preset.UserAgent)
 }
 
-func (b *BrowseTools) emulateCustom(input emulateInput) llm.ToolOut {
+func (b *BrowseTools) emulateCustom(ctx context.Context, input emulateInput) llm.ToolOut {
 	if input.Width <= 0 || input.Height <= 0 {
 		return llm.ErrorfToolOut("width and height are required and must be positive")
 	}
@@ -126,16 +127,11 @@ func (b *BrowseTools) emulateCustom(input emulateInput) llm.ToolOut {
 	// Passing "" clears any prior UA override, which is correct: custom viewports
 	// have no user_agent parameter, so there is no supported way to carry a
 	// custom UA forward.
-	return b.applyEmulation(input.Width, input.Height, input.DeviceScaleFactor, input.Mobile, input.Touch, "")
+	return b.applyEmulation(ctx, input.Timeout, input.Width, input.Height, input.DeviceScaleFactor, input.Mobile, input.Touch, "")
 }
 
-func (b *BrowseTools) applyEmulation(width, height int64, dpr float64, mobile, touch bool, userAgent string) llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+func (b *BrowseTools) applyEmulation(ctx context.Context, timeout string, width, height int64, dpr float64, mobile, touch bool, userAgent string) llm.ToolOut {
+	err := b.browserRun(ctx, timeout, "", chromedp.ActionFunc(func(ctx context.Context) error {
 		if err := emulation.SetDeviceMetricsOverride(width, height, dpr, mobile).Do(ctx); err != nil {
 			return fmt.Errorf("set device metrics: %w", err)
 		}
@@ -168,14 +164,9 @@ func (b *BrowseTools) applyEmulation(width, height int64, dpr float64, mobile, t
 	return llm.ToolOut{LLMContent: llm.TextContent(msg)}
 }
 
-func (b *BrowseTools) emulateReset() llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
-	err = chromedp.Run(
-		browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+func (b *BrowseTools) emulateReset(ctx context.Context, timeout string) llm.ToolOut {
+	err := b.browserRun(ctx, timeout, "",
+		chromedp.ActionFunc(func(ctx context.Context) error {
 			if err := emulation.ClearDeviceMetricsOverride().Do(ctx); err != nil {
 				return fmt.Errorf("clear device metrics: %w", err)
 			}
@@ -199,18 +190,13 @@ func (b *BrowseTools) emulateReset() llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent("Emulation reset to default (1280x720)")}
 }
 
-func (b *BrowseTools) emulateDarkMode(input emulateInput) llm.ToolOut {
+func (b *BrowseTools) emulateDarkMode(ctx context.Context, input emulateInput) llm.ToolOut {
 	enabled := true
 	if input.Enabled != nil {
 		enabled = *input.Enabled
 	}
 
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+	err := b.browserRun(ctx, input.Timeout, "", chromedp.ActionFunc(func(ctx context.Context) error {
 		return emulation.SetAutoDarkModeOverride().WithEnabled(enabled).Do(ctx)
 	}))
 	if err != nil {
@@ -224,13 +210,8 @@ func (b *BrowseTools) emulateDarkMode(input emulateInput) llm.ToolOut {
 	return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf("Automatic dark mode %s", state))}
 }
 
-func (b *BrowseTools) emulateMedia(input emulateInput) llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorToolOut(err)
-	}
-
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+func (b *BrowseTools) emulateMedia(ctx context.Context, input emulateInput) llm.ToolOut {
+	err := b.browserRun(ctx, input.Timeout, "", chromedp.ActionFunc(func(ctx context.Context) error {
 		return emulation.SetEmulatedMedia().WithMedia(input.Media).Do(ctx)
 	}))
 	if err != nil {

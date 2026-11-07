@@ -49,14 +49,9 @@ Output format:
 	return llm.ToolOut{LLMContent: llm.TextContent(helpText)}
 }
 
-func (b *BrowseTools) accessibilityTree(depth int) llm.ToolOut {
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorfToolOut("failed to get browser context: %w", err)
-	}
-
+func (b *BrowseTools) accessibilityTree(ctx context.Context, timeout string, depth int) llm.ToolOut {
 	var nodes []*accessibility.Node
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+	err := b.browserRun(ctx, timeout, "failed to get accessibility tree", chromedp.ActionFunc(func(ctx context.Context) error {
 		params := accessibility.GetFullAXTree()
 		if depth > 0 {
 			params = params.WithDepth(int64(depth))
@@ -69,7 +64,7 @@ func (b *BrowseTools) accessibilityTree(depth int) llm.ToolOut {
 		return nil
 	}))
 	if err != nil {
-		return llm.ErrorfToolOut("failed to get accessibility tree: %w", err)
+		return llm.ErrorToolOut(err)
 	}
 
 	if len(nodes) == 0 {
@@ -151,18 +146,13 @@ func walkTree(sb *strings.Builder, node *accessibility.Node, nodeMap map[accessi
 	}
 }
 
-func (b *BrowseTools) accessibilityQuery(name, role string) llm.ToolOut {
+func (b *BrowseTools) accessibilityQuery(ctx context.Context, timeout, name, role string) llm.ToolOut {
 	if name == "" && role == "" {
 		return llm.ErrorfToolOut("at least one of 'name' or 'role' must be provided")
 	}
 
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorfToolOut("failed to get browser context: %w", err)
-	}
-
 	var nodes []*accessibility.Node
-	err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+	err := b.browserRun(ctx, timeout, "failed to query accessibility tree", chromedp.ActionFunc(func(ctx context.Context) error {
 		// Get the document root node ID
 		doc, err := dom.GetDocument().WithDepth(0).Do(ctx)
 		if err != nil {
@@ -184,7 +174,7 @@ func (b *BrowseTools) accessibilityQuery(name, role string) llm.ToolOut {
 		return nil
 	}))
 	if err != nil {
-		return llm.ErrorfToolOut("failed to query accessibility tree: %w", err)
+		return llm.ErrorToolOut(err)
 	}
 
 	if len(nodes) == 0 {
@@ -219,20 +209,14 @@ func (b *BrowseTools) accessibilityQuery(name, role string) llm.ToolOut {
 	return b.maybeWriteToFile(result, "ax_query")
 }
 
-func (b *BrowseTools) accessibilityNode(selector string) llm.ToolOut {
+func (b *BrowseTools) accessibilityNode(ctx context.Context, timeout, selector string) llm.ToolOut {
 	if selector == "" {
 		return llm.ErrorfToolOut("'selector' parameter is required for the node action")
 	}
 
-	browserCtx, err := b.GetBrowserContext()
-	if err != nil {
-		return llm.ErrorfToolOut("failed to get browser context: %w", err)
-	}
-
 	// Find the DOM node and get its AX tree in a single Run call
 	var axNodes []*accessibility.Node
-	err = chromedp.Run(
-		browserCtx,
+	err := b.browserRun(ctx, timeout, fmt.Sprintf("failed to get accessibility info for %q", selector),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var domNodes []*cdp.Node
 			if err := chromedp.Nodes(selector, &domNodes, chromedp.ByQuery).Do(ctx); err != nil {
@@ -253,7 +237,7 @@ func (b *BrowseTools) accessibilityNode(selector string) llm.ToolOut {
 		}),
 	)
 	if err != nil {
-		return llm.ErrorfToolOut("failed to get accessibility info for %q: %w", selector, err)
+		return llm.ErrorToolOut(err)
 	}
 
 	// Find the first non-ignored node
