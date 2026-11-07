@@ -1,4 +1,4 @@
-import { responseError } from "./api";
+import { apiJSON } from "./api";
 
 /** Why a page can't be framed here: it is Shelley itself, its
  *  Content-Security-Policy or X-Frame-Options forbids it, or it is behind
@@ -16,12 +16,8 @@ export interface PageFrame {
 
 const probes = new Map<string, Promise<PageFrame>>();
 
-async function fetchPageFrame(url: string, failure: string): Promise<PageFrame> {
-  const response = await fetch(`/api/page-frame?url=${encodeURIComponent(url)}`, {
-    headers: { "X-Shelley-Request": "1" },
-  });
-  if (!response.ok) throw await responseError(response, failure);
-  return response.json();
+function fetchPageFrame(url: string, failure: string): Promise<PageFrame> {
+  return apiJSON(`/api/page-frame?url=${encodeURIComponent(url)}`, failure);
 }
 
 /** Asks the server once per page load, or again with refresh; failure

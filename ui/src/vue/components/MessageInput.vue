@@ -645,12 +645,11 @@
 </template>
 
 <script setup lang="ts">
-import { responseDetail } from "../../services/responseDetail";
 import PathText from "./PathText.vue";
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowReactive, shallowRef, useId, watch } from "vue";
 import { useFileCompletion } from "../composables/fileCompletion";
 import { useSkillCompletion } from "../composables/skillCompletion";
-import type { SkillDescriptor } from "../../services/api";
+import { apiFetch, type SkillDescriptor } from "../../services/api";
 import type { Profile } from "../../types";
 import { useI18n } from "../composables/i18n";
 import { pickPlaceholderHint } from "../../utils/placeholderHints";
@@ -1112,10 +1111,10 @@ async function uploadFile(file: File) {
   try {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch("/api/upload", { method: "POST", body: formData });
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${await responseDetail(response)}`);
-    }
+    const response = await apiFetch("/api/upload", "Upload failed", {
+      method: "POST",
+      body: formData,
+    });
     const data = await response.json();
     updateAttachments(session, (current) =>
       current.map((a) => (a.id === id ? { ...a, status: "ready", path: data.path } : a)),

@@ -93,6 +93,7 @@ import PathText from "./PathText.vue";
 import { computed, nextTick, ref, watch } from "vue";
 import Modal from "./Modal.vue";
 import { isImeComposing } from "../../utils/imeComposing";
+import { apiJSON } from "../../services/api";
 
 interface GitRepoInfo {
   path: string;
@@ -290,11 +291,7 @@ watch(
     repos.value = null;
     query.value = "";
     activeIdx.value = 0;
-    fetch("/api/git/repos")
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()) as GitReposResponse;
-      })
+    apiJSON<GitReposResponse>("/api/git/repos", "Failed to list repositories")
       .then((d) => {
         if (cancelled) return;
         repos.value = d.repos || [];

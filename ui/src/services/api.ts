@@ -40,6 +40,50 @@ export async function responseError(response: Response, prefix: string): Promise
   return new ApiError(`${prefix}: ${await responseDetail(response)}`, response.status);
 }
 
+/** Fetches path, throwing an ApiError "<failure>: <reason>" unless the
+ *  response is OK; status 0 when no response came. Aborts throw as they are. */
+export async function apiFetch(
+  path: string,
+  failure: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const response = await fetch(path, {
+    ...init,
+    headers: { "X-Shelley-Request": "1", ...(init.headers as Record<string, string>) },
+  }).catch((err: unknown) => {
+    if (init.signal?.aborted) throw err;
+    console.warn(`${path}:`, err);
+    throw new ApiError(`${failure}: no response`, 0);
+  });
+  if (!response.ok) throw await responseError(response, failure);
+  return response;
+}
+
+/** Calls path, sending body as JSON if given, and returns the JSON reply
+ *  (undefined for 204 No Content); a failure throws an ApiError
+ *  "<failure>: <reason>", status 0 when no response came. */
+export async function apiJSON<T>(
+  path: string,
+  failure: string,
+  method = "GET",
+  body?: unknown,
+): Promise<T> {
+  const response = await apiFetch(path, failure, sendJSON(method, body));
+  return response.status === 204 ? (undefined as T) : response.json();
+}
+
+/** A request sending body, if given, as JSON. */
+export function sendJSON(method: string, body?: unknown, signal?: AbortSignal): RequestInit {
+  return body === undefined
+    ? { method, signal }
+    : {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal,
+      };
+}
+
 // A backgrounded bash command that has not exited (server BackgroundJobInfo).
 export interface BackgroundJob {
   job_id: string;
@@ -164,125 +208,80 @@ export interface BtwSummaryReceipt {
 }
 
 class ApiService {
-  private baseUrl = "/api";
-
-  private postHeaders = {
-    "Content-Type": "application/json",
-  };
-
   async getConversationsSnapshot(): Promise<{
     conversations: ConversationWithState[];
     hash: string;
   }> {
-    const response = await fetch(`${this.baseUrl}/conversations/snapshot`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to load conversations");
-    }
-    return response.json();
+    return apiJSON("/api/conversations/snapshot", "Failed to load conversations");
   }
 
   async getModels(): Promise<AvailableModel[]> {
-    const response = await fetch(`${this.baseUrl}/models`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get models");
-    }
-    return response.json();
+    return apiJSON("/api/models", "Failed to get models");
   }
 
   async getIntegrations(): Promise<IntegrationsResponse> {
-    const response = await fetch(`${this.baseUrl}/integrations`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to load integrations");
-    }
-    return response.json();
+    return apiJSON("/api/integrations", "Failed to load integrations");
   }
 
   async getIntegrationDetails(name: string, team: boolean): Promise<AttachedIntegration> {
     const params = new URLSearchParams({ details: name, team: String(team) });
-    const response = await fetch(`${this.baseUrl}/integrations?${params}`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to load integration details");
-    }
+    const response = await apiFetch(
+      `/api/integrations?${params}`,
+      "Failed to load integration details",
+    );
     const body: IntegrationsResponse = await response.json();
     return body.integrations[0];
   }
 
   async sendTestNotification(message: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/integrations/notify/test`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ message }),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Could not send test notification");
-    }
+    await apiFetch(
+      "/api/integrations/notify/test",
+      "Could not send test notification",
+      sendJSON("POST", { message }),
+    );
   }
 
   async sendSlackTest(name: string, team: boolean, message: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/integrations/slack/test`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ name, team, message }),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Could not send Slack test message");
-    }
+    await apiFetch(
+      "/api/integrations/slack/test",
+      "Could not send Slack test message",
+      sendJSON("POST", { name, team, message }),
+    );
   }
 
   async dismissModelUpgrade(from: string, to: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/model-upgrade/dismiss`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ from, to }),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to dismiss upgrade");
-    }
+    await apiFetch(
+      "/api/model-upgrade/dismiss",
+      "Failed to dismiss upgrade",
+      sendJSON("POST", { from, to }),
+    );
   }
 
   // Moves the other conversations in the family `from` belongs to onto their
   // upgrades.
   async upgradeAllModels(from: string, to: string): Promise<{ upgraded: number; skipped: number }> {
-    const response = await fetch(`${this.baseUrl}/model-upgrade/apply-all`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ from, to }),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to upgrade other conversations");
-    }
-    return response.json();
+    return apiJSON(
+      "/api/model-upgrade/apply-all",
+      "Failed to upgrade other conversations",
+      "POST",
+      { from, to },
+    );
   }
 
   async dismissUpgradePrompt(): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/model-upgrade/prompt-dismissed`, {
+    await apiFetch("/api/model-upgrade/prompt-dismissed", "Failed to record the answer", {
       method: "POST",
-      headers: this.postHeaders,
     });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to record the answer");
-    }
   }
 
   async refreshModels(): Promise<AvailableModel[]> {
-    const response = await fetch(`${this.baseUrl}/models/refresh`, {
-      method: "POST",
-      headers: this.postHeaders,
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to refresh models");
-    }
-    return response.json();
+    return apiJSON("/api/models/refresh", "Failed to refresh models", "POST");
   }
 
   async getTools(): Promise<{
     tools: Array<{ name: string; summary: string; default_on: boolean }>;
   }> {
-    const response = await fetch(`${this.baseUrl}/tools`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get tools");
-    }
-    return response.json();
+    return apiJSON("/api/tools", "Failed to get tools");
   }
 
   async startSearchChat(
@@ -296,23 +295,26 @@ class ApiService {
       }
     >,
   ): Promise<{ conversation: ConversationWithState }> {
-    const response = await fetch(`${this.baseUrl}/conversations/search/enhance`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Shelley-Request": "1" },
-      body: JSON.stringify({
-        q: query,
-        archived,
-        matches: matches.map((c) => ({
-          conversation_id: c.conversation_id,
-          slug: c.slug,
-          snippet: c.search_snippet ?? "",
-          message_id: c.search_snippet_message_id ?? "",
-        })),
-      }),
-      signal,
-    });
-    if (!response.ok) throw await responseError(response, "Could not start search chat");
-    return response.json();
+    return (
+      await apiFetch(
+        "/api/conversations/search/enhance",
+        "Could not start search chat",
+        sendJSON(
+          "POST",
+          {
+            q: query,
+            archived,
+            matches: matches.map((c) => ({
+              conversation_id: c.conversation_id,
+              slug: c.slug,
+              snippet: c.search_snippet ?? "",
+              message_id: c.search_snippet_message_id ?? "",
+            })),
+          },
+          signal,
+        ),
+      )
+    ).json();
   }
 
   // Search active top-level conversations, or only archived ones when requested.
@@ -323,11 +325,11 @@ class ApiService {
   ): Promise<ConversationWithState[]> {
     const params = new URLSearchParams({ q: query });
     if (archived) params.set("archived", "true");
-    const response = await fetch(`${this.baseUrl}/conversations/search?${params}`, { signal });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to search conversations");
-    }
-    return response.json();
+    return (
+      await apiFetch(`/api/conversations/search?${params}`, "Failed to search conversations", {
+        signal,
+      })
+    ).json();
   }
 
   // createDraft creates a draft conversation server-side. Drafts hold the
@@ -341,15 +343,7 @@ class ApiService {
     cwd?: string;
     conversation_options?: ChatRequest["conversation_options"];
   }): Promise<Conversation> {
-    const response = await fetch(`${this.baseUrl}/conversations/draft`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify(request),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to create draft");
-    }
-    return response.json();
+    return apiJSON("/api/conversations/draft", "Failed to create draft", "POST", request);
   }
 
   // updateDraft partially updates a draft conversation in place: the draft
@@ -362,37 +356,29 @@ class ApiService {
     conversationId: string,
     fields: { draft?: string; model?: string; cwd?: string },
   ): Promise<Conversation> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/draft`, {
-      method: "PUT",
-      headers: this.postHeaders,
-      body: JSON.stringify(fields),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to update draft");
-    }
-    return response.json();
+    return apiJSON(
+      `/api/conversation/${conversationId}/draft`,
+      "Failed to update draft",
+      "PUT",
+      fields,
+    );
   }
 
   async sendMessageWithNewConversation(request: ChatRequest): Promise<{ conversation_id: string }> {
-    const response = await fetch(`${this.baseUrl}/conversations/new`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify(withMcpSelections(request)),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to start conversation");
-    }
-    return response.json();
+    return apiJSON(
+      "/api/conversations/new",
+      "Failed to start conversation",
+      "POST",
+      withMcpSelections(request),
+    );
   }
 
   async startNewGeneration(conversationId: string): Promise<Conversation> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/new-generation`, {
-      method: "POST",
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to start new generation");
-    }
-    return response.json();
+    return apiJSON(
+      `/api/conversation/${conversationId}/new-generation`,
+      "Failed to start new generation",
+      "POST",
+    );
   }
 
   async getConversationWithProgress(
@@ -403,11 +389,10 @@ class ApiService {
       bytesTotal?: number;
     }) => void,
   ): Promise<StreamResponse> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get messages");
-    }
-
+    const response = await apiFetch(
+      `/api/conversation/${conversationId}`,
+      "Failed to get messages",
+    );
     const contentLengthHeader = response.headers.get("Content-Length");
     const contentLength = contentLengthHeader ? Number(contentLengthHeader) : undefined;
 
@@ -464,26 +449,23 @@ class ApiService {
     conversationId: string,
     sinceSequenceId: number,
   ): Promise<StreamResponse> {
-    const response = await fetch(
-      `${this.baseUrl}/conversation/${conversationId}?last_sequence_id=${sinceSequenceId}`,
+    return apiJSON(
+      `/api/conversation/${conversationId}?last_sequence_id=${sinceSequenceId}`,
+      `Failed to get messages since ${sinceSequenceId}`,
     );
-    if (!response.ok) {
-      throw await responseError(response, `Failed to get messages since ${sinceSequenceId}`);
-    }
-    return response.json();
   }
 
   // Saves body in the server's upload directory; resolves to its absolute path.
   async uploadRaw(filename: string, body: Blob): Promise<string> {
-    const response = await fetch(
-      `${this.baseUrl}/upload/raw?filename=${encodeURIComponent(filename)}`,
+    const response = await apiFetch(
+      `/api/upload/raw?filename=${encodeURIComponent(filename)}`,
+      `Failed to upload ${filename}`,
       {
         method: "POST",
         headers: { "Content-Type": body.type || "application/octet-stream" },
         body,
       },
     );
-    if (!response.ok) throw await responseError(response, `Failed to upload ${filename}`);
     const { path } = (await response.json()) as { path?: unknown };
     if (typeof path !== "string" || !path)
       throw new Error(`Upload of ${filename} returned no path`);
@@ -495,15 +477,11 @@ class ApiService {
     request: ChatRequest,
     signal?: AbortSignal,
   ): Promise<ChatAcceptedResponse> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/chat`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify(withMcpSelections(request)),
-      signal,
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to send message");
-    }
+    const response = await apiFetch(
+      `/api/conversation/${conversationId}/chat`,
+      "Failed to send message",
+      sendJSON("POST", withMcpSelections(request), signal),
+    );
     const body = await response.text();
     return body ? (JSON.parse(body) as ChatAcceptedResponse) : {};
   }
@@ -516,14 +494,13 @@ class ApiService {
     signal: AbortSignal,
     settings?: LiveConversationSettings,
   ): Promise<{ session: { id: string }; transport: { sdp: string } }> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/live-session`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ sdp, ...settings }),
-      signal,
-    });
-    if (!response.ok) throw await responseError(response, "Failed to start live session");
-    return response.json();
+    return (
+      await apiFetch(
+        `/api/conversation/${conversationId}/live-session`,
+        "Failed to start live session",
+        sendJSON("POST", { sdp, ...settings }, signal),
+      )
+    ).json();
   }
 
   // Live's events for the server's side of a call, which decides what the
@@ -533,12 +510,11 @@ class ApiService {
     sessionId: string,
     events: unknown[],
   ): Promise<void> {
-    const response = await fetch(this.liveCallURL(conversationId, sessionId) + "/events", {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ events }),
-    });
-    if (!response.ok) throw await responseError(response, "Failed to relay the call to Shelley");
+    await apiFetch(
+      this.liveCallURL(conversationId, sessionId) + "/events",
+      "Failed to relay the call to Shelley",
+      sendJSON("POST", { events }),
+    );
   }
 
   liveCallInstructionsURL(conversationId: string, sessionId: string): string {
@@ -546,39 +522,41 @@ class ApiService {
   }
 
   async endLiveCall(conversationId: string, sessionId: string): Promise<void> {
-    const response = await fetch(this.liveCallURL(conversationId, sessionId), { method: "DELETE" });
-    if (!response.ok) throw await responseError(response, "Failed to end the call");
+    await apiFetch(this.liveCallURL(conversationId, sessionId), "Failed to end the call", {
+      method: "DELETE",
+    });
   }
 
   private liveCallURL(conversationId: string, sessionId: string): string {
-    return `${this.baseUrl}/conversation/${encodeURIComponent(conversationId)}/live-session/${encodeURIComponent(sessionId)}`;
+    return `/api/conversation/${encodeURIComponent(conversationId)}/live-session/${encodeURIComponent(sessionId)}`;
   }
 
   async listBtwReaders(conversationId: string): Promise<BtwReaderDescriptor[]> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/btw`);
-    if (!response.ok) throw await responseError(response, "Failed to load BTW readers");
+    const response = await apiFetch(
+      `/api/conversation/${conversationId}/btw`,
+      "Failed to load BTW readers",
+    );
     const data = (await response.json()) as { readers?: BtwReaderDescriptor[] };
     return data.readers ?? [];
   }
 
   async dismissBtwExchange(conversationId: string, exchangeId: string): Promise<void> {
-    const response = await fetch(
-      `${this.baseUrl}/conversation/${conversationId}/btw/${exchangeId}/dismiss`,
-      { method: "POST", headers: this.postHeaders },
+    await apiFetch(
+      `/api/conversation/${conversationId}/btw/${exchangeId}/dismiss`,
+      "Failed to dismiss BTW",
+      { method: "POST" },
     );
-    if (!response.ok) throw await responseError(response, "Failed to dismiss BTW");
   }
 
   async summarizeBtwExchange(
     conversationId: string,
     exchangeId: string,
   ): Promise<BtwSummaryReceipt> {
-    const response = await fetch(
-      `${this.baseUrl}/conversation/${conversationId}/btw/${exchangeId}/summarize`,
-      { method: "POST", headers: this.postHeaders },
+    return apiJSON(
+      `/api/conversation/${conversationId}/btw/${exchangeId}/summarize`,
+      "Failed to summarize BTW",
+      "POST",
     );
-    if (!response.ok) throw await responseError(response, "Failed to summarize BTW");
-    return response.json();
   }
 
   // createStream opens the unified SSE stream. It delivers per-conversation
@@ -593,7 +571,7 @@ class ApiService {
       params.set("conversation_list_hash", opts.conversationListHash);
     }
     const query = params.toString();
-    return new EventSource(`${this.baseUrl}/stream2${query ? `?${query}` : ""}`);
+    return new EventSource(`/api/stream2${query ? `?${query}` : ""}`);
   }
 
   // forkConversation creates a new conversation that copies all messages from
@@ -604,22 +582,20 @@ class ApiService {
     conversationId: string,
     opts: { messageId?: string; sequenceId?: number } = {},
   ): Promise<Conversation> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/fork`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({
-        message_id: opts.messageId,
-        sequence_id: opts.sequenceId,
-      }),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to fork conversation");
-    }
-    return response.json();
+    return (
+      await apiFetch(
+        `/api/conversation/${conversationId}/fork`,
+        "Failed to fork conversation",
+        sendJSON("POST", {
+          message_id: opts.messageId,
+          sequence_id: opts.sequenceId,
+        }),
+      )
+    ).json();
   }
 
   async resumeConversation(conversationId: string): Promise<"resuming" | "not_applicable"> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/resume`, {
+    const response = await fetch(`/api/conversation/${conversationId}/resume`, {
       method: "POST",
     });
     if (!response.ok) {
@@ -630,7 +606,7 @@ class ApiService {
   }
 
   async retryConversation(conversationId: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/retry`, {
+    const response = await fetch(`/api/conversation/${conversationId}/retry`, {
       method: "POST",
     });
     if (!response.ok) {
@@ -640,72 +616,57 @@ class ApiService {
 
   // Switch models and re-fire the request the previous model declined.
   async continueConversation(conversationId: string, model?: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/continue`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: model || "" }),
-    });
+    const response = await fetch(
+      `/api/conversation/${conversationId}/continue`,
+      sendJSON("POST", { model: model || "" }),
+    );
     if (!response.ok) {
       throw await ownError(response, "Failed to continue conversation");
     }
   }
 
   async cancelConversation(conversationId: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/cancel`, {
+    await apiFetch(`/api/conversation/${conversationId}/cancel`, "Failed to cancel conversation", {
       method: "POST",
     });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to cancel conversation");
-    }
   }
 
   async cancelQueuedMessages(conversationId: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/cancel-queued`, {
-      method: "POST",
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to cancel queued messages");
-    }
+    await apiFetch(
+      `/api/conversation/${conversationId}/cancel-queued`,
+      "Failed to cancel queued messages",
+      { method: "POST" },
+    );
   }
 
   async sendQueuedMessageNow(conversationId: string, queuedId: string): Promise<void> {
-    const response = await fetch(
-      `${this.baseUrl}/conversation/${conversationId}/send-queued?queued_id=${encodeURIComponent(queuedId)}`,
+    await apiFetch(
+      `/api/conversation/${conversationId}/send-queued?queued_id=${encodeURIComponent(queuedId)}`,
+      "Failed to send queued message now",
       { method: "POST" },
     );
-    if (!response.ok) {
-      throw await responseError(response, "Failed to send queued message now");
-    }
   }
 
   // Cancel a single queued message by its QueuedMessage id.
   async cancelQueuedMessage(conversationId: string, queuedId: string): Promise<void> {
-    const response = await fetch(
-      `${this.baseUrl}/conversation/${conversationId}/cancel-queued?queued_id=${encodeURIComponent(queuedId)}`,
+    await apiFetch(
+      `/api/conversation/${conversationId}/cancel-queued?queued_id=${encodeURIComponent(queuedId)}`,
+      "Failed to cancel queued message",
       { method: "POST" },
     );
-    if (!response.ok) {
-      throw await responseError(response, "Failed to cancel queued message");
-    }
   }
 
   // Retry a failed durable queued item in place.
   async retryQueuedMessage(conversationId: string, queuedId: string): Promise<void> {
-    const response = await fetch(
-      `${this.baseUrl}/conversation/${conversationId}/retry-queued?queued_id=${encodeURIComponent(queuedId)}`,
+    await apiFetch(
+      `/api/conversation/${conversationId}/retry-queued?queued_id=${encodeURIComponent(queuedId)}`,
+      "Failed to retry queued message",
       { method: "POST" },
     );
-    if (!response.ok) {
-      throw await responseError(response, "Failed to retry queued message");
-    }
   }
 
   async validateCwd(path: string): Promise<{ valid: boolean; error?: string }> {
-    const response = await fetch(`${this.baseUrl}/validate-cwd?path=${encodeURIComponent(path)}`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to validate cwd");
-    }
-    return response.json();
+    return apiJSON(`/api/validate-cwd?path=${encodeURIComponent(path)}`, "Failed to validate cwd");
   }
 
   async listDirectory(
@@ -725,69 +686,49 @@ class ApiService {
     error?: string;
   }> {
     const params = machineParams(conversationId, path ? { path } : {});
-    const response = await fetch(`${this.baseUrl}/list-directory?${params}`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to list directory");
-    }
-    return response.json();
+    return apiJSON(`/api/list-directory?${params}`, "Failed to list directory");
   }
 
   async createDirectory(
     path: string,
     conversationId?: string,
   ): Promise<{ path?: string; error?: string }> {
-    const response = await fetch(onMachine(`${this.baseUrl}/create-directory`, conversationId), {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ path }),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to create directory");
-    }
-    return response.json();
+    return apiJSON(
+      onMachine("/api/create-directory", conversationId),
+      "Failed to create directory",
+      "POST",
+      { path },
+    );
   }
 
   async getArchivedConversations(): Promise<ConversationWithParticipants[]> {
-    const response = await fetch(`${this.baseUrl}/conversations/archived`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get archived conversations");
-    }
-    return response.json();
+    return apiJSON("/api/conversations/archived", "Failed to get archived conversations");
   }
 
   async archiveConversation(conversationId: string): Promise<Conversation> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/archive`, {
-      method: "POST",
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to archive conversation");
-    }
-    return response.json();
+    return apiJSON(
+      `/api/conversation/${conversationId}/archive`,
+      "Failed to archive conversation",
+      "POST",
+    );
   }
 
   async unarchiveConversation(conversationId: string): Promise<Conversation> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/unarchive`, {
-      method: "POST",
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to unarchive conversation");
-    }
-    return response.json();
+    return apiJSON(
+      `/api/conversation/${conversationId}/unarchive`,
+      "Failed to unarchive conversation",
+      "POST",
+    );
   }
 
   async deleteConversation(conversationId: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/delete`, {
+    await apiFetch(`/api/conversation/${conversationId}/delete`, "Failed to delete conversation", {
       method: "POST",
     });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to delete conversation");
-    }
   }
 
   async getConversationBySlug(slug: string): Promise<Conversation | null> {
-    const response = await fetch(
-      `${this.baseUrl}/conversation-by-slug/${encodeURIComponent(slug)}`,
-    );
+    const response = await fetch(`/api/conversation-by-slug/${encodeURIComponent(slug)}`);
     if (response.status === 404) {
       return null;
     }
@@ -808,11 +749,7 @@ class ApiService {
     const params = machineParams(conversationId, { cwd });
     if (commit) params.set("commit", commit);
     if (!includeStats) params.set("stats", "false");
-    const response = await fetch(`${this.baseUrl}/git/diffs?${params}`);
-    if (!response.ok) {
-      throw new Error(await responseDetail(response));
-    }
-    return response.json();
+    return apiJSON(`/api/git/diffs?${params}`, "Failed to get diffs");
   }
 
   // Null when the commit has no highlights, or they no longer match it.
@@ -822,7 +759,7 @@ class ApiService {
     hash: string,
   ): Promise<CommitHighlights | null> {
     const params = machineParams(conversationId, { cwd, hash });
-    const response = await fetch(`${this.baseUrl}/git/highlights?${params}`);
+    const response = await fetch(`/api/git/highlights?${params}`);
     if (response.status === 404) return null;
     if (!response.ok) {
       throw await responseError(response, "Failed to get commit highlights");
@@ -837,11 +774,7 @@ class ApiService {
     scope: "all" | "current" = "all",
   ): Promise<import("../types").GitGraphResponse> {
     const params = machineParams(conversationId, { cwd, limit: String(limit), scope });
-    const response = await fetch(`${this.baseUrl}/git/graph?${params}`);
-    if (!response.ok) {
-      throw new Error(await responseDetail(response));
-    }
-    return response.json();
+    return apiJSON(`/api/git/graph?${params}`, "Failed to get git graph");
   }
 
   async getGitCommitDetail(
@@ -850,11 +783,7 @@ class ApiService {
     hash: string,
   ): Promise<import("../types").GitCommitDetail> {
     const params = machineParams(conversationId, { cwd, hash });
-    const response = await fetch(`${this.baseUrl}/git/commit-detail?${params}`);
-    if (!response.ok) {
-      throw new Error(await responseDetail(response));
-    }
-    return response.json();
+    return apiJSON(`/api/git/commit-detail?${params}`, "Failed to get commit");
   }
 
   async getGitDiffFiles(
@@ -865,11 +794,7 @@ class ApiService {
   ): Promise<GitFileInfo[]> {
     const params = machineParams(conversationId, { cwd });
     if (to) params.set("to", to);
-    const response = await fetch(`${this.baseUrl}/git/diffs/${diffId}/files?${params}`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get diff files");
-    }
-    return response.json();
+    return apiJSON(`/api/git/diffs/${diffId}/files?${params}`, "Failed to get diff files");
   }
 
   async getGitFileDiff(
@@ -883,13 +808,10 @@ class ApiService {
     if (to) params.set("to", to);
     // Encode per segment so names containing '#', '?' or '%' survive the URL.
     const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
-    const response = await fetch(
-      `${this.baseUrl}/git/file-diff/${diffId}/${encodedPath}?${params}`,
+    return apiJSON(
+      `/api/git/file-diff/${diffId}/${encodedPath}?${params}`,
+      "Failed to get file diff",
     );
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get file diff");
-    }
-    return response.json();
   }
 
   async getGitCommitMessages(
@@ -900,11 +822,7 @@ class ApiService {
   ): Promise<{ hash: string; subject: string; body: string; author: string; isHead: boolean }[]> {
     const params = machineParams(conversationId, { cwd, from });
     if (to) params.set("to", to);
-    const response = await fetch(`${this.baseUrl}/git/commit-messages?${params}`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get commit messages");
-    }
-    return response.json();
+    return apiJSON(`/api/git/commit-messages?${params}`, "Failed to get commit messages");
   }
 
   async amendGitMessage(
@@ -912,27 +830,15 @@ class ApiService {
     conversationId: string | undefined,
     message: string,
   ): Promise<void> {
-    const response = await fetch(onMachine(`${this.baseUrl}/git/amend-message`, conversationId), {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ cwd, message }),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to amend: ${await responseDetail(response)}`);
-    }
+    await apiFetch(
+      onMachine("/api/git/amend-message", conversationId),
+      "Failed to amend",
+      sendJSON("POST", { cwd, message }),
+    );
   }
 
   async createGitWorktree(cwd: string): Promise<{ path?: string; error?: string }> {
-    const response = await fetch(`${this.baseUrl}/git/create-worktree`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ cwd }),
-    });
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      throw new Error(data.error || `Failed to create worktree: ${response.statusText}`);
-    }
-    return response.json();
+    return apiJSON("/api/git/create-worktree", "Failed to create worktree", "POST", { cwd });
   }
 
   async getSkills(
@@ -942,8 +848,7 @@ class ApiService {
   ): Promise<{ skills: SkillDescriptor[]; warnings?: string[] }> {
     const params = new URLSearchParams({ cwd });
     if (conversationId) params.set("conversation_id", conversationId);
-    const response = await fetch(`${this.baseUrl}/skills?${params}`, { signal });
-    if (!response.ok) throw await responseError(response, "Failed to load skills");
+    const response = await apiFetch(`/api/skills?${params}`, "Failed to load skills", { signal });
     const catalog: { skills: SkillDescriptor[] } = await response.json();
     let servers: McpServer[];
     try {
@@ -1034,23 +939,18 @@ class ApiService {
     if (query) params.set("q", query);
     if (opts?.content) params.set("content", opts.content);
     if (opts?.includeDirs) params.set("include_dirs", "true");
-    const response = await fetch(`${this.baseUrl}/find-files?${params.toString()}`, { signal });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to find files");
-    }
-    return response.json();
+    return (
+      await apiFetch(`/api/find-files?${params.toString()}`, "Failed to find files", { signal })
+    ).json();
   }
 
   async renameConversation(conversationId: string, slug: string): Promise<Conversation> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/rename`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ slug }),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to rename conversation: ${await responseDetail(response)}`);
-    }
-    return response.json();
+    return apiJSON(
+      `/api/conversation/${conversationId}/rename`,
+      "Failed to rename conversation",
+      "POST",
+      { slug },
+    );
   }
 
   // Moves an existing conversation to a different working directory: the
@@ -1059,28 +959,22 @@ class ApiService {
   // is deliberately not a draft-style local update. Rejections are meaningful
   // (a missing directory, or a turn in flight), so the message is surfaced.
   async setConversationCwd(conversationId: string, cwd: string): Promise<Conversation> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/cwd`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ cwd }),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to change directory: ${await responseDetail(response)}`);
-    }
-    return response.json();
+    return apiJSON(
+      `/api/conversation/${conversationId}/cwd`,
+      "Failed to change directory",
+      "POST",
+      { cwd },
+    );
   }
 
   // Turns the compact_in_place tool on in a conversation started without it
   // (the Compact in Place button). Refused mid-turn; the message says so.
   async enableCompactInPlace(conversationId: string): Promise<Conversation> {
-    const response = await fetch(
-      `${this.baseUrl}/conversation/${conversationId}/enable-compact-in-place`,
-      { method: "POST", headers: this.postHeaders },
+    return apiJSON(
+      `/api/conversation/${conversationId}/enable-compact-in-place`,
+      "Failed to enable compacting in place",
+      "POST",
     );
-    if (!response.ok) {
-      throw new Error(`Failed to enable compacting in place: ${await responseDetail(response)}`);
-    }
-    return response.json();
   }
 
   // Changes an existing conversation's settings (see SettingsChange). The
@@ -1089,87 +983,59 @@ class ApiService {
     conversationId: string,
     change: SettingsChange,
   ): Promise<ConversationSettings> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/settings`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify(change),
-    });
-    if (!response.ok) throw await responseError(response, "Failed to change settings");
-    return response.json();
+    return apiJSON(
+      `/api/conversation/${conversationId}/settings`,
+      "Failed to change settings",
+      "POST",
+      change,
+    );
   }
 
   async updateConversationTags(conversationId: string, tags: string[]): Promise<Conversation> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/tags`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ tags }),
+    return apiJSON(`/api/conversation/${conversationId}/tags`, "Failed to update tags", "POST", {
+      tags,
     });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to update tags");
-    }
-    return response.json();
   }
 
   async getBackgroundJobs(conversationId: string): Promise<BackgroundJob[]> {
-    const response = await fetch(
-      `${this.baseUrl}/conversation/${encodeURIComponent(conversationId)}/background-jobs`,
+    return apiJSON(
+      `/api/conversation/${encodeURIComponent(conversationId)}/background-jobs`,
+      "Failed to get background jobs",
     );
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get background jobs");
-    }
-    return response.json();
   }
 
   async killBackgroundJob(conversationId: string, jobId: string): Promise<void> {
-    const response = await fetch(
-      `${this.baseUrl}/conversation/${encodeURIComponent(conversationId)}/background-jobs/${encodeURIComponent(jobId)}/kill`,
+    await apiFetch(
+      `/api/conversation/${encodeURIComponent(conversationId)}/background-jobs/${encodeURIComponent(jobId)}/kill`,
+      "Failed to kill background job",
       { method: "POST" },
     );
-    if (!response.ok) {
-      throw await responseError(response, "Failed to kill background job");
-    }
   }
 
   async getStatusBar(conversationId: string, signal?: AbortSignal): Promise<StatusBar> {
-    const response = await fetch(
-      `${this.baseUrl}/conversation/${encodeURIComponent(conversationId)}/status-bar`,
-      { signal },
-    );
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get status bar");
-    }
-    return response.json();
+    return (
+      await apiFetch(
+        `/api/conversation/${encodeURIComponent(conversationId)}/status-bar`,
+        "Failed to get status bar",
+        { signal },
+      )
+    ).json();
   }
 
   // Version check APIs
   async checkVersion(forceRefresh = false): Promise<VersionInfo> {
     const url = forceRefresh ? "/version-check?refresh=true" : "/version-check";
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to check version");
-    }
-    return response.json();
+    return apiJSON(url, "Failed to check version");
   }
 
   async getChangelog(currentTag: string, latestTag: string): Promise<CommitInfo[]> {
     const params = new URLSearchParams({ current: currentTag, latest: latestTag });
-    const response = await fetch(`/version-changelog?${params}`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get changelog");
-    }
-    return response.json();
+    return apiJSON(`/version-changelog?${params}`, "Failed to get changelog");
   }
 
   async upgrade(restart: boolean = false): Promise<{ status: string; message: string }> {
     const url = restart ? "/upgrade?restart=true" : "/upgrade";
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "X-Shelley-Request": "1" },
-    });
-    if (!response.ok) {
-      throw new ApiError(await responseDetail(response), response.status);
-    }
-    return response.json();
+    return apiJSON(url, "Failed to upgrade", "POST");
   }
 
   async getVersion(): Promise<{ tag?: string; commit?: string }> {
@@ -1178,10 +1044,7 @@ class ApiService {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 5000);
     try {
-      const response = await fetch("/version", { signal: ctl.signal });
-      if (!response.ok) {
-        throw await responseError(response, "Failed to get version");
-      }
+      const response = await apiFetch("/version", "Failed to get version", { signal: ctl.signal });
       return await response.json();
     } finally {
       clearTimeout(timer);
@@ -1189,65 +1052,31 @@ class ApiService {
   }
 
   async upgradeHeadlessShell(): Promise<{ status: string; message: string; version: string }> {
-    const response = await fetch("/upgrade-headless-shell", {
-      method: "POST",
-      headers: { "X-Shelley-Request": "1" },
-    });
-    if (!response.ok) {
-      throw new Error(await responseDetail(response));
-    }
-    return response.json();
+    return (
+      await apiFetch("/upgrade-headless-shell", "Failed to upgrade headless-shell", {
+        method: "POST",
+      })
+    ).json();
   }
 
   // restart exits Shelley for systemd to start the installed binary;
   // active conversations resume.
   async restart(): Promise<{ status: string; message: string }> {
-    const response = await fetch("/exit?resume=true", {
-      method: "POST",
-      headers: { "X-Shelley-Request": "1" },
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to restart");
-    }
-    return response.json();
+    return apiJSON("/exit?resume=true", "Failed to restart", "POST");
   }
 
   async getSettings(): Promise<Record<string, string>> {
-    const response = await fetch("/settings");
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get settings");
-    }
-    return response.json();
+    return apiJSON("/settings", "Failed to get settings");
   }
 
   async setSetting(key: string, value: string): Promise<{ status: string }> {
-    const response = await fetch("/settings", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Shelley-Request": "1",
-      },
-      body: JSON.stringify({ key, value }),
-    });
-    if (!response.ok) {
-      throw new Error(await responseDetail(response));
-    }
-    return response.json();
+    return apiJSON("/settings", "Failed to save setting", "POST", { key, value });
   }
 
   async dismissResourceNotice(kind: ResourceKind, episodeId: number): Promise<ResourceStatus> {
-    const response = await fetch(`/api/resources/${kind}/dismiss`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Shelley-Request": "1",
-      },
-      body: JSON.stringify({ episode_id: episodeId }),
+    return apiJSON(`/api/resources/${kind}/dismiss`, "Failed to dismiss", "POST", {
+      episode_id: episodeId,
     });
-    if (!response.ok) {
-      throw new Error(await responseDetail(response));
-    }
-    return response.json();
   }
 }
 
@@ -1265,25 +1094,13 @@ export interface FeatureFlag {
 
 export const featureFlagsApi = {
   async list(): Promise<FeatureFlag[]> {
-    const r = await fetch("/feature-flags");
-    if (!r.ok) throw await responseError(r, "Failed to load feature flags");
-    return r.json();
+    return apiJSON("/feature-flags", "Failed to load feature flags");
   },
   async set(name: string, value: unknown): Promise<void> {
-    const r = await fetch("/feature-flags", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Shelley-Request": "1" },
-      body: JSON.stringify({ name, value }),
-    });
-    if (!r.ok) throw new Error(await responseDetail(r));
+    await apiFetch("/feature-flags", "Failed to set flag", sendJSON("POST", { name, value }));
   },
   async clear(name: string): Promise<void> {
-    const r = await fetch("/feature-flags", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json", "X-Shelley-Request": "1" },
-      body: JSON.stringify({ name }),
-    });
-    if (!r.ok) throw new Error(await responseDetail(r));
+    await apiFetch("/feature-flags", "Failed to clear flag", sendJSON("DELETE", { name }));
   },
 };
 
@@ -1297,18 +1114,10 @@ export interface FaviconEmoji {
 
 export const faviconEmojiApi = {
   async get(): Promise<FaviconEmoji> {
-    const r = await fetch("/api/favicon-emoji");
-    if (!r.ok) throw await responseError(r, "Failed to load favicon emoji");
-    return r.json();
+    return apiJSON("/api/favicon-emoji", "Failed to load favicon emoji");
   },
   async set(emoji: string): Promise<FaviconEmoji> {
-    const r = await fetch("/api/favicon-emoji", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", "X-Shelley-Request": "1" },
-      body: JSON.stringify({ emoji }),
-    });
-    if (!r.ok) throw await responseError(r, "Failed to save favicon emoji");
-    return r.json();
+    return apiJSON("/api/favicon-emoji", "Failed to save favicon emoji", "PUT", { emoji });
   },
 };
 
@@ -1335,12 +1144,11 @@ export const modelCostsApi = {
   ): Promise<Record<string, ModelCostDTO | null>> {
     const missing = models.filter((m) => !modelCostCache.has(m.model));
     if (missing.length > 0) {
-      const r = await fetch("/api/model-costs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Shelley-Request": "1" },
-        body: JSON.stringify({ models: missing }),
-      });
-      if (!r.ok) throw await responseError(r, "Failed to load model costs");
+      const r = await apiFetch(
+        "/api/model-costs",
+        "Failed to load model costs",
+        sendJSON("POST", { models: missing }),
+      );
       const data = (await r.json()) as { costs: Record<string, ModelCostDTO | null> };
       for (const m of missing) modelCostCache.set(m.model, data.costs[m.model] ?? null);
     }
@@ -1382,11 +1190,14 @@ export interface SubagentUsageDTO {
 
 export const subagentUsageApi = {
   async get(conversationId: string, signal?: AbortSignal): Promise<SubagentUsageDTO> {
-    const r = await fetch(`/api/conversation/${conversationId}/subagent-usage`, {
-      headers: { "X-Shelley-Request": "1" },
-      signal,
-    });
-    if (!r.ok) throw await responseError(r, "Failed to load subagent usage");
+    const r = await apiFetch(
+      `/api/conversation/${conversationId}/subagent-usage`,
+      "Failed to load subagent usage",
+      {
+        headers: { "X-Shelley-Request": "1" },
+        signal,
+      },
+    );
     return (await r.json()) as SubagentUsageDTO;
   },
 };
@@ -1438,80 +1249,45 @@ export interface TestCustomModelRequest {
 }
 
 class CustomModelsApi {
-  private baseUrl = "/api";
-
-  private postHeaders = {
-    "Content-Type": "application/json",
-  };
-
   async getCustomModels(): Promise<CustomModel[]> {
-    const response = await fetch(`${this.baseUrl}/custom-models`);
-    if (!response.ok) {
-      throw await responseError(response, "Failed to get custom models");
-    }
-    return response.json();
+    return apiJSON("/api/custom-models", "Failed to get custom models");
   }
 
   async createCustomModel(request: CreateCustomModelRequest): Promise<CustomModel> {
-    const response = await fetch(`${this.baseUrl}/custom-models`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify(request),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to create custom model");
-    }
-    return response.json();
+    return apiJSON("/api/custom-models", "Failed to create custom model", "POST", request);
   }
 
   async updateCustomModel(
     modelId: string,
     request: Partial<CreateCustomModelRequest>,
   ): Promise<CustomModel> {
-    const response = await fetch(`${this.baseUrl}/custom-models/${modelId}`, {
-      method: "PUT",
-      headers: this.postHeaders,
-      body: JSON.stringify(request),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to update custom model");
-    }
-    return response.json();
+    return apiJSON(
+      `/api/custom-models/${modelId}`,
+      "Failed to update custom model",
+      "PUT",
+      request,
+    );
   }
 
   async deleteCustomModel(modelId: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/custom-models/${modelId}`, {
+    await apiFetch(`/api/custom-models/${modelId}`, "Failed to delete custom model", {
       method: "DELETE",
     });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to delete custom model");
-    }
   }
 
   async duplicateCustomModel(modelId: string, displayName?: string): Promise<CustomModel> {
-    const response = await fetch(`${this.baseUrl}/custom-models/${modelId}/duplicate`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify({ display_name: displayName }),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to duplicate custom model");
-    }
-    return response.json();
+    return apiJSON(
+      `/api/custom-models/${modelId}/duplicate`,
+      "Failed to duplicate custom model",
+      "POST",
+      { display_name: displayName },
+    );
   }
 
   async testCustomModel(
     request: TestCustomModelRequest,
   ): Promise<{ success: boolean; message: string }> {
-    const response = await fetch(`${this.baseUrl}/custom-models-test`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify(request),
-    });
-    if (!response.ok) {
-      throw await responseError(response, "Failed to test custom model");
-    }
-    return response.json();
+    return apiJSON("/api/custom-models-test", "Failed to test custom model", "POST", request);
   }
 }
 
@@ -1540,55 +1316,38 @@ export const modelProvidersApi = {
     const path = id
       ? `/api/model-providers/${encodeURIComponent(id)}/check`
       : "/api/model-providers/check";
-    const response = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    if (!response.ok) throw await responseError(response, "Failed to check models");
-    return response.json();
+    return apiJSON(path, "Failed to check models", "POST", input);
   },
 
   async list(): Promise<ModelProviderConnection[]> {
-    const response = await fetch("/api/model-providers");
-    if (!response.ok) throw await responseError(response, "Failed to load providers");
-    return response.json();
+    return apiJSON("/api/model-providers", "Failed to load providers");
   },
 
   async create(input: ModelProviderInput): Promise<ModelProviderConnection> {
-    const response = await fetch("/api/model-providers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    if (!response.ok) throw await responseError(response, "Failed to add provider");
-    return response.json();
+    return apiJSON("/api/model-providers", "Failed to add provider", "POST", input);
   },
 
   async update(id: string, input: ModelProviderInput): Promise<ModelProviderConnection> {
-    const response = await fetch(`/api/model-providers/${encodeURIComponent(id)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    if (!response.ok) throw await responseError(response, "Failed to update provider");
-    return response.json();
+    return apiJSON(
+      `/api/model-providers/${encodeURIComponent(id)}`,
+      "Failed to update provider",
+      "PUT",
+      input,
+    );
   },
 
   async refresh(id: string): Promise<ModelProviderConnection> {
-    const response = await fetch(`/api/model-providers/${encodeURIComponent(id)}/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    if (!response.ok) throw await responseError(response, "Failed to refresh provider");
-    return response.json();
+    return apiJSON(
+      `/api/model-providers/${encodeURIComponent(id)}/refresh`,
+      "Failed to refresh provider",
+      "POST",
+    );
   },
 
   async remove(id: string): Promise<void> {
-    const response = await fetch(`/api/model-providers/${encodeURIComponent(id)}`, {
+    await apiFetch(`/api/model-providers/${encodeURIComponent(id)}`, "Failed to remove provider", {
       method: "DELETE",
     });
-    if (!response.ok) throw await responseError(response, "Failed to remove provider");
   },
 };
 
@@ -1615,8 +1374,7 @@ export interface McpTool {
 }
 
 async function mcpFetch(path: string, failure: string, init?: RequestInit): Promise<Response> {
-  const response = await fetch(`/api/mcp/servers${path}`, init);
-  if (!response.ok) throw await responseError(response, failure);
+  const response = await apiFetch(`/api/mcp/servers${path}`, failure, init);
   return response;
 }
 
@@ -1645,106 +1403,69 @@ export const mcpServersApi = {
   },
 };
 
-async function profilesFetch(path: string, failure: string, init?: RequestInit) {
-  const response = await fetch(`/api${path}`, init);
-  if (!response.ok) throw await responseError(response, failure);
-  return response;
-}
-
-/** Calls path, sending body as JSON if given, and returns the JSON reply
- *  (undefined for 204 No Content); a failure throws an ApiError
- *  "<failure>: <reason>", status 0 when no response came. */
-export async function apiJSON<T>(
-  path: string,
-  failure: string,
-  method = "GET",
-  body?: unknown,
-): Promise<T> {
-  const response = await fetch(
-    path,
-    body === undefined
-      ? { method }
-      : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
-  ).catch((err: unknown) => {
-    console.warn(`${path}:`, err);
-    throw new ApiError(`${failure}: no response`, 0);
-  });
-  if (!response.ok) throw await responseError(response, failure);
-  return response.status === 204 ? (undefined as T) : response.json();
-}
-
 export const profilesApi = {
   async list(): Promise<Profile[]> {
-    return (await profilesFetch("/profiles", "Failed to load profiles")).json();
+    return apiJSON("/api/profiles", "Failed to load profiles");
   },
   /** voicePrompt, if given, is saved too; else a new profile has none and
    *  an updated one keeps its own. */
   async create(name: string, settings: Settings, voicePrompt?: string): Promise<Profile> {
-    const response = await profilesFetch("/profiles", "Failed to save profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, ...settings, voice_prompt: voicePrompt }),
-    });
+    const response = await apiFetch(
+      "/api/profiles",
+      "Failed to save profile",
+      sendJSON("POST", { name, ...settings, voice_prompt: voicePrompt }),
+    );
     return response.json();
   },
   async update(name: string, settings: Settings, voicePrompt?: string): Promise<Profile> {
-    const response = await profilesFetch(
-      `/profiles/${encodeURIComponent(name)}`,
+    const response = await apiFetch(
+      `/api/profiles/${encodeURIComponent(name)}`,
       "Failed to save profile",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...settings, voice_prompt: voicePrompt }),
-      },
+      sendJSON("PUT", { ...settings, voice_prompt: voicePrompt }),
     );
     return response.json();
   },
   async makeDefault(name: string): Promise<Profile> {
-    const response = await profilesFetch(
-      `/profiles/${encodeURIComponent(name)}/default`,
+    const response = await apiFetch(
+      `/api/profiles/${encodeURIComponent(name)}/default`,
       "Failed to change the default profile",
       { method: "POST" },
     );
     return response.json();
   },
   async restore(name: string): Promise<Profile> {
-    const response = await profilesFetch(
-      `/profiles/${encodeURIComponent(name)}/restore`,
+    const response = await apiFetch(
+      `/api/profiles/${encodeURIComponent(name)}/restore`,
       "Failed to restore profile defaults",
       { method: "POST" },
     );
     return response.json();
   },
   async remove(name: string): Promise<void> {
-    await profilesFetch(`/profiles/${encodeURIComponent(name)}`, "Failed to delete profile", {
+    await apiFetch(`/api/profiles/${encodeURIComponent(name)}`, "Failed to delete profile", {
       method: "DELETE",
     });
   },
   /** A voice prompt written from a profile's model and system prompt, for
    *  the editor; nothing is saved. */
   async generateVoicePrompt(model: string, systemPrompt: string): Promise<string> {
-    const response = await profilesFetch(
-      "/profiles/voice-prompt/generate",
+    const response = await apiFetch(
+      "/api/profiles/voice-prompt/generate",
       "Failed to generate a voice prompt",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, system_prompt: systemPrompt }),
-      },
+      sendJSON("POST", { model, system_prompt: systemPrompt }),
     );
     return ((await response.json()) as { voice_prompt: string }).voice_prompt;
   },
   async systemPrompt(): Promise<SystemPromptInfo> {
-    return (await profilesFetch("/system-prompt", "Failed to load the system prompt")).json();
+    return apiJSON("/api/system-prompt", "Failed to load the system prompt");
   },
   /** Why template can't be rendered, or null if it can. */
   async checkSystemPrompt(template: string, signal: AbortSignal): Promise<TemplateProblem | null> {
-    const response = await profilesFetch("/system-prompt/check", "Failed to check the template", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ template }),
-      signal,
-    });
+    const response = await apiFetch(
+      "/api/system-prompt/check",
+      "Failed to check the template",
+      sendJSON("POST", { template }, signal),
+    );
     return ((await response.json()) as { error: TemplateProblem | null }).error;
   },
 };
@@ -1788,60 +1509,45 @@ export interface ChannelTypeInfo {
 }
 
 class NotificationChannelsApi {
-  private baseUrl = "/api";
-
-  private postHeaders = {
-    "Content-Type": "application/json",
-  };
-
-  private async throwIfNotOk(response: Response, fallback: string): Promise<void> {
-    if (response.ok) return;
-    throw new Error(`${fallback}: ${await responseDetail(response)}`);
-  }
-
   async getChannels(): Promise<NotificationChannelAPI[]> {
-    const response = await fetch(`${this.baseUrl}/notification-channels`);
-    await this.throwIfNotOk(response, "Failed to get notification channels");
-    return response.json();
+    return apiJSON("/api/notification-channels", "Failed to get notification channels");
   }
 
   async createChannel(request: CreateNotificationChannelRequest): Promise<NotificationChannelAPI> {
-    const response = await fetch(`${this.baseUrl}/notification-channels`, {
-      method: "POST",
-      headers: this.postHeaders,
-      body: JSON.stringify(request),
-    });
-    await this.throwIfNotOk(response, "Failed to create notification channel");
-    return response.json();
+    return apiJSON(
+      "/api/notification-channels",
+      "Failed to create notification channel",
+      "POST",
+      request,
+    );
   }
 
   async updateChannel(
     channelId: string,
     request: UpdateNotificationChannelRequest,
   ): Promise<NotificationChannelAPI> {
-    const response = await fetch(`${this.baseUrl}/notification-channels/${channelId}`, {
-      method: "PUT",
-      headers: this.postHeaders,
-      body: JSON.stringify(request),
-    });
-    await this.throwIfNotOk(response, "Failed to update notification channel");
-    return response.json();
+    return apiJSON(
+      `/api/notification-channels/${channelId}`,
+      "Failed to update notification channel",
+      "PUT",
+      request,
+    );
   }
 
   async deleteChannel(channelId: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/notification-channels/${channelId}`, {
-      method: "DELETE",
-    });
-    await this.throwIfNotOk(response, "Failed to delete notification channel");
+    await apiFetch(
+      `/api/notification-channels/${channelId}`,
+      "Failed to delete notification channel",
+      { method: "DELETE" },
+    );
   }
 
   async testChannel(channelId: string): Promise<{ success: boolean; message: string }> {
-    const response = await fetch(`${this.baseUrl}/notification-channels/${channelId}/test`, {
-      method: "POST",
-      headers: this.postHeaders,
-    });
-    await this.throwIfNotOk(response, "Failed to test notification channel");
-    return response.json();
+    return apiJSON(
+      `/api/notification-channels/${channelId}/test`,
+      "Failed to test notification channel",
+      "POST",
+    );
   }
 }
 
@@ -1863,15 +1569,8 @@ export interface Secret {
   }>;
 }
 
-async function secretsRequest(method: string, path: string, body?: unknown): Promise<Response> {
-  const r = await fetch(`/api/secrets${path}`, {
-    method,
-    headers: { "Content-Type": "application/json", "X-Shelley-Request": "1" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!r.ok) throw await responseError(r, "Secrets");
-  return r;
-}
+const secretsRequest = (method: string, path: string, body?: unknown) =>
+  apiFetch(`/api/secrets${path}`, "Secrets", sendJSON(method, body));
 
 export const secretsApi = {
   async list(): Promise<Secret[]> {

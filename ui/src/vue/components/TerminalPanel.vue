@@ -242,7 +242,7 @@
 </template>
 
 <script setup lang="ts">
-import { responseDetail } from "../../services/responseDetail";
+import { apiFetch, sendJSON } from "../../services/api";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Popover from "primevue/popover";
 import type { TerminalHandle, TerminalRenderer } from "./terminalBackend";
@@ -377,14 +377,11 @@ async function toggleScope(t: EphemeralTerminal) {
   }
   scopePending.value = new Set(scopePending.value).add(t.id);
   try {
-    const res = await fetch(`/api/terminals/${encodeURIComponent(t.termId)}/scope`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conversation_id: next }),
-    });
-    if (!res.ok) {
-      throw new Error(await responseDetail(res));
-    }
+    await apiFetch(
+      `/api/terminals/${encodeURIComponent(t.termId)}/scope`,
+      "Failed to change terminal scope",
+      sendJSON("PUT", { conversation_id: next }),
+    );
     emit("scope-change", t.id, next);
   } catch (err) {
     emit("scope-error", err instanceof Error ? err.message : "Failed to change terminal scope");

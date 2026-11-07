@@ -135,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { responseDetail } from "../../services/responseDetail";
+import { apiFetch } from "../../services/api";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { useI18n } from "../composables/i18n";
 import type { RecordingMode } from "./recordingDestination";
@@ -302,10 +302,6 @@ function recordingFilename(extension: string): string {
   return `rec-${stamp}${extension}`;
 }
 
-async function responseError(response: Response, action: string): Promise<Error> {
-  return new Error(`${action}: ${await responseDetail(response)}`);
-}
-
 async function createScreenStream(screen: MediaStream): Promise<MediaStream> {
   microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   if (discarding) throw new DOMException("Recording cancelled", "AbortError");
@@ -452,13 +448,16 @@ async function uploadRecording(filename: string, body: Blob): Promise<string> {
   const controller = new AbortController();
   requestController = controller;
   try {
-    const response = await fetch(`/api/upload/raw?filename=${encodeURIComponent(filename)}`, {
-      method: "POST",
-      headers: { "Content-Type": body.type || "application/octet-stream" },
-      body,
-      signal: controller.signal,
-    });
-    if (!response.ok) throw await responseError(response, t("recordingFailed"));
+    const response = await apiFetch(
+      `/api/upload/raw?filename=${encodeURIComponent(filename)}`,
+      t("recordingFailed"),
+      {
+        method: "POST",
+        headers: { "Content-Type": body.type || "application/octet-stream" },
+        body,
+        signal: controller.signal,
+      },
+    );
     const uploaded = (await response.json()) as { path?: unknown };
     if (typeof uploaded.path !== "string" || uploaded.path.length === 0) {
       throw new Error(t("recordingInvalidResponse"));
