@@ -190,7 +190,7 @@ func TestHydrateSystemPromptDisplayDataRespectsToolOverrides(t *testing.T) {
 		t.Fatalf("parse response: %v", err)
 	}
 
-	messages, err := db.WithTxRes(h.db, t.Context(), func(q *generated.Queries) ([]generated.Message, error) {
+	messages, err := db.QueriesTxRes(h.db, t.Context(), func(q *generated.Queries) ([]generated.Message, error) {
 		return q.ListMessages(t.Context(), resp.ConversationID)
 	})
 	if err != nil {

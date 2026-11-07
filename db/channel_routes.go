@@ -21,8 +21,8 @@ type ChannelRoute struct {
 // RecordChannelRoute records route. Recording it again, as a retried
 // delivery does, keeps the first.
 func (db *DB) RecordChannelRoute(ctx context.Context, route ChannelRoute) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		return generated.New(tx.Conn()).CreateChannelRoute(ctx, generated.CreateChannelRouteParams{
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
+		return q.CreateChannelRoute(ctx, generated.CreateChannelRouteParams{
 			ConversationID: route.ConversationID, ExternalMessageID: route.ExternalMessageID, ChatID: route.ChatID, Endpoint: route.Endpoint,
 		})
 	})

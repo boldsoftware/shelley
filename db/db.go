@@ -254,25 +254,6 @@ func (db *DB) Checkpoint(ctx context.Context) error {
 	return nil
 }
 
-// WithTx runs a function within a database transaction
-func (db *DB) WithTx(ctx context.Context, fn func(*generated.Queries) error) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		queries := generated.New(tx.Conn())
-		return fn(queries)
-	})
-}
-
-// WithTxRes runs a function within a database transaction and returns a value
-func WithTxRes[T any](db *DB, ctx context.Context, fn func(*generated.Queries) (T, error)) (T, error) {
-	var result T
-	err := db.WithTx(ctx, func(queries *generated.Queries) error {
-		var err error
-		result, err = fn(queries)
-		return err
-	})
-	return result, err
-}
-
 // Conversation methods (moved from ConversationService)
 
 // ConversationOptions holds extensible conversation settings stored as JSON.
@@ -352,8 +333,7 @@ func (db *DB) UpdateConversationOptions(ctx context.Context, conversationID stri
 	if err != nil {
 		return fmt.Errorf("failed to marshal conversation options: %w", err)
 	}
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.UpdateConversationOptions(ctx, generated.UpdateConversationOptionsParams{
 			ConversationID:      conversationID,
 			ConversationOptions: string(optsJSON),
@@ -429,9 +409,8 @@ func (db *DB) CreateConversation(ctx context.Context, slug *string, userInitiate
 		return nil, fmt.Errorf("failed to marshal conversation options: %w", err)
 	}
 	var conversation generated.Conversation
-	err = db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		conversation, err = q.CreateConversation(ctx, generated.CreateConversationParams{
+	conversation, err = QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.CreateConversation(ctx, generated.CreateConversationParams{
 			ConversationID:      conversationID,
 			Slug:                slug,
 			UserInitiated:       userInitiated,
@@ -439,7 +418,6 @@ func (db *DB) CreateConversation(ctx context.Context, slug *string, userInitiate
 			Model:               model,
 			ConversationOptions: string(optsJSON),
 		})
-		return err
 	})
 	return &conversation, err
 }
@@ -461,15 +439,14 @@ func (db *DB) CreateChannelConversation(ctx context.Context, externalID, endpoin
 		ep = &endpoint
 	}
 	var conversation generated.Conversation
-	err = db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		conversation, err = generated.New(tx.Conn()).CreateChannelConversation(ctx, generated.CreateChannelConversationParams{
+	conversation, err = QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.CreateChannelConversation(ctx, generated.CreateChannelConversationParams{
 			ConversationID:         conversationID,
 			Model:                  &model,
 			ConversationOptions:    string(optsJSON),
 			ExternalConversationID: &externalID,
 			ExternalEndpoint:       ep,
 		})
-		return err
 	})
 	return &conversation, err
 }
@@ -488,9 +465,8 @@ func (db *DB) CreateDraftConversation(ctx context.Context, cwd, model *string, o
 		return nil, fmt.Errorf("failed to marshal conversation options: %w", err)
 	}
 	var conversation generated.Conversation
-	err = db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		conversation, err = q.CreateDraftConversation(ctx, generated.CreateDraftConversationParams{
+	conversation, err = QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.CreateDraftConversation(ctx, generated.CreateDraftConversationParams{
 			ConversationID:      conversationID,
 			Slug:                nil,
 			Cwd:                 cwd,
@@ -498,7 +474,6 @@ func (db *DB) CreateDraftConversation(ctx context.Context, cwd, model *string, o
 			ConversationOptions: string(optsJSON),
 			Draft:               draft,
 		})
-		return err
 	})
 	return &conversation, err
 }
@@ -894,12 +869,8 @@ var ErrConversationNotDraft = errors.New("conversation is not a draft")
 
 // GetConversationByID retrieves a conversation by its ID
 func (db *DB) GetConversationByID(ctx context.Context, conversationID string) (*generated.Conversation, error) {
-	var conversation generated.Conversation
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		conversation, err = q.GetConversation(ctx, conversationID)
-		return err
+	conversation, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.GetConversation(ctx, conversationID)
 	})
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("conversation not found: %s", conversationID)
@@ -909,12 +880,8 @@ func (db *DB) GetConversationByID(ctx context.Context, conversationID string) (*
 
 // GetConversationBySlug retrieves a conversation by its slug
 func (db *DB) GetConversationBySlug(ctx context.Context, slug string) (*generated.Conversation, error) {
-	var conversation generated.Conversation
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		conversation, err = q.GetConversationBySlug(ctx, &slug)
-		return err
+	conversation, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.GetConversationBySlug(ctx, &slug)
 	})
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("conversation not found with slug: %s", slug)
@@ -1267,15 +1234,11 @@ func centerOnMark(s string, budget int) string {
 
 // UpdateConversationSlug updates the slug of a conversation
 func (db *DB) UpdateConversationSlug(ctx context.Context, conversationID, slug string) (*generated.Conversation, error) {
-	var conversation generated.Conversation
-	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		var err error
-		conversation, err = q.UpdateConversationSlug(ctx, generated.UpdateConversationSlugParams{
+	conversation, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.UpdateConversationSlug(ctx, generated.UpdateConversationSlugParams{
 			Slug:           &slug,
 			ConversationID: conversationID,
 		})
-		return err
 	})
 	return &conversation, err
 }
@@ -1321,14 +1284,11 @@ func (db *DB) UpdateConversationTags(ctx context.Context, conversationID string,
 		return nil, fmt.Errorf("failed to marshal tags: %w", err)
 	}
 	var conversation generated.Conversation
-	err = db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		var err error
-		conversation, err = q.UpdateConversationTags(ctx, generated.UpdateConversationTagsParams{
+	conversation, err = QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.UpdateConversationTags(ctx, generated.UpdateConversationTagsParams{
 			Tags:           string(tagsJSON),
 			ConversationID: conversationID,
 		})
-		return err
 	})
 	return &conversation, err
 }
@@ -1339,8 +1299,7 @@ func (db *DB) UpdateConversationTags(ctx context.Context, conversationID string,
 // query intentionally does not bump updated_at — working state changes are
 // frequent and must not reorder the conversation list.
 func (db *DB) SetConversationAgentWorking(ctx context.Context, conversationID string, working bool) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.SetConversationAgentWorking(ctx, generated.SetConversationAgentWorkingParams{
 			AgentWorking:   working,
 			ConversationID: conversationID,
@@ -1352,8 +1311,7 @@ func (db *DB) SetConversationAgentWorking(ctx context.Context, conversationID st
 // Ordinary startup calls it in the same transaction that records durable
 // interruption state for top-level conversations left mid-turn.
 func (db *DB) ResetAllAgentWorking(ctx context.Context) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.ResetAllAgentWorking(ctx)
 	})
 }
@@ -1362,13 +1320,10 @@ func (db *DB) ResetAllAgentWorking(ctx context.Context) error {
 // conversation into a working conversation. A false result means another
 // request already claimed it or it is no longer eligible.
 func (db *DB) ClaimInterruptedTurn(ctx context.Context, conversationID string) (bool, error) {
-	var claimed bool
-	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		rows, err := generated.New(tx.Conn()).ClaimInterruptedTurn(ctx, conversationID)
-		claimed = rows == 1
-		return err
+	rows, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (int64, error) {
+		return q.ClaimInterruptedTurn(ctx, conversationID)
 	})
-	return claimed, err
+	return rows == 1, err
 }
 
 // UpgradeResume is a one-process claim token for a turn that was working when
@@ -1384,46 +1339,37 @@ type UpgradeResume struct {
 // still names the current stale working turn. A fresh turn changes its durable
 // version before a late worker can claim it.
 func (db *DB) ClaimUpgradeInterruptedTurn(ctx context.Context, resume UpgradeResume) (bool, error) {
-	var claimed bool
-	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		rows, err := generated.New(tx.Conn()).ClaimUpgradeInterruptedTurn(ctx, generated.ClaimUpgradeInterruptedTurnParams{
+	rows, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (int64, error) {
+		return q.ClaimUpgradeInterruptedTurn(ctx, generated.ClaimUpgradeInterruptedTurnParams{
 			ConversationID:    resume.ConversationID,
 			CurrentGeneration: resume.CurrentGeneration,
 			MaxUserSequenceID: resume.MaxUserSequenceID,
 		})
-		claimed = rows == 1
-		return err
 	})
-	return claimed, err
+	return rows == 1, err
 }
 
 // FinishUpgradeInterruptedTurn clears the hidden claim immediately before the
 // automatic retry. A false result means the claimed state changed unexpectedly.
 func (db *DB) FinishUpgradeInterruptedTurn(ctx context.Context, conversationID string) (bool, error) {
-	var finished bool
-	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		rows, err := generated.New(tx.Conn()).FinishUpgradeInterruptedTurn(ctx, conversationID)
-		finished = rows == 1
-		return err
+	rows, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (int64, error) {
+		return q.FinishUpgradeInterruptedTurn(ctx, conversationID)
 	})
-	return finished, err
+	return rows == 1, err
 }
 
 // MarkUpgradeResumeInterrupted converts a failed automatic resume into the
 // ordinary manual-recovery state only if its startup token still names the same
 // durable turn. A false result means newer work or cancellation won the race.
 func (db *DB) MarkUpgradeResumeInterrupted(ctx context.Context, resume UpgradeResume) (bool, error) {
-	var marked bool
-	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		rows, err := generated.New(tx.Conn()).MarkUpgradeResumeInterrupted(ctx, generated.MarkUpgradeResumeInterruptedParams{
+	rows, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (int64, error) {
+		return q.MarkUpgradeResumeInterrupted(ctx, generated.MarkUpgradeResumeInterruptedParams{
 			ConversationID:    resume.ConversationID,
 			CurrentGeneration: resume.CurrentGeneration,
 			MaxUserSequenceID: resume.MaxUserSequenceID,
 		})
-		marked = rows == 1
-		return err
 	})
-	return marked, err
+	return rows == 1, err
 }
 
 // ClearConversationRuntimeState cancels work that has no live loop, including
@@ -1647,8 +1593,7 @@ func (db *DB) UpdateConversationCwd(ctx context.Context, conversationID, cwd str
 // UpdateConversationModel sets the model for a conversation that doesn't have one yet.
 // This is used to backfill the model for conversations created before the model column existed.
 func (db *DB) UpdateConversationModel(ctx context.Context, conversationID, model string) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.UpdateConversationModel(ctx, generated.UpdateConversationModelParams{
 			Model:          &model,
 			ConversationID: conversationID,
@@ -1658,8 +1603,7 @@ func (db *DB) UpdateConversationModel(ctx context.Context, conversationID, model
 
 // ForceUpdateConversationModel updates the model on a conversation, even if already set.
 func (db *DB) ForceUpdateConversationModel(ctx context.Context, conversationID, model string) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.ForceUpdateConversationModel(ctx, generated.ForceUpdateConversationModelParams{
 			Model:          &model,
 			ConversationID: conversationID,
@@ -2145,12 +2089,8 @@ func marshalJSON(v interface{}) (*string, error) {
 
 // GetMessageByID retrieves a message by its ID
 func (db *DB) GetMessageByID(ctx context.Context, messageID string) (*generated.Message, error) {
-	var message generated.Message
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		message, err = q.GetMessage(ctx, messageID)
-		return err
+	message, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Message, error) {
+		return q.GetMessage(ctx, messageID)
 	})
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("message not found: %s", messageID)
@@ -2160,82 +2100,55 @@ func (db *DB) GetMessageByID(ctx context.Context, messageID string) (*generated.
 
 // ListMessagesByConversationPaginated retrieves messages in a conversation with pagination
 func (db *DB) ListMessagesByConversationPaginated(ctx context.Context, conversationID string, limit, offset int64) ([]generated.Message, error) {
-	var messages []generated.Message
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		messages, err = q.ListMessagesPaginated(ctx, generated.ListMessagesPaginatedParams{
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Message, error) {
+		return q.ListMessagesPaginated(ctx, generated.ListMessagesPaginatedParams{
 			ConversationID: conversationID,
 			Limit:          limit,
 			Offset:         offset,
 		})
-		return err
 	})
-	return messages, err
 }
 
 // ListMessages retrieves all messages in a conversation ordered by sequence
 func (db *DB) ListMessages(ctx context.Context, conversationID string) ([]generated.Message, error) {
-	var messages []generated.Message
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		messages, err = q.ListMessages(ctx, conversationID)
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Message, error) {
+		return q.ListMessages(ctx, conversationID)
 	})
-	return messages, err
 }
 
 // ListMessagesForContext retrieves messages that should be sent to the LLM (excludes excluded_from_context=true)
 func (db *DB) ListMessagesForContext(ctx context.Context, conversationID string) ([]generated.Message, error) {
-	var messages []generated.Message
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		messages, err = q.ListMessagesForContext(ctx, conversationID)
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Message, error) {
+		return q.ListMessagesForContext(ctx, conversationID)
 	})
-	return messages, err
 }
 
 // ListMessagesByType retrieves messages of a specific type in a conversation
 func (db *DB) ListMessagesByType(ctx context.Context, conversationID string, messageType MessageType) ([]generated.Message, error) {
-	var messages []generated.Message
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		messages, err = q.ListMessagesByType(ctx, generated.ListMessagesByTypeParams{
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Message, error) {
+		return q.ListMessagesByType(ctx, generated.ListMessagesByTypeParams{
 			ConversationID: conversationID,
 			Type:           string(messageType),
 		})
-		return err
 	})
-	return messages, err
 }
 
 // ListTypedUserMessages returns the messages the user typed in a
 // conversation, newest first.
 func (db *DB) ListTypedUserMessages(ctx context.Context, conversationID string) ([]generated.Message, error) {
-	var messages []generated.Message
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		var err error
-		messages, err = generated.New(rx.Conn()).ListTypedUserMessages(ctx, conversationID)
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Message, error) {
+		return q.ListTypedUserMessages(ctx, conversationID)
 	})
-	return messages, err
 }
 
 // GetAgentMessageBefore returns the newest agent message of a conversation
 // before sequenceID.
 func (db *DB) GetAgentMessageBefore(ctx context.Context, conversationID string, sequenceID int64) (*generated.Message, error) {
-	var message generated.Message
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		var err error
-		message, err = generated.New(rx.Conn()).GetAgentMessageBefore(ctx, generated.GetAgentMessageBeforeParams{
+	message, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Message, error) {
+		return q.GetAgentMessageBefore(ctx, generated.GetAgentMessageBeforeParams{
 			ConversationID: conversationID,
 			SequenceID:     sequenceID,
 		})
-		return err
 	})
 	if err != nil {
 		return nil, err
@@ -2249,28 +2162,19 @@ func (db *DB) GetAgentMessageBefore(ctx context.Context, conversationID string, 
 // notification body that walks back through a tail of tool-only turns up
 // to the previous user turn boundary.
 func (db *DB) ListAgentMessagesSinceLastUser(ctx context.Context, conversationID string) ([]generated.Message, error) {
-	var messages []generated.Message
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		messages, err = q.ListAgentMessagesSinceLastUser(ctx, generated.ListAgentMessagesSinceLastUserParams{
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Message, error) {
+		return q.ListAgentMessagesSinceLastUser(ctx, generated.ListAgentMessagesSinceLastUserParams{
 			ConversationID:   conversationID,
 			ConversationID_2: conversationID,
 		})
-		return err
 	})
-	return messages, err
 }
 
 // GetLatestActionableMessage retrieves the latest message a user could act on.
 // Slug markers are skipped; see the query comment for why.
 func (db *DB) GetLatestActionableMessage(ctx context.Context, conversationID string) (*generated.Message, error) {
-	var message generated.Message
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		message, err = q.GetLatestActionableMessage(ctx, conversationID)
-		return err
+	message, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Message, error) {
+		return q.GetLatestActionableMessage(ctx, conversationID)
 	})
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("no messages found in conversation: %s", conversationID)
@@ -2280,99 +2184,92 @@ func (db *DB) GetLatestActionableMessage(ctx context.Context, conversationID str
 
 // CountMessagesByType returns the number of messages of a specific type in a conversation
 func (db *DB) CountMessagesByType(ctx context.Context, conversationID string, messageType MessageType) (int64, error) {
-	var count int64
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		count, err = q.CountMessagesByType(ctx, generated.CountMessagesByTypeParams{
+	return QueriesRes(db, ctx, func(q *generated.Queries) (int64, error) {
+		return q.CountMessagesByType(ctx, generated.CountMessagesByTypeParams{
 			ConversationID: conversationID,
 			Type:           string(messageType),
 		})
-		return err
 	})
-	return count, err
 }
 
 // Queries provides read-only access to generated queries within a read transaction
 func (db *DB) Queries(ctx context.Context, fn func(*generated.Queries) error) error {
 	return db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		return fn(q)
+		return fn(generated.New(rx.Conn()))
 	})
 }
 
 // QueriesTx provides read-write access to generated queries within a write transaction
 func (db *DB) QueriesTx(ctx context.Context, fn func(*generated.Queries) error) error {
 	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		return fn(q)
+		return fn(generated.New(tx.Conn()))
 	})
+}
+
+// QueriesRes is Queries for a fn that returns a value.
+func QueriesRes[T any](db *DB, ctx context.Context, fn func(*generated.Queries) (T, error)) (T, error) {
+	var res T
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		var err error
+		res, err = fn(generated.New(rx.Conn()))
+		return err
+	})
+	return res, err
+}
+
+// QueriesTxRes is QueriesTx for a fn that returns a value.
+func QueriesTxRes[T any](db *DB, ctx context.Context, fn func(*generated.Queries) (T, error)) (T, error) {
+	var res T
+	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		var err error
+		res, err = fn(generated.New(tx.Conn()))
+		return err
+	})
+	return res, err
 }
 
 // ListConversationsWithQueuedTranscriptions returns every conversation, archived
 // or not, whose queued_messages array holds a transcription item.
 func (db *DB) ListConversationsWithQueuedTranscriptions(ctx context.Context) ([]generated.Conversation, error) {
-	var conversations []generated.Conversation
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		var err error
-		conversations, err = generated.New(rx.Conn()).ListConversationsWithQueuedTranscriptions(ctx)
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Conversation, error) {
+		return q.ListConversationsWithQueuedTranscriptions(ctx)
 	})
-	return conversations, err
 }
 
 // ListArchivedConversations retrieves archived conversations with pagination
 func (db *DB) ListArchivedConversations(ctx context.Context, limit, offset int64) ([]generated.Conversation, error) {
-	var conversations []generated.Conversation
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		conversations, err = q.ListArchivedConversations(ctx, generated.ListArchivedConversationsParams{
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Conversation, error) {
+		return q.ListArchivedConversations(ctx, generated.ListArchivedConversationsParams{
 			Limit:  limit,
 			Offset: offset,
 		})
-		return err
 	})
-	return conversations, err
 }
 
 // SearchArchivedConversations searches for archived conversations containing the given query in their slug
 func (db *DB) SearchArchivedConversations(ctx context.Context, query string, limit, offset int64) ([]generated.Conversation, error) {
 	queryPtr := &query
-	var conversations []generated.Conversation
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		conversations, err = q.SearchArchivedConversations(ctx, generated.SearchArchivedConversationsParams{
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Conversation, error) {
+		return q.SearchArchivedConversations(ctx, generated.SearchArchivedConversationsParams{
 			Column1: queryPtr,
 			Limit:   limit,
 			Offset:  offset,
 		})
-		return err
 	})
-	return conversations, err
 }
 
 // ArchiveConversation archives a conversation
 func (db *DB) ArchiveConversation(ctx context.Context, conversationID string) (*generated.Conversation, error) {
-	var conversation generated.Conversation
-	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		var err error
-		conversation, err = q.ArchiveConversation(ctx, conversationID)
-		return err
+	conversation, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.ArchiveConversation(ctx, conversationID)
 	})
 	return &conversation, err
 }
 
 // UnarchiveConversation unarchives a conversation
 func (db *DB) UnarchiveConversation(ctx context.Context, conversationID string) (*generated.Conversation, error) {
-	var conversation generated.Conversation
-	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		var err error
-		conversation, err = q.UnarchiveConversation(ctx, conversationID)
-		return err
+	conversation, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.UnarchiveConversation(ctx, conversationID)
 	})
 	return &conversation, err
 }
@@ -2476,15 +2373,13 @@ func (db *DB) CreateSubagentConversation(ctx context.Context, slug, parentID str
 		return nil, fmt.Errorf("failed to generate conversation ID: %w", err)
 	}
 	var conversation generated.Conversation
-	err = db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		conversation, err = q.CreateSubagentConversation(ctx, generated.CreateSubagentConversationParams{
+	conversation, err = QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.CreateSubagentConversation(ctx, generated.CreateSubagentConversationParams{
 			ConversationID:       conversationID,
 			Slug:                 &slug,
 			Cwd:                  cwd,
 			ParentConversationID: &parentID,
 		})
-		return err
 	})
 	return &conversation, err
 }
@@ -2493,38 +2388,24 @@ func (db *DB) CreateSubagentConversation(ctx context.Context, slug, parentID str
 // conversations of parentID (recursively), one row per call so the caller can
 // price each by its context-size tier.
 func (db *DB) GetSubagentUsage(ctx context.Context, parentID string) ([]generated.GetSubagentUsageRow, error) {
-	var rows []generated.GetSubagentUsageRow
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		rows, err = q.GetSubagentUsage(ctx, &parentID)
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.GetSubagentUsageRow, error) {
+		return q.GetSubagentUsage(ctx, &parentID)
 	})
-	return rows, err
 }
 
 // GetSubagentOtherUsage returns per-entry indirect LLM usage (other_usage_data
 // entries) across all descendant conversations of parentID (recursively), one
 // row per entry so the caller can price each by its context-size tier.
 func (db *DB) GetSubagentOtherUsage(ctx context.Context, parentID string) ([]generated.GetSubagentOtherUsageRow, error) {
-	var rows []generated.GetSubagentOtherUsageRow
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		rows, err = q.GetSubagentOtherUsage(ctx, &parentID)
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.GetSubagentOtherUsageRow, error) {
+		return q.GetSubagentOtherUsage(ctx, &parentID)
 	})
-	return rows, err
 }
 
 // GetMaxSequenceIDsForAllConversations returns a map of conversation_id -> max sequence_id.
 func (db *DB) GetMaxSequenceIDsForAllConversations(ctx context.Context) (map[string]int64, error) {
-	var rows []generated.GetMaxSequenceIDsForAllConversationsRow
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		rows, err = q.GetMaxSequenceIDsForAllConversations(ctx)
-		return err
+	rows, err := QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.GetMaxSequenceIDsForAllConversationsRow, error) {
+		return q.GetMaxSequenceIDsForAllConversations(ctx)
 	})
 	if err != nil {
 		return nil, err
@@ -2538,42 +2419,29 @@ func (db *DB) GetMaxSequenceIDsForAllConversations(ctx context.Context) (map[str
 
 // UpdateConversationParent sets the parent_conversation_id for a conversation
 func (db *DB) UpdateConversationParent(ctx context.Context, conversationID, parentID string) (*generated.Conversation, error) {
-	var conversation generated.Conversation
-	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		var err error
-		conversation, err = q.UpdateConversationParent(ctx, generated.UpdateConversationParentParams{
+	conversation, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.UpdateConversationParent(ctx, generated.UpdateConversationParentParams{
 			ParentConversationID: &parentID,
 			ConversationID:       conversationID,
 		})
-		return err
 	})
 	return &conversation, err
 }
 
 // GetSubagents retrieves all subagent conversations for a parent conversation
 func (db *DB) GetSubagents(ctx context.Context, parentID string) ([]generated.Conversation, error) {
-	var conversations []generated.Conversation
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		conversations, err = q.GetSubagents(ctx, &parentID)
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Conversation, error) {
+		return q.GetSubagents(ctx, &parentID)
 	})
-	return conversations, err
 }
 
 // GetConversationBySlugAndParent retrieves a subagent conversation by slug and parent ID
 func (db *DB) GetConversationBySlugAndParent(ctx context.Context, slug, parentID string) (*generated.Conversation, error) {
-	var conversation generated.Conversation
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		conversation, err = q.GetConversationBySlugAndParent(ctx, generated.GetConversationBySlugAndParentParams{
+	conversation, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return q.GetConversationBySlugAndParent(ctx, generated.GetConversationBySlugAndParentParams{
 			Slug:                 &slug,
 			ParentConversationID: &parentID,
 		})
-		return err
 	})
 	if err == sql.ErrNoRows {
 		return nil, nil // Not found, return nil without error
@@ -2615,24 +2483,15 @@ func (a *SubagentDBAdapter) GetOrCreateSubagentConversation(ctx context.Context,
 
 // GetModels returns all models from the database
 func (db *DB) GetModels(ctx context.Context) ([]generated.Model, error) {
-	var models []generated.Model
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		models, err = q.GetModels(ctx)
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.Model, error) {
+		return q.GetModels(ctx)
 	})
-	return models, err
 }
 
 // GetModel returns a model by ID
 func (db *DB) GetModel(ctx context.Context, modelID string) (*generated.Model, error) {
-	var model generated.Model
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		model, err = q.GetModel(ctx, modelID)
-		return err
+	model, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.Model, error) {
+		return q.GetModel(ctx, modelID)
 	})
 	if err != nil {
 		return nil, err
@@ -2645,12 +2504,8 @@ func (db *DB) CreateModel(ctx context.Context, params generated.CreateModelParam
 	if params.ReasoningReplay == "" {
 		params.ReasoningReplay = "auto"
 	}
-	var model generated.Model
-	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		var err error
-		model, err = q.CreateModel(ctx, params)
-		return err
+	model, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Model, error) {
+		return q.CreateModel(ctx, params)
 	})
 	if err != nil {
 		return nil, err
@@ -2663,12 +2518,8 @@ func (db *DB) UpdateModel(ctx context.Context, params generated.UpdateModelParam
 	if params.ReasoningReplay == "" {
 		params.ReasoningReplay = "auto"
 	}
-	var model generated.Model
-	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		var err error
-		model, err = q.UpdateModel(ctx, params)
-		return err
+	model, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.Model, error) {
+		return q.UpdateModel(ctx, params)
 	})
 	if err != nil {
 		return nil, err
@@ -2678,41 +2529,26 @@ func (db *DB) UpdateModel(ctx context.Context, params generated.UpdateModelParam
 
 // DeleteModel deletes a model
 func (db *DB) DeleteModel(ctx context.Context, modelID string) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.DeleteModel(ctx, modelID)
 	})
 }
 
 func (db *DB) GetNotificationChannels(ctx context.Context) ([]generated.NotificationChannel, error) {
-	var channels []generated.NotificationChannel
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		channels, err = q.GetNotificationChannels(ctx)
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.NotificationChannel, error) {
+		return q.GetNotificationChannels(ctx)
 	})
-	return channels, err
 }
 
 func (db *DB) GetEnabledNotificationChannels(ctx context.Context) ([]generated.NotificationChannel, error) {
-	var channels []generated.NotificationChannel
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		channels, err = q.GetEnabledNotificationChannels(ctx)
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.NotificationChannel, error) {
+		return q.GetEnabledNotificationChannels(ctx)
 	})
-	return channels, err
 }
 
 func (db *DB) GetNotificationChannel(ctx context.Context, channelID string) (*generated.NotificationChannel, error) {
-	var ch generated.NotificationChannel
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		ch, err = q.GetNotificationChannel(ctx, channelID)
-		return err
+	ch, err := QueriesRes(db, ctx, func(q *generated.Queries) (generated.NotificationChannel, error) {
+		return q.GetNotificationChannel(ctx, channelID)
 	})
 	if err != nil {
 		return nil, err
@@ -2721,12 +2557,8 @@ func (db *DB) GetNotificationChannel(ctx context.Context, channelID string) (*ge
 }
 
 func (db *DB) CreateNotificationChannel(ctx context.Context, params generated.CreateNotificationChannelParams) (*generated.NotificationChannel, error) {
-	var ch generated.NotificationChannel
-	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		var err error
-		ch, err = q.CreateNotificationChannel(ctx, params)
-		return err
+	ch, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.NotificationChannel, error) {
+		return q.CreateNotificationChannel(ctx, params)
 	})
 	if err != nil {
 		return nil, err
@@ -2735,12 +2567,8 @@ func (db *DB) CreateNotificationChannel(ctx context.Context, params generated.Cr
 }
 
 func (db *DB) UpdateNotificationChannel(ctx context.Context, params generated.UpdateNotificationChannelParams) (*generated.NotificationChannel, error) {
-	var ch generated.NotificationChannel
-	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
-		var err error
-		ch, err = q.UpdateNotificationChannel(ctx, params)
-		return err
+	ch, err := QueriesTxRes(db, ctx, func(q *generated.Queries) (generated.NotificationChannel, error) {
+		return q.UpdateNotificationChannel(ctx, params)
 	})
 	if err != nil {
 		return nil, err
@@ -2749,8 +2577,7 @@ func (db *DB) UpdateNotificationChannel(ctx context.Context, params generated.Up
 }
 
 func (db *DB) DeleteNotificationChannel(ctx context.Context, channelID string) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.DeleteNotificationChannel(ctx, channelID)
 	})
 }
@@ -2773,8 +2600,7 @@ func (db *DB) GetSetting(ctx context.Context, key string) (string, error) {
 
 // SetSetting sets a setting value by key
 func (db *DB) SetSetting(ctx context.Context, key, value string) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.SetSetting(ctx, generated.SetSettingParams{
 			Key:   key,
 			Value: value,
@@ -2810,12 +2636,8 @@ func (db *DB) InitSetting(ctx context.Context, key, value string) (string, error
 
 // GetAllSettings retrieves all settings
 func (db *DB) GetAllSettings(ctx context.Context) (map[string]string, error) {
-	var rows []generated.GetAllSettingsRow
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		rows, err = q.GetAllSettings(ctx)
-		return err
+	rows, err := QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.GetAllSettingsRow, error) {
+		return q.GetAllSettings(ctx)
 	})
 	if err != nil {
 		return nil, err
@@ -2866,8 +2688,7 @@ func (db *DB) GetCacheSession(ctx context.Context, tokenHash string) (CacheSessi
 
 // UpsertCacheSession creates or updates the row (refreshing last_seen_at).
 func (db *DB) UpsertCacheSession(ctx context.Context, tokenHash, userID string) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.UpsertCacheSession(ctx, generated.UpsertCacheSessionParams{
 			TokenHash: tokenHash,
 			UserID:    userID,
@@ -2878,8 +2699,7 @@ func (db *DB) UpsertCacheSession(ctx context.Context, tokenHash, userID string) 
 // DeleteCacheSession removes the row, effectively logging that browser out
 // of the IDB cache.
 func (db *DB) DeleteCacheSession(ctx context.Context, tokenHash string) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.DeleteCacheSession(ctx, tokenHash)
 	})
 }
@@ -2890,12 +2710,8 @@ func (db *DB) DeleteCacheSession(ctx context.Context, tokenHash string) error {
 // keyed by flag name. Callers are responsible for filtering out names not
 // recognized by the in-code registry.
 func (db *DB) GetAllFeatureFlagOverrides(ctx context.Context) (map[string]string, error) {
-	var rows []generated.GetAllFeatureFlagsRow
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
-		q := generated.New(rx.Conn())
-		var err error
-		rows, err = q.GetAllFeatureFlags(ctx)
-		return err
+	rows, err := QueriesRes(db, ctx, func(q *generated.Queries) ([]generated.GetAllFeatureFlagsRow, error) {
+		return q.GetAllFeatureFlags(ctx)
 	})
 	if err != nil {
 		return nil, err
@@ -2909,8 +2725,7 @@ func (db *DB) GetAllFeatureFlagOverrides(ctx context.Context) (map[string]string
 
 // SetFeatureFlagOverride upserts a JSON-encoded override.
 func (db *DB) SetFeatureFlagOverride(ctx context.Context, name, jsonValue string) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.SetFeatureFlag(ctx, generated.SetFeatureFlagParams{
 			Name:  name,
 			Value: jsonValue,
@@ -2921,8 +2736,7 @@ func (db *DB) SetFeatureFlagOverride(ctx context.Context, name, jsonValue string
 // DeleteFeatureFlagOverride removes a stored override, reverting to the
 // code-defined default.
 func (db *DB) DeleteFeatureFlagOverride(ctx context.Context, name string) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		q := generated.New(tx.Conn())
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.DeleteFeatureFlag(ctx, name)
 	})
 }

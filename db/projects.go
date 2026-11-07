@@ -256,23 +256,17 @@ func getConversationProject(ctx context.Context, q *generated.Queries, conversat
 }
 
 func (db *DB) GetProject(ctx context.Context, name string) (*Project, error) {
-	var project *Project
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
-		project, err = getProject(ctx, generated.New(rx.Conn()), name)
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) (*Project, error) {
+		return getProject(ctx, q, name)
 	})
-	return project, err
 }
 
 // GetConversationProject returns the project of conversation conversationID, or
 // sql.ErrNoRows if it is in none.
 func (db *DB) GetConversationProject(ctx context.Context, conversationID string) (*Project, error) {
-	var project *Project
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
-		project, err = getConversationProject(ctx, generated.New(rx.Conn()), conversationID)
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) (*Project, error) {
+		return getConversationProject(ctx, q, conversationID)
 	})
-	return project, err
 }
 
 func listProjects(ctx context.Context, q *generated.Queries) ([]Project, error) {
@@ -305,12 +299,9 @@ func attachProjectDetails(ctx context.Context, q *generated.Queries, projects []
 }
 
 func (db *DB) ListProjects(ctx context.Context) ([]Project, error) {
-	var out []Project
-	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) (err error) {
-		out, err = listProjects(ctx, generated.New(rx.Conn()))
-		return err
+	return QueriesRes(db, ctx, func(q *generated.Queries) ([]Project, error) {
+		return listProjects(ctx, q)
 	})
-	return out, err
 }
 
 // CheckProjectDeletable returns the project's base VM setup conversation, if any, or

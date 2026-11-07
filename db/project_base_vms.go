@@ -27,8 +27,8 @@ const (
 // RecordProjectBaseVM records (or updates) a base VM Shelley is creating or
 // created for vm.Project.
 func (db *DB) RecordProjectBaseVM(ctx context.Context, vm ProjectBaseVM) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		return generated.New(tx.Conn()).UpsertProjectBaseVM(ctx, generated.UpsertProjectBaseVMParams{
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
+		return q.UpsertProjectBaseVM(ctx, generated.UpsertProjectBaseVMParams{
 			Integration: vm.Integration, VmName: vm.Name, Profile: vm.Project, Status: vm.Status,
 			VmCreatedAt: vm.VMCreatedAt, RequestedAt: formatTime(vm.RequestedAt),
 		})
@@ -37,8 +37,8 @@ func (db *DB) RecordProjectBaseVM(ctx context.Context, vm ProjectBaseVM) error {
 
 // ForgetProjectBaseVM drops the record of a base VM that no longer exists.
 func (db *DB) ForgetProjectBaseVM(ctx context.Context, integration, name string) error {
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		return generated.New(tx.Conn()).DeleteProjectBaseVM(ctx, generated.DeleteProjectBaseVMParams{Integration: integration, VmName: name})
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
+		return q.DeleteProjectBaseVM(ctx, generated.DeleteProjectBaseVMParams{Integration: integration, VmName: name})
 	})
 }
 

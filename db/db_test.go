@@ -214,7 +214,7 @@ func listMigrationProfiles(t *testing.T, db *DB) []generated.Profile {
 	return profiles
 }
 
-func TestDB_WithTx(t *testing.T) {
+func TestDB_QueriesTx(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
@@ -222,7 +222,7 @@ func TestDB_WithTx(t *testing.T) {
 	defer cancel()
 
 	// Test successful transaction
-	err := db.WithTx(ctx, func(q *generated.Queries) error {
+	err := db.QueriesTx(ctx, func(q *generated.Queries) error {
 		_, err := q.CreateConversation(ctx, generated.CreateConversationParams{
 			ConversationID: "test-conv-1",
 			Slug:           stringPtr("test-slug"),
@@ -232,7 +232,7 @@ func TestDB_WithTx(t *testing.T) {
 		return err
 	})
 	if err != nil {
-		t.Errorf("WithTx() error = %v", err)
+		t.Errorf("QueriesTx() error = %v", err)
 	}
 
 	// Verify the conversation was created
@@ -297,32 +297,32 @@ func TestDB_Pool(t *testing.T) {
 	}
 }
 
-func TestDB_WithTxRes(t *testing.T) {
+func TestDB_QueriesTxRes(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	// Test WithTxRes with a simple function that returns a string
-	result, err := WithTxRes(db, ctx, func(queries *generated.Queries) (string, error) {
+	// Test QueriesTxRes with a simple function that returns a string
+	result, err := QueriesTxRes(db, ctx, func(queries *generated.Queries) (string, error) {
 		return "test result", nil
 	})
 	if err != nil {
-		t.Errorf("WithTxRes() error = %v", err)
+		t.Errorf("QueriesTxRes() error = %v", err)
 	}
 
 	if result != "test result" {
 		t.Errorf("Expected 'test result', got %s", result)
 	}
 
-	// Test WithTxRes with error handling
-	_, err = WithTxRes(db, ctx, func(queries *generated.Queries) (string, error) {
+	// Test QueriesTxRes with error handling
+	_, err = QueriesTxRes(db, ctx, func(queries *generated.Queries) (string, error) {
 		return "", fmt.Errorf("test error")
 	})
 
 	if err == nil {
-		t.Error("Expected error from WithTxRes, got none")
+		t.Error("Expected error from QueriesTxRes, got none")
 	}
 }
 

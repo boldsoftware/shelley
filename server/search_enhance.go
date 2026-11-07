@@ -141,7 +141,7 @@ func (s *Server) reuseSearchConversation(ctx context.Context, name, modelID, ema
 	}
 	err = manager.resetLoopAfter(true, func() error {
 		var err error
-		conversation, err = db.WithTxRes(s.db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		conversation, err = db.QueriesTxRes(s.db, ctx, func(q *generated.Queries) (generated.Conversation, error) {
 			if err := q.ForceUpdateConversationModel(ctx, generated.ForceUpdateConversationModelParams{Model: &modelID, ConversationID: conversation.ConversationID}); err != nil {
 				return generated.Conversation{}, err
 			}

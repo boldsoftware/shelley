@@ -77,8 +77,8 @@ func (db *DB) CreateModelProvider(ctx context.Context, p ModelProvider) error {
 	if err != nil {
 		return err
 	}
-	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
-		return generated.New(tx.Conn()).CreateModelProvider(ctx, generated.CreateModelProviderParams{
+	return db.QueriesTx(ctx, func(q *generated.Queries) error {
+		return q.CreateModelProvider(ctx, generated.CreateModelProviderParams{
 			ProviderID: p.ProviderID, ProviderType: p.ProviderType, Endpoint: p.Endpoint,
 			ApiKey: p.APIKey, DisplayName: p.DisplayName, Models: string(raw),
 		})

@@ -358,7 +358,7 @@ func TestWedgedBtwReaderRecoversAfterServerReload(t *testing.T) {
 	releaseAndWaitIdle(t, server, reader.ConversationID, held.waitCall(t, "echo: before reload"))
 	initialPrompt := btwSystemData(t, database, reader.ConversationID, 1)
 
-	if _, err := db.WithTxRes(database, t.Context(), func(q *generated.Queries) (generated.Conversation, error) {
+	if _, err := db.QueriesTxRes(database, t.Context(), func(q *generated.Queries) (generated.Conversation, error) {
 		return q.IncrementConversationGeneration(t.Context(), reader.ConversationID)
 	}); err != nil {
 		t.Fatal(err)
@@ -696,7 +696,7 @@ func TestConversationDeletionDeletesLegacyCommitTourWorkers(t *testing.T) {
 	// The options exactly as an older Shelley stored them.
 	legacy := `{"kind":"commit-tour","commit_tour":{"repository":"/repo/.git","worktree":"/repo",` +
 		`"commit":"abc1234abc1234abc1234abc1234abc1234abc12","state":"complete","requested_at":"2026-10-01T00:00:00Z"}}`
-	if err := database.WithTx(ctx, func(q *generated.Queries) error {
+	if err := database.QueriesTx(ctx, func(q *generated.Queries) error {
 		return q.UpdateConversationOptions(ctx, generated.UpdateConversationOptionsParams{
 			ConversationID:      worker.ConversationID,
 			ConversationOptions: legacy,
