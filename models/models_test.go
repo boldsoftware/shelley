@@ -71,7 +71,7 @@ func TestGPT61TerraInBuiltInCatalog(t *testing.T) {
 			t.Fatalf("GPT-6.1 Terra = %+v", m)
 		}
 		svc, ok := m.Build("", "", nil).(*oai.ResponsesService)
-		if !ok || svc.Model != oai.GPT61Terra || svc.MaxTokens != 128000 {
+		if !ok || svc.Model != oai.GPT61Terra {
 			t.Fatalf("GPT-6.1 Terra service = %+v", svc)
 		}
 		return

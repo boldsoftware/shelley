@@ -17,9 +17,7 @@ import (
 
 	"shelley.exe.dev/exeenv"
 	"shelley.exe.dev/llm"
-	"shelley.exe.dev/llm/ant"
 	"shelley.exe.dev/llm/llmhttp"
-	"shelley.exe.dev/llm/oai"
 	"shelley.exe.dev/models"
 	"shelley.exe.dev/models/modelsdev"
 )
@@ -397,38 +395,13 @@ func newIntegrationService(catalog []models.Model, model IntegrationModel, baseU
 	if !ok {
 		return "", nil, false
 	}
-	supportsImages := model.supportsImages()
-	switch apiType {
-	case models.APITypeAnthropicMessages:
-		return apiType, &ant.Service{
-			APIKey:                "implicit",
-			URL:                   baseURL + "/v1/messages",
-			Model:                 modelName,
-			HTTPC:                 httpc,
-			ThinkingLevel:         llm.ThinkingLevelMedium,
-			SupportsImages_:       supportsImages,
-			EnableThinkingBinding: model.Provider == "anthropic",
-		}, true
-	case models.APITypeOpenAIResponses:
-		return apiType, &oai.ResponsesService{
-			APIKey:        "implicit",
-			ModelURL:      baseURL + "/v1",
-			Model:         oai.Model{ModelName: modelName, SupportsImages: supportsImages},
-			HTTPC:         httpc,
-			ThinkingLevel: llm.ThinkingLevelMedium,
-			ProviderName:  model.Provider,
-		}, true
-	case models.APITypeOpenAIChat:
-		return apiType, &oai.Service{
-			APIKey:       "implicit",
-			ModelURL:     baseURL + "/v1",
-			Model:        oai.Model{ModelName: modelName, SupportsImages: supportsImages},
-			HTTPC:        httpc,
-			ProviderName: model.Provider,
-		}, true
-	default:
-		return "", nil, false
-	}
+	// Non-catalog models: the integration publishes the vendor and image
+	// support; only a first-party Anthropic backend gets thinking binding.
+	return apiType, models.NewService(models.ServiceConfig{
+		APIType: apiType, URL: models.APIEndpoint(apiType, baseURL), APIKey: "implicit", HTTPC: httpc,
+		Model: modelName, SupportsImages: model.supportsImages(),
+		ProviderName: model.Provider, ThinkingBinding: model.Provider == "anthropic",
+	}), true
 }
 
 // compatibleCatalogModel matches provider and native name only.

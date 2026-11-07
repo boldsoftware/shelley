@@ -1,7 +1,6 @@
 package models
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -161,74 +160,6 @@ type Config struct {
 
 // --- Catalog ---------------------------------------------------------------
 
-// antSvc / oaiResponsesSvc / oaiChatSvc / gemSvc are factories for the
-// per-provider llm.Service constructors used by Model.Build.
-//
-// The `baseURL` parameter is a BARE origin/prefix with NO API-protocol
-// path on it (e.g. "https://llm.int.exe.xyz" or "" for the package
-// default). Each factory knows its own protocol's path suffix and
-// appends it before constructing the service. Keeping that knowledge
-// inside the factory means modelsources never has to encode
-// per-API-type paths like "/v1" or "/v1/messages".
-func antSvc(modelName string) func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-	return func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-		s := &ant.Service{APIKey: apiKey, Model: modelName, HTTPC: httpc, ThinkingLevel: llm.ThinkingLevelMedium, SupportsImages_: true, EnableThinkingBinding: true}
-		if baseURL != "" {
-			s.URL = baseURL + "/v1/messages"
-		}
-		return s
-	}
-}
-
-// outputLimit is the models.dev output limit for a model, or 0 so the service
-// falls back to its own default. Uses the configured base URL when set,
-// otherwise the model's canonical URL.
-func outputLimit(baseURL, modelURL, modelName string) int {
-	limit, _ := modelsdev.LookupOutputLimit(cmp.Or(baseURL, modelURL), modelName)
-	return limit
-}
-
-func oaiResponsesSvc(model oai.Model) func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-	return oaiResponsesSvcNamed(model, "openai")
-}
-
-func oaiResponsesSvcNamed(model oai.Model, providerName string) func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-	return func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-		s := &oai.ResponsesService{
-			Model: model, APIKey: apiKey, HTTPC: httpc,
-			MaxTokens:     outputLimit(baseURL, model.URL, model.ModelName),
-			ThinkingLevel: llm.ThinkingLevelMedium, ProviderName: providerName,
-		}
-		if baseURL != "" {
-			s.ModelURL = baseURL + "/v1"
-		}
-		return s
-	}
-}
-
-func oaiChatSvc(model oai.Model, providerName string) func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-	return func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-		s := &oai.Service{
-			Model: model, APIKey: apiKey, HTTPC: httpc,
-			MaxTokens: outputLimit(baseURL, model.URL, model.ModelName), ProviderName: providerName,
-		}
-		if baseURL != "" {
-			s.ModelURL = baseURL + "/v1"
-		}
-		return s
-	}
-}
-
-func gemSvc(modelName string) func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-	return func(baseURL, apiKey string, httpc *http.Client) llm.Service {
-		s := &gem.Service{APIKey: apiKey, Model: modelName, HTTPC: httpc, SupportsImages_: true}
-		if baseURL != "" {
-			s.URL = baseURL + "/v1beta"
-		}
-		return s
-	}
-}
-
 // All returns all available models in Shelley.
 //
 // Order is significant: it is the display order in the model picker and, when
@@ -296,67 +227,67 @@ func All() []Model {
 			ID: "gpt-6-astra", Provider: ProviderOpenAI,
 			Description: "GPT-6 Astra", APIModelName: oai.GPT6Astra.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT6Astra),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT6Astra, "openai"),
 		},
 		{
 			ID: "gpt-6.1-sol", Provider: ProviderOpenAI,
 			Description: "GPT-6.1 Sol", APIModelName: oai.GPT61Sol.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT61Sol),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT61Sol, "openai"),
 		},
 		{
 			ID: "gpt-6.1-terra", Provider: ProviderOpenAI,
 			Description: "GPT-6.1 Terra", APIModelName: oai.GPT61Terra.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT61Terra),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT61Terra, "openai"),
 		},
 		{
 			ID: "gpt-6-sol", Provider: ProviderOpenAI,
 			Description: "GPT-6 Sol", APIModelName: oai.GPT6Sol.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT6Sol),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT6Sol, "openai"),
 		},
 		{
 			ID: "gpt-6-luna", Provider: ProviderOpenAI,
 			Description: "GPT-6 Luna", APIModelName: oai.GPT6Luna.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT6Luna),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT6Luna, "openai"),
 		},
 		{
 			ID: "gpt-5.6-sol", Provider: ProviderOpenAI,
 			Description: "GPT-5.6 Sol", APIModelName: oai.GPT56Sol.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT56Sol),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT56Sol, "openai"),
 		},
 		{
 			ID: "gpt-5.6-terra", Provider: ProviderOpenAI,
 			Description: "GPT-5.6 Terra", APIModelName: oai.GPT56Terra.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT56Terra),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT56Terra, "openai"),
 		},
 		{
 			ID: "gpt-5.6-luna", Provider: ProviderOpenAI,
 			Description: "GPT-5.6 Luna", APIModelName: oai.GPT56Luna.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT56Luna),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT56Luna, "openai"),
 		},
 		{
 			ID: "gpt-5.5", Provider: ProviderOpenAI,
 			Description: "GPT-5.5", APIModelName: oai.GPT55.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT55),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT55, "openai"),
 		},
 		{
 			ID: "glm-5.3-fireworks", Provider: ProviderFireworks,
 			Description: "GLM-5.3 on Fireworks", APIModelName: oai.GLM53Fireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
-			Build: oaiChatSvc(oai.GLM53Fireworks, "fireworks"),
+			Build: oaiSvc(APITypeOpenAIChat, oai.GLM53Fireworks, "fireworks"),
 		},
 		{
 			ID: "glm-5.3-flash-fireworks", Provider: ProviderFireworks,
 			Description: "GLM-5.3 Flash on Fireworks", APIModelName: oai.GLM53FlashFireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
-			Build: oaiChatSvc(oai.GLM53FlashFireworks, "fireworks"),
+			Build: oaiSvc(APITypeOpenAIChat, oai.GLM53FlashFireworks, "fireworks"),
 		},
 		{
 			ID: "gemini-3.1-pro", Provider: ProviderGemini,
@@ -374,13 +305,13 @@ func All() []Model {
 			ID: "grok-4.5", Provider: ProviderXAI,
 			Description: "Grok 4.5", APIModelName: oai.Grok45.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultXAIBaseURL,
-			Build: oaiResponsesSvcNamed(oai.Grok45, "xai"),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.Grok45, "xai"),
 		},
 		{
 			ID: "kimi-k3-fireworks", Provider: ProviderFireworks,
 			Description: "Kimi K3 on Fireworks", APIModelName: oai.KimiK3Fireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
-			Build: oaiChatSvc(oai.KimiK3Fireworks, "fireworks"),
+			Build: oaiSvc(APITypeOpenAIChat, oai.KimiK3Fireworks, "fireworks"),
 		},
 		{
 			ID: "claude-opus-4.8", Provider: ProviderAnthropic,
@@ -428,37 +359,37 @@ func All() []Model {
 			ID: "gpt-5.4", Provider: ProviderOpenAI,
 			Description: "GPT-5.4", APIModelName: oai.GPT54.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT54),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT54, "openai"),
 		},
 		{
 			ID: "gpt-5.4-mini", Provider: ProviderOpenAI,
 			Description: "GPT-5.4 mini", APIModelName: oai.GPT54Mini.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT54Mini),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT54Mini, "openai"),
 		},
 		{
 			ID: "gpt-5.4-nano", Provider: ProviderOpenAI,
 			Description: "GPT-5.4 nano", APIModelName: oai.GPT54Nano.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT54Nano),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT54Nano, "openai"),
 		},
 		{
 			ID: "gpt-5.3-codex", Provider: ProviderOpenAI,
 			Description: "GPT-5.3 Codex", APIModelName: oai.GPT53Codex.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
-			Build: oaiResponsesSvc(oai.GPT53Codex),
+			Build: oaiSvc(APITypeOpenAIResponses, oai.GPT53Codex, "openai"),
 		},
 		{
 			ID: "deepseek-v4.1-flash-1017-fireworks", Provider: ProviderFireworks,
 			Description: "DeepSeek V4.1 Flash 1017 on Fireworks", APIModelName: oai.DeepseekV41Flash1017Fireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
-			Build: oaiChatSvc(oai.DeepseekV41Flash1017Fireworks, "fireworks"),
+			Build: oaiSvc(APITypeOpenAIChat, oai.DeepseekV41Flash1017Fireworks, "fireworks"),
 		},
 		{
 			ID: "deepseek-v4.1-flash-fireworks", Provider: ProviderFireworks,
 			Description: "DeepSeek V4.1 Flash on Fireworks", APIModelName: oai.DeepseekV41FlashFireworks.ModelName,
 			APIType: APITypeOpenAIChat, DefaultBaseURL: DefaultFireworksBaseURL,
-			Build: oaiChatSvc(oai.DeepseekV41FlashFireworks, "fireworks"),
+			Build: oaiSvc(APITypeOpenAIChat, oai.DeepseekV41FlashFireworks, "fireworks"),
 		},
 		{
 			ID: "predictable", Provider: ProviderBuiltIn,
@@ -1075,70 +1006,11 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 // configuration, or returns nil for an unknown provider type. A nil httpc
 // uses the provider's default client.
 func NewCustomModelService(model *generated.Model, httpc *http.Client) llm.Service {
-	supportsImages := ResolveSupportsImages(model.Endpoint, model.ModelName, model.ImageSupport)
-	var service llm.Service
-	switch model.ProviderType {
-	case "anthropic":
-		service = &ant.Service{
-			APIKey:          model.ApiKey,
-			URL:             model.Endpoint,
-			Model:           model.ModelName,
-			MaxTokens:       int(model.MaxTokens),
-			HTTPC:           httpc,
-			ThinkingLevel:   llm.ThinkingLevelMedium,
-			SupportsImages_: supportsImages,
-		}
-	case "openai":
-		service = &oai.Service{
-			APIKey:    model.ApiKey,
-			ModelURL:  model.Endpoint,
-			MaxTokens: int(model.MaxTokens),
-			Model: oai.Model{
-				ModelName:        model.ModelName,
-				TextVerbosity:    "",
-				URL:              model.Endpoint,
-				APIKeyEnv:        "",
-				IsReasoningModel: false,
-				SupportsImages:   supportsImages,
-			},
-			HTTPC:           httpc,
-			ProviderName:    "openai",
-			ReasoningEffort: model.ReasoningEffort,
-			ReasoningReplay: oai.ReasoningReplay(model.ReasoningReplay),
-		}
-	case "openai-responses":
-		service = &oai.ResponsesService{
-			APIKey:    model.ApiKey,
-			ModelURL:  model.Endpoint,
-			MaxTokens: int(model.MaxTokens),
-			Model: oai.Model{
-				ModelName:        model.ModelName,
-				TextVerbosity:    "",
-				URL:              model.Endpoint,
-				APIKeyEnv:        "",
-				IsReasoningModel: false,
-				SupportsImages:   supportsImages,
-			},
-			HTTPC:           httpc,
-			ThinkingLevel:   llm.ThinkingLevelMedium,
-			ReasoningEffort: model.ReasoningEffort,
-			ProviderName:    "openai",
-			ReasoningReplay: oai.ReasoningReplay(model.ReasoningReplay),
-		}
-	case "gemini":
-		service = &gem.Service{
-			APIKey:          model.ApiKey,
-			URL:             model.Endpoint,
-			Model:           model.ModelName,
-			MaxTokens:       int(model.MaxTokens),
-			HTTPC:           httpc,
-			ReasoningEffort: model.ReasoningEffort,
-			SupportsImages_: supportsImages,
-		}
-	default:
+	cfg, ok := customServiceConfig(model, httpc)
+	if !ok {
 		return nil
 	}
-	return wrapReasoningService(service, model)
+	return wrapReasoningService(NewService(cfg), model)
 }
 
 // ResolveSupportsImages turns a stored image_support value ("auto"|"yes"|"no")

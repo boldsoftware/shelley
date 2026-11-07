@@ -10,7 +10,6 @@ import (
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
-	"shelley.exe.dev/llm/ant"
 	"shelley.exe.dev/llm/oai"
 	"shelley.exe.dev/models/modelsdev"
 )
@@ -174,24 +173,17 @@ func (m *Manager) providerEntry(row db.ModelProvider, wire string) (serviceEntry
 	default:
 		return serviceEntry{}, fmt.Errorf("unsupported provider type: %s", row.ProviderType)
 	}
-	service := m.createServiceFromModel(&model).(*reasoningService)
+	cfg, _ := customServiceConfig(&model, m.httpc)
+	cfg.DisableReasoning = model.ReasoningSupport == "no"
+	if catalog := ByID(wire); exact && catalog != nil && apiType == APITypeOpenAIResponses && catalog.APIType == apiType {
+		if base, ok := catalog.Build("", "", m.httpc).(*oai.ResponsesService); ok {
+			cfg.OpenAIModel.TextVerbosity, cfg.OpenAIModel.SupportsApplyPatch = base.Model.TextVerbosity, base.Model.SupportsApplyPatch
+		}
+	}
+	service := wrapReasoningService(NewService(cfg), &model).(*reasoningService)
 	service.disableWebSearch = true
 	// Advertise levels without imposing a custom-model override map.
 	service.levels = known.Reasoning.Levels
-	disabled := model.ReasoningSupport == "no"
-	switch raw := service.Service.(type) {
-	case *ant.Service:
-		raw.DisableReasoning = disabled
-	case *oai.Service:
-		raw.DisableReasoning = disabled
-	case *oai.ResponsesService:
-		raw.DisableReasoning = disabled
-		if catalog := ByID(wire); exact && catalog != nil && catalog.APIType == APITypeOpenAIResponses {
-			if base, ok := catalog.Build("", "", m.httpc).(*oai.ResponsesService); ok {
-				raw.Model.TextVerbosity, raw.Model.SupportsApplyPatch = base.Model.TextVerbosity, base.Model.SupportsApplyPatch
-			}
-		}
-	}
 
 	label := row.DisplayName
 	if label == "" {
