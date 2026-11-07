@@ -219,53 +219,22 @@ func isHexHash(s string) bool {
 // getGitStateFromGit is the subprocess implementation, used as a fallback when
 // the file-based reader can't interpret the repository layout.
 func getGitStateFromGit(dir string) *GitState {
-	state := &GitState{}
-
-	// Get the worktree root (this works for both regular repos and worktrees)
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	if dir != "" {
+	git := func(args ...string) (string, error) {
+		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
+		out, err := cmd.Output()
+		return strings.TrimSpace(string(out)), err
 	}
-	output, err := cmd.Output()
+	worktree, err := git("rev-parse", "--show-toplevel")
 	if err != nil {
-		// Not in a git repository
-		return state
+		return &GitState{} // not in a git repository
 	}
-	state.IsRepo = true
-	state.Worktree = strings.TrimSpace(string(output))
-
-	// Get the current commit hash (short form)
-	cmd = exec.Command("git", "rev-parse", "--short", "HEAD")
-	if dir != "" {
-		cmd.Dir = dir
-	}
-	output, err = cmd.Output()
-	if err == nil {
-		state.Commit = strings.TrimSpace(string(output))
-	}
-
-	// Get the commit subject line
-	cmd = exec.Command("git", "log", "-1", "--format=%s")
-	if dir != "" {
-		cmd.Dir = dir
-	}
-	output, err = cmd.Output()
-	if err == nil {
-		state.Subject = strings.TrimSpace(string(output))
-	}
-
-	// Get the current branch name
-	// First try symbolic-ref for normal branches
-	cmd = exec.Command("git", "symbolic-ref", "--short", "HEAD")
-	if dir != "" {
-		cmd.Dir = dir
-	}
-	output, err = cmd.Output()
-	if err == nil {
-		state.Branch = strings.TrimSpace(string(output))
-	}
-	// If symbolic-ref fails, we're in detached HEAD state - branch stays empty
-
+	state := &GitState{IsRepo: true, Worktree: worktree}
+	// Each of these fails on an unborn branch or detached HEAD (branch);
+	// the field then stays empty.
+	state.Commit, _ = git("rev-parse", "--short", "HEAD")
+	state.Subject, _ = git("log", "-1", "--format=%s")
+	state.Branch, _ = git("symbolic-ref", "--short", "HEAD")
 	return state
 }
 
