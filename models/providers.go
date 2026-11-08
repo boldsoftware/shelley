@@ -169,6 +169,9 @@ func (m *Manager) providerEntry(row db.ModelProvider, wire string) (serviceEntry
 		apiType = APITypeOpenAIChat
 	case "openai-responses":
 		apiType = APITypeOpenAIResponses
+	case "gemini":
+		apiType = APITypeGemini
+		model.ReasoningSupport = "auto"
 	default:
 		return serviceEntry{}, fmt.Errorf("unsupported provider type: %s", row.ProviderType)
 	}
@@ -178,9 +181,11 @@ func (m *Manager) providerEntry(row db.ModelProvider, wire string) (serviceEntry
 		cfg.OpenAIModel.TextVerbosity, cfg.OpenAIModel.SupportsApplyPatch = catalog.OpenAI.TextVerbosity, catalog.OpenAI.SupportsApplyPatch
 	}
 	service := wrapReasoningService(NewService(cfg), &model).(*reasoningService)
-	service.disableWebSearch = true
+	service.disableWebSearch = apiType != APITypeGemini
 	// Advertise levels without imposing a custom-model override map.
-	service.levels = known.Reasoning.Levels
+	if apiType != APITypeGemini {
+		service.levels = known.Reasoning.Levels
+	}
 
 	label := row.DisplayName
 	if label == "" {
@@ -189,6 +194,8 @@ func (m *Manager) providerEntry(row db.ModelProvider, wire string) (serviceEntry
 	provider := ProviderOpenAI
 	if row.ProviderType == "anthropic" {
 		provider = ProviderAnthropic
+	} else if row.ProviderType == "gemini" {
+		provider = ProviderGemini
 	}
 	return serviceEntry{
 		service: service, provider: provider, modelID: model.ModelID, sourceID: row.ProviderID,

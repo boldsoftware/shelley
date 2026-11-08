@@ -175,11 +175,13 @@ const endpoints: Record<ModelProviderType, string> = {
   anthropic: "https://api.anthropic.com/v1",
   openai: "https://api.openai.com/v1",
   "openai-responses": "https://api.openai.com/v1",
+  gemini: "https://generativelanguage.googleapis.com/v1beta",
 };
 const providerTypes: { value: ModelProviderType; label: string }[] = [
   { value: "anthropic", label: "Anthropic" },
   { value: "openai", label: "OpenAI (Chat API)" },
   { value: "openai-responses", label: "OpenAI (Responses API)" },
+  { value: "gemini", label: "Google Gemini" },
 ];
 
 const providerType = ref<ModelProviderType>("anthropic");

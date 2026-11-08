@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -37,6 +38,8 @@ func (m *Manager) discover(ctx context.Context, p db.ModelProvider) ([]db.Provid
 	cursorParam := "after"
 	if p.ProviderType == "anthropic" {
 		cursorParam = "after_id"
+	} else if p.ProviderType == "gemini" {
+		cursorParam = "pageToken"
 	}
 	result := []db.ProviderModel{}
 	seenIDs := make(map[string]bool)
@@ -88,6 +91,8 @@ func fetchModelPage(ctx context.Context, client *http.Client, providerType, targ
 	if providerType == "anthropic" {
 		req.Header.Set("x-api-key", key)
 		req.Header.Set("anthropic-version", "2023-06-01")
+	} else if providerType == "gemini" {
+		req.Header.Set("x-goog-api-key", key)
 	} else {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}
@@ -110,6 +115,10 @@ func fetchModelPage(ctx context.Context, client *http.Client, providerType, targ
 		return nil, false, "", discoveryFailure("response body limit exceeded")
 	}
 	*bodyLeft -= int64(len(body))
+
+	if providerType == "gemini" {
+		return parseGeminiModelPage(body)
+	}
 
 	var (
 		data    json.RawMessage
@@ -158,4 +167,29 @@ func fetchModelPage(ctx context.Context, client *http.Client, providerType, targ
 		items = append(items, db.ProviderModel{ID: model.ID, Name: name})
 	}
 	return items, hasMore, lastID, nil
+}
+
+func parseGeminiModelPage(body []byte) ([]db.ProviderModel, bool, string, error) {
+	var page struct {
+		Models []struct {
+			Name                       string   `json:"name"`
+			DisplayName                string   `json:"displayName"`
+			SupportedGenerationMethods []string `json:"supportedGenerationMethods"`
+		} `json:"models"`
+		NextPageToken string `json:"nextPageToken"`
+	}
+	if json.Unmarshal(body, &page) != nil || page.Models == nil {
+		return nil, false, "", discoveryFailure("malformed Gemini model response")
+	}
+	items := make([]db.ProviderModel, 0, len(page.Models))
+	for _, model := range page.Models {
+		id, ok := strings.CutPrefix(model.Name, "models/")
+		if !ok || strings.TrimSpace(id) == "" {
+			return nil, false, "", discoveryFailure("provider response contains an invalid model")
+		}
+		if slices.Contains(model.SupportedGenerationMethods, "generateContent") {
+			items = append(items, db.ProviderModel{ID: id, Name: model.DisplayName})
+		}
+	}
+	return items, page.NextPageToken != "", page.NextPageToken, nil
 }

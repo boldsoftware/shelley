@@ -5,13 +5,120 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"testing"
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/llm/gem"
+	"shelley.exe.dev/llm/gem/gemini"
 	"shelley.exe.dev/llm/oai"
 )
+
+func TestProviderModelsNewestFirstWithinAccount(t *testing.T) {
+	manager := &Manager{
+		modelOrder: []string{"builtin", "a-old", "b-unknown", "a-unknown", "custom", "b-new", "a-new", "a-tie"},
+		services: map[string]serviceEntry{
+			"builtin":   {releaseDate: "2020-01-01"},
+			"custom":    {},
+			"a-old":     {sourceID: "a", releaseDate: "2025-01-01"},
+			"a-unknown": {sourceID: "a"},
+			"a-new":     {sourceID: "a", releaseDate: "2026-09-01"},
+			"a-tie":     {sourceID: "a", releaseDate: "2026-09-01"},
+			"b-unknown": {sourceID: "b"},
+			"b-new":     {sourceID: "b", releaseDate: "2026-01-01"},
+		},
+	}
+	before := slices.Clone(manager.modelOrder)
+	want := []string{"builtin", "a-new", "b-new", "a-tie", "custom", "b-unknown", "a-old", "a-unknown"}
+	if got := manager.GetAvailableModels(); !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
+	}
+	if !slices.Equal(manager.modelOrder, before) {
+		t.Fatal("listing mutated the saved registry order")
+	}
+}
+
+func TestSavedGeminiProviderNativeControls(t *testing.T) {
+	for _, tc := range []struct {
+		model string
+		level llm.ThinkingLevel
+		want  *gemini.ThinkingConfig
+	}{
+		{"gemini-4-argon", llm.ThinkingLevelMedium, &gemini.ThinkingConfig{ThinkingLevel: "medium", IncludeThoughts: true}},
+		{"gemini-3.8-flash", llm.ThinkingLevelMedium, &gemini.ThinkingConfig{ThinkingLevel: "medium", IncludeThoughts: true}},
+		{"gemini-flash-latest", llm.ThinkingLevelHigh, &gemini.ThinkingConfig{ThinkingLevel: "high", IncludeThoughts: true}},
+		{"gemini-2.5-pro", llm.ThinkingLevelMedium, &gemini.ThinkingConfig{ThinkingBudget: new(8192), IncludeThoughts: true}},
+		{"gemma-4-26b-a4b-it", llm.ThinkingLevelDefault, nil},
+	} {
+		t.Run(tc.model, func(t *testing.T) {
+			called := false
+			wantSearch := tc.model == "gemini-4-argon" || tc.model == "gemini-3.8-flash"
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				if r.URL.Path != "/v1beta/models/"+tc.model+":streamGenerateContent" || r.Header.Get("x-goog-api-key") != "secret" {
+					t.Errorf("incorrect Gemini request: %s", r.URL.Path)
+				}
+				var request struct {
+					Tools            []gemini.Tool `json:"tools"`
+					GenerationConfig struct {
+						Thinking *gemini.ThinkingConfig `json:"thinkingConfig"`
+					} `json:"generationConfig"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+					t.Error(err)
+				}
+				if !reflect.DeepEqual(request.GenerationConfig.Thinking, tc.want) {
+					t.Errorf("thinking = %+v, want %+v", request.GenerationConfig.Thinking, tc.want)
+				}
+				if len(request.Tools) == 0 || len(request.Tools[0].FunctionDeclarations) != 1 {
+					t.Error("missing function tool")
+				}
+				if wantSearch && (len(request.Tools) != 2 || request.Tools[1].GoogleSearch == nil) {
+					t.Error("missing native Google Search alongside function tools")
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				fmt.Fprint(w, "data: "+`{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"hi"}]}}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1}}`+"\n\n")
+			}))
+			defer upstream.Close()
+			manager, err := NewManager(&Config{HTTPC: upstream.Client()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry, err := manager.providerEntry(db.ModelProvider{
+				ProviderID: "google", ProviderType: "gemini", APIKey: "secret",
+				Endpoint: "https://generativelanguage.googleapis.com/v1beta",
+			}, tc.model)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if entry.provider != ProviderGemini || entry.apiType != APITypeGemini {
+				t.Fatal("incorrect Gemini provider metadata")
+			}
+			service := entry.service.(*reasoningService)
+			if got := service.SupportsReasoning(); got != (tc.want != nil) {
+				t.Errorf("reasoning advertised = %t, want %t", got, tc.want != nil)
+			}
+			if got := service.SupportsServerSideWebSearch(); got != wantSearch {
+				t.Errorf("native search advertised = %t, want %t", got, wantSearch)
+			}
+			tools := []*llm.Tool{{Name: "bash", InputSchema: json.RawMessage(`{"type":"object"}`)}}
+			if wantSearch {
+				tools = append(tools, &llm.Tool{Name: "web_search", Type: "google_search", ServerSide: true})
+			}
+			service.Service.(*gem.Service).URL = upstream.URL + "/v1beta"
+			if _, err := service.Do(t.Context(), &llm.Request{
+				Messages: []llm.Message{llm.UserStringMessage("hi")}, ThinkingLevel: tc.level, Tools: tools,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if !called {
+				t.Fatal("request never reached the Gemini endpoint")
+			}
+		})
+	}
+}
 
 func TestProviderModelAdmission(t *testing.T) {
 	for _, tc := range []struct {

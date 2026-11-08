@@ -1,12 +1,14 @@
 package models
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -774,6 +776,23 @@ func (m *Manager) GetAvailableModels() []string {
 	defer m.mu.RUnlock()
 	result := make([]string, len(m.modelOrder))
 	copy(result, m.modelOrder)
+	byProvider := make(map[string][]string)
+	for _, id := range result {
+		if source := m.services[id].sourceID; source != "" {
+			byProvider[source] = append(byProvider[source], id)
+		}
+	}
+	for _, ids := range byProvider {
+		slices.SortStableFunc(ids, func(a, b string) int {
+			return cmp.Compare(m.services[b].releaseDate, m.services[a].releaseDate)
+		})
+	}
+	for i, id := range result {
+		if source := m.services[id].sourceID; source != "" {
+			result[i] = byProvider[source][0]
+			byProvider[source] = byProvider[source][1:]
+		}
+	}
 	return result
 }
 

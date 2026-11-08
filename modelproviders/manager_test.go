@@ -165,3 +165,47 @@ func TestProviderCheckDoesNotSave(t *testing.T) {
 		t.Fatalf("check reused the saved key on a new origin: %v", err)
 	}
 }
+
+func TestGeminiProviderLifecycle(t *testing.T) {
+	failing := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1beta/models" || r.Header.Get("x-goog-api-key") != "secret" {
+			t.Errorf("incorrect Gemini discovery request")
+		}
+		if failing {
+			http.Error(w, "private upstream error", http.StatusUnauthorized)
+			return
+		}
+		fmt.Fprint(w, `{"models":[{"name":"models/gemini-3.8-flash","displayName":"Flash","supportedGenerationMethods":["generateContent"]}]}`)
+	}))
+	defer upstream.Close()
+	manager, database := testManager(t, upstream.Client())
+	input := Input{ProviderType: "gemini", Endpoint: upstream.URL + "/v1beta", APIKey: "secret"}
+	checked, err := manager.Check(t.Context(), "", input)
+	if err != nil || len(checked) != 1 {
+		t.Fatalf("check: %+v, %v", checked, err)
+	}
+	created, err := manager.Create(t.Context(), input)
+	if err != nil || created.ProviderType != "gemini" || created.ModelCount != 1 || !created.HasAPIKey {
+		t.Fatalf("create: %+v, %v", created, err)
+	}
+	id := models.ProviderRouteID(created.ProviderID, "gemini-3.8-flash")
+	info := manager.registry.GetModelInfo(id)
+	if info == nil || info.Provider != models.ProviderGemini || info.APIType != string(models.APITypeGemini) {
+		t.Fatalf("incorrect Gemini route: %+v", info)
+	}
+	failing = true
+	if _, err := manager.Refresh(t.Context(), created.ProviderID); !errors.Is(err, ErrDiscovery) {
+		t.Fatalf("failed refresh: %v", err)
+	}
+	saved, err := database.GetModelProvider(t.Context(), created.ProviderID)
+	if err != nil || len(saved.Models) != 1 || saved.Models[0].ID != "gemini-3.8-flash" {
+		t.Fatalf("failed refresh lost snapshot: %+v, %v", saved, err)
+	}
+	if err := manager.Delete(t.Context(), created.ProviderID); err != nil {
+		t.Fatal(err)
+	}
+	if manager.registry.HasModel(id) {
+		t.Fatal("deleted Gemini provider remained in the registry")
+	}
+}

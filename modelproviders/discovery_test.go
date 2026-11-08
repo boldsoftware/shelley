@@ -5,11 +5,74 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
 	"shelley.exe.dev/db"
 )
+
+func TestGeminiDiscoveryAuthPaginationAndFiltering(t *testing.T) {
+	pages := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pages++
+		if r.URL.Path != "/v1beta/models" || r.Header.Get("x-goog-api-key") != "secret" ||
+			r.Header.Get("Authorization") != "" || r.URL.Query().Has("key") {
+			t.Errorf("incorrect Gemini discovery request: path=%s headers=%v query=%s", r.URL.Path, r.Header, r.URL.RawQuery)
+		}
+		switch pages {
+		case 1:
+			if r.URL.Query().Has("pageToken") {
+				t.Error("first page had a cursor")
+			}
+			fmt.Fprint(w, `{"models":[
+				{"name":"models/gemini-3.8-flash","displayName":"Gemini Flash","supportedGenerationMethods":["generateContent"]},
+				{"name":"models/gemini-3.1-pro-preview","supportedGenerationMethods":["embedContent"]},
+				{"name":"models/unknown-model","supportedGenerationMethods":["generateContent"]}
+			],"nextPageToken":"next +/="}`)
+		case 2:
+			if r.URL.Query().Get("pageToken") != "next +/=" {
+				t.Errorf("second page cursor = %q", r.URL.RawQuery)
+			}
+			fmt.Fprint(w, `{"models":[
+				{"name":"models/gemini-3.8-flash","supportedGenerationMethods":["generateContent"]},
+				{"name":"models/gemini-3.1-pro-preview","displayName":"Gemini Pro","supportedGenerationMethods":["generateContent"]}
+			]}`)
+		default:
+			t.Error("unexpected extra page")
+			http.Error(w, "unexpected page", http.StatusInternalServerError)
+		}
+	}))
+	defer upstream.Close()
+	manager := New(nil, nil, upstream.Client())
+	got, err := manager.discover(t.Context(), db.ModelProvider{
+		ProviderType: "gemini", Endpoint: upstream.URL + "/v1beta", APIKey: "secret",
+	})
+	want := []db.ProviderModel{{ID: "gemini-3.8-flash", Name: "Gemini Flash"}, {ID: "gemini-3.1-pro-preview", Name: "Gemini Pro"}}
+	if err != nil || pages != 2 || !reflect.DeepEqual(got, want) {
+		t.Fatalf("models = %+v, pages = %d, error = %v", got, pages, err)
+	}
+}
+
+func TestGeminiDiscoveryRejectsMalformedPages(t *testing.T) {
+	for _, body := range []string{
+		`{`, `{}`, `{"models":null}`, `{"models":{}}`, `{"models":[null]}`,
+		`{"models":[{"name":"gemini-3.8-flash"}]}`,
+		`{"models":[{"name":"models/"}]}`,
+		`{"models":[{"name":42}]}`,
+		`{"models":[],"nextPageToken":42}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			if _, _, _, err := parseGeminiModelPage([]byte(body)); !errors.Is(err, ErrDiscovery) {
+				t.Fatalf("error = %v, want discovery failure", err)
+			}
+		})
+	}
+	items, more, cursor, err := parseGeminiModelPage([]byte(`{"models":[]}`))
+	if err != nil || len(items) != 0 || more || cursor != "" {
+		t.Fatalf("empty catalog: %v, %t, %q, %v", items, more, cursor, err)
+	}
+}
 
 func TestDiscoveryAuthAndPagination(t *testing.T) {
 	for _, tc := range []struct {
