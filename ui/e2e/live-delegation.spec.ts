@@ -311,6 +311,37 @@ test("late punctuation neither amends a sent request nor creates another task", 
   await expect(message).not.toContainText("USER: echo: keep the period.");
 });
 
+test("a transcript backlog drains in order at hangup", async ({ page, request }) => {
+  const { conversationId } = await createConversationViaAPIWithDetails(request, "echo: backlog ready");
+  await mockVoiceBrowser(page);
+  await page.goto(`/c/${conversationId}`);
+  await page.getByTestId("live-call-header").click();
+  await expect(page.getByTestId("live-bar")).toContainText("On call");
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const offsets: number[] = [];
+  await page.route("**/live-session/*/events", async (route) => {
+    offsets.push(...route.request().postDataJSON().events.map((e: { start_ms: number }) => e.start_ms));
+    await gate;
+    await route.continue();
+  });
+  await page.evaluate(() => {
+    const live = (window as any).__mockLive as Live;
+    for (let i = 0; i < 4; i++) {
+      live.emit({ type: "session.input_transcript.delta", delta: "声".repeat(16000), start_ms: i, end_ms: i + 1 });
+    }
+  });
+  await expect.poll(() => offsets.length).toBe(1);
+  const hangup = page.waitForResponse((r) => r.request().method() === "DELETE" && r.url().includes("/live-session/"));
+  await page.getByTestId("live-stop").click();
+  release();
+  expect((await hangup).ok()).toBe(true);
+  expect(offsets).toEqual([0, 1, 2, 3]);
+  await expect(page.getByTestId("live-error")).toHaveCount(0);
+  const saved = await request.get(`/api/conversation/${conversationId}/call/1/transcript`);
+  expect(await saved.text()).toContain("声".repeat(64000));
+});
+
 for (const endManually of [false, true]) {
   test(`a failed pending relay still ends the call after ${endManually ? "manual hangup" : "automatic stop"}`, async ({ page, request }) => {
     const { conversationId } = await createConversationViaAPIWithDetails(request, "echo: relay failure ready");
@@ -333,7 +364,7 @@ for (const endManually of [false, true]) {
     if (endManually) await page.getByTestId("live-stop").click();
     release();
     expect((await hangup).ok()).toBe(true);
-    await expect(page.getByTestId("live-error")).toContainText("Could not send the call's final voice events");
+    await expect(page.getByTestId("live-error")).toContainText("Failed to relay the call to Shelley");
     await expect(page.getByTestId("live-error")).toContainText("Relay failed for test");
     await expect(page.getByTestId("live-stop")).toHaveCount(0);
     expect(await page.evaluate(() => (window as any).__voiceTracksStopped)).toBeGreaterThan(0);
@@ -356,7 +387,7 @@ test("a failed hangup remains visible alongside a failed final transcript", asyn
     }
   });
   await emit(page, { type: "session.input_transcript.delta", delta: "Already received words", start_ms: 0, end_ms: 1000 });
-  await expect(page.getByTestId("live-error")).toContainText("Could not send the call's final voice events");
+  await expect(page.getByTestId("live-error")).toContainText("Failed to relay the call to Shelley");
   await expect(page.getByTestId("live-error")).toContainText("Could not end the call");
   await expect(page.getByTestId("live-error")).toContainText("Hangup failed for test");
 });

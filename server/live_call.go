@@ -31,8 +31,8 @@ const (
 	liveFragmentsKept    = 500
 	liveFragmentsMax     = 1000
 	liveInstructionsKept = 256
-	// liveIdle ends a call that has had no instruction stream this long.
-	liveIdle = time.Minute
+	// Allow a backgrounded browser time to reconnect both sides of the relay.
+	liveIdle = 5 * time.Minute
 )
 
 // liveReceipt is chat's answer to a delivered delegation.
@@ -151,9 +151,10 @@ type liveCall struct {
 	nextID int64
 	wake   chan struct{} // closed and replaced on each instruction
 
-	streams  int
-	attached chan struct{} // closed when a newer stream attaches
-	idle     *time.Timer
+	streams   int
+	attached  chan struct{} // closed when a newer stream attaches
+	idle      *time.Timer
+	idleUntil time.Time
 }
 
 // liveRow is a conversation row the call may tell Live about: its
@@ -176,7 +177,8 @@ func newLiveCall(id, conversationID string, initialSeq int64, deliver liveDelive
 		taken: map[int]bool{}, wake: make(chan struct{}), attached: make(chan struct{}),
 		newDeliveryID: uuid.NewString,
 	}
-	c.idle = time.AfterFunc(liveIdle, func() { c.end("no instruction stream") })
+	c.idleUntil = time.Now().Add(liveIdle)
+	c.idle = time.AfterFunc(liveIdle, c.expireIdle)
 	go c.deliveries()
 	return c
 }
@@ -185,6 +187,9 @@ func newLiveCall(id, conversationID string, initialSeq int64, deliver liveDelive
 func (c *liveCall) handle(events []liveEvent) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.streams == 0 {
+		c.idleUntil = time.Now().Add(liveIdle)
+	}
 	for _, e := range events {
 		if !c.active {
 			return
@@ -604,7 +609,7 @@ func (c *liveCall) instructions(after int64) (out []liveInstruction, wake, done 
 
 // attach registers an instruction stream. Only the newest stream reads:
 // superseded closes when another attaches. When the last one detaches,
-// the call ends unless one attaches within liveIdle.
+// incoming events can still keep the call alive.
 func (c *liveCall) attach() (superseded <-chan struct{}, detach func()) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -616,9 +621,24 @@ func (c *liveCall) attach() (superseded <-chan struct{}, detach func()) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		if c.streams--; c.streams == 0 && c.active {
+			c.idleUntil = time.Now().Add(liveIdle)
 			c.idle.Reset(liveIdle)
 		}
 	}
+}
+
+// Recheck under the lock: events or a reconnect can race a firing timer.
+func (c *liveCall) expireIdle() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.active || c.streams != 0 {
+		return
+	}
+	if remaining := time.Until(c.idleUntil); remaining > 0 {
+		c.idle.Reset(remaining)
+		return
+	}
+	c.endLocked("no instruction stream or voice events")
 }
 
 // end stops the call for good. Unsent delegations are dropped, but received

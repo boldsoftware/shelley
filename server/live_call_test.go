@@ -668,3 +668,28 @@ func TestLiveCallTranscriptSaveFailure(t *testing.T) {
 		expectEqual(t, "saved after recovery", h.savedCount(), 1)
 	})
 }
+
+func TestLiveCallBackgroundReconnect(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newLiveHarness(t)
+		_, detach := h.call.attach()
+		detach()
+		h.advance(4 * time.Minute)
+		h.say("still on the call", 0, 1000)
+		h.advance(4 * time.Minute)
+		_, detach = h.call.attach()
+		h.advance(liveIdle)
+		select {
+		case <-h.call.done:
+			t.Fatal("call expired despite relay activity and reconnection")
+		default:
+		}
+		detach()
+		h.advance(liveIdle)
+		select {
+		case <-h.call.done:
+		default:
+			t.Fatal("disconnected call never expired")
+		}
+	})
+}

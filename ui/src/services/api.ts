@@ -510,11 +510,31 @@ class ApiService {
     sessionId: string,
     events: unknown[],
   ): Promise<void> {
-    await apiFetch(
-      this.liveCallURL(conversationId, sessionId) + "/events",
-      "Failed to relay the call to Shelley",
-      sendJSON("POST", { events }),
-    );
+    // Match maxLiveRequestBytes in server/live_message.go, including the JSON envelope.
+    const prefix = '{"events":[';
+    const suffix = "]}";
+    const emptyBytes = prefix.length + suffix.length;
+    const encoder = new TextEncoder();
+    const url = this.liveCallURL(conversationId, sessionId) + "/events";
+    const batch: string[] = [];
+    let bytes = emptyBytes;
+    const send = async () => {
+      await apiFetch(url, "Failed to relay the call to Shelley", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: prefix + batch.join(",") + suffix,
+      });
+      batch.length = 0;
+      bytes = emptyBytes;
+    };
+    for (const event of events) {
+      const json = JSON.stringify(event);
+      const size = encoder.encode(json).length;
+      if (batch.length && bytes + 1 + size > 128 * 1024) await send();
+      bytes += size + (batch.length ? 1 : 0);
+      batch.push(json);
+    }
+    if (batch.length) await send();
   }
 
   liveCallInstructionsURL(conversationId: string, sessionId: string): string {

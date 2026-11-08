@@ -382,7 +382,11 @@ async function finishCall(conversationId: string, sessionId: string, events: Liv
   const failures: string[] = [];
   try {
     await pending;
-    if (events.length) await api.sendLiveEvents(conversationId, sessionId, events);
+  } catch (err) {
+    failures.push(err instanceof Error ? err.message : String(err));
+  }
+  try {
+    if (!failures.length && events.length) await api.sendLiveEvents(conversationId, sessionId, events);
   } catch (err) {
     failures.push(`Could not send the call's final voice events: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -441,7 +445,13 @@ onBeforeUnmount(() => {
 .live-call .recording-waveform-bar {
   flex: 0 0 2px;
 }
+.live-call .recording-error {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .live-call[data-call="failed"] {
+  min-height: 46px;
+  height: auto;
   border-color: var(--error-border);
 }
 .live-call .recording-waveform-bar,
