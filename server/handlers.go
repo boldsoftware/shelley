@@ -1541,6 +1541,7 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 			s.internalError(w, "Failed to queue user message", err, "conversationID", conversationID)
 			return
 		}
+		s.clearExePushes(conversationID)
 		writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued", "message": req.Message})
 		return
 	}
@@ -1567,6 +1568,8 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	if firstMessage {
 		s.generateSlugAsync(conversationID, req.Message, modelID)
 	}
+	// The user moved on: the conversation's earlier pushes are stale.
+	s.clearExePushes(conversationID)
 
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted", "message": req.Message})
 }

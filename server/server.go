@@ -439,6 +439,13 @@ type Server struct {
 	// (push notifications). exeNotifyDetected caches the result.
 	exeNotifyOnce     sync.Once
 	exeNotifyDetected bool
+	// exePushed holds the conversations pushed through the notify gateway
+	// since their last clear (guarded by mu; nil until the first push); see
+	// clearExePushes.
+	exePushed map[string]bool
+	// hookClient, if set, sends end-of-turn hooks and push clears instead of
+	// http.DefaultClient (see hookHTTPClient).
+	hookClient *http.Client
 	// streamPub is the server-wide subpub that fans out per-conversation
 	// events to every /api/stream2 subscriber. Events are tagged with their
 	// ConversationID so clients can route them.
@@ -2687,10 +2694,11 @@ func (s *Server) sendEndOfTurnHook(ctx context.Context, hook db.ConversationHook
 	}
 
 	hookPayload := map[string]any{
-		"title":    title,
-		"body":     body,
-		"data":     data,
-		"category": endOfTurnPushCategory,
+		"title":     title,
+		"body":      body,
+		"data":      data,
+		"category":  endOfTurnPushCategory,
+		"thread_id": exePushThreadID(event.ConversationID),
 	}
 	if subtitle != "" {
 		hookPayload["subtitle"] = subtitle
@@ -2713,7 +2721,16 @@ func (s *Server) sendEndOfTurnHook(ctx context.Context, hook db.ConversationHook
 		req.Header.Set(shelleyConversationIDHeader, event.ConversationID)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	// Mark before sending, so a message racing the push still clears it.
+	if hook.URL == exeNotifyGatewayURL {
+		s.mu.Lock()
+		if s.exePushed == nil {
+			s.exePushed = make(map[string]bool)
+		}
+		s.exePushed[event.ConversationID] = true
+		s.mu.Unlock()
+	}
+	resp, err := s.hookHTTPClient().Do(req)
 	if err != nil {
 		s.logger.Warn("failed to send end-of-turn hook", "conversationID", event.ConversationID, "error", err)
 		return
@@ -2722,6 +2739,56 @@ func (s *Server) sendEndOfTurnHook(ctx context.Context, hook db.ConversationHook
 	if resp.StatusCode >= 400 {
 		s.logger.Warn("end-of-turn hook failed", "conversationID", event.ConversationID, "status", resp.Status)
 	}
+}
+
+func (s *Server) hookHTTPClient() *http.Client {
+	if s.hookClient != nil {
+		return s.hookClient
+	}
+	return http.DefaultClient
+}
+
+// exePushThreadID is the notify gateway thread of a conversation's pushes:
+// clearing it removes them from the user's devices.
+func exePushThreadID(conversationID string) string {
+	return "shelley/" + conversationID
+}
+
+// clearExePushes asks the notify gateway to remove the conversation's
+// delivered pushes ("turn done", "canceled", ...) once the user has moved
+// on in it, if any went out since the last clear. Gateways that predate
+// clears reject the request, which is logged and otherwise harmless.
+func (s *Server) clearExePushes(conversationID string) {
+	s.mu.Lock()
+	pushed := s.exePushed[conversationID]
+	delete(s.exePushed, conversationID)
+	s.mu.Unlock()
+	if !pushed {
+		return
+	}
+	go func() {
+		body, err := json.Marshal(map[string]any{"clear": true, "thread_id": exePushThreadID(conversationID)})
+		if err != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, exeNotifyGatewayURL, bytes.NewReader(body))
+		if err != nil {
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(shelleyConversationIDHeader, conversationID)
+		resp, err := s.hookHTTPClient().Do(req)
+		if err != nil {
+			s.logger.Warn("failed to clear exe.dev pushes", "conversationID", conversationID, "error", err)
+			return
+		}
+		resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			s.logger.Info("exe.dev push clear rejected", "conversationID", conversationID, "status", resp.Status)
+		}
+	}()
 }
 
 func validateConversationHookURL(rawURL string) error {
