@@ -84,6 +84,10 @@ func faviconHref(emoji string) string {
 	svg := fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
 <text x="200" y="200" text-anchor="middle" dominant-baseline="central" font-size="320" font-family="Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif">%s</text>
 </svg>`, html.EscapeString(emoji))
+	return svgDataURL(svg)
+}
+
+func svgDataURL(svg string) string {
 	return "data:image/svg+xml," + url.PathEscape(svg)
 }
 

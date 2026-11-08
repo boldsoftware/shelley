@@ -76,6 +76,10 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 	if init := indexInitData(t, s); init["workspace"] != true || init["ui_build"] != workspaceBuild || init["compact_nav"] != true {
 		t.Fatalf("workspace init data: workspace=%v ui_build=%v compact_nav=%v", init["workspace"], init["ui_build"], init["compact_nav"])
 	}
+	// Its favicon is exe's pufferfish, not the emoji.
+	if svg := indexFaviconSVG(t, s); !strings.Contains(svg, "#F48E00") {
+		t.Fatalf("workspace favicon is not exe's fish: %s", svg)
+	}
 	if got := s.flagDefault(FlagCompactNav); got != true {
 		t.Fatalf("compact-nav's default in workspace mode: %v", got)
 	}
@@ -106,6 +110,9 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 	}
 	if init := indexInitData(t, s); init["workspace"] != false || init["compact_nav"] != false {
 		t.Fatalf("init data after workspace mode: workspace=%v compact_nav=%v", init["workspace"], init["compact_nav"])
+	}
+	if svg := indexFaviconSVG(t, s); strings.Contains(svg, "#F48E00") {
+		t.Fatalf("stock favicon is still exe's fish: %s", svg)
 	}
 }
 

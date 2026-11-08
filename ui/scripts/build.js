@@ -264,13 +264,15 @@ async function build() {
       }
     }
     fs.writeFileSync("dist/SymbolsNerdFontMono.woff2", await symbolsNerdFont());
-    const appIcon = fs.readFileSync("src/app-icon.svg");
-    for (const [file, size] of [
-      ["icon-192.png", 192],
-      ["icon-512.png", 512],
-      ["apple-touch-icon.png", 180],
+    // Workspace mode's favicon (the server inlines it) and home-screen icon.
+    fs.copyFileSync("src/vue/assets/exe-fish.svg", "dist/exe-fish.svg");
+    for (const [icon, file, size] of [
+      ["src/app-icon.svg", "icon-192.png", 192],
+      ["src/app-icon.svg", "icon-512.png", 512],
+      ["src/app-icon.svg", "apple-touch-icon.png", 180],
+      ["src/exe-app-icon.svg", "exe-apple-touch-icon.png", 180],
     ]) {
-      const png = new Resvg(appIcon, {
+      const png = new Resvg(fs.readFileSync(icon), {
         fitTo: { mode: "width", value: size },
         font: { loadSystemFonts: false }, // no text to draw
       })

@@ -569,19 +569,20 @@ func (s *Server) staticHandler(fsys http.FileSystem) http.Handler {
 	})
 }
 
+func readUIFile(fs http.FileSystem, name string) ([]byte, error) {
+	f, err := fs.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return io.ReadAll(f)
+}
+
 // serveIndexWithInit serves index.html with injected initialization data
 func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs http.FileSystem) {
-	// Read index.html from the filesystem
-	file, err := fs.Open("/index.html")
+	indexHTML, err := readUIFile(fs, "/index.html")
 	if err != nil {
-		http.Error(w, "index.html not found", http.StatusNotFound)
-		return
-	}
-	defer file.Close()
-
-	indexHTML, err := io.ReadAll(file)
-	if err != nil {
-		http.Error(w, "Failed to read index.html", http.StatusInternalServerError)
+		s.internalError(w, "Failed to read index.html", err)
 		return
 	}
 
@@ -698,16 +699,30 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		return
 	}
 
-	fe, err := s.currentFaviconEmoji(r.Context())
-	if err != nil {
-		s.internalError(w, "Failed to get favicon emoji", err)
-		return
+	// Workspace mode shows exe's pufferfish; stock Shelley, its emoji.
+	var favicon, touchIcon string
+	if s.workspaceMode() {
+		fish, err := readUIFile(fs, "/exe-fish.svg")
+		if err != nil {
+			s.internalError(w, "Failed to read favicon", err)
+			return
+		}
+		favicon = svgDataURL(string(fish))
+		touchIcon = "/exe-apple-touch-icon.png"
+	} else {
+		fe, err := s.currentFaviconEmoji(r.Context())
+		if err != nil {
+			s.internalError(w, "Failed to get favicon emoji", err)
+			return
+		}
+		favicon = faviconHref(fe.Emoji)
+		touchIcon = "/apple-touch-icon.png"
 	}
-	faviconLink := fmt.Sprintf(`<link rel="icon" type="image/svg+xml" href="%s"/>`, html.EscapeString(faviconHref(fe.Emoji)))
+	icons := fmt.Sprintf(`<link rel="icon" type="image/svg+xml" href="%s"/><link rel="apple-touch-icon" href="%s"/>`, html.EscapeString(favicon), touchIcon)
 
-	// Inject the script tag and favicon before </head>
+	// Inject the icons and script tag before </head>
 	initScript := fmt.Sprintf(`<script>window.__SHELLEY_INIT__=%s;</script>`, initJSON)
-	injection := faviconLink + initScript
+	injection := icons + initScript
 	modifiedHTML := strings.Replace(string(indexHTML), "</head>", injection+"</head>", 1)
 
 	w.Write([]byte(modifiedHTML))

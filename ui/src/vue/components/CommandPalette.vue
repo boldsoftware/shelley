@@ -133,6 +133,7 @@ import { isImeComposing } from "../../utils/imeComposing";
 import { highlightSearchMatches } from "../../utils/searchHighlight";
 import { menuShortcutLabel } from "../../utils/menuShortcuts";
 import { storedSelectedCwd } from "../../utils/selectedCwd";
+import { workspaceMode } from "../../utils/workspaceMode";
 import type { RecordingMode } from "./recordingDestination";
 
 interface CommandItem {
@@ -528,18 +529,21 @@ const actionItems = computed<CommandItem[]>(() => {
     keywords: ["notification", "notify", "alert", "discord", "webhook", "browser", "favicon"],
   });
 
-  items.push({
-    id: "favicon-emoji",
-    type: "action",
-    title: t("faviconEmoji"),
-    subtitle: t("pickFaviconEmoji"),
-    icon: ICON_SMILE,
-    action: () => {
-      emit("open-favicon-emoji-picker");
-      emit("close");
-    },
-    keywords: ["favicon", "emoji", "icon", "tab", "change", "edit", "customize"],
-  });
+  // Workspace mode's favicon is exe's logo, not the emoji.
+  if (!workspaceMode) {
+    items.push({
+      id: "favicon-emoji",
+      type: "action",
+      title: t("faviconEmoji"),
+      subtitle: t("pickFaviconEmoji"),
+      icon: ICON_SMILE,
+      action: () => {
+        emit("open-favicon-emoji-picker");
+        emit("close");
+      },
+      keywords: ["favicon", "emoji", "icon", "tab", "change", "edit", "customize"],
+    });
+  }
 
   items.push({
     id: "feature-flags",
