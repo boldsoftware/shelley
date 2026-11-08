@@ -15,8 +15,7 @@ one tool to put the value where a command can use it.
   shown on the management page) can be renamed.
 - `{{secret=VALUE}}` or `{{secret:NAME=VALUE}}` in the composer marks VALUE
   as a secret by hand (the escape hatch for anything detection misses); its
-  ID is `secret-…` or `NAME-…`. The composer's lock button wraps the
-  selection in a mark, or opens an empty one at the caret.
+  ID is `secret-…` or `NAME-…`.
 
 ## Detection (client side, `ui/src/utils/secretDetect.ts`)
 
@@ -47,8 +46,7 @@ line, and PuTTY `.ppk` keys. A generic rule takes long (≥32) tokens with
 high entropy that mix upper case, lower case and digits, and are not hex,
 UUIDs, URLs, paths, or names with many dashes and underscores (base64url
 has about one in 32 characters; more than one in 12 is a name). False negatives are preferred over mangling normal
-text, and the manual paths (syntax above, or the lock button) cover the
-rest.
+text, and the manual syntax above covers the rest.
 
 The composer seals a finding as soon as it is complete: on paste, when the
 caret leaves the token, when a `{{secret=…}}` closes, and at the latest on

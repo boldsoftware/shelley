@@ -525,30 +525,6 @@
             />
           </svg>
         </button>
-        <button
-          v-if="secretsOn"
-          type="button"
-          :disabled="isDisabled"
-          class="message-attach-btn"
-          aria-label="Mark as secret"
-          title="Mark the selection as a secret, or type one: {{secret=…}}"
-          data-testid="secret-button"
-          @mousedown.prevent
-          @click="markSecret"
-        >
-          <svg
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            aria-hidden="true"
-          >
-            <rect x="5" y="11" width="14" height="10" rx="2" />
-            <path stroke-linecap="round" d="M8 11V7a4 4 0 0 1 8 0v4" />
-          </svg>
-        </button>
         <RecordButton
           v-if="mediaRecordingAvailable && !voiceActive"
           :can-record-audio="canRecordAudio"
@@ -834,26 +810,6 @@ function onCaretMove() {
 
 function undoSecret(id: string) {
   setMessage(secrets.undo(id, message.value).text);
-}
-
-/** The lock button: marks the selection as a secret (sealed at once), or
- *  opens an empty mark at the caret to type one into. */
-function markSecret() {
-  const textarea = textareaRef.value;
-  if (!textarea) return;
-  const { selectionStart: start, selectionEnd: end } = textarea;
-  const text = message.value;
-  if (start === end) {
-    setMessage(`${text.slice(0, start)}{{secret=}}${text.slice(end)}`);
-    void nextTick(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + 9, start + 9);
-    });
-    return;
-  }
-  const marked = `${text.slice(0, start)}{{secret=${text.slice(start, end)}}}${text.slice(end)}`;
-  setMessageSealed(marked, start, true);
-  textarea.focus();
 }
 
 // Sync programmatic seeds (e.g. switching between draft conversations).
