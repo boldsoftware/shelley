@@ -54,11 +54,14 @@ func TestSecrets(t *testing.T) {
 	}
 	id := conv.ConversationID
 	secret, _ := json.Marshal(newSecret{ID: "github-token-k3f9", Name: "GitHub", Kind: "github-token", Value: testSecretValue, ConversationID: id})
-	call("POST", "/api/secrets", string(secret), 403) // the flag is off
-	if err := database.SetFeatureFlagOverride(t.Context(), FlagSecrets.Name, "true"); err != nil {
+	if err := database.SetFeatureFlagOverride(t.Context(), FlagSecrets.Name, "false"); err != nil {
 		t.Fatal(err)
 	}
-	call("POST", "/api/secrets", string(secret), 201)
+	call("POST", "/api/secrets", string(secret), 403)
+	if err := database.DeleteFeatureFlagOverride(t.Context(), FlagSecrets.Name); err != nil {
+		t.Fatal(err)
+	}
+	call("POST", "/api/secrets", string(secret), 201) // on by default
 	call("POST", "/api/secrets", string(secret), 409)
 	call("POST", "/api/secrets", `{"id":"short-k3f9","name":"x","kind":"token","value":"12345"}`, 400)
 	call("POST", "/api/secrets", `{"id":"Bad ID","name":"x","kind":"token","value":"123456"}`, 400)

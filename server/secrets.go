@@ -36,7 +36,7 @@ import (
 var FlagSecrets = featureflags.Register(featureflags.Flag{
 	Name:        "secrets",
 	Description: "Take secrets (API keys, tokens, {{secret=...}}) out of messages before they are sent, store them in Shelley, and let the agent write them to files unseen.",
-	Default:     false,
+	Default:     true,
 })
 
 // minSecretLen keeps short values, which redaction would find all over

@@ -1,6 +1,6 @@
 # Secrets: capture in the browser, store in Shelley, inject by id
 
-Behind the `secrets` feature flag (off by default). A user can type or
+Behind the `secrets` feature flag (on by default). A user can type or
 paste a secret into the composer; the browser takes it out of the message
 before anything is sent, stores it in Shelley's secret store, and leaves a
 placeholder in its place. The model only ever sees the placeholder, and gets
