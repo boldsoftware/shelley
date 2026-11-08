@@ -1,5 +1,5 @@
-<!-- The tabs in the title bar of a project's or a VM's view: its web page
-     and its settings. -->
+<!-- The tabs in the title bar of a project's or a VM's view: its web page,
+     its settings and, for a VM, its terminal. -->
 <template>
   <nav class="view-tabs" :aria-label="label">
     <button
@@ -7,7 +7,7 @@
       :key="tab.key"
       type="button"
       class="view-tab"
-      :class="{ active: tab.key === active }"
+      :class="{ active: tab.key === active, yields: tab.yields }"
       :title="tab.tooltip"
       :aria-current="tab.key === active ? 'page' : undefined"
       :data-testid="`view-tab-${tab.key}`"
@@ -26,6 +26,8 @@ export interface ViewTab<T extends string> {
   icon: string;
   title: string;
   tooltip?: string;
+  /** On a narrow screen, this tab's title (e.g. a page's host) gives way. */
+  yields?: boolean;
 }
 
 defineProps<{ tabs: ViewTab<K>[]; active: K; label: string }>();
@@ -58,8 +60,7 @@ const emit = defineEmits<{ show: [key: K] }>();
   white-space: nowrap;
   cursor: pointer;
 }
-/* On a narrow screen the page's host gives way, Settings stays whole. */
-.view-tab:first-child:not(:last-child) {
+.view-tab.yields {
   flex: 0 1 auto;
   min-width: 2rem;
 }

@@ -128,7 +128,16 @@ const tabs = computed(() => {
   };
   const page = pageTab.value;
   return page
-    ? [{ key: "page" as const, icon: "pi-globe", title: page.title, tooltip: page.url }, settings]
+    ? [
+        {
+          key: "page" as const,
+          icon: "pi-globe",
+          title: page.title,
+          tooltip: page.url,
+          yields: true,
+        },
+        settings,
+      ]
     : [settings];
 });
 // The frame mounts once the page is first shown, and stays mounted.

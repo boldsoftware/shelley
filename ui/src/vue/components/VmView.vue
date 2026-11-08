@@ -1,6 +1,6 @@
 <!-- The main pane for a VM picked in the sidebar's prod tab, with tabs like a
-     project's: its settings, first, and its web page in a frame (or why the
-     page can't be framed here, with a link to open it). -->
+     project's: its settings, first, its web page in a frame (or why the
+     page can't be framed here, with a link to open it), and a terminal. -->
 <template>
   <div class="full-height flex flex-col">
     <div class="header">
@@ -56,6 +56,19 @@
           <i class="pi pi-external-link" aria-hidden="true" />
         </a>
       </div>
+      <div v-else-if="tab === 'terminal'" class="header-actions">
+        <Button
+          class="btn-icon"
+          text
+          severity="secondary"
+          aria-label="New session"
+          v-tooltip.bottom="'New session'"
+          data-testid="vm-terminal-restart"
+          @click="terminalSession++"
+        >
+          <i class="pi pi-refresh" aria-hidden="true" />
+        </Button>
+      </div>
     </div>
     <VmSettings
       v-if="tab === 'settings'"
@@ -81,6 +94,14 @@
         data-testid="vm-frame"
       />
     </div>
+    <!-- Opened by its tab, the shell lasts while this VM's view does. -->
+    <VmTerminal
+      v-if="terminalSession"
+      v-show="tab === 'terminal'"
+      :key="`${name} ${terminalSession}`"
+      :name="name"
+      :visible="tab === 'terminal'"
+    />
   </div>
 </template>
 
@@ -90,6 +111,7 @@ import Button from "primevue/button";
 import ExeBrand from "./ExeBrand.vue";
 import ViewTabs, { type ViewTab } from "./ViewTabs.vue";
 import VmSettings from "./VmSettings.vue";
+import VmTerminal from "./VmTerminal.vue";
 import { useI18n } from "../composables/i18n";
 import { exeVmsApi, exeVmsChanged, type ExeVM, type VmTab } from "../../services/exeVms";
 import { errorMessage } from "../../utils/errorMessage";
@@ -110,6 +132,15 @@ const blocked = ref("");
 const error = ref("");
 const loading = ref(false);
 const frameKey = ref(0);
+// Bumped for each new shell; 0 until the Terminal tab first opens.
+const terminalSession = ref(0);
+watch(
+  () => props.tab,
+  (tab) => {
+    if (tab === "terminal" && !terminalSession.value) terminalSession.value = 1;
+  },
+  { immediate: true },
+);
 
 // Probes framing again too: a VM may have been made public or private.
 async function load() {
@@ -144,7 +175,8 @@ const tabs = computed<ViewTab<VmTab>[]>(() => {
   }
   return [
     { key: "settings", icon: "pi-cog", title: "Settings" },
-    { key: "page", icon: "pi-globe", title: host, tooltip: vm.value?.url },
+    { key: "page", icon: "pi-globe", title: host, tooltip: vm.value?.url, yields: true },
+    { key: "terminal", icon: "pi-code", title: "Terminal", tooltip: vm.value?.ssh_command },
   ];
 });
 // A change in the settings may have made the page public or private.
@@ -154,6 +186,7 @@ watch(
   () => props.name,
   () => {
     vm.value = null;
+    terminalSession.value = props.tab === "terminal" ? 1 : 0;
     void load();
   },
   { immediate: true },

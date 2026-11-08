@@ -54,6 +54,10 @@ type exeVM struct {
 	// Integration is the exe.dev integration that lists the VM, which its
 	// settings change it through.
 	Integration string `json:"integration"`
+	// SSHDest is where its terminal connects, if Shell says the integration
+	// may (exe_vm_terminal.go).
+	SSHDest string `json:"-"`
+	Shell   bool   `json:"-"`
 }
 
 // devProdTabs reports whether the sidebar has dev/prod tabs: workspace
@@ -119,11 +123,15 @@ func (s *Server) fetchExeVMs(ctx context.Context) (*exeVMList, error) {
 		return &exeVMList{VMs: []exeVM{}, SetupURL: "https://exe.dev/integrations/add?" + setup.Encode(), FetchedAt: time.Now()}, nil
 	}
 	type lsVM struct {
-		Name       string   `json:"vm_name"`
-		Emoji      string   `json:"emoji"`
-		Status     string   `json:"status"`
-		HTTPSURL   string   `json:"https_url"`
-		SSHCommand string   `json:"ssh_command"`
+		Name       string `json:"vm_name"`
+		Emoji      string `json:"emoji"`
+		Status     string `json:"status"`
+		HTTPSURL   string `json:"https_url"`
+		SSHCommand string `json:"ssh_command"`
+		SSHDest    string `json:"ssh_dest"`
+		Access     struct {
+			Shell bool `json:"shell"`
+		} `json:"access"`
 		ProxyShare string   `json:"proxy_share"`
 		Comment    string   `json:"comment"`
 		Tags       []string `json:"tags"`
@@ -164,7 +172,7 @@ func (s *Server) fetchExeVMs(ctx context.Context) (*exeVMList, error) {
 			list.VMs = append(list.VMs, exeVM{
 				Name: vm.Name, Emoji: vm.Emoji, Status: vm.Status, URL: vm.HTTPSURL, SSH: vm.SSHCommand,
 				Public: vm.ProxyShare == "public", Comment: vm.Comment, Tags: vm.Tags,
-				Role: roles[vm.Name], Integration: integrations[i],
+				Role: roles[vm.Name], Integration: integrations[i], SSHDest: vm.SSHDest, Shell: vm.Access.Shell,
 			})
 		}
 	}

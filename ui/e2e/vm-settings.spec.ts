@@ -15,7 +15,9 @@ test.afterEach(async ({ request }) => {
   }
 });
 
-test("a VM opens on its Settings tab, beside its Page tab, and settings changes confirm first", async ({ page }) => {
+test("a VM opens on its Settings tab, beside its Page tab, and settings changes confirm first", async ({
+  page,
+}) => {
   const vm = {
     name: "web",
     emoji: "🌐",
@@ -115,4 +117,61 @@ test("a VM opens on its Settings tab, beside its Page tab, and settings changes 
   await page.getByTestId("view-tab-settings").click();
   await expect(page).toHaveURL(/\/vm\/web$/);
   await expect(page.getByTestId("vm-status")).toBeVisible();
+});
+
+test("a VM's Terminal tab opens a shell on it, which closes with the VM's view", async ({
+  page,
+}) => {
+  const vm = {
+    name: "web",
+    emoji: "🌐",
+    status: "running",
+    url: "https://web.exe.test",
+    ssh_command: "ssh web.exe.test",
+    public: false,
+    comment: "",
+    tags: [],
+    role: "",
+    integration: "acme-exe",
+  };
+  await page.route("**/api/exe-vms", (route) => route.fulfill({ json: { vms: [vm] } }));
+  await page.route("**/api/exe-vms/web/frame?*", (route) =>
+    route.fulfill({ json: { blocked: "" } }),
+  );
+  await page.route("https://web.exe.test/**", (route) => route.fulfill({ body: "the web page" }));
+  await page.route("**/api/exe-vms/web/settings", (route) => route.fulfill({ status: 502 }));
+  // The server's side of the shell (TestExeVMTerminal covers the real one).
+  const messages: { type: string; cols?: number; data?: string }[] = [];
+  let closed = false;
+  await page.routeWebSocket("**/api/exe-vms/web/terminal", (ws) => {
+    ws.onMessage((raw) => {
+      const msg = JSON.parse(String(raw));
+      messages.push(msg);
+      if (msg.type === "init") ws.send(JSON.stringify({ type: "output", data: btoa("$ ") }));
+    });
+    ws.onClose(() => (closed = true));
+  });
+
+  await page.goto("/vm/web/page");
+  const tabs = page.getByRole("navigation", { name: "VM tabs" }).getByRole("button");
+  await expect(tabs).toHaveCount(3);
+  await expect(tabs.last()).toHaveAttribute("data-testid", "view-tab-terminal");
+  // Unopened, there is no shell.
+  await expect(page.getByTestId("vm-terminal")).toHaveCount(0);
+
+  await page.getByTestId("view-tab-terminal").click();
+  await expect(page).toHaveURL(/\/vm\/web\/terminal$/);
+  await expect(page.getByTestId("vm-terminal")).toBeVisible();
+  await expect.poll(() => messages[0]?.type).toBe("init");
+  expect(messages[0].cols).toBeGreaterThan(20);
+  await page.keyboard.type("ls");
+  await expect.poll(() => messages.map((m) => m.data ?? "").join("")).toContain("ls");
+  await page.screenshot({ path: "test-results/vm-terminal.png" });
+
+  // Another tab keeps the shell; leaving the VM closes it.
+  await page.getByTestId("view-tab-page").click();
+  await expect(page.getByTestId("vm-terminal")).toBeHidden();
+  expect(closed).toBe(false);
+  await page.goto("/");
+  await expect.poll(() => closed).toBe(true);
 });

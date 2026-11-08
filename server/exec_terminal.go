@@ -64,32 +64,11 @@ func (s *Server) handleExecWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		CompressionMode: websocket.CompressionDisabled,
-	})
-	if err != nil {
-		s.logger.Error("Failed to upgrade websocket", "error", err)
+	conn, cols, rows, ok := s.acceptTerminalWS(w, r)
+	if !ok {
 		return
 	}
 	defer conn.Close(websocket.StatusInternalError, "internal error")
-
-	var initMsg ExecMessage
-	if err := wsjson.Read(ctx, conn, &initMsg); err != nil {
-		s.logger.Debug("Failed to read init message", "error", err)
-		return
-	}
-	if initMsg.Type != "init" {
-		conn.Close(websocket.StatusPolicyViolation, "expected init message")
-		return
-	}
-	cols := initMsg.Cols
-	rows := initMsg.Rows
-	if cols == 0 {
-		cols = 80
-	}
-	if rows == 0 {
-		rows = 24
-	}
 
 	var slug string
 	if conversationID != "" {
@@ -98,6 +77,7 @@ func (s *Server) handleExecWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if termID == "" {
+		var err error
 		if cmd, cwd, err = s.terminalCommand(ctx, conversationID, cmd, cwd); err != nil {
 			wsjson.Write(ctx, conn, ExecMessage{Type: "error", Data: err.Error()})
 			conn.Close(websocket.StatusInternalError, "attach failed")
@@ -140,6 +120,37 @@ func (s *Server) handleExecWS(w http.ResponseWriter, r *http.Request) {
 	_ = dc.SendResize(cols, rows)
 
 	s.bridgeWS(ctx, conn, dc, sess.ID)
+}
+
+// acceptTerminalWS upgrades r to a terminal websocket and reads the
+// client's "init" message with its size. Unless ok, it has given up on r;
+// otherwise the caller closes conn.
+func (s *Server) acceptTerminalWS(w http.ResponseWriter, r *http.Request) (conn *websocket.Conn, cols, rows uint16, ok bool) {
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		CompressionMode: websocket.CompressionDisabled,
+	})
+	if err != nil {
+		s.logger.Error("Failed to upgrade websocket", "error", err)
+		return nil, 0, 0, false
+	}
+	var initMsg ExecMessage
+	if err := wsjson.Read(r.Context(), conn, &initMsg); err != nil {
+		s.logger.Debug("Failed to read init message", "error", err)
+		conn.Close(websocket.StatusInternalError, "internal error")
+		return nil, 0, 0, false
+	}
+	if initMsg.Type != "init" {
+		conn.Close(websocket.StatusPolicyViolation, "expected init message")
+		return nil, 0, 0, false
+	}
+	cols, rows = initMsg.Cols, initMsg.Rows
+	if cols == 0 {
+		cols = 80
+	}
+	if rows == 0 {
+		rows = 24
+	}
+	return conn, cols, rows, true
 }
 
 // buildTerminalEnv returns the SHELLEY_* environment variables to inject into
@@ -215,6 +226,10 @@ func (s *Server) bridgeWS(ctx context.Context, conn *websocket.Conn, client term
 			case terminalExit:
 				exited = true
 				_ = wsjson.Write(ctx, conn, ExecMessage{Type: "exit", Data: fmt.Sprintf("%d", message.exitCode)})
+				return
+			case terminalFailed:
+				exited = true
+				_ = wsjson.Write(ctx, conn, ExecMessage{Type: "error", Data: string(message.data)})
 				return
 			}
 		}

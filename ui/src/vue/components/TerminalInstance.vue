@@ -35,6 +35,8 @@ const props = defineProps<{
   renderer: TerminalRenderer;
   model?: string | null;
   transformInput?: (data: string) => string;
+  /** A websocket path speaking /api/exec-ws's protocol, instead of it. */
+  socketPath?: string;
 }>();
 
 const emit = defineEmits<{
@@ -122,6 +124,28 @@ onMounted(async () => {
   await connect();
 });
 
+// The /api/exec-ws path of this terminal's session.
+function execSocketPath(): string {
+  // If we already have a persistent session id, reattach to it and nothing
+  // else: sending cmd as well would let the server silently rerun the command
+  // when the session has died. Otherwise spawn a new one with cmd+cwd.
+  //
+  // conversation_id comes from the terminal itself, not from whatever
+  // conversation happens to be selected right now, so navigating while this
+  // component mounts cannot record the wrong owner.
+  const params = new URLSearchParams();
+  if (sessionId) {
+    params.set("term_id", sessionId);
+  } else {
+    params.set("cmd", props.term.command);
+    params.set("cwd", props.term.cwd);
+    params.set("close_on_exit", String(props.term.closeOnExit));
+    if (props.term.conversationId) params.set("conversation_id", props.term.conversationId);
+    if (props.model) params.set("model", props.model);
+  }
+  return `/api/exec-ws?${params.toString()}`;
+}
+
 // Open a view and a websocket to the session: a new one the first time,
 // otherwise the one this terminal already has. `size` keeps a reopened
 // terminal's grid while it's hidden and can't be fitted.
@@ -175,26 +199,9 @@ async function connect(size?: { cols: number; rows: number }, focus = false) {
   v.write(`\x1b[2m$ ${props.term.command}\x1b[0m\r\n`);
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  // If we already have a persistent session id, reattach to it and nothing
-  // else: sending cmd as well would let the server silently rerun the command
-  // when the session has died. Otherwise spawn a new one with cmd+cwd.
-  //
-  // conversation_id comes from the terminal itself, not from whatever
-  // conversation happens to be selected right now, so navigating while this
-  // component mounts cannot record the wrong owner.
-  const params = new URLSearchParams();
-  if (sessionId) {
-    params.set("term_id", sessionId);
-  } else {
-    params.set("cmd", props.term.command);
-    params.set("cwd", props.term.cwd);
-    params.set("close_on_exit", String(props.term.closeOnExit));
-    if (props.term.conversationId) params.set("conversation_id", props.term.conversationId);
-    if (props.model) params.set("model", props.model);
-  }
   titleParser.reset();
   const socket = new WebSocket(
-    `${protocol}//${window.location.host}/api/exec-ws?${params.toString()}`,
+    `${protocol}//${window.location.host}${props.socketPath ?? execSocketPath()}`,
   );
   ws = socket;
 

@@ -143,20 +143,21 @@ export function saveNavTab(tab: NavTab) {
   localStorage.setItem(NAV_TAB_KEY, tab);
 }
 
-/** A VM's view's tabs: its settings, first, and its web page. */
-export type VmTab = "settings" | "page";
+/** A VM's view's tabs: its settings, first, its web page, and a shell on it. */
+export type VmTab = "settings" | "page" | "terminal";
 
-/** The VM name in a /vm/<name>[/page] path, or null. */
+/** The VM name in a /vm/<name>[/page|/terminal] path, or null. */
 export function vmFromPath(path: string): string | null {
-  const m = path.match(/^\/vm\/([^/]+)(\/page)?\/?$/);
+  const m = path.match(/^\/vm\/([^/]+)(\/page|\/terminal)?\/?$/);
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-/** The tab of a /vm/<name>[/page] path. */
+/** The tab of a /vm/<name>[/page|/terminal] path. */
 export function vmTabFromPath(path: string): VmTab {
-  return /^\/vm\/[^/]+\/page\/?$/.test(path) ? "page" : "settings";
+  const m = path.match(/^\/vm\/[^/]+\/(page|terminal)\/?$/);
+  return m ? (m[1] as VmTab) : "settings";
 }
 
 export function vmPath(name: string, tab: VmTab): string {
-  return `/vm/${encodeURIComponent(name)}${tab === "page" ? "/page" : ""}`;
+  return `/vm/${encodeURIComponent(name)}${tab === "settings" ? "" : `/${tab}`}`;
 }

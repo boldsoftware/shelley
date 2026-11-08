@@ -243,11 +243,11 @@
 
 <script setup lang="ts">
 import { apiFetch, sendJSON } from "../../services/api";
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import Popover from "primevue/popover";
 import type { TerminalHandle, TerminalRenderer } from "./terminalBackend";
 import { useTerminalRendererPreference } from "../composables/terminalRendererPreference";
-import { isDarkModeActive } from "../../services/theme";
+import { useDarkMode } from "../composables/darkMode";
 import TerminalKeyShortcuts from "./TerminalKeyShortcuts.vue";
 import TerminalInstance from "./TerminalInstance.vue";
 import type { TermStatus } from "./terminalHelpers";
@@ -394,19 +394,7 @@ async function toggleScope(t: EphemeralTerminal) {
 
 let resizeDrag: { pointerId: number; y: number; height: number } | null = null;
 
-// Detect dark mode
-const isDark = ref(isDarkModeActive());
-let observer: MutationObserver | null = null;
-onMounted(() => {
-  observer = new MutationObserver(() => {
-    isDark.value = isDarkModeActive();
-  });
-  observer.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ["class"],
-  });
-});
-onUnmounted(() => observer?.disconnect());
+const isDark = useDarkMode();
 
 // Re-resolve the selected tab whenever the visible set can have changed: the
 // app-wide terminal collection changed, a terminal was re-scoped, or the user

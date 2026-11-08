@@ -20,6 +20,9 @@ type terminalMessageKind int
 const (
 	terminalOutput terminalMessageKind = iota
 	terminalExit
+	// terminalFailed ends a terminal whose program could not do its job;
+	// data says why, in one line.
+	terminalFailed
 )
 
 type terminalMessage struct {
