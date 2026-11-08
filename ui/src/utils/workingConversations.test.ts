@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ConversationWithState } from "../types";
-import { foldedProjectWorking, workingConversationIds } from "./workingConversations";
+import {
+  anyTaskRunning,
+  foldedProjectWorking,
+  workingConversationIds,
+} from "./workingConversations";
 
 function conversation(
   id: string,
@@ -61,4 +65,15 @@ test("a project marks its rows' work only while folded", () => {
   assert.equal(foldedProjectWorking(false, rows, new Set(["busy"])), false);
   assert.equal(foldedProjectWorking(true, rows, new Set(["elsewhere"])), false);
   assert.equal(foldedProjectWorking(true, [], new Set(["busy"])), false);
+});
+
+test("a task runs while any conversation works or any action runs", () => {
+  const idle = conversation("idle");
+  const done = { status: "succeeded" };
+  assert.equal(anyTaskRunning([idle], [done]), false);
+  assert.equal(anyTaskRunning([], []), false);
+  assert.equal(anyTaskRunning([idle, conversation("assistant", null, true)], []), true);
+  assert.equal(anyTaskRunning([conversation("sub", "idle", true)], []), true);
+  assert.equal(anyTaskRunning([conversation("job", null, false, 1)], []), true);
+  assert.equal(anyTaskRunning([idle], [done, { status: "running" }]), true);
 });

@@ -421,6 +421,8 @@ import {
 } from "./composables/workspace";
 import type { ActionRunSummary } from "../services/workspace";
 import PerfHud from "./components/PerfHud.vue";
+import { setFaviconStatus } from "../services/favicon";
+import { anyTaskRunning } from "../utils/workingConversations";
 
 const perfHudEnabled = useFeatureFlag("performance-hud");
 
@@ -560,6 +562,14 @@ const workspace = createWorkspace((run: ActionRunSummary) => {
     });
 });
 const refreshWorkspace = () => void workspace.refresh().catch(() => {});
+// Workspace mode's favicon shows a dot while any task runs.
+if (workspaceMode)
+  watch(
+    () => anyTaskRunning(conversations.value, workspace.data.value?.runs ?? []),
+    (running) => setFaviconStatus(running ? "working" : "ready"),
+    { immediate: true },
+  );
+
 workspace.projectView.value = projectViewFromPath(window.location.pathname);
 const drawerOpen = ref(false);
 // A project's view takes the main pane at its own path: opening it closes

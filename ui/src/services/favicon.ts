@@ -1,7 +1,9 @@
-// Favicon service for dynamic conversation-status indication
-// When the agent is working, the entire favicon is ghosted rather than badged
+// Favicon service for dynamic status indication. Stock Shelley ghosts the
+// whole favicon while the open conversation's agent works; workspace mode
+// badges exe's logo with a blue dot while any task runs (App.vue).
+import { workspaceMode } from "../utils/workspaceMode";
 
-type FaviconStatus = "working" | "ready";
+export type FaviconStatus = "working" | "ready";
 
 const WORKING_OPACITY = "0.35";
 
@@ -25,10 +27,19 @@ function extractSVGFromDataURI(dataURI: string): string | null {
   }
 }
 
-// Ghost every element in the favicon while the agent is working
-function applyStatus(svg: string, status: FaviconStatus): string {
+// The workspace dot: --primary blue (the nav's working dot), ringed in white
+// to stand out on the fish and on dark tabs, in a 32-unit square.
+const WORKING_DOT = `<circle cx="24.5" cy="24.5" r="6" fill="#2563eb" stroke="#fff" stroke-width="2"/>`;
+
+// The favicon to show for status: in workspace mode, svg under the dot
+// while working; otherwise svg, ghosted while working.
+export function applyStatus(svg: string, status: FaviconStatus, workspace = workspaceMode): string {
   if (status === "ready") {
     return svg;
+  }
+  if (workspace) {
+    const base = "data:image/svg+xml," + encodeURIComponent(svg);
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><image href="${base}" width="32" height="32"/>${WORKING_DOT}</svg>`;
   }
 
   const openingTagEnd = svg.indexOf(">");

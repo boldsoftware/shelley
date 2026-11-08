@@ -24,3 +24,15 @@ export function foldedProjectWorking(
 ): boolean {
   return folded && rows.some((row) => working.has(row.conversation_id));
 }
+
+// Workspace mode's favicon dot: any conversation working as the nav shows it
+// (the Assistant and subagents included), or any project action running.
+export function anyTaskRunning(
+  conversations: ConversationWithState[],
+  runs: { status: string }[],
+): boolean {
+  return (
+    conversations.some((c) => c.working || c.running_background_jobs > 0) ||
+    runs.some((run) => run.status === "running")
+  );
+}
