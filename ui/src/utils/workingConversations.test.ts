@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ConversationWithState } from "../types";
-import { workingConversationIds } from "./workingConversations";
+import { foldedProjectWorking, workingConversationIds } from "./workingConversations";
 
 function conversation(
   id: string,
@@ -53,4 +53,12 @@ test("stays working until the last task or subagent finishes", () => {
   assert.deepEqual(workingConversationIds(conversations), new Set());
   nested.working = true;
   assert.equal(active(), true);
+});
+
+test("a project marks its rows' work only while folded", () => {
+  const rows = [conversation("idle"), conversation("busy")];
+  assert.equal(foldedProjectWorking(true, rows, new Set(["busy"])), true);
+  assert.equal(foldedProjectWorking(false, rows, new Set(["busy"])), false);
+  assert.equal(foldedProjectWorking(true, rows, new Set(["elsewhere"])), false);
+  assert.equal(foldedProjectWorking(true, [], new Set(["busy"])), false);
 });

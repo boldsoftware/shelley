@@ -14605,7 +14605,8 @@ kbd {
 }
 
 .conversation-item .working-indicator,
-.workspace-assistant-row .working-indicator {
+.workspace-assistant-row .working-indicator,
+.project-heading .working-indicator {
   display: inline-block;
   align-self: center;
   width: 7px;
@@ -14617,7 +14618,8 @@ kbd {
 }
 
 .conversation-item.active .working-indicator,
-.workspace-assistant-row.active .working-indicator {
+.workspace-assistant-row.active .working-indicator,
+.project-heading.active .working-indicator {
   background-color: white;
   color: white;
 }

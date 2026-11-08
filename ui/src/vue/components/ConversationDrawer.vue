@@ -619,6 +619,18 @@
             >
               <span class="conversation-group-label">{{ group.label }}</span>
               <span class="conversation-group-count">{{ group.conversations.length }}</span>
+              <span
+                v-if="
+                  foldedProjectWorking(
+                    projectGroupCollapsed(group),
+                    group.conversations,
+                    workingIds,
+                  )
+                "
+                class="working-indicator"
+                :title="t('agentIsWorking')"
+                data-testid="project-working-indicator"
+              />
             </component>
             <button
               v-if="!archivedOnly"
@@ -851,7 +863,7 @@ import DatePicker from "primevue/datepicker";
 import Popover from "primevue/popover";
 import { DrawerCtxKey, type GroupBy, parseTags } from "./conversationDrawerShared";
 import { compactNav, workspaceMode } from "../../utils/workspaceMode";
-import { workingConversationIds } from "../../utils/workingConversations";
+import { foldedProjectWorking, workingConversationIds } from "../../utils/workingConversations";
 import type { EphemeralTerminal } from "./terminalTypes";
 import {
   UNTAGGED_TERM,

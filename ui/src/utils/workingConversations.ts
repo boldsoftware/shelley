@@ -14,3 +14,13 @@ export function workingConversationIds(conversations: ConversationWithState[]): 
   }
   return working;
 }
+
+// A folded project marks the work its hidden rows would show; unfolded, the
+// rows show it themselves.
+export function foldedProjectWorking(
+  folded: boolean,
+  rows: { conversation_id: string }[],
+  working: Set<string>,
+): boolean {
+  return folded && rows.some((row) => working.has(row.conversation_id));
+}
