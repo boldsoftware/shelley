@@ -558,13 +558,7 @@ func fromLLMContent(c llm.Content) content {
 	case llm.ContentTypeToolUse:
 		d.ID = c.ID
 		d.ToolName = c.ToolName
-		// History from before llm.CanonicalToolInput may repeat names,
-		// which the API rejects.
-		d.ToolInput, _ = llm.CanonicalToolInput(c.ToolInput)
-		// Handle both nil and JSON "null" (which unmarshals as []byte("null"))
-		if d.ToolInput == nil || string(d.ToolInput) == "null" {
-			d.ToolInput = json.RawMessage("{}")
-		}
+		d.ToolInput = llm.ReplayToolInput(c.ToolInput)
 	case llm.ContentTypeToolResult:
 		d.ToolUseID = c.ToolUseID
 		d.ToolError = c.ToolError

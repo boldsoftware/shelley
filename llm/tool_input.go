@@ -5,6 +5,18 @@ import (
 	"encoding/json"
 )
 
+// ReplayToolInput returns object-shaped arguments for provider history.
+// Input that is not one valid JSON object replays as {}; the original
+// input kept for storage and execution is never changed.
+func ReplayToolInput(input json.RawMessage) json.RawMessage {
+	trimmed := bytes.TrimSpace(input)
+	if len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(input) {
+		return json.RawMessage(`{}`)
+	}
+	input, _ = CanonicalToolInput(input)
+	return input
+}
+
 // CanonicalToolInput returns a tool call's input with every object member
 // name appearing once, keeping the last value as encoding/json does, and
 // the names that were repeated. Models occasionally garble a call into

@@ -325,6 +325,9 @@ func TestToolArgumentsInput(t *testing.T) {
 		{"empty", "", `{}`},
 		{"truncated", `{"command": "ls`, `"{\"command\": \"ls"`},
 		{"trailing garbage", `{"a":1} trailing`, `"{\"a\":1} trailing"`},
+		{"quoted object", `"{\"a\":1}"`, `"{\"a\":1}"`},
+		{"null", `null`, `null`},
+		{"array", `[]`, `[]`},
 		{"valid", `{"a":1}`, `{"a":1}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2599,8 +2602,12 @@ func TestServiceDoDoesNotRetryNonEventStreamResponse(t *testing.T) {
 	}
 }
 
-func TestCanonicalToolInputReplayed(t *testing.T) {
-	if got := string(canonicalToolInput(json.RawMessage(`{"a":1,"a":2}`))); got != `{"a":2}` {
-		t.Fatalf("tool input %s", got)
+func TestFromLLMContentRepeatedToolInputNames(t *testing.T) {
+	_, calls := fromLLMContent(llm.Content{
+		Type: llm.ContentTypeToolUse, ID: "t", ToolName: "bash",
+		ToolInput: json.RawMessage(`{"a":1,"a":2}`),
+	})
+	if len(calls) != 1 || calls[0].Function.Arguments != `{"a":2}` {
+		t.Fatalf("tool calls %+v", calls)
 	}
 }

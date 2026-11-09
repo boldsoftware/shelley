@@ -22,3 +22,41 @@ func TestCanonicalToolInput(t *testing.T) {
 		}
 	}
 }
+
+func TestReplayToolInput(t *testing.T) {
+	for _, tc := range []struct {
+		name, input, want string
+	}{
+		{"empty", "", `{}`},
+		{"whitespace", " \n\t", `{}`},
+		{"null", " \nnull\t", `{}`},
+		{"quoted object", `"{\"action\":\"eval\"}"`, `{}`},
+		{"quoted truncated object", `"{\"action\":\"eval\""`, `{}`},
+		{"string", `"hello"`, `{}`},
+		{"number", `42`, `{}`},
+		{"boolean", `true`, `{}`},
+		{"array", `[{"action":"eval"}]`, `{}`},
+		{"truncated", `{"action":`, `{}`},
+		{"trailing garbage", `{"a":1} trailing`, `{}`},
+		{"multiple objects", `{} {}`, `{}`},
+		{"empty object", `{}`, `{}`},
+		{"valid object bytes", " \n{ \"b\":1.50, \"a\":9007199254740993 }\t", " \n{ \"b\":1.50, \"a\":9007199254740993 }\t"},
+		{"invalid field type", `{"action":42}`, `{"action":42}`},
+		{"repeated names", `{"a":{"x":1,"x":2},"b":[{"y":1,"y":1.50}]}`, `{"a":{"x":2},"b":[{"y":1.50}]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := json.RawMessage(tc.input)
+			for range 2 {
+				if got := string(ReplayToolInput(input)); got != tc.want {
+					t.Fatalf("replay = %q, want %q", got, tc.want)
+				}
+				if string(input) != tc.input {
+					t.Fatalf("original input changed: %q", input)
+				}
+			}
+		})
+	}
+	if got := string(ReplayToolInput(nil)); got != `{}` {
+		t.Fatalf("nil replay = %q", got)
+	}
+}

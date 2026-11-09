@@ -181,7 +181,7 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 			case llm.ContentTypeToolUse:
 				// Tool use becomes a function call
 				var args map[string]any
-				if err := json.Unmarshal(c.ToolInput, &args); err != nil {
+				if err := json.Unmarshal(llm.ReplayToolInput(c.ToolInput), &args); err != nil {
 					return nil, fmt.Errorf("failed to unmarshal tool input: %w", err)
 				}
 
