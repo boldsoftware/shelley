@@ -165,7 +165,8 @@ func (e profileEcho) problem(p Profile) string {
 		differs("default", e.Default, p.Default),
 		differs("builtin", e.Builtin, p.Builtin),
 		differs("user_edited", e.UserEdited, p.UserEdited),
-		differs("project", e.Project, p.Project))
+		differs("project", e.Project, p.Project),
+	)
 }
 
 func encodeProfile(st Settings, voicePrompt string) string {
