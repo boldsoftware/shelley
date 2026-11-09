@@ -8,7 +8,7 @@
 <template>
   <div class="chat-workspace-actions">
     <button
-      v-if="hasCwd"
+      v-if="gitActions"
       type="button"
       class="btn-icon chat-workspace-action"
       :aria-label="t('diffs')"
@@ -18,7 +18,7 @@
       <WorkspaceActionIcon action="diffs" />
     </button>
     <button
-      v-if="hasCwd"
+      v-if="gitActions"
       type="button"
       class="btn-icon chat-workspace-action"
       :aria-label="t('gitGraph')"
@@ -358,7 +358,8 @@ import {
 } from "../../services/notifications";
 
 const props = defineProps<{
-  hasCwd: boolean;
+  // Offer the diff viewer and git graph.
+  gitActions: boolean;
   showDirectory: boolean;
   cwd: string;
   links: Link[];
@@ -441,7 +442,7 @@ type ToolbarAction = {
 };
 const toolbarActions = computed(() => {
   const actions: ToolbarAction[] = [];
-  if (props.hasCwd) {
+  if (props.gitActions) {
     actions.push({ icon: "diffs", label: t("diffs"), run: onDiffs });
     actions.push({ icon: "gitGraph", label: t("gitGraph"), run: onGitGraph });
   }

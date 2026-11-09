@@ -633,24 +633,35 @@ test("a search shows matches in folded projects without unfolding them", async (
   expect(await saved()).toBe(folds);
 });
 
-test("the Assistant shows no host or working directory; conversations still do", async ({
+test("the Assistant shows no host, working directory, diffs or git graph; conversations still do", async ({
   page,
   request,
 }) => {
   const conversation = await createConversationViaAPIWithDetails(request, "Hello");
+  const actions = page.locator(".chat-workspace-actions");
+  const gitButtons = actions.getByRole("button", { name: /^(Diffs|Git Graph)$/ });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`/c/${conversation.conversationId}`);
   await expect(page.locator(".status-ready")).toBeVisible();
   await expect(page.locator(".status-readout-cwd")).toBeVisible();
+  await expect(gitButtons).toHaveCount(2);
 
   await page.goto("/");
   await expect(page.locator("h1.header-title")).toHaveText("Assistant");
   await expect(page.locator(".context-usage-label")).toBeVisible();
   await expect(page.locator(".status-ready")).toHaveCount(0);
   await expect(page.locator(".status-readout-cwd, .status-field-cwd")).toHaveCount(0);
+  await expect(actions.getByRole("button", { name: "Terminal", exact: true })).toBeVisible();
+  await expect(gitButtons).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 800 });
   await page.getByRole("button", { name: "More options", exact: true }).click();
+  await expect(page.locator(".overflow-toolbar-action[aria-label='Terminal']")).toBeVisible();
+  await expect(
+    page.locator(
+      ".overflow-toolbar-action[aria-label='Diffs'], .overflow-toolbar-action[aria-label='Git Graph']",
+    ),
+  ).toHaveCount(0);
   await expect(page.locator(".overflow-menu-item", { hasText: "Change Language" })).toBeVisible();
   await expect(page.locator(".overflow-menu-item", { hasText: "Directory" })).toHaveCount(0);
 });

@@ -70,7 +70,7 @@
       <div class="header-actions">
         <!-- Overflow menu (PrimeVue Popover + Select) -->
         <ChatOverflowMenu
-          :has-cwd="hasCwd"
+          :git-actions="gitActions"
           :show-directory="isMobile && !isAssistant"
           :cwd="currentConversation?.cwd || selectedCwd"
           :links="links"
@@ -2483,6 +2483,8 @@ const showPlace = computed(
     !props.currentConversation?.is_draft,
 );
 const hasCwd = computed(() => !!(props.currentConversation?.cwd || selectedCwd.value));
+// Workspace mode's Assistant works on no repository: no diffs or git graph.
+const gitActions = computed(() => hasCwd.value && !(workspaceMode && props.isAssistant));
 const proxyURL = computed(() => `https://${hostname}/`);
 // On exe.dev hosts the welcome message advertises the proxy features; off
 // exe.dev those don't apply, so show a shorter variant without proxy details.
@@ -4361,11 +4363,11 @@ function handleMenuShortcut(e: KeyboardEvent) {
   if (e.defaultPrevented || isImeComposing(e) || terminalOwnsKey(e) || hasOpenDialog()) return;
   switch (action) {
     case "diffs":
-      if (!hasCwd.value) return;
+      if (!gitActions.value) return;
       showDiffViewer.value = true;
       break;
     case "gitGraph":
-      if (!hasCwd.value) return;
+      if (!gitActions.value) return;
       showGitGraph.value = true;
       break;
     case "terminal":
