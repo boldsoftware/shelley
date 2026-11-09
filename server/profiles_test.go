@@ -133,7 +133,7 @@ func TestProfilesCRUD(t *testing.T) {
 	// deleted. PUT replaces the settings; "default" isn't one of them.
 	e.want(200, "POST", "/api/profiles/Fast/default", "")
 	e.want(404, "POST", "/api/profiles/Nope/default", "")
-	e.want(400, "PUT", "/api/profiles/Fast", `{"model":"model-b","default":true}`)
+	e.want(400, "PUT", "/api/profiles/Fast", `{"model":"model-b","default":false}`)
 	e.want(200, "PUT", "/api/profiles/Fast", `{"model":"model-b"}`)
 	p = e.profiles()
 	if !p["Fast"].Default || p["Default"].Default || p["Fast"].ThinkingLevel != "" || p["Fast"].ToolOverrides == nil {
@@ -801,4 +801,31 @@ func TestConversationFollowsProfile(t *testing.T) {
 	if got := strings.TrimSpace(systemText(turn(shared))); got != "Version two." {
 		t.Fatalf("deleting the profile changed the conversation: %q", got)
 	}
+}
+
+// A client may send back a profile as listed, with its read-only fields, as
+// long as it doesn't try to change them that way.
+func TestProfileRoundTrip(t *testing.T) {
+	t.Parallel()
+	e := newProfileEnv(t)
+	p := e.profiles()["Default"]
+	p.ThinkingLevel = "low"
+	body, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.want(200, "PUT", "/api/profiles/Default", string(body))
+	if got := e.profiles()["Default"]; got.ThinkingLevel != "low" || !got.Default {
+		t.Fatalf("after round trip: %+v", got)
+	}
+	// Saved as a new profile, its echoes are a new profile's.
+	p.Name, p.Default, p.Builtin, p.UserEdited = "Copy", false, false, false
+	body, _ = json.Marshal(p)
+	e.want(201, "POST", "/api/profiles", string(body))
+
+	for _, bad := range []string{`"default":false`, `"builtin":false`, `"project":true`, `"name":"Other"`} {
+		e.want(400, "PUT", "/api/profiles/Default", `{"model":"",`+bad+`}`)
+	}
+	e.want(400, "POST", "/api/profiles", `{"name":"X","default":true}`)
+	e.want(400, "PUT", "/api/profiles/Default", `{"nope":1}`)
 }

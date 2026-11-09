@@ -140,6 +140,34 @@ func decodeStrict(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
+// profileEcho is a listed Profile's read-only fields. A client may send them
+// back with the settings it saves, so long as they're unchanged.
+type profileEcho struct {
+	Name       *string `json:"name"`
+	Default    *bool   `json:"default"`
+	Builtin    *bool   `json:"builtin"`
+	UserEdited *bool   `json:"user_edited"`
+	Project    *bool   `json:"project"`
+}
+
+// problem says which echoed field differs from p's, or "".
+func (e profileEcho) problem(p Profile) string {
+	differs := func(field string, sent *bool, have bool) string {
+		if sent != nil && *sent != have {
+			return field + " can't be changed by saving settings"
+		}
+		return ""
+	}
+	if e.Name != nil && *e.Name != p.Name {
+		return "name can't be changed by saving settings"
+	}
+	return cmp.Or(
+		differs("default", e.Default, p.Default),
+		differs("builtin", e.Builtin, p.Builtin),
+		differs("user_edited", e.UserEdited, p.UserEdited),
+		differs("project", e.Project, p.Project))
+}
+
 func encodeProfile(st Settings, voicePrompt string) string {
 	b, err := json.Marshal(storedProfile{Settings: st, VoicePrompt: voicePrompt})
 	if err != nil {
@@ -153,6 +181,7 @@ func encodeProfile(st Settings, voicePrompt string) string {
 func (s *Server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name string `json:"name"`
+		profileEcho
 		Settings
 		VoicePrompt string `json:"voice_prompt"`
 	}
@@ -160,7 +189,7 @@ func (s *Server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body.Name = strings.TrimSpace(body.Name)
-	if msg := db.ProfileNameProblem(body.Name); msg != "" {
+	if msg := cmp.Or(db.ProfileNameProblem(body.Name), body.problem(Profile{Name: body.Name})); msg != "" {
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
@@ -199,6 +228,7 @@ func (s *Server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 // voice_prompt keeps. Its model needn't be available if it is unchanged.
 func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	var body struct {
+		profileEcho
 		Settings
 		VoicePrompt *string `json:"voice_prompt"`
 	}
@@ -214,6 +244,18 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		s.internalError(w, "Failed to load profile", err)
+		return
+	}
+	if body.Project != nil {
+		_, err := s.db.GetProject(r.Context(), name)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			s.internalError(w, "Failed to load project", err)
+			return
+		}
+		existing.Project = err == nil
+	}
+	if msg := body.problem(existing); msg != "" {
+		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
 	voicePrompt := existing.VoicePrompt
