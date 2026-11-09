@@ -32,6 +32,11 @@ const fishUrl = `data:image/svg+xml,${encodeURIComponent(fish)}`;
   border-right: 1px solid var(--border);
   min-height: 1.25rem;
 }
+/* No rule before a title kept only for screen readers (the Assistant's). */
+.header-left .exe-brand:has(+ .sr-only) {
+  padding-right: 0;
+  border-right: 0;
+}
 .exe-brand-fish {
   display: block;
   width: 1.5rem;

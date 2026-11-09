@@ -633,7 +633,7 @@ test("a search shows matches in folded projects without unfolding them", async (
   expect(await saved()).toBe(folds);
 });
 
-test("the Assistant shows no host, working directory, diffs, git graph or message actions; conversations still do", async ({
+test("the Assistant shows no title, host, working directory, diffs, git graph or message actions; conversations still do", async ({
   page,
   request,
 }) => {
@@ -645,12 +645,32 @@ test("the Assistant shows no host, working directory, diffs, git graph or messag
   await expect(page.locator(".status-ready")).toBeVisible();
   await expect(page.locator(".status-readout-cwd")).toBeVisible();
   await expect(gitButtons).toHaveCount(2);
+  const title = async () => (await page.locator("h1.header-title").boundingBox())!;
+  const header = async () => (await page.locator(".header").boundingBox())!;
+  const actionsBox = async () => (await page.locator(".header-actions").boundingBox())!;
+  expect((await title()).width).toBeGreaterThan(1);
+  const taskHeader = await header();
+  const taskActionsRight = (await actionsBox()).x + (await actionsBox()).width;
+  const brandRule = async (width: string) => {
+    await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
+    await expect(page.locator(".header-left .exe-brand")).toHaveCSS("border-right-width", width);
+    await page.getByRole("button", { name: "Expand sidebar", exact: true }).click();
+  };
+  await brandRule("1px");
   const hello = page.getByTestId("message").filter({ hasText: "Hello" }).first();
   await hello.hover();
   await expect(hello.getByRole("button", { name: "Copy" })).toBeVisible();
 
   await page.goto("/");
+  // The title row shows no "Assistant", which stays a heading for screen
+  // readers, and the header keeps its height and right-aligned actions.
   await expect(page.locator("h1.header-title")).toHaveText("Assistant");
+  await expect(page.locator("h1.header-title")).toHaveClass(/\bsr-only\b/);
+  expect((await title()).width).toBeLessThanOrEqual(1);
+  expect((await header()).height).toBe(taskHeader.height);
+  expect((await actionsBox()).x + (await actionsBox()).width).toBe(taskActionsRight);
+  // With the drawer collapsed, the logo has no title to rule off.
+  await brandRule("0px");
   await expect(page.locator(".context-usage-label")).toBeVisible();
   await expect(page.locator(".status-ready")).toHaveCount(0);
   await expect(page.locator(".status-readout-cwd, .status-field-cwd")).toHaveCount(0);

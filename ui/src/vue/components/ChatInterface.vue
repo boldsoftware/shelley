@@ -46,7 +46,7 @@
         <ExeBrand v-if="workspaceMode && isDrawerCollapsed" class="show-on-desktop-only" />
         <h1
           class="app-bar-title header-title"
-          :class="{ 'header-title-yields': showPlace }"
+          :class="{ 'header-title-yields': showPlace, 'sr-only': workspaceMode && isAssistant }"
           :title="currentConversation?.slug || 'Shelley'"
         >
           <EditableTitle
