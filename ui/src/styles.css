@@ -9297,26 +9297,6 @@ svg {
   white-space: nowrap;
 }
 
-.diff-tree-label.has-detail {
-  flex: 0 1 auto;
-}
-
-.diff-tree-detail {
-  flex: 1 1 0;
-  min-width: 2ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-secondary);
-  font-size: var(--font-size-11);
-  font-weight: 400;
-}
-
-.diff-tree-row.active .diff-tree-detail {
-  color: inherit;
-  opacity: 0.75;
-}
-
 /* Number of commit highlights on a file. */
 .diff-tree-highlight-count {
   flex-shrink: 0;

@@ -1,7 +1,5 @@
-// Framework-agnostic tree logic extracted from components/DiffFileTree.tsx so
-// both the Vue SFC (DiffFileTree.vue / DiffTreeRows.vue) and the diff viewer
-// (treeRealPathOrder) can share it. Keeps the COMMIT_MESSAGES_DIR ordering
-// and flattening semantics identical to the React original.
+// Framework-agnostic tree logic shared by the Vue SFCs (DiffFileTree.vue /
+// DiffTreeRows.vue) and the diff viewer (realPathOrder).
 
 // One row to render. `treePath` controls placement in the tree; we hand back
 // `realPath` to the parent on selection so synthetic rows (e.g. commit
@@ -95,33 +93,121 @@ export function buildTree(entries: DiffFileTreeEntry[]): DirNode {
   return root;
 }
 
-// Walk the (sorted) tree depth-first and return the real paths of the file
-// rows in the exact order they render. The diff viewer uses this for
-// next/previous-file navigation so it tracks what the user sees in the tree
-// rather than the raw `files` order.
-export function treeRealPathOrder(entries: DiffFileTreeEntry[]): string[] {
-  const out: string[] = [];
-  const walk = (d: DirNode) => {
-    for (const c of d.children) {
-      if (c.kind === "dir") walk(c);
-      else out.push(c.entry.realPath);
-    }
-  };
-  walk(buildTree(entries));
-  return out;
-}
-
 // In an ordered list (commit highlights rank the files), commit messages keep
-// their folder at the top and every other file follows flat, in entry order.
+// their folder at the top and every other file follows in entry order.
 export function isCommitMessageEntry(entry: DiffFileTreeEntry): boolean {
   return entry.treePath.length > 1 && entry.treePath[0] === COMMIT_MESSAGES_DIR;
 }
 
-export function orderedRealPathOrder(entries: DiffFileTreeEntry[]): string[] {
+// A folder row as the alphabetical tree renders it (single-child runs folded),
+// and a file with the chain of folder rows above it.
+interface FolderRow {
+  path: string;
+  label: string;
+  isPath: boolean;
+  pathsCovered: string[];
+}
+interface PlacedFile {
+  node: FileNode;
+  chain: FolderRow[];
+}
+
+// Files in the order they render: the alphabetical tree's depth-first order,
+// or, if `ordered`, commit messages in that order followed by the rest in
+// entry order.
+function placeFiles(tree: DirNode, entries: DiffFileTreeEntry[], ordered: boolean): PlacedFile[] {
+  const out: PlacedFile[] = [];
+  const walk = (d: DirNode, chain: FolderRow[]) => {
+    for (const c of d.children) {
+      if (c.kind === "file") {
+        out.push({ node: c, chain });
+        continue;
+      }
+      const { displayName, effective, pathsCovered } = flatten(c);
+      const row = {
+        path: c.path,
+        label: displayName,
+        isPath: c.name !== COMMIT_MESSAGES_DIR,
+        pathsCovered,
+      };
+      walk(effective, [...chain, row]);
+    }
+  };
+  walk(tree, []);
+  if (!ordered) return out;
+  const byEntry = new Map(out.map((p) => [p.node.entry, p]));
   return [
-    ...treeRealPathOrder(entries.filter(isCommitMessageEntry)),
-    ...entries.filter((entry) => !isCommitMessageEntry(entry)).map((entry) => entry.realPath),
+    ...out.filter((p) => isCommitMessageEntry(p.node.entry)),
+    ...entries.filter((e) => !isCommitMessageEntry(e)).flatMap((e) => byEntry.get(e) ?? []),
   ];
+}
+
+// The real paths of the file rows in the order they render. The diff viewer
+// uses this for next/previous-file navigation.
+export function realPathOrder(entries: DiffFileTreeEntry[], ordered: boolean): string[] {
+  return placeFiles(buildTree(entries), entries, ordered).map((p) => p.node.entry.realPath);
+}
+
+// The rows to render. Each file sits under its folder rows; walking the files
+// in order, folder rows already open above (the common prefix with the
+// previous file's chain) are shared and the rest are emitted again, so in an
+// ordered list a folder repeats wherever its files aren't contiguous. A
+// collapsed folder still shows its headers but hides the files below them.
+// Searching keeps only matching files and opens every folder above them.
+export function buildRows(
+  entries: DiffFileTreeEntry[],
+  ordered: boolean,
+  collapsed: Set<string>,
+  query: string,
+  selectedRealPath: string | null,
+): RenderedRow[] {
+  const tree = buildTree(entries);
+  const matched = matchTreePaths(tree, query);
+  const out: RenderedRow[] = [];
+  const headerCount = new Map<string, number>();
+  let open: FolderRow[] = [];
+  for (const { node, chain } of placeFiles(tree, entries, ordered)) {
+    if (matched && !matched.has(node.path)) continue;
+    const closedAt = matched
+      ? -1
+      : chain.findIndex((f) => f.pathsCovered.some((p) => collapsed.has(p)));
+    const shown = closedAt < 0 ? chain : chain.slice(0, closedAt + 1);
+    let depth = 0;
+    while (depth < open.length && depth < shown.length && open[depth] === shown[depth]) depth++;
+    for (; depth < shown.length; depth++) {
+      const f = shown[depth];
+      const n = headerCount.get(f.path) ?? 0;
+      headerCount.set(f.path, n + 1);
+      out.push({
+        kind: "dir",
+        key: `d:${f.path}:${n}`,
+        depth,
+        isOpen: depth !== closedAt,
+        label: f.label,
+        isPath: f.isPath,
+        pathsCovered: f.pathsCovered,
+      });
+    }
+    open = shown;
+    if (closedAt >= 0) continue;
+    const entry = node.entry;
+    out.push({
+      kind: "file",
+      key: `f:${node.path}`,
+      depth: chain.length,
+      isSelected: entry.realPath === selectedRealPath,
+      label: node.name,
+      isPath: !isCommitMessageEntry(entry),
+      realPath: entry.realPath,
+      decoration: entry.decoration,
+      decorationTitle: entry.decorationTitle,
+      statusInfo: statusLetter(entry.status),
+      additions: entry.additions,
+      deletions: entry.deletions,
+      highlightCount: entry.highlightCount,
+    });
+  }
+  return out;
 }
 
 // Walk into a directory, folding runs of single-child directories into a
@@ -200,15 +286,8 @@ export function matchTreePaths(tree: DirNode, query: string): Set<string> | null
   return m;
 }
 
-export function subtreeHasMatch(node: Node, matchedPaths: Set<string>): boolean {
-  if (node.kind === "file") return matchedPaths.has(node.path);
-  for (const c of node.children) if (subtreeHasMatch(c, matchedPaths)) return true;
-  return false;
-}
-
-// A pre-computed flat row produced by DiffFileTree.vue and rendered by
-// DiffTreeRows.vue. Mirrors the props the React <Row> took, but flattened so
-// the Vue side avoids a recursive component.
+// A pre-computed flat row produced by buildRows and rendered by
+// DiffTreeRows.vue, so the Vue side avoids a recursive component.
 export type RenderedRow =
   | {
       kind: "dir";
@@ -226,8 +305,6 @@ export type RenderedRow =
       isPath: boolean;
       isSelected: boolean;
       label: string;
-      // Shown dimmed after the label: the directory in ordered (flat) lists.
-      detail?: string;
       realPath: string;
       decoration?: string;
       decorationTitle?: string;

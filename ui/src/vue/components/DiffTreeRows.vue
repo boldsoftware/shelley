@@ -29,20 +29,14 @@
       :ref="(el) => setFileRef(el, row.isSelected)"
       :class="`diff-tree-row${row.isSelected ? ' active' : ''}`"
       :style="{ paddingLeft: `calc(0.375rem + ${row.depth} * 0.85rem)` }"
-      :title="row.detail ? `${row.detail}/${row.label}` : row.label"
+      :title="row.label"
       role="treeitem"
       :aria-selected="row.isSelected"
       @click="emit('select', row.realPath)"
     >
       <span class="diff-tree-icon" v-html="FILE_ICON" />
-      <PathText
-        v-if="row.isPath"
-        :class="['diff-tree-label', { 'has-detail': row.detail }]"
-        :text="row.label"
-        :title="row.realPath"
-      />
+      <PathText v-if="row.isPath" class="diff-tree-label" :text="row.label" :title="row.realPath" />
       <span v-else class="diff-tree-label">{{ row.label }}</span>
-      <span v-if="row.detail" class="diff-tree-detail">{{ row.detail }}</span>
       <span v-if="row.decoration" class="diff-tree-decoration" :title="row.decorationTitle">{{
         row.decoration
       }}</span>

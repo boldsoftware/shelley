@@ -560,12 +560,7 @@ import {
   useReviewRecording,
   type ReviewConversationStart,
 } from "./useReviewRecording";
-import {
-  COMMIT_MESSAGES_DIR,
-  orderedRealPathOrder,
-  treeRealPathOrder,
-  type DiffFileTreeEntry,
-} from "./diffFileTree";
+import { COMMIT_MESSAGES_DIR, realPathOrder, type DiffFileTreeEntry } from "./diffFileTree";
 import { highlightsByFile, orderByHighlights, showHighlights } from "./commitHighlights";
 import { defaultDiffSelection, workingChangesStatus } from "./diffViewerModel";
 import type {
@@ -1744,9 +1739,7 @@ const treeEntries = computed<DiffFileTreeEntry[]>(() => {
   });
 });
 
-const navOrder = computed(() =>
-  highlights.value ? orderedRealPathOrder(treeEntries.value) : treeRealPathOrder(treeEntries.value),
-);
+const navOrder = computed(() => realPathOrder(treeEntries.value, !!highlights.value));
 watch(navOrder, (v) => (navOrderRef.value = v), { immediate: true });
 
 // Title for the sidebar layout's header.

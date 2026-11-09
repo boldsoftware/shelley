@@ -91,7 +91,17 @@ test.describe("Commit highlights", () => {
       ]);
       await expect(files.first().locator(".ellipsis-start")).toHaveCount(0);
       await expect(files.nth(1).locator(".ellipsis-start")).toHaveCount(1);
-      await expect(files.nth(1).locator(".diff-tree-detail")).toHaveText("src");
+      // Each file sits under its folder, so src repeats around README.md.
+      const folders = overlay.locator(".diff-tree-row:not([aria-selected]) .diff-tree-label");
+      await expect(overlay.locator(".diff-tree-row .diff-tree-label")).toHaveText([
+        "Commit messages",
+        "Highlighted commit",
+        "src",
+        "zeta.ts",
+        "README.md",
+        "src",
+        "alpha.ts",
+      ]);
 
       // Files show how many highlights they carry, not the comments.
       const counts = files.locator(".diff-tree-highlight-count");
@@ -122,7 +132,7 @@ test.describe("Commit highlights", () => {
       await overlay.getByRole("radio", { name: "Through working tree" }).click();
       await expect(overlay.getByText("Commit Messages and Files", { exact: true })).toBeVisible();
       await expect(counts).toHaveCount(0);
-      await expect(overlay.locator(".diff-tree-detail")).toHaveCount(0);
+      await expect(folders).toHaveText(["Commit messages", "src"]);
     });
   });
 

@@ -1,9 +1,9 @@
 import {
   buildTree,
   COMMIT_MESSAGES_DIR,
+  buildRows,
   matchTreePaths,
-  orderedRealPathOrder,
-  treeRealPathOrder,
+  realPathOrder,
   type DiffFileTreeEntry,
   type DirNode,
 } from "./diffFileTree";
@@ -98,7 +98,7 @@ run("ordered lists keep commit messages first and files in entry order", () => {
     file("docs/content/vm-backups.md"),
   ];
   assertEqual(
-    orderedRealPathOrder(ranked),
+    realPathOrder(ranked, true),
     [
       "commit-msg:abc",
       "commit-msg:def",
@@ -110,8 +110,107 @@ run("ordered lists keep commit messages first and files in entry order", () => {
     "ordered",
   );
   assertEqual(
-    treeRealPathOrder(ranked).slice(2),
+    realPathOrder(ranked, false).slice(2),
     ["docs/content/vm-backups.md", "exed/backup.go", "shelley/server/messages.go", "README.md"],
     "tree order ignores entry order",
+  );
+});
+
+// Rows as indented text: folders end in "/", or " +" when collapsed.
+const show = (
+  es: DiffFileTreeEntry[],
+  ordered: boolean,
+  opts: { collapsed?: string[]; query?: string } = {},
+) =>
+  buildRows(es, ordered, new Set(opts.collapsed), opts.query ?? "", null).map(
+    (r) => "  ".repeat(r.depth) + r.label + (r.kind === "file" ? "" : r.isOpen ? "/" : " +"),
+  );
+
+const spec1 = [entries[0], file("server/model.go"), file("README.md"), file("server/handler.go")];
+
+run("ordered rows repeat a folder whose files aren't contiguous in rank", () => {
+  assertEqual(
+    show(spec1, true),
+    [
+      "Commit messages/",
+      "  Add VM backups docs",
+      "server/",
+      "  model.go",
+      "README.md",
+      "server/",
+      "  handler.go",
+    ],
+    "rows",
+  );
+  assertEqual(
+    realPathOrder(spec1, true),
+    ["commit-msg:abc", "server/model.go", "README.md", "server/handler.go"],
+    "nav order follows the rows",
+  );
+});
+
+run("ordered rows share a common folder prefix", () => {
+  assertEqual(
+    show([file("a/b/x.go"), file("a/c/y.go")], true),
+    ["a/", "  b/", "    x.go", "  c/", "    y.go"],
+    "rows",
+  );
+});
+
+run("ordered rows fold single-child folders like the alphabetical tree", () => {
+  const es = [file("cmd/hello/main.go"), file("README.md"), file("cmd/hello/x.go")];
+  assertEqual(
+    show(es, true),
+    ["cmd / hello/", "  main.go", "README.md", "cmd / hello/", "  x.go"],
+    "ordered",
+  );
+  assertEqual(
+    show(es, false),
+    ["cmd / hello/", "  main.go", "  x.go", "README.md"],
+    "alphabetical",
+  );
+});
+
+run("repeated folder rows have unique keys", () => {
+  const keys = buildRows(spec1, true, new Set(), "", null).map((r) => r.key);
+  assertEqual(new Set(keys).size, keys.length, "unique keys");
+});
+
+run("collapsing a folder hides its files under every header for it", () => {
+  assertEqual(
+    show(spec1, true, { collapsed: ["server"] }),
+    ["Commit messages/", "  Add VM backups docs", "server +", "README.md", "server +"],
+    "server collapsed",
+  );
+  const es = [file("a/b/x.go"), file("README.md"), file("a/c/y.go"), file("a/b/z.go")];
+  const b = buildRows(es, true, new Set(), "", null).find((r) => r.label === "b")!;
+  assertEqual(
+    show(es, true, { collapsed: b.kind === "dir" ? b.pathsCovered : [] }),
+    ["a/", "  b +", "README.md", "a/", "  c/", "    y.go", "  b +"],
+    "a/b collapsed",
+  );
+});
+
+run("searching an ordered list keeps the folders of the matches", () => {
+  assertEqual(show(spec1, true, { query: "model" }), ["server/", "  model.go"], "model");
+  assertEqual(
+    show(spec1, true, { query: "server", collapsed: ["server"] }),
+    ["server/", "  model.go", "  handler.go"],
+    "search opens collapsed folders",
+  );
+});
+
+run("unordered rows are the alphabetical tree, folders first", () => {
+  assertEqual(
+    show(spec1, false),
+    [
+      "Commit messages/",
+      "  Add VM backups docs",
+      "server/",
+      "  handler.go",
+      "  model.go",
+      "README.md",
+    ],
+    "rows",
   );
 });
