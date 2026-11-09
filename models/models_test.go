@@ -59,6 +59,17 @@ func TestGPT61SolInBuiltInCatalog(t *testing.T) {
 	t.Fatal("GPT-6.1 Sol not in built-in catalog")
 }
 
+func TestFable52InBuiltInCatalog(t *testing.T) {
+	m := ByID("claude-fable-5.2")
+	if m == nil {
+		t.Fatal("Fable 5.2 not in built-in catalog")
+	}
+	if m.Provider != ProviderAnthropic || m.APIModelName != "claude-fable-5-2" || m.Description != "Claude Fable 5.2" ||
+		m.APIType != APITypeAnthropicMessages || m.DefaultBaseURL != DefaultAnthropicBaseURL {
+		t.Fatalf("Fable 5.2 = %+v", m)
+	}
+}
+
 func TestGPT61TerraInBuiltInCatalog(t *testing.T) {
 	for _, m := range All() {
 		if m.ID != "gpt-6.1-terra" {

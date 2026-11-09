@@ -105,6 +105,13 @@ func TestAssignTiers(t *testing.T) {
 		}
 	})
 
+	t.Run("fable 5.2 shadows older Fable", func(t *testing.T) {
+		tiers := AssignTiers([]string{"claude-fable-5.2", "claude-fable-5.1", "claude-fable-5"})
+		if tiers["claude-fable-5.2"] != Tier1 || tiers["claude-fable-5.1"] != Tier2 || tiers["claude-fable-5"] != Tier2 {
+			t.Fatalf("tiers = %v", tiers)
+		}
+	})
+
 	t.Run("fable 5.1 shadows fable 5", func(t *testing.T) {
 		tiers := AssignTiers([]string{"claude-fable-5.1", "claude-fable-5"})
 		if tiers["claude-fable-5.1"] != Tier1 {

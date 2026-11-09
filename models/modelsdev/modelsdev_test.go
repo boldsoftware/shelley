@@ -415,6 +415,7 @@ func TestLookupReleaseDate(t *testing.T) {
 	}{
 		{"https://llm.int.exe.xyz/v1/messages", "claude-haiku-4-5", "2025-10-15"},
 		{"https://llm.int.exe.xyz/v1/messages", "claude-haiku-5-5", "2026-10-07"},
+		{"https://llm.int.exe.xyz/v1/messages", "claude-fable-5-2", "2026-11-09"},
 		{"https://llm.int.exe.xyz/v1", "gpt-6.1-sol", "2026-09-29"},
 		{"https://llm.int.exe.xyz/v1", "gpt-6.1-terra", "2026-10-26"},
 		{"https://llm.int.exe.xyz/v1", "gpt-6-sol", "2026-09-22"},
@@ -443,6 +444,7 @@ func TestLookupCost(t *testing.T) {
 		// models.dev lists Sonnet 5.5 cache reads at $0.10/1M, half the $0.20 on
 		// Anthropic's card (which llmcatalog transcribes and pins). This asserts
 		// what the snapshot says, not what the rate is; billing reads llmcatalog.
+		{"fable 5.2 via gateway", "https://llm.int.exe.xyz/v1/messages", "claude-fable-5-2", true, Cost{Input: 8, Output: 40, CacheRead: 0.2, CacheWrite: 10}},
 		{"sonnet 5.5 via gateway", "https://llm.int.exe.xyz/v1/messages", "claude-sonnet-5-5", true, Cost{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
 		{"haiku 5.5 via gateway", "https://llm.int.exe.xyz/v1/messages", "claude-haiku-5-5", true, Cost{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125}},
 		{"anthropic dated", "", "claude-sonnet-4-5-20250929", true, Cost{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
@@ -544,6 +546,7 @@ func TestLookupAnthropicOutputLimit(t *testing.T) {
 	}{
 		{"canonical Anthropic", "https://api.anthropic.com/v1/messages", "claude-opus-4-5-20251101", 64000, true},
 		{"gateway Claude resolves canonical catalog", "https://llm.int.exe.xyz/anthropic/v1/messages", "claude-sonnet-5", 128000, true},
+		{"fable 5.2 uses snapshot limit", "https://llm.int.exe.xyz/anthropic/v1/messages", "claude-fable-5-2", 128000, true},
 		{"sonnet 5.5 uses snapshot limit", "https://llm.int.exe.xyz/anthropic/v1/messages", "claude-sonnet-5-5", 128000, true},
 		{"haiku 5.5 uses snapshot limit", "https://llm.int.exe.xyz/anthropic/v1/messages", "claude-haiku-5-5", 128000, true},
 		{"date alias resolves canonical catalog", "", "claude-opus-4-5-2026-01-01", 64000, true},

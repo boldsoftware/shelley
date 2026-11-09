@@ -227,6 +227,11 @@ func All() []Model {
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
 		},
 		{
+			ID: "claude-fable-5.2", Provider: ProviderAnthropic,
+			Description: "Claude Fable 5.2", APIModelName: ant.ClaudeFable52,
+			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
+		},
+		{
 			ID: "claude-fable-5.1", Provider: ProviderAnthropic,
 			Description: "Claude Fable 5.1", APIModelName: ant.ClaudeFable51,
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,

@@ -896,6 +896,13 @@ func TestMaxOutputTokensCapping(t *testing.T) {
 		t.Errorf("Haiku 5.5 request = %+v, want 128k output with adaptive medium", haiku)
 	}
 
+	// Fable 5.2 has a 128k limit and uses adaptive thinking.
+	fable52 := (&Service{Model: ClaudeFable52, MaxTokens: 200000, ThinkingLevel: llm.ThinkingLevelMedium}).fromLLMRequest(simpleReq)
+	if fable52.MaxTokens != 128000 || fable52.Thinking == nil || fable52.Thinking.Type != "adaptive" ||
+		fable52.OutputConfig == nil || fable52.OutputConfig.Effort != "medium" {
+		t.Errorf("Fable 5.2 request = %+v, want 128k output with adaptive medium", fable52)
+	}
+
 	// Fable 5.1 has a 128k limit and uses adaptive thinking.
 	s6 := &Service{Model: ClaudeFable51, MaxTokens: 200000, ThinkingLevel: llm.ThinkingLevelMedium}
 	got6 := s6.fromLLMRequest(simpleReq)
@@ -2913,6 +2920,7 @@ func TestUseAdaptiveThinking(t *testing.T) {
 		{Claude5Opus, true},
 		{Claude5Sonnet, true},
 		{Claude55Sonnet, true},
+		{ClaudeFable52, true},
 		{ClaudeFable51, true},
 		{ClaudeFable5, true},
 		{"claude-opus-4-8-20260115", true},
@@ -2960,6 +2968,7 @@ func TestSupportedReasoningLevels(t *testing.T) {
 		{Claude55Opus, "low,medium,high,xhigh,max"},
 		{Claude55Sonnet, "low,medium,high,xhigh,max"},
 		{Claude48Opus, "low,medium,high,xhigh,max"},
+		{ClaudeFable52, "low,medium,high,xhigh,max"},
 		{ClaudeFable51, "low,medium,high,xhigh,max"},
 	}
 	for _, tt := range tests {
@@ -3345,6 +3354,7 @@ func TestCharsPerToken(t *testing.T) {
 		Claude55Opus:   2.32,
 		Claude47Opus:   2.32,
 		Claude5Sonnet:  2.32,
+		ClaudeFable52:  2.32,
 		ClaudeFable51:  2.32,
 		Claude55Haiku:  2.32,
 		Claude46Opus:   2.94,
