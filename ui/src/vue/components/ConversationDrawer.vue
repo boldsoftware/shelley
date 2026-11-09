@@ -407,7 +407,9 @@
             @ user
           </button>
         </span>
+        <!-- Projects, not tags, organize workspace mode's tasks. -->
         <button
+          v-if="!workspaceMode"
           type="button"
           class="drawer-filter-action"
           aria-label="Add tag filter"
@@ -1675,11 +1677,16 @@ function conversationActions(conversation: Conversation): MenuItem[] {
       icon: "pi pi-pencil",
       command: ({ originalEvent }) => handleStartRename(originalEvent as MouseEvent, conversation),
     },
-    {
-      label: t("editTags"),
-      icon: "pi pi-tag",
-      command: ({ originalEvent }) => handleOpenTagEditor(originalEvent as MouseEvent, id),
-    },
+    // Projects, not tags, organize workspace mode's tasks.
+    ...(workspaceMode
+      ? []
+      : [
+          {
+            label: t("editTags"),
+            icon: "pi pi-tag",
+            command: ({ originalEvent }) => handleOpenTagEditor(originalEvent as MouseEvent, id),
+          } satisfies MenuItem,
+        ]),
   ];
   const current = workspace.projectFor(id);
   const targets = workspace.data.value?.projects.filter((p) => p.name !== current?.name) ?? [];
@@ -2220,7 +2227,11 @@ const addUserFilterTooltip = computed(() => ({
 // Dismissing it latches until the active term changes.
 const filterMenuDismissed = ref(false);
 const tagMenuOpen = computed(
-  () => searchOpen.value && activeTagPrefix.value !== null && !filterMenuDismissed.value,
+  () =>
+    !workspaceMode &&
+    searchOpen.value &&
+    activeTagPrefix.value !== null &&
+    !filterMenuDismissed.value,
 );
 const userMenuOpen = computed(
   () => searchOpen.value && activeUserPrefix.value !== null && !filterMenuDismissed.value,

@@ -460,6 +460,9 @@ test("project and conversation ⋯ menus: delete waits for an empty project; mov
 
   await conversationRow.getByRole("button", { name: "Actions", exact: true }).click();
   const conversationMenu = page.getByTestId("conversation-actions-menu");
+  // Projects, not tags, organize tasks: no Edit tags.
+  await expect(conversationMenu.getByRole("menuitem").first()).toBeVisible();
+  await expect(conversationMenu.getByRole("menuitem", { name: "Edit tags" })).toHaveCount(0);
   await conversationMenu.getByRole("menuitem", { name: "Move to project" }).click();
   await conversationMenu.getByRole("menuitem", { name: to, exact: true }).click();
   await expect(toGroup.locator(conversationRow)).toBeVisible();
@@ -600,6 +603,11 @@ test("a search shows matches in folded projects without unfolding them", async (
 
   const search = page.getByTestId("conversation-query-editor");
   await page.getByRole("button", { name: "Search tasks..." }).click();
+  // Projects, not tags, organize tasks: no tag filter, nor `tag:` suggestions.
+  await expect(page.getByTestId("archived-toggle")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add tag filter" })).toHaveCount(0);
+  await fillConversationQuery(search, "tag:");
+  await expect(page.getByTestId("tag-filter-panel")).toHaveCount(0);
   await fillConversationQuery(search, word);
   await expect(row).toBeVisible();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
