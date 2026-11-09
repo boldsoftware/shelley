@@ -171,6 +171,8 @@ func (s *Server) registerWorkspaceRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/exe-vms/{name}/settings", s.handleExeVMSettings)
 	api.HandleFunc("POST /api/exe-vms/{name}/settings", s.handleExeVMChange)
 	api.HandleFunc("GET /api/exe-vms/{name}/terminal", s.handleExeVMTerminal)
+	api.HandleFunc("GET /api/exe-vms/{name}/terminal-sessions", s.handleExeVMTerminalSessions)
+	api.HandleFunc("DELETE /api/exe-vms/{name}/terminal-sessions/{session}", s.handleExeVMTerminalClose)
 	api.HandleFunc("GET /api/page-frame", s.handlePageFrame)
 	api.HandleFunc("POST /api/projects", s.handleCreateProject)
 	api.HandleFunc("PUT /api/projects/{name}", s.handleUpdateProject)

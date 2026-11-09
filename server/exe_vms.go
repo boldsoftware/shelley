@@ -29,6 +29,8 @@ type exeVMCache struct {
 	mu      sync.Mutex
 	list    *exeVMList
 	fetched time.Time
+	// terminals is access to VMs' web terminals, by VM name.
+	terminals map[string]*exeVMTerminalAccess
 }
 
 type exeVMList struct {
@@ -54,10 +56,9 @@ type exeVM struct {
 	// Integration is the exe.dev integration that lists the VM, which its
 	// settings change it through.
 	Integration string `json:"integration"`
-	// SSHDest is where its terminal connects, if Shell says the integration
-	// may (exe_vm_terminal.go).
-	SSHDest string `json:"-"`
-	Shell   bool   `json:"-"`
+	// Shell says whether the integration may open its terminal
+	// (exe_vm_terminal.go).
+	Shell bool `json:"-"`
 }
 
 // devProdTabs reports whether the sidebar has dev/prod tabs: workspace
@@ -128,7 +129,6 @@ func (s *Server) fetchExeVMs(ctx context.Context) (*exeVMList, error) {
 		Status     string `json:"status"`
 		HTTPSURL   string `json:"https_url"`
 		SSHCommand string `json:"ssh_command"`
-		SSHDest    string `json:"ssh_dest"`
 		Access     struct {
 			Shell bool `json:"shell"`
 		} `json:"access"`
@@ -172,7 +172,7 @@ func (s *Server) fetchExeVMs(ctx context.Context) (*exeVMList, error) {
 			list.VMs = append(list.VMs, exeVM{
 				Name: vm.Name, Emoji: vm.Emoji, Status: vm.Status, URL: vm.HTTPSURL, SSH: vm.SSHCommand,
 				Public: vm.ProxyShare == "public", Comment: vm.Comment, Tags: vm.Tags,
-				Role: roles[vm.Name], Integration: integrations[i], SSHDest: vm.SSHDest, Shell: vm.Access.Shell,
+				Role: roles[vm.Name], Integration: integrations[i], Shell: vm.Access.Shell,
 			})
 		}
 	}

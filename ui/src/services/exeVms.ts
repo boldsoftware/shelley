@@ -113,6 +113,19 @@ export const exeVmsApi = {
       `/api/exe-vms/${encodeURIComponent(name)}/frame?origin=${encodeURIComponent(window.location.origin)}`,
       `Failed to check whether ${name} can be shown here`,
     ).then((r) => r.blocked),
+  /** The names of name's live web terminal sessions, oldest first. */
+  terminalSessions: (name: string) =>
+    apiJSON<{ sessions: string[] }>(
+      `/api/exe-vms/${encodeURIComponent(name)}/terminal-sessions`,
+      `Failed to list ${name}'s terminal sessions`,
+    ).then((r) => r.sessions),
+  /** Ends name's web terminal session, hanging up whoever is attached. */
+  closeTerminalSession: (name: string, session: string) =>
+    apiJSON<void>(
+      `/api/exe-vms/${encodeURIComponent(name)}/terminal-sessions/${encodeURIComponent(session)}`,
+      `Failed to close ${session}`,
+      "DELETE",
+    ),
   settings: (name: string) =>
     apiJSON<ExeVMSettings>(
       `/api/exe-vms/${encodeURIComponent(name)}/settings`,
