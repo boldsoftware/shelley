@@ -189,11 +189,15 @@ function newStream() {
   let reconnects = 0;
   let modelsChanged = 0;
   let workspaceChanged = 0;
+  const readSnapshots: unknown[] = [];
+  const readUpdates: unknown[] = [];
   const statuses: string[] = [];
   let staleBuilds = 0;
   const handle = connectGlobalStream({
     getHash: () => "hash0",
     onListPatch: () => {},
+    onConversationReads: (reads) => readSnapshots.push(reads),
+    onConversationRead: (read) => readUpdates.push(read),
     onModelsChanged: () => {
       modelsChanged += 1;
     },
@@ -211,6 +215,8 @@ function newStream() {
   return {
     handle,
     statuses,
+    readSnapshots,
+    readUpdates,
     get modelsChanged() {
       return modelsChanged;
     },
@@ -724,4 +730,16 @@ await run("resource_status frames: a snapshot per connection, then transitions",
 });
 
 Date.now = realDateNow;
+await run("private read snapshots and updates dispatch independently of list patches", () => {
+  const s = newStream();
+  const source = latest();
+  const read = { conversation_id: "a", read_at: 12 };
+  const snapshot = { first_seen_at: 10, receipts: [] };
+  source.emitMessage({ conversation_reads: snapshot });
+  source.emitMessage({ conversation_read: read });
+  assert(JSON.stringify(s.readSnapshots) === JSON.stringify([snapshot]), "snapshot delivery");
+  assert(JSON.stringify(s.readUpdates) === JSON.stringify([read]), "incremental delivery");
+  s.handle.close();
+});
+
 console.log("\nglobalStream: all scenarios passed");

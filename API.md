@@ -104,6 +104,21 @@ Unless noted, results exclude **archived** conversations.
 | `git_repo_root`, `git_worktree_root`, `git_commit`, `git_subject` | optional, from a cached HEAD lookup keyed by `cwd` |
 | `subagent_count` | number of subagent conversations whose `parent_conversation_id` matches this row |
 | `preview`, `preview_updated_at` | trailing text of the most recent agent message and its timestamp (RFC 3339); empty if no agent reply yet, or if this conversation is outside the 500-most-recent window the server tracks for previews |
+| `last_attention_at` | Server timestamp for the latest qualifying reply, error or directed notice, in Unix milliseconds. Absent until one arrives. |
+
+`GET /api/conversations` adds the user's effective `read_at` and `unread`.
+A chat is unread when `last_attention_at > max(first_seen_at, receipt.read_at)`.
+The server starts tracking new messages at rollout. Existing users start at
+rollout and new users start at their first visit. Successful `message_user`
+deliveries advance the timestamp, including tool-only turns. Ordinary tool activity and user sends leave it unchanged.
+
+Opening a chat in a focused, visible tab sends the observed reply timestamp to
+`POST /api/conversation/<id>/read` as `{"read_at": number}`. The server returns
+`{conversation_id, read_at}` and streams it to the same user's other devices.
+A late acknowledgment cannot clear a newer reply or move a receipt backward.
+
+The global stream opens with a private `conversation_reads` snapshot containing `{first_seen_at, receipts: [{conversation_id, read_at}]}`.
+These timestamps are private to the requesting identity.
 
 ### Single conversation
 
@@ -250,6 +265,8 @@ interface StreamResponse {
   tool_progress?: ToolProgress;
   stream_delta?: StreamDelta;
   notification_event?: NotificationEvent;
+  conversation_reads?: { first_seen_at: number; receipts: { conversation_id: string; read_at: number }[] };
+  conversation_read?: { conversation_id: string; read_at: number };
 
   // Conversation-list patch stream:
   conversation_list_patch?: {
@@ -282,6 +299,12 @@ Reconnect semantics: the server keeps the last 100 patch events in
 memory. If the client's `conversation_list_hash` matches one of those
 boundaries, the server replays the missed patches; otherwise it sends a
 fresh reset event.
+
+After subscribing to live updates, every `/api/stream2` connection receives a
+private `conversation_reads` timestamp snapshot. Later read receipts are sent
+as private `conversation_read` frames only to that identity. Merge snapshots,
+POST responses, and live frames per conversation with `MAX(read_at)`; none changes a shared
+conversation-list hash.
 
 ### Git
 

@@ -749,7 +749,14 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "Failed to get conversations", err)
 		return
 	}
+	if userID := s.userIDFromRequest(r); s.requireHeader == "" || userID != "" {
+		if err := s.personalizeConversationReads(r.Context(), conversations, userID); err != nil {
+			s.internalError(w, "Failed to get conversation reads", err)
+			return
+		}
+	}
 
+	w.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(w, http.StatusOK, conversations)
 }
 
@@ -802,6 +809,9 @@ func (s *Server) searchConversationsFTSWithState(ctx context.Context, query stri
 	for i := range decorated {
 		decorated[i] = ConversationWithState{ConversationListItem: conversations[i], Working: conversations[i].AgentWorking, SearchSnippet: hits[i].Snippet, SearchSnippetMessageID: hits[i].SnippetMessageID}
 	}
+	if err := s.addConversationAttention(ctx, decorated); err != nil {
+		return nil, err
+	}
 	return decorated, nil
 }
 
@@ -833,7 +843,26 @@ func (s *Server) conversationListWithStateInternal(ctx context.Context, limit, o
 	for _, vm := range vms {
 		onVM[vm.ConversationID] = onVM[vm.ConversationID] || !vm.Replaced
 	}
-	return s.decorateConversations(conversations, onVM), nil
+	decorated := s.decorateConversations(conversations, onVM)
+	if err := s.addConversationAttention(ctx, decorated); err != nil {
+		return nil, err
+	}
+	return decorated, nil
+}
+
+func (s *Server) addConversationAttention(ctx context.Context, conversations []ConversationWithState) error {
+	ids := make([]string, len(conversations))
+	for i := range conversations {
+		ids[i] = conversations[i].ConversationID
+	}
+	attention, err := s.db.ConversationAttention(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for i := range conversations {
+		conversations[i].LastAttentionAt = attention[conversations[i].ConversationID]
+	}
+	return nil
 }
 
 // decorateConversations adds git metadata to conversation list items, except
@@ -897,6 +926,9 @@ func (s *Server) registerConversationRoutes(mux *http.ServeMux) {
 	// compressor flush after every event so messages stream promptly.
 	mux.HandleFunc("GET /api/conversation/{id}/stream", func(w http.ResponseWriter, r *http.Request) {
 		s.handleStreamConversation(w, r, r.PathValue("id"))
+	})
+	mux.HandleFunc("POST /api/conversation/{id}/read", func(w http.ResponseWriter, r *http.Request) {
+		s.handleConversationRead(w, r, r.PathValue("id"))
 	})
 	// POST endpoints - small responses, no compression needed
 	mux.HandleFunc("POST /api/conversation/{id}/chat", func(w http.ResponseWriter, r *http.Request) {
@@ -2260,6 +2292,9 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 	}
 
 	writeStreamData := func(streamData StreamResponse) bool {
+		if !s.streamEventVisible(r, streamData) {
+			return true
+		}
 		if !initCompression() {
 			return false
 		}
@@ -2398,6 +2433,19 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 	// periodic heartbeat. The legacy endpoint keeps its first-frame contract.
 	if includeConversationListPatches && len(listInitial) == 0 {
 		if !writeStreamData(StreamResponse{Heartbeat: true}) {
+			return
+		}
+	}
+
+	// The subscription is active before this private snapshot, so acknowledgements
+	// racing the query are either represented here or queued as private live events.
+	if includeConversationListPatches {
+		reads, err := s.db.ConversationReads(ctx, s.userIDFromRequest(r))
+		if err != nil {
+			errAfterStreamStart(w, "Failed to read conversation acknowledgements", err)
+			return
+		}
+		if !writeStreamData(StreamResponse{ConversationReads: &reads}) {
 			return
 		}
 	}

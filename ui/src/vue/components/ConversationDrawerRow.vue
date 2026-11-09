@@ -70,6 +70,13 @@
           title="Interrupted — open to continue"
           aria-label="Conversation interrupted"
         />
+        <span
+          v-else-if="compactNav && showNew"
+          class="conversation-new-badge drawer-working-indicator"
+          data-testid="conversation-new-badge"
+          title="New response"
+          >New</span
+        >
         <!-- Title-only rows: the drawer's build status, and a draft's delete. -->
         <slot />
         <div v-if="compactNav && deletable" class="conversation-actions drawer-actions-row">
@@ -182,6 +189,13 @@
         class="conversation-preview conversation-snippet"
         :title="stripSnippetMarks(convState.search_snippet)"
       >
+        <span
+          v-if="showNew"
+          class="conversation-new-badge"
+          data-testid="conversation-new-badge"
+          title="New response"
+          >New</span
+        >
         <template v-for="(seg, i) in renderSnippetSegments(convState.search_snippet)" :key="i">
           <mark v-if="seg.mark" class="conversation-snippet-mark">{{ seg.text }}</mark>
           <template v-else>{{ seg.text }}</template>
@@ -199,6 +213,13 @@
         class="conversation-preview"
         :title="convState.preview || undefined"
       >
+        <span
+          v-if="showNew"
+          class="conversation-new-badge"
+          data-testid="conversation-new-badge"
+          title="New response"
+          >New</span
+        >
         {{ convState.preview || "\u00a0" }}
       </div>
 
@@ -569,6 +590,14 @@ const deletable = computed(
 const isActive = computed(
   () => props.conversation.conversation_id === ctx.currentConversationId.value,
 );
+const showNew = computed(
+  () =>
+    !isActive.value &&
+    convState.value.unread &&
+    !itemArchived.value &&
+    !ctx.workingIds.value.has(props.conversation.conversation_id) &&
+    !(convState.value.turn_interrupted && !props.conversation.parent_conversation_id),
+);
 const conversationSubagents = computed<ConversationWithState[]>(() =>
   isDraft.value ? [] : ctx.subagentsByParent.value[props.conversation.conversation_id] || [],
 );
@@ -890,6 +919,28 @@ const DeleteButton = defineComponent({
 </script>
 
 <style scoped>
+.conversation-new-badge {
+  flex: none;
+  padding: 0 3px;
+  border-radius: 3px;
+  color: var(--blue-text);
+  background: var(--blue-bg);
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.conversation-preview .conversation-new-badge {
+  display: inline-block;
+  margin-right: 2px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+  vertical-align: 1px;
+}
+
 .conversation-running-work {
   display: inline-flex;
   align-items: center;

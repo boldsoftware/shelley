@@ -17,6 +17,7 @@
 
 import type {
   ConversationListPatchEvent,
+  ConversationRead,
   ResourceStatus,
   NotificationEvent,
   StreamResponse,
@@ -67,6 +68,8 @@ async function probeAuthentication(): Promise<boolean> {
 export interface GlobalStreamOptions {
   getHash: () => string | null;
   onListPatch: (event: ConversationListPatchEvent) => void;
+  onConversationReads?: (reads: NonNullable<StreamResponse["conversation_reads"]>) => void;
+  onConversationRead?: (read: ConversationRead) => void;
   onNotificationEvent?: (event: NotificationEvent) => void;
   /** Refresh the existing model catalog trigger after a server-side change. */
   onModelsChanged?: () => void;
@@ -134,6 +137,8 @@ function staleBuild(serverBuild: string): boolean {
 export function connectGlobalStream({
   getHash,
   onListPatch,
+  onConversationReads,
+  onConversationRead,
   onNotificationEvent,
   onModelsChanged,
   onWorkspaceChanged,
@@ -250,6 +255,8 @@ export function connectGlobalStream({
   };
 
   const handleEvent = (data: StreamResponse) => {
+    if (data.conversation_reads) onConversationReads?.(data.conversation_reads);
+    if (data.conversation_read) onConversationRead?.(data.conversation_read);
     if (data.ui_build && staleBuild(data.ui_build)) {
       // The server runs a newer UI than this page (it was upgraded or
       // restarted since), whose API may have changed underneath. Load it

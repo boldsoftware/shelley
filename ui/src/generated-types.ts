@@ -95,6 +95,16 @@ export interface ConversationStateForTS {
   model?: string;
 }
 
+export interface ConversationReadMarkersRow {
+  conversation_id: string;
+  read_at: number;
+}
+
+export interface ConversationReads {
+  first_seen_at: number;
+  receipts: ConversationReadMarkersRow[] | null;
+}
+
 export interface NotificationEventForTS {
   type: EventType;
   conversation_id: string;
@@ -107,6 +117,8 @@ export interface StreamResponseForTS {
   messages?: ApiMessageForTS[] | null;
   conversation?: Conversation | null;
   conversation_state?: ConversationStateForTS | null;
+  conversation_read?: ConversationReadMarkersRow | null;
+  conversation_reads?: ConversationReads | null;
   heartbeat?: boolean;
   notification_event?: NotificationEventForTS | null;
   resource_status?: ResourceStatus | null;
@@ -151,6 +163,7 @@ export interface ConversationWithStateForTS {
   preview_updated_at?: string;
   search_snippet?: string;
   search_snippet_message_id?: string;
+  last_attention_at?: number;
   max_sequence_id: number;
   participants?: ConversationParticipant[] | null;
 }

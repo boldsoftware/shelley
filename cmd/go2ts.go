@@ -149,19 +149,22 @@ type conversationWithStateForTS struct {
 	PreviewUpdatedAt        string                       `json:"preview_updated_at,omitempty"`
 	SearchSnippet           string                       `json:"search_snippet,omitempty"`
 	SearchSnippetMessageID  string                       `json:"search_snippet_message_id,omitempty"`
+	LastAttentionAt         int64                        `json:"last_attention_at,omitempty"`
 	MaxSequenceID           int64                        `json:"max_sequence_id"`
 	Participants            []db.ConversationParticipant `json:"participants,omitempty"`
 }
 
 type streamResponseForTS struct {
-	ConversationID    string                  `json:"conversation_id,omitempty"`
-	Messages          []apiMessageForTS       `json:"messages,omitempty"`
-	Conversation      *generated.Conversation `json:"conversation,omitempty"`
-	ConversationState *conversationStateForTS `json:"conversation_state,omitempty"`
-	Heartbeat         bool                    `json:"heartbeat,omitempty"`
-	NotificationEvent *notificationEventForTS `json:"notification_event,omitempty"`
-	ResourceStatus    *resource.Status        `json:"resource_status,omitempty"`
-	MaxSequenceID     int64                   `json:"max_sequence_id,omitempty"`
+	ConversationID    string                                `json:"conversation_id,omitempty"`
+	Messages          []apiMessageForTS                     `json:"messages,omitempty"`
+	Conversation      *generated.Conversation               `json:"conversation,omitempty"`
+	ConversationState *conversationStateForTS               `json:"conversation_state,omitempty"`
+	ConversationRead  *generated.ConversationReadMarkersRow `json:"conversation_read,omitempty"`
+	ConversationReads *db.ConversationReads                 `json:"conversation_reads,omitempty"`
+	Heartbeat         bool                                  `json:"heartbeat,omitempty"`
+	NotificationEvent *notificationEventForTS               `json:"notification_event,omitempty"`
+	ResourceStatus    *resource.Status                      `json:"resource_status,omitempty"`
+	MaxSequenceID     int64                                 `json:"max_sequence_id,omitempty"`
 }
 
 type notificationEventForTS struct {

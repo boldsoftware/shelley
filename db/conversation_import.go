@@ -188,6 +188,10 @@ func importConversation(ctx context.Context, q *generated.Queries, c ImportedCon
 			return fmt.Errorf("import message %s: %w", m.MessageID, err)
 		}
 	}
+	// Copying history fires the live-reply triggers; imported history is old.
+	if err := q.ClearConversationAttention(ctx, conv.ConversationID); err != nil {
+		return fmt.Errorf("clear attention of imported conversation %s: %w", conv.ConversationID, err)
+	}
 	for _, sub := range c.Subagents {
 		if err := importConversation(ctx, q, sub, "", cwd); err != nil {
 			return err

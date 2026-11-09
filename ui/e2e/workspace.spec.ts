@@ -805,7 +805,12 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
   page,
   request,
 }) => {
-  const { conversationId } = await createConversationViaAPIWithDetails(request, "Hello");
+  const source = await createConversationViaAPIWithDetails(request, "Hello", {
+    conversationOptions: { tool_overrides: { message_user: "on" } },
+  });
+  const fork = await request.post(`/api/conversation/${source.conversationId}/fork`, { data: {} });
+  expect(fork.ok()).toBeTruthy();
+  const { conversation_id: conversationId } = await fork.json();
   const row = page.locator(`.conversation-item[data-conversation-id="${conversationId}"]`);
   const assistant = page.getByTestId("assistant-row");
   const build = await request.post(`/api/conversation/${conversationId}/customization`, {
@@ -816,6 +821,17 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
   await page.goto("/");
   await openWorkspace(page);
   await expect(row.locator(".conversation-title")).toBeVisible();
+  await expect(row.getByTestId("conversation-new-badge")).toHaveCount(0);
+  const delivered = await request.post(`/api/conversation/${conversationId}/chat`, {
+    data: { message: 'message_user: {"text":"Ready","end_turn":true}', model: "predictable" },
+  });
+  expect(delivered.ok()).toBeTruthy();
+  await expect(
+    row.locator(".drawer-conversation-header-row").getByText("New", { exact: true }),
+  ).toBeVisible();
+  await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-size", "10px");
+  await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-weight", "600");
+  await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("line-height", "12px");
   // Its time shows beside the title on hover.
   const time = row.locator(".conversation-hover-date");
   await expect(time).toBeHidden();
@@ -837,6 +853,12 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
     await page.reload();
     await openWorkspace(page);
     await expect(row.locator(".conversation-preview")).toHaveCount(1);
+    await expect(
+      row.locator(".conversation-preview").getByTestId("conversation-new-badge"),
+    ).toBeVisible();
+    await expect(
+      row.locator(".drawer-conversation-header-row").getByTestId("conversation-new-badge"),
+    ).toHaveCount(0);
     await expect(row.locator(".conversation-meta")).toHaveCount(1);
     await expect(assistant.locator(".conversation-preview")).toHaveCount(1);
     expect((await row.boundingBox())!.height).toBeGreaterThan(short * 1.5);

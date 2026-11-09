@@ -270,7 +270,7 @@ test("a draft row keeps the sent message until the agent replies", async ({ page
   expect(frames.length).toBeGreaterThan(0);
   for (const frame of frames) {
     expect(frame.shown, JSON.stringify(frame)).toBe(true);
-    expect([message, reply], JSON.stringify(frame)).toContain(frame.preview);
+    expect([message, reply, `New ${reply}`], JSON.stringify(frame)).toContain(frame.preview);
     expect(frame.path, JSON.stringify(frame)).not.toBe("/");
   }
 });

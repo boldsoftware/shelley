@@ -335,7 +335,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, provide, ref, watch, shallowRef } from "vue";
+import { computed, reactive, onMounted, onUnmounted, provide, ref, watch, shallowRef } from "vue";
 import ChatInterface from "./components/ChatInterface.vue";
 import ProjectView from "./components/ProjectView.vue";
 import VmView from "./components/VmView.vue";
@@ -372,6 +372,7 @@ import {
   type Conversation,
   type ConversationWithState,
   type ConversationListPatchEvent,
+  type ConversationRead,
   type ResourceKind,
   type ResourceStatus,
   type ChatRequest,
@@ -504,8 +505,22 @@ const uiUpdated = ref(false);
 const reloadPage = () => window.location.reload();
 
 // ---- state ----
-// Patches replace the list (and only the rows they touch), so deep reactivity is unnecessary.
 const conversations = shallowRef<ConversationWithState[]>([]);
+const firstSeenAt = ref<number | null>(null);
+const readTimes = reactive(new Map<string, number>());
+
+function observeRead({ conversation_id: id, read_at }: ConversationRead) {
+  if (read_at > (readTimes.get(id) ?? 0)) readTimes.set(id, read_at);
+}
+
+function unreadTime(c: ConversationWithState) {
+  const time = c.last_attention_at ?? 0;
+  return firstSeenAt.value !== null &&
+    time > Math.max(firstSeenAt.value, readTimes.get(c.conversation_id) ?? 0)
+    ? time
+    : 0;
+}
+
 const currentConversationId = ref<string | null>(null);
 // Subagent tool widgets (SubagentTool.vue) join their slug against the live
 // conversation list to show what the subagent is doing right now.
@@ -748,7 +763,8 @@ provide(ComposerPreviewKey, {
   }),
 });
 const drawerConversations = computed(() => {
-  const list = withComposerRow(conversations.value, composer.value, creating.value);
+  const rows = conversations.value.map((c) => (unreadTime(c) ? { ...c, unread: true } : c));
+  const list = withComposerRow(rows, composer.value, creating.value);
   return lingering.value ? withComposerRow(list, lingering.value, null) : list;
 });
 const drawerCurrentConversationId = computed(() =>
@@ -862,6 +878,25 @@ const currentConversation = computed<ConversationWithState | undefined>(() => {
   }
   return undefined;
 });
+
+const openUnreadTime = computed(() => {
+  const c = currentConversation.value;
+  return c && drawerCurrentConversationId.value === c.conversation_id ? unreadTime(c) : 0;
+});
+const pendingReads = new Set<number>();
+
+async function acknowledgeOpenConversation() {
+  const time = openUnreadTime.value;
+  const id = currentConversationId.value;
+  if (!id || !time || pendingReads.has(time) || document.hidden || !document.hasFocus()) return;
+  pendingReads.add(time);
+  try {
+    observeRead(await api.acknowledgeConversationRead(id, time));
+  } finally {
+    pendingReads.delete(time);
+  }
+}
+watch(openUnreadTime, acknowledgeOpenConversation);
 
 const mostRecentCwd = computed(() => {
   const conversation = currentConversation.value?.cwd
@@ -1523,6 +1558,8 @@ watch(
 // ---- lifecycle ----
 let stopActivityHeartbeat: (() => void) | null = null;
 onMounted(() => {
+  document.addEventListener("visibilitychange", acknowledgeOpenConversation);
+  window.addEventListener("focus", acknowledgeOpenConversation);
   // Shelley restarts into an installed binary only once the user is idle.
   stopActivityHeartbeat = startActivityHeartbeat();
   // Hydrate persistent terminals from the server.
@@ -1569,6 +1606,11 @@ onMounted(() => {
   globalStreamHandle = connectGlobalStream({
     getHash: () => conversationListHash,
     onListPatch: handleConversationListPatch,
+    onConversationReads: (snapshot) => {
+      firstSeenAt.value = snapshot.first_seen_at;
+      snapshot.receipts?.forEach(observeRead);
+    },
+    onConversationRead: observeRead,
     onNotificationEvent: handleNotificationEvent,
     onModelsChanged: () => modelsRefreshTrigger.value++,
     onWorkspaceChanged: refreshWorkspace,
@@ -1594,6 +1636,8 @@ onMounted(() => {
 let terminalsHydrationCancel: (() => void) | null = null;
 
 onUnmounted(() => {
+  document.removeEventListener("visibilitychange", acknowledgeOpenConversation);
+  window.removeEventListener("focus", acknowledgeOpenConversation);
   stopActivityHeartbeat?.();
   terminalsHydrationCancel?.();
   globalStreamHandle?.close();

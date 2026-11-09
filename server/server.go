@@ -91,6 +91,11 @@ type ConversationState struct {
 // list query's row plus git metadata from the filesystem.
 type ConversationWithState struct {
 	db.ConversationListItem
+	// Shared attention watermark; user-specific read state is added only to
+	// the ordinary REST list response.
+	LastAttentionAt int64  `json:"last_attention_at,omitempty"`
+	ReadAt          *int64 `json:"read_at,omitempty"`
+	Unread          *bool  `json:"unread,omitempty"`
 	Working         bool   `json:"working"`
 	GitRepoRoot     string `json:"git_repo_root,omitempty"`
 	GitWorktreeRoot string `json:"git_worktree_root,omitempty"`
@@ -105,6 +110,10 @@ type ConversationWithState struct {
 
 // StreamResponse represents the response format for conversation streaming
 type StreamResponse struct {
+	ConversationReads *db.ConversationReads                 `json:"conversation_reads,omitempty"`
+	ConversationRead  *generated.ConversationReadMarkersRow `json:"conversation_read,omitempty"`
+	// readUserID is never serialized; it filters private cursor frames.
+	readUserID       string
 	ModelsChanged    bool `json:"models_changed,omitempty"`
 	WorkspaceChanged bool `json:"workspace_changed,omitempty"`
 	// Customizations is every task's install-custom state, sent on connect

@@ -1,5 +1,6 @@
 import {
   Conversation,
+  ConversationRead,
   ConversationWithParticipants,
   ConversationWithState,
   ResourceKind,
@@ -213,6 +214,18 @@ class ApiService {
     hash: string;
   }> {
     return apiJSON("/api/conversations/snapshot", "Failed to load conversations");
+  }
+
+  async acknowledgeConversationRead(
+    conversationId: string,
+    readAt: number,
+  ): Promise<ConversationRead> {
+    return apiJSON(
+      `/api/conversation/${conversationId}/read`,
+      "Failed to mark conversation as read",
+      "POST",
+      { read_at: readAt },
+    );
   }
 
   async getModels(): Promise<AvailableModel[]> {

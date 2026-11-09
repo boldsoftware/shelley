@@ -14,7 +14,12 @@ import { llmData } from "./utils/llmData";
 
 // Re-export generated types
 export type Conversation = GeneratedConversation;
-export type ConversationWithState = ConversationWithStateForTS;
+// Read fields are a client-only overlay, never part of the shared list/hash.
+export type ConversationWithState = ConversationWithStateForTS & {
+  read_at?: number;
+  unread?: boolean;
+};
+export type ConversationRead = import("./generated-types").ConversationReadMarkersRow;
 export type { ConversationParticipant } from "./generated-types";
 export type ConversationWithParticipants = Conversation & {
   participants?: import("./generated-types").ConversationParticipant[] | null;

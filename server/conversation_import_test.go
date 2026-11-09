@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -15,8 +16,55 @@ import (
 	"shelley.exe.dev/llm"
 )
 
+// importedMessages is how many messages newImportSource gives each conversation.
+const importedMessages = 6
+
+// addReplies adds the messages that mark a conversation New when they arrive
+// live: a visible agent reply, an error, and a delivered message_user call.
+func addReplies(t *testing.T, d *db.DB, id string) {
+	t.Helper()
+	addAgentReply(t, d, id, db.MessageTypeAgent, "an answer")
+	addAgentReply(t, d, id, db.MessageTypeError, "a failure")
+	addMessageUserDelivery(t, d, id, "call-"+id)
+}
+
+func addAgentReply(t *testing.T, d *db.DB, id string, typ db.MessageType, text string) {
+	t.Helper()
+	msg := llm.Message{Role: llm.MessageRoleAssistant, Content: []llm.Content{{Type: llm.ContentTypeText, Text: text}}}
+	if _, err := d.CreateMessage(t.Context(), db.CreateMessageParams{ConversationID: id, Type: typ, LLMData: msg}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func addMessageUserDelivery(t *testing.T, d *db.DB, id, callID string) {
+	t.Helper()
+	call := llm.Message{Role: llm.MessageRoleAssistant, Content: []llm.Content{{Type: llm.ContentTypeToolUse, ID: callID, ToolName: "message_user"}}}
+	result := llm.Message{Role: llm.MessageRoleUser, Content: []llm.Content{{Type: llm.ContentTypeToolResult, ToolUseID: callID}}}
+	if _, err := d.CreateMessage(t.Context(), db.CreateMessageParams{ConversationID: id, Type: db.MessageTypeAgent, LLMData: call}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CreateMessage(t.Context(), db.CreateMessageParams{ConversationID: id, Type: db.MessageTypeTool, LLMData: result}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// wantAttention fails unless exactly the conversations in marked have a reply mark.
+func wantAttention(t *testing.T, d *db.DB, marked map[string]bool, ids ...string) {
+	t.Helper()
+	got, err := d.ConversationAttention(t.Context(), ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		if _, ok := got[id]; ok != marked[id] {
+			t.Fatalf("attention of %s: marked=%v, want %v", id, ok, marked[id])
+		}
+	}
+}
+
 // newImportSource creates another Shelley's database at path, with a
-// conversation, its subagent, and their messages, the first one texted.
+// conversation, its subagent, and their messages, the first one texted and
+// the last ones replies that would mark a live conversation New.
 func newImportSource(t *testing.T, path string) (source *db.DB, parent, child *generated.Conversation) {
 	t.Helper()
 	ctx := t.Context()
@@ -54,6 +102,7 @@ func newImportSource(t *testing.T, path string) (source *db.DB, parent, child *g
 				t.Fatal(err)
 			}
 		}
+		addReplies(t, source, id)
 	}
 	return source, parent, child
 }
@@ -85,8 +134,9 @@ func TestImportConversations(t *testing.T) {
 	}
 	for i := range want {
 		g, w := got[i], want[i]
-		if g.MessageID != w.MessageID || g.SequenceID != w.SequenceID || *g.UserData != *w.UserData || *g.LlmData != *w.LlmData ||
-			*g.UserEmail != *w.UserEmail || !g.CreatedAt.Equal(w.CreatedAt.Truncate(1e9)) {
+		if g.MessageID != w.MessageID || g.SequenceID != w.SequenceID || !reflect.DeepEqual(g.UserData, w.UserData) ||
+			!reflect.DeepEqual(g.LlmData, w.LlmData) || !reflect.DeepEqual(g.UserEmail, w.UserEmail) ||
+			!g.CreatedAt.Equal(w.CreatedAt.Truncate(1e9)) {
 			t.Fatalf("message %d: %+v want %+v", i, g, w)
 		}
 	}
@@ -113,6 +163,12 @@ func TestImportConversations(t *testing.T) {
 	if masters := ssh.calls(t, "master"); len(masters) != 1 {
 		t.Fatalf("imported conversation's VM masters: %v", masters)
 	}
+	// Imported history is old: neither it nor its subagent is New, but replies
+	// that arrive after the import are.
+	wantAttention(t, database, nil, parent.ConversationID, child.ConversationID)
+	addAgentReply(t, database, parent.ConversationID, db.MessageTypeAgent, "a new answer")
+	addMessageUserDelivery(t, database, child.ConversationID, "call-after-import")
+	wantAttention(t, database, map[string]bool{parent.ConversationID: true, child.ConversationID: true}, parent.ConversationID, child.ConversationID)
 	// Importing again conflicts and changes nothing.
 	if response := workspaceAPI(s, "POST", "/api/conversations/import", body); response.Code != 409 {
 		t.Fatalf("re-import: %d %s", response.Code, response.Body.String())
@@ -146,6 +202,7 @@ func TestImportConversationsIntoDirectoryProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	wantAttention(t, database, nil, parent.ConversationID, child.ConversationID)
 	for _, id := range []string{parent.ConversationID, child.ConversationID} {
 		conversation, err := database.GetConversationByID(t.Context(), id)
 		if err != nil || *conversation.Cwd != p.Cwd {
@@ -155,7 +212,7 @@ func TestImportConversationsIntoDirectoryProject(t *testing.T) {
 			t.Fatalf("%s bound to a VM: %v", id, err)
 		}
 		messages, err := database.ListMessages(t.Context(), id)
-		if err != nil || len(messages) != 2 {
+		if err != nil || len(messages) != importedMessages {
 			t.Fatalf("messages of %s: %d %v", id, len(messages), err)
 		}
 		for _, m := range messages {
@@ -212,4 +269,5 @@ func TestImportConversationsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspaceResponse[map[string]any](t, workspaceAPI(s, "POST", "/api/conversations/import", importBody(path, project, parent.ConversationID)), http.StatusCreated)
+	wantAttention(t, database, nil, parent.ConversationID, child.ConversationID)
 }
