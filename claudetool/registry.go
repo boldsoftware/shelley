@@ -27,6 +27,7 @@ var ToolRegistry = []ToolInfo{
 	{Name: "compact_in_place", Summary: "The agent compacts its own context.", DefaultOn: true, SourcePath: "claudetool/compact_in_place.go"},
 	{Name: "write_secret", Summary: "Write a secret the user stored to a file, unseen (secrets flag).", DefaultOn: true, SourcePath: "claudetool/secret.go"},
 	{Name: "message_user", Summary: "Chat with the user: messages, replies, emoji reactions, attachments.", DefaultOn: false, SourcePath: "claudetool/message_user.go"},
+	{Name: "chapter", Summary: "Mark a change of direction in the conversation's chapters.", DefaultOn: true, SourcePath: "claudetool/chapter.go"},
 	{Name: "send_to_thread", Summary: "Reply in a Slack thread (Slack Assistant).", DefaultOn: false, SourcePath: "claudetool/slack.go"},
 	{Name: "send_to_channel", Summary: "Post to a Slack channel (Slack Assistant).", DefaultOn: false, SourcePath: "claudetool/slack.go"},
 	{Name: "add_reaction", Summary: "React to a Slack message with an emoji (Slack Assistant).", DefaultOn: false, SourcePath: "claudetool/slack.go"},

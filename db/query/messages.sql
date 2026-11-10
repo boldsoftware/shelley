@@ -205,7 +205,7 @@ WHERE conversation_id = ? AND type = 'user'
     SELECT 1 FROM json_each(messages.llm_data, '$.Content') c
     WHERE json_extract(c.value, '$.Type') = 6
   )
-ORDER BY user_data LIKE '%compaction_carried%', sequence_id DESC;
+ORDER BY COALESCE(user_data LIKE '%compaction_carried%', 0), sequence_id DESC;
 
 -- name: GetAgentMessageBefore :one
 -- The newest agent message before sequence_id: for a tool-result message,

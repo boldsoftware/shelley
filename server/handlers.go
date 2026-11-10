@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -913,6 +914,7 @@ func (s *Server) decorateConversations(conversations []db.ConversationListItem, 
 
 // registerConversationRoutes registers the /api/conversation/<id>/* routes.
 func (s *Server) registerConversationRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/conversation/{id}/themes", s.handleConversationThemes)
 	// GET /api/conversation/<id> - returns all messages (can be large, compress)
 	mux.Handle("GET /api/conversation/{id}", compressionHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.handleGetConversation(w, r, r.PathValue("id"))
@@ -3309,8 +3311,19 @@ func markDefaultModel(modelList []ModelInfo, defaultID string) {
 
 // handleTools returns the list of tools available to conversations.
 func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
+	on, err := s.flagOn(r.Context(), FlagConversationChapters)
+	if err != nil {
+		s.internalError(w, "Failed to read conversation chapters flag", err)
+		return
+	}
+	tools := claudetool.ToolRegistry
+	if !on {
+		tools = slices.DeleteFunc(slices.Clone(tools), func(tool claudetool.ToolInfo) bool {
+			return tool.Name == "chapter"
+		})
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"tools": claudetool.ToolRegistry,
+		"tools": tools,
 	})
 }
 

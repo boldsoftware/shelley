@@ -3008,6 +3008,7 @@ function stopSavedBottomRestoration() {
 }
 
 function markUserScrolledUp() {
+  pendingScroll = undefined;
   stopBottomPin();
   followExplicitSelectionToBottom = false;
   suppressExplicitSelectionClamp = false;
@@ -5319,6 +5320,7 @@ watch(
     const key = `${props.conversationId}:${id}`;
     if (
       !id ||
+      window.location.hash ||
       loading.value ||
       key === appliedMessageLink ||
       !messages.value.some((m) => m.message_id === id)

@@ -301,9 +301,21 @@ export function connectGlobalStream({
       // Clear streaming text / tool progress for tools that just produced results.
       const toolIds: string[] = [];
       let sawAgentMsg = false;
+      let chapterUpdated = false;
       let maxSeq = 0;
       for (const m of data.messages) {
         toolIds.push(...extractToolUseIds(m));
+        if (
+          (m.type === "user" || m.type === "tool") &&
+          llmData(m)?.Content.some(
+            (c) =>
+              c.Type === 6 &&
+              !c.ToolError &&
+              (c.Display as { type?: string } | undefined)?.type === "chapter",
+          )
+        ) {
+          chapterUpdated = true;
+        }
         if (m.type === "agent") sawAgentMsg = true;
         if (m.sequence_id > maxSeq) maxSeq = m.sequence_id;
       }
@@ -311,6 +323,9 @@ export function connectGlobalStream({
       if (sawAgentMsg) messageStore.resetStreaming(convId);
       messageStore.upsertMessages(convId, data.messages);
       if (maxSeq > 0) messageStore.setMaxSequenceIdKnown(convId, maxSeq);
+      if (chapterUpdated) {
+        window.dispatchEvent(new CustomEvent("shelley-chapters-updated", { detail: convId }));
+      }
     }
     if (data.conversation) {
       // NB: we deliberately do NOT mirror data.conversation.agent_working

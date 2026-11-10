@@ -90,6 +90,7 @@ type ToolSetConfig struct {
 	// enabled by ToolOverrides). The server sets it only for top-level
 	// conversations.
 	UserMessageFinder UserMessageFinder
+	RecordChapter     func(context.Context, string) (string, error)
 	// UserChat, if set, is the external chat message_user's messages also
 	// go to.
 	UserChat UserChat
@@ -325,6 +326,9 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 	}
 	if cfg.UserMessageFinder != nil {
 		tools = append(tools, MessageUserTool(cfg.UserMessageFinder, cfg.UserChat, hostWD))
+	}
+	if cfg.RecordChapter != nil {
+		tools = append(tools, ChapterTool(cfg.RecordChapter))
 	}
 	if cfg.Slack != nil {
 		tools = append(tools, SlackTools(cfg.Slack, wd)...)

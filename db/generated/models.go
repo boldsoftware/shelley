@@ -85,6 +85,12 @@ type Conversation struct {
 	NextPromptSuggestionSeq int64     `json:"next_prompt_suggestion_seq"`
 }
 
+type ConversationTheme struct {
+	ConversationID   string `json:"conversation_id"`
+	ChaptersJson     string `json:"chapters_json"`
+	ThroughMessageID string `json:"through_message_id"`
+}
+
 type ConversationVm struct {
 	ID              int64  `json:"id"`
 	ConversationID  string `json:"conversation_id"`

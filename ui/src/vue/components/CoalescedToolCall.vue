@@ -145,6 +145,7 @@ import WriteSecretTool from "./tools/WriteSecretTool.vue";
 import CompactInPlaceTool from "./tools/CompactInPlaceTool.vue";
 import MessageParentTool from "./tools/MessageParentTool.vue";
 import MessageUserTool from "./tools/MessageUserTool.vue";
+import ChapterTool from "./tools/ChapterTool.vue";
 import SlackSendTool from "./tools/SlackSendTool.vue";
 import SubagentTool from "./tools/SubagentTool.vue";
 import LLMOneShotTool from "./tools/LLMOneShotTool.vue";
@@ -218,6 +219,7 @@ const TOOL_COMPONENTS: Record<string, any> = {
   subagent: SubagentTool,
   message_parent: MessageParentTool,
   message_user: MessageUserTool,
+  chapter: ChapterTool,
   send_to_thread: SlackSendTool,
   send_to_channel: SlackSendTool,
   add_reaction: SlackSendTool,

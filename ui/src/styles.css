@@ -14561,6 +14561,13 @@ kbd {
   gap: 0.5rem;
 }
 
+.drawer-conversation-header-row > .conversation-themes-toggle {
+  width: 0.5rem;
+  flex: 0 0 0.5rem;
+  margin-right: -0.375rem;
+  text-align: left;
+}
+
 .drawer-rename-input {
   width: 100%;
   background: transparent;

@@ -1280,6 +1280,13 @@ func (s *Service) makeToolSmorgasbordResponse(inputTokens uint64) *llm.Response 
 
 	// message_user tool (a reply to the smorgasbord request, with a reaction)
 	content = append(content, llm.Content{
+		ID:        fmt.Sprintf("tool_chapter_%d", (baseNano+23)%1000),
+		Type:      llm.ContentTypeToolUse,
+		ToolName:  "chapter",
+		ToolInput: json.RawMessage(`{"title":"Trying a different approach"}`),
+	})
+
+	content = append(content, llm.Content{
 		ID:        fmt.Sprintf("tool_message_user_%d", (baseNano+20)%1000),
 		Type:      llm.ContentTypeToolUse,
 		ToolName:  "message_user",

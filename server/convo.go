@@ -2012,7 +2012,11 @@ func (cm *ConversationManager) renderSystemPrompt(ctx context.Context, opts db.C
 	if err != nil {
 		return renderedSystemPrompt{}, fmt.Errorf("failed to generate system prompt: %w", err)
 	}
-	return renderedSystemPrompt{text, cm.systemPromptDisplayData(opts, promptSkills)}, nil
+	display, err := cm.systemPromptDisplayData(ctx, opts, promptSkills)
+	if err != nil {
+		return renderedSystemPrompt{}, err
+	}
+	return renderedSystemPrompt{text, display}, nil
 }
 
 // storeSystemPrompt stores prompt as the conversation's system message. It
@@ -2116,15 +2120,20 @@ func systemPromptDisplayData(cfg claudetool.ToolSetConfig, promptSkills []skills
 	}
 }
 
-func (cm *ConversationManager) systemPromptDisplayData(opts db.ConversationOptions, promptSkills []skills.Skill) map[string]any {
+func (cm *ConversationManager) systemPromptDisplayData(ctx context.Context, opts db.ConversationOptions, promptSkills []skills.Skill) (map[string]any, error) {
 	cfg := cm.toolSetConfig
 	cfg.ToolOverrides = opts.ToolOverrides
 	cfg.DisableAllTools = opts.DisableAllTools
 	cfg.InPlaceCompactor = inPlaceCompactor{cm: cm}
 	cfg.UserMessageFinder = cm.userMessageFinder()
+	recorder, err := cm.chapterRecorder(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cfg.RecordChapter = recorder
 	cfg.UserChat = cm.userChat
 	cfg.Slack = cm.slack
-	return systemPromptDisplayData(cfg, promptSkills)
+	return systemPromptDisplayData(cfg, promptSkills), nil
 }
 
 // renderSubagentSystemPrompt is renderSystemPrompt for subagents and
@@ -2142,7 +2151,11 @@ func (cm *ConversationManager) renderSubagentSystemPrompt(ctx context.Context, o
 	if err != nil {
 		return renderedSystemPrompt{}, fmt.Errorf("failed to generate subagent system prompt: %w", err)
 	}
-	return renderedSystemPrompt{text, cm.systemPromptDisplayData(opts, promptSkills)}, nil
+	display, err := cm.systemPromptDisplayData(ctx, opts, promptSkills)
+	if err != nil {
+		return renderedSystemPrompt{}, err
+	}
+	return renderedSystemPrompt{text, display}, nil
 }
 
 func subagentPromptCacheKey(system []llm.SystemContent, modelID string) string {
@@ -2351,6 +2364,10 @@ func (cm *ConversationManager) serviceForLoop(service llm.Service) (llm.Service,
 }
 
 func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID string) error {
+	chaptersOn, err := cm.chaptersOn(context.Background())
+	if err != nil {
+		return err
+	}
 	sourceID, sourceRevision := "", uint64(0)
 	if cm.resolveModelService != nil {
 		current, currentSource, revision, err := cm.resolveModelService(modelID)
@@ -2368,8 +2385,11 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 		return fmt.Errorf("%w: conversation already uses model %s; requested %s", errConversationModelMismatch, existingModel, modelID)
 	}
 	if cm.loop != nil {
-		if !cm.agentWorking && cm.loopSourceID != "" &&
-			(cm.loopSourceID != sourceID || cm.loopSourceRevision != sourceRevision) {
+		wantChapterTool := chaptersOn && claudetool.IsToolEnabled("chapter", cm.conversationOptions.ToolOverrides, cm.conversationOptions.DisableAllTools)
+		chaptersChanged := cm.toolSet != nil &&
+			wantChapterTool != slices.ContainsFunc(cm.toolSet.Tools(), func(t *llm.Tool) bool { return t.Name == "chapter" })
+		if !cm.agentWorking && (chaptersChanged || (cm.loopSourceID != "" &&
+			(cm.loopSourceID != sourceID || cm.loopSourceRevision != sourceRevision))) {
 			// Same-model refresh: the conversation's account must survive a
 			// failed rebuild, or queued work and retries would fall back to
 			// the host default.
@@ -2413,7 +2433,7 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 	// Reading here ensures we always see messages added asynchronously
 	// (e.g. in-place compactions).
 	var dbMessages []generated.Message
-	err := database.Queries(context.Background(), func(q *generated.Queries) error {
+	err = database.Queries(context.Background(), func(q *generated.Queries) error {
 		var err error
 		dbMessages, err = q.ListMessagesForContext(context.Background(), conversationID)
 		return err
@@ -2482,6 +2502,11 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 	}
 	toolSetConfig.InPlaceCompactor = inPlaceCompactor{cm: cm, generation: generation}
 	toolSetConfig.UserMessageFinder = cm.userMessageFinder()
+	toolSetConfig.RecordChapter, err = cm.chapterRecorder(processCtx)
+	if err != nil {
+		cancel()
+		return err
+	}
 	toolSetConfig.UserChat = cm.userChat
 	toolSetConfig.Slack = cm.slack
 	toolSet := claudetool.NewToolSet(processCtx, toolSetConfig)
@@ -2537,6 +2562,7 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 	if slices.ContainsFunc(toolSet.Tools(), func(t *llm.Tool) bool { return t.Name == messageParentTool.Name }) {
 		rewriteFinalReply = cm.rewriteFinalReply
 	}
+	chapterEnabled := slices.ContainsFunc(toolSet.Tools(), func(t *llm.Tool) bool { return t.Name == "chapter" })
 	loopInstance := loop.NewLoop(loop.Config{
 		LLM:            service,
 		ModelID:        modelID,
@@ -2588,7 +2614,27 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 			cm.mu.Unlock()
 		},
 		InjectMessages: func(ctx context.Context) (loop.Injection, error) {
-			return cm.takeInjectable(ctx, generation, nudger)
+			var note string
+			if chapterEnabled {
+				var err error
+				note, err = cm.chapterContext(context.WithoutCancel(ctx))
+				if err != nil {
+					return loop.Injection{}, err
+				}
+			}
+			inj, err := cm.takeInjectable(ctx, generation, nudger)
+			if err != nil || !chapterEnabled {
+				return inj, err
+			}
+			if inj.System != nil {
+				system = inj.System
+			}
+
+			inj.System = slices.Clone(system)
+			if note != "" {
+				inj.System = append(inj.System, llm.SystemContent{Type: "text", Text: note})
+			}
+			return inj, nil
 		},
 		RewriteFinalReply: rewriteFinalReply,
 		// A message can arrive too late to join the turn before, which

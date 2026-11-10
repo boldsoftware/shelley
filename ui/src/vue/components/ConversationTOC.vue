@@ -45,13 +45,15 @@
       <span class="toc-popover-title">Jump to…</span>
     </div>
     <div ref="listRef" class="toc-popover-list">
+      <p v-if="chaptersEnabled && chaptersError" role="alert">{{ chaptersError }}</p>
+
       <button
         v-for="entry in entries"
         :key="entry.id"
         :class="`toc-entry toc-entry-${entry.kind}${entry.category ? ' toc-category-' + entry.category : ''}${activeId === entry.id ? ' toc-entry-active' : ''}`"
         @click="handleGoto(entry)"
       >
-        <span v-if="entry.kind !== 'gen'" class="toc-entry-icon" aria-hidden="true">
+        <span v-if="entry.kind !== 'gen' && entry.kind !== 'chapter'" class="toc-entry-icon" aria-hidden="true">
           <template v-if="entry.kind === 'top'">↑</template>
           <template v-else-if="entry.kind === 'bottom'">↓</template>
           <svg
@@ -159,10 +161,12 @@ import {
   type LLMContent,
 } from "../../types";
 import { perfCount, perfWrap } from "../../utils/perf";
-import { replaceLocationFragment } from "../../utils/locationFragment";
+import { fragmentForMessage, replaceLocationFragment } from "../../utils/locationFragment";
 import { chunkMountKey } from "./chunkMount";
 import { messageTOCCategory, type TOCCategory } from "../../utils/conversationTOCCategory";
 import { messageSource, parseLegacyBackgroundJobNotice } from "../../utils/messageSource";
+import { apiFetch } from "../../services/api";
+import { useFeatureFlag } from "../composables/featureFlags";
 
 interface TOCThumbnail {
   src: string;
@@ -171,7 +175,7 @@ interface TOCThumbnail {
 
 interface TOCEntry {
   id: string;
-  kind: "top" | "user" | "eot" | "image" | "gen" | "compaction" | "bottom";
+  kind: "top" | "user" | "eot" | "image" | "gen" | "compaction" | "bottom" | "chapter";
   label: string;
   category?: TOCCategory;
   messageId?: string;
@@ -197,6 +201,40 @@ const activeId = ref<string | null>(null);
 const popoverRef = ref<InstanceType<typeof Popover> | null>(null);
 const listRef = ref<HTMLElement | null>(null);
 const renderedThumbnails = ref<Map<string, TOCThumbnail[]>>(new Map());
+const chapters = ref<{ title: string; message_id: string }[]>([]);
+const chaptersError = ref("");
+const chaptersEnabled = useFeatureFlag("conversation-chapters");
+
+async function loadChapters() {
+  if (!chaptersEnabled.value) return;
+  const id = props.conversationId;
+  try {
+    const response = await apiFetch(`/api/conversation/${encodeURIComponent(id)}/themes`, "Failed to load chapters");
+    const themes = await response.json();
+    if (id !== props.conversationId) return;
+    chapters.value = themes.chapters;
+    chaptersError.value = "";
+  } catch (error) {
+    if (id !== props.conversationId) return;
+    chaptersError.value = error instanceof Error ? error.message : String(error);
+  }
+}
+
+function onChaptersUpdated(event: Event) {
+  if (chaptersEnabled.value && open.value && (event as CustomEvent<string>).detail === props.conversationId) void loadChapters();
+}
+
+watch(() => props.conversationId, () => {
+  chapters.value = [];
+  chaptersError.value = "";
+  if (open.value) void loadChapters();
+});
+
+watch(chaptersEnabled, (enabled) => {
+  chapters.value = [];
+  chaptersError.value = "";
+  if (enabled && open.value) void loadChapters();
+});
 
 function extractMessageLabel(message: Message, maxLen = 70): string {
   const slack = slackEventOf(message);
@@ -213,10 +251,6 @@ function extractMessageLabel(message: Message, maxLen = 70): string {
   return s;
 }
 
-function fragmentForMessage(messageId: string): string {
-  const short = messageId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8);
-  return `m-${short}`;
-}
 
 function fragmentForToolUse(toolUseId: string): string {
   const short = toolUseId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8);
@@ -369,8 +403,10 @@ function fallbackToolThumbnails(toolUse: LLMContent, toolResult?: LLMContent): T
 function buildEntries(
   messages: Message[],
   thumbnailsByTarget: Map<string, TOCThumbnail[]>,
+  chapters: { title: string; message_id: string }[],
 ): TOCEntry[] {
   const entries: TOCEntry[] = [];
+  const chaptersByMessageId = new Map(chapters.map((chapter) => [chapter.message_id, chapter]));
   entries.push({ id: "top", kind: "top", label: "Top of conversation" });
 
   const toolResultsById = new Map<string, LLMContent>();
@@ -394,6 +430,16 @@ function buildEntries(
         });
       }
       prevGen = m.generation;
+    }
+
+    const chapter = chaptersByMessageId.get(m.message_id);
+    if (chapter) {
+      entries.push({
+        id: `chapter-${m.message_id}`,
+        kind: "chapter",
+        label: chapter.title,
+        messageId: m.message_id,
+      });
     }
 
     if (m.type === "inplacecompaction") {
@@ -550,7 +596,9 @@ function scrollToFragment(container: HTMLElement, fragment: string): boolean {
   }
   emit("scroll-away");
   el.scrollIntoView({
-    behavior: el.classList.contains("tool-card-mount-placeholder") ? "auto" : "smooth",
+    behavior: fragment.startsWith("m-")
+      ? "instant"
+      : el.classList.contains("tool-card-mount-placeholder") ? "auto" : "smooth",
     block: "start",
   });
   const toolUseId = fragment.startsWith("t-") ? toolUseIdForElement(el) : null;
@@ -560,7 +608,7 @@ function scrollToFragment(container: HTMLElement, fragment: string): boolean {
 }
 
 const entries = computed(
-  perfWrap("toc.buildEntries", () => buildEntries(props.messages, renderedThumbnails.value)),
+  perfWrap("toc.buildEntries", () => buildEntries(props.messages, renderedThumbnails.value, chaptersEnabled.value ? chapters.value : [])),
 );
 const activeEntryByMessageId = computed(() => {
   const entriesBySourceMessageId = new Map<string, TOCEntry[]>();
@@ -595,6 +643,7 @@ const activeEntryByToolUseId = computed(() => {
 function handleShow() {
   refreshRenderedThumbnails();
   open.value = true;
+  void loadChapters();
   nextTick(() => {
     const list = listRef.value;
     if (!list) return;
@@ -603,7 +652,7 @@ function handleShow() {
       list.scrollTop = 0;
       return;
     }
-    const el = list.children[index] as HTMLElement | undefined;
+    const el = list.querySelector<HTMLElement>(".toc-entry-active");
     // Center the active entry (block: "center" without scrolling ancestors).
     if (el) list.scrollTop = el.offsetTop - (list.clientHeight - el.offsetHeight) / 2;
   });
@@ -750,9 +799,9 @@ function handleGoto(entry: TOCEntry) {
     if (!isCurrentNavigation(navigation)) return;
     const el = findMessageElement(container, messageId);
     if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.scrollIntoView({ behavior: entry.kind === "chapter" ? "instant" : "smooth", block: "start" });
     highlight(el);
-    replaceFragment(entry.id);
+    replaceFragment(fragmentForMessage(messageId));
   });
 }
 
@@ -832,11 +881,34 @@ watch(
   { immediate: true, flush: "post" },
 );
 
-window.addEventListener("hashchange", resolveFragmentWithRetry);
+function onLocationNavigation() {
+  cancelFragmentNavigation();
+  resolveFragmentWithRetry();
+}
+
+window.addEventListener("popstate", onLocationNavigation);
+window.addEventListener("hashchange", onLocationNavigation);
+window.addEventListener("shelley-chapters-updated", onChaptersUpdated);
 
 onUnmounted(() => {
   cancelFragmentNavigation();
   detachScroll();
-  window.removeEventListener("hashchange", resolveFragmentWithRetry);
+  window.removeEventListener("popstate", onLocationNavigation);
+  window.removeEventListener("hashchange", onLocationNavigation);
+  window.removeEventListener("shelley-chapters-updated", onChaptersUpdated);
 });
 </script>
+
+<style>
+.toc-entry-chapter {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  font-weight: 700;
+  height: auto;
+  min-height: 36px;
+  padding: 10px 0.875rem 7px;
+}
+.toc-entry-chapter .toc-entry-label {
+  white-space: normal;
+}
+</style>
