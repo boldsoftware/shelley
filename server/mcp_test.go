@@ -400,6 +400,27 @@ func TestMCPNoticeInjectedWhileWorking(t *testing.T) {
 		t.Fatalf("create status = %d: %s", addW.Code, addW.Body.String())
 	}
 
+	// handleCreateMCPServer notifies active conversations from a background
+	// goroutine, so the notice is queued asynchronously. Wait until it is
+	// actually queued before releasing the first call. Otherwise the turn can
+	// end (the "start" response is final text, no tool round) before the
+	// goroutine runs its IsAgentWorking check, which skips the notice entirely
+	// and makes this test flaky (issue #345). While first is held the turn stays
+	// working, so the injected notice sits in the queue until we release it.
+	waitFor(t, 5*time.Second, func() bool {
+		queued, err := database.GetQueuedMessages(t.Context(), conversation.ConversationID)
+		if err != nil {
+			return false
+		}
+		for _, qm := range queued {
+			var n mcpNoticeUserData
+			if json.Unmarshal(qm.UserData, &n) == nil && n.MCPServerChange == "added" && n.ServerName == "linear" {
+				return true
+			}
+		}
+		return false
+	})
+
 	// Let the turn run; the injected notice reaches a later model request.
 	first.Release()
 	deadline := time.After(5 * time.Second)
