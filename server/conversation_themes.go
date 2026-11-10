@@ -23,22 +23,6 @@ func (cm *ConversationManager) chaptersOn(ctx context.Context) (bool, error) {
 	return cm.server.flagOn(ctx, FlagConversationChapters)
 }
 
-func (cm *ConversationManager) chapterContext(ctx context.Context) (string, error) {
-	on, err := cm.chaptersOn(ctx)
-	if err != nil || !on {
-		return "", err
-	}
-	themes, err := cm.db.GetConversationThemes(ctx, cm.conversationID)
-	if err != nil {
-		return "", err
-	}
-	if len(themes.Chapters) == 0 {
-		return "There is no conversation chapter yet. Use chapter to record the user's first substantive goal; do not announce this bookkeeping.", nil
-	}
-	current := themes.Chapters[len(themes.Chapters)-1].Title
-	return fmt.Sprintf("Current conversation chapter: %q.\nCompare the latest user's topic with this heading. Emit chapter for a meaningful new subtopic, question, decision, goal, or approach worth navigating to, even within the same overall task. Do not wait for a major goal change or for the user to ask. Skip routine implementation, progress updates, and tiny corrections. The three-user-message spacing brake still applies.", current), nil
-}
-
 func (cm *ConversationManager) chapterRecorder(ctx context.Context) (func(context.Context, string) (string, error), error) {
 	on, err := cm.chaptersOn(ctx)
 	if err != nil || !on {

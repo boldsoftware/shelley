@@ -2562,7 +2562,6 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 	if slices.ContainsFunc(toolSet.Tools(), func(t *llm.Tool) bool { return t.Name == messageParentTool.Name }) {
 		rewriteFinalReply = cm.rewriteFinalReply
 	}
-	chapterEnabled := slices.ContainsFunc(toolSet.Tools(), func(t *llm.Tool) bool { return t.Name == "chapter" })
 	loopInstance := loop.NewLoop(loop.Config{
 		LLM:            service,
 		ModelID:        modelID,
@@ -2614,27 +2613,7 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 			cm.mu.Unlock()
 		},
 		InjectMessages: func(ctx context.Context) (loop.Injection, error) {
-			var note string
-			if chapterEnabled {
-				var err error
-				note, err = cm.chapterContext(context.WithoutCancel(ctx))
-				if err != nil {
-					return loop.Injection{}, err
-				}
-			}
-			inj, err := cm.takeInjectable(ctx, generation, nudger)
-			if err != nil || !chapterEnabled {
-				return inj, err
-			}
-			if inj.System != nil {
-				system = inj.System
-			}
-
-			inj.System = slices.Clone(system)
-			if note != "" {
-				inj.System = append(inj.System, llm.SystemContent{Type: "text", Text: note})
-			}
-			return inj, nil
+			return cm.takeInjectable(ctx, generation, nudger)
 		},
 		RewriteFinalReply: rewriteFinalReply,
 		// A message can arrive too late to join the turn before, which
