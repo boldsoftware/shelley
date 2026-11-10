@@ -881,20 +881,19 @@ watch(
   { immediate: true, flush: "post" },
 );
 
-function onLocationNavigation() {
-  cancelFragmentNavigation();
-  resolveFragmentWithRetry();
-}
-
-window.addEventListener("popstate", onLocationNavigation);
-window.addEventListener("hashchange", onLocationNavigation);
+// Router navigations (chapter links) pushState without a hashchange, so listen
+// for popstate too. Both go straight to the resolver: it already restarts on a
+// changed conversation, container or fragment, and keeping the navigation it
+// owns is what stops a repeated event from replaying a jump that already landed.
+window.addEventListener("popstate", resolveFragmentWithRetry);
+window.addEventListener("hashchange", resolveFragmentWithRetry);
 window.addEventListener("shelley-chapters-updated", onChaptersUpdated);
 
 onUnmounted(() => {
   cancelFragmentNavigation();
   detachScroll();
-  window.removeEventListener("popstate", onLocationNavigation);
-  window.removeEventListener("hashchange", onLocationNavigation);
+  window.removeEventListener("popstate", resolveFragmentWithRetry);
+  window.removeEventListener("hashchange", resolveFragmentWithRetry);
   window.removeEventListener("shelley-chapters-updated", onChaptersUpdated);
 });
 </script>
