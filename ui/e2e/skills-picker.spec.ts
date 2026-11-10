@@ -98,8 +98,10 @@ test.describe("desktop", () => {
       await openConversation(page, request, cwd);
       const sent: string[] = [];
       page.on("request", (req) => {
-        // The activity heartbeat isn't a send.
-        if (req.method() === "POST" && !req.url().endsWith("/api/activity")) sent.push(req.url());
+        // Neither the activity heartbeat nor the read receipt is a send.
+        const url = req.url();
+        if (req.method() === "POST" && !url.endsWith("/api/activity") && !url.endsWith("/read"))
+          sent.push(url);
       });
       const input = await pickSkill(page);
       await expect(input).toHaveValue("");
