@@ -85,6 +85,55 @@ func TestLiveUtterance(t *testing.T) {
 			[]liveFragment{userSaid("Hi.", 0, 500), liveSaid("Hello! What can I do?", 4000, 8000)},
 			8100, "",
 		},
+		{
+			"a clarification survives a delayed acknowledgement",
+			[]liveFragment{
+				liveSaid("Which bit's misbehaving?", 78000, 79600),
+				userSaid("Yeah, it often uses ", 82600, 83600),
+				userSaid("find double ", 83600, 84200),
+				userSaid("dot", 84200, 84400),
+				liveSaid("Got it, I'll pass that along.", 87800, 89800),
+			},
+			89900, "Yeah, it often uses find double dot",
+		},
+		{
+			"a quick clarification keeps its request through a delayed acknowledgement",
+			[]liveFragment{
+				userSaid("Find the files that use parent dirs.", 74000, 77000),
+				liveSaid("Which bit's misbehaving?", 77600, 79000),
+				userSaid(" Yeah, it often uses find double dot", 81500, 83300),
+				liveSaid("Okay, I'm looking at that now.", 86000, 88000),
+			},
+			88100, "Find the files that use parent dirs. Yeah, it often uses find double dot",
+		},
+		{
+			"a clarification cannot bridge an indefinitely late reply",
+			[]liveFragment{
+				liveSaid("Which bit's misbehaving?", 78000, 79600),
+				userSaid("Yeah, it often uses find double dot", 82600, 84400),
+				liveSaid("What else can I help with?", 100000, 102000),
+			},
+			102100, "",
+		},
+		{
+			"old Live speech does not make a greeting a clarification",
+			[]liveFragment{
+				liveSaid("Hello!", 0, 1000),
+				userSaid("Hi.", 30000, 30500),
+				liveSaid("What can I do?", 34000, 35000),
+			},
+			35100, "",
+		},
+		{
+			"earlier user speech prevents treating a greeting as a reply to Live",
+			[]liveFragment{
+				liveSaid("Hello!", 0, 1000),
+				userSaid("One moment.", 1500, 2000),
+				userSaid("Hi.", 7100, 7500),
+				liveSaid("What can I do?", 11000, 12000),
+			},
+			12100, "",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := utterance(tt.speech, tt.offset); got != tt.want {
@@ -183,6 +232,8 @@ func TestLiveEcho(t *testing.T) {
 		want   bool
 	}{
 		{"Shelley is working on that request", 1000, true},
+		{"Shelley is working on that request", 2000 - liveEchoTailMs, true},
+		{"Shelley is working on that request", 2000 - liveEchoTailMs - 1, false},
 		{"No, use the other file", 1000, false},
 		{"Yes", 1000, false},
 		// Echo is Live's playback picked up while it speaks, not speech
@@ -191,7 +242,7 @@ func TestLiveEcho(t *testing.T) {
 		{"Shelley is working on that request", 4000 + liveEchoTailMs, true},
 		{"Shelley is working on that request", 4000 + liveEchoTailMs + 1, false},
 	} {
-		if got := liveEcho(tt.speech, tt.start, liveReply{reply, 4000}); got != tt.want {
+		if got := liveEcho(tt.speech, tt.start, liveReply{text: reply, startMs: 2000, endMs: 4000}); got != tt.want {
 			t.Errorf("liveEcho(%q at %v) = %v", tt.speech, tt.start, got)
 		}
 	}
@@ -209,7 +260,7 @@ func TestLiveLatestReply(t *testing.T) {
 		liveSaid("Earlier part.", 2000, 2500), liveSaid(" Hello", 6000, 6500), liveSaid(" there.", 6500, 7000),
 		userSaid("um", 7100, 7200),
 	})
-	if got != (liveReply{" Hello there.", 7000}) {
+	if got != (liveReply{text: " Hello there.", startMs: 6000, endMs: 7000}) {
 		t.Errorf("latest reply = %+v", got)
 	}
 }

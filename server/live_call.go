@@ -26,7 +26,6 @@ const (
 	liveMaxPerMinute     = 12
 	liveFeedbackLoop     = "Voice delegation paused to prevent a feedback loop. Start voice again to continue."
 	liveInvalidOffset    = "Live returned an invalid delegation timestamp."
-	liveNoRequest        = "No user request was captured for this delegation. Do not report progress. If the user asked for something, ask them to repeat it."
 	liveDeliveryFailed   = "The last delegation could not be sent to the backend. Tell the user briefly and ask them to repeat it. Do not report progress."
 	liveFragmentsKept    = 500
 	liveFragmentsMax     = 1000
@@ -263,12 +262,12 @@ func (c *liveCall) delegation(e liveEvent) {
 	c.activity()
 	// Settle now only if the user's speech already leads up to the
 	// delegation; otherwise wait for its transcript.
-	user := c.unclaimedUser()
+	user := liveRecentUser(c.unclaimedUser())
 	if len(user) > 0 {
-		end := user[len(user)-1].endMs
-		replyEnd := liveTurnEnd(end, c.fragments)
+		last := user[len(user)-1]
+		replyEnd := liveTurnEnd(user, c.fragments)
 		if replyEnd+liveUserLeadMs >= offset {
-			p.output = replyEnd > end
+			p.output = replyEnd > last.endMs
 			c.settle(id)
 		}
 	}
@@ -339,7 +338,6 @@ func (c *liveCall) commit(id string) {
 			}
 		}
 		c.logger.Info("Live delegation dropped: no user request", "delegation", id, "speech", ok)
-		c.thinking(liveNoRequest, &id)
 		return
 	}
 	now := time.Now()

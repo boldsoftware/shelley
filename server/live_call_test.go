@@ -411,13 +411,11 @@ func TestLiveCallNeverDeliversMissingOrEchoedSpeech(t *testing.T) {
 		h.delegate("d2", 8000)
 		h.advance(liveQuiet)
 		expectEqual(t, "transcripts", h.transcripts(), []string(nil))
-		expectEqual(t, "context", h.context(), []string{"thinking [d1]: " + liveNoRequest, "thinking [d2]: " + liveNoRequest})
+		expectEqual(t, "context", h.context(), []string{})
 		expectEqual(t, "instructions", h.instructions(), []string{
 			"activity: true",
-			"thinking [d1]: " + liveNoRequest,
 			"activity: false",
 			"activity: true",
-			"thinking [d2]: " + liveNoRequest,
 			"activity: false",
 		})
 	})
@@ -592,6 +590,81 @@ func TestLiveCallDeliversAShortAnswerLiveAcknowledgedBeforeDelegating(t *testing
 	})
 }
 
+func TestLiveCallDeliversClarificationAfterDelayedAcknowledgement(t *testing.T) {
+	for _, tt := range []struct {
+		late  bool
+		extra float64
+	}{
+		{false, 0}, {true, 0}, {false, 10000}, {true, 10000},
+	} {
+		t.Run(fmt.Sprintf("late transcript: %v, extra answer duration: %v", tt.late, tt.extra), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				h := newLiveHarness(t)
+				h.liveSays("Which bit's misbehaving?", 78000, 79600)
+				captions := func() {
+					h.say("Yeah, it often uses ", 82600, 83600+tt.extra)
+					h.say("find double ", 83600+tt.extra, 84200+tt.extra)
+					h.say("dot", 84200+tt.extra, 84400+tt.extra)
+				}
+				if !tt.late {
+					captions()
+					h.liveSays("Got it, I'll pass that along.", 87800+tt.extra, 89800+tt.extra)
+				}
+				h.delegate("d1", 89900+tt.extra)
+				if tt.late {
+					h.liveSays("Got it, I'll pass that along.", 87800+tt.extra, 89800+tt.extra)
+					captions()
+				}
+				h.advance(liveQuiet)
+				expectEqual(t, "clarification delivered at output quiet", h.transcripts(), []string{"Yeah, it often uses find double dot"})
+				h.delegate("d1", 89900+tt.extra)
+				h.delegate("d2", 90000+tt.extra)
+				h.advance(liveDeadline)
+				expectEqual(t, "no duplicate handoff", h.transcripts(), []string{"Yeah, it often uses find double dot"})
+				expectEqual(t, "no spurious repeat prompt", h.context(), []string{
+					"thinking [d1]: The backend accepted this task: Yeah, it often uses find double dot",
+				})
+			})
+		})
+	}
+}
+
+func TestLiveCallKeepsAQuickClarificationWithItsRequest(t *testing.T) {
+	for _, late := range []bool{false, true} {
+		t.Run(fmt.Sprintf("late answer captions: %v", late), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				h := newLiveHarness(t)
+				h.say("Find the files that use parent dirs.", 74000, 77000)
+				h.liveSays("Which bit's misbehaving?", 77600, 79000)
+				captions := func() {
+					h.say(" Yeah, it often uses ", 81500, 82500)
+					h.say("find double ", 82500, 83100)
+					h.say("dot", 83100, 83300)
+				}
+				if !late {
+					captions()
+					h.liveSays("Okay, I'm looking at that now.", 86000, 88000)
+				}
+				h.delegate("d1", 88100)
+				if late {
+					h.liveSays("Okay, I'm looking at that now.", 86000, 88000)
+					captions()
+				}
+				h.advance(liveQuiet)
+				const speech = "Find the files that use parent dirs. Yeah, it often uses find double dot"
+				expectEqual(t, "request and clarification delivered together at output quiet", h.transcripts(), []string{speech})
+				h.delegate("d1", 88100)
+				h.delegate("d2", 88200)
+				h.advance(liveDeadline)
+				expectEqual(t, "one combined handoff", h.transcripts(), []string{speech})
+				expectEqual(t, "no silent drop or repeat prompt", h.context(), []string{
+					"thinking [d1]: The backend accepted this task: " + speech,
+				})
+			})
+		})
+	}
+}
+
 // Choosing an option by repeating Live's words is not echo: echo is Live's
 // playback picked up while it speaks, not speech after it stopped.
 func TestLiveCallDeliversAnOptionRepeatedAfterLiveStopped(t *testing.T) {
@@ -602,6 +675,33 @@ func TestLiveCallDeliversAnOptionRepeatedAfterLiveStopped(t *testing.T) {
 		h.delegate("d1", 9100)
 		h.advance(liveQuiet)
 		expectEqual(t, "transcripts", h.transcripts(), []string{"calls also start from a new or draft chat"})
+	})
+}
+
+func TestLiveCallDeliversAnAnswerLiveRepeatsInAcknowledgement(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newLiveHarness(t)
+		h.liveSays("Which bit's misbehaving?", 78000, 79600)
+		h.say("Yeah, it often uses ", 82600, 83600)
+		h.say("find double ", 83600, 84200)
+		h.say("dot", 84200, 84400)
+		h.liveSays("Yeah, it often uses find double dot. I'll pass that along.", 87800, 89800)
+		h.delegate("d1", 89900)
+		h.advance(liveQuiet)
+		expectEqual(t, "answer predates acknowledgement, not microphone echo", h.transcripts(), []string{"Yeah, it often uses find double dot"})
+	})
+}
+
+func TestLiveCallDoesNotReviveAGreetingAfterLiveSpokeFirst(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newLiveHarness(t)
+		h.liveSays("Hello, how can I help?", 0, 1500)
+		h.say("Hello", 2000, 2500)
+		h.liveSays("What would you like to work on?", 8000, 9000)
+		h.delegate("d1", 9100)
+		h.advance(liveDeadline)
+		expectEqual(t, "stale greeting is not a request", h.transcripts(), []string(nil))
+		expectEqual(t, "no spurious repeat prompt", h.context(), []string{})
 	})
 }
 

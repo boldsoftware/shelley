@@ -31,6 +31,8 @@ const (
 	// liveUserLeadMs: a delegation counts the user's speech when it follows
 	// within this long, of the user or of Live's answer to them.
 	liveUserLeadMs = 2500
+	// Replies in an ongoing exchange can take longer to start.
+	liveResponseGapMs = 5000
 	// liveEchoTailMs: echo starts while Live speaks or this soon after.
 	liveEchoTailMs         = 1500
 	liveContextTurns       = 6
@@ -60,15 +62,24 @@ func liveSpeech(fragments []liveFragment) string {
 // within 2.5 s, or follows Live's reply to it: Live often acknowledges first
 // ("Got it, handing that off") and delegates as it finishes, seconds after
 // the user stopped. A reply that starts more than 2.5 s after the user
-// stopped doesn't bridge, so an old greeting never becomes a task.
+// stopped only bridges in an ongoing exchange, not from an old greeting.
 func liveUtterance(user []liveFragment, offsetMs float64, all []liveFragment) (text string, startMs float64, ok bool) {
+	user = liveRecentUser(user)
 	if len(user) == 0 {
 		return "", 0, false
 	}
-	last := user[len(user)-1]
-	if liveTurnEnd(last.endMs, all)+liveUserLeadMs < offsetMs {
+	if liveTurnEnd(user, all)+liveUserLeadMs < offsetMs {
 		return "", 0, false
 	}
+	text = liveSpeech(user)
+	return text, user[0].startMs, text != ""
+}
+
+func liveRecentUser(user []liveFragment) []liveFragment {
+	if len(user) == 0 {
+		return user
+	}
+	last := user[len(user)-1]
 	first := len(user) - 1
 	for first > 0 {
 		before, current := user[first-1], user[first]
@@ -77,27 +88,42 @@ func liveUtterance(user []liveFragment, offsetMs float64, all []liveFragment) (t
 		}
 		first--
 	}
-	text = liveSpeech(user[first:])
-	return text, user[first].startMs, text != ""
+	return user[first:]
 }
 
-// liveTurnEnd is when the exchange the user's speech opened ends: the
-// user's end, extended through Live's speech that answers it without a
-// pause of more than 2.5 s.
-func liveTurnEnd(userEnd float64, all []liveFragment) float64 {
+// liveTurnEnd extends the user's speech through Live's answer. Allow a
+// longer response pause when the user was replying to Live, but don't
+// revive an isolated greeting with unrelated later output. The user's
+// speech can span an intervening clarification question.
+func liveTurnEnd(user, all []liveFragment) float64 {
+	end := user[len(user)-1].endMs
+	gap := float64(liveUserLeadMs)
+	for _, u := range user {
+		var preceding *liveFragment
+		for _, f := range all {
+			if f.startMs < u.startMs && f.endMs > f.startMs && strings.TrimSpace(f.text) != "" &&
+				(preceding == nil || f.endMs > preceding.endMs) {
+				preceding = &f
+			}
+		}
+		if preceding != nil && !preceding.user && u.startMs-preceding.endMs <= liveResponseGapMs {
+			gap = liveResponseGapMs
+			break
+		}
+	}
 	var live []liveFragment
 	for _, f := range all {
-		if !f.user && f.endMs > userEnd {
+		if !f.user && f.endMs > end {
 			live = append(live, f)
 		}
 	}
 	slices.SortStableFunc(live, func(a, b liveFragment) int { return cmp.Compare(a.startMs, b.startMs) })
-	end := userEnd
 	for _, f := range live {
-		if f.startMs-end > liveUserLeadMs {
+		if f.startMs-end > gap {
 			break
 		}
 		end = max(end, f.endMs)
+		gap = liveUserLeadMs
 	}
 	return end
 }
@@ -162,7 +188,7 @@ var liveWord = regexp.MustCompile(`[\p{L}\p{N}]+`)
 // words, e.g. choosing an option Live just read out. Echo cancellation
 // runs too; this is a second guard.
 func liveEcho(speech string, startMs float64, reply liveReply) bool {
-	return startMs <= reply.endMs+liveEchoTailMs && liveRepeats(speech, reply.text)
+	return startMs >= reply.startMs-liveEchoTailMs && startMs <= reply.endMs+liveEchoTailMs && liveRepeats(speech, reply.text)
 }
 
 // liveRepeats reports whether one text's words, four or more, appear
@@ -182,15 +208,14 @@ func liveRepeats(speech, reply string) bool {
 }
 
 type liveReply struct {
-	text  string
-	endMs float64
+	text           string
+	startMs, endMs float64
 }
 
 // liveLatestReply is Live's latest run of speech, stopping at a pause of
 // more than three seconds.
 func liveLatestReply(all []liveFragment) liveReply {
 	var reply liveReply
-	var firstStart float64
 	for i := len(all) - 1; i >= 0; i-- {
 		f := all[i]
 		if f.user {
@@ -199,14 +224,14 @@ func liveLatestReply(all []liveFragment) liveReply {
 			}
 			continue
 		}
-		if reply.text != "" && firstStart-f.endMs > liveReplyPauseMs {
+		if reply.text != "" && reply.startMs-f.endMs > liveReplyPauseMs {
 			break
 		}
 		if reply.text == "" {
 			reply.endMs = f.endMs
 		}
 		reply.text = f.text + reply.text
-		firstStart = f.startMs
+		reply.startMs = f.startMs
 	}
 	if r := []rune(reply.text); len(r) > liveLatestReplyChars {
 		reply.text = string(r[len(r)-liveLatestReplyChars:])
