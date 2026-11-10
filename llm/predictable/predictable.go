@@ -334,7 +334,7 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 		if rest, ok := strings.CutPrefix(inputText, "fail "); ok {
 			errorMsg := strings.TrimSpace(rest)
 			if req.OnRetry != nil {
-				req.OnRetry(llm.RetryEvent{Attempt: 1, Sleep: time.Second, Err: errorMsg, Provider: "predictable", Model: "predictable-v1"})
+				req.OnRetry(llm.RetryEvent{Attempt: 1, Sleep: 5 * time.Second, Err: errorMsg, Provider: "predictable", Model: "predictable-v1"})
 			}
 			return nil, fmt.Errorf("predictable failure: %s", errorMsg)
 		}

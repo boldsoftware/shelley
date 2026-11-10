@@ -510,11 +510,19 @@ func (l *RunConfig) emitToolResponse(ctx context.Context, message llm.Message, o
 	return nil
 }
 
+// quietRetry is the longest retry wait that goes unreported.
+const quietRetry = 5 * time.Second
+
 func (l *RunConfig) retryWarningHook(ctx context.Context) func(llm.RetryEvent) {
 	if l.Hooks.OnWarning == nil {
 		return nil
 	}
 	return func(event llm.RetryEvent) {
+		// Quick retries ride out blips such as a gateway restart resetting
+		// the stream; only waits the user would notice are worth a warning.
+		if event.Sleep < quietRetry {
+			return
+		}
 		if err := l.Hooks.OnWarning(ctx, llm.FormatRetryEvent(event)); err != nil {
 			l.Logger.Error("failed to record retry warning", "error", err)
 		}

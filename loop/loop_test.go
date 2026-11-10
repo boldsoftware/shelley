@@ -3205,3 +3205,22 @@ func (l *Loop) executeToolCalls(ctx context.Context, content []llm.Content) erro
 	config := RunConfig{Tools: l.tools, Hooks: l.hooks(), Logger: l.logger}
 	return config.executeToolCalls(ctx, content, &messages)
 }
+
+// A gateway restart resets the stream and the request succeeds on a quick
+// retry; that blip must not surface as a warning, while long waits must.
+func TestRetryWarningSkipsQuickRetries(t *testing.T) {
+	var warnings []string
+	l := &RunConfig{Hooks: Hooks{OnWarning: func(_ context.Context, w string) error {
+		warnings = append(warnings, w)
+		return nil
+	}}}
+	hook := l.retryWarningHook(t.Context())
+	hook(llm.RetryEvent{Attempt: 3, Sleep: 2900 * time.Millisecond, Err: "transport: connection refused"})
+	if len(warnings) != 0 {
+		t.Fatalf("quick retry warned: %q", warnings)
+	}
+	hook(llm.RetryEvent{Attempt: 4, Sleep: 5 * time.Second, Err: "transport: connection refused"})
+	if len(warnings) != 1 {
+		t.Fatalf("got %d warnings for a 5s retry, want 1", len(warnings))
+	}
+}

@@ -166,7 +166,7 @@ type Service struct {
 	Model                 string            // defaults to DefaultModel if empty
 	MaxTokens             int               // 0 uses the catalog limit, or the named unknown-model default
 	ThinkingLevel         llm.ThinkingLevel // service-level default; ThinkingLevelDefault (zero) means "none configured"
-	Backoff               []time.Duration   // retry backoff durations; defaults to {15s, 30s, 60s} if nil
+	Backoff               []time.Duration   // retry backoff durations; llm.DefaultBackoff if nil
 	SupportsImages_       bool              // whether this service accepts image inputs
 	EnableThinkingBinding bool              // send drop_block binding controls; native api.anthropic.com always does
 }
@@ -1155,18 +1155,7 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 
 	backoff := s.Backoff
 	if backoff == nil {
-		// Long tail: many model providers have multi-hour incidents, and it is
-		// a much worse UX to return after a few minutes than to keep waiting.
-		backoff = []time.Duration{
-			15 * time.Second,
-			30 * time.Second,
-			60 * time.Second,
-			2 * time.Minute,
-			5 * time.Minute,
-			10 * time.Minute,
-			20 * time.Minute,
-			30 * time.Minute,
-		}
+		backoff = llm.DefaultBackoff
 	}
 
 	url := cmp.Or(s.URL, DefaultURL)
