@@ -633,7 +633,7 @@ test("a search shows matches in folded projects without unfolding them", async (
   expect(await saved()).toBe(folds);
 });
 
-test("the Assistant shows no host, working directory, diffs or git graph; conversations still do", async ({
+test("the Assistant shows no host, working directory, diffs, git graph or message actions; conversations still do", async ({
   page,
   request,
 }) => {
@@ -645,6 +645,9 @@ test("the Assistant shows no host, working directory, diffs or git graph; conver
   await expect(page.locator(".status-ready")).toBeVisible();
   await expect(page.locator(".status-readout-cwd")).toBeVisible();
   await expect(gitButtons).toHaveCount(2);
+  const hello = page.getByTestId("message").filter({ hasText: "Hello" }).first();
+  await hello.hover();
+  await expect(hello.getByRole("button", { name: "Copy" })).toBeVisible();
 
   await page.goto("/");
   await expect(page.locator("h1.header-title")).toHaveText("Assistant");
@@ -653,6 +656,17 @@ test("the Assistant shows no host, working directory, diffs or git graph; conver
   await expect(page.locator(".status-readout-cwd, .status-field-cwd")).toHaveCount(0);
   await expect(actions.getByRole("button", { name: "Terminal", exact: true })).toBeVisible();
   await expect(gitButtons).toHaveCount(0);
+  const text = `texted ${randomUUID()}`;
+  const texted = await request.post(`/api/debug/channels/debug-${randomUUID()}/receive`, {
+    headers: { "X-Shelley-Request": "1" },
+    data: { text },
+  });
+  expect(texted.ok()).toBeTruthy();
+  const message = page.getByTestId("message").filter({ hasText: text });
+  await message.hover();
+  await message.click();
+  await expect(message.getByTestId("message-via-text")).toBeVisible();
+  await expect(page.locator(".message-action-bar")).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 800 });
   await page.getByRole("button", { name: "More options", exact: true }).click();

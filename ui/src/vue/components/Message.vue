@@ -295,6 +295,7 @@ import { usePerfLifecycle } from "../composables/perfLifecycle";
 import { getContentType } from "../utils/messageContent";
 import MarkdownContent from "./MarkdownContent.vue";
 import MessageActionBar from "./MessageActionBar.vue";
+import { workspaceMode } from "../../utils/workspaceMode";
 import UsageDetailModal from "./UsageDetailModal.vue";
 import MessageInfoModal from "./MessageInfoModal.vue";
 import GitInfoMessage from "./GitInfoMessage.vue";
@@ -376,7 +377,9 @@ const messageRef = ref<HTMLDivElement | null>(null);
 // Hover temporarily takes precedence over a pinned region, so two sibling
 // action bars can never be visible at once. rowActionKey is the fallback for a
 // single-entity message, whose entity can be far narrower than the row.
+// Workspace mode's Assistant shows no action bars (copy, details, fork).
 function actionBarVisible(key: string): boolean {
+  if (workspaceMode && isAssistantConversation?.value) return false;
   return key === (hoveredActionKey.value ?? rowActionKey.value ?? pinnedActionKey.value);
 }
 
