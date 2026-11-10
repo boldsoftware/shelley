@@ -18,6 +18,7 @@ export type Conversation = GeneratedConversation;
 export type ConversationWithState = ConversationWithStateForTS & {
   read_at?: number;
   unread?: boolean;
+  unread_count?: number;
 };
 export type ConversationRead = import("./generated-types").ConversationReadMarkersRow;
 export type { ConversationParticipant } from "./generated-types";

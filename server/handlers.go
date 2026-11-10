@@ -860,8 +860,13 @@ func (s *Server) addConversationAttention(ctx context.Context, conversations []C
 	if err != nil {
 		return err
 	}
+	replies, err := s.recentReplyTimes(ctx, attention)
+	if err != nil {
+		return err
+	}
 	for i := range conversations {
 		conversations[i].LastAttentionAt = attention[conversations[i].ConversationID]
+		conversations[i].RecentReplyTimes = replies[conversations[i].ConversationID]
 	}
 	return nil
 }

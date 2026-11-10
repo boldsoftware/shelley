@@ -27,7 +27,7 @@ test("opening a chat clears New across browsers and keeps the open row quiet", a
     expect(reply.ok()).toBeTruthy();
     await expect(badge).toBeVisible();
     await expect(badge).toHaveCSS("font-size", "10px");
-    await expect(badge).toHaveCSS("font-weight", "500");
+    await expect(badge).toHaveCSS("font-weight", "700");
     await expect(badge).toHaveCSS("line-height", "14px");
     await expect(badge).toHaveCSS("margin-right", "2px");
     await expect(badge).toHaveCSS("vertical-align", "1px");

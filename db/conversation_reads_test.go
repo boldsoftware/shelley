@@ -309,3 +309,37 @@ func TestConversationReadMalformedOptions(t *testing.T) {
 		t.Fatalf("visible reply attention = %v, %v", marks, err)
 	}
 }
+
+// The sidebar counts unread replies from a conversation's latest 10 agent messages with text.
+func TestCustomConversationReplyTimesKeepsLatestTen(t *testing.T) {
+	database := setupTestDB(t)
+	ctx := t.Context()
+	c, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []CreateMessageParams{
+		{ConversationID: c.ConversationID, Type: MessageTypeUser, LLMData: llm.UserStringMessage("question")},
+		{ConversationID: c.ConversationID, Type: MessageTypeAgent, LLMData: llm.UserStringMessage("  ")},
+	} {
+		if _, err := database.CreateMessage(ctx, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	times, err := database.CustomConversationReplyTimes(ctx, []string{c.ConversationID})
+	if err != nil || len(times) != 0 {
+		t.Fatalf("reply times without replies = %v, %v", times, err)
+	}
+	for range 12 {
+		if _, err := database.CreateMessage(ctx, CreateMessageParams{ConversationID: c.ConversationID, Type: MessageTypeAgent, LLMData: llm.UserStringMessage("reply")}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	times, err = database.CustomConversationReplyTimes(ctx, []string{c.ConversationID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := times[c.ConversationID]; len(got) != 10 || got[0] <= 0 || got[0] > got[9] {
+		t.Fatalf("reply times = %v", got)
+	}
+}

@@ -880,10 +880,10 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
   });
   expect(delivered.ok()).toBeTruthy();
   await expect(
-    row.locator(".drawer-conversation-header-row").getByText("New", { exact: true }),
+    row.locator(".drawer-conversation-header-row").getByText("1", { exact: true }),
   ).toBeVisible();
   await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-size", "10px");
-  await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-weight", "600");
+  await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-weight", "700");
   await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("line-height", "12px");
   // Its time shows beside the title on hover.
   const time = row.locator(".conversation-hover-date");
