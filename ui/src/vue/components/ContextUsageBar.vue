@@ -1,7 +1,8 @@
 <!-- The token-count segment of the status readout ("15k"). Opens token/cost
      graphs and manual compaction actions. The count warms up at 100k / 200k /
-     300k tokens (or 70/80/90% of a known context window); the popup advises
-     compacting later (see longConversationAdvice). -->
+     300k tokens (or 70/80/90% of a known context window), unless auto
+     compaction is on; the popup advises compacting later (see
+     longConversationAdvice). -->
 <template>
   <div ref="barRef" class="context-usage-root">
     <Popover
@@ -113,7 +114,8 @@ const props = defineProps<{
   onCompactInPlace: () => Promise<void> | void;
   /** The tool still has to be enabled, which waits for the turn to end. */
   compactInPlaceBusy?: boolean;
-  /** The agent is told its context size, so it compacts on its own. */
+  /** The agent is told its context size, so it compacts on its own: the
+   *  count stays plain and the popup gives no advice. */
   contextNudges?: boolean;
   /** Called just before the popup opens. The parent computes usageEntries /
    *  otherUsageRows lazily (walking every message and parsing its usage data),
@@ -135,7 +137,7 @@ const barRef = ref<HTMLElement | null>(null);
 // The token count is the whole warning: it warms up (amber, orange, red) as
 // the conversation grows, rather than a triangle appearing beside it.
 const usageLevel = computed(() =>
-  contextUsageLevel(props.contextWindowSize, props.maxContextTokens),
+  contextUsageLevel(props.contextWindowSize, props.maxContextTokens, !!props.contextNudges),
 );
 const usageLevelClass = computed(() =>
   usageLevel.value ? `context-usage-label-tokens-${usageLevel.value}` : "",

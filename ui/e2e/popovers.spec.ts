@@ -895,16 +895,20 @@ test.describe("Context usage popup", () => {
     const cases = [
       { message: "cache: 170000 0", opts: nudgesOff, level: "high", advised: false },
       { message: "cache: 185000 0", opts: nudgesOff, level: "critical", advised: true },
-      // compact_in_place is on by default, and with it the nudges.
-      { message: "cache: 185000 0", opts: {}, level: "critical", advised: false },
+      // compact_in_place is on by default, and with it the nudges, which
+      // leave the count uncolored.
+      { message: "cache: 185000 0", opts: {}, level: "", advised: false },
     ];
     for (const { message, opts, level, advised } of cases) {
       const slug = await createConversationViaAPI(request, message, opts);
       await page.goto(`/c/${slug}`);
-      // The count has colored, so the size the advice depends on is in.
-      await expect(tokens, message).toHaveClass(new RegExp(`context-usage-label-tokens-${level}`), {
-        timeout: 30000,
-      });
+      // The size the advice depends on is in.
+      await expect(tokens, message).toHaveText(/^1[78]\dk$/, { timeout: 30000 });
+      if (level)
+        await expect(tokens, message).toHaveClass(
+          new RegExp(`context-usage-label-tokens-${level}`),
+        );
+      else await expect(tokens, message).not.toHaveClass(/context-usage-label-tokens-/);
       await label.click();
       await expect(popup.getByTestId("compact-in-place-button")).toBeVisible();
       if (advised) await expect(advice, message).toBeVisible();

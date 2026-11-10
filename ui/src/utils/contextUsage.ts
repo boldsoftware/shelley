@@ -37,9 +37,16 @@ const CRITICAL_FRACTION = 0.9;
 
 /**
  * Level for `tokens` used out of a `maxContextTokens` window. A model that
- * declares no window (0) is judged on the absolute thresholds alone.
+ * declares no window (0) is judged on the absolute thresholds alone. Always
+ * plain when `nudged`: with auto compaction on, the agent is told its context
+ * size and compacts on its own, so a large count is nothing to act on.
  */
-export function contextUsageLevel(tokens: number, maxContextTokens: number): ContextUsageLevel {
+export function contextUsageLevel(
+  tokens: number,
+  maxContextTokens: number,
+  nudged: boolean,
+): ContextUsageLevel {
+  if (nudged) return "";
   const fraction = maxContextTokens > 0 ? tokens / maxContextTokens : 0;
   if (tokens >= CRITICAL_TOKENS || fraction >= CRITICAL_FRACTION) return "critical";
   if (tokens >= HIGH_TOKENS || fraction >= HIGH_FRACTION) return "high";

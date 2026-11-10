@@ -27,26 +27,32 @@ run("every non-empty level has words to go with the color", () => {
 
 run("contextUsageLevel steps on absolute token counts", () => {
   const max = 1_000_000; // large window: percentage never trips
-  assert(contextUsageLevel(50_000, max) === "", "50k is plain");
-  assert(contextUsageLevel(99_999, max) === "", "just under 100k is plain");
-  assert(contextUsageLevel(100_000, max) === "warn", "100k warns");
-  assert(contextUsageLevel(199_999, max) === "warn", "just under 200k warns");
-  assert(contextUsageLevel(200_000, max) === "high", "200k is high");
-  assert(contextUsageLevel(300_000, max) === "critical", "300k is critical");
-  assert(contextUsageLevel(5_000_000, max) === "critical", "way over is critical");
+  assert(contextUsageLevel(50_000, max, false) === "", "50k is plain");
+  assert(contextUsageLevel(99_999, max, false) === "", "just under 100k is plain");
+  assert(contextUsageLevel(100_000, max, false) === "warn", "100k warns");
+  assert(contextUsageLevel(199_999, max, false) === "warn", "just under 200k warns");
+  assert(contextUsageLevel(200_000, max, false) === "high", "200k is high");
+  assert(contextUsageLevel(300_000, max, false) === "critical", "300k is critical");
+  assert(contextUsageLevel(5_000_000, max, false) === "critical", "way over is critical");
 });
 
 run("contextUsageLevel also steps on fraction of the window", () => {
   const max = 20_000; // small window: absolute thresholds never trip
-  assert(contextUsageLevel(10_000, max) === "", "half a small window is plain");
-  assert(contextUsageLevel(14_000, max) === "warn", "70% warns");
-  assert(contextUsageLevel(16_000, max) === "high", "80% is high");
-  assert(contextUsageLevel(18_000, max) === "critical", "90% is critical");
+  assert(contextUsageLevel(10_000, max, false) === "", "half a small window is plain");
+  assert(contextUsageLevel(14_000, max, false) === "warn", "70% warns");
+  assert(contextUsageLevel(16_000, max, false) === "high", "80% is high");
+  assert(contextUsageLevel(18_000, max, false) === "critical", "90% is critical");
 });
 
 run("contextUsageLevel tolerates an unknown window", () => {
-  assert(contextUsageLevel(50_000, 0) === "", "no window, under 100k: plain");
-  assert(contextUsageLevel(150_000, 0) === "warn", "no window, over 100k: warn");
+  assert(contextUsageLevel(50_000, 0, false) === "", "no window, under 100k: plain");
+  assert(contextUsageLevel(150_000, 0, false) === "warn", "no window, over 100k: warn");
+});
+
+run("contextUsageLevel stays plain when the agent is nudged", () => {
+  assert(contextUsageLevel(150_000, 1_000_000, true) === "", "150k with nudges: plain");
+  assert(contextUsageLevel(5_000_000, 1_000_000, true) === "", "way over with nudges: plain");
+  assert(contextUsageLevel(19_000, 20_000, true) === "", "95% with nudges: plain");
 });
 
 run("longConversationAdvice waits for 250k, well after the count colors", () => {
