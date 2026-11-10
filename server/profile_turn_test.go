@@ -135,15 +135,23 @@ func TestProfileMentionIsolatesQueuedAndImmediateMessages(t *testing.T) {
 		t.Fatalf("messages escaped the turn boundary: %+v", q)
 	}
 	close(gate.release)
-	waitFor(t, 5*time.Second, func() bool {
+	turns := func() int {
 		n := 0
 		for _, row := range listMessages(t, e.database, id) {
 			if row.Type == "agent" && row.LlmData != nil && strings.Contains(*row.LlmData, `"EndOfTurn":true`) {
 				n++
 			}
 		}
-		return n == 4
-	})
+		return n
+	}
+	// The four turns run one after another, each started by the previous
+	// one's drain; give each the budget waitTurn gives a single turn.
+	for want := 1; want <= 4; want++ {
+		waitFor(t, 10*time.Second, func() bool { return turns() >= want })
+	}
+	if n := turns(); n != 4 {
+		t.Fatalf("got %d turns, want 4", n)
+	}
 	var prompts []bool
 	for _, req := range e.ps.GetRecentRequests() {
 		if len(req.Tools) > 0 {
