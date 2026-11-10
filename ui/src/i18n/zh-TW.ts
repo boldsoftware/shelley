@@ -199,7 +199,13 @@ export const zhTW: TranslationKeys = {
   collapseSidebar: "收合側邊欄",
   closeConversations: "關閉對話",
   yesterday: "昨天",
-  daysAgo: "天前",
+  timeNow: "剛剛",
+  timeMinutes: "{n}分",
+  timeHours: "{n}小時",
+  timeDays: "{n}天",
+  timeWeeks: "{n}週",
+  timeMonths: "{n}個月",
+  timeYears: "{n}年",
 
   // Message Input
   messagePlaceholder: "輸入訊息、貼上圖片或附加檔案...",

@@ -88,7 +88,6 @@ export interface DrawerCtx {
   selectedTags: Ref<string[]>;
   selectedUsers: Ref<string[]>;
   toggleTagFilter: (tag: string) => void;
-  formatDate: (timestamp: string) => string;
   formatCwdForDisplay: (p: string | null | undefined) => string | null;
   // Where a conversation works: its directory, or VM:directory for one
   // that works on a VM over ssh (its directory here is a scratch directory).

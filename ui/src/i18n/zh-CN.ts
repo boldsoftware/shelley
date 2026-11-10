@@ -199,7 +199,13 @@ export const zhCN: TranslationKeys = {
   collapseSidebar: "折叠侧边栏",
   closeConversations: "关闭对话",
   yesterday: "昨天",
-  daysAgo: "天前",
+  timeNow: "刚刚",
+  timeMinutes: "{n}分",
+  timeHours: "{n}小时",
+  timeDays: "{n}天",
+  timeWeeks: "{n}周",
+  timeMonths: "{n}个月",
+  timeYears: "{n}年",
 
   // Message Input
   messagePlaceholder: "输入消息、粘贴图片或附加文件...",

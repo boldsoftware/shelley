@@ -207,7 +207,13 @@ export const vi: TranslationKeys = {
   collapseSidebar: "Thu gọn sidebar",
   closeConversations: "Đóng hội thoại",
   yesterday: "Hôm qua",
-  daysAgo: "ngày trước",
+  timeNow: "vừa xong",
+  timeMinutes: "{n} phút",
+  timeHours: "{n} giờ",
+  timeDays: "{n} ngày",
+  timeWeeks: "{n} tuần",
+  timeMonths: "{n} tháng",
+  timeYears: "{n} năm",
 
   // Message Input
   messagePlaceholder: "Gửi tin nhắn, ảnh hoặc file...",

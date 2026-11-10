@@ -202,7 +202,13 @@ export const upgoer5: TranslationKeys = {
   collapseSidebar: "Make side part small",
   closeConversations: "Close talks",
   yesterday: "Before Today",
-  daysAgo: "days ago",
+  timeNow: "now",
+  timeMinutes: "{n}m",
+  timeHours: "{n}h",
+  timeDays: "{n}d",
+  timeWeeks: "{n}w",
+  timeMonths: "{n}mo",
+  timeYears: "{n}y",
 
   // Message Input
   messagePlaceholder: "Write something, drop in a picture, or add a thing...",

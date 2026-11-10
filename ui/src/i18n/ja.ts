@@ -204,7 +204,13 @@ export const ja: TranslationKeys = {
   collapseSidebar: "サイドバーを折りたたむ",
   closeConversations: "会話を閉じる",
   yesterday: "昨日",
-  daysAgo: "日前",
+  timeNow: "今",
+  timeMinutes: "{n}分",
+  timeHours: "{n}時間",
+  timeDays: "{n}日",
+  timeWeeks: "{n}週",
+  timeMonths: "{n}か月",
+  timeYears: "{n}年",
 
   // Message Input
   messagePlaceholder: "メッセージ、画像の貼り付け、またはファイルを添付...",

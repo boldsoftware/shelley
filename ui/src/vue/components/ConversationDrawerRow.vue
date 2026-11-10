@@ -27,7 +27,9 @@
           aria-label="Toggle conversation chapters"
           @click.stop="themesRef.toggle()"
           @keydown.stop
-        >{{ themesRef.expanded ? "⌄" : "›" }}</button>
+        >
+          {{ themesRef.expanded ? "⌄" : "›" }}
+        </button>
         <div class="drawer-conversation-item-flex-container">
           <input
             v-if="ctx.editingId.value === conversation.conversation_id"
@@ -63,10 +65,6 @@
               </template>
             </template>
           </div>
-          <!-- Title-only rows show when the conversation last changed on hover. -->
-          <span v-if="compactNav" class="conversation-hover-date">{{
-            ctx.formatDate(conversation.updated_at)
-          }}</span>
         </div>
         <span
           v-if="compactNav && showNew"
@@ -91,8 +89,12 @@
         <div v-if="compactNav && deletable" class="conversation-actions drawer-actions-row">
           <DeleteButton :conversation-id="conversation.conversation_id" />
         </div>
-        <div v-if="hasActions" class="conversation-actions drawer-actions-row drawer-actions-top">
+        <!-- When it last changed, in a column right-aligned beside the ⋯, whose
+             place every row keeps so the times line up. -->
+        <CompactTime v-if="!isPlaceholder" :timestamp="conversation.updated_at" />
+        <div class="conversation-actions drawer-actions-top">
           <NavActionsMenu
+            v-if="hasActions"
             ref="actionsMenuRef"
             :items="actionsMenuItems"
             :label="ctx.t('actions')"
@@ -240,7 +242,6 @@
       </div>
 
       <div v-if="!compactNav" class="conversation-meta">
-        <span class="conversation-date">{{ ctx.formatDate(conversation.updated_at) }}</span>
         <PathText
           v-if="workingDirectory && ctx.groupBy.value !== 'cwd'"
           class="conversation-cwd"
@@ -454,16 +455,14 @@
               class="working-indicator"
               :title="ctx.t('subagentIsWorking')"
             />
+            <CompactTime :timestamp="sub.updated_at" />
+            <div class="drawer-actions-top" />
           </div>
           <div class="conversation-preview" :title="sub.preview || undefined">
             {{ sub.preview || "\u00a0" }}
           </div>
-          <div class="conversation-meta">
-            <span class="conversation-date drawer-subagent-date">{{
-              ctx.formatDate(sub.updated_at)
-            }}</span>
+          <div v-if="sub.running_background_jobs > 0" class="conversation-meta">
             <span
-              v-if="sub.running_background_jobs > 0"
               class="conversation-running-work"
               data-testid="conversation-running-work"
               :aria-label="taskTooltip(sub.running_background_jobs)"
@@ -510,6 +509,7 @@ import { perfCount } from "../../utils/perf";
 import { COMPOSER_ROW_ID, ComposerPreviewKey } from "../../utils/composerRow";
 import { compactNav, workspaceMode } from "../../utils/workspaceMode";
 import GearIcon from "./GearIcon.vue";
+import CompactTime from "./CompactTime.vue";
 import ConversationThemes from "./ConversationThemes.vue";
 import { useFeatureFlag } from "../composables/featureFlags";
 

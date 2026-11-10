@@ -209,7 +209,13 @@ export const fr: TranslationKeys = {
   collapseSidebar: "Réduire la barre latérale",
   closeConversations: "Fermer les conversations",
   yesterday: "Hier",
-  daysAgo: "jours",
+  timeNow: "maint.",
+  timeMinutes: "{n}min",
+  timeHours: "{n}h",
+  timeDays: "{n}j",
+  timeWeeks: "{n}sem",
+  timeMonths: "{n}mois",
+  timeYears: "{n}a",
 
   // Message Input
   messagePlaceholder: "Message, coller une image ou joindre un fichier...",

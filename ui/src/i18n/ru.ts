@@ -205,7 +205,13 @@ export const ru: TranslationKeys = {
   collapseSidebar: "Свернуть боковую панель",
   closeConversations: "Закрыть диалоги",
   yesterday: "Вчера",
-  daysAgo: "дн. назад",
+  timeNow: "сейчас",
+  timeMinutes: "{n}м",
+  timeHours: "{n}ч",
+  timeDays: "{n}д",
+  timeWeeks: "{n}н",
+  timeMonths: "{n}мес",
+  timeYears: "{n}г",
 
   // Message Input
   messagePlaceholder: "Сообщение, вставьте изображение или прикрепите файл...",

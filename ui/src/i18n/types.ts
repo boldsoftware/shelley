@@ -198,7 +198,13 @@ export interface TranslationKeys {
   collapseSidebar: string;
   closeConversations: string;
   yesterday: string;
-  daysAgo: string;
+  timeNow: string;
+  timeMinutes: string;
+  timeHours: string;
+  timeDays: string;
+  timeWeeks: string;
+  timeMonths: string;
+  timeYears: string;
 
   // Message Input
   messagePlaceholder: string;

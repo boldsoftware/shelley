@@ -885,11 +885,14 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
   await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-size", "10px");
   await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-weight", "700");
   await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("line-height", "12px");
-  // Its time shows beside the title on hover.
-  const time = row.locator(".conversation-hover-date");
-  await expect(time).toBeHidden();
+  // Its age shows at the right, beside the ⋯, hovered or not.
+  const time = row.locator(".conversation-time");
+  await expect(time).toHaveText("now");
+  const timeBox = (await time.boundingBox())!;
   await row.hover();
-  await expect(time).toBeVisible();
+  expect(await time.boundingBox()).toEqual(timeBox);
+  const menuBox = (await row.getByRole("button", { name: "Actions" }).boundingBox())!;
+  expect(menuBox.x - (timeBox.x + timeBox.width)).toBeLessThan(8);
   // A task's build status is a label on its title line.
   await expect(row.getByRole("status", { name: "Shelley build" })).toHaveText("Installed");
   await expect(row.locator(".conversation-preview, .conversation-meta")).toHaveCount(0);
