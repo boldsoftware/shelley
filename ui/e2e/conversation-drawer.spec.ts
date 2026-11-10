@@ -254,9 +254,12 @@ test.describe("conversation drawer startup and app bar", () => {
     const interruptedRow = page.locator('[data-conversation-id="interrupted"]');
     await expect(interruptedRow.locator(".drawer-interrupted-indicator")).toBeVisible();
     await expect(interruptedRow.locator(".drawer-working-indicator")).toHaveCount(0);
+    await expect(interruptedRow.locator(".conversation-time")).toBeVisible();
 
+    // A working row's dot stands in for its age.
     const runningRow = page.locator('[data-conversation-id="running"]');
     await expect(runningRow.locator(".drawer-working-indicator")).toBeVisible();
+    await expect(runningRow.locator(".conversation-time")).toHaveCount(0);
     await expect(runningRow.locator(".drawer-interrupted-indicator")).toHaveCount(0);
   });
 

@@ -885,12 +885,10 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
   await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-size", "10px");
   await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-weight", "700");
   await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("line-height", "12px");
-  // Its age shows at the right, beside the ⋯, hovered or not.
+  // On a touch screen, its age shows at the right beside the ⋯.
   const time = row.locator(".conversation-time");
   await expect(time).toHaveText("now");
   const timeBox = (await time.boundingBox())!;
-  await row.hover();
-  expect(await time.boundingBox()).toEqual(timeBox);
   const menuBox = (await row.getByRole("button", { name: "Actions" }).boundingBox())!;
   expect(menuBox.x - (timeBox.x + timeBox.width)).toBeLessThan(8);
   // A task's build status is a label on its title line.
@@ -990,4 +988,26 @@ test("opening a chat clears New across browsers and keeps the open row quiet", a
   } finally {
     await observer.close();
   }
+});
+
+test.describe("with a mouse", () => {
+  test.use({ viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false });
+
+  test("a row's ⋯ takes its age's place while pointed at", async ({ page, request }) => {
+    const { conversationId } = await createConversationViaAPIWithDetails(request, "Hello");
+    const row = page.locator(`.conversation-item[data-conversation-id="${conversationId}"]`);
+    await page.goto("/");
+    await openWorkspace(page);
+    const time = row.locator(".conversation-time");
+    const menu = row.getByRole("button", { name: "Actions" });
+    await expect(time).toHaveCSS("opacity", "1");
+    await expect(menu).toHaveCSS("opacity", "0");
+    const timeBox = (await time.boundingBox())!;
+    await row.hover();
+    await expect(time).toHaveCSS("opacity", "0");
+    await expect(menu).not.toHaveCSS("opacity", "0");
+    const menuBox = (await menu.boundingBox())!;
+    expect(menuBox.x).toBeLessThan(timeBox.x + timeBox.width);
+    expect(menuBox.x + menuBox.width).toBeGreaterThan(timeBox.x);
+  });
 });

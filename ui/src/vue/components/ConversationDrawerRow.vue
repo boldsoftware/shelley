@@ -81,7 +81,7 @@
           >{{ unreadLabel }}</span
         >
         <span
-          v-if="ctx.workingIds.value.has(conversation.conversation_id)"
+          v-if="isWorking"
           class="working-indicator drawer-working-indicator"
           :title="ctx.t('agentIsWorking')"
         />
@@ -96,17 +96,20 @@
         <div v-if="compactNav && deletable" class="conversation-actions drawer-actions-row">
           <DeleteButton :conversation-id="conversation.conversation_id" />
         </div>
-        <!-- When it last changed, in a column right-aligned beside the ⋯, whose
-             place every row keeps so the times line up. -->
-        <CompactTime v-if="!isPlaceholder" :timestamp="conversation.updated_at" />
-        <div class="conversation-actions drawer-actions-top">
-          <NavActionsMenu
-            v-if="hasActions"
-            ref="actionsMenuRef"
-            :items="actionsMenuItems"
-            :label="ctx.t('actions')"
-            testid="conversation-actions-menu"
-          />
+        <!-- When it last changed (a working row's dot says "now" instead),
+             right-aligned beside the ⋯, whose place every row keeps so the
+             times line up. With a mouse, the ⋯ takes the time's place. -->
+        <div class="drawer-row-end">
+          <CompactTime v-if="!isPlaceholder && !isWorking" :timestamp="conversation.updated_at" />
+          <div class="conversation-actions drawer-actions-top">
+            <NavActionsMenu
+              v-if="hasActions"
+              ref="actionsMenuRef"
+              :items="actionsMenuItems"
+              :label="ctx.t('actions')"
+              testid="conversation-actions-menu"
+            />
+          </div>
         </div>
       </div>
 
@@ -462,8 +465,13 @@
               class="working-indicator"
               :title="ctx.t('subagentIsWorking')"
             />
-            <CompactTime :timestamp="sub.updated_at" />
-            <div class="drawer-actions-top" />
+            <div class="drawer-row-end">
+              <CompactTime
+                v-if="!ctx.workingIds.value.has(sub.conversation_id)"
+                :timestamp="sub.updated_at"
+              />
+              <div class="drawer-actions-top" />
+            </div>
           </div>
           <div class="conversation-preview" :title="sub.preview || undefined">
             {{ sub.preview || "\u00a0" }}
@@ -533,6 +541,7 @@ const themesRef = ref<InstanceType<typeof ConversationThemes> | null>(null);
 const renameInput = ref<HTMLInputElement | null>(null);
 const tagInput = ref<HTMLInputElement | null>(null);
 const actionsMenuRef = ref<InstanceType<typeof NavActionsMenu> | null>(null);
+const isWorking = computed(() => ctx.workingIds.value.has(props.conversation.conversation_id));
 const actionsMenuItems = computed(() => ctx.conversationActions(props.conversation));
 
 const workingDirectory = computed(() => ctx.workingDirectory(props.conversation));

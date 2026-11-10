@@ -14848,11 +14848,38 @@ kbd {
   background: var(--bg-hover);
 }
 
-/* With a mouse, a ⋯ shows on the row being pointed at, focused, acted on
-   or open; touch screens always show it. */
+.drawer-row-end {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* With a mouse, a row's ⋯ takes its time's place while the row is pointed
+   at, focused, acted on or open; touch screens show both side by side. */
 @media (hover: hover) and (pointer: fine) {
+  .workspace-mode .drawer-row-end {
+    display: grid;
+    justify-items: end;
+    align-items: center;
+  }
+  .workspace-mode .drawer-row-end > * {
+    grid-row: 1;
+    grid-column: 1;
+  }
+  .workspace-mode .drawer-row-end .conversation-time {
+    margin-right: 0.25rem;
+  }
   .workspace-mode
-    .conversation-item:not(.active, .context-menu-target, :hover, :focus-within)
+    .conversation-item:is(
+      .context-menu-target,
+      :hover,
+      :focus-within,
+      :has(.drawer-actions-trigger[aria-expanded="true"])
+    )
+    .drawer-row-end:has(.drawer-actions-trigger)
+    .conversation-time,
+  .workspace-mode
+    .conversation-item:not(.context-menu-target, :hover, :focus-within)
     .drawer-actions-trigger:not([aria-expanded="true"]) {
     opacity: 0;
     transition: opacity 0.15s;
