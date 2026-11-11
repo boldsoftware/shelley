@@ -298,6 +298,11 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 		// Trigger a patch with malformed JSON (simulates Anthropic sending invalid JSON)
 		return s.makeMalformedPatchToolResponse(inputTokens), nil
 
+	case "patch stringified":
+		// The patches array JSON-encoded inside a string, as models
+		// sometimes send it; the loop coerces it to the schema's array.
+		return s.makeStringifiedPatchToolResponse(inputTokens), nil
+
 	case "maxTokens":
 		// Simulate a max_tokens truncation
 		return s.makeMaxTokensResponse("This is a truncated response that was cut off mid-sentence because the output token limit was", inputTokens), nil
@@ -744,6 +749,19 @@ func (s *Service) makeMalformedPatchToolResponse(inputTokens uint64) *llm.Respon
 			CostUSD:      0.003,
 		},
 	}
+}
+
+// makeStringifiedPatchToolResponse creates a patch call whose patches member
+// is a JSON string holding the array, which llm.CoerceToolInput unwraps.
+func (s *Service) makeStringifiedPatchToolResponse(inputTokens uint64) *llm.Response {
+	patches, err := json.Marshal(`[{"operation":"overwrite","newText":"hello from a stringified patch\n"}]`)
+	if err != nil {
+		panic(err)
+	}
+	resp := s.makeMalformedPatchToolResponse(inputTokens)
+	resp.ID = fmt.Sprintf("pred-patch-stringified-%d", time.Now().UnixNano())
+	resp.Content[1].ToolInput = json.RawMessage(`{"path":"/tmp/test-patch-stringified.txt","patches":` + string(patches) + `}`)
+	return resp
 }
 
 // GetRecentRequests returns the recent requests made to this service

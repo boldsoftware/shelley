@@ -280,10 +280,7 @@ func (l *RunConfig) run(ctx context.Context) error {
 				assistantMessage, toolUse, rewritten = m, true, true
 			}
 		}
-		// Calls run from the model's own input (malformed input is refused
-		// there); history keeps canonical input, which providers accept.
-		calls := assistantMessage.Content
-		assistantMessage = canonicalToolInputs(assistantMessage)
+		calls, assistantMessage := l.toolInputs(assistantMessage)
 		if toolUse {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -475,17 +472,32 @@ func (l *RunConfig) resolvePausedTurn(
 	return &resolved, nil
 }
 
-// canonicalToolInputs returns message with each tool call's input in the
-// form llm.CanonicalToolInput gives it.
-func canonicalToolInputs(message llm.Message) llm.Message {
-	content := slices.Clone(message.Content)
+// toolInputs returns message's content with each tool call's input in the
+// form llm.CoerceToolInput gives it for the tool's schema, which the calls
+// run from (input that repeats names is refused there), and message with
+// that input made canonical for history, which providers accept.
+func (l *RunConfig) toolInputs(message llm.Message) ([]llm.Content, llm.Message) {
+	calls := slices.Clone(message.Content)
+	for i, c := range calls {
+		if c.Type != llm.ContentTypeToolUse {
+			continue
+		}
+		if tool := l.findTool(c.ToolName); tool != nil {
+			var coerced []llm.ToolInputCoercion
+			calls[i].ToolInput, coerced = llm.CoerceToolInput(c.ToolInput, tool.InputSchema)
+			if len(coerced) > 0 {
+				l.Logger.Warn("tool input coerced to schema types", "name", c.ToolName, "call_id", c.ID, "changes", coerced)
+			}
+		}
+	}
+	content := slices.Clone(calls)
 	for i, c := range content {
 		if c.Type == llm.ContentTypeToolUse {
 			content[i].ToolInput, _ = llm.CanonicalToolInput(c.ToolInput)
 		}
 	}
 	message.Content = content
-	return message
+	return calls, message
 }
 
 func (l *RunConfig) emitResponse(ctx context.Context, message llm.Message, usage llm.Usage, failureMessage string) error {
