@@ -478,6 +478,7 @@ type OpenAIResponsesReasoningSummary struct {
 type OpenAIResponsesReasoningMetadata struct {
 	ID               string
 	EncryptedContent string
+	Format           string `json:",omitempty"`
 	Summary          []OpenAIResponsesReasoningSummary
 }
 
@@ -789,7 +790,10 @@ type Usage struct {
 	CacheReadInputTokens     uint64  `json:"cache_read_input_tokens"`
 	OutputTokens             uint64  `json:"output_tokens"`
 	CostUSD                  float64 `json:"cost_usd"`
-	Model                    string  `json:"model,omitempty"`
+	// ContextWindowTokens separates the context size of a continued answer from
+	// its billable usage, whose input tokens count the prompt again on each hop.
+	ContextWindowTokens uint64 `json:"context_window_tokens,omitempty"`
+	Model               string `json:"model,omitempty"`
 	// URL is the LLM API endpoint the request was sent to (e.g.
 	// https://api.anthropic.com/v1/messages). Set by the loop from the
 	// response so it can be recorded alongside the model name.
@@ -831,6 +835,9 @@ func (u *Usage) TotalInputTokens() uint64 {
 // This is the size of the conversation that would be sent to the model for the next turn:
 // total input tokens + output tokens (which become part of the conversation).
 func (u *Usage) ContextWindowUsed() uint64 {
+	if u.ContextWindowTokens != 0 {
+		return u.ContextWindowTokens
+	}
 	return u.TotalInputTokens() + u.OutputTokens
 }
 
