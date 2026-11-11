@@ -23,6 +23,66 @@ func TestCanonicalToolInput(t *testing.T) {
 	}
 }
 
+func TestCoerceToolInput(t *testing.T) {
+	schema := MustSchema(`{"type":"object","properties":{
+		"text":{"type":"string"},
+		"end_turn":{"type":"boolean"},
+		"timeout_seconds":{"type":"integer"},
+		"ratio":{"type":"number"},
+		"patches":{"type":"array","items":{"type":"object"}},
+		"options":{"type":"object"},
+		"note":{"type":["string","null"]},
+		"count":{"type":["integer","null"]},
+		"ref":{"$ref":"#/$defs/x"}
+	}}`)
+	for _, tc := range []struct {
+		in, want string
+		coerced  []string
+	}{
+		{in: `{"text":"hi", "end_turn":"true"}`, want: `{"text":"hi", "end_turn":true}`, coerced: []string{"end_turn"}},
+		{in: `{"end_turn":"false","text":"hi"}`, want: `{"end_turn":false,"text":"hi"}`, coerced: []string{"end_turn"}},
+		{in: `{"end_turn": " true "}`, want: `{"end_turn": true}`, coerced: []string{"end_turn"}},
+		{in: `{"timeout_seconds":"30"}`, want: `{"timeout_seconds":30}`, coerced: []string{"timeout_seconds"}},
+		{in: `{"ratio":"30"}`, want: `{"ratio":30}`, coerced: []string{"ratio"}},
+		{in: `{"ratio":"1.5e3"}`, want: `{"ratio":1.5e3}`, coerced: []string{"ratio"}},
+		{in: `{"count":"7"}`, want: `{"count":7}`, coerced: []string{"count"}},
+		{in: `{"patches":"[{\"operation\":\"append_eof\",\"newText\":\"a\\n\"}]","path":"f"}`, want: `{"patches":[{"operation":"append_eof","newText":"a\n"}],"path":"f"}`, coerced: []string{"patches"}},
+		{in: `{"options":"{\"a\":1}","end_turn":"true"}`, want: `{"options":{"a":1},"end_turn":true}`, coerced: []string{"options", "end_turn"}},
+		// Strings that are not JSON of the declared type stay strings.
+		{in: `{"end_turn":"yes"}`, want: `{"end_turn":"yes"}`},
+		{in: `{"end_turn":"[1]"}`, want: `{"end_turn":"[1]"}`},
+		{in: `{"end_turn":""}`, want: `{"end_turn":""}`},
+		{in: `{"timeout_seconds":"1.5"}`, want: `{"timeout_seconds":"1.5"}`},
+		{in: `{"timeout_seconds":"null"}`, want: `{"timeout_seconds":"null"}`},
+		{in: `{"patches":"[{\"operation\":"}`, want: `{"patches":"[{\"operation\":"}`},
+		{in: `{"patches":"[1] x"}`, want: `{"patches":"[1] x"}`},
+		// Members typed to hold a string are never touched.
+		{in: `{"text":"[1,2]","note":"true","ref":"1","unknown":"{}"}`, want: `{"text":"[1,2]","note":"true","ref":"1","unknown":"{}"}`},
+		// Well-typed and non-object input is unchanged.
+		{in: `{"end_turn":true,"patches":["true"]}`, want: `{"end_turn":true,"patches":["true"]}`},
+		{in: `{"end_turn":"true","end_turn":"false"}`, want: `{"end_turn":true,"end_turn":false}`, coerced: []string{"end_turn", "end_turn"}},
+		{in: `["true"]`, want: `["true"]`},
+		{in: `"true"`, want: `"true"`},
+		{in: `{"end_turn":`, want: `{"end_turn":`},
+		{in: `not json`, want: `not json`},
+	} {
+		in := json.RawMessage(tc.in)
+		got, coerced := CoerceToolInput(in, schema)
+		if string(got) != tc.want || !slices.Equal(coerced, tc.coerced) {
+			t.Errorf("CoerceToolInput(%s) = %s %v, want %s %v", tc.in, got, coerced, tc.want, tc.coerced)
+		}
+		if tc.coerced == nil && &got[0] != &in[0] {
+			t.Errorf("CoerceToolInput(%s) copied unchanged input", tc.in)
+		}
+	}
+	for _, schema := range []json.RawMessage{nil, EmptySchema(), json.RawMessage(`{"type":"object"}`)} {
+		in := json.RawMessage(`{"end_turn":"true"}`)
+		if got, coerced := CoerceToolInput(in, schema); &got[0] != &in[0] || coerced != nil {
+			t.Errorf("CoerceToolInput(%s, %s) = %s %v", in, schema, got, coerced)
+		}
+	}
+}
+
 func TestReplayToolInput(t *testing.T) {
 	for _, tc := range []struct {
 		name, input, want string

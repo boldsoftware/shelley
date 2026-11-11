@@ -679,3 +679,61 @@ func TestRunRefusesToolInputWithRepeatedNames(t *testing.T) {
 		t.Fatalf("replayed tool input %s", got)
 	}
 }
+
+func TestRunCoercesToolInputToSchemaTypes(t *testing.T) {
+	service := &runTestService{first: []llm.Content{{
+		Type: llm.ContentTypeToolUse, ID: "job", ToolName: "work",
+		ToolInput: json.RawMessage(`{"text":"[1]","end_turn":"true"}`),
+	}}}
+	var ran json.RawMessage
+	var recorded []llm.Message
+	err := Run(t.Context(), RunConfig{
+		LLM: service,
+		Tools: []*llm.Tool{{
+			Name:        "work",
+			InputSchema: llm.MustSchema(`{"type":"object","properties":{"text":{"type":"string"},"end_turn":{"type":"boolean"}}}`),
+			EndsTurnWhen: func(input json.RawMessage) bool {
+				var req struct {
+					EndTurn bool `json:"end_turn"`
+				}
+				return json.Unmarshal(input, &req) == nil && req.EndTurn
+			},
+			Run: func(_ context.Context, input json.RawMessage) llm.ToolOut {
+				ran = input
+				var req struct {
+					Text    string `json:"text"`
+					EndTurn bool   `json:"end_turn"`
+				}
+				if err := json.Unmarshal(input, &req); err != nil {
+					return llm.ErrorToolOut(err)
+				}
+				return llm.ToolOut{LLMContent: llm.TextContent(req.Text), EndTurn: req.EndTurn}
+			},
+		}},
+		Hooks: Hooks{
+			OnResponse: func(_ context.Context, r Response) error { recorded = append(recorded, r.Message); return nil },
+			OnToolResponse: func(_ context.Context, r ToolResponse) error {
+				recorded = append(recorded, r.Message)
+				return nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `{"text":"[1]","end_turn":true}`
+	if string(ran) != want {
+		t.Fatalf("tool ran with %s", ran)
+	}
+	if got := string(recorded[0].Content[0].ToolInput); got != want {
+		t.Fatalf("recorded tool input %s", got)
+	}
+	result := recorded[1].Content[0]
+	if result.ToolError || result.ToolResult[0].Text != "[1]" {
+		t.Fatalf("tool result %+v", result)
+	}
+	// The tool ended the turn, so the model was asked exactly once.
+	if len(service.requests) != 1 {
+		t.Fatalf("%d requests", len(service.requests))
+	}
+}
