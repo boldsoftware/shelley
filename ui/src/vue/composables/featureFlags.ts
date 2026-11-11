@@ -48,7 +48,7 @@ export async function refreshFeatureFlags(): Promise<void> {
 // here mainly for E2E tests: writing the global DB-backed override races
 // across parallel Playwright workers, but a localStorage value set via
 // `page.addInitScript` is private to that page.
-function localOverride(name: string): boolean | undefined {
+function localOverride(name: string): unknown {
   if (typeof window === "undefined") return undefined;
   let raw: string | null = null;
   try {
@@ -56,9 +56,12 @@ function localOverride(name: string): boolean | undefined {
   } catch {
     return undefined;
   }
-  if (raw === "true") return true;
-  if (raw === "false") return false;
-  return undefined;
+  if (raw === null) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
 }
 
 /** Subscribe to a single boolean flag. Returns a Ref that yields `fallback`
@@ -68,9 +71,21 @@ export function useFeatureFlag(name: string, fallback = false): Ref<boolean> {
   if (!loaded.value && !inflight) void load();
   return computed(() => {
     const override = localOverride(name);
-    if (override !== undefined) return override;
+    if (typeof override === "boolean") return override;
     if (!loaded.value) return fallback;
     const v = values.value[name];
     return typeof v === "boolean" ? v : fallback;
+  });
+}
+
+/** Subscribe to a flag's value, whatever its type: undefined until the
+ *  initial fetch completes. A localStorage value at `ff:<name>` (JSON) takes
+ *  precedence. */
+export function useFeatureFlagValue(name: string): Ref<unknown> {
+  if (!loaded.value && !inflight) void load();
+  return computed(() => {
+    const override = localOverride(name);
+    if (override !== undefined) return override;
+    return loaded.value ? values.value[name] : undefined;
   });
 }

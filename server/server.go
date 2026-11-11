@@ -497,6 +497,14 @@ type Server struct {
 	// still owns it, and queues clients there until the next start.
 	SocketListener net.Listener
 
+	// ArchiveStorePort is where the archive store listens while its flag is on
+	// (see archive_store.go).
+	ArchiveStorePort   int
+	archiveStoreMu     sync.Mutex
+	archiveStoreServer *http.Server
+	// archiverWake wakes the archiver (archiver.go).
+	archiverWake chan struct{}
+
 	// hooksDir is the directory searched for user hook scripts
 	// (end-of-turn, new-conversation). Defaults to
 	// $HOME/.config/shelley/hooks; tests override it to a per-test
@@ -547,6 +555,8 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		versionChecker:        NewVersionChecker(),
 		notifDispatcher:       notifications.NewDispatcher(logger),
 		shutdownCh:            make(chan struct{}),
+		ArchiveStorePort:      8000,
+		archiverWake:          make(chan struct{}, 1),
 		conversationVMs:       conversationVMState{cleanup: make(chan struct{}, 1), active: make(chan struct{})},
 		workspace:             workspaceState{reports: make(chan struct{}, 1)},
 		hooksDir:              defaultHooksDir(),
@@ -2324,6 +2334,10 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	go s.recoverQueuedTranscriptions(context.Background())
 	s.startConversationVMCleanup()
 	s.startActionReports()
+	if err := s.syncArchiveStoreListener(context.Background()); err != nil {
+		s.logger.Error("Failed to start the archive store", "error", err)
+	}
+	go s.archiverLoop()
 
 	// Wait for shutdown signal or server error
 	quit := make(chan os.Signal, 1)

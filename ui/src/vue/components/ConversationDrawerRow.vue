@@ -67,6 +67,13 @@
           </div>
         </div>
         <span
+          v-if="temporary"
+          class="temporary-badge"
+          data-testid="drawer-temporary-badge"
+          title="Temporary: not archived"
+          >Temporary</span
+        >
+        <span
           v-if="compactNav && showNew"
           class="conversation-new-badge drawer-working-indicator"
           data-testid="conversation-new-badge"
@@ -512,6 +519,7 @@ import GearIcon from "./GearIcon.vue";
 import CompactTime from "./CompactTime.vue";
 import ConversationThemes from "./ConversationThemes.vue";
 import { useFeatureFlag } from "../composables/featureFlags";
+import { isTemporaryConversation } from "../../utils/temporaryConversation";
 
 const props = defineProps<{
   conversation: Conversation | ConversationWithState;
@@ -594,6 +602,7 @@ const participantTooltipHtml = computed(() => {
   return `<span class="conversation-participant-tooltip-list">${rows}</span>`;
 });
 const isDraft = computed(() => !!props.conversation.is_draft);
+const temporary = computed(() => isTemporaryConversation(props.conversation));
 // Stands in for a conversation the server has yet to create: nothing to edit.
 const isPlaceholder = computed(() => props.conversation.conversation_id === COMPOSER_ROW_ID);
 // A draft being typed here previews the composer, not the last autosave.

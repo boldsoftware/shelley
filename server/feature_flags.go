@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -65,11 +66,9 @@ func (s *Server) handleSetFeatureFlag(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "Failed to set feature flag", err, "name", req.Name)
 		return
 	}
-	if req.Name == db.WorkspaceFlag {
-		if err := s.workspaceFlagChanged(r.Context()); err != nil {
-			s.internalError(w, "Failed to load the workspace", err)
-			return
-		}
+	if err := s.featureFlagChanged(r.Context(), req.Name); err != nil {
+		s.internalError(w, "Failed to apply feature flag", err, "name", req.Name)
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -90,11 +89,22 @@ func (s *Server) handleDeleteFeatureFlag(w http.ResponseWriter, r *http.Request)
 		s.internalError(w, "Failed to delete feature flag", err, "name", req.Name)
 		return
 	}
-	if req.Name == db.WorkspaceFlag {
-		if err := s.workspaceFlagChanged(r.Context()); err != nil {
-			s.internalError(w, "Failed to load the workspace", err)
-			return
-		}
+	if err := s.featureFlagChanged(r.Context(), req.Name); err != nil {
+		s.internalError(w, "Failed to apply feature flag", err, "name", req.Name)
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// featureFlagChanged applies a change of the named flag to what runs.
+func (s *Server) featureFlagChanged(ctx context.Context, name string) error {
+	switch name {
+	case db.WorkspaceFlag:
+		return s.workspaceFlagChanged(ctx)
+	case FlagArchiveStore.Name:
+		return s.syncArchiveStoreListener(ctx)
+	case FlagArchiver.Name:
+		s.wakeArchiver()
+	}
+	return nil
 }

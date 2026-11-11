@@ -195,6 +195,7 @@ func runServe(global GlobalConfig, args []string) {
 	portFile := fs.String("port-file", "", "Write the actual listening port to this file (useful with --port 0)")
 	systemdActivation := fs.Bool("systemd-activation", false, "Use systemd socket activation (listen on fd from systemd)")
 	listenUnix := fs.String("listen-unix", "", "Serve the web UI on this Unix socket instead of a TCP port (-port is ignored)")
+	archiveStorePort := fs.Int("archive-store-port", 8000, "Port of the Shelley archive store, served while its feature flag is on")
 	requireHeader := fs.String("require-header", "", "Require this header on all API requests (e.g., X-Exedev-Userid)")
 	socketPath := fs.String("socket", client.DefaultSocketPath(), "Path to Unix socket for local CLI client access (set to 'none' to disable)")
 	banner := fs.String("banner", "", "If set, shows this text in a banner at the top of the UI (useful for marking demo instances)")
@@ -253,6 +254,7 @@ func runServe(global GlobalConfig, args []string) {
 		svr.SetChatGPTPlans(chatGPTPlans, llmManager.(*models.Manager).RefreshChatGPTPlans)
 	}
 	svr.Banner = *banner
+	svr.ArchiveStorePort = *archiveStorePort
 	svr.SocketActivated = *systemdActivation
 
 	// Load notification channels from DB.

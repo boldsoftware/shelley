@@ -531,6 +531,30 @@
           :screen-available="screenRecordingAvailable"
           @record="beginRecording"
         />
+        <button
+          v-if="temporaryAvailable"
+          v-tooltip.top="temporaryTooltip(temporary)"
+          type="button"
+          class="message-attach-btn message-temporary-btn"
+          :class="{ 'message-temporary-on': temporary }"
+          :aria-pressed="temporary"
+          :aria-label="temporaryTooltip(temporary)"
+          data-testid="temporary-toggle"
+          @click="emit('update:temporary', !temporary)"
+        >
+          <!-- A dashed circle: a conversation that leaves no record. -->
+          <svg
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-dasharray="3.2 3"
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+          >
+            <circle cx="12" cy="12" r="9" />
+          </svg>
+        </button>
         <div ref="queueMenuRef" class="message-send-wrapper">
           <!-- Slack-style split button: [Send | ▾] — always same width -->
           <div v-if="showQueueOption && hasQueueHandler" class="send-split-btn">
@@ -639,6 +663,7 @@ import RecordingPanel from "./RecordingPanel.vue";
 import type { RecordingDestination, RecordingMode, RecordingPreparation } from "./recordingDestination";
 import { focusMessageInputIfUnfocused } from "../../utils/focusMessageInput";
 import { useFeatureFlag } from "../composables/featureFlags";
+import { temporaryTooltip } from "../../utils/temporaryConversation";
 import { useSecretSealing } from "../composables/secretSealing";
 import { prettyModelName } from "../../utils/modelNames";
 import {
@@ -713,6 +738,11 @@ const props = withDefaults(
     /** Suggested next message, shown above the text box; Tab in the empty
      * composer or a click on it takes it. */
     nextPromptSuggestion?: string | null;
+    /** Offer the Temporary toggle: a new conversation while this Shelley
+     * archives to a Shelley archive store. */
+    temporaryAvailable?: boolean;
+    /** The new conversation is temporary: kept out of the archive store. */
+    temporary?: boolean;
   }>(),
   {
     recordingInlineAvailable: true,
@@ -724,6 +754,8 @@ const props = withDefaults(
     initialRows: 1,
     isChildConversation: false,
     profiles: () => [],
+    temporaryAvailable: false,
+    temporary: false,
   },
 );
 
@@ -736,6 +768,7 @@ const emit = defineEmits<{
   (e: "draft-cleared"): void;
   (e: "recording-unsent", path: string, error: unknown): void;
   (e: "recording-unavailable"): void;
+  (e: "update:temporary", value: boolean): void;
 }>();
 
 const { t } = useI18n();

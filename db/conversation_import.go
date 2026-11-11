@@ -174,6 +174,10 @@ func importConversation(ctx context.Context, q *generated.Queries, c ImportedCon
 	}); err != nil {
 		return fmt.Errorf("import conversation %s: %w", conv.ConversationID, err)
 	}
+	// It was written before it came here: not for the archiver.
+	if err := q.DeleteArchiverPush(ctx, conv.ConversationID); err != nil {
+		return err
+	}
 	for _, m := range c.Messages {
 		if m.ConversationID != conv.ConversationID {
 			return errors.New("import: message of another conversation")

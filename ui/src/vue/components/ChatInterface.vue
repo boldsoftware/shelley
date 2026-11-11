@@ -55,6 +55,13 @@
             :editable="titleEditable"
             :submit="renameFromTitle"
           /><template v-if="currentConversation?.archived"> (archived)</template>
+          <span
+            v-if="conversationTemporary"
+            v-tooltip.bottom="temporaryTooltip(true)"
+            class="temporary-badge"
+            data-testid="temporary-badge"
+            >Temporary</span
+          >
         </h1>
         <template v-if="showPlace">
           <PageTabStrip v-if="pages?.tabs.value.length" :pages="pages" />
@@ -593,6 +600,9 @@
       "
       :is-child-conversation="!!currentConversation?.parent_conversation_id"
       :next-prompt-suggestion="nextPromptSuggestion"
+      :temporary-available="temporaryAvailable"
+      :temporary="temporary"
+      @update:temporary="temporary = $event"
       @clear-injected-text="
         diffCommentText = '';
         composerInjectedText = null;
@@ -831,7 +841,8 @@ import {
   type SettingsKnob,
 } from "../composables/profiles";
 import { useDraftAutosave } from "../composables/draftAutosave";
-import { useFeatureFlag } from "../composables/featureFlags";
+import { useFeatureFlag, useFeatureFlagValue } from "../composables/featureFlags";
+import { isTemporaryConversation, archiverOn, temporaryTooltip } from "../../utils/temporaryConversation";
 import { useVersionChecker } from "../composables/versionChecker";
 import { provideToolProgress } from "../composables/toolProgress";
 import { closeImageComment, useImageCommentTarget } from "../composables/imageComment";
@@ -1163,6 +1174,17 @@ provide("lastMessageId", lastMessageId);
 // and git and model notes (a new generation, for one, ends it), and nothing
 // the user sent waits in the queue.
 const nextPromptSuggestionsOn = useFeatureFlag("next-prompt-suggestions");
+
+// While this Shelley archives to a Shelley archive store, a new conversation may be made
+// temporary (kept out of it), before its first message only.
+const archiver = useFeatureFlagValue("archiver");
+const temporary = ref(false);
+const temporaryAvailable = computed(
+  () =>
+    archiverOn(archiver.value) &&
+    (!props.conversationId || !!props.currentConversation?.is_draft),
+);
+const conversationTemporary = computed(() => isTemporaryConversation(props.currentConversation));
 const nextPromptSuggestion = computed(() => {
   const conv = props.currentConversation;
   if (
@@ -3678,6 +3700,7 @@ function buildConversationOptions(): ChatRequest["conversation_options"] {
     idle_compaction_minutes,
     idle_compaction_prompt,
     cache_keep_warm_minutes,
+    temporary: (temporaryAvailable.value && temporary.value) || undefined,
   };
 }
 
@@ -5084,6 +5107,7 @@ watch(
       draftAutosave.flush();
       draftSessionVersion++;
       if (id == null) newDraftSessionVersion++;
+      temporary.value = false;
       inflightCreate = null;
       inflightDraft = null;
       draftAutosave.cancel();

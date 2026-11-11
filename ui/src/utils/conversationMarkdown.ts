@@ -64,6 +64,8 @@ export interface ConversationMarkdownOptions {
   // Include tool *results* (outputs). Tool calls and their inputs are always
   // recorded; this only gates the (often large) output blocks. On by default.
   includeToolOutputs?: boolean;
+  // Start with the title and metadata block. On by default.
+  header?: boolean;
 }
 
 // Build the title/front-matter block for the document.
@@ -218,9 +220,10 @@ export function conversationToMarkdown(
   const opts: Required<ConversationMarkdownOptions> = {
     includeThinking: options.includeThinking ?? true,
     includeToolOutputs: options.includeToolOutputs ?? true,
+    header: options.header ?? true,
   };
 
-  const parts: string[] = [header(conversation, messages)];
+  const parts: string[] = opts.header ? [header(conversation, messages)] : [];
 
   for (const message of messages) {
     // Skip distill/system bookkeeping messages; they're UI scaffolding.

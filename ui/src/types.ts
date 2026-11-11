@@ -156,6 +156,8 @@ export interface ChatRequest {
   conversation_options?: Omit<SettingsChange, "model"> & {
     disable_all_tools?: boolean;
     disable_notifications?: boolean;
+    /** Kept out of the archive store; first message only. */
+    temporary?: boolean;
   };
   queue?: boolean;
   /** Composer-selected skill names; the server prefixes mentions to the message. */

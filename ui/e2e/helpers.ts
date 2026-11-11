@@ -252,20 +252,20 @@ export async function mountAllToolCards(page: Page): Promise<void> {
   await expect(page.locator(".tool-card-mount-placeholder")).toHaveCount(0, { timeout: 15000 });
 }
 
-/** Override a boolean feature flag for THIS page only (via localStorage).
+/** Override a feature flag for THIS page only (via localStorage, as JSON).
  *  Call before the first `page.goto(...)` so the override is in place when
  *  the React app first reads the flag. Per-page scope means parallel
  *  workers can disagree on the same flag without racing on the global DB. */
-export async function setPageFeatureFlag(page: Page, name: string, value: boolean): Promise<void> {
+export async function setPageFeatureFlag(page: Page, name: string, value: unknown): Promise<void> {
   await page.addInitScript(
     ([n, v]) => {
       try {
-        window.localStorage.setItem(`ff:${n}`, String(v));
+        window.localStorage.setItem(`ff:${n}`, v);
       } catch {
         /* localStorage unavailable; flag will fall back to server default */
       }
     },
-    [name, value] as const,
+    [name, JSON.stringify(value)] as const,
   );
 }
 

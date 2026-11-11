@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"shelley.exe.dev/db/generated"
@@ -315,6 +314,10 @@ type ConversationOptions struct {
 	// set by a profile, the user, or a channel's first message. Empty means
 	// the built-in one.
 	SystemPrompt string `json:"system_prompt,omitempty"`
+	// Temporary keeps the conversation, its subagents and its forks out of
+	// the archive store (server/archiver.go). Set only by the request that
+	// creates the conversation or sends its draft's first message.
+	Temporary bool `json:"temporary,omitempty"`
 }
 
 // ParseConversationOptions parses a JSON string into ConversationOptions.
@@ -1125,22 +1128,10 @@ const (
 // The query is the raw user input; this function handles tokenisation and
 // escaping for both the FTS5 MATCH branch and the LIKE branch.
 func (db *DB) SearchConversationsFTS(ctx context.Context, query string, archived bool, limit, offset int64) ([]ConversationSearchResult, error) {
-	fields := strings.Fields(query)
-	if len(fields) == 0 {
+	if len(strings.Fields(query)) == 0 {
 		return nil, nil
 	}
-
-	// Quote terms and AND them together, allowing prefixes only for longer terms.
-	// Escape embedded double quotes by doubling.
-	ftsParts := make([]string, 0, len(fields))
-	for _, f := range fields {
-		part := `"` + strings.ReplaceAll(f, `"`, `""`) + `"`
-		if utf8.RuneCountInString(f) >= 3 {
-			part += "*"
-		}
-		ftsParts = append(ftsParts, part)
-	}
-	ftsMatch := strings.Join(ftsParts, " AND ")
+	ftsMatch := FTSMatch(query)
 
 	// Escape LIKE wildcards (%, _) and the escape char itself in the slug
 	// pattern so typing a literal % doesn't match every conversation.

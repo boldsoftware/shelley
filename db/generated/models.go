@@ -26,6 +26,24 @@ type ActionRun struct {
 	Report           string  `json:"report"`
 }
 
+type ArchiveStoreMessage struct {
+	ID                  int64     `json:"id"`
+	SourceVm            string    `json:"source_vm"`
+	ConversationID      string    `json:"conversation_id"`
+	SequenceID          int64     `json:"sequence_id"`
+	MessageID           string    `json:"message_id"`
+	Type                string    `json:"type"`
+	LlmData             *string   `json:"llm_data"`
+	UserData            *string   `json:"user_data"`
+	UsageData           *string   `json:"usage_data"`
+	DisplayData         *string   `json:"display_data"`
+	CreatedAt           time.Time `json:"created_at"`
+	Generation          int64     `json:"generation"`
+	ExcludedFromContext bool      `json:"excluded_from_context"`
+	ModelName           *string   `json:"model_name"`
+	UserEmail           *string   `json:"user_email"`
+}
+
 type BackgroundJob struct {
 	JobID            string    `json:"job_id"`
 	ConversationID   string    `json:"conversation_id"`
