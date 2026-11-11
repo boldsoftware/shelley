@@ -104,26 +104,28 @@ const insertArchiveStoreMessage = `-- name: InsertArchiveStoreMessage :exec
 INSERT INTO archive_store_messages (source_vm, conversation_id, sequence_id, message_id, type,
     llm_data, user_data, usage_data, display_data, created_at, generation,
     excluded_from_context, model_name, user_email, external_message_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?1, ?2, ?3, ?4, ?5,
+    ?6, ?7, ?8, ?9, CAST(?10 AS TEXT), ?11,
+    ?12, ?13, ?14, ?15)
 ON CONFLICT (source_vm, conversation_id, sequence_id) DO NOTHING
 `
 
 type InsertArchiveStoreMessageParams struct {
-	SourceVm            string    `json:"source_vm"`
-	ConversationID      string    `json:"conversation_id"`
-	SequenceID          int64     `json:"sequence_id"`
-	MessageID           string    `json:"message_id"`
-	Type                string    `json:"type"`
-	LlmData             *string   `json:"llm_data"`
-	UserData            *string   `json:"user_data"`
-	UsageData           *string   `json:"usage_data"`
-	DisplayData         *string   `json:"display_data"`
-	CreatedAt           time.Time `json:"created_at"`
-	Generation          int64     `json:"generation"`
-	ExcludedFromContext bool      `json:"excluded_from_context"`
-	ModelName           *string   `json:"model_name"`
-	UserEmail           *string   `json:"user_email"`
-	ExternalMessageID   *string   `json:"external_message_id"`
+	SourceVm            string  `json:"source_vm"`
+	ConversationID      string  `json:"conversation_id"`
+	SequenceID          int64   `json:"sequence_id"`
+	MessageID           string  `json:"message_id"`
+	Type                string  `json:"type"`
+	LlmData             *string `json:"llm_data"`
+	UserData            *string `json:"user_data"`
+	UsageData           *string `json:"usage_data"`
+	DisplayData         *string `json:"display_data"`
+	CreatedAt           string  `json:"created_at"`
+	Generation          int64   `json:"generation"`
+	ExcludedFromContext bool    `json:"excluded_from_context"`
+	ModelName           *string `json:"model_name"`
+	UserEmail           *string `json:"user_email"`
+	ExternalMessageID   *string `json:"external_message_id"`
 }
 
 func (q *Queries) InsertArchiveStoreMessage(ctx context.Context, arg InsertArchiveStoreMessageParams) error {
@@ -409,7 +411,9 @@ func (q *Queries) SetArchiveStoreSourceProjects(ctx context.Context, arg SetArch
 const upsertArchiveStoreConversation = `-- name: UpsertArchiveStoreConversation :exec
 INSERT INTO archive_store_conversations (source_vm, conversation_id, parent_conversation_id,
     slug, project, model, cwd, archived, created_at, updated_at, have_seq)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?1, ?2, ?3,
+    ?4, ?5, ?6, ?7, ?8,
+    CAST(?9 AS TEXT), CAST(?10 AS TEXT), ?11)
 ON CONFLICT (source_vm, conversation_id) DO UPDATE SET
     parent_conversation_id = excluded.parent_conversation_id,
     slug = excluded.slug,
@@ -423,19 +427,21 @@ ON CONFLICT (source_vm, conversation_id) DO UPDATE SET
 `
 
 type UpsertArchiveStoreConversationParams struct {
-	SourceVm             string    `json:"source_vm"`
-	ConversationID       string    `json:"conversation_id"`
-	ParentConversationID *string   `json:"parent_conversation_id"`
-	Slug                 *string   `json:"slug"`
-	Project              string    `json:"project"`
-	Model                *string   `json:"model"`
-	Cwd                  *string   `json:"cwd"`
-	Archived             bool      `json:"archived"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
-	HaveSeq              int64     `json:"have_seq"`
+	SourceVm             string  `json:"source_vm"`
+	ConversationID       string  `json:"conversation_id"`
+	ParentConversationID *string `json:"parent_conversation_id"`
+	Slug                 *string `json:"slug"`
+	Project              string  `json:"project"`
+	Model                *string `json:"model"`
+	Cwd                  *string `json:"cwd"`
+	Archived             bool    `json:"archived"`
+	CreatedAt            string  `json:"created_at"`
+	UpdatedAt            string  `json:"updated_at"`
+	HaveSeq              int64   `json:"have_seq"`
 }
 
+// Times are SQLite's (time.DateTime, UTC), like Shelley's own tables, so
+// that SQLite's date functions read them.
 func (q *Queries) UpsertArchiveStoreConversation(ctx context.Context, arg UpsertArchiveStoreConversationParams) error {
 	_, err := q.db.ExecContext(ctx, upsertArchiveStoreConversation,
 		arg.SourceVm,

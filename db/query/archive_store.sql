@@ -11,9 +11,13 @@ ON CONFLICT (source_vm) DO UPDATE SET
 UPDATE archive_store_sources SET projects = ? WHERE source_vm = ?;
 
 -- name: UpsertArchiveStoreConversation :exec
+-- Times are SQLite's (time.DateTime, UTC), like Shelley's own tables, so
+-- that SQLite's date functions read them.
 INSERT INTO archive_store_conversations (source_vm, conversation_id, parent_conversation_id,
     slug, project, model, cwd, archived, created_at, updated_at, have_seq)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (sqlc.arg(source_vm), sqlc.arg(conversation_id), sqlc.arg(parent_conversation_id),
+    sqlc.arg(slug), sqlc.arg(project), sqlc.arg(model), sqlc.arg(cwd), sqlc.arg(archived),
+    CAST(sqlc.arg(created_at) AS TEXT), CAST(sqlc.arg(updated_at) AS TEXT), sqlc.arg(have_seq))
 ON CONFLICT (source_vm, conversation_id) DO UPDATE SET
     parent_conversation_id = excluded.parent_conversation_id,
     slug = excluded.slug,
@@ -32,7 +36,9 @@ SELECT have_seq FROM archive_store_conversations WHERE source_vm = ? AND convers
 INSERT INTO archive_store_messages (source_vm, conversation_id, sequence_id, message_id, type,
     llm_data, user_data, usage_data, display_data, created_at, generation,
     excluded_from_context, model_name, user_email, external_message_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (sqlc.arg(source_vm), sqlc.arg(conversation_id), sqlc.arg(sequence_id), sqlc.arg(message_id), sqlc.arg(type),
+    sqlc.arg(llm_data), sqlc.arg(user_data), sqlc.arg(usage_data), sqlc.arg(display_data), CAST(sqlc.arg(created_at) AS TEXT), sqlc.arg(generation),
+    sqlc.arg(excluded_from_context), sqlc.arg(model_name), sqlc.arg(user_email), sqlc.arg(external_message_id))
 ON CONFLICT (source_vm, conversation_id, sequence_id) DO NOTHING;
 
 -- name: DeleteArchiveStoreMessages :exec

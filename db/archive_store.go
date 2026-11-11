@@ -114,7 +114,7 @@ func (db *DB) ReceiveArchiveStorePush(ctx context.Context, m ArchiveStoreSource,
 		if err := q.UpsertArchiveStoreConversation(ctx, generated.UpsertArchiveStoreConversationParams{
 			SourceVm: m.SourceVM, ConversationID: id, ParentConversationID: c.ParentConversationID,
 			Slug: c.Slug, Project: c.Project, Model: c.Model, Cwd: c.Cwd, Archived: c.Archived,
-			CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, HaveSeq: max(have, p.ThroughSeq),
+			CreatedAt: sqliteTime(c.CreatedAt), UpdatedAt: sqliteTime(c.UpdatedAt), HaveSeq: max(have, p.ThroughSeq),
 		}); err != nil {
 			return 0, err
 		}
@@ -122,7 +122,7 @@ func (db *DB) ReceiveArchiveStorePush(ctx context.Context, m ArchiveStoreSource,
 			if err := q.InsertArchiveStoreMessage(ctx, generated.InsertArchiveStoreMessageParams{
 				SourceVm: m.SourceVM, ConversationID: id, SequenceID: msg.SequenceID, MessageID: msg.MessageID,
 				Type: msg.Type, LlmData: msg.LlmData, UserData: msg.UserData, UsageData: msg.UsageData,
-				DisplayData: msg.DisplayData, CreatedAt: msg.CreatedAt, Generation: msg.Generation,
+				DisplayData: msg.DisplayData, CreatedAt: sqliteTime(msg.CreatedAt), Generation: msg.Generation,
 				ExcludedFromContext: msg.ExcludedFromContext, ModelName: msg.ModelName, UserEmail: msg.UserEmail,
 				ExternalMessageID: msg.ExternalMessageID,
 			}); err != nil {
@@ -193,3 +193,7 @@ func (db *DB) SearchArchiveStore(ctx context.Context, query string) (map[[2]stri
 	}
 	return hits, nil
 }
+
+// sqliteTime is t as the store keeps times: SQLite's own format, in UTC,
+// which SQLite's date functions read (Go's default text form they don't).
+func sqliteTime(t time.Time) string { return t.UTC().Format(time.DateTime) }
