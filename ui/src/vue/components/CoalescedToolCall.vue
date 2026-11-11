@@ -142,6 +142,7 @@ import RunningToolTime from "./tools/RunningToolTime.vue";
 import KeywordSearchTool from "./tools/KeywordSearchTool.vue";
 import ChangeDirTool from "./tools/ChangeDirTool.vue";
 import WriteSecretTool from "./tools/WriteSecretTool.vue";
+import ArchiveStoreTool from "./tools/ArchiveStoreTool.vue";
 import CompactInPlaceTool from "./tools/CompactInPlaceTool.vue";
 import MessageParentTool from "./tools/MessageParentTool.vue";
 import MessageUserTool from "./tools/MessageUserTool.vue";
@@ -215,6 +216,7 @@ const TOOL_COMPONENTS: Record<string, any> = {
   keyword_search: KeywordSearchTool,
   change_dir: ChangeDirTool,
   write_secret: WriteSecretTool,
+  archive_store: ArchiveStoreTool,
   compact_in_place: CompactInPlaceTool,
   subagent: SubagentTool,
   message_parent: MessageParentTool,

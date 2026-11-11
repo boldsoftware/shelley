@@ -91,6 +91,7 @@ test.describe('Tool Component Verification', () => {
     expect(pdfResponse.headers()['content-type']).toBe('application/pdf');
     await expectEmoji(toolCard(/console/i), '📋');
     await expectEmoji(toolCard('/tmp/test-prompt.txt'), '🤖');
+    await expectEmoji(toolCard('search "webhook backoff" author alice'), '🗄️');
     // The emulate/network/accessibility/profile families are folded into the
     // single "browser" tool via `<family>_<sub>` actions, and the old
     // standalone browser_* tool names must still render with their specialized

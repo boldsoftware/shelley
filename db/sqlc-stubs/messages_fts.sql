@@ -7,3 +7,5 @@ ALTER TABLE messages_fts ADD COLUMN rank REAL;
 ALTER TABLE messages_fts ADD COLUMN messages_fts TEXT;
 ALTER TABLE archive_store_messages_fts ADD COLUMN rank REAL;
 ALTER TABLE archive_store_messages_fts ADD COLUMN archive_store_messages_fts TEXT;
+ALTER TABLE archive_research_fts ADD COLUMN rank REAL;
+ALTER TABLE archive_research_fts ADD COLUMN archive_research_fts TEXT;

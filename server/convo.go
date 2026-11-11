@@ -2012,6 +2012,9 @@ func (cm *ConversationManager) renderSystemPrompt(ctx context.Context, opts db.C
 	if err != nil {
 		return renderedSystemPrompt{}, fmt.Errorf("failed to generate system prompt: %w", err)
 	}
+	if store := cm.toolSetConfig.ArchiveStore; store != nil && store.ArchiveResearchEnabled(ctx) && claudetool.IsToolEnabled(claudetool.ArchiveStoreName, opts.ToolOverrides, opts.DisableAllTools) {
+		text += claudetool.ArchiveStorePromptNote
+	}
 	display, err := cm.systemPromptDisplayData(ctx, opts, promptSkills)
 	if err != nil {
 		return renderedSystemPrompt{}, err

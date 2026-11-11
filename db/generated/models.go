@@ -26,6 +26,16 @@ type ActionRun struct {
 	Report           string  `json:"report"`
 }
 
+type ArchiveResearchRead struct {
+	ID       int64     `json:"id"`
+	At       time.Time `json:"at"`
+	UserID   string    `json:"user_id"`
+	Email    string    `json:"email"`
+	SourceVm string    `json:"source_vm"`
+	Path     string    `json:"path"`
+	Query    string    `json:"query"`
+}
+
 type ArchiveStoreMessage struct {
 	ID                  int64     `json:"id"`
 	SourceVm            string    `json:"source_vm"`

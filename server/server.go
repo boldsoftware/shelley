@@ -636,6 +636,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	s.toolSetConfig.BackgroundJobs = backgroundJobs{server: s}
 	s.toolSetConfig.MaxSubagentDepth = 1 // Only top-level conversations can spawn subagents
 	s.toolSetConfig.Secrets = s.secrets
+	s.toolSetConfig.ArchiveStore = archiveResearchClient{s}
 	s.noteUserActivity()
 
 	return s

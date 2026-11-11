@@ -94,6 +94,7 @@ func (s *Server) archiveStoreHandler() http.Handler {
 	mux.HandleFunc("GET /archive-store/api/sources", s.handleArchiveStoreSources)
 	mux.HandleFunc("GET /archive-store/api/conversations", s.handleArchiveStoreConversations)
 	mux.HandleFunc("GET /archive-store/api/conversations/{vm}/{id}", s.handleArchiveStoreConversation)
+	s.registerArchiveResearch(mux)
 	mux.Handle("GET /{$}", http.RedirectHandler("/archive-store/", http.StatusFound))
 	assets := ui.Assets()
 	mux.HandleFunc("GET /archive-store/", func(w http.ResponseWriter, r *http.Request) {
