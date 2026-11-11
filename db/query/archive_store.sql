@@ -31,8 +31,8 @@ SELECT have_seq FROM archive_store_conversations WHERE source_vm = ? AND convers
 -- name: InsertArchiveStoreMessage :exec
 INSERT INTO archive_store_messages (source_vm, conversation_id, sequence_id, message_id, type,
     llm_data, user_data, usage_data, display_data, created_at, generation,
-    excluded_from_context, model_name, user_email)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    excluded_from_context, model_name, user_email, external_message_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (source_vm, conversation_id, sequence_id) DO NOTHING;
 
 -- name: DeleteArchiveStoreMessages :exec

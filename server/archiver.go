@@ -322,6 +322,7 @@ func (s *Server) archiveStoreMessage(ctx context.Context, m generated.Message) (
 		MessageID: m.MessageID, SequenceID: m.SequenceID, Type: m.Type, LlmData: llmData, UserData: m.UserData,
 		UsageData: m.UsageData, DisplayData: m.DisplayData, CreatedAt: m.CreatedAt, Generation: m.Generation,
 		ExcludedFromContext: m.ExcludedFromContext, ModelName: m.ModelName, UserEmail: m.UserEmail,
+		ExternalMessageID: m.ExternalMessageID,
 	}
 	for _, p := range []**string{&out.LlmData, &out.UserData, &out.DisplayData} {
 		if *p == nil {

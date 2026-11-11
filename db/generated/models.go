@@ -42,6 +42,7 @@ type ArchiveStoreMessage struct {
 	ExcludedFromContext bool      `json:"excluded_from_context"`
 	ModelName           *string   `json:"model_name"`
 	UserEmail           *string   `json:"user_email"`
+	ExternalMessageID   *string   `json:"external_message_id"`
 }
 
 type BackgroundJob struct {

@@ -103,8 +103,8 @@ func (q *Queries) GetArchiveStoreHaveSeq(ctx context.Context, arg GetArchiveStor
 const insertArchiveStoreMessage = `-- name: InsertArchiveStoreMessage :exec
 INSERT INTO archive_store_messages (source_vm, conversation_id, sequence_id, message_id, type,
     llm_data, user_data, usage_data, display_data, created_at, generation,
-    excluded_from_context, model_name, user_email)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    excluded_from_context, model_name, user_email, external_message_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (source_vm, conversation_id, sequence_id) DO NOTHING
 `
 
@@ -123,6 +123,7 @@ type InsertArchiveStoreMessageParams struct {
 	ExcludedFromContext bool      `json:"excluded_from_context"`
 	ModelName           *string   `json:"model_name"`
 	UserEmail           *string   `json:"user_email"`
+	ExternalMessageID   *string   `json:"external_message_id"`
 }
 
 func (q *Queries) InsertArchiveStoreMessage(ctx context.Context, arg InsertArchiveStoreMessageParams) error {
@@ -141,6 +142,7 @@ func (q *Queries) InsertArchiveStoreMessage(ctx context.Context, arg InsertArchi
 		arg.ExcludedFromContext,
 		arg.ModelName,
 		arg.UserEmail,
+		arg.ExternalMessageID,
 	)
 	return err
 }
@@ -208,7 +210,7 @@ func (q *Queries) ListArchiveStoreConversations(ctx context.Context) ([]ListArch
 }
 
 const listArchiveStoreMessages = `-- name: ListArchiveStoreMessages :many
-SELECT id, source_vm, conversation_id, sequence_id, message_id, type, llm_data, user_data, usage_data, display_data, created_at, generation, excluded_from_context, model_name, user_email FROM archive_store_messages
+SELECT id, source_vm, conversation_id, sequence_id, message_id, type, llm_data, user_data, usage_data, display_data, created_at, generation, excluded_from_context, model_name, user_email, external_message_id FROM archive_store_messages
 WHERE source_vm = ? AND conversation_id = ?
 ORDER BY sequence_id
 `
@@ -243,6 +245,7 @@ func (q *Queries) ListArchiveStoreMessages(ctx context.Context, arg ListArchiveS
 			&i.ExcludedFromContext,
 			&i.ModelName,
 			&i.UserEmail,
+			&i.ExternalMessageID,
 		); err != nil {
 			return nil, err
 		}

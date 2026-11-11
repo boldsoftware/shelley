@@ -300,7 +300,7 @@ func (s *Server) handleArchiveStoreConversation(w http.ResponseWriter, r *http.R
 				MessageID: m.MessageID, ConversationID: id, SequenceID: m.SequenceID, Type: m.Type,
 				LlmData: m.LlmData, UserData: m.UserData, UsageData: m.UsageData, DisplayData: m.DisplayData,
 				CreatedAt: m.CreatedAt, Generation: m.Generation, ExcludedFromContext: m.ExcludedFromContext,
-				ModelName: m.ModelName, UserEmail: m.UserEmail,
+				ModelName: m.ModelName, UserEmail: m.UserEmail, ExternalMessageID: m.ExternalMessageID,
 			}
 		}
 		res.Messages = toAPIMessages(msgs)

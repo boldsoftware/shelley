@@ -338,3 +338,39 @@ func TestArchiverNextBackoff(t *testing.T) {
 		t.Fatalf("backoffs %v, want %v", got, want)
 	}
 }
+
+// Authorship reaches the store: who typed a message (user_email), and
+// whether it came in as a text (external_message_id).
+func TestArchiverAuthorship(t *testing.T) {
+	t.Parallel()
+	f := newArchiveStoreFixture(t)
+	f.pushOn(t)
+	id := f.conversation(t, db.ConversationOptions{})
+	for _, p := range []db.CreateMessageParams{
+		{UserEmail: "alice@example.com"},
+		{ExternalMessageID: "0c69f6cd-3da0-4b8e-9d2a-7f1e5c3b2a10"},
+	} {
+		p.ConversationID, p.Type = id, db.MessageTypeUser
+		p.LLMData = llm.Message{Role: llm.MessageRoleUser, Content: []llm.Content{text("hello")}}
+		if _, err := f.archiverDB.CreateMessage(t.Context(), p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.push(t)
+	msgs := f.stored(t, id)
+	if len(msgs) != 2 {
+		t.Fatalf("stored %d messages", len(msgs))
+	}
+	str := func(s *string) string {
+		if s == nil {
+			return "<nil>"
+		}
+		return *s
+	}
+	if got := str(msgs[0].UserEmail) + " " + str(msgs[0].ExternalMessageID); got != "alice@example.com <nil>" {
+		t.Errorf("typed message: %s", got)
+	}
+	if got := str(msgs[1].UserEmail) + " " + str(msgs[1].ExternalMessageID); got != "<nil> 0c69f6cd-3da0-4b8e-9d2a-7f1e5c3b2a10" {
+		t.Errorf("texted message: %s", got)
+	}
+}

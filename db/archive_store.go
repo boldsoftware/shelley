@@ -42,6 +42,9 @@ type ArchiveStoreMessage struct {
 	ExcludedFromContext bool      `json:"excluded_from_context"`
 	ModelName           *string   `json:"model_name"`
 	UserEmail           *string   `json:"user_email"`
+	// ExternalMessageID is set on a message that came in through a channel
+	// (a text); optional, since archivers that predate it omit it.
+	ExternalMessageID *string `json:"external_message_id,omitempty"`
 }
 
 // ArchiveStorePush is the body of POST /archive-store/v1/conversations/{id}: the
@@ -121,6 +124,7 @@ func (db *DB) ReceiveArchiveStorePush(ctx context.Context, m ArchiveStoreSource,
 				Type: msg.Type, LlmData: msg.LlmData, UserData: msg.UserData, UsageData: msg.UsageData,
 				DisplayData: msg.DisplayData, CreatedAt: msg.CreatedAt, Generation: msg.Generation,
 				ExcludedFromContext: msg.ExcludedFromContext, ModelName: msg.ModelName, UserEmail: msg.UserEmail,
+				ExternalMessageID: msg.ExternalMessageID,
 			}); err != nil {
 				return 0, err
 			}
