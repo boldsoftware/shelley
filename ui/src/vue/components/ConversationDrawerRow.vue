@@ -619,8 +619,10 @@ const deletable = computed(
 const isActive = computed(
   () => props.conversation.conversation_id === ctx.currentConversationId.value,
 );
+// Unread badges are a workspace-mode feature.
 const showNew = computed(
   () =>
+    workspaceMode &&
     !isActive.value &&
     convState.value.unread &&
     !itemArchived.value &&
