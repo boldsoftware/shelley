@@ -173,6 +173,7 @@ type responsesInputItem struct {
 	Output           string              `json:"output,omitempty"`            // for tool outputs
 	Summary          *[]responsesSummary `json:"summary,omitempty"`           // for reasoning; pointer preserves an empty array
 	EncryptedContent string              `json:"encrypted_content,omitempty"` // for reasoning
+	Format           string              `json:"format,omitempty"`            // OpenRouter reasoning envelope
 }
 
 type responsesContent struct {
@@ -203,14 +204,19 @@ type responsesToolGrammar struct {
 }
 
 type responsesResponse struct {
-	ID        string                `json:"id"`
-	Object    string                `json:"object"` // "response"
-	CreatedAt float64               `json:"created_at"`
-	Status    string                `json:"status"` // "completed", "incomplete", etc.
-	Model     string                `json:"model"`
-	Output    []responsesOutputItem `json:"output"`
-	Usage     responsesUsage        `json:"usage"`
-	Error     *responsesError       `json:"error"`
+	ID                string                      `json:"id"`
+	Object            string                      `json:"object"` // "response"
+	CreatedAt         float64                     `json:"created_at"`
+	Status            string                      `json:"status"` // "completed", "incomplete", etc.
+	Model             string                      `json:"model"`
+	Output            []responsesOutputItem       `json:"output"`
+	Usage             responsesUsage              `json:"usage"`
+	Error             *responsesError             `json:"error"`
+	IncompleteDetails *responsesIncompleteDetails `json:"incomplete_details,omitempty"`
+}
+
+type responsesIncompleteDetails struct {
+	Reason string `json:"reason"`
 }
 
 type responsesOutputItem struct {
@@ -225,6 +231,7 @@ type responsesOutputItem struct {
 	Input            string             `json:"input,omitempty"`             // for custom_tool_call
 	Summary          []responsesSummary `json:"summary,omitempty"`           // for reasoning
 	EncryptedContent string             `json:"encrypted_content,omitempty"` // for reasoning
+	Format           string             `json:"format,omitempty"`            // OpenRouter reasoning envelope
 	Action           *responsesAction   `json:"action,omitempty"`            // for web_search_call
 }
 
@@ -249,6 +256,7 @@ type responsesUsage struct {
 	OutputTokens        int                           `json:"output_tokens"`
 	OutputTokensDetails *responsesOutputTokensDetails `json:"output_tokens_details,omitempty"`
 	TotalTokens         int                           `json:"total_tokens"`
+	Cost                float64                       `json:"cost,omitempty"` // OpenRouter billed cost
 }
 
 type responsesOutputTokensDetails struct {
@@ -346,6 +354,7 @@ const (
 	responsesReasoningReplayNone responsesReasoningReplay = iota
 	responsesReasoningReplayEncrypted
 	responsesReasoningReplaySummary
+	responsesReasoningReplayOpenRouter
 )
 
 // fromLLMMessageResponses converts llm.Message to Responses API input items.
@@ -456,7 +465,13 @@ func fromLLMMessageResponses(msg llm.Message, reasoningReplay responsesReasoning
 				}
 			case llm.ContentTypeThinking:
 				metadata := c.OpenAIResponsesReasoning
-				encrypted := metadata != nil && metadata.EncryptedContent != "" && reasoningReplay == responsesReasoningReplayEncrypted
+				// A provider envelope is not native OpenAI state, including in
+				// legacy history whose origin was not recorded.
+				if metadata != nil && metadata.Format != "" && reasoningReplay != responsesReasoningReplayOpenRouter {
+					continue
+				}
+				encrypted := metadata != nil && metadata.EncryptedContent != "" &&
+					(reasoningReplay == responsesReasoningReplayEncrypted || reasoningReplay == responsesReasoningReplayOpenRouter)
 				summaryOnly := metadata != nil && metadata.EncryptedContent == "" && reasoningReplay == responsesReasoningReplaySummary && metadata.ID != "" && len(metadata.Summary) > 0
 				if msg.Role != llm.MessageRoleAssistant || metadata == nil || (!encrypted && !summaryOnly) {
 					continue
@@ -471,6 +486,7 @@ func fromLLMMessageResponses(msg llm.Message, reasoningReplay responsesReasoning
 					Type:             "reasoning",
 					Summary:          &summary,
 					EncryptedContent: metadata.EncryptedContent,
+					Format:           metadata.Format,
 				})
 			case llm.ContentTypeToolUse:
 				flushMessage()
@@ -532,10 +548,11 @@ func responsesInstructionsFromLLMSystem(systemContent []llm.SystemContent) strin
 func (s *ResponsesService) toLLMResponseFromResponses(resp *responsesResponse, headers http.Header) *llm.Response {
 	if len(resp.Output) == 0 {
 		return &llm.Response{
-			ID:    resp.ID,
-			Model: resp.Model,
-			Role:  llm.MessageRoleAssistant,
-			Usage: s.toLLMUsageFromResponses(resp.Usage, headers),
+			ID:         resp.ID,
+			Model:      resp.Model,
+			Role:       llm.MessageRoleAssistant,
+			StopReason: responsesStopReason(resp, llm.StopReasonStopSequence),
+			Usage:      s.toLLMUsageFromResponses(resp.Usage, headers),
 		}
 	}
 
@@ -573,6 +590,7 @@ func (s *ResponsesService) toLLMResponseFromResponses(resp *responsesResponse, h
 					OpenAIResponsesReasoning: &llm.OpenAIResponsesReasoningMetadata{
 						ID:               item.ID,
 						EncryptedContent: item.EncryptedContent,
+						Format:           item.Format,
 						Summary:          summary,
 					},
 				})
@@ -624,6 +642,8 @@ func (s *ResponsesService) toLLMResponseFromResponses(resp *responsesResponse, h
 		})
 	}
 
+	stopReason = responsesStopReason(resp, stopReason)
+
 	return &llm.Response{
 		ID:         resp.ID,
 		Model:      resp.Model,
@@ -634,11 +654,27 @@ func (s *ResponsesService) toLLMResponseFromResponses(resp *responsesResponse, h
 	}
 }
 
+func responsesStopReason(resp *responsesResponse, stopReason llm.StopReason) llm.StopReason {
+	if resp.Status == "incomplete" && resp.IncompleteDetails != nil {
+		switch resp.IncompleteDetails.Reason {
+		case "max_output_tokens":
+			stopReason = llm.StopReasonMaxTokens
+		case "content_filter":
+			stopReason = llm.StopReasonRefusal
+		}
+	}
+
+	return stopReason
+}
+
 // toLLMUsageFromResponses converts Responses API usage to llm.Usage.
 func (s *ResponsesService) toLLMUsageFromResponses(usage responsesUsage, headers http.Header) llm.Usage {
 	u := splitOpenAIInputUsage(usage.InputTokens, usage.InputTokensDetails)
 	u.OutputTokens = uint64(usage.OutputTokens)
 	u.CostUSD = llm.CostUSDFromResponse(headers)
+	if headers.Get("Exedev-Gateway-Cost") == "" {
+		u.CostUSD = usage.Cost
+	}
 	return u
 }
 
@@ -695,7 +731,6 @@ func (s *ResponsesService) MaxImageDimension() int {
 // MaxImageBytes returns the maximum allowed encoded size for a single image.
 func (s *ResponsesService) MaxImageBytes() int { return maxImageBytes }
 
-// Do sends a request to OpenAI using the Responses API.
 // buildRequest converts ir into a streaming Responses API request.
 func (s *ResponsesService) buildRequest(ctx context.Context, ir *llm.Request) (responsesRequest, string, llm.MessageOrigin, error) {
 	var err error
@@ -706,13 +741,20 @@ func (s *ResponsesService) buildRequest(ctx context.Context, ir *llm.Request) (r
 	model := cmp.Or(s.Model, DefaultModel)
 	openAIResponses := s.isOpenAIResponses()
 	reasoningReplay := responsesReasoningReplayNone
-	switch ResolveReasoningReplay(cmp.Or(s.ModelURL, model.URL), model.ModelName, s.ReasoningReplay) {
-	case ReasoningReplayContent:
-		reasoningReplay = responsesReasoningReplaySummary
-	case ReasoningReplayNone:
-	case "":
-		if openAIResponses {
-			reasoningReplay = responsesReasoningReplayEncrypted
+	switch {
+	case s.replaysOpenRouterReasoning():
+		// OpenRouter wraps provider signatures in encrypted reasoning items,
+		// independently of models.dev's Chat Completions interleaving field.
+		reasoningReplay = responsesReasoningReplayOpenRouter
+	default:
+		switch ResolveReasoningReplay(cmp.Or(s.ModelURL, model.URL), model.ModelName, s.ReasoningReplay) {
+		case ReasoningReplayContent:
+			reasoningReplay = responsesReasoningReplaySummary
+		case ReasoningReplayNone:
+		case "":
+			if openAIResponses {
+				reasoningReplay = responsesReasoningReplayEncrypted
+			}
 		}
 	}
 
@@ -776,14 +818,16 @@ func (s *ResponsesService) buildRequest(ctx context.Context, ir *llm.Request) (r
 	if s.ChatGPTPlan == nil {
 		req.MaxOutputTokens = maxOutputTokens(baseURL, model.ModelName, s.MaxTokens)
 	}
-	if openAIResponses {
+	if openAIResponses || s.isOpenRouter() {
 		req.Include = []string{"reasoning.encrypted_content"}
-		req.ToolChoice = "auto"
-		req.ParallelToolCalls = true
 		req.PromptCacheKey = llmhttp.PromptCacheKeyFromContext(ctx)
 		if model.TextVerbosity != "" {
 			req.Text = &responsesText{Verbosity: model.TextVerbosity}
 		}
+	}
+	if openAIResponses {
+		req.ToolChoice = "auto"
+		req.ParallelToolCalls = true
 	}
 
 	// Add reasoning. Precedence:
@@ -845,12 +889,8 @@ func (s *ResponsesService) buildRequest(ctx context.Context, ir *llm.Request) (r
 	return req, fullURL, origin, nil
 }
 
-func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error) {
-	ctx = llmhttp.WithOpenAIProtocol(ctx)
-	req, fullURL, origin, err := s.buildRequest(ctx, ir)
-	if err != nil {
-		return nil, err
-	}
+func (s *ResponsesService) doResponses(ctx context.Context, ir *llm.Request, req responsesRequest, fullURL string, origin llm.MessageOrigin) (*llm.Response, error) {
+	var err error
 	httpc := cmp.Or(s.HTTPC, http.DefaultClient)
 	model := cmp.Or(s.Model, DefaultModel)
 
@@ -1184,7 +1224,7 @@ func (s *ResponsesService) WarmCache(ctx context.Context, ir *llm.Request) (llm.
 }
 
 func (s *ResponsesService) isOpenAIResponses() bool {
-	return s.ProviderName == "" || s.ProviderName == "openai"
+	return !s.isOpenRouter() && (s.ProviderName == "" || s.ProviderName == "openai")
 }
 
 // supportsReasoningSummaries reports whether the provider accepts
@@ -1352,6 +1392,12 @@ func mergeResponsesStreamOutput(final []responsesOutputItem, streamed map[int]re
 		}
 		if final[index].EncryptedContent == "" {
 			final[index].EncryptedContent = streamedItem.EncryptedContent
+		}
+		if final[index].ID == "" {
+			final[index].ID = streamedItem.ID
+		}
+		if final[index].Format == "" {
+			final[index].Format = streamedItem.Format
 		}
 		if len(final[index].Summary) == 0 {
 			final[index].Summary = streamedItem.Summary

@@ -31,3 +31,30 @@ When adding a rule, add a serialized-request case and a live case. One
 provider's acceptance does not establish another's. DeepSeek needs the field on
 tool-call history even with replay disabled; never collapse its `""` into
 omission or null.
+
+## OpenRouter Responses
+
+Use the Responses API format, endpoint `https://openrouter.ai/api/v1`, and model
+`google/gemini-4-carbon`. Leave reasoning replay on `auto`. The adapter preserves
+each reasoning item's `id`, `format`, `encrypted_content`, and summary through
+stored message JSON and tool-result replay. Provider-formatted reasoning is not
+replayed to native OpenAI or other non-OpenRouter routes.
+
+Gemini length stops resume only with a nonempty `gemini-continuation` checkpoint
+and output budget remaining. The adapter resends the original input plus the
+latest checkpoint, with the same cumulative `max_output_tokens`; it never raises
+the configured budget. Completed checkpoints and content-filter stops do not
+resume. Repeated checkpoints, missing output usage, or more than 16 hops fail.
+Interrupted-stream checkpoint recovery is not implemented.
+
+Billable input, output, and cost are summed across hops. Context-window checks
+use the first hop's input plus all output, rather than counting the prompt again
+on every hop. OpenRouter's `usage.cost` is used when no gateway cost header exists.
+
+Protocol: https://openrouter.ai/docs/cookbook/evaluate-and-optimize/model-migrations/gemini-4#responses-api
+
+Run the offline JSON/SSE, persistence, origin-isolation, and continuation tests:
+
+```sh
+go test ./llm/oai -run '^TestOpenRouterResponses' -count=1
+```
