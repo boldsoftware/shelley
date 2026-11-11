@@ -40,29 +40,36 @@ func (db *DB) AppendConversationChapter(ctx context.Context, conversationID, tit
 				return "", err
 			}
 		}
+		var anchorSequence int64
+		var currentTitle string
 		if len(themes.Chapters) > 0 {
 			current := themes.Chapters[len(themes.Chapters)-1]
 			anchor, err := q.GetMessage(ctx, current.MessageID)
 			if err != nil {
 				return "", err
 			}
-			turns := 0
-			for _, user := range users {
-				var data struct {
-					CompactionCarried string `json:"compaction_carried"`
-				}
-				if user.UserData != nil && *user.UserData != "" {
-					if err := json.Unmarshal([]byte(*user.UserData), &data); err != nil {
-						return "", err
-					}
-				}
-				if user.SequenceID > anchor.SequenceID && data.CompactionCarried != "true" {
-					turns++
+			anchorSequence = anchor.SequenceID
+			currentTitle = current.Title
+		}
+		turns := 0
+		for _, user := range users {
+			var data struct {
+				CompactionCarried string `json:"compaction_carried"`
+			}
+			if user.UserData != nil && *user.UserData != "" {
+				if err := json.Unmarshal([]byte(*user.UserData), &data); err != nil {
+					return "", err
 				}
 			}
-			if turns < 3 || strings.EqualFold(current.Title, title) {
-				return fmt.Sprintf("Keep current chapter %q (%d user messages since it). Do not retry; continue the conversation.", current.Title, turns), nil
+			if user.SequenceID > anchorSequence && data.CompactionCarried != "true" {
+				turns++
 			}
+		}
+		if len(themes.Chapters) == 0 && turns < 3 {
+			return "Too early for the first chapter; wait until at least three user messages. Do not retry; continue the conversation.", nil
+		}
+		if len(themes.Chapters) > 0 && (turns < 3 || strings.EqualFold(currentTitle, title)) {
+			return fmt.Sprintf("Keep current chapter %q (%d user messages since it). Do not retry; continue the conversation.", currentTitle, turns), nil
 		}
 		themes.Chapters = append(themes.Chapters, ConversationChapter{Title: title, MessageID: users[0].MessageID})
 		chapters, err := json.Marshal(themes.Chapters)

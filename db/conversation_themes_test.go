@@ -4,10 +4,72 @@ import (
 	"database/sql"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"shelley.exe.dev/llm"
 )
+
+func TestAppendConversationChapter(t *testing.T) {
+	database, cleanup := NewTestDB(t)
+	t.Cleanup(cleanup)
+	ctx := t.Context()
+	conversation, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := conversation.ConversationID
+	add := func(kind MessageType, data any) string {
+		t.Helper()
+		m, err := database.CreateMessage(ctx, CreateMessageParams{
+			ConversationID: id, Type: kind, LLMData: llm.UserStringMessage("hello"), UserData: data,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m.MessageID
+	}
+	check := func(title, note string, want []ConversationChapter) {
+		t.Helper()
+		result, err := database.AppendConversationChapter(ctx, id, title)
+		if err != nil || !strings.Contains(result, note) {
+			t.Fatalf("append = %q, %v; want %q", result, err, note)
+		}
+		got, err := database.GetConversationThemes(ctx, id)
+		if err != nil || !reflect.DeepEqual(got.Chapters, want) {
+			t.Fatalf("themes = %+v, %v; want %+v", got, err, want)
+		}
+		if len(want) == 0 && got.ThroughMessageID != "" {
+			t.Fatalf("skipped chapter updated through message: %q", got.ThroughMessageID)
+		}
+	}
+	if _, err := database.AppendConversationChapter(ctx, id, "First idea"); err == nil {
+		t.Fatal("accepted chapter without a user message")
+	}
+	empty := []ConversationChapter{}
+	add(MessageTypeUser, nil)
+	check("First idea", "Too early", empty)
+	add(MessageTypeAgent, nil)
+	add(MessageTypeUser, map[string]string{"type": "system"})
+	add(MessageTypeUser, map[string]string{"compaction_carried": "true"})
+	check("First idea", "Too early", empty)
+	add(MessageTypeUser, nil)
+	check("First idea", "Too early", empty)
+	first := add(MessageTypeUser, nil)
+	chapters := []ConversationChapter{{Title: "First idea", MessageID: first}}
+	check("First idea", "Recorded chapter", chapters)
+	check("New direction", "Keep current chapter", chapters)
+	for range 2 {
+		add(MessageTypeUser, nil)
+		check("New direction", "Keep current chapter", chapters)
+	}
+	add(MessageTypeUser, map[string]string{"compaction_carried": "true"})
+	check("New direction", "Keep current chapter", chapters)
+	next := add(MessageTypeUser, nil)
+	check("FIRST IDEA", "Keep current chapter", chapters)
+	chapters = append(chapters, ConversationChapter{Title: "New direction", MessageID: next})
+	check("New direction", "Recorded chapter", chapters)
+}
 
 func TestConversationThemes(t *testing.T) {
 	database, cleanup := NewTestDB(t)
