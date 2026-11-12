@@ -164,7 +164,7 @@ func TestRetryWaitsForTurnEnd(t *testing.T) {
 			server, _, held, conv := newBtwTest(t)
 			requireBtwStatus(t, postBtwChat(t, server, conv.ConversationID, ChatRequest{Message: "report", Model: "predictable"}), http.StatusAccepted)
 			call := held.waitCall(t, "report")
-			if err := server.recordMessage(t.Context(), conv.ConversationID, tc.failure, llm.Usage{}, nil); err != nil {
+			if err := server.recordMessage(t.Context(), conv.ConversationID, tc.failure, "", llm.Usage{}, nil); err != nil {
 				t.Fatal(err)
 			}
 			w := httptest.NewRecorder()

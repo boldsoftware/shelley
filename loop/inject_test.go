@@ -82,7 +82,7 @@ func TestInjectMessagesMidTurn(t *testing.T) {
 	loop := NewLoop(Config{
 		LLM:   service,
 		Tools: []*llm.Tool{echoTool},
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, purposed []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, purposed []llm.PurposedUsage) error {
 			return nil
 		},
 		InjectMessages: func(ctx context.Context) (Injection, error) {
@@ -153,7 +153,7 @@ func TestInjectHistoryReplacesHistory(t *testing.T) {
 		LLM:    service,
 		Tools:  []*llm.Tool{echoTool},
 		System: []llm.SystemContent{{Type: "text", Text: "stale"}},
-		RecordMessage: func(context.Context, llm.Message, llm.Usage, []llm.PurposedUsage) error {
+		RecordMessage: func(context.Context, llm.Message, string, llm.Usage, []llm.PurposedUsage) error {
 			return nil
 		},
 		InjectMessages: func(ctx context.Context) (Injection, error) {

@@ -24,7 +24,11 @@ type PendingMessages func(ctx context.Context, messages []llm.Message) ([]llm.Me
 // Response is a completed assistant message and its direct model usage.
 type Response struct {
 	Message llm.Message
-	Usage   llm.Usage
+	// MessageID is the message_id to store a model reply under: the id its
+	// stream deltas carried. Empty for error rows and other messages, which
+	// get a fresh id.
+	MessageID string
+	Usage     llm.Usage
 }
 
 // ToolResponse is a completed tool-result message and any indirect LLM usage
@@ -284,11 +288,11 @@ func (l *RunConfig) run(ctx context.Context) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if err := l.emitResponse(context.WithoutCancel(ctx), assistantMessage, resp.UsageWithMeta(), "failed to record assistant tool-use message"); err != nil {
+			if err := l.emitResponse(context.WithoutCancel(ctx), assistantMessage, "", resp.UsageWithMeta(), "failed to record assistant tool-use message"); err != nil {
 				return fmt.Errorf("%w: assistant tool-use message: %v", errMessagePersistence, err)
 			}
 		} else {
-			l.emitResponse(ctx, assistantMessage, resp.UsageWithMeta(), "failed to record assistant message")
+			l.emitResponse(ctx, assistantMessage, "", resp.UsageWithMeta(), "failed to record assistant message")
 		}
 		messages = append(messages, assistantMessage)
 
@@ -499,15 +503,25 @@ func (l *RunConfig) toolInputs(message llm.Message) ([]llm.Content, llm.Message)
 	return calls, message
 }
 
-func (l *RunConfig) emitResponse(ctx context.Context, message llm.Message, usage llm.Usage, failureMessage string) error {
+// emitResponse records an assistant message. messageID is the reply's id for
+// the one message that records a model reply (see Response.MessageID), and
+// empty for every other message.
+func (l *RunConfig) emitResponse(ctx context.Context, message llm.Message, messageID string, usage llm.Usage, failureMessage string) error {
 	if l.Hooks.OnResponse == nil {
 		return nil
 	}
-	if err := l.Hooks.OnResponse(ctx, Response{Message: message, Usage: usage}); err != nil {
+	if err := l.Hooks.OnResponse(ctx, Response{Message: message, MessageID: messageID, Usage: usage}); err != nil {
 		l.Logger.Error(failureMessage, "error", err)
 		return err
 	}
 	return nil
+}
+
+// emitSystemMessage records a message the loop wrote itself, not the model:
+// an error row, an error report or an end-of-turn marker. It has no usage and
+// gets a fresh id.
+func (l *RunConfig) emitSystemMessage(ctx context.Context, message llm.Message, failureMessage string) error {
+	return l.emitResponse(ctx, message, "", llm.Usage{}, failureMessage)
 }
 
 func (l *RunConfig) emitToolResponse(ctx context.Context, message llm.Message, otherUsage []llm.PurposedUsage) error {
@@ -559,12 +573,12 @@ func (l *RunConfig) failTurn(ctx context.Context, errorMessage llm.Message, mess
 	// provides the user-visible error and Retry affordance and, unless a
 	// report follows, ends the turn and clears the durable agent-working state.
 	errorMessage.EndOfTurn = !reported
-	l.emitResponse(context.WithoutCancel(ctx), errorMessage, llm.Usage{}, "failed to record error message")
+	l.emitSystemMessage(context.WithoutCancel(ctx), errorMessage, "failed to record error message")
 	if !reported {
 		return
 	}
 	*rewritten = true
-	if err := l.emitResponse(context.WithoutCancel(ctx), report, llm.Usage{}, "failed to record error report"); err == nil {
+	if err := l.emitSystemMessage(context.WithoutCancel(ctx), report, "failed to record error report"); err == nil {
 		*messages = append(*messages, report)
 		if errors.Is(l.executeToolCalls(ctx, report.Content, messages), errToolEndedTurn) {
 			return
@@ -576,7 +590,7 @@ func (l *RunConfig) failTurn(ctx context.Context, errorMessage llm.Message, mess
 	// The report did not end the turn: the parent was stopped meanwhile, say,
 	// or the turn's deadline passed before it ran.
 	marker := llm.Message{Role: llm.MessageRoleAssistant, EndOfTurn: true, ExcludedFromContext: true}
-	l.emitResponse(context.WithoutCancel(ctx), marker, llm.Usage{}, "failed to record error end-of-turn")
+	l.emitSystemMessage(context.WithoutCancel(ctx), marker, "failed to record error end-of-turn")
 }
 
 // truncationError records a response truncated at the maximum output token
@@ -591,7 +605,7 @@ func (l *RunConfig) truncationError(ctx context.Context, resp *llm.Response) llm
 	truncatedMessage.ExcludedFromContext = true
 	truncatedMessage.EndOfTurn = false
 
-	l.emitResponse(ctx, truncatedMessage, resp.UsageWithMeta(), "failed to record truncated message")
+	l.emitResponse(ctx, truncatedMessage, "", resp.UsageWithMeta(), "failed to record truncated message")
 
 	// The truncation error message has EndOfTurn=true to properly signal end of turn.
 	return llm.Message{
@@ -627,7 +641,7 @@ func (l *RunConfig) refusalError(ctx context.Context, resp *llm.Response) llm.Me
 	rawMessage.ExcludedFromContext = true
 	rawMessage.EndOfTurn = false
 
-	l.emitResponse(ctx, rawMessage, resp.UsageWithMeta(), "failed to record refusal message")
+	l.emitResponse(ctx, rawMessage, "", resp.UsageWithMeta(), "failed to record refusal message")
 
 	// Build the user-visible notice. Start with the standard guidance, then
 	// append every field the provider gave us in the refusal reason (category
@@ -786,7 +800,7 @@ func (l *RunConfig) executeToolCalls(ctx context.Context, content []llm.Content,
 		// The empty excluded assistant marker does both without adding a
 		// visible bubble or another message to the model's future context.
 		marker := llm.Message{Role: llm.MessageRoleAssistant, EndOfTurn: true, ExcludedFromContext: true}
-		if err := l.emitResponse(context.WithoutCancel(ctx), marker, llm.Usage{}, "failed to record tool end-of-turn"); err != nil {
+		if err := l.emitSystemMessage(context.WithoutCancel(ctx), marker, "failed to record tool end-of-turn"); err != nil {
 			return fmt.Errorf("%w: tool end-of-turn: %v", errMessagePersistence, err)
 		}
 		return errToolEndedTurn

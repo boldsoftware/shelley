@@ -262,7 +262,7 @@ func (cm *ConversationManager) answerFirstMessage(ctx context.Context, message l
 	calls[len(calls)-1].EndTurn = true
 	tool := claudetool.MessageUserTool(cm.userMessageFinder(), cm.userChat, claudetool.NewMutableWorkingDir(cm.HostDir()))
 	record := func(m llm.Message) error {
-		err := cm.recordMessage(ctx, m, llm.Usage{}, nil)
+		err := cm.recordMessage(ctx, m, "", llm.Usage{}, nil)
 		if err != nil {
 			cm.SetAgentWorking(false)
 		}

@@ -25,7 +25,7 @@ func TestLoopWithClaude(t *testing.T) {
 		},
 		History: []llm.Message{},
 		Tools:   []*llm.Tool{},
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			// In a real app, this would save to database
 			t.Logf("Recorded %s message: %s", message.Role, message.Content[0].Text)
 			return nil

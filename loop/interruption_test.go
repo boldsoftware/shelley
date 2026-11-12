@@ -82,7 +82,7 @@ func TestNoInterruptionNormalFlow(t *testing.T) {
 			},
 		}
 
-		recordMessage := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		recordMessage := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			return nil
 		}
 

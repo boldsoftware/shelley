@@ -28,7 +28,7 @@ func ExampleLoop() {
 	}
 
 	// Message recording function (in real usage, this would save to database)
-	recordMessage := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordMessage := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		roleStr := "user"
 		if message.Role == llm.MessageRoleAssistant {
 			roleStr = "assistant"

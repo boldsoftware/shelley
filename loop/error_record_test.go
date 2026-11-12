@@ -59,7 +59,7 @@ func TestCancelledTurnDoesNotRecordErrorMessage(t *testing.T) {
 			// cancelled turn — CancelConversation owns that bookkeeping — so a
 			// permissive recorder is what discriminates: pre-fix the loop called
 			// it (via a dead ctx) and a row would land here.
-			RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+			RecordMessage: func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 				mu.Lock()
 				recorded = append(recorded, message)
 				mu.Unlock()
@@ -110,7 +110,7 @@ func TestLLMErrorRecordedDespiteExpiredContext(t *testing.T) {
 		// Enforce what the real recorder (db.Pool.Tx) does: refuse writes on
 		// a dead context. Pre-fix the loop recorded on the turn's own (now
 		// expired) ctx, so this guard rejected the write and the test failed.
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
@@ -184,7 +184,7 @@ func TestMessageAfterFailedRequestGoesOutAtOnce(t *testing.T) {
 		svc := &failOnceService{answered: make(chan struct{})}
 		l := NewLoop(Config{
 			LLM: svc,
-			RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+			RecordMessage: func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 				return nil
 			},
 		})

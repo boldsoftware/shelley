@@ -136,7 +136,7 @@ func TestSubagentUsageHandler(t *testing.T) {
 	// A turn-ending tool's synthetic completion marker is not an LLM call.
 	if err := srv.recordMessage(ctx, child.ConversationID, llm.Message{
 		Role: llm.MessageRoleAssistant, EndOfTurn: true, ExcludedFromContext: true,
-	}, llm.Usage{}, nil); err != nil {
+	}, "", llm.Usage{}, nil); err != nil {
 		t.Fatal(err)
 	}
 

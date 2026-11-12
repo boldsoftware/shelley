@@ -608,7 +608,7 @@ func TestCancelMultiToolHTTPPersistsCompleteOrderedBatch(t *testing.T) {
 	}
 
 	userMessage := llm.Message{Role: llm.MessageRoleUser, Content: []llm.Content{{Type: llm.ContentTypeText, Text: "run tools"}}}
-	if err := server.recordMessage(t.Context(), conversationID, userMessage, llm.Usage{}, nil); err != nil {
+	if err := server.recordMessage(t.Context(), conversationID, userMessage, "", llm.Usage{}, nil); err != nil {
 		t.Fatalf("record user: %v", err)
 	}
 
@@ -648,8 +648,8 @@ func TestCancelMultiToolHTTPPersistsCompleteOrderedBatch(t *testing.T) {
 		LLM:     service,
 		History: []llm.Message{userMessage},
 		Tools:   tools,
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
-			return server.recordMessage(ctx, conversationID, message, usage, otherUsage)
+		RecordMessage: func(ctx context.Context, message llm.Message, messageID string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+			return server.recordMessage(ctx, conversationID, message, messageID, usage, otherUsage)
 		},
 	})
 	loopDone := make(chan struct{})
@@ -748,7 +748,7 @@ func TestCancelSlowLoopWaitsForOrderedFinalization(t *testing.T) {
 	}
 
 	userMessage := llm.Message{Role: llm.MessageRoleUser, Content: []llm.Content{{Type: llm.ContentTypeText, Text: "run tool"}}}
-	if err := server.recordMessage(t.Context(), conversationID, userMessage, llm.Usage{}, nil); err != nil {
+	if err := server.recordMessage(t.Context(), conversationID, userMessage, "", llm.Usage{}, nil); err != nil {
 		t.Fatalf("record user: %v", err)
 	}
 
@@ -775,7 +775,7 @@ func TestCancelSlowLoopWaitsForOrderedFinalization(t *testing.T) {
 		LLM:     service,
 		History: []llm.Message{userMessage},
 		Tools:   tools,
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, message llm.Message, messageID string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			// Stall only the tool-results message (a user-role message).
 			if message.Role == llm.MessageRoleUser {
 				stallOnce.Do(func() {
@@ -783,7 +783,7 @@ func TestCancelSlowLoopWaitsForOrderedFinalization(t *testing.T) {
 					<-releaseRecord
 				})
 			}
-			return server.recordMessage(ctx, conversationID, message, usage, otherUsage)
+			return server.recordMessage(ctx, conversationID, message, messageID, usage, otherUsage)
 		},
 	})
 	loopDone := make(chan struct{})
@@ -1045,7 +1045,7 @@ func TestResetLoopWaitsForExitBeforeReplacement(t *testing.T) {
 	}
 
 	userMessage := llm.Message{Role: llm.MessageRoleUser, Content: llm.TextContent("reset while tool runs")}
-	if err := server.recordMessage(t.Context(), conversation.ConversationID, userMessage, llm.Usage{}, nil); err != nil {
+	if err := server.recordMessage(t.Context(), conversation.ConversationID, userMessage, "", llm.Usage{}, nil); err != nil {
 		t.Fatalf("record user: %v", err)
 	}
 
@@ -1070,14 +1070,14 @@ func TestResetLoopWaitsForExitBeforeReplacement(t *testing.T) {
 		LLM:     service,
 		History: []llm.Message{userMessage},
 		Tools:   []*llm.Tool{tool},
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, message llm.Message, messageID string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			if message.Role == llm.MessageRoleUser {
 				stallOnce.Do(func() {
 					close(recordStarted)
 					<-releaseRecord
 				})
 			}
-			return server.recordMessage(ctx, conversation.ConversationID, message, usage, otherUsage)
+			return server.recordMessage(ctx, conversation.ConversationID, message, messageID, usage, otherUsage)
 		},
 	})
 	processCtx, cancelProcess := context.WithCancel(t.Context())

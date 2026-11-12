@@ -1208,8 +1208,8 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 			return nil, errConversationDeleting
 		}
 
-		recordMessage := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
-			if err := s.recordMessage(ctx, conversationID, message, usage, otherUsage); err != nil {
+		recordMessage := func(ctx context.Context, message llm.Message, messageID string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+			if err := s.recordMessage(ctx, conversationID, message, messageID, usage, otherUsage); err != nil {
 				return err
 			}
 			// Tool results follow the work that fills disks and memory.
@@ -1416,11 +1416,13 @@ func (s *Server) buildCreateMessageParams(conversationID string, message llm.Mes
 	return params, nil
 }
 
-func (s *Server) recordMessage(ctx context.Context, conversationID string, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage, userData ...interface{}) error {
-	params, err := s.buildCreateMessageParams(conversationID, message, usage, otherUsage, userData...)
+func (s *Server) recordMessage(ctx context.Context, conversationID string, message llm.Message, messageID string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	params, err := s.buildCreateMessageParams(conversationID, message, usage, otherUsage)
 	if err != nil {
 		return err
 	}
+	// A model reply keeps the id its stream deltas announced.
+	params.MessageID = messageID
 	_, err = s.insertMessages(ctx, conversationID, []db.CreateMessageParams{params})
 	if err != nil {
 		return err

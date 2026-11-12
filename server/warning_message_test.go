@@ -54,7 +54,7 @@ func TestRoutingWarningBypassesRetryCap(t *testing.T) {
 			}
 			if err := cm.recordMessage(ctx, llm.Message{
 				Role: llm.MessageRoleAssistant, Content: llm.TextContent("reply"), EndOfTurn: true,
-			}, llm.Usage{}, nil); err != nil {
+			}, "", llm.Usage{}, nil); err != nil {
 				t.Fatal(err)
 			}
 			messages, err := h.db.ListMessages(ctx, conversation.ConversationID)

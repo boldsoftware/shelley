@@ -17,7 +17,7 @@ func TestQueuedTurnOverrideAndRetry(t *testing.T) {
 	service := predictable.NewService()
 	agent := NewLoop(Config{
 		LLM: service, ModelID: "base", System: []llm.SystemContent{{Text: "BASE"}},
-		RecordMessage: func(context.Context, llm.Message, llm.Usage, []llm.PurposedUsage) error { return nil },
+		RecordMessage: func(context.Context, llm.Message, string, llm.Usage, []llm.PurposedUsage) error { return nil },
 	})
 	retryable := errors.New("retry this turn")
 	attempts := 0
@@ -84,7 +84,7 @@ func TestOnTurnStartPrecedesEveryTurn(t *testing.T) {
 	agent = NewLoop(Config{
 		LLM:         service,
 		OnTurnStart: func() { events <- fmt.Sprint("start ", agent.WillRunTurn()) },
-		RecordMessage: func(_ context.Context, m llm.Message, _ llm.Usage, _ []llm.PurposedUsage) error {
+		RecordMessage: func(_ context.Context, m llm.Message, _ string, _ llm.Usage, _ []llm.PurposedUsage) error {
 			if m.EndOfTurn {
 				events <- fmt.Sprint("end ", agent.WillRunTurn())
 			}

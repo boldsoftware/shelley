@@ -2538,9 +2538,9 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 			return err
 		}
 		record := recordMessage
-		recordMessage = func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		recordMessage = func(ctx context.Context, message llm.Message, messageID string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			nudger.observe(usage)
-			return record(ctx, message, usage, otherUsage)
+			return record(ctx, message, messageID, usage, otherUsage)
 		}
 	}
 
@@ -2572,7 +2572,7 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 		Tools:          toolSet.Tools(),
 		ThinkingLevel:  llm.ParseThinkingLevel(conversationOpts.ThinkingLevel),
 		PromptCacheKey: promptCacheKey,
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, message llm.Message, messageID string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			// Before recording: recording the turn's end schedules the
 			// suggestion, which reads the tail.
 			if !message.ExcludedFromContext && cm.isCurrentLoopGeneration(generation) {
@@ -2582,7 +2582,7 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 				}
 				cm.mu.Unlock()
 			}
-			return recordMessage(ctx, message, usage, otherUsage)
+			return recordMessage(ctx, message, messageID, usage, otherUsage)
 		},
 		RecordWarning: func(ctx context.Context, text string) error {
 			return cm.recordWarning(ctx, text)
@@ -2929,7 +2929,7 @@ func (cm *ConversationManager) cancelConversation(ctx context.Context, clearQueu
 		Content:   []llm.Content{{Type: llm.ContentTypeText, Text: "[Operation cancelled]"}},
 		EndOfTurn: true,
 	}
-	if err := cm.recordMessage(persistCtx, endTurnMessage, llm.Usage{}, nil); err != nil {
+	if err := cm.recordMessage(persistCtx, endTurnMessage, "", llm.Usage{}, nil); err != nil {
 		cm.logger.Error("Failed to record end turn message", "error", err)
 		return fmt.Errorf("failed to record end turn message: %w", err)
 	}

@@ -46,7 +46,7 @@ func runStallTurn(t *testing.T, service llm.Service) ([]llm.Message, error) {
 	var recorded []llm.Message
 	l := NewLoop(Config{
 		LLM: service,
-		RecordMessage: func(ctx context.Context, m llm.Message, _ llm.Usage, _ []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, m llm.Message, _ string, _ llm.Usage, _ []llm.PurposedUsage) error {
 			recorded = append(recorded, m)
 			return nil
 		},

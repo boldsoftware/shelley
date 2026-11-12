@@ -30,10 +30,13 @@ const stallTimeout = 5 * time.Minute
 const maxRequestDuration = 60 * time.Minute
 
 // MessageRecordFunc is called to record new messages to persistent storage.
-// otherUsage carries the usage of indirect LLM calls affiliated with the
-// message (e.g. LLM-backed tools for a tool-result message); nil for most
-// messages.
-type MessageRecordFunc func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error
+// messageID, when non-empty, is the message_id to store the message under: a
+// model reply's id, which its stream deltas already carried (see
+// llm.StreamDelta.MessageID). It is empty for every other message, which gets
+// a fresh id. otherUsage carries the usage of indirect LLM calls affiliated
+// with the message (e.g. LLM-backed tools for a tool-result message); nil for
+// most messages.
+type MessageRecordFunc func(ctx context.Context, message llm.Message, messageID string, usage llm.Usage, otherUsage []llm.PurposedUsage) error
 
 // WarningRecordFunc is called to record user-visible warnings that are not sent to the LLM.
 type WarningRecordFunc func(ctx context.Context, text string) error
@@ -482,14 +485,14 @@ func (l *Loop) hooks() Hooks {
 			l.mu.Lock()
 			l.totalUsage.Add(r.Usage)
 			l.mu.Unlock()
-			if err := l.recordMessage(ctx, r.Message, r.Usage, nil); err != nil {
+			if err := l.recordMessage(ctx, r.Message, r.MessageID, r.Usage, nil); err != nil {
 				return err
 			}
 			l.appendContext(r.Message)
 			return nil
 		},
 		OnToolResponse: func(ctx context.Context, r ToolResponse) error {
-			if err := l.recordMessage(ctx, r.Message, llm.Usage{}, r.OtherUsage); err != nil {
+			if err := l.recordMessage(ctx, r.Message, "", llm.Usage{}, r.OtherUsage); err != nil {
 				return err
 			}
 			l.appendContext(r.Message)

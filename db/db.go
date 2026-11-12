@@ -4,6 +4,7 @@ package db
 //go:generate go tool github.com/sqlc-dev/sqlc/cmd/sqlc generate -f ../sqlc.yaml
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -1651,6 +1652,11 @@ const (
 
 // CreateMessageParams contains parameters for creating a message
 type CreateMessageParams struct {
+	// MessageID, when set, is the new row's message_id; otherwise a fresh
+	// UUID is assigned. The agent loop picks a reply's id before the reply
+	// streams so clients can match stream deltas to the row (see
+	// llm.StreamDelta.MessageID).
+	MessageID      string
 	ConversationID string
 	Type           MessageType
 	LLMData        interface{} // Will be JSON marshalled
@@ -1792,7 +1798,7 @@ func insertMessageTx(ctx context.Context, q *generated.Queries, params CreateMes
 		return generated.Message{}, fmt.Errorf("failed to get conversation generation: %w", err)
 	}
 	message, err := q.CreateMessage(ctx, generated.CreateMessageParams{
-		MessageID:           uuid.New().String(),
+		MessageID:           cmp.Or(params.MessageID, uuid.New().String()),
 		ConversationID:      params.ConversationID,
 		SequenceID:          sequenceID,
 		Generation:          conversation.CurrentGeneration,

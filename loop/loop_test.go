@@ -27,7 +27,7 @@ func TestNewLoop(t *testing.T) {
 		{Role: llm.MessageRoleUser, Content: []llm.Content{{Type: llm.ContentTypeText, Text: "Hello"}}},
 	}
 	tools := []*llm.Tool{}
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		return nil
 	}
 
@@ -65,7 +65,7 @@ func TestLoopAppliesPromptCacheKeyToMainRequest(t *testing.T) {
 	agentLoop := NewLoop(Config{
 		LLM:            service,
 		PromptCacheKey: "shared-subagent-prefix",
-		RecordMessage:  func(context.Context, llm.Message, llm.Usage, []llm.PurposedUsage) error { return nil },
+		RecordMessage:  func(context.Context, llm.Message, string, llm.Usage, []llm.PurposedUsage) error { return nil },
 	})
 	agentLoop.QueueUserMessage(llm.UserStringMessage("hello"))
 	ctx := llmhttp.WithConversationID(t.Context(), "child-conversation")
@@ -269,7 +269,7 @@ func TestLoopWithPredictableFixture(t *testing.T) {
 	var recordedMessages []llm.Message
 	var recordedUsages []llm.Usage
 
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		recordedMessages = append(recordedMessages, message)
 		recordedUsages = append(recordedUsages, usage)
 		return nil
@@ -333,7 +333,7 @@ func TestLoopWithTools(t *testing.T) {
 		LLM:     service,
 		History: []llm.Message{},
 		Tools:   []*llm.Tool{testTool},
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			return nil
 		},
 	})
@@ -829,7 +829,7 @@ func TestGitStateTracking(t *testing.T) {
 			gitStateChanges = append(gitStateChanges, state)
 			mu.Unlock()
 		},
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			return nil
 		},
 	})
@@ -923,7 +923,7 @@ func TestGitStateTrackingWorktree(t *testing.T) {
 			gitStateChanges = append(gitStateChanges, state)
 			mu.Unlock()
 		},
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			return nil
 		},
 	})
@@ -1295,7 +1295,7 @@ func TestProcessLLMRequestError(t *testing.T) {
 	errorService := &errorLLMService{err: fmt.Errorf("test LLM error")}
 
 	var recordedMessages []llm.Message
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		recordedMessages = append(recordedMessages, message)
 		return nil
 	}
@@ -1449,7 +1449,7 @@ func TestLLMRequestRetryOnEOF(t *testing.T) {
 	retryService := &retryableLLMService{failuresRemaining: 1}
 
 	var recordedMessages []llm.Message
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		recordedMessages = append(recordedMessages, message)
 		return nil
 	}
@@ -1505,7 +1505,7 @@ func TestLLMRequestRetryExhausted(t *testing.T) {
 	retryService := &retryableLLMService{failuresRemaining: 10} // More than maxRetries
 
 	var recordedMessages []llm.Message
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		recordedMessages = append(recordedMessages, message)
 		return nil
 	}
@@ -1648,7 +1648,7 @@ func TestCheckGitStateChange(t *testing.T) {
 		History:    []llm.Message{},
 		GitTracker: gitstate.NewTracker(func() string { return tmpDir }),
 		// OnGitStateChange is nil
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			return nil
 		},
 	})
@@ -1665,7 +1665,7 @@ func TestCheckGitStateChange(t *testing.T) {
 		OnGitStateChange: func(ctx context.Context, state *gitstate.GitState) {
 			gitStateChanges = append(gitStateChanges, state)
 		},
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			return nil
 		},
 	})
@@ -1708,7 +1708,7 @@ func TestExecuteToolCallsDoesNotPublishUnpersistedResults(t *testing.T) {
 			Role:    llm.MessageRoleAssistant,
 			Content: []llm.Content{toolUse},
 		}},
-		RecordMessage: func(context.Context, llm.Message, llm.Usage, []llm.PurposedUsage) error {
+		RecordMessage: func(context.Context, llm.Message, string, llm.Usage, []llm.PurposedUsage) error {
 			return errors.New("database unavailable")
 		},
 	})
@@ -1757,7 +1757,7 @@ func TestExecuteToolCallsRunsInRequestOrder(t *testing.T) {
 
 		loop := NewLoop(Config{
 			Tools: []*llm.Tool{testTool},
-			RecordMessage: func(context.Context, llm.Message, llm.Usage, []llm.PurposedUsage) error {
+			RecordMessage: func(context.Context, llm.Message, string, llm.Usage, []llm.PurposedUsage) error {
 				return nil
 			},
 		})
@@ -1812,7 +1812,7 @@ func TestExecuteToolCallsSkipsQueuedCallAfterCancellation(t *testing.T) {
 	var recorded llm.Message
 	loop := NewLoop(Config{
 		Tools: []*llm.Tool{tool},
-		RecordMessage: func(_ context.Context, message llm.Message, _ llm.Usage, _ []llm.PurposedUsage) error {
+		RecordMessage: func(_ context.Context, message llm.Message, _ string, _ llm.Usage, _ []llm.PurposedUsage) error {
 			recorded = message
 			return nil
 		},
@@ -1834,7 +1834,7 @@ func TestExecuteToolCallsSkipsQueuedCallAfterCancellation(t *testing.T) {
 
 func TestExecuteToolCallsWithMissingTool(t *testing.T) {
 	var recordedMessages []llm.Message
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		recordedMessages = append(recordedMessages, message)
 		return nil
 	}
@@ -1907,7 +1907,7 @@ func TestExecuteToolCallsWithMissingTool(t *testing.T) {
 
 func TestExecuteToolCallsWithErrorTool(t *testing.T) {
 	var recordedMessages []llm.Message
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		recordedMessages = append(recordedMessages, message)
 		return nil
 	}
@@ -1991,7 +1991,7 @@ func TestExecuteToolCallsWithErrorTool(t *testing.T) {
 func TestMaxTokensTruncation(t *testing.T) {
 	var mu sync.Mutex
 	var recordedMessages []llm.Message
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		mu.Lock()
 		recordedMessages = append(recordedMessages, message)
 		mu.Unlock()
@@ -2086,7 +2086,7 @@ func TestMaxTokensTruncation(t *testing.T) {
 func TestRefusal(t *testing.T) {
 	var mu sync.Mutex
 	var recordedMessages []llm.Message
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		mu.Lock()
 		recordedMessages = append(recordedMessages, message)
 		mu.Unlock()
@@ -2231,7 +2231,7 @@ func TestRefusalThenRephraseNotInContext(t *testing.T) {
 		LLM:           service,
 		History:       []llm.Message{},
 		Tools:         []*llm.Tool{},
-		RecordMessage: func(context.Context, llm.Message, llm.Usage, []llm.PurposedUsage) error { return nil },
+		RecordMessage: func(context.Context, llm.Message, string, llm.Usage, []llm.PurposedUsage) error { return nil },
 	})
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
@@ -2453,7 +2453,7 @@ func TestLoopRetryAfterPersistentFailure(t *testing.T) {
 		mu       sync.Mutex
 		recorded []llm.Message
 	)
-	record := func(ctx context.Context, m llm.Message, _ llm.Usage, _ []llm.PurposedUsage) error {
+	record := func(ctx context.Context, m llm.Message, _ string, _ llm.Usage, _ []llm.PurposedUsage) error {
 		mu.Lock()
 		recorded = append(recorded, m)
 		mu.Unlock()
@@ -2590,7 +2590,7 @@ func (p *pauseLLMService) MaxImageBytes() int     { return 5 * 1024 * 1024 }
 func TestLoopResolvesPauseTurn(t *testing.T) {
 	var recorded []llm.Message
 	var recordedUsage []llm.Usage
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		recorded = append(recorded, message)
 		recordedUsage = append(recordedUsage, usage)
 		return nil
@@ -2754,7 +2754,7 @@ func TestToolOtherUsageAttachedToToolResult(t *testing.T) {
 	loop := NewLoop(Config{
 		LLM:   predictable.NewService(),
 		Tools: []*llm.Tool{testTool},
-		RecordMessage: func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		RecordMessage: func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 			mu.Lock()
 			defer mu.Unlock()
 			records = append(records, recorded{message, otherUsage})
@@ -2807,7 +2807,7 @@ func TestToolOtherUsageAttachedToToolResult(t *testing.T) {
 // message is recorded despite the cancelled context.
 func TestExecuteToolCallsCancellationPreservesOutput(t *testing.T) {
 	var recordedMessages []llm.Message
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -2908,7 +2908,7 @@ func TestExecuteToolCallsCancellationPreservesOutput(t *testing.T) {
 // completes successfully despite a cancel keeps its real result.
 func TestExecuteToolCallsCancelActiveSuccessWins(t *testing.T) {
 	var recordedMessages []llm.Message
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		recordedMessages = append(recordedMessages, message)
 		return nil
 	}
@@ -2956,7 +2956,7 @@ func TestExecuteToolCallsAbandonsContextIgnoringTool(t *testing.T) {
 	t.Parallel()
 	var mu sync.Mutex
 	var recordedMessages []llm.Message
-	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 		mu.Lock()
 		defer mu.Unlock()
 		recordedMessages = append(recordedMessages, message)

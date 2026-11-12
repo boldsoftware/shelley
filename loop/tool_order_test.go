@@ -130,7 +130,7 @@ type groupRun struct {
 
 func startGroups(ctx context.Context, tools []*llm.Tool, calls []llm.Content) <-chan groupRun {
 	var recorded []llm.Message
-	loop := NewLoop(Config{Tools: tools, RecordMessage: func(_ context.Context, m llm.Message, _ llm.Usage, _ []llm.PurposedUsage) error {
+	loop := NewLoop(Config{Tools: tools, RecordMessage: func(_ context.Context, m llm.Message, _ string, _ llm.Usage, _ []llm.PurposedUsage) error {
 		recorded = append(recorded, m)
 		return nil
 	}})
