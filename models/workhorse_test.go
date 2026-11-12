@@ -302,6 +302,63 @@ func TestGetWorkhorseServiceReturnsSelectionErrors(t *testing.T) {
 	}
 }
 
+func TestWorkhorseClampsExplicitReasoningMapWithoutOff(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		support    string
+		rawMap     string
+		wantLevel  llm.ThinkingLevel
+		wantEffort string
+	}{
+		{
+			name:      "mandatory reasoning map clamps off to lowest configured level",
+			support:   "yes",
+			rawMap:    `{"low":"low","medium":"medium","high":"high"}`,
+			wantLevel: llm.ThinkingLevelLow,
+		},
+		{
+			name:       "custom verbatim effort at lowest tier",
+			support:    "yes",
+			rawMap:     `{"medium":"provider-low","high":"provider-high"}`,
+			wantLevel:  llm.ThinkingLevelMedium,
+			wantEffort: "provider-low",
+		},
+		{
+			name:      "map with off keeps thinking off",
+			support:   "yes",
+			rawMap:    `{"off":"off","low":"low","high":"high"}`,
+			wantLevel: llm.ThinkingLevelOff,
+		},
+		{
+			name:      "disabled reasoning ignores map",
+			support:   "no",
+			rawMap:    `{"low":"low","high":"high"}`,
+			wantLevel: llm.ThinkingLevelOff,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			inner := &recordingService{provider: "openai"}
+			wrapped := WrapReasoningConfig(inner, "https://openrouter.int.exe.xyz/api/v1", "google/gemini-4-carbon", tt.support, tt.rawMap)
+			manager := newWorkhorseManager(t, Built{ID: "gemini-4-carbon-openrouter", Provider: ProviderOpenAI, Service: wrapped})
+			service, err := manager.GetWorkhorseService("gemini-4-carbon-openrouter")
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := &llm.Request{ThinkingLevel: llm.ThinkingLevelHigh, ReasoningEffort: "high"}
+			if _, err := service.Do(t.Context(), req); err != nil {
+				t.Fatalf("workhorse Do failed: %v", err)
+			}
+			assertRequestUnchanged(t, req)
+			if inner.request == nil {
+				t.Fatal("inner service was not called")
+			}
+			if inner.request.ThinkingLevel != tt.wantLevel || inner.request.ReasoningEffort != tt.wantEffort {
+				t.Fatalf("sent (%v, %q), want (%v, %q)", inner.request.ThinkingLevel, inner.request.ReasoningEffort, tt.wantLevel, tt.wantEffort)
+			}
+		})
+	}
+}
+
 func assertReasoningDisabled(t *testing.T, req *llm.Request) {
 	t.Helper()
 	if req == nil {
