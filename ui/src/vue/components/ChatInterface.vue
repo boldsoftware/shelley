@@ -600,7 +600,7 @@
       "
       :is-child-conversation="!!currentConversation?.parent_conversation_id"
       :next-prompt-suggestion="nextPromptSuggestion"
-      :temporary-available="temporaryAvailable"
+      :temporary-scope="temporaryScope"
       :temporary="temporary"
       @update:temporary="temporary = $event"
       @clear-injected-text="
@@ -807,7 +807,13 @@ import {
   COMPACT_IN_PLACE_TOOL,
   DEFAULT_COMPACT_NUDGE_TOKENS,
 } from "./autoCompaction";
-import { api, ApiError, modelProvidersApi, profilesApi } from "../../services/api";
+import {
+  api,
+  ApiError,
+  getTemporaryMessageRanges,
+  modelProvidersApi,
+  profilesApi,
+} from "../../services/api";
 import { btwStore } from "../../services/btwStore";
 import { messageStore } from "../../services/messageStore";
 import { cacheDiag } from "../../services/cacheDiag";
@@ -842,7 +848,12 @@ import {
 } from "../composables/profiles";
 import { useDraftAutosave } from "../composables/draftAutosave";
 import { useFeatureFlag, useFeatureFlagValue } from "../composables/featureFlags";
-import { isTemporaryConversation, archiverOn, temporaryTooltip } from "../../utils/temporaryConversation";
+import {
+  isTemporaryConversation,
+  archiverOn,
+  temporaryTooltip,
+  type TemporaryScope,
+} from "../../utils/temporaryConversation";
 import { useVersionChecker } from "../composables/versionChecker";
 import { provideToolProgress } from "../composables/toolProgress";
 import { closeImageComment, useImageCommentTarget } from "../composables/imageComment";
@@ -1176,15 +1187,24 @@ provide("lastMessageId", lastMessageId);
 const nextPromptSuggestionsOn = useFeatureFlag("next-prompt-suggestions");
 
 // While this Shelley archives to a Shelley archive store, a new conversation may be made
-// temporary (kept out of it), before its first message only.
+// temporary (kept out of it), before its first message only; in the
+// Assistant, each message may be (server/temporary.go).
 const archiver = useFeatureFlagValue("archiver");
 const temporary = ref(false);
-const temporaryAvailable = computed(
-  () =>
-    archiverOn(archiver.value) &&
-    (!props.conversationId || !!props.currentConversation?.is_draft),
-);
 const conversationTemporary = computed(() => isTemporaryConversation(props.currentConversation));
+const temporaryScope = computed((): TemporaryScope | undefined => {
+  if (!archiverOn(archiver.value)) return undefined;
+  if (!props.conversationId || props.currentConversation?.is_draft) return "conversation";
+  if (props.isAssistant && !conversationTemporary.value) return "message";
+  return undefined;
+});
+const temporaryAvailable = computed(() => temporaryScope.value === "conversation");
+/** The next message is temporary. */
+const messageTemporary = computed(
+  () => (temporaryScope.value === "message" && temporary.value) || undefined,
+);
+// The server's temporary messages, for their transcript marker.
+const temporaryRanges = ref<[number, number][]>([]);
 const nextPromptSuggestion = computed(() => {
   const conv = props.currentConversation;
   if (
@@ -1674,6 +1694,42 @@ const diffCommentText = ref("");
 const imageCommentTarget = useImageCommentTarget();
 const markdownDoc = useMarkdownDoc();
 const agentWorking = ref(false);
+
+// The Assistant's temporary messages, refetched as each turn ends: a turn
+// adds to them, and a notice of temporary work may start one.
+let temporaryRangesFetch: AbortController | null = null;
+async function refreshTemporaryRanges() {
+  temporaryRangesFetch?.abort();
+  const id = props.conversationId;
+  if (temporaryScope.value !== "message" || !id) {
+    temporaryRanges.value = [];
+    return;
+  }
+  const controller = new AbortController();
+  temporaryRangesFetch = controller;
+  try {
+    const ranges = await getTemporaryMessageRanges(id, controller.signal);
+    if (!controller.signal.aborted) temporaryRanges.value = ranges;
+  } catch (err) {
+    if (!controller.signal.aborted) console.error(err);
+  }
+}
+watch(
+  () => [props.conversationId, temporaryScope.value, agentWorking.value] as const,
+  () => void refreshTemporaryRanges(),
+  { immediate: true },
+);
+const temporaryMessageIds = computed(() => {
+  const ids = new Set<string>();
+  if (!temporaryRanges.value.length) return ids;
+  for (const m of messages.value) {
+    if (temporaryRanges.value.some(([from, to]) => from <= m.sequence_id && m.sequence_id <= to)) {
+      ids.add(m.message_id);
+    }
+  }
+  return ids;
+});
+provide("temporaryMessage", (messageId: string) => temporaryMessageIds.value.has(messageId));
 const conversationWorking = computed(
   () =>
     agentWorking.value ||
@@ -3544,7 +3600,9 @@ function rejectSkillsOnCommand(message: string, skills: string[]) {
 
 async function queueMessage(message: string, skills: string[] = []) {
   if (!props.conversationId) return;
-  await queueMessageTo(props.conversationId, selectedModel.value, message, skills);
+  const sentTemporary = messageTemporary.value;
+  await queueMessageTo(props.conversationId, selectedModel.value, message, skills, sentTemporary);
+  if (sentTemporary) temporary.value = false;
 }
 
 async function queueMessageTo(
@@ -3552,6 +3610,7 @@ async function queueMessageTo(
   model: string,
   message: string,
   skills: string[] = [],
+  temporary?: true,
 ) {
   if (!message.trim()) return;
   rejectSkillsOnCommand(message, skills);
@@ -3577,6 +3636,7 @@ async function queueMessageTo(
         model,
         queue: true,
         skills,
+        temporary,
       },
       pending.controller.signal,
     );
@@ -4174,6 +4234,7 @@ async function sendMessage(message: string, skills: string[] = []) {
       cwd: isDraft ? selectedCwd.value || undefined : undefined,
       conversation_options: isDraft ? buildConversationOptions() : undefined,
       skills,
+      temporary: messageTemporary.value,
     };
     if (isDraft) undoSubmit = props.onComposerSubmit?.(request.message, selectedCwd.value || null);
     let effectiveId = props.conversationId || draftConvId;
@@ -4191,6 +4252,11 @@ async function sendMessage(message: string, skills: string[] = []) {
       const accepted = await postSubmittedDraft(id, submittedDraft, () =>
         api.sendMessage(id, request),
       );
+      // Each temporary message is chosen anew.
+      if (request.temporary) {
+        temporary.value = false;
+        void refreshTemporaryRanges();
+      }
       // A queued message starts no turn (e.g. it waits behind a failed
       // recording), so drop the optimistic indicator for the server's state.
       if (accepted.status === "queued") syncTransientFromStore(id);

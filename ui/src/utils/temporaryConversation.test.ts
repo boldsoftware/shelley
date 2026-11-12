@@ -14,4 +14,7 @@ assert.equal(isTemporaryConversation(null), false);
 // Off, the tooltip says the archive store's readers can read the conversation; on, that it isn't archived.
 assert.match(temporaryTooltip(false), /anyone with access to the store can read it/);
 assert.match(temporaryTooltip(true), /isn't archived/);
+// Per message, it says the team can read the message and that Temporary turns off once sent.
+assert.match(temporaryTooltip(false, "message"), /archived, where your team can read them/);
+assert.match(temporaryTooltip(true, "message"), /stay out of the archive\. Turns off once sent/);
 console.log("temporaryConversation: ok");

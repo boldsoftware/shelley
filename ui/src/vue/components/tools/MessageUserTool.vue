@@ -70,7 +70,12 @@
     </button>
   </div>
 
-  <div v-else class="message message-agent-chat" data-testid="message-user-bubble">
+  <div
+    v-else
+    class="message message-agent-chat"
+    :class="{ 'message-temporary': temporary }"
+    data-testid="message-user-bubble"
+  >
     <div class="message-content message-agent-chat-bubble">
       <button
         v-if="display.target_excerpt"
@@ -190,6 +195,12 @@ function formatSize(n: number): string {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+// A reply in a temporary turn, kept out of the archive (server/temporary.go).
+const temporaryMessage = inject<((messageId: string) => boolean) | null>("temporaryMessage", null);
+const temporary = computed(
+  () => !!props.resultMessageId && !!temporaryMessage?.(props.resultMessageId),
+);
 
 const context = inject(messageUserContextKey, null);
 // The rendered message this replies or reacts to, if it is in this

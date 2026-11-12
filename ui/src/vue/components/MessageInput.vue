@@ -29,7 +29,7 @@
        use the `:on-send` / `:on-queue` function props. -->
 <template>
   <div
-    :class="`message-input-container ${isDraggingOver ? 'drag-over' : ''} ${isShellMode ? 'shell-mode' : ''} ${showSlashMenu || showProfileMenu || showFileMenu || showSkillMenu ? 'slash-menu-open' : ''}`"
+    :class="`message-input-container ${temporaryOn ? 'temporary-on' : ''} ${isDraggingOver ? 'drag-over' : ''} ${isShellMode ? 'shell-mode' : ''} ${showSlashMenu || showProfileMenu || showFileMenu || showSkillMenu ? 'slash-menu-open' : ''}`"
     @dragover="handleDragOver"
     @dragenter="handleDragEnter"
     @dragleave="handleDragLeave"
@@ -532,17 +532,17 @@
           @record="beginRecording"
         />
         <button
-          v-if="temporaryAvailable"
-          v-tooltip.top="temporaryTooltip(temporary)"
+          v-if="temporaryScope"
+          v-tooltip.top="temporaryTooltip(temporary, temporaryScope)"
           type="button"
           class="message-attach-btn message-temporary-btn"
           :class="{ 'message-temporary-on': temporary }"
           :aria-pressed="temporary"
-          :aria-label="temporaryTooltip(temporary)"
+          :aria-label="temporaryTooltip(temporary, temporaryScope)"
           data-testid="temporary-toggle"
           @click="emit('update:temporary', !temporary)"
         >
-          <!-- A dashed circle: a conversation that leaves no record. -->
+          <!-- A dashed circle: what leaves no record. -->
           <svg
             fill="none"
             stroke="currentColor"
@@ -663,7 +663,7 @@ import RecordingPanel from "./RecordingPanel.vue";
 import type { RecordingDestination, RecordingMode, RecordingPreparation } from "./recordingDestination";
 import { focusMessageInputIfUnfocused } from "../../utils/focusMessageInput";
 import { useFeatureFlag } from "../composables/featureFlags";
-import { temporaryTooltip } from "../../utils/temporaryConversation";
+import { temporaryTooltip, type TemporaryScope } from "../../utils/temporaryConversation";
 import { useSecretSealing } from "../composables/secretSealing";
 import { prettyModelName } from "../../utils/modelNames";
 import {
@@ -738,10 +738,10 @@ const props = withDefaults(
     /** Suggested next message, shown above the text box; Tab in the empty
      * composer or a click on it takes it. */
     nextPromptSuggestion?: string | null;
-    /** Offer the Temporary toggle: a new conversation while this Shelley
-     * archives to a Shelley archive store. */
-    temporaryAvailable?: boolean;
-    /** The new conversation is temporary: kept out of the archive store. */
+    /** Offer the Temporary toggle while this Shelley archives: for a new
+     *  conversation, or for each message (the Assistant's). */
+    temporaryScope?: TemporaryScope;
+    /** What the composer sends is temporary: kept out of the archive store. */
     temporary?: boolean;
   }>(),
   {
@@ -754,7 +754,7 @@ const props = withDefaults(
     initialRows: 1,
     isChildConversation: false,
     profiles: () => [],
-    temporaryAvailable: false,
+    temporaryScope: undefined,
     temporary: false,
   },
 );
@@ -923,7 +923,13 @@ function acceptSuggestion() {
   });
 }
 
+const temporaryOn = computed(() => !!props.temporaryScope && props.temporary);
 const placeholderText = computed(() => {
+  if (temporaryOn.value) {
+    return props.temporaryScope === "message"
+      ? "Temporary message: kept out of the archive"
+      : "Temporary conversation: kept out of the archive";
+  }
   if (hint.value.id !== "default" && hint.value.text) return hint.value.text;
   return t("messagePlaceholder");
 });

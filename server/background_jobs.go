@@ -202,6 +202,16 @@ func (s *Server) deliverBackgroundJobNotice(ctx context.Context, job claudetool.
 	if outcome.ExitCode != nil {
 		data.Duration = outcome.Elapsed.String()
 	}
+	// The notice of a job a temporary message started is temporary.
+	temporary, err := s.db.QueriesRes(ctx, func(q *generated.Queries) (bool, error) {
+		return q.ToolUseTemporary(ctx, generated.ToolUseTemporaryParams{ConversationID: job.ConversationID, ToolUseID: job.ToolUseID})
+	})
+	if err != nil {
+		return err
+	}
+	if temporary {
+		ctx = contextWithTemporary(ctx)
+	}
 	ctx = contextWithTurnUserData(ctx, data)
 	return cm.InjectMessage(ctx, modelID, llm.UserStringMessage(text))
 }

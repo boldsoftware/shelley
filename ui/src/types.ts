@@ -161,6 +161,9 @@ export interface ChatRequest {
   queue?: boolean;
   /** Composer-selected skill names; the server prefixes mentions to the message. */
   skills?: string[];
+  /** The message, what answers it, and what it starts stay out of the
+   *  archive store (server/temporary.go). */
+  temporary?: boolean;
 }
 
 /** A conversation's adjustable settings; see Settings in server/settings.go. */

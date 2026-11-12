@@ -49,6 +49,8 @@ var shelleyEnvKeys = []string{
 	"SHELLEY_PORT",
 	"SHELLEY_URL",
 	"SHELLEY_SOCKET",
+	// Set by the server's CommandEnv in a temporary turn.
+	"SHELLEY_TEMPORARY",
 }
 
 // Environ returns the SHELLEY_* "KEY=VALUE" entries for this context. cwd is the

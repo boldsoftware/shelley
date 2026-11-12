@@ -20,7 +20,7 @@ import (
 
 // The archiver: this Shelley pushes its projects and the conversations
 // recorded in archiver_pushes to a Shelley archive store (see
-// archive_store.go).
+// archive_store.go), less their temporary messages (temporary.go).
 
 // FlagArchiver is the archive store's base URL, through this VM's
 // VM-to-VM integration; null or "" is off.
@@ -246,16 +246,19 @@ func (s *Server) archiveConversation(ctx context.Context, base string, row gener
 	behind := false
 	for {
 		push := db.ArchiveStorePush{Conversation: meta, AfterSeq: seq, ThroughSeq: seq, Reset: reset, Messages: []db.ArchiveStoreMessage{}}
-		msgs, err := s.db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.Message, error) {
+		msgs, err := s.db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.ListArchiverMessagesAfterRow, error) {
 			return q.ListArchiverMessagesAfter(ctx, generated.ListArchiverMessagesAfterParams{ConversationID: row.ConversationID, SequenceID: seq, Limit: 500})
 		})
 		if err != nil {
 			return err
 		}
 		size := 0
-		for _, m := range msgs {
+		for _, r := range msgs {
+			// The cursor passes the messages the store doesn't get: the store
+			// takes gaps in sequence ids.
+			m := r.Message
 			push.ThroughSeq = m.SequenceID
-			if m.Type == string(db.MessageTypeSystem) {
+			if m.Type == string(db.MessageTypeSystem) || r.IsTemporary {
 				continue
 			}
 			tm, err := s.archiveStoreMessage(ctx, m)

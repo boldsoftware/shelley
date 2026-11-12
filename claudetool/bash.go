@@ -48,9 +48,9 @@ type BashTool struct {
 	// Env holds the conversation context exposed to invoked commands as
 	// SHELLEY_* environment variables.
 	Env ShelleyEnv
-	// CommitEnv, if set, returns assignments added to every command's
-	// environment, here or on the VM (see ToolSetConfig.CommitEnv).
-	CommitEnv func(context.Context) ([]string, error)
+	// CommandEnv, if set, returns assignments added to every command's
+	// environment, here or on the VM (see ToolSetConfig.CommandEnv).
+	CommandEnv func(context.Context) ([]string, error)
 	// VM, if set, is where the conversation's project work happens: each
 	// call names its target, the VM or this host (see VM).
 	VM VM
@@ -351,10 +351,10 @@ type bashResult struct {
 
 func (b *BashTool) executeBashInDir(ctx context.Context, req bashInput, wd string) (bashResult, error) {
 	var extraEnv []string
-	if b.CommitEnv != nil {
+	if b.CommandEnv != nil {
 		var err error
-		if extraEnv, err = b.CommitEnv(ctx); err != nil {
-			return bashResult{}, fmt.Errorf("commit identity: %w", err)
+		if extraEnv, err = b.CommandEnv(ctx); err != nil {
+			return bashResult{}, fmt.Errorf("command environment: %w", err)
 		}
 	}
 	dir := bashJobDir()

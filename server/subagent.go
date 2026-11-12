@@ -139,6 +139,17 @@ func (r *SubagentRunner) RunSubagent(ctx context.Context, conversationID, prompt
 		})
 	}
 
+	// What a temporary turn delegates is temporary.
+	if convErr == nil && conv.ParentConversationID != nil {
+		temporary, err := s.temporaryNow(ctx, *conv.ParentConversationID)
+		if err != nil {
+			return "", err
+		}
+		if temporary {
+			ctx = contextWithTemporary(ctx)
+		}
+	}
+
 	// A busy subagent receives the message at its current turn's next LLM
 	// round, without interrupting the turn (see AcceptUserMessage).
 	if _, err := manager.AcceptUserMessage(ctx, llmService, modelID, userMessage); err != nil {
@@ -206,6 +217,14 @@ func (s *Server) messageParent(ctx context.Context, conv generated.Conversation,
 	parent.mu.Lock()
 	modelID := parent.modelID
 	parent.mu.Unlock()
+	// A report from temporary work is temporary.
+	temporary, err := s.temporaryNow(ctx, conv.ConversationID)
+	if err != nil {
+		return err
+	}
+	if temporary {
+		ctx = contextWithTemporary(ctx)
+	}
 	ctx = contextWithTurnUserData(ctx, senderMessageUserData{
 		SenderConversationID: conv.ConversationID,
 		SenderSlug:           derefString(conv.Slug),

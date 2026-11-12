@@ -279,6 +279,7 @@ func cmdChat(cc *clientConfig, args []string) {
 	fs.Var(&tags, "tag", "Tag to add to the conversation (repeatable)")
 	ephemeral := fs.Bool("ephemeral", false, "Wait for end of turn, then archive the conversation (for cron-style cleanup)")
 	noNotify := fs.Bool("disable-notifications", false, "Disable end-of-turn notifications for this conversation (new conversations only)")
+	temporary := fs.Bool("temporary", false, "Send the message as temporary, kept out of the archive (a new conversation is temporary)")
 	fs.Parse(args)
 
 	if *prompt == "" {
@@ -311,6 +312,9 @@ func cmdChat(cc *clientConfig, args []string) {
 	reqBody := buildChatRequestBody(*prompt, *model, effectiveCwd, *noNotify, *convID)
 	if conversationOptions != nil {
 		reqBody["conversation_options"] = conversationOptions
+	}
+	if *temporary {
+		reqBody["temporary"] = true
 	}
 
 	var apiURL string

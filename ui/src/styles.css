@@ -1983,6 +1983,22 @@ body {
   text-align: right;
 }
 
+/* A temporary message, kept out of the archive store: a faint dashed edge. */
+.message-temporary {
+  border-left: 2px dashed var(--gray-300);
+  padding-left: 0.5rem;
+}
+
+.dark .message-temporary {
+  border-left-color: var(--gray-600);
+}
+
+/* The composer while what it sends is temporary. */
+.message-input-container.temporary-on .message-textarea {
+  border-style: dashed;
+  border-color: var(--gray-500);
+}
+
 .message-author-conversation {
   font-size: var(--font-size-12);
   color: var(--text-secondary);
@@ -7750,6 +7766,24 @@ svg {
     left: auto;
     right: 58px;
     transform: none;
+  }
+
+  /* The Assistant's per-message Temporary toggle takes the slot beside Send;
+     record and attach move one slot left, and the status narrows. */
+  .message-input-form:has(.message-temporary-btn) .message-temporary-btn {
+    right: 58px;
+  }
+
+  .message-input-form:has(.message-temporary-btn) .message-record {
+    right: 96px;
+  }
+
+  .message-input-form:has(.message-temporary-btn) .message-attach-btn:not(.message-temporary-btn) {
+    right: 134px;
+  }
+
+  .message-input-form:has(.message-temporary-btn) .message-controls-status-slot {
+    width: calc(100% - 210px);
   }
 
   .message-voice-btn {

@@ -159,6 +159,14 @@
           {{ authorEmail }}
         </div>
         <div
+          v-if="temporary && isUser && !sender"
+          v-tooltip.left="'Temporary: this message, its replies and the work it started are kept out of the archive.'"
+          class="message-via-text"
+          data-testid="message-temporary"
+        >
+          temporary
+        </div>
+        <div
           v-if="textedFromPhone"
           class="message-via-text"
           data-testid="message-via-text"
@@ -480,6 +488,10 @@ const isAssistantConversation = inject<ComputedRef<boolean> | null>(
   "isAssistantConversation",
   null,
 );
+// A temporary message, kept out of the archive store (server/temporary.go).
+const temporaryMessage = inject<((messageId: string) => boolean) | null>("temporaryMessage", null);
+const temporary = computed(() => !!temporaryMessage?.(props.message.message_id));
+
 const textedFromPhone = computed(
   () =>
     !!isAssistantConversation?.value &&
@@ -684,7 +696,10 @@ const hasRenderableContent = computed(() => {
 });
 
 // ---- Message container classes ----
-const messageClasses = computed(() => {
+const messageClasses = computed(
+  () => `${messageKindClasses.value}${temporary.value ? " message-temporary" : ""}`,
+);
+const messageKindClasses = computed(() => {
   if (jobNotice.value || conversationSender.value || actionReport.value) {
     return "message message-tool message-tool-card";
   }

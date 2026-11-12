@@ -46,7 +46,7 @@ func TestCommitIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env, err := manager.toolSetConfig.CommitEnv(t.Context())
+	env, err := manager.toolSetConfig.CommandEnv(t.Context())
 	if err != nil || !slices.Contains(env, "GIT_AUTHOR_NAME=Ada Lovelace") || !slices.Contains(env, "GIT_COMMITTER_EMAIL=ada@example.com") {
 		t.Fatalf("bash environment %q %v", env, err)
 	}

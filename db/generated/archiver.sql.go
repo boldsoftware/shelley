@@ -65,9 +65,11 @@ func (q *Queries) ListArchiverDeleted(ctx context.Context) ([]ListArchiverDelete
 }
 
 const listArchiverMessagesAfter = `-- name: ListArchiverMessagesAfter :many
-SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation, llm_api_url, model_name, forked_from_message_id, user_email, other_usage_data, external_message_id FROM messages
-WHERE conversation_id = ? AND sequence_id > ?
-ORDER BY sequence_id
+SELECT m.message_id, m.conversation_id, m.sequence_id, m.type, m.llm_data, m.user_data, m.usage_data, m.created_at, m.display_data, m.excluded_from_context, m.generation, m.llm_api_url, m.model_name, m.forked_from_message_id, m.user_email, m.other_usage_data, m.external_message_id,
+  CAST(EXISTS (SELECT 1 FROM temporary_messages t WHERE t.message_id = m.message_id) AS BOOLEAN) AS is_temporary
+FROM messages m
+WHERE m.conversation_id = ? AND m.sequence_id > ?
+ORDER BY m.sequence_id
 LIMIT ?
 `
 
@@ -77,33 +79,40 @@ type ListArchiverMessagesAfterParams struct {
 	Limit          int64  `json:"limit"`
 }
 
-func (q *Queries) ListArchiverMessagesAfter(ctx context.Context, arg ListArchiverMessagesAfterParams) ([]Message, error) {
+type ListArchiverMessagesAfterRow struct {
+	Message     Message `json:"message"`
+	IsTemporary bool    `json:"is_temporary"`
+}
+
+// With whether each is temporary (db/schema/082-temporary-messages.sql).
+func (q *Queries) ListArchiverMessagesAfter(ctx context.Context, arg ListArchiverMessagesAfterParams) ([]ListArchiverMessagesAfterRow, error) {
 	rows, err := q.db.QueryContext(ctx, listArchiverMessagesAfter, arg.ConversationID, arg.SequenceID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Message{}
+	items := []ListArchiverMessagesAfterRow{}
 	for rows.Next() {
-		var i Message
+		var i ListArchiverMessagesAfterRow
 		if err := rows.Scan(
-			&i.MessageID,
-			&i.ConversationID,
-			&i.SequenceID,
-			&i.Type,
-			&i.LlmData,
-			&i.UserData,
-			&i.UsageData,
-			&i.CreatedAt,
-			&i.DisplayData,
-			&i.ExcludedFromContext,
-			&i.Generation,
-			&i.LlmApiUrl,
-			&i.ModelName,
-			&i.ForkedFromMessageID,
-			&i.UserEmail,
-			&i.OtherUsageData,
-			&i.ExternalMessageID,
+			&i.Message.MessageID,
+			&i.Message.ConversationID,
+			&i.Message.SequenceID,
+			&i.Message.Type,
+			&i.Message.LlmData,
+			&i.Message.UserData,
+			&i.Message.UsageData,
+			&i.Message.CreatedAt,
+			&i.Message.DisplayData,
+			&i.Message.ExcludedFromContext,
+			&i.Message.Generation,
+			&i.Message.LlmApiUrl,
+			&i.Message.ModelName,
+			&i.Message.ForkedFromMessageID,
+			&i.Message.UserEmail,
+			&i.Message.OtherUsageData,
+			&i.Message.ExternalMessageID,
+			&i.IsTemporary,
 		); err != nil {
 			return nil, err
 		}

@@ -635,6 +635,8 @@ type QueuedMessage struct {
 	// Inject lets a running turn take the message at its next LLM round
 	// instead of waiting for the turn to end.
 	Inject bool `json:"inject,omitempty"`
+	// Temporary is a message of temporary origin (TemporaryStart).
+	Temporary bool `json:"temporary,omitempty"`
 	// ID, CreatedAt, Model, UserEmail, UserData, and ExternalMessageID are
 	// shared queue metadata.
 	// Kind, State, Transcription, Error, and the optional ready Llm payload form
@@ -1716,7 +1718,23 @@ type CreateMessageParams struct {
 	// message's created_at and the tool/usage timestamps embedded in it
 	// stay on one timeline instead of disagreeing about "now".
 	CreatedAt *time.Time
+	// Temporary is how the message bears on the conversation's temporary run.
+	Temporary TemporaryMark
 }
+
+// TemporaryMark is how a new message bears on its conversation's temporary
+// run (db/schema/082-temporary-messages.sql).
+type TemporaryMark int
+
+const (
+	// TemporaryInherit: the message is temporary while a run is open.
+	TemporaryInherit TemporaryMark = iota
+	// TemporaryStart: the message is of temporary origin; it opens a run.
+	TemporaryStart
+	// TemporaryEnd: the user typed the message, not temporary, and it starts
+	// a turn; it closes the run.
+	TemporaryEnd
+)
 
 // nullableString returns nil for an empty string so the column is stored as
 // SQL NULL, and a pointer to the value otherwise.
@@ -1796,6 +1814,15 @@ func insertMessageTx(ctx context.Context, q *generated.Queries, params CreateMes
 	conversation, err := q.GetConversation(ctx, params.ConversationID)
 	if err != nil {
 		return generated.Message{}, fmt.Errorf("failed to get conversation generation: %w", err)
+	}
+	switch params.Temporary {
+	case TemporaryStart:
+		err = q.OpenTemporaryRun(ctx, params.ConversationID)
+	case TemporaryEnd:
+		err = q.CloseTemporaryRun(ctx, params.ConversationID)
+	}
+	if err != nil {
+		return generated.Message{}, err
 	}
 	message, err := q.CreateMessage(ctx, generated.CreateMessageParams{
 		MessageID:           cmp.Or(params.MessageID, uuid.New().String()),
@@ -2369,12 +2396,23 @@ func (db *DB) CreateSubagentConversation(ctx context.Context, slug, parentID str
 	}
 	var conversation generated.Conversation
 	conversation, err = db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
-		return q.CreateSubagentConversation(ctx, generated.CreateSubagentConversationParams{
+		conversation, err := q.CreateSubagentConversation(ctx, generated.CreateSubagentConversationParams{
 			ConversationID:       conversationID,
 			Slug:                 &slug,
 			Cwd:                  cwd,
 			ParentConversationID: &parentID,
 		})
+		if err != nil {
+			return conversation, err
+		}
+		// One created in a temporary run is a temporary conversation.
+		if n, err := q.MarkTemporarySubagent(ctx, conversationID); err != nil || n == 0 {
+			return conversation, err
+		}
+		if err := q.DeleteArchiverPush(ctx, conversationID); err != nil {
+			return conversation, err
+		}
+		return q.GetConversation(ctx, conversationID)
 	})
 	return &conversation, err
 }

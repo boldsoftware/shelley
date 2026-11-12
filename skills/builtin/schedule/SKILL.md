@@ -21,6 +21,8 @@ The prompt baked into the service unit should concisely convey the overarching g
 
 You are responsible for ensuring that one-shot units will be cleaned up.
 
+If `$SHELLEY_TEMPORARY` is `1`, the user asked for this work to stay off the archive: add `-temporary` to every `shelley client chat` you schedule, here and below.
+
 ## Resume this conversation after a delay
 
 For a one-off wait within ongoing work, detach a tmux session that sleeps then

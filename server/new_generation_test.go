@@ -204,10 +204,10 @@ func TestStartNewGenerationRefusesTurnStartedMeanwhile(t *testing.T) {
 	releaseDrain := sync.OnceFunc(func() { close(release) })
 	defer releaseDrain()
 	record := manager.recordDrainedQueued
-	manager.recordDrainedQueued = func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message) (int64, error) {
+	manager.recordDrainedQueued = func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message, turnStart bool) (int64, error) {
 		close(draining)
 		<-release
-		return record(ctx, qm, messages)
+		return record(ctx, qm, messages, turnStart)
 	}
 	requireBtwStatus(t, postBtwChat(t, server, conv.ConversationID, ChatRequest{Message: "drained", Model: "predictable", Queue: true}), http.StatusAccepted)
 	<-draining

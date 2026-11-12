@@ -20,8 +20,20 @@ export function isTemporaryConversation(
   }
 }
 
-/** The composer toggle's tooltip, saying what happens to the conversation. */
-export function temporaryTooltip(temporary: boolean): string {
+/** What the composer's Temporary toggle applies to: the new conversation,
+ *  or the next message (the Assistant's; see server/temporary.go). */
+export type TemporaryScope = "conversation" | "message";
+
+/** The composer toggle's tooltip, saying what happens to what it sends. */
+export function temporaryTooltip(
+  temporary: boolean,
+  scope: TemporaryScope = "conversation",
+): string {
+  if (scope === "message") {
+    return temporary
+      ? "Temporary: this message, the replies to it and any conversations it starts stay out of the archive. Turns off once sent."
+      : "This message and the replies to it will be archived, where your team can read them. Turn on Temporary to keep this one out.";
+  }
   return temporary
     ? "Temporary: this conversation stays on this machine and isn't archived."
     : "This conversation will be archived to the Shelley archive store, where anyone with access to the store can read it. Turn on Temporary to keep it out.";

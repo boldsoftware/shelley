@@ -20,9 +20,12 @@ SELECT conversation_id, CAST(pushed_meta <> '' AS BOOLEAN) AS pushed FROM archiv
 WHERE NOT EXISTS (SELECT 1 FROM conversations c WHERE c.conversation_id = p.conversation_id);
 
 -- name: ListArchiverMessagesAfter :many
-SELECT * FROM messages
-WHERE conversation_id = ? AND sequence_id > ?
-ORDER BY sequence_id
+-- With whether each is temporary (db/schema/082-temporary-messages.sql).
+SELECT sqlc.embed(m),
+  CAST(EXISTS (SELECT 1 FROM temporary_messages t WHERE t.message_id = m.message_id) AS BOOLEAN) AS is_temporary
+FROM messages m
+WHERE m.conversation_id = ? AND m.sequence_id > ?
+ORDER BY m.sequence_id
 LIMIT ?;
 
 -- name: SetArchiverPushed :exec

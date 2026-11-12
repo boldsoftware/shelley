@@ -1235,6 +1235,20 @@ export const subagentUsageApi = {
   },
 };
 
+/** The conversation's temporary messages, kept out of the archive store
+ *  (server/temporary.go), as inclusive sequence id ranges. */
+export async function getTemporaryMessageRanges(
+  conversationId: string,
+  signal?: AbortSignal,
+): Promise<[number, number][]> {
+  const r = await apiFetch(
+    `/api/conversation/${conversationId}/temporary-messages`,
+    "Failed to load temporary messages",
+    { headers: { "X-Shelley-Request": "1" }, signal },
+  );
+  return ((await r.json()) as { ranges: [number, number][] }).ranges;
+}
+
 // Custom models API
 export interface CustomModel {
   model_id: string;

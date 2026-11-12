@@ -1230,9 +1230,13 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		config := s.toolSetConfig
 		config.VM = vm
 		config.HostDir = scratch
-		config.CommitEnv = func(ctx context.Context) ([]string, error) {
+		config.CommandEnv = func(ctx context.Context) ([]string, error) {
 			identity, err := s.db.ConversationCommitIdentity(ctx, conversationID)
-			return identity.Environ(), err
+			if err != nil {
+				return nil, err
+			}
+			temporary, err := s.commandTemporaryEnv(ctx, conversationID)
+			return append(identity.Environ(), temporary...), err
 		}
 		if role != roleTopLevel {
 			// Only top-level conversations can spawn subagents.
@@ -1253,8 +1257,8 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 			manager.profileModelService = s.llmManager.GetService
 		}
 		manager.onTurnStartRejected = func() { go manager.drainPendingMessages() }
-		manager.recordDrainedQueued = func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message) (int64, error) {
-			return s.recordDrainedQueuedMessages(ctx, conversationID, qm, messages)
+		manager.recordDrainedQueued = func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message, turnStart bool) (int64, error) {
+			return s.recordDrainedQueuedMessages(ctx, conversationID, qm, messages, turnStart)
 		}
 		if role == roleTopLevel && isSlackChat(conversation) {
 			manager.slack = slackChat{s: s, conversationID: conversationID}
@@ -1475,7 +1479,7 @@ func (s *Server) insertMessages(ctx context.Context, conversationID string, para
 // carries the user provenance captured at queue time (drain runs on a
 // background context). Synthetic transcription audit rows stay unattributed. Returns
 // the user row's sequence ID for rendering its external wrapper to the LLM.
-func (s *Server) recordDrainedQueuedMessages(ctx context.Context, conversationID string, qm db.QueuedMessage, messages []llm.Message) (int64, error) {
+func (s *Server) recordDrainedQueuedMessages(ctx context.Context, conversationID string, qm db.QueuedMessage, messages []llm.Message, turnStart bool) (int64, error) {
 	paramsList := make([]db.CreateMessageParams, 0, len(messages))
 	for i, message := range messages {
 		var userDataArgs []interface{}
@@ -1489,6 +1493,7 @@ func (s *Server) recordDrainedQueuedMessages(ctx context.Context, conversationID
 		if i == 0 {
 			params.RemoveQueuedID = qm.ID
 			params.MarkAgentStart = true
+			params.Temporary = queuedMark(qm, typedUserForLLM(messages[len(messages)-1], qm.UserData), turnStart)
 		}
 		if i == len(messages)-1 {
 			params.UserEmail = qm.UserEmail
@@ -1592,6 +1597,7 @@ func (s *Server) recordTurnStartMessage(ctx context.Context, conversationID stri
 		return nil, err
 	}
 	params.MarkAgentStart = true
+	params.Temporary = turnStartMark(ctx, turnUserDataFromContext(ctx) == nil || liveDeliveryIDFromContext(ctx) != "")
 	// Attribute the turn-start user row to its author. recordTurnStartMessage
 	// is only ever called with a genuine user message (AcceptUserMessage's
 	// turn-start recorder), so unlike buildCreateMessageParams — which also
@@ -2312,7 +2318,8 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 		socketHandler := LoggerMiddleware(s.logger)(localCLIHandler(mux))
 
 		socketServer = &http.Server{
-			Handler: socketHandler,
+			Handler:     socketHandler,
+			ConnContext: withSocketPeer,
 		}
 
 		go func() {

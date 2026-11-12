@@ -919,6 +919,7 @@ func (s *Server) registerConversationRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/conversation/{id}", compressionHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.handleGetConversation(w, r, r.PathValue("id"))
 	})))
+	mux.HandleFunc("GET /api/conversation/{id}/temporary-messages", s.handleTemporaryMessages)
 	// GET /api/conversation/<id>/subagent-usage - aggregated subagent cost
 	mux.HandleFunc("GET /api/conversation/{id}/subagent-usage", func(w http.ResponseWriter, r *http.Request) {
 		s.handleSubagentUsage(w, r, r.PathValue("id"))
@@ -1107,6 +1108,9 @@ type ChatRequest struct {
 	ConversationOptions  *ChatOptions `json:"conversation_options,omitempty"`
 	Queue                bool         `json:"queue,omitempty"`
 	SenderConversationID string       `json:"sender_conversation_id,omitempty"`
+	// Temporary sends the message as temporary (temporary.go); a new
+	// conversation's first message makes it a temporary conversation.
+	Temporary bool `json:"temporary,omitempty"`
 	// Skills names composer-selected skills mentioned before the message.
 	Skills []string `json:"skills,omitempty"`
 }
@@ -1235,6 +1239,12 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	// carrier here. Both the immediate-send (recordTurnStartMessage) and queued
 	// (QueueMessage) paths read it off this ctx.
 	ctx = contextWithUserEmail(ctx, userEmail)
+	if temporary, err := requestTemporary(r, req.Temporary); err != nil {
+		s.internalError(w, "Failed to classify the message", err, "conversationID", conversationID)
+		return
+	} else if temporary {
+		ctx = contextWithTemporary(ctx)
+	}
 
 	// Built-in /transcription is durable queued user input backed by a hidden
 	// child. Reject bad commands before any side effect (draft promotion or
@@ -1620,6 +1630,12 @@ func (s *Server) newConversation(w http.ResponseWriter, r *http.Request, req New
 	if req.Model != "" {
 		change.Model = &req.Model
 	}
+	temporary, err := requestTemporary(r, req.Temporary)
+	if err != nil {
+		s.internalError(w, "Failed to classify the message", err)
+		return
+	}
+	convOpts.Temporary = convOpts.Temporary || temporary
 	modelList := s.getModelList()
 	settings, err := s.newConversationSettings(ctx, change, modelList)
 	var invalid invalidSettings

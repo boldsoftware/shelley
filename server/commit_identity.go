@@ -17,7 +17,7 @@ import (
 // default plus an optional override per project (see db.CommitIdentity).
 // Nothing invents one: with none set, git's own configuration applies.
 // Shelley applies it wherever the agent commits: its commands carry
-// GIT_AUTHOR_* and GIT_COMMITTER_* (claudetool.ToolSetConfig.CommitEnv),
+// GIT_AUTHOR_* and GIT_COMMITTER_* (claudetool.ToolSetConfig.CommandEnv),
 // as do actions, and a task's own VM gets it as git's global identity (see
 // setUpConversationVM); a shared VM's or SSH host's configuration is left
 // alone.
