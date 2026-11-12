@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/llmhttp"
 )
@@ -171,6 +173,10 @@ func (l *RunConfig) run(ctx context.Context) error {
 			}
 		}
 
+		// Pick the reply's message_id before it streams, so every delta can
+		// name the message it will become. A retry streams the reply again
+		// under the same id.
+		replyID := uuid.NewString()
 		onRetry := l.retryWarningHook(ctx)
 		req := &llm.Request{
 			Messages:      requestMessages,
@@ -181,6 +187,7 @@ func (l *RunConfig) run(ctx context.Context) error {
 		}
 		if l.Hooks.OnStreamingResponse != nil {
 			req.OnStream = func(delta llm.StreamDelta) {
+				delta.MessageID = replyID
 				l.Hooks.OnStreamingResponse(ctx, delta)
 			}
 		}
@@ -253,7 +260,7 @@ func (l *RunConfig) run(ctx context.Context) error {
 		// should not be added to history normally (they get special handling)
 		if resp.StopReason == llm.StopReasonMaxTokens {
 			l.Logger.Warn("LLM response truncated due to max tokens")
-			l.failTurn(ctx, l.truncationError(ctx, resp), &messages, &rewritten)
+			l.failTurn(ctx, l.truncationError(ctx, resp, replyID), &messages, &rewritten)
 			return nil
 		}
 
@@ -265,7 +272,7 @@ func (l *RunConfig) run(ctx context.Context) error {
 		// endless string of blank turns. Surface it as a visible error instead.
 		if resp.StopReason == llm.StopReasonRefusal {
 			l.Logger.Warn("LLM declined to continue (stop_reason=refusal)")
-			l.failTurn(ctx, l.refusalError(ctx, resp), &messages, &rewritten)
+			l.failTurn(ctx, l.refusalError(ctx, resp, replyID), &messages, &rewritten)
 			return nil
 		}
 
@@ -288,11 +295,11 @@ func (l *RunConfig) run(ctx context.Context) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if err := l.emitResponse(context.WithoutCancel(ctx), assistantMessage, "", resp.UsageWithMeta(), "failed to record assistant tool-use message"); err != nil {
+			if err := l.emitResponse(context.WithoutCancel(ctx), assistantMessage, replyID, resp.UsageWithMeta(), "failed to record assistant tool-use message"); err != nil {
 				return fmt.Errorf("%w: assistant tool-use message: %v", errMessagePersistence, err)
 			}
 		} else {
-			l.emitResponse(ctx, assistantMessage, "", resp.UsageWithMeta(), "failed to record assistant message")
+			l.emitResponse(ctx, assistantMessage, replyID, resp.UsageWithMeta(), "failed to record assistant message")
 		}
 		messages = append(messages, assistantMessage)
 
@@ -596,7 +603,7 @@ func (l *RunConfig) failTurn(ctx context.Context, errorMessage llm.Message, mess
 // truncationError records a response truncated at the maximum output token
 // limit for cost tracking (excluded from context) and returns the error
 // message for the user.
-func (l *RunConfig) truncationError(ctx context.Context, resp *llm.Response) llm.Message {
+func (l *RunConfig) truncationError(ctx context.Context, resp *llm.Response, replyID string) llm.Message {
 	// Record the truncated message for cost tracking, but mark it as excluded from context.
 	// This preserves billing information without confusing the LLM on future turns.
 	// Not the end of the turn: the error that follows ends it, or the report
@@ -605,7 +612,7 @@ func (l *RunConfig) truncationError(ctx context.Context, resp *llm.Response) llm
 	truncatedMessage.ExcludedFromContext = true
 	truncatedMessage.EndOfTurn = false
 
-	l.emitResponse(ctx, truncatedMessage, "", resp.UsageWithMeta(), "failed to record truncated message")
+	l.emitResponse(ctx, truncatedMessage, replyID, resp.UsageWithMeta(), "failed to record truncated message")
 
 	// The truncation error message has EndOfTurn=true to properly signal end of turn.
 	return llm.Message{
@@ -632,7 +639,7 @@ func (l *RunConfig) truncationError(ctx context.Context, resp *llm.Response) llm
 // raw response excluded from context (for cost tracking) and return a visible,
 // non-retryable error message that ends the turn. Neither is added to the live
 // context history, matching the cold-start rehydration path.
-func (l *RunConfig) refusalError(ctx context.Context, resp *llm.Response) llm.Message {
+func (l *RunConfig) refusalError(ctx context.Context, resp *llm.Response, replyID string) llm.Message {
 	// Record the raw refusal for cost tracking, but keep it out of context so it
 	// doesn't poison future turns (an empty/near-empty assistant turn biases the
 	// model toward refusing again, and empty content blocks can wedge replay).
@@ -641,7 +648,7 @@ func (l *RunConfig) refusalError(ctx context.Context, resp *llm.Response) llm.Me
 	rawMessage.ExcludedFromContext = true
 	rawMessage.EndOfTurn = false
 
-	l.emitResponse(ctx, rawMessage, "", resp.UsageWithMeta(), "failed to record refusal message")
+	l.emitResponse(ctx, rawMessage, replyID, resp.UsageWithMeta(), "failed to record refusal message")
 
 	// Build the user-visible notice. Start with the standard guidance, then
 	// append every field the provider gave us in the refusal reason (category

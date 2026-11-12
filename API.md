@@ -282,6 +282,35 @@ interface StreamResponse {
 }
 ```
 
+`stream_delta` carries part of the model reply being generated:
+
+```ts
+interface StreamDelta {
+  type: "text" | "thinking";
+  text: string;        // append to what this reply has streamed so far
+  index: number;       // provider content-block index (not reliable for
+                       // matching blocks in the saved message)
+  seq: number;         // increases with each delta
+  message_id?: string; // the message_id the reply will be saved under
+}
+```
+
+`message_id` is the id the reply will have once it is saved. It is chosen
+before the reply streams and stays the same if the request is retried, so
+a client can treat the streaming reply and the saved message as one thing:
+
+1. Append each delta's `text` to what its `message_id` has streamed.
+2. When a message with that `message_id` arrives in `messages`, it replaces
+   the streamed content. The saved message is authoritative, and its text
+   can differ from what streamed. Ignore later deltas for that id.
+3. A cancelled or failed request may save no message under its id. When an
+   `end_of_turn` message arrives, discard streamed content whose message
+   has not arrived. Do the same on reconnect, because deltas are not
+   replayed.
+
+Older servers do not send `message_id`. With them, clear the streamed
+content when the next agent message arrives.
+
 The `conversation_list_patch` operates on a document that is exactly the
 `conversations` array returned by `/api/conversations/snapshot`. Clients
 should:

@@ -215,12 +215,19 @@ const (
 
 // StreamDelta represents a partial content update during streaming.
 type StreamDelta struct {
-	// Type is the kind of delta: "text", "thinking", "tool_input"
+	// Type is the kind of delta: "text" or "thinking".
 	Type string `json:"type"`
 	// Text is the delta text content
 	Text string `json:"text"`
 	// Index is the content block index in the response
 	Index int `json:"index"`
+	// MessageID is the message_id the reply being streamed will be recorded
+	// under, so a client can treat the streaming reply and the saved message
+	// as one thing. It is stamped by the agent loop (see
+	// loop.Response.MessageID), not by LLM providers, and stays the same
+	// across retries of one model request. A request that is cancelled or
+	// fails may record no message under it.
+	MessageID string `json:"message_id,omitempty"`
 	// Seq is a per-conversation, monotonically increasing sequence number
 	// assigned to each partial update broadcast to clients. It lets clients
 	// detect dropped or out-of-order deltas. It is assigned by the server
