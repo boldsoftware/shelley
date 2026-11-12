@@ -14,7 +14,6 @@
           placeholder="# Conventions&#10;- Run `make test` before committing."
           :disabled="saving"
         />
-        <p class="project-muted">{{ t("projectInstructionsHint") }}</p>
         <ProjectRepoPicker v-if="!account" v-model="draft.repos" :disabled="saving" />
         <ProjectVMFields v-model:vm="draft.vm" heading :disabled="saving" />
         <template v-if="account">

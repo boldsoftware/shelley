@@ -164,9 +164,7 @@ export const es: TranslationKeys = {
   sendResultToAgent: "Enviar el resultado al agente",
   removeAction: "Quitar",
   editProject: "Editar proyecto",
-  projectInstructions: "Instrucciones del proyecto (AGENTS.md)",
-  projectInstructionsHint:
-    "Instrucciones al estilo de AGENTS.md que se añaden a cada conversación de este proyecto.",
+  projectInstructions: "AGENTS.md (instrucciones usadas por cada conversación del proyecto)",
   workingDirectory: "Directorio de trabajo",
   projectNamePlaceholder: "p. ej., Tienda",
   projectCwdHintVm: "Dónde empiezan las conversaciones, en la VM: una ruta absoluta.",

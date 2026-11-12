@@ -250,7 +250,7 @@ test("project editor, task creation, failed action retry, and success-only archi
   await expect(page).toHaveURL(/\/project\/\d+\/settings$/);
   await expect(editor.getByRole("button", { name: "Delete project…" })).toBeEnabled();
   await editor
-    .getByLabel("Project instructions (AGENTS.md)", { exact: true })
+    .getByLabel("AGENTS.md (instructions used by every project task)", { exact: true })
     .fill("Keep publishing tasks brief.");
   await editor.getByLabel("Working directory", { exact: true }).fill(testWorkingDirectory());
   // A page gives the view a tab framing it, first.

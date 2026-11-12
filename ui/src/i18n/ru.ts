@@ -165,9 +165,7 @@ export const ru: TranslationKeys = {
   sendResultToAgent: "Отправить результат агенту",
   removeAction: "Удалить",
   editProject: "Изменить проект",
-  projectInstructions: "Инструкции проекта (AGENTS.md)",
-  projectInstructionsHint:
-    "Инструкции в стиле AGENTS.md, добавляемые к каждому разговору в этом проекте.",
+  projectInstructions: "AGENTS.md (инструкции для каждого разговора в проекте)",
   workingDirectory: "Рабочий каталог",
   projectNamePlaceholder: "например, Storefront",
   projectCwdHintVm: "Где начинаются разговоры, на ВМ: абсолютный путь.",

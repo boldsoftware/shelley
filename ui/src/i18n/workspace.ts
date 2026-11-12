@@ -35,7 +35,7 @@ export const workspaceEn: Partial<TranslationKeys> = {
   newConversationInProject: "New task in {project}",
   projectHasActiveConversation: "Archive or move its active task first",
   projectHasActiveConversations: "Archive or move its {count} active tasks first",
-  projectInstructionsHint: "AGENTS.md-style instructions appended to every task in this project.",
+  projectInstructions: "AGENTS.md (instructions used by every project task)",
   projectProfileHint:
     "The project is also a profile: its model, effort, tools and base system prompt are its tasks’ settings. Change them from a task’s model picker (Update profile).",
   deleteProjectConfirm: "Delete {name}? Task history is never deleted.",

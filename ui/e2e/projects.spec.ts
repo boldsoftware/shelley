@@ -69,7 +69,7 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   // The view is titled with the project's name, which a click renames:
   // Escape reverts, Enter saves (leaving the form's other edits unsaved).
   await editor
-    .getByLabel("Project instructions (AGENTS.md)", { exact: true })
+    .getByLabel("AGENTS.md (instructions used by every project conversation)", { exact: true })
     .fill("Keep release notes brief.");
   await view.getByRole("button", { name, exact: true }).click();
   const rename = view.getByLabel("Rename", { exact: true });
@@ -94,9 +94,11 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   await editor.getByRole("button", { name: "Save project", exact: true }).click();
   await expect(editor.getByText("Saved.", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(editor.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
-    "Keep release notes brief.",
-  );
+  await expect(
+    editor.getByLabel("AGENTS.md (instructions used by every project conversation)", {
+      exact: true,
+    }),
+  ).toHaveValue("Keep release notes brief.");
 
   // Outside workspace mode the composer has no project picker; start the
   // project's conversation through the API.
@@ -112,9 +114,9 @@ test("create, edit and delete a project; start a conversation in it", async ({ p
   ).toHaveText(name);
   await page.getByRole("button", { name: "Edit conversation project", exact: true }).click();
   const edit = page.getByRole("region", { name: "Edit project", exact: true });
-  await expect(edit.getByLabel("Project instructions (AGENTS.md)", { exact: true })).toHaveValue(
-    "Keep release notes brief.",
-  );
+  await expect(
+    edit.getByLabel("AGENTS.md (instructions used by every project conversation)", { exact: true }),
+  ).toHaveValue("Keep release notes brief.");
   await page.goBack();
   await expect(edit).toBeHidden();
 

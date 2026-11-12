@@ -166,9 +166,7 @@ export const vi: TranslationKeys = {
   sendResultToAgent: "Gửi kết quả cho tác tử",
   removeAction: "Xóa",
   editProject: "Sửa dự án",
-  projectInstructions: "Hướng dẫn dự án (AGENTS.md)",
-  projectInstructionsHint:
-    "Hướng dẫn kiểu AGENTS.md được thêm vào mọi cuộc trò chuyện trong dự án này.",
+  projectInstructions: "AGENTS.md (hướng dẫn dùng cho mọi cuộc trò chuyện của dự án)",
   workingDirectory: "Thư mục làm việc",
   projectNamePlaceholder: "vd. Storefront",
   projectCwdHintVm: "Nơi các cuộc trò chuyện bắt đầu, trên VM: một đường dẫn tuyệt đối.",
