@@ -52,15 +52,36 @@ func (s *workhorseService) Do(ctx context.Context, req *llm.Request) (*llm.Respo
 
 func (s *workhorseService) do(ctx context.Context, service llm.Service, req *llm.Request) (*llm.Response, error) {
 	request := *req
-	request.ThinkingLevel = llm.ThinkingLevelOff
-	if isNativeGemini(service) {
-		request.ThinkingLevel = llm.ThinkingLevelDefault
-		if levels := llm.SupportedReasoningLevels(service); llm.SupportsReasoning(service) && len(levels) > 0 {
-			request.ThinkingLevel = llm.ClampThinkingLevel(llm.ThinkingLevelOff, levels)
-		}
-	}
+	request.ThinkingLevel = workhorseThinkingLevel(service)
 	request.ReasoningEffort = ""
 	return service.Do(ctx, &request)
+}
+
+func workhorseThinkingLevel(service llm.Service) llm.ThinkingLevel {
+	switch s := service.(type) {
+	case *loggingService:
+		return workhorseThinkingLevel(s.service)
+	case *reasoningService:
+		if isNativeGemini(s.Service) {
+			if s.supported {
+				if levels := s.SupportedReasoningLevels(); len(levels) > 0 {
+					return llm.ClampThinkingLevel(llm.ThinkingLevelOff, levels)
+				}
+			}
+			return llm.ThinkingLevelDefault
+		}
+		if s.supported && len(s.levels) > 0 {
+			return llm.ClampThinkingLevel(llm.ThinkingLevelOff, s.levels)
+		}
+		return llm.ThinkingLevelOff
+	case *gem.Service:
+		if levels := llm.SupportedReasoningLevels(s); llm.SupportsReasoning(s) && len(levels) > 0 {
+			return llm.ClampThinkingLevel(llm.ThinkingLevelOff, levels)
+		}
+		return llm.ThinkingLevelDefault
+	default:
+		return llm.ThinkingLevelOff
+	}
 }
 
 func isNativeGemini(service llm.Service) bool {
