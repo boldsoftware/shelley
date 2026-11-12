@@ -730,6 +730,39 @@ func TestFromLLMMessage(t *testing.T) {
 		t.Errorf("tool image is not adjacent before regular content: %+v", messages)
 	}
 
+	// Test parallel tool results keep all tool-role messages contiguous before image user messages
+	parallelToolImageMsg := llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{
+			{
+				Type:      llm.ContentTypeToolResult,
+				ToolUseID: "call-read-image",
+				ToolResult: []llm.Content{
+					{Type: llm.ContentTypeText, Text: "Image read"},
+					{Type: llm.ContentTypeText, MediaType: "image/png", Data: "imgA"},
+				},
+			},
+			{
+				Type:      llm.ContentTypeToolResult,
+				ToolUseID: "call-bash",
+				ToolResult: []llm.Content{
+					{Type: llm.ContentTypeText, Text: "bash ok"},
+				},
+			},
+			{Type: llm.ContentTypeText, Text: "trailing text"},
+		},
+	}
+	messages = fromLLMMessage(parallelToolImageMsg)
+	if len(messages) != 4 {
+		t.Fatalf("fromLLMMessage(parallelToolImageMsg) length = %d, expected 4", len(messages))
+	}
+	if messages[0].Role != "tool" || messages[0].ToolCallID != "call-read-image" ||
+		messages[1].Role != "tool" || messages[1].ToolCallID != "call-bash" ||
+		messages[2].Role != "user" || len(messages[2].MultiContent) != 2 ||
+		messages[3].Role != "user" || messages[3].Content != "trailing text" {
+		t.Errorf("parallel tool results did not keep tool messages contiguous: %+v", messages)
+	}
+
 	// Test message with tool result and error
 	toolResultErrorMsg := llm.Message{
 		Role: llm.MessageRoleUser,

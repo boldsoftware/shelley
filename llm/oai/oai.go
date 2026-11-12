@@ -470,7 +470,10 @@ func fromLLMMessage(msg llm.Message) []openai.ChatCompletionMessage {
 		}
 	}
 
-	// Process tool results as separate messages, but first
+	// Process tool results as separate messages, emitting all tool-role
+	// responses before any synthetic image user messages so parallel tool_calls
+	// are answered contiguously.
+	var toolImageMessages []openai.ChatCompletionMessage
 	for _, tr := range toolResults {
 		// Tool-role messages cannot carry image parts. Preserve images as a following user
 		// message so vision-capable OpenAI models actually receive them.
@@ -505,12 +508,13 @@ func fromLLMMessage(msg llm.Message) []openai.ChatCompletionMessage {
 		if len(imageParts) > 0 {
 			parts := []openai.ChatMessagePart{openAITextPart("Images returned by tool " + tr.ToolUseID + ":")}
 			parts = append(parts, imageParts...)
-			messages = append(messages, openai.ChatCompletionMessage{
+			toolImageMessages = append(toolImageMessages, openai.ChatCompletionMessage{
 				Role:         "user",
 				MultiContent: parts,
 			})
 		}
 	}
+	messages = append(messages, toolImageMessages...)
 	// Process regular content second
 	if len(regularContent) > 0 {
 		m := openai.ChatCompletionMessage{
