@@ -136,7 +136,6 @@ func MessageUserTool(finder UserMessageFinder, chat UserChat, wd *MutableWorking
 		Description: description,
 		InputSchema: llm.MustSchema(messageUserSchema),
 		// Messages reach the user in the order the agent wrote them.
-		Sequential: true,
 		EndsTurnWhen: func(input json.RawMessage) bool {
 			var in MessageUserInput
 			return json.Unmarshal(input, &in) == nil && in.EndTurn

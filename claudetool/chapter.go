@@ -17,7 +17,6 @@ Be willing to mark useful topic shifts rather than waiting for a major change of
 Use a concrete heading under 50 characters. The server anchors it to the latest user message and prevents headings less than three user messages apart. If skipped, do not retry.
 Emit alongside other work when possible; never stop just to write a chapter. Do not announce chapter bookkeeping to the user.`,
 		InputSchema: llm.MustSchema(`{"type":"object","properties":{"title":{"type":"string","description":"Short heading for the new direction."}},"required":["title"],"additionalProperties":false}`),
-		Sequential:  true,
 		Run: llm.RunJSON(func(ctx context.Context, input struct {
 			Title string `json:"title"`
 		},

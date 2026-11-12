@@ -204,9 +204,6 @@ func TestMessageUserSendsToChat(t *testing.T) {
 		t.Fatalf("‼️: %v, sent %q", out.Error, chat.sent)
 	}
 	tool := MessageUserTool(finder, chat, NewMutableWorkingDir(t.TempDir()))
-	if !tool.Sequential {
-		t.Fatal("message_user is not sequential, so the chat could get messages out of order")
-	}
 	if !strings.Contains(tool.Description, "phone") || !strings.Contains(tool.Description, "Attach local") {
 		t.Fatalf("description for a chat: %s", tool.Description)
 	}

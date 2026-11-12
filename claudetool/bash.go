@@ -112,7 +112,7 @@ const (
 	bashName        = "bash"
 	bashDescription = "Executes shell commands via bash --login -c, returning combined stdout/stderr.\n" +
 		"For commands like `cd app && make`, call change_dir with path `app`, then bash `make` without cd. " +
-		"These calls can share a response: change_dir completes before the following parallel group starts. " +
+		"These calls can share a response. " +
 		"Apply this before initial inspections and tests too, including README recipes. " +
 		"Skip change_dir if already there.\n\n" +
 		`Shell state (cwd, variables, aliases) does not persist.
@@ -120,9 +120,11 @@ Commands already start in the working directory; omit redundant cd.
 For 'cd dir && ...' or 'cd dir; ...', call change_dir first,
 then run the remaining command directly.
 
-After 60s, commands move to the background. A background command's output
-arrives as a new message when it exits; never poll or sleep for it. While it
-runs, only do work that doesn't need its output; otherwise end your turn.
+After 60s, commands move to the background, and the response's later calls
+are skipped. To run independent work at the same time, start it with
+background. A background command's output arrives as a new message when it
+exits; never poll or sleep for it. While it runs, only do work that doesn't
+need its output; otherwise end your turn.
 Do not use &, nohup, or disown.
 
 For servers and watch modes, which never exit, use tmux.
@@ -243,7 +245,7 @@ func (b *BashTool) run(ctx context.Context, req bashInput) llm.ToolOut {
 	out := res.out
 	if res.job != nil {
 		display.Background = &BashBackgroundDisplay{JobID: res.job.ID, LogPath: res.job.LogPath, PGID: res.job.PID}
-		return llm.ToolOut{LLMContent: llm.TextContent(out), Display: display}
+		return llm.ToolOut{LLMContent: llm.TextContent(out), Display: display, Backgrounded: !req.Background}
 	}
 	exitCode := 0
 	display.ExitCode = &exitCode

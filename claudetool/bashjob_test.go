@@ -139,6 +139,9 @@ func TestBashBackgroundsLongCommand(t *testing.T) {
 	if job.ConversationID != "conv-1" || job.ToolUseID != "toolu_1" || job.Command != command {
 		t.Errorf("job = %+v, want conversation, tool use, and command recorded", job)
 	}
+	if !out.Backgrounded {
+		t.Error("Backgrounded = false, want true so the response's later calls are skipped")
+	}
 	display := bashDisplayData(t, out.Display)
 	if display.ExitCode != nil {
 		t.Errorf("ExitCode = %d, want unknown while running", *display.ExitCode)
@@ -210,6 +213,9 @@ func TestBashBackgroundFieldSkipsForegroundWait(t *testing.T) {
 	}
 	if out.Error != nil {
 		t.Fatalf("error = %v", out.Error)
+	}
+	if out.Backgrounded {
+		t.Error("Backgrounded = true for an asked-for background job, want false so later calls run")
 	}
 	bg := <-jobs
 	if d := bashDisplayData(t, out.Display); d.Background == nil || d.Background.JobID != bg.job.ID {

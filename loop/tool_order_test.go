@@ -37,8 +37,6 @@ func (h *groupHarness) assertLog(t *testing.T, want ...string) {
 	h.mu.Lock()
 	got := slices.Clone(h.log)
 	h.mu.Unlock()
-	slices.Sort(got)
-	slices.Sort(want)
 	if !slices.Equal(got, want) {
 		t.Fatalf("log = %q, want %q", got, want)
 	}
@@ -53,11 +51,11 @@ type groupDirInput struct {
 }
 
 // tool records "name@cwd" when it starts, then waits for its release channel.
-func (h *groupHarness) tool(toolName string, sequential, endsTurn bool) *llm.Tool {
+// A backgrounded tool reports that its work is still running.
+func (h *groupHarness) tool(toolName string, backgrounded, endsTurn bool) *llm.Tool {
 	return &llm.Tool{
-		Name:       toolName,
-		Sequential: sequential,
-		EndsTurn:   endsTurn,
+		Name:     toolName,
+		EndsTurn: endsTurn,
 		Run: llm.RunJSON(func(_ context.Context, in groupInput) llm.ToolOut {
 			h.mu.Lock()
 			h.log = append(h.log, in.Name+"@"+h.cwd)
@@ -65,7 +63,7 @@ func (h *groupHarness) tool(toolName string, sequential, endsTurn bool) *llm.Too
 			if ch := h.release[in.Name]; ch != nil {
 				<-ch
 			}
-			return llm.ToolOut{LLMContent: llm.TextContent("ok:" + in.Name)}
+			return llm.ToolOut{LLMContent: llm.TextContent("ok:" + in.Name), Backgrounded: backgrounded}
 		}),
 	}
 }
@@ -106,7 +104,7 @@ func (h *groupHarness) changeDir() *llm.Tool {
 func (h *groupHarness) tools() []*llm.Tool {
 	return []*llm.Tool{
 		h.tool("work", false, false),
-		h.tool("seq", true, false),
+		h.tool("bg", true, false),
 		h.tool("finish", false, true),
 		h.cancelTool(),
 		h.changeDir(),
@@ -162,8 +160,10 @@ func assertResults(t *testing.T, got groupRun, calls []llm.Content, want ...stri
 		switch {
 		case text == notExecutedToolResultText:
 			text = "notstarted"
-		case strings.Contains(text, "preceding change_dir failed"):
+		case text == directoryFailedText:
 			text = "skipped"
+		case text == backgroundedText:
+			text = "backgrounded"
 		case strings.Contains(text, "turn-ending tools must be called alone"):
 			text = "rejected"
 		case r.ToolError:
@@ -175,21 +175,20 @@ func assertResults(t *testing.T, got groupRun, calls []llm.Content, want ...stri
 	}
 }
 
-func TestToolGroupsRunInDirectoryOrder(t *testing.T) {
+func TestToolCallsRunOneAtATimeInOrder(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
-		h := newGroupHarness(cancel, "a", "c", "d")
+		h := newGroupHarness(cancel, "a", "c")
 		calls := []llm.Content{call("work", "a"), cd("cd1", "/a"), call("work", "c"), call("work", "d"), cd("cd2", "b"), call("work", "e")}
 		done := startGroups(ctx, h.tools(), calls)
 
 		synctest.Wait()
-		h.assertLog(t, "a@/start") // the first group is blocked, so change_dir has not run
+		h.assertLog(t, "a@/start")
 		close(h.release["a"])
 		synctest.Wait()
-		h.assertLog(t, "a@/start", "cd:/a", "c@/a", "d@/a") // c and d are both running in /a
+		h.assertLog(t, "a@/start", "cd:/a", "c@/a") // d waits for c
 		close(h.release["c"])
-		close(h.release["d"])
 
 		got := <-done
 		if got.err != nil {
@@ -200,7 +199,20 @@ func TestToolGroupsRunInDirectoryOrder(t *testing.T) {
 	})
 }
 
-func TestToolGroupsFailureSkipsUntilAbsoluteRecovery(t *testing.T) {
+func TestToolCallsBackgroundedSkipsTheRest(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	h := newGroupHarness(cancel)
+	calls := []llm.Content{call("work", "a"), call("bg", "b"), cd("abs", "/abs"), call("work", "c")}
+	got := <-startGroups(ctx, h.tools(), calls)
+	if got.err != nil {
+		t.Fatal(got.err)
+	}
+	assertResults(t, got, calls, "ok:a", "ok:b", "backgrounded", "backgrounded")
+	h.assertLog(t, "a@/start", "b@/start")
+}
+
+func TestToolCallsFailureSkipsUntilAbsoluteRecovery(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	h := newGroupHarness(cancel)
@@ -226,7 +238,7 @@ func TestToolGroupsFailureSkipsUntilAbsoluteRecovery(t *testing.T) {
 	h.assertLog(t, "x@/start", "cd:missing", "cd:/missing-abs", "cd:/good", "w@/good", "cd:sub", "v@/good/sub")
 }
 
-func TestToolGroupsCancellationBlocksLaterGroups(t *testing.T) {
+func TestToolCallsCancellationBlocksLaterGroups(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		calls   []llm.Content
@@ -253,7 +265,7 @@ func TestToolGroupsCancellationBlocksLaterGroups(t *testing.T) {
 	}
 }
 
-func TestToolGroupsTurnEndingMustBeWholeResponse(t *testing.T) {
+func TestToolCallsTurnEndingMustBeWholeResponse(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		calls    []llm.Content
@@ -277,30 +289,4 @@ func TestToolGroupsTurnEndingMustBeWholeResponse(t *testing.T) {
 			h.assertLog(t, tc.wantLogs...)
 		})
 	}
-}
-
-func TestToolGroupsSequentialToolOrderSpansGroups(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
-		h := newGroupHarness(cancel, "s1", "s2", "s3", "s4")
-		calls := []llm.Content{call("seq", "s1"), call("seq", "s2"), cd("cd", "/a"), call("seq", "s3"), call("seq", "s4")}
-		done := startGroups(ctx, h.tools(), calls)
-
-		want := []string{"s1@/start"}
-		for i, next := range [][]string{{"s2@/start"}, {"cd:/a", "s3@/a"}, {"s4@/a"}} {
-			synctest.Wait()
-			h.assertLog(t, want...)
-			close(h.release[fmt.Sprintf("s%d", i+1)])
-			want = append(want, next...)
-		}
-		close(h.release["s4"])
-
-		got := <-done
-		if got.err != nil {
-			t.Fatal(got.err)
-		}
-		h.assertLog(t, want...)
-		assertResults(t, got, calls, "ok:s1", "ok:s2", "cwd:/a", "ok:s3", "ok:s4")
-	})
 }

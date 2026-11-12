@@ -72,7 +72,6 @@ type Config struct {
 	// requests. Tool-initiated LLM calls retain conversation-local affinity.
 	PromptCacheKey string
 	// OnToolProgress is called when a tool reports progress (partial output).
-	// It may be called concurrently by sibling tools.
 	OnToolProgress llm.ToolProgressFunc
 	// OnStreamDelta is called when the LLM streams a partial content delta.
 	OnStreamDelta func(llm.StreamDelta)

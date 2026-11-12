@@ -400,14 +400,6 @@ func TestScreencastSchemaIncludes(t *testing.T) {
 	}
 }
 
-func TestScreencastSiblingActionsRunSequentially(t *testing.T) {
-	tools := NewBrowseTools(t.Context(), 0)
-	t.Cleanup(tools.Close)
-	if !tools.CombinedTool().Sequential {
-		t.Fatal("browser actions must run sequentially so sibling screencast_start/eval/screencast_stop calls stay ordered")
-	}
-}
-
 // contentText extracts the text from a tool output, including errors.
 func contentText(t *testing.T, out llm.ToolOut) string {
 	t.Helper()

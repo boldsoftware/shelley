@@ -1722,106 +1722,7 @@ func TestExecuteToolCallsDoesNotPublishUnpersistedResults(t *testing.T) {
 	}
 }
 
-func TestExecuteToolCallsRunsConcurrently(t *testing.T) {
-	started := make(chan string, 2)
-	finished := make(chan string, 2)
-	releaseFirst := make(chan struct{})
-	releaseSecond := make(chan struct{})
-	testTool := &llm.Tool{
-		Name:        "parallel_test",
-		Description: "Waits until both calls have started",
-		InputSchema: llm.MustSchema(`{"type":"object","required":["name"],"properties":{"name":{"type":"string"}}}`),
-		Run: func(ctx context.Context, input json.RawMessage) llm.ToolOut {
-			var req struct {
-				Name string `json:"name"`
-			}
-			if err := json.Unmarshal(input, &req); err != nil {
-				return llm.ErrorToolOut(err)
-			}
-			started <- req.Name
-			var release <-chan struct{}
-			switch req.Name {
-			case "first":
-				release = releaseFirst
-			case "second":
-				release = releaseSecond
-			default:
-				return llm.ErrorfToolOut("unexpected call %q", req.Name)
-			}
-			select {
-			case <-release:
-				finished <- req.Name
-				return llm.ToolOut{LLMContent: llm.TextContent(req.Name)}
-			case <-ctx.Done():
-				return llm.ErrorToolOut(ctx.Err())
-			}
-		},
-	}
-
-	var recordedMessages []llm.Message
-	loop := NewLoop(Config{
-		LLM:   predictable.NewService(),
-		Tools: []*llm.Tool{testTool},
-		RecordMessage: func(_ context.Context, message llm.Message, _ llm.Usage, _ []llm.PurposedUsage) error {
-			recordedMessages = append(recordedMessages, message)
-			return nil
-		},
-	})
-	content := []llm.Content{
-		{ID: "first", Type: llm.ContentTypeToolUse, ToolName: testTool.Name, ToolInput: json.RawMessage(`{"name":"first"}`)},
-		{ID: "second", Type: llm.ContentTypeToolUse, ToolName: testTool.Name, ToolInput: json.RawMessage(`{"name":"second"}`)},
-	}
-
-	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-	defer cancel()
-	done := make(chan error, 1)
-	go func() {
-		done <- loop.executeToolCalls(ctx, content)
-	}()
-
-	for range 2 {
-		select {
-		case <-started:
-		case err := <-done:
-			close(releaseFirst)
-			close(releaseSecond)
-			t.Fatalf("executeToolCalls returned before both calls started: %v", err)
-		case <-ctx.Done():
-			close(releaseFirst)
-			close(releaseSecond)
-			<-done
-			t.Fatal("tool calls did not run concurrently")
-		}
-	}
-	close(releaseSecond)
-	select {
-	case name := <-finished:
-		if name != "second" {
-			t.Fatalf("%q finished while first call was blocked", name)
-		}
-	case <-ctx.Done():
-		close(releaseFirst)
-		<-done
-		t.Fatal("second call did not finish independently")
-	}
-	close(releaseFirst)
-	if err := <-done; err != nil {
-		t.Fatalf("executeToolCalls failed: %v", err)
-	}
-
-	if len(recordedMessages) != 1 {
-		t.Fatalf("recorded %d messages, want 1", len(recordedMessages))
-	}
-	results := recordedMessages[0].Content
-	if len(results) != 2 {
-		t.Fatalf("recorded %d tool results, want 2", len(results))
-	}
-	if results[0].ToolUseID != "first" || results[1].ToolUseID != "second" {
-		t.Errorf("tool results out of request order: %q, %q", results[0].ToolUseID, results[1].ToolUseID)
-	}
-}
-
-func TestExecuteToolCallsRunsSequentialToolInRequestOrder(t *testing.T) {
+func TestExecuteToolCallsRunsInRequestOrder(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		firstStarted := make(chan struct{})
 		releaseFirst := make(chan struct{})
@@ -1830,7 +1731,6 @@ func TestExecuteToolCallsRunsSequentialToolInRequestOrder(t *testing.T) {
 			Name:        "sequential_test",
 			Description: "Runs sibling calls in request order",
 			InputSchema: llm.MustSchema(`{"type":"object","required":["name"],"properties":{"name":{"type":"string"}}}`),
-			Sequential:  true,
 			Run: func(ctx context.Context, input json.RawMessage) llm.ToolOut {
 				var request struct {
 					Name string `json:"name"`
@@ -1887,14 +1787,13 @@ func TestExecuteToolCallsRunsSequentialToolInRequestOrder(t *testing.T) {
 	})
 }
 
-func TestExecuteToolCallsSkipsQueuedSequentialCallAfterCancellation(t *testing.T) {
+func TestExecuteToolCallsSkipsQueuedCallAfterCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	secondRan := false
 	tool := &llm.Tool{
 		Name:        "sequential_cancel",
 		Description: "Cancels before the queued call starts",
 		InputSchema: llm.MustSchema(`{"type":"object","required":["name"],"properties":{"name":{"type":"string"}}}`),
-		Sequential:  true,
 		Run: func(_ context.Context, input json.RawMessage) llm.ToolOut {
 			var request struct {
 				Name string `json:"name"`
@@ -2902,79 +2801,10 @@ func TestToolOtherUsageAttachedToToolResult(t *testing.T) {
 }
 
 // TestExecuteToolCallsCancellationPreservesOutput verifies the loop's
-// cancellation behavior for a concurrent multi-tool batch: completed tools
-// keep their real results, interrupted tools preserve partial output with the
-// cancelled sentinel appended, and exactly one ordered result message is
-// recorded despite the cancelled context.
-
-// TestExecuteToolCallsBarrierStartsAllSiblings verifies the batch start
-// contract: once a sibling batch is released, cancellation by one tool cannot
-// make scheduler-late siblings look as though they never started. It also
-// verifies that ordinary errors from those siblings are not rewritten merely
-// because their shared context is now cancelled.
-func TestExecuteToolCallsBarrierStartsAllSiblings(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-
-	started := make(chan string, 3)
-	tool := &llm.Tool{
-		Name:        "barrier",
-		Description: "test barrier semantics",
-		InputSchema: llm.EmptySchema(),
-		Run: func(_ context.Context, input json.RawMessage) llm.ToolOut {
-			var name string
-			if err := json.Unmarshal(input, &name); err != nil {
-				t.Fatalf("decode tool input: %v", err)
-			}
-			started <- name
-			if name == "cancel" {
-				cancel()
-				return llm.ErrorToolOut(context.Canceled)
-			}
-			return llm.ErrorToolOut(fmt.Errorf("ordinary %s failure", name))
-		},
-	}
-
-	var recorded llm.Message
-	l := NewLoop(Config{
-		Tools: []*llm.Tool{tool},
-		RecordMessage: func(_ context.Context, message llm.Message, _ llm.Usage, _ []llm.PurposedUsage) error {
-			recorded = message
-			return nil
-		},
-	})
-	content := []llm.Content{
-		{ID: "one", Type: llm.ContentTypeToolUse, ToolName: tool.Name, ToolInput: json.RawMessage(`"cancel"`)},
-		{ID: "two", Type: llm.ContentTypeToolUse, ToolName: tool.Name, ToolInput: json.RawMessage(`"two"`)},
-		{ID: "three", Type: llm.ContentTypeToolUse, ToolName: tool.Name, ToolInput: json.RawMessage(`"three"`)},
-	}
-
-	if err := l.executeToolCalls(ctx, content); err != context.Canceled {
-		t.Fatalf("executeToolCalls error = %v, want context.Canceled", err)
-	}
-
-	seen := map[string]bool{}
-	for range 3 {
-		seen[<-started] = true
-	}
-	for _, name := range []string{"cancel", "two", "three"} {
-		if !seen[name] {
-			t.Fatalf("%q did not run; siblings were not started as a cohort: %v", name, seen)
-		}
-	}
-	if len(recorded.Content) != 3 {
-		t.Fatalf("recorded results = %d, want 3", len(recorded.Content))
-	}
-	for _, result := range recorded.Content[1:] {
-		if !result.ToolError || !strings.Contains(result.ToolResult[0].Text, "ordinary") {
-			t.Errorf("ordinary sibling result = %+v", result)
-		}
-		if strings.Contains(result.ToolResult[0].Text, cancelledToolResultText) {
-			t.Errorf("ordinary sibling was misclassified as cancelled: %+v", result)
-		}
-	}
-}
-
+// cancellation behavior for a multi-tool response: completed tools keep their
+// real results, interrupted tools preserve partial output with the cancelled
+// sentinel appended, later tools never start, and exactly one ordered result
+// message is recorded despite the cancelled context.
 func TestExecuteToolCallsCancellationPreservesOutput(t *testing.T) {
 	var recordedMessages []llm.Message
 	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
@@ -3009,10 +2839,8 @@ func TestExecuteToolCallsCancellationPreservesOutput(t *testing.T) {
 				<-toolCtx.Done()
 				return llm.ErrorToolOut(fmt.Errorf("[command failed: %w]\npartial output line", toolCtx.Err()))
 			default:
-				// Sibling tools run concurrently after the upstream rebase, so
-				// this call may already be active when another sibling cancels.
-				<-toolCtx.Done()
-				return llm.ErrorToolOut(fmt.Errorf("[command failed: %w]\nthird partial output", toolCtx.Err()))
+				t.Errorf("%q ran after cancellation", in.Command)
+				return llm.ErrorfToolOut("ran")
 			}
 		},
 	}
@@ -3063,12 +2891,9 @@ func TestExecuteToolCallsCancellationPreservesOutput(t *testing.T) {
 		t.Errorf("cancelled tool result missing trailing sentinel: %q", r2.ToolResult[0].Text)
 	}
 
-	// Result 3: concurrent sibling either started before cancellation or
-	// observed cancellation before it started; both paths produce a cancelled
-	// error result with the sentinel.
+	// Result 3: never started.
 	r3 := msg.Content[2]
-	if r3.ToolUseID != "tc_3" || !r3.ToolError ||
-		!strings.HasSuffix(strings.TrimRight(r3.ToolResult[0].Text, "\r\n"), cancelledToolResultText) {
+	if r3.ToolUseID != "tc_3" || !r3.ToolError || r3.ToolResult[0].Text != notExecutedToolResultText {
 		t.Errorf("third tool result wrong: %+v", r3)
 	}
 
@@ -3080,7 +2905,7 @@ func TestExecuteToolCallsCancellationPreservesOutput(t *testing.T) {
 }
 
 // TestExecuteToolCallsCancelActiveSuccessWins verifies that a tool that
-// completes successfully despite a concurrent cancel keeps its real result.
+// completes successfully despite a cancel keeps its real result.
 func TestExecuteToolCallsCancelActiveSuccessWins(t *testing.T) {
 	var recordedMessages []llm.Message
 	recordFunc := func(ctx context.Context, message llm.Message, usage llm.Usage, otherUsage []llm.PurposedUsage) error {

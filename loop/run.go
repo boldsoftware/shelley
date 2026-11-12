@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"shelley.exe.dev/llm"
@@ -693,12 +692,27 @@ func (l *RunConfig) findTool(name string) *llm.Tool {
 var errToolEndedTurn = errors.New("tool ended turn")
 
 type toolCallExecution struct {
-	content  llm.Content
-	endsTurn bool
+	content      llm.Content
+	endsTurn     bool
+	backgrounded bool
 }
 
-// executeToolCalls runs directory-delimited groups in order, with concurrent
-// calls within each group, and appends results in original tool-call order.
+const (
+	directoryFailedText = "Not executed: a preceding change_dir failed. Use an absolute change_dir to recover."
+	backgroundedText    = "Not executed: a preceding command was still running, so it moved to the background. Call this again once that command finishes, if it still applies."
+)
+
+func isAbsoluteChangeDir(input json.RawMessage) bool {
+	var request struct {
+		Path string `json:"path"`
+	}
+	return json.Unmarshal(input, &request) == nil && filepath.IsAbs(request.Path)
+}
+
+// executeToolCalls runs the response's tool calls one at a time, in order,
+// like a script. A call that cannot run leaves its result as skipReason; a
+// failed change_dir, a call left running in the background, or cancellation
+// skips the rest.
 func (l *RunConfig) executeToolCalls(ctx context.Context, content []llm.Content, messages *[]llm.Message) error {
 	var calls []llm.Content
 	for _, c := range content {
@@ -712,49 +726,41 @@ func (l *RunConfig) executeToolCalls(ctx context.Context, content []llm.Content,
 
 	// Collect the usage of indirect LLM calls made by tools (keyword_search,
 	// tool install validation, subagent progress summaries, ...)
-	// so it can be attached to the tool-result message below. Tool calls run
-	// concurrently, so the accumulator is mutex-guarded.
+	// so it can be attached to the tool-result message below.
 	var otherUsage llm.UsageAccumulator
 	ctx = llm.WithUsageCollector(ctx, otherUsage.Collect)
 
 	toolResults := make([]toolCallExecution, len(calls))
-	directoryFailed := false
-	for first := 0; first < len(calls); {
-		directoryChange := calls[first].ToolName == "change_dir"
-		last := first + 1
-		if !directoryChange {
-			for last < len(calls) && calls[last].ToolName != "change_dir" {
-				last++
-			}
-		}
-
-		skipReason := ""
+	stopReason := ""
+	for i, call := range calls {
+		tool := l.findTool(call.ToolName)
+		skipReason := stopReason
 		if ctx.Err() != nil {
 			skipReason = notExecutedToolResultText
-		} else if directoryFailed {
-			var request struct {
-				Path string `json:"path"`
-			}
-			if !directoryChange || json.Unmarshal(calls[first].ToolInput, &request) != nil || !filepath.IsAbs(request.Path) {
-				skipReason = "Not executed: a preceding change_dir failed. Use an absolute change_dir to recover."
-			}
+		} else if stopReason == directoryFailedText && call.ToolName == "change_dir" && isAbsoluteChangeDir(call.ToolInput) {
+			skipReason = ""
+		} else if skipReason == "" && tool != nil && (tool.EndsTurn || (tool.EndsTurnWhen != nil && tool.EndsTurnWhen(call.ToolInput))) && len(calls) != 1 {
+			skipReason = "turn-ending tools must be called alone"
 		}
 		if skipReason != "" {
-			for i := first; i < last; i++ {
-				toolResults[i].content = llm.Content{
-					Type:       llm.ContentTypeToolResult,
-					ToolUseID:  calls[i].ID,
-					ToolError:  true,
-					ToolResult: llm.TextContent(skipReason),
-				}
+			toolResults[i].content = llm.Content{
+				Type:       llm.ContentTypeToolResult,
+				ToolUseID:  call.ID,
+				ToolError:  true,
+				ToolResult: llm.TextContent(skipReason),
 			}
-		} else {
-			l.executeToolGroup(ctx, calls[first:last], toolResults[first:last], len(calls))
+			continue
 		}
-		if directoryChange {
-			directoryFailed = toolResults[first].content.ToolError
+		toolResults[i] = l.executeToolCall(ctx, call, tool)
+		switch {
+		case call.ToolName == "change_dir":
+			stopReason = ""
+			if toolResults[i].content.ToolError {
+				stopReason = directoryFailedText
+			}
+		case toolResults[i].backgrounded:
+			stopReason = backgroundedText
 		}
-		first = last
 	}
 
 	contents := make([]llm.Content, len(toolResults))
@@ -788,65 +794,7 @@ func (l *RunConfig) executeToolCalls(ctx context.Context, content []llm.Content,
 	return nil
 }
 
-func (l *RunConfig) executeToolGroup(ctx context.Context, calls []llm.Content, toolResults []toolCallExecution, batchSize int) {
-	// Every worker reaches start before any tool is invoked. Cancellation
-	// before release produces a never-started result for every call.
-	var ready, finishedWorkers sync.WaitGroup
-	ready.Add(len(calls))
-	start := make(chan struct{})
-	run := false
-	sequentialTails := make(map[string]<-chan struct{})
-	for i, call := range calls {
-		tool := l.findTool(call.ToolName)
-		var predecessor <-chan struct{}
-		var successor chan struct{}
-		if tool != nil && tool.Sequential {
-			predecessor = sequentialTails[call.ToolName]
-			successor = make(chan struct{})
-			sequentialTails[call.ToolName] = successor
-		}
-
-		finishedWorkers.Go(func() {
-			if successor != nil {
-				defer close(successor)
-			}
-			ready.Done()
-			<-start
-			execute := run
-			if execute && predecessor != nil {
-				<-predecessor
-				execute = ctx.Err() == nil
-			}
-			if !execute {
-				toolResults[i].content = llm.Content{
-					Type:       llm.ContentTypeToolResult,
-					ToolUseID:  call.ID,
-					ToolError:  true,
-					ToolResult: llm.TextContent(notExecutedToolResultText),
-				}
-				return
-			}
-			if tool != nil && (tool.EndsTurn || (tool.EndsTurnWhen != nil && tool.EndsTurnWhen(call.ToolInput))) && batchSize != 1 {
-				toolResults[i].content = llm.Content{
-					Type:       llm.ContentTypeToolResult,
-					ToolUseID:  call.ID,
-					ToolError:  true,
-					ToolResult: llm.TextContent("turn-ending tools must be called alone"),
-				}
-				return
-			}
-			toolResults[i] = l.executeToolCall(ctx, call, tool)
-		})
-	}
-	ready.Wait()
-	run = ctx.Err() == nil
-	close(start)
-	finishedWorkers.Wait()
-}
-
-// executeToolCall runs one client-side tool call after its sibling cohort has
-// crossed the start barrier. Do not pre-check ctx: a released sibling is
-// logically started even when cancellation reaches it before the scheduler.
+// executeToolCall runs one client-side tool call.
 func (l *RunConfig) executeToolCall(ctx context.Context, call llm.Content, tool *llm.Tool) toolCallExecution {
 	l.Logger.Debug("executing tool", "name", call.ToolName, "id", call.ID)
 
@@ -928,8 +876,6 @@ func (l *RunConfig) executeToolCall(ctx context.Context, call llm.Content, tool 
 	toolResultContent := result.LLMContent
 	if result.Error != nil {
 		text := result.Error.Error()
-		// Cancellation is a property of this tool's own result, not the shared
-		// context: a sibling may cancel after this tool has already failed.
 		if errors.Is(result.Error, context.Canceled) {
 			l.Logger.Info("tool cancelled by user", "name", call.ToolName)
 			text = strings.TrimRight(text, "\r\n") + "\n\n" + cancelledToolResultText
@@ -951,7 +897,8 @@ func (l *RunConfig) executeToolCall(ctx context.Context, call llm.Content, tool 
 			ToolUseEndTime:   &endTime,
 			Display:          result.Display,
 		},
-		endsTurn: (tool.EndsTurn || result.EndTurn) && result.Error == nil,
+		endsTurn:     (tool.EndsTurn || result.EndTurn) && result.Error == nil,
+		backgrounded: result.Backgrounded,
 	}
 }
 

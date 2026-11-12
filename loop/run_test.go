@@ -200,100 +200,13 @@ func TestRunDrainsPendingBetweenModelRequests(t *testing.T) {
 	}
 }
 
-func TestRunConcurrentToolsPreserveResponseOrder(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		started := make(chan string, 2)
-		release := make(chan struct{})
-		tools := make([]*llm.Tool, 0, 2)
-		service := &runTestService{}
-		for _, name := range []string{"first", "second"} {
-			tools = append(tools, &llm.Tool{
-				Name: name, InputSchema: llm.MustSchema(`{"type":"object","properties":{}}`),
-				Run: func(context.Context, json.RawMessage) llm.ToolOut {
-					started <- name
-					<-release
-					return llm.ToolOut{LLMContent: llm.TextContent(name)}
-				},
-			})
-			service.first = append(service.first, llm.Content{Type: llm.ContentTypeToolUse, ID: name, ToolName: name, ToolInput: json.RawMessage(`{}`)})
-		}
-		done := make(chan error, 1)
-		go func() {
-			done <- Run(t.Context(), RunConfig{LLM: service, Messages: []llm.Message{{Role: llm.MessageRoleUser, Content: llm.TextContent("work")}}, Tools: tools})
-		}()
-		synctest.Wait()
-		if len(started) != 2 {
-			t.Fatalf("only %d of 2 tools started concurrently", len(started))
-		}
-		close(release)
-		if err := <-done; err != nil {
-			t.Fatal(err)
-		}
-		results := service.requests[1].Messages[2].Content
-		for i, name := range []string{"first", "second"} {
-			if results[i].ToolUseID != name || results[i].ToolResult[0].Text != name {
-				t.Fatalf("result %d = %+v, want %s", i, results[i], name)
-			}
-		}
-	})
-}
-
-func TestRunSequentialToolsPreserveRequestOrder(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		started := make(chan string, 4)
-		release := make(chan struct{})
-		runTool := func(_ context.Context, input json.RawMessage) llm.ToolOut {
-			var request struct{ Name string }
-			if err := json.Unmarshal(input, &request); err != nil {
-				return llm.ErrorToolOut(err)
-			}
-			started <- request.Name
-			<-release
-			return llm.ToolOut{LLMContent: llm.TextContent(request.Name)}
-		}
-		tools := []*llm.Tool{
-			{Name: "browser", Sequential: true, Run: runTool},
-			{Name: "bash", Run: runTool},
-		}
-		service := &runTestService{first: []llm.Content{
-			{Type: llm.ContentTypeToolUse, ID: "navigate", ToolName: "browser", ToolInput: json.RawMessage(`{"name":"navigate"}`)},
-			{Type: llm.ContentTypeToolUse, ID: "first", ToolName: "bash", ToolInput: json.RawMessage(`{"name":"first"}`)},
-			{Type: llm.ContentTypeToolUse, ID: "screenshot", ToolName: "browser", ToolInput: json.RawMessage(`{"name":"screenshot"}`)},
-			{Type: llm.ContentTypeToolUse, ID: "second", ToolName: "bash", ToolInput: json.RawMessage(`{"name":"second"}`)},
-		}}
-		done := make(chan error, 1)
-		go func() {
-			done <- Run(t.Context(), RunConfig{LLM: service, Messages: []llm.Message{llm.UserStringMessage("work")}, Tools: tools})
-		}()
-		synctest.Wait()
-		var concurrent []string
-		for len(started) > 0 {
-			concurrent = append(concurrent, <-started)
-		}
-		close(release)
-		if err := <-done; err != nil {
-			t.Fatal(err)
-		}
-		slices.Sort(concurrent)
-		if want := []string{"first", "navigate", "second"}; !slices.Equal(concurrent, want) {
-			t.Errorf("concurrent calls = %v, want %v before navigation completes", concurrent, want)
-		}
-		results := service.requests[1].Messages[2].Content
-		for i, name := range []string{"navigate", "first", "screenshot", "second"} {
-			if results[i].ToolUseID != name || results[i].ToolResult[0].Text != name {
-				t.Errorf("result %d = %+v, want %s", i, results[i], name)
-			}
-		}
-	})
-}
-
-func TestRunSkipsQueuedSequentialCallAfterCancellation(t *testing.T) {
+func TestRunSkipsQueuedCallAfterCancellation(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		started := make(chan string, 2)
 		tool := &llm.Tool{
-			Name: "browser", Sequential: true,
+			Name: "browser",
 			Run: func(ctx context.Context, input json.RawMessage) llm.ToolOut {
 				var request struct{ Name string }
 				if err := json.Unmarshal(input, &request); err != nil {

@@ -746,7 +746,6 @@ examples as needed, use emulate_help, network_help, accessibility_help, or profi
 		Name:        "browser",
 		Description: description,
 		InputSchema: json.RawMessage(schema),
-		Sequential:  true,
 		Run:         b.runCombinedJSON,
 	}
 }

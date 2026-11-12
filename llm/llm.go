@@ -397,9 +397,6 @@ type Tool struct {
 	// EndsTurnWhen identifies inputs that may end the turn. Those calls must
 	// run alone, so the loop checks before starting any sibling tools.
 	EndsTurnWhen func(json.RawMessage) bool `json:"-"`
-	// Sequential runs sibling calls to this tool one at a time in request order.
-	// Other tools in the same sibling batch still run concurrently.
-	Sequential bool
 	// Cache indicates whether to use prompt caching for this tool
 	Cache bool
 
@@ -409,8 +406,8 @@ type Tool struct {
 	ServerSide bool
 
 	// The Run function is automatically called when the tool is used.
-	// Run functions may be called concurrently with adjacent tools, including
-	// other calls to the same tool unless Sequential is set.
+	// Calls in one response run one at a time, in order; calls from different
+	// conversations may run concurrently.
 	// The input to Run function is the input to the tool, as provided by Claude, in compliance with the input schema.
 	// The outputs from Run will be sent back to Claude.
 	// If you do not want to respond to the tool call request from Claude, return ErrDoNotRespond.
@@ -453,6 +450,9 @@ type ToolOut struct {
 	// Unlike Tool.EndsTurn, this is chosen per call (e.g. message_parent
 	// distinguishes a progress report from a final report).
 	EndTurn bool
+	// Backgrounded reports that the call's work outlived it and is still
+	// running, unasked; the response's later calls are not run.
+	Backgrounded bool
 	// Display is content to be displayed to the user.
 	// The type of content is set by the tool and coordinated with the UIs.
 	// It should be JSON-serializable.
