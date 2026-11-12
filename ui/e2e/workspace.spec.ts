@@ -923,26 +923,49 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
   }
 });
 
-test("a row turns bold, unread, only once its agent stops working", async ({ page, request }) => {
-  const { conversationId } = await createConversationViaAPIWithDetails(request, "Hello", {
-    conversationOptions: { tool_overrides: { message_user: "on" } },
-  });
-  const row = page.locator(`.conversation-item[data-conversation-id="${conversationId}"]`);
-  const bold = page.locator(`.conversation-item-unread[data-conversation-id="${conversationId}"]`);
-  await page.goto("/");
-  await openWorkspace(page);
-  const chat = (message: string) =>
-    request.post(`/api/conversation/${conversationId}/chat`, {
-      data: { message, model: "predictable" },
+for (const workspace of [true, false]) {
+  test(`a row turns bold, unread, only once its agent stops working in ${workspace ? "workspace mode" : "stock Shelley"}`, async ({
+    page,
+    request,
+  }) => {
+    if (!workspace) {
+      const off = await request.post("/feature-flags", {
+        data: { name: "workspace", value: false },
+      });
+      expect(off.ok()).toBeTruthy();
+      await page.setViewportSize({ width: 1280, height: 900 });
+    }
+    const { conversationId } = await createConversationViaAPIWithDetails(request, "Hello", {
+      conversationOptions: { tool_overrides: { message_user: "on" } },
     });
-  expect((await chat('message_user: {"text":"Ready","end_turn":true}')).ok()).toBeTruthy();
-  await expect(bold).toBeVisible();
-  expect((await chat("delay: 3")).ok()).toBeTruthy();
-  await expect(row.locator(".working-indicator")).toBeVisible();
-  await expect(bold).toHaveCount(0);
-  await expect(row.locator(".working-indicator")).toHaveCount(0, { timeout: 15000 });
-  await expect(bold).toBeVisible();
-});
+    const row = page.locator(`.conversation-item[data-conversation-id="${conversationId}"]`);
+    const bold = page.locator(
+      `.conversation-item-unread[data-conversation-id="${conversationId}"]`,
+    );
+    await page.goto(workspace ? "/" : "/new");
+    if (workspace) await openWorkspace(page);
+    await expect(row).toBeVisible();
+    const title = row.locator(".conversation-title");
+    const chat = (message: string) =>
+      request.post(`/api/conversation/${conversationId}/chat`, {
+        data: { message, model: "predictable" },
+      });
+    expect((await chat('message_user: {"text":"Ready","end_turn":true}')).ok()).toBeTruthy();
+    await expect(bold).toBeVisible();
+    await expect(title).toHaveCSS("font-weight", "700");
+    expect((await chat("delay: 3")).ok()).toBeTruthy();
+    await expect(row.locator(".working-indicator")).toBeVisible();
+    await expect(bold).toHaveCount(0);
+    await expect(title).not.toHaveCSS("font-weight", "700");
+    await expect(row.locator(".working-indicator")).toHaveCount(0, { timeout: 15000 });
+    await expect(bold).toBeVisible();
+    await expect(title).toHaveCSS("font-weight", "700");
+    await row.click();
+    await expect(row).toHaveAttribute("aria-current", "page");
+    await expect(bold).toHaveCount(0);
+    await expect(title).not.toHaveCSS("font-weight", "700");
+  });
+}
 
 test("opening a chat clears its bold title across browsers and keeps the open row quiet", async ({
   page,

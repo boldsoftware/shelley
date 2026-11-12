@@ -626,11 +626,9 @@ const deletable = computed(
 const isActive = computed(
   () => props.conversation.conversation_id === ctx.currentConversationId.value,
 );
-// In workspace mode an unread row's title is bold, like an unread email, once
-// its agent stops working (until then its working dot shows).
+// An unread row's title is bold once its agent stops working.
 const unread = computed(
   () =>
-    workspaceMode &&
     !isActive.value &&
     !isWorking.value &&
     convState.value.unread &&
