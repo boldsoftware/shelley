@@ -30,6 +30,9 @@ const (
 	liveFragmentsKept    = 500
 	liveFragmentsMax     = 1000
 	liveInstructionsKept = 256
+	// Event IDs remembered to ignore a retried batch; more than a client
+	// queues while its POST is in doubt.
+	liveEventIDsKept = 1024
 	// Allow a backgrounded browser time to reconnect both sides of the relay.
 	liveIdle = 5 * time.Minute
 )
@@ -51,7 +54,7 @@ const liveSaveDelay = time.Second
 
 // liveEvent is the part of a Live data-channel event a call reads.
 type liveEvent struct {
-	typ                            string
+	id, typ                        string
 	delta                          string
 	startMs, endMs                 float64
 	offsetMs                       json.RawMessage
@@ -65,6 +68,7 @@ func parseLiveEvent(raw json.RawMessage) (e liveEvent, ok bool) {
 	if json.Unmarshal(raw, &fields) != nil || fields == nil {
 		return e, false
 	}
+	json.Unmarshal(fields["event_id"], &e.id)
 	json.Unmarshal(fields["type"], &e.typ)
 	var delta any
 	if json.Unmarshal(fields["delta"], &delta) == nil {
@@ -130,6 +134,8 @@ type liveCall struct {
 	taken       map[int]bool // user ordinals reserved by tasks; released on failure
 	tails       []*liveTail
 	seen        map[string]bool
+	handled     map[string]bool // recent event IDs, oldest first in handledIDs
+	handledIDs  []string
 	pending     map[string]*livePending
 	order       []string // pending, oldest first
 	sendTimes   []time.Time
@@ -171,7 +177,7 @@ func newLiveCall(id, conversationID string, initialSeq int64, deliver liveDelive
 	c := &liveCall{
 		id: id, conversationID: conversationID, deliver: deliver, save: save,
 		logger: logger.With("liveCall", id, "conversationID", conversationID),
-		active: true, done: make(chan struct{}), seen: map[string]bool{}, pending: map[string]*livePending{},
+		active: true, done: make(chan struct{}), seen: map[string]bool{}, handled: map[string]bool{}, pending: map[string]*livePending{},
 		kick: make(chan struct{}, 1), lastSeen: initialSeq, latest: initialSeq, unseen: map[int64]liveRow{},
 		taken: map[int]bool{}, wake: make(chan struct{}), attached: make(chan struct{}),
 		newDeliveryID: uuid.NewString,
@@ -192,6 +198,17 @@ func (c *liveCall) handle(events []liveEvent) {
 	for _, e := range events {
 		if !c.active {
 			return
+		}
+		if e.id != "" {
+			if c.handled[e.id] {
+				continue
+			}
+			c.handled[e.id] = true
+			c.handledIDs = append(c.handledIDs, e.id)
+			if len(c.handledIDs) > liveEventIDsKept {
+				delete(c.handled, c.handledIDs[0])
+				c.handledIDs = c.handledIDs[1:]
+			}
 		}
 		switch e.typ {
 		case "session.input_transcript.delta", "session.output_transcript.delta":

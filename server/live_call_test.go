@@ -750,6 +750,22 @@ func TestLiveCallSavesTranscript(t *testing.T) {
 	})
 }
 
+// A client retries a batch whose response it lost; the call applies each
+// event once.
+func TestLiveCallIgnoresReplayedEvents(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newLiveHarness(t)
+		for range 2 {
+			h.event(`{"event_id":"e1","type":"session.input_transcript.delta","delta":"Hi","start_ms":0,"end_ms":500}`)
+			h.event(`{"event_id":"e2","type":"session.input_transcript.delta","delta":" there","start_ms":500,"end_ms":900}`)
+		}
+		h.event(`{"type":"session.input_transcript.delta","delta":"!","start_ms":900,"end_ms":950}`)
+		h.event(`{"type":"session.input_transcript.delta","delta":"!","start_ms":950,"end_ms":990}`)
+		h.advance(liveSaveDelay)
+		expectEqual(t, "saved", h.savedCount(), 4)
+	})
+}
+
 // A request is not delivered pointing at a transcript that failed to save;
 // the deltas are kept for the next save.
 func TestLiveCallTranscriptSaveFailure(t *testing.T) {
