@@ -97,6 +97,8 @@ export interface DrawerCtx {
   selectConversation: (c: Conversation) => void;
   toggleSubagents: (e: MouseEvent, conversationId: string) => void;
   handleStartRename: (e: MouseEvent, conversation: Conversation) => void;
+  // Archives a conversation, once the user confirms deleting its VM if it has one.
+  archive: (e: MouseEvent, conversationId: string) => void;
   // A row's actions, shared by its "…" menu and the drawer's right-click menu.
   conversationActions: (conversation: Conversation) => MenuItem[];
   openContextMenu: (e: MouseEvent, conversation: Conversation) => void;

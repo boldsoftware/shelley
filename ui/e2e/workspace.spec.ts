@@ -172,8 +172,14 @@ test("root opens the pinned Assistant; explicit conversation links remain select
   await expect(row(archived.conversationId)).toHaveClass(/conversation-item-archived/);
   await expect(page.getByTestId("assistant-row")).toBeVisible();
   await expect(page.getByTestId("assistant-row").getByRole("button")).toHaveCount(0);
-  await row(archived.conversationId).click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Restore", exact: true }).click();
+  // An archived row's Restore and Delete take its Archive's place; a touch
+  // screen shows them on the open row.
+  const restore = row(archived.conversationId).getByRole("button", { name: "Restore" });
+  await expect(restore).toBeHidden();
+  await row(archived.conversationId).click();
+  await openWorkspace(page);
+  await expect(row(archived.conversationId).getByRole("button", { name: "Delete" })).toBeVisible();
+  await restore.click();
   await expect(row(archived.conversationId)).not.toHaveClass(/conversation-item-archived/);
   await toggle.click();
   await expect(row(archived.conversationId)).toBeVisible();
@@ -404,7 +410,7 @@ test("agent project edits arrive through workspace SSE without navigating away f
   await expect(page.locator("h1.header-title")).toHaveText("Assistant");
 });
 
-test("project and conversation ⋯ menus: delete waits for an empty project; move to project", async ({
+test("a project's ⋯ menu: delete waits for an empty project; a moved task changes groups", async ({
   page,
   request,
 }) => {
@@ -458,13 +464,12 @@ test("project and conversation ⋯ menus: delete waits for an empty project; mov
   await page.goBack();
   await openWorkspace(page);
 
-  await conversationRow.getByRole("button", { name: "Actions", exact: true }).click();
-  const conversationMenu = page.getByTestId("conversation-actions-menu");
-  // Projects, not tags, organize tasks: no Edit tags.
-  await expect(conversationMenu.getByRole("menuitem").first()).toBeVisible();
-  await expect(conversationMenu.getByRole("menuitem", { name: "Edit tags" })).toHaveCount(0);
-  await conversationMenu.getByRole("menuitem", { name: "Move to project" }).click();
-  await conversationMenu.getByRole("menuitem", { name: to, exact: true }).click();
+  // Tasks move through the API (the Assistant), not the sidebar.
+  const moved = await request.put(`/api/conversation/${projectConversationId}/project`, {
+    headers,
+    data: { project: to },
+  });
+  expect(moved.ok()).toBeTruthy();
   await expect(toGroup.locator(conversationRow)).toBeVisible();
   await expect(fromGroup.locator(conversationRow)).toHaveCount(0);
   // The first conversation unfolds its project; the emptied one folds.
@@ -885,12 +890,12 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
   await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-size", "10px");
   await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-weight", "700");
   await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("line-height", "12px");
-  // On a touch screen, its age shows at the right beside the ⋯.
+  // Its age shows at the right; a touch screen shows Archive beside it
+  // only on the open row.
   const time = row.locator(".conversation-time");
   await expect(time).toHaveText("now");
-  const timeBox = (await time.boundingBox())!;
-  const menuBox = (await row.getByRole("button", { name: "Actions" }).boundingBox())!;
-  expect(menuBox.x - (timeBox.x + timeBox.width)).toBeLessThan(8);
+  await expect(row.getByRole("button", { name: "Archive", exact: true })).toBeHidden();
+  await expect(row.getByRole("button", { name: "Actions" })).toHaveCount(0);
   // A task's build status is a label on its title line.
   await expect(row.getByRole("status", { name: "Shelley build" })).toHaveText("Installed");
   await expect(row.locator(".conversation-preview, .conversation-meta")).toHaveCount(0);
@@ -991,23 +996,47 @@ test("opening a chat clears New across browsers and keeps the open row quiet", a
 });
 
 test.describe("with a mouse", () => {
-  test.use({ viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false });
+  test.use({ hasTouch: false, isMobile: false, viewport: { width: 1280, height: 800 } });
 
-  test("a row's ⋯ takes its age's place while pointed at", async ({ page, request }) => {
+  test("a task row's Archive takes its time's place on hover or keyboard focus; no menu", async ({
+    page,
+    request,
+  }) => {
     const { conversationId } = await createConversationViaAPIWithDetails(request, "Hello");
     const row = page.locator(`.conversation-item[data-conversation-id="${conversationId}"]`);
     await page.goto("/");
     await openWorkspace(page);
     const time = row.locator(".conversation-time");
-    const menu = row.getByRole("button", { name: "Actions" });
+    const archive = row.getByRole("button", { name: "Archive", exact: true });
     await expect(time).toHaveCSS("opacity", "1");
-    await expect(menu).toHaveCSS("opacity", "0");
+    await expect(archive).toHaveCSS("opacity", "0");
     const timeBox = (await time.boundingBox())!;
     await row.hover();
     await expect(time).toHaveCSS("opacity", "0");
-    await expect(menu).not.toHaveCSS("opacity", "0");
-    const menuBox = (await menu.boundingBox())!;
-    expect(menuBox.x).toBeLessThan(timeBox.x + timeBox.width);
-    expect(menuBox.x + menuBox.width).toBeGreaterThan(timeBox.x);
+    await expect(archive).not.toHaveCSS("opacity", "0");
+    // Archive sits where the time was.
+    const archiveBox = (await archive.boundingBox())!;
+    expect(archiveBox.x).toBeLessThan(timeBox.x + timeBox.width);
+    expect(archiveBox.x + archiveBox.width).toBeGreaterThan(timeBox.x);
+    // No ⋯, and a right-click leaves the browser's own menu.
+    await expect(row.getByRole("button", { name: "Actions" })).toHaveCount(0);
+    await row.click({ button: "right" });
+    await expect(page.getByTestId("conversation-context-menu")).toBeHidden();
+    await page.mouse.move(0, 0);
+    await expect(archive).toHaveCSS("opacity", "0");
+    await expect(time).toHaveCSS("opacity", "1");
+    // From the row, Tab reaches it; back on the row, it stays.
+    await row.focus();
+    await page.keyboard.press("Tab");
+    await expect(archive).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(row).toBeFocused();
+    await expect(archive).not.toHaveCSS("opacity", "0");
+    await archive.click();
+    await expect(row).toHaveCount(0);
+    const archived = await request.get(`/api/conversation/${conversationId}`);
+    expect(
+      ((await archived.json()) as { conversation: { archived: boolean } }).conversation.archived,
+    ).toBe(true);
   });
 });

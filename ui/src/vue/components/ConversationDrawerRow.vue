@@ -97,8 +97,8 @@
           <DeleteButton :conversation-id="conversation.conversation_id" />
         </div>
         <!-- When it last changed (a working row's dot says "now" instead),
-             right-aligned beside the ⋯, whose place every row keeps so the
-             times line up. With a mouse, the ⋯ takes the time's place. -->
+             right-aligned beside the row's actions, whose place every row
+             keeps so the times line up. -->
         <div class="drawer-row-end">
           <CompactTime v-if="!isPlaceholder && !isWorking" :timestamp="conversation.updated_at" />
           <div class="conversation-actions drawer-actions-top">
@@ -109,6 +109,35 @@
               :label="ctx.t('actions')"
               testid="conversation-actions-menu"
             />
+            <!-- Workspace mode's rows have buttons, shown on hover, in place of a menu. -->
+            <template v-else-if="workspaceMode && !isDraft && !isPlaceholder">
+              <template v-if="itemArchived">
+                <Button
+                  class="btn-icon-sm drawer-actions-trigger"
+                  text
+                  severity="secondary"
+                  size="small"
+                  v-tooltip.top="ctx.t('restore')"
+                  :aria-label="ctx.t('restore')"
+                  @click.stop="ctx.handleUnarchive($event, conversation.conversation_id)"
+                >
+                  <i class="pi pi-replay" aria-hidden="true" />
+                </Button>
+                <DeleteButton :conversation-id="conversation.conversation_id" />
+              </template>
+              <Button
+                v-else
+                class="btn-icon-sm drawer-actions-trigger"
+                text
+                severity="secondary"
+                size="small"
+                v-tooltip.top="ctx.t('archive')"
+                :aria-label="ctx.t('archive')"
+                @click.stop="ctx.archive($event, conversation.conversation_id)"
+              >
+                <i class="pi pi-inbox" aria-hidden="true" />
+              </Button>
+            </template>
           </div>
         </div>
       </div>
@@ -405,17 +434,12 @@
       </div>
     </div>
 
-    <!-- Workspace mode's archived rows keep these in their ⋯ menu; Delete
-         there asks for confirmation here. -->
+    <!-- Workspace mode's archived rows have these beside their time. -->
     <div
-      v-if="
-        itemArchived &&
-        (!workspaceMode || ctx.pendingDeleteId.value === conversation.conversation_id)
-      "
+      v-if="itemArchived && !workspaceMode"
       class="conversation-actions drawer-actions-row-offset"
     >
       <Button
-        v-if="!workspaceMode"
         class="btn-icon-sm"
         text
         severity="secondary"
@@ -673,8 +697,9 @@ const isExpanded = computed(() =>
 const itemArchived = computed(() => props.conversation.archived);
 const hasActions = computed(
   () =>
+    !workspaceMode &&
     !isDraft.value &&
-    (!itemArchived.value || workspaceMode) &&
+    !itemArchived.value &&
     !isPlaceholder.value &&
     actionsMenuItems.value.length > 0,
 );

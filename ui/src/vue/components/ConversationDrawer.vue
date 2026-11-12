@@ -1639,36 +1639,33 @@ function vmCleanupIssues(project: string | undefined) {
 }
 
 // --- Row actions ---
+// Archiving a conversation that owns a VM deletes the VM, so it asks first.
+function archive(e: MouseEvent, id: string) {
+  void workspace.confirmArchive(id, () => handleArchive(e, id));
+}
+// Stock Shelley's ⋯ and right-click menu; workspace mode's rows have an
+// Archive button instead.
 function conversationActions(conversation: Conversation): MenuItem[] {
   const id = conversation.conversation_id;
   if (workspace.isAssistant(id)) return [];
-  // Archiving a conversation that owns a VM deletes the VM, so it asks first.
   const note = workspace.archiveNote(id);
-  const archive: MenuItem = {
-    label: note ? `${t("archive")}…` : t("archive"),
-    icon: "pi pi-inbox",
-    class: note ? "drawer-menu-danger" : undefined,
-    command: ({ originalEvent }) =>
-      void workspace.confirmArchive(id, () => handleArchive(originalEvent as MouseEvent, id)),
-  };
-  // Stock Shelley lists Archive first; workspace mode sets it apart, last.
   const items: MenuItem[] = [
-    ...(workspaceMode ? [] : [archive]),
+    {
+      label: note ? `${t("archive")}…` : t("archive"),
+      icon: "pi pi-inbox",
+      class: note ? "drawer-menu-danger" : undefined,
+      command: ({ originalEvent }) => archive(originalEvent as MouseEvent, id),
+    },
     {
       label: t("rename"),
       icon: "pi pi-pencil",
       command: ({ originalEvent }) => handleStartRename(originalEvent as MouseEvent, conversation),
     },
-    // Projects, not tags, organize workspace mode's tasks.
-    ...(workspaceMode
-      ? []
-      : [
-          {
-            label: t("editTags"),
-            icon: "pi pi-tag",
-            command: ({ originalEvent }) => handleOpenTagEditor(originalEvent as MouseEvent, id),
-          } satisfies MenuItem,
-        ]),
+    {
+      label: t("editTags"),
+      icon: "pi pi-tag",
+      command: ({ originalEvent }) => handleOpenTagEditor(originalEvent as MouseEvent, id),
+    },
   ];
   const current = workspace.projectFor(id);
   const targets = workspace.data.value?.projects.filter((p) => p.name !== current?.name) ?? [];
@@ -1695,25 +1692,6 @@ function conversationActions(conversation: Conversation): MenuItem[] {
       })),
     });
   }
-  if (workspaceMode)
-    items.push(
-      { separator: true },
-      ...(conversation.archived
-        ? ([
-            {
-              label: t("restore"),
-              icon: "pi pi-replay",
-              command: ({ originalEvent }) => void handleUnarchive(originalEvent as MouseEvent, id),
-            },
-            {
-              label: `${t("delete_")}…`,
-              icon: "pi pi-trash",
-              class: "drawer-menu-danger",
-              command: ({ originalEvent }) => handleDeleteClick(originalEvent as MouseEvent, id),
-            },
-          ] satisfies MenuItem[])
-        : [archive]),
-    );
   return items;
 }
 const workingIds = computed(() => workingConversationIds(props.conversations));
@@ -2544,6 +2522,7 @@ provide(DrawerCtxKey, {
   selectConversation: (c: Conversation) => emit("select-conversation", c),
   toggleSubagents,
   handleStartRename,
+  archive,
   conversationActions,
   openContextMenu,
   contextMenuId,

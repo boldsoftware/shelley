@@ -14854,8 +14854,10 @@ kbd {
   flex-shrink: 0;
 }
 
-/* With a mouse, a row's ⋯ takes its time's place while the row is pointed
-   at, focused, acted on or open; touch screens show both side by side. */
+/* With a mouse, workspace mode's row buttons (Archive; Restore and Delete)
+   take the time's place while the row is pointed at, keyboard-focused or
+   confirming a delete, as a ⋯ menu does; touch screens, which can't point, show them
+   beside the time on the open row. */
 @media (hover: hover) and (pointer: fine) {
   .workspace-mode .drawer-row-end {
     display: grid;
@@ -14873,16 +14875,29 @@ kbd {
     .conversation-item:is(
       .context-menu-target,
       :hover,
-      :focus-within,
-      :has(.drawer-actions-trigger[aria-expanded="true"])
+      :focus-visible,
+      :has(:focus-visible, .drawer-actions-trigger[aria-expanded="true"], .drawer-delete-confirm)
     )
-    .drawer-row-end:has(.drawer-actions-trigger)
+    .drawer-row-end:has(.drawer-actions-trigger, .drawer-delete-confirm)
     .conversation-time,
   .workspace-mode
-    .conversation-item:not(.context-menu-target, :hover, :focus-within)
-    .drawer-actions-trigger:not([aria-expanded="true"]) {
+    .conversation-item:not(
+      .context-menu-target,
+      :hover,
+      :focus-visible,
+      :has(:focus-visible, .drawer-actions-trigger[aria-expanded="true"], .drawer-delete-confirm)
+    )
+    .drawer-actions-top
+    > * {
     opacity: 0;
     transition: opacity 0.15s;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .workspace-mode .conversation-item:not(.active) .drawer-actions-top > * {
+    opacity: 0;
+    visibility: hidden;
   }
 }
 
