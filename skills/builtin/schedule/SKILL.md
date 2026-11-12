@@ -15,7 +15,7 @@ Name shelley-calling units `shelley-<name>.{service,timer}`. The service ExecSta
 shelley client chat -p '<prompt>' -cwd '<working_directory>'
 ```
 
-Each timer firing always creates a new conversation so that no conversation grows without bound.
+Each timer firing creates a new conversation. To wake up your own conversation instead, add `-c $SHELLEY_CONVERSATION_ID`.
 
 The prompt baked into the service unit should concisely convey the overarching goals and context from the user, preferably in their own words, as well as the specific task being achieved by this scheduled invocation. The prompt must always include the originating conversation ID (from `$SHELLEY_CONVERSATION_ID`), so that new agent can refer to the originating conversation for additional context if needed.
 
@@ -30,5 +30,3 @@ expands `$SHELLEY_CONVERSATION_ID`; tmux's server environment may be stale.
 ```bash
 tmux new-session -d "sleep 3600 && shelley client chat -c $SHELLEY_CONVERSATION_ID -p 'Resume: <what next>'"
 ```
-
-Use a new conversation for recurring tasks, as above.
