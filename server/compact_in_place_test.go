@@ -579,10 +579,8 @@ func TestBuildCompactionKeepsCallsWithOutputs(t *testing.T) {
 	}
 }
 
-// TestBuildCompactionOrphans: a call can lack its output (the server stopped
-// while it ran), or an output its call. Such a row gets a row of its own, and
-// a range may cover it, but not end at the call or start at the output: that
-// would leave the output, or the call, behind.
+// Orphaned calls and outputs stay out of collapse; eligible ranges on either
+// side get fresh notes.
 func TestBuildCompactionOrphans(t *testing.T) {
 	items := []contextItem{
 		textItem(1, llm.MessageRoleUser, "do it"),
@@ -604,19 +602,16 @@ func TestBuildCompactionOrphans(t *testing.T) {
 		return claudetool.CompactCollapse{From: from, To: to, Note: "n"}
 	}
 	_, err = buildCompaction(items, 20_000, piTokenCounter, claudetool.CompactInPlaceInput{Collapse: []claudetool.CompactCollapse{col("2", "4"), col("6", "7")}})
-	want := "2 problems:\n" +
-		"- collapse 2-4: 4 is a tool call without its output; end the range before it\n" +
-		"- collapse 6-7: 6 is a tool output without its call; start the range after it\n\n" + compactRetryGuidance
-	if err == nil || err.Error() != want {
-		t.Fatalf("got %v", err)
+	for _, want := range []string{
+		"2 problems:", `compact {"from":"2","to":"2"}`, `keep {"from":"4","to":"4"}`,
+		`keep {"from":"6","to":"6"}`, `compact {"from":"7","to":"7"}`, compactRetryGuidance,
+	} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("missing %q: %v", want, err)
+		}
 	}
-	// A range may cover the user's messages.
-	withUser := slices.Insert(slices.Clone(items), 4, textItem(10, llm.MessageRoleUser, "back"))
-	if _, err := buildCompaction(withUser, 20_000, piTokenCounter, claudetool.CompactInPlaceInput{Collapse: []claudetool.CompactCollapse{col("2", "5")}}); err != nil {
-		t.Fatal(err)
-	}
-	// Otherwise they go with the range.
-	for _, r := range []claudetool.CompactCollapse{col("2", "5"), col("4", "6"), col("5", "7")} {
+	// User messages can still be collapsed, but orphaned rows cannot.
+	for _, r := range []claudetool.CompactCollapse{col("1", "2"), col("2", "2"), col("5", "5")} {
 		c, err := buildCompaction(items, 20_000, piTokenCounter, claudetool.CompactInPlaceInput{Collapse: []claudetool.CompactCollapse{r}})
 		if err != nil {
 			t.Fatal(err)
@@ -639,6 +634,10 @@ func TestCompactIndexReadabilityGuidance(t *testing.T) {
 		"readable sentences or bullets with normal whitespace",
 		"words, numbers, and units clearly separated",
 		"not by removing spaces or joining words",
+		"Aim for ranges of ~20k tokens or less",
+		"not a hard limit",
+		"Never split an indivisible tool exchange",
+		"write fresh notes for the compact ranges",
 	} {
 		if !strings.Contains(index, want) {
 			t.Errorf("index missing %q", want)
@@ -906,11 +905,11 @@ func TestCompactIndexRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, table, _ := strings.Cut(index, "```\n")
-	want := "id  role       tokens  content\n" +
-		"1   user*      2       text \"do it\"\n" +
-		"2   assistant  117     thinking, bash \"cd /x && ls -la slow_ok=false\" → 100\n" +
-		"4   assistant  49      bash \"make\" → trimmed, browser \"navigate http://localhost/ await=false timeout=0\" → 1\n" +
-		"6   assistant  1       text \"done\"\n" +
+	want := "id  role       tokens  select          content\n" +
+		"1   user*      2       start,end       text \"do it\"\n" +
+		"2   assistant  117     start,end,trim  thinking, bash \"cd /x && ls -la slow_ok=false\" → 100\n" +
+		"4   assistant  49      start,end,trim  bash \"make\" → trimmed, browser \"navigate http://localhost/ await=false timeout=0\" → 1\n" +
+		"6   assistant  1       start,end       text \"done\"\n" +
 		"```\n"
 	if table != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", table, want)
@@ -931,7 +930,7 @@ func TestBuildCompactionTrimsOnlyOlderOutputs(t *testing.T) {
 		t.Fatalf("trim 2: %+v, %v", c, err)
 	}
 	for id, want := range map[claudetool.IndexID]string{
-		"6": "in the recent part, which is kept as is",
+		"6": "in the recent part (from 6 on), which is kept as is",
 		"4": "already trimmed",
 		"1": "has no tool output",
 		"3": "unknown id",
@@ -943,12 +942,48 @@ func TestBuildCompactionTrimsOnlyOlderOutputs(t *testing.T) {
 	}
 }
 
+func TestBuildCompactionTokenLimits(t *testing.T) {
+	t.Run("large single row", func(t *testing.T) {
+		items := []contextItem{
+			textItem(1, llm.MessageRoleAssistant, strings.Repeat("x", 4*30_001)),
+			textItem(2, llm.MessageRoleAssistant, strings.Repeat("x", 4*25_000)),
+		}
+		c, err := buildCompaction(items, 20_000, piTokenCounter, claudetool.CompactInPlaceInput{
+			Collapse: []claudetool.CompactCollapse{{From: "1", To: "1", Note: "Done."}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(c.Squishes) != 1 || c.Squishes[0].ToSequenceID != 1 {
+			t.Fatalf("unexpected squishes: %+v", c.Squishes)
+		}
+	})
+	for _, tokens := range []int{20_000, 20_878, 30_000, 30_001, 60_000} {
+		t.Run(fmt.Sprint(tokens), func(t *testing.T) {
+			items := []contextItem{
+				textItem(1, llm.MessageRoleAssistant, strings.Repeat("x", 4*(tokens-1))),
+				textItem(2, llm.MessageRoleAssistant, "xxxx"),
+				textItem(3, llm.MessageRoleAssistant, strings.Repeat("x", 4*25_000)),
+			}
+			c, err := buildCompaction(items, 20_000, piTokenCounter, claudetool.CompactInPlaceInput{
+				Collapse: []claudetool.CompactCollapse{{From: "1", To: "2", Note: "Done."}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(c.Squishes) != 1 || c.Squishes[0].FromSequenceID != 1 || c.Squishes[0].ToSequenceID != 2 {
+				t.Fatalf("unexpected squishes: %+v", c.Squishes)
+			}
+		})
+	}
+}
+
 func TestBuildCompaction(t *testing.T) {
 	big := strings.Repeat("x", 4*15_000) // ~15k tokens
 	items := []contextItem{
 		textItem(1, llm.MessageRoleUser, "do it"),
 		callItem(2, "a"),
-		outputItem(3, "a", strings.Repeat("x", 4*25_000)),
+		outputItem(3, "a", strings.Repeat("x", 4*35_000)),
 		textItem(4, llm.MessageRoleAssistant, big),
 		textItem(5, llm.MessageRoleAssistant, "a"),
 		textItem(6, llm.MessageRoleUser, "also this"),
@@ -968,9 +1003,9 @@ func TestBuildCompaction(t *testing.T) {
 		"nothing to compact":    {},
 		"skip compacts nothing": {Action: "skip", Trim: []claudetool.IndexID{"8"}},
 		"recent part":           {Collapse: []claudetool.CompactCollapse{col("9", "10")}},
-		"at most":               {Collapse: []claudetool.CompactCollapse{col("2", "4")}},
-		"overlaps":              {Collapse: []claudetool.CompactCollapse{col("8", "9"), col("9", "9")}},
-		"note is empty":         {Collapse: []claudetool.CompactCollapse{{From: "8", To: "9"}}},
+
+		"overlaps":      {Collapse: []claudetool.CompactCollapse{col("8", "9"), col("9", "9")}},
+		"note is empty": {Collapse: []claudetool.CompactCollapse{{From: "8", To: "9"}}},
 	} {
 		if _, err := buildCompaction(items, 20_000, piTokenCounter, in); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("want error %q, got %v", want, err)
@@ -979,17 +1014,16 @@ func TestBuildCompaction(t *testing.T) {
 	// Every problem is reported at once, and nothing is compacted.
 	_, err := buildCompaction(items, 20_000, piTokenCounter, claudetool.CompactInPlaceInput{
 		Trim:     []claudetool.IndexID{"nope"},
-		Collapse: []claudetool.CompactCollapse{col("99", "2"), col("2", "4")},
+		Collapse: []claudetool.CompactCollapse{col("99", "2"), {From: "2", To: "4"}},
 	})
 	want := "3 problems:\n" +
 		"- trim nope: unknown id; use ids from the index\n" +
 		"- collapse 99-2: unknown id; use ids from the index\n" +
-		"- collapse 2-4: covers ~"
+		"- collapse 2-4: note is empty"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("want error starting %q, got %v", want, err)
 	}
-	// Over the limit is fine for one row, here a tool call and its output,
-	// and a range may cover the user's messages.
+	// Large ranges and ranges covering the user's messages are allowed.
 	c, err := buildCompaction(items, 20_000, piTokenCounter, claudetool.CompactInPlaceInput{Collapse: []claudetool.CompactCollapse{col("8", "9"), col("2", "2"), col("5", "7"), col("1", "1")}})
 	if err != nil {
 		t.Fatal(err)

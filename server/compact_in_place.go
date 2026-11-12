@@ -34,11 +34,8 @@ const (
 	// ConversationOptions.CompactNudgeTokens is unset.
 	defaultCompactNudgeTokens = 200_000
 	// compactNudgeStep is the distance between later nudges.
-	compactNudgeStep = 50_000
-	// maxCollapseTokens bounds the history one collapse may cover, so that a
-	// single note never stands for too much. A single message, or a single
-	// tool call and its output, may exceed it.
-	maxCollapseTokens = 20_000
+	compactNudgeStep     = 50_000
+	targetCollapseTokens = 20_000
 )
 
 // inPlaceCompactor is the claudetool.InPlaceCompactor of the loop of one
@@ -314,6 +311,7 @@ func buildCompaction(history []contextItem, keepRecentTokens int, tc tokenCounte
 		return c, err
 	}
 	rows, recent := splitRows(items, recentStart(items, keepRecentTokens, tc))
+	starts, ends := toolPairBoundaries(history)
 	var problems []string
 	var trimmed []int
 	for _, id := range in.Trim {
@@ -325,7 +323,7 @@ func buildCompaction(history []contextItem, keepRecentTokens int, tc tokenCounte
 		case r < 0:
 			problem("unknown id; use ids from the index")
 		case r >= recent:
-			problem("in the recent part, which is kept as is")
+			problem("in the recent part (from %s on), which is kept as is; select only indexed rows", rowID(rows[recent]))
 		case slices.Contains(trimmed, r):
 			problem("listed twice")
 		case !slices.ContainsFunc(rows[r], func(it contextItem) bool { return hasContent(it.message, llm.ContentTypeToolResult) }):
@@ -353,15 +351,17 @@ func buildCompaction(history []contextItem, keepRecentTokens int, tc tokenCounte
 		case j < i:
 			problem("from comes after to")
 			continue
-		case j >= recent:
-			problem("reaches into the recent part (from %s on), which is kept as is", rowID(rows[recent]))
+		}
+		parts := splitCollapseRange(rows, recent, i, j, starts, ends)
+		if slices.ContainsFunc(parts, func(p collapsePart) bool { return p.keep }) {
+			if j >= recent {
+				problem("reaches into the recent part (from %s on), which is kept as is; %s", rowID(rows[recent]), collapseSplitPlan(rows, parts))
+			} else {
+				problem("contains rows that must stay out of collapse; %s", collapseSplitPlan(rows, parts))
+			}
 			continue
-		case orphanOutput(rows[i]):
-			problem("%s is a tool output without its call; start the range after it", rowID(rows[i]))
-			continue
-		case orphanCall(rows[j]):
-			problem("%s is a tool call without its output; end the range before it", rowID(rows[j]))
-			continue
+		}
+		switch {
 		case slices.ContainsFunc(spans, func(s span) bool { return i <= s.j && s.i <= j }):
 			problem("overlaps another collapse")
 			continue
@@ -376,11 +376,8 @@ func buildCompaction(history []contextItem, keepRecentTokens int, tc tokenCounte
 		case strings.TrimSpace(col.Note) == "":
 			problem("note is empty")
 			continue
-		case tokens > maxCollapseTokens && j > i:
-			problem("covers ~%d tokens; at most ~%d per collapse unless it is a single row, so split it", tokens, maxCollapseTokens)
-			continue
 		case (len(col.Note)+3)/4 >= tokens:
-			problem("note is not shorter than the ~%d tokens it replaces", tokens)
+			problem("note is not shorter than the ~%d tokens it replaces (note ~%d tokens)", tokens, (len(col.Note)+3)/4)
 			continue
 		}
 		last := rows[j][len(rows[j])-1]
@@ -397,6 +394,48 @@ func buildCompaction(history []contextItem, keepRecentTokens int, tc tokenCounte
 	// are disjoint, so order them as they appear.
 	slices.SortFunc(c.Squishes, func(a, b db.CompactionSquish) int { return int(a.FromSequenceID - b.FromSequenceID) })
 	return c, nil
+}
+
+func collapsibleRow(row []contextItem, starts, ends map[int64]bool) bool {
+	return !orphanOutput(row) && !orphanCall(row) && starts[row[0].from] && ends[row[len(row)-1].to]
+}
+
+type collapsePart struct {
+	from, to int
+	keep     bool
+}
+
+func splitCollapseRange(rows [][]contextItem, recent, from, to int, starts, ends map[int64]bool) []collapsePart {
+	var parts []collapsePart
+	for i := from; i <= to; i++ {
+		keep := i >= recent || !collapsibleRow(rows[i], starts, ends)
+		if len(parts) > 0 && parts[len(parts)-1].keep == keep {
+			parts[len(parts)-1].to = i
+		} else {
+			parts = append(parts, collapsePart{from: i, to: i, keep: keep})
+		}
+	}
+	return parts
+}
+
+func collapseSplitPlan(rows [][]contextItem, parts []collapsePart) string {
+	var b strings.Builder
+	b.WriteString("Auto-split plan (write a fresh note for each chosen compact range; smaller ranges within these are fine):")
+	compact := false
+	for _, p := range parts {
+		action := "compact"
+		if p.keep {
+			action = "keep"
+		} else {
+			compact = true
+		}
+		fmt.Fprintf(&b, "\n  %s {\"from\":%q,\"to\":%q}", action, rowID(rows[p.from]), rowID(rows[p.to]))
+	}
+	b.WriteString("\nKeep rows out of collapse. Only outputs marked trim in the index may still be explicitly trimmed")
+	if !compact {
+		b.WriteString("\nNo compactable ranges remain; trim eligible outputs or skip")
+	}
+	return b.String()
 }
 
 // carriesTask reports whether it is a message from the user (or the parent
@@ -420,29 +459,32 @@ func carriesTask(it contextItem) (bool, error) {
 }
 
 // splitRows groups items into the index's rows, and returns the index of the
-// first row of the recent part, which starts at items[recent]. A message with
-// tool calls shares a row with the message carrying their outputs, which
-// follows it; so a range of rows cannot split a call from its output. The
-// recent part never starts at an output, so no row straddles it.
+// first row of the recent part. Calls, their results, and any intervening
+// messages share an indivisible row.
 func splitRows(items []contextItem, recent int) (rows [][]contextItem, recentRow int) {
-	group := func(items []contextItem) {
-		for k := 0; k < len(items); k++ {
-			if k+1 < len(items) && hasContent(items[k].message, llm.ContentTypeToolUse) && isToolResultMessage(items[k+1].message) {
-				rows = append(rows, items[k:k+2])
-				k++
+	_, ends := toolPairBoundaries(items)
+	group := func(from, to int) {
+		first := from
+		for k := from; k < to; k++ {
+			if k+1 < to && (!ends[items[k].to] ||
+				hasContent(items[k].message, llm.ContentTypeToolUse) && isToolResultMessage(items[k+1].message)) {
 				continue
 			}
-			rows = append(rows, items[k:k+1])
+			rows = append(rows, items[first:k+1])
+			first = k + 1
 		}
 	}
-	group(items[:recent])
+	group(0, recent)
 	recentRow = len(rows)
-	group(items[recent:])
+	group(recent, len(items))
 	return rows, recentRow
 }
 
-// rowID is the id of a row in the index: that of its first item.
+// rowID names a message, an adjacent exchange, or a larger source span.
 func rowID(row []contextItem) string {
+	if len(row) > 1 && !(len(row) == 2 && hasContent(row[0].message, llm.ContentTypeToolUse) && isToolResultMessage(row[1].message)) {
+		return itemID(row[0]) + ".." + itemID(row[len(row)-1])
+	}
 	return itemID(row[0])
 }
 
@@ -451,16 +493,16 @@ func indexOfRow(rows [][]contextItem, id claudetool.IndexID) int {
 }
 
 // taskRows reports for each row whether it carries the task (see
-// carriesTask). Rows of a call and its output never do.
+// carriesTask), including messages inside a tool exchange.
 func taskRows(rows [][]contextItem) ([]bool, error) {
 	task := make([]bool, len(rows))
 	for i, row := range rows {
-		if len(row) > 1 {
-			continue
-		}
-		var err error
-		if task[i], err = carriesTask(row[0]); err != nil {
-			return nil, err
+		for _, it := range row {
+			carries, err := carriesTask(it)
+			if err != nil {
+				return nil, err
+			}
+			task[i] = task[i] || carries
 		}
 	}
 	return task, nil
@@ -539,7 +581,12 @@ func recentStart(items []contextItem, keepRecentTokens int, tc tokenCounter) int
 	for i, it := range items {
 		msgs[i] = it.message
 	}
-	return findPiCutPoint(msgs, keepRecentTokens, tc)
+	cut := findPiCutPoint(msgs, keepRecentTokens, tc)
+	starts, _ := toolPairBoundaries(items)
+	for cut > 0 && !starts[items[cut].from] {
+		cut--
+	}
+	return cut
 }
 
 func itemID(it contextItem) string {
@@ -564,8 +611,12 @@ sequence_id (see the previous-conversations skill).
 
 Then call compact_in_place with action "compact": trim lists ids of rows whose
 tool outputs you no longer need; collapse lists {from, to, note} ranges of ids
-from the table. A range may not cover more than ~%dk tokens unless it is a
-single row. Rows marked * are messages from the user or the parent and notes
+from the table. Aim for ranges of ~%dk tokens or less. This is a suggestion,
+not a hard limit: keep a larger coherent range together when useful.
+Never split an indivisible tool exchange. Trim unneeded outputs first.
+Leave rows without both start/end flags out of collapse. If they interrupt a
+range, use the auto-split plan and write fresh notes for the compact ranges.
+Rows marked * include messages from the user or the parent and notes
 and summaries from earlier compactions: they carry the task and its rules. A
 range may cover them, but its note must keep what of them still matters:
 requests, preferences, corrections, open questions.`
@@ -580,6 +631,7 @@ func compactIndex(history []contextItem, overhead, keepRecentTokens int, tc toke
 	}
 	recent := recentStart(items, keepRecentTokens, tc)
 	rows, recentRow := splitRows(items, recent)
+	starts, ends := toolPairBoundaries(history)
 	listed := 0
 	update := false
 	if id, ok := earlierIndexRecentPart(history); ok {
@@ -607,6 +659,15 @@ func compactIndex(history []contextItem, overhead, keepRecentTokens int, tc toke
 	}
 	fmt.Fprintf(&b, recentPartLine+"\n",
 		itemID(items[recent]), len(items)-recent, tc.items(items[recent:]))
+	last := recentRow - 1
+	for last >= 0 && !collapsibleRow(rows[last], starts, ends) {
+		last--
+	}
+	if last >= 0 {
+		fmt.Fprintf(&b, "The last collapsible row is %s; do not select the protected recent rows.\n", rowID(rows[last]))
+	} else {
+		b.WriteString("No older rows can be collapsed; outputs marked trim can still be trimmed.\n")
+	}
 	b.WriteString("\n")
 	if update {
 		if listed >= recentRow {
@@ -616,18 +677,23 @@ func compactIndex(history []contextItem, overhead, keepRecentTokens int, tc toke
 		b.WriteString("The latest index above still applies, with its guidance. These rows have left\n" +
 			"the recent part since:\n\n```\n")
 	} else {
-		fmt.Fprintf(&b, compactIndexGuidance, maxCollapseTokens/1000)
-		b.WriteString("\n\nOne row per message, oldest first, except that a tool call and its output\n" +
-			"share a row. id is the sequence_id (of the call, for a shared row), or s<n>.<i>\n" +
+		fmt.Fprintf(&b, compactIndexGuidance, targetCollapseTokens/1000)
+		b.WriteString("\n\nOne row per message, oldest first, except that calls, their results, and\n" +
+			"intervening messages share one indivisible row. id is the sequence_id\n" +
+			"(of the call, for an adjacent pair), first..last for a larger group, or s<n>.<i>\n" +
 			"for a note from an earlier compaction. tokens are estimated; `→ N` gives the\n" +
-			"tokens of a call's output, or says it is trimmed or missing.\n\n```\n")
+			"tokens of a call's output, or says it is trimmed or missing.\n" +
+			"select lists eligible range boundaries (start/end) and outputs to trim.\n" +
+			"Copy exact row IDs, not output sequence IDs or IDs from before a compaction.\n" +
+			"Every row in a collapse range must be marked start,end; never cross a kept row.\n" +
+			"Only trim rows marked trim; already-trimmed outputs need no further work.\n\n```\n")
 	}
 	task, err := taskRows(rows)
 	if err != nil {
 		return "", err
 	}
 	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "id\trole\ttokens\tcontent")
+	fmt.Fprintln(tw, "id\trole\ttokens\tselect\tcontent")
 	toolNames := map[string]string{}
 	for i, row := range rows[:recentRow] {
 		// Earlier rows still name the calls of later outputs.
@@ -646,10 +712,25 @@ func compactIndex(history []contextItem, overhead, keepRecentTokens int, tc toke
 		if task[i] {
 			role += "*"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", rowID(row), role, tc.items(row), description)
+		var eligible []string
+		if collapsibleRow(row, starts, ends) {
+			eligible = append(eligible, "start", "end")
+		}
+		if len(rowTrims(row)) > 0 {
+			eligible = append(eligible, "trim")
+		}
+		flags := strings.Join(eligible, ",")
+		if flags == "" {
+			flags = "-"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\t%s\n", rowID(row), role, tc.items(row), flags, description)
 	}
 	tw.Flush()
 	b.WriteString("```\n")
+	parts := splitCollapseRange(rows, recentRow, listed, recentRow-1, starts, ends)
+	if slices.ContainsFunc(parts, func(p collapsePart) bool { return p.keep }) {
+		b.WriteString("\n" + collapseSplitPlan(rows, parts) + "\n")
+	}
 	return b.String(), nil
 }
 

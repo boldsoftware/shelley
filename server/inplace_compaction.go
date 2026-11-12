@@ -112,6 +112,22 @@ func applyInPlaceCompaction(items []contextItem, c db.InPlaceCompaction, convers
 		if i < 0 || j < 0 || j < i {
 			return nil, fmt.Errorf("squish: range %d-%d does not align with messages in context", s.FromSequenceID, s.ToSequenceID)
 		}
+		for _, p := range toolPairs(out) {
+			if !p.call || !p.result {
+				continue
+			}
+			inside, outside := false, false
+			for _, k := range p.positions {
+				if k >= i && k <= j {
+					inside = true
+				} else {
+					outside = true
+				}
+			}
+			if inside && outside {
+				return nil, fmt.Errorf("squish: range %d-%d splits a tool call from its result", s.FromSequenceID, s.ToSequenceID)
+			}
+		}
 		if hasContent(out[i].message, llm.ContentTypeToolResult) {
 			return nil, fmt.Errorf("squish: range %d-%d starts with a tool result whose tool use precedes it", s.FromSequenceID, s.ToSequenceID)
 		}
@@ -131,6 +147,52 @@ func applyInPlaceCompaction(items []contextItem, c db.InPlaceCompaction, convers
 		out = append(out[:i], append([]contextItem{summary}, out[j+1:]...)...)
 	}
 	return hideItems(out, c.HiddenSequenceIDs, c.HiddenToolUseIDs)
+}
+
+type toolPair struct {
+	positions    []int
+	call, result bool
+}
+
+func toolPairs(items []contextItem) map[string]toolPair {
+	pairs := map[string]toolPair{}
+	for i, it := range items {
+		for _, c := range it.message.Content {
+			id := c.ID
+			switch c.Type {
+			case llm.ContentTypeToolUse:
+			case llm.ContentTypeToolResult:
+				id = c.ToolUseID
+			default:
+				continue
+			}
+			p := pairs[id]
+			p.positions = append(p.positions, i)
+			p.call = p.call || c.Type == llm.ContentTypeToolUse
+			p.result = p.result || c.Type == llm.ContentTypeToolResult
+			pairs[id] = p
+		}
+	}
+	return pairs
+}
+
+// toolPairBoundaries marks cuts that keep every matching call/result together.
+func toolPairBoundaries(items []contextItem) (starts, ends map[int64]bool) {
+	delta := make([]int, len(items)+1)
+	for _, p := range toolPairs(items) {
+		if p.call && p.result {
+			delta[p.positions[0]+1]++
+			delta[p.positions[len(p.positions)-1]+1]--
+		}
+	}
+	starts, ends = map[int64]bool{}, map[int64]bool{}
+	open := 0
+	for i, it := range items {
+		open += delta[i]
+		starts[it.from] = open == 0
+		ends[it.to] = open+delta[i+1] == 0
+	}
+	return starts, ends
 }
 
 // hideItems drops the original messages with sequence ids seqs, and the tool
