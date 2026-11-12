@@ -163,7 +163,6 @@ export const upgoer5: TranslationKeys = {
   sendResultToAgent: "Tell the helper what happened",
   removeAction: "Take away",
   editProject: "Change work",
-  projectFormIntro: "Words to follow, code homes and jobs for every talk in this work.",
   projectInstructions: "Words to follow (AGENTS.md)",
   projectInstructionsHint: "Words like in AGENTS.md, added to every talk in this work.",
   workingDirectory: "Work folder",

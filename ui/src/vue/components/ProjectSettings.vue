@@ -5,7 +5,6 @@
   <section class="project-page" :aria-label="t('editProject')">
     <div class="project-page-body">
       <form id="project-form" class="project-form project-page-form" @submit.prevent="saveProject">
-        <p class="project-muted">{{ t("projectFormIntro") }}</p>
         <label for="project-instructions">{{ t("projectInstructions") }}</label>
         <textarea
           id="project-instructions"

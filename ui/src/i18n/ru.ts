@@ -165,7 +165,6 @@ export const ru: TranslationKeys = {
   sendResultToAgent: "Отправить результат агенту",
   removeAction: "Удалить",
   editProject: "Изменить проект",
-  projectFormIntro: "Общие инструкции, репозитории и действия для всех разговоров в этом проекте.",
   projectInstructions: "Инструкции проекта (AGENTS.md)",
   projectInstructionsHint:
     "Инструкции в стиле AGENTS.md, добавляемые к каждому разговору в этом проекте.",

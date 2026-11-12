@@ -164,8 +164,6 @@ export const es: TranslationKeys = {
   sendResultToAgent: "Enviar el resultado al agente",
   removeAction: "Quitar",
   editProject: "Editar proyecto",
-  projectFormIntro:
-    "Instrucciones, repositorios y acciones compartidos para todas las conversaciones de este proyecto.",
   projectInstructions: "Instrucciones del proyecto (AGENTS.md)",
   projectInstructionsHint:
     "Instrucciones al estilo de AGENTS.md que se añaden a cada conversación de este proyecto.",

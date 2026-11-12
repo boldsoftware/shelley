@@ -160,7 +160,6 @@ export interface TranslationKeys {
   sendResultToAgent: string;
   removeAction: string;
   editProject: string;
-  projectFormIntro: string;
   projectInstructions: string;
   projectInstructionsHint: string;
   workingDirectory: string;

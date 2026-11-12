@@ -164,7 +164,6 @@ export const ja: TranslationKeys = {
   sendResultToAgent: "結果をエージェントに送る",
   removeAction: "削除",
   editProject: "プロジェクトを編集",
-  projectFormIntro: "このプロジェクトのすべての会話に共通する指示、リポジトリ、アクション。",
   projectInstructions: "プロジェクトの指示 (AGENTS.md)",
   projectInstructionsHint: "このプロジェクトの各会話に追加される AGENTS.md 形式の指示。",
   workingDirectory: "作業ディレクトリ",
