@@ -358,7 +358,7 @@ test.describe("in workspace mode", () => {
     await page.setViewportSize({ width: 1100, height: 1400 });
     await page.screenshot({ path: "test-results/project-commit-identity.png" });
     await page.getByRole("button", { name: "Save project" }).click();
-    await expect(page.getByRole("status")).toContainText("Saved");
+    await expect(editor.getByRole("status")).toContainText("Saved");
     const workspace = (await (await request.get("/api/workspace", { headers })).json()) as {
       projects: { name: string; commit_identity: object }[];
     };

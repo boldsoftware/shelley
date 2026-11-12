@@ -55,7 +55,11 @@ test("a task's install-custom run shows on its row as the stream sends it", asyn
   const id = conversation.conversationId;
   await page.goto("/");
   await openWorkspace(page);
-  const build = page.getByRole("region", { name: "Shelley build", exact: true });
+  // The line that follows this task's row: the worker's earlier specs leave
+  // other builds.
+  const build = page.locator(
+    `.conversation-item[data-conversation-id="${id}"] + section[aria-label="Shelley build"]`,
+  );
   const restart = build.getByRole("button", { name: "Restart Shelley", exact: true });
   await expect(build).toHaveCount(0);
 
@@ -86,7 +90,10 @@ test("title-only rows show the build as a badge", async ({ page, request }) => {
   await report(request, conversation.conversationId, "verifying");
   await page.goto("/");
   await openWorkspace(page);
-  const badge = page.getByRole("status", { name: "Shelley build", exact: true });
+  // Scoped to this task's row: the worker's earlier specs leave other builds.
+  const badge = page
+    .locator(`.conversation-item[data-conversation-id="${conversation.conversationId}"]`)
+    .getByRole("status", { name: "Shelley build", exact: true });
   await expect(badge).toHaveText("Verifying…");
   await report(request, conversation.conversationId, "installed");
   await expect(badge).toHaveText("Installed");

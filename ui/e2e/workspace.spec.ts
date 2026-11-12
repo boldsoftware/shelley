@@ -22,12 +22,15 @@ test.afterEach(async ({ request }) => {
 });
 
 async function openWorkspace(page: Page) {
-  if (!(await page.locator(".drawer").isVisible())) {
-    await page.getByRole("button", { name: "Open tasks", exact: true }).click();
-  } else if (await page.getByRole("button", { name: "Open tasks", exact: true }).isVisible()) {
-    await page.getByRole("button", { name: "Open tasks", exact: true }).click();
-  }
-  await expect(page.getByTestId("assistant-row")).toBeVisible();
+  // An off-canvas mobile drawer still counts as visible; open it explicitly.
+  // isVisible() doesn't wait, so retry until the page has rendered its
+  // header (and with it the button, on narrow screens) or the drawer.
+  const open = page.getByRole("button", { name: "Open tasks", exact: true });
+  const row = page.getByTestId("assistant-row");
+  await expect(async () => {
+    if (await open.isVisible()) await open.click();
+    await expect(row).toBeInViewport({ timeout: 1000 });
+  }).toPass();
 }
 
 test("the dev-prod-tabs flag adds a prod tab that links to exe.dev integration setup", async ({

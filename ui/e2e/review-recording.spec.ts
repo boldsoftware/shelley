@@ -99,6 +99,12 @@ async function waitForCommit(overlay: Locator) {
   ).toBeVisible({ timeout: 30_000 });
 }
 
+// The send is several requests plus IndexedDB work and re-renders: ~0.6s of
+// browser CPU, so under CI load it can take well over expect's default 5s.
+async function expectSent(overlay: Locator) {
+  await expect(overlay.getByTestId("review-recording-sent")).toBeVisible({ timeout: 30_000 });
+}
+
 async function openDiffs(page: Page, slug: string, viewport = { width: 1500, height: 900 }) {
   await page.setViewportSize(viewport);
   await page.goto(`/c/${slug}`);
@@ -193,7 +199,7 @@ test.describe("Narrated review recording", () => {
       await expect(said).toHaveCount(0);
 
       await overlay.getByTestId("review-record-stop").click();
-      await expect(overlay.getByTestId("review-recording-sent")).toBeVisible();
+      await expectSent(overlay);
       await expect(overlay.locator(".diff-viewer-close")).toBeEnabled();
       // Once sent, the header is back.
       await expect(status).toHaveCount(0);
@@ -415,7 +421,7 @@ test.describe("Narrated review recording", () => {
       await page.unroute("**/api/upload/raw*", failUploads);
       await page.goto(url);
       await overlay.getByTestId("review-recording-send").click();
-      await expect(overlay.getByTestId("review-recording-sent")).toBeVisible();
+      await expectSent(overlay);
       expect(drafts).toEqual([
         expect.objectContaining({ draft: "", cwd: repo, model: expect.any(String) }),
       ]);
@@ -481,7 +487,7 @@ test.describe("Narrated review recording", () => {
       await expect(overlay.getByTestId("review-recording-error")).toContainText("unavailable");
       accept = true;
       await overlay.getByTestId("review-recording-send").click();
-      await expect(overlay.getByTestId("review-recording-sent")).toBeVisible();
+      await expectSent(overlay);
       // Both attempts went to the page's draft; no other was made.
       expect(chats).toEqual([
         `/api/conversation/${draftId}/chat`,
@@ -549,7 +555,7 @@ test.describe("Narrated review recording", () => {
         "Unsent recording",
       );
       await overlay.getByTestId("review-recording-send").click();
-      await expect(overlay.getByTestId("review-recording-sent")).toBeVisible();
+      await expectSent(overlay);
       expect(chats).toEqual([`/api/conversation/${draftId}/chat`]);
       expect(drafts).toHaveLength(1);
     });
@@ -589,7 +595,7 @@ test.describe("Narrated review recording", () => {
       await page.unroute("**/api/upload/raw*", failUploads);
       await page.goto(`/c/${live.slug}?diff=${hash}&cwd=${encodeURIComponent(repo)}`);
       await overlay.getByTestId("review-recording-send").click();
-      await expect(overlay.getByTestId("review-recording-sent")).toBeVisible();
+      await expectSent(overlay);
       expect(chats).toHaveLength(1);
       const id = chats[0]!.split("/")[3]!;
       expect(id).not.toBe(live.conversationId);
@@ -639,7 +645,7 @@ test.describe("Narrated review recording", () => {
       // One click: the gone draft is noticed and replaced.
       accept = true;
       await overlay.getByTestId("review-recording-send").click();
-      await expect(overlay.getByTestId("review-recording-sent")).toBeVisible();
+      await expectSent(overlay);
       expect(drafts).toHaveLength(2);
       // Checked before sending: nothing more goes to the deleted draft.
       expect(chats).toEqual([
@@ -685,7 +691,7 @@ test.describe("Narrated review recording", () => {
           document.querySelector("[data-testid=review-record-stop] time")?.textContent !== "00:00",
       );
       await overlay.getByTestId("review-record-stop").click();
-      await expect(overlay.getByTestId("review-recording-sent")).toBeVisible();
+      await expectSent(overlay);
 
       expect(chats).toHaveLength(1);
       const id = chats[0]!.split("/")[3]!;
@@ -739,7 +745,7 @@ test.describe("Narrated review recording", () => {
       await page.unroute("**/api/upload/raw*", failUploads);
       await page.goto(url);
       await overlay.getByTestId("review-recording-send").click();
-      await expect(overlay.getByTestId("review-recording-sent")).toBeVisible();
+      await expectSent(overlay);
       expect(chats).toHaveLength(1);
       expect(chats[0].path).toBe(`/api/conversation/${draftId}/chat`);
       expect(chats[0].body).toMatchObject({ model: "predictable", cwd: repo });
@@ -841,7 +847,7 @@ test.describe("Narrated review recording", () => {
       await expectInHeader(overlay, top);
       await expect(overlay.getByTestId("review-recording-send")).toBeDisabled();
       await overlay.getByTestId("review-record-stop").click();
-      await expect(overlay.getByTestId("review-recording-sent")).toBeVisible();
+      await expectSent(overlay);
       await expect(overlay.getByTestId("review-recording-pending")).toHaveCount(1);
       expect(uploads).toBe(4);
       expect(chats).toHaveLength(1);
