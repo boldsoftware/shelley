@@ -10,10 +10,9 @@
       :style="{ top: `${pos.top}px`, left: `${pos.left}px`, width: `${BTN_WIDTH}px` }"
       data-testid="message-selection-comment-btn"
       aria-label="Comment"
-      v-tooltip.top="'Comment'"
+      v-tooltip.top="{ value: 'Comment', disabled: isCoarse }"
       @mousedown="swallow"
-      @pointerdown="swallow"
-      @touchstart="swallow"
+      @pointerdown="handlePointerDown"
       @click="handleClick"
     >
       <svg
@@ -76,6 +75,7 @@ function computeState(): ToolbarState | null {
   if (!startEl || startEl !== endEl) return null;
   const rect = range.getBoundingClientRect();
   if (rect.width === 0 && rect.height === 0) return null;
+  if (rect.bottom <= 0 || rect.top >= window.innerHeight) return null;
   return {
     messageId: startEl.dataset.messageId!,
     snippet: text,
@@ -84,6 +84,9 @@ function computeState(): ToolbarState | null {
 }
 
 const state = ref<ToolbarState | null>(null);
+const isCoarse = ref(false);
+let pressingToolbar = false;
+let pressedSnapshot: ToolbarState | null = null;
 let rafId: number | null = null;
 
 const pos = computed<{ top: number; left: number }>(() => {
@@ -93,10 +96,9 @@ const pos = computed<{ top: number; left: number }>(() => {
   // and is horizontally centered. To avoid colliding with it we anchor our
   // button to the right edge of the selection, vertically centered with the
   // selection's midpoint. On narrow selections we clamp to the viewport.
-  const isCoarse = window.matchMedia("(pointer: coarse)").matches;
   let top: number;
   let left: number;
-  if (isCoarse) {
+  if (isCoarse.value) {
     const GAP = 8;
     // Prefer to the right of the selection.
     const rightCandidate = s.rect.right + GAP;
@@ -121,42 +123,95 @@ const pos = computed<{ top: number; left: number }>(() => {
 });
 
 function recompute() {
+  isCoarse.value = window.matchMedia("(pointer: coarse)").matches;
+  if (pressingToolbar) return;
   if (rafId != null) cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(() => {
     rafId = null;
+    if (pressingToolbar) return;
     state.value = computeState();
   });
 }
 function hide() {
+  if (pressingToolbar) return;
   state.value = null;
 }
 
 onMounted(() => {
+  isCoarse.value = window.matchMedia("(pointer: coarse)").matches;
   document.addEventListener("selectionchange", recompute);
-  window.addEventListener("resize", hide);
+  window.addEventListener("resize", recompute);
   // Hide during scrolling to avoid stale positioning; user can re-select.
   window.addEventListener("scroll", hide, true);
 });
 
 onUnmounted(() => {
   document.removeEventListener("selectionchange", recompute);
-  window.removeEventListener("resize", hide);
+  window.removeEventListener("resize", recompute);
   window.removeEventListener("scroll", hide, true);
+  clearWindowPointerListeners();
   if (rafId != null) cancelAnimationFrame(rafId);
+  if (releaseRafId != null) cancelAnimationFrame(releaseRafId);
 });
+
+let releaseRafId: number | null = null;
+
+function clearWindowPointerListeners() {
+  window.removeEventListener("pointerup", handlePointerEnd, true);
+  window.removeEventListener("pointercancel", handlePointerEnd, true);
+}
+
+function releasePressGuard() {
+  pressingToolbar = false;
+  pressedSnapshot = null;
+  clearWindowPointerListeners();
+  if (releaseRafId != null) {
+    cancelAnimationFrame(releaseRafId);
+    releaseRafId = null;
+  }
+}
 
 function handleClick(e: MouseEvent) {
   e.stopPropagation();
-  if (state.value) {
-    props.onComment(state.value.messageId, state.value.snippet);
+  const target = state.value ?? pressedSnapshot;
+  releasePressGuard();
+  if (target) {
+    props.onComment(target.messageId, target.snippet);
   }
   // Clear selection after injecting so toolbar hides.
   window.getSelection()?.removeAllRanges();
   state.value = null;
 }
 
-// preventDefault on pointerdown prevents the selection from being
-// cleared/collapsed before we can read it in onClick.
+function handlePointerDown(e: PointerEvent) {
+  releasePressGuard();
+  pressingToolbar = true;
+  pressedSnapshot = state.value;
+  window.addEventListener("pointerup", handlePointerEnd, true);
+  window.addEventListener("pointercancel", handlePointerEnd, true);
+  // On mouse/pen, preventDefault keeps the press from collapsing the text
+  // selection before click fires. Do NOT preventDefault on touchstart: mobile
+  // browsers suppress click synthesis when touchstart is canceled.
+  e.preventDefault();
+}
+
+function handlePointerEnd() {
+  clearWindowPointerListeners();
+  if (!pressingToolbar) return;
+  // Release after any click event from this gesture has arrived; if the press
+  // drifted off the button or was canceled without clicking, resync with the
+  // live selection after two frames.
+  releaseRafId = requestAnimationFrame(() => {
+    releaseRafId = requestAnimationFrame(() => {
+      releaseRafId = null;
+      if (!pressingToolbar) return;
+      pressingToolbar = false;
+      pressedSnapshot = null;
+      recompute();
+    });
+  });
+}
+
 function swallow(e: Event) {
   e.preventDefault();
 }
