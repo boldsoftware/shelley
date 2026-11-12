@@ -242,6 +242,45 @@ func TestFromLLMMessageResponsesWithImageOnlyToolResultAndRegularContent(t *test
 	}
 }
 
+func TestFromLLMMessageResponsesParallelToolResultsKeepOutputsContiguous(t *testing.T) {
+	items := fromLLMMessageResponses(llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{
+			{
+				Type:      llm.ContentTypeToolResult,
+				ToolUseID: "call_read_image",
+				ToolResult: []llm.Content{
+					{Type: llm.ContentTypeText, Text: "Image from /tmp/a.png"},
+					{Type: llm.ContentTypeText, MediaType: "image/png", Data: "imgA"},
+				},
+			},
+			{
+				Type:      llm.ContentTypeToolResult,
+				ToolUseID: "call_bash",
+				ToolResult: []llm.Content{
+					{Type: llm.ContentTypeText, Text: "shell output"},
+				},
+			},
+			{Type: llm.ContentTypeText, Text: "follow-up note"},
+		},
+	}, responsesReasoningReplayOpenRouter)
+	if len(items) != 4 {
+		t.Fatalf("expected 4 items, got %d: %+v", len(items), items)
+	}
+	if items[0].Type != "function_call_output" || items[0].CallID != "call_read_image" || items[0].Output != "Image from /tmp/a.png" {
+		t.Fatalf("items[0] = %+v, want function_call_output for call_read_image", items[0])
+	}
+	if items[1].Type != "function_call_output" || items[1].CallID != "call_bash" || items[1].Output != "shell output" {
+		t.Fatalf("items[1] = %+v, want contiguous function_call_output for call_bash", items[1])
+	}
+	if items[2].Type != "message" || items[2].Role != "user" || len(items[2].Content) != 2 || items[2].Content[1].ImageURL != "data:image/png;base64,imgA" {
+		t.Fatalf("items[2] = %+v, want deferred tool image user message", items[2])
+	}
+	if items[3].Type != "message" || items[3].Role != "user" || items[3].Content[0].Text != "follow-up note" {
+		t.Fatalf("items[3] = %+v, want trailing regular text message", items[3])
+	}
+}
+
 func TestResponsesContentOmitsEmptyTextForImages(t *testing.T) {
 	got, err := json.Marshal(responsesImageContent(llm.Content{Type: llm.ContentTypeText, MediaType: "image/png", Data: "abc123"}))
 	if err != nil {

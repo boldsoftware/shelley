@@ -378,7 +378,10 @@ func fromLLMMessageResponses(msg llm.Message, reasoningReplay responsesReasoning
 		}
 	}
 
-	// Process tool results first - they need to come before the assistant message
+	// Process tool results first - they need to come before the assistant message.
+	// Emit all function_call_output items before any synthetic image user messages
+	// so parallel tool calls are answered contiguously without an interleaved user turn.
+	var toolImageItems []responsesInputItem
 	for _, tr := range toolResults {
 		// function_call_output is text-only. Preserve images as a following user
 		// message so vision-capable Responses models actually receive them.
@@ -416,13 +419,14 @@ func fromLLMMessageResponses(msg llm.Message, reasoningReplay responsesReasoning
 		if len(imageContent) > 0 {
 			content := []responsesContent{{Type: "input_text", Text: "Images returned by tool " + tr.ToolUseID + ":"}}
 			content = append(content, imageContent...)
-			items = append(items, responsesInputItem{
+			toolImageItems = append(toolImageItems, responsesInputItem{
 				Type:    "message",
 				Role:    "user",
 				Content: content,
 			})
 		}
 	}
+	items = append(items, toolImageItems...)
 
 	// Process regular content in provider output order. Contiguous text/image
 	// blocks are coalesced into one message item; reasoning and function calls
