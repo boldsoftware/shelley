@@ -521,12 +521,6 @@ function unreadTime(c: ConversationWithState) {
     : 0;
 }
 
-// Replies after the read cursor, at least 1 when unread (the server keeps the last 10).
-function unreadCount(c: ConversationWithState) {
-  const since = Math.max(firstSeenAt.value ?? 0, readTimes.get(c.conversation_id) ?? 0);
-  return Math.max(1, (c.recent_reply_times ?? []).filter((t) => t > since).length);
-}
-
 const currentConversationId = ref<string | null>(null);
 // Subagent tool widgets (SubagentTool.vue) join their slug against the live
 // conversation list to show what the subagent is doing right now.
@@ -769,9 +763,7 @@ provide(ComposerPreviewKey, {
   }),
 });
 const drawerConversations = computed(() => {
-  const rows = conversations.value.map((c) =>
-    unreadTime(c) ? { ...c, unread: true, unread_count: unreadCount(c) } : c,
-  );
+  const rows = conversations.value.map((c) => (unreadTime(c) ? { ...c, unread: true } : c));
   const list = withComposerRow(rows, composer.value, creating.value);
   return lingering.value ? withComposerRow(list, lingering.value, null) : list;
 });

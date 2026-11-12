@@ -164,7 +164,6 @@ export interface ConversationWithStateForTS {
   search_snippet?: string;
   search_snippet_message_id?: string;
   last_attention_at?: number;
-  recent_reply_times?: number[] | null;
   max_sequence_id: number;
   participants?: ConversationParticipant[] | null;
 }

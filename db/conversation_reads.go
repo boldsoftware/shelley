@@ -24,21 +24,6 @@ func (db *DB) ConversationAttention(ctx context.Context, ids []string) (map[stri
 	})
 }
 
-// CustomConversationReplyTimes returns the times of each conversation's latest 10 replies, oldest first.
-func (db *DB) CustomConversationReplyTimes(ctx context.Context, ids []string) (map[string][]int64, error) {
-	return db.QueriesRes(ctx, func(q *generated.Queries) (map[string][]int64, error) {
-		rows, err := q.CustomConversationReplyTimes(ctx, ids)
-		if err != nil {
-			return nil, err
-		}
-		result := make(map[string][]int64)
-		for _, row := range rows {
-			result[row.ConversationID] = append(result[row.ConversationID], row.RepliedAt)
-		}
-		return result, nil
-	})
-}
-
 // AcknowledgeConversation monotonically advances a user's read-through cursor.
 // Validation and MAX happen in one write transaction.
 func (db *DB) AcknowledgeConversation(ctx context.Context, userID, conversationID string, readAt int64) (int64, error) {

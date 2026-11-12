@@ -879,17 +879,15 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
   await page.goto("/");
   await openWorkspace(page);
   await expect(row.locator(".conversation-title")).toBeVisible();
-  await expect(row.getByTestId("conversation-new-badge")).toHaveCount(0);
+  const title = row.locator(".conversation-title");
+  await expect(title).not.toHaveCSS("font-weight", "700");
   const delivered = await request.post(`/api/conversation/${conversationId}/chat`, {
     data: { message: 'message_user: {"text":"Ready","end_turn":true}', model: "predictable" },
   });
   expect(delivered.ok()).toBeTruthy();
-  await expect(
-    row.locator(".drawer-conversation-header-row").getByText("1", { exact: true }),
-  ).toBeVisible();
-  await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-size", "10px");
-  await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("font-weight", "700");
-  await expect(row.getByTestId("conversation-new-badge")).toHaveCSS("line-height", "12px");
+  // Unread, its title is bold, like an unread email; no count.
+  await expect(title).toHaveCSS("font-weight", "700");
+  await expect(row.getByText("1", { exact: true })).toHaveCount(0);
   // Its age shows at the right; a touch screen shows Archive beside it
   // only on the open row.
   const time = row.locator(".conversation-time");
@@ -912,12 +910,7 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
     await page.reload();
     await openWorkspace(page);
     await expect(row.locator(".conversation-preview")).toHaveCount(1);
-    await expect(
-      row.locator(".conversation-preview").getByTestId("conversation-new-badge"),
-    ).toBeVisible();
-    await expect(
-      row.locator(".drawer-conversation-header-row").getByTestId("conversation-new-badge"),
-    ).toHaveCount(0);
+    await expect(title).toHaveCSS("font-weight", "700");
     await expect(row.locator(".conversation-meta")).toHaveCount(1);
     await expect(assistant.locator(".conversation-preview")).toHaveCount(1);
     expect((await row.boundingBox())!.height).toBeGreaterThan(short * 1.5);
@@ -927,7 +920,28 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
   }
 });
 
-test("opening a chat clears New across browsers and keeps the open row quiet", async ({
+test("a row turns bold, unread, only once its agent stops working", async ({ page, request }) => {
+  const { conversationId } = await createConversationViaAPIWithDetails(request, "Hello", {
+    conversationOptions: { tool_overrides: { message_user: "on" } },
+  });
+  const row = page.locator(`.conversation-item[data-conversation-id="${conversationId}"]`);
+  const bold = page.locator(`.conversation-item-unread[data-conversation-id="${conversationId}"]`);
+  await page.goto("/");
+  await openWorkspace(page);
+  const chat = (message: string) =>
+    request.post(`/api/conversation/${conversationId}/chat`, {
+      data: { message, model: "predictable" },
+    });
+  expect((await chat('message_user: {"text":"Ready","end_turn":true}')).ok()).toBeTruthy();
+  await expect(bold).toBeVisible();
+  expect((await chat("delay: 3")).ok()).toBeTruthy();
+  await expect(row.locator(".working-indicator")).toBeVisible();
+  await expect(bold).toHaveCount(0);
+  await expect(row.locator(".working-indicator")).toHaveCount(0, { timeout: 15000 });
+  await expect(bold).toBeVisible();
+});
+
+test("opening a chat clears its bold title across browsers and keeps the open row quiet", async ({
   page,
   browser,
   baseURL,
@@ -939,7 +953,7 @@ test("opening a chat clears New across browsers and keeps the open row quiet", a
   );
   const observer = await browser.newPage({ baseURL, viewport: { width: 1280, height: 900 } });
   const row = `[data-conversation-id="${conversationId}"]`;
-  const badge = observer.locator(row).getByTestId("conversation-new-badge");
+  const bold = observer.locator(`.conversation-item-unread${row}`);
   try {
     await observer.goto("/new");
     await expect(observer.locator(row)).toBeVisible();
@@ -951,8 +965,8 @@ test("opening a chat clears New across browsers and keeps the open row quiet", a
       data: { message: "echo: ready for review", model: "predictable" },
     });
     expect(reply.ok()).toBeTruthy();
-    await expect(badge).toBeVisible();
-    await expect(page.locator(row).getByTestId("conversation-new-badge")).toBeVisible();
+    await expect(bold).toBeVisible();
+    await expect(page.locator(`.conversation-item-unread${row}`)).toBeVisible();
 
     // Keep the receipt in flight until we've inspected both drawers.
     let release!: () => void;
@@ -975,21 +989,19 @@ test("opening a chat clears New across browsers and keeps the open row quiet", a
         page.locator(row).click(),
       ]);
       await expect(page.locator(row)).toHaveAttribute("aria-current", "page");
-      await expect(page.locator(row).getByTestId("conversation-new-badge")).toHaveCount(0);
-      await expect(badge).toBeVisible();
+      await expect(page.locator(`.conversation-item-unread${row}`)).toHaveCount(0);
+      await expect(bold).toBeVisible();
     } finally {
       release();
     }
-    await expect(badge).toHaveCount(0);
+    await expect(bold).toHaveCount(0);
     const other = await createConversationViaAPIWithDetails(request, "echo: another unread chat");
     await observer.reload();
     await expect(
-      observer
-        .locator(`[data-conversation-id="${other.conversationId}"]`)
-        .getByTestId("conversation-new-badge"),
+      observer.locator(`.conversation-item-unread[data-conversation-id="${other.conversationId}"]`),
     ).toBeVisible();
     await expect(observer.locator(row)).toBeVisible();
-    await expect(badge).toHaveCount(0);
+    await expect(bold).toHaveCount(0);
   } finally {
     await observer.close();
   }

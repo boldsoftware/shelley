@@ -93,16 +93,14 @@ type ConversationWithState struct {
 	db.ConversationListItem
 	// Shared attention watermark; user-specific read state is added only to
 	// the ordinary REST list response.
-	LastAttentionAt int64 `json:"last_attention_at,omitempty"`
-	// Customization: the latest reply marks (up to 10), to count unread replies.
-	RecentReplyTimes []int64 `json:"recent_reply_times,omitempty"`
-	ReadAt           *int64  `json:"read_at,omitempty"`
-	Unread           *bool   `json:"unread,omitempty"`
-	Working          bool    `json:"working"`
-	GitRepoRoot      string  `json:"git_repo_root,omitempty"`
-	GitWorktreeRoot  string  `json:"git_worktree_root,omitempty"`
-	GitCommit        string  `json:"git_commit,omitempty"`
-	GitSubject       string  `json:"git_subject,omitempty"`
+	LastAttentionAt int64  `json:"last_attention_at,omitempty"`
+	ReadAt          *int64 `json:"read_at,omitempty"`
+	Unread          *bool  `json:"unread,omitempty"`
+	Working         bool   `json:"working"`
+	GitRepoRoot     string `json:"git_repo_root,omitempty"`
+	GitWorktreeRoot string `json:"git_worktree_root,omitempty"`
+	GitCommit       string `json:"git_commit,omitempty"`
+	GitSubject      string `json:"git_subject,omitempty"`
 	// SearchSnippet is set on hits from /api/conversations/search. Matched
 	// terms are wrapped in \x02..\x03 sentinels (see db.SnippetMarkStart /
 	// SnippetMarkEnd) so the UI can substitute spans without HTML injection.
@@ -422,7 +420,6 @@ type Server struct {
 	notifDispatcher          *notifications.Dispatcher
 	conversationListStream   *conversationListStream
 	conversationListGitCache *conversationListGitCache
-	replyTimes               replyTimesCache
 	workspace                workspaceState
 	conversationVMs          conversationVMState
 	exeVMCache               exeVMCache

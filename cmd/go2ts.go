@@ -150,7 +150,6 @@ type conversationWithStateForTS struct {
 	SearchSnippet           string                       `json:"search_snippet,omitempty"`
 	SearchSnippetMessageID  string                       `json:"search_snippet_message_id,omitempty"`
 	LastAttentionAt         int64                        `json:"last_attention_at,omitempty"`
-	RecentReplyTimes        []int64                      `json:"recent_reply_times,omitempty"`
 	MaxSequenceID           int64                        `json:"max_sequence_id"`
 	Participants            []db.ConversationParticipant `json:"participants,omitempty"`
 }

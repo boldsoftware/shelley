@@ -6,7 +6,7 @@
      the DrawerCtx inject. Mirrors renderConversationItem in the React source. -->
 <template>
   <div
-    :class="`conversation-item ${isActive ? 'active' : ''}${isNew ? ' conversation-item-enter' : ''}${itemArchived && workspaceMode ? ' conversation-item-archived' : ''}${ctx.contextMenuId.value === conversation.conversation_id ? ' context-menu-target' : ''}`"
+    :class="`conversation-item ${isActive ? 'active' : ''}${isNew ? ' conversation-item-enter' : ''}${itemArchived && workspaceMode ? ' conversation-item-archived' : ''}${unread ? ' conversation-item-unread' : ''}${ctx.contextMenuId.value === conversation.conversation_id ? ' context-menu-target' : ''}`"
     :data-conversation-id="conversation.conversation_id"
     role="link"
     tabindex="0"
@@ -72,13 +72,6 @@
           data-testid="drawer-temporary-badge"
           title="Temporary: not archived"
           >Temporary</span
-        >
-        <span
-          v-if="compactNav && showNew"
-          class="conversation-new-badge drawer-working-indicator"
-          data-testid="conversation-new-badge"
-          title="Unread replies"
-          >{{ unreadLabel }}</span
         >
         <span
           v-if="isWorking"
@@ -246,13 +239,6 @@
         class="conversation-preview conversation-snippet"
         :title="stripSnippetMarks(convState.search_snippet)"
       >
-        <span
-          v-if="showNew"
-          class="conversation-new-badge"
-          data-testid="conversation-new-badge"
-          title="Unread replies"
-          >{{ unreadLabel }}</span
-        >
         <template v-for="(seg, i) in renderSnippetSegments(convState.search_snippet)" :key="i">
           <mark v-if="seg.mark" class="conversation-snippet-mark">{{ seg.text }}</mark>
           <template v-else>{{ seg.text }}</template>
@@ -270,13 +256,6 @@
         class="conversation-preview"
         :title="convState.preview || undefined"
       >
-        <span
-          v-if="showNew"
-          class="conversation-new-badge"
-          data-testid="conversation-new-badge"
-          title="Unread replies"
-          >{{ unreadLabel }}</span
-        >
         {{ convState.preview || "\u00a0" }}
       </div>
 
@@ -652,19 +631,17 @@ const deletable = computed(
 const isActive = computed(
   () => props.conversation.conversation_id === ctx.currentConversationId.value,
 );
-// Unread badges are a workspace-mode feature.
-const showNew = computed(
+// In workspace mode an unread row's title is bold, like an unread email, once
+// its agent stops working (until then its working dot shows).
+const unread = computed(
   () =>
     workspaceMode &&
     !isActive.value &&
+    !isWorking.value &&
     convState.value.unread &&
     !itemArchived.value &&
     !(convState.value.turn_interrupted && !props.conversation.parent_conversation_id),
 );
-const unreadLabel = computed(() => {
-  const n = convState.value.unread_count ?? 1;
-  return n >= 10 ? "10+" : String(n);
-});
 const conversationSubagents = computed<ConversationWithState[]>(() =>
   isDraft.value ? [] : ctx.subagentsByParent.value[props.conversation.conversation_id] || [],
 );
@@ -987,26 +964,8 @@ const DeleteButton = defineComponent({
 </script>
 
 <style scoped>
-.conversation-new-badge {
-  flex: none;
-  padding: 0 3px;
-  border-radius: 3px;
-  /* The orange of exe's logo (assets/exe-fish.svg). */
-  color: white;
-  background: #f48e00;
-  font-size: 0.625rem;
+.conversation-item-unread .conversation-title {
   font-weight: 700;
-  line-height: 1.2;
-}
-
-.conversation-preview .conversation-new-badge {
-  display: inline-block;
-  margin-right: 2px;
-  padding: 0 3px;
-  border-radius: 3px;
-  font-size: 10px;
-  line-height: 14px;
-  vertical-align: 1px;
 }
 
 .conversation-running-work {
