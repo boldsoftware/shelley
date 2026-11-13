@@ -364,6 +364,16 @@ export const zhTW: TranslationKeys = {
 
   // MCP Servers Modal
   mcpServers: "MCP 伺服器",
+  bookmarklet: "書籤小工具",
+  bookmarkletHelp:
+    "將它拖到書籤列。在任何頁面點擊它，即可開始關於該頁面的對話、選取頁面元素，並記錄你指向的內容。",
+  bookmarkletOpenedFrom: "來自 {host}",
+  bookmarkletLinkedTo: "已連結 {host}",
+  bookmarkletTracking: "正在記錄你在 {host} 上的操作",
+  bookmarkletAsk: "允許 {origin} 開始錄音?",
+  bookmarkletAllow: "允許",
+  bookmarkletNotNow: "暫不",
+  bookmarkletSites: "可以開始錄音的網站",
   configureMcpServers: "連接供代理使用的 MCP 伺服器",
   addMcpServer: "新增 MCP 伺服器",
   editMcpServer: "編輯 MCP 伺服器",

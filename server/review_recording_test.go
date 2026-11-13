@@ -519,3 +519,39 @@ func TestReviewPromptFilesAreCapped(t *testing.T) {
 		t.Fatalf("files = %d, %d runes", len(files), got)
 	}
 }
+
+// The bookmarklet's recordings narrate a web page: its events come from the
+// page, and a screen recording also gets the screen guidance.
+func TestWebPageReviewRecording(t *testing.T) {
+	review := &reviewRecording{
+		mediaPath: "/tmp/rec.webm",
+		Version:   1,
+		Source:    "web-page",
+		URL:       "https://example.com/pricing",
+		Title:     "Pricing",
+		Events:    []reviewEvent{{Type: "click", Where: `main > button.buy › "Buy"`}},
+	}
+	prompt := buildTranscriptionPrompt("vm", "", "slug", review)
+	for _, want := range []string{"narrating while using a web page", "Site: example.com"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt missing %q:\n%s", want, prompt)
+		}
+	}
+	if strings.Contains(prompt, "diff viewer") || strings.Contains(prompt, "Pricing") {
+		t.Errorf("web page prompt mentions the diff viewer or the page's title:\n%s", prompt)
+	}
+
+	timeline := buildReviewTimeline(review, speechTimings{})
+	if !strings.Contains(timeline, "Page: Pricing — https://example.com/pricing\n") || !strings.Contains(timeline, `clicked: main > button.buy › "Buy"`) {
+		t.Errorf("timeline:\n%s", timeline)
+	}
+
+	got := strings.Join(review.parentDetails("/tmp/rec.webm.timestamps.json", true), "\n\n")
+	want := "Page recording: narrated while using Pricing — https://example.com/pricing\n" +
+		"Timeline (speech interleaved with what was on screen, pointed at, and selected): [/tmp/rec.webm.timeline.md]\n" +
+		"Screen recording: [/tmp/rec.webm] · Events: [/tmp/rec.webm.review.json] · Word timestamps: [/tmp/rec.webm.timestamps.json]\n\n" +
+		"Treat this as feedback on the page to work through."
+	if !strings.HasPrefix(got, want) || !strings.Contains(got, "CSS path") || !strings.HasSuffix(got, screenRecordingGuidance) {
+		t.Fatalf("details:\n%s\nwant prefix:\n%s", got, want)
+	}
+}

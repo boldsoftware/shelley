@@ -302,6 +302,8 @@ export interface InitData {
   dev_prod_tabs?: boolean;
   // title-only sidebar rows: see utils/workspaceMode.ts.
   compact_nav?: boolean;
+  // The bookmarklet feature flag: see vue/composables/bookmarklet.ts.
+  bookmarklet?: boolean;
   // True once the "upgrade your other conversations too?" offer has been
   // answered, so it is never made again.
   model_upgrade_prompt_done?: boolean;

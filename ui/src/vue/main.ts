@@ -13,6 +13,7 @@ import "katex/dist/katex.min.css";
 
 import { initializeTheme } from "../services/theme";
 import { initializeNotifications } from "../services/notifications";
+import { initBookmarklet } from "./composables/bookmarklet";
 import { i18nPlugin } from "./composables/i18n";
 import { compactNav, workspaceMode } from "../utils/workspaceMode";
 import { exportConversationIdFromPath } from "./export";
@@ -62,6 +63,7 @@ if (exportId) {
   app.mount(rootContainer);
 } else {
   initializeNotifications();
+  initBookmarklet();
   const app = createApp(App);
   app.use(PrimeVue, primeVueOptions);
   app.use(i18nPlugin);

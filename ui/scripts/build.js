@@ -88,6 +88,12 @@ function log(...args) {
   if (verbose) console.log(...args);
 }
 
+// Bundles one minified script and returns its text.
+async function esbuildText(options) {
+  const result = await esbuild.build({ ...options, bundle: true, minify: true, write: false });
+  return result.outputFiles[0].text.trim();
+}
+
 async function build() {
   const startTime = Date.now();
   try {
@@ -164,6 +170,35 @@ async function build() {
       sourcemap: !noSourceMaps,
     });
 
+    // The bookmarklet's page script, embedded in the app's bookmarklet link and
+    // in dist/shelley-bookmarklet.html, a standalone page for making one.
+    log("Building bookmarklet...");
+    const bookmarklet = await esbuildText({
+      entryPoints: ["src/bookmarklet/page.ts"],
+      format: "iife",
+      target: "es2020",
+    });
+    const bookmarkletDefine = { __BOOKMARKLET_SOURCE__: JSON.stringify(bookmarklet) };
+    const standalone = await esbuildText({
+      entryPoints: ["src/bookmarklet/standalone.ts"],
+      format: "iife",
+      define: bookmarkletDefine,
+    });
+    const standaloneCss = fs.readFileSync("src/bookmarklet/standalone.css", "utf8");
+    if (/<\/script|<!--/i.test(standalone) || /<\/style/i.test(standaloneCss)) {
+      throw new Error("bookmarklet: standalone.ts or .css can't be inlined");
+    }
+    const standaloneHtml = fs
+      .readFileSync("src/bookmarklet/standalone.html", "utf8")
+      .split('<link rel="stylesheet" href="standalone.css" />')
+      .join(`<style>${standaloneCss}</style>`)
+      .split('<script src="standalone.js"></script>')
+      .join(`<script>${standalone}</script>`);
+    if (/standalone\.(css|js)/.test(standaloneHtml)) {
+      throw new Error("standalone.html: unexpected standalone.css or standalone.js reference");
+    }
+    fs.writeFileSync("dist/shelley-bookmarklet.html", standaloneHtml);
+
     // Build the Vue 3 + PrimeVue app (src/vue/main.ts). It emits dist/main.js +
     // dist/main.css, which index.html links statically (see src/index.html).
     log("Building main application (src/vue/main.ts)...");
@@ -175,6 +210,7 @@ async function build() {
       minify: isProd,
       sourcemap: !noSourceMaps,
       metafile: true,
+      define: bookmarkletDefine,
       external: ["monaco-editor", "/monaco-editor.js", "/ghostty-web.js"],
       loader: {
         ".png": "dataurl",

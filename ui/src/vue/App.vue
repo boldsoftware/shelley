@@ -424,6 +424,7 @@ import type { ActionRunSummary } from "../services/workspace";
 import PerfHud from "./components/PerfHud.vue";
 import { setFaviconStatus } from "../services/favicon";
 import { anyTaskRunning } from "../utils/workingConversations";
+import { bookmarkletRecordRequests } from "./composables/bookmarklet";
 
 const perfHudEnabled = useFeatureFlag("performance-hud");
 
@@ -1399,6 +1400,10 @@ function beginRecording(mode: RecordingMode) {
   commandPaletteOpen.value = false;
   void chatInterfaceRef.value?.beginRecording(mode);
 }
+// Nor behind a VM or a project.
+watch(bookmarkletRecordRequests, () => {
+  if (!currentVm.value && !workspace.projectView.value) beginRecording("microphone");
+});
 
 // ---- global keyboard shortcuts (incl. Ctrl+M chord) ----
 let chordPending = false;

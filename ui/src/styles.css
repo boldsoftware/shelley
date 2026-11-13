@@ -340,6 +340,7 @@ body {
 
 .text-error,
 .favicon-emoji-status.error,
+.bookmarklet-status .pi-circle-fill,
 .drawer-actions-menu .drawer-menu-danger :is(a, .p-tieredmenu-item-icon, .p-contextmenu-item-icon) {
   color: var(--error-text);
 }
@@ -17057,6 +17058,8 @@ kbd {
   background: transparent;
   border: none;
   color: var(--text-primary);
+  line-height: normal;
+  text-decoration: none;
   font-size: var(--font-size-14);
   cursor: pointer;
   transition: background-color 0.15s;
@@ -17183,6 +17186,45 @@ kbd {
 .language-picker-check {
   margin-left: auto;
   font-size: var(--font-size-14);
+}
+
+.bookmarklet-modal {
+  max-width: 26rem;
+}
+.bookmarklet-help {
+  margin: 0 0 1rem;
+  color: var(--text-secondary);
+}
+.bookmarklet-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--primary);
+  color: var(--bg-base);
+  text-decoration: none;
+  cursor: grab;
+}
+.bookmarklet-sites-title {
+  margin: 1.5rem 0 0.5rem;
+}
+.bookmarklet-sites li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  overflow-wrap: anywhere;
+}
+/* Above the composer of a chat opened by the bookmarklet. */
+.bookmarklet-status {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 1rem;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
 }
 
 /* One compact row of stateful controls. Every choice stays visible; the
@@ -19270,7 +19312,8 @@ kbd {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.secret-injections {
+.secret-injections,
+.bookmarklet-sites {
   margin: 0;
   padding: 0;
   list-style: none;

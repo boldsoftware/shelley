@@ -161,6 +161,19 @@
         <i class="pi pi-server chat-menu-icon" aria-hidden="true" />
         {{ t("mcpServers") }}
       </button>
+      <!-- Drag it to the bookmarks bar, or click for the modal. -->
+      <a
+        v-if="bookmarkletLink"
+        class="overflow-menu-item"
+        :href="bookmarkletLink"
+        aria-haspopup="dialog"
+        data-testid="bookmarklet-menu-item"
+        @click.prevent="onBookmarklet"
+        @keydown.space.prevent="onBookmarklet"
+      >
+        <i class="pi pi-bookmark chat-menu-icon" aria-hidden="true" />
+        {{ t("bookmarklet") }}
+      </a>
       <div class="overflow-menu-divider" />
       <div class="overflow-quick-controls">
         <div
@@ -332,6 +345,12 @@
         </button>
       </div>
     </Modal>
+    <BookmarkletModal
+      v-if="bookmarkletLink"
+      :is-open="bookmarkletOpen"
+      :href="bookmarkletLink"
+      @close="bookmarkletOpen = false"
+    />
   </div>
 </template>
 
@@ -340,11 +359,15 @@ import { computed, nextTick, ref, toRef } from "vue";
 import Popover from "primevue/popover";
 import Button from "primevue/button";
 import Modal from "./Modal.vue";
+import BookmarkletModal from "./BookmarkletModal.vue";
 import OverflowDotsIcon from "./OverflowDotsIcon.vue";
 import WorkspaceActionIcon, { type WorkspaceAction } from "./WorkspaceActionIcon.vue";
 import type { Link } from "../../types";
 import type { Locale } from "../../i18n/types";
 import { useI18n } from "../composables/i18n";
+import { bookmarkletEnabled } from "../composables/bookmarklet";
+import { bookmarkletHref } from "../../bookmarklet/href";
+import { BOOKMARKLET_SOURCE } from "../../bookmarklet/source";
 import { useConversationView } from "../composables/conversationView";
 import { menuShortcutLabel } from "../../utils/menuShortcuts";
 import { tildifyPath } from "../../utils/tildify";
@@ -418,6 +441,15 @@ const onEditAgentsMd = () => (emit("edit-agents-md"), hide());
 const onEditFile = () => (emit("edit-file"), hide());
 const onMcpServers = () => (emit("open-mcp-servers"), hide());
 const onCheckVersion = () => (emit("check-version"), hide());
+const bookmarkletLink = bookmarkletEnabled
+  ? bookmarkletHref(BOOKMARKLET_SOURCE, location.origin)
+  : null;
+const bookmarkletOpen = ref(false);
+function onBookmarklet() {
+  hide();
+  triggerRef.value?.$el.focus();
+  bookmarkletOpen.value = true;
+}
 function onExternalLink(url: string) {
   emit("open-external-link", url);
   hide();

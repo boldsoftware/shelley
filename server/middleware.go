@@ -45,6 +45,18 @@ func RequireHeaderMiddleware(headerName string) func(http.Handler) http.Handler 
 	}
 }
 
+// sameOriginFramingOnly stops other sites from framing Shelley, where a
+// logged-in UI would be a clickjacking target. Shelley frames itself (PDF
+// previews), so same-origin framing stays allowed. Handlers that replace the
+// CSP (sandboxed files) keep X-Frame-Options.
+func sameOriginFramingOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // compressedResponseWriter compresses non-streaming HTTP responses.
 type compressedResponseWriter struct {
 	http.ResponseWriter

@@ -368,6 +368,16 @@ export const upgoer5: TranslationKeys = {
 
   // MCP Servers Modal
   mcpServers: "MCP Tool Boxes",
+  bookmarklet: "Page Button",
+  bookmarkletHelp:
+    "Pull this up to your saved places bar. Hit it on any page to start a talk about that page, pick parts of the page into it, and keep a record of what you point at.",
+  bookmarkletOpenedFrom: "From {host}",
+  bookmarkletLinkedTo: "Joined to {host}",
+  bookmarkletTracking: "Keeping a record of what you do on {host}",
+  bookmarkletAsk: "Let {origin} start keeping a record of your voice?",
+  bookmarkletAllow: "Yes",
+  bookmarkletNotNow: "Not now",
+  bookmarkletSites: "Places that can start keeping a record of your voice",
   configureMcpServers: "Hook up tool boxes the helper can use",
   addMcpServer: "Add Tool Box",
   editMcpServer: "Change Tool Box",

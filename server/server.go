@@ -2191,7 +2191,7 @@ func (s *Server) tcpHandler(mux http.Handler) http.Handler {
 	if s.requireHeader != "" {
 		h = RequireHeaderMiddleware(s.requireHeader)(h)
 	}
-	return h
+	return sameOriginFramingOnly(h)
 }
 
 // rememberWebOrigin, in workspace mode, records the origin the user's
@@ -2214,7 +2214,7 @@ func (s *Server) rememberWebOrigin(next http.Handler) http.Handler {
 
 // StartWithListeners starts the HTTP server on the given web listener (TCP, or
 // a Unix socket with -listen-unix) and optionally
-// also on a Unix socket. The TCP listener gets full middleware (CSRF, requireHeader, logger).
+// also on a Unix socket. The TCP listener gets full middleware (framing, CSRF, requireHeader, logger).
 // The Unix socket listener gets only the logger middleware (no CSRF, no requireHeader)
 // since it is local and trusted.
 func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string) error {

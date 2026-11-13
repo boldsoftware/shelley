@@ -373,6 +373,16 @@ export const vi: TranslationKeys = {
 
   // MCP Servers Modal
   mcpServers: "Máy chủ MCP",
+  bookmarklet: "Bookmarklet",
+  bookmarkletHelp:
+    "Kéo nó vào thanh dấu trang. Nhấp vào nó trên bất kỳ trang nào để bắt đầu trò chuyện về trang đó, chọn phần tử vào cuộc trò chuyện và ghi lại những gì bạn chỉ vào.",
+  bookmarkletOpenedFrom: "Từ {host}",
+  bookmarkletLinkedTo: "Đã liên kết với {host}",
+  bookmarkletTracking: "Đang ghi lại thao tác của bạn trên {host}",
+  bookmarkletAsk: "Cho phép {origin} bắt đầu ghi âm?",
+  bookmarkletAllow: "Cho phép",
+  bookmarkletNotNow: "Để sau",
+  bookmarkletSites: "Các trang có thể bắt đầu ghi âm",
   configureMcpServers: "Kết nối máy chủ MCP cho agent sử dụng",
   addMcpServer: "Thêm máy chủ MCP",
   editMcpServer: "Sửa máy chủ MCP",

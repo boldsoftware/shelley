@@ -561,6 +561,30 @@
       </div>
     </div>
 
+    <div v-if="bookmarkletAsking" class="bookmarklet-status" data-testid="bookmarklet-ask">
+      <i class="pi pi-microphone" aria-hidden="true" />
+      <span>{{ t("bookmarkletAsk").replace("{origin}", bookmarkletOrigin) }}</span>
+      <Button
+        size="small"
+        :label="t('bookmarkletAllow')"
+        :disabled="!bookmarkletAllowReady"
+        @click="answerBookmarkletAsk(true)"
+      />
+      <Button
+        size="small"
+        severity="secondary"
+        text
+        :label="t('bookmarkletNotNow')"
+        @click="answerBookmarkletAsk(false)"
+      />
+    </div>
+    <div v-else-if="bookmarkletPage" class="bookmarklet-status" data-testid="bookmarklet-status">
+      <i
+        :class="['pi', bookmarkletTracing ? 'pi-circle-fill' : 'pi-bookmark']"
+        aria-hidden="true"
+      />
+      <span>{{ t(bookmarkletStatusKey).replace("{host}", bookmarkletHost) }}</span>
+    </div>
     <!-- Message input -->
     <!-- No :key here, matching React: MessageInput must NOT remount on the
          first-message conversationId flip, or its post-await setMessage("")
@@ -918,6 +942,16 @@ import {
 import { RefusalContinueKey } from "./refusalContinue";
 
 import MessageInput from "./MessageInput.vue";
+import {
+  answerBookmarkletAsk,
+  bookmarkletAllowReady,
+  bookmarkletAsking,
+  bookmarkletInserts,
+  bookmarkletLinked,
+  bookmarkletOrigin,
+  bookmarkletPage,
+  bookmarkletTracing,
+} from "../composables/bookmarklet";
 import RunningWorkStrip from "./RunningWorkStrip.vue";
 import { BackgroundJobsKey, useBackgroundJobs } from "../composables/backgroundJobs";
 import { ConversationsListKey } from "../composables/subagentLive";
@@ -2641,7 +2675,7 @@ watch(
     for (const exchange of exchanges) {
       if (exchange.parent_conversation_id !== currentConversationId) continue;
       const summary = btwStore.claimSummary(exchange);
-      if (summary) appendBtwSummaryToComposer(summary.answer);
+      if (summary) appendToComposer(summary.answer);
     }
   },
   { flush: "post" },
@@ -4518,8 +4552,8 @@ function reportComposer(value: string) {
   if (props.conversationId && !props.currentConversation?.is_draft) return;
   props.onComposerInput?.(value, selectedCwd.value || null);
 }
-function appendBtwSummaryToComposer(answer: string) {
-  const value = draftText ? `${draftText}\n\n${answer}` : answer;
+function appendToComposer(text: string) {
+  const value = draftText ? `${draftText}\n\n${text}` : text;
   handleDraftChange(value);
   draftSeed.value = { value };
 }
@@ -5268,6 +5302,27 @@ watch(
       console.error("Failed to refresh BTW exchanges:", err);
     });
   },
+);
+
+// Text from the bookmarklet's page: the page itself, then picked elements.
+const bookmarkletStatusKey = computed(() =>
+  bookmarkletTracing.value
+    ? "bookmarkletTracking"
+    : bookmarkletLinked.value
+      ? "bookmarkletLinkedTo"
+      : "bookmarkletOpenedFrom",
+);
+const bookmarkletHost = computed(() =>
+  bookmarkletPage.value ? new URL(bookmarkletPage.value.url).host : "",
+);
+watch(
+  bookmarkletInserts,
+  (inserts) => {
+    if (!inserts.length) return;
+    bookmarkletInserts.value = [];
+    for (const text of inserts) appendToComposer(text);
+  },
+  { immediate: true },
 );
 
 // Trigger: open diff viewer.

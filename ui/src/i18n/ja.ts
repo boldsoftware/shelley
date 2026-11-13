@@ -372,6 +372,16 @@ export const ja: TranslationKeys = {
 
   // MCP Servers Modal
   mcpServers: "MCP サーバー",
+  bookmarklet: "ブックマークレット",
+  bookmarkletHelp:
+    "これをブックマークバーにドラッグしてください。任意のページでクリックすると、そのページについてのチャットを開始し、要素を選んで追加したり、指した場所を記録したりできます。",
+  bookmarkletOpenedFrom: "{host} から",
+  bookmarkletLinkedTo: "{host} とリンク中",
+  bookmarkletTracking: "{host} での操作を記録中",
+  bookmarkletAsk: "{origin} に録音の開始を許可しますか?",
+  bookmarkletAllow: "許可",
+  bookmarkletNotNow: "今はしない",
+  bookmarkletSites: "録音を開始できるサイト",
   configureMcpServers: "エージェントが使う MCP サーバーを接続",
   addMcpServer: "MCP サーバーを追加",
   editMcpServer: "MCP サーバーを編集",

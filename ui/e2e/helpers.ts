@@ -1,4 +1,10 @@
-import { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+import {
+  expect,
+  type APIRequestContext,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -390,17 +396,29 @@ function crc32(buf: Buffer): number {
 
 // Recording needs a transcription route, which the predictable-only test
 // server never has; specs that record mock the chat endpoint instead.
-export async function installTranscriptionAvailability(page: Page, available: boolean) {
-  await page.addInitScript((transcriptionAvailable) => {
+// page may be a whole context, to cover popups.
+export async function installTranscriptionAvailability(
+  page: Page | BrowserContext,
+  available: boolean,
+) {
+  await patchInitData(page, { transcription_available: available });
+}
+
+/** Overrides fields of the server's __SHELLEY_INIT__ in page (or every page
+ *  of a context), on top of earlier patches. */
+export async function patchInitData(page: Page | BrowserContext, patch: Record<string, unknown>) {
+  await page.addInitScript((patch) => {
+    const prior = Object.getOwnPropertyDescriptor(window, "__SHELLEY_INIT__");
     let init: Record<string, unknown> | undefined;
     Object.defineProperty(window, "__SHELLEY_INIT__", {
       configurable: true,
       get: () => init,
       set: (value) => {
-        init = { ...value, transcription_available: transcriptionAvailable };
+        prior?.set?.(value);
+        init = { ...(prior?.get?.() ?? value), ...patch };
       },
     });
-  }, available);
+  }, patch);
 }
 
 // Keep link ordering deliberate: the VM link is not the first configured link.

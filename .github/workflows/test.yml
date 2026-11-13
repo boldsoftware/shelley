@@ -49,6 +49,13 @@ jobs:
           cd ui
           pnpm run build
 
+      - name: Upload bookmarklet
+        uses: actions/upload-artifact@v4
+        with:
+          name: shelley-bookmarklet
+          path: ui/dist/shelley-bookmarklet.html
+          if-no-files-found: error
+
       - name: Build templates
         run: |
           for dir in templates/*/; do

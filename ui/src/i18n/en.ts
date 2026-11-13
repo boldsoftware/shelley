@@ -371,6 +371,16 @@ export const en: TranslationKeys = {
 
   // MCP Servers Modal
   mcpServers: "MCP Servers",
+  bookmarklet: "Bookmarklet",
+  bookmarkletHelp:
+    "Drag this to your bookmarks bar. Click it on any page to start a chat about that page, pick elements into it, and record what you point at.",
+  bookmarkletOpenedFrom: "From {host}",
+  bookmarkletLinkedTo: "Linked to {host}",
+  bookmarkletTracking: "Recording what you do on {host}",
+  bookmarkletAsk: "Let {origin} start recordings?",
+  bookmarkletAllow: "Allow",
+  bookmarkletNotNow: "Not now",
+  bookmarkletSites: "Sites that can start recordings",
   configureMcpServers: "Connect MCP servers for the agent to use",
   addMcpServer: "Add MCP Server",
   editMcpServer: "Edit MCP Server",

@@ -372,6 +372,16 @@ export const es: TranslationKeys = {
 
   // MCP Servers Modal
   mcpServers: "Servidores MCP",
+  bookmarklet: "Bookmarklet",
+  bookmarkletHelp:
+    "Arrástralo a tu barra de marcadores. Haz clic en cualquier página para iniciar un chat sobre esa página, añadir elementos y grabar lo que señalas.",
+  bookmarkletOpenedFrom: "Desde {host}",
+  bookmarkletLinkedTo: "Vinculado a {host}",
+  bookmarkletTracking: "Grabando lo que haces en {host}",
+  bookmarkletAsk: "¿Permitir que {origin} inicie grabaciones?",
+  bookmarkletAllow: "Permitir",
+  bookmarkletNotNow: "Ahora no",
+  bookmarkletSites: "Sitios que pueden iniciar grabaciones",
   configureMcpServers: "Conectar servidores MCP para el agente",
   addMcpServer: "Agregar servidor MCP",
   editMcpServer: "Editar servidor MCP",

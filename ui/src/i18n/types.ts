@@ -359,6 +359,15 @@ export interface TranslationKeys {
 
   // MCP Servers Modal
   mcpServers: string;
+  bookmarklet: string;
+  bookmarkletHelp: string;
+  bookmarkletOpenedFrom: string;
+  bookmarkletLinkedTo: string;
+  bookmarkletTracking: string;
+  bookmarkletAsk: string;
+  bookmarkletAllow: string;
+  bookmarkletNotNow: string;
+  bookmarkletSites: string;
   configureMcpServers: string;
   addMcpServer: string;
   editMcpServer: string;

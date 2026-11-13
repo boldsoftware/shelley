@@ -448,7 +448,7 @@ func (s *Server) finalizeQueuedTranscription(parentID string, queued db.QueuedMe
 	var details []string
 	switch {
 	case review != nil:
-		details = review.parentDetails(result.TimestampsPath)
+		details = review.parentDetails(result.TimestampsPath, hasVideo)
 	case hasVideo:
 		details = screenRecordingDetails(queued.Transcription.MediaPath)
 	}

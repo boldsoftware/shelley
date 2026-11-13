@@ -50,6 +50,15 @@ var FlagCompactNav = featureflags.Register(featureflags.Flag{
 	WorkspaceDefault: true,
 })
 
+// FlagBookmarklet offers, in the overflow menu, a bookmarklet that opens a
+// chat linked to the page it is clicked on (see ui/src/bookmarklet). Off,
+// Shelley also ignores chats opened that way.
+var FlagBookmarklet = featureflags.Register(featureflags.Flag{
+	Name:        "bookmarklet",
+	Description: "Overflow menu offers a bookmarklet that opens a chat about any page, linked to it to pick elements and record what you do there. Applies on reload.",
+	Default:     false,
+})
+
 // flagDefault is f's value on this server when no override is stored.
 func (s *Server) flagDefault(f featureflags.Flag) any {
 	if f.WorkspaceDefault != nil && s.workspaceMode() {

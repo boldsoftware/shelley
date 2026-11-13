@@ -1,0 +1,38 @@
+body {
+  margin: 0;
+  font:
+    16px/1.5 system-ui,
+    sans-serif;
+  color: #1f2328;
+  background: #f6f8fa;
+}
+main {
+  max-width: 32rem;
+  margin: 10vh auto;
+  padding: 0 1.5rem;
+}
+label {
+  display: block;
+  margin: 1rem 0;
+}
+input[type="url"] {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  font: inherit;
+}
+a {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: #1f6feb;
+  color: #fff;
+  text-decoration: none;
+  cursor: grab;
+}
+a:not([href]) {
+  background: #8c959f;
+  cursor: not-allowed;
+}

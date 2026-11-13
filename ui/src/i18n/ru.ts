@@ -372,6 +372,16 @@ export const ru: TranslationKeys = {
 
   // MCP Servers Modal
   mcpServers: "MCP-серверы",
+  bookmarklet: "Букмарклет",
+  bookmarkletHelp:
+    "Перетащите его на панель закладок. Нажмите на любой странице, чтобы начать чат об этой странице, добавлять в него элементы и записывать, на что вы указываете.",
+  bookmarkletOpenedFrom: "С {host}",
+  bookmarkletLinkedTo: "Связано с {host}",
+  bookmarkletTracking: "Запись ваших действий на {host}",
+  bookmarkletAsk: "Разрешить {origin} начинать запись?",
+  bookmarkletAllow: "Разрешить",
+  bookmarkletNotNow: "Не сейчас",
+  bookmarkletSites: "Сайты, которые могут начинать запись",
   configureMcpServers: "Подключить MCP-серверы для агента",
   addMcpServer: "Добавить MCP-сервер",
   editMcpServer: "Редактировать MCP-сервер",

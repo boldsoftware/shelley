@@ -140,6 +140,7 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vu
 import { useI18n } from "../composables/i18n";
 import type { RecordingMode } from "./recordingDestination";
 import { startRecordingMeter } from "./recordingMeter";
+import { startPageTrace, type PageTrace } from "../composables/bookmarklet";
 
 type RecordingState = "starting" | "preroll" | "recording" | "stopping" | "error";
 
@@ -172,6 +173,8 @@ const capturedRecording = shallowRef<{
   durationMs: number;
   path?: string;
   metadataUploaded: boolean;
+  // What the user did on the bookmarklet's page meanwhile (.review.json).
+  review?: Blob;
 } | null>(null);
 const screenCaptureAvailable =
   typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getDisplayMedia === "function";
@@ -184,6 +187,7 @@ let stopMeter: (() => void) | null = null;
 let recorder: MediaRecorder | null = null;
 let recordedChunks: Blob[] = [];
 let startedAt = 0;
+let pageTrace: PageTrace | null = null;
 let timerId: number | null = null;
 let prerollTimerId: number | null = null;
 let resolvePreroll: (() => void) | null = null;
@@ -259,6 +263,8 @@ function waitForPreroll(): Promise<void> {
 }
 
 async function cleanupMedia() {
+  pageTrace?.cancel();
+  pageTrace = null;
   cancelPreroll();
   stopTimer();
   stopAudioMeter();
@@ -428,6 +434,7 @@ async function startRecording(
     };
     recorder.start(1000);
     startedAt = Date.now();
+    pageTrace = startPageTrace();
     state.value = "preroll";
     await waitForPreroll();
     if (discarding || disposed || state.value !== "preroll") return;
@@ -514,6 +521,7 @@ async function stopRecording() {
       filename: recordingFilename(extensionForMimeType(mimeType)),
       durationMs: elapsedMs.value,
       metadataUploaded: false,
+      review: pageTrace?.stop(startedAt, elapsedMs.value) ?? undefined,
     };
     recordedChunks = [];
     await cleanupMedia();
@@ -532,13 +540,28 @@ async function finishRecording(retry: boolean) {
   errorMessage.value = "";
   let submitting = false;
   try {
-    if (captured.body) {
-      captured.path = await uploadRecording(captured.filename, captured.body);
-      captured.body = undefined;
+    if (!captured.path) {
+      captured.path = await uploadRecording(captured.filename, captured.body!);
+      // A review keeps the bytes until it is uploaded beside them.
+      if (!captured.review) captured.body = undefined;
     }
     if (mode.value === "screen" && !captured.metadataUploaded) {
       await uploadVideoMetadata(captured.path!, captured.durationMs);
       captured.metadataUploaded = true;
+    }
+    if (captured.review) {
+      // The server finds a recording's review by name.
+      const expected = `${captured.path}.review.json`;
+      const uploaded = await uploadRecording(expected.split("/").pop()!, captured.review);
+      if (uploaded !== expected) {
+        // An earlier attempt stored the review but lost the response, so its
+        // name was taken. Retrying uploads a fresh pair.
+        captured.path = undefined;
+        captured.metadataUploaded = false;
+        throw new Error(t("recordingInvalidResponse"));
+      }
+      captured.review = undefined;
+      captured.body = undefined;
     }
     if (discarding || disposed) return;
     submitting = true;
