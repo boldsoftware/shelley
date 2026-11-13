@@ -224,7 +224,7 @@ export const ja: TranslationKeys = {
   messagePlaceholderShort: "メッセージ...",
   attachFile: "ファイルを添付",
   sendMessage: "メッセージを送信",
-  suggestionLabel: "提案",
+  useSuggestion: "使用",
   useSuggestionTitle: "この提案を入力欄に入れて編集・送信 (Tab)",
   recordingTitle: "メディアを録画",
   recordingReturn: "録画に戻る",

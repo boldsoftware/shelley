@@ -224,7 +224,7 @@ export const ru: TranslationKeys = {
   messagePlaceholderShort: "Сообщение...",
   attachFile: "Прикрепить файл",
   sendMessage: "Отправить сообщение",
-  suggestionLabel: "Предложение",
+  useSuggestion: "Вставить",
   useSuggestionTitle: "Вставить это предложение в поле ввода, чтобы изменить или отправить (Tab)",
   recordingTitle: "Запись медиа",
   recordingReturn: "Вернуться к записи",

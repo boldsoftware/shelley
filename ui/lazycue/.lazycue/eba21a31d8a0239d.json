@@ -1,0 +1,74 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The suggestion\" is [data-testid=\"next-prompt-suggestion\"]; \"the input\" is the message input [data-testid=\"message-input\"]. \"The button\" is the suggestion's button [data-testid=\"next-prompt-suggestion-use\"]. The window.* helpers return \"ok\" or what is wrong; check each with an eval step expecting \"ok\". On a short phone screen, a suggestion too long for the input is cut off like overflowing text, no taller than the input gets (40% of the 240px screen), and its button stays in sight at the bottom. Perform the steps in order. 1. Navigate to /c/basil. 2. The suggestion should come to contain \"{{EXPECTED}}\". 3. Eval window.suggestionInside(), window.inputNoTallerThan(97), window.suggestionCutOff(), window.useOnLastLine() and window.markInput(). 4. Tap the button: a touch step \"start\" on it, immediately followed by a touch step \"end\". 5. The input's value should become exactly \"{{EXPECTED}}\". 6. Eval window.inputSettled(0.5).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/basil"
+    },
+    {
+      "action": "wait_text",
+      "text": "{{EXPECTED}}",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"next-prompt-suggestion\"]",
+      "text": "{{EXPECTED}}"
+    },
+    {
+      "action": "eval",
+      "expression": "window.suggestionInside()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.inputNoTallerThan(97)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.suggestionCutOff()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.useOnLastLine()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.markInput()",
+      "expect": "ok"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"next-prompt-suggestion-use\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "{{EXPECTED}}"
+    },
+    {
+      "action": "eval",
+      "expression": "window.inputSettled(0.5)",
+      "expect": "ok"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T22:32:48.746736879Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 23843,
+    "output_tokens": 562,
+    "estimated_cost_usd": 0.02074455,
+    "mode": "generated"
+  }
+}

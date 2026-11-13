@@ -219,7 +219,7 @@ export const zhCN: TranslationKeys = {
   messagePlaceholderShort: "输入消息...",
   attachFile: "附加文件",
   sendMessage: "发送消息",
-  suggestionLabel: "建议",
+  useSuggestion: "使用",
   useSuggestionTitle: "将此建议放入输入框以编辑或发送 (Tab)",
   recordingTitle: "录制媒体",
   recordingReturn: "返回录制",

@@ -222,7 +222,7 @@ export const en: TranslationKeys = {
   messagePlaceholderShort: "Message...",
   attachFile: "Attach file",
   sendMessage: "Send message",
-  suggestionLabel: "Suggestion",
+  useSuggestion: "Use",
   useSuggestionTitle: "Put this suggestion in the text box to edit or send (Tab)",
   recordingTitle: "Record media",
   recordingReturn: "Return to recording",

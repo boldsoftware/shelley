@@ -86,20 +86,6 @@
         aria-hidden="true"
         @change="handleFileSelect"
       />
-      <button
-        v-if="suggestion"
-        id="next-prompt-suggestion"
-        type="button"
-        class="next-prompt-suggestion"
-        data-testid="next-prompt-suggestion"
-        :title="t('useSuggestionTitle')"
-        :disabled="isDisabled"
-        @mousedown.prevent
-        @click="acceptSuggestion"
-      >
-        <span class="next-prompt-suggestion-label">{{ t("suggestionLabel") }}</span>
-        <span class="next-prompt-suggestion-text">{{ suggestion }} <kbd aria-hidden="true">Tab</kbd></span>
-      </button>
       <div v-if="sealedSecrets.length > 0" class="secret-bar" data-testid="secret-bar">
         <span
           v-for="s in sealedSecrets"
@@ -470,42 +456,64 @@
             <line x1="12" y1="19" x2="20" y2="19" />
           </svg>
         </div>
-        <textarea
-          ref="textareaRef"
-          :value="message"
-          :placeholder="placeholderText"
-          :aria-keyshortcuts="suggestion ? 'Tab' : undefined"
-          :aria-describedby="
-            [suggestion && 'next-prompt-suggestion', viewDraft && viewDraftLabelId].filter(Boolean).join(' ') ||
-            undefined
-          "
-          class="message-textarea"
-          :disabled="isDisabled"
-          :rows="initialRows ?? 1"
-          aria-label="Message input"
-          data-testid="message-input"
-          :aria-autocomplete="showSkillMenu || showFileMenu || showProfileMenu ? 'list' : undefined"
-          :aria-controls="
-            showSkillMenu ? skillMenuId : showFileMenu ? fileMenuId : showProfileMenu ? profileMenuId : undefined
-          "
-          :aria-activedescendant="
-            showSkillMenu && skillMatches.length
-              ? `${skillMenuId}-${skillSelected}`
-              : showFileMenu && fileMatches.length
-                ? `${fileMenuId}-${fileSelected}`
-                : showProfileMenu && profileSuggestions.length
-                  ? `${profileMenuId}-${profileMenuSelectedIndex}`
-                  : undefined
-          "
-          @input="onTextareaInput"
-          @select="onCaretMove"
-          @click="onCaretMove"
-          @keyup="onCaretMove"
-          @blur="onTextareaBlur"
-          @keydown="handleKeyDown"
-          @paste="handlePaste"
-          @focus="onTextareaFocus"
-        />
+        <div class="message-textarea-stack">
+          <textarea
+            ref="textareaRef"
+            :value="message"
+            :placeholder="suggestion ? undefined : placeholderText"
+            :aria-keyshortcuts="suggestion ? 'Tab' : undefined"
+            :aria-describedby="
+              [suggestion && 'next-prompt-suggestion', viewDraft && viewDraftLabelId].filter(Boolean).join(' ') ||
+              undefined
+            "
+            class="message-textarea"
+            :disabled="isDisabled"
+            :rows="initialRows ?? 1"
+            aria-label="Message input"
+            data-testid="message-input"
+            :aria-autocomplete="showSkillMenu || showFileMenu || showProfileMenu ? 'list' : undefined"
+            :aria-controls="
+              showSkillMenu ? skillMenuId : showFileMenu ? fileMenuId : showProfileMenu ? profileMenuId : undefined
+            "
+            :aria-activedescendant="
+              showSkillMenu && skillMatches.length
+                ? `${skillMenuId}-${skillSelected}`
+                : showFileMenu && fileMatches.length
+                  ? `${fileMenuId}-${fileSelected}`
+                  : showProfileMenu && profileSuggestions.length
+                    ? `${profileMenuId}-${profileMenuSelectedIndex}`
+                    : undefined
+            "
+            @input="onTextareaInput"
+            @select="onCaretMove"
+            @click="onCaretMove"
+            @keyup="onCaretMove"
+            @blur="onTextareaBlur"
+            @keydown="handleKeyDown"
+            @paste="handlePaste"
+            @focus="onTextareaFocus"
+          />
+          <!-- The suggested next message stands in for the placeholder,
+               laid out as the typed text would be, so taking it doesn't
+               shift the box. Taps fall through to the text box; its
+               button (Tab on a keyboard) takes it. -->
+          <div v-if="suggestion" class="next-prompt-suggestion" data-testid="next-prompt-suggestion">
+            <span id="next-prompt-suggestion">{{ suggestion }}</span>
+            <button
+              type="button"
+              class="next-prompt-suggestion-use"
+              data-testid="next-prompt-suggestion-use"
+              :title="t('useSuggestionTitle')"
+              :aria-label="`${t('useSuggestion')} (Tab)`"
+              :disabled="isDisabled"
+              @mousedown.prevent
+              @click="acceptSuggestion"
+            >
+              <span class="next-prompt-suggestion-key">Tab</span>
+              <span class="next-prompt-suggestion-tap">{{ t("useSuggestion") }}</span>
+            </button>
+          </div>
+        </div>
       </div>
       <div class="message-controls-row">
         <div v-if="$slots.status" class="message-controls-status-slot"><slot name="status" /></div>
@@ -718,8 +726,8 @@ const props = withDefaults(
     cwd?: string;
     /** Child conversations cannot start nested BTW readers. */
     isChildConversation?: boolean;
-    /** Suggested next message, shown above the text box; Tab in the empty
-     * composer or a click on it takes it. */
+    /** Suggested next message, shown in the empty text box; Tab or its
+     * button takes it. */
     nextPromptSuggestion?: string | null;
   }>(),
   {
@@ -903,10 +911,10 @@ watch(isSmallScreen, (small) => {
   hint.value = pickPlaceholderHint(small);
 });
 
-// The suggested next message shows in full just above the text box while
-// the composer could take it: shown, not replaced by a recording, and empty
-// (no text, attachments, or skills). Typing hides it; Tab or a click on it
-// takes it.
+// The suggested next message shows in full in the empty text box, in place
+// of the placeholder, while the composer could take it: shown, not replaced
+// by a recording, and empty (no text, attachments, or skills). Typing hides
+// it; Tab or its button takes it.
 const suggestion = computed(() =>
   !props.composerHidden &&
   (!recordingActive.value || recordingFloating.value) &&
