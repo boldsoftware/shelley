@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"errors"
+	"mime"
 	"net/http"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"shelley.exe.dev/commitnotes"
 )
@@ -49,6 +51,13 @@ type GitFileDiff struct {
 	Path       string `json:"path"`
 	OldContent string `json:"oldContent"`
 	NewContent string `json:"newContent"`
+	Binary     bool   `json:"binary"`
+	OldExists  bool   `json:"oldExists"`
+	NewExists  bool   `json:"newExists"`
+	OldImage   bool   `json:"oldImage"`
+	NewImage   bool   `json:"newImage"`
+	OldAudio   bool   `json:"oldAudio"`
+	NewAudio   bool   `json:"newAudio"`
 }
 
 // emptyTreeHash is the well-known hash for git's empty tree object.
@@ -794,11 +803,13 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var oldContent string
+	var oldExists bool
 	if baseRef == emptyTreeHash {
 		oldContent = ""
 	} else {
 		oldCmd := m.git(gitRoot, "show", baseRef+":"+filePath)
-		oldOutput, _ := oldCmd.Output()
+		oldOutput, err := oldCmd.Output()
+		oldExists = err == nil
 		oldContent = string(oldOutput)
 	}
 
@@ -824,17 +835,73 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var newContent string
+	var newExists bool
 	if headRef == "" {
 		if fileData, err := m.readFile(m.join(gitRoot, cleanPath)); err == nil {
+			newExists = true
 			newContent = string(fileData)
 		}
 	} else {
 		newCmd := m.git(gitRoot, "show", headRef+":"+filePath)
-		newOutput, _ := newCmd.Output()
+		newOutput, err := newCmd.Output()
+		newExists = err == nil
 		newContent = string(newOutput)
 	}
 
+	side := r.URL.Query().Get("download")
+	preview := r.URL.Query().Get("preview")
+	if preview != "" {
+		side = preview
+	}
+	if side != "" {
+		var content string
+		var exists bool
+		switch side {
+		case "before":
+			content, exists = oldContent, oldExists
+		case "after":
+			content, exists = newContent, newExists
+		default:
+			http.Error(w, "invalid download side", http.StatusBadRequest)
+			return
+		}
+		if !exists {
+			http.Error(w, "file not found", http.StatusNotFound)
+			return
+		}
+		contentType, disposition := "application/octet-stream", "attachment"
+		if preview != "" {
+			contentType = http.DetectContentType([]byte(content))
+			if !strings.HasPrefix(contentType, "image/") && !strings.HasPrefix(contentType, "audio/") {
+				http.Error(w, "not supported media", http.StatusUnsupportedMediaType)
+				return
+			}
+			disposition = "inline"
+		}
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": side + "-" + filepath.Base(cleanPath)}))
+		http.ServeContent(w, r, filepath.Base(cleanPath), time.Time{}, bytes.NewReader([]byte(content)))
+		return
+	}
+	oldBinary := strings.ContainsRune(oldContent, 0) || !utf8.ValidString(oldContent)
+	newBinary := strings.ContainsRune(newContent, 0) || !utf8.ValidString(newContent)
+	oldImage := oldBinary && strings.HasPrefix(http.DetectContentType([]byte(oldContent)), "image/")
+	newImage := newBinary && strings.HasPrefix(http.DetectContentType([]byte(newContent)), "image/")
+	oldAudio := oldBinary && strings.HasPrefix(http.DetectContentType([]byte(oldContent)), "audio/")
+	newAudio := newBinary && strings.HasPrefix(http.DetectContentType([]byte(newContent)), "audio/")
+	binary := oldBinary || newBinary
+	if binary && r.URL.Query().Get("text") != "true" {
+		oldContent, newContent = "", ""
+	}
 	fileDiff := GitFileDiff{
+		Binary:     binary,
+		OldAudio:   oldAudio,
+		NewAudio:   newAudio,
+		OldImage:   oldImage,
+		NewImage:   newImage,
+		OldExists:  oldExists,
+		NewExists:  newExists,
 		Path:       filePath,
 		OldContent: oldContent,
 		NewContent: newContent,

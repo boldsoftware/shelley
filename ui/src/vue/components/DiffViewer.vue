@@ -220,7 +220,7 @@
               <button
                 v-tooltip.top="'Previous change (,)'"
                 class="diff-viewer-nav-btn"
-                :disabled="!fileDiff"
+                :disabled="!fileDiff || binaryPanel"
                 aria-label="Previous change (,)"
                 @click="goToPreviousChange"
               >
@@ -229,7 +229,7 @@
               <button
                 v-tooltip.top="'Next change (.)'"
                 class="diff-viewer-nav-btn"
-                :disabled="!fileDiff"
+                :disabled="!fileDiff || binaryPanel"
                 aria-label="Next change (.)"
                 @click="goToNextChange"
               >
@@ -412,7 +412,10 @@
               <div class="spinner"></div>
               <span>Loading...</span>
             </div>
-            <div v-if="!loading && !monacoLoaded && !error" class="diff-viewer-loading">
+            <div
+              v-if="!loading && !binaryPanel && !monacoLoaded && !error"
+              class="diff-viewer-loading"
+            >
               <div class="spinner"></div>
               <span>Loading editor...</span>
             </div>
@@ -422,13 +425,92 @@
                 Click a line to comment, or select text and click Comment.
               </p>
             </div>
+            <div v-if="fileDiff?.binary" class="diff-viewer-binary-toolbar">
+              <button
+                v-if="showBinaryAsText"
+                type="button"
+                class="btn-secondary"
+                :disabled="loading"
+                @click="showBinaryAsText = false"
+              >
+                Binary view
+              </button>
+              <template v-else>
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  :disabled="loading"
+                  @click="showBinaryText"
+                >
+                  View as text
+                </button>
+              </template>
+            </div>
+            <div v-if="binaryPanel" class="diff-viewer-binary" data-testid="binary-file-panel">
+              <div class="diff-viewer-binary-sides">
+                <div
+                  class="diff-viewer-binary-side"
+                  :class="{ 'diff-viewer-binary-side-empty': !fileDiff?.oldExists }"
+                  :style="{ flex: binaryBeforeRatio }"
+                >
+                  <div v-if="fileDiff?.oldExists" class="diff-viewer-binary-side-content">
+                    <div v-if="fileDiff?.oldImage" class="diff-viewer-binary-image">
+                      <img :src="binaryMediaURL('before')" :alt="`Before: ${selectedFile}`" />
+                    </div>
+                    <div v-else-if="fileDiff?.oldAudio" class="diff-viewer-binary-audio">
+                      <audio
+                        :src="binaryMediaURL('before')"
+                        :aria-label="`Before: ${selectedFile}`"
+                        controls
+                        preload="metadata"
+                      />
+                    </div>
+                    <div v-else class="diff-viewer-binary-line">Binary file</div>
+                    <a
+                      v-if="fileDiff?.oldExists && !fileDiff.oldImage && !fileDiff.oldAudio"
+                      class="diff-viewer-binary-download"
+                      :href="binaryDownloadURL('before')"
+                      download
+                      >Download</a
+                    >
+                  </div>
+                </div>
+                <div
+                  class="diff-viewer-binary-side"
+                  :class="{ 'diff-viewer-binary-side-empty': !fileDiff?.newExists }"
+                  :style="{ flex: 1 - binaryBeforeRatio }"
+                >
+                  <div v-if="fileDiff?.newExists" class="diff-viewer-binary-side-content">
+                    <div v-if="fileDiff?.newImage" class="diff-viewer-binary-image">
+                      <img :src="binaryMediaURL('after')" :alt="`After: ${selectedFile}`" />
+                    </div>
+                    <div v-else-if="fileDiff?.newAudio" class="diff-viewer-binary-audio">
+                      <audio
+                        :src="binaryMediaURL('after')"
+                        :aria-label="`After: ${selectedFile}`"
+                        controls
+                        preload="metadata"
+                      />
+                    </div>
+                    <div v-else class="diff-viewer-binary-line">Binary file</div>
+                    <a
+                      v-if="fileDiff?.newExists && !fileDiff.newImage && !fileDiff.newAudio"
+                      class="diff-viewer-binary-download"
+                      :href="binaryDownloadURL('after')"
+                      download
+                      >Download</a
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
             <div
               ref="editorContainerRef"
               class="diff-viewer-editor"
-              :style="{ display: fileDiff && monacoLoaded ? 'block' : 'none' }"
+              :style="{ display: fileDiff && !binaryPanel && monacoLoaded ? 'block' : 'none' }"
             />
             <div
-              v-if="!isMobile && vimEnabled && fileDiff && monacoLoaded"
+              v-if="!isMobile && vimEnabled && fileDiff && !fileDiff.binary && monacoLoaded"
               ref="vimStatusRef"
               class="monaco-vim-status"
             />
@@ -473,7 +555,7 @@
         <button
           v-tooltip.top="'Previous change (,)'"
           class="diff-viewer-mobile-nav-btn"
-          :disabled="!fileDiff"
+          :disabled="!fileDiff || binaryPanel"
           aria-label="Previous change (,)"
           @click="goToPreviousChange"
         >
@@ -482,7 +564,7 @@
         <button
           v-tooltip.top="'Next change (.)'"
           class="diff-viewer-mobile-nav-btn"
-          :disabled="!fileDiff"
+          :disabled="!fileDiff || binaryPanel"
           aria-label="Next change (.)"
           @click="goToNextChange"
         >
@@ -654,6 +736,34 @@ let loadDiffsRequestId = 0;
 let loadFilesRequestId = 0;
 let loadFileDiffRequestId = 0;
 const fileDiff = ref<GitFileDiff | null>(null);
+const showBinaryAsText = ref(false);
+const binaryPanel = computed(() => !!fileDiff.value?.binary && !showBinaryAsText.value);
+const binaryBeforeRatio = computed(() =>
+  !fileDiff.value?.oldExists
+    ? EMPTY_SIDE_SPLIT_RATIO
+    : !fileDiff.value?.newExists
+      ? 1 - EMPTY_SIDE_SPLIT_RATIO
+      : 0.5,
+);
+function showBinaryText() {
+  if (selectedDiff.value && selectedFile.value)
+    void loadFileDiff(selectedDiff.value, selectedFile.value, true);
+}
+function binaryMediaURL(side: "before" | "after"): string {
+  return binaryDownloadURL(side).replace(`&download=${side}`, `&preview=${side}`);
+}
+function binaryDownloadURL(side: "before" | "after"): string {
+  if (!selectedDiff.value || !selectedFile.value) return "";
+  return (
+    api.gitFileDiffURL(
+      selectedDiff.value,
+      selectedFile.value,
+      props.cwd,
+      props.conversationId,
+      selectedDiff.value === "working" ? undefined : selectedTo.value,
+    ) + `&download=${side}`
+  );
+}
 const loading = ref(false);
 const error = ref<string | null>(null);
 const monacoLoaded = ref(false);
@@ -778,7 +888,7 @@ function lineSpan(first: number, last: number): string {
 }
 
 function monacoEditors(): Array<[Monaco.editor.ICodeEditor, ReviewSide]> {
-  if (!diffEditor) return [];
+  if (!diffEditor || loading.value || binaryPanel.value) return [];
   return [
     [diffEditor.getModifiedEditor(), "new"],
     [diffEditor.getOriginalEditor(), "old"],
@@ -920,7 +1030,7 @@ watch(
 useMonacoVim(
   () => modifiedEditor.value,
   () => vimStatusRef.value,
-  () => !isMobile.value && vimEnabled.value && mode.value === "edit",
+  () => !isMobile.value && vimEnabled.value && mode.value === "edit" && !fileDiff.value?.binary,
   () => requestClose(),
 );
 
@@ -931,10 +1041,10 @@ watch([mode, selectedFile, selectedDiff, selectedTo], () => {
   commentPrompt.value = null;
   if (diffEditor && selectedFile.value && !isCommitMessageFile(selectedFile.value)) {
     const isWorkingView = selectedDiff.value === "working" || selectedTo.value === "working";
-    const readOnly = mode.value === "comment" || !isWorkingView;
+    const readOnly = !!fileDiff.value?.binary || mode.value === "comment" || !isWorkingView;
     // Only allow drag-and-drop of selected text in edit mode. In comment mode
     // (including editable commit messages) selecting text must not move it.
-    const dragAndDrop = mode.value === "edit";
+    const dragAndDrop = !fileDiff.value?.binary && mode.value === "edit";
     diffEditor.updateOptions({ readOnly, dragAndDrop, splitViewDefaultRatio: splitViewRatioVal });
     diffEditor.getModifiedEditor().updateOptions({ readOnly, dragAndDrop });
   }
@@ -1176,9 +1286,10 @@ watch(isMobile, (mob) => {
 // Swap models into the existing editor when fileDiff changes.
 let diffUpdateDisposable: Monaco.IDisposable | null = null;
 watch(
-  [monacoLoaded, fileDiff],
+  [monacoLoaded, fileDiff, showBinaryAsText],
   () => {
-    if (!monacoLoaded.value || !fileDiff.value || !diffEditor || !monacoMod) return;
+    if (!monacoLoaded.value || !fileDiff.value || binaryPanel.value || !diffEditor || !monacoMod)
+      return;
     const monaco = monacoMod;
     const fd = fileDiff.value;
 
@@ -1214,9 +1325,10 @@ watch(
     prev?.modified.dispose();
 
     const isWorkingView = selectedDiff.value === "working" || selectedTo.value === "working";
-    const readOnly = isCommitMsg ? !isHeadCommit : modeVal === "comment" || !isWorkingView;
+    const readOnly =
+      !!fd.binary || (isCommitMsg ? !isHeadCommit : modeVal === "comment" || !isWorkingView);
     // Drag-and-drop of text only in edit mode (never on commit messages).
-    const dragAndDrop = !isCommitMsg && modeVal === "edit";
+    const dragAndDrop = !fd.binary && !isCommitMsg && modeVal === "edit";
     // For new/deleted files one side is empty; shrink it so the non-empty
     // side gets most of the width instead of wasting half the screen.
     splitViewRatioVal = 0.5;
@@ -1412,7 +1524,7 @@ async function loadFiles(diffId: string) {
   }
 }
 
-async function loadFileDiff(diffId: string, filePath: string) {
+async function loadFileDiff(diffId: string, filePath: string, asText = false) {
   const requestId = ++loadFileDiffRequestId;
   const cwd = props.cwd;
   const toArg = diffId === "working" ? undefined : selectedTo.value;
@@ -1430,8 +1542,16 @@ async function loadFileDiff(diffId: string, filePath: string) {
       }
       return;
     }
-    const diffData = await api.getGitFileDiff(diffId, filePath, cwd, props.conversationId, toArg);
+    const diffData = await api.getGitFileDiff(
+      diffId,
+      filePath,
+      cwd,
+      props.conversationId,
+      toArg,
+      asText,
+    );
     if (requestId !== loadFileDiffRequestId) return;
+    showBinaryAsText.value = asText;
     fileDiff.value = diffData;
   } catch (err) {
     if (requestId !== loadFileDiffRequestId) return;
@@ -1467,6 +1587,7 @@ function goToPreviousFile(): boolean {
 }
 
 function goToNextChange() {
+  if (binaryPanel.value) return;
   if (!diffEditor) return;
   const changes = diffEditor.getLineChanges();
   if (!changes || changes.length === 0) {
@@ -1496,6 +1617,7 @@ function goToNextChange() {
 }
 
 function goToPreviousChange() {
+  if (binaryPanel.value) return;
   if (!diffEditor) return;
   const changes = diffEditor.getLineChanges();
   if (!changes || changes.length === 0) {
@@ -1528,6 +1650,7 @@ async function saveCurrentFile() {
     !selectedFile.value ||
     isCommitMessageFile(selectedFile.value) ||
     !fileDiff.value ||
+    fileDiff.value.binary ||
     modeVal !== "edit" ||
     !gitRoot.value ||
     !isWorkingView
@@ -1638,7 +1761,7 @@ function handleKeyDown(e: KeyboardEvent) {
   }
   // Route Ctrl/Cmd+F to Monaco's find widget instead of browser find.
   if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-    if (diffEditor) {
+    if (diffEditor && !binaryPanel.value) {
       e.preventDefault();
       e.stopPropagation();
       const modEditor = diffEditor.getModifiedEditor();
@@ -1652,7 +1775,7 @@ function handleKeyDown(e: KeyboardEvent) {
   if (findWidget) return;
   // Intercept PageUp/PageDown to scroll the diff editor.
   if (e.key === "PageUp" || e.key === "PageDown") {
-    if (diffEditor) {
+    if (diffEditor && !binaryPanel.value) {
       e.preventDefault();
       e.stopPropagation();
       const modEditor = diffEditor.getModifiedEditor();

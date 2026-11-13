@@ -357,6 +357,13 @@ export interface GitFileInfo {
 }
 
 export interface GitFileDiff {
+  binary?: boolean;
+  oldAudio?: boolean;
+  newAudio?: boolean;
+  oldImage?: boolean;
+  newImage?: boolean;
+  oldExists?: boolean;
+  newExists?: boolean;
   path: string;
   oldContent: string;
   newContent: string;

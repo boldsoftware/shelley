@@ -277,6 +277,54 @@ test.describe("Narrated review recording", () => {
     });
   });
 
+  test("binary views do not reuse the previous text selection or visible lines", async ({
+    page,
+    request,
+  }) => {
+    await withTempDir("shelley-review-binary-", async (dir) => {
+      const repo = reviewRepo(dir);
+      writeFileSync(join(repo, "opaque.bin"), Buffer.from([0, 1, 255]));
+      git(repo, "add", "opaque.bin");
+      git(repo, "commit", "--amend", "--no-edit");
+      const slug = await createConversationViaAPI(request, "Hello", { cwd: repo });
+      await installMicrophone(page);
+      const chats: Chat[] = [];
+      await page.route("**/api/conversation/*/chat", async (route: Route) => {
+        chats.push(route.request().postDataJSON() as Chat);
+        await route.fulfill({ status: 202, contentType: "application/json", body: "{}" });
+      });
+      await page.addInitScript(() => localStorage.setItem("diff-viewer-layout", "sidebar"));
+      const overlay = await openDiffs(page, slug);
+      await overlay.getByTestId("review-record-start").click();
+      await overlay.getByRole("treeitem", { name: /app\.ts/ }).click();
+      const line = overlay.locator(".editor.modified .view-line", { hasText: "renamedValue" });
+      await expect(line).toBeVisible();
+      await line.hover({ position: { x: 2, y: 8 } });
+      await page.mouse.down();
+      await line.hover({ position: { x: 160, y: 8 } });
+      await page.mouse.up();
+      const status = overlay.getByTestId("review-recording-status");
+      await expect(status).toContainText("Selected");
+      await overlay.getByRole("treeitem", { name: /opaque\.bin/ }).click();
+      const panel = overlay.getByTestId("binary-file-panel");
+      await expect(panel).toBeVisible();
+      await status.hover();
+      await expect(status).not.toContainText("Selected");
+      await expect(overlay.getByTestId("review-recording-where")).toHaveText("opaque.bin");
+      await overlay.getByTestId("review-record-stop").click();
+      await expectSent(overlay);
+      expect(chats).toHaveLength(1);
+      const audioPath = chats[0].message.replace(/^\/transcription /, "");
+      const review = JSON.parse(readFileSync(`${audioPath}.review.json`, "utf8"));
+      expect(review.events).not.toContainEqual(
+        expect.objectContaining({ type: "selection", file: "opaque.bin" }),
+      );
+      expect(review.events).toContainEqual(
+        expect.objectContaining({ type: "on_screen", items: ["opaque.bin"] }),
+      );
+    });
+  });
+
   test("offers no narrated review without transcription", async ({ page, request }) => {
     await withTempDir("shelley-review-rec-", async (dir) => {
       const slug = await createConversationViaAPI(request, "Hello", { cwd: reviewRepo(dir) });

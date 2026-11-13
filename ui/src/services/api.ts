@@ -835,21 +835,29 @@ class ApiService {
     return apiJSON(`/api/git/diffs/${diffId}/files?${params}`, "Failed to get diff files");
   }
 
+  gitFileDiffURL(
+    diffId: string,
+    filePath: string,
+    cwd: string,
+    conversationId: string | undefined,
+    to?: string,
+  ): string {
+    const params = machineParams(conversationId, { cwd });
+    if (to) params.set("to", to);
+    const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
+    return `/api/git/file-diff/${diffId}/${encodedPath}?${params}`;
+  }
+
   async getGitFileDiff(
     diffId: string,
     filePath: string,
     cwd: string,
     conversationId: string | undefined,
     to?: string,
+    asText = false,
   ): Promise<GitFileDiff> {
-    const params = machineParams(conversationId, { cwd });
-    if (to) params.set("to", to);
-    // Encode per segment so names containing '#', '?' or '%' survive the URL.
-    const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
-    return apiJSON(
-      `/api/git/file-diff/${diffId}/${encodedPath}?${params}`,
-      "Failed to get file diff",
-    );
+    const url = this.gitFileDiffURL(diffId, filePath, cwd, conversationId, to);
+    return apiJSON(url + (asText ? "&text=true" : ""), "Failed to get file diff");
   }
 
   async getGitCommitMessages(

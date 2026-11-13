@@ -9597,6 +9597,8 @@ svg {
 }
 
 .diff-viewer-files-pane {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   position: relative;
@@ -9619,6 +9621,8 @@ svg {
 }
 
 .diff-viewer-editor {
+  flex: 1;
+  min-height: 0;
   height: 100%;
   width: 100%;
 }
@@ -19452,5 +19456,108 @@ kbd {
   .archive-store-list {
     flex-basis: auto;
     border-right: none;
+  }
+}
+
+.diff-viewer-binary {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-secondary);
+  font-size: var(--font-size-13);
+}
+.diff-viewer-binary-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.diff-viewer-binary-sides {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.diff-viewer-binary-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.diff-viewer-binary-side + .diff-viewer-binary-side {
+  border-left: 1px solid var(--border);
+}
+.diff-viewer-binary-side-empty {
+  --binary-diagonal-fill: #22222233;
+  background-image: linear-gradient(
+    -45deg,
+    var(--binary-diagonal-fill) 12.5%,
+    transparent 12.5%,
+    transparent 50%,
+    var(--binary-diagonal-fill) 50%,
+    var(--binary-diagonal-fill) 62.5%,
+    transparent 62.5%,
+    transparent 100%
+  );
+  background-size: 8px 8px;
+}
+.dark .diff-viewer-binary-side-empty {
+  --binary-diagonal-fill: #cccccc33;
+}
+
+.diff-viewer-binary-download {
+  align-self: flex-start;
+  margin: 12px;
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+.diff-viewer-binary-line {
+  padding: 6px 12px;
+  font-family: var(--font-mono, monospace);
+}
+
+.diff-viewer-binary-image {
+  flex: 1;
+  min-height: 0;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-base);
+  background-image: conic-gradient(
+    color-mix(in srgb, var(--text-primary) 6%, transparent) 25%,
+    transparent 0 50%,
+    color-mix(in srgb, var(--text-primary) 6%, transparent) 0 75%,
+    transparent 0
+  );
+  background-size: 16px 16px;
+}
+.diff-viewer-binary-image img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.diff-viewer-binary-side-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.diff-viewer-binary-audio {
+  padding: 12px;
+}
+.diff-viewer-binary-audio audio {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+}
+@media (max-width: 767px) {
+  .diff-viewer-binary-image {
+    align-items: flex-start;
+    padding: 12px;
   }
 }
