@@ -176,6 +176,35 @@ test("double-clicking a conversation name renames it and Escape cancels", async 
   await expect(page).toHaveURL(new RegExp(`/c/${newSlug}$`));
 });
 
+test("row text is not selectable but rename and tag inputs are", async ({ page, request }) => {
+  const conversation = await createConversationViaAPIWithDetails(request, "selection test");
+  await page.goto("/new");
+  const row = page.locator(`[data-conversation-id="${conversation.conversationId}"]`);
+  await expect(row.locator(".conversation-title")).toHaveCSS("user-select", "none");
+  await expect(row.locator(".conversation-preview")).toHaveCSS("user-select", "none");
+
+  const menu = page.getByTestId("conversation-context-menu");
+  await row.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Rename" }).click();
+  const rename = row.locator(".drawer-rename-input");
+  await expect(rename).toHaveCSS("user-select", "text");
+  await rename.selectText();
+  expect(
+    await rename.evaluate((el: HTMLInputElement) => el.selectionEnd! - el.selectionStart!),
+  ).toBeGreaterThan(0);
+  await rename.press("Escape");
+
+  await row.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Edit tags" }).click();
+  const tag = row.locator(".conversation-tag-inline-input");
+  await expect(tag).toHaveCSS("user-select", "text");
+  await tag.fill("selectable");
+  await tag.selectText();
+  expect(await tag.evaluate((el: HTMLInputElement) => el.selectionEnd! - el.selectionStart!)).toBe(
+    10,
+  );
+});
+
 function conversation(
   id: string,
   isDraft = false,

@@ -957,6 +957,16 @@ const DeleteButton = defineComponent({
 </script>
 
 <style scoped>
+.conversation-item {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.conversation-item input {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .conversation-item-unread .conversation-title {
   font-weight: 700;
 }
