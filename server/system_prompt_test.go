@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -847,6 +848,111 @@ This is a test skill.
 	}
 	if !strings.Contains(prompt, "run its activation command") {
 		t.Errorf("subagent prompt should explain how to load matching skills")
+	}
+}
+
+func TestSubagentSystemPromptIncludesGuidancePaths(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	parent := t.TempDir()
+	repo := filepath.Join(parent, "repo")
+	cwd := filepath.Join(repo, "ui")
+	files := []string{
+		filepath.Join(home, ".config", "shelley", "AGENTS.md"),
+		filepath.Join(repo, "AGENTS.md"),
+		filepath.Join(cwd, "CLAUDE.md"),
+		filepath.Join(cwd, "e2e", "README.md"),
+	}
+	outside := []string{
+		filepath.Join(parent, "AGENTS.md"),
+		filepath.Join(parent, "sibling", "AGENTS.md"),
+	}
+	for i, path := range append(append([]string{}, files...), outside...) {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("GUIDANCE_BODY_"+strconv.Itoa(i)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command("git", "init", repo)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, output)
+	}
+
+	for _, delegated := range []bool{true, false} {
+		prompt, _, err := generateSubagentSystemPromptWithIntegrationSkills(cwd, delegated, nil, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, path := range files {
+			if strings.Contains(prompt, path) != delegated {
+				t.Errorf("delegated=%t: unexpected guidance path presence: %s\n%s", delegated, path, prompt)
+			}
+		}
+		for _, path := range outside {
+			if strings.Contains(prompt, path) {
+				t.Errorf("prompt includes guidance outside repository: %s", path)
+			}
+		}
+		if strings.Contains(prompt, "GUIDANCE_BODY_") {
+			t.Error("prompt should list guidance paths, not copy their contents")
+		}
+		if strings.Contains(prompt, filepath.Join(repo, "CLAUDE.md")) {
+			t.Error("prompt includes a nonexistent guidance file")
+		}
+	}
+}
+
+func TestSubagentSystemPromptIncludesAncestorGuidanceOutsideRepo(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	parent := t.TempDir()
+	cwd := filepath.Join(parent, "work")
+	if err := os.Mkdir(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	guidance := filepath.Join(parent, "AGENTS.md")
+	if err := os.WriteFile(guidance, []byte("ANCESTOR_GUIDANCE_BODY"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sibling := filepath.Join(parent, "sibling", "CLAUDE.md")
+	if err := os.Mkdir(filepath.Dir(sibling), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sibling, []byte("SIBLING_GUIDANCE_BODY"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	prompt, err := GenerateSubagentSystemPrompt(cwd, "parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(prompt, guidance) {
+		t.Fatalf("prompt is missing ancestor guidance path:\n%s", prompt)
+	}
+	if strings.Contains(prompt, sibling) || strings.Contains(prompt, "_GUIDANCE_BODY") {
+		t.Fatalf("prompt includes sibling guidance or file contents:\n%s", prompt)
+	}
+}
+
+func TestSubagentSystemPromptWithoutGuidance(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	prompt, err := GenerateSubagentSystemPrompt(t.TempDir(), "parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(prompt, "Guidance files:") || strings.Contains(prompt, "Subdirectory guidance files") {
+		t.Fatalf("prompt lists guidance when no files exist:\n%s", prompt)
+	}
+}
+
+func TestSubdirGuidanceSummaryScopesDiscovery(t *testing.T) {
+	info := &CodebaseInfo{}
+	for i := range 11 {
+		info.SubdirGuidanceFiles = append(info.SubdirGuidanceFiles, filepath.Join("/repo", strconv.Itoa(i), "AGENTS.md"))
+	}
+	summary := info.SubdirGuidanceSummary()
+	if strings.Count(summary, "AGENTS.md") != 10 || !strings.Contains(summary, "...and 1 more. Use `find` within the repository") {
+		t.Fatalf("unexpected guidance summary:\n%s", summary)
 	}
 }
 

@@ -24,6 +24,14 @@ Working directory: {{.WorkingDirectory}}
 {{if .GitInfo}}
 Git repository root: {{.GitInfo.Root}}
 {{end}}
+{{if .Codebase}}
+{{if .Codebase.InjectFiles}}
+Guidance files:
+{{range .Codebase.InjectFiles}}{{.}}
+{{end}}
+{{end}}
+{{.Codebase.SubdirGuidanceSummary}}
+{{end}}
 {{if .ShelleyDBPath}}
 <parent_conversation>
 To see the user's original messages in the parent conversation:
