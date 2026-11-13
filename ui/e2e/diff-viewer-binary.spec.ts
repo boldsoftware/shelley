@@ -74,7 +74,7 @@ test.describe("Binary file diffs", () => {
       await expect(panel).toBeHidden();
       await expect(overlay.locator(".diff-viewer-binary-toolbar")).toHaveText("Binary view");
       await overlay.getByRole("button", { name: "Edit mode", exact: true }).click();
-      const modifiedLines = editor.locator(".editor.modified .view-lines");
+      const modifiedLines = editor.locator(".editor.modified .view-lines:not(.line-delete)");
       await modifiedLines.click();
       await page.keyboard.insertText("must-not-write");
       await expect(modifiedLines).not.toContainText("must-not-write");
@@ -154,6 +154,8 @@ test.describe("Binary file diffs", () => {
         const missing = panel.locator(".diff-viewer-binary-side").nth(name === "added.bin" ? 0 : 1);
         await expect(missing).toHaveClass(/diff-viewer-binary-side-empty/);
         await expect(missing).toBeEmpty();
+        // Reduced motion still gives every property a 0.01ms transition, so
+        // the new split settles a frame after the class changes.
         await expect
           .poll(() =>
             missing.evaluate(
