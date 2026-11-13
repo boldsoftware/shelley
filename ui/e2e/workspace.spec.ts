@@ -1013,6 +1013,52 @@ test("opening a chat clears its bold title across browsers and keeps the open ro
 test.describe("with a mouse", () => {
   test.use({ hasTouch: false, isMobile: false, viewport: { width: 1280, height: 800 } });
 
+  test("a working task's dot sits in the time's place; Archive pushes it left", async ({
+    page,
+    request,
+  }) => {
+    const idle = await createConversationViaAPIWithDetails(request, "echo: idle");
+    const started = await request.post("/api/conversations/new", {
+      data: { message: "bash: sleep 60", model: "predictable", cwd: testWorkingDirectory() },
+    });
+    expect(started.ok()).toBeTruthy();
+    const working = { conversationId: (await started.json()).conversation_id as string };
+    try {
+      const row = (id: string) => page.locator(`.conversation-item[data-conversation-id="${id}"]`);
+      await page.goto("/");
+      await openWorkspace(page);
+      const time = row(idle.conversationId).locator(".conversation-time");
+      const dot = row(working.conversationId).getByTestId("drawer-working-indicator");
+      await expect(time).toBeVisible();
+      await expect(dot).toBeVisible();
+      await expect(row(working.conversationId).locator(".conversation-time")).toHaveCount(0);
+      // Right-aligned where the times are.
+      const timeBox = (await time.boundingBox())!;
+      const dotBox = (await dot.boundingBox())!;
+      expect(Math.abs(dotBox.x + dotBox.width - (timeBox.x + timeBox.width))).toBeLessThan(2);
+
+      await row(working.conversationId).hover();
+      const archive = row(working.conversationId).getByRole("button", {
+        name: "Archive",
+        exact: true,
+      });
+      await expect(archive).not.toHaveCSS("opacity", "0");
+      // Still shown, left of Archive.
+      await expect(dot).toHaveCSS("opacity", "1");
+      await expect
+        .poll(async () => {
+          const d = (await dot.boundingBox())!;
+          const a = (await archive.boundingBox())!;
+          return d.x + d.width <= a.x;
+        })
+        .toBe(true);
+    } finally {
+      await request.post(`/api/conversation/${working.conversationId}/cancel`, {
+        headers: { "X-Shelley-Request": "1" },
+      });
+    }
+  });
+
   test("a task row's Archive takes its time's place on hover or keyboard focus; no menu", async ({
     page,
     request,

@@ -14902,8 +14902,24 @@ kbd {
     grid-row: 1;
     grid-column: 1;
   }
-  .workspace-mode .drawer-row-end .conversation-time {
+  .workspace-mode .drawer-row-end .conversation-time,
+  .workspace-mode .drawer-row-end .drawer-working-indicator {
     margin-right: 0.25rem;
+  }
+  /* A working row's dot, in the time's place, makes way for the buttons. */
+  .workspace-mode .drawer-row-end .drawer-working-indicator {
+    transition: margin-right 0.15s;
+  }
+  .workspace-mode
+    .conversation-item:is(
+      .context-menu-target,
+      :hover,
+      :focus-visible,
+      :has(:focus-visible, .drawer-actions-trigger[aria-expanded="true"])
+    )
+    .drawer-row-end:has(.drawer-actions-trigger)
+    .drawer-working-indicator {
+    margin-right: 2.25rem;
   }
   .workspace-mode
     .conversation-item:is(

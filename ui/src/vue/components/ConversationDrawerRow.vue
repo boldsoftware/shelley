@@ -74,12 +74,7 @@
           >Temporary</span
         >
         <span
-          v-if="isWorking"
-          class="working-indicator drawer-working-indicator"
-          :title="ctx.t('agentIsWorking')"
-        />
-        <span
-          v-else-if="convState.turn_interrupted && !conversation.parent_conversation_id"
+          v-if="!isWorking && convState.turn_interrupted && !conversation.parent_conversation_id"
           class="drawer-interrupted-indicator"
           title="Interrupted — open to continue"
           aria-label="Conversation interrupted"
@@ -89,11 +84,17 @@
         <div v-if="compactNav && deletable" class="conversation-actions drawer-actions-row">
           <DeleteButton :conversation-id="conversation.conversation_id" />
         </div>
-        <!-- When it last changed (a working row's dot says "now" instead),
-             right-aligned beside the row's actions, whose place every row
-             keeps so the times line up. -->
+        <!-- When it last changed, or a working row's dot ("now") in its
+             place, right-aligned beside the row's actions, whose place every
+             row keeps so the times line up. -->
         <div class="drawer-row-end">
-          <CompactTime v-if="!isPlaceholder && !isWorking" :timestamp="conversation.updated_at" />
+          <span
+            v-if="isWorking"
+            class="working-indicator drawer-working-indicator"
+            data-testid="drawer-working-indicator"
+            :title="ctx.t('agentIsWorking')"
+          />
+          <CompactTime v-else-if="!isPlaceholder" :timestamp="conversation.updated_at" />
           <div class="conversation-actions drawer-actions-top">
             <NavActionsMenu
               v-if="hasActions"
