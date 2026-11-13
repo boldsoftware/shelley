@@ -248,18 +248,15 @@ test.describe("Commit highlights", () => {
       const repo = makeRepo(tempDir);
       const slug = await createConversationViaAPI(request, "Hello", { cwd: repo });
       const overlay = await openDiffViewer(page, slug, "header", { width: 390, height: 844 });
-      const select = overlay
-        .locator(".diff-viewer-file-selector-wrapper select")
-        .filter({ visible: true });
-      const options = select.locator("option");
-      // A placeholder, the commit message, then the ranked files.
-      await expect(options).toHaveCount(5);
-      await expect(options.nth(2)).toHaveText(/ src\/zeta\.ts .*★1$/);
-      await expect(options.nth(3)).toHaveText(/ README\.md .*★1$/);
-      await expect(options.nth(4)).toHaveText(/ src\/alpha\.ts /);
+      await overlay.locator(".diff-rethink-file-jump").click();
+      const files = overlay.locator(".diff-rethink-mobile-files .diff-tree-code-row[aria-selected]");
+      await expect(files.locator(".diff-tree-label")).toHaveText([
+        "zeta.ts", "README.md", "alpha.ts",
+      ]);
+      await files.first().click();
+      await expect(overlay.locator(".diff-rethink-file-name")).toHaveText("zeta.ts");
 
       // The narrow diff is inline; the comment still shows under its line.
-      await select.selectOption("src/zeta.ts");
       const callout = overlay.locator(".diff-highlight-callout-text");
       await expect(callout).toHaveText("The one line that matters.");
       await expect(callout).toBeInViewport();

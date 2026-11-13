@@ -232,9 +232,14 @@ for (const viewport of [
       await openWorkspaceTool(page, "Diffs");
       const diff = page.locator(".diff-viewer-overlay");
       await expect(diff).toBeVisible();
-      await expect(diff.locator("select.diff-viewer-select").first()).toHaveValue(
-        "toolbar-fixture.txt",
-      );
+      if (mobile) {
+        await diff.locator('.diff-rethink-mobile-files.is-overview .diff-tree-row[title="toolbar-fixture.txt"]').click();
+        await expect(diff.locator(".diff-rethink-file-name")).toHaveText("toolbar-fixture.txt");
+      } else {
+        await expect(diff.locator("select.diff-viewer-select").first()).toHaveValue(
+          "toolbar-fixture.txt",
+        );
+      }
       await page.keyboard.press("Escape");
       await expect(diff).toBeHidden();
 

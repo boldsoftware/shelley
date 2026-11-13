@@ -662,6 +662,7 @@ const props = defineProps<{
   onVm?: boolean;
   isOpen: boolean;
   initialCommit?: string;
+  initialTo?: "working" | "self";
   // File to select once initialCommit's file list loads (e.g. from the git
   // graph diffstat). Consumed on the first load only.
   initialFile?: string;
@@ -725,6 +726,13 @@ const selectedDiff = ref<string | null>(null);
 const selectedTo = ref<"working" | "self">("working");
 const files = ref<GitFileInfo[]>([]);
 const selectedFile = ref<string | null>(null);
+defineExpose({
+  getSelection: () => ({
+    diff: selectedDiff.value,
+    to: selectedTo.value,
+    file: selectedFile.value,
+  }),
+});
 // Highlights for the selected single commit, if it has any; they order
 // `files` and annotate lines in the editor.
 const highlights = ref<CommitHighlights | null>(null);
@@ -1405,7 +1413,7 @@ async function loadDiffs() {
   try {
     loading.value = true;
     error.value = null;
-    const response = await api.getGitDiffs(cwd, props.conversationId, initialCommit, false);
+    const response = await api.getGitDiffs(cwd, props.conversationId, initialCommit === "working" ? undefined : initialCommit, false);
     if (requestId !== loadDiffsRequestId) return;
     diffs.value = response.diffs;
     gitRoot.value = response.gitRoot;
@@ -1413,7 +1421,7 @@ async function loadDiffs() {
     const selection = defaultDiffSelection(response.diffs, initialCommit);
     if (selection) {
       selectedDiff.value = selection.selectedDiff;
-      selectedTo.value = selection.selectedTo;
+      selectedTo.value = props.initialTo ?? selection.selectedTo;
     }
   } catch (err) {
     if (requestId !== loadDiffsRequestId) return;
@@ -1435,7 +1443,7 @@ async function loadCommitStats() {
     return;
   commitStatsRequestId = requestId;
   try {
-    const response = await api.getGitDiffs(props.cwd, props.conversationId, props.initialCommit);
+    const response = await api.getGitDiffs(props.cwd, props.conversationId, props.initialCommit === "working" ? undefined : props.initialCommit);
     if (requestId !== loadDiffsRequestId) return;
     const byId = new Map(response.diffs.map((diff) => [diff.id, diff]));
     diffs.value = diffs.value.map((diff) => {

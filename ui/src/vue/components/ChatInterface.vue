@@ -748,13 +748,16 @@
     />
 
     <!-- Diff Viewer -->
-    <DiffViewer
+    <component
+      ref="diffViewerRef"
+      :is="isMobile ? MobileDiffViewer : DiffViewer"
       :cwd="(diffViewerCwd || currentConversation?.cwd || selectedCwd) as string"
       :conversation-id="conversationId ?? undefined"
       :on-vm="onVm"
       :is-open="showDiffViewer"
-      :initial-commit="diffViewerInitialCommit"
-      :initial-file="diffViewerInitialFile"
+      :initial-commit="diffViewerTransfer?.diff ?? diffViewerInitialCommit"
+      :initial-file="diffViewerTransfer?.file ?? diffViewerInitialFile"
+      :initial-to="diffViewerTransfer?.to"
       :recording-conversation-id="
         currentConversation && !currentConversation.archived && !currentConversation.is_draft
           ? (conversationId ?? undefined)
@@ -966,6 +969,7 @@ import ProfilesModal from "./ProfilesModal.vue";
 import ToolsModal from "./ToolsModal.vue";
 import MessageSelectionToolbar from "./MessageSelectionToolbar.vue";
 import DiffViewer from "./DiffViewer.vue";
+import MobileDiffViewer from "./MobileDiffViewer.vue";
 import type { ReviewConversationStart } from "./useReviewRecording";
 import ImageCommentModal from "./ImageCommentModal.vue";
 import MarkdownDocModal from "./MarkdownDocModal.vue";
@@ -1717,6 +1721,9 @@ async function applyPickedCwd(path: string) {
 }
 const isMobile = ref(window.innerWidth < 768);
 const showDiffViewer = ref(false);
+type DiffViewerSelection = { diff: string | null; to: "working" | "self"; file: string | null };
+const diffViewerRef = ref<{ getSelection: () => DiffViewerSelection } | null>(null);
+const diffViewerTransfer = ref<DiffViewerSelection | null>(null);
 const showGitGraph = ref(false);
 const showAgentsMdEditor = ref(false);
 const diffViewerInitialCommit = ref<string | undefined>(undefined);
@@ -4749,6 +4756,7 @@ function onTerminalCloseHandler(id: string) {
 
 function onDiffViewerClose() {
   showDiffViewer.value = false;
+  diffViewerTransfer.value = null;
   diffViewerInitialCommit.value = undefined;
   diffViewerInitialFile.value = undefined;
   diffViewerCwd.value = undefined;
@@ -5029,7 +5037,13 @@ watch(
 
 // Mobile media query.
 const mobileMq = window.matchMedia("(max-width: 767px)");
-const onMobileChange = (e: MediaQueryListEvent) => (isMobile.value = e.matches);
+const onMobileChange = (e: MediaQueryListEvent) => {
+  if (showDiffViewer.value && diffViewerRef.value) {
+    const selection = diffViewerRef.value.getSelection();
+    if (selection.diff && selection.file) diffViewerTransfer.value = selection;
+  }
+  isMobile.value = e.matches;
+};
 mobileMq.addEventListener("change", onMobileChange);
 
 // Favicon working indicator; workspace mode's (App.vue) covers every task.

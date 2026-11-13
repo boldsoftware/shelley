@@ -107,8 +107,12 @@ test.describe("Binary file diffs", () => {
   }) => {
     await withTempDir("shelley-binary-media-", async (cwd) => {
       const overlay = await openFixture(page, request, cwd);
-      const files = overlay.locator("select.diff-viewer-select");
-      await files.selectOption("image.png");
+      const chooseFile = async (name: string) => {
+        const overview = overlay.locator(".diff-rethink-mobile-files.is-overview");
+        if (!(await overview.isVisible())) await overlay.locator(".diff-rethink-file-jump").click();
+        await overlay.locator(`.diff-rethink-mobile-files .diff-tree-code-row[title="${name}"]`).click();
+      };
+      await chooseFile("image.png");
       const panel = overlay.getByTestId("binary-file-panel");
       const images = panel.locator("img");
       await expect(images).toHaveCount(2);
@@ -123,7 +127,7 @@ test.describe("Binary file diffs", () => {
       }
       await expect(panel.getByRole("link", { name: "Download", exact: true })).toHaveCount(0);
       await expect(panel.locator(".diff-viewer-binary-side-header")).toHaveCount(0);
-      await files.selectOption("tone.mp3");
+      await chooseFile("tone.mp3");
       const players = panel.locator("audio");
       await expect(players).toHaveCount(2);
       for (const player of await players.all()) {

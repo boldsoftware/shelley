@@ -1,0 +1,623 @@
+/* Mobile-only skin for the rethink diff viewer. Keep every rule inside this
+   breakpoint so the existing desktop viewer remains untouched. */
+@media (max-width: 767px) {
+  .diff-viewer-overlay:has(> .diff-viewer-rethink) {
+    padding: 0 !important;
+    backdrop-filter: none !important;
+  }
+
+  .diff-viewer-rethink {
+    --diff-line: #e5e8ed;
+    --diff-side: #f7f8fa;
+    --diff-main: #fff;
+    --diff-code-surround: #fff;
+    --diff-header: #f7f8fa;
+    --diff-selection: #e8edf3;
+    --diff-hover: #eceff3;
+    --diff-accent: #526a87;
+    --diff-ink: #303844;
+    --diff-muted: #7b8490;
+    --diff-added: #3e7955;
+    --diff-deleted: #a45160;
+    --bg-base: #fff;
+    --bg-secondary: #f7f8fa;
+    --bg-tertiary: #eceff3;
+    --text-primary: #303844;
+    --text-secondary: #7b8490;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: var(--bg-base) !important;
+    color: var(--diff-ink) !important;
+    font:
+      13px/1.45 system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      sans-serif !important;
+  }
+
+  .diff-viewer-rethink *,
+  .diff-viewer-rethink *::before,
+  .diff-viewer-rethink *::after {
+    box-sizing: border-box;
+  }
+
+  .diff-viewer-rethink :is(button, input, select, textarea):focus-visible {
+    outline: 2px solid #7699c5;
+    outline-offset: 2px;
+  }
+
+  .diff-viewer-rethink .diff-viewer-header-mobile {
+    min-height: 48px !important;
+    padding: 4px 8px !important;
+    border-bottom: 1px solid var(--diff-line) !important;
+    background: var(--diff-header) !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-header-main {
+    min-width: 0;
+  }
+
+  .diff-viewer-rethink .commit-picker-trigger {
+    min-height: 42px !important;
+    padding: 5px 7px !important;
+    border: 1px solid var(--diff-line) !important;
+    border-radius: 4px !important;
+    background: var(--bg-base) !important;
+    color: var(--diff-ink) !important;
+    box-shadow: none !important;
+    font:
+      600 13px/20px system-ui,
+      sans-serif !important;
+  }
+  .diff-viewer-rethink .commit-picker-trigger-primary code {
+    font: inherit;
+    color: inherit;
+  }
+
+  .diff-viewer-rethink .diff-viewer-dir-btn,
+  .diff-viewer-rethink .diff-viewer-close {
+    width: 28px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    padding: 4px !important;
+    border: 0 !important;
+    border-radius: 4px !important;
+    background: transparent !important;
+    color: var(--diff-muted) !important;
+    box-shadow: none !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-close {
+    font:
+      21px/20px system-ui,
+      sans-serif !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mobile-tools {
+    display: flex !important;
+    align-items: center;
+    gap: 6px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 10px !important;
+    border-bottom: 1px solid var(--diff-line) !important;
+    background: var(--diff-header) !important;
+    color: var(--diff-muted) !important;
+    font:
+      400 11px/18px system-ui,
+      sans-serif !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mobile-tools .diff-rethink-mode-switch {
+    order: 0;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    margin: 0;
+    padding: 2px;
+    border: 1px solid var(--diff-line);
+    border-radius: 5px;
+    background: var(--bg-secondary);
+  }
+
+  .diff-viewer-rethink .diff-rethink-mode-switch button {
+    min-width: 48px;
+    min-height: 32px;
+    padding: 5px 7px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-primary);
+    font:
+      600 12px/20px system-ui,
+      sans-serif;
+    white-space: nowrap;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mode-switch button.active {
+    background: var(--diff-accent);
+    color: #fff;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mobile-tools .diff-rethink-change-label {
+    order: 1;
+    flex: none;
+    margin-left: auto;
+    color: var(--diff-muted);
+    white-space: nowrap;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mobile-tools .diff-rethink-change-nav {
+    order: 2;
+    display: flex;
+    flex: none;
+    gap: 2px;
+    margin-left: 0;
+  }
+
+  .diff-viewer-rethink .diff-rethink-change-nav button {
+    width: 28px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: #7f8b99;
+    font:
+      14px/20px system-ui,
+      sans-serif;
+  }
+
+  .diff-viewer-rethink .diff-viewer-main {
+    min-width: 0;
+    background: var(--diff-main) !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-files-pane {
+    min-width: 0;
+    padding: 0 !important;
+    background: var(--diff-code-surround) !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-editor {
+    overflow: hidden !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: var(--bg-base) !important;
+    box-shadow: none !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-editor .line-insert {
+    background: #eef7f0 !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-editor .line-delete {
+    background: #fbf0f0 !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-editor .char-insert {
+    background: #abd8b833 !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-editor .char-delete {
+    background: #e5b2b233 !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-editor .monaco-editor .margin,
+  .diff-viewer-rethink .diff-viewer-editor .monaco-editor .margin-view-overlays {
+    width: 14px !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-editor .monaco-editor .editor-scrollable {
+    left: 14px !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-editor .monaco-editor .insert-sign,
+  .diff-viewer-rethink .diff-viewer-editor .monaco-editor .delete-sign {
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
+    text-shadow:
+      0.35px 0 currentColor,
+      -0.35px 0 currentColor;
+  }
+
+  .diff-viewer-rethink .diff-viewer-editor .monaco-editor .insert-sign {
+    color: var(--diff-added) !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-editor .monaco-editor .delete-sign {
+    color: var(--diff-deleted) !important;
+  }
+
+  /* Preserve Monaco's token fonts; only tint the change gutter. */
+  .diff-viewer-rethink .diff-viewer-editor .monaco-editor .margin-view-overlays .gutter-insert {
+    background-image: linear-gradient(
+      to right,
+      transparent calc(100% - 5px),
+      #77a68b calc(100% - 5px),
+      #77a68b calc(100% - 2px),
+      transparent calc(100% - 2px)
+    ) !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-editor .monaco-editor .inline-deleted-margin-view-zone {
+    background-image: linear-gradient(
+      to right,
+      transparent calc(100% - 5px),
+      #c1838c calc(100% - 5px),
+      #c1838c calc(100% - 2px),
+      transparent calc(100% - 2px)
+    ) !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mobile-files {
+    overflow: hidden auto;
+    background: var(--bg-base) !important;
+    border-color: var(--diff-line) !important;
+    padding: 0 16px 16px !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mobile-files:not(.is-overview) {
+    max-height: min(58dvh, 480px) !important;
+    border-radius: 0 0 10px 10px !important;
+    box-shadow: 0 18px 36px #14243a40 !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mobile-files.is-overview {
+    padding: 0 16px 16px !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mobile-files.is-overview .diff-rethink-opening-title {
+    display: none !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mobile-files .diff-tree-search {
+    margin: 0 0 8px;
+    padding: 0;
+  }
+
+  .diff-viewer-rethink .diff-tree-search-input {
+    width: 100%;
+    height: 30px;
+    padding: 6px 9px;
+    border: 1px solid var(--diff-line);
+    border-radius: 5px;
+    background: var(--bg-base);
+    color: var(--diff-ink);
+    font:
+      11px/16px system-ui,
+      sans-serif;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mobile-files .diff-tree-scroll {
+    display: grid !important;
+    grid-template-columns: minmax(100%, max-content) !important;
+    overflow: auto hidden !important;
+    padding: 0;
+  }
+
+  .diff-viewer-rethink .diff-tree-row {
+    width: 100% !important;
+    min-width: 100% !important;
+    min-height: 32px;
+    height: auto !important;
+    padding: 5px 4px;
+    border: 0;
+    border-bottom: 1px solid var(--diff-line);
+    border-radius: 0;
+    background: transparent;
+    color: var(--diff-ink) !important;
+    font:
+      400 13px/20px system-ui,
+      sans-serif;
+  }
+
+  .diff-viewer-rethink .diff-tree-row[aria-expanded] .diff-tree-label {
+    font-weight: 600;
+  }
+
+  .diff-viewer-rethink .diff-tree-row:hover {
+    background: var(--diff-hover);
+  }
+
+  .diff-viewer-rethink .diff-tree-row.active,
+  .diff-viewer-rethink .diff-tree-row.active:hover {
+    background: var(--diff-selection) !important;
+    color: var(--diff-ink) !important;
+    font-weight: 400 !important;
+  }
+
+  .diff-viewer-rethink .diff-tree-label {
+    min-width: max-content !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+  }
+
+  .diff-viewer-rethink .diff-tree-label.path-text {
+    display: block !important;
+    max-width: none !important;
+  }
+
+  .diff-viewer-rethink .diff-tree-label .path-text-tail {
+    display: inline !important;
+    min-width: auto !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+    direction: ltr !important;
+  }
+
+  .diff-viewer-rethink .diff-tree-label .ellipsis-start::before {
+    content: none !important;
+  }
+
+  .diff-viewer-rethink .diff-tree-code-row {
+    display: grid !important;
+    grid-template-columns: 14px minmax(max-content, 1fr) 0 0 40px 40px 14px !important;
+    column-gap: 3px !important;
+    align-items: center !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    padding: 4px !important;
+    white-space: nowrap !important;
+  }
+
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-icon {
+    grid-column: 1;
+  }
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-label {
+    grid-column: 2;
+  }
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-icon,
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-label,
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-decoration,
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-highlight-count,
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-status,
+  .diff-viewer-rethink .diff-tree-code-row .diff-tree-changes-added,
+  .diff-viewer-rethink .diff-tree-code-row .diff-tree-changes-deleted {
+    grid-row: 1;
+  }
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-decoration,
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-highlight-count {
+    grid-column: 2;
+    justify-self: end;
+    background: var(--bg-base);
+    font-size: 11px;
+  }
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-decoration {
+    margin-right: 23px;
+  }
+  .diff-viewer-rethink .diff-tree-code-row:has(.diff-tree-decoration) > .diff-tree-label {
+    padding-right: 48px;
+  }
+  .diff-viewer-rethink
+    .diff-tree-code-row:has(.diff-tree-highlight-count):not(:has(.diff-tree-decoration))
+    > .diff-tree-label {
+    padding-right: 24px;
+  }
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-changes {
+    display: contents !important;
+    font-variant-numeric: tabular-nums;
+  }
+  .diff-viewer-rethink .diff-tree-code-row .diff-tree-changes-added {
+    grid-column: 5;
+    justify-self: end;
+    color: var(--diff-added);
+    font-size: 11px;
+  }
+  .diff-viewer-rethink .diff-tree-code-row .diff-tree-changes-deleted {
+    grid-column: 6;
+    justify-self: end;
+    color: var(--diff-deleted);
+    font-size: 11px;
+  }
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-status {
+    grid-column: 7;
+    font-size: 11px;
+    opacity: 1;
+    transform: translateX(4px);
+  }
+  .diff-viewer-rethink .diff-tree-code-row > .diff-tree-status-modified {
+    color: var(--diff-ink);
+  }
+  .diff-viewer-rethink .diff-tree-graph {
+    display: none !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mobile-files .diff-tree-code-row {
+    height: 38px !important;
+    min-height: 38px !important;
+    padding: 4px 0 !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-file-heading {
+    padding: 10px 0 8px !important;
+    color: var(--diff-ink) !important;
+    font-size: 13px !important;
+    line-height: 20px !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-file-heading .diff-rethink-totals {
+    gap: 3px !important;
+    margin-right: 23px !important;
+    font:
+      11px/20px system-ui,
+      sans-serif !important;
+    font-variant-numeric: tabular-nums !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-file-heading .diff-rethink-totals > span {
+    min-width: 40px;
+    text-align: right;
+  }
+
+  .diff-viewer-rethink .diff-rethink-filebar {
+    min-height: 60px !important;
+    padding: 4px 8px !important;
+    border-top: 0 !important;
+    border-bottom: 1px solid var(--diff-line) !important;
+    background: var(--bg-base) !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-file-jump strong {
+    font:
+      500 13px/18px system-ui,
+      sans-serif !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-file-jump small {
+    color: var(--diff-muted) !important;
+    font:
+      400 10px/18px system-ui,
+      sans-serif !important;
+  }
+
+  .diff-viewer-rethink .diff-commit-message {
+    padding: 16px !important;
+    background: var(--bg-base) !important;
+  }
+
+  .diff-viewer-rethink .diff-rethink-mobile-files.is-overview .diff-commit-message {
+    margin: 0 -16px !important;
+  }
+
+  .diff-viewer-rethink .diff-commit-message-toolbar {
+    gap: 8px !important;
+    padding-bottom: 12px !important;
+  }
+
+  .diff-viewer-rethink .diff-commit-message-content h2 {
+    margin: 14px 0 10px !important;
+    font:
+      500 17px/1.45 system-ui,
+      sans-serif !important;
+  }
+
+  .diff-viewer-rethink .diff-viewer-comment-dialog {
+    top: 12px !important;
+    display: flex;
+    max-height: calc(100% - 24px) !important;
+    flex-direction: column;
+  }
+
+  .diff-viewer-rethink .diff-viewer-comment-dialog h4,
+  .diff-viewer-rethink .diff-viewer-comment-input,
+  .diff-viewer-rethink .diff-viewer-comment-actions {
+    flex-shrink: 0;
+  }
+
+  .diff-viewer-rethink .diff-viewer-comment-dialog h4 {
+    font-size: 14px;
+  }
+
+  .diff-viewer-rethink .diff-viewer-selected-text {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: 60px;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .diff-viewer-rethink .diff-viewer-comment-input {
+    min-height: 80px;
+    font-size: 16px;
+    line-height: 1.4;
+    resize: none;
+  }
+
+  .diff-viewer-rethink .diff-viewer-comment-actions {
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .diff-viewer-rethink .diff-viewer-comment-actions .diff-viewer-btn {
+    min-height: 44px;
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 14px;
+    touch-action: manipulation;
+  }
+
+  .dark .diff-viewer-rethink {
+    --diff-line: #34404f;
+    --diff-side: #1c232d;
+    --diff-main: #191f28;
+    --diff-code-surround: #191f28;
+    --diff-header: #1c232d;
+    --diff-selection: #2b3849;
+    --diff-hover: #293544;
+    --diff-ink: #edf2f8;
+    --diff-muted: #aebccc;
+    --diff-added: #88ba9a;
+    --diff-deleted: #d39aa4;
+    --bg-base: #191f28;
+    --bg-secondary: #1c232d;
+    --bg-tertiary: #293544;
+    --text-primary: #edf2f8;
+    --text-secondary: #aebccc;
+    color-scheme: dark;
+  }
+
+  .dark .diff-viewer-overlay:has(> .diff-viewer-rethink) {
+    background: #11151bc9;
+  }
+
+  .dark .diff-viewer-rethink .diff-viewer-editor .line-insert {
+    background: #1d2927 !important;
+  }
+
+  .dark .diff-viewer-rethink .diff-viewer-editor .char-insert {
+    background: rgba(111, 186, 135, 0.07) !important;
+  }
+
+  .dark .diff-viewer-rethink .diff-viewer-editor .line-delete {
+    background: #292127 !important;
+  }
+
+  .dark .diff-viewer-rethink .diff-viewer-editor .char-delete {
+    background: rgba(198, 123, 134, 0.07) !important;
+  }
+
+  .dark
+    .diff-viewer-rethink
+    .diff-viewer-editor
+    .monaco-editor
+    .margin-view-overlays
+    .gutter-insert {
+    background-image: linear-gradient(
+      to right,
+      transparent calc(100% - 5px),
+      #82b595 calc(100% - 5px),
+      #82b595 calc(100% - 2px),
+      transparent calc(100% - 2px)
+    ) !important;
+  }
+
+  .dark .diff-viewer-rethink .diff-viewer-editor .monaco-editor .inline-deleted-margin-view-zone {
+    background-image: linear-gradient(
+      to right,
+      transparent calc(100% - 5px),
+      #d29da4 calc(100% - 5px),
+      #d29da4 calc(100% - 2px),
+      transparent calc(100% - 2px)
+    ) !important;
+  }
+
+  .dark .diff-viewer-rethink .diff-viewer-mobile-selectors .commit-picker-trigger {
+    color: #e6edf6 !important;
+    border-color: #52637a !important;
+  }
+}

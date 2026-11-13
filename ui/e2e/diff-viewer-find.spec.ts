@@ -37,14 +37,19 @@ test.describe("Diff viewer find widget", () => {
 
     // Select the first non-empty commit if working changes are empty.
     // The diff viewer auto-selects, but we need a file to be loaded.
-    // Wait for a file to appear in the file selector. There's only one
-    // <select> in the header now (the commit selector was replaced with
-    // a button-driven CommitPicker), so .first() targets the file select.
-    const fileSelect = overlay.locator("select.diff-viewer-select").first();
-    await expect(async () => {
-      const options = await fileSelect.locator("option").count();
-      expect(options).toBeGreaterThan(1); // more than just the placeholder
-    }).toPass({ timeout: 15000 });
+    if (page.viewportSize()!.width < 768) {
+      const overview = overlay.locator(".diff-rethink-mobile-files.is-overview");
+      if (!(await overview.isVisible())) await overlay.locator(".diff-rethink-file-jump").click();
+      await overlay.locator(".diff-rethink-mobile-files .diff-tree-code-row[aria-selected]").first().click();
+      await expect(overlay.locator(".diff-rethink-file-name")).toBeVisible();
+    } else {
+      // Desktop retains its native file selector.
+      const fileSelect = overlay.locator("select.diff-viewer-select").first();
+      await expect(async () => {
+        const options = await fileSelect.locator("option").count();
+        expect(options).toBeGreaterThan(1);
+      }).toPass({ timeout: 15000 });
+    }
 
     // Wait for Monaco editor to render inside the diff viewer.
     const editorContainer = overlay.locator(".diff-viewer-editor");
