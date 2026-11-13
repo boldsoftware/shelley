@@ -20,6 +20,43 @@ func (q *Queries) GetConversationThemes(ctx context.Context, conversationID stri
 	return i, err
 }
 
+const listConversationThemes = `-- name: ListConversationThemes :many
+SELECT ct.conversation_id, ct.chapters_json
+FROM conversation_themes ct
+JOIN conversations c ON c.conversation_id = ct.conversation_id
+WHERE c.parent_conversation_id IS NULL
+  AND c.is_draft = FALSE
+  AND json_extract(c.conversation_options, '$.kind') IS NOT 'search'
+`
+
+type ListConversationThemesRow struct {
+	ConversationID string `json:"conversation_id"`
+	ChaptersJson   string `json:"chapters_json"`
+}
+
+func (q *Queries) ListConversationThemes(ctx context.Context) ([]ListConversationThemesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listConversationThemes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListConversationThemesRow{}
+	for rows.Next() {
+		var i ListConversationThemesRow
+		if err := rows.Scan(&i.ConversationID, &i.ChaptersJson); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertConversationThemes = `-- name: UpsertConversationThemes :exec
 INSERT INTO conversation_themes (conversation_id, chapters_json, through_message_id)
 VALUES (?, ?, ?)

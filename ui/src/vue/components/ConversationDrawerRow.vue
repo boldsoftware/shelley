@@ -19,17 +19,6 @@
   >
     <div class="drawer-conversation-item-flex-container">
       <div class="drawer-conversation-header-row">
-        <button
-          v-if="chaptersEnabled && themesRef?.hasChapters"
-          type="button"
-          class="conversation-themes-toggle"
-          :aria-expanded="themesRef.expanded"
-          aria-label="Toggle conversation chapters"
-          @click.stop="themesRef.toggle()"
-          @keydown.stop
-        >
-          {{ themesRef.expanded ? "⌄" : "›" }}
-        </button>
         <div class="drawer-conversation-item-flex-container">
           <input
             v-if="ctx.editingId.value === conversation.conversation_id"
@@ -137,10 +126,15 @@
       </div>
 
       <ConversationThemes
-        ref="themesRef"
-        v-if="chaptersEnabled && !isDraft && !isPlaceholder"
+        v-if="
+          chaptersEnabled && !isDraft && !isPlaceholder &&
+          ctx.searchOpen.value &&
+          (!ctx.searchText.value.trim() || ctx.chapterScores.value.has(conversation.conversation_id))
+        "
         :conversation-id="conversation.conversation_id"
         :conversation-slug="conversation.slug"
+        :chapters="ctx.chapterIndex.value[conversation.conversation_id] ?? []"
+        :search-text="ctx.searchText.value"
       />
 
       <!-- Tags / tag editor -->
@@ -541,7 +535,7 @@ const ctx = inject(DrawerCtxKey)!;
 const composerPreview = inject(ComposerPreviewKey, null);
 
 const chaptersEnabled = useFeatureFlag("conversation-chapters");
-const themesRef = ref<InstanceType<typeof ConversationThemes> | null>(null);
+
 const renameInput = ref<HTMLInputElement | null>(null);
 const tagInput = ref<HTMLInputElement | null>(null);
 const actionsMenuRef = ref<InstanceType<typeof NavActionsMenu> | null>(null);

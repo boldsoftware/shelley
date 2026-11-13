@@ -16,8 +16,21 @@ func TestConversationThemesEndpoint(t *testing.T) {
 	if err := database.SetFeatureFlagOverride(t.Context(), FlagConversationChapters.Name, "true"); err != nil {
 		t.Fatal(err)
 	}
-	id := seedConversation(t, database, 3)
 	mux, _ := newTestStreamServer(t, database)
+	emptyIndexResponse := httptest.NewRecorder()
+	mux.ServeHTTP(emptyIndexResponse, httptest.NewRequest("GET", "/api/conversations/themes", nil))
+	if emptyIndexResponse.Code != http.StatusOK {
+		t.Fatalf("empty index status = %d, want %d: %s", emptyIndexResponse.Code, http.StatusOK, emptyIndexResponse.Body)
+	}
+	var emptyIndex map[string][]db.ConversationChapter
+	if err := json.Unmarshal(emptyIndexResponse.Body.Bytes(), &emptyIndex); err != nil {
+		t.Fatal(err)
+	}
+	if emptyIndex == nil || len(emptyIndex) != 0 {
+		t.Fatalf("empty index = %#v, want empty object", emptyIndex)
+	}
+
+	id := seedConversation(t, database, 3)
 	get := func(id string, status int) db.ConversationThemes {
 		t.Helper()
 		w := httptest.NewRecorder()
@@ -54,4 +67,27 @@ func TestConversationThemesEndpoint(t *testing.T) {
 		t.Fatalf("themes = %+v; want %+v", got, themes)
 	}
 	get("missing-conversation", http.StatusNotFound)
+
+	indexRequest := httptest.NewRequest("GET", "/api/conversations/themes", nil)
+	indexResponse := httptest.NewRecorder()
+	mux.ServeHTTP(indexResponse, indexRequest)
+	if indexResponse.Code != http.StatusOK {
+		t.Fatalf("index status = %d, want %d: %s", indexResponse.Code, http.StatusOK, indexResponse.Body)
+	}
+	var index map[string][]db.ConversationChapter
+	if err := json.Unmarshal(indexResponse.Body.Bytes(), &index); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(index, map[string][]db.ConversationChapter{id: themes.Chapters}) {
+		t.Fatalf("index = %#v", index)
+	}
+
+	if err := database.SetFeatureFlagOverride(t.Context(), FlagConversationChapters.Name, "false"); err != nil {
+		t.Fatal(err)
+	}
+	offResponse := httptest.NewRecorder()
+	mux.ServeHTTP(offResponse, httptest.NewRequest("GET", "/api/conversations/themes", nil))
+	if offResponse.Code != http.StatusForbidden {
+		t.Fatalf("flag-off index status = %d, want %d", offResponse.Code, http.StatusForbidden)
+	}
 }

@@ -22,6 +22,7 @@ import {
   TemplateProblem,
 } from "../types";
 import type { CostTier } from "../utils/tokenCostGraph";
+import type { ChapterIndex } from "../utils/chapterSearch";
 import { ownError, responseDetail } from "./responseDetail";
 
 export type LiveConversationSettings = Pick<ChatRequest, "model" | "cwd" | "conversation_options">;
@@ -328,6 +329,10 @@ class ApiService {
         ),
       )
     ).json();
+  }
+
+  async getConversationChapterIndex(): Promise<ChapterIndex> {
+    return (await apiFetch("/api/conversations/themes", "Failed to load chapters")).json();
   }
 
   // Search active top-level conversations, or only archived ones when requested.

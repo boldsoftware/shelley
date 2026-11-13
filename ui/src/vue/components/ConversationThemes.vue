@@ -1,48 +1,30 @@
 <template>
-  <p v-if="error" class="conversation-themes-error" role="alert">{{ error }}</p>
-  <ol v-else-if="expanded && chapters.length" class="conversation-themes-list" @click.stop @auxclick.stop @keydown.stop>
+  <ol v-if="chapters.length" class="conversation-themes-list" @click.stop @auxclick.stop @keydown.stop>
     <li v-for="chapter in chapters" :key="chapter.message_id">
-      <a :href="chapterHref(chapter)" @click="onLinkClick($event, chapter)">{{ chapter.title }}</a>
+      <a
+        :href="chapterHref(chapter)"
+        :class="{ 'conversation-chapter-match': chapterMatchScore(chapter.title, searchText) > 0 }"
+        @click="onLinkClick($event, chapter)"
+      >
+        <template v-for="(segment, i) in chapterSearchSegments(chapter.title, searchText)" :key="i">
+          <mark v-if="segment.mark" class="conversation-snippet-mark">{{ segment.text }}</mark>
+          <template v-else>{{ segment.text }}</template>
+        </template>
+      </a>
     </li>
   </ol>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from "vue";
-import { apiFetch } from "../../services/api";
 import { fragmentForMessage } from "../../utils/locationFragment";
+import { chapterMatchScore, chapterSearchSegments, type Chapter } from "../../utils/chapterSearch";
 
-interface Chapter {
-  title: string;
-  message_id: string;
-}
-const props = defineProps<{ conversationId: string; conversationSlug?: string | null }>();
-const chapters = ref<Chapter[]>([]);
-const expanded = ref(false);
-const error = ref("");
-const hasChapters = computed(() => chapters.value.length > 0);
-
-async function load() {
-  try {
-    const res = await apiFetch(
-      `/api/conversation/${encodeURIComponent(props.conversationId)}/themes`,
-      "Failed to load chapters",
-    );
-    chapters.value = ((await res.json()) as { chapters: Chapter[] }).chapters;
-    error.value = "";
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err);
-  }
-}
-
-function onChaptersUpdated(event: Event) {
-  if ((event as CustomEvent<string>).detail === props.conversationId) void load();
-}
-onMounted(() => {
-  void load();
-  window.addEventListener("shelley-chapters-updated", onChaptersUpdated);
-});
-onBeforeUnmount(() => window.removeEventListener("shelley-chapters-updated", onChaptersUpdated));
+const props = defineProps<{
+  conversationId: string;
+  conversationSlug?: string | null;
+  chapters: Chapter[];
+  searchText: string;
+}>();
 
 function chapterHref(chapter: Chapter): string {
   return `/c/${encodeURIComponent(props.conversationSlug || props.conversationId)}#${fragmentForMessage(chapter.message_id)}`;
@@ -55,7 +37,6 @@ function onLinkClick(event: MouseEvent, chapter: Chapter) {
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-defineExpose({ hasChapters, expanded, toggle: () => { expanded.value = !expanded.value; } });
 </script>
 
 <style>
@@ -86,16 +67,8 @@ defineExpose({ hasChapters, expanded, toggle: () => { expanded.value = !expanded
   background: color-mix(in srgb, currentColor 12%, transparent);
   text-decoration: underline;
 }
-.conversation-themes-toggle {
-  border: 0;
-  background: transparent;
-  color: inherit;
-  opacity: 0.65;
-  padding: 0;
-  width: 1rem;
-  height: 1.25rem;
-  flex: 0 0 1rem;
-  cursor: pointer;
+.conversation-themes-list a.conversation-chapter-match {
+  opacity: 1;
+  font-weight: 600;
 }
-.conversation-themes-toggle:hover { opacity: 1; }
 </style>

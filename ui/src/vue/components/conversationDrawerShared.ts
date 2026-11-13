@@ -6,6 +6,7 @@ import type { MenuItem } from "primevue/menuitem";
 import type { Conversation, ConversationWithState } from "../../types";
 import type { TranslationKeys } from "../../i18n/types";
 import type { OfferedTag } from "../../utils/tagFilter";
+import type { Chapter } from "../../utils/chapterSearch";
 
 export type GroupBy = "none" | "project" | "daily" | "cwd" | "git_repo" | "tag" | "participants";
 
@@ -63,6 +64,9 @@ export interface DrawerCtx {
   t: (key: keyof TranslationKeys) => string;
   currentConversationId: ComputedRef<string | null>;
   searchText: ComputedRef<string>;
+  searchOpen: Ref<boolean>;
+  chapterIndex: Ref<Record<string, Chapter[]>>;
+  chapterScores: ComputedRef<Map<string, number>>;
   showParticipantBadges: ComputedRef<boolean>;
   // Number of live terminals pinned to each conversation. Rows show a badge
   // when a conversation has more than one.

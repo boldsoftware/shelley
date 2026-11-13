@@ -914,6 +914,7 @@ func (s *Server) decorateConversations(conversations []db.ConversationListItem, 
 
 // registerConversationRoutes registers the /api/conversation/<id>/* routes.
 func (s *Server) registerConversationRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/conversations/themes", s.handleConversationThemesIndex)
 	mux.HandleFunc("GET /api/conversation/{id}/themes", s.handleConversationThemes)
 	// GET /api/conversation/<id> - returns all messages (can be large, compress)
 	mux.Handle("GET /api/conversation/{id}", compressionHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

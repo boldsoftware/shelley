@@ -62,3 +62,22 @@ func (s *Server) handleConversationThemes(w http.ResponseWriter, r *http.Request
 	}
 	writeJSON(w, http.StatusOK, themes)
 }
+
+func (s *Server) handleConversationThemesIndex(w http.ResponseWriter, r *http.Request) {
+	on, err := s.flagOn(r.Context(), FlagConversationChapters)
+	if err != nil {
+		s.internalError(w, "Failed to read conversation chapters flag", err)
+		return
+	}
+	if !on {
+		http.Error(w, "The conversation-chapters feature flag is off", http.StatusForbidden)
+		return
+	}
+	themes, err := s.db.ListConversationThemes(r.Context())
+	if err != nil {
+		s.logger.Error("failed to load conversation themes index", "error", err)
+		http.Error(w, "Failed to load conversation themes", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, themes)
+}

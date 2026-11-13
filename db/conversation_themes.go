@@ -104,6 +104,26 @@ func (db *DB) GetConversationThemes(ctx context.Context, conversationID string) 
 	})
 }
 
+func (db *DB) ListConversationThemes(ctx context.Context) (map[string][]ConversationChapter, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) (map[string][]ConversationChapter, error) {
+		rows, err := q.ListConversationThemes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		result := make(map[string][]ConversationChapter, len(rows))
+		for _, row := range rows {
+			var chapters []ConversationChapter
+			if err := json.Unmarshal([]byte(row.ChaptersJson), &chapters); err != nil {
+				return nil, err
+			}
+			if len(chapters) > 0 {
+				result[row.ConversationID] = chapters
+			}
+		}
+		return result, nil
+	})
+}
+
 func (db *DB) SetConversationThemes(ctx context.Context, conversationID string, themes ConversationThemes) error {
 	if len(themes.Chapters) == 0 {
 		return fmt.Errorf("at least one chapter is required")

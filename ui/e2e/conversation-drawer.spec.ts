@@ -463,6 +463,220 @@ test.describe("conversation drawer startup and app bar", () => {
     await expect(paletteTitle.locator("mark")).toHaveCount(0);
   });
 
+  test("search reveals chapters and prioritizes chapter-title matches", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("ff:conversation-chapters", "true"));
+    const exact = conversation("chapter-only");
+    const prefix = conversation("chapter-prefix");
+    const text = conversation("message-only");
+    const excluded = conversation("other-tag");
+    exact.tags = prefix.tags = text.tags = '["birds"]';
+    excluded.tags = '["other"]';
+    text.search_snippet = "A \x02pelican\x03 by the bay";
+    await stubConversationList(page, [text, prefix, exact, excluded]);
+    await page.route("**/api/conversations/search**", route => route.fulfill({ json: [text] }));
+    let indexRequests = 0;
+    await page.route("**/api/conversations/themes", route => {
+      indexRequests++;
+      return route.fulfill({ json: {
+        "chapter-only": [
+          { title: "Pelican", message_id: "12345678-abcd-1234-abcd-123456789abc" },
+          { title: "Another direction", message_id: "other-message" },
+        ],
+        "chapter-prefix": [{ title: "Pelican research", message_id: "prefix-message" }],
+        "message-only": [{ title: "Unrelated chapter", message_id: "text-message" }],
+        "other-tag": [{ title: "Pelican", message_id: "excluded-message" }],
+      } });
+    });
+    await page.goto("/new");
+    const outlines = page.locator(".drawer .conversation-themes-list");
+    await expect(page.locator('[data-conversation-id="chapter-only"]')).toBeVisible();
+    await expect(outlines).toHaveCount(0);
+    expect(indexRequests).toBe(0);
+    const searchButton = page.getByRole("button", { name: "Search conversations..." });
+    await searchButton.click();
+    await expect(outlines).toHaveCount(4);
+    expect(indexRequests).toBe(1);
+
+    await fillConversationQuery(queryEditor(page), "PELICAN tag:birds ");
+    await expect(page.locator(".drawer .conversation-title")).toHaveText([
+      "chapter-only", "chapter-prefix", "message-only",
+    ]);
+    await expect(outlines).toHaveCount(2);
+    await expect(outlines.locator("mark")).toHaveText(["Pelican", "Pelican"]);
+    const exactOutline = page.locator('[data-conversation-id="chapter-only"] .conversation-themes-list');
+    await expect(exactOutline.locator("a")).toHaveText(["Pelican", "Another direction"]);
+    await expect(exactOutline.locator("a").first()).toHaveAttribute(
+      "href", "/c/chapter-only#m-12345678",
+    );
+    await expect(page.locator(".conversation-snippet mark")).toHaveText(["pelican"]);
+    expect(indexRequests).toBe(1);
+
+    await clearConversationQuery(queryEditor(page));
+    await expect(outlines).toHaveCount(4);
+    await searchButton.click();
+    await expect(outlines).toHaveCount(0);
+    await searchButton.click();
+    await expect(outlines).toHaveCount(4);
+    expect(indexRequests).toBe(2);
+  });
+
+  test("chapter search respects the current archive view", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("ff:conversation-chapters", "true"));
+    const active = conversation("active-chapter-hit");
+    const archived = conversation("archived-chapter-hit");
+    archived.archived = true;
+    await stubConversationList(page, [active]);
+    await page.route("**/api/conversations/search**", route => route.fulfill({ json: [] }));
+    await page.route("**/api/conversations/archived**", route =>
+      route.fulfill({ json: [archived] }),
+    );
+    await page.route("**/api/conversations/themes", route => route.fulfill({ json: {
+      [active.conversation_id]: [{ title: "Needle", message_id: "active-message" }],
+      [archived.conversation_id]: [{ title: "Needle", message_id: "archived-message" }],
+    } }));
+    await page.goto("/new");
+    await page.getByRole("button", { name: "Search conversations..." }).click();
+    await fillConversationQuery(queryEditor(page), "needle");
+    const titles = page.locator(".drawer .conversation-title");
+    await expect(titles).toHaveText(["active-chapter-hit"]);
+    await page.getByRole("button", { name: "View Archived", exact: true }).click();
+    await expect(titles).toHaveText(["archived-chapter-hit"]);
+    await page.getByRole("button", { name: "Back to conversations", exact: true }).click();
+    await expect(titles).toHaveText(["active-chapter-hit"]);
+  });
+
+  test("chapter search stays disabled behind the feature flag", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("ff:conversation-chapters", "false"));
+    await stubConversationList(page, [conversation("ordinary-result")]);
+    let indexRequests = 0;
+    await page.route("**/api/conversations/themes", route => {
+      indexRequests++;
+      return route.fulfill({ json: {
+        "ordinary-result": [{ title: "Needle", message_id: "message" }],
+      } });
+    });
+    await page.goto("/new");
+    await page.getByRole("button", { name: "Search conversations..." }).click();
+    await fillConversationQuery(queryEditor(page), "needle");
+    await expect(page.locator(".drawer .conversation-title")).toHaveText(["ordinary-result"]);
+    await expect(page.locator(".drawer .conversation-themes-list")).toHaveCount(0);
+    expect(indexRequests).toBe(0);
+  });
+
+  test("chapter search includes late-loading archived tasks in compact workspace mode", async ({ page, request }) => {
+    const enabled = await request.post("/feature-flags", { data: { name: "workspace", value: true } });
+    expect(enabled.ok()).toBeTruthy();
+    let releaseArchives!: () => void;
+    const archiveGate = new Promise<void>(resolve => { releaseArchives = resolve; });
+    try {
+      await page.addInitScript(() => localStorage.setItem("ff:conversation-chapters", "true"));
+      const active = conversation("active-chapter-hit");
+      const archived = conversation("archived-chapter-hit");
+      archived.archived = true;
+      await stubConversationList(page, [active]);
+      await page.route("**/api/conversations/search**", route => route.fulfill({ json: [] }));
+      await page.route("**/api/conversations/archived**", async route => {
+        await archiveGate;
+        await route.fulfill({ json: [archived] });
+      });
+      await page.route("**/api/conversations/themes", route => route.fulfill({ json: {
+        [active.conversation_id]: [{ title: "Needle", message_id: "active-message" }],
+        [archived.conversation_id]: [{ title: "Needle", message_id: "archived-message" }],
+      } }));
+      await page.goto("/new");
+      await page.getByRole("button", { name: "Search tasks..." }).click();
+      await fillConversationQuery(queryEditor(page), "needle");
+      await expect(page.locator('[data-conversation-id="active-chapter-hit"]')).toBeVisible();
+      await expect(page.locator(".drawer .conversation-preview")).toHaveCount(0);
+      await page.getByTestId("archived-toggle").click();
+      await expect(page.getByRole("button", { name: "Ask Shelley", exact: true })).toBeEnabled();
+      releaseArchives();
+      await expect(page.locator('[data-conversation-id="archived-chapter-hit"]')).toBeVisible();
+      await expect(page.locator('[data-conversation-id="active-chapter-hit"]')).toBeVisible();
+    } finally {
+      releaseArchives();
+      const reset = await request.delete("/feature-flags", { data: { name: "workspace" } });
+      expect(reset.ok()).toBeTruthy();
+    }
+  });
+
+  test("chapter search refreshes recorded chapters and surfaces index failures", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("ff:conversation-chapters", "true"));
+    await stubConversationList(page, [conversation("chapter-hit")]);
+    let title = "First idea";
+    let fail = false;
+    await page.route("**/api/conversations/themes", route => fail
+      ? route.fulfill({ status: 500, body: "Index failed" })
+      : route.fulfill({ json: { "chapter-hit": [{ title, message_id: "message" }] } }),
+    );
+    await page.goto("/new");
+    await page.getByRole("button", { name: "Search conversations..." }).click();
+    const link = page.locator(".drawer .conversation-themes-list a");
+    await expect(link).toHaveText("First idea");
+    title = "Changed direction";
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("shelley-chapters-updated")));
+    await expect(link).toHaveText("Changed direction");
+    fail = true;
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("shelley-chapters-updated")));
+    await expect(page.getByRole("alert")).toContainText("Failed to load chapters");
+    fail = false;
+    await fillConversationQuery(queryEditor(page), "changed");
+    await expect(link).toHaveText("Changed direction");
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  });
+
+  test("chapter search removes chapter-only results when the flag is turned off", async ({ page }) => {
+    await stubConversationList(page, [conversation("chapter-only")]);
+    await page.route("**/api/conversations/search**", route => route.fulfill({ json: [] }));
+    await page.route("**/api/conversations/themes", route => route.fulfill({ json: {
+      "chapter-only": [{ title: "Needle", message_id: "message" }],
+    } }));
+    let enabled = true;
+    await page.route("**/feature-flags", route => {
+      if (route.request().method() === "POST") {
+        enabled = route.request().postDataJSON().value;
+        return route.fulfill({ json: {} });
+      }
+      return route.fulfill({ json: [{
+        name: "conversation-chapters", default: false, override: enabled,
+      }] });
+    });
+    await page.goto("/new");
+    await page.getByRole("button", { name: "Search conversations..." }).click();
+    await fillConversationQuery(queryEditor(page), "needle");
+    await expect(page.locator(".drawer .conversation-title")).toHaveText(["chapter-only"]);
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.locator(".command-palette-input").fill("feature");
+    await page.locator(".command-palette-item").first().click();
+    await page.locator(".feature-flag-row").getByRole("checkbox").uncheck();
+    await expect(page.locator(".drawer .conversation-title")).toHaveCount(0);
+    await expect(page.locator(".drawer .conversation-themes-list")).toHaveCount(0);
+  });
+
+  test("chapter search refreshes updates recorded while the index is loading", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("ff:conversation-chapters", "true"));
+    await stubConversationList(page, [conversation("chapter-hit")]);
+    await page.route("**/api/conversations/search**", route => route.fulfill({ json: [] }));
+    let releaseIndex!: () => void;
+    const indexGate = new Promise<void>(resolve => { releaseIndex = resolve; });
+    let indexRequests = 0;
+    await page.route("**/api/conversations/themes", async route => {
+      const title = ++indexRequests === 1 ? "Old direction" : "Needle";
+      if (indexRequests === 1) await indexGate;
+      await route.fulfill({ json: { "chapter-hit": [{ title, message_id: "message" }] } });
+    });
+    await page.goto("/new");
+    const firstIndex = page.waitForRequest("**/api/conversations/themes");
+    await page.getByRole("button", { name: "Search conversations..." }).click();
+    await firstIndex;
+    await fillConversationQuery(queryEditor(page), "needle");
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("shelley-chapters-updated")));
+    releaseIndex();
+    await expect(page.locator(".drawer .conversation-title")).toHaveText(["chapter-hit"]);
+    await expect(page.locator(".drawer .conversation-themes-list a")).toHaveText("Needle");
+    expect(indexRequests).toBe(2);
+  });
+
   test("drawer clears stale matches while the next query is pending", async ({ page }) => {
     await stubConversationList(page, [conversation("recent")]);
     let release!: () => void;

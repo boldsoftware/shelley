@@ -445,6 +445,7 @@
         </span>
       </div>
       <p v-if="enhanceError" role="alert">{{ enhanceError }}</p>
+      <p v-if="searchOpen && chapterError && !searchError" role="alert">{{ chapterError }}</p>
       <!-- Tag dropdown. Opens on a `tag:` term, listing only tags carried by
            conversations still on screen, each with the count it would leave —
            so a suggestion can never lead to an empty list. -->
@@ -812,6 +813,8 @@ import type {
   ConversationWithState,
 } from "../../types";
 import { api } from "../../services/api";
+import { mergeChapterResults, scoreChapterIndex, type ChapterIndex } from "../../utils/chapterSearch";
+import { useFeatureFlag } from "../composables/featureFlags";
 import { useI18n } from "../composables/i18n";
 import {
   sortConversationsByBucket,
@@ -1066,7 +1069,44 @@ const searchTooltip = computed(() => ({
 }));
 const queryEditorRef = ref<InstanceType<typeof ConversationQueryEditor> | null>(null);
 const activeStructuredEdit = ref<ActiveStructuredQueryEdit | null>(null);
-const searchResults = ref<ConversationWithState[] | null>(null);
+const ftsResults = ref<ConversationWithState[] | null>(null);
+const searchResults = computed(() => ftsResults.value === null ? null :
+  mergeChapterResults<ConversationWithParticipants>(ftsResults.value, listPool.value, chapterScores.value),
+);
+const chaptersEnabled = useFeatureFlag("conversation-chapters");
+const chapterIndex = ref<ChapterIndex>({});
+let chapterLoad: Promise<void> | null = null;
+let chaptersLoaded = false;
+const chapterError = ref<string | null>(null);
+const chapterScores = computed(() =>
+  chaptersEnabled.value ? scoreChapterIndex(chapterIndex.value, searchText.value) : new Map<string, number>(),
+);
+
+async function loadSearchChapters() {
+  if (!chaptersEnabled.value) return;
+  if (chapterLoad) return chapterLoad;
+  if (chaptersLoaded) return;
+  chapterLoad = api.getConversationChapterIndex().then((index) => {
+    chapterIndex.value = index;
+    chaptersLoaded = true;
+    chapterError.value = null;
+  }).finally(() => { chapterLoad = null; });
+  return chapterLoad;
+}
+
+async function updateSearchChapters() {
+  chaptersLoaded = false;
+  if (!searchOpen.value || !chaptersEnabled.value) return;
+  chapterError.value = null;
+  try {
+    await chapterLoad;
+    chaptersLoaded = false;
+    if (searchOpen.value && chaptersEnabled.value) await loadSearchChapters();
+  } catch (error) {
+    chapterError.value = errorMessage(error);
+  }
+}
+window.addEventListener("shelley-chapters-updated", updateSearchChapters);
 const searching = ref(false);
 const searchError = ref<string | null>(null);
 const enhancing = ref(false);
@@ -1332,7 +1372,7 @@ watch(showArchived, (sa) => {
     void loadArchivedConversations();
   }
   if (searchText.value.trim()) {
-    searchResults.value = null;
+    ftsResults.value = null;
     void refreshSearchResults();
   }
 });
@@ -1343,15 +1383,18 @@ async function fetchSearchResults(query: string, seq: number) {
   searchController = controller;
   try {
     const scopes = archivedOnly.value ? [true] : showArchived.value ? [false, true] : [false];
-    const results = (
-      await Promise.all(
+    const [scopedResults] = await Promise.all([
+      Promise.all(
         scopes.map((archived) => api.searchConversationsFTS(query, controller.signal, archived)),
-      )
-    ).flat();
-    if (!controller.signal.aborted && seq === searchSeq) searchResults.value = results;
+      ),
+      loadSearchChapters(),
+    ]);
+    if (!controller.signal.aborted && seq === searchSeq) {
+      ftsResults.value = scopedResults.flat();
+    }
   } catch (error) {
     if (controller.signal.aborted || seq !== searchSeq) return;
-    searchResults.value = [];
+    ftsResults.value = [];
     searchError.value = error instanceof Error ? error.message : String(error);
   } finally {
     if (searchController === controller) searchController = null;
@@ -1362,7 +1405,7 @@ async function fetchSearchResults(query: string, seq: number) {
 // Debounced FTS search within the current archive view. Only the free
 // text goes to the server; `tag:` terms are applied client-side.
 watch(searchText, () => {
-  searchResults.value = null;
+  ftsResults.value = null;
   searchError.value = null;
   searchController?.abort();
   if (searchTimeout) {
@@ -1372,7 +1415,7 @@ watch(searchText, () => {
   const seq = ++searchSeq;
   const query = searchText.value.trim();
   if (!query) {
-    searchResults.value = null;
+    ftsResults.value = null;
     searching.value = false;
     return;
   }
@@ -1387,7 +1430,7 @@ async function refreshSearchResults() {
     clearTimeout(searchTimeout);
     searchTimeout = null;
   }
-  searchResults.value = null;
+  ftsResults.value = null;
   searchError.value = null;
   searching.value = true;
   await fetchSearchResults(query, ++searchSeq);
@@ -2010,6 +2053,15 @@ const listPool = computed<ConversationWithParticipants[]>(() => {
   return showArchived.value ? [...active, ...archivedRows.value] : active;
 });
 
+watch([searchOpen, chaptersEnabled], ([, enabled], [, previouslyEnabled]) => {
+  if (!enabled) {
+    chapterIndex.value = {};
+    chapterError.value = null;
+    if (previouslyEnabled) void refreshSearchResults();
+  }
+  void updateSearchChapters();
+});
+
 const calendarDayCounts = computed(() => {
   const pool = isSearching.value ? (searchResults.value ?? []) : listPool.value;
   const matches = filterConversationsByQuery(
@@ -2479,6 +2531,7 @@ onUnmounted(() => {
   document.removeEventListener("mousedown", onPendingDeleteOutside);
   document.removeEventListener("mousedown", onTagEditorOutside);
   document.removeEventListener("contextmenu", hideContextMenu);
+  window.removeEventListener("shelley-chapters-updated", updateSearchChapters);
 });
 
 // Share all row-relevant state + handlers with ConversationDrawerRow via inject.
@@ -2486,6 +2539,9 @@ provide(DrawerCtxKey, {
   t,
   currentConversationId: computed(() => props.currentConversationId),
   searchText,
+  searchOpen,
+  chapterIndex,
+  chapterScores,
   showParticipantBadges: multipleParticipantsAvailable,
   terminalCounts: computed(() => {
     const counts: Record<string, number> = {};
