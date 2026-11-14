@@ -20,6 +20,7 @@ import {
   tagGroupLabel,
   tagMatchesQuery,
   toggleTagInQuery,
+  toggleUnreadInQuery,
 } from "./tagFilter";
 
 function assert(cond: boolean, msg: string): void {
@@ -557,3 +558,23 @@ run("tag group ordering is total and prefix-aware", () => {
 });
 
 console.log("\ntagFilter tests passed");
+
+run("is:unread is a state filter, not full-text or a tag", () => {
+  const query = parseSearchQuery('IS:UNREAD tag:"in progress" needle');
+  assert(query.unreadOnly, "case-insensitive state term");
+  assertEqual(query.tags, ["in progress"], "other filters preserved");
+  assert(query.text === "needle", "unread never reaches full-text search");
+  assert(parseSearchQuery("is:unread").unreadOnly, "no trailing space required");
+  assert(!parseSearchQuery('tag:"is:unread" ').unreadOnly, "quoted tag is not unread");
+});
+
+run("unread toggle preserves text, tags, and unfinished structured terms", () => {
+  assert(toggleUnreadInQuery("") === "is:unread ", "adds unread");
+  assert(toggleUnreadInQuery("tag:inf") === "is:unread tag:inf", "does not commit a prefix");
+  assert(toggleUnreadInQuery("is:unread tag:inf") === "tag:inf", "removes without committing");
+  assert(toggleUnreadInQuery("IS:UNREAD is:unread") === "", "removes every unread term");
+  assert(
+    toggleUnreadInQuery('is:unread tag:"is:unread" needle') === 'tag:"is:unread" needle ',
+    "preserves quoted values and free text",
+  );
+});

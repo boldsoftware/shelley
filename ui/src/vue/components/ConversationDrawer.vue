@@ -418,6 +418,16 @@
           # tag
         </button>
         <button
+          type="button"
+          :class="`drawer-filter-action${parsedQuery.unreadOnly ? ' drawer-filter-action-on' : ''}`"
+          :aria-pressed="parsedQuery.unreadOnly"
+          aria-label="Unread or working conversations"
+          data-testid="unread-toggle"
+          @click="toggleUnreadFilter"
+        >
+          unread
+        </button>
+        <button
           v-if="isSearching"
           type="button"
           class="drawer-filter-action drawer-search-shelley"
@@ -557,6 +567,21 @@
           @click="clearParticipantFilter"
         >
           Show all conversations
+        </Button>
+      </div>
+      <div
+        v-else-if="parsedQuery.unreadOnly && displayedConversations.length === 0"
+        class="text-secondary drawer-empty-state"
+        data-testid="unread-filter-empty"
+      >
+        <p>No unread or working conversations</p>
+        <Button
+          class="drawer-empty-state-action"
+          severity="secondary"
+          size="small"
+          @click="toggleUnreadFilter"
+        >
+          Clear unread filter
         </Button>
       </div>
       <div
@@ -891,8 +916,9 @@ import {
   tagGroupLabel,
   tagMatchesQuery,
   toggleTagInQuery,
+  toggleUnreadInQuery,
 } from "../../utils/tagFilter";
-import type { OfferedTag } from "../../utils/tagFilter";
+import type { OfferedTag, ParsedQuery } from "../../utils/tagFilter";
 import { perfCount } from "../../utils/perf";
 import { errorMessage } from "../../utils/errorMessage";
 
@@ -1295,6 +1321,7 @@ const structuredFiltersActive = computed(
   () =>
     selectedUsers.value.length > 0 ||
     parsedQuery.value.includeUnattributed ||
+    parsedQuery.value.unreadOnly ||
     queryHasTagFilter(parsedQuery.value),
 );
 const searchToolbarActive = computed(
@@ -1878,6 +1905,11 @@ function clearSearch() {
   void nextTick(() => queryEditorRef.value?.focusEnd());
 }
 
+function toggleUnreadFilter() {
+  queryEditorRef.value?.finishStructuredEdit();
+  searchQuery.value = toggleUnreadInQuery(searchQuery.value);
+}
+
 function startTagFilter() {
   filterMenuDismissed.value = false;
   searchQuery.value = startFilterTermInQuery(searchQuery.value, "tag:");
@@ -1954,6 +1986,24 @@ function onNewConversationClick(e: MouseEvent) {
 }
 
 // --- Derived lists ---
+const unreadConversationIds = computed(
+  () => new Set(props.conversations.filter((c) => c.unread).map((c) => c.conversation_id)),
+);
+
+function filterUnread<T extends Conversation>(conversations: T[]): T[] {
+  return parsedQuery.value.unreadOnly
+    ? conversations.filter(
+        (c) =>
+          unreadConversationIds.value.has(c.conversation_id) ||
+          workingIds.value.has(c.conversation_id),
+      )
+    : conversations;
+}
+
+function filterDrawerQuery<T extends Conversation>(conversations: T[], query: ParsedQuery): T[] {
+  return filterUnread(filterConversationsByQuery(conversations, query));
+}
+
 const stableTopLevelConversations = computed(() => {
   perfCount("drawer.topLevel");
   resetOrderRefsForResort();
@@ -1968,7 +2018,7 @@ const stableTopLevelConversations = computed(() => {
   return items;
 });
 const topLevelConversations = computed(() =>
-  filterConversationsByQuery(
+  filterDrawerQuery(
     filterConversationsByParticipantQuery(
       filterConversationsByDay(stableTopLevelConversations.value, selectedDay.value),
       selectedUsers.value,
@@ -2022,7 +2072,7 @@ const stableArchivedConversations = computed(() => {
   );
   const { items, order } = applyStableOrder(sorted, archivedOrder);
   archivedOrder = order;
-  return filterConversationsByQuery(
+  return filterDrawerQuery(
     filterConversationsByParticipantQuery(
       filterConversationsByDay(items, selectedDay.value),
       selectedUsers.value,
@@ -2064,7 +2114,7 @@ watch([searchOpen, chaptersEnabled], ([, enabled], [, previouslyEnabled]) => {
 
 const calendarDayCounts = computed(() => {
   const pool = isSearching.value ? (searchResults.value ?? []) : listPool.value;
-  const matches = filterConversationsByQuery(
+  const matches = filterDrawerQuery(
     filterConversationsByParticipantQuery(
       pool,
       selectedUsers.value,
@@ -2092,6 +2142,10 @@ function calendarDayCount(date: { year: number; month: number; day: number }): n
 const tagMenuConversationSnapshot = shallowRef<(Conversation | ConversationWithState)[] | null>(
   null,
 );
+watch(
+  () => parsedQuery.value.unreadOnly,
+  () => (tagMenuConversationSnapshot.value = null),
+);
 const displayedConversations = computed<(Conversation | ConversationWithState)[]>(() => {
   if (filterMenuOpen.value && tagMenuConversationSnapshot.value) {
     return tagMenuConversationSnapshot.value;
@@ -2099,7 +2153,7 @@ const displayedConversations = computed<(Conversation | ConversationWithState)[]
   // Search results apply the same predicate stack as active and archived
   // rows. Those lists establish stable order before filtering.
   if (isSearching.value)
-    return filterConversationsByQuery(
+    return filterDrawerQuery(
       filterConversationsByParticipantQuery(
         filterConversationsByDay(
           (searchResults.value ?? []).filter((c) => !pinnedAssistant(c.conversation_id)),
@@ -2132,13 +2186,13 @@ const tagFilterPool = computed<ConversationWithParticipants[]>(() => {
   if (isSearching.value)
     return filterConversationsByParticipantQuery(
       filterConversationsByDay(
-        (searchResults.value ?? []).filter((c) => !pinnedAssistant(c.conversation_id)),
+        filterUnread(searchResults.value ?? []).filter((c) => !pinnedAssistant(c.conversation_id)),
         selectedDay.value,
       ),
       selectedUsers.value,
       parsedQuery.value.includeUnattributed,
     );
-  const pool = listPool.value.filter((c) => !pinnedAssistant(c.conversation_id));
+  const pool = filterUnread(listPool.value).filter((c) => !pinnedAssistant(c.conversation_id));
   return filterConversationsByParticipantQuery(
     filterConversationsByDay(pool, selectedDay.value),
     selectedUsers.value,
@@ -2201,7 +2255,7 @@ interface UserOffer {
 const currentOfferedUsers = computed<UserOffer[]>(() => {
   const selected = new Set(selectedUsers.value.map((email) => email.trim().toLowerCase()));
   const candidates = new Map<string, string>();
-  const pool = filterConversationsByQuery(participantFilterPool.value, parsedQuery.value);
+  const pool = filterDrawerQuery(participantFilterPool.value, parsedQuery.value);
   for (const conversation of pool) {
     for (const participant of conversation.participants ?? []) {
       const email = participant.email.trim();
@@ -2281,7 +2335,7 @@ const emptiedByParticipantFilter = computed(
   () =>
     (selectedUsers.value.length > 0 || parsedQuery.value.includeUnattributed) &&
     displayedConversations.value.length === 0 &&
-    filterConversationsByQuery(participantFilterPool.value, parsedQuery.value).length > 0,
+    filterDrawerQuery(participantFilterPool.value, parsedQuery.value).length > 0,
 );
 
 // Keep the keyboard highlight in range as the offered set narrows.

@@ -12,9 +12,10 @@ import {
   scanConversationQuery,
   UNATTRIBUTED_TERM,
   UNTAGGED_TERM,
+  UNREAD_TERM,
 } from "./conversationQuery";
 
-export { UNATTRIBUTED_TERM, UNTAGGED_TERM } from "./conversationQuery";
+export { UNATTRIBUTED_TERM, UNTAGGED_TERM, UNREAD_TERM } from "./conversationQuery";
 
 // The comparison key for a tag. Empty string means "not a tag".
 export function foldTag(tag: string): string {
@@ -193,6 +194,7 @@ export interface ParsedQuery {
   text: string;
   // True when `is:untagged` is present: keep only conversations with no tags.
   untaggedOnly: boolean;
+  unreadOnly: boolean;
   // True when unattributed conversations are included in the participant facet.
   includeUnattributed: boolean;
   // The half-typed trailing `tag:` term — a bare `tag:`, or a partial
@@ -250,9 +252,14 @@ export function parseSearchQuery(raw: string): ParsedQuery {
   const words: string[] = [];
   const { terms, endsMidTerm } = tokenize(raw);
   let untaggedOnly = false;
+  let unreadOnly = false;
   let includeUnattributed = false;
   terms.forEach((term, i) => {
     const lower = term.toLowerCase();
+    if (lower === UNREAD_TERM) {
+      unreadOnly = true;
+      return;
+    }
     if (lower === UNTAGGED_TERM) {
       untaggedOnly = true;
       return;
@@ -303,6 +310,7 @@ export function parseSearchQuery(raw: string): ParsedQuery {
     users,
     text: words.join(" "),
     untaggedOnly,
+    unreadOnly,
     includeUnattributed,
     activeTagPrefix,
     activeUserPrefix,
@@ -364,6 +372,14 @@ export function removeUserFromQuery(raw: string, email: string): string {
 export function removeUnattributedFromQuery(raw: string): string {
   const kept = tokenize(raw).terms.filter((term) => term.toLowerCase() !== UNATTRIBUTED_TERM);
   return joinTermsAfterRemoval(raw, kept);
+}
+
+export function toggleUnreadInQuery(raw: string): string {
+  if (parseSearchQuery(raw).unreadOnly) {
+    const kept = tokenize(raw).terms.filter((term) => term.toLowerCase() !== UNREAD_TERM);
+    return joinTermsAfterRemoval(raw, kept);
+  }
+  return `${UNREAD_TERM} ${raw}`;
 }
 
 function joinTermsAfterRemoval(raw: string, kept: string[]): string {

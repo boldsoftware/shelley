@@ -76,6 +76,11 @@ run("keeps a trailing tag or user prefix editable", () => {
 
 run("state terms are atomic even at the end of a query", () => {
   assertEqual(
+    tokenizeConversationQuery("IS:UNREAD").map((token) => token.kind),
+    ["text", "unread", "text"],
+    "unread state",
+  );
+  assertEqual(
     tokenizeConversationQuery("is:untagged").map((token) => token.kind),
     ["text", "untagged", "text"],
     "untagged state",

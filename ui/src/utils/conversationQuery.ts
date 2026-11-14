@@ -1,5 +1,6 @@
 const TAG_PREFIX = "tag:";
 const USER_PREFIX = "user:";
+export const UNREAD_TERM = "is:unread";
 export const UNTAGGED_TERM = "is:untagged";
 export const UNATTRIBUTED_TERM = "is:unattributed";
 
@@ -14,7 +15,7 @@ export interface ScannedConversationQuery {
   endsMidTerm: boolean;
 }
 
-export type StructuredQueryKind = "tag" | "user" | "untagged" | "unattributed";
+export type StructuredQueryKind = "tag" | "user" | "untagged" | "unattributed" | "unread";
 export type EditableStructuredQueryKind = Extract<StructuredQueryKind, "tag" | "user">;
 
 export interface StructuredQueryEdit {
@@ -126,6 +127,9 @@ function structuredToken(
   trailingPartial: boolean,
 ): StructuredQueryToken | null {
   const lower = term.raw.toLowerCase();
+  if (lower === UNREAD_TERM) {
+    return { ...term, kind: "unread", label: UNREAD_TERM, value: "" };
+  }
   if (lower === UNTAGGED_TERM) {
     return { ...term, kind: "untagged", label: UNTAGGED_TERM, value: "" };
   }
