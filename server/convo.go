@@ -170,7 +170,8 @@ type ConversationManager struct {
 	cacheWarmTail []llm.Message
 	// cancelSuggestion stops the next prompt suggestion request, if one is
 	// in flight. Idle work cancellation calls it. Guarded by mu.
-	cancelSuggestion context.CancelFunc
+	cancelSuggestion   context.CancelFunc
+	cancelChapterIndex context.CancelFunc
 
 	// changingSettings holds queued messages back, from both the drain and
 	// the running turn, while ApplySettings or StartNewGeneration interrupts
@@ -2132,11 +2133,7 @@ func (cm *ConversationManager) systemPromptDisplayData(ctx context.Context, opts
 	cfg.DisableAllTools = opts.DisableAllTools
 	cfg.InPlaceCompactor = inPlaceCompactor{cm: cm}
 	cfg.UserMessageFinder = cm.userMessageFinder()
-	recorder, err := cm.chapterRecorder(ctx)
-	if err != nil {
-		return nil, err
-	}
-	cfg.RecordChapter = recorder
+
 	cfg.UserChat = cm.userChat
 	cfg.Slack = cm.slack
 	return systemPromptDisplayData(cfg, promptSkills), nil
@@ -2370,10 +2367,7 @@ func (cm *ConversationManager) serviceForLoop(service llm.Service) (llm.Service,
 }
 
 func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID string) error {
-	chaptersOn, err := cm.chaptersOn(context.Background())
-	if err != nil {
-		return err
-	}
+	var err error
 	sourceID, sourceRevision := "", uint64(0)
 	if cm.resolveModelService != nil {
 		current, currentSource, revision, err := cm.resolveModelService(modelID)
@@ -2391,11 +2385,8 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 		return fmt.Errorf("%w: conversation already uses model %s; requested %s", errConversationModelMismatch, existingModel, modelID)
 	}
 	if cm.loop != nil {
-		wantChapterTool := chaptersOn && claudetool.IsToolEnabled("chapter", cm.conversationOptions.ToolOverrides, cm.conversationOptions.DisableAllTools)
-		chaptersChanged := cm.toolSet != nil &&
-			wantChapterTool != slices.ContainsFunc(cm.toolSet.Tools(), func(t *llm.Tool) bool { return t.Name == "chapter" })
-		if !cm.agentWorking && (chaptersChanged || (cm.loopSourceID != "" &&
-			(cm.loopSourceID != sourceID || cm.loopSourceRevision != sourceRevision))) {
+		if !cm.agentWorking && cm.loopSourceID != "" &&
+			(cm.loopSourceID != sourceID || cm.loopSourceRevision != sourceRevision) {
 			// Same-model refresh: the conversation's account must survive a
 			// failed rebuild, or queued work and retries would fall back to
 			// the host default.
@@ -2508,11 +2499,7 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 	}
 	toolSetConfig.InPlaceCompactor = inPlaceCompactor{cm: cm, generation: generation}
 	toolSetConfig.UserMessageFinder = cm.userMessageFinder()
-	toolSetConfig.RecordChapter, err = cm.chapterRecorder(processCtx)
-	if err != nil {
-		cancel()
-		return err
-	}
+
 	toolSetConfig.UserChat = cm.userChat
 	toolSetConfig.Slack = cm.slack
 	toolSet := claudetool.NewToolSet(processCtx, toolSetConfig)

@@ -89,6 +89,9 @@ func TestNewToolSetRespectsOverrides(t *testing.T) {
 	})
 	defer ts.Cleanup()
 	for _, tool := range ts.Tools() {
+		if tool.Name == "chapter" {
+			t.Fatal("chapter indexing must not be a conversation tool")
+		}
 		if tool.Name == "bash" {
 			t.Fatalf("bash should have been filtered out")
 		}

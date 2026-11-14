@@ -76,7 +76,7 @@
       <span aria-hidden="true">↑</span> Top of conversation
     </button>
     <div ref="listRef" class="toc-popover-list">
-      <p v-if="chaptersEnabled && chaptersError" role="alert">{{ chaptersError }}</p>
+      <p v-if="chaptersError" role="alert">{{ chaptersError }}</p>
 
       <button
         v-for="entry in entries"
@@ -205,7 +205,6 @@ import { chunkMountKey } from "./chunkMount";
 import { messageTOCCategory, type TOCCategory } from "../../utils/conversationTOCCategory";
 import { messageSource, parseLegacyBackgroundJobNotice } from "../../utils/messageSource";
 import { apiFetch } from "../../services/api";
-import { useFeatureFlag } from "../composables/featureFlags";
 
 interface TOCThumbnail {
   src: string;
@@ -263,10 +262,8 @@ const listRef = ref<HTMLElement | null>(null);
 const renderedThumbnails = ref<Map<string, TOCThumbnail[]>>(new Map());
 const chapters = ref<{ title: string; message_id: string }[]>([]);
 const chaptersError = ref("");
-const chaptersEnabled = useFeatureFlag("conversation-chapters");
 
 async function loadChapters() {
-  if (!chaptersEnabled.value) return;
   const id = props.conversationId;
   try {
     const response = await apiFetch(
@@ -284,7 +281,7 @@ async function loadChapters() {
 }
 
 function onChaptersUpdated(event: Event) {
-  if (chaptersEnabled.value && open.value && (event as CustomEvent<string>).detail === props.conversationId) void loadChapters();
+  if (open.value && (event as CustomEvent<string>).detail === props.conversationId) void loadChapters();
 }
 
 watch(
@@ -295,12 +292,6 @@ watch(
     if (open.value) void loadChapters();
   },
 );
-
-watch(chaptersEnabled, (enabled) => {
-  chapters.value = [];
-  chaptersError.value = "";
-  if (enabled && open.value) void loadChapters();
-});
 
 function extractMessageLabel(message: Message, maxLen = 70): string {
   const slack = slackEventOf(message);
@@ -677,7 +668,7 @@ const entries = computed(
     buildEntries(
       props.messages,
       renderedThumbnails.value,
-      chaptersEnabled.value ? chapters.value : [],
+      chapters.value,
     ),
   ),
 );

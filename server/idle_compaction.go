@@ -37,7 +37,7 @@ const maxIdleCompactionMinutes = int(math.MaxInt64 / time.Minute)
 var idleNudgePrompt string
 
 // cancelIdleCompactionLocked cancels all idle work: compaction, cache
-// warming, and the next prompt suggestion. Activity, settings changes, and
+// warming, chapters, and the next prompt suggestion. Activity, settings changes, and
 // compaction all go through here.
 func (cm *ConversationManager) cancelIdleCompactionLocked() {
 	cm.idleCompactionVersion++
@@ -53,6 +53,10 @@ func (cm *ConversationManager) cancelIdleCompactionLocked() {
 	if cm.cancelSuggestion != nil {
 		cm.cancelSuggestion()
 		cm.cancelSuggestion = nil
+	}
+	if cm.cancelChapterIndex != nil {
+		cm.cancelChapterIndex()
+		cm.cancelChapterIndex = nil
 	}
 }
 
@@ -115,6 +119,7 @@ func (cm *ConversationManager) scheduleIdleWork(endSeq int64) {
 	now := time.Now()
 	cm.scheduleCacheWarmLocked(version, now.Add(warmFor), now)
 	cm.suggestNextPromptLocked(endSeq)
+	cm.indexChaptersLocked(endSeq)
 }
 
 // scheduleCacheWarmLocked arms a refresh shortly before the cache last

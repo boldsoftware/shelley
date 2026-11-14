@@ -444,8 +444,8 @@ func TestHandleTools(t *testing.T) {
 	}
 	var hasBash bool
 	for _, tt := range resp.Tools {
-		if tt.Name == "keyword_search" {
-			t.Fatal("keyword_search must not appear in the tool registry")
+		if tt.Name == "keyword_search" || tt.Name == "chapter" {
+			t.Fatalf("%s must not appear in the tool registry", tt.Name)
 		}
 		if tt.Name == "bash" {
 			hasBash = true

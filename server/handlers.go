@@ -19,7 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
+
 	"strconv"
 	"strings"
 	"sync"
@@ -3334,19 +3334,8 @@ func markDefaultModel(modelList []ModelInfo, defaultID string) {
 
 // handleTools returns the list of tools available to conversations.
 func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
-	on, err := s.flagOn(r.Context(), FlagConversationChapters)
-	if err != nil {
-		s.internalError(w, "Failed to read conversation chapters flag", err)
-		return
-	}
-	tools := claudetool.ToolRegistry
-	if !on {
-		tools = slices.DeleteFunc(slices.Clone(tools), func(tool claudetool.ToolInfo) bool {
-			return tool.Name == "chapter"
-		})
-	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"tools": tools,
+		"tools": claudetool.ToolRegistry,
 	})
 }
 

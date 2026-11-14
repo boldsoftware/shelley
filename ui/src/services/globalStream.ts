@@ -317,12 +317,10 @@ export function connectGlobalStream({
       for (const m of data.messages) {
         toolIds.push(...extractToolUseIds(m));
         if (
-          (m.type === "user" || m.type === "tool") &&
-          llmData(m)?.Content.some(
-            (c) =>
-              c.Type === 6 &&
-              !c.ToolError &&
-              (c.Display as { type?: string } | undefined)?.type === "chapter",
+          m.type === "slug" &&
+          m.other_usage_data &&
+          (JSON.parse(m.other_usage_data) as { purpose: string }[]).some(
+            (usage) => usage.purpose === "chapter_index",
           )
         ) {
           chapterUpdated = true;

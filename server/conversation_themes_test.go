@@ -13,7 +13,7 @@ import (
 func TestConversationThemesEndpoint(t *testing.T) {
 	database, cleanup := setupTestDB(t)
 	t.Cleanup(cleanup)
-	if err := database.SetFeatureFlagOverride(t.Context(), FlagConversationChapters.Name, "true"); err != nil {
+	if err := database.SetFeatureFlagOverride(t.Context(), "conversation-chapters", "false"); err != nil {
 		t.Fatal(err)
 	}
 	mux, _ := newTestStreamServer(t, database)
@@ -82,12 +82,4 @@ func TestConversationThemesEndpoint(t *testing.T) {
 		t.Fatalf("index = %#v", index)
 	}
 
-	if err := database.SetFeatureFlagOverride(t.Context(), FlagConversationChapters.Name, "false"); err != nil {
-		t.Fatal(err)
-	}
-	offResponse := httptest.NewRecorder()
-	mux.ServeHTTP(offResponse, httptest.NewRequest("GET", "/api/conversations/themes", nil))
-	if offResponse.Code != http.StatusForbidden {
-		t.Fatalf("flag-off index status = %d, want %d", offResponse.Code, http.StatusForbidden)
-	}
 }

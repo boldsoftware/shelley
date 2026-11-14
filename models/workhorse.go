@@ -110,6 +110,23 @@ func (m *Manager) getWorkhorseService(conversationModelID string) (llm.Service, 
 	return m.newWorkhorseService(modelID, conversationModelID)
 }
 
+func (m *Manager) GetWorkhorseServiceNoFallback(conversationModelID string) (llm.Service, error) {
+	modelID := m.GetWorkhorseModelID(conversationModelID)
+	info := m.GetModelInfo(modelID)
+	if info == nil {
+		return nil, fmt.Errorf("no workhorse model available (conversation model %q)", conversationModelID)
+	}
+	name := modelID
+	if info.SourceID != "" && info.APIModelName != "" {
+		name = info.APIModelName
+	}
+	family, ok := workhorseFamilies[info.Provider]
+	if !ok || !matchesWorkhorseFamily(name, family) {
+		return nil, fmt.Errorf("no workhorse model available (conversation model %q)", conversationModelID)
+	}
+	return m.GetService(modelID)
+}
+
 func (m *Manager) newWorkhorseService(modelID, conversationModelID string) (llm.Service, error) {
 	primary, err := m.GetService(modelID)
 	if err != nil {

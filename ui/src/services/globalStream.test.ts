@@ -65,6 +65,7 @@ type Handler = () => void;
 
 class FakeEventTarget {
   handlers = new Map<string, Set<Handler>>();
+  events: Event[] = [];
   addEventListener(type: string, fn: Handler) {
     if (!this.handlers.has(type)) this.handlers.set(type, new Set());
     this.handlers.get(type)!.add(fn);
@@ -74,6 +75,11 @@ class FakeEventTarget {
   }
   dispatch(type: string) {
     for (const fn of this.handlers.get(type) ?? []) fn();
+  }
+  dispatchEvent(event: Event): boolean {
+    this.events.push(event);
+    this.dispatch(event.type);
+    return true;
   }
 }
 
@@ -164,6 +170,7 @@ function reset(): void {
   fakeDocument.visibilityState = "visible";
   fakeDocument.handlers.clear();
   fakeWindow.handlers.clear();
+  fakeWindow.events = [];
   fetchResponseType = "basic";
   fetchStatus = 200;
   fetchCalls = 0;
@@ -781,6 +788,36 @@ await run("private read snapshots and updates dispatch independently of list pat
   assert(JSON.stringify(s.readSnapshots) === JSON.stringify([snapshot]), "snapshot delivery");
   assert(JSON.stringify(s.readUpdates) === JSON.stringify([read]), "incremental delivery");
   s.handle.close();
+});
+
+await run("background chapter usage refreshes navigation, not other usage", () => {
+  reset();
+  const stream = newStream();
+  const upsert = messageStore.upsertMessages;
+  const setMax = messageStore.setMaxSequenceIdKnown;
+  messageStore.upsertMessages = () => {};
+  messageStore.setMaxSequenceIdKnown = () => {};
+  try {
+    const marker = {
+      type: "slug",
+      sequence_id: 1,
+      other_usage_data: JSON.stringify([{ purpose: "slug" }]),
+    };
+    latest().emitMessage({ conversation_id: "chapters", messages: [marker] });
+    assert(fakeWindow.events.length === 0, "ordinary usage does not refresh chapters");
+    marker.other_usage_data = JSON.stringify([{ purpose: "chapter_index" }]);
+    latest().emitMessage({ conversation_id: "chapters", messages: [marker] });
+    const event = fakeWindow.events[0] as CustomEvent<string>;
+    assert(fakeWindow.events.length === 1, "chapter index refresh is dispatched");
+    assert(
+      event.type === "shelley-chapters-updated" && event.detail === "chapters",
+      "refresh targets its conversation",
+    );
+  } finally {
+    messageStore.upsertMessages = upsert;
+    messageStore.setMaxSequenceIdKnown = setMax;
+    stream.handle.close();
+  }
 });
 
 console.log("\nglobalStream: all scenarios passed");

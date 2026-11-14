@@ -862,7 +862,6 @@ import type {
 } from "../../types";
 import { api } from "../../services/api";
 import { mergeChapterResults, scoreChapterIndex, type ChapterIndex } from "../../utils/chapterSearch";
-import { useFeatureFlag } from "../composables/featureFlags";
 import { useI18n } from "../composables/i18n";
 import {
   sortConversationsByBucket,
@@ -1128,17 +1127,13 @@ const ftsResults = ref<ConversationWithState[] | null>(null);
 const searchResults = computed(() => ftsResults.value === null ? null :
   mergeChapterResults<ConversationWithParticipants>(ftsResults.value, listPool.value, chapterScores.value),
 );
-const chaptersEnabled = useFeatureFlag("conversation-chapters");
 const chapterIndex = ref<ChapterIndex>({});
 let chapterLoad: Promise<void> | null = null;
 let chaptersLoaded = false;
 const chapterError = ref<string | null>(null);
-const chapterScores = computed(() =>
-  chaptersEnabled.value ? scoreChapterIndex(chapterIndex.value, searchText.value) : new Map<string, number>(),
-);
+const chapterScores = computed(() => scoreChapterIndex(chapterIndex.value, searchText.value));
 
 async function loadSearchChapters() {
-  if (!chaptersEnabled.value) return;
   if (chapterLoad) return chapterLoad;
   if (chaptersLoaded) return;
   chapterLoad = api.getConversationChapterIndex().then((index) => {
@@ -1151,12 +1146,12 @@ async function loadSearchChapters() {
 
 async function updateSearchChapters() {
   chaptersLoaded = false;
-  if (!searchOpen.value || !chaptersEnabled.value) return;
+  if (!searchOpen.value) return;
   chapterError.value = null;
   try {
     await chapterLoad;
     chaptersLoaded = false;
-    if (searchOpen.value && chaptersEnabled.value) await loadSearchChapters();
+    if (searchOpen.value) await loadSearchChapters();
   } catch (error) {
     chapterError.value = errorMessage(error);
   }
@@ -2149,14 +2144,7 @@ const listPool = computed<ConversationWithParticipants[]>(() => {
   return showArchived.value ? [...active, ...archivedRows.value] : active;
 });
 
-watch([searchOpen, chaptersEnabled], ([, enabled], [, previouslyEnabled]) => {
-  if (!enabled) {
-    chapterIndex.value = {};
-    chapterError.value = null;
-    if (previouslyEnabled) void refreshSearchResults();
-  }
-  void updateSearchChapters();
-});
+watch(searchOpen, () => void updateSearchChapters());
 
 const calendarDayCounts = computed(() => {
   const pool = isSearching.value ? (searchResults.value ?? []) : listPool.value;

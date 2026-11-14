@@ -538,7 +538,6 @@ test.describe("conversation drawer startup and app bar", () => {
   });
 
   test("search reveals chapters and prioritizes chapter-title matches", async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem("ff:conversation-chapters", "true"));
     const exact = conversation("chapter-only");
     const prefix = conversation("chapter-prefix");
     const text = conversation("message-only");
@@ -595,7 +594,6 @@ test.describe("conversation drawer startup and app bar", () => {
   });
 
   test("chapter search respects the current archive view", async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem("ff:conversation-chapters", "true"));
     const active = conversation("active-chapter-hit");
     const archived = conversation("archived-chapter-hit");
     archived.archived = true;
@@ -619,22 +617,21 @@ test.describe("conversation drawer startup and app bar", () => {
     await expect(titles).toHaveText(["active-chapter-hit"]);
   });
 
-  test("chapter search stays disabled behind the feature flag", async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem("ff:conversation-chapters", "false"));
-    await stubConversationList(page, [conversation("ordinary-result")]);
+  test("chapter search is enabled by default", async ({ page }) => {
+    await stubConversationList(page, [conversation("chapter-only")]);
     let indexRequests = 0;
     await page.route("**/api/conversations/themes", route => {
       indexRequests++;
       return route.fulfill({ json: {
-        "ordinary-result": [{ title: "Needle", message_id: "message" }],
+        "chapter-only": [{ title: "Needle", message_id: "message" }],
       } });
     });
     await page.goto("/new");
     await page.getByRole("button", { name: "Search conversations..." }).click();
     await fillConversationQuery(queryEditor(page), "needle");
-    await expect(page.locator(".drawer .conversation-title")).toHaveText(["ordinary-result"]);
-    await expect(page.locator(".drawer .conversation-themes-list")).toHaveCount(0);
-    expect(indexRequests).toBe(0);
+    await expect(page.locator(".drawer .conversation-title")).toHaveText(["chapter-only"]);
+    await expect(page.locator(".drawer .conversation-themes-list a")).toHaveText("Needle");
+    expect(indexRequests).toBe(1);
   });
 
   test("chapter search includes late-loading archived tasks in compact workspace mode", async ({ page, request }) => {
@@ -643,7 +640,6 @@ test.describe("conversation drawer startup and app bar", () => {
     let releaseArchives!: () => void;
     const archiveGate = new Promise<void>(resolve => { releaseArchives = resolve; });
     try {
-      await page.addInitScript(() => localStorage.setItem("ff:conversation-chapters", "true"));
       const active = conversation("active-chapter-hit");
       const archived = conversation("archived-chapter-hit");
       archived.archived = true;
@@ -675,7 +671,6 @@ test.describe("conversation drawer startup and app bar", () => {
   });
 
   test("chapter search refreshes recorded chapters and surfaces index failures", async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem("ff:conversation-chapters", "true"));
     await stubConversationList(page, [conversation("chapter-hit")]);
     let title = "First idea";
     let fail = false;
@@ -699,36 +694,7 @@ test.describe("conversation drawer startup and app bar", () => {
     await expect(page.getByRole("alert")).toHaveCount(0);
   });
 
-  test("chapter search removes chapter-only results when the flag is turned off", async ({ page }) => {
-    await stubConversationList(page, [conversation("chapter-only")]);
-    await page.route("**/api/conversations/search**", route => route.fulfill({ json: [] }));
-    await page.route("**/api/conversations/themes", route => route.fulfill({ json: {
-      "chapter-only": [{ title: "Needle", message_id: "message" }],
-    } }));
-    let enabled = true;
-    await page.route("**/feature-flags", route => {
-      if (route.request().method() === "POST") {
-        enabled = route.request().postDataJSON().value;
-        return route.fulfill({ json: {} });
-      }
-      return route.fulfill({ json: [{
-        name: "conversation-chapters", default: false, override: enabled,
-      }] });
-    });
-    await page.goto("/new");
-    await page.getByRole("button", { name: "Search conversations..." }).click();
-    await fillConversationQuery(queryEditor(page), "needle");
-    await expect(page.locator(".drawer .conversation-title")).toHaveText(["chapter-only"]);
-    await page.keyboard.press("ControlOrMeta+k");
-    await page.locator(".command-palette-input").fill("feature");
-    await page.locator(".command-palette-item").first().click();
-    await page.locator(".feature-flag-row").getByRole("checkbox").uncheck();
-    await expect(page.locator(".drawer .conversation-title")).toHaveCount(0);
-    await expect(page.locator(".drawer .conversation-themes-list")).toHaveCount(0);
-  });
-
   test("chapter search refreshes updates recorded while the index is loading", async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem("ff:conversation-chapters", "true"));
     await stubConversationList(page, [conversation("chapter-hit")]);
     await page.route("**/api/conversations/search**", route => route.fulfill({ json: [] }));
     let releaseIndex!: () => void;

@@ -128,7 +128,7 @@
 
       <ConversationThemes
         v-if="
-          chaptersEnabled && !isDraft && !isPlaceholder &&
+          !isDraft && !isPlaceholder &&
           ctx.searchOpen.value &&
           (!ctx.searchText.value.trim() || ctx.chapterScores.value.has(conversation.conversation_id))
         "
@@ -521,7 +521,6 @@ import { workspaceMode } from "../../utils/workspaceMode";
 import GearIcon from "./GearIcon.vue";
 import CompactTime from "./CompactTime.vue";
 import ConversationThemes from "./ConversationThemes.vue";
-import { useFeatureFlag } from "../composables/featureFlags";
 import { isTemporaryConversation } from "../../utils/temporaryConversation";
 
 const props = defineProps<{
@@ -531,7 +530,6 @@ const props = defineProps<{
 const ctx = inject(DrawerCtxKey)!;
 const composerPreview = inject(ComposerPreviewKey, null);
 
-const chaptersEnabled = useFeatureFlag("conversation-chapters");
 const short = computed(() => ctx.rowSize.value === "short");
 const full = computed(() => ctx.rowSize.value === "full");
 
