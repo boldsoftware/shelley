@@ -200,12 +200,13 @@ func TestDirectPTYCloseInterruptsRecv(t *testing.T) {
 // Input a surviving command never read must not stay queued after Close.
 func TestDirectPTYCloseDropsQueuedInput(t *testing.T) {
 	t.Parallel()
-	client, err := startDirectPTY(`trap "" HUP; stty raw -echo; echo ready; exec sleep 1000`, t.TempDir(), 80, 24, nil)
+	dir := symlinkedDir(t)
+	client, err := startDirectPTY(`trap "" HUP; stty raw -echo; echo "ready $PWD"; exec sleep 1000`, dir, 80, 24, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = syscall.Kill(client.cmd.Process.Pid, syscall.SIGKILL) })
-	readTerminalUntil(t, client, "ready", 5*time.Second)
+	readTerminalUntil(t, client, "ready "+dir, 5*time.Second)
 	// More than the terminal's input queue holds, so the writer parks.
 	if err := client.SendInput(make([]byte, 64<<10)); err != nil {
 		t.Fatal(err)

@@ -42,7 +42,7 @@ func workspaceResponse[T any](t *testing.T, response *httptest.ResponseRecorder,
 func newActionFixture(t *testing.T, command string, archive bool) (*Server, *db.DB, string, string) {
 	t.Helper()
 	s, database, _ := newTestServer(t)
-	cwd := t.TempDir()
+	cwd := symlinkedDir(t)
 	project, err := database.CreateProject(t.Context(), db.Project{
 		Name: "Commands", Cwd: cwd,
 		Actions: []db.ProjectAction{{ID: "run", Label: "Run command", Command: command, ArchiveOnSuccess: archive}},
@@ -426,7 +426,7 @@ func TestActionRejectsConversationMutationInProgress(t *testing.T) {
 
 func TestActionReceivesOwnEnvironment(t *testing.T) {
 	t.Parallel()
-	command := `printf '%s|%s|%s|%s|%s|%s|%s' "$SHELLEY_CONVERSATION_ID" "$SHELLEY_CWD" "$SHELLEY_MODEL" "$SHELLEY_PORT" "$SHELLEY_URL" "$SHELLEY_SOCKET" "$SHELLEY_USER_EMAIL"`
+	command := `printf '%s|%s|%s|%s|%s|%s|%s|%s' "$SHELLEY_CONVERSATION_ID" "$SHELLEY_CWD" "$PWD" "$SHELLEY_MODEL" "$SHELLEY_PORT" "$SHELLEY_URL" "$SHELLEY_SOCKET" "$SHELLEY_USER_EMAIL"`
 	s, database, id, cwd := newActionFixture(t, command, false)
 	s.listenPort = 8123
 	s.socketPath = "/tmp/task-test.sock"
@@ -442,7 +442,7 @@ func TestActionReceivesOwnEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := strings.Join([]string{id, cwd, "predictable", "8123", "http://localhost:8123", "/tmp/task-test.sock", "task@example.com"}, "|")
+	expected := strings.Join([]string{id, cwd, cwd, "predictable", "8123", "http://localhost:8123", "/tmp/task-test.sock", "task@example.com"}, "|")
 	if finished.Status != "succeeded" || finished.Output != expected {
 		t.Fatalf("action environment: status=%s output=%q want=%q", finished.Status, finished.Output, expected)
 	}

@@ -29,23 +29,38 @@ func TestWorkingDirectoryConfiguration(t *testing.T) {
 		dir := t.TempDir()
 		h.NewConversation("bash: pwd", dir)
 		result := strings.TrimSpace(h.WaitToolResult())
-		// Resolve symlinks for comparison (on macOS, temp dirs may be symlinked)
-		expected, _ := filepath.EvalSymlinks(dir)
-		if result != expected {
-			t.Errorf("expected %q, got: %s", expected, result)
+		if result != dir {
+			t.Errorf("expected %q, got: %s", dir, result)
 		}
 	})
 
-	t.Run("cwd_second", func(t *testing.T) {
-		dir := t.TempDir()
-		h.NewConversation("bash: pwd", dir)
-		result := strings.TrimSpace(h.WaitToolResult())
-		// Resolve symlinks for comparison (on macOS, temp dirs may be symlinked)
-		expected, _ := filepath.EvalSymlinks(dir)
-		if result != expected {
-			t.Errorf("expected %q, got: %s", expected, result)
+	// A directory reached through a symlink: pwd and cd .. name it as given,
+	// while pwd -P still resolves it.
+	t.Run("cwd_through_symlink", func(t *testing.T) {
+		link := symlinkedDir(t)
+		resolved, err := filepath.EvalSymlinks(link)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.NewConversation("bash: pwd; pwd -P; cd .. && pwd", link)
+		// Shelley's note that the cd doesn't persist comes first.
+		want := "\n" + strings.Join([]string{link, resolved, filepath.Dir(link)}, "\n")
+		if got := strings.TrimSpace(h.WaitToolResult()); !strings.HasSuffix(got, want) {
+			t.Errorf("got:\n%s\nwant it to end:%s", got, want)
 		}
 	})
+}
+
+// symlinkedDir returns a path that reaches a new directory through a symlink.
+// A command started there shows whether it was given that path or left to
+// resolve it, on Linux too, where t.TempDir() has no symlink in it.
+func symlinkedDir(t *testing.T) string {
+	t.Helper()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(t.TempDir(), link); err != nil {
+		t.Fatal(err)
+	}
+	return link
 }
 
 // TestListDirectory tests the list-directory API endpoint used by the directory picker.

@@ -180,7 +180,7 @@ type directPTYClient struct {
 func startDirectPTY(command, cwd string, cols, rows uint16, extraEnv []string) (*directPTYClient, error) {
 	cmd := exec.Command("bash", "--login", "-c", command)
 	cmd.Dir = cwd
-	cmd.Env = terminalEnvironment(extraEnv)
+	cmd.Env = terminalEnvironment(cmd.Environ(), extraEnv)
 	ptmx, err := pty.Start(cmd, cols, rows)
 	if err != nil {
 		return nil, fmt.Errorf("terminals: start %q: %w", command, err)

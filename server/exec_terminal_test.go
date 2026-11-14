@@ -170,7 +170,7 @@ func TestExecTerminal_WorkingDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get working directory: %v", err)
 	}
-	existing := t.TempDir()
+	existing := symlinkedDir(t)
 
 	for _, tc := range []struct {
 		name     string
@@ -201,12 +201,12 @@ func TestExecTerminal_WorkingDirectory(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// pwd -P resolves symlinks (e.g. macOS /var -> /private/var),
 			// so compare it against the resolved path. SHELLEY_CWD is
-			// passed through verbatim.
+			// passed through verbatim, and PWD names it as given too.
 			wantReal, err := filepath.EvalSymlinks(tc.want)
 			if err != nil {
 				t.Fatalf("EvalSymlinks(%q): %v", tc.want, err)
 			}
-			cmd := `echo "pwd=$(pwd -P)"; echo "SHELLEY_CWD=$SHELLEY_CWD"`
+			cmd := `echo "pwd=$(pwd -P)"; echo "SHELLEY_CWD=$SHELLEY_CWD"; echo "PWD=$PWD"`
 			wsURL := url.URL{
 				Scheme:   "ws",
 				Host:     server.Listener.Addr().String(),
@@ -250,7 +250,7 @@ func TestExecTerminal_WorkingDirectory(t *testing.T) {
 			for i, l := range lines {
 				lines[i] = strings.TrimSpace(l)
 			}
-			for _, want := range []string{"pwd=" + wantReal, "SHELLEY_CWD=" + tc.want} {
+			for _, want := range []string{"pwd=" + wantReal, "SHELLEY_CWD=" + tc.want, "PWD=" + tc.want} {
 				if !slices.Contains(lines, want) {
 					t.Errorf("Expected output line %q, got: %q", want, output.String())
 				}

@@ -22,7 +22,8 @@ type ServerOptions struct {
 	Args    []string
 	// Dir is the working directory for the command.
 	Dir string
-	// Env is the environment for the command. If nil, os.Environ() is used.
+	// Env is appended to this process's environment (with PWD set to Dir);
+	// later entries win.
 	Env []string
 	// Cols, Rows is the initial PTY size. Defaults to 80x24 if zero.
 	Cols, Rows uint16
@@ -68,11 +69,7 @@ func Serve(opts ServerOptions) error {
 
 	cmd := exec.Command(opts.Command, opts.Args...)
 	cmd.Dir = opts.Dir
-	if opts.Env == nil {
-		cmd.Env = os.Environ()
-	} else {
-		cmd.Env = opts.Env
-	}
+	cmd.Env = append(cmd.Environ(), opts.Env...)
 
 	ptmx, err := pty.Start(cmd, opts.Cols, opts.Rows)
 	if err != nil {

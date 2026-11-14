@@ -316,8 +316,6 @@ func (b *BashTool) makeBashCommand(vm VM, command, wd string, extraEnv []string,
 		"EDITOR=/bin/false", // interactive editors won't work
 		`GIT_SEQUENCE_EDITOR=echo "To do an interactive rebase, run it in a tmux session." && exit 1`,
 	}, extraEnv...)
-	// Strip any inherited SHELLEY_* vars so we control them explicitly below.
-	env := stripShelleyEnv(os.Environ())
 	var cmd *exec.Cmd
 	if vm != nil {
 		argv := vm.Command(VMJobScript, append([]string{wd, command}, commandEnv...)...)
@@ -326,6 +324,10 @@ func (b *BashTool) makeBashCommand(vm VM, command, wd string, extraEnv []string,
 	} else {
 		cmd = exec.Command("bash", "-c", bashJobWrapper, "shelley-job", command, exitPath)
 		cmd.Dir = wd
+	}
+	// Strip any inherited SHELLEY_* vars so we control them explicitly below.
+	env := stripShelleyEnv(cmd.Environ())
+	if vm == nil {
 		env = append(env, commandEnv...)
 		env = append(env, b.Env.Environ(cmd.Dir)...)
 	}

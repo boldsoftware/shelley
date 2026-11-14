@@ -781,7 +781,7 @@ func (s *Server) actionCommand(ctx context.Context, run *db.ActionRun, conversat
 	if errors.Is(err, sql.ErrNoRows) {
 		cmd := exec.Command("/bin/sh", "-c", command)
 		cmd.Dir = cwd
-		cmd.Env = actionEnvironment(os.Environ(), env)
+		cmd.Env = actionEnvironment(cmd.Environ(), env)
 		return cmd, func() {}, nil
 	}
 	if err != nil {

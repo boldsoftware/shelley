@@ -316,7 +316,7 @@ func (t *TerminalSessions) spawnExeScroll(id, command, cwd, conversationID strin
 		"shelley-exe-scroll", command, pidFile, exitFile,
 	)
 	cmd.Dir = cwd
-	cmd.Env = terminalEnvironment(extraEnv)
+	cmd.Env = terminalEnvironment(cmd.Environ(), extraEnv)
 	if err := exescroll.ConfigureCommand(cmd); err != nil {
 		return nil, nil, fmt.Errorf("terminals: share embedded exe-scroll: %w", err)
 	}
@@ -360,8 +360,8 @@ func (t *TerminalSessions) spawnExeScroll(id, command, cwd, conversationID strin
 	return sess, client, nil
 }
 
-func terminalEnvironment(extra []string) []string {
-	env := append(os.Environ(), extra...)
+func terminalEnvironment(base, extra []string) []string {
+	env := append(base, extra...)
 	out := env[:0]
 	for _, value := range env {
 		if strings.HasPrefix(value, "TERM=") || strings.HasPrefix(value, "COLORTERM=") {
@@ -712,10 +712,6 @@ func (t *TerminalSessions) spawnSubprocess(socket, logFile, cwd, command string,
 func InProcessSpawner(socket, logFile, cwd, command string, cols, rows uint16, extraEnv []string) (int, error) {
 	ready := make(chan struct{})
 	served := make(chan error, 1)
-	var env []string
-	if len(extraEnv) > 0 {
-		env = append(os.Environ(), extraEnv...)
-	}
 	go func() {
 		served <- dtach.Serve(dtach.ServerOptions{
 			SocketPath: socket,
@@ -724,7 +720,7 @@ func InProcessSpawner(socket, logFile, cwd, command string, cols, rows uint16, e
 			Dir:        cwd,
 			Cols:       cols,
 			Rows:       rows,
-			Env:        env,
+			Env:        extraEnv,
 			Ready:      ready,
 		})
 	}()

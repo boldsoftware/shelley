@@ -45,8 +45,13 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	if err := os.Chdir(tmp); err != nil {
-		panic(err)
+	// Unless this process is the exe-scroll helper (see
+	// TestExeScrollHelperProcess), move into tmp. The helper launches
+	// exe-scroll for a test, so it stays in the directory the test gave it.
+	if os.Getenv("SHELLEY_EXE_SCROLL_HELPER") != "1" {
+		if err := os.Chdir(tmp); err != nil {
+			panic(err)
+		}
 	}
 	code := m.Run()
 	os.RemoveAll(tmp)

@@ -2,6 +2,7 @@ package dtach
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -156,5 +157,49 @@ func TestAttachReplaysScrollbackToLateClient(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("server did not exit")
+	}
+}
+
+// The command gets PWD naming Dir as given (not resolved), and Env on top
+// of the inherited environment, Env winning.
+func TestServeRunsCommandInDirAsGiven(t *testing.T) {
+	dir := sockpath.TempDir(t)
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(t.TempDir(), link); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DTACH_TEST_INHERITED", "inherited")
+	t.Setenv("TERM", "dumb")
+	done := serveInBackground(t, ServerOptions{
+		SocketPath: filepath.Join(dir, "sock"),
+		Command:    "sh",
+		// Wait for input so the session is still there to attach to.
+		Args: []string{"-c", `read _; echo "PWD=$PWD $DTACH_TEST_INHERITED $DTACH_TEST_ADDED $TERM"`},
+		Dir:  link,
+		Env:  []string{"DTACH_TEST_ADDED=added", "TERM=xterm-256color"},
+	})
+	c, err := Attach(filepath.Join(dir, "sock"))
+	if err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	defer c.Close()
+	if err := c.SendInput([]byte("\n")); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	var collected bytes.Buffer
+	for {
+		mt, p, err := c.Recv()
+		if err != nil || mt == MsgExit {
+			break
+		}
+		collected.Write(p)
+	}
+	if want := "PWD=" + link + " inherited added xterm-256color"; !bytes.Contains(collected.Bytes(), []byte(want)) {
+		t.Fatalf("output %q, want it to contain %q", collected.String(), want)
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("serve did not exit")
 	}
 }

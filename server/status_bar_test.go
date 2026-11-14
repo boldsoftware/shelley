@@ -117,8 +117,8 @@ func TestStatusBarHookOutput(t *testing.T) {
 // The hook runs in the conversation's directory with its context on stdin.
 func TestStatusBarHookInput(t *testing.T) {
 	t.Parallel()
-	hooks, cwd := t.TempDir(), t.TempDir()
-	writeStatusBarHook(t, hooks, `cat > input.json; echo "$GIT_OPTIONAL_LOCKS" > locks; echo '{"body":"ok"}'`)
+	hooks, cwd := t.TempDir(), symlinkedDir(t)
+	writeStatusBarHook(t, hooks, `cat > input.json; echo "$GIT_OPTIONAL_LOCKS" > locks; echo "$PWD" > pwd; echo '{"body":"ok"}'`)
 	input := StatusBarHookInput{ConversationID: "cABC", Slug: "fix-it", Cwd: cwd, Model: "predictable"}
 	if got, err := runStatusBarHookIn(t.Context(), hooks, input); !reflect.DeepEqual(got, StatusBar{Items: []StatusBarItem{{Body: "ok"}}}) || err != nil {
 		t.Fatalf("got %+v, %v", got, err)
@@ -139,6 +139,9 @@ func TestStatusBarHookInput(t *testing.T) {
 	// So a "git status" here can't make the agent's "git add" fail.
 	if locks, err := os.ReadFile(filepath.Join(cwd, "locks")); string(locks) != "0\n" {
 		t.Fatalf("GIT_OPTIONAL_LOCKS = %q, %v", locks, err)
+	}
+	if pwd, err := os.ReadFile(filepath.Join(cwd, "pwd")); string(pwd) != cwd+"\n" {
+		t.Fatalf("PWD = %q, %v; want %q", pwd, err, cwd)
 	}
 }
 

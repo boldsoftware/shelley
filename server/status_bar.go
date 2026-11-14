@@ -100,7 +100,7 @@ func runStatusBarHookIn(ctx context.Context, hooksDir string, input StatusBarHoo
 	cmd.Dir = input.Cwd
 	// The hook runs while the agent's tools do, often right as one starts:
 	// a "git status" taking index.lock would make the agent's "git add" fail.
-	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
+	cmd.Env = append(cmd.Environ(), "GIT_OPTIONAL_LOCKS=0")
 	cmd.Stdin = bytes.NewReader(inputJSON)
 	stdout := &cappedBuffer{max: statusBarHookMaxOutput}
 	stderr := &cappedBuffer{max: statusBarHookMaxOutput}

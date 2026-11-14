@@ -167,7 +167,9 @@ func TestExeScrollSessionReattachesWithScrollbackAndExitStatus(t *testing.T) {
 func TestExeScrollPreservesNonzeroExitStatus(t *testing.T) {
 	t.Parallel()
 	ts := newExeScrollTestSessions(t)
-	sess, client, err := ts.Spawn("exit 42", t.TempDir(), "", false, 80, 24, []string{"SHELLEY_EXE_SCROLL_HELPER=1"})
+	// The command also records its PWD, which names the directory as given.
+	dir := symlinkedDir(t)
+	sess, client, err := ts.Spawn(`printf %s "$PWD" >pwd; exit 42`, dir, "", false, 80, 24, []string{"SHELLEY_EXE_SCROLL_HELPER=1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,6 +181,9 @@ func TestExeScrollPreservesNonzeroExitStatus(t *testing.T) {
 	}
 	if message.exitCode != 42 {
 		t.Fatalf("exit code = %d, want 42", message.exitCode)
+	}
+	if pwd, err := os.ReadFile(filepath.Join(dir, "pwd")); string(pwd) != dir {
+		t.Fatalf("PWD = %q, %v; want %q", pwd, err, dir)
 	}
 }
 
