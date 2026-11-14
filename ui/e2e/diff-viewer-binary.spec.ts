@@ -154,13 +154,17 @@ test.describe("Binary file diffs", () => {
         const missing = panel.locator(".diff-viewer-binary-side").nth(name === "added.bin" ? 0 : 1);
         await expect(missing).toHaveClass(/diff-viewer-binary-side-empty/);
         await expect(missing).toBeEmpty();
-        const dimensions = await missing.evaluate((el) => ({
-          width: el.getBoundingClientRect().width,
-          total: el.parentElement!.getBoundingClientRect().width,
-          fill: getComputedStyle(el).backgroundImage,
-        }));
-        expect(dimensions.width / dimensions.total).toBeCloseTo(0.1, 2);
-        expect(dimensions.fill).toContain("linear-gradient");
+        await expect
+          .poll(() =>
+            missing.evaluate(
+              (el) =>
+                el.getBoundingClientRect().width / el.parentElement!.getBoundingClientRect().width,
+            ),
+          )
+          .toBeCloseTo(0.1, 2);
+        expect(await missing.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain(
+          "linear-gradient",
+        );
         await expect(panel.getByRole("link", { name: "Download", exact: true })).toHaveCount(1);
       }
     });
