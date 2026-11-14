@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -249,6 +250,7 @@ func (l *RunConfig) run(ctx context.Context) error {
 		}
 
 		l.Logger.Debug("received LLM response", "content_count", len(resp.Content), "stop_reason", resp.StopReason.String(), "usage", resp.Usage.String())
+		l.fillToolCallIDs(resp)
 
 		if ctx.Err() == nil {
 			if err := l.modelRouting.observe(ctx, resp, l.Hooks.OnRoutingWarning); err != nil {
@@ -480,6 +482,18 @@ func (l *RunConfig) resolvePausedTurn(
 	resolved.Usage = totalUsage
 	resolved.StartTime = startTime // EndTime stays at the final continuation
 	return &resolved, nil
+}
+
+// fillToolCallIDs gives each tool call the provider sent without an id a
+// unique one, before the reply is recorded in any form or its tools run, so
+// its result and clients can name it.
+func (l *RunConfig) fillToolCallIDs(resp *llm.Response) {
+	for i, c := range resp.Content {
+		if c.Type == llm.ContentTypeToolUse && c.ID == "" {
+			resp.Content[i].ID = "shelley_" + rand.Text()
+			l.Logger.Warn("tool call without an id; assigned one", "name", c.ToolName, "call_id", resp.Content[i].ID)
+		}
+	}
 }
 
 // toolInputs returns message's content with each tool call's input in the

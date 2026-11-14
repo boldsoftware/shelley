@@ -644,6 +644,81 @@ func TestToolInputsLogsCoercions(t *testing.T) {
 	}
 }
 
+// A tool call the provider sent without an id gets a unique one before it is
+// recorded or run, and its result carries the same id; each fill is logged.
+func TestRunGivesToolCallsWithoutIDsUniqueIDs(t *testing.T) {
+	service := &runTestService{first: []llm.Content{
+		{Type: llm.ContentTypeToolUse, ToolName: "work", ToolInput: json.RawMessage(`{}`)},
+		{Type: llm.ContentTypeToolUse, ToolName: "work", ToolInput: json.RawMessage(`{}`)},
+	}}
+	var logs bytes.Buffer
+	var recorded []llm.Message
+	err := Run(t.Context(), RunConfig{
+		LLM:    service,
+		Logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn})),
+		Tools: []*llm.Tool{{Name: "work", Run: func(context.Context, json.RawMessage) llm.ToolOut {
+			return llm.ToolOut{LLMContent: llm.TextContent("done"), EndTurn: true}
+		}}},
+		Hooks: Hooks{
+			OnResponse: func(_ context.Context, r Response) error { recorded = append(recorded, r.Message); return nil },
+			OnToolResponse: func(_ context.Context, r ToolResponse) error {
+				recorded = append(recorded, r.Message)
+				return nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids, resultIDs []string
+	for _, c := range recorded[0].Content {
+		ids = append(ids, c.ID)
+	}
+	for _, m := range recorded[1:] {
+		for _, c := range m.Content {
+			if c.Type == llm.ContentTypeToolResult {
+				resultIDs = append(resultIDs, c.ToolUseID)
+			}
+		}
+	}
+	if len(ids) != 2 || ids[0] == "" || ids[1] == "" || ids[0] == ids[1] {
+		t.Fatalf("tool call ids %q, want two distinct non-empty ids", ids)
+	}
+	if !slices.Equal(resultIDs, ids) {
+		t.Fatalf("tool result ids %q, want %q", resultIDs, ids)
+	}
+	if got := strings.Count(logs.String(), `msg="tool call without an id; assigned one"`); got != 2 {
+		t.Fatalf("logged %d fills, want 2: %q", got, logs.String())
+	}
+}
+
+// A reply cut off at the token limit or refused is recorded without running
+// its tools, and its tool calls get ids too.
+func TestRunGivesUnrunToolCallsIDs(t *testing.T) {
+	for _, stop := range []llm.StopReason{llm.StopReasonMaxTokens, llm.StopReasonRefusal} {
+		t.Run(stop.String(), func(t *testing.T) {
+			service := &runTestService{response: &llm.Response{Role: llm.MessageRoleAssistant, StopReason: stop, Content: []llm.Content{
+				{Type: llm.ContentTypeToolUse, ToolName: "work", ToolInput: json.RawMessage(`{}`)},
+			}}}
+			var recorded []llm.Message
+			err := Run(t.Context(), RunConfig{
+				LLM:    service,
+				Logger: slog.New(slog.DiscardHandler),
+				Hooks: Hooks{OnResponse: func(_ context.Context, r Response) error {
+					recorded = append(recorded, r.Message)
+					return nil
+				}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(recorded) == 0 || len(recorded[0].Content) != 1 || !strings.HasPrefix(recorded[0].Content[0].ID, "shelley_") {
+				t.Fatalf("recorded %+v, want the tool call first with a shelley_ id", recorded)
+			}
+		})
+	}
+}
+
 func TestRunCoercesToolInputToSchemaTypes(t *testing.T) {
 	service := &runTestService{first: []llm.Content{{
 		Type: llm.ContentTypeToolUse, ID: "job", ToolName: "work",

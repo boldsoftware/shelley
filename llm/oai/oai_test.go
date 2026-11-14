@@ -304,7 +304,7 @@ func TestToToolCallLLMContent(t *testing.T) {
 		t.Errorf("toToolCallLLMContent().ToolInput = %q, expected %q", string(content.ToolInput), `{"location": "New York"}`)
 	}
 
-	// Test without ID (should generate one)
+	// Without an id it stays empty; the loop fills it in.
 	toolCallNoID := openai.ToolCall{
 		Type: openai.ToolTypeFunction,
 		Function: openai.FunctionCall{
@@ -312,9 +312,8 @@ func TestToToolCallLLMContent(t *testing.T) {
 			Arguments: `{"location": "New York"}`,
 		},
 	}
-	contentNoID := toToolCallLLMContent(toolCallNoID)
-	if contentNoID.ID != "tc_get_weather" {
-		t.Errorf("toToolCallLLMContent() with no ID = %q, expected %q", contentNoID.ID, "tc_get_weather")
+	if id := toToolCallLLMContent(toolCallNoID).ID; id != "" {
+		t.Errorf("toToolCallLLMContent() with no ID = %q, want empty", id)
 	}
 }
 

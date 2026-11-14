@@ -647,15 +647,9 @@ func toRawLLMContent(content string) llm.Content {
 
 // toToolCallLLMContent converts a tool call from OpenAI to llm.Content.
 func toToolCallLLMContent(toolCall openai.ToolCall) llm.Content {
-	// Generate a content ID if needed
-	id := toolCall.ID
-	if id == "" {
-		// Create a deterministic ID based on the function name if no ID is provided
-		id = "tc_" + toolCall.Function.Name
-	}
-
+	// A missing id is filled in by the loop, as for every provider.
 	return llm.Content{
-		ID:        id,
+		ID:        toolCall.ID,
 		Type:      llm.ContentTypeToolUse,
 		ToolName:  toolCall.Function.Name,
 		ToolInput: toolArgumentsInput(toolCall.Function.Arguments),

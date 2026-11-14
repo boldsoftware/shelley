@@ -370,11 +370,8 @@ func convertGeminiResponseToContent(res *gemini.Response) []llm.Content {
 				args = []byte("{}")
 			}
 
+			// A missing id is filled in by the loop, as for every provider.
 			toolID := part.FunctionCall.ID
-			if toolID == "" {
-				toolID = fmt.Sprintf("gemini_tool_%s_%d", part.FunctionCall.Name, time.Now().UnixNano())
-			}
-
 			contents = append(contents, llm.Content{
 				ID:        toolID,
 				Type:      llm.ContentTypeToolUse,
@@ -408,19 +405,6 @@ func convertGeminiResponseToContent(res *gemini.Response) []llm.Content {
 	}
 
 	return contents
-}
-
-// ensureToolIDs makes sure all tool uses have proper IDs
-func ensureToolIDs(contents []llm.Content) {
-	for i, content := range contents {
-		if content.Type == llm.ContentTypeToolUse && content.ID == "" {
-			// Generate a stable ID using the tool name and timestamp
-			contents[i].ID = fmt.Sprintf("gemini_tool_%s_%d", content.ToolName, time.Now().UnixNano())
-			slog.DebugContext(context.Background(), "assigned_missing_tool_id",
-				"tool_name", content.ToolName,
-				"new_id", contents[i].ID)
-		}
-	}
 }
 
 func calculateUsage(res *gemini.Response) (llm.Usage, error) {
@@ -480,7 +464,6 @@ func convertGeminiResponse(res *gemini.Response) (*llm.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	ensureToolIDs(response.Content)
 	if response.StopReason == llm.StopReasonEndTurn {
 		for _, part := range response.Content {
 			if part.Type == llm.ContentTypeToolUse {
