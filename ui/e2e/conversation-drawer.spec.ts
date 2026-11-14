@@ -1559,11 +1559,8 @@ async function swipe(
   start: { x: number; y: number },
   end: { x: number; y: number },
 ) {
-  await page.evaluate(
-    ({ selector, start, end }) => {
-      const target = document.querySelector(selector);
-      if (!(target instanceof Element)) throw new Error(`Missing ${selector}`);
-
+  await page.locator(selector).first().evaluate(
+    (target, { start, end }) => {
       const makeTouch = ({ x, y }: { x: number; y: number }) =>
         new Touch({
           identifier: 1,
@@ -1577,41 +1574,98 @@ async function swipe(
         });
       const startTouch = makeTouch(start);
       const endTouch = makeTouch(end);
+      let timestamp = 0;
+      const dispatch = (type: string, touches: Touch[], changedTouches: Touch[]) => {
+        const event = new TouchEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          touches,
+          targetTouches: touches,
+          changedTouches,
+        });
+        timestamp += type === "touchmove" ? 10 : 1;
+        Object.defineProperty(event, "timeStamp", { value: timestamp });
+        target.dispatchEvent(event);
+      };
 
-      target.dispatchEvent(
-        new TouchEvent("touchstart", {
-          bubbles: true,
-          cancelable: true,
-          touches: [startTouch],
-          targetTouches: [startTouch],
-          changedTouches: [startTouch],
-        }),
-      );
-      target.dispatchEvent(
-        new TouchEvent("touchmove", {
-          bubbles: true,
-          cancelable: true,
-          touches: [endTouch],
-          targetTouches: [endTouch],
-          changedTouches: [endTouch],
-        }),
-      );
-      target.dispatchEvent(
-        new TouchEvent("touchend", {
-          bubbles: true,
-          cancelable: true,
-          touches: [],
-          targetTouches: [],
-          changedTouches: [endTouch],
-        }),
-      );
+      dispatch("touchstart", [startTouch], [startTouch]);
+      dispatch("touchmove", [endTouch], [endTouch]);
+      dispatch("touchend", [], [endTouch]);
     },
-    { selector, start, end },
+    { start, end },
   );
 }
 
-async function swipePatchDiff(page: Page) {
-  await page.evaluate(() => {
+async function drag(
+  page: Page,
+  selector: string,
+  points: { x: number; y: number }[],
+  ending: "touchend" | "touchcancel" = "touchend",
+  secondFinger = false,
+  modalAtEnd = false,
+) {
+  return page.evaluate(
+    async ({ selector, points, ending, secondFinger, modalAtEnd }) => {
+      const target = document.querySelector(selector);
+      if (!(target instanceof Element)) throw new Error(`Missing ${selector}`);
+      const touch = (point: { x: number; y: number }, identifier: number) =>
+        new Touch({
+          identifier,
+          target,
+          clientX: point.x,
+          clientY: point.y,
+          screenX: point.x,
+          screenY: point.y,
+          pageX: point.x,
+          pageY: point.y,
+        });
+      let timestamp = 0;
+      const emit = (type: string, touches: Touch[], changedTouches = touches) => {
+        const event = new TouchEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          touches,
+          targetTouches: touches,
+          changedTouches,
+        });
+    timestamp += type === "touchmove" ? 10 : 1;
+        Object.defineProperty(event, "timeStamp", { value: timestamp });
+        target.dispatchEvent(event);
+      };
+      const [start, ...moves] = points;
+      emit("touchstart", [touch(start, 1)]);
+      await Promise.resolve();
+      for (const point of moves) {
+        const active = [touch(point, 1)];
+        if (secondFinger) active.push(touch({ x: point.x - 2, y: point.y }, 2));
+        emit("touchmove", active);
+        await Promise.resolve();
+      }
+      const surfaces = [...document.querySelectorAll<HTMLElement>(
+        ".drawer, .backdrop, .toc-drawer, .toc-drawer-scrim",
+      )];
+      const styles = surfaces.map((element) => ({
+        className: element.className,
+        transform: getComputedStyle(element).transform,
+        translate: getComputedStyle(element).translate,
+        opacity: getComputedStyle(element).opacity,
+      }));
+      if (modalAtEnd) {
+        const modal = document.createElement("div");
+        modal.className = "command-palette-overlay";
+        modal.setAttribute("aria-modal", "true");
+        document.body.append(modal);
+      }
+      emit(ending, [], [touch(moves.at(-1) ?? start, 1)]);
+      document.querySelector(".command-palette-overlay")?.remove();
+      return styles;
+    },
+    { selector, points, ending, secondFinger, modalAtEnd },
+  );
+}
+
+async function swipePatchDiff(page: Page, startX = 160, endX = 220) {
+  await page.evaluate(({ startX, endX }) => {
     const mainContent = document.querySelector(".main-content");
     if (!(mainContent instanceof HTMLElement)) throw new Error("Missing main content");
 
@@ -1645,8 +1699,8 @@ async function swipePatchDiff(page: Page) {
         pageX: x,
         pageY: y,
       });
-    const startTouch = makeTouch(160, 300);
-    const endTouch = makeTouch(220, 304);
+    const startTouch = makeTouch(startX, 300);
+    const endTouch = makeTouch(endX, 304);
 
     diffLine.dispatchEvent(
       new TouchEvent("touchstart", {
@@ -1678,7 +1732,7 @@ async function swipePatchDiff(page: Page) {
         changedTouches: [endTouch],
       }),
     );
-  });
+  }, { startX, endX });
 }
 
 test.describe("mobile drawer swipe", () => {
@@ -1698,19 +1752,20 @@ test.describe("mobile drawer swipe", () => {
     await input.focus();
     await expect(input).toBeFocused();
 
-    await swipe(page, ".main-content", { x: 180, y: 300 }, { x: 256, y: 304 });
+    await swipe(page, ".main-content", { x: 180, y: 300 }, { x: 350, y: 304 });
     await expect(drawer).toHaveClass(/open/);
     await expect(input).not.toBeFocused();
 
-    await swipe(page, ".backdrop", { x: 380, y: 300 }, { x: 328, y: 304 });
+    await swipe(page, ".backdrop", { x: 350, y: 300 }, { x: 150, y: 304 });
     await expect(drawer).not.toHaveClass(/open/);
   });
 
   test("keeps filter text lowercase-ready", async ({ page }) => {
     await stubConversationList(page, [conversation("first")]);
     await page.goto("/new");
+    await expect(page.locator(".main-content")).toBeVisible();
 
-    await swipe(page, ".main-content", { x: 180, y: 300 }, { x: 256, y: 304 });
+    await swipe(page, ".main-content", { x: 180, y: 300 }, { x: 350, y: 304 });
     const searchToggle = page.getByRole("button", { name: "Search conversations..." });
     await searchToggle.click();
     await expect(page.locator(".p-tooltip")).toHaveCount(0);
@@ -1728,10 +1783,21 @@ test.describe("mobile drawer swipe", () => {
     await page.goto("/new");
 
     const drawer = page.locator(".drawer");
+    await swipe(page, ".main-content", { x: 40, y: 300 }, { x: 140, y: 304 });
+    await expect(drawer).toHaveClass(/open/);
+    await swipe(page, ".backdrop", { x: 350, y: 300 }, { x: 150, y: 304 });
+    await expect(drawer).not.toHaveClass(/open/);
     await swipe(page, ".main-content", { x: 12, y: 300 }, { x: 112, y: 304 });
     await expect(drawer).not.toHaveClass(/open/);
 
-    await swipe(page, ".main-content", { x: 160, y: 300 }, { x: 224, y: 304 });
+    await swipe(page, ".main-content", { x: 340, y: 300 }, { x: 360, y: 304 });
+    await expect(drawer).toHaveClass(/open/);
+    await swipe(page, ".backdrop", { x: 350, y: 300 }, { x: 150, y: 304 });
+    await expect(drawer).not.toHaveClass(/open/);
+    await swipe(page, ".main-content", { x: 370, y: 300 }, { x: 390, y: 304 });
+    await expect(drawer).not.toHaveClass(/open/);
+
+    await swipe(page, ".main-content", { x: 160, y: 300 }, { x: 166, y: 304 });
     await expect(drawer).not.toHaveClass(/open/);
 
     await swipe(page, ".main-content", { x: 64, y: 200 }, { x: 92, y: 300 });
@@ -1741,10 +1807,93 @@ test.describe("mobile drawer swipe", () => {
   test("leaves horizontal patch diff scrolling alone", async ({ page }) => {
     await stubConversationList(page, [conversation("first")]);
     await page.goto("/new");
+    await expect(page.locator(".main-content")).toBeVisible();
 
     await swipePatchDiff(page);
 
     await expect(page.locator(".drawer")).not.toHaveClass(/open/);
+  });
+
+  test("follows the finger and cancels safely on a second finger or touchcancel", async ({
+    page,
+  }) => {
+    await stubConversationList(page, [conversation("first")]);
+    await page.goto("/new");
+
+    const styles = await drag(page, ".main-content", [
+      { x: 180, y: 300 },
+      { x: 260, y: 302 },
+      { x: 370, y: 304 },
+    ]);
+    const drawer = styles.find((style) => style.className.includes("drawer"));
+    const scrim = styles.find((style) => style.className.includes("backdrop"));
+    expect(drawer).toBeDefined();
+    expect(scrim).toBeDefined();
+    expect(drawer!.transform).not.toBe("matrix(1, 0, 0, 1, 0, 0)");
+    expect(Number(scrim!.opacity)).toBeGreaterThan(0);
+    expect(Number(scrim!.opacity)).toBeLessThan(1);
+    await expect(page.locator(".drawer")).toHaveClass(/open/);
+    await drag(page, ".backdrop", [
+      { x: 350, y: 300 },
+      { x: 250, y: 302 },
+    ], "touchend", true);
+    await expect(page.locator(".drawer")).toHaveClass(/open/);
+
+    await swipe(page, ".backdrop", { x: 350, y: 300 }, { x: 150, y: 304 });
+    await expect(page.locator(".drawer")).not.toHaveClass(/open/);
+    await drag(
+      page,
+      ".main-content",
+      [{ x: 180, y: 300 }, { x: 220, y: 302 }],
+      "touchcancel",
+    );
+    await expect(page.locator(".drawer")).not.toHaveClass(/open/);
+  });
+
+  test("cancels an in-flight open if a modal appears before release", async ({ page }) => {
+    await stubConversationList(page, [conversation("first")]);
+    await page.goto("/new");
+    await drag(
+      page,
+      ".main-content",
+      [{ x: 180, y: 300 }, { x: 340, y: 302 }],
+      "touchend",
+      false,
+      true,
+    );
+    await expect(page.locator(".drawer")).not.toHaveClass(/open/);
+    await expect(page.locator(".drawer")).not.toHaveAttribute("style", /transform/);
+    await expect(page.locator(".backdrop")).toHaveCount(0);
+  });
+
+  test("keeps form fields, editable content, status hooks, and scroll regions out of drawer swipes", async ({
+    page,
+  }) => {
+    await stubConversationList(page, [conversation("first")]);
+    await page.goto("/new");
+    await swipe(page, ".main-content", { x: 180, y: 300 }, { x: 256, y: 304 });
+    await expect(page.locator(".drawer")).toHaveClass(/open/);
+    await swipe(page, ".backdrop", { x: 350, y: 300 }, { x: 150, y: 304 });
+    await expect(page.locator(".drawer")).not.toHaveClass(/open/);
+
+    await page.locator(".main-content").evaluate((root) => {
+      root.insertAdjacentHTML(
+        "beforeend",
+        '<input style="height:40px"><textarea style="height:40px"></textarea><div class="status-hook-row" style="height:120px"><div class="status-hook-item">hook</div></div><div contenteditable="true" style="height:80px">editable</div><div class="horizontal-test" style="overflow-x:auto;width:120px"><div style="width:320px;height:80px"></div></div><pre class="code-scroll" style="overflow-x:auto;width:120px"><code style="display:block;width:320px;height:24px">long code</code></pre><div class="table-scroll" style="overflow-x:auto;width:120px"><table style="width:320px"><tbody><tr><td>wide table</td></tr></tbody></table></div>',
+      );
+    });
+    for (const selector of [
+      "input",
+      "textarea",
+      ".status-hook-item",
+      '[contenteditable="true"]',
+      ".horizontal-test > div",
+      ".code-scroll code",
+      ".table-scroll td",
+    ]) {
+      await swipe(page, selector, { x: 180, y: 300 }, { x: 256, y: 304 });
+      await expect(page.locator(".drawer")).not.toHaveClass(/open/);
+    }
   });
 
   test("does not open while a diff viewer modal is shown", async ({ page }) => {
@@ -1761,5 +1910,168 @@ test.describe("mobile drawer swipe", () => {
     await swipe(page, ".diff-viewer-header", { x: 180, y: 100 }, { x: 256, y: 104 });
 
     await expect(page.locator(".drawer")).not.toHaveClass(/open/);
+  });
+});
+
+test.describe("mobile TOC drawer swipe", () => {
+  test.use({
+    viewport: { width: 393, height: 851 },
+    isMobile: true,
+    hasTouch: true,
+  });
+
+  test("tracks opening and closes with a swipe; its own dialog is exempt from modal blocking", async ({
+    page,
+    request,
+  }) => {
+    const { slug } = await createConversationViaAPIWithDetails(request, "echo mobile TOC drawer");
+    await page.goto(`/c/${slug}`);
+    await expect(page.locator(".toc-button")).toBeVisible();
+
+    const styles = await drag(page, ".main-content", [
+      { x: 220, y: 300 },
+      { x: 130, y: 302 },
+      { x: 40, y: 304 },
+    ]);
+    const drawer = styles.find((style) => style.className.includes("toc-drawer"));
+    const scrim = styles.find((style) => style.className.includes("toc-drawer-scrim"));
+    expect(drawer).toBeDefined();
+    expect(scrim).toBeDefined();
+    expect(drawer!.translate).not.toBe("0px");
+    expect(Number(scrim!.opacity)).toBeGreaterThan(0);
+    expect(Number(scrim!.opacity)).toBeLessThan(1);
+    await expect(page.locator(".toc-drawer")).toBeVisible();
+
+    // Touch begins in the drawer's own dialog surface. It remains swipeable
+    // while unrelated modal overlays still inhibit starting a gesture.
+    await drag(page, ".toc-drawer", [
+      { x: 100, y: 300 },
+      { x: 200, y: 302 },
+      { x: 300, y: 304 },
+    ]);
+    await expect(page.locator(".toc-drawer")).toBeHidden();
+  });
+
+  test("honors edge, vertical, scroll, editable, modal, multitouch, and cancel guards", async ({
+    page,
+    request,
+  }) => {
+    const { slug } = await createConversationViaAPIWithDetails(request, "echo TOC swipe guards");
+    await page.goto(`/c/${slug}`);
+    await expect(page.locator(".toc-button")).toBeVisible();
+    const open = async () => {
+      await drag(page, ".main-content", [
+        { x: 220, y: 300 },
+        { x: 130, y: 302 },
+        { x: 40, y: 304 },
+      ]);
+      await expect(page.locator(".toc-drawer")).toBeVisible();
+    };
+    const close = async () => {
+      await drag(page, ".toc-drawer", [
+        { x: 100, y: 300 },
+        { x: 200, y: 302 },
+        { x: 300, y: 304 },
+      ]);
+      await expect(page.locator(".toc-drawer")).toBeHidden();
+    };
+
+    await swipe(page, ".main-content", { x: 220, y: 300 }, { x: 180, y: 304 });
+    await expect(page.locator(".toc-drawer")).toBeVisible();
+    await swipe(page, ".toc-drawer", { x: 100, y: 300 }, { x: 300, y: 304 });
+    await expect(page.locator(".toc-drawer")).toBeHidden();
+
+    await swipe(page, ".main-content", { x: 40, y: 300 }, { x: 16, y: 304 });
+    await expect(page.locator(".toc-drawer")).toBeVisible();
+    await swipe(page, ".toc-drawer", { x: 100, y: 300 }, { x: 300, y: 304 });
+    await expect(page.locator(".toc-drawer")).toBeHidden();
+    await swipe(page, ".main-content", { x: 28, y: 300 }, { x: 4, y: 304 });
+    await expect(page.locator(".toc-drawer")).toBeHidden();
+
+    await swipe(page, ".main-content", { x: 350, y: 300 }, { x: 288, y: 304 });
+    await expect(page.locator(".toc-drawer")).toBeVisible();
+    await swipe(page, ".toc-drawer", { x: 100, y: 300 }, { x: 300, y: 304 });
+    await expect(page.locator(".toc-drawer")).toBeHidden();
+    await swipe(page, ".main-content", { x: 382, y: 300 }, { x: 320, y: 304 });
+    await swipe(page, ".main-content", { x: 180, y: 200 }, { x: 184, y: 280 });
+    await expect(page.locator(".toc-drawer")).toBeHidden();
+
+    await page.locator(".main-content").evaluate((root) => {
+      root.insertAdjacentHTML(
+        "beforeend",
+        '<input style="height:40px"><textarea style="height:40px"></textarea><div class="status-hook-row" style="height:120px"><div class="status-hook-item">hook</div></div><div contenteditable="true" style="height:80px">editable</div><div class="horizontal-test" style="overflow-x:auto;width:120px"><div style="width:320px;height:80px"></div></div><pre class="code-scroll" style="overflow-x:auto;width:120px"><code style="display:block;width:320px;height:24px">long code</code></pre><div class="table-scroll" style="overflow-x:auto;width:120px"><table style="width:320px"><tbody><tr><td>wide table</td></tr></tbody></table></div>',
+      );
+    });
+    for (const selector of [
+      "input",
+      "textarea",
+      ".status-hook-item",
+      '[contenteditable="true"]',
+      ".horizontal-test > div",
+      ".code-scroll code",
+      ".table-scroll td",
+    ]) {
+      await swipe(page, selector, { x: 220, y: 300 }, { x: 180, y: 304 });
+      await expect(page.locator(".toc-drawer")).toBeHidden();
+    }
+    await swipePatchDiff(page, 220, 160);
+    await expect(page.locator(".toc-drawer")).toBeHidden();
+
+    await page.locator(".main-content").evaluate((root) => {
+      const modal = document.createElement("div");
+      modal.className = "command-palette-overlay";
+      modal.setAttribute("aria-modal", "true");
+      root.append(modal);
+    });
+    await swipe(page, ".main-content", { x: 220, y: 300 }, { x: 180, y: 304 });
+    await expect(page.locator(".toc-drawer")).toBeHidden();
+    await page.locator(".command-palette-overlay").evaluate((element) => element.remove());
+
+    await drag(
+      page,
+      ".main-content",
+      [{ x: 220, y: 300 }, { x: 130, y: 302 }, { x: 40, y: 304 }],
+      "touchcancel",
+    );
+    await expect(page.locator(".toc-drawer")).toBeHidden();
+
+    await drag(
+      page,
+      ".main-content",
+      [{ x: 220, y: 300 }, { x: 130, y: 302 }, { x: 40, y: 304 }],
+      "touchend",
+      false,
+      true,
+    );
+    await expect(page.locator(".toc-drawer")).toBeHidden();
+
+    await open();
+    await drag(
+      page,
+      ".toc-drawer",
+      [{ x: 100, y: 300 }, { x: 200, y: 302 }, { x: 300, y: 304 }],
+      "touchend",
+      false,
+      true,
+    );
+    await expect(page.locator(".toc-drawer")).toBeVisible();
+    await expect(page.locator(".toc-drawer")).not.toHaveAttribute("style", /translate/);
+
+    await drag(
+      page,
+      ".toc-drawer",
+      [{ x: 100, y: 300 }, { x: 200, y: 302 }, { x: 300, y: 304 }],
+      "touchend",
+      true,
+    );
+    await expect(page.locator(".toc-drawer")).toBeVisible();
+    await drag(
+      page,
+      ".toc-drawer",
+      [{ x: 100, y: 300 }, { x: 200, y: 302 }, { x: 300, y: 304 }],
+      "touchcancel",
+    );
+    await expect(page.locator(".toc-drawer")).toBeVisible();
+    await close();
   });
 });

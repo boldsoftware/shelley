@@ -199,8 +199,7 @@ test.describe("Model picker (PrimeVue)", () => {
     // Desktop, where the search has focus from the start.
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/new");
-    const picker = page.locator(".model-picker.p-select");
-    await openModelPicker(page);
+    const picker = await openModelPicker(page);
     const panel = page.locator(".model-picker-panel");
     const twin = panel.locator(".p-select-option", { hasText: "Predictable Twin" });
     await expect(twin).toBeVisible();

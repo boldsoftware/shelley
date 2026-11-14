@@ -493,6 +493,11 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const selectRef = ref<InstanceType<typeof Select> | null>(null);
+defineExpose({
+  open: () => {
+    if (!props.disabled) selectRef.value?.show();
+  },
+});
 // Where the panel is a sheet (see styles.css), focusing the search would bring
 // up the keyboard over it.
 const mobileMq = window.matchMedia("(max-width: 767px), (max-height: 500px)");

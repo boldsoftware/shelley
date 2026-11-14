@@ -6018,7 +6018,14 @@ svg {
 /* No arrow for this panel; PrimeVue draws one via :before/:after. */
 .toc-popover.p-popover:before,
 .toc-popover.p-popover:after,
-.msg-compaction-event summary::-webkit-details-marker {
+.msg-compaction-event summary::-webkit-details-marker,
+.toc-drawer-scrim,
+.toc-drawer-close,
+.toc-drawer-context,
+.toc-drawer-close-lane,
+.toc-drawer-jump,
+.toc-drawer .toc-popover-list .toc-entry-top,
+.toc-drawer .toc-popover-list .toc-entry-bottom {
   display: none;
 }
 .toc-popover .toc-popover-content {
@@ -8889,7 +8896,8 @@ svg {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .review-recording-status {
+  .review-recording-status,
+  .p-select-overlay.toc-model-picker-sheet {
     animation: none;
   }
 }
@@ -19602,5 +19610,161 @@ kbd {
   .diff-viewer-binary-image {
     align-items: flex-start;
     padding: 12px;
+  }
+}
+
+.toc-model-picker-anchor {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .toc-drawer-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    border: 0;
+    background: rgb(0 0 0 / 35%);
+    padding: 0;
+    transition: opacity 220ms ease;
+  }
+  .toc-drawer.p-popover {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: auto !important;
+    bottom: 0 !important;
+    margin: 0 !important;
+    width: min(88vw, 360px) !important;
+    height: 100dvh;
+    box-sizing: border-box;
+    border-radius: 16px 0 0 16px;
+    transform: none !important;
+    z-index: 1000 !important;
+    translate: 0 0;
+    transition: translate 220ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+    will-change: translate;
+  }
+  .toc-drawer .toc-popover-content {
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .toc-drawer .toc-popover-list {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding-bottom: 0;
+  }
+  .toc-drawer .toc-entry {
+    min-height: 44px;
+    height: auto;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .toc-drawer-close {
+    display: block;
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: var(--font-size-13);
+    width: 36px;
+    height: 36px;
+  }
+  .toc-drawer-close span {
+    display: inline-block;
+    scale: 2;
+  }
+  .toc-drawer.p-anchored-overlay-enter-from,
+  .toc-drawer.p-anchored-overlay-leave-active {
+    translate: 100% 0 !important;
+  }
+  .toc-drawer-jump {
+    display: flex;
+    flex: 0 0 auto;
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 12px 14px;
+    border: 0;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    text-align: left;
+    font: inherit;
+    font-size: var(--font-size-12);
+  }
+  .toc-drawer-jump-top {
+    border-bottom: 1px solid var(--border);
+  }
+  .toc-drawer-jump-bottom {
+    border-top: 1px solid var(--border);
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  .toc-drawer-context {
+    display: block;
+    flex: 0 0 auto;
+    padding: 0 0 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .toc-drawer-close-lane {
+    display: flex;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    padding: env(safe-area-inset-top) 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .toc-drawer-context .overflow-menu-item {
+    min-height: 36px;
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+  }
+  .p-select-overlay.toc-model-picker-sheet {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    max-height: 85dvh !important;
+    border-radius: 16px 16px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    transform: none !important;
+    animation: toc-picker-rise 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  @keyframes toc-picker-rise {
+    from {
+      translate: 0 100%;
+    }
+    to {
+      translate: 0 0;
+    }
+  }
+  .drawer {
+    transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .backdrop {
+    transition: opacity 220ms ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .toc-drawer.p-popover,
+    .toc-drawer-scrim {
+      transition: none !important;
+    }
+    .drawer,
+    .backdrop {
+      transition: none;
+    }
   }
 }

@@ -359,7 +359,7 @@ test("mobile status row swipes leave the drawer alone, even when content fits", 
 
     expect(await swipe(page, ".main-content", 180, 256)).toBe(true);
     await expect(drawer).toHaveClass(/open/);
-    expect(await swipe(page, ".backdrop", 380, 328)).toBe(true);
+    expect(await swipe(page, ".backdrop", 350, 150)).toBe(true);
     await expect(drawer).not.toHaveClass(/open/);
   });
 });

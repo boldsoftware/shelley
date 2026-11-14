@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createConversationViaAPIWithDetails } from "./helpers";
+import { createConversationViaAPIWithDetails, openModelPicker } from "./helpers";
 import type { Profile } from "../src/types";
 
 test.use({ viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false });
@@ -23,7 +23,7 @@ test.describe("Settings knob", () => {
 
   test("the pre-installed Assistant starts a text chat with auto compaction", async ({ page }) => {
     await page.goto("/new");
-    await page.locator(".model-picker.p-select").click();
+    await openModelPicker(page);
     const profiles = page.getByTestId("model-picker-profiles");
     await expect(profiles.getByRole("radio", { name: "Default", exact: true })).toHaveAttribute(
       "aria-checked",
@@ -330,11 +330,11 @@ test.describe("Settings knob", () => {
         localStorage.setItem("shelley.compactNudgeTokens", kept);
       }, kept);
       await page.goto("/new");
-      await page.locator(".model-picker.p-select").click();
+      await openModelPicker(page);
       const nudge = page.getByTestId("model-picker-auto-compaction").getByRole("combobox");
       await expect(nudge).toHaveValue(shown);
       await page.reload();
-      await page.locator(".model-picker.p-select").click();
+      await openModelPicker(page);
       await expect(nudge).toHaveValue(shown);
     });
   }
@@ -344,7 +344,7 @@ test.describe("Settings knob", () => {
     request,
   }) => {
     await page.goto("/new");
-    await page.locator(".model-picker.p-select").click();
+    await openModelPicker(page);
     const section = page.getByTestId("model-picker-auto-compaction");
     const radio = (name: string) =>
       section
@@ -597,7 +597,7 @@ test.describe("Settings knob", () => {
     expect(created.ok()).toBeTruthy();
     try {
       await page.goto("/new");
-      await page.locator(".model-picker.p-select").click();
+      await openModelPicker(page);
       await page
         .locator("[data-testid=model-picker-profiles]")
         .getByRole("radio", { name })

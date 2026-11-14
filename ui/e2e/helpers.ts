@@ -17,7 +17,7 @@ import { hermeticGitEnvironment } from "../scripts/git-test-env";
 // Phones reach the model through the overflow menu, in every conversation.
 export async function openModelPicker(page: Page): Promise<Locator> {
   await expect(page.locator(".header")).toBeVisible();
-  let scope: Page | Locator = page;
+  let scope = page.locator(".status-bar");
   if (page.viewportSize()!.width < 768) {
     scope = page.locator(".chat-overflow-popover");
     if (!(await scope.isVisible())) {

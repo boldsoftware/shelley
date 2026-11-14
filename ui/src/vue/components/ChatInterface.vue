@@ -670,8 +670,73 @@
         :conversation-id="conversationId"
         @scroll-bottom="scrollToBottom"
         @scroll-away="markUserScrolledUp"
-      />
+      >
+        <template #context="{ close }">
+          <button
+            class="overflow-menu-item"
+            :disabled="conversationWorking || sending"
+            :title="conversationWorking ? t('modelSwitchBusy') : 'Change model'"
+            @click="openTocModelPicker(close)"
+          >
+            <WorkspaceActionIcon action="model" class="chat-menu-icon" />
+            {{ t("model") }}
+            <span class="overflow-menu-cwd">{{
+              selectedModelInfo ? modelName(selectedModelInfo) : selectedModel
+            }}</span>
+          </button>
+          <button
+            v-if="!isAssistant"
+            class="overflow-menu-item"
+            :disabled="agentWorking"
+            :title="
+              agentWorking
+                ? 'Cannot change directory while the agent is working'
+                : 'Change working directory'
+            "
+            @click="
+              close();
+              showDirectoryPicker = true;
+            "
+          >
+            <i class="pi pi-folder chat-menu-icon" aria-hidden="true" />
+            {{ t("directory") }}
+            <span
+              class="overflow-menu-cwd ellipsize-start"
+              :title="currentConversation?.cwd || selectedCwd"
+              ><bdi>{{ tildifyPath(currentConversation?.cwd || selectedCwd) }}</bdi></span
+            >
+          </button>
+        </template>
+      </ConversationTOC>
     </Teleport>
+
+    <div class="toc-model-picker-anchor" aria-hidden="true" inert>
+      <ModelPicker
+        ref="tocModelPickerRef"
+        panel-class="toc-model-picker-sheet"
+        :models="models"
+        :selected-model="selectedModel"
+        :thinking-level="statusContentProps.thinkingLevel"
+        :disabled="conversationWorking || sending"
+        :disabled-reason="conversationWorking ? t('modelSwitchBusy') : undefined"
+        :refreshing="refreshingModels"
+        :knob="knob"
+        @select-model="
+          conversationLive ? switchConversationModel($event) : setSelectedModel($event)
+        "
+        @select-combination="
+          (model, level) =>
+            conversationLive
+              ? switchConversationCombination(model, level)
+              : setSelectedCombination(model, level)
+        "
+        @thinking-change="
+          conversationLive ? switchConversationThinkingLevel($event) : setThinkingLevel($event)
+        "
+        @manage-models="props.onOpenModelsModal?.()"
+        @refresh-models="handleRefreshModels"
+      />
+    </div>
 
     <ToolsModal
       :is-open="showToolsModal"
@@ -1153,6 +1218,11 @@ const {
 } = useVersionChecker();
 
 // ---- core state ----
+const tocModelPickerRef = ref<InstanceType<typeof ModelPicker> | null>(null);
+async function openTocModelPicker(close: (instant?: boolean) => Promise<void>) {
+  await close(true);
+  tocModelPickerRef.value?.open();
+}
 const messageInputRef = ref<InstanceType<typeof MessageInput> | null>(null);
 const liveVoiceRef = ref<InstanceType<typeof LiveVoice> | null>(null);
 const voicePhase = ref<"idle" | "connecting" | "live">("idle");

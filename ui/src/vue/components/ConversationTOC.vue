@@ -20,7 +20,7 @@
     aria-haspopup="true"
     :aria-expanded="open"
     v-tooltip.top="'Table of contents'"
-    @click="popoverRef?.toggle($event)"
+    @click="togglePopover"
   >
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="toc-button-icon">
       <line x1="8" y1="6" x2="20" y2="6" :stroke-width="2" stroke-linecap="round" />
@@ -32,18 +32,49 @@
     </svg>
   </button>
 
+  <Teleport to="body">
+    <button
+      v-if="open && drawerMode"
+      class="toc-drawer-scrim"
+      aria-label="Close conversation outline"
+      @click="popoverRef?.hide()"
+    />
+  </Teleport>
   <Popover
     ref="popoverRef"
     :pt="{
-      root: { class: 'toc-popover', 'aria-label': 'Table of contents' },
+      root: {
+        class: ['toc-popover', { 'toc-drawer': drawerMode }],
+        'aria-label': 'Table of contents',
+      },
       content: { class: 'toc-popover-content' },
+      transition: { css: !instantClose },
     }"
     @show="handleShow"
     @hide="open = false"
   >
-    <div class="toc-popover-header">
+    <div v-if="!drawerMode" class="toc-popover-header">
       <span class="toc-popover-title">Jump to…</span>
     </div>
+    <div v-if="drawerMode" class="toc-drawer-close-lane">
+      <button
+        class="toc-drawer-close"
+        aria-label="Close table of contents"
+        @click="popoverRef?.hide()"
+      >
+        <span aria-hidden="true">×</span>
+      </button>
+    </div>
+    <div v-if="drawerMode" class="toc-drawer-context overflow-menu-panel">
+      <slot name="context" :close="closeContext" />
+    </div>
+    <button
+      v-if="drawerMode"
+      class="toc-drawer-jump toc-drawer-jump-top"
+      @click="handleGoto({ id: 'top', kind: 'top', label: 'Top of conversation' })"
+    >
+      <span aria-hidden="true">↑</span> Top of conversation
+    </button>
     <div ref="listRef" class="toc-popover-list">
       <p v-if="chaptersEnabled && chaptersError" role="alert">{{ chaptersError }}</p>
 
@@ -143,10 +174,18 @@
         <span class="toc-entry-label">{{ entry.label }}</span>
       </button>
     </div>
+    <button
+      v-if="drawerMode"
+      class="toc-drawer-jump toc-drawer-jump-bottom"
+      @click="handleGoto({ id: 'bottom', kind: 'bottom', label: 'End of conversation' })"
+    >
+      <span aria-hidden="true">↓</span> End of conversation
+    </button>
   </Popover>
 </template>
 
 <script setup lang="ts">
+import { useRightTocSwipe } from "../composables/rightTocSwipe";
 import { llmData } from "../../utils/llmData";
 import { computed, inject, nextTick, onUnmounted, ref, watch } from "vue";
 import { slackEventNames, slackEventOf, slackEventSummary } from "../../utils/slack";
@@ -197,8 +236,29 @@ const emit = defineEmits<{
 }>();
 
 const open = ref(false);
+const drawerMode = ref(false);
+const instantClose = ref(false);
+async function closeContext(instant = false) {
+  instantClose.value = instant;
+  if (instant) await nextTick();
+  popoverRef.value?.hide();
+  await nextTick();
+}
 const activeId = ref<string | null>(null);
 const popoverRef = ref<InstanceType<typeof Popover> | null>(null);
+function togglePopover(event: Event) {
+  drawerMode.value = false;
+  instantClose.value = false;
+  popoverRef.value?.toggle(event);
+}
+useRightTocSwipe(
+  () => open.value && drawerMode.value,
+  (event, target) => {
+    drawerMode.value = true;
+    popoverRef.value?.show(event, target);
+  },
+  () => popoverRef.value?.hide(),
+);
 const listRef = ref<HTMLElement | null>(null);
 const renderedThumbnails = ref<Map<string, TOCThumbnail[]>>(new Map());
 const chapters = ref<{ title: string; message_id: string }[]>([]);
@@ -209,7 +269,10 @@ async function loadChapters() {
   if (!chaptersEnabled.value) return;
   const id = props.conversationId;
   try {
-    const response = await apiFetch(`/api/conversation/${encodeURIComponent(id)}/themes`, "Failed to load chapters");
+    const response = await apiFetch(
+      `/api/conversation/${encodeURIComponent(id)}/themes`,
+      "Failed to load chapters",
+    );
     const themes = await response.json();
     if (id !== props.conversationId) return;
     chapters.value = themes.chapters;
@@ -224,11 +287,14 @@ function onChaptersUpdated(event: Event) {
   if (chaptersEnabled.value && open.value && (event as CustomEvent<string>).detail === props.conversationId) void loadChapters();
 }
 
-watch(() => props.conversationId, () => {
-  chapters.value = [];
-  chaptersError.value = "";
-  if (open.value) void loadChapters();
-});
+watch(
+  () => props.conversationId,
+  () => {
+    chapters.value = [];
+    chaptersError.value = "";
+    if (open.value) void loadChapters();
+  },
+);
 
 watch(chaptersEnabled, (enabled) => {
   chapters.value = [];
@@ -250,7 +316,6 @@ function extractMessageLabel(message: Message, maxLen = 70): string {
   if (s.length > maxLen) s = s.slice(0, maxLen - 1) + "…";
   return s;
 }
-
 
 function fragmentForToolUse(toolUseId: string): string {
   const short = toolUseId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8);
@@ -608,7 +673,13 @@ function scrollToFragment(container: HTMLElement, fragment: string): boolean {
 }
 
 const entries = computed(
-  perfWrap("toc.buildEntries", () => buildEntries(props.messages, renderedThumbnails.value, chaptersEnabled.value ? chapters.value : [])),
+  perfWrap("toc.buildEntries", () =>
+    buildEntries(
+      props.messages,
+      renderedThumbnails.value,
+      chaptersEnabled.value ? chapters.value : [],
+    ),
+  ),
 );
 const activeEntryByMessageId = computed(() => {
   const entriesBySourceMessageId = new Map<string, TOCEntry[]>();
@@ -640,22 +711,34 @@ const activeEntryByToolUseId = computed(() => {
   return result;
 });
 
-function handleShow() {
+function positionOpenList() {
+  const list = listRef.value;
+  if (!list) return;
+  if (drawerMode.value) {
+    list.scrollTop = list.scrollHeight;
+    return;
+  }
+  const index = entries.value.findIndex((entry) => entry.id === activeId.value);
+  if (index <= 0) {
+    list.scrollTop = 0;
+    return;
+  }
+  const el = list.querySelector<HTMLElement>(".toc-entry-active");
+  if (el) list.scrollTop = el.offsetTop - (list.clientHeight - el.offsetHeight) / 2;
+}
+
+async function handleShow() {
+  instantClose.value = false;
   refreshRenderedThumbnails();
   open.value = true;
-  void loadChapters();
-  nextTick(() => {
-    const list = listRef.value;
-    if (!list) return;
-    const index = entries.value.findIndex((entry) => entry.id === activeId.value);
-    if (index <= 0) {
-      list.scrollTop = 0;
-      return;
-    }
-    const el = list.querySelector<HTMLElement>(".toc-entry-active");
-    // Center the active entry (block: "center" without scrolling ancestors).
-    if (el) list.scrollTop = el.offsetTop - (list.clientHeight - el.offsetHeight) / 2;
-  });
+  const chaptersLoaded = loadChapters();
+  await nextTick();
+  positionOpenList();
+  if (drawerMode.value) {
+    await chaptersLoaded;
+    await nextTick();
+    if (open.value && drawerMode.value) positionOpenList();
+  }
 }
 
 interface TOCTarget {
@@ -799,7 +882,10 @@ function handleGoto(entry: TOCEntry) {
     if (!isCurrentNavigation(navigation)) return;
     const el = findMessageElement(container, messageId);
     if (!el) return;
-    el.scrollIntoView({ behavior: entry.kind === "chapter" ? "instant" : "smooth", block: "start" });
+    el.scrollIntoView({
+      behavior: entry.kind === "chapter" ? "instant" : "smooth",
+      block: "start",
+    });
     highlight(el);
     replaceFragment(fragmentForMessage(messageId));
   });
