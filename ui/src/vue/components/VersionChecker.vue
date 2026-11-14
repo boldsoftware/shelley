@@ -244,7 +244,7 @@ const upgradeError = ref<string | null>(null);
 const restarting = ref(false);
 const restartError = ref<string | null>(null);
 const startingRebase = ref(false);
-const autoUpgrade = ref(false);
+const autoUpgrade = ref(true);
 const loadingAutoUpgrade = ref(true);
 const upgradingHeadless = ref(false);
 const headlessError = ref<string | null>(null);
@@ -289,7 +289,7 @@ async function loadAutoUpgradeSetting() {
   loadingAutoUpgrade.value = true;
   try {
     const settings = await api.getSettings();
-    autoUpgrade.value = settings.auto_upgrade === "true";
+    autoUpgrade.value = settings.auto_upgrade !== "false";
   } catch (err) {
     console.error("Failed to load auto-upgrade setting:", err);
   } finally {

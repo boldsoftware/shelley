@@ -2437,13 +2437,18 @@ func (s *Server) autoUpgradeRoutine() {
 	}
 }
 
+// autoUpgradeEnabled reports whether auto-upgrade is on.
+// It defaults to enabled; only an explicit "false" disables it.
+func (s *Server) autoUpgradeEnabled(ctx context.Context) bool {
+	val, err := s.db.GetSetting(ctx, "auto_upgrade")
+	return err == nil && val != "false"
+}
+
 // tryAutoUpgrade attempts to upgrade if auto-upgrade is enabled and server is idle
 func (s *Server) tryAutoUpgrade() {
 	ctx := context.Background()
 
-	// Check if auto-upgrade is enabled
-	autoUpgradeEnabled, err := s.db.GetSetting(ctx, "auto_upgrade")
-	if err != nil || autoUpgradeEnabled != "true" {
+	if !s.autoUpgradeEnabled(ctx) {
 		return
 	}
 
