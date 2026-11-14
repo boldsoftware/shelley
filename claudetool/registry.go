@@ -28,10 +28,9 @@ var ToolRegistry = []ToolInfo{
 	{Name: "write_secret", Summary: "Write a secret the user stored to a file, unseen (secrets flag).", DefaultOn: true, SourcePath: "claudetool/secret.go"},
 	{Name: "archive_store", Summary: "Research prior work in the Shelley archive store (archive-research flag).", DefaultOn: true, SourcePath: "claudetool/archive_store.go"},
 	{Name: "message_user", Summary: "Chat with the user: messages, replies, emoji reactions, attachments.", DefaultOn: false, SourcePath: "claudetool/message_user.go"},
-
-	{Name: "send_to_thread", Summary: "Reply in a Slack thread (Slack Assistant).", DefaultOn: false, SourcePath: "claudetool/slack.go"},
-	{Name: "send_to_channel", Summary: "Post to a Slack channel (Slack Assistant).", DefaultOn: false, SourcePath: "claudetool/slack.go"},
-	{Name: "add_reaction", Summary: "React to a Slack message with an emoji (Slack Assistant).", DefaultOn: false, SourcePath: "claudetool/slack.go"},
+	{Name: "send_to_thread", Summary: "Reply in a Slack thread (Assistant).", DefaultOn: true, SourcePath: "claudetool/slack.go"},
+	{Name: "send_to_channel", Summary: "Post to a Slack channel (Assistant).", DefaultOn: true, SourcePath: "claudetool/slack.go"},
+	{Name: "add_reaction", Summary: "React to a Slack message with an emoji (Assistant).", DefaultOn: true, SourcePath: "claudetool/slack.go"},
 }
 
 // ToolInfoByName returns registry metadata for a tool.

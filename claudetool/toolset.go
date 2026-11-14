@@ -95,8 +95,7 @@ type ToolSetConfig struct {
 	// go to.
 	UserChat UserChat
 	// Slack, if set, provides send_to_thread, send_to_channel and
-	// add_reaction (off
-	// unless enabled by ToolOverrides).
+	// add_reaction.
 	Slack Slack
 	// BackgroundJobs is told about bash commands moved to the background.
 	BackgroundJobs BackgroundJobs

@@ -1,4 +1,4 @@
-<!-- Slack's mark, beside Slack messages and the Slack Assistant's posts. -->
+<!-- Slack's mark, beside Slack messages and the Assistant's posts. -->
 <template>
   <svg class="slack-mark" viewBox="0 0 24 24" width="14" height="14" role="img" aria-label="Slack">
     <path

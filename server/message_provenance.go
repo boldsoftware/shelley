@@ -192,15 +192,22 @@ func messageWithSenderProvenance(message llm.Message, rawUserData []byte) (llm.M
 
 // messageWithSequenceID shows the stable sequence ID of a typed user message
 // to the LLM, without changing its persisted or UI text. For channel messages,
-// the transport's own ID stays out of the prompt and is resolved on reply.
+// the transport's own ID stays out of the prompt and is resolved on reply. A
+// Slack event keeps its own tag, which takes the sequence ID.
 func messageWithSequenceID(message llm.Message, externalID string, sequenceID int64) (llm.Message, error) {
-	tag := "user_message"
-	if externalID != "" {
-		tag = "external_message"
+	attrs := []xml.Attr{{Name: xml.Name{Local: "sequence_id"}, Value: strconv.FormatInt(sequenceID, 10)}}
+	if externalID == "" {
+		return wrapMessageForLLM(message, "user_message", attrs...)
 	}
-	return wrapMessageForLLM(message, tag, xml.Attr{
-		Name: xml.Name{Local: "sequence_id"}, Value: strconv.FormatInt(sequenceID, 10),
-	})
+	if len(message.Content) == 1 && message.Content[0].Type == llm.ContentTypeText {
+		if tag, slack, body, ok := parseSlackEvent(externalID, message.Content[0].Text); ok {
+			c := message.Content[0]
+			c.Text = body
+			message.Content = []llm.Content{c}
+			return wrapMessageForLLM(message, tag, append(attrs, slack...)...)
+		}
+	}
+	return wrapMessageForLLM(message, "external_message", attrs...)
 }
 
 // typedUserForLLM mirrors ListTypedUserMessages: machine notices and tool

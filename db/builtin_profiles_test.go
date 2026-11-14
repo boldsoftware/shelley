@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"shelley.exe.dev/db/generated"
@@ -199,5 +200,47 @@ func TestBuiltinAssistantKeepsUserProfile(t *testing.T) {
 	}
 	if got := builtinProfile(t, db, "Assistant"); got.Settings != mine || got.Builtin {
 		t.Fatalf("user's Assistant changed: %+v", got)
+	}
+}
+
+// Slack events now go to the Assistant: the Slack Assistant's conversation
+// is archived with its history and no Slack chat, and its profile goes
+// unless the user edited it.
+func TestSlackAssistantMigration(t *testing.T) {
+	t.Parallel()
+	for _, edited := range []bool{false, true} {
+		db := setupDBMigratedThrough(t, 82)
+		ctx := t.Context()
+		if err := db.pool.Exec(ctx, `INSERT INTO profiles(name, settings, builtin, user_edited) VALUES('Slack Assistant', '{}', TRUE, ?);
+			INSERT INTO builtin_profiles(name) VALUES('Slack Assistant');
+			INSERT INTO conversations(conversation_id, slug, user_initiated, external_conversation_id, external_endpoint, conversation_options, agent_working)
+			VALUES('s', 'slack-app', 1, 'slack:assistant', 'https://slack-app.int.exe.xyz', '{"profile":"Slack Assistant"}', 1)`, edited); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Migrate(ctx); err != nil {
+			t.Fatal(err)
+		}
+		c, err := db.GetConversationByID(ctx, "s")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.ExternalConversationID != nil || c.ExternalEndpoint != nil || !c.Archived || c.AgentWorking || ptrValue(c.Slug) != "slack-app" {
+			t.Fatalf("edited=%v: Slack Assistant conversation: %+v", edited, c)
+		}
+		var profile generated.Profile
+		err = db.Queries(ctx, func(q *generated.Queries) (err error) {
+			if _, err := q.GetBuiltinProfile(ctx, "Slack Assistant"); !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("still registered: %v", err)
+			}
+			profile, err = q.GetProfile(ctx, "Slack Assistant")
+			return err
+		})
+		if edited && (err != nil || profile.Builtin) {
+			t.Fatalf("edited profile: %+v, %v", profile, err)
+		}
+		if !edited && !errors.Is(err, sql.ErrNoRows) {
+			t.Fatalf("unedited profile: %+v, %v", profile, err)
+		}
+		db.Close()
 	}
 }

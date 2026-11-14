@@ -185,6 +185,13 @@ func TestMessageUserSendsToChat(t *testing.T) {
 		t.Fatalf("refused reaction: %v", out.Error)
 	}
 
+	// So is a mistake the chat finds in the call.
+	chat = &fakeChat{sendErr: ChatCallError{Err: errors.New("set reply_to")}}
+	out = runMessageUser(t.Context(), finder, chat, t.TempDir(), MessageUserInput{Text: "hi"})
+	if out.Error == nil || out.Error.Error() != "set reply_to" || out.Display != nil {
+		t.Fatalf("mistake found by the chat: %+v", out)
+	}
+
 	// Mistakes in the call reach no chat, and are not the chat's failures.
 	chat = &fakeChat{}
 	file := filepath.Join(t.TempDir(), "missing.png")

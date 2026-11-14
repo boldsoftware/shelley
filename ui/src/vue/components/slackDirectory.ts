@@ -1,4 +1,4 @@
-// The Slack Assistant's directory (see utils/slack.ts): who and where the
+// The Assistant's Slack directory (see utils/slack.ts): who and where the
 // Slack IDs in its messages and replies are. ChatInterface provides it; it is
 // computed only when a Slack message or reply reads it.
 import { computed, inject, type ComputedRef, type InjectionKey } from "vue";

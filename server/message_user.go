@@ -59,6 +59,9 @@ func (f userMessageFinder) FindUserMessageBySequence(ctx context.Context, sequen
 		if m.SequenceID != sequenceID && origin != sequenceID {
 			continue
 		}
+		if strings.HasPrefix(derefString(m.ExternalMessageID), slackChatPrefix) {
+			return claudetool.UserMessage{}, false, fmt.Errorf("sequence_id %d is a Slack event: answer it in Slack with %s or %s; nothing was sent", sequenceID, claudetool.SendToThreadName, claudetool.AddReactionName)
+		}
 		msg, err := parseLLMData(m.LlmData)
 		if err != nil {
 			return claudetool.UserMessage{}, false, fmt.Errorf("message %s: %w", m.MessageID, err)

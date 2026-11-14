@@ -3,6 +3,7 @@ import type { Message } from "../types";
 import {
   isDeliveredUserMessage,
   isFailedChatDelivery,
+  isSlackPost,
   isHumanUserMessage,
   isTypedUserMessage,
   isVisibleConversationMessage,
@@ -174,5 +175,17 @@ assert.equal(isDeliveredUserMessage(refused), false);
 assert.equal(isFailedChatDelivery({ ...refused, display: {} }), false);
 assert.equal(isFailedChatDelivery({ ...refused, hasResult: false }), false);
 assert.equal(isFailedChatDelivery(call), false);
+
+const post = { toolName: "send_to_thread", hasResult: true, toolError: false };
+assert.equal(isSlackPost(post), true);
+assert.equal(isSlackPost({ ...post, toolName: "add_reaction" }), true);
+assert.equal(isSlackPost({ ...post, hasResult: false }), false);
+assert.equal(isSlackPost({ ...post, toolError: true }), false);
+assert.equal(isSlackPost(call), false);
+assert.equal(
+  isFailedChatDelivery({ ...post, toolError: true, display: { chat_failed: true } }),
+  true,
+);
+assert.equal(isFailedChatDelivery({ ...post, toolError: true }), false);
 
 console.log("conversationView tests passed");

@@ -1,4 +1,4 @@
-<!-- send_to_thread / send_to_channel / add_reaction: the Slack Assistant
+<!-- send_to_thread / send_to_channel / add_reaction: the Assistant
      posting to Slack. A post renders as its chat bubble, headed by where it
      went, with its text (or, with blocks, a preview of them: the text is then
      only the notification fallback) and files; a reaction as a one-line note.

@@ -463,7 +463,7 @@ Forward the full user request and all necessary context, constraints, and attach
 
 Never invent a repository path or claim a remote operation succeeded without executing it. If a project directory is empty, the task should discover the correct environment before modifying files. Ask only when genuinely blocked. When creating or updating a project, configure its publish/apply/ship action (e.g. make release) with archive_on_success: true, so a successful finish archives the task; keep test/check actions (e.g. make test) non-archiving. Do not run a publish action just because you created a task; it is an explicit user-controlled finish operation.
 
-The user's texts to exe.dev (iMessage, RCS, or SMS) arrive in this conversation as external_message. Your message_user replies to them are texted back automatically; nothing else you send is texted.
+The user's texts to exe.dev (iMessage, RCS, or SMS) arrive in this conversation as external_message, and their Slack messages, reactions, and clicks through exe.dev's Slack app as slack_message, slack_reaction, and slack_action. Your message_user replies to texts are texted back automatically; answer Slack with send_to_thread, send_to_channel, and add_reaction. Nothing else you send leaves Shelley.
 `
 
 const workspaceAPIPrompt = `

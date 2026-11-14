@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/db"
@@ -41,7 +42,7 @@ func (s *Server) recoverAssistantChannelQueue(ctx context.Context) error {
 // message, to the chat that message came from. Answers to a web chat's
 // messages stay in the conversation, which the chat's page reads. Everything else (an
 // answer to a message typed in the UI, to a conversation's or subagent's report, or
-// to a scheduled wakeup) stays in the UI.
+// to a scheduled wakeup) stays in the UI. The Slack tools answer Slack events.
 type assistantChat struct {
 	s              *Server
 	conversationID string
@@ -49,25 +50,33 @@ type assistantChat struct {
 
 // route returns the route of the texted message that a message replying to
 // target answers, or nil if it answers none. With no target, it answers the
-// latest user message, typed or not.
+// latest user message, typed or not, and refuses if that is a Slack event:
+// the agent may mean to wrap up in Slack, or to answer a text after it.
 func (c assistantChat) route(ctx context.Context, target claudetool.UserMessage) (*db.ChannelRoute, error) {
 	id := target.ExternalID
 	if target.SequenceID == 0 {
 		var err error
 		if id, err = c.s.db.LatestUserExternalMessageID(ctx, c.conversationID); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("nothing was sent: %w", err)
+		}
+		if strings.HasPrefix(id, slackChatPrefix) {
+			return nil, claudetool.ChatCallError{Err: fmt.Errorf("the latest message is a Slack event: answer it in Slack with %s, without message_user; to answer another message, set reply_to to its sequence_id; nothing was sent", claudetool.SendToThreadName)}
 		}
 	}
 	if id == "" {
 		return nil, nil
 	}
-	return c.s.db.GetChannelRoute(ctx, c.conversationID, id)
+	route, err := c.s.db.GetChannelRoute(ctx, c.conversationID, id)
+	if err != nil {
+		return nil, fmt.Errorf("nothing was sent: %w", err)
+	}
+	return route, nil
 }
 
 func (c assistantChat) Send(ctx context.Context, text string, attachments []claudetool.MessageUserAttachment, target claudetool.UserMessage) error {
 	route, err := c.route(ctx, target)
 	if err != nil {
-		return fmt.Errorf("nothing was sent: %w", err)
+		return err
 	}
 	if route == nil || route.Endpoint == "" {
 		return nil
@@ -81,7 +90,7 @@ func (c assistantChat) React(ctx context.Context, target claudetool.UserMessage,
 	}
 	route, err := c.route(ctx, target)
 	if err != nil {
-		return fmt.Errorf("nothing was sent: %w", err)
+		return err
 	}
 	if route == nil || route.Endpoint == "" {
 		return nil

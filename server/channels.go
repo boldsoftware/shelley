@@ -22,22 +22,24 @@ import (
 	"shelley.exe.dev/llm"
 )
 
-// A channel connects the Assistant to external chat services, such as the
-// exe.dev messages integration (the VM owner's iMessage, RCS, or SMS chat
-// with exe.dev) and web chats. Every chat's messages go to the one
-// Assistant, made on the first if there is none yet (see ensureAssistant).
-// Each delivered message records the channel's id for it
-// (external_message_id), and its chat and the endpoint replies to it go to
-// in channel_message_routes. The Assistant answers with message_user,
-// which texts only what answers a texted message, to its chat (see
-// assistantChat); a web chat's answers stay in the conversation, which its
-// page reads. The user follows texts in the chat, so they send no
+// A channel connects the Assistant to external chat services: the exe.dev
+// messages integration (the VM owner's iMessage, RCS, or SMS chat with
+// exe.dev), web chats, and exe.dev's Slack app (see slack_channel.go).
+// Every chat's messages go to the one Assistant, made on the first if
+// there is none yet (see ensureAssistant). Each delivered message records
+// the channel's id for it (external_message_id), and its chat and the
+// endpoint replies to it go to in channel_message_routes. The Assistant
+// answers texts with message_user, which texts only what answers a texted
+// message, to its chat (see assistantChat), and Slack events with the
+// Slack tools; a web chat's answers stay in the conversation, which its
+// page reads. The user follows the chat, so its messages send no
 // notifications.
 //
-// An endpoint speaks the exe.dev messages gateway's API: POST /send
-// {"text":"...","reply_to":"<message_id>"} answers {"message_id":"..."}, POST /react
-// {"message_id":"<message_id>","reaction":"<emoji>"} answers {"ok":true}, and a
-// refusal answers {"error":"<code>","message":"..."}.
+// The messages integration's endpoint speaks the exe.dev messages
+// gateway's API: POST /send {"text":"...","reply_to":"<message_id>"}
+// answers {"message_id":"..."}, POST /react
+// {"message_id":"<message_id>","reaction":"<emoji>"} answers {"ok":true},
+// and a refusal answers {"error":"<code>","message":"..."}.
 
 // messagesIntegration is the exe.dev integration whose chat exed delivers to
 // POST /api/channels/messages, and which takes that chat's replies.
@@ -87,6 +89,10 @@ func (s *Server) handleChannelMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "chat ids like "+debugChatIDPattern.String()+" are reserved for /debug/channels", http.StatusBadRequest)
 		return
 	}
+	if strings.HasPrefix(ev.ChatID, slackChatPrefix) {
+		http.Error(w, "chat ids starting "+slackChatPrefix+" are reserved for /api/channels/slack", http.StatusBadRequest)
+		return
+	}
 	env, err := exeenv.Current()
 	if err != nil {
 		s.internalError(w, "Cannot determine exe.dev environment", err)
@@ -129,8 +135,7 @@ func (s *Server) handleChannelStream(w http.ResponseWriter, r *http.Request) {
 
 // receiveChannelEvent delivers ev, an event on the external chat whose
 // replies go to endpoint ("" for a web chat, whose replies stay in the
-// conversation), to the Assistant as a user message. A message that was
-// already delivered (a retry) is dropped.
+// conversation), to the Assistant.
 func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev channelEvent) error {
 	if ev.ChatID == "" {
 		return errInvalidChannelEvent
@@ -141,9 +146,39 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	if ev.ID == "" {
 		return errChannelEventNoID
 	}
+	return s.deliverChatMessage(ctx, chatMessage{
+		route:         db.ChannelRoute{ChatID: ev.ChatID, ExternalMessageID: ev.ID, Endpoint: endpoint},
+		text:          ev.Text,
+		attachments:   ev.Attachments,
+		typing:        endpoint != "",
+		firstReaction: ev.FirstReaction,
+		firstReply:    ev.FirstReply,
+	})
+}
+
+// chatMessage is a message from one of the user's external chats.
+type chatMessage struct {
+	// route is the chat, its id for the message, and where answers go;
+	// its ConversationID is the Assistant's.
+	route       db.ChannelRoute
+	text        string
+	attachments []channelAttachment
+	// tag, if set, is the stored form of the text with its attachments.
+	tag func(string) string
+	// typing shows the chat's typing indicator.
+	typing bool
+	// firstReaction and firstReply answer a message that starts the
+	// Assistant's conversation (see answerFirstMessage).
+	firstReaction, firstReply string
+}
+
+// deliverChatMessage delivers m to the Assistant, made if there is none, as
+// a user message. A message that was already delivered (a retry) is
+// dropped.
+func (s *Server) deliverChatMessage(ctx context.Context, m chatMessage) error {
 	// One delivery per chat at a time, so that a retry racing its original
 	// is seen as delivered.
-	unlock, err := s.lockChannelChat(ctx, ev.ChatID)
+	unlock, err := s.lockChannelChat(ctx, m.route.ChatID)
 	if err != nil {
 		return err
 	}
@@ -161,7 +196,7 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	if err != nil {
 		return err
 	}
-	delivered, err := s.channelMessageDelivered(ctx, id, ev.ID)
+	delivered, err := s.channelMessageDelivered(ctx, id, m.route.ExternalMessageID)
 	if err != nil {
 		return err
 	}
@@ -179,30 +214,34 @@ func (s *Server) receiveChannelEvent(ctx context.Context, endpoint string, ev ch
 	if err != nil {
 		return fmt.Errorf("model %s: %w", modelID, err)
 	}
-	if err := s.db.RecordChannelRoute(ctx, db.ChannelRoute{ConversationID: id, ExternalMessageID: ev.ID, ChatID: ev.ChatID, Endpoint: endpoint}); err != nil {
+	m.route.ConversationID = id
+	if err := s.db.RecordChannelRoute(ctx, m.route); err != nil {
 		return err
 	}
 	// Fetch signed provider URLs only after deduplication, while holding the
 	// chat lock. Retries must not re-fetch URLs that may have expired.
-	ev.Text, err = s.channelMessageText(ctx, ev.Text, ev.Attachments)
+	text, err := s.channelMessageText(ctx, m.text, m.attachments)
 	if err != nil {
 		return err
 	}
-	ctx = contextWithExternalMessageID(ctx, ev.ID)
+	if m.tag != nil {
+		text = m.tag(text)
+	}
+	ctx = contextWithExternalMessageID(ctx, m.route.ExternalMessageID)
 	// A busy turn takes channel messages at its next model request, after
 	// the current tool round finishes, even with UI messages queued for later.
-	message := llm.UserStringMessage(ev.Text)
+	message := llm.UserStringMessage(text)
 	if manager.IsAgentWorking() {
 		return manager.InjectMessage(ctx, modelID, message)
 	}
-	if ev.FirstReaction != "" || ev.FirstReply != "" {
-		answered, err := manager.answerFirstMessage(ctx, message, ev.FirstReaction, ev.FirstReply)
+	if m.firstReaction != "" || m.firstReply != "" {
+		answered, err := manager.answerFirstMessage(ctx, message, m.firstReaction, m.firstReply)
 		if answered || err != nil {
 			return err
 		}
 	}
-	if endpoint != "" {
-		s.showChannelTyping(ctx, endpoint)
+	if m.typing {
+		s.showChannelTyping(ctx, m.route.Endpoint)
 	}
 	_, err = manager.AcceptUserMessage(ctx, service, modelID, message)
 	return err

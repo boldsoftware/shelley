@@ -1,4 +1,4 @@
-// Slack mrkdwn, as Slack users write it and the Slack Assistant posts it,
+// Slack mrkdwn, as Slack users write it and the Assistant posts it,
 // rendered to safe HTML: every piece of text is escaped, and only http(s) and
 // mailto links are made. See https://api.slack.com/reference/surfaces/formatting.
 

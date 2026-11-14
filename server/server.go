@@ -1268,10 +1268,9 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		manager.recordDrainedQueued = func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message, turnStart bool) (int64, error) {
 			return s.recordDrainedQueuedMessages(ctx, conversationID, qm, messages, turnStart)
 		}
-		if role == roleTopLevel && isSlackChat(conversation) {
-			manager.slack = slackChat{s: s, conversationID: conversationID}
-		} else if role == roleTopLevel && s.isAssistant(conversationID) {
+		if role == roleTopLevel && s.isAssistant(conversationID) {
 			manager.userChat = assistantChat{s: s, conversationID: conversationID}
+			manager.slack = slackChat{s: s, conversationID: conversationID}
 		}
 		manager.userEmail = userEmail
 		manager.serverPort = s.listenPort

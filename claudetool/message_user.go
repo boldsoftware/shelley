@@ -3,6 +3,7 @@ package claudetool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -51,6 +52,13 @@ type UserChat interface {
 	// React delivers a reaction to target, the user's message.
 	React(ctx context.Context, target UserMessage, emoji string) error
 }
+
+// ChatCallError is a UserChat's error for a mistake in the call, which the
+// agent can fix, not a failure in the chat: message_user reports it as is.
+type ChatCallError struct{ Err error }
+
+func (e ChatCallError) Error() string { return e.Err.Error() }
+func (e ChatCallError) Unwrap() error { return e.Err }
 
 // UserChatDescriber is a UserChat that describes itself to the agent, in
 // place of messageUserChatDescription: one that takes only some messages.
@@ -209,6 +217,9 @@ func runMessageUser(ctx context.Context, finder UserMessageFinder, chat UserChat
 		// reactions refuses messages too, so a reaction rarely fails after
 		// its message went out. When one does, the call stands.
 		failed := func(format string, err error) llm.ToolOut {
+			if errors.As(err, new(ChatCallError)) {
+				return llm.ErrorToolOut(err)
+			}
 			return llm.ToolOut{Error: fmt.Errorf(format, err), Display: MessageUserDisplay{ChatFailed: true}}
 		}
 		hasMessage := in.Text != "" || len(display.Attachments) != 0

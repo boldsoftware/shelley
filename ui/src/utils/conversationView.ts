@@ -83,6 +83,8 @@ export function isVisibleConversationMessage(
 }
 
 export const MESSAGE_USER_TOOL = "message_user";
+/** The Assistant's Slack tools (claudetool/slack.go). */
+export const SLACK_TOOLS = new Set(["send_to_thread", "send_to_channel", "add_reaction"]);
 
 /** Input of a message_user call, as the model sent it. */
 export interface MessageUserInput {
@@ -125,9 +127,20 @@ export function isDeliveredUserMessage(item: {
   return !!input.text?.trim() || !!messageUserDisplay(item.display).attachments?.length;
 }
 
-/** Whether a message_user call failed in the user's chat, such as a phone
- * the messages service refused to send to. Brief view shows it: unlike a
- * mistake in the call, the agent cannot fix it, so it may show nothing else. */
+/** Whether a Slack post or reaction went out, which brief view shows: it is
+ * the Assistant's side of a Slack thread. */
+export function isSlackPost(item: {
+  toolName?: string;
+  hasResult?: boolean;
+  toolError?: boolean;
+}): boolean {
+  return SLACK_TOOLS.has(item.toolName ?? "") && !!item.hasResult && !item.toolError;
+}
+
+/** Whether a message_user or Slack call failed in the user's chat, such as
+ * a phone the messages service refused to send to. Brief view shows it:
+ * unlike a mistake in the call, the agent cannot fix it, so it may show
+ * nothing else. */
 export function isFailedChatDelivery(item: {
   toolName?: string;
   hasResult?: boolean;
@@ -135,7 +148,7 @@ export function isFailedChatDelivery(item: {
   display?: unknown;
 }): boolean {
   return (
-    item.toolName === MESSAGE_USER_TOOL &&
+    (item.toolName === MESSAGE_USER_TOOL || SLACK_TOOLS.has(item.toolName ?? "")) &&
     !!item.hasResult &&
     !!item.toolError &&
     !!messageUserDisplay(item.display).chat_failed

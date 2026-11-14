@@ -228,7 +228,7 @@ type ConversationManager struct {
 	// userChat, set for a top-level conversation bound to an external chat,
 	// is where message_user's messages also go.
 	userChat claudetool.UserChat
-	// slack, set for the Slack Assistant, backs its Slack tools.
+	// slack, set for the Assistant, backs its Slack tools.
 	slack claudetool.Slack
 
 	// idleWaiters are closed at the next working→idle transition; see idle.

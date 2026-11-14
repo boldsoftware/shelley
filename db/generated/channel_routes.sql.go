@@ -87,3 +87,29 @@ func (q *Queries) LatestChannelRoute(ctx context.Context, chatID string) (Channe
 	)
 	return i, err
 }
+
+const latestChannelRouteWithChatPrefix = `-- name: LatestChannelRouteWithChatPrefix :one
+SELECT conversation_id, external_message_id, chat_id, endpoint, created_at FROM channel_message_routes
+WHERE conversation_id = ?1 AND substr(chat_id, 1, length(CAST(?2 AS TEXT))) = CAST(?2 AS TEXT)
+ORDER BY created_at DESC, rowid DESC LIMIT 1
+`
+
+type LatestChannelRouteWithChatPrefixParams struct {
+	ConversationID string `json:"conversation_id"`
+	Prefix         string `json:"prefix"`
+}
+
+// The latest route of conversation_id whose chat id starts with prefix, such
+// as a Slack thread's.
+func (q *Queries) LatestChannelRouteWithChatPrefix(ctx context.Context, arg LatestChannelRouteWithChatPrefixParams) (ChannelMessageRoute, error) {
+	row := q.db.QueryRowContext(ctx, latestChannelRouteWithChatPrefix, arg.ConversationID, arg.Prefix)
+	var i ChannelMessageRoute
+	err := row.Scan(
+		&i.ConversationID,
+		&i.ExternalMessageID,
+		&i.ChatID,
+		&i.Endpoint,
+		&i.CreatedAt,
+	)
+	return i, err
+}

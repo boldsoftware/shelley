@@ -1,5 +1,5 @@
 <!-- Files shared in Slack: a user's, saved to the uploads directory, which
-     /api/read serves; or the Slack Assistant's, from anywhere, of which images
+     /api/read serves; or the Assistant's, from anywhere, of which images
      preview if /api/read serves them (screenshots do) and the rest just show. -->
 <template>
   <div class="message-user-attachments" data-testid="slack-files">

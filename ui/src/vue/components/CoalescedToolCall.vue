@@ -153,7 +153,7 @@ import LLMOneShotTool from "./tools/LLMOneShotTool.vue";
 import OutputIframeTool from "./tools/OutputIframeTool.vue";
 import WebSearchTool from "./tools/WebSearchTool.vue";
 import { toolCardPlaceholderKind } from "./toolCardMount";
-import { MESSAGE_USER_TOOL } from "../../utils/conversationView";
+import { MESSAGE_USER_TOOL, SLACK_TOOLS } from "../../utils/conversationView";
 
 const props = defineProps<{
   toolName: string;
@@ -179,14 +179,9 @@ const mountPlaceholderEl = ref<HTMLElement | null>(null);
 const nearViewport = useNearViewport(mountPlaceholderEl);
 const startedEager = !props.hasResult;
 // message_user calls are the conversation itself in brief view, and Slack
-// posts are the Slack Assistant's side of its conversation; a placeholder would
+// posts are the Assistant's side of its Slack threads; a placeholder would
 // make every bubble pop in while scrolling.
-const CHAT_TOOLS = new Set([
-  MESSAGE_USER_TOOL,
-  "send_to_thread",
-  "send_to_channel",
-  "add_reaction",
-]);
+const CHAT_TOOLS = new Set([MESSAGE_USER_TOOL, ...SLACK_TOOLS]);
 const mountSpecializedCard = computed(
   () => startedEager || !props.hasResult || nearViewport.value || CHAT_TOOLS.has(props.toolName),
 );

@@ -1,7 +1,7 @@
-<!-- A Slack event delivered to the Slack Assistant (see utils/slack.ts), as
+<!-- A Slack event delivered to the Assistant (see utils/slack.ts), as
      the chat it is: who wrote where, and what (mrkdwn rendered, files shown);
-     or a reaction or click, on one line. The header expands into the text the
-     model read, verbatim. -->
+     or a reaction or click, on one line. The header expands into the stored
+     text, its slack_* tag and all. -->
 <template>
   <div class="slack-event" data-testid="slack-event" :data-slack-kind="event.kind">
     <button

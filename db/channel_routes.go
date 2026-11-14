@@ -63,6 +63,21 @@ func (db *DB) LatestChannelRoute(ctx context.Context, chatID string) (*ChannelRo
 	return route, nil
 }
 
+// LatestChannelRouteWithChatPrefix returns the route of the latest message
+// of conversationID from a chat whose id starts with prefix.
+func (db *DB) LatestChannelRouteWithChatPrefix(ctx context.Context, conversationID, prefix string) (*ChannelRoute, error) {
+	var route *ChannelRoute
+	err := db.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		row, err := generated.New(rx.Conn()).LatestChannelRouteWithChatPrefix(ctx, generated.LatestChannelRouteWithChatPrefixParams{ConversationID: conversationID, Prefix: prefix})
+		route = newChannelRoute(row)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return route, nil
+}
+
 // HasChannelRouteEndpoint reports whether a message of chat chatID came
 // with endpoint.
 func (db *DB) HasChannelRouteEndpoint(ctx context.Context, chatID, endpoint string) (bool, error) {

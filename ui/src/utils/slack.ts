@@ -1,5 +1,5 @@
-// The Slack Assistant's conversation, read for display: the Slack events
-// delivered to it (user messages in the tag server/slack_channel.go's
+// The Assistant's Slack side, read for display: the Slack events delivered
+// to it (user messages in the tag server/slack_channel.go's
 // slackEvent.tagged writes, which the model reads), the names they carry, and
 // the Block Kit blocks of its replies.
 import type { Message } from "../types";

@@ -970,6 +970,7 @@ import {
   isVisibleConversationMessage,
   isDeliveredUserMessage,
   isFailedChatDelivery,
+  isSlackPost,
   MESSAGE_USER_TOOL,
 } from "../../utils/conversationView";
 import { SLASH_COMMANDS } from "../../utils/slashCommands";
@@ -2740,7 +2741,8 @@ const coalescedItems = computed(() => {
   if (mode === "all") return items;
   return items.filter((item) =>
     item.type === "tool"
-      ? mode === "brief" && (isDeliveredUserMessage(item) || isFailedChatDelivery(item))
+      ? mode === "brief" &&
+          (isDeliveredUserMessage(item) || isSlackPost(item) || isFailedChatDelivery(item))
       : !!item.message && isVisibleConversationMessage(item.message, mode),
   );
 });

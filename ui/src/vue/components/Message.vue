@@ -469,7 +469,7 @@ const conversationSender = computed(() =>
 const actionReport = computed(() =>
   isUser.value && !isDistilledUser.value ? actionReportSource(props.message.user_data) : null,
 );
-// A Slack event delivered to the Slack Assistant.
+// A Slack event delivered to the Assistant.
 const slackEvent = computed(() =>
   isUser.value && !isDistilledUser.value ? slackEventOf(props.message) : null,
 );
@@ -483,7 +483,8 @@ const authorEmail = computed(() =>
     : null,
 );
 
-// A user message texted to the workspace Assistant from the user's phone.
+// A user message texted to the workspace Assistant from the user's phone;
+// Slack events have external IDs too, and say where they came from.
 const isAssistantConversation = inject<ComputedRef<boolean> | null>(
   "isAssistantConversation",
   null,
@@ -497,7 +498,8 @@ const textedFromPhone = computed(
     !!isAssistantConversation?.value &&
     isUser.value &&
     !isDistilledUser.value &&
-    !!props.message.external_message_id,
+    !!props.message.external_message_id &&
+    !slackEvent.value,
 );
 
 // ---- Legacy compaction summary ----

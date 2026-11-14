@@ -9,14 +9,22 @@ import (
 	"shelley.exe.dev/llm"
 )
 
-// The Slack tools post to the Slack workspace that a Slack Assistant
-// conversation is bound to. Its events arrive wrapped in slack_message,
+// The Slack tools post to the Slack workspace connected through exe.dev's
+// Slack app. Its events reach the Assistant wrapped in slack_message,
 // slack_reaction and slack_action tags carrying their channel and thread.
 const (
 	SendToThreadName  = "send_to_thread"
 	SendToChannelName = "send_to_channel"
 	AddReactionName   = "add_reaction"
 )
+
+// sendToThreadDescription carries the Slack guidance, so that it comes
+// with the tools whatever the system prompt.
+const sendToThreadDescription = `Reply in a Slack thread. Use the channel and thread_ts of the event you answer.
+
+The user's Slack messages reach you through exe.dev's Slack app, each with its channel, channel_name, thread_ts, ts, user and user_name: slack_message (they wrote; mentions_you says whether they mentioned you; files they shared are saved locally and referenced by path in brackets), slack_reaction (they reacted with emoji to your message ts, whose text it carries) and slack_action (they clicked a button on your message ts). Their text is XML-escaped over Slack's own markup: &lt;@U1&gt; is the mention <@U1>.
+
+Slack sees only what you send with send_to_thread, send_to_channel and add_reaction: answer Slack only with them, never message_user, and end your turn once you have. Reply in the event's thread; use send_to_channel only to start something new. Respond to direct messages (channel D…), mentions, and reactions and clicks that ask for something; a thread reply may be meant for someone else in the thread, so stay quiet then. Others read Slack channels and threads: share private data there only where the user asked for it, and never carry one thread's content into another. When a request needs work, acknowledge it with add_reaction (eyes) on its ts instead of a message, then reply in its thread with the result. For structured results (status, summaries, choices) use blocks. Every post gets a link back to this conversation automatically; don't add one.`
 
 // maxSlackFileBytes caps each file sent to Slack.
 const maxSlackFileBytes = 50 << 20
@@ -92,7 +100,7 @@ func SlackTools(s Slack, wd *MutableWorkingDir) []*llm.Tool {
 			}
 			ts, err := s.Send(ctx, p)
 			if err != nil {
-				return llm.ErrorToolOut(err)
+				return slackFailed(err)
 			}
 			return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf("Sent (ts %s).", ts))}
 		}
@@ -100,7 +108,7 @@ func SlackTools(s Slack, wd *MutableWorkingDir) []*llm.Tool {
 	return []*llm.Tool{
 		{
 			Name:        SendToThreadName,
-			Description: "Reply in a Slack thread. Use the channel and thread_ts of the event you answer.",
+			Description: sendToThreadDescription,
 			InputSchema: llm.MustSchema(`{
   "type": "object",
   "required": ["channel", "thread_ts", "text"],
@@ -138,12 +146,24 @@ func SlackTools(s Slack, wd *MutableWorkingDir) []*llm.Tool {
 					return llm.ErrorfToolOut("channel, ts and emoji are required")
 				}
 				if err := s.React(ctx, in.Channel, in.TS, in.Emoji); err != nil {
-					return llm.ErrorToolOut(err)
+					return slackFailed(err)
 				}
 				return llm.ToolOut{LLMContent: llm.TextContent("Reacted.")}
 			}),
 		},
 	}
+}
+
+// SlackDisplay is the UI's view of a failed Slack call.
+type SlackDisplay struct {
+	// ChatFailed marks a call that failed in Slack, or on its way there,
+	// not a mistake in the call; see MessageUserDisplay.ChatFailed.
+	ChatFailed bool `json:"chat_failed,omitempty"`
+}
+
+// slackFailed is the result of a call that failed in Slack.
+func slackFailed(err error) llm.ToolOut {
+	return llm.ToolOut{Error: err, Display: SlackDisplay{ChatFailed: true}}
 }
 
 func readSlackFile(cwd, path string) (SlackFile, error) {
