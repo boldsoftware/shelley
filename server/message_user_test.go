@@ -189,7 +189,8 @@ func TestMessageUserEndToEnd(t *testing.T) {
 
 // Sequence lookup matches only typed messages, including compaction copies.
 func TestFindUserMessageBySequence(t *testing.T) {
-	database, _ := setupTestDB(t)
+	database, cleanup := setupTestDB(t)
+	t.Cleanup(cleanup)
 	ctx := t.Context()
 	conv, err := database.CreateConversation(ctx, nil, true, nil, nil, db.ConversationOptions{})
 	if err != nil {

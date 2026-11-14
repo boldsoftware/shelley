@@ -11,6 +11,7 @@ import (
 
 type testTB interface {
 	Helper()
+	Errorf(format string, args ...any)
 	Fatalf(format string, args ...any)
 	TempDir() string
 }
@@ -44,7 +45,9 @@ func NewTestDB(tb testTB) (*DB, func()) {
 	}
 
 	return database, func() {
-		_ = database.Close()
+		if err := database.Close(); err != nil {
+			tb.Errorf("close test database: %v", err)
+		}
 	}
 }
 

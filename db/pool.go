@@ -4,6 +4,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -12,6 +13,11 @@ import (
 )
 
 // Pool is an SQLite connection pool.
+//
+// It is a copy of the pool in exe's sqlite package (sqlite/sqlite.go in the
+// exe repository), which Shelley cannot import because it is published on
+// its own. A fix to either belongs in both. It still lags upstream, which
+// has more fixes to port (e.g. here a Tx whose callback panics commits).
 //
 // We deliberately minimize our use of database/sql machinery because
 // the semantics do not match SQLite well.
@@ -22,6 +28,10 @@ type Pool struct {
 	db      *sql.DB
 	writer  chan *sql.Conn
 	readers chan *sql.Conn
+
+	operations operationGate
+	closeOnce  sync.Once
+	closeErr   error
 
 	hooksMu       sync.RWMutex
 	commitHooks   []func()
@@ -88,7 +98,7 @@ func NewPool(dataSourceName string, readerCount int) (*Pool, error) {
 	for range numConns {
 		conn, err := db.Conn(context.Background())
 		if err != nil {
-			db.Close()
+			closeAll(conns, db)
 			return nil, fmt.Errorf("NewPool: %w", err)
 		}
 		conns = append(conns, conn)
@@ -104,7 +114,7 @@ func NewPool(dataSourceName string, readerCount int) (*Pool, error) {
 		// temp_store=MEMORY keeps read-side sorts and temp tables off the
 		// disk, so reads keep working when the disk is full.
 		if _, err := conn.ExecContext(context.Background(), "PRAGMA query_only=1; PRAGMA temp_store=MEMORY;"); err != nil {
-			db.Close()
+			closeAll(conns, db)
 			return nil, fmt.Errorf("NewPool reader pragmas: %w", err)
 		}
 		p.readers <- conn
@@ -133,28 +143,112 @@ func InitPoolDB(db *sql.DB, numConns int) error {
 	for i := range numConns {
 		conn, err := db.Conn(context.Background())
 		if err != nil {
-			db.Close()
+			closeAll(conns, db)
 			return fmt.Errorf("InitPoolDB: %w", err)
 		}
+		conns = append(conns, conn)
 		for _, q := range initQueries {
 			if _, err := conn.ExecContext(context.Background(), q); err != nil {
-				db.Close()
+				closeAll(conns, db)
 				return fmt.Errorf("InitPoolDB %d: %w", i, err)
 			}
 		}
-		conns = append(conns, conn)
 	}
 	for _, conn := range conns {
 		if err := conn.Close(); err != nil {
-			db.Close()
+			closeAll(conns, db)
 			return fmt.Errorf("InitPoolDB: %w", err)
 		}
 	}
 	return nil
 }
 
+// closeAll closes conns, which were checked out of db, and then db.
+// sql.DB.Close only closes idle connections; a checked-out sql.Conn keeps
+// its database file open until it is closed itself.
+func closeAll(conns []*sql.Conn, db *sql.DB) error {
+	var errs []error
+	for _, conn := range conns {
+		if err := conn.Close(); err != nil && !errors.Is(err, sql.ErrConnDone) {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(append(errs, db.Close())...)
+}
+
+// operationGate lets Close stop new pool work and wait for work that already
+// started. A channel rather than a WaitGroup makes admission and shutdown
+// atomic: begin cannot race a zero-count Wait. A call made from inside
+// another one while Close waits is refused rather than blocked, so the
+// outer call can finish. (Ported from exe's sqlite package.)
+type operationGate struct {
+	mu      sync.Mutex
+	active  int
+	closing bool
+	drained chan struct{}
+}
+
+func (g *operationGate) begin() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closing {
+		return false
+	}
+	g.active++
+	return true
+}
+
+func (g *operationGate) end() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.active--
+	if g.closing && g.active == 0 {
+		close(g.drained)
+	}
+}
+
+// drain refuses new operations and waits for running ones to end.
+func (g *operationGate) drain() {
+	g.mu.Lock()
+	if !g.closing {
+		g.closing = true
+		g.drained = make(chan struct{})
+		if g.active == 0 {
+			close(g.drained)
+		}
+	}
+	drained := g.drained
+	g.mu.Unlock()
+	<-drained
+}
+
+// Close waits for running Exec, Tx and Rx calls, refusing new ones, then
+// closes every connection and the database. Closing a
+// connection another goroutine is starting a statement on is not safe in
+// database/sql (it can hand that statement a nil driver connection), so
+// nothing is closed while an operation runs. Later calls return the first
+// call's result.
 func (p *Pool) Close() error {
-	return p.db.Close()
+	p.closeOnce.Do(func() {
+		p.operations.drain()
+		p.closeErr = errors.Join(p.releaseConns(), p.db.Close())
+	})
+	return p.closeErr
+}
+
+// releaseConns hands the pool's connections back to db, whose Close then
+// closes them: sql.DB.Close skips checked-out connections, which would keep
+// their files open. Readers go first so the writer closes last and can
+// checkpoint and remove the WAL. A connection dropped after a failed BEGIN
+// is not in its channel and stays open.
+func (p *Pool) releaseConns() error {
+	var err error
+	for _, ch := range []chan *sql.Conn{p.readers, p.writer} {
+		for len(ch) > 0 {
+			err = errors.Join(err, (<-ch).Close())
+		}
+	}
+	return err
 }
 
 type ctxKeyType int
@@ -184,6 +278,10 @@ func checkNoTx(ctx context.Context, typ string) {
 // such as PRAGMA wal_checkpoint.
 func (p *Pool) Exec(ctx context.Context, query string, args ...interface{}) (err error) {
 	checkNoTx(ctx, "Tx")
+	if !p.operations.begin() {
+		return errors.New("sqlite: database is closing")
+	}
+	defer p.operations.end()
 	var conn *sql.Conn
 	select {
 	case <-ctx.Done():
@@ -200,6 +298,10 @@ func (p *Pool) Exec(ctx context.Context, query string, args ...interface{}) (err
 
 func (p *Pool) Tx(ctx context.Context, fn func(ctx context.Context, tx *Tx) error) (err error) {
 	checkNoTx(ctx, "Tx")
+	if !p.operations.begin() {
+		return errors.New("sqlite: database is closing")
+	}
+	defer p.operations.end()
 	var conn *sql.Conn
 	select {
 	case <-ctx.Done():
@@ -254,6 +356,10 @@ func (p *Pool) Tx(ctx context.Context, fn func(ctx context.Context, tx *Tx) erro
 
 func (p *Pool) Rx(ctx context.Context, fn func(ctx context.Context, rx *Rx) error) error {
 	checkNoTx(ctx, "Rx")
+	if !p.operations.begin() {
+		return errors.New("sqlite: database is closing")
+	}
+	defer p.operations.end()
 	var conn *sql.Conn
 	select {
 	case <-ctx.Done():
