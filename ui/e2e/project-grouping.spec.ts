@@ -31,7 +31,7 @@ test("stock mode offers Group by Project without the workspace", async ({ page, 
   await expect(page.getByTestId("nav-tab-dev")).toHaveCount(0);
   await expect(page.locator(".project-group")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Group conversations" }).click();
+  await page.getByRole("button", { name: "View options" }).click();
   await page
     .locator(".group-by-menu-item")
     .filter({ hasText: /^Project$/ })

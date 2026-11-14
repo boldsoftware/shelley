@@ -10,6 +10,12 @@ import type { Chapter } from "../../utils/chapterSearch";
 
 export type GroupBy = "none" | "project" | "daily" | "cwd" | "git_repo" | "tag" | "participants";
 
+// How much of a conversation a drawer row shows: "short" is its title alone,
+// "medium" adds its preview line, "full" adds its tags, place, badges, git
+// line and subagents.
+export type RowSize = "short" | "medium" | "full";
+export const ROW_SIZES: readonly RowSize[] = ["short", "medium", "full"];
+
 // Parses the JSON-encoded tags field on a Conversation. Tolerates the empty
 // string and malformed JSON (treated as no tags).
 export function parseTags(conversation: Conversation): string[] {
@@ -87,6 +93,7 @@ export interface DrawerCtx {
   tagInputRef: Ref<HTMLInputElement | null>;
   draftLabels: ComputedRef<Record<string, string>>;
   groupBy: Ref<GroupBy>;
+  rowSize: Ref<RowSize>;
   // Tag filter: the selection is derived from the search query (`tag:foo`),
   // so toggling a chip edits that query.
   selectedTags: Ref<string[]>;

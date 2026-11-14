@@ -108,7 +108,7 @@ async function openEditor(page: Page, name: string, workspace = true) {
     .getByRole("button", { name: workspace ? "Open tasks" : "Open conversations", exact: true })
     .click();
   if (!workspace) {
-    await page.getByRole("button", { name: "Group conversations" }).click();
+    await page.getByRole("button", { name: "View options" }).click();
     await page
       .locator(".group-by-menu-item")
       .filter({ hasText: /^Project$/ })

@@ -3,7 +3,7 @@
      EXACTLY the e2e + i18n contract: classes .drawer/.drawer.open,
      .conversation-item/.active, .conversation-title, .conversation-group,
      .conversation-group-label; aria-labels come from i18n t() keys
-     ("Open conversations", "Group conversations", closeConversations,
+     ("Open conversations", "View options", closeConversations,
      collapseSidebar, searchConversations, clearSearch, newConversation, plus
      archive/restore/delete_/rename/editTags/removeTag/cancel). Reuses
      utils/conversationSort, utils/tildify, vue/utils/openInNewTab.
@@ -30,7 +30,9 @@
          (e: "unarchived", c: Conversation): void   // onConversationUnarchived
          (e: "renamed", c: Conversation): void      // onConversationRenamed -->
 <template>
-  <div :class="`drawer ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''} nav-${navTab}`">
+  <div
+    :class="`drawer ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''} nav-${navTab} row-size-${rowSize}`"
+  >
     <!-- Header -->
     <div class="drawer-header">
       <ExeBrand v-if="workspaceMode" />
@@ -72,18 +74,16 @@
             />
           </svg>
         </Button>
-        <!-- Group by button; workspace mode always groups by project -->
-        <div
-          v-if="!workspaceMode && !showArchived && navTab === 'dev'"
-          ref="groupMenuRef"
-          class="group-by-wrapper"
-        >
+        <!-- View menu: grouping (workspace mode always groups by project)
+             and row size. -->
+        <div v-if="navTab === 'dev'" ref="groupMenuRef" class="group-by-wrapper">
           <Button
-            :class="`btn-icon${groupBy !== 'none' ? ' group-by-active' : ''}`"
+            :class="`btn-icon${groupBy !== 'none' && !workspaceMode ? ' group-by-active' : ''}`"
             text
             severity="secondary"
-            :aria-label="t('groupConversations')"
-            v-tooltip.top="t('groupConversations')"
+            :aria-label="t('viewOptions')"
+            v-tooltip.top="t('viewOptions')"
+            :aria-expanded="groupMenuOpen"
             @click="groupMenuOpen = !groupMenuOpen"
           >
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -91,46 +91,69 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 :stroke-width="2"
-                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
               />
             </svg>
           </Button>
           <div v-if="groupMenuOpen" class="group-by-menu">
-            <button
-              v-for="value in groupByOptions"
-              :key="value"
-              :class="`group-by-menu-item${groupBy === value ? ' active' : ''}`"
-              @click="
-                handleGroupByChange(value);
-                groupMenuOpen = false;
-              "
-            >
-              {{ groupByLabel(value) }}
-            </button>
-            <div class="group-by-menu-separator" />
-            <button
-              class="group-by-menu-item"
-              @click="
-                resortKey += 1;
-                groupMenuOpen = false;
-              "
-            >
-              <svg
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                class="group-by-menu-icon"
-                aria-hidden="true"
+            <template v-if="!workspaceMode && !showArchived">
+              <div class="group-by-menu-heading">{{ t("groupBy") }}</div>
+              <button
+                v-for="value in groupByOptions"
+                :key="value"
+                :class="`group-by-menu-item${groupBy === value ? ' active' : ''}`"
+                @click="
+                  handleGroupByChange(value);
+                  groupMenuOpen = false;
+                "
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  :stroke-width="2"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-              {{ t("resortNow") }}
-            </button>
+                {{ groupByLabel(value) }}
+              </button>
+              <div class="group-by-menu-separator" />
+            </template>
+            <div id="drawer-row-size-heading" class="group-by-menu-heading">
+              {{ t("rowSize") }}
+            </div>
+            <!-- Stays open on a choice, to compare sizes. -->
+            <div role="group" aria-labelledby="drawer-row-size-heading">
+              <button
+                v-for="size in ROW_SIZES"
+                :key="size"
+                type="button"
+                :class="`group-by-menu-item${rowSize === size ? ' active' : ''}`"
+                :aria-pressed="rowSize === size"
+                :data-testid="`row-size-${size}`"
+                @click="rowSize = size"
+              >
+                {{ rowSizeLabel(size) }}
+              </button>
+            </div>
+            <template v-if="!workspaceMode && !showArchived">
+              <div class="group-by-menu-separator" />
+              <button
+                class="group-by-menu-item"
+                @click="
+                  resortKey += 1;
+                  groupMenuOpen = false;
+                "
+              >
+                <svg
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  class="group-by-menu-icon"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    :stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                {{ t("resortNow") }}
+              </button>
+            </template>
           </div>
         </div>
         <Button
@@ -221,7 +244,7 @@
             aria-label="Assistant is working"
           />
         </div>
-        <div v-if="!compactNav" class="conversation-preview">
+        <div v-if="rowSize !== 'short'" class="conversation-preview">
           Your permanent workspace companion
         </div>
       </div>
@@ -685,7 +708,7 @@
             <template v-for="conv in group.conversations" :key="conv.conversation_id">
               <ConversationRow :conversation="conv">
                 <CustomizationStatus
-                  v-if="compactNav && customizationFor(conv.conversation_id)"
+                  v-if="rowSize === 'short' && customizationFor(conv.conversation_id)"
                   compact
                   :state="customizationFor(conv.conversation_id)!"
                   :pending-conversation="customizations.pendingConversation.value"
@@ -693,7 +716,7 @@
                 />
               </ConversationRow>
               <CustomizationStatus
-                v-if="!compactNav && customizationFor(conv.conversation_id)"
+                v-if="rowSize !== 'short' && customizationFor(conv.conversation_id)"
                 :state="customizationFor(conv.conversation_id)!"
                 :pending-conversation="customizations.pendingConversation.value"
                 :unavailable="customizations.unavailable.value"
@@ -891,8 +914,14 @@ import { projectViewPath, useWorkspace } from "../composables/workspace";
 import { workspaceApi, type Project } from "../../services/workspace";
 import DatePicker from "primevue/datepicker";
 import Popover from "primevue/popover";
-import { DrawerCtxKey, type GroupBy, parseTags } from "./conversationDrawerShared";
-import { compactNav, workspaceMode } from "../../utils/workspaceMode";
+import {
+  DrawerCtxKey,
+  type GroupBy,
+  parseTags,
+  ROW_SIZES,
+  type RowSize,
+} from "./conversationDrawerShared";
+import { workspaceMode } from "../../utils/workspaceMode";
 import { foldedProjectWorking, workingConversationIds } from "../../utils/workingConversations";
 import type { EphemeralTerminal } from "./terminalTypes";
 import {
@@ -1247,6 +1276,15 @@ const groupBy = ref<GroupBy>(
   })(),
 );
 if (groupBy.value === "daily") selectedDay.value = shiftLocalDay(new Date(), 0);
+// Kept per browser. Workspace mode, whose rows sit under project headings,
+// starts with title-only rows.
+const rowSize = ref<RowSize>(
+  (() => {
+    const stored = localStorage.getItem("shelley-row-size");
+    return ROW_SIZES.find((size) => size === stored) ?? (workspaceMode ? "short" : "full");
+  })(),
+);
+watch(rowSize, (size) => localStorage.setItem("shelley-row-size", size));
 const collapsedGroups = ref(loadCollapsedGroups(localStorage));
 watch(collapsedGroups, (groups) => saveCollapsedGroups(groups, localStorage));
 const groupMenuOpen = ref(false);
@@ -1874,6 +1912,14 @@ function groupByLabel(value: GroupBy): string {
     participants: t("participants"),
   };
   return labels[value];
+}
+function rowSizeLabel(size: RowSize): string {
+  const labels: Record<RowSize, string> = {
+    short: t("rowSizeShort"),
+    medium: t("rowSizeMedium"),
+    full: t("rowSizeFull"),
+  };
+  return labels[size];
 }
 function toggleGroup(groupKey: string) {
   const next = new Set(collapsedGroups.value);
@@ -2622,6 +2668,7 @@ provide(DrawerCtxKey, {
   tagInputRef,
   draftLabels,
   groupBy,
+  rowSize,
   selectedTags,
   selectedUsers,
   toggleTagFilter,

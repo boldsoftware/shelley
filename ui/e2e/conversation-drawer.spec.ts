@@ -24,7 +24,7 @@ for (const width of [390, 1280]) {
     const actions = page.locator(".drawer-header-actions");
     const labels = [
       "Search conversations...",
-      "Group conversations",
+      "View options",
       "New Conversation",
       width < 768 ? "Close conversations" : "Collapse sidebar",
     ];
@@ -290,6 +290,51 @@ test.describe("conversation drawer startup and app bar", () => {
     await expect(runningRow.locator(".drawer-working-indicator")).toBeVisible();
     await expect(runningRow.locator(".conversation-time")).toHaveCount(0);
     await expect(runningRow.locator(".drawer-interrupted-indicator")).toHaveCount(0);
+  });
+
+  test("View options sizes rows: short is the title, medium adds the preview", async ({ page }) => {
+    const tagged = conversation("tagged");
+    tagged.tags = '["work"]';
+    tagged.cwd = "/srv/app";
+    tagged.git_commit = "abc1234";
+    tagged.git_subject = "fix the thing";
+    const draft = conversation("draft", true);
+    await stubConversationList(page, [tagged, draft]);
+    await page.goto("/new");
+
+    const row = page.locator('[data-conversation-id="tagged"]');
+    const draftRow = page.locator('[data-conversation-id="draft"]');
+    const lines = ".conversation-tags, .conversation-meta, .conversation-git";
+    // Full, the default: every line.
+    await expect(row.locator(".conversation-preview")).toHaveText("Preview");
+    await expect(row.locator(lines)).toHaveCount(3);
+    const fullHeight = (await row.boundingBox())!.height;
+
+    await page.getByRole("button", { name: "View options" }).click();
+    const sizes = page.getByRole("group", { name: "Row size" });
+    await expect(sizes.getByRole("button", { name: "Full" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await sizes.getByRole("button", { name: "Medium" }).click();
+    await expect(row.locator(".conversation-preview")).toHaveText("Preview");
+    await expect(row.locator(lines)).toHaveCount(0);
+    // A draft's delete moves up to its title line, the meta line gone.
+    await expect(draftRow.getByRole("button", { name: "Delete" })).toBeVisible();
+    const mediumHeight = (await row.boundingBox())!.height;
+    expect(mediumHeight).toBeLessThan(fullHeight);
+
+    // The menu stays open to compare sizes.
+    await sizes.getByRole("button", { name: "Short" }).click();
+    await expect(row.locator(".conversation-preview")).toHaveCount(0);
+    await expect(row.locator(".conversation-title")).toHaveText("tagged");
+    await expect(draftRow.getByRole("button", { name: "Delete" })).toBeVisible();
+    expect((await row.boundingBox())!.height).toBeLessThan(mediumHeight);
+
+    // The choice is kept across reloads.
+    await page.reload();
+    await expect(row.locator(".conversation-title")).toBeVisible();
+    await expect(row.locator(".conversation-preview")).toHaveCount(0);
   });
 
   test("shows a running-task gear count that opens the conversation", async ({ page }) => {
@@ -1407,7 +1452,7 @@ test.describe("conversation drawer startup and app bar", () => {
     await page.getByRole("button", { name: "Search conversations..." }).click();
     await expectQuery(queryEditor(page), "");
     await expect(page.getByRole("button", { name: "Add user filter" })).toBeEnabled();
-    await page.getByRole("button", { name: "Group conversations" }).click();
+    await page.getByRole("button", { name: "View options" }).click();
     await expect(page.getByRole("button", { name: "Participants", exact: true })).toBeVisible();
   });
 
@@ -1422,7 +1467,7 @@ test.describe("conversation drawer startup and app bar", () => {
 
     await page.goto("/new");
     await expect(page.locator('[data-conversation-id="mine"]')).toBeVisible();
-    await page.getByRole("button", { name: "Group conversations" }).click();
+    await page.getByRole("button", { name: "View options" }).click();
     await expect(page.getByRole("button", { name: "Tags", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Participants", exact: true })).toHaveCount(0);
   });
@@ -1450,7 +1495,7 @@ test.describe("conversation drawer startup and app bar", () => {
     await clearConversationQuery(editor);
     await expect(page.locator('[data-conversation-id="none"]')).toBeVisible();
 
-    await page.getByRole("button", { name: "Group conversations" }).click();
+    await page.getByRole("button", { name: "View options" }).click();
     await page.getByRole("button", { name: "Participants", exact: true }).click();
 
     await expect(page.locator(".conversation-group-label")).toHaveText([

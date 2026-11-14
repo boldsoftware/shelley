@@ -19,8 +19,6 @@ type Flag struct {
 	// Default is the value when no override is stored. May be any
 	// JSON-encodable value, including nil.
 	Default any `json:"default"`
-	// WorkspaceDefault, if non-nil, replaces Default in workspace mode.
-	WorkspaceDefault any `json:"-"`
 }
 
 var (
@@ -42,9 +40,6 @@ func Register(f Flag) Flag {
 	// Round-trip Default through JSON to fail fast on non-encodable defaults.
 	if _, err := json.Marshal(f.Default); err != nil {
 		panic(fmt.Sprintf("featureflags: flag %q has non-JSON Default: %v", f.Name, err))
-	}
-	if _, err := json.Marshal(f.WorkspaceDefault); err != nil {
-		panic(fmt.Sprintf("featureflags: flag %q has non-JSON WorkspaceDefault: %v", f.Name, err))
 	}
 	registry[f.Name] = f
 	return f

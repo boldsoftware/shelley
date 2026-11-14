@@ -7,7 +7,7 @@ const headers = { "X-Shelley-Request": "1" };
 // Opens the drawer grouped by project, where projects are managed.
 async function openProjects(page: Page) {
   await page.getByRole("button", { name: "Open conversations", exact: true }).click();
-  await page.getByRole("button", { name: "Group conversations" }).click();
+  await page.getByRole("button", { name: "View options" }).click();
   await page
     .locator(".group-by-menu-item")
     .filter({ hasText: /^Project$/ })

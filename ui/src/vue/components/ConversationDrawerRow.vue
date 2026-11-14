@@ -68,9 +68,10 @@
           title="Interrupted — open to continue"
           aria-label="Conversation interrupted"
         />
-        <!-- Title-only rows: the drawer's build status, and a draft's delete. -->
+        <!-- A short row's build status, from the drawer; and a draft's
+             delete, on rows without the meta line that holds it. -->
         <slot />
-        <div v-if="compactNav && deletable" class="conversation-actions drawer-actions-row">
+        <div v-if="!full && deletable" class="conversation-actions drawer-actions-row">
           <DeleteButton :conversation-id="conversation.conversation_id" />
         </div>
         <!-- When it last changed, or a working row's dot ("now") in its
@@ -139,7 +140,7 @@
 
       <!-- Tags / tag editor -->
       <div
-        v-if="tagsEditing || (!compactNav && conversationTags.length > 0)"
+        v-if="tagsEditing || (full && conversationTags.length > 0)"
         :ref="setTagEditorRefMaybe"
         :class="`conversation-tags${tagsEditing ? ' conversation-tags-editing' : ''}`"
         @click="tagsEditing ? $event.stopPropagation() : undefined"
@@ -228,9 +229,9 @@
         </form>
       </div>
 
-      <!-- Preview / snippet; title-only rows (compactNav) have no lines below. -->
+      <!-- Preview / snippet; short rows are their title line alone. -->
       <div
-        v-if="!compactNav && convState.search_snippet"
+        v-if="!short && convState.search_snippet"
         class="conversation-preview conversation-snippet"
         :title="stripSnippetMarks(convState.search_snippet)"
       >
@@ -240,21 +241,17 @@
         </template>
       </div>
       <div
-        v-else-if="!compactNav && isDraft"
+        v-else-if="!short && isDraft"
         class="conversation-preview"
         :title="draftText?.trim() || undefined"
       >
         {{ draftText?.trim() || "\u00a0" }}
       </div>
-      <div
-        v-else-if="!compactNav"
-        class="conversation-preview"
-        :title="convState.preview || undefined"
-      >
+      <div v-else-if="!short" class="conversation-preview" :title="convState.preview || undefined">
         {{ convState.preview || "\u00a0" }}
       </div>
 
-      <div v-if="!compactNav" class="conversation-meta">
+      <div v-if="full" class="conversation-meta">
         <PathText
           v-if="workingDirectory && ctx.groupBy.value !== 'cwd'"
           class="conversation-cwd"
@@ -369,7 +366,7 @@
       </div>
 
       <div
-        v-if="!compactNav && convState.git_commit"
+        v-if="full && convState.git_commit"
         :class="`conversation-git drawer-git-info ${isActive ? 'drawer-git-info-active' : ''}`"
       >
         <button
@@ -437,7 +434,7 @@
 
   <!-- Subagents -->
   <div
-    v-if="!compactNav && !itemArchived && isExpanded && conversationSubagents.length > 0"
+    v-if="full && !itemArchived && isExpanded && conversationSubagents.length > 0"
     class="subagent-list drawer-subagent-list"
   >
     <template v-for="sub in conversationSubagents" :key="sub.conversation_id">
@@ -520,7 +517,7 @@ import {
 import { isTagSelected } from "../../utils/tagFilter";
 import { perfCount } from "../../utils/perf";
 import { COMPOSER_ROW_ID, ComposerPreviewKey } from "../../utils/composerRow";
-import { compactNav, workspaceMode } from "../../utils/workspaceMode";
+import { workspaceMode } from "../../utils/workspaceMode";
 import GearIcon from "./GearIcon.vue";
 import CompactTime from "./CompactTime.vue";
 import ConversationThemes from "./ConversationThemes.vue";
@@ -535,6 +532,8 @@ const ctx = inject(DrawerCtxKey)!;
 const composerPreview = inject(ComposerPreviewKey, null);
 
 const chaptersEnabled = useFeatureFlag("conversation-chapters");
+const short = computed(() => ctx.rowSize.value === "short");
+const full = computed(() => ctx.rowSize.value === "full");
 
 const renameInput = ref<HTMLInputElement | null>(null);
 const tagInput = ref<HTMLInputElement | null>(null);

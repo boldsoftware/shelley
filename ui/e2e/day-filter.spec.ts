@@ -34,7 +34,7 @@ test("Daily grouping expands subagents last touched on other days", async ({ pag
   await page.route("**/api/stream2*", (route) => route.abort());
   await page.goto(`/c/${slug}`);
   await page.getByRole("button", { name: "Open conversations", exact: true }).click();
-  await page.getByRole("button", { name: "Group conversations" }).click();
+  await page.getByRole("button", { name: "View options" }).click();
   await page
     .locator(".group-by-menu-item")
     .filter({ hasText: /^Daily$/ })
@@ -102,7 +102,7 @@ test("Daily returns to today only after sending in an older conversation", async
   await page.goto(`/c/${today.slug}`);
   const openDrawer = page.getByRole("button", { name: "Open conversations", exact: true });
   await openDrawer.click();
-  await page.getByRole("button", { name: "Group conversations" }).click();
+  await page.getByRole("button", { name: "View options" }).click();
   await page
     .locator(".group-by-menu-item")
     .filter({ hasText: /^Daily$/ })
@@ -203,7 +203,7 @@ test("Daily grouping pages and counts last-touched chats and selects calendar da
   const date = picker.locator(".drawer-day-date");
   const count = picker.locator(".drawer-day-count");
   const groupBy = async (label: string) => {
-    await page.getByRole("button", { name: "Group conversations" }).click();
+    await page.getByRole("button", { name: "View options" }).click();
     await expect(page.locator(".group-by-menu-item").nth(3)).toHaveText("Tags");
     await expect(page.locator(".group-by-menu-item").nth(4)).toHaveText("Daily");
     await page

@@ -28,7 +28,7 @@ test.describe("Conversation grouping", () => {
     // Open drawer and enable grouping by git repo.
     await page.locator('button[aria-label="Open conversations"]').click();
     await expect(page.locator(".drawer.open")).toBeVisible();
-    await page.locator('button[aria-label="Group conversations"]').click();
+    await page.locator('button[aria-label="View options"]').click();
     await page.getByRole("button", { name: "Git Repo" }).click();
 
     // The group containing the active conversation should not be "Other".

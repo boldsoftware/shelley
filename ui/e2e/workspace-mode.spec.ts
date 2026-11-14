@@ -20,7 +20,10 @@ test("workspace mode pins the Assistant and always groups by project", async ({
     await expect(page.getByTestId("assistant-row")).toBeVisible();
     await expect(page.getByTestId("nav-tab-dev")).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Self", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Group conversations" })).toHaveCount(0);
+    // Its View options size rows; there is no grouping to choose.
+    await page.getByRole("button", { name: "View options" }).click();
+    await expect(page.getByRole("group", { name: "Row size" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "No grouping" })).toHaveCount(0);
   } finally {
     const off = await request.delete("/feature-flags", { data: { name: "workspace" } });
     expect(off.ok()).toBeTruthy();

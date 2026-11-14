@@ -119,7 +119,12 @@ export interface TranslationKeys {
   hideSubagents: string;
   terminalsPinnedHere: string;
   showSubagents: string;
-  groupConversations: string;
+  viewOptions: string;
+  groupBy: string;
+  rowSize: string;
+  rowSizeShort: string;
+  rowSizeMedium: string;
+  rowSizeFull: string;
   resortNow: string;
   noGrouping: string;
   groupByProject: string;

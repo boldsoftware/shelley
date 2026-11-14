@@ -862,10 +862,7 @@ test("a task moves to another machine from where it runs, and back", async ({ pa
   await expect(place).toHaveAccessibleName(/^This host/);
 });
 
-test("workspace mode's sidebar rows are their title alone, unless compact-nav is off", async ({
-  page,
-  request,
-}) => {
+test("workspace mode's sidebar rows start short, their title alone", async ({ page, request }) => {
   const source = await createConversationViaAPIWithDetails(request, "Hello", {
     conversationOptions: { tool_overrides: { message_user: "on" } },
   });
@@ -907,20 +904,14 @@ test("workspace mode's sidebar rows are their title alone, unless compact-nav is
   const titleX = (await row.locator(".conversation-title").boundingBox())!.x;
   expect(Math.abs(titleX - (await label.boundingBox())!.x)).toBeLessThan(1);
 
-  const off = await request.post("/feature-flags", { data: { name: "compact-nav", value: false } });
-  expect(off.ok()).toBeTruthy();
-  try {
-    await page.reload();
-    await openWorkspace(page);
-    await expect(row.locator(".conversation-preview")).toHaveCount(1);
-    await expect(title).toHaveCSS("font-weight", "700");
-    await expect(row.locator(".conversation-meta")).toHaveCount(1);
-    await expect(assistant.locator(".conversation-preview")).toHaveCount(1);
-    expect((await row.boundingBox())!.height).toBeGreaterThan(short * 1.5);
-  } finally {
-    const reset = await request.delete("/feature-flags", { data: { name: "compact-nav" } });
-    expect(reset.ok()).toBeTruthy();
-  }
+  // View options make them full.
+  await page.getByRole("button", { name: "View options" }).click();
+  await page.getByRole("group", { name: "Row size" }).getByRole("button", { name: "Full" }).click();
+  await expect(row.locator(".conversation-preview")).toHaveCount(1);
+  await expect(title).toHaveCSS("font-weight", "700");
+  await expect(row.locator(".conversation-meta")).toHaveCount(1);
+  await expect(assistant.locator(".conversation-preview")).toHaveCount(1);
+  expect((await row.boundingBox())!.height).toBeGreaterThan(short * 1.5);
 });
 
 for (const workspace of [true, false]) {

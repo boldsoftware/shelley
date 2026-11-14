@@ -3,22 +3,16 @@ import { createConversationViaAPIWithDetails } from "./helpers";
 
 // These specs exercise workspace mode, which each test turns on before its
 // page loads and off again so the worker's other specs see stock Shelley.
-// They drive the drawer's full build line, which title-only rows (the
-// compact-nav flag, on by default) shrink to a label.
-test.beforeEach(async ({ request }) => {
-  for (const [name, value] of [
-    ["workspace", true],
-    ["compact-nav", false],
-  ]) {
-    const resp = await request.post("/feature-flags", { data: { name, value } });
-    expect(resp.ok()).toBeTruthy();
-  }
+// They drive the drawer's full build line, which short rows (workspace mode's
+// default size) shrink to a label.
+test.beforeEach(async ({ page, request }) => {
+  const resp = await request.post("/feature-flags", { data: { name: "workspace", value: true } });
+  expect(resp.ok()).toBeTruthy();
+  await page.addInitScript(() => localStorage.setItem("shelley-row-size", "full"));
 });
 test.afterEach(async ({ request }) => {
-  for (const name of ["workspace", "compact-nav"]) {
-    const resp = await request.delete("/feature-flags", { data: { name } });
-    expect(resp.ok()).toBeTruthy();
-  }
+  const resp = await request.delete("/feature-flags", { data: { name: "workspace" } });
+  expect(resp.ok()).toBeTruthy();
 });
 
 async function openWorkspace(page: Page) {
@@ -83,13 +77,16 @@ test("a task's install-custom run shows on its row as the stream sends it", asyn
   await expect(build.getByRole("status")).toHaveText("Installed");
 });
 
-test("title-only rows show the build as a badge", async ({ page, request }) => {
-  const resp = await request.post("/feature-flags", { data: { name: "compact-nav", value: true } });
-  expect(resp.ok()).toBeTruthy();
+test("short rows show the build as a badge", async ({ page, request }) => {
   const conversation = await createConversationViaAPIWithDetails(request, "Hello");
   await report(request, conversation.conversationId, "verifying");
   await page.goto("/");
   await openWorkspace(page);
+  await page.getByRole("button", { name: "View options" }).click();
+  await page
+    .getByRole("group", { name: "Row size" })
+    .getByRole("button", { name: "Short" })
+    .click();
   // Scoped to this task's row: the worker's earlier specs leave other builds.
   const badge = page
     .locator(`.conversation-item[data-conversation-id="${conversation.conversationId}"]`)
