@@ -266,6 +266,8 @@ async function startServer(liveSessionURL: string, index: number, logPath: strin
       PWD: cwd,
       PREDICTABLE_DELAY_MS: process.env.PREDICTABLE_DELAY_MS || '20',
       SHELLEY_LIVE_SESSION_URL: liveSessionURL,
+      // Else a minute in, auto-upgrade swaps in the latest release and restarts.
+      SHELLEY_SKIP_VERSION_CHECK: 'true',
     }),
   });
   // The child has its own copy of the descriptor.
