@@ -3551,6 +3551,7 @@ async function loadMessages(focusedId: string) {
   let cached = messageStore.peek(focusedId);
   if (cached) {
     messages.value = cached.messages;
+    primeTailFirstMount();
     if (cached.messages.length > 0 || cached.hasFullHistory) {
       lastKnownMessageCount.value = cached.messages.length;
       saveMsgCount(cached.messages.length);

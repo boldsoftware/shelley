@@ -80,6 +80,70 @@ test.describe("Tail-first conversation mounting", () => {
     await expect(page.locator(".scroll-to-bottom-button")).not.toBeVisible();
   });
 
+  test("cached refresh keeps history unmounted while waiting for the server", async ({
+    page,
+    request,
+  }) => {
+    await tailFirstSetup(page, { tailChunks: 2, chunkSize: 5, sweep: false });
+    const generated = await request.post("/debug/loremipsum?json=1", {
+      form: { size: "15", model: "predictable" },
+    });
+    expect(generated.ok()).toBeTruthy();
+    const { conversation_id: conversationId } = await generated.json();
+    const slug = `loremipsum-15turns-${conversationId}`;
+    expect((await request.post(`/api/conversation/${conversationId}/archive`)).ok()).toBeTruthy();
+
+    await page.goto(`/c/${slug}`);
+    await page.waitForFunction(
+      (id) => window.__shelleyPerf?.loads().some((load) => load.conversationId === id),
+      conversationId,
+    );
+    const initial = await chunkCounts(page);
+    expect(initial.pending).toBeGreaterThan(0);
+    await page.evaluate(() => {
+      history.pushState({}, "", "/new");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await expect(page.getByTestId("message")).toHaveCount(0);
+
+    let releaseTail = () => {};
+    const tailGate = new Promise<void>((resolve) => {
+      releaseTail = resolve;
+    });
+    let sawIncremental = false;
+    await page.route(new RegExp(`/api/conversation/${conversationId}\\?`), async (route) => {
+      if (!new URL(route.request().url()).searchParams.has("last_sequence_id")) {
+        await route.continue();
+        return;
+      }
+      sawIncremental = true;
+      await tailGate;
+      await route.continue();
+    });
+
+    try {
+      await page.goBack();
+      await expect.poll(() => sawIncremental).toBeTruthy();
+      await expect(page.getByTestId("message").last()).toBeVisible();
+      const refreshing = await chunkCounts(page);
+      expect(refreshing.pending).toBeGreaterThan(0);
+      expect(refreshing.mounted).toBeLessThan(initial.pending + initial.mounted);
+      await expect(page.locator(".conversation-loading-overlay")).toHaveCount(0);
+    } finally {
+      releaseTail();
+    }
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (id) =>
+            window.__shelleyPerf?.loads().filter((load) => load.conversationId === id).length,
+          conversationId,
+        ),
+      )
+      .toBe(2);
+    expect((await chunkCounts(page)).pending).toBeGreaterThan(0);
+  });
+
   test("background sweep mounts everything without moving the viewport", async ({
     page,
     request,
