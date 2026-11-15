@@ -329,7 +329,7 @@ func (s *Server) refreshResources(ctx context.Context) {
 // snapshots under the publishing locks. Any transition the sample caused was
 // broadcast before this subscriber existed, so it arrives only via the
 // snapshot; events queued afterwards are never older than it.
-func (s *Server) subscribeStream(ctx context.Context) (func() (StreamResponse, bool), *subpub.SubscriptionStatus, []resource.Status) {
+func (s *Server) subscribeStream(ctx context.Context) (func() (StreamResponse, bool), *subpub.SubscriptionStatus, []resource.Status, HookHealthStatus) {
 	s.refreshResources(ctx)
 	var snapshots []resource.Status
 	for _, m := range s.resourceMonitors() {
@@ -337,8 +337,10 @@ func (s *Server) subscribeStream(ctx context.Context) (func() (StreamResponse, b
 		defer m.mu.Unlock()
 		snapshots = append(snapshots, m.status)
 	}
+	s.hookHealth.mu.Lock()
+	defer s.hookHealth.mu.Unlock()
 	next, status := s.streamPub.SubscribeWithStatus(ctx, -1)
-	return next, status, snapshots
+	return next, status, snapshots, s.hookHealth.status
 }
 
 func (s *Server) handleDismissResource(w http.ResponseWriter, r *http.Request) {

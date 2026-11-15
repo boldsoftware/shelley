@@ -2,6 +2,10 @@ import type { TranslationKeys } from "./types";
 
 export const ja: TranslationKeys = {
   // App-level
+  hookFailureTitle: "フック {hook} が失敗しました",
+  hookFailureCountOne: "{count} 回連続で失敗",
+  hookFailureCountMany: "{count} 回連続で失敗",
+  troubleshootWithShelley: "Shelley で原因を調べる",
   loading: "読み込み中...",
   diskSpaceLow: "ディスク容量が少なくなっています",
   diskSpaceCritical: "ディスク容量が極めて少なくなっています",

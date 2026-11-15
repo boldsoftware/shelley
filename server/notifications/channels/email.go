@@ -65,7 +65,7 @@ func (e *email) Send(ctx context.Context, event notifications.Event) error {
 
 	resp, err := e.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("send email: %w", err)
+		return fmt.Errorf("send email failed: %s", transportErrorCategory(err))
 	}
 	defer resp.Body.Close()
 

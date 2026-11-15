@@ -2,6 +2,10 @@ import type { TranslationKeys } from "./types";
 
 export const upgoer5: TranslationKeys = {
   // App-level
+  hookFailureTitle: "The {hook} after-turn step failed",
+  hookFailureCountOne: "{count} failed try in a row",
+  hookFailureCountMany: "{count} failed tries in a row",
+  troubleshootWithShelley: "Find the problem with Shelley",
   loading: "Getting ready...",
   diskSpaceLow: "Not much room left on the computer",
   diskSpaceCritical: "Almost no room left on the computer",

@@ -5345,6 +5345,46 @@ select:disabled {
   line-height: 1;
 }
 
+@media (max-width: 767px) {
+  .hook-health-notice {
+    display: grid;
+    grid-template-columns: 1.125rem minmax(0, 1fr) 1.75rem;
+    align-items: start;
+    gap: 0.25rem 0.5rem;
+  }
+
+  .hook-health-notice .resource-notice-icon {
+    grid-column: 1;
+    grid-row: 1;
+    margin-top: 0.15rem;
+  }
+
+  .hook-health-notice .resource-notice-text {
+    grid-column: 2;
+    grid-row: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.125rem;
+  }
+
+  .hook-health-notice .resource-notice-link {
+    grid-column: 2;
+    grid-row: 2;
+    margin-left: 0;
+    justify-self: start;
+    text-align: left;
+    min-height: 1.75rem;
+    display: flex;
+    align-items: center;
+  }
+
+  .hook-health-notice .resource-notice-dismiss {
+    grid-column: 3;
+    grid-row: 1;
+    margin-left: 0;
+  }
+}
+
 /* Unified Status Bar */
 .status-bar {
   flex: 0 0 auto;

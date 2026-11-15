@@ -493,6 +493,13 @@
       :status="status"
       @dismiss="dismissResourceNotice"
     />
+    <HookHealthNotice
+      v-if="hookHealth?.active && !hookHealth.dismissed"
+      :status="hookHealth"
+      :busy="hookHealthBusy"
+      @dismiss="dismissHookHealth"
+      @troubleshoot="troubleshootHook"
+    />
 
     <StatusHookRow :status="hookStatus" :stale="hookStatusStale" @action="handleStatusHookAction">
       <template #open_models="{ item }">
@@ -880,6 +887,7 @@ import {
   type BtwExchange,
   type ToolProgress,
   type ResourceStatus,
+  type HookHealthStatus,
   type Profile,
   type Settings,
   type SettingsChange,
@@ -1067,6 +1075,7 @@ import MarkdownContent from "./MarkdownContent.vue";
 import InlineText from "./InlineText.vue";
 import ThinkingContent from "./tools/ThinkingContent.vue";
 import ResourceNotice from "./ResourceNotice.vue";
+import HookHealthNotice from "./HookHealthNotice.vue";
 import ModelUpgradeBanner from "./ModelUpgradeBanner.vue";
 
 // Props mirror ChatInterfaceProps in the React source. Callbacks that
@@ -1079,6 +1088,9 @@ const props = withDefaults(
     reconnectNonce?: number;
     resourceStatuses?: ResourceStatus[];
     onResourceStatus?: (status: ResourceStatus) => void;
+    hookHealth?: HookHealthStatus | null;
+    onHookHealth?: (status: HookHealthStatus) => void;
+    onTroubleshootHook?: (status: HookHealthStatus, model: string) => Promise<void>;
     onOpenDrawer: () => void;
     onNewConversation: () => Promise<boolean>;
     onNewProjectConversation?: () => void;
@@ -1401,6 +1413,31 @@ async function dismissResourceNotice(status: ResourceStatus) {
     props.onResourceStatus?.(await api.dismissResourceNotice(status.kind, status.episode_id));
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
+  }
+}
+const hookHealthBusy = ref(false);
+async function dismissHookHealth(status: HookHealthStatus) {
+  hookHealthBusy.value = true;
+  try {
+    props.onHookHealth?.(await api.dismissHookHealth(status.episode_id));
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    hookHealthBusy.value = false;
+  }
+}
+
+async function troubleshootHook(status: HookHealthStatus) {
+  hookHealthBusy.value = true;
+  try {
+    if (!canSendWithModel(selectedModel.value, readyModelIds.value, providerIds.value)) {
+      throw new Error(noModelErrorMessage());
+    }
+    await props.onTroubleshootHook?.(status, selectedModel.value);
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    hookHealthBusy.value = false;
   }
 }
 const models = ref<Model[]>(window.__SHELLEY_INIT__?.models || []);

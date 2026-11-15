@@ -117,7 +117,7 @@ func (n *ntfy) Send(ctx context.Context, event notifications.Event) error {
 
 	resp, err := n.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("send ntfy notification: %w", err)
+		return fmt.Errorf("send ntfy notification failed: %s", transportErrorCategory(err))
 	}
 	defer resp.Body.Close()
 

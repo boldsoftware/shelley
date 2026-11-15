@@ -3,6 +3,10 @@ export type Locale = "en" | "ja" | "fr" | "ru" | "es" | "zh-CN" | "zh-TW" | "upg
 export interface TranslationKeys {
   // App-level
   loading: string;
+  hookFailureTitle: string;
+  hookFailureCountOne: string;
+  hookFailureCountMany: string;
+  troubleshootWithShelley: string;
   diskSpaceLow: string;
   diskSpaceCritical: string;
   diskSpaceRemaining: string;

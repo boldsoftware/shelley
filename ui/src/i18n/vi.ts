@@ -2,6 +2,10 @@ import type { TranslationKeys } from "./types";
 
 export const vi: TranslationKeys = {
   // App-level
+  hookFailureTitle: "Hook {hook} thất bại",
+  hookFailureCountOne: "{count} lần thất bại liên tiếp",
+  hookFailureCountMany: "{count} lần thất bại liên tiếp",
+  troubleshootWithShelley: "Chẩn đoán với Shelley",
   loading: "Đang tải ...",
   diskSpaceLow: "Dung lượng đĩa còn ít",
   diskSpaceCritical: "Dung lượng đĩa cực kỳ thấp",

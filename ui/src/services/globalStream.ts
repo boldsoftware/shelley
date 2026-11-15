@@ -19,6 +19,7 @@ import type {
   ConversationListPatchEvent,
   ConversationRead,
   ResourceStatus,
+  HookHealthStatus,
   NotificationEvent,
   StreamResponse,
   Message,
@@ -95,6 +96,8 @@ export interface GlobalStreamOptions {
    */
   onResourceSnapshot?: (statuses: ResourceStatus[]) => void;
   onResourceStatus?: (status: ResourceStatus) => void;
+  onHookHealthSnapshot?: (status: HookHealthStatus) => void;
+  onHookHealth?: (status: HookHealthStatus) => void;
   /** The server runs a different UI build: offer to reload (see staleBuild). */
   onStaleBuild?: () => void;
 }
@@ -147,6 +150,8 @@ export function connectGlobalStream({
   onReconnect,
   onResourceSnapshot,
   onResourceStatus,
+  onHookHealthSnapshot,
+  onHookHealth,
   onStaleBuild,
 }: GlobalStreamOptions): GlobalStreamHandle {
   let closed = false;
@@ -167,6 +172,7 @@ export function connectGlobalStream({
   let connectionOpenedAt = 0;
   // The current connection's resource snapshot until its opening frames end.
   let resourceSnapshot: ResourceStatus[] | null = [];
+  let hookHealthSnapshot = true;
   // Wall-clock timestamp of the last frame (open or any message, incl.
   // heartbeat) received on the current connection. This is the source of
   // truth for connection liveness: unlike setTimeout-based watchdogs, it is
@@ -292,6 +298,11 @@ export function connectGlobalStream({
     } else if (resource) {
       onResourceStatus?.(resource);
     }
+    if (data.hook_health) {
+      if (hookHealthSnapshot) onHookHealthSnapshot?.(data.hook_health);
+      else onHookHealth?.(data.hook_health);
+      hookHealthSnapshot = false;
+    }
 
     const convId = data.conversation_id;
     if (!convId) return;
@@ -387,6 +398,7 @@ export function connectGlobalStream({
     lastFrameAt = Date.now();
     connectionOpenedAt = 0;
     resourceSnapshot = [];
+    hookHealthSnapshot = true;
     const source = api.createStream({ conversationListHash: getHash() ?? undefined });
     eventSource = source;
 

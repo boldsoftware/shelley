@@ -729,6 +729,47 @@ await run("resource_status frames: a snapshot per connection, then transitions",
   handle.close();
 });
 
+await run("hook_health frames: snapshot on each connection, then transitions", () => {
+  reset();
+  const snapshots: { episode_id: number; revision: number }[] = [];
+  const transitions: { episode_id: number; revision: number }[] = [];
+  const handle = connectGlobalStream({
+    getHash: () => "hash0",
+    onListPatch: () => {},
+    onHookHealthSnapshot: (status) => snapshots.push(status),
+    onHookHealth: (status) => transitions.push(status),
+  });
+  const first = {
+    episode_id: 4,
+    revision: 8,
+    active: true,
+    dismissed: false,
+    failures: 2,
+    last_failure_at: "2026-11-14T23:00:00Z",
+    conversation_id: "chat-a",
+  };
+  latest().emitMessage({ hook_health: first });
+  assert(snapshots.length === 1 && snapshots[0].revision === 8, "first frame is a snapshot");
+  latest().emitMessage({ hook_health: { ...first, revision: 9, failures: 3 } });
+  assert(
+    transitions.length === 1 && transitions[0].revision === 9,
+    "later frames are live transitions",
+  );
+
+  latest().emitError();
+  advance(1000);
+  // The restarted server may replay a lower revision: it is a connection
+  // snapshot, not a stale transition, and must replace the prior client state.
+  latest().emitMessage({ hook_health: { ...first, revision: 2, failures: 1 } });
+  assert(
+    snapshots.length === 2 && snapshots[1].revision === 2,
+    "reconnect snapshots are delivered even with older revisions",
+  );
+  latest().emitMessage({ hook_health: { ...first, revision: 3, failures: 2 } });
+  assert(transitions.length === 2 && transitions[1].revision === 3, "transition follows snapshot");
+  handle.close();
+});
+
 Date.now = realDateNow;
 await run("private read snapshots and updates dispatch independently of list patches", () => {
   const s = newStream();

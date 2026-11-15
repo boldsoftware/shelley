@@ -97,6 +97,9 @@
           :reconnect-nonce="reconnectNonce"
           :resource-statuses="Object.values(resourceStatuses)"
           :on-resource-status="applyResourceStatus"
+          :hook-health="hookHealth"
+          :on-hook-health="applyHookHealth"
+          :on-troubleshoot-hook="troubleshootHook"
           :on-open-drawer="() => (drawerOpen = true)"
           :on-new-conversation="() => startNewConversation(shownProject())"
           :on-new-project-conversation="
@@ -375,9 +378,11 @@ import {
   type ConversationRead,
   type ResourceKind,
   type ResourceStatus,
+  type HookHealthStatus,
   type ChatRequest,
 } from "../types";
 import { api, ApiError, machineParams } from "../services/api";
+import { hookDiagnosticPrompt } from "../utils/hookHealth";
 import {
   absorbUnreachable,
   serverReachable,
@@ -677,6 +682,11 @@ function applyResourceStatus(status: ResourceStatus) {
   const current = resourceStatuses.value[status.kind];
   if (current && status.revision < current.revision) return;
   resourceStatuses.value = { ...resourceStatuses.value, [status.kind]: status };
+}
+const hookHealth = ref<HookHealthStatus | null>(null);
+function applyHookHealth(status: HookHealthStatus) {
+  if (hookHealth.value && status.revision < hookHealth.value.revision) return;
+  hookHealth.value = status;
 }
 const reconnectNonce = ref(0);
 const showActiveTrigger = ref(0);
@@ -1201,6 +1211,23 @@ function selectConversation(conversation: Conversation) {
   drawerOpen.value = false;
 }
 
+async function troubleshootHook(status: HookHealthStatus, model: string) {
+  const response = await api.sendMessageWithNewConversation({
+    message: hookDiagnosticPrompt(status),
+    model,
+    cwd: window.__SHELLEY_INIT__?.default_cwd,
+  });
+  const id = response.conversation_id;
+  const listed = conversations.value.find((conversation) => conversation.conversation_id === id);
+  messageStore.setAgentWorking(id, listed?.working ?? true);
+  currentVm.value = null;
+  workspace.projectView.value = null;
+  viewedConversation.value = null;
+  currentConversationId.value = id;
+  drawerOpen.value = false;
+  handleMessageSent(id);
+}
+
 // Picking a conversation (or the Assistant) in the drawer focuses the composer. The
 // clicked row/link takes focus itself, which would make the composer's
 // autofocus defer to it; release it so focus falls back to <body>. If the
@@ -1627,6 +1654,8 @@ onMounted(() => {
     },
     onResourceSnapshot: replaceResourceStatuses,
     onResourceStatus: applyResourceStatus,
+    onHookHealthSnapshot: (status) => (hookHealth.value = status),
+    onHookHealth: applyHookHealth,
     onStaleBuild: () => (uiUpdated.value = true),
     onReconnect: () => {
       reconnectNonce.value++;

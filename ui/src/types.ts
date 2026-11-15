@@ -7,6 +7,7 @@ import {
   NotificationEventForTS,
   ResourceKind,
   ResourceStatus,
+  HookHealthStatus,
   Usage as GeneratedUsage,
   MessageType as GeneratedMessageType,
 } from "./generated-types";
@@ -26,7 +27,7 @@ export type ConversationWithParticipants = Conversation & {
 };
 export type Usage = GeneratedUsage;
 export type MessageType = GeneratedMessageType;
-export type { ResourceKind, ResourceStatus };
+export type { ResourceKind, ResourceStatus, HookHealthStatus };
 
 export interface BtwReaderDescriptor {
   readonly conversation_id: string;

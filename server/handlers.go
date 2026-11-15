@@ -2425,7 +2425,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 	}
 
 	if includeConversationListPatches && s.streamPub != nil {
-		next, status, resources := s.subscribeStream(ctx)
+		next, status, resources, hookHealth := s.subscribeStream(ctx)
 		watchSubscription(status, "global")
 		go func() {
 			for {
@@ -2442,6 +2442,9 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 			if !writeStreamData(StreamResponse{ResourceStatus: &status}) {
 				return
 			}
+		}
+		if !writeStreamData(StreamResponse{HookHealth: &hookHealth}) {
+			return
 		}
 	}
 

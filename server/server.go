@@ -139,7 +139,8 @@ type StreamResponse struct {
 	// NotificationEvent is set when a notification-worthy event occurs (e.g. agent finished).
 	NotificationEvent *notifications.Event `json:"notification_event,omitempty"`
 	// ResourceStatus is global, including an immediate snapshot of each kind on reconnect.
-	ResourceStatus *resource.Status `json:"resource_status,omitempty"`
+	ResourceStatus *resource.Status  `json:"resource_status,omitempty"`
+	HookHealth     *HookHealthStatus `json:"hook_health,omitempty"`
 	// ToolProgress is set when a running tool reports partial output.
 	ToolProgress *llm.ToolProgress `json:"tool_progress,omitempty"`
 	// StreamDelta is set when the LLM streams partial text content.
@@ -449,6 +450,7 @@ type Server struct {
 	streamPub  *subpub.SubPub[StreamResponse]
 	diskSpace  atomic.Pointer[resourceMonitor]
 	memory     atomic.Pointer[resourceMonitor]
+	hookHealth *hookHealth
 	shutdownCh chan struct{} // Signals background routines to stop
 
 	// resourceRecheckEvery is copied into each resource monitor at init;
@@ -577,6 +579,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		channelChatLocks:      make(map[string]*channelChatLock),
 		reflectionEmoji:       cachedReflectionEmoji,
 	}
+	s.hookHealth = &hookHealth{server: s}
 
 	s.mcp = mcp.NewManager(database, s.mcpLoginURL)
 	s.conversationListStream = newConversationListStream(s)
@@ -671,6 +674,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/conversations/search/enhance", s.handleEnhanceSearch)
 	api.HandleFunc("GET /api/stream2", s.handleStream)
 	api.HandleFunc("POST /api/resources/{kind}/dismiss", s.handleDismissResource)
+	api.HandleFunc("POST /api/hooks/end-of-turn/dismiss", s.handleDismissHookHealth)
 	api.HandleFunc("POST /api/activity", s.handleActivity)
 	api.HandleFunc("GET /api/customizations", s.handleListCustomizations)
 	api.HandleFunc("POST /api/conversation/{id}/customization", s.handleReportCustomization)
@@ -2061,9 +2065,11 @@ func (s *Server) sendTurnEnd(ctx context.Context, conv *generated.Conversation, 
 		FinalResponse:   payload.FinalResponse,
 	}
 	go func() {
-		if err := RunEndOfTurnHookIn(s.hooksDir, input); err != nil {
+		err := RunEndOfTurnHookIn(s.hooksDir, input)
+		if err != nil {
 			s.logger.Error("end-of-turn hook failed", "conversationID", input.ConversationID, "error", err)
 		}
+		s.hookHealth.complete(context.WithoutCancel(ctx), input.ConversationID, err)
 	}()
 	return &event
 }
@@ -2219,6 +2225,9 @@ func (s *Server) rememberWebOrigin(next http.Handler) http.Handler {
 // since it is local and trusted.
 func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string) error {
 	if err := s.initResourceMonitors(context.Background()); err != nil {
+		return err
+	}
+	if err := s.initHookHealth(context.Background()); err != nil {
 		return err
 	}
 

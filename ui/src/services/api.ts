@@ -5,6 +5,7 @@ import {
   ConversationWithState,
   ResourceKind,
   ResourceStatus,
+  HookHealthStatus,
   StreamResponse,
   ChatRequest,
   BtwReaderDescriptor,
@@ -1121,6 +1122,12 @@ class ApiService {
 
   async dismissResourceNotice(kind: ResourceKind, episodeId: number): Promise<ResourceStatus> {
     return apiJSON(`/api/resources/${kind}/dismiss`, "Failed to dismiss", "POST", {
+      episode_id: episodeId,
+    });
+  }
+
+  async dismissHookHealth(episodeId: number): Promise<HookHealthStatus> {
+    return apiJSON("/api/hooks/end-of-turn/dismiss", "Failed to dismiss", "POST", {
       episode_id: episodeId,
     });
   }

@@ -75,6 +75,7 @@ func TS() *go2ts.Go2TS {
 	// Named before first use, or they render as the bare Kind and Status.
 	generator.AddUnionWithName(resource.Kinds, "ResourceKind")
 	generator.AddWithName(resource.Status{}, "ResourceStatus")
+	generator.AddWithName(hookHealthStatusForTS{}, "HookHealthStatus")
 
 	generator.AddMultiple(
 		apiMessageForTS{},
@@ -164,6 +165,7 @@ type streamResponseForTS struct {
 	Heartbeat         bool                                  `json:"heartbeat,omitempty"`
 	NotificationEvent *notificationEventForTS               `json:"notification_event,omitempty"`
 	ResourceStatus    *resource.Status                      `json:"resource_status,omitempty"`
+	HookHealth        *hookHealthStatusForTS                `json:"hook_health,omitempty"`
 	MaxSequenceID     int64                                 `json:"max_sequence_id,omitempty"`
 }
 
@@ -172,4 +174,14 @@ type notificationEventForTS struct {
 	ConversationID string                  `json:"conversation_id"`
 	Timestamp      string                  `json:"timestamp"`
 	Payload        any                     `json:"payload,omitempty"`
+}
+
+type hookHealthStatusForTS struct {
+	EpisodeID      uint64    `json:"episode_id"`
+	Revision       uint64    `json:"revision"`
+	Active         bool      `json:"active"`
+	Dismissed      bool      `json:"dismissed"`
+	Failures       uint64    `json:"failures"`
+	LastFailureAt  time.Time `json:"last_failure_at,omitempty"`
+	ConversationID string    `json:"conversation_id,omitempty"`
 }

@@ -33,6 +33,7 @@ export interface Usage {
   cache_read_input_tokens: number;
   output_tokens: number;
   cost_usd: number;
+  context_window_tokens?: number;
   model?: string;
   url?: string;
   start_time?: string | null;
@@ -67,6 +68,16 @@ export interface ResourceStatus {
   available_bytes: number;
   total_bytes: number;
   stall_percent: number;
+}
+
+export interface HookHealthStatus {
+  episode_id: number;
+  revision: number;
+  active: boolean;
+  dismissed: boolean;
+  failures: number;
+  last_failure_at?: string;
+  conversation_id?: string;
 }
 
 export interface ApiMessageForTS {
@@ -122,6 +133,7 @@ export interface StreamResponseForTS {
   heartbeat?: boolean;
   notification_event?: NotificationEventForTS | null;
   resource_status?: ResourceStatus | null;
+  hook_health?: HookHealthStatus | null;
   max_sequence_id?: number;
 }
 

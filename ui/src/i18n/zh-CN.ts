@@ -2,6 +2,10 @@ import type { TranslationKeys } from "./types";
 
 export const zhCN: TranslationKeys = {
   // App-level
+  hookFailureTitle: "钩子 {hook} 失败",
+  hookFailureCountOne: "连续失败 {count} 次",
+  hookFailureCountMany: "连续失败 {count} 次",
+  troubleshootWithShelley: "用 Shelley 排查",
   loading: "加载中...",
   diskSpaceLow: "磁盘空间不足",
   diskSpaceCritical: "磁盘空间严重不足",

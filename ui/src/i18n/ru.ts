@@ -2,6 +2,10 @@ import type { TranslationKeys } from "./types";
 
 export const ru: TranslationKeys = {
   // App-level
+  hookFailureTitle: "Сбой хука {hook}",
+  hookFailureCountOne: "Сбоев подряд: {count}",
+  hookFailureCountMany: "Сбоев подряд: {count}",
+  troubleshootWithShelley: "Диагностика с Shelley",
   loading: "Загрузка...",
   diskSpaceLow: "Мало места на диске",
   diskSpaceCritical: "Критически мало места на диске",

@@ -2,6 +2,10 @@ import type { TranslationKeys } from "./types";
 
 export const es: TranslationKeys = {
   // App-level
+  hookFailureTitle: "El hook {hook} falló",
+  hookFailureCountOne: "{count} fallo consecutivo",
+  hookFailureCountMany: "{count} fallos consecutivos",
+  troubleshootWithShelley: "Diagnosticar con Shelley",
   loading: "Cargando...",
   diskSpaceLow: "Poco espacio en disco",
   diskSpaceCritical: "Espacio en disco críticamente bajo",
