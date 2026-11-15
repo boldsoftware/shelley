@@ -3,10 +3,13 @@ package channels
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -58,7 +61,7 @@ func (d *discord) Send(ctx context.Context, event notifications.Event) error {
 
 	resp, err := d.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("send discord webhook failed")
+		return fmt.Errorf("send discord webhook failed: %s", discordTransportFailure(err))
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
@@ -67,6 +70,34 @@ func (d *discord) Send(ctx context.Context, event notifications.Event) error {
 		return fmt.Errorf("discord webhook returned %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func discordTransportFailure(err error) string {
+	if errors.Is(err, context.Canceled) {
+		return "request canceled"
+	}
+	var netErr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &netErr) && netErr.Timeout() {
+		return "timeout"
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return "DNS lookup failed"
+	}
+	var certErr *tls.CertificateVerificationError
+	if errors.As(err, &certErr) {
+		return "TLS certificate verification failed"
+	}
+	var recordErr tls.RecordHeaderError
+	var alertErr tls.AlertError
+	if errors.As(err, &recordErr) || errors.As(err, &alertErr) {
+		return "TLS protocol error"
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return "connection failed"
+	}
+	return "transport error"
 }
 
 type discordMessage struct {
