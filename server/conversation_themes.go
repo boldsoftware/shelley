@@ -21,7 +21,6 @@ func (s *Server) handleConversationThemes(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleConversationThemesIndex(w http.ResponseWriter, r *http.Request) {
-
 	themes, err := s.db.ListConversationThemes(r.Context())
 	if err != nil {
 		s.logger.Error("failed to load conversation themes index", "error", err)

@@ -81,5 +81,4 @@ func TestConversationThemesEndpoint(t *testing.T) {
 	if !reflect.DeepEqual(index, map[string][]db.ConversationChapter{id: themes.Chapters}) {
 		t.Fatalf("index = %#v", index)
 	}
-
 }
