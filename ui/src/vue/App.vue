@@ -512,6 +512,8 @@ const reloadPage = () => window.location.reload();
 
 // ---- state ----
 const conversations = shallowRef<ConversationWithState[]>([]);
+const drawerList = shallowRef<ConversationWithState[]>([]);
+let drawerFrame: number | null = null;
 const firstSeenAt = ref<number | null>(null);
 const readTimes = reactive(new Map<string, number>());
 
@@ -774,7 +776,7 @@ provide(ComposerPreviewKey, {
   }),
 });
 const drawerConversations = computed(() => {
-  const rows = conversations.value.map((c) => (unreadTime(c) ? { ...c, unread: true } : c));
+  const rows = drawerList.value.map((c) => (unreadTime(c) ? { ...c, unread: true } : c));
   const list = withComposerRow(rows, composer.value, creating.value);
   return lingering.value ? withComposerRow(list, lingering.value, null) : list;
 });
@@ -978,6 +980,12 @@ function listStateNow(): ConversationListState {
 function commitListState(next: ConversationListState) {
   conversations.value = next.list;
   conversationListHash = next.hash;
+  if (drawerFrame === null) {
+    drawerFrame = requestAnimationFrame(() => {
+      drawerFrame = null;
+      drawerList.value = conversations.value;
+    });
+  }
 }
 
 function recoverConversationListStream() {
@@ -1670,6 +1678,7 @@ onMounted(() => {
 let terminalsHydrationCancel: (() => void) | null = null;
 
 onUnmounted(() => {
+  if (drawerFrame !== null) cancelAnimationFrame(drawerFrame);
   document.removeEventListener("visibilitychange", acknowledgeOpenConversation);
   window.removeEventListener("focus", acknowledgeOpenConversation);
   stopActivityHeartbeat?.();

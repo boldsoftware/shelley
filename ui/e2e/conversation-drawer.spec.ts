@@ -292,6 +292,87 @@ test.describe("conversation drawer startup and app bar", () => {
     await expect(runningRow.locator(".drawer-interrupted-indicator")).toHaveCount(0);
   });
 
+  test("batches frame-burst conversation list patches before projecting the drawer", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      class TestEventSource {
+        static readonly CONNECTING = 0;
+        static readonly OPEN = 1;
+        static readonly CLOSED = 2;
+
+        readyState = TestEventSource.CONNECTING;
+        onopen: (() => void) | null = null;
+        onmessage: ((event: MessageEvent) => void) | null = null;
+        onerror: (() => void) | null = null;
+
+        constructor(_url: string | URL) {
+          (window as Window & { __testStream?: TestEventSource }).__testStream = this;
+          queueMicrotask(() => {
+            this.readyState = TestEventSource.OPEN;
+            this.onopen?.();
+          });
+        }
+
+        close() {
+          this.readyState = TestEventSource.CLOSED;
+        }
+      }
+
+      Object.defineProperty(window, "EventSource", {
+        configurable: true,
+        value: TestEventSource,
+      });
+    });
+
+    const row = conversation("burst-row");
+    await stubConversationList(page, [row]);
+    await page.goto("/new");
+
+    const preview = page.locator('[data-conversation-id="burst-row"] .conversation-preview');
+    await expect(preview).toHaveText("Preview");
+    const patches = Array.from({ length: 35 }, (_, index) => ({
+      old_hash: index === 0 ? "test-1" : `h${index}`,
+      new_hash: `h${index + 1}`,
+      at: new Date().toISOString(),
+      patch: [
+        {
+          op: "replace" as const,
+          path: "/0/preview",
+          value: `Preview ${index + 1}`,
+        },
+      ],
+    }));
+    const counters = await page.evaluate(async (events) => {
+      const { __testStream: stream, __shelleyPerf: perf } = window as Window & {
+        __testStream?: { onmessage: ((event: MessageEvent) => void) | null };
+        __shelleyPerf?: {
+          reset(): void;
+          snapshot(): Record<string, { count: number }>;
+        };
+      };
+      if (!stream?.onmessage || !perf) throw new Error("stream/perf was not initialized");
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      perf.reset();
+      for (const event of events) {
+        stream.onmessage({
+          data: JSON.stringify({ conversation_list_patch: event }),
+        } as MessageEvent);
+        await Promise.resolve();
+      }
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      return perf.snapshot();
+    }, patches);
+
+    await expect(preview).toHaveText("Preview 35");
+    expect(counters["list.apply"]?.count).toBe(35);
+    expect(counters["drawer.topLevel"]?.count).toBe(1);
+  });
+
   test("View options sizes rows: short is the title, medium adds the preview", async ({ page }) => {
     const tagged = conversation("tagged");
     tagged.tags = '["work"]';

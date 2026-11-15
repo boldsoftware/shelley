@@ -2880,6 +2880,7 @@ const loadingSubtitle = computed(() => {
 });
 
 // ---- Render model (porting renderMessages into structured data) ----
+const timestampCache = new Map<string, { date: Date; minute: number; day: string } | null>();
 const renderModel = computed<GenerationBlock[]>(perfWrap("chat.renderModel", buildRenderModel));
 // A mid-history restructure (regenerated turn, compaction) renumbers chunks;
 // re-anchor the tail-first floor to its key. See relocateTailFloor.
@@ -2984,26 +2985,33 @@ function buildRenderModel(): GenerationBlock[] {
     return { kind: "token-marker", key: `tok-${keyPrefix}`, label, ctx };
   };
 
-  const maybeTimestamp = (iso: string | null, keyPrefix: string): RenderNode[] => {
-    if (!iso) return [];
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return [];
-    const minBucket = Math.floor(d.getTime() / 60_000);
-    const dayKey = d.toDateString();
-    if (tsState.lastMin === minBucket && tsState.lastDay === dayKey) return [];
-    const showDay = tsState.lastDay !== dayKey;
-    tsState.lastMin = minBucket;
-    tsState.lastDay = dayKey;
-    const out: RenderNode[] = [];
+  const appendTimestamp = (sink: RenderNode[], iso: string | null, keyPrefix: string): void => {
+    if (!iso) return;
+    let timestamp = timestampCache.get(iso);
+    if (timestamp === undefined) {
+      const date = new Date(iso);
+      timestamp = isNaN(date.getTime())
+        ? null
+        : {
+            date,
+            minute: Math.floor(date.getTime() / 60_000),
+            day: date.toDateString(),
+          };
+      timestampCache.set(iso, timestamp);
+    }
+    if (!timestamp) return;
+    if (tsState.lastMin === timestamp.minute && tsState.lastDay === timestamp.day) return;
+    const showDay = tsState.lastDay !== timestamp.day;
+    tsState.lastMin = timestamp.minute;
+    tsState.lastDay = timestamp.day;
     if (showDay) {
-      out.push({
+      sink.push({
         kind: "day-separator",
         key: `ts-day-${keyPrefix}`,
-        label: formatDay(d, tsState.now),
+        label: formatDay(timestamp.date, tsState.now),
       });
     }
-    out.push({ kind: "timestamp", key: `ts-${keyPrefix}`, createdAt: iso });
-    return out;
+    sink.push({ kind: "timestamp", key: `ts-${keyPrefix}`, createdAt: iso });
   };
 
   const blocks: GenerationBlock[] = [];
@@ -3033,11 +3041,10 @@ function buildRenderModel(): GenerationBlock[] {
     };
 
     const renderItemInto = (sink: RenderNode[], item: CoalescedItem, index: number) => {
-      sink.push(
-        ...maybeTimestamp(
-          itemTime(item),
-          item.message?.message_id || item.toolUseId || `g${generation}-i${index}`,
-        ),
+      appendTimestamp(
+        sink,
+        itemTime(item),
+        item.message?.message_id || item.toolUseId || `g${generation}-i${index}`,
       );
       if (item.type === "message" && item.message) {
         sink.push({
@@ -5157,8 +5164,30 @@ if (!workspaceMode)
 let unsubStore: (() => void) | null = null;
 let unsubTransient: (() => void) | null = null;
 let unsubBtw: (() => void) | null = null;
+let storeSyncFrame: number | null = null;
+let messagesNeedSync = false;
+let transientNeedsSync = false;
+
+function scheduleStoreSync(focusedId: string, transient: boolean): void {
+  if (transient) transientNeedsSync = true;
+  else messagesNeedSync = true;
+  if (storeSyncFrame !== null) return;
+  storeSyncFrame = requestAnimationFrame(() => {
+    storeSyncFrame = null;
+    const syncMessages = messagesNeedSync;
+    const syncTransient = transientNeedsSync;
+    messagesNeedSync = false;
+    transientNeedsSync = false;
+    if (syncMessages) syncFromStore(focusedId);
+    if (syncTransient) syncTransientFromStore(focusedId);
+  });
+}
 
 function teardownSubscriptions() {
+  if (storeSyncFrame !== null) cancelAnimationFrame(storeSyncFrame);
+  storeSyncFrame = null;
+  messagesNeedSync = false;
+  transientNeedsSync = false;
   unsubStore?.();
   unsubTransient?.();
   unsubBtw?.();
@@ -5215,6 +5244,7 @@ watch(
     // unique, so stale entries are never *wrong* — they'd just accumulate for
     // every conversation visited in the session. Drop them on the switch.
     clearConversationViewCache();
+    timestampCache.clear();
     clearUsageCaches();
     usageWanted.value = false;
     // Tail-first mounting is per conversation: cancel the old sweep and mount
@@ -5253,9 +5283,9 @@ watch(
     streamingText.value = "";
     streamingThinking.value = "";
 
-    unsubStore = messageStore.subscribe(focusedId, () => syncFromStore(focusedId));
+    unsubStore = messageStore.subscribe(focusedId, () => scheduleStoreSync(focusedId, false));
     unsubTransient = messageStore.subscribeTransient(focusedId, () =>
-      syncTransientFromStore(focusedId),
+      scheduleStoreSync(focusedId, true),
     );
 
     // A draft conversation has no server-side messages by definition: it only
