@@ -2423,6 +2423,9 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 		}()
 	}
 
+	// Held until after the early heartbeat below so the bare heartbeat stays the
+	// first frame on a caught-up stream; the snapshot itself is still always sent.
+	var hookHealthSnapshot *HookHealthStatus
 	if includeConversationListPatches && s.streamPub != nil {
 		next, status, resources, hookHealth := s.subscribeStream(ctx)
 		watchSubscription(status, "global")
@@ -2442,9 +2445,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 				return
 			}
 		}
-		if !writeStreamData(StreamResponse{HookHealth: &hookHealth}) {
-			return
-		}
+		hookHealthSnapshot = &hookHealth
 	}
 
 	// On the unified /api/stream2 endpoint, send a bare heartbeat whenever
@@ -2457,6 +2458,12 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 	// periodic heartbeat. The legacy endpoint keeps its first-frame contract.
 	if includeConversationListPatches && len(listInitial) == 0 {
 		if !writeStreamData(StreamResponse{Heartbeat: true}) {
+			return
+		}
+	}
+
+	if hookHealthSnapshot != nil {
+		if !writeStreamData(StreamResponse{HookHealth: hookHealthSnapshot}) {
 			return
 		}
 	}
