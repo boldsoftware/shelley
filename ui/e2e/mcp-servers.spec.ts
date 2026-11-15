@@ -53,9 +53,9 @@ test("integration-managed servers have no login, edit, or delete controls", asyn
       has: page.getByText(name, { exact: true }),
     });
     await expect(row).toBeVisible();
-    await expect(row.getByRole("link", { name: "Log in", exact: true })).toHaveCount(0);
+    await expect(row.getByRole("link", { name: "Sign in", exact: true })).toHaveCount(0);
   }
-  await expect(panel.getByRole("link", { name: "Log in", exact: true })).toHaveAttribute(
+  await expect(panel.getByRole("link", { name: "Sign in", exact: true })).toHaveAttribute(
     "href",
     "/mcp/login/oauth",
   );
@@ -110,3 +110,100 @@ test("refresh removes pending deletion when an integration takes ownership", asy
   await expect(panel.getByText("kagi", { exact: true })).toBeVisible();
   await expect(panel.getByRole("button", { name: /^Delete/ })).toHaveCount(0);
 });
+
+test("public servers need no manual connection or login", async ({ page }) => {
+  let probes = 0;
+  await page.route("**/api/mcp/servers", (route) =>
+    route.fulfill({ json: [{ ...servers[2], auth: "" }] }),
+  );
+  await page.route("**/api/mcp/servers/oauth/tools", (route) => {
+    probes++;
+    return route.fulfill({ json: { tools: [] } });
+  });
+  const panel = await openPanel(page);
+  await expect(panel.getByRole("link", { name: "Sign in", exact: true })).toHaveCount(0);
+  await expect(panel.getByRole("columnheader", { name: "Login", exact: true })).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Connect", exact: true })).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Tools", exact: true })).toBeVisible();
+  expect(probes).toBe(0);
+  await panel.getByRole("button", { name: "Tools", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "oauth tools", exact: true })).toContainText(
+    "This server has no tools.",
+  );
+  expect(probes).toBe(1);
+});
+
+test("sign-in appears only after an authentication challenge", async ({ page }) => {
+  let auth = "";
+  await page.route("**/api/mcp/servers", (route) =>
+    route.fulfill({ json: [{ ...servers[2], auth }] }),
+  );
+  const panel = await openPanel(page);
+  await expect(panel.getByRole("link", { name: "Sign in", exact: true })).toHaveCount(0);
+  auth = "login_required";
+  await panel.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(panel.getByRole("link", { name: "Sign in", exact: true })).toHaveAttribute(
+    "href",
+    "/mcp/login/oauth",
+  );
+});
+
+for (const { index, label, href } of [
+  { index: 0, label: "Manage on exe.dev", href: "https://exe.dev/integrations" },
+  { index: 2, label: "Sign in", href: "/mcp/login/oauth" },
+]) {
+  test(`${label} is actionable and tools retry when returning from authentication`, async ({
+    page,
+  }) => {
+    const server: McpServer = { ...servers[index], auth: "" };
+    let authenticated = false;
+    let probes = 0;
+    await page.route("**/api/mcp/servers", (route) => route.fulfill({ json: [server] }));
+    await page.route(`**/api/mcp/servers/${server.name}/tools`, (route) => {
+      probes++;
+      return authenticated
+        ? route.fulfill({
+            json: { tools: [{ name: "ready_tool", inputSchema: { properties: {} } }] },
+          })
+        : route.fulfill({
+            status: 401,
+            body: `MCP server needs authentication: /mcp/login/${server.name}`,
+          });
+    });
+    const panel = await openPanel(page);
+    await panel.getByRole("button", { name: "Tools", exact: true }).click();
+    const tools = page.getByRole("dialog", { name: `${server.name} tools`, exact: true });
+    const action = tools.getByRole("link", { name: label, exact: true });
+    await expect(action).toHaveAttribute("href", href);
+    await expect(action).toHaveAttribute("target", "_blank");
+    await expect(tools.getByRole("alert")).toHaveCount(0);
+    await expect(tools).not.toContainText("/mcp/login/");
+    expect(probes).toBe(1);
+
+    authenticated = true;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(tools.getByText("ready_tool", { exact: true })).toBeVisible();
+    await expect(action).toHaveCount(0);
+    expect(probes).toBe(2);
+  });
+}
+
+for (const { status, index } of [
+  { status: 502, index: 2 },
+  { status: 401, index: 1 },
+]) {
+  test(`tools preserve HTTP ${status} errors without a known authentication action`, async ({
+    page,
+  }) => {
+    const server = servers[index];
+    await page.route("**/api/mcp/servers", (route) => route.fulfill({ json: [server] }));
+    await page.route(`**/api/mcp/servers/${server.name}/tools`, (route) =>
+      route.fulfill({ status, body: "Remote server failed" }),
+    );
+    const panel = await openPanel(page);
+    await panel.getByRole("button", { name: "Tools", exact: true }).click();
+    const tools = page.getByRole("dialog", { name: `${server.name} tools`, exact: true });
+    await expect(tools.getByRole("alert")).toContainText("Remote server failed");
+    await expect(tools.getByRole("link")).toHaveCount(0);
+  });
+}

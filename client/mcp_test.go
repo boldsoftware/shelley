@@ -332,7 +332,7 @@ func TestMCPLoginRequired(t *testing.T) {
 	if out != "locked: not logged in\nLog in: /mcp/login/locked\n" {
 		t.Fatalf("auth: %q", out)
 	}
-	want := "shelley mcp: MCP server \"locked\" needs you to log in: open " + link + "\n"
+	want := "shelley mcp: MCP server \"locked\" needs authentication. [Sign in](" + link + "), then retry.\n"
 	if errOut := e.fail(1, "call", "locked.echo", "text=x"); errOut != want {
 		t.Fatalf("call: %q, want %q", errOut, want)
 	}

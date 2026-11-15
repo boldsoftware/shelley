@@ -129,11 +129,22 @@ func (s *Server) mcpLoginURL(name string) string {
 }
 
 // mcpError writes err, from talking to an MCP server.
-func mcpError(w http.ResponseWriter, err error) {
+func (s *Server) mcpError(w http.ResponseWriter, r *http.Request, srv mcp.Server, err error) {
 	var lr *mcp.LoginRequiredError
 	switch {
 	case errors.As(err, &lr):
-		http.Error(w, lr.Error(), http.StatusUnauthorized)
+		integrations, lookupErr := s.mcpIntegrations(r.Context())
+		if lookupErr != nil {
+			http.Error(w, fmt.Sprintf("discovering MCP integrations: %v", lookupErr), http.StatusBadGateway)
+			return
+		}
+		for _, ig := range integrations {
+			if mcp.SameLoginScope(srv.URL, ig.URL) {
+				http.Error(w, fmt.Sprintf("MCP integration %q needs authentication. [Manage integrations](https://exe.dev/integrations), then retry.", ig.Integration), http.StatusUnauthorized)
+				return
+			}
+		}
+		http.Error(w, fmt.Sprintf("MCP server %q needs authentication. [Sign in](%s), then retry.", lr.Server, lr.URL), http.StatusUnauthorized)
 	case errors.Is(err, mcp.ErrTimeout):
 		http.Error(w, err.Error(), http.StatusGatewayTimeout)
 	default:
@@ -370,7 +381,7 @@ func (s *Server) handleListMCPTools(w http.ResponseWriter, r *http.Request) {
 	}
 	tools, err := s.mcp.ListTools(r.Context(), srv, mcpScope(r))
 	if err != nil {
-		mcpError(w, err)
+		s.mcpError(w, r, srv, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, tools)
@@ -395,7 +406,7 @@ func (s *Server) handleCallMCPTool(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := s.mcp.CallTool(r.Context(), srv, mcpScope(r), req.Tool, req.Arguments, time.Duration(req.TimeoutMS)*time.Millisecond)
 	if err != nil {
-		mcpError(w, err)
+		s.mcpError(w, r, srv, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, res)

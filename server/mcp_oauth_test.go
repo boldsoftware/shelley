@@ -94,7 +94,7 @@ func (e *mcpEnv) wantAuth(want string) {
 
 func (e *mcpEnv) wantLoginRequired() {
 	e.t.Helper()
-	want := fmt.Sprintf("MCP server \"linear\" needs you to log in: open %s\n", e.srv.mcpLoginURL("linear"))
+	want := fmt.Sprintf("MCP server \"linear\" needs authentication. [Sign in](%s), then retry.\n", e.srv.mcpLoginURL("linear"))
 	if b := e.want(401, "POST", "/api/mcp/servers/linear/call", "", `{"tool":"echo"}`); b != want {
 		e.t.Fatalf("call: %q, want %q", b, want)
 	}

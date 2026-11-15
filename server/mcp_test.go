@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -183,6 +185,56 @@ func TestMCPIntegrations(t *testing.T) {
 	want := []string{"kagi:kagi-mcp:", "taken::/mcp/login/taken", "lookalike::/mcp/login/lookalike", "remote:remote:"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("merged:\n%q\nwant:\n%q", names, want)
+	}
+}
+
+func TestMCPAuthenticationActions(t *testing.T) {
+	env, err := exeenv.New("https", "example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name        string
+		url         string
+		discoverErr error
+		status      int
+		body        string
+	}{
+		{
+			name: "direct", url: "https://direct.example.test/mcp", status: 401,
+			body: "MCP server \"registered\" needs authentication. [Sign in](/mcp/login/registered), then retry.\n",
+		},
+		{
+			name: "integration", url: "https://managed.int.example.test/mcp", status: 401,
+			body: "MCP integration \"managed\" needs authentication. [Manage integrations](https://exe.dev/integrations), then retry.\n",
+		},
+		{
+			name: "registered integration alias", url: "https://MANAGED.int.example.test:443/mcp?tools=search", status: 401,
+			body: "MCP integration \"managed\" needs authentication. [Manage integrations](https://exe.dev/integrations), then retry.\n",
+		},
+		{
+			name: "lookalike origin", url: "https://managed.int.example.test.evil.test/mcp", status: 401,
+			body: "MCP server \"registered\" needs authentication. [Sign in](/mcp/login/registered), then retry.\n",
+		},
+		{
+			name: "discovery failure", url: "https://direct.example.test/mcp",
+			discoverErr: errors.New("reflection unavailable"), status: 502,
+			body: "discovering MCP integrations: reflection unavailable\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newMCPEnv(t, "")
+			e.srv.listIntegrations = func(context.Context) (exeenv.Environment, []reflectionIntegration, error) {
+				return env, []reflectionIntegration{{Name: "managed", Attributes: []string{"type:mcp"}}}, tc.discoverErr
+			}
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest("GET", "/api/mcp/servers/registered/tools", nil)
+			err := fmt.Errorf("wrapped: %w", &mcp.LoginRequiredError{Server: "registered", URL: "/mcp/login/registered"})
+			e.srv.mcpError(w, r, mcp.Server{Name: "registered", URL: tc.url}, err)
+			if w.Code != tc.status || w.Body.String() != tc.body {
+				t.Fatalf("response: %d %q, want %d %q", w.Code, w.Body.String(), tc.status, tc.body)
+			}
+		})
 	}
 }
 

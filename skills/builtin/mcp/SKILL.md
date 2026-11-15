@@ -33,7 +33,7 @@ jq -c '.structuredContent.rows[] | {title: .name}' /tmp/rows.json |
 
 ## Log in
 
-When a command says a server needs you to log in, give the user the link exactly as printed, wait for them to say they've logged in, and retry. Never open or fetch the link yourself: it's for the user's browser, and only they can log in. `shelley mcp auth SERVER` shows the login state and link. Never ask for or invent tokens for servers that log in this way.
+When a command reports an authentication problem, give the user its action as a clickable Markdown link, not a bare path or code span. For example, `[Sign in](/mcp/login/SERVER)` for direct servers or `[Manage integrations](https://exe.dev/integrations)` for integration-managed authentication. Preserve the destination the command supplies. Wait for the user to finish, then retry. Never open or fetch the link yourself: it's for the user's browser, and only they can log in. `shelley mcp auth SERVER` shows a direct server's login state and link. Never ask for or invent tokens for servers that log in this way.
 
 ## Register
 

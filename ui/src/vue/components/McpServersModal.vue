@@ -1,6 +1,6 @@
 <!-- MCP servers, listed like Manage Models, with the add/edit form and the
-     tools dialog stacked on top. Servers that can log in (those with a
-     login_url) show their login state; logging in happens in another tab, so
+     tools dialog stacked on top. Servers that require login show their
+     login state; logging in happens in another tab, so
      the list reloads when the window regains focus. Phones get no URL and
      Description columns. `loginResult` is the outcome of a login whose
      callback redirected here (see App.vue). -->
@@ -69,7 +69,7 @@
             <span class="models-cell-name">{{ data.name }}</span>
           </template>
         </Column>
-        <Column v-if="servers.some((s) => s.login_url)" :header="t('mcpColumnLogin')">
+        <Column v-if="servers.some((s) => s.auth)" :header="t('mcpColumnLogin')">
           <template #body="{ data }">
             <div v-if="data.auth === 'logged_in'" class="mcp-login">
               <span class="mcp-pill mcp-pill-ok">{{ t("mcpLoggedIn") }}</span>
@@ -81,8 +81,8 @@
                 @click="run(mcpServersApi.logout(data.name))"
               />
             </div>
-            <div v-else-if="data.login_url" class="mcp-login">
-              <span v-if="data.auth === 'login_required'" class="mcp-pill mcp-pill-warn">
+            <div v-else-if="data.auth === 'login_required' && data.login_url" class="mcp-login">
+              <span class="mcp-pill mcp-pill-warn">
                 {{ t("mcpLoginRequired") }}
               </span>
               <Button
@@ -112,7 +112,10 @@
             <span class="sr-only">{{ t("columnActions") }}</span>
           </template>
           <template #body="{ data }">
-            <div v-if="!data.integration && pendingDelete === data.name" class="models-cell-actions">
+            <div
+              v-if="!data.integration && pendingDelete === data.name"
+              class="models-cell-actions"
+            >
               <Button
                 size="small"
                 severity="danger"
@@ -128,7 +131,7 @@
               />
             </div>
             <div v-else class="models-cell-actions">
-              <Button size="small" text :label="t('mcpTools')" @click="toolsServer = data.name" />
+              <Button size="small" text :label="t('mcpTools')" @click="toolsServer = data" />
               <Button
                 v-if="!data.integration"
                 class="btn-icon"
@@ -207,7 +210,7 @@ const notice = ref<{ text: string; ok?: boolean } | null>(null);
 const pendingDelete = ref<string | null>(null);
 const formOpen = ref(false);
 const editServer = ref<McpServer | null>(null);
-const toolsServer = ref<string | null>(null);
+const toolsServer = ref<McpServer | null>(null);
 
 const showList = computed(() => !loading.value && servers.value.length > 0);
 

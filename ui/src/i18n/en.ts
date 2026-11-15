@@ -410,11 +410,11 @@ export const en: TranslationKeys = {
   mcpValue: "Value",
   mcpRemoveHeader: "Remove header {n}",
   mcpColumnLogin: "Login",
-  mcpLoggedIn: "Logged in",
-  mcpLoginRequired: "Login required",
-  mcpLogIn: "Log in",
+  mcpLoggedIn: "Signed in",
+  mcpLoginRequired: "Sign-in required",
+  mcpLogIn: "Sign in",
   mcpLogOut: "Log out",
-  mcpLoggedInTo: "Logged in to {name}.",
+  mcpLoggedInTo: "Signed in to {name}.",
   mcpDebug: "Debug",
 
   // Notifications Modal
