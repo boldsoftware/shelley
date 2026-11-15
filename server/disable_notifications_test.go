@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -21,26 +20,35 @@ import (
 	"shelley.exe.dev/server/notifications"
 )
 
-// recordingChannel is a notifications.Channel that records every event it
-// receives, so tests can assert whether an end-of-turn notification fired.
-type recordingChannel struct {
-	mu     sync.Mutex
+type turnEndRecorder struct {
+	t      *testing.T
+	server *Server
+	next   func() (StreamResponse, bool)
 	events []notifications.Event
 }
 
-func (c *recordingChannel) Name() string { return "recording" }
-
-func (c *recordingChannel) Send(ctx context.Context, event notifications.Event) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.events = append(c.events, event)
-	return nil
+func recordTurnEnds(t *testing.T, server *Server) *turnEndRecorder {
+	t.Helper()
+	return &turnEndRecorder{t: t, server: server, next: server.streamPub.Subscribe(t.Context(), -1)}
 }
 
-func (c *recordingChannel) count() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return len(c.events)
+func (r *turnEndRecorder) count() int {
+	r.t.Helper()
+	// Drain through a marker to include all events already published.
+	marker := &ConversationState{}
+	r.server.streamPub.Broadcast(StreamResponse{ConversationState: marker})
+	for {
+		response, ok := r.next()
+		if !ok {
+			r.t.Fatal("turn-end stream closed")
+		}
+		if response.ConversationState == marker {
+			return len(r.events)
+		}
+		if response.NotificationEvent != nil {
+			r.events = append(r.events, *response.NotificationEvent)
+		}
+	}
 }
 
 // delegate creates a subagent of parentID with a prompt from it, which the
@@ -77,8 +85,7 @@ func TestPublishConversationStateHonorsDisableNotifications(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			server, database, _ := newTestServer(t)
-			ch := &recordingChannel{}
-			server.RegisterNotificationChannel(ch)
+			ch := recordTurnEnds(t, server)
 
 			conversation, err := database.CreateConversation(t.Context(), nil, true, nil, nil, tc.opts)
 			if err != nil {
@@ -204,8 +211,7 @@ func TestPublishConversationStateWaitsForDelegatedWork(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			server, database, _ := newTestServer(t)
-			ch := &recordingChannel{}
-			server.RegisterNotificationChannel(ch)
+			ch := recordTurnEnds(t, server)
 
 			conversation, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
 			if err != nil {
@@ -230,8 +236,7 @@ func TestPublishConversationStateWaitsForDelegatedWork(t *testing.T) {
 func TestPublishConversationStateSkipsAssistant(t *testing.T) {
 	t.Parallel()
 	server, database, _ := newTestServer(t)
-	ch := &recordingChannel{}
-	server.RegisterNotificationChannel(ch)
+	ch := recordTurnEnds(t, server)
 
 	setWorkspaceFlag(t, server, "true")
 	assistantID := server.assistantID()
@@ -449,8 +454,7 @@ func TestOwedTurnEndIsAnnouncedOnceIdle(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			server, database, _ := newTestServer(t)
-			ch := &recordingChannel{}
-			server.RegisterNotificationChannel(ch)
+			ch := recordTurnEnds(t, server)
 			conversation, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
 			if err != nil {
 				t.Fatal(err)
@@ -489,8 +493,7 @@ func TestBackgroundJobTurnEndIsAnnouncedAfterItsNotice(t *testing.T) {
 	server, database, llmSvc := newTestServer(t)
 	defer stopActiveConversationLoops(server)
 	server.toolSetConfig.BashBackgroundAfter = 50 * time.Millisecond
-	ch := &recordingChannel{}
-	server.RegisterNotificationChannel(ch)
+	ch := recordTurnEnds(t, server)
 	conv, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -544,8 +547,7 @@ func TestJobNoticeRetriesUndrainableQueue(t *testing.T) {
 	t.Parallel()
 	s, database, _ := newTestServer(t)
 	defer stopActiveConversationLoops(s)
-	ch := &recordingChannel{}
-	s.RegisterNotificationChannel(ch)
+	ch := recordTurnEnds(t, s)
 	conv, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -600,8 +602,7 @@ func TestQueueHeldByActionDrainsAfterIt(t *testing.T) {
 	t.Parallel()
 	s, database, id := newReportingConversationFixture(t, "true", false)
 	defer stopActiveConversationLoops(s)
-	ch := &recordingChannel{}
-	s.RegisterNotificationChannel(ch)
+	ch := recordTurnEnds(t, s)
 	cm, err := s.getOrCreateConversationManager(t.Context(), id, "")
 	if err != nil {
 		t.Fatal(err)
@@ -637,8 +638,7 @@ func TestQueueHeldByActionDrainsAfterIt(t *testing.T) {
 func TestFailedLoopLeavesQueueToUser(t *testing.T) {
 	t.Parallel()
 	s, database, _ := newTestServer(t)
-	ch := &recordingChannel{}
-	s.RegisterNotificationChannel(ch)
+	ch := recordTurnEnds(t, s)
 	conv, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -668,8 +668,7 @@ func TestFailedLoopLeavesQueueToUser(t *testing.T) {
 // so that turn's end waits for it.
 func TestUndrainableQueueIsRetriedAfterTheNextTurn(t *testing.T) {
 	s, database, held, conv := newBtwTest(t)
-	ch := &recordingChannel{}
-	s.RegisterNotificationChannel(ch)
+	ch := recordTurnEnds(t, s)
 	cm, err := s.getOrCreateConversationManager(t.Context(), conv.ConversationID, "")
 	if err != nil {
 		t.Fatal(err)
@@ -726,8 +725,7 @@ func TestMessageSentDuringFinalRequestDelaysTheAnnouncement(t *testing.T) {
 	for _, kind := range []string{"reply", "error", "refusal", "truncation"} {
 		t.Run(kind, func(t *testing.T) {
 			s, _, held, conv := newBtwTest(t)
-			ch := &recordingChannel{}
-			s.RegisterNotificationChannel(ch)
+			ch := recordTurnEnds(t, s)
 			held.Service = endsFirstTurn{Service: held.Service, kind: kind}
 			cm, err := s.getOrCreateConversationManager(t.Context(), conv.ConversationID, "")
 			if err != nil {

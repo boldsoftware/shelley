@@ -2044,7 +2044,7 @@ func (s *Server) sendTurnEnd(ctx context.Context, conv *generated.Conversation, 
 		Timestamp:      time.Now(),
 		Payload:        payload,
 	}
-	s.notifDispatcher.Dispatch(ctx, event)
+	go s.notifDispatcher.Dispatch(ctx, event)
 	for _, hook := range hooks {
 		go s.sendEndOfTurnHook(ctx, hook, event)
 	}

@@ -1219,8 +1219,7 @@ func TestChannelFirstMessageAnswersTheAssistantsFirst(t *testing.T) {
 	if conv, err := database.GetConversationByID(t.Context(), assistantID); err != nil || conv.AgentWorking {
 		t.Fatalf("agent working after the first reply: %v", err)
 	}
-	notified := &recordingChannel{}
-	server.RegisterNotificationChannel(notified)
+	notified := recordTurnEnds(t, server)
 	server.publishConversationState(ConversationState{ConversationID: assistantID, Model: "predictable"})
 	if notified.count() != 0 {
 		t.Fatal("Assistant notified")

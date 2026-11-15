@@ -400,8 +400,7 @@ func TestIdleCompactionIsNotAnnounced(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				h := NewTestHarness(t)
 				defer stopActiveConversationLoops(h.server)
-				ch := &recordingChannel{}
-				h.server.RegisterNotificationChannel(ch)
+				ch := recordTurnEnds(t, h.server)
 				opts := db.ConversationOptions{IdleCompactionMinutes: 3}
 				opts.ToolOverrides = map[string]string{claudetool.CompactInPlaceName: "on"}
 				h.convOpts = &opts
