@@ -49,7 +49,16 @@ export function createWorkspaceState(t: Translate, onRunFinished: (run: ActionRu
       do {
         refreshAgain = false;
         const requestedRevision = revision;
-        const next = await workspaceApi.workspace();
+        let next: Workspace;
+        try {
+          next = await workspaceApi.workspace();
+        } catch (err) {
+          if (refreshAgain && !stopped) {
+            if (!absorbUnreachable(err)) error.value = errorMessage(err);
+            continue;
+          }
+          throw err;
+        }
         serverReachable();
         if (stopped) return;
         if (requestedRevision !== revision) {

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import { watch } from "vue";
+import { ApiError } from "../../services/api";
+import { serverReachable, unreachableSince } from "../../services/serverReachability";
 import { workspaceApi, type ActionRunSummary, type Workspace } from "../../services/workspace";
 import { en } from "../../i18n/en";
 import type { TranslationKeys } from "../../i18n/types";
@@ -160,6 +162,83 @@ test("mutations during a refresh coalesce into one fresh follow-up snapshot", as
   await pending;
   assert.equal(calls, 2);
   assert.equal(workspace.projectFor("task")?.name, "Renamed");
+});
+
+test("a reconnect refresh queued behind a failed workspace request is not dropped", async (t) => {
+  const { workspace } = harness(t);
+  t.after(serverReachable);
+  let reject!: (err: Error) => void;
+  let calls = 0;
+  const fetch = t.mock.method(workspaceApi, "workspace", () => {
+    if (++calls === 1)
+      return new Promise<Workspace>((_, fail) => {
+        reject = fail;
+      });
+    return Promise.resolve(empty());
+  });
+  const pending = workspace.refresh();
+  const outcome = pending.then(
+    () => "recovered",
+    () => "failed",
+  );
+  // App marks the live stream connected before its onReconnect refresh.
+  serverReachable();
+  assert.equal(workspace.refresh(), pending);
+  reject(new ApiError("Failed to load workspace: no response", 0));
+  await settle();
+  assert.equal(fetch.mock.callCount(), 2, "the queued reconnect must issue a fresh request");
+  assert.equal(await outcome, "recovered");
+  assert.equal(workspace.data.value?.assistant_id, "assistant");
+  assert.equal(workspace.error.value, null);
+  assert.equal(unreachableSince.value, null, "the successful retry proves REST recovered");
+});
+
+test("a queued workspace retry that also fails rejects without retrying forever", async (t) => {
+  const { workspace } = harness(t);
+  t.after(serverReachable);
+  t.mock.method(workspaceApi, "workspace", async () => empty());
+  await workspace.refresh();
+  const previous = workspace.data.value;
+  let reject!: (err: Error) => void;
+  let calls = 0;
+  const failure = new ApiError("Failed to load workspace: no response", 0);
+  t.mock.method(workspaceApi, "workspace", () => {
+    if (++calls === 1)
+      return new Promise<Workspace>((_, fail) => {
+        reject = fail;
+      });
+    return Promise.reject(failure);
+  });
+  const pending = workspace.refresh();
+  const rejected = assert.rejects(pending, (err) => err === failure);
+  assert.equal(workspace.refresh(), pending);
+  workspace.refresh();
+  reject(failure);
+  await rejected;
+  assert.equal(calls, 2, "only the explicitly queued follow-up is attempted");
+  assert.equal(workspace.data.value, previous);
+  assert.notEqual(unreachableSince.value, null, "a failed retry leaves the warning intact");
+});
+
+test("disposing a workspace does not start a queued retry after a failure", async (t) => {
+  const { workspace } = harness(t);
+  t.after(serverReachable);
+  let reject!: (err: Error) => void;
+  const fetch = t.mock.method(
+    workspaceApi,
+    "workspace",
+    () =>
+      new Promise<Workspace>((_, fail) => {
+        reject = fail;
+      }),
+  );
+  const pending = workspace.refresh();
+  const rejected = assert.rejects(pending, /no response/);
+  workspace.refresh();
+  workspace.dispose();
+  reject(new ApiError("Failed to load workspace: no response", 0));
+  await rejected;
+  assert.equal(fetch.mock.callCount(), 1);
 });
 
 test("archiving a conversation on its own VM warns that the VM is deleted", (t) => {
