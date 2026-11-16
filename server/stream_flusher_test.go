@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,6 +16,53 @@ import (
 )
 
 func alwaysPublishStream() bool { return true }
+
+func TestStreamFlusherDoneWaitsForTimerPublication(t *testing.T) {
+	cm := &ConversationManager{
+		conversationID: "flush-order",
+		subpub:         subpub.New[StreamResponse](),
+		streamPub:      subpub.New[StreamResponse](),
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	next := cm.streamPub.Subscribe(ctx, -1)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var publications atomic.Int32
+	sf := newStreamFlusher(cm, time.Nanosecond, func() bool {
+		if publications.Add(1) == 1 {
+			close(entered)
+			<-release
+		}
+		return true
+	})
+	sf.Push(llm.StreamDelta{Type: "text", Text: "previous answer", MessageID: "reply"})
+	<-entered // The timer has taken the buffer but has not published it.
+
+	done := make(chan struct{})
+	go func() {
+		// The loop flushes before publishing the saved assistant row.
+		sf.Flush()
+		cm.broadcastStream(StreamResponse{Messages: []APIMessage{
+			{MessageID: "reply", Type: "agent"},
+		}})
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+	}
+	close(release)
+	<-done
+
+	first, ok := next()
+	if !ok || len(first.streamDeltas) != 1 {
+		t.Fatalf("saved reply overtook timer-held text: first event = %+v", first)
+	}
+	second, ok := next()
+	if !ok || len(second.Messages) != 1 {
+		t.Fatalf("expected saved reply after text, got %+v", second)
+	}
+}
 
 // TestStreamFlusherAssignsMonotonicSeq verifies that each partial update the
 // streamFlusher broadcasts carries a monotonically increasing per-conversation

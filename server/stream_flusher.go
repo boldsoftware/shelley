@@ -64,6 +64,8 @@ func (sf *streamFlusher) Push(delta llm.StreamDelta) {
 
 func (sf *streamFlusher) flush() {
 	sf.mu.Lock()
+	defer sf.mu.Unlock()
+
 	deltas := sf.buf
 	sf.buf = nil
 	sf.running = false
@@ -74,8 +76,6 @@ func (sf *streamFlusher) flush() {
 	for i := range deltas {
 		deltas[i].Seq = sf.nextSeq()
 	}
-	sf.mu.Unlock()
-
 	if !sf.shouldPublish() {
 		return
 	}
