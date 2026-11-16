@@ -233,7 +233,11 @@ func TestTemporaryPropagation(t *testing.T) {
 		t.Fatalf("chat: %d %s", w.Code, w.Body)
 	}
 	held.waitCall(t, prompt).Release()
-	held.waitCall(t, parentMessage(parent, "message_parent_final: found it")).Release()
+	childCall := held.waitCall(t, parentMessage(parent, "message_parent_final: found it"))
+	// Start the parent's next round before the child can report, so the
+	// report cannot replace prompt as that round's last user message.
+	parentCall := held.waitCall(t, prompt)
+	childCall.Release()
 	report := "found it"
 	children, err := f.archiverDB.GetSubagents(ctx, parent.ConversationID)
 	if err != nil || len(children) != 1 {
@@ -242,13 +246,26 @@ func TestTemporaryPropagation(t *testing.T) {
 	child := children[0]
 	wrapped := `<subagent_message conversation_id="` + child.ConversationID + `" slug="scout">` + "\n" + report + "\n</subagent_message>"
 	// The parent's round after the subagent tool, then the report.
-	held.waitCall(t, prompt).Release()
+	parentCall.Release()
 	reported := held.waitCall(t, wrapped)
 	if !db.ParseConversationOptions(child.ConversationOptions).Temporary {
 		t.Fatalf("subagent of a temporary turn is not temporary: %s", child.ConversationOptions)
 	}
-	m := userMessageContaining(t, f.archiverDB, parent.ConversationID, report)
-	if m == nil || !slices.Contains(temporarySequenceIDs(t, f.archiverDB, parent.ConversationID), m.SequenceID) {
+	var reportSequenceID int64
+	for _, m := range listMessages(t, f.archiverDB, parent.ConversationID) {
+		if m.Type != string(db.MessageTypeUser) || m.UserData == nil {
+			continue
+		}
+		message, err := messageWithSenderProvenance(storedLLMMessage(t, &m), []byte(*m.UserData))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if messageText(message) == wrapped {
+			reportSequenceID = m.SequenceID
+			break
+		}
+	}
+	if reportSequenceID == 0 || !slices.Contains(temporarySequenceIDs(t, f.archiverDB, parent.ConversationID), reportSequenceID) {
 		t.Fatal("the temporary subagent's report is not temporary")
 	}
 	f.push(t)
