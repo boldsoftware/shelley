@@ -10,6 +10,21 @@ test.describe('Shelley Smoke Tests', () => {
     expect(title).toBe('Shelley Agent');
   });
 
+  test('welcome links point to the source and the customization section', async ({ page }) => {
+    await page.goto('/new');
+    await page.waitForLoadState('domcontentloaded');
+
+    const welcome = page.locator('.chat-welcome-text');
+    await expect(welcome.getByRole('link', { name: 'open-source' })).toHaveAttribute(
+      'href',
+      'https://github.com/boldsoftware/shelley/',
+    );
+    await expect(welcome.getByRole('link', { name: 'can be customized' })).toHaveAttribute(
+      'href',
+      'https://shelley.dev/#customization',
+    );
+  });
+
   test('can find message input with proper aria label', async ({ page }) => {
     await page.goto('/new');
     await page.waitForLoadState('domcontentloaded');

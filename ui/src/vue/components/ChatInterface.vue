@@ -245,7 +245,7 @@
                   >
                   <a
                     v-else-if="part === '{customizeLink}'"
-                    href="https://github.com/boldsoftware/shelley/"
+                    href="https://shelley.dev/#customization"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="chat-welcome-link"
