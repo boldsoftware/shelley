@@ -233,7 +233,11 @@ func TestTemporaryPropagation(t *testing.T) {
 		t.Fatalf("chat: %d %s", w.Code, w.Body)
 	}
 	held.waitCall(t, prompt).Release()
-	held.waitCall(t, parentMessage(parent, "message_parent_final: found it")).Release()
+	childCall := held.waitCall(t, parentMessage(parent, "message_parent_final: found it"))
+	// Start the parent's next round before the child can report, so the
+	// report cannot replace prompt as that round's last user message.
+	parentCall := held.waitCall(t, prompt)
+	childCall.Release()
 	report := "found it"
 	children, err := f.archiverDB.GetSubagents(ctx, parent.ConversationID)
 	if err != nil || len(children) != 1 {
@@ -242,7 +246,7 @@ func TestTemporaryPropagation(t *testing.T) {
 	child := children[0]
 	wrapped := `<subagent_message conversation_id="` + child.ConversationID + `" slug="scout">` + "\n" + report + "\n</subagent_message>"
 	// The parent's round after the subagent tool, then the report.
-	held.waitCall(t, prompt).Release()
+	parentCall.Release()
 	reported := held.waitCall(t, wrapped)
 	if !db.ParseConversationOptions(child.ConversationOptions).Temporary {
 		t.Fatalf("subagent of a temporary turn is not temporary: %s", child.ConversationOptions)
