@@ -1,6 +1,7 @@
 package test
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -674,15 +675,12 @@ func TestSSEIncrementalUpdates(t *testing.T) {
 	}
 	defer client1.Body.Close()
 
-	// Read initial response from client1 (should contain the first message)
-	// Buffer must be large enough to hold the full response including system prompt
-	buf1 := make([]byte, 32768)
-	n1, err := client1.Body.Read(buf1)
-	if err != nil && err != io.EOF {
+	// Read the complete SSE data line, independent of payload size or network chunking.
+	response1, err := bufio.NewReader(client1.Body).ReadString('\n')
+	if err != nil {
 		t.Fatalf("Failed to read from client1: %v", err)
 	}
 
-	response1 := string(buf1[:n1])
 	t.Logf("Client1 initial response: %s", response1)
 
 	// Verify client1 received the initial message
@@ -710,13 +708,11 @@ func TestSSEIncrementalUpdates(t *testing.T) {
 	defer client2.Body.Close()
 
 	// Read response from client2 (should contain both messages since it's a new client)
-	buf2 := make([]byte, 32768)
-	n2, err := client2.Body.Read(buf2)
-	if err != nil && err != io.EOF {
+	response2, err := bufio.NewReader(client2.Body).ReadString('\n')
+	if err != nil {
 		t.Fatalf("Failed to read from client2: %v", err)
 	}
 
-	response2 := string(buf2[:n2])
 	t.Logf("Client2 initial response: %s", response2)
 
 	// Verify client2 received both messages (new client gets full state)
