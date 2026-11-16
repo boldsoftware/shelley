@@ -58,7 +58,7 @@ async function expectFollowingAtBottom(page: Page) {
   await expect(page.locator(".scroll-to-bottom-button")).toBeHidden();
 }
 
-async function append(page: Page, request: APIRequestContext, id: string) {
+async function append(page: Page, request: APIRequestContext, id: string, frames = false) {
   const marker = "fragment regression append";
   const response = await request.post(`/api/conversation/${id}/chat`, {
     data: { message: `echo: ${marker}`, model: "predictable" },
@@ -74,7 +74,13 @@ async function append(page: Page, request: APIRequestContext, id: string) {
     expect(JSON.stringify(last.llm_data)).toContain(marker);
     lastId = last.message_id;
   }).toPass();
-  await expect(page.locator(`[data-message-id="${lastId}"]`)).toBeAttached();
+  // The chat view publishes store updates on an animation frame. A paused
+  // clock never delivers one, so tick a single frame per poll: that is far
+  // below the one-second retry window the paused tests rely on.
+  await expect(async () => {
+    if (frames) await page.clock.runFor(16);
+    await expect(page.locator(`[data-message-id="${lastId}"]`)).toBeAttached({ timeout: 250 });
+  }).toPass();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -167,7 +173,7 @@ for (const retry of ["pending", "exhausted"] as const) {
     await page.locator("[data-delayed-message-id]").evaluate((el) => {
       el.setAttribute("data-message-id", el.getAttribute("data-delayed-message-id")!);
     });
-    await append(page, request, conversation.id);
+    await append(page, request, conversation.id, true);
     await page.clock.runFor(1100);
     expect(await scrolls(page)).toEqual([conversation.first]);
   });
