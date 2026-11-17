@@ -242,6 +242,7 @@ export interface StreamDelta {
   type: string; // "text" or "thinking"
   text: string;
   index: number;
+  message_id?: string;
   // seq is a per-conversation, monotonically increasing sequence number
   // assigned by the server to each broadcast delta. Clients can use it to
   // detect dropped or out-of-order partial updates.

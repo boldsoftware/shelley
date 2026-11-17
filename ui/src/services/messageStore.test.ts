@@ -2224,6 +2224,89 @@ async function main(): Promise<void> {
     },
   );
 
+  for (const refresh of ["full", "incremental"] as const) {
+    await run(`${refresh} catch-up retires the previous reply's streaming preview`, async () => {
+      const s = freshStore();
+      const id = `c-stream-catch-up-${refresh}`;
+      const user = msg(id, 1);
+      const reply: Message = { ...msg(id, 2), type: "agent", end_of_turn: true };
+      s.applyFullHistory(id, { messages: [user] });
+      s.setAgentWorking(id, true);
+      s.appendStreamText(id, "previous answer", reply.message_id);
+      s.appendStreamThinking(id, "previous thinking", reply.message_id);
+
+      // The connection drops before the saved agent row. Reconnect restores
+      // that row through REST, not globalStream's saved-message handler.
+      s.markAllStale();
+      s.setAgentWorking(id, false);
+      if (refresh === "full") {
+        s.applyFullHistory(id, { messages: [user, reply] });
+      } else {
+        s.applyIncrementalTail(id, { messages: [reply] }, 1);
+      }
+      s.setAgentWorking(id, true);
+      const t = s.getTransient(id);
+      assert(t.streamingText === "", "next turn must not revive the saved answer");
+      assert(t.streamingThinking === "", "next turn must not revive saved thinking");
+      await s.settle();
+    });
+
+    await run(`${refresh} catch-up preserves a newer reply's streaming preview`, async () => {
+      const s = freshStore();
+      const id = `c-stream-newer-${refresh}`;
+      const user = msg(id, 1);
+      const reply: Message = { ...msg(id, 2), type: "agent", end_of_turn: true };
+      s.applyFullHistory(id, { messages: [user] });
+      s.appendStreamText(id, "previous answer", reply.message_id);
+      s.appendStreamThinking(id, "previous thinking", reply.message_id);
+      s.appendStreamThinking(id, "new thinking", "next-reply");
+      s.appendStreamText(id, "new answer", "next-reply");
+      if (refresh === "full") {
+        s.applyFullHistory(id, { messages: [user, reply] });
+      } else {
+        s.applyIncrementalTail(id, { messages: [reply] }, 1);
+      }
+      // A sidebar snapshot can trail fresh deltas.
+      s.setAgentWorking(id, true);
+      const t = s.getTransient(id);
+      assert(t.streamingText === "new answer", "catch-up must preserve only the newer reply");
+      assert(t.streamingThinking === "new thinking", "catch-up must preserve newer thinking");
+      await s.settle();
+    });
+
+    await run(`${refresh} catch-up of an old cancellation preserves a newer preview`, async () => {
+      const s = freshStore();
+      const id = `c-stream-cancelled-${refresh}`;
+      const user = msg(id, 1);
+      const cancelled: Message = {
+        ...msg(id, 2, "cancel-marker"),
+        type: "agent",
+        end_of_turn: true,
+        llm_data: JSON.stringify({
+          Role: 1,
+          Content: [{ Type: 2, Text: "[Operation cancelled]" }],
+          EndOfTurn: true,
+        }),
+      };
+      s.applyFullHistory(id, { messages: [user] });
+      s.appendStreamText(id, "interrupted answer", "old-reply");
+      s.appendStreamThinking(id, "new thinking", "next-reply");
+      s.appendStreamText(id, "new answer", "next-reply");
+      if (refresh === "full") {
+        s.applyFullHistory(id, { messages: [user, cancelled] });
+      } else {
+        s.applyIncrementalTail(id, { messages: [cancelled] }, 1);
+      }
+      const t = s.getTransient(id);
+      assert(t.streamingText === "new answer", "old cancellation must preserve newer text");
+      assert(
+        t.streamingThinking === "new thinking",
+        "old cancellation must preserve newer thinking",
+      );
+      await s.settle();
+    });
+  }
+
   await run("resetTransient clears tool progress and streamed content", async () => {
     const s = freshStore();
     const id = "c-reset-ephemera";

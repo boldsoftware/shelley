@@ -343,6 +343,7 @@ export interface TransientState {
   toolProgress: Record<string, ToolProgress>;
   streamingText: string;
   streamingThinking: string;
+  streamingMessageId?: string;
   agentWorking: boolean;
 }
 
@@ -1235,6 +1236,7 @@ export class MessageStore {
     // NB: no this.hydrated.add(id) — a live stream message for a
     // conversation we haven't focused yet must not suppress the disk read.
     // hydrate() merges the two (mergeRecords).
+    this.clearRecordedStreaming(id, incoming);
     this.notify(id);
 
     // Snapshot what to persist; do not rely on hot record mutating between now
@@ -1529,6 +1531,7 @@ export class MessageStore {
     // Safe to claim hydrated here: _persistFullHistory replaces the whole
     // conversation's rows, so there is nothing left on disk to read.
     this.hydrated.add(id);
+    this.clearRecordedStreaming(id, messages);
     this.notify(id);
 
     this.queueWrite(id, () => this._persistFullHistory(id, rec)).catch((err) =>
@@ -1833,16 +1836,33 @@ export class MessageStore {
     this.notifyTransient(id);
   }
 
-  appendStreamText(id: string, text: string): void {
-    if (!text) return;
+  private prepareStreaming(id: string, messageId: string | undefined): TransientState {
     const t = this.getTransient(id);
+    if (t.streamingMessageId !== messageId) {
+      t.streamingText = "";
+      t.streamingThinking = "";
+    }
+    t.streamingMessageId = messageId;
+    return t;
+  }
+
+  private clearRecordedStreaming(id: string, messages: Message[]): void {
+    const messageId = this.transient.get(id)?.streamingMessageId;
+    if (messageId && messages.some((m) => m.message_id === messageId)) {
+      this.resetStreaming(id);
+    }
+  }
+
+  appendStreamText(id: string, text: string, messageId?: string): void {
+    if (!text) return;
+    const t = this.prepareStreaming(id, messageId);
     t.streamingText = t.streamingText + text;
     this.notifyTransient(id);
   }
 
-  appendStreamThinking(id: string, text: string): void {
+  appendStreamThinking(id: string, text: string, messageId?: string): void {
     if (!text) return;
-    const t = this.getTransient(id);
+    const t = this.prepareStreaming(id, messageId);
     t.streamingThinking = t.streamingThinking + text;
     this.notifyTransient(id);
   }
@@ -1852,6 +1872,7 @@ export class MessageStore {
     if (!t.streamingText && !t.streamingThinking) return;
     t.streamingText = "";
     t.streamingThinking = "";
+    t.streamingMessageId = undefined;
     this.notifyTransient(id);
   }
 

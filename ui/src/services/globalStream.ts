@@ -375,10 +375,14 @@ export function connectGlobalStream({
       messageStore.setToolProgress(convId, data.tool_progress);
     }
     if (data.stream_delta?.type === "text") {
-      messageStore.appendStreamText(convId, data.stream_delta.text);
+      messageStore.appendStreamText(convId, data.stream_delta.text, data.stream_delta.message_id);
     }
     if (data.stream_delta?.type === "thinking") {
-      messageStore.appendStreamThinking(convId, data.stream_delta.text);
+      messageStore.appendStreamThinking(
+        convId,
+        data.stream_delta.text,
+        data.stream_delta.message_id,
+      );
     }
   };
 
