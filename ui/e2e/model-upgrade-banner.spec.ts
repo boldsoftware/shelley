@@ -99,7 +99,8 @@ test.describe("model upgrade banner", () => {
     await page.route(`**/api/conversation/${draft.conversation_id}/draft`, (route) =>
       route.fulfill({ json: { ...draft, ...route.request().postDataJSON() } }),
     );
-    await page.goto(`/c/${draft.slug}`);
+    // Drafts have no slug yet; /c/null would fall back to the newest chat.
+    await page.goto(`/c/${draft.conversation_id}`);
 
     await expect(page.getByTestId("model-upgrade-banner")).toContainText(
       "Newer version of Predictable available",

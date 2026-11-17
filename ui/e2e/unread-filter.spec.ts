@@ -110,6 +110,9 @@ test("the unread filter also keeps read chats with foreground, background, or de
       working: activity === "foreground",
       running_background_jobs: activity === "background" ? 1 : 0,
     });
+    // Earlier tests on this worker's server leave their own chats unread or
+    // working, so list only this one to make the idle filter really empty.
+    snapshot.conversations = [parent];
     if (activity === "delegated") {
       snapshot.conversations.push({
         ...parent,
