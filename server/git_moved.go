@@ -126,16 +126,12 @@ func (s *Server) handleGitMoved(w http.ResponseWriter, r *http.Request) {
 	args = append(args, "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--no-relative",
 		"--submodule=short", "--src-prefix=a/", "--dst-prefix=b/", "--color=always",
 		"--color-moved=zebra", "--color-moved-ws=no", "--ws-error-highlight=none")
-	switch {
-	case diffID == "working":
-		args = append(args, "HEAD")
-	case toRef == "" || toRef == "working":
-		args = append(args, m.parentRef(gitRoot, diffID))
-	case toRef == "self":
-		args = append(args, m.parentRef(gitRoot, diffID), diffID)
-	default:
-		args = append(args, m.parentRef(gitRoot, diffID), toRef)
+	revs, err := m.diffRange(gitRoot, diffID, toRef)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
+	args = append(args, revs...)
 	ctx, cancel := context.WithTimeout(r.Context(), movedTimeout)
 	defer cancel()
 	m.ctx = ctx

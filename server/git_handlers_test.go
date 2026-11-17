@@ -1474,6 +1474,61 @@ func TestHandleGitDiffFiles_BatchedStats(t *testing.T) {
 	}
 }
 
+// TestHandleGitFileDiff_RenamedFile verifies that a renamed file's diff has
+// the old path's content on the left, so only the edited lines differ. The
+// left side used to be read from the new path, which the base doesn't have,
+// so the whole file showed as added.
+func TestHandleGitFileDiff_RenamedFile(t *testing.T) {
+	t.Parallel()
+	h := NewTestHarness(t)
+
+	tempDir := t.TempDir()
+	run := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = tempDir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v failed: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+
+	run("git", "init")
+	run("git", "config", "user.name", "Test")
+	run("git", "config", "user.email", "test@test.com")
+
+	old := strings.Repeat("line\n", 20) + "package old\n"
+	os.WriteFile(filepath.Join(tempDir, "old.txt"), []byte(old), 0o644)
+	run("git", "add", "old.txt")
+	run("git", "commit", "-m", "base\n\nPrompt: test")
+
+	run("git", "mv", "old.txt", "new name.txt")
+	renamed := strings.Repeat("line\n", 20) + "package renamed\n"
+	os.WriteFile(filepath.Join(tempDir, "new name.txt"), []byte(renamed), 0o644)
+	run("git", "commit", "-am", "rename\n\nPrompt: test")
+	head := run("git", "rev-parse", "HEAD")
+
+	for _, to := range []string{"self", "working"} {
+		req := httptest.NewRequest("GET", fmt.Sprintf("/api/git/file-diff/%s/new%%20name.txt?cwd=%s&to=%s", head, tempDir, to), nil)
+		w := httptest.NewRecorder()
+		h.server.handleGitFileDiff(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("to=%s: expected 200, got %d: %s", to, w.Code, w.Body.String())
+		}
+		var diff GitFileDiff
+		if err := json.Unmarshal(w.Body.Bytes(), &diff); err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		if !diff.OldExists || diff.OldContent != old {
+			t.Errorf("to=%s: old side = exists %v, %q; want the old path's content", to, diff.OldExists, diff.OldContent)
+		}
+		if diff.NewContent != renamed {
+			t.Errorf("to=%s: new side = %q, want %q", to, diff.NewContent, renamed)
+		}
+	}
+}
+
 // TestHandleGitDiffFiles_RenamedFile verifies that a committed rename is listed
 // under the new path. The --name-status rename line is "R100\told\tnew"; the
 // old whitespace-splitting parser produced a bogus status and the wrong path.
@@ -1554,19 +1609,19 @@ func TestParseNameStatusZ(t *testing.T) {
 		{
 			"rename surfaces destination",
 			"R100\x00old.txt\x00new name.txt\x00",
-			[]nameStatusEntry{{code: "R100", path: "new name.txt"}},
+			[]nameStatusEntry{{code: "R100", path: "new name.txt", from: "old.txt"}},
 		},
 		{
 			"copy surfaces destination",
 			"C75\x00src.txt\x00copy.txt\x00",
-			[]nameStatusEntry{{code: "C75", path: "copy.txt"}},
+			[]nameStatusEntry{{code: "C75", path: "copy.txt", from: "src.txt"}},
 		},
 		{
 			"multiple mixed",
 			"M\x00a.txt\x00R100\x00b.txt\x00c d.txt\x00D\x00e.txt\x00",
 			[]nameStatusEntry{
 				{code: "M", path: "a.txt"},
-				{code: "R100", path: "c d.txt"},
+				{code: "R100", path: "c d.txt", from: "b.txt"},
 				{code: "D", path: "e.txt"},
 			},
 		},

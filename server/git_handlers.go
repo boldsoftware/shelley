@@ -6,7 +6,6 @@ import (
 	"mime"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -82,6 +81,29 @@ func (m machine) parentRef(gitDir, commitHash string) string {
 		return emptyTreeHash
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// diffRange returns the revisions `git diff` compares for a diff ID and its
+// `to` parameter: the base, then the head unless that is the working tree.
+//
+//	"" or "working": through the working tree
+//	"self":          only the selected commit
+//	<hash>:          through <hash>
+func (m machine) diffRange(gitRoot, diffID, toRef string) ([]string, error) {
+	if diffID == "working" {
+		return []string{"HEAD"}, nil
+	}
+	parent := m.parentRef(gitRoot, diffID)
+	switch toRef {
+	case "", "working":
+		return []string{parent}, nil
+	case "self":
+		return []string{parent, diffID}, nil
+	}
+	if !safeRef(toRef) {
+		return nil, errors.New("invalid to parameter")
+	}
+	return []string{parent, toRef}, nil
 }
 
 // getGitRoot returns the git repository root for the given directory
@@ -459,10 +481,20 @@ func (s *Server) handleGitHighlights(w http.ResponseWriter, r *http.Request) {
 
 // nameStatusEntry is one record from `git diff --name-status -z`: a status code
 // (e.g. "M", "A", "D", "R100") and the path to surface for it (the destination
-// path for renames/copies).
+// path for renames/copies, whose source path is in from).
 type nameStatusEntry struct {
 	code string
 	path string
+	from string
+}
+
+// nameStatus lists the files that differ across a diffRange.
+func (m machine) nameStatus(gitRoot string, revs []string) ([]nameStatusEntry, error) {
+	out, err := m.git(gitRoot, append([]string{"diff", "--name-status", "-z"}, revs...)...).Output()
+	if err != nil {
+		return nil, err
+	}
+	return parseNameStatusZ(string(out)), nil
 }
 
 // parseNameStatusZ parses the NUL-separated output of
@@ -492,9 +524,8 @@ func parseNameStatusZ(s string) []nameStatusEntry {
 			if i+1 >= len(tokens) {
 				break
 			}
-			dst := tokens[i+1]
+			entries = append(entries, nameStatusEntry{code: code, path: tokens[i+1], from: tokens[i]})
 			i += 2
-			entries = append(entries, nameStatusEntry{code: code, path: dst})
 			continue
 		}
 		path := tokens[i]
@@ -602,53 +633,21 @@ func (s *Server) handleGitDiffFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Optional `to` parameter scopes the right-hand side of the diff:
-	//   "" or "working": through working tree (default)
-	//   "self":          only the selected commit (parent..diffID)
-	//   <hash>:          range from selected commit's parent through <hash>
-	toRef := r.URL.Query().Get("to")
-
-	var cmd *exec.Cmd
-	var statBaseArg string
-	var statHeadArg string // empty means "working tree"
-
-	if diffID == "working" {
-		cmd = m.git(gitRoot, "diff", "--name-status", "-z", "HEAD")
-		statBaseArg = "HEAD"
-	} else {
-		parent := m.parentRef(gitRoot, diffID)
-		statBaseArg = parent
-		switch toRef {
-		case "", "working":
-			// Diff from parent to working tree (existing behavior).
-			cmd = m.git(gitRoot, "diff", "--name-status", "-z", parent)
-		case "self":
-			statHeadArg = diffID
-			cmd = m.git(gitRoot, "diff", "--name-status", "-z", parent, diffID)
-		default:
-			if !safeRef(toRef) {
-				http.Error(w, "invalid to parameter", http.StatusBadRequest)
-				return
-			}
-			statHeadArg = toRef
-			cmd = m.git(gitRoot, "diff", "--name-status", "-z", parent, toRef)
-		}
+	revs, err := m.diffRange(gitRoot, diffID, r.URL.Query().Get("to"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
+	statCmd := m.git(gitRoot, append(append([]string{"diff"}, revs...), "--numstat", "-z")...)
 
-	statArgs := []string{"diff", statBaseArg}
-	if statHeadArg != "" {
-		statArgs = append(statArgs, statHeadArg)
-	}
-	statArgs = append(statArgs, "--numstat", "-z")
-	statCmd := m.git(gitRoot, statArgs...)
-
-	var output, statOutput []byte
+	var statusEntries []nameStatusEntry
+	var statOutput []byte
 	var statusErr, statErr error
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		output, statusErr = cmd.Output()
+		statusEntries, statusErr = m.nameStatus(gitRoot, revs)
 	}()
 	go func() {
 		defer wg.Done()
@@ -664,12 +663,6 @@ func (s *Server) handleGitDiffFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse the NUL-separated --name-status -z stream. Each record is a status
-	// field followed by one path (added/modified/deleted) or two paths
-	// (renames/copies, status like "R100"), every token NUL-terminated. Using
-	// -z (rather than splitting on whitespace) is what makes filenames with
-	// spaces or tabs come through intact.
-	statusEntries := parseNameStatusZ(string(output))
 	stats, err := parseNumstatZ(string(statOutput))
 	if err != nil {
 		http.Error(w, "failed to parse diff stats", http.StatusInternalServerError)
@@ -794,44 +787,37 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Left side: state before the selected commit (or HEAD for working changes)
-	var baseRef string
-	if diffID == "working" {
-		baseRef = "HEAD"
-	} else {
-		baseRef = m.parentRef(gitRoot, diffID)
+	// Left side: the base. Right side: the head, or the working tree (which
+	// allows in-place edits) when the range has none.
+	revs, err := m.diffRange(gitRoot, diffID, r.URL.Query().Get("to"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	baseRef, headRef := revs[0], ""
+	if len(revs) == 2 {
+		headRef = revs[1]
 	}
 
 	var oldContent string
 	var oldExists bool
-	if baseRef == emptyTreeHash {
-		oldContent = ""
-	} else {
-		oldCmd := m.git(gitRoot, "show", baseRef+":"+filePath)
-		oldOutput, err := oldCmd.Output()
-		oldExists = err == nil
-		oldContent = string(oldOutput)
-	}
-
-	// Right side: working tree by default; if `to` is set, show that ref instead.
-	//   ""/"working": working tree (allows in-place edits)
-	//   "self":      the selected commit
-	//   <hash>:      arbitrary commit
-	toRef := r.URL.Query().Get("to")
-	var headRef string
-	if diffID != "working" {
-		switch toRef {
-		case "self":
-			headRef = diffID
-		case "", "working":
-			headRef = ""
-		default:
-			if !safeRef(toRef) {
-				http.Error(w, "invalid to parameter", http.StatusBadRequest)
+	if baseRef != emptyTreeHash {
+		oldOutput, err := m.git(gitRoot, "show", baseRef+":"+filePath).Output()
+		if err != nil {
+			// A file the diff renamed has its left side under the old path.
+			entries, statusErr := m.nameStatus(gitRoot, revs)
+			if statusErr != nil {
+				http.Error(w, "failed to get diff files", http.StatusInternalServerError)
 				return
 			}
-			headRef = toRef
+			for _, e := range entries {
+				if e.path == filePath && e.from != "" {
+					oldOutput, err = m.git(gitRoot, "show", baseRef+":"+e.from).Output()
+				}
+			}
 		}
+		oldExists = err == nil
+		oldContent = string(oldOutput)
 	}
 
 	var newContent string
