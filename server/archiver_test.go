@@ -34,7 +34,7 @@ func newArchiveStoreFixture(t *testing.T) *archiveStoreFixture {
 	f.archiver.secrets.keyPath = filepath.Join(t.TempDir(), "secrets.key")
 	f.store, f.storeDB, _ = newTestServer(t)
 	store := f.store.archiveStoreHandler()
-	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	proxy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.requests = append(f.requests, r.Method+" "+r.URL.Path)
 		fail := f.fail > 0
@@ -50,9 +50,10 @@ func newArchiveStoreFixture(t *testing.T) *archiveStoreFixture {
 		r.Header.Set("X-ExeDev-Email", "alice@example.com")
 		r.Header.Set("X-Exedev-Source-Vm", "alice-vm")
 		store.ServeHTTP(w, r)
-	}))
-	t.Cleanup(proxy.Close)
-	f.url = proxy.URL
+	})
+	// In process, without a listener, so tests can run in a synctest bubble.
+	f.archiver.archiverHTTP = &http.Client{Transport: handlerTransport{proxy}}
+	f.url = "http://archive-store.test"
 	return f
 }
 
@@ -373,4 +374,13 @@ func TestArchiverAuthorship(t *testing.T) {
 	if got := str(msgs[1].UserEmail) + " " + str(msgs[1].ExternalMessageID); got != "<nil> 0c69f6cd-3da0-4b8e-9d2a-7f1e5c3b2a10" {
 		t.Errorf("texted message: %s", got)
 	}
+}
+
+// handlerTransport serves requests with a handler, in process.
+type handlerTransport struct{ h http.Handler }
+
+func (t handlerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	w := httptest.NewRecorder()
+	t.h.ServeHTTP(w, r)
+	return w.Result(), nil
 }

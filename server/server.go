@@ -518,6 +518,9 @@ type Server struct {
 	// that invoke hooks via the server.
 	hooksDir string
 
+	// archiverHTTP sends the archiver's requests to the archive store.
+	archiverHTTP *http.Client
+
 	// keepRecentTokensOverride overrides the recent-token budget (see
 	// keepRecentTokens). Zero means defaultKeepRecentTokens. Tests set it to
 	// get a collapsible compact_in_place index without a giant transcript.
@@ -558,6 +561,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		predictableOnly:       predictableOnly,
 		defaultModel:          defaultModel,
 		requireHeader:         requireHeader,
+		archiverHTTP:          archiverHTTP,
 		versionChecker:        NewVersionChecker(),
 		notifDispatcher:       notifications.NewDispatcher(logger),
 		shutdownCh:            make(chan struct{}),

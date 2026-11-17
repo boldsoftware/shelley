@@ -460,7 +460,7 @@ func (c archiveResearchClient) ArchiveGet(ctx context.Context, path string, quer
 	if err != nil {
 		return err
 	}
-	resp, err := archiverHTTP.Do(req)
+	resp, err := c.s.archiverHTTP.Do(req)
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
@@ -216,66 +217,68 @@ func TestTemporaryNewConversation(t *testing.T) {
 // report to its parent is temporary too.
 func TestTemporaryPropagation(t *testing.T) {
 	t.Parallel()
-	f := newArchiveStoreFixture(t)
-	ctx := t.Context()
-	f.pushOn(t)
-	held := newHeldLLMService()
-	f.archiver.llmManager = &testLLMManager{service: held}
-	t.Cleanup(func() { stopActiveConversationLoops(f.archiver) })
+	synctest.Test(t, func(t *testing.T) {
+		f := newArchiveStoreFixture(t)
+		ctx := t.Context()
+		f.pushOn(t)
+		held := newHeldLLMService()
+		f.archiver.llmManager = &testLLMManager{service: held}
+		t.Cleanup(func() { stopActiveConversationLoops(f.archiver) })
 
-	slug := "assistant"
-	parent, err := f.archiverDB.CreateConversation(ctx, &slug, true, nil, strPtr("predictable"), db.ConversationOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	prompt := "subagent: scout message_parent_final: found it"
-	if w := postBtwChat(t, f.archiver, parent.ConversationID, ChatRequest{Message: prompt, Model: "predictable", Temporary: true}); w.Code != http.StatusAccepted {
-		t.Fatalf("chat: %d %s", w.Code, w.Body)
-	}
-	held.waitCall(t, prompt).Release()
-	childCall := held.waitCall(t, parentMessage(parent, "message_parent_final: found it"))
-	// Start the parent's next round before the child can report, so the
-	// report cannot replace prompt as that round's last user message.
-	parentCall := held.waitCall(t, prompt)
-	childCall.Release()
-	report := "found it"
-	children, err := f.archiverDB.GetSubagents(ctx, parent.ConversationID)
-	if err != nil || len(children) != 1 {
-		t.Fatalf("subagents %v, %v", children, err)
-	}
-	child := children[0]
-	wrapped := `<subagent_message conversation_id="` + child.ConversationID + `" slug="scout">` + "\n" + report + "\n</subagent_message>"
-	// The parent's round after the subagent tool, then the report.
-	parentCall.Release()
-	reported := held.waitCall(t, wrapped)
-	if !db.ParseConversationOptions(child.ConversationOptions).Temporary {
-		t.Fatalf("subagent of a temporary turn is not temporary: %s", child.ConversationOptions)
-	}
-	var reportSequenceID int64
-	for _, m := range listMessages(t, f.archiverDB, parent.ConversationID) {
-		if m.Type != string(db.MessageTypeUser) || m.UserData == nil {
-			continue
-		}
-		message, err := messageWithSenderProvenance(storedLLMMessage(t, &m), []byte(*m.UserData))
+		slug := "assistant"
+		parent, err := f.archiverDB.CreateConversation(ctx, &slug, true, strPtr(t.TempDir()), strPtr("predictable"), db.ConversationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if messageText(message) == wrapped {
-			reportSequenceID = m.SequenceID
-			break
+		prompt := "subagent: scout message_parent_final: found it"
+		if w := postBtwChat(t, f.archiver, parent.ConversationID, ChatRequest{Message: prompt, Model: "predictable", Temporary: true}); w.Code != http.StatusAccepted {
+			t.Fatalf("chat: %d %s", w.Code, w.Body)
 		}
-	}
-	if reportSequenceID == 0 || !slices.Contains(temporarySequenceIDs(t, f.archiverDB, parent.ConversationID), reportSequenceID) {
-		t.Fatal("the temporary subagent's report is not temporary")
-	}
-	f.push(t)
-	if msgs := f.stored(t, child.ConversationID); len(msgs) != 0 {
-		t.Fatalf("temporary subagent archived %d messages", len(msgs))
-	}
-	if got := storedTexts(t, f.stored(t, parent.ConversationID)); len(got) != 0 {
-		t.Fatalf("archived %q of a temporary turn", got)
-	}
-	reported.Release()
+		held.waitCall(t, prompt).Release()
+		childCall := held.waitCall(t, parentMessage(parent, "message_parent_final: found it"))
+		// Start the parent's next round before the child can report, so the
+		// report cannot replace prompt as that round's last user message.
+		parentCall := held.waitCall(t, prompt)
+		childCall.Release()
+		report := "found it"
+		children, err := f.archiverDB.GetSubagents(ctx, parent.ConversationID)
+		if err != nil || len(children) != 1 {
+			t.Fatalf("subagents %v, %v", children, err)
+		}
+		child := children[0]
+		wrapped := `<subagent_message conversation_id="` + child.ConversationID + `" slug="scout">` + "\n" + report + "\n</subagent_message>"
+		// The parent's round after the subagent tool, then the report.
+		parentCall.Release()
+		reported := held.waitCall(t, wrapped)
+		if !db.ParseConversationOptions(child.ConversationOptions).Temporary {
+			t.Fatalf("subagent of a temporary turn is not temporary: %s", child.ConversationOptions)
+		}
+		var reportSequenceID int64
+		for _, m := range listMessages(t, f.archiverDB, parent.ConversationID) {
+			if m.Type != string(db.MessageTypeUser) || m.UserData == nil {
+				continue
+			}
+			message, err := messageWithSenderProvenance(storedLLMMessage(t, &m), []byte(*m.UserData))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if messageText(message) == wrapped {
+				reportSequenceID = m.SequenceID
+				break
+			}
+		}
+		if reportSequenceID == 0 || !slices.Contains(temporarySequenceIDs(t, f.archiverDB, parent.ConversationID), reportSequenceID) {
+			t.Fatal("the temporary subagent's report is not temporary")
+		}
+		f.push(t)
+		if msgs := f.stored(t, child.ConversationID); len(msgs) != 0 {
+			t.Fatalf("temporary subagent archived %d messages", len(msgs))
+		}
+		if got := storedTexts(t, f.stored(t, parent.ConversationID)); len(got) != 0 {
+			t.Fatalf("archived %q of a temporary turn", got)
+		}
+		reported.Release()
+	})
 }
 
 // The notice of a background job is temporary when the message that started

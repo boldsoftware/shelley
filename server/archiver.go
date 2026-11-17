@@ -376,7 +376,7 @@ func (s *Server) archiverRequest(ctx context.Context, method, url string, body [
 		return 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := archiverHTTP.Do(req)
+	resp, err := s.archiverHTTP.Do(req)
 	if err != nil {
 		return 0, err
 	}
