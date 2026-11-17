@@ -2216,6 +2216,8 @@ func TestServiceSupportedReasoningLevels(t *testing.T) {
 		model Model
 		want  string
 	}{
+		{name: "GPT-6.2 Astra", model: GPT62Astra, want: "low,medium,high,xhigh,max"},
+		{name: "GPT-6.2 Sol", model: GPT62Sol, want: "low,medium,high,xhigh,max"},
 		{name: "GPT-6 Astra", model: GPT6Astra, want: "low,medium,high,xhigh,max"},
 		{name: "GPT-6.1 Sol", model: GPT61Sol, want: "low,medium,high,xhigh,max"},
 		{name: "GPT-6.1 Terra", model: GPT61Terra, want: "off,low,medium,high,xhigh,max"},

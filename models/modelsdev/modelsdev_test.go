@@ -416,6 +416,8 @@ func TestLookupReleaseDate(t *testing.T) {
 		{"https://llm.int.exe.xyz/v1/messages", "claude-haiku-4-5", "2025-10-15"},
 		{"https://llm.int.exe.xyz/v1/messages", "claude-haiku-5-5", "2026-10-07"},
 		{"https://llm.int.exe.xyz/v1/messages", "claude-fable-5-2", "2026-11-09"},
+		{"https://llm.int.exe.xyz/v1", "gpt-6.2-astra", "2026-11-17"},
+		{"https://llm.int.exe.xyz/v1", "gpt-6.2-sol", "2026-11-17"},
 		{"https://llm.int.exe.xyz/v1", "gpt-6.1-sol", "2026-09-29"},
 		{"https://llm.int.exe.xyz/v1", "gpt-6.1-terra", "2026-10-26"},
 		{"https://llm.int.exe.xyz/v1", "gpt-6-sol", "2026-09-22"},
@@ -452,6 +454,8 @@ func TestLookupCost(t *testing.T) {
 		{"openai dated", "https://llm.int.exe.xyz/v1/responses", "gpt-5.5-2026-04-23", true, Cost{Input: 5, Output: 30, CacheRead: 0.5}},
 		{"openai undated", "", "gpt-5.3-codex", true, Cost{Input: 1.75, Output: 14, CacheRead: 0.175}},
 		{"astra via gateway", "https://llm.int.exe.xyz/v1/responses", "gpt-6-astra", true, Cost{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}},
+		{"astra 6.2 via gateway", "https://llm.int.exe.xyz/v1/responses", "gpt-6.2-astra", true, Cost{Input: 8, Output: 40, CacheRead: 0.4, CacheWrite: 10}},
+		{"sol 6.2 via gateway", "https://llm.int.exe.xyz/v1/responses", "gpt-6.2-sol", true, Cost{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
 		{"sol 6.1 via gateway", "https://llm.int.exe.xyz/v1/responses", "gpt-6.1-sol", true, Cost{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
 		{"terra 6.1 via gateway", "https://llm.int.exe.xyz/v1/responses", "gpt-6.1-terra", true, Cost{Input: 1, Output: 5, CacheRead: 0.05, CacheWrite: 1.25}},
 		{"sol via gateway", "https://llm.int.exe.xyz/v1/responses", "gpt-6-sol", true, Cost{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
@@ -574,6 +578,8 @@ func TestLookupOutputLimit(t *testing.T) {
 		found    bool
 	}{
 		{"OpenAI endpoint", "https://api.openai.com/v1", "gpt-5.4", 128000, true},
+		{"GPT-6.2 Astra", "https://api.openai.com/v1", "gpt-6.2-astra", 128000, true},
+		{"GPT-6.2 Sol", "https://api.openai.com/v1", "gpt-6.2-sol", 128000, true},
 		{"GPT-6.1 Sol", "https://api.openai.com/v1", "gpt-6.1-sol", 128000, true},
 		{"GPT-6.1 Terra", "https://api.openai.com/v1", "gpt-6.1-terra", 128000, true},
 		{"GPT-6 Luna", "https://api.openai.com/v1", "gpt-6-luna", 128000, true},

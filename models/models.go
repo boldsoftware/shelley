@@ -246,6 +246,18 @@ func All() []Model {
 			APIType: APITypeAnthropicMessages, DefaultBaseURL: DefaultAnthropicBaseURL,
 		},
 		{
+			ID: "gpt-6.2-astra", Provider: ProviderOpenAI,
+			Description: "GPT-6.2 Astra", APIModelName: oai.GPT62Astra.ModelName,
+			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
+			OpenAI: oai.GPT62Astra,
+		},
+		{
+			ID: "gpt-6.2-sol", Provider: ProviderOpenAI,
+			Description: "GPT-6.2 Sol", APIModelName: oai.GPT62Sol.ModelName,
+			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
+			OpenAI: oai.GPT62Sol,
+		},
+		{
 			ID: "gpt-6-astra", Provider: ProviderOpenAI,
 			Description: "GPT-6 Astra", APIModelName: oai.GPT6Astra.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,

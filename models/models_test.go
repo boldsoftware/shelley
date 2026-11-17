@@ -46,6 +46,19 @@ func TestAll(t *testing.T) {
 	}
 }
 
+func TestGPT62InBuiltInCatalog(t *testing.T) {
+	for id, description := range map[string]string{"gpt-6.2-astra": "GPT-6.2 Astra", "gpt-6.2-sol": "GPT-6.2 Sol"} {
+		m := ByID(id)
+		if m == nil {
+			t.Fatalf("%s not in built-in catalog", id)
+		}
+		if m.Provider != ProviderOpenAI || m.APIModelName != id || m.Description != description ||
+			m.APIType != APITypeOpenAIResponses || m.DefaultBaseURL != DefaultOpenAIBaseURL || m.OpenAI.ModelName != id {
+			t.Fatalf("%s = %+v", id, m)
+		}
+	}
+}
+
 func TestGPT61SolInBuiltInCatalog(t *testing.T) {
 	for _, m := range All() {
 		if m.ID != "gpt-6.1-sol" {

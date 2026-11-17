@@ -124,6 +124,26 @@ var (
 		SupportsImages:   true,
 	}
 
+	GPT62Astra = Model{
+		ModelName:          "gpt-6.2-astra",
+		TextVerbosity:      "low",
+		URL:                OpenAIURL,
+		APIKeyEnv:          OpenAIAPIKeyEnv,
+		IsReasoningModel:   true,
+		SupportsApplyPatch: true,
+		SupportsImages:     true,
+	}
+
+	GPT62Sol = Model{
+		ModelName:          "gpt-6.2-sol",
+		TextVerbosity:      "low",
+		URL:                OpenAIURL,
+		APIKeyEnv:          OpenAIAPIKeyEnv,
+		IsReasoningModel:   true,
+		SupportsApplyPatch: true,
+		SupportsImages:     true,
+	}
+
 	GPT6Astra = Model{
 		ModelName:          "gpt-6-astra",
 		TextVerbosity:      "low",

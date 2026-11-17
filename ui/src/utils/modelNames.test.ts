@@ -29,6 +29,8 @@ eq("claude-fable-5.1", "Claude Fable 5.1");
 eq("claude-fable-5", "Claude Fable 5");
 
 // OpenAI gpt-*
+eq("gpt-6.2-astra", "GPT-6.2 Astra");
+eq("gpt-6.2-sol", "GPT-6.2 Sol");
 eq("gpt-6-astra", "GPT-6 Astra");
 eq("gpt-6.1-sol", "GPT-6.1 Sol");
 eq("gpt-6.1-terra", "GPT-6.1 Terra");

@@ -224,6 +224,8 @@ func TestLLMIntegrationSourceLabelsAndFiltering(t *testing.T) {
 	integ := &LLMIntegrationConfig{
 		Name: "llm", Host: "llm.int.exe.xyz", URL: "https://llm.int.exe.xyz",
 		Models: []IntegrationModel{
+			{ID: "openai/gpt-6.2-astra", Provider: "openai", NativeID: "gpt-6.2-astra", APIs: []string{"openai_chat", "openai_responses"}},
+			{ID: "openai/gpt-6.2-sol", Provider: "openai", NativeID: "gpt-6.2-sol", APIs: []string{"openai_chat", "openai_responses"}},
 			{ID: "openai/gpt-6-astra", Provider: "openai", NativeID: "gpt-6-astra", APIs: []string{"openai_chat", "openai_responses"}},
 			{ID: "openai/gpt-6.1-sol", Provider: "openai", NativeID: "gpt-6.1-sol", APIs: []string{"openai_chat", "openai_responses"}},
 			{ID: "openai/gpt-6.1-terra", Provider: "openai", NativeID: "gpt-6.1-terra", APIs: []string{"openai_chat", "openai_responses"}},
@@ -246,6 +248,8 @@ func TestLLMIntegrationSourceLabelsAndFiltering(t *testing.T) {
 	bs := Build(models.All(), []Source{LLMIntegration(integ, ""), Predictable()}, &http.Client{}, nil)
 	wantLabel := "llm.int.exe.xyz"
 	for _, id := range []string{
+		"gpt-6.2-astra",
+		"gpt-6.2-sol",
 		"gpt-6-astra",
 		"gpt-6.1-sol",
 		"gpt-6.1-terra",
@@ -277,6 +281,8 @@ func TestLLMIntegrationSourceLabelsAndFiltering(t *testing.T) {
 		}
 	}
 	for id, want := range map[string]oai.Model{
+		"gpt-6.2-astra": oai.GPT62Astra,
+		"gpt-6.2-sol":   oai.GPT62Sol,
 		"gpt-6-astra":   oai.GPT6Astra,
 		"gpt-6.1-sol":   oai.GPT61Sol,
 		"gpt-6.1-terra": oai.GPT61Terra,

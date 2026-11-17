@@ -35,6 +35,20 @@ func TestAssignTiers(t *testing.T) {
 		}
 	})
 
+	t.Run("GPT-6.2 shadows its predecessors", func(t *testing.T) {
+		ids := []string{"gpt-6.2-astra", "gpt-6.2-sol", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-5.6-sol", "gpt-5.5", "gpt-5.4"}
+		tiers := AssignTiers(ids)
+		for i, id := range ids {
+			want := Tier2
+			if i < 2 {
+				want = Tier1
+			}
+			if tiers[id] != want {
+				t.Errorf("%s tier = %d, want %d", id, tiers[id], want)
+			}
+		}
+	})
+
 	t.Run("GPT-6.1 Sol shadows Sol 6 and older Sol releases", func(t *testing.T) {
 		ids := []string{"gpt-6.1-sol", "gpt-6-sol", "gpt-5.6-sol", "gpt-5.5", "gpt-5.4"}
 		tiers := AssignTiers(ids)

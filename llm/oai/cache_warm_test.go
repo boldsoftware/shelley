@@ -100,6 +100,8 @@ func TestPrewarmSupport(t *testing.T) {
 		provider string
 		want     bool
 	}{
+		{"gpt-6.2-astra", "openai", true},
+		{"gpt-6.2-sol", "openai", true},
 		{"gpt-6.1-sol", "openai", true},
 		{"gpt-6.1-terra", "openai", true},
 		{"gpt-6-luna", "openai", true},
