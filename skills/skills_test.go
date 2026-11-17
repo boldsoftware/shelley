@@ -796,6 +796,28 @@ func TestPreviousConversationsBuiltinIncludesSubagents(t *testing.T) {
 	}
 }
 
+func TestPreviousConversationsBuiltinExcludesCurrentConversation(t *testing.T) {
+	previous := skillByName(BuiltinSkills(), "previous-conversations")
+	if previous == nil {
+		t.Fatal("previous-conversations built-in skill not found")
+	}
+	const exclude = "conversation_id != '$SHELLEY_CONVERSATION_ID'"
+	for _, query := range []string{"ORDER BY updated_at DESC", "LIKE '%SEARCH_TERM%'"} {
+		found := false
+		for _, line := range strings.Split(previous.Body, "\n") {
+			if strings.Contains(line, query) {
+				found = true
+				if !strings.Contains(line, exclude) {
+					t.Errorf("query %q does not exclude the current conversation: %s", query, line)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("query %q not found in instructions", query)
+		}
+	}
+}
+
 func TestToPromptXMLBuiltinSkill(t *testing.T) {
 	skills := []Skill{
 		{

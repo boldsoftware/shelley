@@ -11,10 +11,12 @@ First, locate the database:
 DB="${SHELLEY_DB:-$HOME/.config/shelley/shelley.db}"
 ```
 
+`$SHELLEY_CONVERSATION_ID` is the conversation you are in now. The list and search queries below exclude it; it is not a previous conversation.
+
 ## List recent conversations
 
 ```bash
-sqlite3 "$DB" "SELECT conversation_id, slug, parent_conversation_id, json_extract(conversation_options, '$.kind') AS kind, datetime(created_at, 'localtime') as created, datetime(updated_at, 'localtime') as updated FROM conversations ORDER BY updated_at DESC LIMIT 20;"
+sqlite3 "$DB" "SELECT conversation_id, slug, parent_conversation_id, json_extract(conversation_options, '$.kind') AS kind, datetime(created_at, 'localtime') as created, datetime(updated_at, 'localtime') as updated FROM conversations WHERE conversation_id != '$SHELLEY_CONVERSATION_ID' ORDER BY updated_at DESC LIMIT 20;"
 ```
 
 ## Get messages from a conversation
@@ -40,5 +42,5 @@ Use a returned `conversation_id` with the messages query above. Repeat the child
 ## Search conversations by slug
 
 ```bash
-sqlite3 "$DB" "SELECT conversation_id, slug FROM conversations WHERE slug LIKE '%SEARCH_TERM%';"
+sqlite3 "$DB" "SELECT conversation_id, slug FROM conversations WHERE conversation_id != '$SHELLEY_CONVERSATION_ID' AND slug LIKE '%SEARCH_TERM%';"
 ```
