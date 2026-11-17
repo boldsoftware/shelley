@@ -40,7 +40,7 @@
       <div class="activity-detail">
         <p>${esc(e.actor)}${e.model ? ` · ${esc(e.model)}` : ''} · ${esc(new Date(e.begin).toLocaleString())}</p>
         <p>${duration}</p>
-        ${e.kind === 'llm' ? `<p>Tokens: ${e.tokens.toLocaleString()} · output ${e.usage.output_tokens.toLocaleString()}</p>` : ''}
+        ${e.kind === 'llm' ? `<p>Tokens: ${esc(e.tokens.toLocaleString())} · output ${esc(e.usage.output_tokens.toLocaleString())}</p>` : ''}
         ${inputDetail(e)}
       </div>
     </details>`;
