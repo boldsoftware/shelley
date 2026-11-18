@@ -18,8 +18,8 @@ const bash = (command: string, maxLen?: number) => toolHeadline("bash", { comman
 
 run("strips leading 'cd <dir> &&' prefix", () => {
   assert(
-    bash("cd /home/exedev/exe && git status") === "git status",
-    bash("cd /home/exedev/exe && git status"),
+    bash("cd /home/exedev/project && git status") === "git status",
+    bash("cd /home/exedev/project && git status"),
   );
   assert(
     bash("cd shelley/ui; pnpm run build") === "pnpm run build",
@@ -53,8 +53,8 @@ run("strips wrapper programs (sudo/time/nohup)", () => {
 run("surfaces subcommand for git/go/npm/pnpm", () => {
   assert(bash("git diff HEAD~1") === "git diff HEAD~1", bash("git diff HEAD~1"));
   assert(
-    bash("go test ./e1e -run TestFoo") === "go test ./e1e",
-    bash("go test ./e1e -run TestFoo"),
+    bash("go test ./server -run TestFoo") === "go test ./server",
+    bash("go test ./server -run TestFoo"),
   );
   assert(bash("npm run dev") === "npm run dev", bash("npm run dev"));
   assert(bash("pnpm run build") === "pnpm run build", bash("pnpm run build"));
