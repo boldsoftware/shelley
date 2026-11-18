@@ -1299,8 +1299,9 @@ provide("lastMessageId", lastMessageId);
 // The server suggests what the user will type after a turn. It stands only
 // while nothing has happened since that turn ended, besides usage markers
 // and git and model notes (a new generation, for one, ends it), and nothing
-// the user sent waits in the queue.
-const nextPromptSuggestionsOn = useFeatureFlag("next-prompt-suggestions");
+// the user sent waits in the queue. On by default, like the server, so the
+// chip neither waits on nor depends on the flags fetch.
+const nextPromptSuggestionsOn = useFeatureFlag("next-prompt-suggestions", true);
 
 // While this Shelley archives to a Shelley archive store, a new conversation may be made
 // temporary (kept out of it), before its first message only; in the

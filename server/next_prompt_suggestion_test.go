@@ -19,8 +19,9 @@ func newSuggestionHarness(t *testing.T, on bool) *TestHarness {
 	t.Helper()
 	h := NewTestHarness(t)
 	h.convOpts = &db.ConversationOptions{DisableNotifications: true}
+	// setupTestDB turned the flag off; with on, the default applies.
 	if on {
-		if err := h.db.SetFeatureFlagOverride(t.Context(), FlagNextPromptSuggestions.Name, "true"); err != nil {
+		if err := h.db.DeleteFeatureFlagOverride(t.Context(), FlagNextPromptSuggestions.Name); err != nil {
 			t.Fatal(err)
 		}
 	}

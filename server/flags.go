@@ -37,7 +37,7 @@ var FlagWorkspace = featureflags.Register(featureflags.Flag{
 var FlagNextPromptSuggestions = featureflags.Register(featureflags.Flag{
 	Name:        "next-prompt-suggestions",
 	Description: "After each turn, suggest the next message in the empty composer (Tab accepts). Costs one extra model request per turn, mostly prompt-cached where the model caches.",
-	Default:     false,
+	Default:     true,
 })
 
 // FlagBookmarklet offers, in the overflow menu, a bookmarklet that opens a

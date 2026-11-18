@@ -22,10 +22,16 @@ import (
 	"shelley.exe.dev/models"
 )
 
-// setupTestDB creates a test database
+// setupTestDB creates a test database. Next prompt suggestions are off: they
+// are a model request after every turn, which would race the requests and
+// messages other tests inspect. Their own tests turn them back on.
 func setupTestDB(t *testing.T) (*db.DB, func()) {
 	t.Helper()
-	return db.NewTestDB(t)
+	database, cleanup := db.NewTestDB(t)
+	if err := database.SetFeatureFlagOverride(t.Context(), FlagNextPromptSuggestions.Name, "false"); err != nil {
+		t.Fatal(err)
+	}
+	return database, cleanup
 }
 
 // waitFor polls a condition until it returns true or the timeout is reached.

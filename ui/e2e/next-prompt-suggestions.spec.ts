@@ -1,9 +1,12 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { createConversationViaAPIWithDetails, setPageFeatureFlag, withTempDir } from "./helpers";
+import { createConversationViaAPIWithDetails, withTempDir } from "./helpers";
 
-// Turns the flag on in the worker's server for the test, which then opens a
+const flag = "next-prompt-suggestions";
+
+// Clears the worker server's override of the flag for the test (global setup
+// turns suggestions off for the rest), so the default applies, then opens a
 // conversation whose one turn was "echo: water the basil".
 async function withSuggestions(
   page: Page,
@@ -11,24 +14,25 @@ async function withSuggestions(
   run: (conversationId: string) => Promise<void>,
   options: { cwd?: string } = {},
 ) {
-  const on = await request.post("/feature-flags", {
-    data: { name: "next-prompt-suggestions", value: true },
-  });
-  expect(on.ok()).toBeTruthy();
+  const flags: { name: string; override?: unknown }[] = await (
+    await request.get("/feature-flags")
+  ).json();
+  const override = flags.find((f) => f.name === flag)?.override;
+  expect((await request.delete("/feature-flags", { data: { name: flag } })).ok()).toBeTruthy();
   try {
     const { slug, conversationId } = await createConversationViaAPIWithDetails(
       request,
       "echo: water the basil",
       options,
     );
-    await setPageFeatureFlag(page, "next-prompt-suggestions", true);
     await page.goto(`/c/${slug}`);
     await run(conversationId);
   } finally {
-    const off = await request.delete("/feature-flags", {
-      data: { name: "next-prompt-suggestions" },
-    });
-    expect(off.ok()).toBeTruthy();
+    const restore =
+      override === undefined
+        ? await request.delete("/feature-flags", { data: { name: flag } })
+        : await request.post("/feature-flags", { data: { name: flag, value: override } });
+    expect(restore.ok()).toBeTruthy();
   }
 }
 
@@ -99,6 +103,16 @@ test.describe("desktop", () => {
       await expect(page.getByText("This conversation is archived.")).toBeVisible();
       await expect(suggestion).toBeHidden();
     });
+  });
+});
+
+// The page shows suggestions by default, before or without the flags.
+test("without the flags, the page shows the suggestion", async ({ page, request }) => {
+  await page.route("**/feature-flags", (route) => route.abort());
+  await withSuggestions(page, request, async () => {
+    await expect(page.getByTestId("next-prompt-suggestion")).toContainText(
+      "echo: More about water the basil",
+    );
   });
 });
 

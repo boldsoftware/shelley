@@ -313,6 +313,18 @@ async function startServer(liveSessionURL: string, index: number, logPath: strin
     throw new Error(`Shelley ${name} at ${baseURL} never responded OK within 30s${logTail()}`);
   }
 
+  // Next prompt suggestions, on by default, would show up after every turn,
+  // at a moment no test controls, and shift the layout under it. Their own
+  // spec turns them on.
+  const off = await fetch(`${baseURL}/feature-flags`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'next-prompt-suggestions', value: false }),
+  });
+  if (!off.ok) {
+    throw new Error(`Shelley ${name}: turning off next prompt suggestions: ${off.status} ${await off.text()}`);
+  }
+
   return { baseURL, cwd, db, socket };
 }
 
