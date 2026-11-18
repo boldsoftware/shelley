@@ -102,6 +102,12 @@ type ToolSetConfig struct {
 	BackgroundJobs BackgroundJobs
 	// BashBackgroundAfter overrides DefaultBashBackgroundAfter when nonzero.
 	BashBackgroundAfter time.Duration
+	// UserWaiting, if set, reports whether a user message waits for the
+	// running turn's next model request; see BashTool.UserWaiting.
+	UserWaiting func() (bool, <-chan struct{})
+	// BashUserWaitingBackgroundAfter overrides
+	// DefaultBashUserWaitingBackgroundAfter when nonzero.
+	BashUserWaitingBackgroundAfter time.Duration
 	// DBPath is the Shelley database, named in the subagent tool's description.
 	DBPath string
 	// ParentConversationID is the ID of the parent conversation (for subagent tool).
@@ -253,17 +259,19 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 	env.ConversationID = cfg.ConversationID
 
 	bashTool := &BashTool{
-		WorkingDir:       wd,
-		GitTracker:       gitTracker,
-		LLMProvider:      cfg.LLMProvider,
-		ModelID:          cfg.ModelID,
-		EnableJITInstall: cfg.EnableJITInstall,
-		Env:              env,
-		CommandEnv:       cfg.CommandEnv,
-		Jobs:             cfg.BackgroundJobs,
-		BackgroundAfter:  cfg.BashBackgroundAfter,
-		VM:               cfg.VM,
-		HostDir:          hostWD,
+		WorkingDir:                 wd,
+		GitTracker:                 gitTracker,
+		LLMProvider:                cfg.LLMProvider,
+		ModelID:                    cfg.ModelID,
+		EnableJITInstall:           cfg.EnableJITInstall,
+		Env:                        env,
+		CommandEnv:                 cfg.CommandEnv,
+		Jobs:                       cfg.BackgroundJobs,
+		BackgroundAfter:            cfg.BashBackgroundAfter,
+		VM:                         cfg.VM,
+		HostDir:                    hostWD,
+		UserWaiting:                cfg.UserWaiting,
+		UserWaitingBackgroundAfter: cfg.BashUserWaitingBackgroundAfter,
 	}
 
 	patchProvider, patchProfile := "", "nested"

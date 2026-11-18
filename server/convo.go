@@ -234,6 +234,15 @@ type ConversationManager struct {
 	// idleWaiters are closed at the next working→idle transition; see idle.
 	idleWaiters []chan struct{}
 
+	// userWaiting reports whether a user message waits for the running
+	// turn's next model request, and userWaitingChanged closes when it
+	// changes (see claudetool.BashTool.UserWaiting). Guarded by mu.
+	userWaiting        bool
+	userWaitingChanged chan struct{}
+	// userWaitingMu serializes refreshUserWaiting, so the queue it last read
+	// is the one userWaiting describes.
+	userWaitingMu sync.Mutex
+
 	// cancelling is true while CancelConversation is tearing down the current
 	// turn; batches arriving meanwhile are dropped and nothing is injected.
 	// Guarded by cm.mu.
@@ -1370,6 +1379,7 @@ func (cm *ConversationManager) queueMessageLocked(ctx context.Context, modelID s
 	if turnUserDataFromContext(ctx) == nil || liveDeliveryIDFromContext(ctx) != "" {
 		s.resumeParentCompletions(cm.conversationID)
 	}
+	cm.refreshUserWaiting(ctx)
 	cm.Touch()
 	cm.logger.Info("Queued user message", "queued_id", qm.ID, "midTurn", midTurn)
 	// Before notifying, which settles turn ends: the queue is to drain.
@@ -1380,6 +1390,103 @@ func (cm *ConversationManager) queueMessageLocked(ctx context.Context, modelID s
 	// automatically by the Pool.OnCommit hook fired by the append's Tx.
 	go s.notifySubscribers(context.WithoutCancel(ctx), cm.conversationID)
 	return nil
+}
+
+// userMessageWaiting reports whether a user message waits for the running
+// turn's next model request, and returns a channel closed when that changes.
+func (cm *ConversationManager) userMessageWaiting() (bool, <-chan struct{}) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if cm.userWaitingChanged == nil {
+		cm.userWaitingChanged = make(chan struct{})
+	}
+	return cm.userWaiting, cm.userWaitingChanged
+}
+
+// refreshUserWaiting sets userMessageWaiting: whether the queue holds a
+// user message that takeInjectable would take. takeInjectable refreshes
+// before each model request, and so does each queue change that can come
+// while a turn runs tools; others, such as the turn-end drain, leave a
+// stale state for the next request to correct.
+func (cm *ConversationManager) refreshUserWaiting(ctx context.Context) {
+	cm.userWaitingMu.Lock()
+	defer cm.userWaitingMu.Unlock()
+	// The queue changed whether or not the caller is still interested.
+	ctx = context.WithoutCancel(ctx)
+	waiting, err := cm.userMessageQueued(ctx)
+	if err != nil {
+		cm.logger.Error("Failed to read the queue for a waiting user message", "error", err)
+		return
+	}
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if waiting != cm.userWaiting {
+		cm.userWaiting = waiting
+		if cm.userWaitingChanged != nil {
+			close(cm.userWaitingChanged)
+			cm.userWaitingChanged = nil
+		}
+	}
+}
+
+func (cm *ConversationManager) userMessageQueued(ctx context.Context) (bool, error) {
+	queued, err := cm.db.GetQueuedMessages(ctx, cm.conversationID)
+	if err != nil {
+		return false, err
+	}
+	cm.mu.Lock()
+	profileTurn := cm.profileTurn
+	cm.mu.Unlock()
+	injectable, err := cm.injectable(ctx, queued, profileTurn)
+	if err != nil {
+		return false, err
+	}
+	for _, qm := range injectable {
+		var user llm.Message
+		if err := json.Unmarshal(qm.Llm, &user); err != nil {
+			return false, err
+		}
+		if typedUserForLLM(user, qm.UserData) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// injectable returns, in queue order, the queued messages a running turn
+// accepts: those queued by InjectMessage and ready transcriptions.
+func (cm *ConversationManager) injectable(ctx context.Context, queued []db.QueuedMessage, profileTurn bool) ([]db.QueuedMessage, error) {
+	var out []db.QueuedMessage
+	mentionPending := false
+	for _, qm := range queued {
+		// An unfinished transcription holds everything sent after it.
+		if qm.Kind == db.QueuedMessageKindTranscription {
+			if qm.State != db.QueuedMessageStateReady {
+				break
+			}
+		} else if !qm.Inject {
+			continue
+		}
+		if cm.profileMention != nil {
+			var user llm.Message
+			if err := json.Unmarshal(qm.Llm, &user); err != nil {
+				return nil, err
+			}
+			if typedUserForLLM(user, qm.UserData) {
+				if profileTurn || mentionPending {
+					continue
+				}
+				profile, err := cm.profileMention(ctx, messageText(user))
+				// Resolve mentioned settings at their own turn boundary.
+				if err != nil || profile != nil {
+					mentionPending = true
+					continue
+				}
+			}
+		}
+		out = append(out, qm)
+	}
+	return out, nil
 }
 
 // takeInjectable records the queued messages a running turn accepts — those
@@ -1426,6 +1533,7 @@ func (cm *ConversationManager) takeInjectable(ctx context.Context, generation ui
 	// recorded rows remain valid history either way — hydration picks them
 	// up even if the turn dies before the next LLM round sends them.
 	ctx = context.WithoutCancel(ctx)
+	defer cm.refreshUserWaiting(ctx)
 	var inj loop.Injection
 	if compacted {
 		// compact_in_place recorded a compaction during this turn. The record
@@ -1450,33 +1558,11 @@ func (cm *ConversationManager) takeInjectable(ctx context.Context, generation ui
 		cm.logger.Error("Failed to read queued messages for injection", "error", err)
 		queued = nil
 	}
-	mentionPending := false
-	for _, qm := range queued {
-		// An unfinished transcription holds everything sent after it.
-		if qm.Kind == db.QueuedMessageKindTranscription {
-			if qm.State != db.QueuedMessageStateReady {
-				break
-			}
-		} else if !qm.Inject {
-			continue
-		}
-		if cm.profileMention != nil {
-			var user llm.Message
-			if err := json.Unmarshal(qm.Llm, &user); err != nil {
-				return inj, err
-			}
-			if typedUserForLLM(user, qm.UserData) {
-				if profileTurn || mentionPending {
-					continue
-				}
-				profile, err := cm.profileMention(ctx, messageText(user))
-				// Resolve mentioned settings at their own turn boundary.
-				if err != nil || profile != nil {
-					mentionPending = true
-					continue
-				}
-			}
-		}
+	injectable, err := cm.injectable(ctx, queued, profileTurn)
+	if err != nil {
+		return inj, err
+	}
+	for _, qm := range injectable {
 		_, fed, err := cm.recordQueued(ctx, qm, false)
 		switch {
 		case errors.Is(err, db.ErrQueuedMessageNotFound):
@@ -1514,6 +1600,7 @@ func (cm *ConversationManager) CancelQueuedMessages(ctx context.Context) (*gener
 		return nil, err
 	}
 	cm.logger.Info("Cancelled queued messages")
+	cm.refreshUserWaiting(ctx)
 	go cm.server.notifySubscribers(context.WithoutCancel(ctx), cm.conversationID)
 	return conv, nil
 }
@@ -1530,6 +1617,7 @@ func (cm *ConversationManager) CancelQueuedMessage(ctx context.Context, queuedID
 		return nil, err
 	}
 	cm.logger.Info("Cancelled queued message", "queued_id", queuedID)
+	cm.refreshUserWaiting(ctx)
 	go cm.server.notifySubscribers(context.WithoutCancel(ctx), cm.conversationID)
 	cm.drainQueueIfIdle()
 	return conv, nil
@@ -2449,6 +2537,7 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 	toolSetConfig.ModelID = modelID
 	toolSetConfig.ConversationID = conversationID
 	toolSetConfig.ParentConversationID = conversationID // For subagent tool
+	toolSetConfig.UserWaiting = cm.userMessageWaiting
 	toolSetConfig.OnWorkingDirChange = func(newDir string) {
 		// Persist working directory change to database
 		if err := database.UpdateConversationCwd(context.Background(), conversationID, newDir); err != nil {

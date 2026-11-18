@@ -485,6 +485,7 @@ func (s *Server) finalizeQueuedTranscription(parentID string, queued db.QueuedMe
 		s.logQueuedTranscriptionError("Failed to finalize queued transcription", parentID, queued.ID, err)
 		return
 	}
+	manager.refreshUserWaiting(context.Background())
 	manager.drainQueueIfIdle()
 }
 

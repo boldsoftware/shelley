@@ -17,6 +17,13 @@ assert.equal(
   "first\n\nsecond",
 );
 assert.equal(
+  backgroundOutput(
+    `out\n[Still running after 5s with a user message waiting; moved to${footer}`,
+    job,
+  ),
+  "out",
+);
+assert.equal(
   backgroundOutput(`\u001b[31mearly output\u001b[0m\n\n[Started as${footer}`, job),
   "\u001b[31mearly output\u001b[0m",
 );

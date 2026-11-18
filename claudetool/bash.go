@@ -36,6 +36,15 @@ type BashTool struct {
 	// BackgroundAfter is how long a command runs before it is moved to the
 	// background; zero means DefaultBashBackgroundAfter.
 	BackgroundAfter time.Duration
+	// UserWaiting, if set, reports whether a user message waits for the
+	// next model request, and returns a channel closed when that changes.
+	// While one waits, a command moves to the background after
+	// UserWaitingBackgroundAfter instead, so the model reads it sooner.
+	UserWaiting func() (bool, <-chan struct{})
+	// UserWaitingBackgroundAfter is how long a command runs, with a user
+	// message waiting, before it is moved to the background; zero means
+	// DefaultBashUserWaitingBackgroundAfter.
+	UserWaitingBackgroundAfter time.Duration
 	// WorkingDir is the shared mutable working directory.
 	WorkingDir *MutableWorkingDir
 	// GitTracker, if set, is told about the directories commands run git in.
@@ -73,11 +82,23 @@ const (
 // foreground before it is moved to the background.
 const DefaultBashBackgroundAfter = 60 * time.Second
 
+// DefaultBashUserWaitingBackgroundAfter is how long a bash command runs in
+// the foreground, with a user message waiting, before it is moved to the
+// background. It lets quick commands finish.
+const DefaultBashUserWaitingBackgroundAfter = 5 * time.Second
+
 func (b *BashTool) backgroundAfter() time.Duration {
 	if b.BackgroundAfter == 0 {
 		return DefaultBashBackgroundAfter
 	}
 	return b.BackgroundAfter
+}
+
+func (b *BashTool) userWaitingBackgroundAfter() time.Duration {
+	if b.UserWaitingBackgroundAfter == 0 {
+		return DefaultBashUserWaitingBackgroundAfter
+	}
+	return b.UserWaitingBackgroundAfter
 }
 
 // Tool returns an llm.Tool based on b.
@@ -416,16 +437,45 @@ func (b *BashTool) executeBashInDir(ctx context.Context, req bashInput, wd strin
 		}
 	}
 
+	// A user message waiting for the next model request moves the command
+	// out of its way sooner, though a quick command still finishes.
+	var waiting bool
+	var changed <-chan struct{}
+	if b.UserWaiting != nil && b.userWaitingBackgroundAfter() < b.backgroundAfter() {
+		waiting, changed = b.UserWaiting()
+	}
 	timer := time.NewTimer(b.backgroundAfter())
 	defer timer.Stop()
-	select {
-	case <-exited:
-	case <-ctx.Done():
-		syscall.Kill(-job.PID, syscall.SIGKILL)
-		<-exited
-	case <-timer.C:
-		stopProgress()
-		return b.background(ctx, job, exited, fmt.Sprintf("Still running after %s; moved to", b.backgroundAfter()))
+foreground:
+	for {
+		after := b.backgroundAfter()
+		if waiting {
+			after = b.userWaitingBackgroundAfter()
+		}
+		timer.Reset(time.Until(job.StartedAt.Add(after)))
+		select {
+		case <-exited:
+			break foreground
+		case <-ctx.Done():
+			syscall.Kill(-job.PID, syscall.SIGKILL)
+			<-exited
+			break foreground
+		case <-changed:
+			waiting, changed = b.UserWaiting()
+		case <-timer.C:
+			select {
+			case <-changed: // in a race with the timer
+				waiting, changed = b.UserWaiting()
+				continue
+			default:
+			}
+			stopProgress()
+			how := fmt.Sprintf("Still running after %s; moved to", after)
+			if waiting {
+				how = fmt.Sprintf("Still running after %s with a user message waiting; moved to", time.Since(job.StartedAt).Round(time.Second))
+			}
+			return b.background(ctx, job, exited, how)
+		}
 	}
 	stopProgress()
 
