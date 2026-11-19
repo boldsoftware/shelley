@@ -304,14 +304,15 @@ function onActivate(e: MouseEvent | KeyboardEvent) {
       void copyCodeBlock(button);
       return;
     }
-    // Only the sanitizer sets download, on sandbox: links (utils/markdownRender.ts).
+    // Only the sanitizer sets download, on links to local files that are not
+    // images (utils/markdownRender.ts).
     const download = target.closest<HTMLAnchorElement>("a[download]");
     if (download) {
       handleMarkdownDocClick(e, download);
       return;
     }
-    // Plain links to local images point at the file endpoint, and open the
-    // image view like an embedded image.
+    // Links to local images, plain or sandbox:, point at the file endpoint,
+    // and open the image view like an embedded image.
     const imageLink = target.closest<HTMLAnchorElement>("a[href^='/api/message/'][href*='/file?path=']");
     if (imageLink) {
       if (props.commentable) handleImageCommentClick(e, { src: imageLink.href });

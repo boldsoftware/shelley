@@ -38,10 +38,12 @@ import (
 // This is the on-disk counterpart to handleMessageImage (which serves base64
 // images embedded in llm_data). Some models surface images by emitting markdown
 // like ![chart](./out/chart.png) in their response text rather than by
-// returning a base64 image block. The frontend rewrites such local-path images
-// to point at this endpoint; this handler serves the bytes, but only when:
+// returning a base64 image block, or link one, as [shot](sandbox:/tmp/s.png).
+// The frontend points such local-path images and image links at this
+// endpoint; this handler serves the bytes, but only when:
 //
-//   - the requested path is actually referenced in the message's text (a
+//   - the requested path is actually referenced in the message's text, or is
+//     a link's destination, which names its file percent-decoded (a
 //     capability check: we never serve arbitrary files, only ones the model
 //     itself surfaced in this specific message), and
 //   - the file sniffs as an image.
@@ -63,12 +65,17 @@ func (s *Server) handleMessageFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// Capability check: the message must actually reference this path.
-	if !messageReferencesPath(messageTextContent(msg), reqPath) {
+	// Capability check: the message must actually reference this path. The UI
+	// shows a linked image here too, which names its file as a download link
+	// does (see handleMessageDownload); an embedded image's path is literal.
+	path := reqPath
+	if p, err := url.PathUnescape(reqPath); err == nil && slices.Contains(linkedFilePaths(msg), reqPath) {
+		path = p
+	} else if !messageReferencesPath(messageTextContent(msg), reqPath) {
 		http.Error(w, "path not referenced by message", http.StatusNotFound)
 		return
 	}
-	f, ok := s.openMessageFile(w, r, convID, reqPath)
+	f, ok := s.openMessageFile(w, r, convID, path)
 	if !ok {
 		return
 	}
@@ -101,7 +108,7 @@ func (s *Server) handleMessageFile(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, f)
 }
 
-// sandboxScheme prefixes download links: [name](sandbox:/path/to/file). It is
+// sandboxScheme prefixes file links: [name](sandbox:/path/to/file). It is
 // ChatGPT's convention for files in its sandbox, which models use unprompted,
 // so Shelley adopts it (see system_prompt.txt) rather than fighting it.
 const sandboxScheme = "sandbox:"

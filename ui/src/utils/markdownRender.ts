@@ -19,8 +19,9 @@ const MAX_DATA_URI_LENGTH = 2_000_000;
 const FILE_ENDPOINT_RE = /^\/api\/message\/[^/]+\/file\?path=/;
 const DOWNLOAD_ENDPOINT_RE = /^\/api\/message\/[^/]+\/download\?path=/;
 
-// Links like [name](sandbox:/path/to/file) download that file. The scheme is
-// ChatGPT's convention for files in its sandbox, and models use it unprompted.
+// Links like [name](sandbox:/path/to/file) download that file, or show it if it
+// is an image. The scheme is ChatGPT's convention for files in its sandbox, and
+// models use it unprompted.
 const SANDBOX_SCHEME = "sandbox:";
 
 type ImageKind = "local" | "data" | "remote" | "invalid";
@@ -55,7 +56,7 @@ export function linkedFilePath(href: string): string | undefined {
   return href;
 }
 
-// Plain links to these open in the image view rather than downloading.
+// Links to these open in the image view rather than downloading.
 const IMAGE_FILE_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
 
 // fileEndpointURL builds the same-origin URL that serves a local image
@@ -90,11 +91,13 @@ function buildMarked(messageId?: string, localhostLinks?: LocalhostLinkOptions):
       if (token.type === "link" && path !== undefined) {
         // Without the owning message there is nothing to authorize the file;
         // the link is left as written (a sandbox: href is then stripped by
-        // the sanitizer). A plain link to an image shows it, like an embed;
-        // a sandbox: link always downloads.
+        // the sanitizer). A link to an image shows it, like an embed: models
+        // link screenshots as often as they embed them, and a download is a
+        // poor way to look at one. The image view can still open the original.
         if (!messageId || !path) return;
-        const show = !token.href.startsWith(SANDBOX_SCHEME) && IMAGE_FILE_RE.test(path);
-        token.href = show ? fileEndpointURL(messageId, path) : fileDownloadURL(messageId, path);
+        token.href = IMAGE_FILE_RE.test(path)
+          ? fileEndpointURL(messageId, path)
+          : fileDownloadURL(messageId, path);
         return;
       }
       // Only the href goes through the exe.dev proxy: the visible text (a

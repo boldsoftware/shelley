@@ -275,8 +275,8 @@ assert(
 const withoutId = renderMarkdownToSafeHTML("![alt](out/plot.png)");
 assert(!withoutId.includes("<img"), "local image dropped with no messageId to authorize it");
 
-// sandbox: links (a ChatGPT convention the system prompt adopts) download the
-// file through the per-message download endpoint.
+// sandbox: links (a ChatGPT convention the system prompt adopts) download a
+// non-image file through the per-message download endpoint.
 {
   const root = document.createElement("div");
   root.innerHTML = renderMarkdownToSafeHTML("[get it](<sandbox:/tmp/out/a b.mp4>)", "msg-1");
@@ -293,8 +293,9 @@ assert(!withoutId.includes("<img"), "local image dropped with no messageId to au
     root.querySelector("a")?.hasAttribute("href") === false,
     "sandbox: link is inert with no messageId to authorize it",
   );
-  // Plain links to local files work like sandbox: ones, except that an
-  // image opens in the image view; URLs and Shelley's pages stay links.
+  // Plain links to local files work like sandbox: ones, and a link to an
+  // image, either way, opens in the image view; URLs and Shelley's pages
+  // stay links.
   root.innerHTML = renderMarkdownToSafeHTML(
     "[a](/tmp/sbx/a.png) [b](out/b.csv) [c](report.md) [d](sandbox:/tmp/d.png) " +
       "[e](https://x.test/e.png) [f](/c/abc?message_id=1) [g](#top) [h](mailto:h@x.test)",
@@ -305,7 +306,7 @@ assert(!withoutId.includes("<img"), "local image dropped with no messageId to au
     "/api/message/msg-1/file?path=%2Ftmp%2Fsbx%2Fa.png",
     "/api/message/msg-1/download?path=out%2Fb.csv",
     "/api/message/msg-1/download?path=report.md",
-    "/api/message/msg-1/download?path=%2Ftmp%2Fd.png",
+    "/api/message/msg-1/file?path=%2Ftmp%2Fd.png",
     "https://x.test/e.png",
     "/c/abc?message_id=1",
     "#top",

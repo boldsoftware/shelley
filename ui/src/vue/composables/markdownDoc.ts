@@ -1,9 +1,10 @@
 // Click-to-view for local markdown files.
 //
-// Links like [name](sandbox:<path>) render as per-message download links
-// (utils/markdownRender.ts). A plain click on one that names a .md file opens
-// the file rendered in MarkdownDocModal, which ChatInterface hosts once, like
-// the image annotation view; this module holds the one open document.
+// Links like [name](sandbox:<path>) to files other than images render as
+// per-message download links (utils/markdownRender.ts). A plain click on one
+// that names a .md file opens the file rendered in MarkdownDocModal, which
+// ChatInterface hosts once, like the image annotation view; this module holds
+// the one open document.
 // Modifier-clicks keep their native meaning (download).
 import { readonly, ref, type Ref } from "vue";
 import { isOpenInNewTabClick } from "../utils/openInNewTab";

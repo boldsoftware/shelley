@@ -29,6 +29,8 @@ func TestMessageReferencesPath(t *testing.T) {
 	}{
 		{"markdown relative", "see ![chart](./out/chart.png) here", "./out/chart.png", true},
 		{"markdown absolute", "![x](/tmp/work/a.png)", "/tmp/work/a.png", true},
+		// The UI shows a sandbox: link to an image through this endpoint.
+		{"sandbox link", "[x](sandbox:/tmp/work/a.png)", "/tmp/work/a.png", true},
 		{"plain mention on own line", "file: out/a.png", "out/a.png", true},
 		{"start of string", "out/a.png is here", "out/a.png", true},
 		{"not referenced", "nothing here", "out/a.png", false},
@@ -477,6 +479,37 @@ func TestHandleMessageDownload_Success(t *testing.T) {
 		}
 		if body, _ := io.ReadAll(resp.Body); string(body) != tt.body {
 			t.Errorf("%s: body = %q, want %q", tt.path, body, tt.body)
+		}
+	}
+}
+
+// The UI shows a linked image, sandbox: or plain, through the file endpoint,
+// so a link names its image as it names a download: as the UI parses it, and
+// percent-decoded. An embedded image's path stays literal.
+func TestHandleMessageFile_LinkedImage(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, name := range []string{"a b.png", "a(1).png", "split.png", "plain.png", "100%.png"} {
+		if err := os.WriteFile(filepath.Join(dir, name), pngBytes, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	text := func(s string) llm.Content { return llm.Content{Type: llm.ContentTypeText, Text: s} }
+	srv, msgID := setupFileServerContent(
+		t, "",
+		text("[enc](sandbox:"+dir+"/a%20b.png) [esc](sandbox:"+dir+"/a\\(1\\).png) "+
+			"[plain]("+dir+"/plain.png) ![pct]("+dir+"/100%.png) [x](sandbox:"+dir+"/spl"),
+		text("it.png)"),
+	)
+
+	for _, p := range []string{"a%20b.png", "a(1).png", "plain.png", "100%.png", "split.png"} {
+		resp, err := http.Get(srv.URL + "/api/message/" + msgID + "/file?path=" + url.QueryEscape(dir+"/"+p))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("%s: expected 200, got %d", p, resp.StatusCode)
 		}
 	}
 }
