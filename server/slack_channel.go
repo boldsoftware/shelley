@@ -62,6 +62,9 @@ type slackEvent struct {
 	Files       []channelAttachment `json:"files"`
 	Reaction    string              `json:"reaction"`
 	MentionsYou bool                `json:"mentions_you"`
+	// Permalink is the message's link, which opens it in Slack, if exed
+	// got it.
+	Permalink string `json:"permalink"`
 }
 
 var errInvalidSlackEvent = errors.New("slack event needs a kind, id, channel, ts, thread_ts, and text or files")
@@ -107,7 +110,8 @@ func (s *Server) receiveSlackEvent(ctx context.Context, endpoint string, ev slac
 }
 
 // tagged is ev, with text for its text, as it is stored. The UI reads it
-// (ui/src/utils/slack.ts), and the model reads it as parseSlackEvent does.
+// (ui/src/utils/slack.ts), and the model reads it as parseSlackEvent does,
+// less the permalink, which is for people.
 func (ev slackEvent) tagged(text string) string {
 	a := html.EscapeString
 	extra := ""
@@ -116,6 +120,9 @@ func (ev slackEvent) tagged(text string) string {
 		extra = fmt.Sprintf(` mentions_you="%t"`, ev.MentionsYou)
 	case "reaction":
 		extra = fmt.Sprintf(` emoji=%q`, a(ev.Reaction))
+	}
+	if ev.Permalink != "" {
+		extra += fmt.Sprintf(` permalink=%q`, a(ev.Permalink))
 	}
 	return fmt.Sprintf(`<slack_%s channel=%q channel_name=%q thread_ts=%q ts=%q user=%q user_name=%q%s>`+"\n%s\n</slack_%s>",
 		ev.Kind, a(ev.Channel), a(ev.ChannelName), a(ev.ThreadTS), a(ev.TS), a(ev.User), a(ev.UserName), extra, text, ev.Kind)

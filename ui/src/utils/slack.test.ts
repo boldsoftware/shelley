@@ -10,6 +10,7 @@ import {
   slackEventNames,
   slackEventOf,
   slackEventSummary,
+  slackLink,
 } from "./slack";
 
 // As server/slack_channel.go's slackEvent.tagged writes them.
@@ -27,7 +28,30 @@ assert.deepEqual(parseSlackEvent(philip), {
   emoji: "",
   text: "<@U0CFLGS9HP0> what's up",
   files: [],
+  permalink: "",
 });
+
+// Slack opens a message at its permalink; without one, at its channel.
+const linked = parseSlackEvent(
+  '<slack_message channel="D1" channel_name="DM" thread_ts="1.0" ts="2.0" user="U1" user_name="philip" mentions_you="false" permalink="https://x.slack.com/archives/D1/p20?thread_ts=1.0&amp;cid=D1">\nhi\n</slack_message>',
+);
+assert.equal(linked?.permalink, "https://x.slack.com/archives/D1/p20?thread_ts=1.0&cid=D1");
+assert.equal(slackLink(linked!), "https://x.slack.com/archives/D1/p20?thread_ts=1.0&cid=D1");
+assert.equal(
+  slackLink(parseSlackEvent(philip)!),
+  "https://slack.com/app_redirect?channel=C0A6VAJ9K6Y",
+);
+for (const permalink of [
+  "javascript:alert(1)",
+  "https://evil.example/slack.com/",
+  "http://x.slack.com/a",
+]) {
+  assert.equal(
+    slackLink({ ...linked!, permalink }),
+    "https://slack.com/app_redirect?channel=D1",
+    permalink,
+  );
+}
 
 // Attributes are HTML-escaped and Go-quoted; the body is neither.
 const escaped = parseSlackEvent(

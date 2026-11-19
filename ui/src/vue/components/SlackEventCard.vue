@@ -1,25 +1,39 @@
 <!-- A Slack event delivered to the Assistant (see utils/slack.ts), as
      the chat it is: who wrote where, and what (mrkdwn rendered, files shown);
      or a reaction or click, on one line. The header expands into the stored
-     text, its slack_* tag and all. -->
+     text, its slack_* tag and all; beside it, a link opens the event in
+     Slack. -->
 <template>
   <div class="slack-event" data-testid="slack-event" :data-slack-kind="event.kind">
-    <button
-      type="button"
-      class="slack-event-header"
-      :aria-expanded="showRaw"
-      :title="title"
-      @click="showRaw = !showRaw"
-    >
-      <SlackMark />
-      <span class="truncate">
-        <template v-if="event.kind === 'message'">
-          <strong class="slack-event-who">{{ who }}</strong> · {{ where }}
-        </template>
-        <template v-else>{{ where }}</template>
-      </span>
-      <ToolChevron :expanded="showRaw" />
-    </button>
+    <div class="slack-event-head">
+      <button
+        type="button"
+        class="slack-event-header"
+        :aria-expanded="showRaw"
+        :title="title"
+        @click="showRaw = !showRaw"
+      >
+        <SlackMark />
+        <span class="truncate">
+          <template v-if="event.kind === 'message'">
+            <strong class="slack-event-who">{{ who }}</strong> · {{ where }}
+          </template>
+          <template v-else>{{ where }}</template>
+        </span>
+        <ToolChevron :expanded="showRaw" />
+      </button>
+      <a
+        class="slack-event-open"
+        :href="slackLink(event)"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Open in Slack"
+        aria-label="Open in Slack"
+        data-testid="slack-event-open"
+      >
+        <i class="pi pi-external-link" aria-hidden="true" />
+      </a>
+    </div>
     <template v-if="event.kind === 'message'">
       <SlackText v-if="event.text" :text="event.text" />
       <SlackFiles v-if="event.files.length" :paths="event.files" served />
@@ -43,7 +57,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { clickedLabel, slackKey, slackPlace, type SlackEvent } from "../../utils/slack";
+import { clickedLabel, slackKey, slackLink, slackPlace, type SlackEvent } from "../../utils/slack";
 import { emojify, excerpt, mrkdwnText, slackEmoji } from "../../utils/slackMrkdwn";
 import { useSlackDirectory } from "./slackDirectory";
 import SlackFiles from "./SlackFiles.vue";
@@ -88,12 +102,18 @@ const plainText = computed(() => mrkdwnText(props.event.text, directory.value));
   flex-direction: column;
   gap: 0.375rem;
 }
-.slack-event-header {
+.slack-event-head {
   display: flex;
   align-items: center;
   align-self: flex-end;
-  gap: 0.375rem;
+  gap: 0.5rem;
   max-width: 100%;
+}
+.slack-event-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: none;
@@ -103,6 +123,16 @@ const plainText = computed(() => mrkdwnText(props.event.text, directory.value));
   cursor: pointer;
 }
 .slack-event-header:hover {
+  color: var(--text-primary);
+}
+.slack-event-open {
+  color: var(--text-secondary);
+  line-height: 1;
+}
+.slack-event-open .pi {
+  font-size: var(--font-size-12);
+}
+.slack-event-open:hover {
   color: var(--text-primary);
 }
 .slack-event-who {

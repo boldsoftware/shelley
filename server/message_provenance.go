@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -201,6 +202,7 @@ func messageWithSequenceID(message llm.Message, externalID string, sequenceID in
 	}
 	if len(message.Content) == 1 && message.Content[0].Type == llm.ContentTypeText {
 		if tag, slack, body, ok := parseSlackEvent(externalID, message.Content[0].Text); ok {
+			slack = slices.DeleteFunc(slack, func(a xml.Attr) bool { return a.Name.Local == "permalink" })
 			c := message.Content[0]
 			c.Text = body
 			message.Content = []llm.Content{c}

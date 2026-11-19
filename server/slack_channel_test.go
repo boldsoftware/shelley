@@ -238,7 +238,7 @@ func TestSlackEventKinds(t *testing.T) {
 	files := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("log line")) }))
 	t.Cleanup(files.Close)
 	for _, ev := range []slackEvent{
-		{Kind: "message", ID: "1.0", TS: "1.0", Text: "see file", Files: []channelAttachment{{URL: files.URL + "/files-pri/T-F/build.log", Filename: "build.log"}}},
+		{Kind: "message", ID: "1.0", TS: "1.0", Text: "see file", Files: []channelAttachment{{URL: files.URL + "/files-pri/T-F/build.log", Filename: "build.log"}}, Permalink: "https://x.slack.com/archives/C1/p10?a=1&b=2"},
 		{Kind: "reaction", ID: "reaction:2.0", TS: "1.5", Reaction: "thumbsup", Text: "Deploy?"},
 		{Kind: "action", ID: "action:3.0", TS: "1.5", Text: `Clicked "Deploy"`},
 	} {
@@ -258,6 +258,7 @@ func TestSlackEventKinds(t *testing.T) {
 	msgs := channelUserMessages(t, database, id)
 	if len(msgs) != 3 ||
 		!regexp.MustCompile(`see file\n\n\[/\S*/build\S*\.log\]`).MatchString(msgs[0]) ||
+		!strings.Contains(msgs[0], ` mentions_you="false" permalink="https://x.slack.com/archives/C1/p10?a=1&amp;b=2">`) ||
 		!strings.HasPrefix(msgs[1], `slack:C1/1.0/reaction:2.0: <slack_reaction channel="C1" channel_name="" thread_ts="1.0" ts="1.5" user="U1" user_name="" emoji="thumbsup">`) ||
 		!strings.HasPrefix(msgs[2], `slack:C1/1.0/action:3.0: <slack_action `) {
 		t.Fatalf("messages = %q", msgs)
@@ -310,10 +311,11 @@ func TestSlackPostSaysWhetherRefused(t *testing.T) {
 }
 
 // The model sees a stored Slack event under its own tag, with its sequence
-// id; anything else from a chat is an external_message.
+// id but not its permalink, which is for people; anything else from a chat
+// is an external_message.
 func TestSlackEventForTheModel(t *testing.T) {
 	t.Parallel()
-	stored := slackEvent{Kind: "reaction", Channel: "C1", ThreadTS: "1.0", TS: "1.5", User: "U1", UserName: `a"b`, Reaction: "tada"}.tagged("x < y")
+	stored := slackEvent{Kind: "reaction", Channel: "C1", ThreadTS: "1.0", TS: "1.5", User: "U1", UserName: `a"b`, Reaction: "tada", Permalink: "https://x.slack.com/archives/C1/p15"}.tagged("x < y")
 	for _, tc := range []struct{ externalID, text, want string }{
 		{"slack:C1/1.0/reaction:2", stored, `<slack_reaction sequence_id="7" channel="C1" channel_name="" thread_ts="1.0" ts="1.5" user="U1" user_name="a&#34;b" emoji="tada">` + "\nx &lt; y\n</slack_reaction>"},
 		// Only a Slack chat's messages are Slack events.

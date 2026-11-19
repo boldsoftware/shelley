@@ -26,6 +26,9 @@ export interface SlackEvent {
   text: string;
   /** Local paths of the files shared with a message. */
   files: string[];
+  /** The message's link, which opens it in Slack; "" for events from before
+   * exed sent it. */
+  permalink: string;
 }
 
 const TAG =
@@ -100,7 +103,16 @@ export function parseSlackEvent(text: string): SlackEvent | null {
     emoji: attr("emoji"),
     text: files ? m[3].slice(0, files.index) : m[3],
     files: files ? Array.from(files[1].matchAll(/\[([^\]]+)\]/g), (f) => f[1]) : [],
+    permalink: attr("permalink"),
   };
+}
+
+/** Where Slack shows the event: its message, or, without a permalink (or
+ * with one not on slack.com), its channel in the reader's default
+ * workspace. */
+export function slackLink(event: SlackEvent): string {
+  if (/^https:\/\/([a-z0-9-]+\.)*slack\.com\//i.test(event.permalink)) return event.permalink;
+  return `https://slack.com/app_redirect?channel=${encodeURIComponent(event.channel)}`;
 }
 
 const eventCache = new WeakMap<Message, SlackEvent | null>();
