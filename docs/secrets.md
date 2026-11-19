@@ -42,7 +42,15 @@ matched across the whole text. The composer also reuses the last result
 while the text is unchanged (caret moves).
 
 Our own rules add what gitleaks lacks: a private key pasted without its END
-line, and PuTTY `.ppk` keys. A generic rule takes long (≥32) tokens with
+line, PuTTY `.ppk` keys, exe.dev tokens (`exe0.PAYLOAD.SIGBLOB` with an
+SSHSIG signature, and `exe1.` with 20 to 40 base32 characters, at least one
+a digit so all-letter placeholders aren't taken), OpenRouter keys (`sk-or-v1-` and 64 hex
+digits, which the random-token rule skips as hex), and Luma's keys. Luma AI keys start `luma-api-`
+(Agents API) or `luma-` (Dream Machine); Luma events keys (luma.com) have no
+documented format, so they are taken only as the `x-luma-api-key` header or
+a `LUMA*_API_KEY` value, or as a `secret-…` value in a paragraph mentioning
+Luma. Provider rules run before gitleaks' generic ones (`curl-auth-header`),
+so they keep their kind. A generic rule takes long (≥32) tokens with
 high entropy that mix upper case, lower case and digits, and are not hex,
 UUIDs, URLs, paths, or names with many dashes and underscores (base64url
 has about one in 32 characters; more than one in 12 is a name). False negatives are preferred over mangling normal

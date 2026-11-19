@@ -56,6 +56,113 @@ test("finds known formats", () => {
   assert.deepEqual(kinds("AKIA" + "IOSFODNN7EXAMPLE"), []);
 });
 
+test("finds exe.dev tokens", () => {
+  const base32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  for (const token of [
+    // exe1: crypto/rand.Text, 26 base32 characters.
+    `exe1.${rand(26, base32)}`,
+    `exe1.${rand(20, base32)}`,
+    "exe1.QJ7XKZ4M2WNRTB5YHF3LDPVE6C",
+    // exe0, as https-api-local-key.md makes it (a throwaway ed25519 key).
+    "exe0.eyJleHAiOjE5MDAwMDAwMDB9.U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgLSnPkYQ1fd0m0B3BAEOeqBw9hFjM2MvRTQkFHmI73bYAAAAKdjBAZXhlLmRldgAAAAAAAAAGc2hhNTEyAAAAUwAAAAtzc2gtZWQyNTUxOQAAAEBuKCM6A4kLDF8O29ee6AW50CyyFIJHZ1Vj4y8ek7VmDAXekCvxCY66HlFfQ9wX45tOuBMJ2AJ0ssnnvxKtPIgP",
+    `exe0.e30.U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg${rand(300)}`,
+  ]) {
+    for (const text of [
+      `use ${token}.`,
+      `curl -X POST https://exe.dev/exec -H "Authorization: Bearer ${token}" -d whoami`,
+    ]) {
+      assert.deepEqual(kinds(text), [["exe-dev-token", token]], text);
+    }
+  }
+  for (const text of [
+    'export TOKEN="exe0.$PAYLOAD.$SIGBLOB"',
+    'exe1 tokens are handles: ssh exe.dev exe0-to-exe1 "$TOKEN"',
+    "exe1.XXXXXXXXXXXXXXXXXXXXXXXXXX",
+    "exe1.YOURTOKENGOESHEREPLEASE",
+    `exe1.${rand(19, base32)}`,
+    `exe1.${rand(26, base32).toLowerCase()}`,
+    `exe0.e30.${rand(300)}`,
+  ]) {
+    assert.deepEqual(
+      kinds(text).filter(([kind]) => kind === "exe-dev-token"),
+      [],
+      text,
+    );
+  }
+});
+
+test("finds OpenRouter keys", () => {
+  const key = `sk-or-v1-${rand(64, "0123456789abcdef")}`;
+  for (const text of [`use ${key} please`, `export OPENROUTER_API_KEY="${key}"`]) {
+    assert.deepEqual(kinds(text), [["openrouter-api-key", key]], text);
+  }
+  for (const text of [
+    "export OPENROUTER_API_KEY=sk-or-v1-...",
+    "keys start with sk-or-v1-",
+    `sk-or-v1-${"0".repeat(64)}`,
+    `sk-or-v1-${rand(63, "0123456789abcdef")}`,
+    "npm i sk-or-v1-client",
+  ]) {
+    assert.deepEqual(kinds(text), [], text);
+  }
+});
+
+test("finds Luma keys", () => {
+  const hex = "0123456789abcdef";
+  const lower = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const uuid = () => [8, 4, 4, 4, 12].map((n) => rand(n, hex)).join("-");
+  // Luma AI: luma-api-… (Agents API), luma-… (Dream Machine); the body's
+  // alphabet isn't documented.
+  for (const key of [
+    `luma-api-${rand(43)}`,
+    `luma-api-${rand(30)}-${rand(12)}_${rand(9)}`,
+    `luma-api-${rand(32, lower)}`,
+    `luma-${uuid()}-${uuid()}`,
+    `luma-${rand(40, hex)}`,
+  ]) {
+    for (const text of [`use ${key} please`, `export LUMA_AGENTS_API_KEY="${key}"`]) {
+      assert.deepEqual(kinds(text), [["luma-ai-api-key", key]], text);
+    }
+  }
+  // Luma events (luma.com): only beside its header or variable, or a
+  // secret-… key in a paragraph about Luma.
+  const events = `secret-${rand(32)}`;
+  const bare = rand(30, lower);
+  for (const [text, value] of [
+    [`curl -H "x-luma-api-key: ${events}" https://public-api.luma.com/v1/users/get-self`, events],
+    [`set my luma api key to ${events}`, events],
+    [`LUMA_API_KEY=${bare}`, bare],
+    [`luma_api_key: '${bare}'`, bare],
+    [`-H 'X-Luma-Api-Key: ${bare}'`, bare],
+  ]) {
+    assert.deepEqual(kinds(text), [["luma-api-key", value]], text);
+  }
+  for (const text of [
+    // Placeholders from Luma's docs and examples.
+    "curl -H 'authorization: Bearer luma-xxxx'",
+    'curl -H "Authorization: Bearer luma-api-revoked_key_12345"',
+    'export LUMA_AGENTS_API_KEY="luma-api-..."',
+    'curl -H "x-luma-api-key: $LUMA_API_KEY" https://public-api.luma.com/v1/users/get-self',
+    'curl -H "x-luma-api-key: API_KEY_SECRET" https://api.lu.ma/user',
+    "export LUMA_API_KEY=your_luma_api_key_here",
+    "LUMAAI_API_KEY=YOUR_LUMAAI_API_KEY_HERE",
+    "luma auth set-key secret-XXXX",
+    // Names.
+    "see github.com/lumalabs/luma-agents-typescript and luma-agents-cli",
+    "npm i luma-dream-machine-api-wrapper-v2",
+    "the luma launch party is the secret-santa-gift-exchange-2024",
+    // A secret- value away from any mention of Luma.
+    `token secret-${bare} for the build`,
+  ]) {
+    // gitleaks' curl-auth-header takes any value in a curl header.
+    assert.deepEqual(
+      kinds(text).filter(([kind]) => kind.startsWith("luma")),
+      [],
+      text,
+    );
+  }
+});
+
 test("finds long base64url tokens among other secrets", () => {
   // Base64url: a 154-character token has about five dashes and underscores.
   const token = `${rand(30)}-${rand(31)}_${rand(29)}-${rand(33)}__${rand(27)}`;

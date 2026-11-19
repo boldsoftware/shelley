@@ -78,14 +78,27 @@ function toAllow(a: GitleaksAllow): Allow {
 
 const GLOBAL_ALLOW = toAllow(GITLEAKS_ALLOW);
 
-// The flags rules run with: "d" for the secret's capture group offsets.
+// The flags rules run with: "d" for the secret's capture group offsets,
+// and a literal's "i".
 function indexed(re: RegExp | string): RegExp {
-  return new RegExp(typeof re === "string" ? re : re.source, "dgu");
+  if (typeof re === "string") return new RegExp(re, "dgu");
+  return new RegExp(re.source, re.ignoreCase ? "dgiu" : "dgu");
 }
+
+// A key of unknown alphabet, not a name like agents-typescript-sdk or
+// YOUR_API_KEY: at most a third of it word-like parts between dashes and
+// underscores (a random part of letters alone is almost always mixed case).
+const notName = (s: string) =>
+  s
+    .split(/[-_]+/)
+    .filter((p) => /^(?:[A-Z]?[a-z]+|[A-Z]+)$/.test(p))
+    .join("").length <=
+  s.length / 3;
 
 // Formats gitleaks (generated-secret-rules.ts) misses: a private key pasted
 // without its END line (taken to the end of its base64 lines, which are
-// long or end in padding), and PuTTY's .ppk files.
+// long or end in padding), and PuTTY's .ppk files. They run after gitleaks,
+// whose complete private keys win.
 const SHELLEY_RULES: Rule[] = [
   {
     kind: "private-key",
@@ -112,7 +125,73 @@ const SHELLEY_RULES: Rule[] = [
   },
 ];
 
+// Providers gitleaks misses. They run before gitleaks, whose generic rules
+// (curl-auth-header) would take their keys under a vaguer kind.
+const PROVIDER_RULES: Rule[] = [
+  // exe.dev (sshkey/token.go in exe): exe0.PAYLOAD.SIGBLOB, base64url, the
+  // signature an SSHSIG blob; exe1. and 20 to 40 base32 characters (26 from
+  // crypto/rand.Text).
+  {
+    kind: "exe-dev-token",
+    label: "exe.dev token",
+    re: indexed(/(?<![\w-])exe0\.[A-Za-z0-9_-]{2,}\.U1NIU0lH[A-Za-z0-9_-]{64,8000}(?![\w-])/),
+    keywords: ["exe0."],
+    secretGroup: 0,
+    entropy: 0,
+    allow: [],
+  },
+  {
+    kind: "exe-dev-token",
+    label: "exe.dev token",
+    re: indexed(/(?<![\w-])exe1\.[A-Z2-7]{20,40}(?![\w-])/),
+    keywords: ["exe1."],
+    secretGroup: 0,
+    entropy: 3,
+    allow: [],
+    // A digit, so exe1.YOURTOKENGOESHERE isn't one; misses 1 in 220.
+    ok: (s) => /[2-7]/.test(s),
+  },
+  // OpenRouter: sk-or-v1- and 64 hex digits, which the token rule skips.
+  {
+    kind: "openrouter-api-key",
+    label: "OpenRouter API key",
+    re: indexed(/(?<![\w-])sk-or-v[0-9]+-[0-9a-f]{64}(?![\w-])/),
+    keywords: ["sk-or-"],
+    secretGroup: 0,
+    entropy: 3,
+    allow: [],
+  },
+  // Luma AI (lumalabs.ai): luma-api-… (Agents API), luma-… (Dream Machine).
+  {
+    kind: "luma-ai-api-key",
+    label: "Luma AI API key",
+    re: indexed(/(?<![\w-])luma-(?:api-)?[A-Za-z0-9_-]{20,200}(?![\w-])/),
+    keywords: ["luma-"],
+    secretGroup: 0,
+    entropy: 3,
+    allow: [],
+    ok: (s) => notName(s.replace(/^luma-(?:api-)?/, "")),
+  },
+  // Luma events (luma.com): the format isn't documented (keys are said to
+  // start with secret-, too common alone), so only a value given as the
+  // x-luma-api-key header or a LUMA*_API_KEY, or a secret-… key in a
+  // paragraph about Luma.
+  {
+    kind: "luma-api-key",
+    label: "Luma API key",
+    re: indexed(
+      /(?:x-luma-api-key|\bluma(?:ai|_agents)?_api_key)["'`]?[ \t]{0,3}(?::=|=>|[:=])[ \t"'`=]{0,5}([A-Za-z0-9_-]{16,200})(?=[\s"'`;,)}]|\\[nr]|$)|(?<![\w-])(secret-[A-Za-z0-9_-]{16,200})(?![\w-])/i,
+    ),
+    keywords: ["luma"],
+    secretGroup: 0,
+    entropy: 3,
+    allow: [],
+    ok: (s) => notName(s.replace(/^secret-/i, "")),
+  },
+];
+
 const RULES: Rule[] = [
+  ...PROVIDER_RULES,
   ...GITLEAKS_RULES.map((r) => ({
     kind: r.id,
     label: r.label,
