@@ -419,38 +419,54 @@ test.describe("Context usage popup", () => {
     await expect(total).toBeVisible();
     await expect(total).toContainText("Total");
     await expect(total.locator("th")).toHaveCSS("border-top-style", "solid");
-    // The total heads the receipt, above the subtotals, which in turn sit above
-    // the per-model breakdown, rather than trailing it where a scrolling popup
-    // cuts them off.
-    const subtotalBox = (await page.getByTestId("conversation-cost-subtotal").boundingBox())!;
-    const totalRowBox = (await total.boundingBox())!;
-    const firstModelBox = (await page
-      .locator(".token-cost-model-breakdown")
-      .first()
-      .boundingBox())!;
-    expect(totalRowBox.y).toBeLessThan(subtotalBox.y);
-    expect(subtotalBox.y + subtotalBox.height).toBeLessThanOrEqual(firstModelBox.y + 1);
     // The graphs cover the main conversation only, and say so.
     await expect(
       page.locator(".token-cost-graph-note", { hasText: "main conversation only" }),
     ).toBeVisible();
-    // The graphs stretch across the popup, as wide as the receipt below them,
-    // and the context size lines up with their left edge.
-    const titleBox = (await page.locator(".usage-popup-title").boundingBox())!;
-    const graphBox = (await page.locator(".token-cost-graph-svg").boundingBox())!;
-    const tableBox = (await page.locator(".token-cost-table").boundingBox())!;
-    expect(graphBox.width).toBeGreaterThan(500);
-    expect(Math.abs(graphBox.width - tableBox.width)).toBeLessThan(1);
-    expect(Math.abs(titleBox.x - graphBox.x)).toBeLessThan(1);
-    const subagentCostBox = await subagentRow.locator(".token-cost-legend-cost").boundingBox();
-    const totalCostBox = await total.locator(".token-cost-legend-cost").boundingBox();
-    expect(subagentCostBox).not.toBeNull();
-    expect(totalCostBox).not.toBeNull();
-    expect(
-      Math.abs(
-        subagentCostBox!.x + subagentCostBox!.width - (totalCostBox!.x + totalCostBox!.width),
-      ),
-    ).toBeLessThan(1);
+    // Measured all at once, until settled: resized for the sub-agents, the
+    // popup moves on a later frame, and boxes measured one by one can
+    // straddle the move.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const box = (selector: string) => {
+            const found = document.querySelectorAll(selector);
+            if (found.length !== 1) throw new Error(`${found.length} × ${selector}`);
+            return found[0].getBoundingClientRect();
+          };
+          const total = box('[data-testid="token-cost-total"]');
+          const subtotal = box('[data-testid="conversation-cost-subtotal"]');
+          const firstModel = document
+            .querySelector(".token-cost-model-breakdown")!
+            .getBoundingClientRect();
+          const title = box(".usage-popup-title");
+          const graph = box(".token-cost-graph-svg");
+          const table = box(".token-cost-table");
+          const subagentCost = box('[data-testid="subagent-cost-row"] .token-cost-legend-cost');
+          const totalCost = box('[data-testid="token-cost-total"] .token-cost-legend-cost');
+          return {
+            // The total heads the receipt, above the subtotals, which in turn
+            // sit above the per-model breakdown, rather than trailing it where
+            // a scrolling popup cuts them off.
+            totalAboveSubtotal: total.y < subtotal.y,
+            subtotalAboveModels: subtotal.bottom <= firstModel.y + 1,
+            // The graphs stretch across the popup, as wide as the receipt
+            // below them, and the context size lines up with their left edge.
+            graphWide: graph.width > 500,
+            graphAsWideAsTable: Math.abs(graph.width - table.width) < 1,
+            titleAlignedWithGraph: Math.abs(title.x - graph.x) < 1,
+            costsAligned: Math.abs(subagentCost.right - totalCost.right) < 1,
+          };
+        }),
+      )
+      .toEqual({
+        totalAboveSubtotal: true,
+        subtotalAboveModels: true,
+        graphWide: true,
+        graphAsWideAsTable: true,
+        titleAlignedWithGraph: true,
+        costsAligned: true,
+      });
 
     blockSubagentRequest = true;
     const requestsAfterFirstOpen = subagentRequests;

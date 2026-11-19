@@ -215,11 +215,14 @@ test("deleting the draft being composed opens its neighbor", async ({ page, requ
   await input.fill("never mind");
   save();
 
-  // Saved: the draft goes, and its text with it.
+  // Saved: the draft goes, and its text with it. The neighbor shows its own
+  // draft: none, unless it's one an earlier test on this server left.
   const { conversation_id: id } = await (await created).json();
   await expect(activeRow(page)).toHaveAttribute("data-conversation-id", id);
-  await expectOpened(page, await deleteRow(page, id));
-  await expect(input).toHaveValue("");
+  const neighbor = await deleteRow(page, id);
+  await expectOpened(page, neighbor);
+  const { conversation } = await (await request.get(`/api/conversation/${neighbor}`)).json();
+  await expect(input).toHaveValue(conversation.draft);
   expect((await request.get(`/api/conversation/${id}`)).status()).toBe(404);
   await startNewConversationFromHeader(page);
   await expect(input).toHaveValue("");

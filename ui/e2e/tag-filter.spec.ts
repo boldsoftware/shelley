@@ -6,6 +6,8 @@ import {
   fillConversationQuery,
   testWorkingDirectory,
 } from "./helpers";
+import type { Conversation } from "../src/types";
+import { sortConversationsByBucket } from "../src/utils/conversationSort";
 
 async function setTags(
   request: APIRequestContext,
@@ -505,29 +507,20 @@ test.describe("Tag filter", () => {
         createConversationViaAPIWithDetails(request, `group order ${n}`),
       ),
     );
-    // Within one recency bucket rows sort by id descending, so the smallest
-    // id is the one a plain re-sort demonstrably moves off the top.
-    const [mover, ...stayers] = [...created].sort((a, b) =>
-      a.conversationId < b.conversationId ? -1 : 1,
-    );
+    const plainOrder = sortConversationsByBucket(
+      await Promise.all(
+        created.map(async (c) => {
+          const resp = await request.get(`/api/conversation/${c.conversationId}`);
+          expect(resp.ok()).toBeTruthy();
+          return (await resp.json()).conversation as Conversation;
+        }),
+      ),
+    ).map((c) => c.conversation_id);
+    // The last is the one a plain re-sort demonstrably moves off the top.
+    const mover = created.find((c) => c.conversationId === plainOrder[plainOrder.length - 1])!;
+    const stayers = created.filter((c) => c !== mover);
     await setTags(request, mover.conversationId, ["so-away"]);
     for (const stayer of stayers) await setTags(request, stayer.conversationId, ["so-home"]);
-    const updatedAt = async (conversationId: string) => {
-      const resp = await request.get(`/api/conversation/${conversationId}`);
-      expect(resp.ok()).toBeTruthy();
-      return new Date((await resp.json()).conversation.updated_at as string).getTime();
-    };
-    const buckets = new Map<string, number>();
-    for (const c of created) {
-      buckets.set(c.conversationId, Math.floor((await updatedAt(c.conversationId)) / 300_000));
-    }
-    const plainOrder = [...created]
-      .sort(
-        (a, b) =>
-          buckets.get(b.conversationId)! - buckets.get(a.conversationId)! ||
-          (a.conversationId < b.conversationId ? 1 : -1),
-      )
-      .map((c) => c.conversationId);
 
     await page.goto(`/c/${mover.slug}`);
     await expect(page.getByTestId("message-input")).toBeVisible({ timeout: 30000 });

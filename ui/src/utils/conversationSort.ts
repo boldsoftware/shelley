@@ -1,27 +1,34 @@
 import type { Conversation, ConversationWithState } from "../types";
 
 // Conversations are sorted into 5-minute "buckets" of their updated_at
-// timestamp. Within a bucket, ordering is stable by conversation_id, which
-// is a ULID and therefore time-orderable by creation. The bucketing avoids
-// distracting flip-flops in the drawer when two conversations (or a
-// conversation and its subagent) update within seconds of each other.
+// timestamp. Within a bucket, the most recently created comes first, so the
+// order holds as they update. (Conversation ids are random, so they only
+// break ties.) The bucketing avoids distracting flip-flops in the drawer when
+// two conversations (or a conversation and its subagent) update within
+// seconds of each other.
 export const BUCKET_MS = 5 * 60 * 1000;
 
-export function updatedBucket(updatedAt: string): number {
-  const t = new Date(updatedAt).getTime();
+function time(field: string, timestamp: string): number {
+  const t = new Date(timestamp).getTime();
   if (!Number.isFinite(t)) {
-    throw new Error(`invalid updated_at: ${updatedAt}`);
+    throw new Error(`invalid ${field}: ${timestamp}`);
   }
-  return Math.floor(t / BUCKET_MS);
+  return t;
 }
 
-// Sort newest-bucket first, then by conversation_id descending (newer ULID
-// first). Returns a new array; does not mutate the input.
+export function updatedBucket(updatedAt: string): number {
+  return Math.floor(time("updated_at", updatedAt) / BUCKET_MS);
+}
+
+// Sort newest-bucket first, then newest-created first, then by
+// conversation_id descending. Returns a new array; does not mutate the input.
 export function sortConversationsByBucket<T extends Conversation>(convs: readonly T[]): T[] {
   return [...convs].sort((a, b) => {
     const ab = updatedBucket(a.updated_at);
     const bb = updatedBucket(b.updated_at);
     if (ab !== bb) return bb - ab;
+    const created = time("created_at", b.created_at) - time("created_at", a.created_at);
+    if (created !== 0) return created;
     if (a.conversation_id === b.conversation_id) return 0;
     return a.conversation_id < b.conversation_id ? 1 : -1;
   });

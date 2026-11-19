@@ -22,9 +22,8 @@ test.describe("Conversation drawer ordering", () => {
     page,
     request,
   }) => {
-    // Two conversations created back-to-back: B is created after A so its
-    // ULID is newer and (with bucketed sort) it sorts first whenever both
-    // share an updated_at bucket.
+    // Two conversations created back-to-back: while both share an
+    // updated_at bucket, their order holds however they update.
     const a = await createConversationViaAPIWithDetails(request, "first conversation");
     const b = await createConversationViaAPIWithDetails(request, "second conversation");
 

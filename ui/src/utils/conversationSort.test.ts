@@ -52,25 +52,40 @@ function run(name: string, fn: () => void): void {
   }
 }
 
-run("groups updates within the same 5-minute bucket", () => {
+function sortedIds(convs: ConversationWithState[]): string {
+  return sortConversationsByBucket(convs)
+    .map((c) => c.conversation_id)
+    .join(",");
+}
+
+run("groups updates within the same 5-minute bucket, newest created first", () => {
   // Two conversations updated within seconds of each other should not flip
-  // ordering: ULID A is older (lexicographically smaller) so B sorts first.
-  const a = conv("01HZZZZZZZZZZZZZZZZZZZZZZA", "2026-05-10T12:00:30Z");
-  const b = conv("01HZZZZZZZZZZZZZZZZZZZZZZB", "2026-05-10T12:00:35Z");
-  let order = sortConversationsByBucket([a, b]).map((c) => c.conversation_id);
-  assert(order[0].endsWith("B") && order[1].endsWith("A"), `expected B,A got ${order}`);
+  // ordering: B was created after A, so it sorts first. Conversation ids are
+  // random, and here sort the other way.
+  const a = conv("cZZZZZZ", "2026-05-10T12:00:30Z");
+  const b = conv("cAAAAAA", "2026-05-10T12:00:35Z");
+  assert(sortedIds([a, b]) === "cAAAAAA,cZZZZZZ", `expected B,A got ${sortedIds([a, b])}`);
   // Now flip which one was updated more recently within the same bucket.
-  // Order should be unchanged (B still first by ULID tie-break).
+  // Order should be unchanged (B still first, as created later).
   const a2 = { ...a, updated_at: "2026-05-10T12:01:10Z" };
-  order = sortConversationsByBucket([a2, b]).map((c) => c.conversation_id);
-  assert(order[0].endsWith("B") && order[1].endsWith("A"), `flip-flop: ${order}`);
+  assert(sortedIds([a2, b]) === "cAAAAAA,cZZZZZZ", `flip-flop: ${sortedIds([a2, b])}`);
+  // Times compare as times, not strings: the server's are to the second, and
+  // the composer's placeholder row's to the millisecond.
+  const placeholder = conv("composer", "2026-05-10T12:00:35.504Z");
+  assert(
+    sortedIds([b, placeholder]) === "composer,cAAAAAA",
+    `mixed precision: ${sortedIds([b, placeholder])}`,
+  );
+  // Created the same second, ids break the tie, so the order is total.
+  const b2 = { ...b, conversation_id: "cBBBBBB" };
+  assert(sortedIds([b, b2]) === "cBBBBBB,cAAAAAA", `tie: ${sortedIds([b, b2])}`);
 });
 
 run("different buckets sort by recency", () => {
-  const a = conv("01HZZZZZZZZZZZZZZZZZZZZZZA", "2026-05-10T12:00:00Z");
-  const b = conv("01HZZZZZZZZZZZZZZZZZZZZZZB", "2026-05-10T12:10:00Z");
+  const a = conv("cZZZZZZ", "2026-05-10T12:00:00Z");
+  const b = conv("cAAAAAA", "2026-05-10T12:10:00Z");
   const order = sortConversationsByBucket([a, b]).map((c) => c.conversation_id);
-  assert(order[0].endsWith("B"), `expected newer bucket first, got ${order}`);
+  assert(order[0] === "cAAAAAA", `expected newer bucket first, got ${order}`);
 });
 
 run("bucket boundaries", () => {
@@ -83,10 +98,7 @@ run("bucket boundaries", () => {
 });
 
 run("does not mutate input", () => {
-  const input = [
-    conv("01HZZZZZZZZZZZZZZZZZZZZZZA", "2026-05-10T12:00:00Z"),
-    conv("01HZZZZZZZZZZZZZZZZZZZZZZB", "2026-05-10T12:10:00Z"),
-  ];
+  const input = [conv("cAAAAAA", "2026-05-10T12:00:00Z"), conv("cBBBBBB", "2026-05-10T12:10:00Z")];
   const before = input.map((c) => c.conversation_id).join(",");
   sortConversationsByBucket(input);
   assert(input.map((c) => c.conversation_id).join(",") === before, "input mutated");
