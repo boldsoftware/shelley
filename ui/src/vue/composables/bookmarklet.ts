@@ -107,9 +107,10 @@ export function forgetBookmarkletSite(site: string) {
   storeSites(bookmarkletSites.value.filter((s) => s !== site));
 }
 
-// Call once before mounting the app.
+// Call once before mounting the app. The bookmarklet opens Shelley in a
+// window of its own; a page framing Shelley must not fill in its composer.
 export function initBookmarklet() {
-  if (!bookmarkletEnabled) return;
+  if (!bookmarkletEnabled || window.parent !== window) return;
   bookmarkletSites.value = storedSites();
   // Other Shelley windows may allow or forget sites.
   window.addEventListener("storage", (event) => {

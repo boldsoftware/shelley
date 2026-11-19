@@ -284,6 +284,25 @@ test("Shelley starts recordings only for sites the user allowed", async ({ page,
   await expect(panel).toHaveCount(0);
 });
 
+test("Shelley in a frame ignores the bookmarklet's chats", async ({ page, context }) => {
+  await patchInitData(context, { bookmarklet: true });
+  const chat = `#bookmarklet=${encodeURIComponent(JSON.stringify({ url: HOST, title: "Host Page", selection: "" }))}`;
+  await page.goto("/new");
+  await page.evaluate((src) => {
+    const frame = document.createElement("iframe");
+    frame.src = src;
+    document.body.append(frame);
+  }, `/new${chat}`);
+  const framed = page.frameLocator("iframe").getByTestId("message-input");
+  await expect(framed).toBeVisible();
+  await expect(framed).toHaveValue("");
+  // Shelley's own window takes the same chat. (The frame goes first: the
+  // new-conversation composer's text is shared across windows.)
+  await page.goto("about:blank");
+  await page.goto(`/new${chat}`);
+  await expect(page.getByTestId("message-input")).toHaveValue(/^Page: Host Page/);
+});
+
 test("without the flag, there's no bookmarklet and Shelley ignores its chats", async ({ page }) => {
   const context = { url: HOST, title: "Host Page", selection: "" };
   await page.goto(`/new#bookmarklet=${encodeURIComponent(JSON.stringify(context))}`);
