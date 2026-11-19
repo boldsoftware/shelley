@@ -59,8 +59,9 @@ Call with action "index" first: it lists the older messages and explains what to
 (Right after a nudge that carries the index, go straight to "compact".)
 Then call with action "compact" to collapse message ranges into short notes
 and trim tool outputs. Originals stay in the database.
-If nothing is worth compacting, call with action "skip": it compacts nothing,
-but drops the context nudges and earlier compact_in_place calls from your context.`
+If nothing is worth compacting, call with action "skip": it compacts nothing.
+During active work, skip leaves history unchanged. In an idle compaction turn,
+skip drops context nudges and earlier compact_in_place calls.`
 
 const compactInPlaceSchema = `{
   "type": "object",

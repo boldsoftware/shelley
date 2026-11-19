@@ -1347,9 +1347,7 @@ func TestCompactRequestEndpoint(t *testing.T) {
 	}
 }
 
-// TestCompactSkip: skip compacts nothing and keeps the system prompt, so the
-// cache survives; it drops the evidence of compacting, and with none there
-// is nothing to record.
+// TestCompactSkip: a foreground skip keeps history and the system prompt.
 func TestCompactSkip(t *testing.T) {
 	t.Parallel()
 	c := newCompactTestConversation(t, db.ConversationOptions{ToolOverrides: map[string]string{claudetool.CompactInPlaceName: "on"}})
@@ -1381,20 +1379,36 @@ func TestCompactSkip(t *testing.T) {
 		return out
 	}
 
-	if out := skip(); rows(db.MessageTypeInPlaceCompaction) != 0 || !strings.Contains(out, "Nothing to skip") {
-		t.Fatalf("skip with nothing to drop recorded a compaction: %q", out)
+	if out := skip(); rows(db.MessageTypeInPlaceCompaction) != 0 || out != "Skipped; context unchanged." {
+		t.Fatalf("foreground skip changed context: %q", out)
 	}
 	c.turn(`compact_in_place: {"action":"index"}`)
+	cm, err := c.srv.getOrCreateConversationManager(t.Context(), c.id, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cm.recordContextNudge(t.Context(), "Context is 160k."); err != nil {
+		t.Fatal(err)
+	}
+	cm.ResetLoop()
+	defer cm.ResetLoop()
 	skip()
-	if n := rows(db.MessageTypeInPlaceCompaction); n != 1 {
-		t.Fatalf("compactions = %d, want 1", n)
+	if n := rows(db.MessageTypeInPlaceCompaction); n != 0 {
+		t.Fatalf("compactions = %d, want 0", n)
 	}
 	c.turn("echo: AFTER")
 	req := requestDump(c.ps.GetLastRequest())
-	if strings.Contains(req, `"ToolInput":{"action":"index"}`) || strings.Contains(req, "## Index") {
-		t.Fatalf("skip kept the earlier compact_in_place call:\n%s", req)
+	if !strings.Contains(req, `"ToolInput":{"action":"index"}`) || !strings.Contains(req, "## Index") {
+		t.Fatalf("skip lost the earlier index:\n%s", req)
+	}
+	if !strings.Contains(req, "Context is 160k.") {
+		t.Fatal("foreground skip lost the context nudge")
 	}
 	if rows(db.MessageTypeSystem) != 1 || strings.Contains(c.ps.GetLastRequest().System[0].Text, "FRESH_GUIDANCE") {
 		t.Fatal("skip refreshed the system prompt")
+	}
+	c.turn(`compact_in_place: {"action":"skip","trim":["1"]}`)
+	if out, isErr := c.lastToolOutput(); !isErr || !strings.Contains(out, "skip compacts nothing") {
+		t.Fatalf("invalid skip was not rejected: %q", out)
 	}
 }

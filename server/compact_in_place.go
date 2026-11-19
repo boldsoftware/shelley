@@ -88,6 +88,10 @@ func (cm *ConversationManager) compactMidTurn(ctx context.Context, generation ui
 		overhead = tc.overhead(system, cm.tools())
 		c, err = buildCompaction(items, cm.keepRecentTokens, tc, in)
 	}
+	if err == nil && in.Action == "skip" && !cm.isIdleCompacting() {
+		cm.loopLifecycleMu.Unlock()
+		return "Skipped; context unchanged.", nil
+	}
 	var after []contextItem
 	if err == nil {
 		after, err = applyInPlaceCompaction(items, c, cm.conversationID, 0)
@@ -297,7 +301,6 @@ func compactionEvidence(items []contextItem) (seqs []int64, toolUseIDs []string)
 func buildCompaction(history []contextItem, keepRecentTokens int, tc tokenCounter, in claudetool.CompactInPlaceInput) (db.InPlaceCompaction, error) {
 	var c db.InPlaceCompaction
 	if in.Action == "skip" {
-		// Compacting nothing still drops the evidence (see compactMidTurn).
 		if len(in.Trim) > 0 || len(in.Collapse) > 0 {
 			return c, fmt.Errorf("skip compacts nothing: leave out trim and collapse")
 		}
