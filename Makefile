@@ -18,11 +18,12 @@ exe-scroll:
 exe-scroll-all:
 	@python3 scripts/fetch-exe-scroll.py --all --wait 900
 
-# Build templates into tarballs
+# Build templates into tarballs. gzip -n leaves the time out of them, so a
+# build that embeds them has nothing to redo when the templates are as they were.
 templates:
 	@for dir in templates/*/; do \
 		name=$$(basename "$$dir"); \
-		tar -czf "templates/$$name.tar.gz" -C "templates/$$name" --exclude='.DS_Store' .; \
+		tar --use-compress-program='gzip -n' -cf "templates/$$name.tar.gz" -C "templates/$$name" --exclude='.DS_Store' .; \
 	done
 
 # Build the UI and Go binary
