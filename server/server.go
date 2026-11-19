@@ -1720,15 +1720,8 @@ func (s *Server) notifySubscribers(ctx context.Context, conversationID string, n
 	}
 }
 
-// notifyConversationListChanged recomputes the conversation list patch
-// stream so subscribers receive a patch event that reflects the latest
-// state. It is registered as a Pool.OnCommit hook so every successful
-// write Tx triggers a refresh; this is the single source of truth for the
-// patch stream.
-//
-// Note: this method runs synchronously on whatever goroutine fired the
-// commit. The patch stream's recompute is itself serialized internally,
-// so concurrent commits queue up cleanly.
+// notifyConversationListChanged schedules a coalesced conversation list
+// refresh after a successful database commit.
 func (s *Server) notifyConversationListChanged() {
 	// Deliberately do NOT clear conversationListGitCache here. The cache
 	// exists precisely so that the patch recompute (which runs on every DB
@@ -1736,9 +1729,7 @@ func (s *Server) notifyConversationListChanged() {
 	// Git state only changes through user/agent git operations, not through
 	// Shelley's own DB writes; the cache's per-read HEAD fingerprint catches
 	// real changes (commits, checkouts, resets) on the next list refresh.
-	if err := s.conversationListStream.notify(context.Background()); err != nil {
-		s.logger.Error("failed to publish conversation list patch", "error", err)
-	}
+	s.conversationListStream.notify()
 }
 
 // publicHostname returns the server's public hostname.

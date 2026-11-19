@@ -12,6 +12,159 @@ import (
 	"shelley.exe.dev/db"
 )
 
+func TestConversationListCommitDoesNotWaitForRefresh(t *testing.T) {
+	t.Parallel()
+	server, database, _ := newTestServer(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	stream := server.conversationListStream
+	initial, next, release, err := stream.connect(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+
+	stream.recomputeMu.Lock()
+	stream.mu.Lock()
+	locked := true
+	defer func() {
+		if locked {
+			stream.mu.Unlock()
+			stream.recomputeMu.Unlock()
+		}
+	}()
+	type result struct {
+		id  string
+		err error
+	}
+	committed := make(chan result, 1)
+	go func() {
+		row, err := database.CreateConversation(ctx, nil, true, nil, nil, db.ConversationOptions{})
+		r := result{err: err}
+		if err == nil {
+			r.id = row.ConversationID
+		}
+		committed <- r
+	}()
+	var created result
+	select {
+	case created = <-committed:
+		if created.err != nil {
+			t.Fatal(created.err)
+		}
+	case <-ctx.Done():
+		t.Fatal("database commit waited for sidebar rebuild or patch publication")
+	}
+	stream.mu.Unlock()
+	stream.recomputeMu.Unlock()
+	locked = false
+
+	event, ok := next()
+	if !ok {
+		t.Fatal("committed conversation never reached the list")
+	}
+	state := mustApplyPatch(t, []ConversationWithState{}, initial[0].Patch)
+	state = mustApplyPatch(t, state, event.Patch)
+	verifyHash(t, state, event.NewHash)
+	if len(state) != 1 || state[0].ConversationID != created.id {
+		t.Fatalf("unexpected conversation list: %+v", state)
+	}
+}
+
+func TestConversationListConcurrentCommitsConverge(t *testing.T) {
+	t.Parallel()
+	server, database, _ := newTestServer(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	initial, next, release, err := server.conversationListStream.connect(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	state := mustApplyPatch(t, []ConversationWithState{}, initial[0].Patch)
+	currentHash := initial[0].NewHash
+
+	for range 2 {
+		start := make(chan struct{})
+		results := make(chan error, 16)
+		for range cap(results) {
+			go func() {
+				<-start
+				_, err := database.CreateConversation(ctx, nil, true, nil, nil, db.ConversationOptions{})
+				results <- err
+			}()
+		}
+		close(start)
+		for range cap(results) {
+			select {
+			case err := <-results:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-ctx.Done():
+				t.Fatal("concurrent commits did not complete")
+			}
+		}
+
+		// Read the expected DB state without refreshing the stream itself.
+		want, err := server.conversationListWithStateInternal(ctx, 5000, 0, "", false, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantHash, err := hashList(want)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for currentHash != wantHash {
+			event, ok := next()
+			if !ok {
+				t.Fatal("worker never published all committed conversations")
+			}
+			if event.OldHash == nil || *event.OldHash != currentHash || event.Reset {
+				t.Fatalf("broken patch chain: %+v", event)
+			}
+			state = mustApplyPatch(t, state, event.Patch)
+			verifyHash(t, state, event.NewHash)
+			currentHash = event.NewHash
+		}
+	}
+}
+
+func TestConversationListReconnectIncludesUnobservedCommit(t *testing.T) {
+	t.Parallel()
+	server, database, _ := newTestServer(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	initial, _, release, err := server.conversationListStream.connect(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := mustApplyPatch(t, []ConversationWithState{}, initial[0].Patch)
+	currentHash := initial[0].NewHash
+	release()
+
+	created, err := database.CreateConversation(ctx, nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, _, release, err := server.conversationListStream.connect(ctx, currentHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	for _, event := range events {
+		if event.OldHash == nil || *event.OldHash != currentHash {
+			t.Fatalf("broken reconnect patch chain: %+v", event)
+		}
+		state = mustApplyPatch(t, state, event.Patch)
+		verifyHash(t, state, event.NewHash)
+		currentHash = event.NewHash
+	}
+	if len(state) != 1 || state[0].ConversationID != created.ConversationID {
+		t.Fatalf("reconnect missed unobserved conversation: %+v", state)
+	}
+}
+
 func TestConversationListPatchStreamInitialResetAndNewConversation(t *testing.T) {
 	t.Parallel()
 	server, database, _ := newTestServer(t)
@@ -362,8 +515,8 @@ func TestConversationListPatchStreamHistoryEndpoint(t *testing.T) {
 
 func waitForPatchEventAfter(t *testing.T, rec *flusherRecorder, prevHash string) ConversationListPatchEvent {
 	t.Helper()
-	// The patch event is produced synchronously in the DB commit hook, but
-	// reaches the recorder across several goroutine hops (commit hook ->
+	// The refresh runs asynchronously after the DB commit and reaches
+	// the recorder across several goroutine hops (refresh worker ->
 	// cond.Broadcast -> listNext goroutine -> updates channel -> select loop ->
 	// flush). A generous deadline absorbs scheduling starvation on loaded CI
 	// without masking a real "event never emitted" bug (that still hangs).

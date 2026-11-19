@@ -1876,9 +1876,9 @@ export class MessageStore {
     this.notifyTransient(id);
   }
 
-  setAgentWorking(id: string, working: boolean): void {
+  setAgentWorking(id: string, working: boolean, notifyUnchanged = false): void {
     const t = this.getTransient(id);
-    if (t.agentWorking === working) return;
+    if (t.agentWorking === working && !notifyUnchanged) return;
     t.agentWorking = working;
     this.notifyTransient(id);
   }

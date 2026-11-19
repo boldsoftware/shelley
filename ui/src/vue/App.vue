@@ -1018,12 +1018,19 @@ function handleConversationListPatch(event: ConversationListPatchEvent) {
     void messageStore.delete(removedId);
     btwStore.clear(removedId, removed?.parent_conversation_id ?? undefined);
   }
+  const previousSequence = new Map(
+    prev.map((conv) => [conv.conversation_id, conv.max_sequence_id]),
+  );
   messageStore.seedMaxSequenceIdsKnown(result.state.list);
   for (const conv of result.state.list) {
     // Seed from `working` — the list's authoritative working flag, which the
     // drawer indicator also renders — so the status bar and the conversation
     // list (the source of truth) never disagree.
-    messageStore.setAgentWorking(conv.conversation_id, conv.working);
+    // A fast turn can publish only its final idle snapshot. Wake the chat
+    // to clear its optimistic working indicator even if the store was idle.
+    const prevSeq = previousSequence.get(conv.conversation_id);
+    const completedWhileIdle = !conv.working && conv.max_sequence_id > (prevSeq ?? 0);
+    messageStore.setAgentWorking(conv.conversation_id, conv.working, completedWhileIdle);
   }
   commitListState(result.state);
 }

@@ -40,9 +40,14 @@ type conversationListStream struct {
 	// publish events out of order, leaving subscribers with a stale view.
 	recomputeMu sync.Mutex
 
+	// Keep commit notifications independent of patch and reset construction.
+	scheduleMu sync.Mutex
+	listeners  int
+	dirty      bool
+	refreshing bool
+
 	mu          sync.Mutex
 	cond        *sync.Cond
-	listeners   int
 	currentList []ConversationWithState
 	currentHash string
 	history     []ConversationListPatchEvent
@@ -57,17 +62,36 @@ func newConversationListStream(server *Server) *conversationListStream {
 	return cls
 }
 
-func (cls *conversationListStream) hasListeners() bool {
-	cls.mu.Lock()
-	defer cls.mu.Unlock()
-	return cls.listeners > 0
+func (cls *conversationListStream) notify() {
+	cls.scheduleMu.Lock()
+	defer cls.scheduleMu.Unlock()
+	if cls.listeners == 0 {
+		return
+	}
+	cls.dirty = true
+	if cls.refreshing {
+		return
+	}
+	cls.refreshing = true
+	go cls.refresh()
 }
 
-func (cls *conversationListStream) notify(ctx context.Context) error {
-	if !cls.hasListeners() {
-		return nil
+func (cls *conversationListStream) refresh() {
+	for {
+		cls.scheduleMu.Lock()
+		if !cls.dirty || cls.listeners == 0 {
+			cls.dirty = false
+			cls.refreshing = false
+			cls.scheduleMu.Unlock()
+			return
+		}
+		cls.dirty = false
+		cls.scheduleMu.Unlock()
+
+		if err := cls.recompute(context.Background()); err != nil {
+			cls.server.logger.Error("failed to publish conversation list patch", "error", err)
+		}
 	}
-	return cls.recompute(ctx)
 }
 
 func (cls *conversationListStream) recompute(ctx context.Context) error {
@@ -159,18 +183,19 @@ func resetEvent(currentList []ConversationWithState, currentHash, oldHash string
 }
 
 func (cls *conversationListStream) connect(ctx context.Context, oldHash string) ([]ConversationListPatchEvent, func() (ConversationListPatchEvent, bool), func(), error) {
-	cls.mu.Lock()
+	cls.scheduleMu.Lock()
 	cls.listeners++
-	cls.mu.Unlock()
+	cls.scheduleMu.Unlock()
 
 	var releaseOnce sync.Once
 	release := func() {
 		releaseOnce.Do(func() {
+			cls.scheduleMu.Lock()
+			cls.listeners--
+			cls.scheduleMu.Unlock()
+
 			cls.mu.Lock()
 			defer cls.mu.Unlock()
-			if cls.listeners > 0 {
-				cls.listeners--
-			}
 			cls.cond.Broadcast()
 		})
 	}

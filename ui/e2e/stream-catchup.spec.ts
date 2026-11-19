@@ -210,3 +210,52 @@ test.describe("stream catch-up", () => {
 // forcing the messageStore for a non-focused conversation to "behind" without
 // a debug hook would require patching the production bundle. The reconnect
 // test above exercises the same hasFullHistory=false → REST backfill branch.
+
+for (const listed of [true, false]) {
+  test(`a coalesced idle patch clears optimistic Thinking (${listed ? "known row" : "first row"})`, async ({
+    page,
+    request,
+  }) => {
+    const { conversationId, slug } = await createConversationViaAPIWithDetails(request, "Hello");
+    let release!: () => void;
+    const completed = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/api/stream2*", async (route) => {
+      await completed;
+      await route.fulfill({
+        contentType: "text/event-stream",
+        body: `data: ${JSON.stringify({
+          conversation_list_patch: {
+            reset: true,
+            new_hash: "coalesced-idle",
+            at: new Date().toISOString(),
+            patch: [{ op: "replace", path: "", value: [finalRow] }],
+          },
+        })}\n\n`,
+      });
+    });
+    const snapshot = await request.get("/api/conversations/snapshot");
+    expect(snapshot.ok()).toBeTruthy();
+    const { conversations } = await snapshot.json();
+    const initialRow = conversations.find(
+      (c: { conversation_id: string }) => c.conversation_id === conversationId,
+    );
+    expect(initialRow.working).toBe(false);
+    const finalRow = { ...initialRow, max_sequence_id: initialRow.max_sequence_id + 2 };
+    await page.route("**/api/conversations/snapshot", (route) =>
+      route.fulfill({ json: { conversations: listed ? [initialRow] : [], hash: "before-send" } }),
+    );
+    await page.route(`**/api/conversation/${conversationId}/chat`, (route) =>
+      route.fulfill({ status: 202, json: { status: "accepted" } }),
+    );
+    await page.goto(`/c/${slug}`, { waitUntil: "domcontentloaded" });
+    await waitForText(page, "Hello! I'm Shelley, your AI assistant.");
+    await page.getByTestId("message-input").fill("echo: fast reply");
+    await page.getByTestId("send-button").click();
+    const stop = page.getByRole("button", { name: "Stop", exact: true });
+    await expect(stop).toBeVisible();
+    release();
+    await expect(stop).toBeHidden();
+  });
+}
