@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -510,14 +512,31 @@ func TestSettingsChangeKeepsQueue(t *testing.T) {
 	})
 }
 
-// Messages queued during a turn reach the model together in the next
-// request, not one per request.
-func TestQueuedMessagesDrainIntoOneRequest(t *testing.T) {
+// Messages waiting behind a turn all reach the model, each as its own message
+// and in the order sent, in the one request that follows the turn: whether the
+// turn ends by itself or "Send now" interrupts it, and whether they were sent
+// to wait for the turn's end or for its next model request.
+func TestQueuedMessagesReachModelTogether(t *testing.T) {
 	t.Parallel()
-	synctest.Test(t, testQueuedMessagesDrainIntoOneRequest)
+	for _, tc := range []struct {
+		name           string
+		queue, sendNow bool
+	}{
+		{"queued, turn ends", true, false},
+		{"queued, send now", true, true},
+		{"sent mid-turn, turn ends", false, false},
+		{"sent mid-turn, send now", false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				testQueuedMessagesReachModelTogether(t, tc.queue, tc.sendNow)
+			})
+		})
+	}
 }
 
-func testQueuedMessagesDrainIntoOneRequest(t *testing.T) {
+func testQueuedMessagesReachModelTogether(t *testing.T, queue, sendNow bool) {
 	server, database, llmSvc := newTestServer(t)
 	defer stopActiveConversationLoops(server)
 
@@ -526,28 +545,54 @@ func testQueuedMessagesDrainIntoOneRequest(t *testing.T) {
 		t.Fatalf("CreateConversation: %v", err)
 	}
 	convID := conversation.ConversationID
-	sendChat(t, server, convID, "delay: 2", false)
+	sendChat(t, server, convID, "delay: 60", false)
 	synctest.Wait()
-	for _, msg := range []string{"echo: first queued", "echo: second queued"} {
-		sendChat(t, server, convID, msg, true)
+	sendChat(t, server, convID, "echo: jumped the queue", queue)
+	sendChat(t, server, convID, "echo: second in line", queue)
+	synctest.Wait()
+	queued := queuedMessages(t, database, convID)
+	if len(queued) != 2 {
+		t.Fatalf("queued = %#v", queued)
+	}
+
+	interrupted := "Delayed for 60 seconds"
+	if sendNow {
+		interrupted = "[Operation cancelled]"
+		request := httptest.NewRequest(http.MethodPost, "/api/conversation/"+convID+"/send-queued?queued_id="+queued[0].ID, nil)
+		response := httptest.NewRecorder()
+		server.handleSendQueuedNow(response, request, convID)
+		if response.Code != http.StatusAccepted {
+			t.Fatalf("send now = %d: %s", response.Code, response.Body.String())
+		}
+	} else {
+		time.Sleep(60 * time.Second)
 	}
 	synctest.Wait()
 
-	for deadline := time.Now().Add(8 * time.Second); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
-		for _, req := range llmSvc.GetRecentRequests() {
-			var text strings.Builder
-			for _, msg := range req.Messages {
-				text.WriteString(messageText(msg))
-			}
-			if strings.Contains(text.String(), "first queued") {
-				if !strings.Contains(text.String(), "second queued") {
-					t.Fatal("the model saw the first queued message without the second")
-				}
-				return
-			}
+	// A later turn still carries them.
+	sendChat(t, server, convID, "echo: afterwards", false)
+	synctest.Wait()
+
+	drained := []string{
+		"MessageRoleUser: delay: 60",
+		"MessageRoleAssistant: " + interrupted,
+		"MessageRoleUser: echo: jumped the queue",
+		"MessageRoleUser: echo: second in line",
+	}
+	later := append(slices.Clone(drained), "MessageRoleAssistant: second in line", "MessageRoleUser: echo: afterwards")
+	var got [][]string
+	for _, req := range llmSvc.GetRecentRequests() {
+		var transcript []string
+		for _, msg := range req.Messages {
+			transcript = append(transcript, msg.Role.String()+": "+messageText(msg))
+		}
+		if len(transcript) > 1 {
+			got = append(got, transcript)
 		}
 	}
-	t.Fatal("queued messages never reached the model")
+	if want := [][]string{drained, later}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("requests after the first turn:\n got %q\nwant %q", got, want)
+	}
 }
 
 // The commit that takes a queued message off the queue also marks the
