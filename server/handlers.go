@@ -728,7 +728,6 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 	w.Write([]byte(modifiedHTML))
 }
 
-// handleConfig returns server configuration
 // handleConversations handles GET /conversations
 func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 	limit := 5000
