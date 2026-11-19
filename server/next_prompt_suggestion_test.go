@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
@@ -275,10 +276,24 @@ func TestNextPromptSuggestionSkipsTextedAssistantTurns(t *testing.T) {
 		h.convID = id
 		mux := http.NewServeMux()
 		h.server.RegisterRoutes(mux)
+		// The debug chat's gateway is on mux. Reach it in process: dialing
+		// its http://localhost endpoint would resolve localhost in the
+		// bubble, which can kill the test binary (golang/go#80903).
+		h.server.channelClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, r)
+			return w.Result(), nil
+		})}
 		if w := postJSON(t, mux, "/api/debug/channels/debug-a/receive", map[string]string{"text": "echo: water the basil"}); w.Code != http.StatusOK {
 			t.Fatalf("receive: status %d: %s", w.Code, w.Body.String())
 		}
 		synctest.Wait()
+		h.server.channelDebug.mu.Lock()
+		typing := h.server.channelDebug.chats["debug-a"].Typing
+		h.server.channelDebug.mu.Unlock()
+		if !typing {
+			t.Fatal("the texted turn showed no typing indicator in its chat")
+		}
 		if n := len(suggestionRequests(h)); n != 0 {
 			t.Fatalf("after a texted message, suggestion requests = %d, want 0", n)
 		}
