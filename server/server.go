@@ -1357,7 +1357,6 @@ func ExtractDisplayData(message llm.Message) interface{} {
 	return nil
 }
 
-// recordMessage records a new message to the database and also notifies subscribers
 // buildCreateMessageParams converts an llm.Message into the DB insert params,
 // applying the same message-type detection, display-data extraction, error
 // user_data stamping, and end-of-turn agent-done folding that recordMessage
@@ -1427,6 +1426,7 @@ func (s *Server) buildCreateMessageParams(conversationID string, message llm.Mes
 	return params, nil
 }
 
+// recordMessage records a new message to the database and also notifies subscribers
 func (s *Server) recordMessage(ctx context.Context, conversationID string, message llm.Message, messageID string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
 	params, err := s.buildCreateMessageParams(conversationID, message, usage, otherUsage)
 	if err != nil {

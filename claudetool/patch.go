@@ -396,7 +396,6 @@ type Reindent struct {
 	Add   string `json:"add,omitempty"`
 }
 
-// Run implements the patch tool logic.
 func (p *PatchTool) applyPatchTool() *llm.Tool {
 	return &llm.Tool{
 		Name:          ApplyPatchName,
@@ -413,6 +412,7 @@ func (p *PatchTool) applyPatchTool() *llm.Tool {
 	}
 }
 
+// Run implements the patch tool logic.
 func (p *PatchTool) Run(ctx context.Context, m json.RawMessage) llm.ToolOut {
 	input, err := p.patchParse(m)
 	if err != nil {

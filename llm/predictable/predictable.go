@@ -907,7 +907,6 @@ func (s *Service) makeReadImageToolResponse(path string, inputTokens uint64) *ll
 	}
 }
 
-// makeChangeDirToolResponse creates a response that calls the change_dir tool
 // makeToolResponse calls tool with input verbatim.
 func (s *Service) makeToolResponse(tool string, input json.RawMessage, inputTokens uint64) *llm.Response {
 	nano := time.Now().UnixNano()
@@ -927,6 +926,7 @@ func (s *Service) makeToolResponse(tool string, input json.RawMessage, inputToke
 	}
 }
 
+// makeChangeDirToolResponse creates a response that calls the change_dir tool
 func (s *Service) makeChangeDirToolResponse(path string, inputTokens uint64) *llm.Response {
 	toolInputData := map[string]string{"path": path}
 	toolInputBytes, _ := json.Marshal(toolInputData)

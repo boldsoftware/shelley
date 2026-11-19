@@ -109,7 +109,6 @@ func (m machine) diffRange(gitRoot, diffID, toRef string) ([]string, error) {
 // getGitRoot returns the git repository root for the given directory
 func getGitRoot(dir string) (string, error) { return localMachine.gitRoot(dir) }
 
-// parseDiffStat parses git diff --numstat output
 // parseDecorations turns git's %D output into a list of decoration labels.
 // Input examples:
 //
@@ -141,6 +140,7 @@ func parseDecorations(s string) []string {
 	return out
 }
 
+// parseDiffStat parses git diff --numstat output
 func parseDiffStat(output string) (additions, deletions, filesCount int) {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	for _, line := range lines {

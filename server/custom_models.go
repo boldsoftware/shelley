@@ -69,7 +69,6 @@ type UpdateModelRequest struct {
 	ReasoningMap     string               `json:"reasoning_map"`
 }
 
-// validImageSupport returns the canonical value or an error.
 func validSupportSetting(field, v string) (string, error) {
 	switch v {
 	case "", "auto":
@@ -81,6 +80,7 @@ func validSupportSetting(field, v string) (string, error) {
 	}
 }
 
+// validImageSupport returns the canonical value or an error.
 func validImageSupport(v string) (string, error) {
 	return validSupportSetting("image_support", v)
 }

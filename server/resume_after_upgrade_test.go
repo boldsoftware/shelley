@@ -590,10 +590,6 @@ func TestUpgradeResumeFailureAfterInterruptedResult(t *testing.T) {
 	}
 }
 
-// TestResumeAfterUpgradeSkips covers startup classification: conversations that
-// are not working, managed children, and conversations whose turn already
-// finished are not reserved for automatic resume and have stale working state
-// cleared before listeners open.
 // A delegated subagent left mid-turn resumes like a top-level conversation,
 // and its completion still reaches the idle parent.
 func TestResumeAfterUpgradeResumesSubagent(t *testing.T) {
@@ -648,6 +644,10 @@ func TestResumeAfterUpgradeResumesSubagent(t *testing.T) {
 	}
 }
 
+// TestResumeAfterUpgradeSkips covers startup classification: conversations that
+// are not working, managed children, and conversations whose turn already
+// finished are not reserved for automatic resume and have stale working state
+// cleared before listeners open.
 func TestResumeAfterUpgradeSkips(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

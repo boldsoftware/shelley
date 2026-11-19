@@ -438,8 +438,6 @@ func createAndCopy(root *os.Root, name string, src io.Reader) (string, error) {
 	return filepath.Join(browse.UploadDir, name), nil
 }
 
-// staticHandler serves files from the provided filesystem.
-// For JS/CSS files, it serves pre-compressed .gz versions with content-based ETags.
 func isConversationSlugPath(path string) bool {
 	return strings.HasPrefix(path, "/c/")
 }
@@ -481,6 +479,8 @@ func etagMatches(ifNoneMatch, etag string) bool {
 	return false
 }
 
+// staticHandler serves files from the provided filesystem.
+// For JS/CSS files, it serves pre-compressed .gz versions with content-based ETags.
 func (s *Server) staticHandler(fsys http.FileSystem) http.Handler {
 	fileServer := http.FileServer(fsys)
 	indexHandler := compressionHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -4458,9 +4458,6 @@ func (s *Server) startNewGeneration(ctx context.Context, conversationID string) 
 	return conversation, nil
 }
 
-// validateConversationOptions runs the same checks the new-conversation
-// path applies. Returns ("", nil) when opts are valid; otherwise a 400
-// message suitable for the client.
 func findModelInfo(id string, models []ModelInfo) *ModelInfo {
 	for i := range models {
 		if models[i].ID == id {
@@ -4520,6 +4517,9 @@ func validateModelReasoningLevel(model *ModelInfo, level string) string {
 	return fmt.Sprintf("Model %s does not support reasoning level %s; choose one of: %s.", model.ID, level, strings.Join(model.ReasoningLevels, ", "))
 }
 
+// validateConversationOptions runs the same checks the new-conversation
+// path applies. Returns ("", nil) when opts are valid; otherwise a 400
+// message suitable for the client.
 func validateConversationOptions(opts db.ConversationOptions) string {
 	if opts.Kind != "" || opts.ParentPointer != nil {
 		return "kind and parent_pointer are internal conversation options"
