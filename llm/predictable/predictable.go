@@ -68,6 +68,8 @@ func requestMentions(req *llm.Request, needle string) bool {
 // statement or new prefix checks. Do not extend or wrap this service - modify it in place.
 // Available patterns include:
 //   - "echo: <text>" - echoes the text back
+//   - "stream: <text>" - echoes the text back, streamed slowly enough for a
+//     client to see it grow
 //   - "bash: <command>" - triggers bash tool with command
 //   - "bash-bg: <command>" - triggers bash tool with background=true
 //   - "bash@<ssh_target>: <command>", "bash-bg@<ssh_target>: <command>" - the
@@ -311,6 +313,16 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 			return s.makeResponse(text, inputTokens), nil
 		}
 
+		// The same reply as "echo:", streamed first. Every other reply is
+		// returned without streaming: many tests take a turn's timing from
+		// this model.
+		if text, ok := strings.CutPrefix(inputText, "stream: "); ok {
+			if err := streamText(ctx, req, text); err != nil {
+				return nil, err
+			}
+			return s.makeResponse(text, inputTokens), nil
+		}
+
 		if prefix, cmd, ok := strings.Cut(inputText, ": "); ok && strings.HasPrefix(prefix, "bash") {
 			name, target, hasTarget := strings.Cut(prefix, "@")
 			if name == "bash" || name == "bash-bg" {
@@ -503,6 +515,38 @@ func (s *Service) makeRefusalResponse(inputTokens uint64) *llm.Response {
 			CostUSD:      0.001,
 		},
 	}
+}
+
+// A streamed reply goes out in at most streamPieces pieces, so that a long
+// one costs no more than a short one, with streamPace between them: long
+// enough for a client to see the reply grow. Both are fixed for now: time to
+// first token and output tokens per second are meant to become independent
+// parameters.
+const (
+	streamPieces = 4
+	streamPace   = 75 * time.Millisecond
+)
+
+// streamText sends text through req.OnStream in pieces, as a streaming
+// provider adapter does before it returns the reply. A piece never ends
+// inside a character. Cancelled part way, it returns the context's error.
+func streamText(ctx context.Context, req *llm.Request, text string) error {
+	if req.OnStream == nil {
+		return nil
+	}
+	runes := []rune(text)
+	size := (len(runes) + streamPieces - 1) / streamPieces
+	for start := 0; start < len(runes); start += size {
+		if start > 0 {
+			select {
+			case <-time.After(streamPace):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		req.OnStream(llm.StreamDelta{Type: "text", Text: string(runes[start:min(start+size, len(runes))])})
+	}
+	return nil
 }
 
 // makeResponse creates a simple text response

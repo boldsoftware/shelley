@@ -171,3 +171,100 @@ func TestStreamedTurnDeltasMatchSavedMessages(t *testing.T) {
 		t.Error("stream body has no stream_delta frames")
 	}
 }
+
+// TestPredictableReplyStreamsBeforeItLands sends a chat over HTTP and reads
+// /api/stream2 as a client would: the predictable model's reply arrives in
+// pieces before it is saved, and the saved message has its text once.
+func TestPredictableReplyStreamsBeforeItLands(t *testing.T) {
+	t.Parallel()
+	s, database, _ := newTestServer(t)
+	conversation, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conversationID := conversation.ConversationID
+
+	ctx, cancel := context.WithCancel(t.Context())
+	w := newResponseRecorderWithClose()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.handleStream(w, httptest.NewRequest(http.MethodGet, "/api/stream2", nil).WithContext(ctx))
+	}()
+	defer func() {
+		w.Close()
+		cancel()
+		<-done
+	}()
+	// Deltas are not replayed, so the turn starts once the stream is live.
+	waitFor(t, 10*time.Second, func() bool { return len(decodeSSE(w.Snapshot())) > 0 })
+
+	reply := "the quick brown fox jumps over the lazy dog, again and again"
+	body, _ := json.Marshal(ChatRequest{Message: "stream: " + reply, Model: "predictable"})
+	chat := httptest.NewRequest("POST", "/api/conversation/"+conversationID+"/chat", strings.NewReader(string(body)))
+	chat.Header.Set("Content-Type", "application/json")
+	chatW := httptest.NewRecorder()
+	s.handleChatConversation(chatW, chat, conversationID)
+	if chatW.Code != http.StatusAccepted {
+		t.Fatalf("chat: got %d: %s", chatW.Code, chatW.Body.String())
+	}
+
+	// What the client saw, in the order it arrived, up to the turn's end.
+	var streamed string
+	var deltaIDs map[string]bool
+	var partials int
+	var saved []APIMessage
+	waitFor(t, 10*time.Second, func() bool {
+		streamed, deltaIDs, partials, saved = "", map[string]bool{}, 0, nil
+		working, ended := false, false
+		for _, frame := range decodeSSE(w.Snapshot()) {
+			if state := frame.ConversationState; state != nil && state.ConversationID == conversationID {
+				ended = ended || (working && !state.Working)
+				working = state.Working
+			}
+			if frame.ConversationID != conversationID {
+				continue
+			}
+			if d := frame.StreamDelta; d != nil && d.Type == "text" {
+				if len(saved) > 0 {
+					t.Fatalf("delta %+v arrived after the saved reply", d)
+				}
+				streamed += d.Text
+				deltaIDs[d.MessageID] = true
+				if streamed != reply {
+					partials++
+				}
+			}
+			for _, m := range frame.Messages {
+				if m.Type == string(db.MessageTypeAgent) {
+					saved = append(saved, m)
+				}
+			}
+		}
+		return ended && len(saved) > 0
+	})
+
+	if partials == 0 {
+		t.Errorf("the client never saw part of the reply before all of it; streamed %q", streamed)
+	}
+	if streamed != reply {
+		t.Errorf("streamed %q, want %q", streamed, reply)
+	}
+	if len(saved) != 1 || saved[0].LlmData == nil {
+		t.Fatalf("saved replies: %+v, want one", saved)
+	}
+	if len(deltaIDs) != 1 || !deltaIDs[saved[0].MessageID] {
+		t.Errorf("deltas were for messages %v, saved as %q", deltaIDs, saved[0].MessageID)
+	}
+	var message llm.Message
+	if err := json.Unmarshal([]byte(*saved[0].LlmData), &message); err != nil {
+		t.Fatal(err)
+	}
+	var text string
+	for _, c := range message.Content {
+		text += c.Text
+	}
+	if text != reply {
+		t.Errorf("saved %q, want the reply once: %q", text, reply)
+	}
+}
