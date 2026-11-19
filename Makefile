@@ -3,7 +3,7 @@
 # The Node.js and pnpm pinned in ui/mise.toml.
 PNPM = scripts/with-node pnpm --dir ui
 
-.PHONY: build build-custom build-linux-aarch64 build-linux-x86 test test-go test-e2e ui serve clean help templates demo exe-scroll exe-scroll-all
+.PHONY: build build-noui build-custom build-linux-aarch64 build-linux-x86 test test-go test-e2e ui serve clean help templates demo exe-scroll exe-scroll-all
 
 # Default target
 all: build
@@ -30,6 +30,11 @@ templates:
 build: exe-scroll ui templates
 	@echo "Building Shelley..."
 	go build -o bin/shelley ./cmd/shelley
+
+# Build the server without its web UI: it answers the API and serves no pages.
+# For tests of other clients, which then need neither Node nor a UI build.
+build-noui: exe-scroll templates
+	go build -tags noui -o bin/shelley-noui ./cmd/shelley
 
 # Build a customized Shelley binary (see the customizing-shelley skill).
 # Stamps the release tag this branch diverged from (latest release tag at the
