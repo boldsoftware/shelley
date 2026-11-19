@@ -121,7 +121,7 @@ func TestForegroundSkipEvidence(t *testing.T) {
 			c := newCompactTestConversation(t, db.ConversationOptions{})
 			c.turn("echo: " + strings.Repeat("COMPACT_ME ", 150))
 			svc := &foregroundSkipService{batches: tc.batches, block: -1}
-			c.srv.llmManager.(*twoModelLLMManager).service = svc
+			c.srv.llmManager.(*twoModelLLMManager).use(svc)
 			cm, err := c.srv.getOrCreateConversationManager(t.Context(), c.id, "")
 			if err != nil {
 				t.Fatal(err)
@@ -148,7 +148,7 @@ func TestForegroundSkipResume(t *testing.T) {
 			}
 			batches[block+1] = []llm.Content{second}
 			svc := &foregroundSkipService{batches: batches, block: block, seen: make(chan *llm.Request, 8)}
-			c.srv.llmManager.(*twoModelLLMManager).service = svc
+			c.srv.llmManager.(*twoModelLLMManager).use(svc)
 			cm, err := c.srv.getOrCreateConversationManager(t.Context(), c.id, "")
 			if err != nil {
 				t.Fatal(err)

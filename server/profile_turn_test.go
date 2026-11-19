@@ -113,7 +113,7 @@ func (g *profileGate) Do(ctx context.Context, req *llm.Request) (*llm.Response, 
 func TestProfileMentionIsolatesQueuedAndImmediateMessages(t *testing.T) {
 	e := newProfileEnv(t)
 	gate := &profileGate{Service: e.ps, started: make(chan struct{}), release: make(chan struct{})}
-	e.srv.llmManager.(*twoModelLLMManager).service = gate
+	e.srv.llmManager.(*twoModelLLMManager).use(gate)
 	e.want(201, "POST", "/api/profiles", `{"name":"Probe","system_prompt":"TURN ONLY"}`)
 	var created struct {
 		ConversationID string `json:"conversation_id"`
@@ -166,7 +166,7 @@ func TestProfileMentionIsolatesQueuedAndImmediateMessages(t *testing.T) {
 func TestProfileMentionRetryAndMachineProvenance(t *testing.T) {
 	e := newProfileEnv(t)
 	failing := &gatingTestLLM{inner: e.ps, err: fmt.Errorf("503 Service Unavailable")}
-	e.srv.llmManager.(*twoModelLLMManager).service = failing
+	e.srv.llmManager.(*twoModelLLMManager).use(failing)
 	e.want(201, "POST", "/api/profiles", `{"name":"Probe","system_prompt":"TURN ONLY"}`)
 	conv, err := e.database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
 	if err != nil {
@@ -211,7 +211,7 @@ func TestProfileMentionQueuedFailureIsVisible(t *testing.T) {
 	e := newProfileEnv(t)
 	t.Cleanup(func() { stopActiveConversationLoops(e.srv) })
 	gate := &profileGate{Service: e.ps, started: make(chan struct{}), release: make(chan struct{})}
-	e.srv.llmManager.(*twoModelLLMManager).service = gate
+	e.srv.llmManager.(*twoModelLLMManager).use(gate)
 	e.want(201, "POST", "/api/profiles", `{"name":"Probe"}`)
 	e.want(201, "POST", "/api/profiles", `{"name":"Unavailable","model":"model-b"}`)
 	var created struct {
@@ -275,7 +275,7 @@ func TestProfileMentionQueuedFailureIsVisible(t *testing.T) {
 func TestProfileMentionRefusalContinuesOnConversationModel(t *testing.T) {
 	e := newProfileEnv(t)
 	t.Cleanup(func() { stopActiveConversationLoops(e.srv) })
-	e.srv.llmManager.(*twoModelLLMManager).service = &refuseThenOKService{inner: e.ps}
+	e.srv.llmManager.(*twoModelLLMManager).use(&refuseThenOKService{inner: e.ps})
 	e.want(201, "POST", "/api/profiles", `{"name":"Probe","model":"model-b","system_prompt":"TURN ONLY","tool_overrides":{"bash":"off"}}`)
 	conv, err := e.database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
 	if err != nil {
@@ -361,7 +361,7 @@ func TestProfileMentionRetryAfterSourceRefreshDoesNotFallback(t *testing.T) {
 	e := newProfileEnv(t)
 	t.Cleanup(func() { stopActiveConversationLoops(e.srv) })
 	failing := &gatingTestLLM{inner: e.ps, err: fmt.Errorf("503 Service Unavailable")}
-	e.srv.llmManager.(*twoModelLLMManager).service = failing
+	e.srv.llmManager.(*twoModelLLMManager).use(failing)
 	e.want(201, "POST", "/api/profiles", `{"name":"Probe","system_prompt":"TURN ONLY"}`)
 	conv, err := e.database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
 	if err != nil {

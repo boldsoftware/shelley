@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -70,14 +71,31 @@ func TestModelCommandStatusListsPerModelLevels(t *testing.T) {
 // backed by the same predictable.Service, so /model switching can be exercised
 // end-to-end without real providers.
 type twoModelLLMManager struct {
+	mu      sync.Mutex
 	service llm.Service
 }
 
 func (m *twoModelLLMManager) GetService(modelID string) (llm.Service, error) {
 	if modelID == "model-a" || modelID == "model-b" {
+		m.mu.Lock()
+		defer m.mu.Unlock()
 		return m.service, nil
 	}
 	return nil, os.ErrNotExist
+}
+
+// use swaps the service behind both models. The server may be reading it: a
+// turn's last message is in the database before the server is done with it.
+//
+// TODO: the lock only makes the swap safe. The cause is that tests take "the
+// turn's last message is in the database" for "the server is idle", while the
+// server is still draining the queue and looking the model up. Have them wait
+// until the server is done with the turn before they swap: under
+// testing/synctest with synctest.Wait(), or on a signal that the turn is over.
+func (m *twoModelLLMManager) use(service llm.Service) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.service = service
 }
 
 func (m *twoModelLLMManager) GetAvailableModels() []string { return []string{"model-a", "model-b"} }
