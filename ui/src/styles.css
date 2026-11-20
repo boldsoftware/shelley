@@ -9164,7 +9164,8 @@ svg {
   width: 100%;
 }
 
-.diff-viewer-sidebar-range .commit-picker-range-btn {
+.diff-viewer-sidebar-range .commit-picker-range-btn,
+.drawer-bulk-count {
   flex: 1;
   white-space: nowrap;
 }
@@ -13845,7 +13846,8 @@ kbd {
   min-width: 0;
 }
 
-.token-cost-readout-sizer {
+.token-cost-readout-sizer,
+.drawer.selection-mode .conversation-actions {
   visibility: hidden;
 }
 
@@ -19826,4 +19828,82 @@ kbd {
       transition: none;
     }
   }
+}
+.drawer-query-with-activity {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+}
+.drawer-query-with-activity > .conversation-query-editor-host {
+  flex: 1 1 5rem;
+}
+.drawer-activity-token.conversation-query-editor {
+  width: auto;
+  min-height: 0;
+  padding-right: 0;
+}
+.drawer-activity-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 0;
+  padding-left: 0;
+  white-space: nowrap;
+}
+
+.drawer-activity-heading {
+  padding: 0.5rem 0.4rem 0.15rem;
+  font-size: var(--font-size-12);
+}
+.drawer-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 2rem;
+}
+
+.drawer-selection-check,
+.drawer-bulk-actions > input,
+.drawer-bulk-popover input[type="checkbox"] {
+  accent-color: var(--text-primary);
+  cursor: pointer;
+}
+.drawer.selection-mode .conversation-item {
+  position: relative;
+  padding-left: 2.5rem;
+}
+.drawer-selection-check {
+  position: absolute;
+  left: 1rem;
+  top: 1rem;
+  margin: 0;
+}
+.drawer.selection-mode .conversation-tag,
+.drawer.selection-mode .conversation-meta button {
+  pointer-events: none;
+  cursor: inherit;
+}
+.drawer-bulk-popover {
+  width: min(19rem, calc(100vw - 2rem));
+}
+.drawer-bulk-new-tag {
+  display: flex;
+  margin-top: 0.5rem;
+}
+.drawer-bulk-new-tag input {
+  min-width: 0;
+  flex: 1;
+}
+.drawer-bulk-popover-actions,
+.drawer-bulk-status {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+}
+.drawer-bulk-status {
+  justify-content: space-between;
+  font-size: var(--font-size-12);
 }

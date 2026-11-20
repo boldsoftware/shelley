@@ -31,7 +31,8 @@
          (e: "renamed", c: Conversation): void      // onConversationRenamed -->
 <template>
   <div
-    :class="`drawer ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''} nav-${navTab} row-size-${rowSize}`"
+    :class="`drawer ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''} nav-${navTab} row-size-${rowSize}${selectionMode ? ' selection-mode' : ''}`"
+    @keydown.esc="cancelSelection"
   >
     <!-- Header -->
     <div class="drawer-header">
@@ -394,14 +395,28 @@
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
           </svg>
-          <ConversationQueryEditor
-            ref="queryEditorRef"
-            v-model="searchQuery"
-            :placeholder="t('searchOrTagPlaceholder')"
-            :ariaLabelText="t('searchConversations')"
-            @keydown="onSearchKeyDown"
-            @structured-edit-change="activeStructuredEdit = $event"
-          />
+          <div class="drawer-query-with-activity">
+            <span v-if="activityFilter" class="conversation-query-editor drawer-activity-token">
+              <span class="conversation-query-token" data-conversation-query-token="activity">
+                <span class="conversation-query-token-prefix">{{ activityFilter.mode }}:</span>
+                <span class="conversation-query-token-value">{{ activityFilter.label }}</span>
+                <button
+                  type="button"
+                  class="conversation-query-token-delete"
+                  aria-label="Remove activity filter"
+                  @click="setActivity(null)"
+                />
+              </span>
+            </span>
+            <ConversationQueryEditor
+              ref="queryEditorRef"
+              v-model="searchQuery"
+              :placeholder="t('searchOrTagPlaceholder')"
+              :ariaLabelText="t('searchConversations')"
+              @keydown="onSearchKeyDown"
+              @structured-edit-change="activeStructuredEdit = $event"
+            />
+          </div>
           <button
             v-if="searchQuery.trim()"
             type="button"
@@ -414,7 +429,29 @@
           </button>
         </div>
       </div>
-      <div class="drawer-filter-actions">
+      <ConversationBulkActions
+        v-if="selectionMode"
+        :selected="selectedConversations"
+        :all="selectableConversations"
+        :projects="workspace.data.value?.projects ?? []"
+        :all-selected="allSelected"
+        :archived-only="archivedOnly"
+        :can-move="canMoveSelection"
+        :busy="bulkBusy"
+        :apply-tags="applyBulkTags"
+        :move="moveSelection"
+        @toggle-all="toggleSelectAll"
+        @cancel="cancelSelection"
+        @archive="archiveSelection"
+      />
+      <div v-else class="drawer-filter-actions">
+        <button
+          type="button"
+          class="drawer-filter-action drawer-activity-trigger"
+          @click="activityPopover?.toggle($event)"
+        >
+          Activity <i class="pi pi-angle-down" aria-hidden="true" />
+        </button>
         <span
           v-if="multipleParticipantsAvailable"
           class="drawer-filter-action-wrap"
@@ -476,6 +513,50 @@
         >
           {{ displayedConversations.length }}
         </span>
+        <Button
+          class="btn-icon"
+          icon="pi pi-list-check"
+          text
+          severity="secondary"
+          aria-label="Select conversations"
+          v-tooltip.top="'Select conversations'"
+          @click="startSelection"
+        />
+      </div>
+      <Popover ref="activityPopover" :pt="{ root: { class: 'drawer-bulk-popover' } }">
+        <button type="button" class="tag-filter-option" @click="setActivity(null)">Any</button>
+        <template v-for="mode in ['active', 'inactive'] as const" :key="mode">
+          <div class="text-secondary drawer-activity-heading">
+            {{ mode === "active" ? "Active" : "Inactive" }}
+          </div>
+          <button
+            v-for="period in activityPeriods"
+            :key="period.days"
+            type="button"
+            class="tag-filter-option"
+            @click="
+              setActivity({
+                mode,
+                days: period.days,
+                label: mode === 'active' ? `<${period.short}` : `${period.short}+`,
+              })
+            "
+          >
+            {{ mode === "active" ? period.recent : `${period.short}+` }}
+          </button>
+        </template>
+      </Popover>
+      <div v-if="bulkStatus" class="drawer-bulk-status" role="status">
+        <span>{{ bulkStatus }}</span>
+        <Button
+          v-if="bulkUndo"
+          label="Undo"
+          text
+          size="small"
+          severity="secondary"
+          :disabled="bulkBusy"
+          @click="undoBulk"
+        />
       </div>
       <p v-if="enhanceError" role="alert">{{ enhanceError }}</p>
       <p v-if="searchOpen && chapterError && !searchError" role="alert">{{ chapterError }}</p>
@@ -861,7 +942,11 @@ import type {
   ConversationWithState,
 } from "../../types";
 import { api } from "../../services/api";
-import { mergeChapterResults, scoreChapterIndex, type ChapterIndex } from "../../utils/chapterSearch";
+import {
+  mergeChapterResults,
+  scoreChapterIndex,
+  type ChapterIndex,
+} from "../../utils/chapterSearch";
 import { useI18n } from "../composables/i18n";
 import {
   sortConversationsByBucket,
@@ -897,6 +982,7 @@ import {
   saveProjectFolds,
 } from "../../utils/drawerFolds";
 import ConversationRow from "./ConversationDrawerRow.vue";
+import ConversationBulkActions from "./ConversationBulkActions.vue";
 import VmList from "./VmList.vue";
 import { devProdTabs, type NavTab } from "../../services/exeVms";
 import ProjectVMSetup from "./ProjectVMSetup.vue";
@@ -1084,6 +1170,60 @@ const archivedConversations = ref<ConversationWithParticipants[]>([]);
 const loadingArchived = ref(false);
 const searchQuery = ref("");
 const searchOpen = ref(false);
+const activityFilter = ref<{ mode: "active" | "inactive"; days: number; label: string } | null>(
+  null,
+);
+const activityPopover = ref<InstanceType<typeof Popover> | null>(null);
+const activityPeriods = [
+  { days: 1, short: "1d", recent: "Past day" },
+  { days: 7, short: "1w", recent: "Past week" },
+  { days: 30, short: "1mo", recent: "Past month" },
+];
+function setActivity(filter: typeof activityFilter.value) {
+  activityFilter.value = filter;
+  activityPopover.value?.hide();
+  tagMenuConversationSnapshot.value = null;
+  cancelSelection();
+}
+const selectionMode = ref(false);
+const selectionIds = ref(new Set<string>());
+const bulkBusy = ref(false);
+const bulkStatus = ref("");
+const bulkUndo = shallowRef<(() => Promise<void>) | null>(null);
+let lastSelectionId: string | null = null;
+function startSelection() {
+  editingId.value = null;
+  tagEditorId.value = null;
+  pendingDeleteId.value = null;
+  contextMenuId.value = null;
+  selectionMode.value = true;
+}
+function cancelSelection() {
+  if (bulkBusy.value) return;
+  selectionMode.value = false;
+  selectionIds.value = new Set();
+  lastSelectionId = null;
+}
+function toggleSelection(event: MouseEvent | KeyboardEvent, conversation: Conversation) {
+  if (bulkBusy.value || !selectableIds.value.has(conversation.conversation_id)) return;
+  const id = conversation.conversation_id;
+  const next = new Set(selectionIds.value);
+  const ordered = flatVisualOrder.filter((c) => selectableIds.value.has(c.conversation_id));
+  const from = ordered.findIndex((c) => c.conversation_id === lastSelectionId);
+  const to = ordered.findIndex((c) => c.conversation_id === id);
+  if (event.shiftKey && from >= 0 && to >= 0) {
+    ordered
+      .slice(Math.min(from, to), Math.max(from, to) + 1)
+      .forEach((c) => next.add(c.conversation_id));
+  } else if (next.has(id)) next.delete(id);
+  else next.add(id);
+  selectionIds.value = next;
+  lastSelectionId = id;
+}
+function toggleSelectAll() {
+  if (bulkBusy.value) return;
+  selectionIds.value = allSelected.value ? new Set() : new Set(selectableIds.value);
+}
 const selectedDay = ref<Date | null>(null);
 const dayCalendarRef = ref<InstanceType<typeof Popover> | null>(null);
 const dayCalendarOpen = ref(false);
@@ -1124,8 +1264,14 @@ const searchTooltip = computed(() => ({
 const queryEditorRef = ref<InstanceType<typeof ConversationQueryEditor> | null>(null);
 const activeStructuredEdit = ref<ActiveStructuredQueryEdit | null>(null);
 const ftsResults = ref<ConversationWithState[] | null>(null);
-const searchResults = computed(() => ftsResults.value === null ? null :
-  mergeChapterResults<ConversationWithParticipants>(ftsResults.value, listPool.value, chapterScores.value),
+const searchResults = computed(() =>
+  ftsResults.value === null
+    ? null
+    : mergeChapterResults<ConversationWithParticipants>(
+        ftsResults.value,
+        listPool.value,
+        chapterScores.value,
+      ),
 );
 const chapterIndex = ref<ChapterIndex>({});
 let chapterLoad: Promise<void> | null = null;
@@ -1136,11 +1282,16 @@ const chapterScores = computed(() => scoreChapterIndex(chapterIndex.value, searc
 async function loadSearchChapters() {
   if (chapterLoad) return chapterLoad;
   if (chaptersLoaded) return;
-  chapterLoad = api.getConversationChapterIndex().then((index) => {
-    chapterIndex.value = index;
-    chaptersLoaded = true;
-    chapterError.value = null;
-  }).finally(() => { chapterLoad = null; });
+  chapterLoad = api
+    .getConversationChapterIndex()
+    .then((index) => {
+      chapterIndex.value = index;
+      chaptersLoaded = true;
+      chapterError.value = null;
+    })
+    .finally(() => {
+      chapterLoad = null;
+    });
   return chapterLoad;
 }
 
@@ -1924,9 +2075,11 @@ function toggleGroup(groupKey: string) {
 }
 
 function toggleSearch() {
+  if (bulkBusy.value) return;
   if (searchOpen.value) {
     queryEditorRef.value?.finishStructuredEdit();
     searchOpen.value = false;
+    cancelSelection();
   } else {
     searchOpen.value = true;
     void nextTick(() => queryEditorRef.value?.focusEnd());
@@ -1943,6 +2096,7 @@ function clearSearchText() {
 function clearSearch() {
   queryEditorRef.value?.finishStructuredEdit();
   searchQuery.value = "";
+  setActivity(null);
   void nextTick(() => queryEditorRef.value?.focusEnd());
 }
 
@@ -2006,6 +2160,11 @@ function onSearchKeyDown(e: KeyboardEvent) {
   }
   if (e.key === "Escape") {
     e.preventDefault();
+    if (selectionMode.value) {
+      e.stopPropagation();
+      cancelSelection();
+      return;
+    }
     // Escape peels one layer at a time: dropdown, visible input, then box.
     if (filterMenuOpen.value) {
       filterMenuDismissed.value = true;
@@ -2042,7 +2201,15 @@ function filterUnread<T extends Conversation>(conversations: T[]): T[] {
 }
 
 function filterDrawerQuery<T extends Conversation>(conversations: T[], query: ParsedQuery): T[] {
-  return filterUnread(filterConversationsByQuery(conversations, query));
+  const matches = filterUnread(filterConversationsByQuery(conversations, query));
+  const activity = activityFilter.value;
+  if (!activity) return matches;
+  const cutoff = Date.now() - activity.days * 86_400_000;
+  return matches.filter((c) =>
+    activity.mode === "active"
+      ? Date.parse(c.updated_at) > cutoff
+      : Date.parse(c.updated_at) <= cutoff,
+  );
 }
 
 const stableTopLevelConversations = computed(() => {
@@ -2206,6 +2373,186 @@ const displayedConversations = computed<(Conversation | ConversationWithState)[]
 const displayedConversationIds = computed(
   () => new Set(displayedConversations.value.map((conversation) => conversation.conversation_id)),
 );
+const selectableConversations = computed(() =>
+  displayedConversations.value.filter(
+    (c) => c.conversation_id !== COMPOSER_ROW_ID && !workspace.isAssistant(c.conversation_id),
+  ),
+);
+const selectableIds = computed(
+  () => new Set(selectableConversations.value.map((c) => c.conversation_id)),
+);
+const selectedConversations = computed(() =>
+  selectableConversations.value.filter((c) => selectionIds.value.has(c.conversation_id)),
+);
+const allSelected = computed(
+  () =>
+    selectableConversations.value.length > 0 &&
+    selectedConversations.value.length === selectableConversations.value.length,
+);
+const canMoveSelection = computed(
+  () =>
+    selectedConversations.value.length > 0 &&
+    !!workspace.data.value?.projects.length &&
+    selectedConversations.value.every(
+      (c) =>
+        c.user_initiated &&
+        !c.parent_conversation_id &&
+        !c.external_conversation_id &&
+        !workingIds.value.has(c.conversation_id) &&
+        !workspace.data.value?.runs.some(
+          (run) => run.conversation_id === c.conversation_id && run.status === "running",
+        ),
+    ),
+);
+watch([searchQuery, showArchived], cancelSelection);
+async function runBulk(action: () => Promise<void>): Promise<boolean> {
+  if (bulkBusy.value) return false;
+  bulkBusy.value = true;
+  rowError.value = "";
+  bulkStatus.value = "";
+  bulkUndo.value = null;
+  try {
+    await action();
+    return true;
+  } catch (error) {
+    rowError.value = errorMessage(error);
+    return false;
+  } finally {
+    bulkBusy.value = false;
+  }
+}
+async function undoBulk() {
+  const undo = bulkUndo.value;
+  if (!undo) return;
+  if (await runBulk(undo)) bulkStatus.value = "Undone";
+  else bulkUndo.value = undo;
+}
+function setBulkUndo(actions: (() => Promise<void>)[], refresh: () => Promise<void>) {
+  const total = actions.length;
+  bulkUndo.value = async () => {
+    const progress = () => (bulkStatus.value = `${total - actions.length} of ${total} undone`);
+    progress();
+    try {
+      while (actions.length) {
+        await actions[0]!();
+        actions.shift();
+        progress();
+      }
+    } finally {
+      await refresh();
+    }
+  };
+}
+async function applyBulkTags(changes: Record<string, boolean>): Promise<boolean> {
+  const targets = [...selectedConversations.value];
+  return runBulk(async () => {
+    let updated: Conversation | null = null;
+    let completed = 0;
+    try {
+      for (const conversation of targets) {
+        const tags = new Set(parseTags(conversation));
+        for (const [tag, enabled] of Object.entries(changes)) {
+          if (enabled) tags.add(tag);
+          else tags.delete(tag);
+        }
+        updated = await api.updateConversationTags(conversation.conversation_id, [...tags]);
+        emit("renamed", updated);
+        bulkStatus.value = `Tags updated on ${++completed} of ${targets.length} conversations`;
+      }
+    } finally {
+      if (updated) await refreshConversationSnapshots(updated);
+    }
+    bulkStatus.value = `Tags updated on ${targets.length} conversations`;
+  });
+}
+async function moveSelection(project: string): Promise<boolean> {
+  if (!canMoveSelection.value) return false;
+  const targets = selectedConversations.value.map((c) => ({
+    id: c.conversation_id,
+    previous: workspace.projectFor(c.conversation_id)?.name,
+  }));
+  return runBulk(async () => {
+    const moved: typeof targets = [];
+    try {
+      for (const target of targets) {
+        if (target.previous !== project) {
+          await workspaceApi.moveConversation(target.id, project);
+          moved.push(target);
+        }
+        bulkStatus.value = `${moved.length} of ${targets.length} moved to ${project}`;
+      }
+    } finally {
+      if (moved.length && moved.every((target) => target.previous)) {
+        setBulkUndo(
+          moved.map((target) => async () => {
+            await workspaceApi.moveConversation(target.id, target.previous!);
+          }),
+          workspace.refresh,
+        );
+      }
+      await workspace.refresh();
+    }
+    bulkStatus.value = `${moved.length} moved to ${project}`;
+  });
+}
+async function archiveSelection() {
+  const restore = archivedOnly.value;
+  const targets = selectedConversations.value.filter((c) => (restore ? c.archived : !c.archived));
+  const archived: string[] = [];
+  let deletedVM = false;
+  let cancelled = false;
+  const refresh = async () => {
+    if (showArchived.value) await loadArchivedConversations();
+    if (searchText.value.trim()) await refreshSearchResults();
+  };
+  const success = await runBulk(async () => {
+    const next = flatVisualOrder.find((c) => !selectionIds.value.has(c.conversation_id)) ?? null;
+    try {
+      for (const conversation of targets) {
+        const id = conversation.conversation_id;
+        if (restore) {
+          const updated = await api.unarchiveConversation(id);
+          archivedConversations.value = [];
+          emit("unarchived", updated);
+          archived.push(id);
+        } else {
+          await workspace.refresh();
+          if (!workspace.data.value) throw new Error("Workspace has not loaded");
+          const deletesVM = !!workspace.archiveNote(id);
+          const before = archived.length;
+          await workspace.confirmArchive(id, async () => {
+            await api.archiveConversation(id);
+            archivedConversations.value = [];
+            archived.push(id);
+            deletedVM ||= deletesVM;
+            emit("removed", id, next);
+          });
+          if (archived.length === before) {
+            cancelled = true;
+            break;
+          }
+        }
+        bulkStatus.value = `${archived.length} of ${targets.length} ${restore ? "restored" : "archived"}`;
+      }
+    } finally {
+      if (!restore && archived.length && !deletedVM) {
+        setBulkUndo(
+          archived.map((id) => async () => {
+            const updated = await api.unarchiveConversation(id);
+            archivedConversations.value = [];
+            emit("unarchived", updated);
+          }),
+          refresh,
+        );
+      }
+      if (archived.length) await refresh();
+    }
+    bulkStatus.value = cancelled
+      ? `${archived.length} of ${targets.length} archived; cancelled`
+      : `${archived.length} ${restore ? "restored" : "archived"}`;
+  });
+  if (success && !cancelled) cancelSelection();
+}
 const cacheActiveTopLevelRows = computed(
   () =>
     !showArchived.value &&
@@ -2597,13 +2944,14 @@ watch(
     searchingProjects,
     groupedConversations,
     displayedConversations,
+    collapsedGroups,
   ],
-  ([by, projects, , , , grouped, displayed]) => {
+  ([by, projects, , , , grouped, displayed, collapsed]) => {
     flatVisualOrder =
       by === "project" && projects
         ? projects.flatMap((group) => (projectGroupCollapsed(group) ? [] : group.conversations))
         : grouped
-          ? grouped.flatMap(([, group]) => group.conversations)
+          ? grouped.flatMap(([key, group]) => (collapsed.has(key) ? [] : group.conversations))
           : displayed;
   },
   { immediate: true },
@@ -2623,8 +2971,18 @@ onUnmounted(() => {
 });
 
 // Share all row-relevant state + handlers with ConversationDrawerRow via inject.
+watch([collapsedGroups, groupFoldChoices, searchFolds], cancelSelection);
+watch(selectableIds, (ids) => {
+  if (!bulkBusy.value)
+    selectionIds.value = new Set([...selectionIds.value].filter((id) => ids.has(id)));
+});
 provide(DrawerCtxKey, {
   t,
+  selectionMode,
+  selectionIds,
+  selectableIds,
+  bulkBusy,
+  toggleSelection,
   currentConversationId: computed(() => props.currentConversationId),
   searchText,
   searchOpen,

@@ -67,6 +67,11 @@ export function renderSnippetSegments(snippet: string): SnippetSegment[] {
 
 // The context shared from ConversationDrawer.vue down to its row children.
 export interface DrawerCtx {
+  selectionMode: Ref<boolean>;
+  selectionIds: Ref<Set<string>>;
+  selectableIds: ComputedRef<Set<string>>;
+  bulkBusy: Ref<boolean>;
+  toggleSelection: (event: MouseEvent | KeyboardEvent, conversation: Conversation) => void;
   t: (key: keyof TranslationKeys) => string;
   currentConversationId: ComputedRef<string | null>;
   searchText: ComputedRef<string>;

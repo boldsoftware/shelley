@@ -8,15 +8,29 @@
   <div
     :class="`conversation-item ${isActive ? 'active' : ''}${isNew ? ' conversation-item-enter' : ''}${itemArchived && workspaceMode ? ' conversation-item-archived' : ''}${unread ? ' conversation-item-unread' : ''}${ctx.contextMenuId.value === conversation.conversation_id ? ' context-menu-target' : ''}`"
     :data-conversation-id="conversation.conversation_id"
-    role="link"
+    :role="ctx.selectionMode.value ? 'checkbox' : 'link'"
     tabindex="0"
     :aria-current="isActive ? 'page' : undefined"
-    @keydown.enter.self.prevent="ctx.selectConversation(conversation)"
+    :aria-checked="
+      ctx.selectionMode.value ? ctx.selectionIds.value.has(conversation.conversation_id) : undefined
+    "
+    @keydown.enter.self.prevent="onRowClick"
+    @keydown.space.self="onSelectionSpace"
     style="cursor: pointer"
     @click="onRowClick"
     @auxclick="ctx.handleAuxClick($event, conversation)"
     @contextmenu="onRowContextMenu"
   >
+    <input
+      v-if="ctx.selectionMode.value"
+      type="checkbox"
+      class="drawer-selection-check"
+      tabindex="-1"
+      :aria-label="`Select ${conversation.slug || 'conversation'}`"
+      :checked="ctx.selectionIds.value.has(conversation.conversation_id)"
+      :disabled="ctx.bulkBusy.value || !ctx.selectableIds.value.has(conversation.conversation_id)"
+      @click.stop="ctx.toggleSelection($event, conversation)"
+    />
     <div class="drawer-conversation-item-flex-container">
       <div class="drawer-conversation-header-row">
         <div class="drawer-conversation-item-flex-container">
@@ -38,7 +52,11 @@
             v-else
             class="conversation-title"
             :title="conversation.slug || undefined"
-            @dblclick="!isPlaceholder && ctx.handleStartRename($event, conversation)"
+            @dblclick="
+              !ctx.selectionMode.value &&
+              !isPlaceholder &&
+              ctx.handleStartRename($event, conversation)
+            "
           >
             <em v-if="!conversation.slug">untitled</em>
             <template v-else>
@@ -128,9 +146,11 @@
 
       <ConversationThemes
         v-if="
-          !isDraft && !isPlaceholder &&
+          !isDraft &&
+          !isPlaceholder &&
           ctx.searchOpen.value &&
-          (!ctx.searchText.value.trim() || ctx.chapterScores.value.has(conversation.conversation_id))
+          (!ctx.searchText.value.trim() ||
+            ctx.chapterScores.value.has(conversation.conversation_id))
         "
         :conversation-id="conversation.conversation_id"
         :conversation-slug="conversation.slug"
@@ -664,6 +684,7 @@ const isExpanded = computed(() =>
 const itemArchived = computed(() => props.conversation.archived);
 const hasActions = computed(
   () =>
+    !ctx.selectionMode.value &&
     !workspaceMode &&
     !isDraft.value &&
     !itemArchived.value &&
@@ -692,9 +713,18 @@ function onTagChipClick(e: MouseEvent, tag: string) {
   ctx.toggleTagFilter(tag);
 }
 
-function onRowClick(e: MouseEvent) {
-  if (ctx.handleModifiedClick(e, props.conversation)) return;
+function onRowClick(e: MouseEvent | KeyboardEvent) {
+  if (ctx.selectionMode.value) {
+    ctx.toggleSelection(e, props.conversation);
+    return;
+  }
+  if (e instanceof MouseEvent && ctx.handleModifiedClick(e, props.conversation)) return;
   ctx.selectConversation(props.conversation);
+}
+function onSelectionSpace(e: KeyboardEvent) {
+  if (!ctx.selectionMode.value) return;
+  e.preventDefault();
+  ctx.toggleSelection(e, props.conversation);
 }
 function onSubClick(e: MouseEvent, sub: Conversation) {
   if (ctx.handleModifiedClick(e, sub)) return;
