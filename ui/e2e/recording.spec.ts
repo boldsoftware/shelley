@@ -2141,6 +2141,9 @@ test.describe("media recording composer", () => {
     await page.goto("/new");
     const button = page.getByTestId("voice-button");
     const menu = page.getByTestId("record-menu");
+    await expect(button).toBeEnabled();
+    // install() leaves time flowing: pause it so only runFor moves the long press.
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
     await button.dispatchEvent("pointerdown", { pointerType: "touch", button: 0, isPrimary: true });
     await page.clock.runFor(200);
     await expect(menu).toHaveCount(0);
