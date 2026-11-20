@@ -95,7 +95,7 @@
         <!-- When it last changed, or a working row's dot ("now") in its
              place, right-aligned beside the row's actions, whose place every
              row keeps so the times line up. -->
-        <div class="drawer-row-end" :class="{ 'drawer-row-end-chapters': chaptersAvailable && !workspaceMode }">
+        <div class="drawer-row-end" :class="{ 'drawer-row-end-chapters': chapterSlot }">
           <span
             v-if="isWorking"
             class="working-indicator drawer-working-indicator"
@@ -124,6 +124,7 @@
               />
             </svg>
           </button>
+          <span v-else-if="chapterSlot" class="drawer-chapters-slot" aria-hidden="true" />
           <div class="conversation-actions drawer-actions-top">
             <NavActionsMenu
               v-if="hasActions"
@@ -646,6 +647,7 @@ const temporary = computed(() => isTemporaryConversation(props.conversation));
 // Stands in for a conversation the server has yet to create: nothing to edit.
 const isPlaceholder = computed(() => props.conversation.conversation_id === COMPOSER_ROW_ID);
 const chapters = computed(() => ctx.chapterIndex.value[props.conversation.conversation_id] ?? []);
+const chapterSlot = computed(() => !workspaceMode && ctx.searchOpen.value && !ctx.selectionMode.value);
 const chaptersAvailable = computed(() =>
   !ctx.selectionMode.value && !isDraft.value && !isPlaceholder.value &&
   ctx.searchOpen.value && chapters.value.length > 0 &&

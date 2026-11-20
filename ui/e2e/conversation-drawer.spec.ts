@@ -708,7 +708,8 @@ test.describe("conversation drawer startup and app bar", () => {
       working.working = working.agent_working = true;
       const idle = conversation("idle-chapters");
       const plain = conversation("no-chapters");
-      await stubConversationList(page, [working, idle, plain]);
+      const draft = conversation("draft-no-chapters", true);
+      await stubConversationList(page, [working, idle, plain, draft]);
       await page.route("**/api/conversations/themes", route => route.fulfill({ json: {
         [working.conversation_id]: [{ title: "Working topic", message_id: "working-message" }],
         [idle.conversation_id]: [{ title: "Idle topic", message_id: "idle-message" }],
@@ -720,6 +721,14 @@ test.describe("conversation drawer startup and app bar", () => {
       await page.getByRole("button", { name: "Search conversations..." }).click();
       await expect(page.getByRole("button", { name: "Show chapters", exact: true })).toHaveCount(2);
       await expect(page.locator('[data-conversation-id="no-chapters"] .drawer-chapters-toggle')).toHaveCount(0);
+      await expect(page.locator('[data-conversation-id="draft-no-chapters"] .drawer-chapters-toggle')).toHaveCount(0);
+      const timeEdges = [];
+      for (const id of [idle.conversation_id, plain.conversation_id, draft.conversation_id]) {
+        const time = await page.locator(`[data-conversation-id="${id}"] .conversation-time`).boundingBox();
+        timeEdges.push(time!.x + time!.width);
+      }
+      expect(timeEdges[1]).toBeCloseTo(timeEdges[0], 0);
+      expect(timeEdges[2]).toBeCloseTo(timeEdges[0], 0);
       const workingRow = page.locator('[data-conversation-id="working-chapters"]');
       const toggle = workingRow.getByRole("button", { name: "Show chapters", exact: true });
       await expect(toggle).not.toHaveAttribute("aria-controls");

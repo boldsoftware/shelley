@@ -14956,6 +14956,7 @@ kbd {
 }
 
 .drawer-chapters-toggle,
+.drawer-chapters-slot,
 .drawer-row-end-chapters .drawer-actions-top,
 .drawer-row-end-chapters .drawer-actions-trigger {
   width: 1.25rem;
