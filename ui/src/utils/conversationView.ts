@@ -67,7 +67,7 @@ export function isVisibleConversationMessage(
   if (mode === "all") return true;
   if (mode === "brief") {
     if (isTypedUserMessage(message)) return true;
-    return ["error", "warning", "modelchange", "profileturn"].includes(message.type);
+    return ["error", "warning", "modelchange", "profileturn", "mcpapp"].includes(message.type);
   }
   if (isHumanUserMessage(message)) return true;
   if (isDistillStatusMessage(message)) return true;
@@ -79,6 +79,7 @@ export function isVisibleConversationMessage(
     "modelchange",
     "profileturn",
     "inplacecompaction",
+    "mcpapp",
   ].includes(message.type);
 }
 

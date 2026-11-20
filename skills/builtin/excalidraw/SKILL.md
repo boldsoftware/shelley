@@ -1,6 +1,6 @@
 ---
 name: excalidraw
-description: Use when the user asks for a diagram, sketch, flowchart, architecture diagram, sequence diagram, mind map, or other visual explanation. Renders hand-drawn-style diagrams from Excalidraw JSON via the output_iframe tool.
+description: Use when the user asks for a diagram, sketch, flowchart, architecture diagram, sequence diagram, mind map, or other visual explanation. Renders hand-drawn-style diagrams from Excalidraw JSON via the output_html tool.
 ---
 
 Use this skill whenever the user wants something *drawn* or *diagrammed* (architecture, flow, sequence, mind map, sketch — anything visual). It renders an Excalidraw canvas inside the chat (view-only — user can pan/zoom but not edit; iteration happens by you editing the JSON) with **Download .excalidraw**, **Download PNG**, **Copy SVG**, **Copy PNG**, and **Copy JSON** buttons.
@@ -9,8 +9,8 @@ Use this skill whenever the user wants something *drawn* or *diagrammed* (archit
 
 1. Write the renderer page to `/tmp/excalidraw.html` (template below).
 2. Write the diagram to `/tmp/diagram.json` as a JSON array of elements (skeleton format — see below).
-3. Call `output_iframe` with `path=/tmp/excalidraw.html`, `files={"elements.json": "/tmp/diagram.json"}`, and `libraries=["excalidraw"]`.
-4. On user feedback ("move the DB right", "add a cache layer") edit the JSON and call `output_iframe` again.
+3. Call `output_html` with `path=/tmp/excalidraw.html`, `files={"elements.json": "/tmp/diagram.json"}`, and `libraries=["excalidraw"]`.
+4. On user feedback ("move the DB right", "add a cache layer") edit the JSON and call `output_html` again.
 5. If the user clicks **Copy JSON** in the canvas and pastes scene JSON back, parse it and use it as the new source of truth.
 
 The canvas is view-only because the sandbox blocks edits-out: any change the user made would be silently lost on the next render. Iteration happens by you editing the JSON, or by the user copy/pasting JSON or SVG (with embedded scene) back.
@@ -26,7 +26,7 @@ The `libraries` parameter is essential: it tells the host page to stream the exc
 <meta charset="utf-8">
 <style>
   html,body { margin:0; padding:0; height:100vh; font-family:sans-serif; }
-  #toolbar { display:flex; gap:8px; padding:6px 10px; background:#f5f5f5; border-bottom:1px solid #ddd; align-items:center; font-size:13px; }
+  #toolbar { display:flex; gap:8px; padding:6px 10px; background:var(--color-background-secondary, #f5f5f5); border-bottom:1px solid var(--color-border-primary, #ddd); align-items:center; font-size:13px; }
   #toolbar button { font:inherit; padding:4px 10px; cursor:pointer; }
   #status { color:#888; margin-left:6px; }
   #editor { width:100%; height:calc(100vh - 40px); }

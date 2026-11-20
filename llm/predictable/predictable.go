@@ -165,15 +165,18 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 
 	// Extract the text content from the last user message
 	var inputText string
+	var appContext []string
 	var hasToolResult bool
 	if len(req.Messages) > 0 {
 		lastMessage := req.Messages[len(req.Messages)-1]
 		if lastMessage.Role == llm.MessageRoleUser {
 			for _, content := range lastMessage.Content {
-				switch content.Type {
-				case llm.ContentTypeText:
+				switch {
+				case content.Type == llm.ContentTypeText && isAppContext(content):
+					appContext = append(appContext, content.Text)
+				case content.Type == llm.ContentTypeText:
 					inputText = strings.TrimSpace(content.Text)
-				case llm.ContentTypeToolResult:
+				case content.Type == llm.ContentTypeToolResult:
 					hasToolResult = true
 				}
 			}
@@ -270,6 +273,13 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 		// Return a response with all tool types for testing
 		return s.makeToolSmorgasbordResponse(inputTokens), nil
 
+	case "app context?":
+		// What views asked the model to know with this message, as is.
+		if len(appContext) == 0 {
+			return s.makeResponse("no app context", inputTokens), nil
+		}
+		return s.makeResponse("```\n"+strings.Join(appContext, "\n")+"\n```", inputTokens), nil
+
 	case "echo: foo":
 		return s.makeResponse("foo", inputTokens), nil
 
@@ -332,6 +342,17 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 				}
 				return s.makeBashToolResponse(cmd, name == "bash-bg", sshTarget, inputTokens), nil
 			}
+		}
+
+		// output_html: PATH [with LIBRARY]
+		if rest, ok := strings.CutPrefix(inputText, "output_html: "); ok {
+			path, library, _ := strings.Cut(rest, " with ")
+			input := map[string]any{"path": path, "title": "Predictable view"}
+			if library != "" {
+				input["libraries"] = []string{library}
+			}
+			b, _ := json.Marshal(input)
+			return s.makeToolResponse("output_html", b, inputTokens), nil
 		}
 
 		if thoughts, ok := strings.CutPrefix(inputText, "think: "); ok {
@@ -1472,4 +1493,12 @@ func idleNudgeFirstRow(req *llm.Request) (string, bool) {
 		return "", false
 	}
 	return m[1], true
+}
+
+// isAppContext reports whether c is a view's context the server appended to
+// a user message (server.withAppContext).
+func isAppContext(c llm.Content) bool {
+	b, _ := json.Marshal(c.Display)
+	var d struct{ Type string }
+	return json.Unmarshal(b, &d) == nil && d.Type == "app_context"
 }

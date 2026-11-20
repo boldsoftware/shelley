@@ -13,7 +13,7 @@ export function toolCardPlaceholderKind(
 ): ToolCardPlaceholderKind {
   if (toolName === "bash") return "bash";
   if (toolName === "patch") return "patch";
-  if (toolName === "output_iframe") return "output-iframe";
+  if (toolName === "output_html" || toolName === "output_iframe") return "output-iframe";
   if (toolName === "openai_audio_transcription") return "audio";
   if (
     toolName === "screenshot" ||

@@ -58,6 +58,7 @@ func TS() *go2ts.Go2TS {
 			db.MessageTypeGitInfo,
 			db.MessageTypeWarning,
 			db.MessageTypeModelChange,
+			db.MessageTypeMCPApp,
 			db.MessageTypeProfileTurn,
 			db.MessageTypeSlug,
 			db.MessageTypeInPlaceCompaction,

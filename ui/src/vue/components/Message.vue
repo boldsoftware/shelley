@@ -35,6 +35,9 @@
     :message="message"
   />
 
+  <!-- an MCP tool's view -->
+  <McpAppMessage v-else-if="message.type === 'mcpapp'" :message="message" />
+
   <!-- inplacecompaction -->
   <InPlaceCompactionMessage v-else-if="message.type === 'inplacecompaction'" :message="message" />
 
@@ -160,7 +163,9 @@
         </div>
         <div
           v-if="temporary && isUser && !sender"
-          v-tooltip.left="'Temporary: this message, its replies and the work it started are kept out of the archive.'"
+          v-tooltip.left="
+            'Temporary: this message, its replies and the work it started are kept out of the archive.'
+          "
           class="message-via-text"
           data-testid="message-temporary"
         >
@@ -263,6 +268,15 @@
             </div>
           </template>
         </div>
+        <details
+          v-for="(context, i) in appContexts"
+          :key="`app-context-${i}`"
+          class="message-app-context"
+          data-testid="message-app-context"
+        >
+          <summary>{{ t("viewContextFrom").replace("{source}", context.source) }}</summary>
+          <pre>{{ context.text }}</pre>
+        </details>
       </div>
       <div v-if="reactions.length" class="message-reactions" data-testid="message-reactions">
         <span
@@ -288,6 +302,7 @@
 <script setup lang="ts">
 import { llmData } from "../../utils/llmData";
 import { computed, inject, onUnmounted, ref, watch, type ComputedRef } from "vue";
+import { useI18n } from "../composables/i18n";
 import {
   type Message as MessageType,
   type LLMMessage,
@@ -296,6 +311,7 @@ import {
   cwdChange,
   contextNudge,
   isDistillStatusMessage,
+  isAppContext,
 } from "../../types";
 import { type MarkdownMode } from "../../services/settings";
 import { useMarkdownMode } from "../composables/markdownMode";
@@ -310,6 +326,7 @@ import GitInfoMessage from "./GitInfoMessage.vue";
 import WarningMessage from "./WarningMessage.vue";
 import ModelChangeMessage from "./ModelChangeMessage.vue";
 import InPlaceCompactionMessage from "./InPlaceCompactionMessage.vue";
+import McpAppMessage from "./McpAppMessage.vue";
 import DistillStatusMessage from "./DistillStatusMessage.vue";
 import CwdChangeMessage from "./CwdChangeMessage.vue";
 import ContextNudgeMessage from "./ContextNudgeMessage.vue";
@@ -620,14 +637,24 @@ const isRefusal = computed(() => errorMeta.value.errorType === "refusal");
 // Retry button when it is the bottom-most message (see provide in
 // ChatInterface.vue). Once a retry starts a new turn the error is no longer
 // last and the button disappears.
+const { t } = useI18n();
 const lastMessageId = inject<ComputedRef<string | null>>("lastMessageId");
 const isLastMessage = computed(() => lastMessageId?.value === props.message.message_id);
+
+// What views told the model with this message, shown apart from it.
+const appContexts = computed(() =>
+  (llmMessage.value?.Content ?? []).filter(isAppContext).map((c) => {
+    const d = c.Display as { source?: string; text?: string };
+    return { source: d.source ?? "", text: d.text ?? "" };
+  }),
+);
 
 // ---- Content filtering for the main path ----
 const meaningfulContent = computed<LLMContent[]>(() => {
   return (
     llmMessage.value?.Content?.filter((c) => {
       const contentType = c.Type;
+      if (isAppContext(c)) return false;
       if (contentType === 3) {
         return !!(c.Thinking || c.Text);
       }

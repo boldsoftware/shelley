@@ -419,12 +419,24 @@ func (s *Server) handleRevealSecret(w http.ResponseWriter, r *http.Request) {
 }
 
 // redactChatMessage replaces stored secrets the composer didn't catch (e.g.
-// one pasted again after a reload) in a message from the API.
+// one pasted again after a reload) in a message from the API, and in the
+// views' context that comes with it.
 func (s *Server) redactChatMessage(w http.ResponseWriter, r *http.Request, req *ChatRequest) bool {
-	var err error
-	if req.Message, err = s.secrets.Redact(r.Context(), req.Message); err != nil {
-		s.secretHTTPError(w, err)
+	redact := func(text *string) bool {
+		var err error
+		if *text, err = s.secrets.Redact(r.Context(), *text); err != nil {
+			s.secretHTTPError(w, err)
+			return false
+		}
+		return true
+	}
+	if !redact(&req.Message) {
 		return false
+	}
+	for i := range req.AppContext {
+		if !redact(&req.AppContext[i].Source) || !redact(&req.AppContext[i].Text) {
+			return false
+		}
 	}
 	return true
 }

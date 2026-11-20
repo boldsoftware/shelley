@@ -40,3 +40,14 @@ WHERE t.conversation_id = sqlc.arg('conversation_id') AND m.type IN ('agent', 't
 
 -- name: ListTemporarySequenceIDs :many
 SELECT sequence_id FROM temporary_messages WHERE conversation_id = ? ORDER BY sequence_id;
+
+-- name: ViewTemporary :one
+-- Whether the message that shows a view was temporary: an mcpapp message,
+-- or the one that made a tool call that shows one.
+SELECT CAST(COUNT(*) > 0 AS BOOLEAN) AS is_temporary
+FROM temporary_messages t
+JOIN messages m ON m.message_id = t.message_id
+WHERE t.conversation_id = sqlc.arg('conversation_id') AND (
+  m.message_id = CAST(sqlc.arg('view') AS TEXT)
+  OR (m.type IN ('agent', 'tool') AND EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') x
+    WHERE x.value ->> 'ID' = CAST(sqlc.arg('view') AS TEXT))));

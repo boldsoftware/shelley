@@ -470,3 +470,25 @@ func TestLibraryPathsInSync(t *testing.T) {
 		t.Errorf("LIBRARY_PATHS has %d entries, allowedLibraries has %d", entries, len(allowedLibraries))
 	}
 }
+
+func TestOutputHTMLRun(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "v.html"), []byte("<p>hi</p>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bin"), []byte{0xff}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wd := &MutableWorkingDir{}
+	wd.Set(dir)
+	tool := (&OutputHTMLTool{WorkingDir: wd}).Tool()
+	res := tool.Run(t.Context(), json.RawMessage(`{"path":"v.html","title":"V","libraries":["excalidraw"]}`))
+	d, ok := res.Display.(OutputIframeDisplay)
+	if res.Error != nil || !ok || d.Type != "output_iframe" || d.HTML != "<p>hi</p>" || d.Title != "V" || len(d.Libraries) != 1 {
+		t.Fatalf("output_html: %+v %v", res.Display, res.Error)
+	}
+	res = tool.Run(t.Context(), json.RawMessage(`{"path":"bin"}`))
+	if res.Error == nil || !strings.Contains(res.Error.Error(), "output_html expects") {
+		t.Fatalf("binary: %v", res.Error)
+	}
+}

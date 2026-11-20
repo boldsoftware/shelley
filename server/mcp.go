@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/exeenv"
 	"shelley.exe.dev/llm"
@@ -82,6 +84,9 @@ func (s *Server) registerMCPRoutes(api, mux *http.ServeMux) {
 	api.HandleFunc("DELETE /api/mcp/servers/{name}", s.handleDeleteMCPServer)
 	api.HandleFunc("GET /api/mcp/servers/{name}/tools", s.handleListMCPTools)
 	api.HandleFunc("POST /api/mcp/servers/{name}/call", s.handleCallMCPTool)
+	api.HandleFunc("POST /api/mcp/servers/{name}/app-call", s.handleMCPAppCall)
+	api.HandleFunc("GET /api/mcp/servers/{name}/resource", s.handleReadMCPResource)
+	api.HandleFunc("GET /api/mcp/servers/{name}/app", s.handleReadMCPApp)
 	api.HandleFunc("POST /api/mcp/servers/{name}/restart", s.handleRestartMCPSession)
 	api.HandleFunc("POST /api/mcp/servers/{name}/logout", s.handleMCPLogout)
 	mux.HandleFunc("GET /mcp/login/{name}", s.handleMCPLogin)
@@ -384,7 +389,10 @@ func (s *Server) handleListMCPTools(w http.ResponseWriter, r *http.Request) {
 		s.mcpError(w, r, srv, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, tools)
+	// Tools only views may call aren't the model's.
+	visible := *tools
+	visible.Tools = slices.DeleteFunc(slices.Clone(tools.Tools), func(t *sdk.Tool) bool { return !mcp.ToolUIOf(t).VisibleTo("model") })
+	writeJSON(w, http.StatusOK, visible)
 }
 
 func (s *Server) handleCallMCPTool(w http.ResponseWriter, r *http.Request) {
@@ -404,10 +412,31 @@ func (s *Server) handleCallMCPTool(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	res, err := s.mcp.CallTool(r.Context(), srv, mcpScope(r), req.Tool, req.Arguments, time.Duration(req.TimeoutMS)*time.Millisecond)
+	scope := mcpScope(r)
+	tool, err := s.mcp.Tool(r.Context(), srv, scope, req.Tool)
 	if err != nil {
 		s.mcpError(w, r, srv, err)
 		return
+	}
+	ui := mcp.ToolUI{}
+	if tool != nil {
+		ui = mcp.ToolUIOf(tool)
+		if !ui.VisibleTo("model") {
+			http.Error(w, fmt.Sprintf("%s.%s is only for its MCP App's views", srv.Name, req.Tool), http.StatusForbidden)
+			return
+		}
+	}
+	res, err := s.mcp.CallTool(r.Context(), srv, scope, req.Tool, req.Arguments, time.Duration(req.TimeoutMS)*time.Millisecond)
+	if err != nil {
+		s.mcpError(w, r, srv, err)
+		return
+	}
+	if ui.ResourceURI != "" && scope != "" {
+		if err := s.recordMCPApp(r.Context(), scope, mcpAppUserData{Server: srv.Name, ServerID: srv.AppServerID(), Resource: ui.ResourceURI, Tool: tool, Arguments: req.Arguments, Result: res}); err != nil {
+			s.logger.Warn("failed to show MCP App", "conversation", scope, "server", srv.Name, "tool", req.Tool, "error", err)
+		} else {
+			w.Header().Set(mcpAppHeader, "shown")
+		}
 	}
 	writeJSON(w, http.StatusOK, res)
 }

@@ -220,8 +220,8 @@ func TestPreinstalledAssistant(t *testing.T) {
 	if !hasTool(req, claudetool.MessageUserName) || !hasTool(req, "compact_in_place") || hasTool(req, "llm_one_shot") {
 		t.Fatalf("Assistant didn't get its messaging tools")
 	}
-	if hasTool(req, "output_iframe") {
-		t.Fatal("text-first Assistant must not offer output_iframe")
+	if hasTool(req, "output_html") || hasTool(req, "output_iframe") {
+		t.Fatal("text-first Assistant must not offer output_html")
 	}
 	prompt := systemText(req)
 	if !strings.Contains(prompt, cwd) || !strings.Contains(prompt, "life and work") {

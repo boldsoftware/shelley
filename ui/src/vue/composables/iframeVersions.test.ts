@@ -7,8 +7,8 @@ let seq = 0;
 function msg(content: unknown[], id = `m${++seq}`): Message {
   return { message_id: id, llm_data: JSON.stringify({ Content: content }) } as Message;
 }
-const use = (id: string, path: string, files?: Record<string, string>) =>
-  msg([{ Type: 5, ID: id, ToolName: "output_iframe", ToolInput: { path, files } }]);
+const use = (id: string, path: string, files?: Record<string, string>, tool = "output_html") =>
+  msg([{ Type: 5, ID: id, ToolName: tool, ToolInput: { path, files } }]);
 const result = (id: string, error = false) => msg([{ Type: 6, ToolUseID: id, ToolError: error }]);
 
 function group(messages: Message[]) {
@@ -16,7 +16,12 @@ function group(messages: Message[]) {
 }
 
 test("same path counts versions; ./ prefix is ignored", () => {
-  const v = group([use("a", "chart.html"), result("a"), use("b", "./chart.html"), result("b")]);
+  const v = group([
+    use("a", "chart.html", undefined, "output_iframe"),
+    result("a"),
+    use("b", "./chart.html"),
+    result("b"),
+  ]);
   assert.deepEqual(v.get("a"), { path: "chart.html", version: 1, total: 2, latestId: "b" });
   assert.equal(v.get("b")?.version, 2);
 });

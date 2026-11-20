@@ -70,7 +70,7 @@ func targetSchema(schema string, vm VM) string {
 	s["properties"].(map[string]any)["ssh_target"] = map[string]any{
 		"type": "string",
 		"enum": []string{vm.Name(), Localhost},
-		"description": fmt.Sprintf("Which machine. %q: over ssh on %s, where the project's code is; use it for all project work. %q: here, on the Shelley host; only for Shelley's API, scp to or from %s, ssh -L to reach its ports from the browser, and files for read_image, output_iframe, or message_user. Each machine has its own working directory; change_dir moves the one of its ssh_target.",
+		"description": fmt.Sprintf("Which machine. %q: over ssh on %s, where the project's code is; use it for all project work. %q: here, on the Shelley host; only for Shelley's API, scp to or from %s, ssh -L to reach its ports from the browser, and files for read_image, output_html, or message_user. Each machine has its own working directory; change_dir moves the one of its ssh_target.",
 			vm.Name(), vm.Name(), Localhost, vm.Name()),
 	}
 	required, _ := s["required"].([]any)

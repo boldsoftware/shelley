@@ -69,6 +69,7 @@ type session struct {
 	users    int
 	lastUsed time.Time
 	timer    *time.Timer
+	tools    map[string]*sdk.Tool // from the last listing
 }
 
 // NewManager returns a Manager whose logins are stored in database and
@@ -77,7 +78,7 @@ func NewManager(database *db.DB, loginURL func(server string) string) *Manager {
 	return &Manager{
 		db:        database,
 		loginURL:  loginURL,
-		client:    sdk.NewClient(&sdk.Implementation{Name: "shelley", Version: version.Version}, nil),
+		client:    sdk.NewClient(&sdk.Implementation{Name: "shelley", Version: version.Version}, &sdk.ClientOptions{Capabilities: capabilities()}),
 		transport: httpTransport,
 		authCtx:   context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{Timeout: 30 * time.Second, Transport: headerTransport(nil)}),
 		sessions:  map[key]*session{},
@@ -86,6 +87,13 @@ func NewManager(database *db.DB, loginURL func(server string) string) *Manager {
 		pending:   map[string]*pendingLogin{},
 		states:    map[string]*pendingLogin{},
 	}
+}
+
+func capabilities() *sdk.ClientCapabilities {
+	// The SDK's default, which setting Capabilities replaces.
+	caps := &sdk.ClientCapabilities{RootsV2: &sdk.RootCapabilities{ListChanged: true}}
+	caps.AddExtension(AppsExtension, map[string]any{"mimeTypes": []string{AppMIMEType}})
+	return caps
 }
 
 // ServerInfo is from the server's answer to initialize.
@@ -120,7 +128,38 @@ func (m *Manager) ListTools(ctx context.Context, cfg Server, scope string) (*Too
 		}
 		tl.Tools = append(tl.Tools, tool)
 	}
+	byName := map[string]*sdk.Tool{}
+	for _, t := range tl.Tools {
+		byName[t.Name] = t
+	}
+	m.mu.Lock()
+	s.tools = byName
+	m.mu.Unlock()
 	return tl, nil
+}
+
+// Tool returns cfg's tool name, nil if there is none. It lists the tools
+// only if the session's last listing lacks it.
+func (m *Manager) Tool(ctx context.Context, cfg Server, scope, name string) (*sdk.Tool, error) {
+	m.mu.Lock()
+	var t *sdk.Tool
+	if s := m.sessions[key{cfg.Name, scope}]; s != nil && s.cfg.sameConnection(cfg) {
+		t = s.tools[name]
+	}
+	m.mu.Unlock()
+	if t != nil {
+		return t, nil
+	}
+	tl, err := m.ListTools(ctx, cfg, scope)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range tl.Tools {
+		if t.Name == name {
+			return t, nil
+		}
+	}
+	return nil, nil
 }
 
 // CallTool calls tool once. A tool's failure is a result with IsError set.

@@ -25,6 +25,7 @@ import {
 import type { CostTier } from "../utils/tokenCostGraph";
 import type { ChapterIndex } from "../utils/chapterSearch";
 import { ownError, responseDetail } from "./responseDetail";
+import { restoreAppContext, takeAppContext } from "./appContext";
 
 export type LiveConversationSettings = Pick<ChatRequest, "model" | "cwd" | "conversation_options">;
 
@@ -496,13 +497,34 @@ class ApiService {
     request: ChatRequest,
     signal?: AbortSignal,
   ): Promise<ChatAcceptedResponse> {
-    const response = await apiFetch(
-      `/api/conversation/${conversationId}/chat`,
-      "Failed to send message",
-      sendJSON("POST", withMcpSelections(request), signal),
-    );
-    const body = await response.text();
-    return body ? (JSON.parse(body) as ChatAcceptedResponse) : {};
+    // Views' context for the model rides along with the next message.
+    const context = takeAppContext(conversationId);
+    const app_context = [...context.values()].map((c) => c.context);
+    // Puts back what the message doesn't carry: the server lists, by index,
+    // what it does (X-Shelley-App-Context).
+    const restore = (sent: string) => {
+      const carried = new Set(sent.split(","));
+      const views = [...context].filter((_, i) => !carried.has(String(i)));
+      restoreAppContext(conversationId, new Map(views));
+    };
+    // Some requests (commands, for one) don't make a message to carry it.
+    let sent = "";
+    try {
+      const response = await apiFetch(
+        `/api/conversation/${conversationId}/chat`,
+        "Failed to send message",
+        sendJSON(
+          "POST",
+          withMcpSelections(app_context.length ? { ...request, app_context } : request),
+          signal,
+        ),
+      );
+      sent = response.headers.get("X-Shelley-App-Context") ?? "";
+      const body = await response.text();
+      return body ? (JSON.parse(body) as ChatAcceptedResponse) : {};
+    } finally {
+      restore(sent);
+    }
   }
 
   // Exchanges a browser WebRTC offer for a GPT-Live session. The server holds

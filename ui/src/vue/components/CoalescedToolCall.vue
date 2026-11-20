@@ -169,6 +169,7 @@ const props = defineProps<{
   toolResultMessageId?: string;
   onCommentTextChange?: (text: string) => void;
   toolUseId?: string;
+  conversationId?: string;
 }>();
 
 // Completed inline specialized cards are the dominant mount cost in very large
@@ -220,6 +221,7 @@ const TOOL_COMPONENTS: Record<string, any> = {
   send_to_thread: SlackSendTool,
   send_to_channel: SlackSendTool,
   add_reaction: SlackSendTool,
+  output_html: OutputIframeTool,
   output_iframe: OutputIframeTool,
   llm_one_shot: LLMOneShotTool,
   browser_emulate: BrowserEmulateTool,
@@ -265,8 +267,10 @@ const toolComponentProps = computed<Record<string, unknown>>(() => {
   if (props.toolName === "subagent") {
     base.displayData = props.display;
   }
-  if (props.toolName === "output_iframe") {
+  if (props.toolName === "output_html" || props.toolName === "output_iframe") {
     base.toolUseId = props.toolUseId;
+    base.toolName = props.toolName;
+    base.conversationId = props.conversationId;
   }
   if (props.toolName === MESSAGE_USER_TOOL) {
     base.resultMessageId = props.toolResultMessageId;

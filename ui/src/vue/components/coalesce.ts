@@ -21,6 +21,8 @@ export interface CoalescedItem {
   // compaction. The UI collapses these behind a single band.
   carried?: boolean;
   message?: Message;
+  /** The conversation a tool call belongs to. */
+  conversationId?: string;
   toolUseId?: string;
   toolName?: string;
   toolInput?: unknown;
@@ -150,7 +152,8 @@ export function coalesceMessages(
       message.type === "error" ||
       message.type === "warning" ||
       message.type === "modelchange" ||
-      message.type === "inplacecompaction"
+      message.type === "inplacecompaction" ||
+      message.type === "mcpapp"
     ) {
       items.push(messageItem(message, carried));
       return;
@@ -243,6 +246,7 @@ export function coalesceMessages(
               // arrives; the tool begins at its assistant invocation.
               sourceSequenceID: message.sequence_id,
               anchorKey: `tool:${toolUse.ID || `${message.message_id}-${toolUse.ToolName || "unknown"}`}`,
+              conversationId: message.conversation_id,
               toolUseId: toolUse.ID,
               toolName: toolUse.ToolName,
               toolInput: toolUse.ToolInput,

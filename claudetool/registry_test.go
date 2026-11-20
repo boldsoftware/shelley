@@ -45,6 +45,8 @@ func TestIsToolEnabled(t *testing.T) {
 		{"apply_patch uses patch on", "apply_patch", map[string]string{"patch": "on"}, true, true},
 		{"apply_patch follows disable all", "apply_patch", nil, true, false},
 		{"compact_in_place default on", "compact_in_place", nil, false, true},
+		{"output_html default on", "output_html", nil, false, true},
+		{"output_iframe default off", "output_iframe", nil, false, false},
 		{"unknown tool permissive", "new_experimental_tool", nil, false, true},
 		{"unknown tool under disable-all is off", "new_experimental_tool", nil, true, false},
 	}

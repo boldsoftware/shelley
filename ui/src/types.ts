@@ -165,6 +165,8 @@ export interface ChatRequest {
   /** The message, what answers it, and what it starts stay out of the
    *  archive store (server/temporary.go). */
   temporary?: boolean;
+  /** What views asked the model to know (services/appContext.ts). */
+  app_context?: { source: string; text: string; view?: string }[];
 }
 
 /** A conversation's adjustable settings; see Settings in server/settings.go. */
@@ -468,6 +470,12 @@ export interface CommitInfo {
   date: string;
 }
 
+/** Whether c is what a view asked the model to know, sent with a user
+ *  message (services/appContext.ts); it shows apart from the message. */
+export function isAppContext(c: LLMContent): boolean {
+  return (c.Display as { type?: unknown } | undefined)?.type === "app_context";
+}
+
 // Helper to read a message's distill_status value ("in_progress" | "complete"
 // | "error"), or null if the message is not a distill status message.
 export function distillStatus(message: Message): string | null {
@@ -595,7 +603,7 @@ export function queuedMessageText(qm: QueuedMessage): string {
   const content = qm.llm?.Content;
   if (!Array.isArray(content)) return "";
   return content
-    .filter((c) => c.Type === 2 && typeof c.Text === "string")
+    .filter((c) => c.Type === 2 && typeof c.Text === "string" && !isAppContext(c))
     .map((c) => c.Text)
     .join("");
 }

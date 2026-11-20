@@ -1,4 +1,4 @@
-// Groups output_iframe calls in a conversation by file path (plus bundled files)
+// Groups output_html (and legacy output_iframe) calls in a conversation by file path (plus bundled files)
 // so a re-shown file reads as a new version of one artifact instead of a fresh
 // embed. Only successful showings count as versions.
 import { computed, inject, provide, type ComputedRef, type InjectionKey, type Ref } from "vue";
@@ -21,10 +21,11 @@ export type IframeParseCache = Map<string, Parsed>;
 
 const TOOL_USE = 5;
 const TOOL_RESULT = 6;
+const HTML_TOOLS = new Set(["output_html", "output_iframe"]);
 
 function parse(raw: string): Parsed {
   const out: Parsed = { len: raw.length, uses: [], results: [] };
-  const hasUse = raw.includes("output_iframe");
+  const hasUse = raw.includes("output_html") || raw.includes("output_iframe");
   if (!hasUse && !raw.includes(`"Type":${TOOL_RESULT}`)) return out;
   let content: unknown;
   try {
@@ -37,7 +38,7 @@ function parse(raw: string): Parsed {
     if (!c || typeof c !== "object") continue;
     if (c.Type === TOOL_RESULT && c.ToolUseID) {
       out.results.push({ id: c.ToolUseID, ok: !c.ToolError });
-    } else if (hasUse && c.Type === TOOL_USE && c.ToolName === "output_iframe" && c.ID) {
+    } else if (hasUse && c.Type === TOOL_USE && HTML_TOOLS.has(c.ToolName ?? "") && c.ID) {
       const input = c.ToolInput as { path?: unknown; files?: unknown } | null;
       if (typeof input?.path !== "string") continue;
       const norm = (p: unknown) => (typeof p === "string" ? p.replace(/^\.\//, "") : p);

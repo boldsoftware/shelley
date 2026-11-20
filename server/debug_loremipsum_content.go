@@ -259,7 +259,7 @@ func (g *loremGen) outputIframeCall(i, k int) toolCall {
 	return toolCall{
 		use: llm.Content{
 			Type: llm.ContentTypeToolUse, ID: toolUseID(i, k),
-			ToolName: "output_iframe",
+			ToolName: "output_html",
 			ToolInput: rawInput(map[string]any{
 				"path":  fmt.Sprintf("chart_%d.html", i),
 				"title": "Chart " + strconv.Itoa(i),

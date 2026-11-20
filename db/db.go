@@ -1631,6 +1631,10 @@ const (
 	// the /model command, or otherwise changed what its loop is built with (a
 	// tool enabled mid-conversation). User-visible only, never sent to the LLM.
 	MessageTypeModelChange MessageType = "modelchange"
+	// MessageTypeMCPApp shows an MCP App's view of a tool call the agent made
+	// with `shelley mcp call`. user_data holds the call (server.mcpAppUserData).
+	// User-visible only, never sent to the LLM.
+	MessageTypeMCPApp MessageType = "mcpapp"
 	// MessageTypeProfileTurn labels a one-turn override, not a settings change.
 	MessageTypeProfileTurn MessageType = "profileturn"
 	// MessageTypeSlug records LLM calls made outside a turn (first, the call

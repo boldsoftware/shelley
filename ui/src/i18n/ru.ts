@@ -720,4 +720,10 @@ export const ru: TranslationKeys = {
   chatgptGotIt: "Понятно",
   chatgptSignOutUnconfirmed:
     "Выход выполнен здесь, но ChatGPT его не подтвердил. Для надёжности отключите Shelley в настройках ChatGPT.",
+  viewAsksToSend: "{source} хочет отправить это от вашего имени:",
+  viewAsksToOpen: "{source} хочет открыть:",
+  viewAsksToSave: "{source} хочет сохранить:",
+  viewSend: "Отправить",
+  viewOpen: "Открыть",
+  viewContextFrom: "Контекст от {source}",
 };

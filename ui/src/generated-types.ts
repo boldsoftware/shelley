@@ -189,6 +189,7 @@ export type MessageType =
   | "gitinfo"
   | "warning"
   | "modelchange"
+  | "mcpapp"
   | "profileturn"
   | "slug"
   | "inplacecompaction"

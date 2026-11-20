@@ -162,36 +162,36 @@ func isBoolFlag(f *flag.Flag) bool {
 
 // do makes a request to the MCP API, decodes the JSON response into out
 // unless it's nil, and returns the response body.
-func (c *mcpCLI) do(method, path string, body, out any) ([]byte, error) {
+func (c *mcpCLI) do(method, path string, body, out any) (http.Header, []byte, error) {
 	var r io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		r = bytes.NewReader(b)
 	}
 	req, err := http.NewRequest(method, c.base+"/api/mcp/servers"+path, r)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	req.Header.Set("X-Shelley-Conversation-Id", os.Getenv("SHELLEY_CONVERSATION_ID"))
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if resp.StatusCode >= 300 {
-		return nil, errors.New(cmp.Or(strings.TrimSpace(string(b)), resp.Status))
+		return nil, nil, errors.New(cmp.Or(strings.TrimSpace(string(b)), resp.Status))
 	}
 	if out != nil {
 		err = json.Unmarshal(b, out)
 	}
-	return b, err
+	return resp.Header, b, err
 }
 
 func serverPath(name string) string { return "/" + url.PathEscape(name) }
@@ -216,7 +216,7 @@ type mcpServer struct {
 
 func (c *mcpCLI) servers() ([]mcpServer, error) {
 	var servers []mcpServer
-	_, err := c.do("GET", "", nil, &servers)
+	_, _, err := c.do("GET", "", nil, &servers)
 	return servers, err
 }
 
@@ -228,7 +228,7 @@ type mcpTools struct {
 
 func (c *mcpCLI) tools(server string) (*mcpTools, error) {
 	var ts mcpTools
-	_, err := c.do("GET", serverPath(server)+"/tools", nil, &ts)
+	_, _, err := c.do("GET", serverPath(server)+"/tools", nil, &ts)
 	return &ts, err
 }
 
@@ -444,11 +444,14 @@ func (c *mcpCLI) call(args []string) error {
 		}
 	}
 	var res sdk.CallToolResult
-	body, err := c.do("POST", serverPath(server)+"/call", map[string]any{
+	header, body, err := c.do("POST", serverPath(server)+"/call", map[string]any{
 		"tool": toolName, "arguments": arguments, "timeout_ms": timeout.Milliseconds(),
 	}, &res)
 	if err != nil {
 		return err
+	}
+	if header.Get("X-Shelley-Mcp-App") == "shown" {
+		fmt.Fprintln(c.stderr, "(This conversation shows the result in the tool's interactive view.)")
 	}
 	switch {
 	case *jsonOut:
@@ -481,7 +484,7 @@ func (c *mcpCLI) add(args []string) error {
 		}
 		headers[strings.TrimSpace(k)] = strings.TrimSpace(v)
 	}
-	_, err = c.do("POST", "", map[string]any{"name": pos[0], "url": pos[1], "description": *desc, "headers": headers}, nil)
+	_, _, err = c.do("POST", "", map[string]any{"name": pos[0], "url": pos[1], "description": *desc, "headers": headers}, nil)
 	return err
 }
 
@@ -490,7 +493,7 @@ func (c *mcpCLI) named(method, suffix string) func([]string) error {
 	return func(args []string) error {
 		pos, err := parse(flag.NewFlagSet("", flag.ContinueOnError), args, 1, 1)
 		if err == nil {
-			_, err = c.do(method, serverPath(pos[0])+suffix, nil, nil)
+			_, _, err = c.do(method, serverPath(pos[0])+suffix, nil, nil)
 		}
 		return err
 	}

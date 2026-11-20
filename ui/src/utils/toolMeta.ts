@@ -81,6 +81,7 @@ export function toolEmoji(name: string | undefined | null, input?: unknown): str
       return "📂";
     case "llm_one_shot":
       return "🤖";
+    case "output_html":
     case "output_iframe":
       return "✨";
     case "web_search":
@@ -387,6 +388,7 @@ function inputSummary(name: string | undefined | null, input: unknown): string {
       if (typeof files === "string") return files;
       return pick("prompt");
     }
+    case "output_html":
     case "output_iframe":
       return pick("title", "path");
     case "browser_eval":

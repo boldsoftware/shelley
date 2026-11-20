@@ -260,7 +260,9 @@ func wrapMessageForLLM(message llm.Message, tag string, attrs ...xml.Attr) (llm.
 		if message.Content[i].Type != llm.ContentTypeText || message.Content[i].MediaType != "" {
 			continue
 		}
-		message.Content[i].Text = xmlProvenanceText(message.Content[i].Text)
+		if !isAppContext(message.Content[i]) {
+			message.Content[i].Text = xmlProvenanceText(message.Content[i].Text)
+		}
 		if firstText < 0 {
 			firstText = i
 		}

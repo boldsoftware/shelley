@@ -34,6 +34,7 @@ type mcpEnv struct {
 	srv    *Server
 	ts     *httptest.Server
 	header string // the header Shelley requires, which requests carry
+	view   string // the AppServerID requests carry, as views' do
 }
 
 func newMCPEnv(t *testing.T, requireHeader string) *mcpEnv {
@@ -63,6 +64,9 @@ func (e *mcpEnv) do(method, path, scope, body string) (int, string) {
 	}
 	if e.header != "" {
 		req.Header.Set(e.header, "user")
+	}
+	if e.view != "" {
+		req.Header.Set(mcpAppServerHeader, e.view)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -250,7 +254,7 @@ func TestMCPToolsAndCalls(t *testing.T) {
 	if err := json.Unmarshal([]byte(e.want(200, "GET", "/api/mcp/servers/t/tools", "", "")), &tools); err != nil {
 		t.Fatal(err)
 	}
-	if s := tools.Server; s.Name != "mcptest" || s.Title != "MCP Test" || s.Version != "1.0" || s.Instructions != "Test fixture." || len(tools.Tools) != 7 {
+	if s := tools.Server; s.Name != "mcptest" || s.Title != "MCP Test" || s.Version != "1.0" || s.Instructions != "Test fixture." || len(tools.Tools) != 9 {
 		t.Fatalf("tools: %+v", tools)
 	}
 	if got := e.call("t", "", "echo", `{"text":"hi"}`); got != "hi" {

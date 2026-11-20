@@ -29,6 +29,7 @@ func assistantProfile() string {
 	overrides := map[string]string{
 		"compact_in_place": "on", // idle compaction needs it, whatever the default
 		"llm_one_shot":     "off",
+		"output_html":      "off",
 		"output_iframe":    "off",
 		"message_user":     "on",
 	}

@@ -2284,25 +2284,37 @@ const hostname = window.__SHELLEY_INIT__?.hostname || "localhost";
 
 // ---- tool overrides (persisted) ----
 const TOOL_OVERRIDES_KEY = "shelley.toolOverrides";
-const toolOverrides = ref<Record<string, "on" | "off">>(
-  (() => {
-    try {
-      const raw = localStorage.getItem(TOOL_OVERRIDES_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object") {
-        const clean: Record<string, "on" | "off"> = {};
-        for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-          if (v === "on" || v === "off") clean[k] = v;
-        }
-        return clean;
+function readToolOverrides(): Record<string, "on" | "off"> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TOOL_OVERRIDES_KEY) ?? "null");
+    const clean: Record<string, "on" | "off"> = {};
+    if (parsed && typeof parsed === "object") {
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (v === "on" || v === "off") clean[k] = v;
       }
-    } catch {
-      /* ignore */
     }
+    return clean;
+  } catch {
     return {};
-  })(),
-);
+  }
+}
+// output_html succeeds output_iframe: as for saved settings
+// (db/schema/085-output-html.sql), once.
+const OUTPUT_HTML_KEY = "shelley.toolOverrides.outputHtml";
+function withOutputHtml(overrides: Record<string, "on" | "off">) {
+  try {
+    if (localStorage.getItem(OUTPUT_HTML_KEY)) return overrides;
+    if (overrides.output_iframe === "off" && !overrides.output_html) {
+      overrides = { ...overrides, output_html: "off" };
+      localStorage.setItem(TOOL_OVERRIDES_KEY, JSON.stringify(overrides));
+    }
+    localStorage.setItem(OUTPUT_HTML_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+  return overrides;
+}
+const toolOverrides = ref(withOutputHtml(readToolOverrides()));
 function setToolOverrides(next: Record<string, "on" | "off">) {
   toolOverrides.value = next;
   try {
@@ -2742,7 +2754,7 @@ const coalescedItems = computed(() => {
   return items.filter((item) =>
     item.type === "tool"
       ? mode === "brief" &&
-          (isDeliveredUserMessage(item) || isSlackPost(item) || isFailedChatDelivery(item))
+        (isDeliveredUserMessage(item) || isSlackPost(item) || isFailedChatDelivery(item))
       : !!item.message && isVisibleConversationMessage(item.message, mode),
   );
 });

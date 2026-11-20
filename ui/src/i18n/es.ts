@@ -724,4 +724,10 @@ export const es: TranslationKeys = {
   chatgptGotIt: "Entendido",
   chatgptSignOutUnconfirmed:
     "Se cerró la sesión aquí, pero ChatGPT no lo confirmó. Desconecta Shelley en la configuración de ChatGPT para asegurarte.",
+  viewAsksToSend: "{source} quiere enviar esto como tu mensaje:",
+  viewAsksToOpen: "{source} quiere abrir:",
+  viewAsksToSave: "{source} quiere guardar:",
+  viewSend: "Enviar",
+  viewOpen: "Abrir",
+  viewContextFrom: "Contexto de {source}",
 };

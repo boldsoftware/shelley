@@ -407,7 +407,7 @@ leaves the settings as they are.
 Shelley pre-installs `Default` (the coding profile, initially selected) and
 `Assistant` (an opt-in, text-message-first personal assistant for life and
 work). Assistant enables `message_user` and `compact_in_place` with a
-130k-token compaction nudge, disables `llm_one_shot` and `output_iframe`,
+130k-token compaction nudge, disables `llm_one_shot`, `output_html` and `output_iframe`,
 replies in plain text through `message_user`, compacts in place after 8 idle
 minutes and keeps the prompt cache warm until then. Both profiles use the
 server's default model. Profiles can be edited; a non-default

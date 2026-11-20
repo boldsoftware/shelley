@@ -92,8 +92,64 @@ func newFixture() *Fixture {
 				return nil, nil, errors.New("session deleted")
 			}
 		})
+	addApp(s)
 	f.srv = s
 	return f
+}
+
+// RestrictRefresh makes "refresh" the model's alone, telling clients the
+// tools changed.
+func (f *Fixture) RestrictRefresh() { addRefresh(f.srv, "model") }
+
+func addRefresh(s *sdk.Server, visibility string) {
+	sdk.AddTool(s, &sdk.Tool{Name: "refresh", Description: "Called by the view.", Meta: sdk.Meta{"ui": map[string]any{"visibility": []string{visibility}}}},
+		func(context.Context, *sdk.CallToolRequest, struct{}) (*sdk.CallToolResult, any, error) {
+			return text("refreshed"), nil, nil
+		})
+}
+
+// ShowHTML is the view of the "show" tool, at ui://mcptest/show.
+const ShowHTML = "<!doctype html><title>show</title><p>view</p>"
+
+// addApp adds an MCP App: the "show" tool and its view, a tool only views
+// may call, and one only the model may.
+func addApp(s *sdk.Server) {
+	const mime = "text/html;profile=mcp-app"
+	sdk.AddTool(s, &sdk.Tool{Name: "show", Description: "Show text in a view.", Meta: sdk.Meta{"ui": map[string]any{"resourceUri": "ui://mcptest/show"}}},
+		func(_ context.Context, req *sdk.CallToolRequest, in struct {
+			Text string `json:"text"`
+		},
+		) (*sdk.CallToolResult, any, error) {
+			if req.Session.InitializeParams().Capabilities.Extensions["io.modelcontextprotocol/ui"] == nil {
+				return nil, nil, errors.New("the client doesn't support MCP Apps")
+			}
+			return text("showing " + in.Text), nil, nil
+		})
+	addRefresh(s, "app")
+	sdk.AddTool(s, &sdk.Tool{Name: "secret", Description: "Only for the model.", Meta: sdk.Meta{"ui": map[string]any{"visibility": []string{"model"}}}},
+		func(context.Context, *sdk.CallToolRequest, struct{}) (*sdk.CallToolResult, any, error) {
+			return text("secret"), nil, nil
+		})
+	s.AddResource(&sdk.Resource{URI: "ui://mcptest/show", Name: "show", MIMEType: mime},
+		func(context.Context, *sdk.ReadResourceRequest) (*sdk.ReadResourceResult, error) {
+			return &sdk.ReadResourceResult{Contents: []*sdk.ResourceContents{{
+				URI: "ui://mcptest/show", MIMEType: mime, Text: ShowHTML,
+				Meta: sdk.Meta{"ui": map[string]any{
+					"csp":           map[string]any{"connectDomains": []string{"https://api.example.com", "https://x.example; script-src *"}},
+					"permissions":   map[string]any{"clipboardWrite": map[string]any{}},
+					"prefersBorder": false,
+				}},
+			}}}, nil
+		})
+	// Its _meta is in the resource list, and its HTML a blob.
+	listed := &sdk.Resource{
+		URI: "ui://mcptest/listed", Name: "listed", MIMEType: mime,
+		Meta: sdk.Meta{"ui": map[string]any{"csp": map[string]any{"resourceDomains": []string{"https://cdn.example.com"}}}},
+	}
+	s.AddResource(listed,
+		func(context.Context, *sdk.ReadResourceRequest) (*sdk.ReadResourceResult, error) {
+			return &sdk.ReadResourceResult{Contents: []*sdk.ResourceContents{{URI: "ui://mcptest/listed", MIMEType: mime, Blob: []byte(ShowHTML)}}}, nil
+		})
 }
 
 // handler serves f. go-sdk waits for a deleted session's calls to return,

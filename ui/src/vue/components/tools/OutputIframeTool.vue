@@ -1,6 +1,8 @@
-<!-- Vue port of components/OutputIframeTool.tsx. Renders HTML output in a
-     sandboxed iframe with postMessage-based library streaming (excalidraw
-     skill). jszip is framework-agnostic and reused directly.
+<!-- Renders output_html (and legacy output_iframe) HTML in a sandboxed
+     iframe with postMessage-based library streaming (excalidraw skill).
+     output_html pages are MCP Apps views (McpAppFrame.vue); output_iframe
+     pages only report their height. jszip is framework-agnostic and reused
+     directly.
 
      Preserves: .output-iframe-tool, .output-iframe-tool-header,
      .output-iframe-tool-summary, .output-iframe-tool-emoji,
@@ -99,7 +101,16 @@
           <span>Output:</span>
           <span class="output-iframe-tool-time">{{ executionTime }}</span>
         </div>
-        <div class="output-iframe-container">
+        <McpAppFrame
+          v-if="isApp && appHtml"
+          :html="appHtml"
+          :title="title"
+          sandbox="allow-scripts allow-forms allow-downloads"
+          allow="clipboard-write"
+          :options="appOptions"
+          @load="(send) => libraryMessage().then((m) => m && send(m))"
+        />
+        <div v-else class="output-iframe-container">
           <iframe
             ref="iframeRef"
             :srcdoc="htmlWithHeightReporter"
@@ -108,7 +119,7 @@
             :title="title"
             class="output-iframe-wrapper"
             :style="{ height: iframeHeight + 'px' }"
-            @load="handleIframeLoad"
+            @load="sendLibraries"
           />
         </div>
       </div>
@@ -138,6 +149,9 @@ import ToolChevron from "./ToolChevron.vue";
 import RunningToolTime from "./RunningToolTime.vue";
 import { useIframeVersion } from "../../composables/iframeVersions";
 import { chunkMountKey } from "../chunkMount";
+import McpAppFrame from "../McpAppFrame.vue";
+import { APP_BRIDGE_SOURCE } from "../../../appBridge/source";
+import { prependToPage } from "../../../services/mcpAppHost";
 
 interface EmbeddedFile {
   name: string;
@@ -155,6 +169,9 @@ const props = defineProps<{
   executionTime?: string;
   display?: unknown;
   toolUseId?: string;
+  toolName?: string;
+  /** The conversation the call belongs to, which the view's messages go to. */
+  conversationId?: string;
 }>();
 
 // Script injected into iframe to report its content height
@@ -219,9 +236,7 @@ function escapeHtml(str: string): string {
 
 // State
 const version = useIframeVersion(() => props.toolUseId);
-const superseded = computed(
-  () => !!version.value && version.value.latestId !== props.toolUseId,
-);
+const superseded = computed(() => !!version.value && version.value.latestId !== props.toolUseId);
 const isExpanded = ref(true);
 
 const chunkMount = inject(chunkMountKey, null);
@@ -366,26 +381,45 @@ onUnmounted(() => {
   window.removeEventListener("message", handleMessage);
 });
 
-// After iframe loads, fetch libraries and forward via postMessage
-function handleIframeLoad() {
-  if (!libraries.value.length || !iframeRef.value) return;
-  const win = iframeRef.value.contentWindow;
-  if (!win) return;
-  (async () => {
-    const libs: Record<string, string> = {};
-    for (const name of libraries.value) {
-      const libPath = LIBRARY_PATHS[name];
-      if (!libPath) continue;
-      try {
-        const resp = await fetch(libPath, { credentials: "same-origin" });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        libs[name] = await resp.text();
-      } catch (e) {
-        console.error(`output_iframe: failed to fetch library ${name}`, e);
-      }
+// output_html pages are views, with the bridge (appBridge/view.ts) ahead of
+// their own scripts.
+const isApp = computed(() => props.toolName === "output_html");
+const appHtml = computed(() => {
+  if (!html.value) return undefined;
+  return prependToPage(
+    html.value,
+    `<script data-app-bridge>${APP_BRIDGE_SOURCE}<\/script>` + libsBootstrapScript.value,
+  );
+});
+const appOptions = computed(() => ({
+  source: title.value,
+  key: props.toolUseId ?? "",
+  conversationId: props.conversationId ?? "",
+  sandbox: { permissions: { clipboardWrite: {} }, csp: {} },
+}));
+
+// The libraries the page asked for, as the message its bootstrap awaits.
+async function libraryMessage(): Promise<{ type: "shelley-libs"; libs: object } | null> {
+  if (!libraries.value.length) return null;
+  const libs: Record<string, string> = {};
+  for (const name of libraries.value) {
+    const libPath = LIBRARY_PATHS[name];
+    if (!libPath) continue;
+    try {
+      const resp = await fetch(libPath, { credentials: "same-origin" });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      libs[name] = await resp.text();
+    } catch (e) {
+      console.error(`${props.toolName}: failed to fetch library ${name}`, e);
     }
-    win.postMessage({ type: "shelley-libs", libs }, "*");
-  })();
+  }
+  return { type: "shelley-libs", libs };
+}
+
+// After the legacy iframe loads, send its libraries.
+function sendLibraries() {
+  const win = iframeRef.value?.contentWindow;
+  if (win) void libraryMessage().then((m) => m && win.postMessage(m, "*"));
 }
 
 // Fetch libraries and produce a self-contained HTML with inline base64 bootstrap

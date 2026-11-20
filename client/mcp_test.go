@@ -28,6 +28,7 @@ import (
 // `shelley mcp` code.
 type mcpEnv struct {
 	t    *testing.T
+	db   *db.DB
 	sock string
 
 	mu    sync.Mutex
@@ -49,7 +50,7 @@ func newMCPEnv(t *testing.T) *mcpEnv {
 	svr := server.NewServer(database, llmManager, claudetool.ToolSetConfig{}, logger, true, "predictable", "")
 	mux := http.NewServeMux()
 	svr.RegisterRoutes(mux)
-	e := &mcpEnv{t: t}
+	e := &mcpEnv{t: t, db: database}
 
 	// t.TempDir paths can be too long for a Unix socket.
 	dir, err := os.MkdirTemp("", "mcp")
@@ -315,6 +316,24 @@ func TestMCPCall(t *testing.T) {
 
 	// A call that times out may still have run.
 	requireContains(t, e.fail(1, "call", "f.block", "-timeout", "50ms"), "shelley mcp: ", "may still have run")
+}
+
+// A call of a tool with a view tells the agent the user sees it, and
+// tools only views may call are refused.
+func TestMCPCallApp(t *testing.T) {
+	e := newMCPEnv(t)
+	f := mcptest.NewServer(t)
+	e.ok("add", "f", f.URL)
+	slug := "app"
+	conv, err := e.db.CreateConversation(t.Context(), &slug, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SHELLEY_CONVERSATION_ID", conv.ConversationID)
+	if out, errOut, code := e.run("", "call", "f.show", "text=hi"); code != 0 || out != "showing hi\n" || errOut != "(This conversation shows the result in the tool's interactive view.)\n" {
+		t.Fatalf("call f.show: %d %q %q", code, out, errOut)
+	}
+	requireContains(t, e.fail(1, "call", "f.refresh"), "f.refresh is only for its MCP App's views")
 }
 
 func TestMCPLoginRequired(t *testing.T) {

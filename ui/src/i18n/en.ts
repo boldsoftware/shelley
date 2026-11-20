@@ -718,4 +718,10 @@ export const en: TranslationKeys = {
   chatgptGotIt: "Got it",
   chatgptSignOutUnconfirmed:
     "Signed out here, but ChatGPT didn't confirm it. Disconnect Shelley in ChatGPT settings to be sure.",
+  viewAsksToSend: "{source} asks to send this as your message:",
+  viewAsksToOpen: "{source} asks to open:",
+  viewAsksToSave: "{source} asks to save:",
+  viewSend: "Send",
+  viewOpen: "Open",
+  viewContextFrom: "Context from {source}",
 };

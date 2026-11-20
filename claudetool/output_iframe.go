@@ -21,7 +21,26 @@ func (t *OutputIframeTool) Tool() *llm.Tool {
 		Name:        outputIframeName,
 		Description: outputIframeDescription,
 		InputSchema: llm.MustSchema(outputIframeInputSchema),
-		Run:         llm.RunJSON(t.run),
+		Run: llm.RunJSON(func(_ context.Context, input outputIframeInput) llm.ToolOut {
+			return displayHTML(t.WorkingDir, outputIframeName, input)
+		}),
+	}
+}
+
+// OutputHTMLTool succeeds OutputIframeTool: its page matches Shelley's theme
+// and can talk to Shelley the way an MCP App's view does.
+type OutputHTMLTool struct {
+	WorkingDir *MutableWorkingDir
+}
+
+func (t *OutputHTMLTool) Tool() *llm.Tool {
+	return &llm.Tool{
+		Name:        outputHTMLName,
+		Description: outputHTMLDescription,
+		InputSchema: llm.MustSchema(outputIframeInputSchema),
+		Run: llm.RunJSON(func(_ context.Context, input outputIframeInput) llm.ToolOut {
+			return displayHTML(t.WorkingDir, outputHTMLName, input)
+		}),
 	}
 }
 
@@ -37,6 +56,40 @@ assets with files; use libraries for hosted runtimes such as Excalidraw.
 To change a displayed iframe, patch the file that holds the content (the HTML
 you wrote, or the bundled data file when the HTML is a shared renderer) rather
 than rewriting it, then call output_iframe again with the same path and files.
+The UI shows it as the next version. Never edit a shared renderer or skill
+template to change one output.`
+
+	outputHTMLName        = "output_html"
+	outputHTMLDescription = `Display an HTML file in the chat as an interactive view (sandboxed, scripts
+enabled). Use for charts, HTML demos, SVGs, and interactive widgets. Use
+normal messages for text or simple data.
+
+HTML may include inline scripts/styles and CDN resources. Bundle small local
+assets with files; use libraries for hosted runtimes such as Excalidraw.
+
+The page starts in Shelley's light or dark theme (background, text color,
+font). Style it with the theme's CSS variables, set on :root:
+--color-background-{primary,secondary,tertiary}, --color-text-{primary,secondary,tertiary},
+--color-border-primary, --color-ring-primary, --color-{background,text,border}-{info,success,warning,danger},
+--font-sans, --font-mono, --border-radius-{sm,md,lg}.
+Some clients show the page without them; give each var() a fallback, as in
+var(--color-border-primary, #ddd). If you hard-code colors, set both
+background and text.
+
+window.shelley lets the page work with the conversation (methods return Promises).
+Some clients show the page without it; check that it exists:
+- sendMessage(text): send text as the user's next message, for buttons such as
+  "Apply".
+- openLink(url); download(filename, text, mimeType)
+  The user confirms each of these first; the Promise rejects if they decline.
+- setContext(text): tell the model what the user picked or did in the page. It
+  arrives with the user's next message; each call replaces the last.
+- requestDisplayMode("fullscreen" | "inline")
+- hostContext (theme, displayMode, ...), onHostContextChange(fn)
+
+To change a displayed view, patch the file that holds the content (the HTML
+you wrote, or the bundled data file when the HTML is a shared renderer) rather
+than rewriting it, then call output_html again with the same path and files.
 The UI shows it as the next version. Never edit a shared renderer or skill
 template to change one output.`
 
@@ -252,13 +305,14 @@ type outputIframeInput struct {
 	Libraries []string          `json:"libraries"`
 }
 
-func (t *OutputIframeTool) run(ctx context.Context, input outputIframeInput) llm.ToolOut {
+// displayHTML is output_iframe and output_html, named tool.
+func displayHTML(workingDir *MutableWorkingDir, tool string, input outputIframeInput) llm.ToolOut {
 	if input.Path == "" {
 		return llm.ErrorfToolOut("path is required")
 	}
 
 	// Resolve every relative path against one working-directory snapshot.
-	wd := t.WorkingDir.Get()
+	wd := workingDir.Get()
 	path := resolvePath(wd, input.Path)
 
 	// Read the main HTML file
@@ -274,7 +328,7 @@ func (t *OutputIframeTool) run(ctx context.Context, input outputIframeInput) llm
 	// rendered as a screen of replacement characters). Reject it up front
 	// with an actionable message so the agent picks an HTML file instead.
 	if !utf8.Valid(data) {
-		return llm.ErrorfToolOut("file %q is not valid UTF-8 text — output_iframe expects a self-contained HTML file, not a binary file (image, archive, or compiled binary). To show an image, embed it in HTML (e.g. a data: URL or an <img> tag).", input.Path)
+		return llm.ErrorfToolOut("file %q is not valid UTF-8 text — %s expects a self-contained HTML file, not a binary file (image, archive, or compiled binary). To show an image, embed it in HTML (e.g. a data: URL or an <img> tag).", input.Path, tool)
 	}
 
 	// Read additional files
@@ -288,7 +342,7 @@ func (t *OutputIframeTool) run(ctx context.Context, input outputIframeInput) llm
 		// so they too must be UTF-8 text (JSON, CSS, JS, CSV). A binary blob
 		// here corrupts the same way the main HTML does.
 		if !utf8.Valid(content) {
-			return llm.ErrorfToolOut("bundled file %q (%s) is not valid UTF-8 text — output_iframe files must be text (JSON, CSS, JS, CSV), not binary. To include an image, inline it as a data: URL in the HTML.", name, input.Files[name])
+			return llm.ErrorfToolOut("bundled file %q (%s) is not valid UTF-8 text — %s files must be text (JSON, CSS, JS, CSV), not binary. To include an image, inline it as a data: URL in the HTML.", name, input.Files[name], tool)
 		}
 		embeddedFiles = append(embeddedFiles, EmbeddedFile{
 			Name:    name,
@@ -315,7 +369,9 @@ func (t *OutputIframeTool) run(ctx context.Context, input outputIframeInput) llm
 	}
 
 	display := OutputIframeDisplay{
-		Type:      "output_iframe",
+		// Both tools' pages have the same display, which the web, iOS and
+		// Android clients know by this type.
+		Type:      outputIframeName,
 		HTML:      html,
 		Title:     input.Title,
 		Filename:  filepath.Base(input.Path),

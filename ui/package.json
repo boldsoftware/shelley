@@ -60,10 +60,11 @@
     "vue": "^3.5.38"
   },
   "comments": {
-    "react": "react/react-dom are runtime deps only of src/excalidraw-skill.js, the self-contained Excalidraw bundle streamed into the output_iframe sandbox. The Shelley app frontend is Vue-only."
+    "react": "react/react-dom are runtime deps only of src/excalidraw-skill.js, the self-contained Excalidraw bundle streamed into the output_html sandbox. The Shelley app frontend is Vue-only."
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
+    "@modelcontextprotocol/ext-apps": "2.1.0",
     "@playwright/test": "^1.60.0",
     "@resvg/resvg-js": "2.6.2",
     "@types/jsdom": "^21.1.7",

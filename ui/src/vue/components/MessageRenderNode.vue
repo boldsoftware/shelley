@@ -49,6 +49,7 @@
     :tool-result-message-id="node.item.toolResultMessageId"
     :on-comment-text-change="onCommentTextChange"
     :tool-use-id="node.item.toolUseId"
+    :conversation-id="node.item.conversationId"
   />
   <CarriedBand v-else-if="node.kind === 'carried-band'" :count="node.count" :band-key="node.key">
     <MessageRenderNode

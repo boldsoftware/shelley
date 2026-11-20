@@ -1995,6 +1995,27 @@ body {
   text-align: right;
 }
 
+/* What a view told the model along with a user message. */
+.message-app-context {
+  margin-top: 0.375rem;
+  font-size: var(--font-size-12);
+  color: var(--text-secondary);
+}
+
+.message-app-context summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.message-app-context pre {
+  max-height: 12rem;
+  margin: 0.25rem 0 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* A temporary message, kept out of the archive store: a faint dashed edge. */
 .message-temporary {
   border-left: 2px dashed var(--gray-300);

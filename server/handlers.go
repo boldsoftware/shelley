@@ -1112,6 +1112,9 @@ type ChatRequest struct {
 	Temporary bool `json:"temporary,omitempty"`
 	// Skills names composer-selected skills mentioned before the message.
 	Skills []string `json:"skills,omitempty"`
+	// AppContext is what views (MCP Apps and output_html) asked the model
+	// to know with the user's next message.
+	AppContext []appContext `json:"app_context,omitempty"`
 }
 
 // NewConversationRequest is the body of POST /api/conversations/new.
@@ -1529,6 +1532,18 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		},
 	}
 	userMessage.Content = withSkillMentions(userMessage.Content, skillNames)
+	appContexts, sentContexts, err := s.archivableAppContext(ctx, conversationID, req.AppContext)
+	if err != nil {
+		s.internalError(w, "Failed to check views' context", err, "conversationID", conversationID)
+		return
+	}
+	if userMessage.Content, err = withAppContext(userMessage.Content, appContexts); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if sentContexts != "" {
+		w.Header().Set(appContextHeader, sentContexts)
+	}
 
 	// Queue mode: record the message to DB but don't interrupt the agent.
 	// The message will be sent when the agent finishes its current turn.

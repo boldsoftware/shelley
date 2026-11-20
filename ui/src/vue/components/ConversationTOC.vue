@@ -84,7 +84,11 @@
         :class="`toc-entry toc-entry-${entry.kind}${entry.category ? ' toc-category-' + entry.category : ''}${activeId === entry.id ? ' toc-entry-active' : ''}`"
         @click="handleGoto(entry)"
       >
-        <span v-if="entry.kind !== 'gen' && entry.kind !== 'chapter'" class="toc-entry-icon" aria-hidden="true">
+        <span
+          v-if="entry.kind !== 'gen' && entry.kind !== 'chapter'"
+          class="toc-entry-icon"
+          aria-hidden="true"
+        >
           <template v-if="entry.kind === 'top'">↑</template>
           <template v-else-if="entry.kind === 'bottom'">↓</template>
           <svg
@@ -195,6 +199,7 @@ import {
   compactsSomething,
   contextNudge,
   isCompactionCarried,
+  isAppContext,
   type Message,
   type LLMMessage,
   type LLMContent,
@@ -281,7 +286,8 @@ async function loadChapters() {
 }
 
 function onChaptersUpdated(event: Event) {
-  if (open.value && (event as CustomEvent<string>).detail === props.conversationId) void loadChapters();
+  if (open.value && (event as CustomEvent<string>).detail === props.conversationId)
+    void loadChapters();
 }
 
 watch(
@@ -300,7 +306,7 @@ function extractMessageLabel(message: Message, maxLen = 70): string {
   if (!llm?.Content) return "";
   const parts: string[] = [];
   for (const c of llm.Content as LLMContent[]) {
-    if (c.Type === 2 && c.Text) parts.push(c.Text);
+    if (c.Type === 2 && c.Text && !isAppContext(c)) parts.push(c.Text);
   }
   let s = parts.join(" ").replace(/\s+/g, " ").trim();
   s = tidyLabel(s).replace(/^[#>*\-`\s]+/, "");
@@ -654,7 +660,9 @@ function scrollToFragment(container: HTMLElement, fragment: string): boolean {
   el.scrollIntoView({
     behavior: fragment.startsWith("m-")
       ? "instant"
-      : el.classList.contains("tool-card-mount-placeholder") ? "auto" : "smooth",
+      : el.classList.contains("tool-card-mount-placeholder")
+        ? "auto"
+        : "smooth",
     block: "start",
   });
   const toolUseId = fragment.startsWith("t-") ? toolUseIdForElement(el) : null;
@@ -665,11 +673,7 @@ function scrollToFragment(container: HTMLElement, fragment: string): boolean {
 
 const entries = computed(
   perfWrap("toc.buildEntries", () =>
-    buildEntries(
-      props.messages,
-      renderedThumbnails.value,
-      chapters.value,
-    ),
+    buildEntries(props.messages, renderedThumbnails.value, chapters.value),
   ),
 );
 const activeEntryByMessageId = computed(() => {

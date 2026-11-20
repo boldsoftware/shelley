@@ -151,7 +151,7 @@ type ToolSetConfig struct {
 	VM VM
 	// HostDir, with a VM, is the conversation's working directory on this
 	// host: its scratch space, where tools that only work here (read_image,
-	// output_iframe, message_user, llm_one_shot) resolve relative paths.
+	// output_html, message_user, llm_one_shot) resolve relative paths.
 	HostDir string
 	// Secrets, if set, redacts stored secrets from every tool's output and,
 	// when enabled, provides the write_secret tool (docs/secrets.md).
@@ -289,13 +289,12 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		HostDir:    hostWD,
 	}
 
-	outputIframeTool := &OutputIframeTool{WorkingDir: hostWD}
-
 	tools := []*llm.Tool{
 		bashTool.Tool(),
 		patchTool.Tool(),
 		changeDirTool.Tool(),
-		outputIframeTool.Tool(),
+		(&OutputHTMLTool{WorkingDir: hostWD}).Tool(),
+		(&OutputIframeTool{WorkingDir: hostWD}).Tool(),
 	}
 
 	// Build the available models list (shared by subagent and llm_one_shot tools).

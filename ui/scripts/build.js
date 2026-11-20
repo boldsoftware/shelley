@@ -199,6 +199,15 @@ async function build() {
     }
     fs.writeFileSync("dist/shelley-bookmarklet.html", standaloneHtml);
 
+    // The view side of the MCP Apps bridge, injected into output_html pages.
+    log("Building app bridge...");
+    const appBridge = await esbuildText({
+      entryPoints: ["src/appBridge/view.ts"],
+      format: "iife",
+      target: "es2020",
+    });
+    if (/<\/script|<!--/i.test(appBridge)) throw new Error("appBridge: view.ts can't be inlined");
+
     // Build the Vue 3 + PrimeVue app (src/vue/main.ts). It emits dist/main.js +
     // dist/main.css, which index.html links statically (see src/index.html).
     log("Building main application (src/vue/main.ts)...");
@@ -210,7 +219,7 @@ async function build() {
       minify: isProd,
       sourcemap: !noSourceMaps,
       metafile: true,
-      define: bookmarkletDefine,
+      define: { ...bookmarkletDefine, __APP_BRIDGE_SOURCE__: JSON.stringify(appBridge) },
       external: ["monaco-editor", "/monaco-editor.js", "/ghostty-web.js"],
       loader: {
         ".png": "dataurl",
@@ -255,7 +264,7 @@ async function build() {
 
     // /static/excalidraw/skill.js: self-contained Excalidraw + React +
     // skill helper bundle. The host React app fetches it same-origin and
-    // streams it into the sandboxed `output_iframe` iframe via
+    // streams it into the sandboxed `output_html` iframe via
     // postMessage; the iframe wraps it in a Blob and import()s it from
     // its own opaque origin, sidestepping CORS.
     log("Building /static/excalidraw bundle...");

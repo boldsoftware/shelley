@@ -339,6 +339,32 @@ test.describe("Settings knob", () => {
     });
   }
 
+  test("new chats keep output_iframe's off for output_html, once", async ({ page }) => {
+    const store = (overrides: Record<string, string>, fresh: boolean) =>
+      page.evaluate(
+        ([overrides, fresh]) => {
+          localStorage.setItem("shelley.toolOverrides", JSON.stringify(overrides));
+          if (fresh) localStorage.removeItem("shelley.toolOverrides.outputHtml");
+        },
+        [overrides, fresh] as const,
+      );
+    const tools = page.getByTestId("model-picker-tools").locator(".model-picker-section-text");
+    await page.goto("/new");
+    // The composer first takes on its profile's settings.
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("shelley.profileApplied")))
+      .toBe("Default");
+    await store({ output_iframe: "off" }, true);
+    await page.reload();
+    await openModelPicker(page);
+    await expect(tools).toContainText("output_html");
+    // Later, output_html back at its default stays there.
+    await store({ output_iframe: "off" }, false);
+    await page.reload();
+    await openModelPicker(page);
+    await expect(tools).toHaveText("All at their defaults");
+  });
+
   test("auto compaction turned off in the composer starts the conversation without it", async ({
     page,
     request,

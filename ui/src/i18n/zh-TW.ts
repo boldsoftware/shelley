@@ -701,4 +701,10 @@ export const zhTW: TranslationKeys = {
   chatgptGotIt: "知道了",
   chatgptSignOutUnconfirmed:
     "已在此處登出，但 ChatGPT 未確認。請在 ChatGPT 設定中中斷 Shelley 的連線以確保安全。",
+  viewAsksToSend: "{source} 想以你的名義傳送：",
+  viewAsksToOpen: "{source} 想開啟：",
+  viewAsksToSave: "{source} 想儲存：",
+  viewSend: "傳送",
+  viewOpen: "開啟",
+  viewContextFrom: "來自 {source} 的上下文",
 };

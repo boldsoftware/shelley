@@ -3,7 +3,7 @@ package server
 // Synthetic conversation generator for performance testing. It builds a
 // conversation containing every message and tool-call shape the UI can
 // render (thinking, text, bash, patch/diff, change_dir,
-// subagent, web_search, browser, llm_one_shot, output_iframe, plus
+// subagent, web_search, browser, llm_one_shot, output_html, plus
 // gitinfo/warning/error/modelchange markers) so we can load large
 // conversations and measure client + server performance without needing a
 // live model. Reachable at /debug/loremipsum?size=... (see sizePresets).

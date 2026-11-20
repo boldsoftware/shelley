@@ -117,3 +117,27 @@ func (q *Queries) ToolUseTemporary(ctx context.Context, arg ToolUseTemporaryPara
 	err := row.Scan(&is_temporary)
 	return is_temporary, err
 }
+
+const viewTemporary = `-- name: ViewTemporary :one
+SELECT CAST(COUNT(*) > 0 AS BOOLEAN) AS is_temporary
+FROM temporary_messages t
+JOIN messages m ON m.message_id = t.message_id
+WHERE t.conversation_id = ?1 AND (
+  m.message_id = CAST(?2 AS TEXT)
+  OR (m.type IN ('agent', 'tool') AND EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') x
+    WHERE x.value ->> 'ID' = CAST(?2 AS TEXT))))
+`
+
+type ViewTemporaryParams struct {
+	ConversationID string `json:"conversation_id"`
+	View           string `json:"view"`
+}
+
+// Whether the message that shows a view was temporary: an mcpapp message,
+// or the one that made a tool call that shows one.
+func (q *Queries) ViewTemporary(ctx context.Context, arg ViewTemporaryParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, viewTemporary, arg.ConversationID, arg.View)
+	var is_temporary bool
+	err := row.Scan(&is_temporary)
+	return is_temporary, err
+}

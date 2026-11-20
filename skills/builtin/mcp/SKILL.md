@@ -18,7 +18,7 @@ To find a tool, prefer `shelley mcp search TERM...` over grepping `list`: it
 matches the terms against each tool's name, description and parameters and
 prints the full documentation of every matching tool, grouped by server.
 
-Read a server's instructions and signatures before first calling its tools. `KEY=VALUE` values are taken as is for string parameters and as JSON otherwise, so quote JSON for the shell. Images, audio and binary resources are saved to temporary files (the output says where; look at images with read_image). If the tool reports an error, it is printed to stderr and the exit status is 1. A call that timed out may still have run.
+Read a server's instructions and signatures before first calling its tools. Some tools have an interactive view (an MCP App): calling one shows the result in it, in the conversation, where the user can act on it, so don't repeat what it shows. `KEY=VALUE` values are taken as is for string parameters and as JSON otherwise, so quote JSON for the shell. Images, audio and binary resources are saved to temporary files (the output says where; look at images with read_image). If the tool reports an error, it is printed to stderr and the exit status is 1. A call that timed out may still have run.
 
 Compose calls like any shell command; keep output small with jq:
 

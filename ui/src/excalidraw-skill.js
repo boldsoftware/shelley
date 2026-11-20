@@ -1,5 +1,5 @@
 // High-level entrypoint for the excalidraw skill. Loaded as a module from
-// /static/excalidraw/skill.js inside the sandboxed `output_iframe` produced
+// /static/excalidraw/skill.js inside the sandboxed `output_html` produced
 // by the skill template.
 //
 // Encapsulates: stylesheet injection, font-asset path, the Excalidraw React
