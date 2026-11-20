@@ -155,8 +155,10 @@ func generate(data []byte) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", r.ID, err)
 		}
-		jr := jsRule{ID: kind, Label: label(kind), Regex: re, Keywords: lower(r.Keywords), SecretGroup: r.SecretGroup,
-			Entropy: f.entropy, Wordy: f.wordy, Require: f.require}
+		jr := jsRule{
+			ID: kind, Label: label(kind), Regex: re, Keywords: lower(r.Keywords), SecretGroup: r.SecretGroup,
+			Entropy: f.entropy, Wordy: f.wordy, Require: f.require,
+		}
 		for _, a := range []jsAllow{f.secret, f.match} {
 			if a.Regexes != nil || a.Stopwords != nil {
 				jr.Allow = append(jr.Allow, a)
