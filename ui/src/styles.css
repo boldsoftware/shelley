@@ -5616,7 +5616,8 @@ select:disabled {
   cursor: pointer;
 }
 
-.status-button svg {
+.status-button svg,
+.drawer-chapters-toggle svg {
   width: 0.875rem;
   height: 0.875rem;
 }
@@ -14954,6 +14955,37 @@ kbd {
   flex-shrink: 0;
 }
 
+.drawer-chapters-toggle,
+.drawer-row-end-chapters .drawer-actions-top,
+.drawer-row-end-chapters .drawer-actions-trigger {
+  width: 1.25rem;
+  min-width: 1.25rem;
+}
+
+.drawer-chapters-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.drawer-chapters-toggle[aria-expanded="true"] {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.drawer-row-end-chapters .drawer-actions-trigger {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.drawer-row-end-chapters .drawer-working-indicator {
+  margin-inline: 0.40625rem;
+}
+
+.drawer-row-end-chapters .conversation-time {
+  margin-right: 0.125rem;
+}
+
 /* With a mouse, workspace mode's row buttons (Archive; Restore and Delete)
    take the time's place while the row is pointed at, keyboard-focused or
    confirming a delete, as a ⋯ menu does; touch screens, which can't point, show them
@@ -14967,6 +14999,9 @@ kbd {
   .workspace-mode .drawer-row-end > * {
     grid-row: 1;
     grid-column: 1;
+  }
+  .workspace-mode .drawer-row-end .drawer-chapters-toggle {
+    grid-column: 2;
   }
   .workspace-mode .drawer-row-end .conversation-time,
   .workspace-mode .drawer-row-end .drawer-working-indicator {

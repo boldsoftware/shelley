@@ -95,7 +95,7 @@
         <!-- When it last changed, or a working row's dot ("now") in its
              place, right-aligned beside the row's actions, whose place every
              row keeps so the times line up. -->
-        <div class="drawer-row-end">
+        <div class="drawer-row-end" :class="{ 'drawer-row-end-chapters': chaptersAvailable && !workspaceMode }">
           <span
             v-if="isWorking"
             class="working-indicator drawer-working-indicator"
@@ -103,6 +103,27 @@
             :title="ctx.t('agentIsWorking')"
           />
           <CompactTime v-else-if="!isPlaceholder" :timestamp="conversation.updated_at" />
+          <button
+            v-if="chaptersAvailable"
+            type="button"
+            class="btn-icon-sm drawer-chapters-toggle"
+            :aria-label="chaptersExpanded ? 'Hide chapters' : 'Show chapters'"
+            :aria-expanded="chaptersExpanded"
+            :aria-controls="chaptersExpanded ? `conversation-chapters-${conversation.conversation_id}` : undefined"
+            v-tooltip.top="chaptersExpanded ? 'Hide chapters' : 'Show chapters'"
+            @click.stop="chaptersExpanded = !chaptersExpanded"
+
+            @auxclick.stop
+          >
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6h16M8 12h12M8 18h12"
+              />
+            </svg>
+          </button>
           <div class="conversation-actions drawer-actions-top">
             <NavActionsMenu
               v-if="hasActions"
@@ -145,16 +166,11 @@
       </div>
 
       <ConversationThemes
-        v-if="
-          !isDraft &&
-          !isPlaceholder &&
-          ctx.searchOpen.value &&
-          (!ctx.searchText.value.trim() ||
-            ctx.chapterScores.value.has(conversation.conversation_id))
-        "
+        v-if="chaptersAvailable && chaptersExpanded"
+        :id="`conversation-chapters-${conversation.conversation_id}`"
         :conversation-id="conversation.conversation_id"
         :conversation-slug="conversation.slug"
-        :chapters="ctx.chapterIndex.value[conversation.conversation_id] ?? []"
+        :chapters="chapters"
         :search-text="ctx.searchText.value"
       />
 
@@ -629,6 +645,18 @@ const isDraft = computed(() => !!props.conversation.is_draft);
 const temporary = computed(() => isTemporaryConversation(props.conversation));
 // Stands in for a conversation the server has yet to create: nothing to edit.
 const isPlaceholder = computed(() => props.conversation.conversation_id === COMPOSER_ROW_ID);
+const chapters = computed(() => ctx.chapterIndex.value[props.conversation.conversation_id] ?? []);
+const chaptersAvailable = computed(() =>
+  !ctx.selectionMode.value && !isDraft.value && !isPlaceholder.value &&
+  ctx.searchOpen.value && chapters.value.length > 0 &&
+  (!ctx.searchText.value.trim() || ctx.chapterScores.value.has(props.conversation.conversation_id)),
+);
+const chaptersExpanded = ref(false);
+watch(
+  [() => ctx.searchOpen.value, () => ctx.searchText.value, () => !ctx.searchQuery.value.trim()],
+  ([open, text]) => { chaptersExpanded.value = open && !!text.trim(); },
+  { immediate: true },
+);
 // A draft being typed here previews the composer, not the last autosave.
 const draftText = computed(() =>
   composerPreview?.rowId.value === props.conversation.conversation_id

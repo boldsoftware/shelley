@@ -2985,6 +2985,7 @@ provide(DrawerCtxKey, {
   toggleSelection,
   currentConversationId: computed(() => props.currentConversationId),
   searchText,
+  searchQuery,
   searchOpen,
   chapterIndex,
   chapterScores,

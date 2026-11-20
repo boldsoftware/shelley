@@ -75,6 +75,7 @@ export interface DrawerCtx {
   t: (key: keyof TranslationKeys) => string;
   currentConversationId: ComputedRef<string | null>;
   searchText: ComputedRef<string>;
+  searchQuery: Ref<string>;
   searchOpen: Ref<boolean>;
   chapterIndex: Ref<Record<string, Chapter[]>>;
   chapterScores: ComputedRef<Map<string, number>>;

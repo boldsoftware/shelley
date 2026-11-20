@@ -648,8 +648,23 @@ test.describe("conversation drawer startup and app bar", () => {
     expect(indexRequests).toBe(0);
     const searchButton = page.getByRole("button", { name: "Search conversations..." });
     await searchButton.click();
-    await expect(outlines).toHaveCount(4);
+    await expect(page.getByRole("button", { name: "Show chapters", exact: true })).toHaveCount(4);
+    await expect(outlines).toHaveCount(0);
     expect(indexRequests).toBe(1);
+    const row = page.locator('[data-conversation-id="chapter-only"]');
+    const toggle = row.locator(".drawer-chapters-toggle");
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(row.locator(".conversation-themes-list a")).toHaveText(["Pelican", "Another direction"]);
+    await expect(page).toHaveURL(/\/new$/);
+    await row.getByRole("button", { name: "Hide chapters", exact: true }).click();
+    await expect(outlines).toHaveCount(0);
+    await fillConversationQuery(queryEditor(page), "tag:birds ");
+    await row.getByRole("button", { name: "Show chapters", exact: true }).click();
+    await expect(row.locator(".conversation-themes-list")).toBeVisible();
+    await clearConversationQuery(queryEditor(page));
+    await expect(outlines).toHaveCount(0);
 
     await fillConversationQuery(queryEditor(page), "PELICAN tag:birds ");
     await expect(page.locator(".drawer .conversation-title")).toHaveText([
@@ -665,13 +680,133 @@ test.describe("conversation drawer startup and app bar", () => {
     await expect(page.locator(".conversation-snippet mark")).toHaveText(["pelican"]);
     expect(indexRequests).toBe(1);
 
+    await page.getByRole("button", { name: "Select conversations", exact: true }).click();
+    await expect(outlines).toHaveCount(0);
+    await expect(page.locator(".drawer-chapters-toggle")).toHaveCount(0);
+    await row.click();
+    await expect(row.locator(".drawer-selection-check")).toBeChecked();
+    await expect(page).toHaveURL(/\/new$/);
+    await page.getByRole("button", { name: "Cancel selection", exact: true }).click();
+    await expect(outlines).toHaveCount(2);
+    await expect(exactOutline).toBeVisible();
+
     await clearConversationQuery(queryEditor(page));
-    await expect(outlines).toHaveCount(4);
+    await expect(outlines).toHaveCount(0);
+    await expect(row.getByRole("button", { name: "Show chapters", exact: true })).toHaveAttribute("aria-expanded", "false");
     await searchButton.click();
     await expect(outlines).toHaveCount(0);
     await searchButton.click();
-    await expect(outlines).toHaveCount(4);
+    await expect(page.getByRole("button", { name: "Show chapters", exact: true })).toHaveCount(4);
+    await expect(outlines).toHaveCount(0);
     expect(indexRequests).toBe(2);
+  });
+
+  for (const width of [390, 1280]) {
+    test(`chapter controls stay aligned and compact at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      const working = conversation("working-chapters");
+      working.working = working.agent_working = true;
+      const idle = conversation("idle-chapters");
+      const plain = conversation("no-chapters");
+      await stubConversationList(page, [working, idle, plain]);
+      await page.route("**/api/conversations/themes", route => route.fulfill({ json: {
+        [working.conversation_id]: [{ title: "Working topic", message_id: "working-message" }],
+        [idle.conversation_id]: [{ title: "Idle topic", message_id: "idle-message" }],
+      } }));
+      await page.goto("/new");
+      if (width < 768) {
+        await page.getByRole("button", { name: "Open conversations", exact: true }).click();
+      }
+      await page.getByRole("button", { name: "Search conversations..." }).click();
+      await expect(page.getByRole("button", { name: "Show chapters", exact: true })).toHaveCount(2);
+      await expect(page.locator('[data-conversation-id="no-chapters"] .drawer-chapters-toggle')).toHaveCount(0);
+      const workingRow = page.locator('[data-conversation-id="working-chapters"]');
+      const toggle = workingRow.getByRole("button", { name: "Show chapters", exact: true });
+      await expect(toggle).not.toHaveAttribute("aria-controls");
+      await toggle.focus();
+      await page.evaluate(() => {
+        document.addEventListener("keydown", event => {
+          document.body.dataset.chapterKey = event.key;
+        }, { once: true });
+      });
+      await page.keyboard.press("ArrowRight");
+      await expect(page.locator("body")).toHaveAttribute("data-chapter-key", "ArrowRight");
+      const centers = await workingRow.locator(".drawer-row-end").evaluate(end => {
+        const center = (selector: string) => {
+          const box = end.querySelector(selector)!.getBoundingClientRect();
+          return box.x + box.width / 2;
+        };
+        return [
+          center(".drawer-working-indicator"),
+          center(".drawer-chapters-toggle"),
+          center(".drawer-actions-trigger"),
+        ];
+      });
+      expect(centers[1] - centers[0]).toBeCloseTo(20, 0);
+      expect(centers[2] - centers[1]).toBeCloseTo(20, 0);
+      const workingToggle = await workingRow.locator(".drawer-chapters-toggle").boundingBox();
+      const idleToggle = await page.locator('[data-conversation-id="idle-chapters"] .drawer-chapters-toggle').boundingBox();
+      expect(workingToggle!.x).toBeCloseTo(idleToggle!.x, 0);
+      await workingRow.getByRole("button", { name: "Show chapters", exact: true }).click();
+      await expect(workingRow.locator(".conversation-themes-list a")).toHaveText("Working topic");
+      await expect(page.locator('[data-conversation-id="idle-chapters"] .conversation-themes-list')).toHaveCount(0);
+      await expect(page).toHaveURL(/\/new$/);
+    });
+  }
+
+  test("chapter outlines collapse when clearing structured-only queries", async ({ page }) => {
+    await stubConversationList(page, [conversation("structured-chapters", false, ["adam@poyo.co"])]);
+    await page.route("**/api/conversations/themes", route => route.fulfill({ json: {
+      "structured-chapters": [{ title: "A topic", message_id: "topic-message" }],
+    } }));
+    await page.goto("/new");
+    await page.getByRole("button", { name: "Search conversations..." }).click();
+    for (const query of ["is:untagged ", "user:adam@poyo.co "]) {
+      await fillConversationQuery(queryEditor(page), query);
+      await page.getByRole("button", { name: "Show chapters", exact: true }).click();
+      await expect(page.locator(".drawer .conversation-themes-list")).toBeVisible();
+      await clearConversationQuery(queryEditor(page));
+      await expect(page.locator(".drawer .conversation-themes-list")).toHaveCount(0);
+    }
+  });
+
+  test("chapter controls leave room for workspace restore and delete confirmation", async ({ page, request }) => {
+    const enabled = await request.post("/feature-flags", { data: { name: "workspace", value: true } });
+    expect(enabled.ok()).toBeTruthy();
+    try {
+      const archived = conversation("archived-chapter-controls");
+      archived.archived = true;
+      await stubConversationList(page, [conversation("active")]);
+      await page.route("**/api/conversations/archived**", route => route.fulfill({ json: [archived] }));
+      await page.route("**/api/conversations/themes", route => route.fulfill({ json: {
+        [archived.conversation_id]: [{ title: "Archived topic", message_id: "archived-message" }],
+      } }));
+      await page.goto("/new");
+      await page.getByRole("button", { name: "Search tasks..." }).click();
+      await page.getByTestId("archived-toggle").click();
+      const row = page.locator('[data-conversation-id="archived-chapter-controls"]');
+      await row.hover();
+      const actions = row.locator(".drawer-actions-top");
+      await expect(actions.getByRole("button", { name: "Restore", exact: true })).toBeVisible();
+      const assertNoOverlap = async () => {
+        const toggle = await row.locator(".drawer-chapters-toggle").boundingBox();
+        const controls = await actions.boundingBox();
+        expect(controls!.x + controls!.width).toBeLessThanOrEqual(toggle!.x + 0.5);
+        for (const button of await actions.getByRole("button").all()) {
+          const box = await button.boundingBox();
+          expect(box!.x + box!.width).toBeLessThanOrEqual(toggle!.x + 0.5);
+        }
+      };
+      await assertNoOverlap();
+      await actions.getByRole("button", { name: "Delete", exact: true }).click();
+      await expect(actions.locator(".drawer-delete-confirm")).toBeVisible();
+      await assertNoOverlap();
+      await row.getByRole("button", { name: "Show chapters", exact: true }).click();
+      await expect(row.locator(".conversation-themes-list a")).toHaveText("Archived topic");
+    } finally {
+      const reset = await request.delete("/feature-flags", { data: { name: "workspace" } });
+      expect(reset.ok()).toBeTruthy();
+    }
   });
 
   test("chapter search respects the current archive view", async ({ page }) => {
@@ -761,6 +896,7 @@ test.describe("conversation drawer startup and app bar", () => {
     );
     await page.goto("/new");
     await page.getByRole("button", { name: "Search conversations..." }).click();
+    await page.getByRole("button", { name: "Show chapters", exact: true }).click();
     const link = page.locator(".drawer .conversation-themes-list a");
     await expect(link).toHaveText("First idea");
     title = "Changed direction";

@@ -63,6 +63,45 @@ func newChapterIndexManager(t *testing.T, turns int, missing bool) (*Conversatio
 	return cm, workhorse, conversation
 }
 
+func TestChapterIndexPrompt(t *testing.T) {
+	for _, rule := range []string{
+		"distinct destination worth revisiting",
+		"when those still serve the same objective",
+		"A tool/model/component change is not by itself a new objective",
+		"Do not split merely because an earlier title was too narrow",
+		"a substantial independent finding or decision",
+		"Keep them with the subject being summarized",
+		"There is no chapter count target or message quota",
+		"using their own terms and stated intention",
+		"Preserve the difference between trying to achieve something and having achieved it",
+		"This is incremental indexing",
+		"current_chapter is the active destination",
+		"previous_headings are completed destinations",
+		"If current_chapter is null",
+		"earliest eligible message after the opening exchanges",
+		"message_id and eligible_for_heading=true",
+		"Copy the short eligible IDs exactly as supplied",
+		"always 1–50 characters",
+		`{"reason":"Briefly explain continuation or redirection","chapters":[{"title":"Descriptive label","message_id":"eligible ID"}]}`,
+	} {
+		if !strings.Contains(chapterIndexPrompt, rule) {
+			t.Errorf("chapter prompt missing policy: %q", rule)
+		}
+	}
+	for _, obsolete := range []string{
+		"one broad chapter per 6–10 user messages",
+		"implementing a different model or component",
+		"preparing a working prototype for release",
+		"Redis worker adoption",
+		"retrospective pass over the complete supplied transcript",
+		"All other message_id values are eligible",
+	} {
+		if strings.Contains(chapterIndexPrompt, obsolete) {
+			t.Errorf("chapter prompt contains conflicting instruction: %q", obsolete)
+		}
+	}
+}
+
 func TestChapterIndexWorkhorse(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
