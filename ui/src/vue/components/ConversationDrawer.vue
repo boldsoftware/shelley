@@ -2077,13 +2077,19 @@ function toggleGroup(groupKey: string) {
 function toggleSearch() {
   if (bulkBusy.value) return;
   if (searchOpen.value) {
-    queryEditorRef.value?.finishStructuredEdit();
-    searchOpen.value = false;
-    cancelSelection();
+    closeSearch();
   } else {
     searchOpen.value = true;
     void nextTick(() => queryEditorRef.value?.focusEnd());
   }
+}
+
+function closeSearch() {
+  queryEditorRef.value?.finishStructuredEdit();
+  searchQuery.value = "";
+  setActivity(null);
+  if (workspaceMode) showArchived.value = false;
+  searchOpen.value = false;
 }
 
 function clearSearchText() {
@@ -2175,7 +2181,7 @@ function onSearchKeyDown(e: KeyboardEvent) {
     ) {
       clearSearchText();
     } else {
-      searchOpen.value = false;
+      closeSearch();
     }
   }
 }

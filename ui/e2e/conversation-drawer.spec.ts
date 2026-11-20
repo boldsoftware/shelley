@@ -1226,9 +1226,10 @@ test.describe("conversation drawer startup and app bar", () => {
 
     await searchToggle.click();
     await expect(queryEditor(page)).toHaveCount(0);
-    await expect(searchToggle).toHaveClass(/search-toggle-active/);
+    await expect(searchToggle).not.toHaveClass(/search-toggle-active/);
+    await expect(page.locator('[data-conversation-id="other"]')).toBeVisible();
     await searchToggle.click();
-    await expectQuery(editor, "user:me@example.com ");
+    await expectQuery(editor, "");
 
     await clearConversationQuery(editor);
     await expect(page.locator('[data-conversation-id="other"]')).toBeVisible();
@@ -1255,6 +1256,79 @@ test.describe("conversation drawer startup and app bar", () => {
     await expect(queryEditor(page)).toHaveCount(0);
     await expect(searchToggle).not.toHaveClass(/search-toggle-active/);
   });
+
+  for (const exit of ["toggle", "Escape"] as const) {
+    test(`closing workspace search with ${exit} resets the Archived filter`, async ({ page, request }) => {
+      const enabled = await request.post("/feature-flags", {
+        data: { name: "workspace", value: true },
+      });
+      expect(enabled.ok()).toBeTruthy();
+      try {
+        const active = conversation("active");
+        const archived = { ...conversation("archived"), archived: true };
+        await stubConversationList(page, [active]);
+        await page.route("**/api/conversations/archived", route =>
+          route.fulfill({ json: [archived] }),
+        );
+        await page.goto("/new");
+        const searchToggle = page.getByRole("button", { name: "Search tasks..." });
+        await searchToggle.click();
+        await page.getByTestId("archived-toggle").click();
+        await expect(page.locator('[data-conversation-id="archived"]')).toBeVisible();
+
+        if (exit === "toggle") await searchToggle.click();
+        else await queryEditor(page).press("Escape");
+
+        await expect(queryEditor(page)).toHaveCount(0);
+        await expect(searchToggle).not.toHaveClass(/search-toggle-active/);
+        await expect(page.locator('[data-conversation-id="archived"]')).toHaveCount(0);
+        await expect(page.locator('[data-conversation-id="active"]')).toBeVisible();
+        await searchToggle.click();
+        await expect(page.getByTestId("archived-toggle")).toHaveAttribute("aria-pressed", "false");
+      } finally {
+        const reset = await request.delete("/feature-flags", { data: { name: "workspace" } });
+        expect(reset.ok()).toBeTruthy();
+      }
+    });
+
+    test(`closing search with ${exit} resets the query and all search filters`, async ({ page }) => {
+      await page.setExtraHTTPHeaders({ "X-ExeDev-Email": "me@example.com" });
+      const mine = conversation("mine", false, ["me@example.com"]);
+      mine.tags = JSON.stringify(["alpha"]);
+      mine.unread = true;
+      await stubConversationList(page, [
+        mine,
+        conversation("other", false, ["other@example.com"]),
+      ]);
+      await page.goto("/new");
+      const searchToggle = page.getByRole("button", { name: "Search conversations..." });
+      await searchToggle.click();
+      const editor = queryEditor(page);
+      await page.getByRole("button", { name: "Activity", exact: true }).click();
+      await page.locator(".drawer-bulk-popover").getByRole("button", {
+        name: "1d+",
+        exact: true,
+      }).click();
+      await expect(page.locator('[data-conversation-query-token="activity"]')).toBeVisible();
+      await fillConversationQuery(
+        editor,
+        `user:me@example.com tag:alpha is:unread ${exit === "toggle" ? "needle" : ""}`,
+      );
+      await expect(page.locator('[data-conversation-id="other"]')).not.toBeVisible();
+
+      if (exit === "toggle") await searchToggle.click();
+      else await editor.press("Escape");
+
+      await expect(editor).toHaveCount(0);
+      await expect(searchToggle).not.toHaveClass(/search-toggle-active/);
+      await expect(page.locator('[data-conversation-id="mine"]')).toBeVisible();
+      await expect(page.locator('[data-conversation-id="other"]')).toBeVisible();
+      await searchToggle.click();
+      await expectQuery(editor, "");
+      await expect(page.locator('[data-conversation-query-token="activity"]')).toHaveCount(0);
+      await expect(page.getByTestId("unread-toggle")).toHaveAttribute("aria-pressed", "false");
+    });
+  }
 
   test("user picker disables exhausted options and reports no matches", async ({ page }) => {
     await page.setExtraHTTPHeaders({ "X-ExeDev-Email": "me@example.com" });
