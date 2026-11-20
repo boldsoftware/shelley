@@ -3,7 +3,6 @@
 
 import argparse
 import hashlib
-import json
 import os
 import platform
 import shutil
@@ -11,17 +10,22 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 RELEASE_TAG = "exe-scroll/v0.10.971335601"
-API_URL = "https://api.github.com/repos/boldsoftware/exe.dev/releases/tags/exe-scroll%2Fv0.10.971335601"
-TARGETS = (
-    ("linux", "amd64"),
-    ("linux", "arm64"),
-    ("darwin", "amd64"),
-    ("darwin", "arm64"),
-)
+# Each asset's SHA-256, as RELEASE_TAG's release page lists it; move them with
+# the tag. Pinned so that a build asks nothing of GitHub's API, which refuses
+# callers without a token after 60 requests an hour.
+DIGESTS = {
+    ("linux", "amd64"): "c96c3f024ea667d973daebb5b7a534d627e4455d8bef4a67d146a4cd6b8ed574",
+    ("linux", "arm64"): "61ca823d87d720ded9c4ef13e1955b00ef1e1820d7e3c9ad7b61b7d6c10ee930",
+    ("darwin", "amd64"): "916274cd572c34fac2c072d6d56c93fb6766cf8e04622b40d8443d05fcf9132a",
+    ("darwin", "arm64"): "6d3bbfb6c8ca0890e124c7e7b8cfc55bcb5bf4020b5f97fd8df56cf8a1b25d5c",
+}
+TARGETS = tuple(DIGESTS)
+DOWNLOADS = "https://github.com/boldsoftware/exe.dev/releases/download/" + urllib.parse.quote(RELEASE_TAG, safe="")
 
 
 def native_target() -> tuple[str, str]:
@@ -31,47 +35,16 @@ def native_target() -> tuple[str, str]:
     return os_name, arch
 
 
-def request(url: str) -> urllib.request.Request:
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "shelley-build",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    return urllib.request.Request(url, headers=headers)
-
-
-def release() -> dict:
-    metadata = cache_root() / f"{RELEASE_TAG.replace('/', '_')}.json"
-    try:
-        with urllib.request.urlopen(request(API_URL), timeout=30) as response:
-            data = json.load(response)
-        metadata.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        fd, tmp_name = tempfile.mkstemp(prefix=metadata.name + ".", dir=metadata.parent)
+def fetch(url: str, deadline: float):
+    """Open url, waiting until deadline while it isn't there yet."""
+    while True:
         try:
-            with os.fdopen(fd, "w") as output:
-                json.dump(data, output)
-            os.replace(tmp_name, metadata)
-        finally:
-            Path(tmp_name).unlink(missing_ok=True)
-    except (OSError, urllib.error.URLError):
-        if not metadata.is_file():
-            raise
-        with metadata.open() as cached:
-            data = json.load(cached)
-    if data.get("tag_name") != RELEASE_TAG:
-        raise RuntimeError(f"GitHub returned {data.get('tag_name')!r}, want {RELEASE_TAG!r}")
-    return data
-
-
-def release_assets(data: dict, wanted: tuple[tuple[str, str], ...]) -> dict[tuple[str, str], dict]:
-    by_name = {asset.get("name"): asset for asset in data.get("assets", [])}
-    return {
-        (os_name, arch): by_name.get(f"exe-scroll-{os_name}-{arch}")
-        for os_name, arch in wanted
-    }
+            return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "shelley-build"}), timeout=120)
+        except urllib.error.HTTPError as error:
+            if error.code != 404 or time.monotonic() >= deadline:
+                raise RuntimeError(f"{url}: {error}") from error
+        print(f"Waiting for {url}", file=sys.stderr)
+        time.sleep(min(15, max(1, deadline - time.monotonic())))
 
 
 def sha256(path: Path) -> str:
@@ -92,24 +65,20 @@ def cache_root() -> Path:
     return Path.home() / ".cache" / "shelley" / "exe-scroll"
 
 
-def download(tag: str, asset: dict) -> Path:
-    digest = asset.get("digest", "")
-    if not digest.startswith("sha256:"):
-        raise RuntimeError(f"{tag}/{asset.get('name')}: GitHub did not provide a SHA-256 digest")
-    want = digest.removeprefix("sha256:")
-    cached = cache_root() / tag.replace("/", "_") / f"{asset['name']}-{want}"
+def download(name: str, want: str, deadline: float) -> Path:
+    cached = cache_root() / RELEASE_TAG.replace("/", "_") / f"{name}-{want}"
     if cached.is_file() and sha256(cached) == want:
         return cached
 
     cached.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    fd, tmp_name = tempfile.mkstemp(prefix=asset["name"] + ".", dir=cached.parent)
+    fd, tmp_name = tempfile.mkstemp(prefix=name + ".", dir=cached.parent)
     tmp = Path(tmp_name)
     try:
-        with os.fdopen(fd, "wb") as output, urllib.request.urlopen(request(asset["browser_download_url"]), timeout=120) as response:
+        with os.fdopen(fd, "wb") as output, fetch(f"{DOWNLOADS}/{name}", deadline) as response:
             shutil.copyfileobj(response, output)
         got = sha256(tmp)
         if got != want:
-            raise RuntimeError(f"{tag}/{asset['name']}: SHA-256 {got}, want {want}")
+            raise RuntimeError(f"{RELEASE_TAG}/{name}: SHA-256 {got}, want {want}")
         tmp.chmod(0o755)
         os.replace(tmp, cached)
     finally:
@@ -161,21 +130,10 @@ def main() -> None:
         raise RuntimeError("unsupported exe-scroll target: " + ", ".join(unsupported))
 
     deadline = time.monotonic() + args.wait
-    while True:
-        found = release_assets(release(), wanted)
-        missing = [f"{os_name}/{arch}" for (os_name, arch), asset in found.items() if asset is None]
-        if not missing:
-            break
-        if time.monotonic() >= deadline:
-            raise RuntimeError(f"{RELEASE_TAG} has no release asset for " + ", ".join(missing))
-        print(f"Waiting for {RELEASE_TAG} release assets: " + ", ".join(missing), file=sys.stderr)
-        time.sleep(min(15, max(1, deadline - time.monotonic())))
-
-    for (os_name, arch), asset in found.items():
-        assert asset is not None
-        cached = download(RELEASE_TAG, asset)
-        output = args.output_dir / asset["name"]
-        install(cached, output)
+    for os_name, arch in wanted:
+        name = f"exe-scroll-{os_name}-{arch}"
+        output = args.output_dir / name
+        install(download(name, DIGESTS[(os_name, arch)], deadline), output)
         print(f"exe-scroll: {os_name}/{arch} <- {RELEASE_TAG} ({output})", file=sys.stderr)
 
 
