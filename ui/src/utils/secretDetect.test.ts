@@ -153,6 +153,35 @@ test("finds formats betterleaks misses", () => {
   }
 });
 
+test("takes a value, not the name it's assigned to", () => {
+  const hex = "0123456789abcdef";
+  const token = "q8Zr3Kx0Vb7Nw2Lp5Tj9Hd4Fs6Gc1YmE4uW";
+  for (const text of [`SOME_ID=${token}`, `x=${token}`, `--auth=${token}`]) {
+    assert.deepEqual(kinds(text), [["token", token]], text);
+  }
+  assert.deepEqual(kinds(`TOKEN=${token}==`), [["token", `${token}==`]]);
+  // Beside a name that says it's secret, even hex or one case.
+  assert.deepEqual(kinds(`SOME_API_KEY=${token}`), [["named-secret", token]]);
+  const h = rand(40, hex);
+  const lower = rand(36, "abcdefghijklmnopqrstuvwxyz0123456789");
+  for (const [text, value] of [
+    [`API_KEY=${h}`, h],
+    [`"client_secret": "${lower}"`, lower],
+    [`DB_PASSWORD='${lower.toUpperCase()}'`, lower.toUpperCase()],
+  ]) {
+    assert.deepEqual(kinds(text), [["named-secret", value]], text);
+  }
+  for (const text of [
+    `commit ${h}`,
+    `sha1=${h}`,
+    `cache_key=${h}`,
+    `memorySessionId=${rand(8, hex)}-1234-4abc-8def-${rand(12, hex)}`,
+    "SECRET_KEY=thisisnotarealsecretkeyvalue12345",
+  ]) {
+    assert.deepEqual(kinds(text), [], text);
+  }
+});
+
 test("finds OpenRouter keys", () => {
   const key = `sk-or-v1-${rand(64, "0123456789abcdef")}`;
   for (const text of [`use ${key} please`, `export OPENROUTER_API_KEY="${key}"`]) {

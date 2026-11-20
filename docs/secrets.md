@@ -66,7 +66,10 @@ name; the password alone in a Postgres, MySQL, Redis or AMQP URL (not a
 placeholder or a word); and, only beside their names, AWS secret access
 keys, Railway tokens (UUIDs) and Modal token secrets (`as-`, in a paragraph
 mentioning Modal). Provider rules run before betterleaks' generic ones
-(`curl-auth-header`), so they keep their kind. A generic rule takes long (≥32) tokens with
+(`curl-auth-header`), so they keep their kind. A key of 32 or more letters and
+digits beside a name that says it's secret (`API_KEY=`, `"client_secret":`,
+`DB_PASSWORD=`, any case) is taken even when it is hex or one case. A generic
+rule takes long (≥32) tokens, after any `NAME=`, with
 high entropy that mix upper case, lower case and digits, and are not hex,
 UUIDs, URLs, paths, or names with many dashes and underscores (base64url
 has about one in 32 characters; more than one in 12 is a name). False negatives are preferred over mangling normal

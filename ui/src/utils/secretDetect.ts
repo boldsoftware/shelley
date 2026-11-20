@@ -281,6 +281,17 @@ const PROVIDER_RULES: Rule[] = [
   ),
 ];
 
+// A key beside a name that says it's secret (API_KEY=…, "client_secret":
+// "…"), even of hex or one case, which the random-token rule skips (hashes,
+// IDs).
+const NAMED_SECRET = provider(
+  "named-secret",
+  "Secret",
+  assigned("(?:api[_-]?key|secret|token|passw(?:or)?d)", "[A-Za-z0-9]{32,128}"),
+  ["key", "secret", "token", "passw"],
+  (s) => hasDigit(s) && !wordy(s),
+);
+
 const RULES: Rule[] = [
   ...PROVIDER_RULES,
   ...KNOWN_RULES.map((r) => ({
@@ -295,6 +306,7 @@ const RULES: Rule[] = [
     allow: (r.allow ?? []).map(toAllow),
   })),
   ...SHELLEY_RULES,
+  NAMED_SECRET,
 ];
 
 // Every rule's keywords in one pass: a lookahead tries each position, and
@@ -402,8 +414,11 @@ function candidates(
   if (!tokens) return out;
   for (const m of text.matchAll(TOKEN_RE)) {
     if (text[m.index + m[0].length] === "@") continue;
-    if (!looksRandom(m[0])) continue;
-    out.push({ start: m.index, end: m.index + m[0].length, value: m[0], kind: "token" });
+    // = inside a run assigns (NAME=TOKEN); base64 has it only at the end.
+    const start = m.index + m[0].replace(/=+$/, "").lastIndexOf("=") + 1;
+    const value = text.slice(start, m.index + m[0].length);
+    if (!looksRandom(value)) continue;
+    out.push({ start, end: start + value.length, value, kind: "token" });
   }
   return out;
 }
