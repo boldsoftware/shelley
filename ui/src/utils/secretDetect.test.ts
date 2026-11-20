@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { GITLEAKS_RULES } from "../generated-secret-rules";
+import { KNOWN_RULES } from "../generated-secret-rules";
 import {
   detectSecrets,
   keywordsIn,
@@ -45,6 +45,16 @@ test("finds known formats", () => {
     ["sendgrid-api-token", `SG.${rand(22)}.${rand(43)}`],
     ["jwt", `eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.${rand(43)}`],
     ["token", "q8Zr3Kx0Vb7Nw2Lp5Tj9Hd4Fs6Gc1YmE4uW"],
+    // Newer than gitleaks' rules.
+    ["gcp-gemini-api", `AQ.Ab8RN6${rand(44)}`],
+    ["groq-api-key", `gsk_${rand(52)}`],
+    ["xai-api-key", `xai-${rand(80)}`],
+    ["togetherai-api-key", `tgp_v1_${rand(43)}`],
+    ["cerebras-api-key", `csk-${rand(48, "abcdefghijklmnopqrstuvwxyz0123456789")}`],
+    ["supabase-management-token", `sbp_${rand(38, "0123456789abcdef")}42`],
+    ["neon-api-key", `napi_${rand(64)}`],
+    ["vercel-personal-access-token", `vcp_${rand(56)}`],
+    ["buildkite-user-access-token", `bkua_${rand(40, "abcdefghijklmnopqrstuvwxyz0123456789")}`],
   ];
   for (const [kind, value] of keys) {
     assert.deepEqual(kinds(`use "${value}" please`), [[kind, value]], value);
@@ -52,7 +62,11 @@ test("finds known formats", () => {
   // Keyword rules take the value, not the name.
   const heroku = "12345678-abcd-4ef0-9876-0123456789ab";
   assert.deepEqual(kinds(`HEROKU_API_KEY=${heroku}`), [["heroku-api-key", heroku]]);
-  // gitleaks' own allowlist: AWS's documentation key.
+  // A word-like value isn't a key (betterleaks' tokenRatio).
+  const vercel = rand(24);
+  assert.deepEqual(kinds(`VERCEL_TOKEN=${vercel}`), [["vercel-api-token", vercel]]);
+  assert.deepEqual(kinds("VERCEL_TOKEN=thisisnotarealvercelkey1"), []);
+  // betterleaks' own allowlist: AWS's documentation key.
   assert.deepEqual(kinds("AKIA" + "IOSFODNN7EXAMPLE"), []);
 });
 
@@ -154,7 +168,7 @@ test("finds Luma keys", () => {
     // A secret- value away from any mention of Luma.
     `token secret-${bare} for the build`,
   ]) {
-    // gitleaks' curl-auth-header takes any value in a curl header.
+    // betterleaks' curl-auth-header takes any value in a curl header.
     assert.deepEqual(
       kinds(text).filter(([kind]) => kind.startsWith("luma")),
       [],
@@ -235,7 +249,7 @@ test("finds private keys", () => {
 });
 
 test("keywordsIn finds what includes does", () => {
-  const all = [...new Set(GITLEAKS_RULES.flatMap((r) => r.keywords))];
+  const all = [...new Set(KNOWN_RULES.flatMap((r) => r.keywords))];
   // Overlapping and nested keywords, in a mix of cases.
   const texts = [
     "Sk_Live_ hf_ey xoxb-xoxp T3BlbkFJ sgp_ -----BEGIN PuTTY-User-Key-File",

@@ -1,11 +1,11 @@
 // Secret detection for the composer (docs/secrets.md). Runs in the browser,
-// before text leaves it. Known formats (gitleaks' rules, generated into
+// before text leaves it. Known formats (betterleaks' rules, generated into
 // generated-secret-rules.ts, and a few of our own), a conservative rule for
 // long random tokens, and the manual {{secret=VALUE}} /
 // {{secret:NAME=VALUE}} marks.
 // False negatives beat mangled prose: the marks cover what this misses.
 
-import { GITLEAKS_ALLOW, GITLEAKS_RULES, type GitleaksAllow } from "../generated-secret-rules";
+import { KNOWN_ALLOW, KNOWN_RULES, type KnownAllow } from "../generated-secret-rules";
 
 export interface SecretFinding {
   start: number;
@@ -64,11 +64,15 @@ interface Rule {
   secretGroup: number;
   /** The secret's minimum entropy, in bits per character. */
   entropy: number;
+  /** Drop a secret made mostly of words (see wordy). */
+  wordy?: boolean;
+  /** Regexes the secret must each match. */
+  require?: RegExp[];
   allow: Allow[];
   ok?: (secret: string) => boolean;
 }
 
-function toAllow(a: GitleaksAllow): Allow {
+function toAllow(a: KnownAllow): Allow {
   return {
     match: a.match ?? false,
     regexes: (a.regexes ?? []).map((r) => new RegExp(r, "u")),
@@ -76,7 +80,7 @@ function toAllow(a: GitleaksAllow): Allow {
   };
 }
 
-const GLOBAL_ALLOW = toAllow(GITLEAKS_ALLOW);
+const GLOBAL_ALLOW = toAllow(KNOWN_ALLOW);
 
 // The flags rules run with: "d" for the secret's capture group offsets,
 // and a literal's "i".
@@ -95,10 +99,10 @@ const notName = (s: string) =>
     .join("").length <=
   s.length / 3;
 
-// Formats gitleaks (generated-secret-rules.ts) misses: a private key pasted
+// Formats betterleaks (generated-secret-rules.ts) misses: a private key pasted
 // without its END line (taken to the end of its base64 lines, which are
-// long or end in padding), and PuTTY's .ppk files. They run after gitleaks,
-// whose complete private keys win.
+// long or end in padding), and PuTTY's .ppk files. They run after
+// betterleaks, whose complete private keys win.
 const SHELLEY_RULES: Rule[] = [
   {
     kind: "private-key",
@@ -125,8 +129,8 @@ const SHELLEY_RULES: Rule[] = [
   },
 ];
 
-// Providers gitleaks misses. They run before gitleaks, whose generic rules
-// (curl-auth-header) would take their keys under a vaguer kind.
+// Providers betterleaks misses. They run before betterleaks, whose generic
+// rules (curl-auth-header) would take their keys under a vaguer kind.
 const PROVIDER_RULES: Rule[] = [
   // exe.dev (sshkey/token.go in exe): exe0.PAYLOAD.SIGBLOB, base64url, the
   // signature an SSHSIG blob; exe1. and 20 to 40 base32 characters (26 from
@@ -150,16 +154,6 @@ const PROVIDER_RULES: Rule[] = [
     allow: [],
     // A digit, so exe1.YOURTOKENGOESHERE isn't one; misses 1 in 220.
     ok: (s) => /[2-7]/.test(s),
-  },
-  // OpenRouter: sk-or-v1- and 64 hex digits, which the token rule skips.
-  {
-    kind: "openrouter-api-key",
-    label: "OpenRouter API key",
-    re: indexed(/(?<![\w-])sk-or-v[0-9]+-[0-9a-f]{64}(?![\w-])/),
-    keywords: ["sk-or-"],
-    secretGroup: 0,
-    entropy: 3,
-    allow: [],
   },
   // Luma AI (lumalabs.ai): luma-api-… (Agents API), luma-… (Dream Machine).
   {
@@ -192,21 +186,23 @@ const PROVIDER_RULES: Rule[] = [
 
 const RULES: Rule[] = [
   ...PROVIDER_RULES,
-  ...GITLEAKS_RULES.map((r) => ({
+  ...KNOWN_RULES.map((r) => ({
     kind: r.id,
     label: r.label,
     re: indexed(r.regex),
     keywords: r.keywords,
     secretGroup: r.secretGroup ?? 0,
     entropy: r.entropy ?? 0,
+    wordy: r.wordy,
+    require: (r.require ?? []).map((re) => new RegExp(re, "u")),
     allow: (r.allow ?? []).map(toAllow),
   })),
   ...SHELLEY_RULES,
 ];
 
 // Every rule's keywords in one pass: a lookahead tries each position, and
-// the longest keyword there implies the ones inside it (gitleaks' keyword
-// filter, without 230 scans of the text).
+// the longest keyword there implies the ones inside it (betterleaks' keyword
+// filter, without 400 scans of the text).
 const KEYWORDS = [...new Set(RULES.flatMap((r) => r.keywords))].sort((a, b) => b.length - a.length);
 const KEYWORD_RE = new RegExp(
   `(?=(${KEYWORDS.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")}))`,
@@ -245,6 +241,16 @@ function entropy(s: string): number {
   let h = 0;
   for (const n of counts.values()) h -= (n / s.length) * Math.log2(n / s.length);
   return h;
+}
+
+// Mostly words (betterleaks' tokenRatio, which counts BPE tokens): more
+// than 60% of it runs of 4 or more letters (camelCase split) that are at
+// least 35% vowels. Random letters are about 20% vowels; this takes 0.2% of
+// random lowercase-and-digit keys.
+export function wordy(s: string): boolean {
+  const runs = s.match(/[A-Z]?[a-z]{3,}|[A-Z]{4,}/g) ?? [];
+  const words = runs.filter((r) => (r.match(/[aeiou]/gi) ?? []).length >= r.length * 0.35);
+  return words.join("").length > s.length * 0.6;
 }
 
 // A long random token: 32 to 512 characters of base64/base62, with upper
@@ -290,6 +296,8 @@ function candidates(
       const value = text.slice(span[0], span[1]);
       if (value.length === 0 || entropy(value) < rule.entropy || (rule.ok && !rule.ok(value)))
         continue;
+      if (rule.wordy && wordy(value)) continue;
+      if (rule.require && !rule.require.every((re) => re.test(value))) continue;
       if ([GLOBAL_ALLOW, ...rule.allow].some((a) => allowed(a, value, m[0]))) continue;
       out.push({ start: span[0], end: span[1], value, kind: rule.kind });
     }

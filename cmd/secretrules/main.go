@@ -1,13 +1,15 @@
 // Command secretrules generates ui/src/generated-secret-rules.ts, the
-// composer's known-format secret rules (docs/secrets.md), from gitleaks'
+// composer's known-format secret rules (docs/secrets.md), from betterleaks'
 // default configuration:
 //
 //	go run ./cmd/secretrules -o ui/src/generated-secret-rules.ts
 //
-// It keeps the provider-specific rules: not generic-api-key (which flags
-// ordinary assignments) and not rules scoped to file paths. Go (RE2)
-// regular expressions are translated to JavaScript through their parsed
-// syntax tree, so case folding, classes and anchors keep their meaning.
+// It keeps the provider-specific rules: not the generic ones (which flag
+// ordinary assignments), component-only rules (IDs, URLs), or rules scoped
+// to file paths. Go (RE2) regular expressions are translated to JavaScript
+// through their parsed syntax tree, so case folding, classes and anchors
+// keep their meaning; filters (Expr) are translated term by term, and a
+// term this doesn't know fails the generation.
 package main
 
 import (
@@ -23,46 +25,48 @@ import (
 	"path/filepath"
 	"regexp"
 	"regexp/syntax"
+	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/BurntSushi/toml"
 )
 
-// The gitleaks release the rules come from.
-const version = "v8.30.1"
+// The betterleaks release the rules come from.
+const version = "v1.10.1"
 
-const source = "https://raw.githubusercontent.com/gitleaks/gitleaks/" + version + "/config/gitleaks.toml"
+const source = "https://raw.githubusercontent.com/betterleaks/betterleaks/" + version + "/config/betterleaks.toml"
 
-// Rules left out: generic-api-key matches any key = value with a random
-// value, which the composer's own random-token rule covers more
-// conservatively.
-var skip = map[string]bool{"generic-api-key": true}
+// Rules left out: the generic ones match any key = value, password or
+// URL with credentials, and box-api-access-token's filter reads the text
+// around the match. The composer's own random-token rule covers random
+// values more conservatively.
+var skip = map[string]bool{
+	"generic-api-key":        true,
+	"generic-credential-uri": true,
+	"generic-password":       true,
+	"generic-username":       true,
+	"box-api-access-token":   true,
+	"kubernetes-secret-yaml": true,
+}
 
 // The longest kind the server accepts (server/secrets.go): a secret's ID is
 // its kind and five characters, at most 64.
 const maxKind = 59
 
-type allowlist struct {
-	RegexTarget string   `toml:"regexTarget"`
-	Regexes     []string `toml:"regexes"`
-	Stopwords   []string `toml:"stopwords"`
-	Paths       []string `toml:"paths"`
-}
-
 type rule struct {
-	ID          string      `toml:"id"`
-	Regex       string      `toml:"regex"`
-	Path        string      `toml:"path"`
-	SecretGroup int         `toml:"secretGroup"`
-	Entropy     float64     `toml:"entropy"`
-	Keywords    []string    `toml:"keywords"`
-	Allowlists  []allowlist `toml:"allowlists"`
+	ID          string   `toml:"id"`
+	Regex       string   `toml:"regex"`
+	Path        string   `toml:"path"`
+	SecretGroup int      `toml:"secretGroup"`
+	Keywords    []string `toml:"keywords"`
+	Filter      string   `toml:"filter"`
+	SkipReport  bool     `toml:"skipReport"`
 }
 
 type config struct {
-	Allowlist allowlist `toml:"allowlist"`
-	Rules     []rule    `toml:"rules"`
+	Filter string `toml:"filter"`
+	Rules  []rule `toml:"rules"`
 }
 
 // The generated file's shapes, as JSON.
@@ -79,6 +83,8 @@ type jsRule struct {
 	Keywords    []string  `json:"keywords"`
 	SecretGroup int       `json:"secretGroup,omitempty"`
 	Entropy     float64   `json:"entropy,omitempty"`
+	Wordy       bool      `json:"wordy,omitempty"`
+	Require     []string  `json:"require,omitempty"`
 	Allow       []jsAllow `json:"allow,omitempty"`
 }
 
@@ -124,55 +130,60 @@ func generate(data []byte) ([]byte, error) {
 	if err := toml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
-	global, err := convertAllow(cfg.Allowlist)
+	global, err := parseFilter(cfg.Filter)
 	if err != nil {
-		return nil, fmt.Errorf("global allowlist: %w", err)
+		return nil, fmt.Errorf("global filter: %w", err)
+	}
+	if global.entropy != 0 || global.wordy || len(global.require) > 0 || global.match.Regexes != nil {
+		return nil, fmt.Errorf("global filter: only secret regexes and stopwords are supported")
 	}
 	var rules []jsRule
 	for _, r := range cfg.Rules {
-		if skip[r.ID] || r.Path != "" || r.Regex == "" {
+		if skip[r.ID] || r.SkipReport || r.Path != "" || r.Regex == "" {
 			continue
 		}
-		if len(r.ID) > maxKind || !regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`).MatchString(r.ID) {
+		// Variants of a rule are id.1, id.2: one kind.
+		kind := regexp.MustCompile(`\.[0-9]+$`).ReplaceAllString(r.ID, "")
+		if len(kind) > maxKind || !regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`).MatchString(kind) {
 			return nil, fmt.Errorf("rule id %q is not a valid secret kind", r.ID)
 		}
 		re, err := toJS(r.Regex, true)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", r.ID, err)
 		}
-		jr := jsRule{ID: r.ID, Label: label(r.ID), Regex: re, Keywords: lower(r.Keywords), SecretGroup: r.SecretGroup, Entropy: r.Entropy}
-		for _, a := range r.Allowlists {
-			if len(a.Regexes) == 0 && len(a.Stopwords) == 0 {
-				continue // path-only allowlists don't apply to typed text
+		f, err := parseFilter(r.Filter)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", r.ID, err)
+		}
+		jr := jsRule{ID: kind, Label: label(kind), Regex: re, Keywords: lower(r.Keywords), SecretGroup: r.SecretGroup,
+			Entropy: f.entropy, Wordy: f.wordy, Require: f.require}
+		for _, a := range []jsAllow{f.secret, f.match} {
+			if a.Regexes != nil || a.Stopwords != nil {
+				jr.Allow = append(jr.Allow, a)
 			}
-			ja, err := convertAllow(a)
-			if err != nil {
-				return nil, fmt.Errorf("%s allowlist: %w", r.ID, err)
-			}
-			jr.Allow = append(jr.Allow, ja)
 		}
 		rules = append(rules, jr)
 	}
 	var b bytes.Buffer
-	fmt.Fprintf(&b, `// Known secret formats, from gitleaks %s (config/gitleaks.toml).
+	fmt.Fprintf(&b, `// Known secret formats, from betterleaks %s (config/betterleaks.toml).
 // Generated by cmd/secretrules; do not edit. Regenerate with:
 //   go run ./cmd/secretrules -o ui/src/generated-secret-rules.ts
 //
-// Gitleaks is MIT licensed:
+// Betterleaks is MIT licensed:
 //
 `, version)
 	for _, line := range strings.Split(strings.TrimSpace(mitLicense), "\n") {
 		fmt.Fprintf(&b, "//   %s\n", line)
 	}
 	b.WriteString(`
-export interface GitleaksAllow {
+export interface KnownAllow {
   /** The regexes test the whole match, not the secret. */
   match?: boolean;
   regexes?: string[];
   stopwords?: string[];
 }
 
-export interface GitleaksRule {
+export interface KnownRule {
   id: string;
   label: string;
   /** JavaScript source, for the flags "dgu". */
@@ -184,14 +195,18 @@ export interface GitleaksRule {
   secretGroup?: number;
   /** The secret's minimum Shannon entropy, in bits per character. */
   entropy?: number;
-  allow?: GitleaksAllow[];
+  /** Drop a secret made mostly of words. */
+  wordy?: boolean;
+  /** Regexes the secret must each match. */
+  require?: string[];
+  allow?: KnownAllow[];
 }
 
 `)
 	for _, v := range []struct {
 		decl string
 		val  any
-	}{{"export const GITLEAKS_ALLOW: GitleaksAllow = ", global}, {"export const GITLEAKS_RULES: GitleaksRule[] = ", rules}} {
+	}{{"export const KNOWN_ALLOW: KnownAllow = ", global.secret}, {"export const KNOWN_RULES: KnownRule[] = ", rules}} {
 		j, err := json.MarshalIndent(v.val, "", "  ")
 		if err != nil {
 			return nil, err
@@ -202,28 +217,183 @@ export interface GitleaksRule {
 }
 
 // keyLike matches strings that look like live API keys to secret scanners
-// (gitleaks' allowlists hold example keys, e.g. Google's published ones).
+// (allowlists hold example keys, e.g. Google's published ones).
 // They are written with their first character escaped, so the source holds
 // no key-shaped literal and pushing it trips no scanner.
 var keyLike = regexp.MustCompile(`(sk-|AIza|AKIA|gh[pousr]_|github_pat_|[sr]k_live_)[A-Za-z0-9_-]{16,}`)
 
 func escapeFirst(s string) string { return fmt.Sprintf(`\u%04x`, s[0]) + s[1:] }
 
-func convertAllow(a allowlist) (jsAllow, error) {
-	ja := jsAllow{Match: a.RegexTarget == "match", Stopwords: lower(a.Stopwords)}
-	switch a.RegexTarget {
-	case "", "secret", "match":
-	default:
-		return ja, fmt.Errorf("regexTarget %q", a.RegexTarget)
+// filter is a translated filter (an Expr expression): a finding is dropped
+// when any of its || terms holds.
+type filter struct {
+	entropy float64
+	wordy   bool
+	require []string
+	secret  jsAllow
+	match   jsAllow
+}
+
+var (
+	entropyTerm = regexp.MustCompile(`^(?:filter\.)?entropy\(finding\["secret"\]\) <=? ([0-9.]+)$`)
+	// The secret's length per BPE token: high for words. The composer
+	// approximates it (secretDetect.ts, wordy).
+	ratioTerm = regexp.MustCompile(`^(?:filter\.)?tokenRatio\(finding\["secret"\]\) >= 2\.5$`)
+	listTerm  = regexp.MustCompile(`^(!?)(?:filter\.)?(matchesAny|containsAny)\((finding|attributes)\["(\w+)"\], \[([\s\S]*)\]\)$`)
+)
+
+func parseFilter(expr string) (filter, error) {
+	var f filter
+	terms, err := orTerms(expr)
+	if err != nil {
+		return f, err
 	}
-	for _, r := range a.Regexes {
-		re, err := toJS(r, false)
-		if err != nil {
-			return ja, err
+	for _, term := range terms {
+		if m := entropyTerm.FindStringSubmatch(term); m != nil {
+			if f.entropy, err = strconv.ParseFloat(m[1], 64); err != nil {
+				return f, err
+			}
+			continue
 		}
-		ja.Regexes = append(ja.Regexes, re)
+		if ratioTerm.MatchString(term) {
+			f.wordy = true
+			continue
+		}
+		m := listTerm.FindStringSubmatch(term)
+		if m == nil {
+			return f, fmt.Errorf("unsupported filter term %q", term)
+		}
+		not, fn, target := m[1] == "!", m[2], m[3]+"."+m[4]
+		if target == "attributes.path" && !not {
+			continue // typed text has no path
+		}
+		items, err := listItems(m[5])
+		if err != nil {
+			return f, fmt.Errorf("%q: %w", term, err)
+		}
+		switch {
+		case not && fn == "matchesAny" && target == "finding.secret":
+			for i, it := range items {
+				items[i] = "(?:" + it + ")"
+			}
+			re, err := toJS(strings.Join(items, "|"), false)
+			if err != nil {
+				return f, err
+			}
+			f.require = append(f.require, re)
+		case !not && fn == "matchesAny" && (target == "finding.secret" || target == "finding.match"):
+			a := &f.secret
+			if target == "finding.match" {
+				a = &f.match
+				a.Match = true
+			}
+			for _, it := range items {
+				re, err := toJS(it, false)
+				if err != nil {
+					return f, err
+				}
+				a.Regexes = append(a.Regexes, re)
+			}
+		case !not && fn == "containsAny" && target == "finding.secret":
+			f.secret.Stopwords = append(f.secret.Stopwords, lower(items)...)
+		default:
+			return f, fmt.Errorf("unsupported filter term %q", term)
+		}
 	}
-	return ja, nil
+	return f, nil
+}
+
+// orTerms splits an expression at its top-level ||, unwrapping
+// parenthesized disjunctions.
+func orTerms(expr string) ([]string, error) {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return nil, nil
+	}
+	var terms []string
+	depth, start := 0, 0
+	for i := 0; i < len(expr); i++ {
+		switch c := expr[i]; c {
+		case '`', '"':
+			j := i + 1
+			for ; j < len(expr) && expr[j] != c; j++ {
+				if c == '"' && expr[j] == '\\' {
+					j++
+				}
+			}
+			if j >= len(expr) {
+				return nil, fmt.Errorf("unterminated string in %q", expr)
+			}
+			i = j
+		case '(', '[':
+			depth++
+		case ')', ']':
+			depth--
+		case '|':
+			if depth == 0 && i+1 < len(expr) && expr[i+1] == '|' {
+				terms = append(terms, strings.TrimSpace(expr[start:i]))
+				start = i + 2
+				i++
+			}
+		}
+	}
+	terms = append(terms, strings.TrimSpace(expr[start:]))
+	if len(terms) == 1 && strings.HasPrefix(expr, "(") && strings.HasSuffix(expr, ")") {
+		if inner, err := orTerms(expr[1 : len(expr)-1]); err == nil && len(inner) > 1 {
+			return inner, nil
+		}
+	}
+	var out []string
+	for _, t := range terms {
+		if len(terms) > 1 && strings.HasPrefix(t, "(") && strings.HasSuffix(t, ")") {
+			inner, err := orTerms(t[1 : len(t)-1])
+			if err != nil {
+				return nil, err
+			}
+			if len(inner) > 1 {
+				out = append(out, inner...)
+				continue
+			}
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+// listItems parses a list's strings: `raw` or "quoted".
+func listItems(list string) ([]string, error) {
+	var items []string
+	for s := strings.TrimSpace(list); s != ""; {
+		var end int
+		switch s[0] {
+		case '`':
+			end = strings.IndexByte(s[1:], '`') + 2
+			if end == 1 {
+				return nil, fmt.Errorf("unterminated string")
+			}
+			items = append(items, s[1:end-1])
+		case '"':
+			for end = 1; end < len(s) && s[end] != '"'; end++ {
+				if s[end] == '\\' {
+					end++
+				}
+			}
+			end++
+			if end > len(s) {
+				return nil, fmt.Errorf("unterminated string")
+			}
+			it, err := strconv.Unquote(s[:end])
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, it)
+		default:
+			return nil, fmt.Errorf("unexpected %q in list", s)
+		}
+		s = strings.TrimSpace(s[end:])
+		s = strings.TrimSpace(strings.TrimPrefix(s, ","))
+	}
+	return items, nil
 }
 
 func lower(s []string) []string {
@@ -240,6 +410,10 @@ var acronyms = map[string]string{
 	"ca": "CA", "openai": "OpenAI", "github": "GitHub", "gitlab": "GitLab", "1password": "1Password",
 	"digitalocean": "DigitalOcean", "huggingface": "Hugging Face", "tf": "Terraform", "ptt": "PTT",
 	"rrt": "RRT", "ad": "AD", "pkcs12": "PKCS#12", "base64": "base64", "yaml": "YAML",
+	"ai": "AI", "sdk": "SDK", "gemini": "Gemini", "xai": "xAI", "openrouter": "OpenRouter",
+	"deepseek": "DeepSeek", "elevenlabs": "ElevenLabs", "togetherai": "Together AI", "voyageai": "Voyage AI",
+	"nvidia": "NVIDIA", "langchain": "LangChain", "langsmith": "LangSmith", "posthog": "PostHog",
+	"mongodb": "MongoDB", "dockerhub": "Docker Hub", "circleci": "CircleCI", "assemblyai": "AssemblyAI",
 }
 
 // label makes a rule id readable: github-pat is "GitHub PAT".
@@ -442,7 +616,7 @@ func printable(b *strings.Builder, r rune) {
 const mitLicense = `
 MIT License
 
-Copyright (c) 2019 Zachary Rice
+Copyright (c) 2026 Zachary Rice
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

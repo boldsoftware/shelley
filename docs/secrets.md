@@ -19,16 +19,25 @@ one tool to put the value where a command can use it.
 
 ## Detection (client side, `ui/src/utils/secretDetect.ts`)
 
-Known formats come from [gitleaks](https://github.com/gitleaks/gitleaks)'
-default rules (MIT): `go run ./cmd/secretrules -o
-ui/src/generated-secret-rules.ts` fetches a pinned release's
-`config/gitleaks.toml` and translates each Go regular expression to
-JavaScript through its parsed syntax tree. Each rule keeps gitleaks'
-keywords (a rule runs only on text containing one), capture group (only the
-secret is sealed, not `API_KEY=`), entropy threshold and allowlists (e.g.
-AWS's `…EXAMPLE` key). Left out: `generic-api-key`, which flags any
-`key = random` assignment, and rules scoped to file paths. The generator
-drops the optional runs (`[\w.-]{0,50}?`) that start gitleaks' keyword
+Known formats come from [betterleaks](https://github.com/betterleaks/betterleaks)'
+default rules (MIT; gitleaks' successor, by its author): `go run
+./cmd/secretrules -o ui/src/generated-secret-rules.ts` fetches a pinned
+release's `config/betterleaks.toml` and translates each Go regular
+expression to JavaScript through its parsed syntax tree. Each rule keeps
+betterleaks' keywords (a rule runs only on text containing one) and capture
+group (only the secret is sealed, not `API_KEY=`). Its filter, an Expr
+expression, is translated term by term: an entropy threshold; `tokenRatio`
+(a value of words, counted in BPE tokens) as the composer's `wordy`, which
+counts vowel-rich letter runs instead; `matchesAny` and `containsAny` on the
+secret or match as allowlists (e.g. AWS's `…EXAMPLE` key), and negated as
+patterns the secret must match. Terms on file paths are dropped; any other
+term fails the generation, so a release with new filter shapes needs a
+look. Left out: the generic rules (`generic-api-key`, `-password`,
+`-username`, `-credential-uri`), which flag any `key = random` assignment,
+rules whose filters read the text around the match, component-only rules
+(`skipReport`: IDs, hosts and URLs that complete another rule's finding;
+the primary rule is kept on its own), and rules scoped to file paths. The
+generator drops the optional runs (`[\w.-]{0,50}?`) that start keyword
 rules: they only move where a match starts, but make JavaScript's
 backtracking quadratic. One lookahead regex finds every rule keyword in a
 single pass. Bump the version in `cmd/secretrules` to update.
@@ -41,15 +50,14 @@ message. Only private keys, whose PEM and PGP blocks hold blank lines, are
 matched across the whole text. The composer also reuses the last result
 while the text is unchanged (caret moves).
 
-Our own rules add what gitleaks lacks: a private key pasted without its END
+Our own rules add what betterleaks lacks: a private key pasted without its END
 line, PuTTY `.ppk` keys, exe.dev tokens (`exe0.PAYLOAD.SIGBLOB` with an
 SSHSIG signature, and `exe1.` with 20 to 40 base32 characters, at least one
-a digit so all-letter placeholders aren't taken), OpenRouter keys (`sk-or-v1-` and 64 hex
-digits, which the random-token rule skips as hex), and Luma's keys. Luma AI keys start `luma-api-`
+a digit so all-letter placeholders aren't taken), and Luma's keys. Luma AI keys start `luma-api-`
 (Agents API) or `luma-` (Dream Machine); Luma events keys (luma.com) have no
 documented format, so they are taken only as the `x-luma-api-key` header or
 a `LUMA*_API_KEY` value, or as a `secret-…` value in a paragraph mentioning
-Luma. Provider rules run before gitleaks' generic ones (`curl-auth-header`),
+Luma. Provider rules run before betterleaks' generic ones (`curl-auth-header`),
 so they keep their kind. A generic rule takes long (≥32) tokens with
 high entropy that mix upper case, lower case and digits, and are not hex,
 UUIDs, URLs, paths, or names with many dashes and underscores (base64url

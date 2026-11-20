@@ -28,16 +28,29 @@ func TestToJS(t *testing.T) {
 
 func TestGenerate(t *testing.T) {
 	src, err := generate([]byte(`
-[allowlist]
-regexes = ['''^true$''', '''AIza` + `Sy0123456789abcdefghijklmnopqrstuvw''']
+filter = '''
+(matchesAny(finding["secret"], [
+  ` + "`^true$`, `AIza" + "Sy0123456789abcdefghijklmnopqrstuvw`" + `
+]) || containsAny(finding["secret"], ["abcdefghijklmnopqrstuvwxyz"]))
+'''
 [[rules]]
-id = "acme-token"
+id = "acme-token.1"
 regex = '''\b(acme_[a-z0-9]{8})\b'''
 keywords = ["ACME_"]
-entropy = 2
+filter = '''
+entropy(finding["secret"]) <= 2.5
+|| filter.tokenRatio(finding["secret"]) >= 2.5
+|| !matchesAny(finding["secret"], ["[0-9]"])
+|| matchesAny(finding["match"], [` + "`EXAMPLE`" + `])
+|| matchesAny(attributes["path"], [` + "`README`" + `])
+'''
 [[rules]]
 id = "generic-api-key"
 regex = '''x'''
+[[rules]]
+id = "acme-id"
+regex = '''y'''
+skipReport = true
 [[rules]]
 id = "acme-file"
 regex = '''y'''
@@ -47,16 +60,37 @@ path = '''\.acme$'''
 		t.Fatal(err)
 	}
 	s := string(src)
-	for _, want := range []string{`"id": "acme-token"`, `"label": "Acme token"`, `"keywords": [` + "\n      \"acme_\"", `"entropy": 2`, `"^true$"`, "MIT License"} {
+	for _, want := range []string{
+		`"id": "acme-token"`, `"label": "Acme token"`, `"keywords": [` + "\n      \"acme_\"", `"entropy": 2.5`,
+		`"wordy": true`, `"require": [` + "\n      \"[0-9]\"", `"match": true`, `"EXAMPLE"`,
+		`"^true$"`, `"stopwords": [` + "\n    \"abcdefghijklmnopqrstuvwxyz\"", "MIT License",
+	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %s in\n%s", want, s)
 		}
+	}
+	if strings.Contains(s, "README") {
+		t.Errorf("path filter generated:\n%s", s)
 	}
 	// Key-shaped strings are escaped (see keyLike).
 	if !strings.Contains(s, `"\u0041IzaSy0123456789`) {
 		t.Errorf("key-shaped stopword not escaped in\n%s", s)
 	}
-	if strings.Contains(s, "generic-api-key") || strings.Contains(s, "acme-file") {
-		t.Errorf("skipped rules generated:\n%s", s)
+	for _, id := range []string{"generic-api-key", "acme-id", "acme-file"} {
+		if strings.Contains(s, id) {
+			t.Errorf("skipped rule %s generated:\n%s", id, s)
+		}
+	}
+}
+
+func TestUnsupportedFilter(t *testing.T) {
+	_, err := generate([]byte(`
+[[rules]]
+id = "acme-token"
+regex = '''acme_[a-z]{8}'''
+filter = '''len(finding["secret"]) > 3'''
+`))
+	if err == nil || !strings.Contains(err.Error(), "unsupported filter term") {
+		t.Errorf("err = %v, want unsupported filter term", err)
 	}
 }
