@@ -105,6 +105,54 @@ test("finds exe.dev tokens", () => {
   }
 });
 
+test("finds formats betterleaks misses", () => {
+  const hex = "0123456789abcdef";
+  const b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const cases: Array<[string, string, string]> = [
+    ["gcp-gemini-api", `AQ.Ab8RN6${rand(44)}`, "GEMINI_API_KEY=%"],
+    [
+      "gcp-api-key",
+      `AIza${rand(35)}`,
+      "curl 'https://generativelanguage.googleapis.com/v1/models?key=%&alt=sse'",
+    ],
+    ["anthropic-oauth-token", `sk-ant-oat01-${rand(93)}AA`, "CLAUDE_CODE_OAUTH_TOKEN=%"],
+    ["tailscale-key", `tskey-auth-k${rand(12)}CNTRL-${rand(33)}`, "tailscale up --auth-key=%"],
+    ["jina-ai-api-key", `jina_${rand(60)}`, "use %"],
+    ["fireworks-api-key", `fw_3${rand(23)}`, "use %"],
+    ["elevenlabs-api-key", `sk_${rand(48, hex)}`, "use %"],
+    ["cursor-api-key", `key_${rand(64, hex)}`, "use %"],
+    ["resend-api-key", `re_${rand(8)}_${rand(24)}`, "use %"],
+    ["telegram-bot-api-token", `1234567890:AA${rand(33)}`, "https://api.telegram.org/bot%/getMe"],
+    [
+      "discord-webhook-url",
+      `https://discord.com/api/webhooks/123456789012345678/${rand(68)}`,
+      "curl -d '{}' %",
+    ],
+    ["database-password", rand(20), "DATABASE_URL=postgres://app:%@db.example.com:5432/app"],
+    ["database-password", `${rand(12)}!x`, "redis-cli -u rediss://default:%@cache:6379"],
+    ["aws-secret-access-key", `${rand(30, b64)}/${rand(9)}`, "aws_secret_access_key = %"],
+    ["aws-secret-access-key", `${rand(30, b64)}/${rand(9)}`, '{"SecretAccessKey": "%"}'],
+    ["railway-token", "8c1d5e4a-9b2f-4c3d-a1e6-7f0b2d9c4e81", "RAILWAY_TOKEN=%"],
+    ["modal-token-secret", `as-${rand(22)}`, "modal token set --token-id ak-x --token-secret %"],
+  ];
+  for (const [kind, value, text] of cases) {
+    const t = text.replace("%", value);
+    assert.deepEqual(kinds(t), [[kind, value]], t);
+  }
+  for (const text of [
+    "postgres://postgres:postgres@localhost/db",
+    "postgres://user:password@localhost/db",
+    "postgres://user:${DB_PASSWORD}@db/app",
+    "postgres://user:<password>@db/app",
+    "postgres://localhost:5432/app",
+    "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    "the as-yet-unnamed modal dialog",
+    "sk_" + "0".repeat(48),
+  ]) {
+    assert.deepEqual(kinds(text), [], text);
+  }
+});
+
 test("finds OpenRouter keys", () => {
   const key = `sk-or-v1-${rand(64, "0123456789abcdef")}`;
   for (const text of [`use ${key} please`, `export OPENROUTER_API_KEY="${key}"`]) {

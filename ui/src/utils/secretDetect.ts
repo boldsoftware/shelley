@@ -129,59 +129,156 @@ const SHELLEY_RULES: Rule[] = [
   },
 ];
 
-// Providers betterleaks misses. They run before betterleaks, whose generic
-// rules (curl-auth-header) would take their keys under a vaguer kind.
+// A provider rule: the secret is the first capture group that matched, or
+// the whole match, of at least 3 bits per character.
+function provider(
+  kind: string,
+  label: string,
+  re: RegExp,
+  keywords: string[],
+  ok?: (secret: string) => boolean,
+): Rule {
+  return { kind, label, re: indexed(re), keywords, secretGroup: 0, entropy: 3, allow: [], ok };
+}
+
+// A value assigned to a name: NAME=VALUE, NAME: "VALUE", "NAME": "VALUE".
+const assigned = (name: string, value: string, flags = "i") =>
+  new RegExp(
+    `${name}["'\`]?[ \\t]{0,3}(?::=|=>|[:=])[ \\t"'\`]{0,5}(${value})(?![\\w+/=-])`,
+    flags,
+  );
+
+// Providers betterleaks misses, or takes only beside the provider's name.
+// They run before betterleaks, whose generic rules (curl-auth-header) would
+// take their keys under a vaguer kind.
 const PROVIDER_RULES: Rule[] = [
   // exe.dev (sshkey/token.go in exe): exe0.PAYLOAD.SIGBLOB, base64url, the
   // signature an SSHSIG blob; exe1. and 20 to 40 base32 characters (26 from
-  // crypto/rand.Text).
-  {
-    kind: "exe-dev-token",
-    label: "exe.dev token",
-    re: indexed(/(?<![\w-])exe0\.[A-Za-z0-9_-]{2,}\.U1NIU0lH[A-Za-z0-9_-]{64,8000}(?![\w-])/),
-    keywords: ["exe0."],
-    secretGroup: 0,
-    entropy: 0,
-    allow: [],
-  },
-  {
-    kind: "exe-dev-token",
-    label: "exe.dev token",
-    re: indexed(/(?<![\w-])exe1\.[A-Z2-7]{20,40}(?![\w-])/),
-    keywords: ["exe1."],
-    secretGroup: 0,
-    entropy: 3,
-    allow: [],
-    // A digit, so exe1.YOURTOKENGOESHERE isn't one; misses 1 in 220.
-    ok: (s) => /[2-7]/.test(s),
-  },
+  // crypto/rand.Text). A digit, so exe1.YOURTOKENGOESHERE isn't one; misses
+  // 1 in 220.
+  provider(
+    "exe-dev-token",
+    "exe.dev token",
+    /(?<![\w-])exe0\.[A-Za-z0-9_-]{2,}\.U1NIU0lH[A-Za-z0-9_-]{64,8000}(?![\w-])/,
+    ["exe0."],
+  ),
+  provider(
+    "exe-dev-token",
+    "exe.dev token",
+    /(?<![\w-])exe1\.[A-Z2-7]{20,40}(?![\w-])/,
+    ["exe1."],
+    (s) => /[2-7]/.test(s),
+  ),
   // Luma AI (lumalabs.ai): luma-api-… (Agents API), luma-… (Dream Machine).
-  {
-    kind: "luma-ai-api-key",
-    label: "Luma AI API key",
-    re: indexed(/(?<![\w-])luma-(?:api-)?[A-Za-z0-9_-]{20,200}(?![\w-])/),
-    keywords: ["luma-"],
-    secretGroup: 0,
-    entropy: 3,
-    allow: [],
-    ok: (s) => notName(s.replace(/^luma-(?:api-)?/, "")),
-  },
+  provider(
+    "luma-ai-api-key",
+    "Luma AI API key",
+    /(?<![\w-])luma-(?:api-)?[A-Za-z0-9_-]{20,200}(?![\w-])/,
+    ["luma-"],
+    (s) => notName(s.replace(/^luma-(?:api-)?/, "")),
+  ),
   // Luma events (luma.com): the format isn't documented (keys are said to
   // start with secret-, too common alone), so only a value given as the
   // x-luma-api-key header or a LUMA*_API_KEY, or a secret-… key in a
   // paragraph about Luma.
-  {
-    kind: "luma-api-key",
-    label: "Luma API key",
-    re: indexed(
-      /(?:x-luma-api-key|\bluma(?:ai|_agents)?_api_key)["'`]?[ \t]{0,3}(?::=|=>|[:=])[ \t"'`=]{0,5}([A-Za-z0-9_-]{16,200})(?=[\s"'`;,)}]|\\[nr]|$)|(?<![\w-])(secret-[A-Za-z0-9_-]{16,200})(?![\w-])/i,
-    ),
-    keywords: ["luma"],
-    secretGroup: 0,
-    entropy: 3,
-    allow: [],
-    ok: (s) => notName(s.replace(/^secret-/i, "")),
-  },
+  provider(
+    "luma-api-key",
+    "Luma API key",
+    /(?:x-luma-api-key|\bluma(?:ai|_agents)?_api_key)["'`]?[ \t]{0,3}(?::=|=>|[:=])[ \t"'`=]{0,5}([A-Za-z0-9_-]{16,200})(?=[\s"'`;,)}]|\\[nr]|$)|(?<![\w-])(secret-[A-Za-z0-9_-]{16,200})(?![\w-])/i,
+    ["luma"],
+    (s) => notName(s.replace(/^secret-/i, "")),
+  ),
+  // Gemini: AI Studio makes only AQ. keys since May 2026, 53 characters;
+  // betterleaks wants AQ.Ab8RN6 and a quote or space after.
+  provider("gcp-gemini-api", "Gemini API key", /(?<![\w.-])AQ\.Ab[A-Za-z0-9_-]{48}(?![\w-])/, [
+    "aq.ab",
+  ]),
+  // A Google API key in a URL (?key=AIza…&alt=sse), which betterleaks
+  // skips: it wants a quote or space after.
+  provider("gcp-api-key", "GCP API key", /(?<=[?&]key=)AIza[\w-]{35}(?![\w-])/, ["aiza"]),
+  // Claude Code's OAuth tokens (claude setup-token) and refresh tokens.
+  provider(
+    "anthropic-oauth-token",
+    "Anthropic OAuth token",
+    /(?<![\w-])sk-ant-o[ar]t01-[\w-]{80,200}(?![\w-])/,
+    ["sk-ant-o"],
+  ),
+  // Tailscale (tailscale.com/docs/reference/key-prefixes): tskey-TYPE-,
+  // the key's ID, CNTRL- and the secret.
+  provider(
+    "tailscale-key",
+    "Tailscale key",
+    /(?<![\w-])tskey-(?:[a-z]+-)?k[A-Za-z0-9]{4,16}CNTRL-[A-Za-z0-9]{20,64}(?![\w-])/,
+    ["tskey-"],
+  ),
+  provider("jina-ai-api-key", "Jina AI API key", /(?<![\w-])jina_[\w-]{60}(?![\w-])/, ["jina_"]),
+  // Fireworks AI (trufflehog's detector): fw_ and 20 to 40 base62.
+  provider(
+    "fireworks-api-key",
+    "Fireworks API key",
+    /(?<![\w-])fw_[A-Za-z0-9]{20,40}(?![\w-])/,
+    ["fw_"],
+    mixed,
+  ),
+  // Formats betterleaks takes only beside the provider's name.
+  provider("elevenlabs-api-key", "ElevenLabs API key", /(?<![\w-])sk_[0-9a-f]{48}(?![\w-])/, [
+    "sk_",
+  ]),
+  provider("cursor-api-key", "Cursor API key", /(?<![\w-])key_[0-9a-f]{64}(?![\w-])/, ["key_"]),
+  provider(
+    "resend-api-key",
+    "Resend API key",
+    /(?<![\w-])re_[A-Za-z0-9]{8}_[A-Za-z0-9]{24}(?![\w-])/,
+    ["re_"],
+  ),
+  // Telegram: also in its API's URLs, /botTOKEN/getMe.
+  provider(
+    "telegram-bot-api-token",
+    "Telegram bot API token",
+    /(?:(?<=\/bot)|(?<![\w:]))[0-9]{8,10}:AA[\w-]{33}(?![\w-])/,
+    [":aa"],
+  ),
+  provider(
+    "discord-webhook-url",
+    "Discord webhook URL",
+    /https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/webhooks\/[0-9]{17,20}\/[\w-]{60,68}(?![\w-])/,
+    ["discord"],
+  ),
+  // A password in a database URL (postgres://user:PASSWORD@host), alone, so
+  // the URL stays readable; not a placeholder or a word, like
+  // postgres:postgres@localhost. MongoDB's are betterleaks'.
+  provider(
+    "database-password",
+    "Database password",
+    /\b(?:postgres(?:ql)?|mysql|mariadb|rediss?|amqps?):\/\/[^\s:/@'"`]{0,128}:([^\s/@'"`]{6,256})@[\w.[]/i,
+    ["postgres", "mysql", "mariadb", "redis", "amqp"],
+    (s) => !/[$%{}<>*]/.test(s) && notName(s),
+  ),
+  // An AWS secret access key beside its name (credentials file, env,
+  // JSON): its / and + keep it from the random-token rule. Not AWS's
+  // documentation key.
+  provider(
+    "aws-secret-access-key",
+    "AWS secret access key",
+    assigned("secret_?access_?key", "[A-Za-z0-9/+]{40}"),
+    ["secret_access_key", "secretaccesskey"],
+    (s) => !s.endsWith("EXAMPLEKEY"),
+  ),
+  // Railway tokens are UUIDs, and Modal's token secrets as-…: only beside
+  // their names.
+  provider(
+    "railway-token",
+    "Railway token",
+    assigned("\\bRAILWAY_(?:API_)?TOKEN", "[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}"),
+    ["railway_"],
+  ),
+  provider(
+    "modal-token-secret",
+    "Modal token secret",
+    /(?<![\w-])as-[A-Za-z0-9]{16,32}(?![\w-])/,
+    ["modal"],
+    (s) => /[0-9]/.test(s) && notName(s.slice(3)),
+  ),
 ];
 
 const RULES: Rule[] = [

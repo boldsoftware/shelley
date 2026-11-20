@@ -57,8 +57,16 @@ a digit so all-letter placeholders aren't taken), and Luma's keys. Luma AI keys 
 (Agents API) or `luma-` (Dream Machine); Luma events keys (luma.com) have no
 documented format, so they are taken only as the `x-luma-api-key` header or
 a `LUMA*_API_KEY` value, or as a `secret-…` value in a paragraph mentioning
-Luma. Provider rules run before betterleaks' generic ones (`curl-auth-header`),
-so they keep their kind. A generic rule takes long (≥32) tokens with
+Luma. They also add providers betterleaks misses: Gemini's `AQ.` keys and
+Google keys in URLs (`?key=AIza…&`), where betterleaks wants a quote or
+space after; Claude Code's OAuth tokens (`sk-ant-oat01-`), Tailscale keys,
+Jina and Fireworks keys; ElevenLabs, Cursor, Resend and Telegram bot keys and
+Discord webhook URLs, which betterleaks takes only beside the provider's
+name; the password alone in a Postgres, MySQL, Redis or AMQP URL (not a
+placeholder or a word); and, only beside their names, AWS secret access
+keys, Railway tokens (UUIDs) and Modal token secrets (`as-`, in a paragraph
+mentioning Modal). Provider rules run before betterleaks' generic ones
+(`curl-auth-header`), so they keep their kind. A generic rule takes long (≥32) tokens with
 high entropy that mix upper case, lower case and digits, and are not hex,
 UUIDs, URLs, paths, or names with many dashes and underscores (base64url
 has about one in 32 characters; more than one in 12 is a name). False negatives are preferred over mangling normal
