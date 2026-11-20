@@ -55,6 +55,11 @@ func TestMain(m *testing.M) {
 			panic(err)
 		}
 	}
+	// The resolver sets itself up on the process's first lookup. Done in a
+	// synctest bubble (one that, say, posts to http://localhost), that
+	// makes it the bubble's, and the next lookup outside it is fatal ("send
+	// on synctest channel from outside bubble"). So look up first here.
+	net.LookupHost("localhost")
 	code := m.Run()
 	os.RemoveAll(tmp)
 	os.Exit(code)
