@@ -302,7 +302,15 @@ test("an interrupted conversation keeps the context count in place on phones", a
   // Where the count sits in a conversation that isn't interrupted.
   const other = await createConversationViaAPIWithDetails(request, "echo usage");
   const count = page.locator(".context-usage-label-tokens:visible");
+  // The count arrives with the status slot that holds it, and the slot
+  // switches the phone composer to its grid, whose row gap is wider. The
+  // suite asks for reduced motion, and styles.css answers with a 0.01ms
+  // transition on every property, so the gap can still be the old one when
+  // the count first shows: wait for transitions to finish before measuring.
   const at = async () => {
+    await page.waitForFunction(() =>
+      document.getAnimations().every((animation) => !(animation instanceof CSSTransition)),
+    );
     const box = (await count.boundingBox())!;
     return [Math.round(box.x + box.width), Math.round(box.y)];
   };
