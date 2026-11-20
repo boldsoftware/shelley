@@ -468,8 +468,9 @@ type Manager struct {
 	chatGPT             *siwc.Manager
 }
 
-// GetWorkhorseService returns a service that uses a cheap model from the
-// conversation model's provider, falling back to the conversation model once.
+// GetWorkhorseService returns a service that uses a cheap model (preferring the
+// conversation model's provider/endpoint, then any available workhorse), falling
+// back to the conversation model once.
 func (m *Manager) GetWorkhorseService(conversationModelID string) (llm.Service, error) {
 	return m.getWorkhorseService(conversationModelID)
 }

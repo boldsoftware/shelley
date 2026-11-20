@@ -14,19 +14,32 @@ type workhorseFamily struct {
 	excludes []string
 }
 
-// workhorseFamilies identifies one cheap, fast model family per provider for
+// workhorseFamilies identifies cheap, fast model families per provider for
 // background tasks. The newest available release in the family is selected.
-var workhorseFamilies = map[Provider]workhorseFamily{
-	ProviderOpenAI:    {contains: "luna"},
-	ProviderAnthropic: {contains: "haiku"},
+var workhorseFamilies = map[Provider][]workhorseFamily{
+	ProviderOpenAI:    {{contains: "luna"}},
+	ProviderAnthropic: {{contains: "haiku"}},
 	ProviderGemini: {
-		contains: "flash",
-		excludes: []string{"lite", "image", "tts", "live", "omni"},
+		{
+			contains: "flash",
+			excludes: []string{"lite", "image", "tts", "live", "omni"},
+		},
+		{contains: "gemini-4-hydrogen"},
 	},
 	// DeepSeek's Flash line. Matched on "deepseek-v4" minus Pro rather than
 	// "deepseek-v4-flash" because the 4.1 release is "deepseek-v4.1-flash":
 	// the dot-versioned IDs do not share a literal "v4-flash" substring.
-	ProviderFireworks: {contains: "deepseek-v4", excludes: []string{"pro"}},
+	ProviderFireworks: {{contains: "deepseek-v4", excludes: []string{"pro"}}},
+}
+
+// workhorseFallbackProviders defines the deterministic order used when a
+// conversation model's provider has no matching workhorse of its own
+// (for example, xAI or a custom gateway model).
+var workhorseFallbackProviders = []Provider{
+	ProviderAnthropic,
+	ProviderOpenAI,
+	ProviderGemini,
+	ProviderFireworks,
 }
 
 type workhorseService struct {
@@ -111,17 +124,8 @@ func (m *Manager) getWorkhorseService(conversationModelID string) (llm.Service, 
 }
 
 func (m *Manager) GetWorkhorseServiceNoFallback(conversationModelID string) (llm.Service, error) {
-	modelID := m.GetWorkhorseModelID(conversationModelID)
-	info := m.GetModelInfo(modelID)
-	if info == nil {
-		return nil, fmt.Errorf("no workhorse model available (conversation model %q)", conversationModelID)
-	}
-	name := modelID
-	if info.SourceID != "" && info.APIModelName != "" {
-		name = info.APIModelName
-	}
-	family, ok := workhorseFamilies[info.Provider]
-	if !ok || !matchesWorkhorseFamily(name, family) {
+	modelID, ok := m.findWorkhorseModelID(conversationModelID)
+	if !ok {
 		return nil, fmt.Errorf("no workhorse model available (conversation model %q)", conversationModelID)
 	}
 	return m.GetService(modelID)
@@ -151,27 +155,78 @@ func (m *Manager) newWorkhorseService(modelID, conversationModelID string) (llm.
 }
 
 func (m *Manager) GetWorkhorseModelID(conversationModelID string) string {
+	if modelID, ok := m.findWorkhorseModelID(conversationModelID); ok {
+		return modelID
+	}
+	return conversationModelID
+}
+
+func (m *Manager) findWorkhorseModelID(conversationModelID string) (string, bool) {
 	info := m.GetModelInfo(conversationModelID)
-	if info == nil {
-		return conversationModelID
+	if info == nil || info.Provider == ProviderBuiltIn {
+		return "", false
 	}
-	family, ok := workhorseFamilies[info.Provider]
-	if !ok {
-		return conversationModelID
+	available := m.GetAvailableModels()
+
+	// 1. Prefer a workhorse on the conversation model's own provider and source.
+	if families, ok := workhorseFamilies[info.Provider]; ok {
+		if bestID := m.bestWorkhorse(available, func(modelID string, candidate *ModelInfo) bool {
+			return candidate.Provider == info.Provider &&
+				candidate.SourceID == info.SourceID &&
+				matchesAnyWorkhorseFamily(workhorseMatchName(modelID, candidate), families)
+		}); bestID != "" {
+			return bestID, true
+		}
+	} else if info.BaseURL != "" {
+		// 2. For custom gateway models (e.g. OpenRouter via openai-responses),
+		// prefer a same-endpoint workhorse from the same upstream vendor first.
+		wantVendor := upstreamModelVendor(workhorseMatchName(conversationModelID, info))
+		if wantVendor != "" {
+			if bestID := m.bestWorkhorse(available, func(modelID string, candidate *ModelInfo) bool {
+				name := workhorseMatchName(modelID, candidate)
+				return candidate.Provider == info.Provider &&
+					candidate.SourceID == info.SourceID &&
+					candidate.BaseURL == info.BaseURL &&
+					upstreamModelVendor(name) == wantVendor &&
+					matchesKnownWorkhorse(name)
+			}); bestID != "" {
+				return bestID, true
+			}
+		}
 	}
+
+	// 3. Broad fallback: pick the newest available cheap workhorse from any
+	// configured built-in provider, then any other available workhorse route.
+	for _, provider := range workhorseFallbackProviders {
+		families := workhorseFamilies[provider]
+		if bestID := m.bestWorkhorse(available, func(modelID string, candidate *ModelInfo) bool {
+			return candidate.Provider == provider &&
+				candidate.SourceID == "" &&
+				matchesAnyWorkhorseFamily(workhorseMatchName(modelID, candidate), families)
+		}); bestID != "" {
+			return bestID, true
+		}
+	}
+	if bestID := m.bestWorkhorse(available, func(modelID string, candidate *ModelInfo) bool {
+		if candidate.Provider == ProviderBuiltIn {
+			return false
+		}
+		if families, ok := workhorseFamilies[candidate.Provider]; ok {
+			return matchesAnyWorkhorseFamily(workhorseMatchName(modelID, candidate), families)
+		}
+		return matchesKnownWorkhorse(workhorseMatchName(modelID, candidate))
+	}); bestID != "" {
+		return bestID, true
+	}
+	return "", false
+}
+
+func (m *Manager) bestWorkhorse(available []string, match func(modelID string, candidate *ModelInfo) bool) string {
 	bestID := ""
 	bestDate := ""
-	for _, modelID := range m.GetAvailableModels() {
+	for _, modelID := range available {
 		candidate := m.GetModelInfo(modelID)
-		candidateName := modelID
-		// Saved routes have opaque IDs, so they match by upstream name; every
-		// other route matches by its registered ID, as before.
-		if candidate != nil && candidate.SourceID != "" && candidate.APIModelName != "" {
-			candidateName = candidate.APIModelName
-		}
-		if candidate == nil || candidate.Provider != info.Provider ||
-			candidate.SourceID != info.SourceID ||
-			!matchesWorkhorseFamily(candidateName, family) {
+		if candidate == nil || !match(modelID, candidate) {
 			continue
 		}
 		if bestID == "" || candidate.ReleaseDate > bestDate {
@@ -179,10 +234,43 @@ func (m *Manager) GetWorkhorseModelID(conversationModelID string) string {
 			bestDate = candidate.ReleaseDate
 		}
 	}
-	if bestID != "" {
-		return bestID
+	return bestID
+}
+
+func workhorseMatchName(modelID string, info *ModelInfo) string {
+	// Saved provider routes and custom models may have opaque or gateway-suffixed
+	// IDs, so match by their upstream API model name when available.
+	if info != nil && (info.SourceID != "" || info.Source == SourceCustomLabel) && info.APIModelName != "" {
+		return info.APIModelName
 	}
-	return conversationModelID
+	return modelID
+}
+
+func upstreamModelVendor(name string) string {
+	trimmed := strings.TrimPrefix(name, "~")
+	vendor, _, ok := strings.Cut(trimmed, "/")
+	if !ok {
+		return ""
+	}
+	return vendor
+}
+
+func matchesKnownWorkhorse(modelID string) bool {
+	for _, provider := range workhorseFallbackProviders {
+		if matchesAnyWorkhorseFamily(modelID, workhorseFamilies[provider]) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesAnyWorkhorseFamily(modelID string, families []workhorseFamily) bool {
+	for _, family := range families {
+		if matchesWorkhorseFamily(modelID, family) {
+			return true
+		}
+	}
+	return false
 }
 
 func matchesWorkhorseFamily(modelID string, family workhorseFamily) bool {

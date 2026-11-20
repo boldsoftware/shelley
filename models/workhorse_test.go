@@ -359,6 +359,86 @@ func TestWorkhorseClampsExplicitReasoningMapWithoutOff(t *testing.T) {
 	}
 }
 
+func TestWorkhorseCustomGatewayAndCrossProviderFallback(t *testing.T) {
+	openRouterURL := "https://openrouter.int.exe.xyz/api/v1"
+	neonSvc := &recordingService{provider: "openai-responses"}
+	hydrogenSvc := &recordingService{provider: "openai-responses"}
+	kimiSvc := &recordingService{provider: "openai-responses"}
+	haikuSvc := &recordingService{provider: "anthropic"}
+	lunaSvc := &recordingService{provider: "openai"}
+	grokSvc := &recordingService{provider: "xai"}
+	predictableSvc := &recordingService{provider: "builtin"}
+
+	manager := newWorkhorseManager(
+		t,
+		Built{
+			ID: "gemini-4-neon-openrouter", Provider: Provider("openai-responses"),
+			Source: SourceCustomLabel, BaseURL: openRouterURL, APIModelName: "google/gemini-4-neon",
+			Service: neonSvc,
+		},
+		Built{
+			ID: "gemini-4-hydrogen-openrouter", Provider: Provider("openai-responses"),
+			Source: SourceCustomLabel, BaseURL: openRouterURL, APIModelName: "google/gemini-4-hydrogen",
+			Service: hydrogenSvc,
+		},
+		Built{
+			ID: "kimi-k3-1-pro-openrouter", Provider: Provider("openai-responses"),
+			Source: SourceCustomLabel, BaseURL: openRouterURL, APIModelName: "moonshotai/kimi-k3.1-pro",
+			Service: kimiSvc,
+		},
+		Built{ID: "claude-haiku-5.5", Provider: ProviderAnthropic, ReleaseDate: "2026-10-07", Service: haikuSvc},
+		Built{ID: "gpt-6-luna", Provider: ProviderOpenAI, ReleaseDate: "2026-10-01", Service: lunaSvc},
+		Built{ID: "grok-4.5", Provider: ProviderXAI, Service: grokSvc},
+		Built{ID: "predictable", Provider: ProviderBuiltIn, Service: predictableSvc},
+	)
+
+	for _, tc := range []struct {
+		conversationModel string
+		want              string
+		wantNoFallbackErr bool
+	}{
+		// Same-endpoint, same-vendor Gemini 4 -> Gemini 4 Hydrogen.
+		{"gemini-4-neon-openrouter", "gemini-4-hydrogen-openrouter", false},
+		{"gemini-4-hydrogen-openrouter", "gemini-4-hydrogen-openrouter", false},
+		// Custom model without same-vendor workhorse falls back to built-in workhorse.
+		{"kimi-k3-1-pro-openrouter", "claude-haiku-5.5", false},
+		// Built-in provider without its own workhorse family falls back to available workhorse.
+		{"grok-4.5", "claude-haiku-5.5", false},
+		// Built-in test model never routes background tasks to external providers.
+		{"predictable", "predictable", true},
+	} {
+		if got := manager.GetWorkhorseModelID(tc.conversationModel); got != tc.want {
+			t.Errorf("GetWorkhorseModelID(%q) = %q, want %q", tc.conversationModel, got, tc.want)
+		}
+		_, err := manager.GetWorkhorseServiceNoFallback(tc.conversationModel)
+		if (err != nil) != tc.wantNoFallbackErr {
+			t.Errorf("GetWorkhorseServiceNoFallback(%q) err = %v, wantErr=%v", tc.conversationModel, err, tc.wantNoFallbackErr)
+		}
+	}
+
+	// When no built-in workhorse is configured, fallback can still use an available
+	// custom workhorse (e.g. OpenRouter-only setup).
+	openRouterOnly := newWorkhorseManager(
+		t,
+		Built{
+			ID: "kimi-k3-1-pro-openrouter", Provider: Provider("openai-responses"),
+			Source: SourceCustomLabel, BaseURL: openRouterURL, APIModelName: "moonshotai/kimi-k3.1-pro",
+			Service: kimiSvc,
+		},
+		Built{
+			ID: "gemini-4-hydrogen-openrouter", Provider: Provider("openai-responses"),
+			Source: SourceCustomLabel, BaseURL: openRouterURL, APIModelName: "google/gemini-4-hydrogen",
+			Service: hydrogenSvc,
+		},
+	)
+	if got := openRouterOnly.GetWorkhorseModelID("kimi-k3-1-pro-openrouter"); got != "gemini-4-hydrogen-openrouter" {
+		t.Errorf("openRouterOnly GetWorkhorseModelID = %q, want gemini-4-hydrogen-openrouter", got)
+	}
+	if _, err := openRouterOnly.GetWorkhorseServiceNoFallback("kimi-k3-1-pro-openrouter"); err != nil {
+		t.Errorf("openRouterOnly GetWorkhorseServiceNoFallback err = %v, want nil", err)
+	}
+}
+
 func assertReasoningDisabled(t *testing.T, req *llm.Request) {
 	t.Helper()
 	if req == nil {
