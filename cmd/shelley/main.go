@@ -796,10 +796,16 @@ func printModels(w io.Writer, built []models.Built, defaultID string, custom []g
 }
 
 // systemdListeners returns the listeners systemd passed by socket
-// activation: LISTEN_FDS of them, starting at fd 3.
+// activation: LISTEN_FDS of them, starting at fd 3. It unsets the LISTEN_*
+// variables, as sd_listen_fds does, so that child processes do not mistake
+// themselves for socket-activated.
 func systemdListeners() ([]net.Listener, error) {
+	pidStr, fdsStr := os.Getenv("LISTEN_PID"), os.Getenv("LISTEN_FDS")
+	for _, k := range []string{"LISTEN_PID", "LISTEN_FDS", "LISTEN_FDNAMES", "LISTEN_PIDFDID"} {
+		os.Unsetenv(k)
+	}
+
 	// Check LISTEN_PID matches our PID (optional but recommended)
-	pidStr := os.Getenv("LISTEN_PID")
 	if pidStr != "" {
 		pid, err := strconv.Atoi(pidStr)
 		if err != nil {
@@ -811,7 +817,6 @@ func systemdListeners() ([]net.Listener, error) {
 	}
 
 	// Get the number of file descriptors passed
-	fdsStr := os.Getenv("LISTEN_FDS")
 	if fdsStr == "" {
 		return nil, fmt.Errorf("LISTEN_FDS not set; not running under systemd socket activation")
 	}

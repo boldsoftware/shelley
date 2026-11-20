@@ -584,13 +584,9 @@ func TestCLICommands(t *testing.T) {
 }
 
 func TestSystemdListenerErrors(t *testing.T) {
-	// Save original environment
-	origPID := os.Getenv("LISTEN_PID")
-	origFDs := os.Getenv("LISTEN_FDS")
-	defer func() {
-		os.Setenv("LISTEN_PID", origPID)
-		os.Setenv("LISTEN_FDS", origFDs)
-	}()
+	for _, k := range []string{"LISTEN_PID", "LISTEN_FDS", "LISTEN_FDNAMES", "LISTEN_PIDFDID"} {
+		t.Setenv(k, "") // restored after the test
+	}
 
 	t.Run("no LISTEN_FDS", func(t *testing.T) {
 		os.Unsetenv("LISTEN_FDS")
@@ -607,12 +603,21 @@ func TestSystemdListenerErrors(t *testing.T) {
 	t.Run("wrong LISTEN_PID", func(t *testing.T) {
 		os.Setenv("LISTEN_FDS", "1")
 		os.Setenv("LISTEN_PID", "99999999") // Unlikely to match our PID
+		os.Setenv("LISTEN_FDNAMES", "shelley.socket")
+		os.Setenv("LISTEN_PIDFDID", "1")
 		_, err := systemdListeners()
 		if err == nil {
 			t.Fatal("Expected error when LISTEN_PID doesn't match")
 		}
 		if !strings.Contains(err.Error(), "does not match current PID") {
 			t.Errorf("Unexpected error message: %v", err)
+		}
+		// Children (agent shells, an sshd they start) must not think
+		// systemd activated them, whatever became of the listeners.
+		for _, k := range []string{"LISTEN_PID", "LISTEN_FDS", "LISTEN_FDNAMES", "LISTEN_PIDFDID"} {
+			if v, ok := os.LookupEnv(k); ok {
+				t.Errorf("%s=%q still set", k, v)
+			}
 		}
 	})
 
