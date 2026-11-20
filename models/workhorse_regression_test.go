@@ -464,8 +464,10 @@ func TestWorkhorseTextModalities(t *testing.T) {
 				t.Fatalf("catalog fixture known = %v, want %v", known, tc.known)
 			}
 			manager := newWorkhorseManager(t,
-				Built{ID: "opaque-candidate", Provider: ProviderOpenAI, Source: SourceCustomLabel,
-					BaseURL: tc.endpoint, APIModelName: tc.wire, ReleaseDate: "2026-10-01"},
+				Built{
+					ID: "opaque-candidate", Provider: ProviderOpenAI, Source: SourceCustomLabel,
+					BaseURL: tc.endpoint, APIModelName: tc.wire, ReleaseDate: "2026-10-01",
+				},
 				Built{ID: "private-fallback", Provider: ProviderOpenAI, ReleaseDate: "2026-01-01"},
 			)
 			want := "private-fallback"
