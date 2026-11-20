@@ -1674,7 +1674,7 @@ func (s *Server) generateSlugAsync(conversationID, source, modelID string) {
 		return
 	}
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 		defer cancel()
 		_, marker, err := slug.GenerateSlug(ctx, s.llmManager, s.db, s.logger, conversationID, source, modelID)
 		if marker != nil {

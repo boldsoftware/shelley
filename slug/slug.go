@@ -102,7 +102,7 @@ func generateSlugText(ctx context.Context, llmProvider LLMServiceProvider, userM
 		}},
 	}
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	service, err := llmProvider.GetWorkhorseService(conversationModelID)

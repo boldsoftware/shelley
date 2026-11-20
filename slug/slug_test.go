@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/llm"
@@ -498,6 +499,7 @@ type recordingProvider struct {
 	MockLLMService
 	modelID string
 	request *llm.Request
+	ctx     context.Context
 }
 
 func (p *recordingProvider) GetWorkhorseService(modelID string) (llm.Service, error) {
@@ -505,8 +507,9 @@ func (p *recordingProvider) GetWorkhorseService(modelID string) (llm.Service, er
 	return p, nil
 }
 
-func (p *recordingProvider) Do(_ context.Context, req *llm.Request) (*llm.Response, error) {
+func (p *recordingProvider) Do(ctx context.Context, req *llm.Request) (*llm.Response, error) {
 	p.request = req
+	p.ctx = ctx
 	return &llm.Response{Content: llm.TextContent("my-slug")}, nil
 }
 
@@ -525,6 +528,37 @@ func TestGenerateSlugTextUsesWorkhorseService(t *testing.T) {
 	}
 	if provider.request == nil {
 		t.Fatal("workhorse request was not provided")
+	}
+}
+
+func TestGenerateSlugTextDeadline(t *testing.T) {
+	for _, parentBudget := range []time.Duration{time.Minute, 5 * time.Second} {
+		t.Run(parentBudget.String(), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), parentBudget)
+			defer cancel()
+			parentDeadline, _ := ctx.Deadline()
+			provider := &recordingProvider{}
+			before := time.Now()
+			_, err := generateSlugText(ctx, provider, "some message", "test-model")
+			after := time.Now()
+			if err != nil {
+				t.Fatal(err)
+			}
+			deadline, ok := provider.ctx.Deadline()
+			if !ok {
+				t.Fatal("slug request has no deadline")
+			}
+			if parentBudget < 30*time.Second {
+				if !deadline.Equal(parentDeadline) {
+					t.Fatalf("deadline = %v, want parent deadline %v", deadline, parentDeadline)
+				}
+			} else if deadline.Before(before.Add(30*time.Second)) || deadline.After(after.Add(30*time.Second)) {
+				t.Fatalf("deadline = %v, want 30 seconds from request start", deadline)
+			}
+			if provider.ctx.Err() != context.Canceled {
+				t.Fatalf("request context error = %v, want canceled after return", provider.ctx.Err())
+			}
+		})
 	}
 }
 

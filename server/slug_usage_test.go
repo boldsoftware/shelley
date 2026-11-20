@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,38 @@ import (
 	"shelley.exe.dev/llm/predictable"
 	"shelley.exe.dev/models"
 )
+
+type slugDeadlineService struct {
+	llm.Service
+	seen chan context.Context
+}
+
+func (s *slugDeadlineService) Do(ctx context.Context, _ *llm.Request) (*llm.Response, error) {
+	s.seen <- ctx
+	return nil, errors.New("deadline recorded")
+}
+
+func TestGenerateSlugAsyncDeadline(t *testing.T) {
+	svr, database, _ := newTestServer(t)
+	id := seedConversation(t, database, 0)
+	service := &slugDeadlineService{Service: predictable.NewService(), seen: make(chan context.Context, 1)}
+	svr.llmManager = &testLLMManager{service: service}
+	before := time.Now()
+	svr.generateSlugAsync(id, "hello", "predictable")
+	select {
+	case ctx := <-service.seen:
+		after := time.Now()
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			t.Fatal("slug request has no deadline")
+		}
+		if deadline.Before(before.Add(30*time.Second)) || deadline.After(after.Add(30*time.Second)) {
+			t.Fatalf("deadline = %v, want 30 seconds from request start", deadline)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("slug request never started")
+	}
+}
 
 // newUsageCollectingServer builds a Server whose LLM goes through a real
 // models.Manager. The shared newTestServer hands out the predictable service

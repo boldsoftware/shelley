@@ -29,8 +29,8 @@ func (s *chapterTestService) Do(_ context.Context, req *llm.Request) (*llm.Respo
 	if s.onRequest != nil {
 		s.onRequest()
 	}
-	if len(req.Tools) != 0 || req.ThinkingLevel != llm.ThinkingLevelMedium {
-		return nil, errors.New("chapter request must have no tools and medium thinking")
+	if len(req.Tools) != 0 || req.ThinkingLevel != llm.ThinkingLevelLow {
+		return nil, errors.New("chapter request must have no tools and low thinking")
 	}
 	if s.err != nil {
 		return nil, s.err
