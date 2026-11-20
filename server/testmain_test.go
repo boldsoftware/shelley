@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -26,6 +27,7 @@ func TestMain(m *testing.M) {
 	// network calls. Tests that exercise reflection override this explicitly.
 	setReflectionHTTPClient(&http.Client{Transport: defaultPortTestTransport{}})
 	refuseLinkLocalDials()
+	promptSudoAvailable = func() bool { return false } // see TestSystemPromptRunsNoSudo
 	// Isolate from any host-wide git config (e.g. core.hooksPath that
 	// enforces commit-message policy on agent-driven commits) so tests
 	// that invoke `git commit` behave deterministically.
@@ -113,5 +115,24 @@ func TestRequestsToIntegrationsFailFast(t *testing.T) {
 		if err := refuseLinkLocal("tcp", address, nil); (err != nil) != refused {
 			t.Errorf("refuseLinkLocal(%q) = %v, want refused %t", address, err, refused)
 		}
+	}
+}
+
+// Generating a system prompt runs no sudo in server tests. A slow sudo on
+// the host (PAM, logging, name lookups) otherwise stalls every top-level
+// prompt, and whatever waits on one: a subagent's message_parent hydrating
+// its parent outlasted the tests' waits on CI.
+func TestSystemPromptRunsNoSudo(t *testing.T) {
+	bin := t.TempDir()
+	ran := filepath.Join(t.TempDir(), "ran")
+	if err := os.WriteFile(filepath.Join(bin, "sudo"), []byte("#!/bin/sh\ntouch '"+ran+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if _, err := GenerateSystemPrompt(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(ran); err == nil {
+		t.Fatal("system prompt generation ran sudo")
 	}
 }

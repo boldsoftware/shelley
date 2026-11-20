@@ -906,7 +906,7 @@ func collectSystemData(workingDir string, integrationSkills []skills.Skill) (*Sy
 	}()
 
 	// Run the remaining cheap synchronous probes while the walks are in flight.
-	data.IsSudoAvailable = isSudoAvailable()
+	data.IsSudoAvailable = promptSudoAvailable()
 	if data.IsExeDev {
 		if hostname, err := os.Hostname(); err == nil {
 			// If hostname doesn't contain dots, add .exe.xyz suffix
@@ -1157,6 +1157,11 @@ func resolveAndNormalize(path string) string {
 	}
 	return strings.ToLower(path)
 }
+
+// promptSudoAvailable is isSudoAvailable for the system prompt, which every
+// new top-level conversation asks. Server tests replace it: sudo's latency
+// is the host's (PAM, logging, name lookups), seconds on a busy CI host.
+var promptSudoAvailable = isSudoAvailable
 
 func isSudoAvailable() bool {
 	cmd := exec.Command("sudo", "-n", "id")
