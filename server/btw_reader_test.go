@@ -34,6 +34,12 @@ type heldLLMService struct {
 	mu      sync.Mutex
 	calls   map[string][]*heldLLMCall
 	changed chan struct{}
+	arrived []heldArrival // every call, in order, for a timed-out wait to report
+}
+
+type heldArrival struct {
+	at   time.Time
+	text string
 }
 
 func newHeldLLMService() *heldLLMService {
@@ -49,6 +55,7 @@ func (s *heldLLMService) Do(ctx context.Context, request *llm.Request) (*llm.Res
 	text := lastRequestUserText(request)
 	s.mu.Lock()
 	s.calls[text] = append(s.calls[text], call)
+	s.arrived = append(s.arrived, heldArrival{time.Now(), text})
 	close(s.changed)
 	s.changed = make(chan struct{})
 	s.mu.Unlock()
@@ -62,6 +69,7 @@ func (s *heldLLMService) Do(ctx context.Context, request *llm.Request) (*llm.Res
 
 func (s *heldLLMService) waitCall(t *testing.T, text string) *heldLLMCall {
 	t.Helper()
+	started := time.Now()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	for {
@@ -77,7 +85,50 @@ func (s *heldLLMService) waitCall(t *testing.T, text string) *heldLLMCall {
 		select {
 		case <-changed:
 		case <-ctx.Done():
+			s.reportTimeout(t, text, started)
 			t.Fatalf("timed out waiting for LLM call %q", text)
+		}
+	}
+}
+
+// reportTimeout logs what a wait that timed out had seen: every call that
+// arrived, when, and where its text departs from the one waited for. It then
+// watches twenty seconds more, to tell a call that came late from one that
+// never came. These waits have timed out on a loaded CI machine with nothing
+// to say which it was.
+func (s *heldLLMService) reportTimeout(t *testing.T, text string, started time.Time) {
+	t.Helper()
+	report := func(when string) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		t.Logf("%s: %dms into the wait, %d calls had arrived", when, time.Since(started).Milliseconds(), len(s.arrived))
+		for _, a := range s.arrived {
+			difference := "the text waited for"
+			if a.text != text {
+				i := 0
+				for i < len(text) && i < len(a.text) && text[i] == a.text[i] {
+					i++
+				}
+				difference = fmt.Sprintf("differs at byte %d: want %.60q, got %.60q", i, text[i:], a.text[i:])
+			}
+			t.Logf("  a call at %+dms: %s", a.at.Sub(started).Milliseconds(), difference)
+		}
+	}
+	report("at the deadline")
+	late := time.After(20 * time.Second)
+	for {
+		s.mu.Lock()
+		n, changed := len(s.calls[text]), s.changed
+		s.mu.Unlock()
+		if n > 0 {
+			report("the call arrived late")
+			return
+		}
+		select {
+		case <-changed:
+		case <-late:
+			report("no such call 20s after the deadline")
+			return
 		}
 	}
 }
