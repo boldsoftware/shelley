@@ -31,6 +31,7 @@ import (
 	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
+	"shelley.exe.dev/embedjs"
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/mcp"
 	"shelley.exe.dev/modelproviders"
@@ -759,6 +760,13 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/model-upgrade/prompt-dismissed", s.handleDismissUpgradePrompt)
 	api.Handle("GET /api/models", compressionHandler(http.HandlerFunc(s.handleModels)))
 	api.HandleFunc("GET /api/tools", s.handleTools)
+
+	// The script a page includes to dock Shelley in a pane (package embedjs).
+	mux.HandleFunc("GET /embed.js", embedjs.ServeHTTP)
+	// The origins whose pages may frame Shelley with it.
+	api.HandleFunc("GET /api/embed-origins", s.writeEmbedOrigins)
+	api.HandleFunc("POST /api/embed-origins", s.handleAddEmbedOrigin)
+	api.HandleFunc("DELETE /api/embed-origins", s.handleDeleteEmbedOrigin)
 
 	// Version endpoints
 	mux.HandleFunc("GET /version", s.handleVersion)
@@ -2170,7 +2178,7 @@ func (s *Server) tcpHandler(mux http.Handler) http.Handler {
 	if s.requireHeader != "" {
 		h = RequireHeaderMiddleware(s.requireHeader)(h)
 	}
-	return sameOriginFramingOnly(h)
+	return s.framingPolicy(h)
 }
 
 // rememberWebOrigin, in workspace mode, records the origin the user's

@@ -30,6 +30,7 @@ import (
 	"shelley.exe.dev/claudetool/browse"
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
+	"shelley.exe.dev/exeenv"
 	"shelley.exe.dev/gitstate"
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/models"
@@ -543,7 +544,7 @@ func (s *Server) staticHandler(fsys http.FileSystem) http.Handler {
 				contentType = "font/woff2"
 			}
 			w.Header().Set("Content-Type", contentType)
-			w.Header().Set("Vary", "Accept-Encoding")
+			w.Header().Add("Vary", "Accept-Encoding")
 			// Use must-revalidate so browsers check ETag on each request.
 			// We can't use immutable since we don't have content-hashed filenames.
 			w.Header().Set("Cache-Control", "public, max-age=0, must-revalidate")
@@ -680,6 +681,12 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		initData["links"] = []Link{
 			{Title: hostname, URL: "https://" + hostname, IconSVG: extIcon},
 			{Title: "Manage on exe.dev", URL: "https://exe.dev/vm/" + short, IconSVG: homeIcon},
+		}
+		// Where exe.dev's proxy serves this VM's Shelley, which it lets the
+		// VM's pages frame; Edit with Shelley shows its snippet there. The
+		// hostname, unlike exeenv's VM name, follows a rename.
+		if env, err := exeenv.Current(); err == nil {
+			initData["exe_dev_shelley_host"] = env.ShelleyHost(short)
 		}
 	}
 
@@ -2248,7 +2255,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Vary", "Accept-Encoding")
+	w.Header().Add("Vary", "Accept-Encoding")
 
 	// Compress SSE stream when the client accepts gzip or zstd. We keep a
 	// single gzip/zstd stream for the lifetime of the response and Flush()

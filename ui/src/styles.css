@@ -17261,7 +17261,8 @@ kbd {
 .bookmarklet-modal {
   max-width: 26rem;
 }
-.bookmarklet-help {
+.bookmarklet-help,
+.embed-help {
   margin: 0 0 1rem;
   color: var(--text-secondary);
 }
@@ -17276,14 +17277,52 @@ kbd {
   text-decoration: none;
   cursor: grab;
 }
-.bookmarklet-sites-title {
+.bookmarklet-sites-title,
+.embed-sites-title {
   margin: 1.5rem 0 0.5rem;
 }
-.bookmarklet-sites li {
+.bookmarklet-sites li,
+.embed-sites li {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  overflow-wrap: anywhere;
+}
+.embed-modal {
+  max-width: 32rem;
+}
+.embed-snippet {
+  display: flex;
+  align-items: flex-start;
+  padding: 0.25rem 0.25rem 0.25rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--bg-secondary);
+}
+.embed-snippet code {
+  flex: 1;
+  padding: 0.25rem 0;
+  overflow-wrap: anywhere;
+  user-select: all;
+  background: none;
+  font-size: var(--font-size-13);
+}
+.embed-snippet button {
+  padding: 0.25rem 0.375rem;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.embed-add {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.embed-error {
+  margin: 0.5rem 0 0;
+  color: var(--error-text);
   overflow-wrap: anywhere;
 }
 /* Above the composer of a chat opened by the bookmarklet. */
@@ -19395,7 +19434,8 @@ kbd {
   overflow-wrap: anywhere;
 }
 .secret-injections,
-.bookmarklet-sites {
+.bookmarklet-sites,
+.embed-sites {
   margin: 0;
   padding: 0;
   list-style: none;

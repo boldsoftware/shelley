@@ -396,6 +396,13 @@ export const fr: TranslationKeys = {
   bookmarkletAllow: "Autoriser",
   bookmarkletNotNow: "Pas maintenant",
   bookmarkletSites: "Sites pouvant lancer des enregistrements",
+  editWithShelley: "Modifier avec Shelley",
+  editWithShelleyAction: "Placez Shelley à côté de vos propres pages web",
+  embedHelp: "Ajoutez ceci à vos pages pour avoir un bouton qui ouvre Shelley à côté d’elles.",
+  embedSites: "Sites dont les pages peuvent ouvrir Shelley",
+  embedAdd: "Ajouter",
+  embedExeDev:
+    "Les pages que votre VM sert sur {origin}, sur n’importe quel port, peuvent l’ouvrir.",
   configureMcpServers: "Connecter des serveurs MCP pour l'agent",
   addMcpServer: "Ajouter un serveur MCP",
   editMcpServer: "Modifier le serveur MCP",

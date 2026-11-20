@@ -235,4 +235,7 @@ func TestWebURLIsProductionOnly(t *testing.T) {
 	if other.Production() || other.WebURL() != "" || (Environment{}).Production() {
 		t.Fatalf("other: %v %q", other.Production(), other.WebURL())
 	}
+	if got := other.ShelleyHost("box"); got != "box.shelley.example.test" {
+		t.Fatalf("ShelleyHost = %q", got)
+	}
 }

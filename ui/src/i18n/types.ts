@@ -377,6 +377,12 @@ export interface TranslationKeys {
   bookmarkletAllow: string;
   bookmarkletNotNow: string;
   bookmarkletSites: string;
+  editWithShelley: string;
+  editWithShelleyAction: string;
+  embedHelp: string;
+  embedSites: string;
+  embedAdd: string;
+  embedExeDev: string;
   configureMcpServers: string;
   addMcpServer: string;
   editMcpServer: string;

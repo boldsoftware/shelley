@@ -1196,6 +1196,31 @@ export const faviconEmojiApi = {
   },
 };
 
+// The origins whose pages may frame Shelley with embed.js. Each call
+// returns the list as it stands after it.
+export const embedOriginsApi = {
+  async list(): Promise<string[]> {
+    return (await apiJSON<{ origins: string[] }>("/api/embed-origins", "Failed to load sites"))
+      .origins;
+  },
+  async add(origin: string): Promise<string[]> {
+    return (
+      await apiJSON<{ origins: string[] }>("/api/embed-origins", "Couldn't add the site", "POST", {
+        origin,
+      })
+    ).origins;
+  },
+  async remove(origin: string): Promise<string[]> {
+    return (
+      await apiJSON<{ origins: string[] }>(
+        `/api/embed-origins?origin=${encodeURIComponent(origin)}`,
+        "Couldn't remove the site",
+        "DELETE",
+      )
+    ).origins;
+  },
+};
+
 // models.dev pricing, USD per million tokens. null = model known but unpriced.
 // Mirrors ModelCost in utils/tokenCostGraph; stays structurally compatible so
 // the fetched costs feed the cost-graph math directly.

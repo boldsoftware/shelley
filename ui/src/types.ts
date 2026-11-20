@@ -291,6 +291,9 @@ export interface InitData {
   // is_exe_dev picks exe.dev-specific setup advice when model_setup_hint is
   // absent because the catalog emptied after page load.
   is_exe_dev?: boolean;
+  // exe_dev_shelley_host is where exe.dev's proxy serves this VM's Shelley,
+  // as vm.shelley.exe.xyz.
+  exe_dev_shelley_host?: string;
   // transcription_available says whether recordings can be transcribed
   // (a gpt-transcribe route exists, e.g. from OPENAI_API_KEY).
   transcription_available?: boolean;

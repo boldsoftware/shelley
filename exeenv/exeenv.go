@@ -150,6 +150,12 @@ func (e Environment) VMHost(name string) string {
 	return name + "." + e.boxHost
 }
 
+// ShelleyHost returns the host exe.dev's proxy serves VM name's Shelley
+// at, e.g. name.shelley.exe.xyz.
+func (e Environment) ShelleyHost(name string) string {
+	return name + ".shelley." + e.boxHost
+}
+
 // Production reports whether e is production exe.dev.
 func (e Environment) Production() bool {
 	return e.scheme == "https" && e.boxHost == "exe.xyz"

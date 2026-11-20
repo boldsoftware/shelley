@@ -236,6 +236,12 @@
             commandPaletteOpen = false;
           }
         "
+        @open-embed-modal="
+          () => {
+            embedModalOpen = true;
+            commandPaletteOpen = false;
+          }
+        "
         @next-conversation="navigateToNextConversation"
         @previous-conversation="navigateToPreviousConversation"
         @next-user-message="navigateToNextUserMessage"
@@ -311,6 +317,16 @@
         "
       />
 
+      <EmbedModal
+        :is-open="embedModalOpen"
+        @close="
+          () => {
+            embedModalOpen = false;
+            focusMessageInputIfUnfocused();
+          }
+        "
+      />
+
       <FileFinderModal
         :is-open="fileFinderOpen"
         :initial-dir="finderDir"
@@ -366,6 +382,7 @@ import McpServersModal from "./components/McpServersModal.vue";
 import IntegrationsModal from "./components/IntegrationsModal.vue";
 import NotificationsModal from "./components/NotificationsModal.vue";
 import FeatureFlagsModal from "./components/FeatureFlagsModal.vue";
+import EmbedModal from "./components/EmbedModal.vue";
 import FaviconEmojiPicker from "./components/FaviconEmojiPicker.vue";
 import FileFinderModal from "./components/FileFinderModal.vue";
 import EditableFileModal from "./components/EditableFileModal.vue";
@@ -656,6 +673,7 @@ function takeMcpLoginResult() {
 const integrationsModalOpen = ref(false);
 const notificationsModalOpen = ref(false);
 const featureFlagsModalOpen = ref(false);
+const embedModalOpen = ref(false);
 const faviconEmojiPickerOpen = ref(false);
 // Fuzzy file finder (Cmd/Ctrl+P) + the generic editor it opens.
 const fileFinderOpen = ref(false);

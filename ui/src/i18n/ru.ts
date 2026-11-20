@@ -391,6 +391,13 @@ export const ru: TranslationKeys = {
   bookmarkletAllow: "Разрешить",
   bookmarkletNotNow: "Не сейчас",
   bookmarkletSites: "Сайты, которые могут начинать запись",
+  editWithShelley: "Редактировать с Shelley",
+  editWithShelleyAction: "Shelley рядом с вашими веб-страницами",
+  embedHelp:
+    "Добавьте это на свои страницы, чтобы появилась кнопка, открывающая Shelley рядом с ними.",
+  embedSites: "Сайты, страницы которых могут открывать Shelley",
+  embedAdd: "Добавить",
+  embedExeDev: "Его могут открывать страницы, которые ваша ВМ отдаёт на {origin}, на любом порту.",
   configureMcpServers: "Подключить MCP-серверы для агента",
   addMcpServer: "Добавить MCP-сервер",
   editMcpServer: "Редактировать MCP-сервер",
