@@ -69,6 +69,12 @@ for (const viewport of [
 
       await page.goto(`/c/${parent.slug}`);
       await expect(page.getByTestId("message-input")).toBeVisible();
+      // Wait for the history, not just the composer: a message that streams in
+      // while the page is still loading is painted alone, then remounted (and
+      // collapsed again) when the full history arrives.
+      await expect(
+        page.getByTestId("message").filter({ hasText: "subagent: backend echo: Ready." }),
+      ).toBeVisible();
       const background = colorScheme === "dark" ? "rgb(31, 41, 55)" : "rgb(243, 244, 246)";
       const progress = "Backend underway: **API and database** implementation are progressing.";
       const body = `  ${progress}\nNext: tests, preview at https://example.com/api.`;
