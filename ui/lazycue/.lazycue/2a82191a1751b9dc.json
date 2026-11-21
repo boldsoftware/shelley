@@ -1,0 +1,56 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A link to a conversation keeps the page loading until that conversation shows, even when the live stream delivers the conversation list first. The conversation at /c/deep-link exists; the server holds the page's first load of the conversation list (GET /api/conversations/snapshot) until the call \"release\". Calls: \"snapshot requested\" returns \"true\" once that request has arrived (\"false\" before). window.__listPatches counts the conversation list updates the page's live stream has delivered. \"The message input\" is [data-testid=\"message-input\"]; \"the loading screen\" is \".loading-container\". Perform the steps in order. 1. Navigate to /c/deep-link. 2. Call \"snapshot requested\" until it returns \"true\". 3. Eval window.__listPatches \u003e 0 until it returns true: the stream has delivered the list while the first load is held. 4. Two frames later the page must still be loading, with no composer: eval new Promise((r) =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(() =\u003e r(!!document.querySelector('.loading-container') + ' ' + !!document.querySelector('[data-testid=\"message-input\"]'))))) with expect \"true false\". 5. Call \"release\". 6. The message input should become visible, and the URL must be exactly /c/deep-link. 7. Fill the message input with \"Follow-up\": the button [data-testid=\"send-button\"] should be enabled.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/deep-link"
+    },
+    {
+      "action": "call",
+      "value": "snapshot requested",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__listPatches \u003e 0",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((r) =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(() =\u003e r(!!document.querySelector('.loading-container') + ' ' + !!document.querySelector('[data-testid=\"message-input\"]')))))",
+      "expect": "true false"
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/deep-link"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Follow-up"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"send-button\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T16:07:59.034938205Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 7564,
+    "output_tokens": 356,
+    "estimated_cost_usd": 0.0337035,
+    "mode": "generated"
+  }
+}

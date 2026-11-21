@@ -9,8 +9,11 @@
      (synchronous) API and needs no worker pool, so no provider is rendered
      here. -->
 <template>
-  <!-- Loading gate -->
-  <div v-if="loading && conversations.length === 0" class="loading-container">
+  <!-- Loading gate. The stream can deliver the list before the first load
+       has it and can pick the conversation to show (the URL's, say); showing
+       the app then would open a new conversation's composer for the user to
+       type into. -->
+  <div v-if="!listLoaded || (loading && conversations.length === 0)" class="loading-container">
     <div class="loading-content">
       <div class="spinner" style="margin: 0 auto 1rem" />
       <p class="text-secondary">{{ t("loading") }}</p>
@@ -667,6 +670,8 @@ const cwdSyncTrigger = ref(0);
 const navigateUserMessageTrigger = ref(0);
 const conversationSelectionTrigger = ref(0);
 const loading = ref(true);
+// The first load has the conversation list, or has failed.
+const listLoaded = ref(false);
 const error = ref<string | null>(null);
 const ephemeralTerminals = ref<EphemeralTerminal[]>([]);
 const streamStatus = ref<StreamStatus>("connected");
@@ -1076,6 +1081,7 @@ async function loadConversations() {
       commitListState({ list: snapshot.conversations, hash: snapshot.hash });
     }
     const currentList = streamHash ? conversations.value : snapshot.conversations;
+    listLoaded.value = true;
     const topLevel = currentList.filter((c) => !c.parent_conversation_id);
 
     const slugConv = await resolveInitialSlug(currentList);
@@ -1099,6 +1105,7 @@ async function loadConversations() {
     error.value = err instanceof ApiError ? err.message : t("failedToLoadConversations");
   } finally {
     loading.value = false;
+    listLoaded.value = true;
   }
 }
 
