@@ -170,8 +170,11 @@ func TestInlinedVar(t *testing.T) {
 	if got := inlinedVar([]Step{{Action: ActionRetry, Steps: []Step{{Action: ActionFill, Value: "/tmp/fixture-123"}}}}, vars); got != "DIR" {
 		t.Errorf("value inlined in a retry: got %q, want DIR", got)
 	}
-	if got := inlinedVar([]Step{{Action: ActionClick, Within: &Within{HasText: "/tmp/fixture-123"}}}, vars); got != "DIR" {
+	if got := inlinedVar([]Step{{Action: ActionClick, Within: &Pick{HasText: "/tmp/fixture-123"}}}, vars); got != "DIR" {
 		t.Errorf("value inlined in within: got %q, want DIR", got)
+	}
+	if got := inlinedVar([]Step{{Action: ActionClick, Within: &Pick{Selector: "li", Has: &Pick{Selector: "span", HasText: "/tmp/fixture-123"}}}}, vars); got != "DIR" {
+		t.Errorf("value inlined in within's has: got %q, want DIR", got)
 	}
 }
 

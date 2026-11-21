@@ -27,9 +27,12 @@ type Step struct {
 	// field has narrowed them, as Playwright's nth: 0 is the first, -1 the
 	// last.
 	Nth *int `json:"nth,omitempty"`
+	// Has keeps only the matches with an element inside them that it picks
+	// out, shadow roots included, as Playwright's filter({has}).
+	Has *Pick `json:"has,omitempty"`
 	// Within keeps only the matches inside an element it picks out, as
 	// Playwright's chained locators do.
-	Within *Within `json:"within,omitempty"`
+	Within *Pick `json:"within,omitempty"`
 	// Frame is a CSS selector for an iframe in the page, whose document the
 	// step acts in, as Playwright's frameLocator.
 	Frame      string  `json:"frame,omitempty"`
@@ -77,8 +80,8 @@ type Step struct {
 	Steps []Step `json:"steps,omitempty"`
 }
 
-// Within picks out elements as a step does, for the step to look inside.
-type Within struct {
+// Pick picks out elements as a step does, for a step's within or has.
+type Pick struct {
 	Selector string `json:"selector,omitempty"`
 	Role     string `json:"role,omitempty"`
 	Name     string `json:"name,omitempty"`
@@ -86,11 +89,43 @@ type Within struct {
 	Exact    bool   `json:"exact,omitempty"`
 	Visible  bool   `json:"visible,omitempty"`
 	Nth      *int   `json:"nth,omitempty"`
+	Has      *Pick  `json:"has,omitempty"`
 }
 
-// step is a step that picks out what w does.
-func (w Within) step() Step {
-	return Step{Selector: w.Selector, Role: w.Role, Name: w.Name, HasText: w.HasText, Exact: w.Exact, Visible: w.Visible, Nth: w.Nth}
+// step is a step that picks out what p does.
+func (p Pick) step() Step {
+	return Step{Selector: p.Selector, Role: p.Role, Name: p.Name, HasText: p.HasText, Exact: p.Exact, Visible: p.Visible, Nth: p.Nth, Has: p.Has}
+}
+
+// clone is a deep copy of p, nil for nil.
+func (p *Pick) clone() *Pick {
+	if p == nil {
+		return nil
+	}
+	c := *p
+	c.Has = p.Has.clone()
+	return &c
+}
+
+// strings are p's string fields, those of its has included.
+func (p *Pick) strings() []*string {
+	if p == nil {
+		return nil
+	}
+	return append([]*string{&p.Selector, &p.Role, &p.Name, &p.HasText}, p.Has.strings()...)
+}
+
+// picks are s and the steps its within and has pick out with, theirs
+// included.
+func picks(s Step) []Step {
+	all := []Step{s}
+	if s.Within != nil {
+		all = append(all, picks(s.Within.step())...)
+	}
+	if s.Has != nil {
+		all = append(all, picks(s.Has.step())...)
+	}
+	return all
 }
 
 // Supported action names.
@@ -308,6 +343,9 @@ func describe(s Step) string {
 	}
 	if s.Visible {
 		d = "visible " + d
+	}
+	if s.Has != nil {
+		d += " has " + describe(s.Has.step())
 	}
 	if s.Nth != nil {
 		d += fmt.Sprintf(" nth %d", *s.Nth)

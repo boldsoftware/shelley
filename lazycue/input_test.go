@@ -302,37 +302,89 @@ customElements.define('x-card', class extends HTMLElement {
 document.addEventListener('click', e => document.title = e.target.closest('.msg, [data-testid=card]').firstChild.textContent.trim());
 </script>
 </body></html>`)}
-	cards := &Within{Selector: "[data-testid=card]"}
+	cards := &Pick{Selector: "[data-testid=card]"}
 	runSteps(t, br, env,
 		Step{Action: ActionNavigate, URL: "/"},
 		// Only the step's own matches inside one with the text count; the
 		// first of them is the step's element.
-		Step{Action: ActionAssertText, Within: &Within{Selector: "[data-testid=card]", HasText: "Failed (exit 7)"}, Selector: "[data-testid=status]", Text: "Failed (exit 7)"},
+		Step{Action: ActionAssertText, Within: &Pick{Selector: "[data-testid=card]", HasText: "Failed (exit 7)"}, Selector: "[data-testid=status]", Text: "Failed (exit 7)"},
 		Step{Action: ActionAssertCount, Within: cards, Selector: "[data-testid=status]", Count: 3},
-		Step{Action: ActionAssertCount, Within: &Within{Selector: "[data-testid=card]", Visible: true}, Selector: "[data-testid=status]", Count: 2},
-		Step{Action: ActionAssertCount, Within: &Within{Selector: "[data-testid=card]", HasText: "Failed", Exact: true}, Selector: "[data-testid=status]", Count: 0},
+		Step{Action: ActionAssertCount, Within: &Pick{Selector: "[data-testid=card]", Visible: true}, Selector: "[data-testid=status]", Count: 2},
+		Step{Action: ActionAssertCount, Within: &Pick{Selector: "[data-testid=card]", HasText: "Failed", Exact: true}, Selector: "[data-testid=status]", Count: 0},
 		Step{Action: ActionAssertText, Within: cards, Selector: "[data-testid=status]", Text: "Hidden"},
 		// A within match itself does not count.
 		Step{Action: ActionAssertCount, Within: cards, Selector: "div", Count: 0},
 		// Roles on either side, each with its own name.
-		Step{Action: ActionClick, Within: &Within{Selector: ".msg", HasText: "Bye"}, Role: "button", Name: "Copy"},
+		Step{Action: ActionClick, Within: &Pick{Selector: ".msg", HasText: "Bye"}, Role: "button", Name: "Copy"},
 		Step{Action: ActionAssertTitle, Text: "Bye"},
-		Step{Action: ActionAssertCount, Within: &Within{Role: "region", Name: "messages"}, Role: "button", Name: "Copy", Count: 2},
-		Step{Action: ActionAssertCount, Within: &Within{Selector: "section"}, Selector: "button", Count: 2},
+		Step{Action: ActionAssertCount, Within: &Pick{Role: "region", Name: "messages"}, Role: "button", Name: "Copy", Count: 2},
+		Step{Action: ActionAssertCount, Within: &Pick{Selector: "section"}, Selector: "button", Count: 2},
 		// The step's has_text applies after within.
-		Step{Action: ActionAssertCount, Within: &Within{Selector: "section"}, Selector: "div", HasText: "Bye", Count: 1},
+		Step{Action: ActionAssertCount, Within: &Pick{Selector: "section"}, Selector: "div", HasText: "Bye", Count: 1},
 		// Shadow DOM is inside its host.
-		Step{Action: ActionAssertText, Within: &Within{Selector: "x-card"}, Role: "button", Text: "Shadow"},
+		Step{Action: ActionAssertText, Within: &Pick{Selector: "x-card"}, Role: "button", Text: "Shadow"},
 	)
 	for _, c := range []struct {
 		step Step
 		err  string
 	}{
-		{Step{Action: ActionClick, Within: &Within{Selector: "[data-testid=card]", HasText: "Nope"}, Selector: "button"}, `no element matches button within [data-testid=card] with text "Nope"`},
-		{Step{Action: ActionClick, Within: &Within{HasText: "Bye"}, Selector: "button"}, "within needs a selector or a role"},
+		{Step{Action: ActionClick, Within: &Pick{Selector: "[data-testid=card]", HasText: "Nope"}, Selector: "button"}, `no element matches button within [data-testid=card] with text "Nope"`},
+		{Step{Action: ActionClick, Within: &Pick{HasText: "Bye"}, Selector: "button"}, "within needs a selector or a role"},
 		{Step{Action: ActionClick, Within: cards}, "within scopes a step's selector or role"},
-		{Step{Action: ActionClick, Within: &Within{Selector: ".msg", Name: "Bye"}, Selector: "button"}, "a name needs a role"},
-		{Step{Action: ActionClick, Within: &Within{Role: "image"}, Selector: "button"}, `unknown role "image"`},
+		{Step{Action: ActionClick, Within: &Pick{Selector: ".msg", Name: "Bye"}, Selector: "button"}, "a name needs a role"},
+		{Step{Action: ActionClick, Within: &Pick{Role: "image"}, Selector: "button"}, `unknown role "image"`},
+	} {
+		c.step.Timeout = "300ms"
+		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+}
+
+// has keeps the matches with an element inside them that it picks out, as
+// Playwright's filter({has}), shadow roots included.
+func TestHas(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<section><h2>Profiles</h2><ul>
+<li class="item"><span class="name">Default (old)</span><button>Use</button></li>
+<li class="item"><span class="name">Default</span><button>Use</button></li>
+<li class="item"><x-badge></x-badge><button>Use</button></li>
+</ul></section>
+<section><h2>Other</h2><ul><li class="item"><span class="name">Default</span><button>Use</button></li></ul></section>
+<script>
+customElements.define('x-badge', class extends HTMLElement {
+  connectedCallback() { this.attachShadow({mode: 'open'}).innerHTML = '<span class="name">Shadowed</span>'; }
+});
+document.addEventListener('click', e => document.title = e.target.closest('li').textContent);
+</script>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionAssertCount, Selector: ".item", Has: &Pick{Selector: ".name"}, Count: 4},
+		Step{Action: ActionAssertCount, Selector: ".item", Has: &Pick{Selector: ".name", HasText: "Default", Exact: true}, Count: 2},
+		Step{Action: ActionClick, Role: "button", Within: &Pick{Selector: ".item", Has: &Pick{Selector: ".name", HasText: "Default", Exact: true}}},
+		Step{Action: ActionAssertTitle, Text: "DefaultUse"},
+		// A role, and shadow roots.
+		Step{Action: ActionAssertCount, Selector: "section", Has: &Pick{Role: "heading", Name: "Profiles"}, Count: 1},
+		Step{Action: ActionAssertCount, Selector: ".item", Has: &Pick{Selector: ".name", HasText: "Shadowed"}, Count: 1},
+		// has's nth counts in each match: the first section has three rows.
+		Step{Action: ActionAssertCount, Selector: "section", Has: &Pick{Selector: ".item", Nth: ptr(2)}, Count: 1},
+		Step{Action: ActionAssertCount, Selector: "section", Has: &Pick{Selector: ".item", Nth: ptr(-3)}, Count: 1},
+		Step{Action: ActionAssertCount, Selector: "section", Has: &Pick{Selector: ".item", Nth: ptr(3)}, Count: 0},
+		Step{Action: ActionAssertCount, Selector: "section", Has: &Pick{Selector: ".item", Nth: ptr(0)}, Count: 2},
+		// An element does not have itself.
+		Step{Action: ActionAssertCount, Selector: ".name", Has: &Pick{Selector: ".name"}, Count: 0},
+		// Within's has picks the section; the step's has, the row in it.
+		Step{Action: ActionAssertCount, Within: &Pick{Selector: "section", Has: &Pick{Role: "heading", Name: "Other"}}, Selector: ".item", Has: &Pick{Selector: ".name", HasText: "Default"}, Count: 1},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		{Step{Action: ActionClick, Selector: "li", Has: &Pick{HasText: "Default"}}, "has needs a selector or a role"},
+		{Step{Action: ActionClick, Selector: "li", Has: &Pick{Selector: "span", Name: "x"}}, "a name needs a role"},
+		{Step{Action: ActionClick, Selector: "li", Has: &Pick{Selector: ".nope"}}, "no element matches li has .nope"},
 	} {
 		c.step.Timeout = "300ms"
 		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
@@ -367,9 +419,9 @@ document.addEventListener('click', e => document.title = e.target.closest('li').
 		Step{Action: ActionClick, Role: "button", Name: "Copy", Nth: ptr(1)},
 		Step{Action: ActionAssertTitle, Text: "Two"},
 		// In within, it picks the one element to look inside.
-		Step{Action: ActionClick, Within: &Within{Selector: "li", Visible: true, Nth: ptr(0)}, Selector: "button"},
+		Step{Action: ActionClick, Within: &Pick{Selector: "li", Visible: true, Nth: ptr(0)}, Selector: "button"},
 		Step{Action: ActionAssertTitle, Text: "One"},
-		Step{Action: ActionAssertCount, Within: &Within{Selector: "li", Nth: ptr(-1)}, Selector: "button", Count: 1},
+		Step{Action: ActionAssertCount, Within: &Pick{Selector: "li", Nth: ptr(-1)}, Selector: "button", Count: 1},
 	)
 	for _, c := range []struct {
 		step Step
@@ -434,7 +486,7 @@ customElements.define('x-embed', class extends HTMLElement {
 		Step{Action: ActionAssertCount, Role: "searchbox", Selector: "x-picker", Count: 1},
 		// One selector does not cross into a shadow root; within does.
 		Step{Action: ActionAssertCount, Selector: "x-picker input", Count: 0},
-		Step{Action: ActionAssertCount, Within: &Within{Selector: "x-picker"}, Selector: "input", Count: 1},
+		Step{Action: ActionAssertCount, Within: &Pick{Selector: "x-picker"}, Selector: "input", Count: 1},
 		Step{Action: ActionWaitVisible, Frame: "iframe", Selector: "p", HasText: "Framed"},
 		// What is slotted into an element is in it.
 		Step{Action: ActionClick, Selector: "#inner"},

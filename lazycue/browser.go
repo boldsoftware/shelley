@@ -325,10 +325,8 @@ func substitute(step Step, vars map[string]string) (Step, error) {
 		expect := *step.Expect
 		step.Expect = &expect
 	}
-	if step.Within != nil {
-		within := *step.Within
-		step.Within = &within
-	}
+	step.Within = step.Within.clone()
+	step.Has = step.Has.clone()
 	step.Texts = slices.Clone(step.Texts)
 	for _, f := range stringFields(&step) {
 		*f = placeholder.ReplaceAllStringFunc(*f, func(m string) string {
@@ -355,9 +353,8 @@ func stringFields(s *Step) []*string {
 	if s.Expect != nil {
 		fields = append(fields, s.Expect)
 	}
-	if w := s.Within; w != nil {
-		fields = append(fields, &w.Selector, &w.Role, &w.Name, &w.HasText)
-	}
+	fields = append(fields, s.Within.strings()...)
+	fields = append(fields, s.Has.strings()...)
 	for i := range s.Texts {
 		fields = append(fields, &s.Texts[i])
 	}
@@ -700,7 +697,6 @@ func (b *Browser) executeStep(ctx context.Context, env *Env, step Step) (string,
 
 // run runs a step whose placeholders have been substituted.
 func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) {
-	picks := []Step{step}
 	if w := step.Within; w != nil {
 		if w.Selector == "" && w.Role == "" {
 			return "", mistake{errors.New("within needs a selector or a role")}
@@ -708,9 +704,16 @@ func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) 
 		if step.Selector == "" && step.Role == "" {
 			return "", mistake{errors.New("within scopes a step's selector or role; set one")}
 		}
-		picks = append(picks, w.step())
 	}
-	for _, p := range picks {
+	for _, p := range picks(step) {
+		if h := p.Has; h != nil {
+			if h.Selector == "" && h.Role == "" {
+				return "", mistake{errors.New("has needs a selector or a role")}
+			}
+			if p.Selector == "" && p.Role == "" {
+				return "", mistake{errors.New("has narrows a step's selector or role; set one")}
+			}
+		}
 		if _, ok := axRoles[p.Role]; p.Role != "" && !ok {
 			return "", mistake{fmt.Errorf("unknown role %q; use an ARIA role such as button, link, textbox, checkbox, img or dialog", p.Role)}
 		}
@@ -1406,7 +1409,8 @@ const (
 // (in document order) inside what its selector matches; then those inside
 // what its within picks out; then those whose text has has_text (with a
 // selector alone, an element that holds another match does not count, as
-// with Playwright's getByText); then, with visible, the visible ones; then,
+// with Playwright's getByText); then those holding what its has picks out
+// (its nth counting in each); then, with visible, the visible ones; then,
 // with nth, the one at that index. Evaluate it with evalFind.
 func findAllJS(step Step) string {
 	scopes := "null"
@@ -1424,7 +1428,16 @@ func pickJS(step Step, slot, scopes string) string {
 	if step.Nth != nil {
 		nth = strconv.Itoa(*step.Nth)
 	}
-	return fmt.Sprintf(`(function(sel, role, hasText, exact, visible, nth, slot, scopes) {
+	hasEls, hasNth := "null", "null"
+	if step.Has != nil {
+		has := step.Has.step()
+		if has.Nth != nil {
+			hasNth = strconv.Itoa(*has.Nth)
+		}
+		has.Nth = nil
+		hasEls = pickJS(has, slot+"Has", "null")
+	}
+	return fmt.Sprintf(`(function(sel, role, hasText, exact, visible, nth, slot, scopes, hasEls, hasNth) {
 		`+isVisibleJS+`
 		`+deepAllJS+`
 		const norm = s => s.replace(/\s+/g, ' ').trim();
@@ -1485,11 +1498,25 @@ func pickJS(step Step, slot, scopes string) string {
 			}
 			all = matches.filter(el => !outer.has(el));
 		}
+		if (hasEls) {
+			// How many of has's matches each element holds, as Playwright
+			// queries it inside each one.
+			const held = new Map();
+			for (const h of hasEls) {
+				for (let p = h.parentNode || h.host; p; p = p.parentNode || p.host) {
+					held.set(p, (held.get(p) || 0) + 1);
+				}
+			}
+			all = all.filter(el => {
+				const n = held.get(el) || 0;
+				return hasNth === null ? n > 0 : hasNth >= 0 ? n > hasNth : n >= -hasNth;
+			});
+		}
 		if (visible) all = all.filter(isVisible);
 		if (nth === null) return all;
 		const el = all.at(nth);
 		return el ? [el] : [];
-	})(%q, %t, %q, %t, %t, %s, %q, %s)`, step.Selector, step.Role != "", step.HasText, step.Exact, step.Visible, nth, slot, scopes)
+	})(%q, %t, %q, %t, %t, %s, %q, %s, %s, %s)`, step.Selector, step.Role != "", step.HasText, step.Exact, step.Visible, nth, slot, scopes, hasEls, hasNth)
 }
 
 // deepAllJS defines deepAll(sel): the elements a CSS selector matches in the
@@ -1554,10 +1581,10 @@ var axRoles = func() map[string]string {
 	return m
 }()
 
-// locate finds the elements of a step's role and name, and of its within's,
-// in the execution context world of its frame, for findAllJS.
+// locate finds the elements of a step's role and name, and of its within's
+// and has's, in the execution context world of its frame, for findAllJS.
 func locate(ctx context.Context, step Step, world cdpruntime.ExecutionContextID) error {
-	if step.Role == "" && (step.Within == nil || step.Within.Role == "") {
+	if !slices.ContainsFunc(picks(step), func(p Step) bool { return p.Role != "" }) {
 		return nil
 	}
 	if step.Frame != "" {
@@ -1591,8 +1618,14 @@ func locate(ctx context.Context, step Step, world cdpruntime.ExecutionContextID)
 // slot, in the tree's order: document order, shadow DOM included. Elements
 // hidden from the tree (display: none, visibility: hidden, aria-hidden,
 // inert, behind a modal dialog) have none. Steps without a role need
-// nothing. It looks in the document of the execution context world.
+// nothing. It looks in the document of the execution context world. It does
+// the same for the step's has, in the slot named for it as pickJS does.
 func locateRole(ctx context.Context, step Step, slot string, world cdpruntime.ExecutionContextID) error {
+	if step.Has != nil {
+		if err := locateRole(ctx, step.Has.step(), slot+"Has", world); err != nil {
+			return err
+		}
+	}
 	if step.Role == "" {
 		return nil
 	}

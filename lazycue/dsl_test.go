@@ -36,14 +36,32 @@ func TestSubstituteFrame(t *testing.T) {
 	}
 }
 
+// Placeholders in has, and in within's has, are filled in, on copies.
+func TestSubstituteHas(t *testing.T) {
+	step := Step{Action: ActionClick, Selector: "li", Has: &Pick{Selector: "#{{ID}}", HasText: "{{TEXT}}"}, Within: &Pick{Selector: "ul", Has: &Pick{Role: "{{ROLE}}", Name: "{{NAME}}"}}}
+	got, err := substitute(step, map[string]string{"ID": "name", "ROLE": "heading", "NAME": "Profiles", "TEXT": "Default"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (Pick{Selector: "#name", HasText: "Default"}); *got.Has != want {
+		t.Errorf("has = %+v, want %+v", *got.Has, want)
+	}
+	if want := (Pick{Role: "heading", Name: "Profiles"}); *got.Within.Has != want {
+		t.Errorf("within's has = %+v, want %+v", *got.Within.Has, want)
+	}
+	if step.Has.Selector != "#{{ID}}" || step.Within.Has.Role != "{{ROLE}}" {
+		t.Errorf("substitute changed the step's picks: %+v, %+v", *step.Has, *step.Within.Has)
+	}
+}
+
 // Placeholders in within are filled in, on a copy.
 func TestSubstituteWithin(t *testing.T) {
-	step := Step{Action: ActionClick, Selector: "button", Within: &Within{Selector: "#{{ID}}", Role: "{{ROLE}}", Name: "{{NAME}}", HasText: "{{TEXT}}"}}
+	step := Step{Action: ActionClick, Selector: "button", Within: &Pick{Selector: "#{{ID}}", Role: "{{ROLE}}", Name: "{{NAME}}", HasText: "{{TEXT}}"}}
 	got, err := substitute(step, map[string]string{"ID": "card", "ROLE": "listitem", "NAME": "Build", "TEXT": "Failed"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (Within{Selector: "#card", Role: "listitem", Name: "Build", HasText: "Failed"}); *got.Within != want {
+	if want := (Pick{Selector: "#card", Role: "listitem", Name: "Build", HasText: "Failed"}); *got.Within != want {
 		t.Errorf("within = %+v, want %+v", *got.Within, want)
 	}
 	if step.Within.Selector != "#{{ID}}" {
