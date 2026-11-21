@@ -350,7 +350,7 @@ func substitute(step Step, vars map[string]string) (Step, error) {
 func stringFields(s *Step) []*string {
 	fields := []*string{
 		&s.URL, &s.Selector, &s.Role, &s.Name, &s.HasText, &s.Value, &s.Text,
-		&s.Expression, &s.Attribute, &s.Key, &s.Points, &s.Point,
+		&s.Expression, &s.Attribute, &s.Key, &s.Points, &s.Point, &s.Frame,
 	}
 	if s.Expect != nil {
 		fields = append(fields, s.Expect)
@@ -718,6 +718,9 @@ func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) 
 			return "", mistake{errors.New("a name needs a role")}
 		}
 	}
+	if step.Frame != "" && step.Selector == "" && step.Role == "" && step.Action != ActionEval && step.Action != ActionWaitText && step.Action != ActionWaitTextGone {
+		return "", mistake{errors.New("a frame scopes a step's selector or role, or an eval, wait_text or wait_text_gone")}
+	}
 	if step.Action == ActionRetry {
 		return "", b.retry(ctx, env, step)
 	}
@@ -740,7 +743,7 @@ func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) 
 		defer cancel()
 		return expectResult(ctx, step, timeout, func() (string, error) {
 			var result any
-			if err := chromedp.Run(runCtx, evaluate(step.Expression, &result)); err != nil {
+			if err := chromedp.Run(runCtx, evalIn(step.Frame, step.Expression, &result)); err != nil {
 				return "", err
 			}
 			return formatResult(result), nil
@@ -864,12 +867,56 @@ func formatResult(v any) string {
 	return string(b)
 }
 
-// evaluate is chromedp.Evaluate for an eval step: it waits for a promise the
-// expression returns to settle, so a step can use await or fetch.
-func evaluate(expression string, res any) chromedp.Action {
+// evaluate is chromedp.Evaluate for an eval step, in the execution context
+// world (the page's when 0): it waits for a promise the expression returns
+// to settle, so a step can use await or fetch.
+func evaluate(world cdpruntime.ExecutionContextID, expression string, res any) chromedp.Action {
 	return chromedp.Evaluate(expression, res, func(p *cdpruntime.EvaluateParams) *cdpruntime.EvaluateParams {
-		return p.WithAwaitPromise(true)
+		return p.WithAwaitPromise(true).WithContextID(world)
 	})
+}
+
+// evalIn is evaluate in the document of the iframe the CSS selector frame
+// matches, or the page's when frame is empty.
+func evalIn(frame, expression string, res any) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		world, err := frameWorld(ctx, frame)
+		if err != nil {
+			return err
+		}
+		return evaluate(world, expression, res).Do(ctx)
+	})
+}
+
+// frameWorld is the execution context to run a step's scripts in: the
+// page's (0) when frame is empty, else an isolated world in the document of
+// the iframe the CSS selector frame matches. Like Playwright's utility
+// world, it sees the document but not the globals of the frame's scripts,
+// and it works in a sandboxed frame without scripts too.
+func frameWorld(ctx context.Context, frame string) (cdpruntime.ExecutionContextID, error) {
+	if frame == "" {
+		return 0, nil
+	}
+	const group = "lazycue-frame"
+	defer cdpruntime.ReleaseObjectGroup(group).Do(ctx) //nolint:errcheck // the page may be gone
+	el, exc, err := cdpruntime.Evaluate(fmt.Sprintf("document.querySelector(%q)", frame)).WithObjectGroup(group).Do(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if exc != nil {
+		return 0, exc
+	}
+	if el.ObjectID == "" {
+		return 0, fmt.Errorf("no iframe matches %s", frame)
+	}
+	node, err := dom.DescribeNode().WithObjectID(el.ObjectID).Do(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if node.FrameID == "" {
+		return 0, fmt.Errorf("%s is a <%s>, not an iframe", frame, strings.ToLower(node.NodeName))
+	}
+	return page.CreateIsolatedWorld(node.FrameID).WithWorldName("lazycue").Do(ctx)
 }
 
 func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, baseURL string, step Step) error {
@@ -925,7 +972,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 		if step.Action == ActionWaitTextGone {
 			not = "!"
 		}
-		return b.pollJS(ctx, tabCtx, timeout, fmt.Sprintf(
+		return b.pollJS(ctx, tabCtx, timeout, step.Frame, fmt.Sprintf(
 			`%s(n => n(document.body.textContent || '').includes(n(%q)))(s => s.replace(/\s+/g, ' ').trim())`, not, step.Text,
 		))
 
@@ -1392,10 +1439,19 @@ func pickJS(step Step, slot, scopes string) string {
 	})(%q, %t, %q, %t, %t, %q, %s)`, step.Selector, step.Role != "", step.HasText, step.Exact, step.Visible, slot, scopes)
 }
 
-// evalFind evaluates expr, which uses findAllJS or findJS, once locate has
-// found the elements of step's role.
+// evalFind evaluates expr, which uses findAllJS or findJS, in step's frame
+// once locate has found the elements of step's role.
 func evalFind(ctx context.Context, step Step, expr string, res any) error {
-	return chromedp.Run(ctx, locate(step), evaluate(expr, res))
+	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		world, err := frameWorld(ctx, step.Frame)
+		if err != nil {
+			return err
+		}
+		if err := locate(ctx, step, world); err != nil {
+			return err
+		}
+		return evaluate(world, expr, res).Do(ctx)
+	}))
 }
 
 // axRoles maps the ARIA roles a step may name to the names Chrome's
@@ -1415,16 +1471,28 @@ var axRoles = func() map[string]string {
 }()
 
 // locate finds the elements of a step's role and name, and of its within's,
-// for findAllJS.
-func locate(step Step) chromedp.Action {
-	return chromedp.ActionFunc(func(ctx context.Context) error {
-		if step.Within != nil {
-			if err := locateRole(ctx, step.Within.step(), withinSlot); err != nil {
-				return err
-			}
+// in the execution context world of its frame, for findAllJS.
+func locate(ctx context.Context, step Step, world cdpruntime.ExecutionContextID) error {
+	if step.Role == "" && (step.Within == nil || step.Within.Role == "") {
+		return nil
+	}
+	if step.Frame != "" {
+		// Chrome stops rendering a cross-origin frame out of view, and its
+		// accessibility tree waits for the next rendering.
+		var outOfView bool
+		if err := evaluate(0, fmt.Sprintf(`(f => !f.contentDocument && (r => r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth)(f.getBoundingClientRect()))(document.querySelector(%q))`, step.Frame), &outOfView).Do(ctx); err != nil {
+			return err
 		}
-		return locateRole(ctx, step, roleSlot)
-	})
+		if outOfView {
+			return fmt.Errorf("roles in the cross-origin frame %s cannot be found while it is out of view; scroll to it, or pick by selector", step.Frame)
+		}
+	}
+	if step.Within != nil {
+		if err := locateRole(ctx, step.Within.step(), withinSlot, world); err != nil {
+			return err
+		}
+	}
+	return locateRole(ctx, step, roleSlot, world)
 }
 
 // locateRole finds the elements of a step's role and name, as Chrome
@@ -1432,14 +1500,14 @@ func locate(step Step) chromedp.Action {
 // slot, in the tree's order: document order, shadow DOM included. Elements
 // hidden from the tree (display: none, visibility: hidden, aria-hidden,
 // inert, behind a modal dialog) have none. Steps without a role need
-// nothing.
-func locateRole(ctx context.Context, step Step, slot string) error {
+// nothing. It looks in the document of the execution context world.
+func locateRole(ctx context.Context, step Step, slot string, world cdpruntime.ExecutionContextID) error {
 	if step.Role == "" {
 		return nil
 	}
 	const group = "lazycue-role"
 	defer cdpruntime.ReleaseObjectGroup(group).Do(ctx) //nolint:errcheck // the page may be gone
-	doc, exc, err := cdpruntime.Evaluate("document").WithObjectGroup(group).Do(ctx)
+	doc, exc, err := cdpruntime.Evaluate("document").WithContextID(world).WithObjectGroup(group).Do(ctx)
 	if err != nil {
 		return lookupErr(ctx, step, err)
 	}
@@ -1474,7 +1542,7 @@ func locateRole(ctx context.Context, step Step, slot string) error {
 	var wg sync.WaitGroup
 	for i, id := range ids {
 		wg.Go(func() {
-			el, err := dom.ResolveNode().WithBackendNodeID(id).WithObjectGroup(group).Do(ctx)
+			el, err := dom.ResolveNode().WithBackendNodeID(id).WithExecutionContextID(world).WithObjectGroup(group).Do(ctx)
 			if err == nil {
 				args[i] = &cdpruntime.CallArgument{ObjectID: el.ObjectID}
 			}
@@ -1583,6 +1651,7 @@ const fillJS = `(function(el, sel, value) {
 // findJS, describe, dx, dy and whether to check enabled.
 const targetJS = `(async function(el, sel, dx, dy, checkEnabled) {
 	` + isVisibleJS + `
+	` + hitTestJS + `
 	if (!el) return {err: 'no element matches ' + sel};
 	el.scrollIntoViewIfNeeded(true);
 	if (!isVisible(el)) return {err: sel + ' is not visible'};
@@ -1595,6 +1664,13 @@ const targetJS = `(async function(el, sel, dx, dy, checkEnabled) {
 	const box = dx === null ? [...el.getClientRects()].find(b => b.width > 0 && b.height > 0) || r : null;
 	const x = box ? box.left + box.width / 2 : r.left + dx;
 	const y = box ? box.top + box.height / 2 : r.top + dy;
+	return hitTest(el, sel, x, y);
+})(%s, %q, %s, %s, %t)`
+
+// hitTestJS defines hitTest(el, sel, x, y): {x, y} when the element at that
+// point in the viewport, shadow DOM included, is el or inside it, else {err}
+// naming what is there instead.
+const hitTestJS = `function hitTest(el, sel, x, y) {
 	let hit = document.elementFromPoint(x, y);
 	while (hit && hit.shadowRoot) {
 		const inner = hit.shadowRoot.elementFromPoint(x, y);
@@ -1607,12 +1683,22 @@ const targetJS = `(async function(el, sel, dx, dy, checkEnabled) {
 	}
 	const desc = hit.tagName.toLowerCase() + (hit.id ? '#' + hit.id : '') + (typeof hit.className === 'string' && hit.className ? '.' + hit.className.trim().split(/\s+/).join('.') : '');
 	return {err: sel + ' is covered by ' + desc + ' at ' + x + ',' + y};
-})(%s, %q, %s, %s, %t)`
+}`
+
+// framePointJS maps a point in the viewport of the iframe a selector matches
+// to the page's, where the iframe must be what is there.
+const framePointJS = `(function(f, sel, x, y) {
+	` + hitTestJS + `
+	if (!f) return {err: 'no iframe matches ' + sel};
+	const r = f.getBoundingClientRect(), s = getComputedStyle(f);
+	return hitTest(f, 'frame ' + sel, r.left + f.clientLeft + parseFloat(s.paddingLeft) + x, r.top + f.clientTop + parseFloat(s.paddingTop) + y);
+})(document.querySelector(%q), %[1]q, %g, %g)`
 
 // atPoint runs f at the point a pointer step aims at: x,y CSS pixels from the
 // top-left corner of the element step.Selector matches when both are set,
-// else its center, once targetJS finds the element ready there. Without a
-// selector, x,y is a point in the viewport, taken as is.
+// else its center, once targetJS finds the element ready there; in a frame,
+// that point maps to the page, where the iframe must be what is there.
+// Without a selector, x,y is a point in the viewport, taken as is.
 func (b *Browser) atPoint(ctx, tabCtx context.Context, timeout time.Duration, step Step, checkEnabled bool, f func(ctx context.Context, x, y float64) error) error {
 	if (step.X == nil) != (step.Y == nil) {
 		return fmt.Errorf("%s: set both x and y, or neither", step.Action)
@@ -1654,6 +1740,11 @@ func (b *Browser) atPoint(ctx, tabCtx context.Context, timeout time.Duration, st
 		if err := evalFind(runCtx, step, expr, &target); err != nil {
 			return err
 		}
+		if target.Err == "" && step.Frame != "" {
+			if err := chromedp.Run(runCtx, evaluate(0, fmt.Sprintf(framePointJS, step.Frame, target.X, target.Y), &target)); err != nil {
+				return err
+			}
+		}
 		if target.Err != "" {
 			return fmt.Errorf("%s: %s", step.Action, target.Err)
 		}
@@ -1682,7 +1773,7 @@ func (b *Browser) point(ctx, tabCtx context.Context, timeout time.Duration, step
 		W, H float64
 	}
 	err = b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
-		if err := chromedp.Run(runCtx, evaluate(expr, &p)); err != nil {
+		if err := chromedp.Run(runCtx, evaluate(0, expr, &p)); err != nil {
 			return fmt.Errorf("%s: point: %w", step.Action, err)
 		}
 		if !p.OK {
@@ -1738,8 +1829,9 @@ func (b *Browser) pollCheck(ctx, tabCtx context.Context, timeout time.Duration, 
 	}
 }
 
-// pollJS polls a JS expression until it returns true or the timeout expires.
-func (b *Browser) pollJS(ctx, tabCtx context.Context, timeout time.Duration, expr string) error {
+// pollJS polls a JS expression, in the document of the iframe frame matches
+// when set, until it returns true or the timeout expires.
+func (b *Browser) pollJS(ctx, tabCtx context.Context, timeout time.Duration, frame, expr string) error {
 	runCtx, cancel := context.WithTimeout(tabCtx, timeout)
 	defer cancel()
 	deadline := time.Now().Add(timeout)
@@ -1747,14 +1839,14 @@ func (b *Browser) pollJS(ctx, tabCtx context.Context, timeout time.Duration, exp
 
 	for {
 		var result bool
-		if err := chromedp.Run(runCtx, chromedp.Evaluate(expr, &result)); err != nil {
+		if err := chromedp.Run(runCtx, evalIn(frame, expr, &result)); err != nil {
 			// JS errors during polling are not fatal — element might not exist yet
 		} else if result {
 			return nil
 		}
 
 		if time.Now().After(deadline) {
-			return fmt.Errorf("timeout after %s waiting for: %s", timeout, expr)
+			return fmt.Errorf("timeout after %s waiting for: %s%s", timeout, expr, inFrame(Step{Frame: frame}))
 		}
 
 		select {

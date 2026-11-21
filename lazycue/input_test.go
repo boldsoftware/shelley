@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -326,6 +327,80 @@ document.addEventListener('click', e => document.title = e.target.closest('.msg,
 		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
 			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
 		}
+	}
+}
+
+// Element steps, evals and text waits with a frame act in that iframe's
+// document: same-origin, sandboxed without scripts, or cross-origin, and at
+// an offset in the page.
+func TestFrames(t *testing.T) {
+	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
+		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
+	}
+	br, err := NewBrowser(context.Background(), Launch{Hosts: map[string]http.Handler{"https://other.test": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<!doctype html><body style="margin: 0"><button id="go" style="margin: 40px 0 0 50px">Go</button>
+<script>go.onclick = () => parent.postMessage('cross clicked', '*')</script>`))
+	})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(br.Close)
+	// A small button in a frame with a margin, border and padding: aiming
+	// at it without them in the offset misses it.
+	same := `<body style='margin: 0'><input data-testid='message-input'><button style='position: absolute; left: 30px; top: 40px; width: 12px; height: 12px; padding: 0' onclick='parent.document.title = &quot;same clicked&quot;'>Go</button></body>`
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin: 0">
+<p>Main says hi</p>
+<input data-testid="message-input" value="main">
+<iframe id="same" style="margin: 9px; border: 7px solid; padding: 11px" srcdoc="`+same+`"></iframe>
+<iframe id="sandboxed" sandbox="allow-popups allow-popups-to-escape-sandbox" srcdoc="<p>Olympic hosts</p><button>Search</button>"></iframe>
+<div style="height: 2000px"></div>
+<iframe id="cross" style="border: 0" src="https://other.test/"></iframe>
+<script>addEventListener('message', e => document.title = e.data)</script>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionWaitVisible, Frame: "#sandboxed", Selector: "p", HasText: "Olympic hosts"},
+		Step{Action: ActionWaitText, Frame: "#sandboxed", Text: "Olympic hosts"},
+		Step{Action: ActionWaitTextGone, Frame: "#same", Text: "Main says hi"},
+		Step{Action: ActionAssertText, Frame: "#sandboxed", Role: "button", Text: "Search"},
+		Step{Action: ActionEval, Frame: "#sandboxed", Expression: "document.querySelector('p').textContent", Expect: ptr("Olympic hosts")},
+		Step{Action: ActionAssertValue, Frame: "#same", Selector: "[data-testid=message-input]", Value: ""},
+		Step{Action: ActionFill, Frame: "#same", Selector: "[data-testid=message-input]", Value: "hi"},
+		Step{Action: ActionAssertValue, Frame: "#same", Selector: "[data-testid=message-input]", Value: "hi"},
+		Step{Action: ActionAssertFocused, Frame: "#same", Selector: "[data-testid=message-input]"},
+		Step{Action: ActionAssertValue, Selector: "[data-testid=message-input]", Value: "main"},
+		Step{Action: ActionClick, Frame: "#same", Role: "button", Name: "Go"},
+		Step{Action: ActionAssertTitle, Text: "same clicked"},
+		// Below the fold, in another origin.
+		Step{Action: ActionAssertNotInViewport, Frame: "#cross", Selector: "#go"},
+		Step{Action: ActionWaitVisible, Frame: "#cross", Selector: "#go"},
+		Step{Action: ActionClick, Frame: "#cross", Selector: "#go"},
+		Step{Action: ActionAssertTitle, Text: "cross clicked"},
+		Step{Action: ActionAssertInViewport, Frame: "#cross", Selector: "#go"},
+		Step{Action: ActionAssertCount, Frame: "#cross", Role: "button", Name: "Go", Count: 1},
+		// A frame that comes later is waited for.
+		Step{Action: ActionEval, Expression: `setTimeout(() => document.body.insertAdjacentHTML('afterbegin', '<iframe id="late" srcdoc="<p>Late</p>"></iframe>'), 300)`},
+		Step{Action: ActionWaitVisible, Frame: "#late", Selector: "p"},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		{Step{Action: ActionClick, Frame: "#nope", Selector: "p"}, "no iframe matches #nope"},
+		{Step{Action: ActionClick, Frame: "p", Selector: "p"}, "p is a <p>, not an iframe"},
+		{Step{Action: ActionClick, Frame: "#same", X: ptr(1.0), Y: ptr(1.0)}, "a frame scopes a step's selector or role"},
+		{Step{Action: ActionAssertURL, Frame: "#same", Text: "x"}, "a frame scopes a step's selector or role"},
+	} {
+		c.step.Timeout = "300ms"
+		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+	// Chrome does not render a cross-origin frame out of view, so its roles
+	// cannot be read.
+	runSteps(t, br, env, Step{Action: ActionEval, Expression: "scrollTo(0, 0)"})
+	if err := failSteps(t, br, env, Step{Action: ActionAssertCount, Frame: "#cross", Role: "button", Count: 1, Timeout: "300ms"}); !strings.Contains(err.Error(), "out of view") {
+		t.Errorf("role in a cross-origin frame out of view: %v", err)
 	}
 }
 

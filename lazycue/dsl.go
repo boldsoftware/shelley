@@ -25,7 +25,10 @@ type Step struct {
 	Visible bool `json:"visible,omitempty"`
 	// Within keeps only the matches inside an element it picks out, as
 	// Playwright's chained locators do.
-	Within     *Within `json:"within,omitempty"`
+	Within *Within `json:"within,omitempty"`
+	// Frame is a CSS selector for an iframe in the page, whose document the
+	// step acts in, as Playwright's frameLocator.
+	Frame      string  `json:"frame,omitempty"`
 	Value      string  `json:"value,omitempty"`
 	Text       string  `json:"text,omitempty"`
 	Timeout    string  `json:"timeout,omitempty"`
@@ -168,7 +171,7 @@ func stepSummary(s Step) string {
 	case ActionWaitVisible, ActionWaitHidden, ActionAssertVisible, ActionAssertNotVisible:
 		return s.Action + " " + describe(s)
 	case ActionWaitText, ActionWaitTextGone:
-		return s.Action + " " + truncateArg(s.Text, 40)
+		return s.Action + " " + truncateArg(s.Text, 40) + inFrame(s)
 	case ActionFill:
 		return "fill " + describe(s) + " " + truncateArg(s.Value, 30)
 	case ActionClick:
@@ -229,7 +232,7 @@ func stepSummary(s Step) string {
 	case ActionScreenshot:
 		return "screenshot"
 	case ActionEval:
-		expr := truncateArg(s.Expression, 40)
+		expr := truncateArg(s.Expression, 40) + inFrame(s)
 		if s.Expect != nil {
 			return "eval " + expr + " expect=" + truncateArg(*s.Expect, 20)
 		}
@@ -278,8 +281,8 @@ func stepSummary(s Step) string {
 	}
 }
 
-// describe names what a step's selector, role, name, has_text, visible and
-// within pick out, e.g. `button "Archive" in nav`, or its point.
+// describe names what a step's selector, role, name, has_text, visible,
+// within and frame pick out, e.g. `button "Archive" in nav`, or its point.
 func describe(s Step) string {
 	if s.Point != "" {
 		return "point " + truncateArg(s.Point, 40)
@@ -303,7 +306,15 @@ func describe(s Step) string {
 	if s.Within != nil {
 		d += " within " + describe(s.Within.step())
 	}
-	return d
+	return d + inFrame(s)
+}
+
+// inFrame names a step's frame, if it has one.
+func inFrame(s Step) string {
+	if s.Frame == "" {
+		return ""
+	}
+	return " in frame " + s.Frame
 }
 
 // pointSuffix describes a pointer step's offset, button, click count and
