@@ -1,0 +1,52 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "At 390px wide, the table of contents shows and refreshes chapters without a feature flag. The conversation /c/{{SLUG}} (ID {{ID}}) has one chapter, titled \"Chapter navigation\", anchored at its user message, whose data-message-id is {{ANCHOR}}. Call \"retitle\" renames the chapter to \"Retrospective heading\" on the server. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Click the button whose accessible name is exactly \"Conversation table of contents\". 3. The chapter entry (\".toc-entry-chapter\") should have exactly the text \"Chapter navigation\". 4. Call \"retitle\". 5. Tell the page the chapters changed: eval window.dispatchEvent(new CustomEvent(\"shelley-chapters-updated\", { detail: \"{{ID}}\" })). 6. The chapter entry should then have exactly the text \"Retrospective heading\". 7. Click the chapter entry. 8. The URL should become exactly /c/{{SLUG}}#m-{{ANCHOR8}} (an exact URL check, not a substring).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".toc-entry-chapter",
+      "text": "Chapter navigation"
+    },
+    {
+      "action": "call",
+      "value": "retitle"
+    },
+    {
+      "action": "eval",
+      "expression": "window.dispatchEvent(new CustomEvent('shelley-chapters-updated', { detail: '{{ID}}' }))"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".toc-entry-chapter",
+      "text": "Retrospective heading"
+    },
+    {
+      "action": "click",
+      "selector": ".toc-entry-chapter"
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/{{SLUG}}#m-{{ANCHOR8}}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:21:54.268175933Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 20800,
+    "output_tokens": 441,
+    "estimated_cost_usd": 0.018485849999999998,
+    "mode": "generated"
+  }
+}
