@@ -988,7 +988,8 @@ func findAllJS(step Step) string {
 		const all = Array.from(document.querySelectorAll(sel));
 		if (hasText === '') return all;
 		const norm = s => s.replace(/\s+/g, ' ').trim();
-		const matches = all.filter(el => norm(el.textContent).includes(norm(hasText)));
+		// Text a user can see: not the title, scripts or styles.
+		const matches = all.filter(el => !el.closest('head, script, style, noscript, template') && norm(el.textContent).includes(norm(hasText)));
 		// Keep the innermost: an element holding a match holds its text
 		// too, and "*" would otherwise pick <html>.
 		const outer = new Set();
@@ -1429,8 +1430,6 @@ func pressKey(key, modifiers string, held input.Modifier) (chromedp.Action, erro
 	}), nil
 }
 
-// keyEvents builds the keyDown and keyUp events of a key, by name from
-// keyNames or a single character, pressed with mods held.
 // shiftedKeys maps a key's code to what it gives with Shift held, for the
 // keys whose character Shift changes.
 var shiftedKeys = func() map[string]*kb.Key {
@@ -1443,6 +1442,8 @@ var shiftedKeys = func() map[string]*kb.Key {
 	return m
 }()
 
+// keyEvents builds the keyDown and keyUp events of a key, by name from
+// keyNames or a single character, pressed with mods held.
 func keyEvents(key string, mods input.Modifier) (down, up *input.DispatchKeyEventParams, err error) {
 	r, ok := keyNames[key]
 	if !ok {

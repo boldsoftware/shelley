@@ -139,7 +139,7 @@ func TestVisibility(t *testing.T) {
 
 func TestHasText(t *testing.T) {
 	br := newBrowserOrSkip(t)
-	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"><title>Inner - app</title><script>window.x = 'Inner'</script></head><body>
 <p style="display: none">Hidden note</p>
 <div>Outer <div>Inner</div></div>
 <ul><li><button>Rename</button></li><li><button title="a">Archive
@@ -155,6 +155,8 @@ func TestHasText(t *testing.T) {
 		Step{Action: ActionAssertNotVisible, Selector: "button", HasText: "Delete"},
 		Step{Action: ActionAssertNotVisible, Selector: "*", HasText: "Hidden note"},
 		Step{Action: ActionAssertText, Selector: "div", HasText: "Inner", Text: "Inner"},
+		Step{Action: ActionAssertVisible, Selector: "*", HasText: "Inner"},
+		Step{Action: ActionAssertCount, Selector: "*", HasText: "Inner", Count: 1},
 		Step{Action: ActionAssertCount, Selector: "*", HasText: "Archive", Count: 2},
 		Step{Action: ActionClick, Selector: "button", HasText: "that"},
 		Step{Action: ActionAssertTitle, Text: "Archive that"},

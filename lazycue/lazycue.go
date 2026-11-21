@@ -43,8 +43,9 @@ type Options struct {
 	VideoDir         string // If set, render an MP4 per test (prompt title card + captioned screenshots) here, named <DescriptionHash>.mp4
 	RepoRoot         string // Repository root passed to the heal agent's git_command tool (default: `git rev-parse --show-toplevel` from the cwd, falling back to ".")
 	// GitHidden lists path fragments the agent's git_command refuses to
-	// mention: other tests, which it would copy instead of following its
-	// description.
+	// mention, and drops output lines with: other tests, which it would copy
+	// instead of following its description. Whole-commit diffs can still
+	// show them; it is a fence, not a wall.
 	GitHidden []string
 }
 

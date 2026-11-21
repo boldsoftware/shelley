@@ -192,11 +192,22 @@ func TestCacheConversationMarksOnlyTheLastBlock(t *testing.T) {
 }
 
 func TestGitCommandHidesPaths(t *testing.T) {
-	hidden := []string{"e2e"}
-	if got := executeGitCommand(".", hidden, "git show HEAD:../ui/e2e/x.spec.ts"); !strings.Contains(got, "e2e is off limits") {
+	hidden := []string{"/e2e"}
+	cache := "/tmp/e2e/cache.json"
+	if got := executeGitCommand(".", hidden, cache, "git show HEAD:../ui/e2e/x.spec.ts"); !strings.Contains(got, "/e2e is off limits") {
 		t.Errorf("hidden path: %s", got)
 	}
-	if got := executeGitCommand(".", hidden, "git rev-parse --is-inside-work-tree"); got != "true" {
+	if got := executeGitCommand(".", hidden, cache, "git rev-parse --is-inside-work-tree"); strings.Contains(got, "off limits") {
 		t.Errorf("other command: %s", got)
+	}
+	if got := executeGitCommand(".", hidden, cache, "git rev-parse --is-inside-work-tree"); got == "true" {
+		// In a checkout: what a search turns up in hidden paths is dropped.
+		got := executeGitCommand(".", []string{"_test.go"}, "", "git ls-files")
+		if strings.Contains(got, "_test.go") || !strings.Contains(got, "agent.go") {
+			t.Errorf("ls-files with hidden tests: %s", got)
+		}
+	}
+	if got := executeGitCommand(".", hidden, cache, "git log --oneline -- "+cache); strings.Contains(got, "off limits") {
+		t.Errorf("the cache file's history: %s", got)
 	}
 }

@@ -212,6 +212,7 @@ Available DSL actions:
 - assert_attribute: {"action": "assert_attribute", "selector": "...", "attribute": "...", "value": "..."} - Assert an attribute is present with this value; it fails when the attribute is absent, even for value "". To check that an attribute is present or absent, use assert_count with an attribute selector, e.g. {"action": "assert_count", "selector": "details:not([open])", "count": 1}. For disabled state use assert_enabled / assert_disabled.
 - assert_value: {"action": "assert_value", "selector": "...", "value": "..."} - Assert the current value of an input, textarea or select (the DOM property, which typing changes; not the value attribute).
 - assert_enabled / assert_disabled: {"action": "assert_enabled", "selector": "..."} - Assert a control is enabled or disabled: disabled means a disabled form control (or one in a disabled fieldset) or inside aria-disabled="true".
+- Dialogs close by themselves: a page may always be left despite a beforeunload handler, and alert, confirm and prompt are cancelled (confirm returns false).
 - assert_focused: {"action": "assert_focused", "selector": "..."} - Assert the element has keyboard focus. For a custom element with a shadow root, focus anywhere inside it counts.
 - wait_url: {"action": "wait_url", "text": "...", "timeout": "10s"} (substring) or {"action": "wait_url", "value": "..."} (exact) - Wait for the browser URL to match. Its exact "value" may be a whole URL or just the path, query and hash.
 - assert_url: {"action": "assert_url", "value": "..."} or {"action": "assert_url", "text": "..."} for contains - Assert the URL; an exact "value" must be the whole URL.
@@ -367,7 +368,7 @@ func buildTools() []apiTool {
 				"properties": {
 					"command": {
 						"type": "string",
-						"description": "The git command to run (e.g., 'git grep data-testid', 'git ls-files src/')"
+						"description": "The git command to run (e.g., 'git grep data-testid', 'git ls-files vue/')"
 					}
 				},
 				"required": ["command"]
@@ -758,7 +759,7 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 				gitCommands++
 				result := fmt.Sprintf("Error: git_command is limited to %d calls per run; work with run_steps and screenshot now.", maxGitCommands)
 				if gitCommands <= maxGitCommands {
-					result = executeGitCommand(cfg.RepoRoot, cfg.GitHidden, input.Command)
+					result = executeGitCommand(cfg.RepoRoot, cfg.GitHidden, cfg.CacheFilePath, input.Command)
 				}
 				toolResults = append(toolResults, makeToolResult(tu.ID, result))
 
@@ -863,16 +864,32 @@ func gitExec(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func executeGitCommand(repoRoot string, hidden []string, command string) string {
+func executeGitCommand(repoRoot string, hidden []string, cacheFile, command string) (result string) {
 	normalized := strings.TrimSpace(command)
 	if !strings.HasPrefix(normalized, "git ") {
 		return "Error: Only git commands are allowed"
 	}
+	// The heal prompt asks for the cache file's history.
+	unhidden := normalized
+	if cacheFile != "" {
+		unhidden = strings.ReplaceAll(unhidden, cacheFile, "")
+	}
 	for _, h := range hidden {
-		if strings.Contains(normalized, h) {
+		if strings.Contains(unhidden, h) {
 			return fmt.Sprintf("Error: %s is off limits; follow the description and look at the live page instead.", h)
 		}
 	}
+	defer func() {
+		// Drop what a search turned up in hidden paths anyway.
+		if len(hidden) == 0 || cacheFile != "" && strings.Contains(normalized, cacheFile) {
+			return
+		}
+		lines := strings.Split(result, "\n")
+		lines = slices.DeleteFunc(lines, func(l string) bool {
+			return slices.ContainsFunc(hidden, func(h string) bool { return strings.Contains(l, h) })
+		})
+		result = strings.Join(lines, "\n")
+	}()
 
 	allowedSubcommands := []string{"grep", "ls-files", "show", "log", "diff", "cat-file", "rev-parse", "for-each-ref"}
 	parts := strings.Fields(normalized)
