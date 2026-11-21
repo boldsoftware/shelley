@@ -1,0 +1,240 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "CLI conversation messages show as tool cards that say where they came from, at 1280x720 in the light color scheme. The conversation /c/{{SLUG}} (ID {{PARENT_ID}}) was started with \"subagent: backend echo: Ready.\", which made the subagent conversation {{CHILD}} (ID {{CHILD_ID}}). window.__provMessage(text) is the first element with data-testid \"message\" whose text contains text, and window.__provCard(text, headline, background, tag) checks that message's tool card: \"ok\", or what is wrong. \"The card of M\" is the element with data-testid \"conversation-message-card\" whose text contains M (has_text); look inside it with \"within\". Links are picked by role \"link\" and exact name. 1. Navigate to /c/{{SLUG}}. 2. The element with data-testid \"message-input\" should be visible (allow 30s). 3. The first element with data-testid \"message\" whose text contains \"subagent: backend echo: Ready.\" (has_text) should be visible (allow 30s): the history has loaded. 4. Call \"progress\": the subagent sends this conversation a two-line progress report. 5. window.__provCard(\"Backend underway\", \"Backend underway: **API and database** implementation are progressing.\", 'rgb(243, 244, 246)', 'message') must return \"ok\" (eval with expect, which polls). 6. The card of \"Backend underway\" should show a visible link named exactly \"{{CHILD}}\". 7. Click the card's button named \"Expand\". 8. Eval window.__provCardOf('Backend underway').querySelector('.tool-details .tool-code').textContent === {{PROGRESS}}: it must return true (the verbatim report). 9. The card's link named exactly \"https://example.com/api\" should have the href attribute \"https://example.com/api\". 10. Reload the page. 11. window.__provCard(\"Backend underway\", \"Backend underway: **API and database** implementation are progressing.\", 'rgb(243, 244, 246)', 'message') must return \"ok\" (eval with expect, which polls) (the stored message, after the reload). 12. The card's link named exactly \"{{CHILD}}\" should have the href attribute \"/c/{{CHILD_ID}}\" and the title attribute \"Open subagent conversation\". 13. Click it. 14. \".header-title\" should read exactly \"{{CHILD}}\". 15. window.__provCard(\"echo: Ready.\", \"echo: Ready.\", 'rgb(243, 244, 246)', 'from parent') must return \"ok\" (eval with expect, which polls): the parent's delegated prompt. 16. The card of \"echo: Ready.\" should show a visible link named exactly \"{{SLUG}}\". 17. Eval window.__provHeadline('echo: Ready.'): it must return exactly '{\"lines\":1,\"below\":false,\"clipped\":false}' (the short message is one line, beside the sender link, and not clipped). 18. Call \"instruct\": the parent sends this subagent \"Please finish the API tests before the database changes.\". 19. window.__provCard(\"Please finish the API tests\", \"Please finish the API tests before the database changes.\", 'rgb(243, 244, 246)', 'from parent') must return \"ok\" (eval with expect, which polls). 20. The card of \"Please finish the API tests\" must hold exactly 0 buttons named \"Expand\": a short single-line message has nothing to expand. 21. That card should show a visible link named exactly \"{{SLUG}}\". 22. Call \"rename\": the parent conversation is renamed {{RENAMED}}. 23. The card of \"Please finish the API tests\" should come to have a link named exactly \"{{RENAMED}}\", with the href attribute \"/c/{{PARENT_ID}}\" and the title attribute \"Open parent conversation\". 24. Click it. 25. \".header-title\" should read exactly \"{{RENAMED}}\". 26. The first element with data-testid \"message\" whose text contains \"Backend underway\" (has_text) should show a visible link named exactly \"{{CHILD}}\". 27. Eval window.__provMessage('subagent: backend echo: Ready.').classList.contains('message-user'): it must return true. 28. Eval window.__provMessage('subagent: backend echo: Ready.').querySelectorAll('[data-testid=\"conversation-message-card\"]').length: it must return exactly \"0\". 29. Eval document.documentElement.scrollWidth \u003c= window.innerWidth: it must return true (nothing overflows sideways).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "subagent: {{CHILD}} echo: Ready.",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "progress"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__provCard('Backend underway', 'Backend underway: **API and database** implementation are progressing.', 'rgb(243, 244, 246)', 'message')",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='conversation-message-card']",
+        "has_text": "Backend underway"
+      },
+      "role": "link",
+      "name": "{{CHILD}}",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='conversation-message-card']",
+        "has_text": "Backend underway"
+      },
+      "role": "button",
+      "name": "Expand"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__provCardOf('Backend underway').querySelector('.tool-details .tool-code').textContent === {{PROGRESS}}",
+      "expect": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[data-testid='conversation-message-card']",
+        "has_text": "Backend underway"
+      },
+      "role": "link",
+      "name": "https://example.com/api",
+      "exact": true,
+      "attribute": "href",
+      "value": "https://example.com/api"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__provCard('Backend underway', 'Backend underway: **API and database** implementation are progressing.', 'rgb(243, 244, 246)', 'message')",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[data-testid='conversation-message-card']",
+        "has_text": "Backend underway"
+      },
+      "role": "link",
+      "name": "{{CHILD}}",
+      "exact": true,
+      "attribute": "href",
+      "value": "/c/{{CHILD_ID}}"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[data-testid='conversation-message-card']",
+        "has_text": "Backend underway"
+      },
+      "role": "link",
+      "name": "{{CHILD}}",
+      "exact": true,
+      "attribute": "title",
+      "value": "Open subagent conversation"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='conversation-message-card']",
+        "has_text": "Backend underway"
+      },
+      "role": "link",
+      "name": "{{CHILD}}",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".header-title",
+      "text": "{{CHILD}}"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__provCard('echo: Ready.', 'echo: Ready.', 'rgb(243, 244, 246)', 'from parent')",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='conversation-message-card']",
+        "has_text": "echo: Ready."
+      },
+      "role": "link",
+      "name": "{{SLUG}}",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "window.__provHeadline('echo: Ready.')",
+      "expect": "{\"lines\":1,\"below\":false,\"clipped\":false}"
+    },
+    {
+      "action": "call",
+      "value": "instruct"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__provCard('Please finish the API tests', 'Please finish the API tests before the database changes.', 'rgb(243, 244, 246)', 'from parent')",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid='conversation-message-card']",
+        "has_text": "Please finish the API tests"
+      },
+      "role": "button",
+      "name": "Expand",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='conversation-message-card']",
+        "has_text": "Please finish the API tests"
+      },
+      "role": "link",
+      "name": "{{SLUG}}",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "rename"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[data-testid='conversation-message-card']",
+        "has_text": "Please finish the API tests"
+      },
+      "role": "link",
+      "name": "{{RENAMED}}",
+      "exact": true,
+      "attribute": "href",
+      "value": "/c/{{PARENT_ID}}"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[data-testid='conversation-message-card']",
+        "has_text": "Please finish the API tests"
+      },
+      "role": "link",
+      "name": "{{RENAMED}}",
+      "exact": true,
+      "attribute": "title",
+      "value": "Open parent conversation"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='conversation-message-card']",
+        "has_text": "Please finish the API tests"
+      },
+      "role": "link",
+      "name": "{{RENAMED}}",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".header-title",
+      "text": "{{RENAMED}}"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='message']",
+        "has_text": "Backend underway"
+      },
+      "role": "link",
+      "name": "{{CHILD}}",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "window.__provMessage('subagent: {{CHILD}} echo: Ready.').classList.contains('message-user')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__provMessage('subagent: {{CHILD}} echo: Ready.').querySelectorAll('[data-testid=\"conversation-message-card\"]').length",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "document.documentElement.scrollWidth \u003c= window.innerWidth",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:48:55.461171167Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 69878,
+    "output_tokens": 5420,
+    "estimated_cost_usd": 0.12986085,
+    "mode": "generated"
+  }
+}
