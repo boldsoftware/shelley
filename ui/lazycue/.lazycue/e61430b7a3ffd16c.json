@@ -1,0 +1,498 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "create, edit and delete a project; start a conversation in it. Conversation {{PLAIN}} exists, and there are no projects yet. Call \"projects\" returns the sorted names of the projects; call \"publish-vm\" the VM (JSON) of project \"{{NAME}}\"; call \"notes-instructions\" the instructions of project \"{{NAME}} notes\". Call \"start-notes\" starts a conversation in project \"{{NAME}} notes\" through the API, titled \"Publish release notes\" with the message \"Hello\" (the composer has no project picker outside workspace mode), and navigating to /test/go/started then opens it. Call \"archive-notes\" archives the conversation of project \"{{NAME}} notes\" through the API. To \"open the projects\" (the drawer grouped by project, where projects are managed): click the button \"Open conversations\", click the button \"View options\", click {\"selector\": \".group-by-menu-item\", \"has_text\": \"Project\", \"exact\": true}, then check that the button \"New project\" is visible. \"The group P\" is the drawer's project group {\"role\": \"region\", \"name\": P, \"exact\": true}, which is the element section[aria-label='P']; its link is \"section[aria-label='P'] a.project-select\". \"The editor\" is {\"role\": \"region\", \"name\": \"Edit project\", \"exact\": true} (the element section[aria-label='Edit project']); a field \"labelled L\" in it is {\"within\": {\"selector\": \"section[aria-label='Edit project']\"}, \"role\": \"textbox\", \"name\": L, \"exact\": true}, and its button B is {\"within\": {\"selector\": \"section[aria-label='Edit project']\"}, \"role\": \"button\", \"name\": B, \"exact\": true}. \"The view\" is data-testid \"project-view\". \"The AGENTS.md label\" is \"AGENTS.md (instructions used by every project conversation)\". Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The name field\" is {\"within\": {\"selector\": \"[data-testid='new-project-row']\"}, \"role\": \"textbox\", \"name\": \"New project\", \"exact\": true}. \"The project picker\" is {\"role\": \"combobox\", \"name\": \"Conversation project\", \"exact\": true} (the select #current-conversation-project), and \"its chosen option\" is \"#current-conversation-project option:checked\". \"The Rename field\" is {\"within\": {\"selector\": \"[data-testid='project-view']\"}, \"role\": \"textbox\", \"name\": \"Rename\", \"exact\": true}, and \"the title button T\" is {\"within\": {\"selector\": \"[data-testid='project-view']\"}, \"role\": \"button\", \"name\": T, \"exact\": true}. \"The delete dialog\" is {\"role\": \"dialog\", \"name\": \"Delete project?\", \"exact\": true}. 1. Navigate to /c/{{PLAIN}}; data-testid \"message-input\" is enabled (assert_enabled). 2. Without projects there is no project picker (assert_count 0). 3. Open the projects. 4. Click the button \"New project\"; the name field is focused (assert_focused). 5. Fill the name field with \"Dropped\" and press Escape (press_key). 6. There is no name field (assert_count 0). 7. Click the button \"New project\", then blur the field: eval document.querySelector(\"[data-testid='new-project-row'] input[aria-label='New project']\").blur() (no expect). 8. There is no name field. 9. Click the button \"New project\", fill the name field with \"a/b\" and press Enter. 10. {\"within\": {\"selector\": \"[data-testid='new-project-row']\"}, \"role\": \"alert\"} reads exactly \"The name can't contain / or control characters.\" (assert_text). 11. Fill the name field with \"{{NAME}}\", then blur it as in step 7 (leaving the field creates the project). 12. There is no name field. 13. The group {{NAME}} is visible. 14. Call \"projects\" with expect '[\"{{NAME}}\"]' (nothing named Dropped). 15. Call \"publish-vm\" with expect \"null\" (naming a project creates no VM). 16. Click the link of the group {{NAME}}. 17. The URL ends in /project/\u003cdigits\u003e/settings: eval with expect \"true\" of String(/\\/project\\/\\d+\\/settings$/.test(location.href)). 18. The buttons of the view's navigation are exactly [\"Settings\"]: assert_texts of {\"within\": {\"selector\": \"[data-testid='project-view']\", \"role\": \"navigation\"}, \"role\": \"button\"}. 19. The editor's button \"Delete project…\" is enabled (assert_enabled). 20. Fill the editor's field labelled with the AGENTS.md label with \"Keep release notes brief.\". 21. Click the title button {{NAME}}; the Rename field is focused. 22. Fill the Rename field with \"Discarded\" and press Escape. 23. The editor is visible. 24. Click the title button {{NAME}}, fill the Rename field with \"{{NAME}} notes\" and press Enter. 25. The title button \"{{NAME}} notes\" is visible. 26. Call \"notes-instructions\" with expect \"\" (the rename saved nothing else), and call \"projects\" with expect '[\"{{NAME}} notes\"]'. 27. Fill the editor's field labelled \"Working directory\" with \"{{CWD}}\". 28. Outside workspace mode a project has no page: there is no {\"selector\": \"section[aria-label='Edit project'] label\", \"has_text\": \"Project page\", \"exact\": true} (assert_count 0), while the same with has_text \"Working directory\" is visible. 29. Click the editor's button \"Save project\". 30. {\"selector\": \"section[aria-label='Edit project'] *\", \"has_text\": \"Saved.\", \"exact\": true} is visible. 31. Reload the page (reload action). 32. The value of the editor's field labelled with the AGENTS.md label is exactly \"Keep release notes brief.\" (assert_value). 33. Call \"start-notes\" (no expect: it acts once), then navigate to /test/go/started. 34. The project picker is visible, and its chosen option reads exactly \"{{NAME}} notes\". 35. Click the button \"Edit conversation project\". 36. The value of the editor's field labelled with the AGENTS.md label is exactly \"Keep release notes brief.\". 37. Go back (go_back). 38. The editor is not visible (assert_not_visible). 39. Navigate to /c/{{PLAIN}}. 40. Now that a project exists, the project picker is visible, and its chosen option reads exactly \"No project\". 41. Call \"archive-notes\" (no expect: it acts once). 42. Open the projects. 43. The group \"{{NAME}} notes\" is visible. 44. Click its link. 45. Click the editor's button \"Delete project…\". 46. The delete dialog is visible. 47. {\"within\": {\"role\": \"dialog\", \"name\": \"Delete project?\", \"exact\": true}, \"selector\": \"[data-testid='project-delete-effects']\"} reads exactly \"Its archived conversation moves to No project.\". 48. Click {\"within\": {\"role\": \"dialog\", \"name\": \"Delete project?\", \"exact\": true}, \"role\": \"button\", \"name\": \"Delete project\", \"exact\": true}. 49. The delete dialog is not visible. 50. There is no group \"{{NAME}} notes\" (assert_count 0). 51. Call \"projects\" with expect \"[]\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{PLAIN}}"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "#current-conversation-project",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".group-by-menu-item",
+      "has_text": "Project",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "New project",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "New project",
+      "exact": true
+    },
+    {
+      "action": "assert_focused",
+      "within": {
+        "selector": "[data-testid='new-project-row']"
+      },
+      "role": "textbox",
+      "name": "New project",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "[data-testid='new-project-row']"
+      },
+      "role": "textbox",
+      "name": "New project",
+      "exact": true,
+      "value": "Dropped"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid='new-project-row']"
+      },
+      "role": "textbox",
+      "name": "New project",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "New project",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='new-project-row'] input[aria-label='New project']\").blur()"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid='new-project-row']"
+      },
+      "role": "textbox",
+      "name": "New project",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "New project",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "[data-testid='new-project-row']"
+      },
+      "role": "textbox",
+      "name": "New project",
+      "exact": true,
+      "value": "a/b"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": "[data-testid='new-project-row']"
+      },
+      "role": "alert",
+      "text": "The name can't contain / or control characters."
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "[data-testid='new-project-row']"
+      },
+      "role": "textbox",
+      "name": "New project",
+      "exact": true,
+      "value": "{{NAME}}"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='new-project-row'] input[aria-label='New project']\").blur()"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid='new-project-row']"
+      },
+      "role": "textbox",
+      "name": "New project",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "role": "region",
+      "name": "{{NAME}}",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "projects",
+      "expect": "[\"{{NAME}}\"]"
+    },
+    {
+      "action": "call",
+      "value": "publish-vm",
+      "expect": "null"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='{{NAME}}'] a.project-select"
+    },
+    {
+      "action": "eval",
+      "expression": "String(/\\/project\\/\\d+\\/settings$/.test(location.href))",
+      "expect": "true"
+    },
+    {
+      "action": "assert_texts",
+      "within": {
+        "selector": "[data-testid='project-view']",
+        "role": "navigation"
+      },
+      "role": "button",
+      "texts": [
+        "Settings"
+      ]
+    },
+    {
+      "action": "assert_enabled",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "button",
+      "name": "Delete project…",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "textbox",
+      "name": "AGENTS.md (instructions used by every project conversation)",
+      "exact": true,
+      "value": "Keep release notes brief."
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='project-view']"
+      },
+      "role": "button",
+      "name": "{{NAME}}",
+      "exact": true
+    },
+    {
+      "action": "assert_focused",
+      "within": {
+        "selector": "[data-testid='project-view']"
+      },
+      "role": "textbox",
+      "name": "Rename",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "[data-testid='project-view']"
+      },
+      "role": "textbox",
+      "name": "Rename",
+      "exact": true,
+      "value": "Discarded"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_visible",
+      "role": "region",
+      "name": "Edit project",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='project-view']"
+      },
+      "role": "button",
+      "name": "{{NAME}}",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "[data-testid='project-view']"
+      },
+      "role": "textbox",
+      "name": "Rename",
+      "exact": true,
+      "value": "{{NAME}} notes"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='project-view']"
+      },
+      "role": "button",
+      "name": "{{NAME}} notes",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "notes-instructions",
+      "expect": ""
+    },
+    {
+      "action": "call",
+      "value": "projects",
+      "expect": "[\"{{NAME}} notes\"]"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "textbox",
+      "name": "Working directory",
+      "exact": true,
+      "value": "{{CWD}}"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='Edit project'] label",
+      "has_text": "Project page",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Edit project'] label",
+      "has_text": "Working directory"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "button",
+      "name": "Save project",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Edit project'] *",
+      "has_text": "Saved.",
+      "exact": true
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "assert_value",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "textbox",
+      "name": "AGENTS.md (instructions used by every project conversation)",
+      "exact": true,
+      "value": "Keep release notes brief."
+    },
+    {
+      "action": "call",
+      "value": "start-notes"
+    },
+    {
+      "action": "navigate",
+      "url": "/test/go/started"
+    },
+    {
+      "action": "assert_visible",
+      "role": "combobox",
+      "name": "Conversation project",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "#current-conversation-project option:checked",
+      "text": "{{NAME}} notes"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Edit conversation project",
+      "exact": true
+    },
+    {
+      "action": "assert_value",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "textbox",
+      "name": "AGENTS.md (instructions used by every project conversation)",
+      "exact": true,
+      "value": "Keep release notes brief."
+    },
+    {
+      "action": "go_back"
+    },
+    {
+      "action": "assert_not_visible",
+      "role": "region",
+      "name": "Edit project",
+      "exact": true
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{PLAIN}}"
+    },
+    {
+      "action": "assert_visible",
+      "role": "combobox",
+      "name": "Conversation project",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "#current-conversation-project option:checked",
+      "text": "No project"
+    },
+    {
+      "action": "call",
+      "value": "archive-notes"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".group-by-menu-item",
+      "has_text": "Project",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "New project",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "role": "region",
+      "name": "{{NAME}} notes",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='{{NAME}} notes'] a.project-select"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "button",
+      "name": "Delete project…",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "role": "dialog",
+      "name": "Delete project?",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "role": "dialog",
+        "name": "Delete project?",
+        "exact": true
+      },
+      "selector": "[data-testid='project-delete-effects']",
+      "text": "Its archived conversation moves to No project."
+    },
+    {
+      "action": "click",
+      "within": {
+        "role": "dialog",
+        "name": "Delete project?",
+        "exact": true
+      },
+      "role": "button",
+      "name": "Delete project",
+      "exact": true
+    },
+    {
+      "action": "assert_not_visible",
+      "role": "dialog",
+      "name": "Delete project?",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='{{NAME}} notes']",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "projects",
+      "expect": "[]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:10:08.0098294Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 20452,
+    "output_tokens": 5194,
+    "estimated_cost_usd": 0.1061682,
+    "mode": "generated"
+  }
+}

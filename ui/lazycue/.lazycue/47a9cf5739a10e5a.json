@@ -1,0 +1,378 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "stock mode offers Group by Project without the workspace. Project {{NAME}} runs in the server's directory. Conversation {{PROJECT_CONV}} was started in it, and {{PLAIN}} in no project. Call \"integrations-none\" has the browser told there are no exe.dev integrations, and call \"integrations-exe\" that there is one, exe; before either the server answers. Call \"saved-vm\" returns the base, integration, managed_base_vm and shared_vm of the vm the last project save (a PUT to /api/projects/...) sent, or \"none\". \"The editor\" is the region named exactly \"Edit project\"; its CSS selector is \"section[aria-label='Edit project']\". To \"open the settings of P\": click \"section[aria-label='P'] a.project-select\" (in the drawer), then click {\"selector\": \"[data-testid='project-view'] nav\", \"role\": \"button\", \"name\": \"Settings\", \"exact\": true}. The editor's radios are {\"selector\": \"section[aria-label='Edit project']\", \"role\": \"radio\", \"name\": \"...\"} (name a substring): \"This Shelley host\" is input[name='project-vm-mode'][value='host'], \"One shared machine\" is the one with value shared, and \"Their own VMs\" the one with value own; whether one \"is checked\" is an eval of its .checked (polled with expect), and to \"choose\" one, click it and then check that it is checked. The editor's fields, by the exact text of their \u003clabel\u003e: \"Working directory\" is #project-cwd, \"Reached through\" is the select #project-vm-via, \"VM\" and \"SSH destination\" are both #project-vm-machine (the label says which), \"Base VM\" is #project-vm-base and \"exe.dev integration\" is #project-vm-integration. \"The field L is visible\" means: \"section[aria-label='Edit project'] label\" with has_text L and \"exact\": true is visible, and so is the field. \"There is no field L\" means: assert_count 0 of \"section[aria-label='Edit project'] label\" with has_text L and \"exact\": true. \"The Automanage checkbox\" is {\"selector\": \"section[aria-label='Edit project']\", \"role\": \"checkbox\", \"name\": \"Automanage\"}; to tick or untick it, click it and then check its .checked with an eval of document.querySelector(\"section[aria-label='Edit project'] label.project-checkbox input\").checked (it is the first such checkbox). \"The text T is visible\" means: assert_visible of \"section[aria-label='Edit project'] *\" with has_text T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /. 2. The URL contains \"/c/\" (assert_url with text). 3. Click the button \"Open conversations\". 4. There is no data-testid \"assistant-row\", no data-testid \"nav-tab-dev\" and no \".project-group\" (assert_count 0 each). 5. Click the button \"View options\". 6. Click {\"selector\": \".group-by-menu\", \"role\": \"button\", \"name\": \"Project\", \"exact\": true}. 7. \".project-group[aria-label='{{NAME}}'] [data-conversation-id='{{PROJECT_CONV}}']\" is visible. 8. The region named exactly \"No project\" is visible (role region), and \"section[aria-label='No project'] [data-conversation-id='{{PLAIN}}']\" is visible. 9. Click the button \"New conversation in {{NAME}}\". 10. Data-testid \"message-input\" is visible; there is no \".project-picker\"; \".status-field-cwd\" is visible. 11. Navigate to /. 12. Click the button \"Open conversations\". 13. Reload the page (reload action). 14. Click the button \"Open conversations\". 15. \".project-group[aria-label='{{NAME}}'] [data-conversation-id='{{PROJECT_CONV}}']\" is visible (Project grouping is remembered). 16. Call \"integrations-none\". 17. Open the settings of {{NAME}}. 18. The field \"Working directory\" is visible. 19. The radio \"This Shelley host\" is checked. 20. There is no radio \"Their own VMs\" in the editor (assert_count 0 by role and name). 21. Choose the radio \"One shared machine\". 22. There is no field \"Reached through\" and no field \"exe.dev integration\". 23. Fill the field \"SSH destination\" with \"me@devbox\" (check its label first). 24. Go back (go_back). 25. Click the button \"Open conversations\". 26. Call \"integrations-exe\". 27. Open the settings of {{NAME}}. 28. The radio \"This Shelley host\" is checked. 29. No element in the editor contains the text \"Recommended\": assert_count 0 of \"section[aria-label='Edit project'] *\" with has_text \"Recommended\". 30. Choose the radio \"One shared machine\". 31. The field \"Reached through\" is visible, and its value is exactly \"exe\" (assert_value). 32. The field \"VM\" is visible. 33. In the field \"Reached through\", pick the option labelled \"ssh, with this host's SSH configuration\", whose value is \"\": fill the select with value \"\", then check that the chosen option reads that label: eval with expect \"ssh, with this host's SSH configuration\" of document.querySelector(\"#project-vm-via\").selectedOptions[0].textContent.trim(). 34. The field \"SSH destination\" is visible. 35. Choose the radio \"Their own VMs\". 36. The value of the field \"Base VM\" is exactly \"\"; its placeholder contains \"Optional\" (assert_count 1 of \"#project-vm-base[placeholder*='Optional']\"). 37. The text \"starts on a new, empty VM\" is visible. 38. Fill the field \"Base VM\" with \"my-base\". 39. The text \"a copy of this existing VM\" is visible. 40. Tick the Automanage checkbox. 41. The field \"Base VM\" has the attribute readonly with value \"\" (assert_attribute), its value is exactly \"\", and its placeholder contains \"setup task\" (assert_count 1 of \"#project-vm-base[placeholder*='setup task']\"). 42. The text \"Saving starts a setup\" is visible. 43. Untick the Automanage checkbox. 44. The value of the field \"Base VM\" is exactly \"\". 45. Click {\"selector\": \"section[aria-label='Edit project']\", \"role\": \"button\", \"name\": \"Save project\", \"exact\": true}. 46. Call \"saved-vm\" with expect '{\"base\":\"\",\"integration\":\"exe\",\"managed_base_vm\":false,\"shared_vm\":\"\"}'.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "assert_url",
+      "text": "/c/"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='assistant-row']",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='nav-tab-dev']",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".project-group",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".group-by-menu",
+      "role": "button",
+      "name": "Project",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".project-group[aria-label='{{NAME}}'] [data-conversation-id='{{PROJECT_CONV}}']"
+    },
+    {
+      "action": "assert_visible",
+      "role": "region",
+      "name": "No project",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='No project'] [data-conversation-id='{{PLAIN}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "New conversation in {{NAME}}",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".project-picker",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".status-field-cwd"
+    },
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".project-group[aria-label='{{NAME}}'] [data-conversation-id='{{PROJECT_CONV}}']"
+    },
+    {
+      "action": "call",
+      "value": "integrations-none"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='{{NAME}}'] a.project-select"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='project-view'] nav",
+      "role": "button",
+      "name": "Settings",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Edit project'] label",
+      "has_text": "Working directory",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "#project-cwd"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"input[name='project-vm-mode'][value='host']\").checked",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='Edit project']",
+      "role": "radio",
+      "name": "Their own VMs",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='Edit project']",
+      "role": "radio",
+      "name": "One shared machine"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"input[name='project-vm-mode'][value='shared']\").checked",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='Edit project'] label",
+      "has_text": "Reached through",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='Edit project'] label",
+      "has_text": "exe.dev integration",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Edit project'] label",
+      "has_text": "SSH destination",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "#project-vm-machine"
+    },
+    {
+      "action": "fill",
+      "selector": "#project-vm-machine",
+      "value": "me@devbox"
+    },
+    {
+      "action": "go_back"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "integrations-exe"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='{{NAME}}'] a.project-select"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='project-view'] nav",
+      "role": "button",
+      "name": "Settings",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"input[name='project-vm-mode'][value='host']\").checked",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='Edit project'] *",
+      "has_text": "Recommended",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='Edit project']",
+      "role": "radio",
+      "name": "One shared machine"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"input[name='project-vm-mode'][value='shared']\").checked",
+      "expect": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Edit project'] label",
+      "has_text": "Reached through",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "#project-vm-via"
+    },
+    {
+      "action": "assert_value",
+      "selector": "#project-vm-via",
+      "value": "exe"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Edit project'] label",
+      "has_text": "VM",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "#project-vm-machine"
+    },
+    {
+      "action": "fill",
+      "selector": "#project-vm-via",
+      "value": ""
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"#project-vm-via\").selectedOptions[0].textContent.trim()",
+      "expect": "ssh, with this host's SSH configuration"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Edit project'] label",
+      "has_text": "SSH destination",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "#project-vm-machine"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='Edit project']",
+      "role": "radio",
+      "name": "Their own VMs"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"input[name='project-vm-mode'][value='own']\").checked",
+      "expect": "true"
+    },
+    {
+      "action": "assert_value",
+      "selector": "#project-vm-base",
+      "value": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": "#project-vm-base[placeholder*='Optional']",
+      "count": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Edit project'] *",
+      "has_text": "starts on a new, empty VM"
+    },
+    {
+      "action": "fill",
+      "selector": "#project-vm-base",
+      "value": "my-base"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Edit project'] *",
+      "has_text": "a copy of this existing VM"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='Edit project']",
+      "role": "checkbox",
+      "name": "Automanage"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"section[aria-label='Edit project'] label.project-checkbox input\").checked",
+      "expect": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#project-vm-base",
+      "attribute": "readonly",
+      "value": ""
+    },
+    {
+      "action": "assert_value",
+      "selector": "#project-vm-base",
+      "value": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": "#project-vm-base[placeholder*='setup task']",
+      "count": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Edit project'] *",
+      "has_text": "Saving starts a setup"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='Edit project']",
+      "role": "checkbox",
+      "name": "Automanage"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"section[aria-label='Edit project'] label.project-checkbox input\").checked",
+      "expect": "false"
+    },
+    {
+      "action": "assert_value",
+      "selector": "#project-vm-base",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='Edit project']",
+      "role": "button",
+      "name": "Save project",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "saved-vm",
+      "expect": "{\"base\":\"\",\"integration\":\"exe\",\"managed_base_vm\":false,\"shared_vm\":\"\"}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:48:48.602983387Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 19218,
+    "output_tokens": 4369,
+    "estimated_cost_usd": 0.09110805,
+    "mode": "generated"
+  }
+}

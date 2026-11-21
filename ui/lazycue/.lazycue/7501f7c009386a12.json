@@ -1,0 +1,200 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "project settings and conversation menu: delete waits for an empty project; move to project. Projects \"{{FROM}}\" and \"{{TO}}\" exist, and conversation {{ID}} (titled \"Move me 4f2a9c1e\") is in {{FROM}}. To \"open the projects\" (the drawer grouped by project, where projects are managed): click the button \"Open conversations\", click the button \"View options\", click {\"selector\": \".group-by-menu-item\", \"has_text\": \"Project\", \"exact\": true}, then check that the button \"New project\" is visible. \"The group P\" is the drawer's project group {\"role\": \"region\", \"name\": P, \"exact\": true}, which is the element section[aria-label='P']; its link is \"section[aria-label='P'] a.project-select\". \"The editor\" is {\"role\": \"region\", \"name\": \"Edit project\", \"exact\": true} (the element section[aria-label='Edit project']); a field \"labelled L\" in it is {\"within\": {\"selector\": \"section[aria-label='Edit project']\"}, \"role\": \"textbox\", \"name\": L, \"exact\": true}, and its button B is {\"within\": {\"selector\": \"section[aria-label='Edit project']\"}, \"role\": \"button\", \"name\": B, \"exact\": true}. \"The view\" is data-testid \"project-view\". \"The AGENTS.md label\" is \"AGENTS.md (instructions used by every project conversation)\". Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The row\" is \".conversation-item[data-conversation-id='{{ID}}']\"; \"the row in P\" is \"section[aria-label='P'] .conversation-item[data-conversation-id='{{ID}}']\". \"The toggle of P\" is \"section[aria-label='P'] .project-toggle\". 1. Navigate to /c/{{ID}}. 2. Open the projects. 3. The row in {{FROM}} is visible. 4. There is no \".conversation-item[data-conversation-id='{{ID}}'] .working-indicator\" (assert_count 0). 5. Empty projects start folded: the toggle of {{FROM}} has aria-expanded exactly \"true\", and the toggle of {{TO}} \"false\" (assert_attribute). 6. Click the toggle of {{TO}}; its aria-expanded is \"true\". 7. Click the toggle of {{TO}}; its aria-expanded is \"false\". 8. Click the link \"section[aria-label='{{FROM}}'] a.project-select\". 9. {\"within\": {\"selector\": \"section[aria-label='Edit project']\"}, \"role\": \"button\", \"name\": \"Delete project…\"} is disabled (assert_disabled). 10. The editor contains the text \"Archive or move its active conversation first\" (assert_text_contains on \"section[aria-label='Edit project']\"). 11. Go back (go_back). 12. Open the projects. 13. Click {\"selector\": \".conversation-item[data-conversation-id='{{ID}}']\", \"role\": \"button\", \"name\": \"Actions\", \"exact\": true}. 14. Click {\"within\": {\"selector\": \"[data-testid='conversation-actions-menu']\"}, \"role\": \"menuitem\", \"name\": \"Move to project\"}. 15. Click {\"within\": {\"selector\": \"[data-testid='conversation-actions-menu']\"}, \"role\": \"menuitem\", \"name\": \"{{TO}}\", \"exact\": true}. 16. The row in {{TO}} is visible. 17. There is no row in {{FROM}} (assert_count 0). 18. The first conversation unfolds its project, the emptied one folds: the toggle of {{TO}} has aria-expanded \"true\", and the toggle of {{FROM}} \"false\". 19. An explicit choice outlasts emptiness: click the toggle of {{FROM}}; its aria-expanded is \"true\". 20. Click the toggle of {{TO}}. 21. There is no row in {{TO}} (assert_count 0). 22. The toggle of {{TO}} has aria-expanded \"false\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".group-by-menu-item",
+      "has_text": "Project",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "role": "button",
+      "name": "New project",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='{{FROM}}'] .conversation-item[data-conversation-id='{{ID}}']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] .working-indicator",
+      "count": 0
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label='{{FROM}}'] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label='{{TO}}'] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='{{TO}}'] .project-toggle"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label='{{TO}}'] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='{{TO}}'] .project-toggle"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label='{{TO}}'] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='{{FROM}}'] a.project-select"
+    },
+    {
+      "action": "assert_disabled",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "button",
+      "name": "Delete project…",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "section[aria-label='Edit project']",
+      "text": "Archive or move its active conversation first"
+    },
+    {
+      "action": "go_back"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".group-by-menu-item",
+      "has_text": "Project",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "role": "button",
+      "name": "New project",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}']",
+      "role": "button",
+      "name": "Actions",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='conversation-actions-menu']"
+      },
+      "role": "menuitem",
+      "name": "Move to project"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='conversation-actions-menu']"
+      },
+      "role": "menuitem",
+      "name": "{{TO}}",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='{{TO}}'] .conversation-item[data-conversation-id='{{ID}}']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='{{FROM}}'] .conversation-item[data-conversation-id='{{ID}}']",
+      "count": 0
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label='{{TO}}'] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label='{{FROM}}'] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='{{FROM}}'] .project-toggle"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label='{{FROM}}'] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='{{TO}}'] .project-toggle"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='{{TO}}'] .conversation-item[data-conversation-id='{{ID}}']",
+      "count": 0
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label='{{TO}}'] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:09:41.867282635Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 16762,
+    "output_tokens": 2451,
+    "estimated_cost_usd": 0.054138900000000004,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,133 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "a conversation's title renames it in place, in a bar as tall as a project's. Conversation {{ID}} has the slug {{SLUG}}. Call \"slug\" returns its slug from the server. Call \"create-bar\" creates project \"{{NAME}}\" through the API, and navigating to /test/go/bar then opens its settings (/project/\u003cid\u003e/settings). Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The header\" is the first \".header\". \"The title button T\" is {\"within\": {\"selector\": \".header\"}, \"role\": \"button\", \"name\": T, \"exact\": true}, and \"the Rename field\" {\"within\": {\"selector\": \".header\"}, \"role\": \"textbox\", \"name\": \"Rename\", \"exact\": true}. 1. Navigate to /c/{{ID}}. 2. Click the title button {{SLUG}}. 3. The Rename field is focused (assert_focused), and its value is exactly \"{{SLUG}}\" (assert_value). 4. Fill the Rename field with \"Discarded\" and press Escape (press_key). 5. There is no Rename field (assert_count 0). 6. Click the title button {{SLUG}}, fill the Rename field with \"titled 4f2a9c1e!\" and press Enter. 7. The title button \"titled-4f2a9c1e\" is visible. 8. Call \"slug\" with expect \"titled-4f2a9c1e\". 9. Note the header's height, once: eval (no expect) of (() =\u003e { const h = document.querySelector(\".header\").getBoundingClientRect().height; sessionStorage.setItem(\"lcConversationBar\", String(h)); return String(h); })(). 10. Call \"create-bar\" (no expect: it acts once), then navigate to /test/go/bar. 11. {\"within\": {\"selector\": \"[data-testid='project-view']\"}, \"role\": \"button\", \"name\": \"{{NAME}}\", \"exact\": true} is visible. 12. The view's header is exactly as tall, read once: eval (no expect) of (() =\u003e { const bar = Number(sessionStorage.getItem(\"lcConversationBar\")); const headers = document.querySelectorAll(\"[data-testid='project-view'] .header\"); if (headers.length !== 1) throw new Error(\"project view headers: \" + headers.length); const h = headers[0].getBoundingClientRect().height; if (!bar || h !== bar) throw new Error(\"project bar \" + h + \", conversation bar \" + bar); return String(h); })().",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "{{SLUG}}",
+      "exact": true
+    },
+    {
+      "action": "assert_focused",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "textbox",
+      "name": "Rename",
+      "exact": true
+    },
+    {
+      "action": "assert_value",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "textbox",
+      "name": "Rename",
+      "exact": true,
+      "value": "{{SLUG}}"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "textbox",
+      "name": "Rename",
+      "exact": true,
+      "value": "Discarded"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "textbox",
+      "name": "Rename",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "{{SLUG}}",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "textbox",
+      "name": "Rename",
+      "exact": true,
+      "value": "titled 4f2a9c1e!"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "titled-4f2a9c1e",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "slug",
+      "expect": "titled-4f2a9c1e"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const h = document.querySelector('.header').getBoundingClientRect().height; sessionStorage.setItem('lcConversationBar', String(h)); return String(h); })()"
+    },
+    {
+      "action": "call",
+      "value": "create-bar"
+    },
+    {
+      "action": "navigate",
+      "url": "/test/go/bar"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='project-view']"
+      },
+      "role": "button",
+      "name": "{{NAME}}",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const bar = Number(sessionStorage.getItem('lcConversationBar')); const headers = document.querySelectorAll(\"[data-testid='project-view'] .header\"); if (headers.length !== 1) throw new Error('project view headers: ' + headers.length); const h = headers[0].getBoundingClientRect().height; if (!bar || h !== bar) throw new Error('project bar ' + h + ', conversation bar ' + bar); return String(h); })()"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:09:08.565444535Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 7151,
+    "output_tokens": 784,
+    "estimated_cost_usd": 0.0188649,
+    "mode": "generated"
+  }
+}
