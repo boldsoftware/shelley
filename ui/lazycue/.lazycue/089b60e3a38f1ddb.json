@@ -1,0 +1,138 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The ntfy add-channel form uses PrimeVue InputText and Select, and they update the form. The screen is the default 393x727 phone. Name elements by ARIA role and accessible name, as Playwright's getByRole does. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Press Control+k to open the command palette; \".command-palette-input\" should be visible. Fill it with \"notification\". The first \".command-palette-item\" should be visible; click it. 3. Click the button whose name contains \"+ Add Channel\". 4. Click the \".provider-btn\" whose text is exactly \"ntfy\". 5. \"#config-topic\" should have the class \"p-inputtext\". Fill it with \"my-topic\"; its value should be exactly \"my-topic\". 6. \"#config-password\" should have the attribute type=\"password\" and the attribute aria-describedby exactly \"config-password-desc\", and \"#config-password-desc\" should be visible. 7. \"The priority select\" is the \".p-select\" inside the \".form-group\" containing the text \"Done Priority\". It should be visible, and its \".p-select-label\" should have exactly the text \"default\". 8. Click the priority select. \".p-select-overlay\" should be visible, and the texts of its \".p-select-option\" elements should be exactly, in order: \"min\", \"low\", \"default\", \"high\", \"max\". 9. Click the overlay's \".p-select-option\" whose text is exactly \"max\". The priority select's \".p-select-label\" should then have exactly the text \"max\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "notification"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "+ Add Channel"
+    },
+    {
+      "action": "click",
+      "selector": ".provider-btn",
+      "has_text": "ntfy",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "#config-topic.p-inputtext"
+    },
+    {
+      "action": "fill",
+      "selector": "#config-topic",
+      "value": "my-topic"
+    },
+    {
+      "action": "assert_value",
+      "selector": "#config-topic",
+      "value": "my-topic"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-password",
+      "attribute": "type",
+      "value": "password"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-password",
+      "attribute": "aria-describedby",
+      "value": "config-password-desc"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "#config-password-desc"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".form-group",
+        "has_text": "Done Priority"
+      },
+      "selector": ".p-select"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".form-group",
+        "has_text": "Done Priority"
+      },
+      "selector": ".p-select .p-select-label",
+      "text": "default"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".form-group",
+        "has_text": "Done Priority"
+      },
+      "selector": ".p-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".p-select-overlay"
+    },
+    {
+      "action": "assert_texts",
+      "selector": ".p-select-overlay .p-select-option",
+      "texts": [
+        "min",
+        "low",
+        "default",
+        "high",
+        "max"
+      ]
+    },
+    {
+      "action": "click",
+      "selector": ".p-select-overlay .p-select-option",
+      "has_text": "max",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".form-group",
+        "has_text": "Done Priority"
+      },
+      "selector": ".p-select .p-select-label",
+      "text": "max"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:36:00.128525123Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 229869,
+    "output_tokens": 5476,
+    "estimated_cost_usd": 0.20088374999999997,
+    "mode": "generated"
+  }
+}
