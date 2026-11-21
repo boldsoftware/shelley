@@ -104,18 +104,8 @@ func TestMain(m *testing.M) {
 
 	ts, cleanup := startPredictableServer()
 	defer cleanup()
-	stopE2E, err := startE2E(filepath.Join(pkgDir, ".."))
-	if err != nil {
-		panic(err)
-	}
+	e2eModuleDir = filepath.Join(pkgDir, "..")
 
-	// Prepare a deterministic git fixture for the diff-viewer test. The path
-	// must be stable so the LazyCue description (which embeds it) hashes to the
-	// same cache key across runs.
-	if err := setupDiffFixtureRepo(diffFixtureDir); err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(diffFixtureDir)
 	if err := setupCompletionFixture(cwd, filepath.Join(tmp, "elsewhere")); err != nil {
 		panic(err)
 	}
@@ -443,7 +433,7 @@ func TestNewPageConsecutiveToolCalls(t *testing.T) {
 // component updates at window.__shelleyPerf (ui/src/utils/perf.ts); we watch
 // a slow bash command stream its output and assert Message components stay
 // quiet while progress events arrive.
-func TestToolProgressDoesNotRerenderMessages(t *testing.T) {
+func TestE2EToolProgressDoesNotRerenderMessages(t *testing.T) {
 	lazyTest(t, `Navigate to /new. Type "echo: warmup one" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"), then wait for the reply text "warmup one" to appear. Then type the text bash: for i in 1 2 3 4 5 6 7 8; do echo tick $i; sleep 1; done into the message input and click the send button. The bash tool card streams the command's output while it runs, so wait for the text "tick 2" to appear on the page (allow up to 30 seconds). Then reset the UI's recomputation counters: eval "(function(){window.__shelleyPerf.reset();return true;})()" and expect "true". Wait for at least 4 tool-progress events to arrive: eval "(function(){var s=window.__shelleyPerf.snapshot();return (((s['store.notifyTransient']||{}).count)||0)>=4;})()" with expect "true" (allow up to 15 seconds). Then assert the progress events did not re-render the conversation's message components: eval "(function(){var s=window.__shelleyPerf.snapshot();var prog=((s['store.notifyTransient']||{}).count)||0;var upd=((s['message.update']||{}).count)||0;return upd<=5?'pass':'fail: '+upd+' message updates during '+prog+' progress events';})()" and expect "pass". Finally wait for the completed tool call (data-testid "tool-call-completed") to become visible (allow up to 30 seconds).`)
 }
 
@@ -696,13 +686,13 @@ func TestNewPageQueueDrains(t *testing.T) {
 // the in-app "New Conversation" button so the steps are simple and
 // deterministic. ---
 
-func TestArchiveSelectsConversationBelow(t *testing.T) {
+func TestE2EArchiveSelectsConversationBelow(t *testing.T) {
 	lazyTestIsolated(t, `This test verifies that archiving the current conversation selects the one immediately below it in the list. Conversations are listed newest-first.
 Step A — create conversation "alpha": navigate to /new, wait for the message input (data-testid "message-input") to be visible, fill it with "echo: alpha", and click the send button (data-testid "send-button"). Wait for the echoed text "alpha" to appear and for the URL to contain "/c/". Then run an eval step with expression "sessionStorage.setItem('alphaUrl', location.pathname)".
 Step B — create conversation "bravo": navigate to /new again, wait for the message input (data-testid "message-input") to be visible, fill it with "echo: bravo", and click the send button (data-testid "send-button"). Wait for the echoed text "bravo" to appear and for the URL to contain "/c/". Then run an eval step with expression "sessionStorage.setItem('bravoUrl', location.pathname)".
 Now "bravo" is the current conversation and is at the TOP of the list, with "alpha" immediately below it.
 Step C — open the conversation drawer by clicking the button with aria-label "Open conversations", and wait for the active conversation item (selector ".conversation-item.active") to be visible. Confirm the current URL is bravo's: run an eval step whose expression is "location.pathname === sessionStorage.getItem('bravoUrl') ? 'true' : 'false'" and expect the result "true".
-Step D — archive the active conversation. The archive button is a small icon button that a coordinate-based click can miss, so trigger it with an eval step whose expression is "document.querySelector(\".conversation-item.active button[aria-label='Archive']\").click()". After archiving, the app asynchronously selects the conversation immediately below bravo, which is alpha, and the URL changes to alpha's path. The selection update is not instantaneous, so add a sleep of about 2 seconds to let it settle before asserting. Then run an eval step whose expression is "location.pathname === sessionStorage.getItem('alphaUrl') ? 'true' : 'false'" and expect the result "true". Then run an eval step whose expression is "location.pathname === sessionStorage.getItem('bravoUrl') ? 'true' : 'false'" and expect the result "false".`)
+Step D — archive the active conversation from its actions menu: click the button with aria-label "Actions" in ".conversation-item.active", wait for the menu's "Archive" item, and trigger it with an eval step whose expression is "Array.from(document.querySelectorAll('.p-tieredmenu-item-link')).find(el => el.textContent.trim().startsWith('Archive')).click()". After archiving, the app asynchronously selects the conversation immediately below bravo, which is alpha, and the URL changes to alpha's path. The selection update is not instantaneous, so add a sleep of about 2 seconds to let it settle before asserting. Then run an eval step whose expression is "location.pathname === sessionStorage.getItem('alphaUrl') ? 'true' : 'false'" and expect the result "true". Then run an eval step whose expression is "location.pathname === sessionStorage.getItem('bravoUrl') ? 'true' : 'false'" and expect the result "false".`)
 }
 
 // --- Diff viewer file list (regression for untracked/added files missing from
@@ -714,15 +704,13 @@ Step D — archive the active conversation. The archive button is a small icon b
 // list; the handler now merges them in as "added". This is the same <select> on
 // mobile and desktop, so the assertion is viewport-independent. ---
 
-func TestDiffViewerListsAddedModifiedDeleted(t *testing.T) {
-	lazyTest(t, fmt.Sprintf(`Navigate to /new?diff=working&cwd=%s . This opens the git diff viewer for the working-tree changes of that repository. Wait for the file picker (a <select> element with selector "select.diff-viewer-select") to be visible. The working tree has exactly four changed files, each appearing as an <option> in that select with a status-symbol prefix: a modified file shown as "~ tracked_mod.txt", a deleted file shown as "- tracked_del.txt", a brand-new untracked file shown as "+ untracked_added.txt", and a modified committed file whose name contains a space shown as "~ spaced name.txt". Verify all four options are present, with their full untruncated paths, by running an eval step whose expression is "(() => { const opts = Array.from(document.querySelectorAll('select.diff-viewer-select option')).map(o => o.textContent.trim()); const has = (sym, name) => opts.some(t => t.startsWith(sym) && t.includes(name)); return has('+','untracked_added.txt') && has('~','tracked_mod.txt') && has('-','tracked_del.txt') && has('~','spaced name.txt') ? 'true' : 'false'; })()" and expect the result "true". Two regression cases matter here: the untracked (added) file must be present with the "+" prefix, and the committed file with a space must appear as the full "spaced name.txt" (not truncated at the space to "spaced").`, diffFixtureDir))
+func TestE2EDiffViewerListsAddedModifiedDeleted(t *testing.T) {
+	e2e(t, `Navigate to /c/diff-fixture, a conversation in a repository with working-tree changes. Open its diff viewer: phones keep the workspace tools in the overflow menu, so click the button with aria-label "More options", then the menu button whose text starts with "Diffs". The diff viewer (".diff-viewer-overlay") opens on the working-tree changes. Wait for the file picker (a <select> element with selector "select.diff-viewer-select") to be visible. The working tree has exactly four changed files, each appearing as an <option> in that select with a status-symbol prefix: a modified file shown as "~ tracked_mod.txt", a deleted file shown as "- tracked_del.txt", a brand-new untracked file shown as "+ untracked_added.txt", and a modified committed file whose name contains a space shown as "~ spaced name.txt". Verify all four options are present, with their full untruncated paths, by running an eval step whose expression is "(() => { const opts = Array.from(document.querySelectorAll('select.diff-viewer-select option')).map(o => o.textContent.trim()); const has = (sym, name) => opts.some(t => t.startsWith(sym) && t.includes(name)); return has('+','untracked_added.txt') && has('~','tracked_mod.txt') && has('-','tracked_del.txt') && has('~','spaced name.txt') ? 'true' : 'false'; })()" and expect the result "true". Two regression cases matter here: the untracked (added) file must be present with the "+" prefix, and the committed file with a space must appear as the full "spaced name.txt" (not truncated at the space to "spaced").`, func(s *shelley) {
+		repo := s.path("diff")
+		s.check(setupDiffFixtureRepo(repo))
+		s.conversationWith(map[string]any{"message": "Hello", "model": "predictable", "cwd": repo}, "diff-fixture")
+	})
 }
-
-// diffFixtureDir is a deterministic path holding a git repo with working-tree
-// changes (a modified, a deleted, and a brand-new untracked file). The diff
-// viewer's file list is loaded from here. The path is fixed (not random) so the
-// LazyCue description that embeds it hashes to a stable cache key across runs.
-var diffFixtureDir = filepath.Join(os.TempDir(), "shelley-lazycue-diff-fixture")
 
 // setupDiffFixtureRepo (re)creates a git repo at dir with three kinds of
 // working-tree change: a modified tracked file, a deleted tracked file, and a

@@ -8,14 +8,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -35,33 +38,57 @@ import (
 // test can intercept requests on. A test's setup function prepares that
 // world afresh for each attempt.
 
-// e2eBin is the shelley binary the e2e tests run, e2eRoot the directory
-// their servers live in, and e2eLive the fake live-session provider.
+// e2eModuleDir is the shelley module, set by TestMain; initE2E fills in
+// the rest when the first e2e test runs: e2eBin is the shelley binary the
+// tests run, e2eRoot the directory their servers live in, e2eLive the fake
+// live-session provider and e2eDB a migrated database each server starts
+// from.
 var (
+	e2eModuleDir string
+
+	e2eOnce sync.Once
+	e2eErr  error
 	e2eBin  string
 	e2eRoot string
 	e2eLive string
+	e2eDB   string
+	e2eStop func()
 
 	e2eMu        sync.Mutex
 	e2eHarnesses []*lazycue.Harness
+	e2eServers   = map[*shelley]bool{} // not yet closed
 )
 
-// startE2E builds the shelley binary (or takes SHELLEY_BIN) and starts the
-// fake live-session provider, for TestMain.
-func startE2E(moduleDir string) (cleanup func(), err error) {
-	// Short: unix sockets live in here, and their paths are limited to ~100 bytes.
-	e2eRoot, err = os.MkdirTemp("", "se2e-")
+// initE2E prepares for the e2e tests once.
+func initE2E() error {
+	e2eOnce.Do(func() { e2eErr = startE2E() })
+	return e2eErr
+}
+
+func startE2E() (err error) {
+	sweepE2E()
+	// Short: unix sockets live in here, and their paths are limited to
+	// ~100 bytes. The pid lets sweepE2E tell a dead run's from a live one's.
+	e2eRoot, err = os.MkdirTemp("", fmt.Sprintf("se2e-%d-", os.Getpid()))
 	if err != nil {
-		return nil, err
+		return err
 	}
+	// Servers are in process groups of their own, which miss the terminal's
+	// interrupt.
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sig
+		stopE2E()
+		os.Exit(1)
+	}()
 	e2eBin = os.Getenv("SHELLEY_BIN")
 	if e2eBin == "" {
 		e2eBin = filepath.Join(e2eRoot, "shelley")
 		cmd := exec.Command("go", "build", "-o", e2eBin, "./cmd/shelley")
-		cmd.Dir = moduleDir
+		cmd.Dir = e2eModuleDir
 		if out, err := cmd.CombinedOutput(); err != nil {
-			os.RemoveAll(e2eRoot)
-			return nil, fmt.Errorf("build shelley: %w\n%s", err, out)
+			return fmt.Errorf("build shelley: %w\n%s", err, out)
 		}
 	}
 	var sessions atomic.Int64
@@ -73,16 +100,69 @@ func startE2E(moduleDir string) (cleanup func(), err error) {
 	})}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		os.RemoveAll(e2eRoot)
-		return nil, err
+		return err
 	}
 	go live.Serve(ln)
+	e2eStop = func() { live.Close() }
 	e2eLive = "http://" + ln.Addr().String() + "/v1/live/sessions"
-	return func() {
-		live.Close()
+
+	// Migrating a new database takes most of a server's start.
+	sh, err := newShelley(context.Background())
+	if err != nil {
+		return err
+	}
+	defer sh.close()
+	if err := sh.try(sh.start); err != nil {
+		return fmt.Errorf("start shelley: %w\nserver log:\n%s", err, sh.logTail())
+	}
+	sh.stop()
+	e2eDB = filepath.Join(e2eRoot, "template.db")
+	for _, suffix := range []string{"", "-wal"} {
+		b, err := os.ReadFile(filepath.Join(sh.dir, "test.db") + suffix)
+		if errors.Is(err, os.ErrNotExist) && suffix != "" {
+			continue
+		}
+		if err == nil {
+			err = os.WriteFile(e2eDB+suffix, b, 0o600)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// stopE2E closes the servers still running and removes what the e2e tests
+// left behind.
+func stopE2E() {
+	e2eMu.Lock()
+	servers := slices.Collect(maps.Keys(e2eServers))
+	e2eMu.Unlock()
+	for _, s := range servers {
+		s.close()
+	}
+	if e2eStop != nil {
+		e2eStop()
+	}
+	if e2eRoot != "" {
 		killTerminalSessions(e2eRoot)
 		os.RemoveAll(e2eRoot)
-	}, nil
+	}
+}
+
+// sweepE2E removes what runs that died without stopE2E (a test timeout, a
+// kill) left behind: their terminal sessions and directories. Their servers
+// died with them.
+func sweepE2E() {
+	dirs, _ := filepath.Glob(filepath.Join(os.TempDir(), "se2e-*-*"))
+	for _, dir := range dirs {
+		pid, err := strconv.Atoi(strings.Split(filepath.Base(dir), "-")[1])
+		if err != nil || syscall.Kill(pid, 0) != syscall.ESRCH {
+			continue
+		}
+		killTerminalSessions(dir)
+		os.RemoveAll(dir)
+	}
 }
 
 // e2eResults is every e2e test's lazycue result, for the report.
@@ -104,34 +184,46 @@ func e2e(t *testing.T, description string, setup func(s *shelley)) {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run the LazyCue browser integration tests")
 	}
 	t.Parallel()
+	if err := initE2E(); err != nil {
+		t.Fatal(err)
+	}
 	opts := appOpts
 	opts.BaseURL = ""
-	opts.Setup = func(ctx context.Context) (env *lazycue.Env, err error) {
-		sh, err := newShelley(ctx)
-		if err != nil {
-			return nil, err
+	opts.Setup = func(ctx context.Context) (*lazycue.Env, error) {
+		env, err := setUp(ctx, setup)
+		if err != nil && ctx.Err() == nil {
+			// Playwright retried a test whose setup failed; so does this,
+			// once.
+			env, err = setUp(ctx, setup)
 		}
-		defer func() {
-			if r := recover(); r != nil {
-				se, ok := r.(setupError)
-				if !ok {
-					panic(r)
-				}
-				sh.close()
-				env, err = nil, se.err
-			}
-		}()
-		if setup != nil {
-			setup(sh)
-		}
-		sh.start()
-		return sh.env(), nil
+		return env, err
 	}
 	h := lazycue.New(opts)
 	e2eMu.Lock()
 	e2eHarnesses = append(e2eHarnesses, h)
 	e2eMu.Unlock()
 	h.Test(t, description)
+}
+
+// setUp starts a shelley that setup prepares.
+func setUp(ctx context.Context, setup func(s *shelley)) (*lazycue.Env, error) {
+	sh, err := newShelley(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := sh.try(func() {
+		if setup != nil {
+			setup(sh)
+		}
+		sh.start()
+	}); err != nil {
+		if sh.cmd != nil {
+			err = fmt.Errorf("%w\nserver log:\n%s", err, sh.logTail())
+		}
+		sh.close()
+		return nil, err
+	}
+	return sh.env(), nil
 }
 
 // setupError carries a failure out of a setup function, which reports
@@ -150,13 +242,15 @@ type shelley struct {
 	vars      map[string]string
 	calls     map[string]func(ctx context.Context) (string, error)
 
-	mux     *http.ServeMux
-	pass    http.Handler // passes a request on to the server
-	proxy   *http.Server
-	url     string // the proxy, which the browser talks to
-	backend string // the server itself
-	cmd     *exec.Cmd
-	exited  chan struct{}
+	mux       *http.ServeMux
+	pass      http.Handler    // passes a request on to the server
+	transport *http.Transport // talks to the server
+	proxy     *http.Server
+	url       string // the proxy, which the browser talks to
+	backend   string // the server itself
+	cmd       *exec.Cmd
+	exited    chan struct{}
+	closed    sync.Once
 
 	mu       sync.Mutex
 	headers  http.Header
@@ -169,15 +263,19 @@ func newShelley(ctx context.Context) (*shelley, error) {
 		return nil, err
 	}
 	s := &shelley{
-		ctx:     ctx,
-		dir:     dir,
-		cwd:     filepath.Join(dir, "cwd"),
-		home:    filepath.Join(dir, "home"),
-		vars:    map[string]string{},
-		calls:   map[string]func(ctx context.Context) (string, error){},
-		mux:     http.NewServeMux(),
-		headers: http.Header{},
+		ctx:       ctx,
+		dir:       dir,
+		cwd:       filepath.Join(dir, "cwd"),
+		home:      filepath.Join(dir, "home"),
+		vars:      map[string]string{},
+		calls:     map[string]func(ctx context.Context) (string, error){},
+		mux:       http.NewServeMux(),
+		transport: http.DefaultTransport.(*http.Transport).Clone(),
+		headers:   http.Header{},
 	}
+	e2eMu.Lock()
+	e2eServers[s] = true
+	e2eMu.Unlock()
 	s.vars["CWD"] = s.cwd
 	s.vars["HOME"] = s.home
 	if err := s.try(func() {
@@ -190,7 +288,7 @@ func newShelley(ctx context.Context) (*shelley, error) {
 		s.write("example.txt", "after\n")
 		s.git("commit", "--quiet", "-am", "Update test fixture")
 	}); err != nil {
-		os.RemoveAll(dir)
+		s.close()
 		return nil, err
 	}
 	// /new starts in the fixture directory. Otherwise it falls back to the
@@ -199,15 +297,16 @@ func newShelley(ctx context.Context) (*shelley, error) {
 	return s, nil
 }
 
-// try runs f, returning the error a helper in it panicked with.
+// try runs f, returning the error a helper in it panicked with, or any
+// other panic as an error.
 func (s *shelley) try(f func()) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			se, ok := r.(setupError)
-			if !ok {
-				panic(r)
+			if se, ok := r.(setupError); ok {
+				err = se.err
+			} else {
+				err = fmt.Errorf("panic: %v\n%s", r, debug.Stack())
 			}
-			err = se.err
 		}
 	}()
 	f()
@@ -426,7 +525,7 @@ func (s *shelley) forward(r *http.Request) (*http.Response, error) {
 	out.URL.Host = strings.TrimPrefix(s.backend, "http://")
 	out.Header.Del("Accept-Encoding")
 	s.addHeaders(out.Header)
-	return http.DefaultTransport.RoundTrip(out)
+	return s.transport.RoundTrip(out)
 }
 
 // fetchJSON forwards r to the server and decodes its JSON response into out,
@@ -472,6 +571,13 @@ func (s *shelley) start() {
 	log, err := os.Create(filepath.Join(s.dir, "server.log"))
 	s.check(err)
 	defer log.Close()
+	if e2eDB != "" {
+		for _, suffix := range []string{"", "-wal"} {
+			if b, err := os.ReadFile(e2eDB + suffix); err == nil {
+				s.check(os.WriteFile(filepath.Join(s.dir, "test.db")+suffix, b, 0o600))
+			}
+		}
+	}
 	portFile := filepath.Join(s.dir, "port")
 	cmd := exec.Command(e2eBin, "--predictable-only", "--db", filepath.Join(s.dir, "test.db"),
 		"serve", "--port", "0", "--port-file", portFile, "--socket", filepath.Join(s.dir, "client.sock"))
@@ -503,11 +609,11 @@ func (s *shelley) start() {
 		}
 		select {
 		case <-s.exited:
-			s.fail("shelley exited during startup:\n%s", s.logTail())
+			s.fail("shelley exited during startup")
 		case <-time.After(20 * time.Millisecond):
 		}
 		if time.Now().After(deadline) {
-			s.fail("shelley did not write its port within 30s:\n%s", s.logTail())
+			s.fail("shelley did not write its port within 30s")
 		}
 	}
 	s.backend = "http://127.0.0.1:" + port
@@ -520,6 +626,7 @@ func (s *shelley) start() {
 			r.Out.Host = r.In.Host
 			s.addHeaders(r.Out.Header)
 		},
+		Transport:     s.transport,
 		FlushInterval: -1,
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -550,9 +657,23 @@ func (s *shelley) logTail() string {
 
 // close stops the server and removes everything the attempt made.
 func (s *shelley) close() {
+	s.closed.Do(func() {
+		e2eMu.Lock()
+		delete(e2eServers, s)
+		e2eMu.Unlock()
+		s.stop()
+		killTerminalSessions(s.dir)
+		os.RemoveAll(s.dir)
+	})
+}
+
+// stop stops the server and the proxy in front of it.
+func (s *shelley) stop() {
 	if s.proxy != nil {
 		s.proxy.Close()
 	}
+	// The server waits for idle connections to close as it shuts down.
+	s.transport.CloseIdleConnections()
 	if s.cmd != nil {
 		syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
 		select {
@@ -562,8 +683,6 @@ func (s *shelley) close() {
 			<-s.exited
 		}
 	}
-	killTerminalSessions(s.dir)
-	os.RemoveAll(s.dir)
 }
 
 // killTerminalSessions kills the terminal sessions servers under dir left
@@ -638,7 +757,7 @@ func (s *shelley) send(method, path, contentType string, body io.Reader) []byte 
 	s.check(err)
 	req.Header.Set("Content-Type", contentType)
 	s.addHeaders(req.Header)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := (&http.Client{Transport: s.transport}).Do(req)
 	s.check(err)
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)

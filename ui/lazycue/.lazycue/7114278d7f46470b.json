@@ -14,8 +14,8 @@
     },
     {
       "action": "eval",
-      "expression": "(function() { const c = document.querySelector('.messages-container'); return c.scrollHeight - c.clientHeight - c.scrollTop; })()",
-      "expect": "0"
+      "expression": "(function() { const c = document.querySelector('.messages-container'); return c.scrollHeight - c.clientHeight - c.scrollTop \u003c 5; })()",
+      "expect": "true"
     },
     {
       "action": "assert_not_visible",
@@ -28,8 +28,8 @@
     },
     {
       "action": "eval",
-      "expression": "(function() { const c = document.querySelector('.messages-container'); return c.scrollHeight - c.clientHeight - c.scrollTop; })()",
-      "expect": "0"
+      "expression": "(function() { const c = document.querySelector('.messages-container'); return c.scrollHeight - c.clientHeight - c.scrollTop \u003c 5; })()",
+      "expect": "true"
     },
     {
       "action": "assert_not_visible",

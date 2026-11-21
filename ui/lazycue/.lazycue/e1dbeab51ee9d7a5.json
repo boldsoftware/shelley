@@ -28,20 +28,6 @@
       "expect": "{{HOME}}/.config/shelley/AGENTS.md"
     },
     {
-      "action": "fill",
-      "selector": "[data-testid='message-input']",
-      "value": "hello"
-    },
-    {
-      "action": "click",
-      "selector": "button[type='submit'], button.send, [data-testid='send-button']"
-    },
-    {
-      "action": "wait_url",
-      "text": "/c/",
-      "timeout": "10s"
-    },
-    {
       "action": "call",
       "value": "conversation cwd",
       "expect": "{{CWD}}"

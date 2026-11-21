@@ -4,12 +4,16 @@
 // time does until a test pauses it, and steps drive it with window.__clock:
 //
 //   pauseAt(ms)      jump forward to ms (epoch milliseconds or a date string),
-//                    firing each due timer once, and stop time there
+//                    firing each late timer once, then stop time there
 //   runFor(ms)       advance ms, firing every timer due in that span in order,
 //                    intervals as often as they come due
-//   fastForward(ms)  jump ms ahead, firing each due timer once
+//   fastForward(ms)  jump ms ahead, firing each late timer once
 //   setFixedTime(ms) make Date report ms from now on; timers run as before
 //   resume()         let time flow again
+//
+// pauseAt, runFor and fastForward return promises (an eval step awaits
+// them): like Playwright's, they let the page run a task after each timer,
+// so promise chains and awaited sleeps advance as they would in real time.
 //
 // Date, performance.now, setTimeout, setInterval, requestAnimationFrame and
 // requestIdleCallback (and their cancel functions) follow the fake clock.
@@ -28,9 +32,11 @@
   let fixed = null;
   let nextId = 1;
   let wake = null;
+  let firing = false; // in a timer's callback
+  let advancing = 0; // advances running, which own the time
   const timers = new Map();
 
-  const current = () => (paused ? now : now + (real.now() - realAt));
+  const current = () => (paused || advancing ? now : now + (real.now() - realAt));
   const rebase = () => {
     now = current();
     realAt = real.now();
@@ -50,7 +56,11 @@
 
   const add = (kind, fn, delay, args, interval) => {
     const id = nextId++;
-    timers.set(id, { id, kind, fn, args, interval, at: current() + Math.max(0, Number(delay) || 0) });
+    delay = Math.max(0, Number(delay) || 0);
+    // As Playwright's, a timer set from a timer's callback is never due in
+    // the same instant.
+    if (firing) delay = Math.max(1, delay);
+    timers.set(id, { id, kind, fn, args, interval, at: current() + delay });
     schedule();
     return id;
   };
@@ -69,6 +79,7 @@
   const fire = (t) => {
     if (t.interval) t.at += t.interval;
     else timers.delete(t.id);
+    firing = true;
     try {
       if (t.kind === 'frame') t.fn(performance.now());
       else if (t.kind === 'idle') t.fn({ didTimeout: false, timeRemaining: () => 50 });
@@ -76,6 +87,8 @@
       else (0, eval)(String(t.fn));
     } catch (e) {
       reportError(e);
+    } finally {
+      firing = false;
     }
   };
   const due = (until) => {
@@ -85,52 +98,57 @@
     }
     return next;
   };
-  // advance moves time to until, firing what comes due. With once, each
-  // timer due fires at most once, as after a laptop's lid opens.
-  const advance = (until, once) => {
+  const nextTask = () => new Promise((done) => real.setTimeout(done));
+  // advance moves time to target(now), firing what comes due in order and
+  // letting the page run a task after each. With once, timers already late
+  // by then fire once, all at the target time, as after a laptop's lid opens.
+  const advance = async (target, once) => {
     rebase();
+    const until = target(now);
     if (until < now) throw new Error('the clock cannot go back from ' + new RealDate(now).toISOString());
-    if (once) {
-      for (const t of [...timers.values()].filter((t) => t.at <= until).sort((a, b) => a.at - b.at || a.id - b.id)) {
-        if (!timers.has(t.id)) continue;
-        now = Math.max(now, t.at);
-        fire(t);
-        if (t.interval && t.at <= until) t.at = until + t.interval;
+    advancing++;
+    schedule(); // no wake-ups meanwhile
+    try {
+      if (once) {
+        for (const t of timers.values()) if (t.at <= until) t.at = until;
+        now = until;
       }
-    } else {
       for (let t = due(until); t; t = due(until)) {
         now = Math.max(now, t.at);
         fire(t);
+        await nextTask();
       }
+    } finally {
+      advancing--;
+      now = Math.max(now, until); // another advance may have gone further
+      realAt = real.now();
+      schedule();
     }
-    now = until;
-    realAt = real.now();
-    schedule();
   };
   // schedule wakes up for the next timer while time flows.
   function schedule() {
     if (wake !== null) real.clearTimeout(wake);
     wake = null;
-    if (paused || timers.size === 0) return;
+    if (paused || advancing || timers.size === 0) return;
     let at = Infinity;
     for (const t of timers.values()) at = Math.min(at, t.at);
     wake = real.setTimeout(() => {
       wake = null;
-      advance(current());
+      advance((now) => now);
     }, Math.max(0, at - current()));
   }
 
   window.__clock = {
     pauseAt(t) {
-      advance(toMs(t), true);
+      rebase();
       paused = true;
-      schedule();
+      return advance(() => toMs(t), true);
     },
     runFor(ms) {
-      advance(current() + ms);
+      return advance((now) => now + ms);
     },
     fastForward(ms) {
-      advance(current() + ms, true);
+      return advance((now) => now + ms, true);
     },
     setFixedTime(t) {
       fixed = toMs(t);
