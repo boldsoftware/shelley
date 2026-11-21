@@ -865,19 +865,21 @@ func expectResult(ctx context.Context, step Step, timeout time.Duration, probe f
 	want := *step.Expect
 	deadline := time.Now().Add(timeout)
 	// last is the latest result or error, kept over the error of a probe cut
-	// short by the deadline, which says nothing about the state.
+	// short by the deadline, which says nothing about the state; have says
+	// there is one, since a result may be empty.
 	var last string
+	have := false
 	for {
 		got, err := probe()
 		switch {
 		case err == nil && got == want:
 			return got, nil
 		case err == nil:
-			last = got
-		case last == "" || !errors.Is(err, context.DeadlineExceeded):
+			last, have = got, true
+		case !have || !errors.Is(err, context.DeadlineExceeded):
 			// Transient errors (element not present yet) are not fatal
 			// while we still have time to poll.
-			last = "<error: " + err.Error() + ">"
+			last, have = "<error: "+err.Error()+">", true
 		}
 		if time.Now().After(deadline) {
 			return last, fmt.Errorf("timeout after %s: %s: expected %q, got %q", timeout, step.Action, want, last)

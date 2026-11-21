@@ -152,6 +152,11 @@ func TestEvalAwaitsPromisesAndRendersJSON(t *testing.T) {
 	if err := failSteps(t, br, env, step); !strings.Contains(err.Error(), `expected "", got "x"`) {
 		t.Errorf("empty expect error = %v", err)
 	}
+	// So does an empty result, which the probes the deadline cuts short
+	// don't replace.
+	if err := failSteps(t, br, env, Step{Action: ActionEval, Expression: `''`, Expect: ptr("x"), Timeout: "300ms"}); !strings.Contains(err.Error(), `expected "x", got ""`) {
+		t.Errorf("empty result error = %v", err)
+	}
 }
 
 // Visible means a box of some size, as Playwright has it; position: fixed
