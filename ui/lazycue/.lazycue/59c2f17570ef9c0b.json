@@ -1,0 +1,187 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A notification send stays locked after the panel is reopened, and its stale result is discarded. The VM has four integrations: gh, llm, notify and reflection. The first test notification waits until call \"release\", then succeeds; the second succeeds at once; the third answers 502 \"Gateway rejected test\". Call \"sends\" returns how many test notifications the page has sent; call \"first message\" returns the message of the first (\"none\" before one); call \"first answered\" says whether its answer has been sent (\"true\" or \"false\"). \"The input\" is \"#integrations-test-message\". Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match. \"The modal\" is \".integrations-modal\". To \"open the panel\": press Control+k; \".command-palette-input\" should be visible; fill it with \"integration\", click the first \".command-palette-item\", and the modal should be visible. To \"select\" an integration N: click the first \".integrations-tabs button\" (the list), then the \".integrations-name-btn\" whose text starts with N followed by a space; \".integrations-detail-head strong\" should then have exactly the text N. \"The refresh button\" is the modal's button named \"Refresh\"; \"the Slack test button\" is the button named \"Test integration (webhook only)\"; \"the notify button\" is the button named \"Send test notification\". To \"close the modal\": click the modal's button whose name contains \"Close modal\". To \"start\": navigate to /new, wait for the element with data-testid \"message-input\" to be visible, and open the panel. Perform the steps in order. 1. Start, and select notify. 2. Fill the input with \"My notification test\" and click the notify button. The input should be disabled. 3. Call \"first message\" until it returns \"My notification test\". 4. Close the modal, open the panel again, and click the \".integrations-name-btn\" whose text starts with \"notify \". 5. The input should be disabled, and so should \".integrations-notify button\". 6. Submit \".integrations-notify form\" anyway with an eval dispatching new Event(\"submit\", {bubbles: true, cancelable: true}) on it. Sleep 500ms; call \"sends\": it must return \"1\". 7. Call \"release\", then call \"first answered\" until it returns \"true\". Let the answer land: eval new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 300))). 8. The input should be enabled, and \".integrations-notify\" should hold no element with role \"status\" (count 0). 9. Click the notify button: the element with role \"status\" inside \".integrations-notify\" should contain the text \"Test accepted\". 10. Click the notify button again: the element with role \"alert\" inside \".integrations-notify\" should contain the text \"Gateway rejected test\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "integration"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".integrations-modal"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-tabs button"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-name-btn",
+      "has_text": "notify "
+    },
+    {
+      "action": "assert_text",
+      "selector": ".integrations-detail-head strong",
+      "text": "notify"
+    },
+    {
+      "action": "fill",
+      "selector": "#integrations-test-message",
+      "value": "My notification test"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Send test notification",
+      "exact": true
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "#integrations-test-message"
+    },
+    {
+      "action": "call",
+      "value": "first message",
+      "expect": "My notification test"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close modal",
+      "selector": ".integrations-modal"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "integration"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".integrations-modal"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-name-btn",
+      "has_text": "notify "
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "#integrations-test-message"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": ".integrations-notify button"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.integrations-notify form').dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}))"
+    },
+    {
+      "action": "sleep",
+      "timeout": "500ms"
+    },
+    {
+      "action": "call",
+      "value": "sends",
+      "expect": "1"
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "call",
+      "value": "first answered",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 300)))"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "#integrations-test-message"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".integrations-notify"
+      },
+      "role": "status",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Send test notification",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".integrations-notify"
+      },
+      "role": "status",
+      "text": "Test accepted"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Send test notification",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".integrations-notify"
+      },
+      "role": "alert",
+      "text": "Gateway rejected test"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:20:37.236579475Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 44775,
+    "output_tokens": 2055,
+    "estimated_cost_usd": 0.0652014,
+    "mode": "generated"
+  }
+}

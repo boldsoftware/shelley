@@ -1,0 +1,125 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The Slack panel offers an explicit webhook-only test and explains bot failures. The VM has two integrations named \"slack-hook\": a personal webhook and a team Slack bot whose help is {{HELP}}. A Slack test answers 422 \"This is a Slack bot. This test only supports incoming webhooks.\" Call \"sends\" returns how many Slack tests the page has sent; call \"last send\" returns the JSON body of the last one (\"none\" before one). Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match. \"The modal\" is \".integrations-modal\". To \"open the panel\": press Control+k; \".command-palette-input\" should be visible; fill it with \"integration\", click the first \".command-palette-item\", and the modal should be visible. To \"select\" an integration N: click the first \".integrations-tabs button\" (the list), then the \".integrations-name-btn\" whose text starts with N followed by a space; \".integrations-detail-head strong\" should then have exactly the text N. \"The refresh button\" is the modal's button named \"Refresh\"; \"the Slack test button\" is the button named \"Test integration (webhook only)\"; \"the notify button\" is the button named \"Send test notification\". To \"close the modal\": click the modal's button whose name contains \"Close modal\". To \"start\": navigate to /new, wait for the element with data-testid \"message-input\" to be visible, and open the panel. Perform the steps in order. 1. Start, and click the first \".integrations-name-btn\". 2. The Slack test button should be enabled, and \".slack-access\" should have exactly the text \"For incoming webhooks only. Slack bots are not supported by this test.\" 3. Select the option with value \"team:slack-hook\" of \"#slack-hook\" (fill it with that value). The Slack test button should be enabled. 4. Click \".integrations-guide summary\": \".integrations-guide pre\" should have exactly the text {{HELP}}. 5. Call \"sends\": it must return \"0\". 6. Fill \"#slack-message\" with \"Hello bot\" and click the Slack test button. The element with role \"alert\" inside \".slack-integration\" should have exactly the text \"This is a Slack bot. This test only supports incoming webhooks.\" 7. Call \"sends\": it must return \"1\"; call \"last send\": it must return {\"message\":\"Hello bot\",\"name\":\"slack-hook\",\"team\":true}.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "integration"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".integrations-modal"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-name-btn"
+    },
+    {
+      "action": "assert_enabled",
+      "role": "button",
+      "name": "Test integration (webhook only)",
+      "within": {
+        "selector": ".integrations-modal"
+      },
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".slack-access",
+      "text": "For incoming webhooks only. Slack bots are not supported by this test."
+    },
+    {
+      "action": "fill",
+      "selector": "#slack-hook",
+      "value": "team:slack-hook"
+    },
+    {
+      "action": "assert_enabled",
+      "role": "button",
+      "name": "Test integration (webhook only)",
+      "within": {
+        "selector": ".integrations-modal"
+      },
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-guide summary"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".integrations-guide pre",
+      "text": "{{HELP}}"
+    },
+    {
+      "action": "call",
+      "value": "sends",
+      "expect": "0"
+    },
+    {
+      "action": "fill",
+      "selector": "#slack-message",
+      "value": "Hello bot"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Test integration (webhook only)",
+      "within": {
+        "selector": ".integrations-modal"
+      },
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".slack-integration"
+      },
+      "role": "alert",
+      "text": "This is a Slack bot. This test only supports incoming webhooks."
+    },
+    {
+      "action": "call",
+      "value": "sends",
+      "expect": "1"
+    },
+    {
+      "action": "call",
+      "value": "last send",
+      "expect": "{\"message\":\"Hello bot\",\"name\":\"slack-hook\",\"team\":true}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:22:49.317746248Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 144653,
+    "output_tokens": 2861,
+    "estimated_cost_usd": 0.1170192,
+    "mode": "generated"
+  }
+}

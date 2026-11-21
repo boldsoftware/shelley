@@ -1,0 +1,131 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Refresh updates the Slack destinations, and goes back to the list when the selected one is detached. The VM starts with one integration, a personal Slack hook \"slack-hook\". Call \"attach team hook\" attaches a team Slack hook also named \"slack-hook\"; call \"detach team hook\" detaches it again. Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match. \"The modal\" is \".integrations-modal\". To \"open the panel\": press Control+k; \".command-palette-input\" should be visible; fill it with \"integration\", click the first \".command-palette-item\", and the modal should be visible. To \"select\" an integration N: click the first \".integrations-tabs button\" (the list), then the \".integrations-name-btn\" whose text starts with N followed by a space; \".integrations-detail-head strong\" should then have exactly the text N. \"The refresh button\" is the modal's button named \"Refresh\"; \"the Slack test button\" is the button named \"Test integration (webhook only)\"; \"the notify button\" is the button named \"Send test notification\". To \"close the modal\": click the modal's button whose name contains \"Close modal\". To \"start\": navigate to /new, wait for the element with data-testid \"message-input\" to be visible, and open the panel. Perform the steps in order. 1. Start, and select slack-hook. 2. Fill \"#slack-message\" with \"Keep this draft\". 3. Call \"attach team hook\", then click the refresh button. The texts of \"#slack-hook option\" should be exactly [\"slack-hook · Personal\", \"slack-hook · Team\"], and \"#slack-message\" should have the value exactly \"Keep this draft\". 4. Select the option with value \"team:slack-hook\" of \"#slack-hook\" (fill it with that value). 5. Call \"detach team hook\", then click the refresh button. There should be exactly 1 \".integrations-name-btn\" and no \".integrations-detail\" (count 0). 6. Click the \".integrations-name-btn\": the texts of \"#slack-hook option\" should be exactly [\"slack-hook · Personal\"].",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "15s"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "integration"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".integrations-modal"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-tabs button"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-name-btn",
+      "has_text": "slack-hook "
+    },
+    {
+      "action": "assert_text",
+      "selector": ".integrations-detail-head strong",
+      "text": "slack-hook"
+    },
+    {
+      "action": "fill",
+      "selector": "#slack-message",
+      "value": "Keep this draft"
+    },
+    {
+      "action": "call",
+      "value": "attach team hook"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Refresh",
+      "within": {
+        "selector": ".integrations-modal"
+      },
+      "exact": true
+    },
+    {
+      "action": "assert_texts",
+      "selector": "#slack-hook option",
+      "texts": [
+        "slack-hook · Personal",
+        "slack-hook · Team"
+      ]
+    },
+    {
+      "action": "assert_value",
+      "selector": "#slack-message",
+      "value": "Keep this draft"
+    },
+    {
+      "action": "fill",
+      "selector": "#slack-hook",
+      "value": "team:slack-hook"
+    },
+    {
+      "action": "call",
+      "value": "detach team hook"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Refresh",
+      "within": {
+        "selector": ".integrations-modal"
+      },
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".integrations-name-btn",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": ".integrations-detail",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-name-btn"
+    },
+    {
+      "action": "assert_texts",
+      "selector": "#slack-hook option",
+      "texts": [
+        "slack-hook · Personal"
+      ]
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:21:09.045757369Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 64135,
+    "output_tokens": 1744,
+    "estimated_cost_usd": 0.06744,
+    "mode": "generated"
+  }
+}

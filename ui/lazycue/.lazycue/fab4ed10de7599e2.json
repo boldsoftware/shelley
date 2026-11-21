@@ -1,0 +1,151 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Same-name Slack hooks switch by scope, and a send locks the destination it was submitted to. The VM has two integrations named \"slack-hook\": a personal one and a team one at https://slack-hook.team.example.test. The first Slack test waits until call \"release\", then succeeds; later ones answer 502 \"Slack rejected the test\". Call \"first send\" returns the JSON body of the first Slack test (\"none\" before one). Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match. \"The modal\" is \".integrations-modal\". To \"open the panel\": press Control+k; \".command-palette-input\" should be visible; fill it with \"integration\", click the first \".command-palette-item\", and the modal should be visible. To \"select\" an integration N: click the first \".integrations-tabs button\" (the list), then the \".integrations-name-btn\" whose text starts with N followed by a space; \".integrations-detail-head strong\" should then have exactly the text N. \"The refresh button\" is the modal's button named \"Refresh\"; \"the Slack test button\" is the button named \"Test integration (webhook only)\"; \"the notify button\" is the button named \"Send test notification\". To \"close the modal\": click the modal's button whose name contains \"Close modal\". To \"start\": navigate to /new, wait for the element with data-testid \"message-input\" to be visible, and open the panel. Perform the steps in order. 1. Start, and click the first \".integrations-name-btn\". 2. \"#slack-hook\" should have the value exactly \"personal:slack-hook\". Fill \"#slack-message\" with \"Keep this draft\". 3. Select the option with value \"team:slack-hook\" of \"#slack-hook\" (fill it with that value): \"#slack-hook\" should have the value exactly \"team:slack-hook\", \"#slack-message\" still exactly \"Keep this draft\", and \".integrations-detail-head\" should contain the text \"slack · Team\". 4. Click \".integrations-advanced summary\": the first \".integrations-copy-line code\" should have exactly the text \"https://slack-hook.team.example.test\". 5. Click the Slack test button. \"#slack-hook\" and \"#slack-message\" should be disabled, and so should the refresh button and the first \".integrations-tabs button\". 6. Call \"first send\" until it returns {\"message\":\"Keep this draft\",\"name\":\"slack-hook\",\"team\":true}. 7. Call \"release\". The element with role \"status\" inside \".slack-integration\" should have exactly the text \"Message sent to slack-hook.\", and \"#slack-hook\" should be enabled. 8. Click the Slack test button again: the element with role \"alert\" inside \".slack-integration\" should contain the text \"Slack rejected the test\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "integration"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".integrations-modal"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-name-btn"
+    },
+    {
+      "action": "assert_value",
+      "selector": "#slack-hook",
+      "value": "personal:slack-hook"
+    },
+    {
+      "action": "fill",
+      "selector": "#slack-message",
+      "value": "Keep this draft"
+    },
+    {
+      "action": "fill",
+      "selector": "#slack-hook",
+      "value": "team:slack-hook"
+    },
+    {
+      "action": "assert_value",
+      "selector": "#slack-hook",
+      "value": "team:slack-hook"
+    },
+    {
+      "action": "assert_value",
+      "selector": "#slack-message",
+      "value": "Keep this draft"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".integrations-detail-head",
+      "text": "slack · Team"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-advanced summary"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".integrations-copy-line code",
+      "text": "https://slack-hook.team.example.test"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Test integration (webhook only)",
+      "exact": true
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "#slack-hook"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "#slack-message"
+    },
+    {
+      "action": "assert_disabled",
+      "role": "button",
+      "name": "Refresh",
+      "within": {
+        "selector": ".integrations-modal"
+      },
+      "exact": true
+    },
+    {
+      "action": "assert_disabled",
+      "selector": ".integrations-tabs button"
+    },
+    {
+      "action": "call",
+      "value": "first send",
+      "expect": "{\"message\":\"Keep this draft\",\"name\":\"slack-hook\",\"team\":true}"
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".slack-integration"
+      },
+      "role": "status",
+      "text": "Message sent to slack-hook."
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "#slack-hook"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Test integration (webhook only)",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".slack-integration"
+      },
+      "role": "alert",
+      "text": "Slack rejected the test"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:21:55.024035862Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 58738,
+    "output_tokens": 1948,
+    "estimated_cost_usd": 0.0742188,
+    "mode": "generated"
+  }
+}

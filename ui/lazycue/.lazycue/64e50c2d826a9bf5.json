@@ -1,0 +1,131 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The panel shows what reflection reports without account access. The VM has four integrations: gh, llm (whose details list anthropic, mode managed, and openai, mode api_key with 3 chat models), notify, and reflection (at https://reflection.int.example.test, whose help is \"curl https://reflection.int.example.test/\"). Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match. \"The modal\" is \".integrations-modal\". To \"open the panel\": press Control+k; \".command-palette-input\" should be visible; fill it with \"integration\", click the first \".command-palette-item\", and the modal should be visible. To \"select\" an integration N: click the first \".integrations-tabs button\" (the list), then the \".integrations-name-btn\" whose text starts with N followed by a space; \".integrations-detail-head strong\" should then have exactly the text N. \"The refresh button\" is the modal's button named \"Refresh\"; \"the Slack test button\" is the button named \"Test integration (webhook only)\"; \"the notify button\" is the button named \"Send test notification\". To \"close the modal\": click the modal's button whose name contains \"Close modal\". To \"start\": navigate to /new, wait for the element with data-testid \"message-input\" to be visible, and open the panel. Perform the steps in order. 1. Start, and select llm. 2. There should be exactly 2 \".integrations-providers-table tbody tr\". With all whitespace removed from their text (an eval), the first row's must contain \"anthropicexe.devmanaged—\" and the second's \"openaiapi_key3chat\". 3. Select reflection. \".integrations-guide\" should contain the text \"curl https://reflection.int.example.test/\". 4. Click \".integrations-advanced summary\": \".integrations-advanced\" should contain the text \"https://reflection.int.example.test\". 5. Select notify. The modal should hold no element with role \"alert\" (count 0), and the notify button should be enabled.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "integration"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".integrations-modal"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-tabs button"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-name-btn",
+      "has_text": "llm "
+    },
+    {
+      "action": "assert_text",
+      "selector": ".integrations-detail-head strong",
+      "text": "llm"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".integrations-providers-table tbody tr",
+      "count": 2
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.integrations-providers-table tbody tr')[0].textContent.replace(/\\s+/g, '')",
+      "expect": "anthropicexe.devmanaged—"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.integrations-providers-table tbody tr')[1].textContent.replace(/\\s+/g, '')",
+      "expect": "openaiapi_key3chat"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-tabs button"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-name-btn",
+      "has_text": "reflection "
+    },
+    {
+      "action": "assert_text",
+      "selector": ".integrations-detail-head strong",
+      "text": "reflection"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".integrations-guide",
+      "text": "curl https://reflection.int.example.test/"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-advanced summary"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".integrations-advanced",
+      "text": "https://reflection.int.example.test"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-tabs button"
+    },
+    {
+      "action": "click",
+      "selector": ".integrations-name-btn",
+      "has_text": "notify "
+    },
+    {
+      "action": "assert_text",
+      "selector": ".integrations-detail-head strong",
+      "text": "notify"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".integrations-modal"
+      },
+      "role": "alert",
+      "count": 0
+    },
+    {
+      "action": "assert_enabled",
+      "role": "button",
+      "name": "Send test notification",
+      "exact": true
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:19:05.607391723Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 50168,
+    "output_tokens": 1784,
+    "estimated_cost_usd": 0.0692955,
+    "mode": "generated"
+  }
+}
