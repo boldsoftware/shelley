@@ -1,0 +1,39 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A short phone screen, as with Android's keyboard up, leaves the new-conversation composer's model and directory fields to the menu. The screen is 393x320. 1. Navigate to /new. 2. \".status-bar-new\" should be hidden. 3. The message input (data-testid \"message-input\") must lie entirely inside the viewport: its bounding box has left \u003e= 0, top \u003e= 0, right \u003c= window.innerWidth and bottom \u003c= window.innerHeight.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 393,
+      "height": 320
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-bar-new"
+    },
+    {
+      "action": "eval",
+      "expression": "const r = document.querySelector('[data-testid=\"message-input\"]').getBoundingClientRect(); r.left \u003e= 0 \u0026\u0026 r.top \u003e= 0 \u0026\u0026 r.right \u003c= window.innerWidth \u0026\u0026 r.bottom \u003c= window.innerHeight",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:45:39.108118629Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 65709,
+    "output_tokens": 1735,
+    "estimated_cost_usd": 0.061419299999999996,
+    "mode": "generated"
+  }
+}

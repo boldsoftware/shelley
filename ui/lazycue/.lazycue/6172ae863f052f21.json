@@ -1,0 +1,59 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Opening the model picker on a phone does not focus its search. The screen is 390x844. To \"open the model picker\": wait for \".header\" to be visible; when the window is narrower than 768px, the picker is in the overflow menu: if \".chat-overflow-popover\" is not visible, click the button with aria-label exactly \"More options\", then click the visible \".model-picker.p-select\" inside \".chat-overflow-popover\"; on a wider window, click the visible \".model-picker.p-select\" inside \".status-bar\". The element clicked is \"the picker\"; its panel is \".model-picker-panel\". 1. Navigate to /new and open the model picker. 2. The panel's searchbox (role \"searchbox\") should be visible. 3. It must not be document.activeElement.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 844,
+      "mobile": true,
+      "touch": true
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"More options\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .model-picker.p-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"searchbox\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[role=\"searchbox\"]')",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:18:00.965250619Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 81939,
+    "output_tokens": 2061,
+    "estimated_cost_usd": 0.08351205,
+    "mode": "generated"
+  }
+}

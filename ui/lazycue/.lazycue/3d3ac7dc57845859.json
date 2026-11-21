@@ -1,0 +1,142 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The model picker (a PrimeVue Select) opens, lists models, persists the selection, and its \"Manage Models\" action opens the manage-models modal. The screen is the default 393x727 phone. To \"open the model picker\": wait for \".header\" to be visible; when the window is narrower than 768px, the picker is in the overflow menu: if \".chat-overflow-popover\" is not visible, click the button with aria-label exactly \"More options\", then click the visible \".model-picker.p-select\" inside \".chat-overflow-popover\"; on a wider window, click the visible \".model-picker.p-select\" inside \".status-bar\". The element clicked is \"the picker\"; its panel is \".model-picker-panel\". Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match. Perform the steps in order. 1. Navigate to /new and open the model picker. 2. The panel should be visible and hold at least one \".p-select-option\". Its buttons named \"Manage Models\" and \"Refresh\" should be visible. 3. On a phone it is a sheet across the bottom of the screen: the panel's bounding box must have x exactly 0, width exactly window.innerWidth, and Math.round(y + height) exactly window.innerHeight. 4. In this single-source install there must be no \".model-picker-option-source\" in the panel (count 0). 5. Remember the trimmed text of the first option's \".model-picker-option-name\" (in a window variable), then click the first option. 6. The picker should contain that remembered name, and localStorage \"shelley_selected_model\" must be exactly \"predictable\" (the raw model id, not the label). The panel stays open: it should still be visible. 7. Click the panel's button named \"Close\": the panel should be hidden, and the picker's \".p-select-label\" must be document.activeElement (focus is handed back to the trigger). 8. Open the model picker again; the panel should be visible. 9. Click the panel's button named \"Manage Models\": a visible dialog (role dialog) named \"Manage Models\" should appear, and the panel should be hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "eval",
+      "expression": "!document.querySelector('.chat-overflow-popover') || document.querySelector('.chat-overflow-popover').getBoundingClientRect().width === 0",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .model-picker.p-select",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-panel .p-select-option"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Manage Models",
+      "exact": true,
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Refresh",
+      "exact": true,
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var rect = document.querySelector('.model-picker-panel').getBoundingClientRect(); return rect.x === 0 && rect.width === window.innerWidth && Math.round(rect.y + rect.height) === window.innerHeight; })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".model-picker-panel .model-picker-option-source",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var el = document.querySelector('.model-picker-panel .p-select-option .model-picker-option-name'); window._firstModelName = el ? el.textContent.trim() : ''; return window._firstModelName ? 'remembered' : 'NO_NAME'; })()",
+      "expect": "remembered"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-panel .p-select-option",
+      "visible": true
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var picker = [...document.querySelectorAll('.chat-overflow-popover .model-picker.p-select')].find(e => e.checkVisibility()); return !!picker && !!window._firstModelName && picker.textContent.includes(window._firstModelName); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley_selected_model')",
+      "expect": "predictable"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close",
+      "exact": true,
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-overflow-popover .model-picker.p-select .p-select-label') === document.activeElement",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .model-picker.p-select",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Manage Models",
+      "exact": true,
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Manage Models",
+      "exact": true
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".model-picker-panel"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:48:21.371389948Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 298590,
+    "output_tokens": 7175,
+    "estimated_cost_usd": 0.2814885,
+    "mode": "generated"
+  }
+}

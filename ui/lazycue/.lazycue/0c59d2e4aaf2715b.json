@@ -1,0 +1,184 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The model picker shows recent model and effort combinations, hidden while searching. The only conversation so far used the model \"predictable\" with reasoning effort \"high\", and the composer has taken on the default profile already (localStorage \"shelley.thinkingLevel.v2\" is \"high\", \"shelley.profileApplied\" is \"Default\"). The screen is the default phone. To \"open the model picker\": wait for \".header\" to be visible; when the window is narrower than 768px, the picker is in the overflow menu: if \".chat-overflow-popover\" is not visible, click the button with aria-label exactly \"More options\", then click the visible \".model-picker.p-select\" inside \".chat-overflow-popover\"; on a wider window, click the visible \".model-picker.p-select\" inside \".status-bar\". The element clicked is \"the picker\"; its panel is \".model-picker-panel\". Within the panel: \"the recent row\" is \".p-select-option:has(.model-picker-option-effort)\" and \"the model row\" is \".p-select-option:not(:has(.model-picker-option-effort))\". Perform the steps in order. 1. Navigate to /new and open the model picker. 2. There must be no \".model-picker-group-label\" in the panel (count 0). 3. The model row's \".model-picker-option-name\" should have exactly the text \"predictable\", and its \".model-picker-option-check\" should be visible. 4. Click the panel's \".model-picker-effort-pill\" whose text is exactly \"low\". 5. Recent combinations are taken as the panel opens: there must still be no \".model-picker-group-label\" (count 0). 6. Press Escape, then open the model picker again. 7. \".model-picker-group-label\" should have exactly the text \"Recent\", and \".model-picker-group-divider\" should be visible. 8. The recent row's \".model-picker-option-name\" should have exactly the text \"predictable\", its \".model-picker-option-effort\" exactly the text \"high\", and it must have no \".model-picker-option-check\" (count 0). 9. The recent row's computed background-color must be exactly \"rgba(0, 0, 0, 0)\" (a heading, not a highlight, sets it apart), and the model row must have the class \"p-focus\" (the keyboard starts on the selected model). 10. The recent row's \".model-picker-option-effort\" must start (bounding box x) right of the end (x + width) of its \".model-picker-option-name\", and its computed background-color must not be \"rgba(0, 0, 0, 0)\". 11. Hover the recent row: it must not have the class \"p-focus\". 12. Fill the panel's searchbox (role \"searchbox\") with \"predictable\": there must be no \".model-picker-group-label\" (count 0) and no visible \".p-select-option-group\" (count of visible ones 0). 13. Fill the searchbox with \"\" (empty): \".model-picker-group-label\" should be visible. 14. Click the recent row: it must still have no \".model-picker-option-check\" (count 0), the model row's \".model-picker-option-check\" should be visible, the panel's element with role \"radio\" and accessible name exactly \"high\" should have aria-checked=\"true\", and the panel should still be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .model-picker.p-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".model-picker-panel .model-picker-group-label",
+      "count": 0
+    },
+    {
+      "action": "assert_text",
+      "selector": ".model-picker-panel .p-select-option:not(:has(.model-picker-option-effort)) .model-picker-option-name",
+      "text": "predictable"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-panel .p-select-option:not(:has(.model-picker-option-effort)) .model-picker-option-check"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-panel .model-picker-effort-pill",
+      "has_text": "low"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".model-picker-panel .model-picker-group-label",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .model-picker.p-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".model-picker-panel .model-picker-group-label",
+      "text": "Recent"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-panel .model-picker-group-divider"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".model-picker-panel .p-select-option:has(.model-picker-option-effort) .model-picker-option-name",
+      "text": "predictable"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".model-picker-panel .p-select-option:has(.model-picker-option-effort) .model-picker-option-effort",
+      "text": "high"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".model-picker-panel .p-select-option:has(.model-picker-option-effort) .model-picker-option-check",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.model-picker-panel .p-select-option:has(.model-picker-option-effort)')).backgroundColor",
+      "expect": "rgba(0, 0, 0, 0)"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-panel .p-select-option:not(:has(.model-picker-option-effort)).p-focus"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const nameEl = document.querySelector('.model-picker-panel .p-select-option:has(.model-picker-option-effort) .model-picker-option-name'); const effortEl = document.querySelector('.model-picker-panel .p-select-option:has(.model-picker-option-effort) .model-picker-option-effort'); const nr = nameEl.getBoundingClientRect(); const er = effortEl.getBoundingClientRect(); return er.x > nr.x + nr.width ? 'right' : 'not right'; })()",
+      "expect": "right"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.model-picker-panel .p-select-option:has(.model-picker-option-effort) .model-picker-option-effort')).backgroundColor === 'rgba(0, 0, 0, 0)' ? 'transparent' : 'not transparent'",
+      "expect": "not transparent"
+    },
+    {
+      "action": "hover",
+      "selector": ".model-picker-panel .p-select-option:has(.model-picker-option-effort)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.model-picker-panel .p-select-option:has(.model-picker-option-effort)').classList.contains('p-focus')",
+      "expect": "false"
+    },
+    {
+      "action": "fill",
+      "selector": ".model-picker-panel [role='searchbox']",
+      "value": "predictable"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".model-picker-panel .model-picker-group-label",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.model-picker-panel .p-select-option-group')).filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }).length",
+      "expect": "0"
+    },
+    {
+      "action": "fill",
+      "selector": ".model-picker-panel [role='searchbox']",
+      "value": ""
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-panel .model-picker-group-label"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-panel .p-select-option:has(.model-picker-option-effort)"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".model-picker-panel .p-select-option:has(.model-picker-option-effort) .model-picker-option-check",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-panel .p-select-option:not(:has(.model-picker-option-effort)) .model-picker-option-check"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".model-picker-panel [role='radio']",
+      "has_text": "high",
+      "attribute": "aria-checked",
+      "value": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-panel"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:27:57.278078483Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 321884,
+    "output_tokens": 12219,
+    "estimated_cost_usd": 0.3607845,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a desktop-sized screen the new-conversation composer keeps the model and directory fields in a row, with only the directory labelled. The screen is 1280x800. \"The labels\" are \".status-bar-new .status-field-label\"; \"the model field\" is \".status-field-model .model-picker.p-select\"; \"the directory field\" is \".status-field-cwd .status-chip\". 1. Navigate to /new. 2. The model field and the directory field should be visible. 3. The labels' texts should be exactly [\"Model:\", \"Dir:\"]; the first label should be hidden and the last visible. 4. The vertical centers (y + height / 2 of the bounding box) of the model field and the directory field must differ by less than 2px.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".status-bar-new",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".status-field-model .model-picker.p-select"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".status-field-cwd .status-chip"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.status-bar-new .status-field-label')).map(el => el.textContent.trim())",
+      "expect": "[\"Model:\",\"Dir:\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== \"hidden\"; }; const l = document.querySelectorAll(\".status-bar-new .status-field-label\"); return !vis(l[0]); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== \"hidden\"; }; const l = document.querySelectorAll(\".status-bar-new .status-field-label\"); return vis(l[l.length - 1]); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const model = document.querySelector('.status-field-model .model-picker.p-select'); const dir = document.querySelector('.status-field-cwd .status-chip'); const mRect = model.getBoundingClientRect(); const dRect = dir.getBoundingClientRect(); const mCenter = mRect.top + mRect.height / 2; const dCenter = dRect.top + dRect.height / 2; return Math.abs(mCenter - dCenter) < 2; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:44:27.138172885Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 39502,
+    "output_tokens": 2450,
+    "estimated_cost_usd": 0.061456199999999996,
+    "mode": "generated"
+  }
+}

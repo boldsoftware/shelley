@@ -1,0 +1,63 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The selected model keeps the keyboard focus once the panel settles. The screen is 1280x800. The page runs on a fake clock that steps advance with eval \"window.__clock.runFor(ms)\". To \"open the model picker\": wait for \".header\" to be visible; when the window is narrower than 768px, the picker is in the overflow menu: if \".chat-overflow-popover\" is not visible, click the button with aria-label exactly \"More options\", then click the visible \".model-picker.p-select\" inside \".chat-overflow-popover\"; on a wider window, click the visible \".model-picker.p-select\" inside \".status-bar\". The element clicked is \"the picker\"; its panel is \".model-picker-panel\". 1. Navigate to /new and open the model picker. 2. The panel's searchbox (role \"searchbox\") should be document.activeElement. 3. Run the clock for 1000ms. 4. There should be exactly one \".p-select-option.p-focus\" in the panel, and it must have the class \"p-select-option-selected\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".status-bar .model-picker.p-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('.model-picker-panel [role=\"searchbox\"]') ? 'yes' : 'no'",
+      "expect": "yes"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(1000)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('.model-picker-panel [role=\"searchbox\"]') ? 'yes' : 'no'",
+      "expect": "yes"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".model-picker-panel .p-select-option.p-focus",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.model-picker-panel .p-select-option.p-focus').classList.contains('p-select-option-selected') ? 'yes' : 'no'",
+      "expect": "yes"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:18:03.953332253Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 105925,
+    "output_tokens": 2944,
+    "estimated_cost_usd": 0.10545479999999999,
+    "mode": "generated"
+  }
+}
