@@ -503,23 +503,12 @@ type Server struct {
 	// still owns it, and queues clients there until the next start.
 	SocketListener net.Listener
 
-	// ArchiveStorePort is where the archive store listens while its flag is on
-	// (see archive_store.go).
-	ArchiveStorePort   int
-	archiveStoreMu     sync.Mutex
-	archiveStoreServer *http.Server
-	// archiverWake wakes the archiver (archiver.go).
-	archiverWake chan struct{}
-
 	// hooksDir is the directory searched for user hook scripts
 	// (end-of-turn, new-conversation). Defaults to
 	// $HOME/.config/shelley/hooks; tests override it to a per-test
 	// temp dir to avoid racing on $HOME with other parallel tests
 	// that invoke hooks via the server.
 	hooksDir string
-
-	// archiverHTTP sends the archiver's requests to the archive store.
-	archiverHTTP *http.Client
 
 	// keepRecentTokensOverride overrides the recent-token budget (see
 	// keepRecentTokens). Zero means defaultKeepRecentTokens. Tests set it to
@@ -561,12 +550,9 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 		predictableOnly:       predictableOnly,
 		defaultModel:          defaultModel,
 		requireHeader:         requireHeader,
-		archiverHTTP:          archiverHTTP,
 		versionChecker:        NewVersionChecker(),
 		notifDispatcher:       notifications.NewDispatcher(logger),
 		shutdownCh:            make(chan struct{}),
-		ArchiveStorePort:      8000,
-		archiverWake:          make(chan struct{}, 1),
 		conversationVMs:       conversationVMState{cleanup: make(chan struct{}, 1), active: make(chan struct{})},
 		workspace:             workspaceState{reports: make(chan struct{}, 1)},
 		hooksDir:              defaultHooksDir(),
@@ -640,7 +626,6 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	s.toolSetConfig.BackgroundJobs = backgroundJobs{server: s}
 	s.toolSetConfig.MaxSubagentDepth = 1 // Only top-level conversations can spawn subagents
 	s.toolSetConfig.Secrets = s.secrets
-	s.toolSetConfig.ArchiveStore = archiveResearchClient{s}
 	s.noteUserActivity()
 
 	return s
@@ -1240,11 +1225,7 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		config.HostDir = scratch
 		config.CommandEnv = func(ctx context.Context) ([]string, error) {
 			identity, err := s.db.ConversationCommitIdentity(ctx, conversationID)
-			if err != nil {
-				return nil, err
-			}
-			temporary, err := s.commandTemporaryEnv(ctx, conversationID)
-			return append(identity.Environ(), temporary...), err
+			return identity.Environ(), err
 		}
 		if role != roleTopLevel {
 			// Only top-level conversations can spawn subagents.
@@ -1265,8 +1246,8 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 			manager.profileModelService = s.llmManager.GetService
 		}
 		manager.onTurnStartRejected = func() { go manager.drainPendingMessages() }
-		manager.recordDrainedQueued = func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message, turnStart bool) (int64, error) {
-			return s.recordDrainedQueuedMessages(ctx, conversationID, qm, messages, turnStart)
+		manager.recordDrainedQueued = func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message) (int64, error) {
+			return s.recordDrainedQueuedMessages(ctx, conversationID, qm, messages)
 		}
 		if role == roleTopLevel && s.isAssistant(conversationID) {
 			manager.userChat = assistantChat{s: s, conversationID: conversationID}
@@ -1486,7 +1467,7 @@ func (s *Server) insertMessages(ctx context.Context, conversationID string, para
 // carries the user provenance captured at queue time (drain runs on a
 // background context). Synthetic transcription audit rows stay unattributed. Returns
 // the user row's sequence ID for rendering its external wrapper to the LLM.
-func (s *Server) recordDrainedQueuedMessages(ctx context.Context, conversationID string, qm db.QueuedMessage, messages []llm.Message, turnStart bool) (int64, error) {
+func (s *Server) recordDrainedQueuedMessages(ctx context.Context, conversationID string, qm db.QueuedMessage, messages []llm.Message) (int64, error) {
 	paramsList := make([]db.CreateMessageParams, 0, len(messages))
 	for i, message := range messages {
 		var userDataArgs []interface{}
@@ -1500,7 +1481,6 @@ func (s *Server) recordDrainedQueuedMessages(ctx context.Context, conversationID
 		if i == 0 {
 			params.RemoveQueuedID = qm.ID
 			params.MarkAgentStart = true
-			params.Temporary = queuedMark(qm, typedUserForLLM(messages[len(messages)-1], qm.UserData), turnStart)
 		}
 		if i == len(messages)-1 {
 			params.UserEmail = qm.UserEmail
@@ -1604,7 +1584,6 @@ func (s *Server) recordTurnStartMessage(ctx context.Context, conversationID stri
 		return nil, err
 	}
 	params.MarkAgentStart = true
-	params.Temporary = turnStartMark(ctx, turnUserDataFromContext(ctx) == nil || liveDeliveryIDFromContext(ctx) != "")
 	// Attribute the turn-start user row to its author. recordTurnStartMessage
 	// is only ever called with a genuine user message (AcceptUserMessage's
 	// turn-start recorder), so unlike buildCreateMessageParams — which also
@@ -2321,8 +2300,7 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 		socketHandler := LoggerMiddleware(s.logger)(localCLIHandler(mux))
 
 		socketServer = &http.Server{
-			Handler:     socketHandler,
-			ConnContext: withSocketPeer,
+			Handler: socketHandler,
 		}
 
 		go func() {
@@ -2351,10 +2329,6 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	go s.recoverQueuedTranscriptions(context.Background())
 	s.startConversationVMCleanup()
 	s.startActionReports()
-	if err := s.syncArchiveStoreListener(context.Background()); err != nil {
-		s.logger.Error("Failed to start the archive store", "error", err)
-	}
-	go s.archiverLoop()
 
 	// Wait for shutdown signal or server error
 	quit := make(chan os.Signal, 1)

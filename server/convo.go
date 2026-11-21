@@ -223,8 +223,7 @@ type ConversationManager struct {
 	rewriteFinalReply func(context.Context, llm.Message) (llm.Message, bool)
 	// recordDrainedQueued records a queued item's messages and removes the item
 	// from the queue in one transaction.
-	// turnStart: the item starts a turn, rather than joining a running one.
-	recordDrainedQueued func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message, turnStart bool) (int64, error)
+	recordDrainedQueued func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message) (int64, error)
 	// userChat, set for a top-level conversation bound to an external chat,
 	// is where message_user's messages also go.
 	userChat claudetool.UserChat
@@ -1243,7 +1242,6 @@ func (cm *ConversationManager) QueueTranscription(ctx context.Context, qm db.Que
 	defer cm.loopLifecycleMu.Unlock()
 	cm.waitForLoopTeardownLocked()
 
-	qm.Temporary = temporaryFromContext(ctx)
 	_, queued, err := cm.db.CreateQueuedTranscription(ctx, cm.conversationID, qm)
 	if err != nil {
 		return db.QueuedMessage{}, err
@@ -1371,7 +1369,6 @@ func (cm *ConversationManager) queueMessageLocked(ctx context.Context, modelID s
 		UserData:          userData,
 		Inject:            midTurn,
 		ExternalMessageID: externalMessageIDFromContext(ctx),
-		Temporary:         temporaryFromContext(ctx),
 	}
 	if _, err := s.db.AppendQueuedMessage(ctx, cm.conversationID, qm); err != nil {
 		return fmt.Errorf("failed to append queued message: %w", err)
@@ -1563,7 +1560,7 @@ func (cm *ConversationManager) takeInjectable(ctx context.Context, generation ui
 		return inj, err
 	}
 	for _, qm := range injectable {
-		_, fed, err := cm.recordQueued(ctx, qm, false)
+		_, fed, err := cm.recordQueued(ctx, qm)
 		switch {
 		case errors.Is(err, db.ErrQueuedMessageNotFound):
 			cm.logger.Info("Skipping cancelled queued message", "queued_id", qm.ID)
@@ -1628,7 +1625,7 @@ func (cm *ConversationManager) CancelQueuedMessage(ctx context.Context, queuedID
 // that a later drain would feed twice. A ready transcription records its audit
 // pair too, but only the transcript reaches the model. It returns the user
 // message as recorded and as fed to the model, with sender provenance.
-func (cm *ConversationManager) recordQueued(ctx context.Context, qm db.QueuedMessage, turnStart bool) (user, fed llm.Message, err error) {
+func (cm *ConversationManager) recordQueued(ctx context.Context, qm db.QueuedMessage) (user, fed llm.Message, err error) {
 	var messages []llm.Message
 	if qm.Kind == db.QueuedMessageKindTranscription {
 		if messages, err = readyTranscriptionMessages(qm); err != nil {
@@ -1644,7 +1641,7 @@ func (cm *ConversationManager) recordQueued(ctx context.Context, qm db.QueuedMes
 	if fed, err = messageWithSenderProvenance(user, qm.UserData); err != nil {
 		return user, fed, err
 	}
-	sequenceID, err := cm.recordDrainedQueued(ctx, qm, messages, turnStart)
+	sequenceID, err := cm.recordDrainedQueued(ctx, qm, messages)
 	if err != nil {
 		return user, fed, err
 	}
@@ -1911,7 +1908,7 @@ func (cm *ConversationManager) feedQueued(ctx context.Context, queued []db.Queue
 		if len(messages) > 0 && run != nil {
 			break
 		}
-		user, message, err := cm.recordQueued(ctx, qm, len(messages) == 0)
+		user, message, err := cm.recordQueued(ctx, qm)
 		if errors.Is(err, db.ErrQueuedMessageNotFound) {
 			cm.logger.Info("Skipping cancelled queued message", "queued_id", qm.ID)
 			continue
@@ -2103,9 +2100,6 @@ func (cm *ConversationManager) renderSystemPrompt(ctx context.Context, opts db.C
 	text, promptSkills, err := generateSystemPromptWithIntegrationSkills(cm.promptDir(), cm.integrationSkills.Skills(ctx), promptOpts...)
 	if err != nil {
 		return renderedSystemPrompt{}, fmt.Errorf("failed to generate system prompt: %w", err)
-	}
-	if store := cm.toolSetConfig.ArchiveStore; store != nil && store.ArchiveResearchEnabled(ctx) && claudetool.IsToolEnabled(claudetool.ArchiveStoreName, opts.ToolOverrides, opts.DisableAllTools) {
-		text += claudetool.ArchiveStorePromptNote
 	}
 	display, err := cm.systemPromptDisplayData(ctx, opts, promptSkills)
 	if err != nil {

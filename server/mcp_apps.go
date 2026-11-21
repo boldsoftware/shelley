@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
-	"strconv"
 	"strings"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -160,35 +159,6 @@ func (s *Server) handleReadMCPApp(w http.ResponseWriter, r *http.Request) {
 type appContext struct {
 	Source string `json:"source"`
 	Text   string `json:"text"`
-	// View is what shows the view: an mcpapp message's ID, or the ID of the
-	// tool call that shows it.
-	View string `json:"view,omitempty"`
-}
-
-// archivableAppContext is contexts but those from views in temporary
-// messages, unless the message they'd go with is of temporary origin:
-// what a temporary turn showed stays out of the archive store
-// (temporary.go). A message the user sends while a temporary turn runs is
-// temporary too, but it goes without them, as it may be recorded after the
-// turn. sent lists the indexes in contexts of those it keeps.
-func (s *Server) archivableAppContext(ctx context.Context, conversationID string, contexts []appContext) (kept []appContext, sent string, err error) {
-	var indexes []string
-	for i, c := range contexts {
-		if !temporaryFromContext(ctx) {
-			temporary, err := s.db.QueriesRes(ctx, func(q *generated.Queries) (bool, error) {
-				return q.ViewTemporary(ctx, generated.ViewTemporaryParams{ConversationID: conversationID, View: c.View})
-			})
-			if err != nil {
-				return nil, "", err
-			}
-			if temporary {
-				continue
-			}
-		}
-		kept = append(kept, c)
-		indexes = append(indexes, strconv.Itoa(i))
-	}
-	return kept, strings.Join(indexes, ","), nil
 }
 
 // withAppContext appends each view's context to a user message, for the

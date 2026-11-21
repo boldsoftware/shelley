@@ -26,35 +26,6 @@ type ActionRun struct {
 	Report           string  `json:"report"`
 }
 
-type ArchiveResearchRead struct {
-	ID       int64     `json:"id"`
-	At       time.Time `json:"at"`
-	UserID   string    `json:"user_id"`
-	Email    string    `json:"email"`
-	SourceVm string    `json:"source_vm"`
-	Path     string    `json:"path"`
-	Query    string    `json:"query"`
-}
-
-type ArchiveStoreMessage struct {
-	ID                  int64     `json:"id"`
-	SourceVm            string    `json:"source_vm"`
-	ConversationID      string    `json:"conversation_id"`
-	SequenceID          int64     `json:"sequence_id"`
-	MessageID           string    `json:"message_id"`
-	Type                string    `json:"type"`
-	LlmData             *string   `json:"llm_data"`
-	UserData            *string   `json:"user_data"`
-	UsageData           *string   `json:"usage_data"`
-	DisplayData         *string   `json:"display_data"`
-	CreatedAt           time.Time `json:"created_at"`
-	Generation          int64     `json:"generation"`
-	ExcludedFromContext bool      `json:"excluded_from_context"`
-	ModelName           *string   `json:"model_name"`
-	UserEmail           *string   `json:"user_email"`
-	ExternalMessageID   *string   `json:"external_message_id"`
-}
-
 type BackgroundJob struct {
 	JobID            string    `json:"job_id"`
 	ConversationID   string    `json:"conversation_id"`

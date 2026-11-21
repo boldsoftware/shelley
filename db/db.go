@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"shelley.exe.dev/db/generated"
@@ -224,6 +225,11 @@ func (db *DB) runMigration(ctx context.Context, filename string, migrationNumber
 		if _, err := tx.Conn().ExecContext(ctx, string(content)); err != nil {
 			return fmt.Errorf("failed to execute migration %s: %w", filename, err)
 		}
+		if step := migrationSteps[filename]; step != nil {
+			if err := step(ctx, tx.Conn()); err != nil {
+				return fmt.Errorf("failed to execute migration %s: %w", filename, err)
+			}
+		}
 
 		if err := generated.New(tx.Conn()).RecordMigration(ctx, generated.RecordMigrationParams{
 			MigrationNumber: int64(migrationNumber), MigrationName: filename,
@@ -233,6 +239,43 @@ func (db *DB) runMigration(ctx context.Context, filename string, migrationNumber
 
 		return nil
 	})
+}
+
+// migrationSteps finish migrations, in their transactions, where SQL can't
+// say what to do.
+var migrationSteps = map[string]func(context.Context, *sql.Conn) error{
+	// The archive store's tables go where empty, an external-content FTS
+	// index before its content table and a table before those it references.
+	"086-remove-archive-store.sql": func(ctx context.Context, conn *sql.Conn) error {
+		return dropEmptyTables(ctx, conn,
+			"archive_research_fts", "archive_research_docs", "archive_research_reads",
+			"archive_store_messages_fts", "archive_store_messages", "archive_store_conversations", "archive_store_sources")
+	},
+}
+
+// dropEmptyTables drops, in order, those of tables that exist and have no
+// rows. Raw SQL: sqlc can't name a table at run time.
+func dropEmptyTables(ctx context.Context, conn *sql.Conn, tables ...string) error {
+	for _, table := range tables {
+		var exists bool
+		if err := conn.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?)", table).Scan(&exists); err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		var empty bool
+		if err := conn.QueryRowContext(ctx, `SELECT NOT EXISTS (SELECT 1 FROM "`+table+`")`).Scan(&empty); err != nil {
+			return fmt.Errorf("%s: %w", table, err)
+		}
+		if !empty {
+			continue
+		}
+		if _, err := conn.ExecContext(ctx, `DROP TABLE "`+table+`"`); err != nil {
+			return fmt.Errorf("%s: %w", table, err)
+		}
+	}
+	return nil
 }
 
 // Pool returns the underlying connection pool for advanced operations
@@ -315,10 +358,6 @@ type ConversationOptions struct {
 	// set by a profile, the user, or a channel's first message. Empty means
 	// the built-in one.
 	SystemPrompt string `json:"system_prompt,omitempty"`
-	// Temporary keeps the conversation, its subagents and its forks out of
-	// the archive store (server/archiver.go). Set only by the request that
-	// creates the conversation or sends its draft's first message.
-	Temporary bool `json:"temporary,omitempty"`
 }
 
 // ParseConversationOptions parses a JSON string into ConversationOptions.
@@ -635,8 +674,6 @@ type QueuedMessage struct {
 	// Inject lets a running turn take the message at its next LLM round
 	// instead of waiting for the turn to end.
 	Inject bool `json:"inject,omitempty"`
-	// Temporary is a message of temporary origin (TemporaryStart).
-	Temporary bool `json:"temporary,omitempty"`
 	// ID, CreatedAt, Model, UserEmail, UserData, and ExternalMessageID are
 	// shared queue metadata.
 	// Kind, State, Transcription, Error, and the optional ready Llm payload form
@@ -1132,10 +1169,22 @@ const (
 // The query is the raw user input; this function handles tokenisation and
 // escaping for both the FTS5 MATCH branch and the LIKE branch.
 func (db *DB) SearchConversationsFTS(ctx context.Context, query string, archived bool, limit, offset int64) ([]ConversationSearchResult, error) {
-	if len(strings.Fields(query)) == 0 {
+	fields := strings.Fields(query)
+	if len(fields) == 0 {
 		return nil, nil
 	}
-	ftsMatch := FTSMatch(query)
+
+	// Quote terms and AND them together, allowing prefixes only for longer terms.
+	// Escape embedded double quotes by doubling.
+	ftsParts := make([]string, 0, len(fields))
+	for _, f := range fields {
+		part := `"` + strings.ReplaceAll(f, `"`, `""`) + `"`
+		if utf8.RuneCountInString(f) >= 3 {
+			part += "*"
+		}
+		ftsParts = append(ftsParts, part)
+	}
+	ftsMatch := strings.Join(ftsParts, " AND ")
 
 	// Escape LIKE wildcards (%, _) and the escape char itself in the slug
 	// pattern so typing a literal % doesn't match every conversation.
@@ -1723,23 +1772,7 @@ type CreateMessageParams struct {
 	// message's created_at and the tool/usage timestamps embedded in it
 	// stay on one timeline instead of disagreeing about "now".
 	CreatedAt *time.Time
-	// Temporary is how the message bears on the conversation's temporary run.
-	Temporary TemporaryMark
 }
-
-// TemporaryMark is how a new message bears on its conversation's temporary
-// run (db/schema/082-temporary-messages.sql).
-type TemporaryMark int
-
-const (
-	// TemporaryInherit: the message is temporary while a run is open.
-	TemporaryInherit TemporaryMark = iota
-	// TemporaryStart: the message is of temporary origin; it opens a run.
-	TemporaryStart
-	// TemporaryEnd: the user typed the message, not temporary, and it starts
-	// a turn; it closes the run.
-	TemporaryEnd
-)
 
 // nullableString returns nil for an empty string so the column is stored as
 // SQL NULL, and a pointer to the value otherwise.
@@ -1819,15 +1852,6 @@ func insertMessageTx(ctx context.Context, q *generated.Queries, params CreateMes
 	conversation, err := q.GetConversation(ctx, params.ConversationID)
 	if err != nil {
 		return generated.Message{}, fmt.Errorf("failed to get conversation generation: %w", err)
-	}
-	switch params.Temporary {
-	case TemporaryStart:
-		err = q.OpenTemporaryRun(ctx, params.ConversationID)
-	case TemporaryEnd:
-		err = q.CloseTemporaryRun(ctx, params.ConversationID)
-	}
-	if err != nil {
-		return generated.Message{}, err
 	}
 	message, err := q.CreateMessage(ctx, generated.CreateMessageParams{
 		MessageID:           cmp.Or(params.MessageID, uuid.New().String()),
@@ -2401,23 +2425,12 @@ func (db *DB) CreateSubagentConversation(ctx context.Context, slug, parentID str
 	}
 	var conversation generated.Conversation
 	conversation, err = db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
-		conversation, err := q.CreateSubagentConversation(ctx, generated.CreateSubagentConversationParams{
+		return q.CreateSubagentConversation(ctx, generated.CreateSubagentConversationParams{
 			ConversationID:       conversationID,
 			Slug:                 &slug,
 			Cwd:                  cwd,
 			ParentConversationID: &parentID,
 		})
-		if err != nil {
-			return conversation, err
-		}
-		// One created in a temporary run is a temporary conversation.
-		if n, err := q.MarkTemporarySubagent(ctx, conversationID); err != nil || n == 0 {
-			return conversation, err
-		}
-		if err := q.DeleteArchiverPush(ctx, conversationID); err != nil {
-			return conversation, err
-		}
-		return q.GetConversation(ctx, conversationID)
 	})
 	return &conversation, err
 }

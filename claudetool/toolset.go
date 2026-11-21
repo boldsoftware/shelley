@@ -123,7 +123,7 @@ type ToolSetConfig struct {
 	// CommandEnv, if set, returns environment assignments for every bash
 	// command, wherever it runs, read for each command so a change applies
 	// at once: the conversation's commit identity (GIT_AUTHOR_* and
-	// GIT_COMMITTER_*), and SHELLEY_TEMPORARY in a temporary turn.
+	// GIT_COMMITTER_*).
 	CommandEnv func(context.Context) ([]string, error)
 	// SubagentDepth is the nesting depth of this conversation.
 	// 0 = top-level conversation, 1 = subagent, 2 = sub-subagent, etc.
@@ -156,8 +156,6 @@ type ToolSetConfig struct {
 	// Secrets, if set, redacts stored secrets from every tool's output and,
 	// when enabled, provides the write_secret tool (docs/secrets.md).
 	Secrets Secrets
-	// ArchiveStore, if set and enabled, provides the archive_store tool.
-	ArchiveStore ArchiveStore
 }
 
 // ToolSet holds a set of tools for a single conversation.
@@ -394,10 +392,6 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 	if cfg.Secrets != nil && cfg.Secrets.ToolEnabled(ctx) {
 		writeSecret := &WriteSecretTool{Secrets: cfg.Secrets, ConversationID: cfg.ConversationID, WorkingDir: wd, VM: cfg.VM, HostDir: hostWD}
 		tools = append(tools, writeSecret.Tool())
-	}
-
-	if cfg.ArchiveStore != nil && cfg.ArchiveStore.ArchiveResearchEnabled(ctx) {
-		tools = append(tools, ArchiveStoreTool(cfg.ArchiveStore))
 	}
 
 	tools = FilterTools(tools, cfg.ToolOverrides, cfg.DisableAllTools)

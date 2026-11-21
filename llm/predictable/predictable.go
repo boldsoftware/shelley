@@ -79,7 +79,6 @@ func requestMentions(req *llm.Request, needle string) bool {
 //   - "subagent: <slug> <prompt>" - triggers subagent tool
 //   - "change_dir: <path>" - triggers change_dir tool
 //   - "write_secret: <json>" - calls write_secret with that input
-//   - "archive_store: <json>" - calls archive_store with that input
 //   - "delay: <seconds>" - delays response by specified seconds
 //   - "cache: <read> <write>" - reports a prompt of that many cache read and
 //     cache write tokens, and no others
@@ -444,7 +443,7 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 			return s.makeToolResponse("message_user", json.RawMessage(input), inputTokens), nil
 		}
 
-		for _, tool := range []string{"send_to_thread", "send_to_channel", "add_reaction", "write_secret", "archive_store"} {
+		for _, tool := range []string{"send_to_thread", "send_to_channel", "add_reaction", "write_secret"} {
 			if input, ok := strings.CutPrefix(inputText, tool+": "); ok {
 				return s.makeToolResponse(tool, json.RawMessage(input), inputTokens), nil
 			}
@@ -1215,14 +1214,6 @@ func (s *Service) makeToolSmorgasbordResponse(inputTokens uint64) *llm.Response 
 		Type:      llm.ContentTypeToolUse,
 		ToolName:  "write_secret",
 		ToolInput: json.RawMessage(`{"id":"openai-key-k3f9","path":"/tmp/openai-key"}`),
-	})
-
-	// archive_store tool (the archive-research flag)
-	content = append(content, llm.Content{
-		ID:        fmt.Sprintf("tool_archive_store_%d", (baseNano+24)%1000),
-		Type:      llm.ContentTypeToolUse,
-		ToolName:  "archive_store",
-		ToolInput: json.RawMessage(`{"action":"search","query":"webhook backoff","author":"alice"}`),
 	})
 
 	// browser: screenshot action

@@ -20,7 +20,6 @@ import { exportConversationIdFromPath } from "./export";
 import App from "./App.vue";
 import ExportPage from "./components/ExportPage.vue";
 import SecretsPage from "./components/SecretsPage.vue";
-import ArchiveStorePage from "./components/ArchiveStorePage.vue";
 
 // Apply theme before render to avoid a flash of the wrong color scheme.
 initializeTheme();
@@ -48,12 +47,6 @@ if (exportId) {
   app.use(PrimeVue, primeVueOptions);
   app.use(i18nPlugin);
   app.directive("tooltip", Tooltip);
-  app.mount(rootContainer);
-} else if (window.location.pathname.startsWith("/archive-store/")) {
-  // The Shelley archive store browse page, on the store's own port.
-  const app = createApp(ArchiveStorePage);
-  app.use(PrimeVue, primeVueOptions);
-  app.use(i18nPlugin);
   app.mount(rootContainer);
 } else if (window.location.pathname === "/secrets") {
   const app = createApp(SecretsPage);

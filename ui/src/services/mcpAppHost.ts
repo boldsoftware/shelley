@@ -474,10 +474,10 @@ export class AppHost {
         return {};
       }
       case "ui/update-model-context": {
-        // Without what shows it, the server can't tell if it may go.
+        // Context is kept per view; views without what shows them would share a key.
         if (!key) throw new RPCError(INVALID, "This view can't set context.");
         const text = contentText(params.content, params.structuredContent);
-        setAppContext(conversationId, key, text ? { source, text, view: key } : null);
+        setAppContext(conversationId, key, text ? { source, text } : null);
         return {};
       }
       case "ui/request-display-mode": {

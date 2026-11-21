@@ -6,9 +6,6 @@ export interface AppContext {
   /** Names the view to the model. */
   source: string;
   text: string;
-  /** What shows the view: an mcpapp message's ID or a tool call's. The
-   *  server keeps context from temporary views out of other messages. */
-  view?: string;
 }
 
 /** What a send took: each view's context, and which update it was. */

@@ -156,17 +156,12 @@ export interface ChatRequest {
   conversation_options?: Omit<SettingsChange, "model"> & {
     disable_all_tools?: boolean;
     disable_notifications?: boolean;
-    /** Kept out of the archive store; first message only. */
-    temporary?: boolean;
   };
   queue?: boolean;
   /** Composer-selected skill names; the server prefixes mentions to the message. */
   skills?: string[];
-  /** The message, what answers it, and what it starts stay out of the
-   *  archive store (server/temporary.go). */
-  temporary?: boolean;
   /** What views asked the model to know (services/appContext.ts). */
-  app_context?: { source: string; text: string; view?: string }[];
+  app_context?: { source: string; text: string }[];
 }
 
 /** A conversation's adjustable settings; see Settings in server/settings.go. */

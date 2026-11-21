@@ -98,13 +98,8 @@ func (s *Server) handleDeleteFeatureFlag(w http.ResponseWriter, r *http.Request)
 
 // featureFlagChanged applies a change of the named flag to what runs.
 func (s *Server) featureFlagChanged(ctx context.Context, name string) error {
-	switch name {
-	case db.WorkspaceFlag:
+	if name == db.WorkspaceFlag {
 		return s.workspaceFlagChanged(ctx)
-	case FlagArchiveStore.Name:
-		return s.syncArchiveStoreListener(ctx)
-	case FlagArchiver.Name:
-		s.wakeArchiver()
 	}
 	return nil
 }
