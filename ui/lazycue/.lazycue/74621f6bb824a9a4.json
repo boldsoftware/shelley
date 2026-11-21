@@ -1,0 +1,87 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "New chats keep output_iframe's off for output_html, once. To \"store O\" is to eval localStorage.setItem(\"shelley.toolOverrides\", JSON.stringify(O)) for the object O; to \"store O fresh\" is to do that and also eval localStorage.removeItem(\"shelley.toolOverrides.outputHtml\"). \"The tools text\" is \".model-picker-section-text\" inside the panel's data-testid \"model-picker-tools\". To \"open the model picker\": wait for \".header\" to be visible; when the window is narrower than 768px, the picker is in the overflow menu: if \".chat-overflow-popover\" is not visible, click the button with aria-label exactly \"More options\", then click the visible \".model-picker.p-select\" inside \".chat-overflow-popover\"; on a wider window, click the visible \".model-picker.p-select\" inside \".status-bar\". The element clicked is \"the picker\"; its panel is \".model-picker-panel\". The screen is a 1280x800 desktop window. Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match, \"whose name contains X\" a substring one. \"The panel\" is \".model-picker-panel\". To \"open the knob\": click \".model-picker-inline .p-select-label\"; the panel should be visible. To \"edit tools\": click the button whose name contains \"Edit\" inside the panel's data-testid \"model-picker-tools\"; the panel should be hidden. \"The pills\" are data-testid \"model-picker-profiles\"; \"the profile X\" is the radio (role \"radio\") named X inside them. To \"edit profiles\": click the button whose name contains \"Edit\" inside the pills. \"The section\" is data-testid \"model-picker-auto-compaction\"; \"the section's X\" is the radio named X inside it, and \"the nudge\" is its select (role \"combobox\"). \"The dialog\" is the element with role \"dialog\". \"The X tool\" is the dialog's radiogroup with aria-label X ('[role=radiogroup][aria-label=\"X\"]'). \"The auto compaction row\" is the dialog's data-testid \"auto-compaction\". To \"apply\": click the dialog's button whose name contains \"Apply to this conversation\"; the dialog should be hidden. \"The markers\" are the data-testid \"message-modelchange\" elements. \"Changed\" is the panel's data-testid \"model-picker-profile-changed\". To \"save as new\" a name N: click changed's button whose name contains \"Save as new…\", fill changed's textbox named \"New profile name\" with N and press Enter in it. A \"row\" X is the dialog's data-testid \"profile-row\" containing the text X. Perform the steps in order. 1. Navigate to /new. The composer first takes on its profile's settings: eval localStorage.getItem(\"shelley.profileApplied\") until it returns \"Default\". 2. Store {\"output_iframe\":\"off\"} fresh. Reload the page and open the model picker: the tools text should contain \"output_html\". 3. Later, output_html back at its default stays there: store {\"output_iframe\":\"off\"}, not fresh. Reload the page and open the model picker: the tools text should have exactly the text \"All at their defaults\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley.profileApplied')",
+      "expect": "Default"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley.toolOverrides', JSON.stringify({'output_iframe':'off'})); localStorage.removeItem('shelley.toolOverrides.outputHtml');"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker.p-select",
+      "within": {
+        "selector": ".status-bar"
+      },
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='model-picker-tools'] .model-picker-section-text",
+      "text": "output_html",
+      "within": {
+        "selector": ".model-picker-panel"
+      }
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley.toolOverrides', JSON.stringify({'output_iframe':'off'}));"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker.p-select",
+      "within": {
+        "selector": ".status-bar"
+      },
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='model-picker-tools'] .model-picker-section-text",
+      "text": "All at their defaults",
+      "within": {
+        "selector": ".model-picker-panel"
+      }
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T09:46:49.170078155Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 42066,
+    "output_tokens": 1452,
+    "estimated_cost_usd": 0.0669978,
+    "mode": "generated"
+  }
+}

@@ -332,6 +332,12 @@ func TestE2EProfilesComposerNudgeKept130000(t *testing.T) {
 	profilesComposerNudge(t, "130000", "130000")
 }
 
+func TestE2EProfilesOutputHtmlOffFollowsOutputIframeOnce(t *testing.T) {
+	e2e(t, `New chats keep output_iframe's off for output_html, once. To "store O" is to eval localStorage.setItem("shelley.toolOverrides", JSON.stringify(O)) for the object O; to "store O fresh" is to do that and also eval localStorage.removeItem("shelley.toolOverrides.outputHtml"). "The tools text" is ".model-picker-section-text" inside the panel's data-testid "model-picker-tools". `+menusOpenModelPickerHow+profilesHow+`Perform the steps in order. 1. Navigate to /new. The composer first takes on its profile's settings: eval localStorage.getItem("shelley.profileApplied") until it returns "Default". 2. Store {"output_iframe":"off"} fresh. Reload the page and open the model picker: the tools text should contain "output_html". 3. Later, output_html back at its default stays there: store {"output_iframe":"off"}, not fresh. Reload the page and open the model picker: the tools text should have exactly the text "All at their defaults".`, func(s *shelley) {
+		s.device(profilesDesktop)
+	})
+}
+
 func TestE2EProfilesComposerCompactionOff(t *testing.T) {
 	e2e(t, `Auto compaction turned off in the composer starts the conversation without it. Call "started settings" returns the profile and tool_overrides of the settings of the conversation the page's first send started, as JSON ("none" before one). `+menusOpenModelPickerHow+profilesHow+`Perform the steps in order. 1. Navigate to /new and open the model picker. 2. Assistant's idle compaction needs auto compaction: click the profile "Assistant". The section's "On" should have aria-checked="true", the section's "Off" should be disabled, and the section should contain the text "idle compaction needs it". 3. Click the profile "Default". The section's "Off" should be enabled; click it: it should have aria-checked="true". 4. Press Escape. Fill data-testid "message-input" with "echo: no compaction" and click data-testid "send-button". 5. Call "started settings" until it returns {"profile":"Default","tool_overrides":{"compact_in_place":"off"}}.`, func(s *shelley) {
 		s.device(profilesDesktop)
