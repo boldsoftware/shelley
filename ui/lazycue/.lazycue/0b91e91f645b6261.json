@@ -1,0 +1,85 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "first-run onboarding starts a project for the picked repositories. The server runs in workspace mode, with the onboarding card showing and no default commit identity yet. The test mocks the server's exe.dev endpoints (GitHub connected, with acme/repo-007 among its repositories) and the commit identity suggestions (\"Ann Example\", ann@example.com); call \"suggestion-logins\" returns the distinct GitHub logins the suggestions were asked for. It answers the project saves itself: call \"saved-match\" says \"ok\" if the saves were as expected (otherwise it returns them), and call \"identities\" returns the commit identities saved as the default. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /. 2. Click data-testid \"onboarding-github\". 3. Fill {\"role\": \"searchbox\", \"name\": \"Search repositories\"} (an input type=search with that aria-label) with \"acme/repo-007\". 4. Click {\"within\": {\"selector\": \"[data-testid='github-repo-list']\"}, \"role\": \"button\", \"name\": \"Add\"}. 5. It asks who the tasks commit as, prefilled from GitHub: the value of data-testid \"commit-identity-name\" is exactly \"Ann Example\" and that of data-testid \"commit-identity-email\" exactly \"ann@example.com\" (assert_value). 6. Fill data-testid \"commit-identity-name\" with \"\". 7. Data-testid \"github-start\" is disabled (assert_disabled). 8. Fill data-testid \"commit-identity-name\" with \"Ann E.\". 9. Click data-testid \"github-start\". 10. The URL path is exactly \"/c/setup-id\" (assert_url with value). 11. Call \"identities\" with expect '[{\"email\":\"ann@example.com\",\"name\":\"Ann E.\"}]'. 12. Call \"saved-match\" with expect \"ok\". 13. Call \"suggestion-logins\" with expect '[[\"ann\"]]'.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='onboarding-github']"
+    },
+    {
+      "action": "fill",
+      "role": "searchbox",
+      "name": "Search repositories",
+      "value": "acme/repo-007"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='github-repo-list']"
+      },
+      "role": "button",
+      "name": "Add"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='commit-identity-name']",
+      "value": "Ann Example"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='commit-identity-email']",
+      "value": "ann@example.com"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='commit-identity-name']",
+      "value": ""
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "[data-testid='github-start']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='commit-identity-name']",
+      "value": "Ann E."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='github-start']"
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/setup-id"
+    },
+    {
+      "action": "call",
+      "value": "identities",
+      "expect": "[{\"email\":\"ann@example.com\",\"name\":\"Ann E.\"}]"
+    },
+    {
+      "action": "call",
+      "value": "saved-match",
+      "expect": "ok"
+    },
+    {
+      "action": "call",
+      "value": "suggestion-logins",
+      "expect": "[[\"ann\"]]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:12:20.57130746Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 14761,
+    "output_tokens": 1001,
+    "estimated_cost_usd": 0.026627400000000002,
+    "mode": "generated"
+  }
+}

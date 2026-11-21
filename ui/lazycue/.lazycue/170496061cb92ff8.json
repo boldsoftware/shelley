@@ -1,0 +1,265 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "connect GitHub, find and add repositories and integrations. The server runs in workspace mode. Project {{NAME}} exists. The test mocks the server's exe.dev endpoints: GitHub is not connected until call \"connect-github\", and then lists 121 repositories (acme/web and acme/repo-000 to acme/repo-089 of the owner acme, ann/repo-000 to ann/repo-029 of ann); the account's integrations are ci, claude, clickhouse and acme-web (for acme/web). Call \"changes-match\" says \"ok\" if the account changes the editor asked for are as expected (otherwise it returns them); call \"repos\" returns the saved repositories of {{NAME}}. \"The editor\" is {\"role\": \"region\", \"name\": \"Edit project\", \"exact\": true}, the element section[aria-label='Edit project']; things \"in the editor\" are scoped to it (a selector after \"section[aria-label='Edit project'] \", or {\"within\": {\"selector\": \"section[aria-label='Edit project']\"}, ...} for a role). To \"open the editor of P\": click \"section[aria-label='P'] a.project-select\", then click {\"within\": {\"selector\": \"[data-testid='project-view']\", \"role\": \"navigation\"}, \"role\": \"button\", \"name\": \"Settings\", \"exact\": true}. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The rows\" are \"section[aria-label='Edit project'] [data-testid='github-repo-list'] .project-repo-row\". \"The search\" is {\"within\": {\"selector\": \"section[aria-label='Edit project']\"}, \"role\": \"searchbox\", \"name\": \"Search repositories\"} (an input type=search with that aria-label); \"the owner\" is {\"within\": {\"selector\": \"section[aria-label='Edit project']\"}, \"role\": \"combobox\", \"name\": \"Owner\"} (a select). \"The first row\" is \"section[aria-label='Edit project'] [data-testid='github-repo-list'] \u003e .project-repo-row:nth-child(1)\" and \"the second row\" the same with :nth-child(2); what a row contains is checked with assert_text_contains. \"The connect link\" is {\"within\": {\"selector\": \"section[aria-label='Edit project']\"}, \"role\": \"link\", \"name\": \"Connect GitHub\"}. \"The clickhouse integration\" is {\"selector\": \"section[aria-label='Edit project'] [data-testid='project-integrations'] .project-repo-row\", \"has_text\": \"clickhouse\"}. 1. Navigate to /. 2. Click the button \"Open tasks\". 3. Open the editor of {{NAME}}. 4. Where tasks run comes first, then GitHub, then the other integrations: the texts of \"section[aria-label='Edit project'] .project-section-heading h3\" are exactly [\"Tasks run on\", \"GitHub repositories\", \"Integrations\", \"Commit identity\", \"Actions\", \"Position in the sidebar\"]. 5. The connect link's href is exactly \"https://exe.dev/github/setup\" (assert_attribute). 6. Keep the link from leaving: eval (no expect) of (() =\u003e { const a = [...document.querySelectorAll(\"section[aria-label='Edit project'] a\")].find((a) =\u003e a.textContent.includes(\"Connect GitHub\")); a.addEventListener(\"click\", (e) =\u003e e.preventDefault()); return \"prevented\"; })(). 7. Click the connect link. 8. Call \"connect-github\" (no expect: it acts once). 9. The user comes back: eval (no expect) of (() =\u003e { document.dispatchEvent(new Event(\"visibilitychange\")); return \"dispatched\"; })(). 10. There are exactly 50 rows (assert_count). 11. Click {\"within\": {\"selector\": \"section[aria-label='Edit project']\"}, \"role\": \"button\", \"name\": \"Show more (71 left)\"}. 12. There are exactly 100 rows. 13. The search's placeholder is exactly \"Search 121 repositories\" (assert_attribute). 14. Fill the owner with \"ann\" (fill sets a select by option value). 15. There are exactly 30 rows. 16. Fill the owner with \"\". 17. Fill the search with \"web\". 18. There is exactly 1 row. 19. The first row contains \"Integration acme-web: adding attaches it to the project's VMs\". 20. Click {\"within\": {\"selector\": \"section[aria-label='Edit project'] [data-testid='github-repo-list'] \u003e .project-repo-row:nth-child(1)\"}, \"role\": \"button\", \"name\": \"Add\"} (the first row's). 21. {\"within\": {\"selector\": \"section[aria-label='Edit project'] [data-testid='github-repo-list'] \u003e .project-repo-row:nth-child(1)\"}, \"role\": \"button\", \"name\": \"Remove\"} is visible. 22. Fill the search with \"acme/repo-007\". 23. The first row contains \"No integration yet: adding creates one\". 24. Click the first row's button \"Add\" as in step 20. 25. Fill the search with \"\". 26. The project's repositories come first: the first row contains \"acme/repo-007\" and the second row \"acme/web\". 27. The texts of \"section[aria-label='Edit project'] [data-testid='project-integrations'] .project-repo-row strong\" are exactly [\"ci\", \"claude\", \"clickhouse\"]. 28. Click {\"within\": {\"selector\": \"section[aria-label='Edit project'] [data-testid='project-integrations'] .project-repo-row\", \"has_text\": \"clickhouse\"}, \"role\": \"button\", \"name\": \"Add\"}. 29. The clickhouse integration contains \"Added to the project's VMs\" (assert_text_contains). 30. Call \"changes-match\" with expect \"ok\". 31. Set the viewport to 1100x2000 (set_viewport, keeping the device's scale, mobile and touch). 32. Click the editor's {\"role\": \"button\", \"name\": \"Save project\", \"exact\": true}. 33. {\"selector\": \"section[aria-label='Edit project'] *\", \"has_text\": \"Saved.\", \"exact\": true} is visible. 34. Call \"repos\" with expect '[{\"integration\":\"acme-web\",\"repository\":\"acme/web\"},{\"integration\":\"acme-repo-007\",\"repository\":\"acme/repo-007\"}]'.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open tasks",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='{{NAME}}'] a.project-select"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='project-view']",
+        "role": "navigation"
+      },
+      "role": "button",
+      "name": "Settings",
+      "exact": true
+    },
+    {
+      "action": "assert_texts",
+      "selector": "section[aria-label='Edit project'] .project-section-heading h3",
+      "texts": [
+        "Tasks run on",
+        "GitHub repositories",
+        "Integrations",
+        "Commit identity",
+        "Actions",
+        "Position in the sidebar"
+      ]
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "link",
+      "name": "Connect GitHub",
+      "attribute": "href",
+      "value": "https://exe.dev/github/setup"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const a = [...document.querySelectorAll(\"section[aria-label='Edit project'] a\")].find((a) =\u003e a.textContent.includes('Connect GitHub')); a.addEventListener('click', (e) =\u003e e.preventDefault()); return 'prevented'; })()"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "link",
+      "name": "Connect GitHub"
+    },
+    {
+      "action": "call",
+      "value": "connect-github"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { document.dispatchEvent(new Event('visibilitychange')); return 'dispatched'; })()"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='Edit project'] [data-testid='github-repo-list'] .project-repo-row",
+      "count": 50
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "button",
+      "name": "Show more (71 left)"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='Edit project'] [data-testid='github-repo-list'] .project-repo-row",
+      "count": 100
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "searchbox",
+      "name": "Search repositories",
+      "attribute": "placeholder",
+      "value": "Search 121 repositories"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "combobox",
+      "name": "Owner",
+      "value": "ann"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='Edit project'] [data-testid='github-repo-list'] .project-repo-row",
+      "count": 30
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "combobox",
+      "name": "Owner",
+      "value": ""
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "searchbox",
+      "name": "Search repositories",
+      "value": "web"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='Edit project'] [data-testid='github-repo-list'] .project-repo-row",
+      "count": 1
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "section[aria-label='Edit project'] [data-testid='github-repo-list'] \u003e .project-repo-row:nth-child(1)",
+      "text": "Integration acme-web: adding attaches it to the project's VMs"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "section[aria-label='Edit project'] [data-testid='github-repo-list'] \u003e .project-repo-row:nth-child(1)"
+      },
+      "role": "button",
+      "name": "Add",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": "section[aria-label='Edit project'] [data-testid='github-repo-list'] \u003e .project-repo-row:nth-child(1)"
+      },
+      "role": "button",
+      "name": "Remove"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "searchbox",
+      "name": "Search repositories",
+      "value": "acme/repo-007"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "section[aria-label='Edit project'] [data-testid='github-repo-list'] \u003e .project-repo-row:nth-child(1)",
+      "text": "No integration yet: adding creates one"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "section[aria-label='Edit project'] [data-testid='github-repo-list'] \u003e .project-repo-row:nth-child(1)"
+      },
+      "role": "button",
+      "name": "Add",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "searchbox",
+      "name": "Search repositories",
+      "value": ""
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "section[aria-label='Edit project'] [data-testid='github-repo-list'] \u003e .project-repo-row:nth-child(1)",
+      "text": "acme/repo-007"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "section[aria-label='Edit project'] [data-testid='github-repo-list'] \u003e .project-repo-row:nth-child(2)",
+      "text": "acme/web"
+    },
+    {
+      "action": "assert_texts",
+      "selector": "section[aria-label='Edit project'] [data-testid='project-integrations'] .project-repo-row strong",
+      "texts": [
+        "ci",
+        "claude",
+        "clickhouse"
+      ]
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "section[aria-label='Edit project'] [data-testid='project-integrations'] .project-repo-row",
+        "has_text": "clickhouse"
+      },
+      "role": "button",
+      "name": "Add"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "section[aria-label='Edit project'] [data-testid='project-integrations'] .project-repo-row",
+      "has_text": "clickhouse",
+      "text": "Added to the project's VMs"
+    },
+    {
+      "action": "call",
+      "value": "changes-match",
+      "expect": "ok"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1100,
+      "height": 2000
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "button",
+      "name": "Save project",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Edit project'] *",
+      "has_text": "Saved.",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "repos",
+      "expect": "[{\"integration\":\"acme-web\",\"repository\":\"acme/web\"},{\"integration\":\"acme-repo-007\",\"repository\":\"acme/repo-007\"}]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:13:07.2120815Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 18826,
+    "output_tokens": 3743,
+    "estimated_cost_usd": 0.0788853,
+    "mode": "generated"
+  }
+}

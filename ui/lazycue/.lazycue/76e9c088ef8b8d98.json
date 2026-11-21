@@ -1,0 +1,87 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "a project's settings give it its own commit identity. The server runs in workspace mode. Project {{NAME}} exists. The test mocks the server's exe.dev endpoints (GitHub connected) and the commit identity suggestions (none). Call \"commit-identity\" returns the saved commit identity of {{NAME}}. \"The editor\" is {\"role\": \"region\", \"name\": \"Edit project\", \"exact\": true}, the element section[aria-label='Edit project']; things \"in the editor\" are scoped to it (a selector after \"section[aria-label='Edit project'] \", or {\"within\": {\"selector\": \"section[aria-label='Edit project']\"}, ...} for a role). To \"open the editor of P\": click \"section[aria-label='P'] a.project-select\", then click {\"within\": {\"selector\": \"[data-testid='project-view']\", \"role\": \"navigation\"}, \"role\": \"button\", \"name\": \"Settings\", \"exact\": true}. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /. 2. Click the button \"Open tasks\". 3. Open the editor of {{NAME}}. 4. The checkbox data-testid \"commit-identity-default\" in the editor is checked: eval with expect \"true\" of String(document.querySelector(\"section[aria-label='Edit project'] [data-testid='commit-identity-default']\").checked). 5. Uncheck it: click it, then the same eval has expect \"false\". 6. Fill \"section[aria-label='Edit project'] [data-testid='commit-identity-name']\" with \"Grace Hopper\" and \"section[aria-label='Edit project'] [data-testid='commit-identity-email']\" with \"grace@example.com\". 7. Set the viewport to 1100x1400 (set_viewport, keeping the device's scale, mobile and touch). 8. Click {\"role\": \"button\", \"name\": \"Save project\"} (page-wide, not exact). 9. {\"within\": {\"selector\": \"section[aria-label='Edit project']\"}, \"role\": \"status\"} contains \"Saved\" (assert_text_contains). 10. Call \"commit-identity\" with expect '{\"email\":\"grace@example.com\",\"name\":\"Grace Hopper\"}'.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open tasks",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='{{NAME}}'] a.project-select"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='project-view']",
+        "role": "navigation"
+      },
+      "role": "button",
+      "name": "Settings",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "String(document.querySelector(\"section[aria-label='Edit project'] [data-testid='commit-identity-default']\").checked)",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label='Edit project'] [data-testid='commit-identity-default']"
+    },
+    {
+      "action": "eval",
+      "expression": "String(document.querySelector(\"section[aria-label='Edit project'] [data-testid='commit-identity-default']\").checked)",
+      "expect": "false"
+    },
+    {
+      "action": "fill",
+      "selector": "section[aria-label='Edit project'] [data-testid='commit-identity-name']",
+      "value": "Grace Hopper"
+    },
+    {
+      "action": "fill",
+      "selector": "section[aria-label='Edit project'] [data-testid='commit-identity-email']",
+      "value": "grace@example.com"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1100,
+      "height": 1400
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save project"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": "section[aria-label='Edit project']"
+      },
+      "role": "status",
+      "text": "Saved"
+    },
+    {
+      "action": "call",
+      "value": "commit-identity",
+      "expect": "{\"email\":\"grace@example.com\",\"name\":\"Grace Hopper\"}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:12:20.593955144Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 7033,
+    "output_tokens": 559,
+    "estimated_cost_usd": 0.015047399999999999,
+    "mode": "generated"
+  }
+}
