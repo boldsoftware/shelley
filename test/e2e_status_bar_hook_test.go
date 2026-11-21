@@ -194,6 +194,18 @@ func TestE2EStatusBarHookItems(t *testing.T) {
 	})
 }
 
+// A popover that just fits below its button must not overflow by PrimeVue's
+// gutter, which PrimeVue leaves out when it checks the fit. Reduced motion
+// used to hide this by having PrimeVue measure the popover early.
+func TestE2EStatusBarHookErrorFitsOnAPhone(t *testing.T) {
+	e2e(t, statusBarHookSetup+`A status hook's error opens entirely on screen on a phone, with motion on. The hook prints one "Bad commit" item whose arguments are wrong, so the row only says "Status hook failed". Perform the steps in order. 1. Resize the viewport to 390 x 900 (set_viewport width and height only) and navigate to /c/items. 2. The row's text should be exactly "Status hook failed". 3. Click the button named "Status hook failed" in the row. 4. The dialog named "Status hook error" ([role="dialog"][aria-label="Status hook error"]) should be visible and contain "full or abbreviated commit hash". 5. Eval document.querySelector('[role="dialog"][aria-label="Status hook error"]').getAnimations({ subtree: true }).length with expect "0", so it has finished opening. 6. The dialog should be entirely within the viewport.`, func(s *shelley) {
+		s.media("prefers-reduced-motion", "no-preference")
+		dir := s.gitRepo(filepath.Join(s.dir, "items"))
+		statusBarHook(s, dir, map[string]any{"body": []any{map[string]any{"body": "Bad commit", "action": "open_diff", "args": map[string]any{"commit": "HEAD~1"}}}})
+		s.conversationWith(map[string]any{"message": "Hello", "model": "predictable", "cwd": dir}, "items")
+	})
+}
+
 // statusBarHookSwipeJS gives pages window.swipe(selector, startX, endX),
 // which dispatches a synthetic one-finger horizontal swipe (touchstart,
 // one touchmove, touchend at clientY 300) on the first element matching

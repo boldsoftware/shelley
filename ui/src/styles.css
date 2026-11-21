@@ -5424,8 +5424,12 @@ select:disabled {
   text-overflow: ellipsis;
 }
 
-.status-hook-error-popover {
+/* No arrow (see .chat-overflow-popover), so no gutter: PrimeVue checks
+   whether a popover fits below its target without its gutter, so one that
+   just fits would overflow by it. */
+.status-hook-error-popover.p-popover {
   width: min(36rem, calc(100vw - 2rem));
+  margin-block: 0;
 }
 
 .status-hook-error-details {
@@ -17093,9 +17097,12 @@ kbd {
   max-width: calc(100vw - 1rem);
 }
 
-/* The menu needs neither PrimeVue's arrow nor its gutter. Its rows own padding. */
+/* The menu needs neither PrimeVue's arrow nor its gutter. Its rows own
+   padding. Nor does the status hook's error. */
 .chat-overflow-popover.p-popover:before,
-.chat-overflow-popover.p-popover:after {
+.chat-overflow-popover.p-popover:after,
+.status-hook-error-popover.p-popover:before,
+.status-hook-error-popover.p-popover:after {
   display: none;
 }
 .chat-overflow-popover .overflow-menu-panel {

@@ -1,0 +1,57 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The row\" is the status-bar hook's row, [data-testid=\"status-bar-hook\"]. \"Go within the app to URL\" means: eval (() =\u003e { window.history.pushState({}, '', 'URL'); window.dispatchEvent(new PopStateEvent('popstate')); })(), without reloading. \"Send\" means: fill the message input (data-testid \"message-input\") with \"Hello\", then click the send button (data-testid \"send-button\"). For CSS checks, eval getComputedStyle on the element and compare the property exactly. A status hook's error opens entirely on screen on a phone, with motion on. The hook prints one \"Bad commit\" item whose arguments are wrong, so the row only says \"Status hook failed\". Perform the steps in order. 1. Resize the viewport to 390 x 900 (set_viewport width and height only) and navigate to /c/items. 2. The row's text should be exactly \"Status hook failed\". 3. Click the button named \"Status hook failed\" in the row. 4. The dialog named \"Status hook error\" ([role=\"dialog\"][aria-label=\"Status hook error\"]) should be visible and contain \"full or abbreviated commit hash\". 5. Eval document.querySelector('[role=\"dialog\"][aria-label=\"Status hook error\"]').getAnimations({ subtree: true }).length with expect \"0\", so it has finished opening. 6. The dialog should be entirely within the viewport.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 900
+    },
+    {
+      "action": "navigate",
+      "url": "/c/items"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='status-bar-hook']",
+      "text": "Status hook failed"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Status hook failed",
+      "within": {
+        "selector": "[data-testid='status-bar-hook']"
+      }
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='dialog'][aria-label='Status hook error']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='dialog'][aria-label='Status hook error']",
+      "text": "full or abbreviated commit hash"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=\"dialog\"][aria-label=\"Status hook error\"]').getAnimations({ subtree: true }).length",
+      "expect": "0"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": "[role='dialog'][aria-label='Status hook error']",
+      "ratio": 1
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T16:53:26.47520678Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 23866,
+    "output_tokens": 827,
+    "estimated_cost_usd": 0.02551305,
+    "mode": "generated"
+  }
+}
