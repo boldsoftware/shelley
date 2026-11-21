@@ -1,0 +1,70 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "In the file finder, name matches and content matches share the list, names first. The conversation /c/{{SLUG}} runs in a git repository holding (untracked) cardamom-notes.md, which reads \"about the spice\", and recipes.txt, which reads \"secret ingredient: cardamom\". Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Open the fuzzy file finder by pressing \"p\" (lowercase) with the Control modifier, without clicking anything first, and wait up to 10s for its input \".grp-filter\" to be visible. 3. Fill the finder input with \"cardamom\". 4. There should come to be exactly 2 \".grp-row\" elements (up to 10s). 5. The first should contain \"cardamom-notes.md\" (the name match, rendered by the fast pass) and the second \"recipes.txt\" (the content-only hit). 6. The second row's \".ff-snippet mark\" should be exactly one element, with exactly the text \"cardamom\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-input, textarea, [contenteditable]",
+      "timeout": "15s"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "cardamom"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-row:nth-child(2)",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".grp-row",
+      "count": 2
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".grp-row:nth-child(1)",
+      "text": "cardamom-notes.md"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".grp-row:nth-child(2)",
+      "text": "recipes.txt"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".grp-row:nth-child(2) .ff-snippet mark",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": ".grp-row:nth-child(2) .ff-snippet mark",
+      "text": "cardamom"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:01:08.118654774Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 37091,
+    "output_tokens": 1268,
+    "estimated_cost_usd": 0.046305299999999994,
+    "mode": "generated"
+  }
+}

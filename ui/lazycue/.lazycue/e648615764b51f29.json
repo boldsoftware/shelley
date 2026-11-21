@@ -1,0 +1,60 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "In the file finder, a path to an empty directory says the directory is empty. The conversation /c/{{SLUG}} runs in a directory holding local.md and an empty subdirectory {{EMPTY}}. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Open the fuzzy file finder by pressing \"p\" (lowercase) with the Control modifier, without clicking anything first, and wait up to 10s for its input \".grp-filter\" to be visible. 3. Fill the finder input with \"{{EMPTY}}/\" (naming a directory lists all of it). 4. \".grp-empty\" should come to have exactly the text \"No files in this directory.\" (up to 10s). 5. Fill the finder input with \"{{EMPTY}}/zzz\" (a pattern that matches nothing inside it). 6. \".grp-empty\" should come to have exactly the text \"No matching files.\" (up to 10s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "{{EMPTY}}/"
+    },
+    {
+      "action": "wait_text",
+      "text": "No files in this directory.",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".grp-empty",
+      "text": "No files in this directory."
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "{{EMPTY}}/zzz"
+    },
+    {
+      "action": "wait_text",
+      "text": "No matching files.",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".grp-empty",
+      "text": "No matching files."
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:01:30.995251089Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 37907,
+    "output_tokens": 1149,
+    "estimated_cost_usd": 0.045406800000000004,
+    "mode": "generated"
+  }
+}

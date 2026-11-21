@@ -1,0 +1,115 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a new conversation, the file finder stays put when another conversation becomes the most recent. Two conversations: A, {{A_ID}}, in {{DIR_A}}, which holds only-in-a.md, and B in {{DIR_B}}, which holds only-in-b.md; B is the most recently active. Call \"make A most recent\" renames A until it is the most recently active conversation and then sets {{A_SLUG}} to its final slug. Perform the steps in order. 1. Navigate to /new and wait for the message input (data-testid \"message-input\") to be visible. 2. Open the fuzzy file finder by pressing \"p\" (lowercase) with the Control modifier, without clicking anything first, and wait up to 10s for its input \".grp-filter\" to be visible. 3. \".ff-dir-path\" should have exactly the text \"{{DIR_B}}\". 4. Fill the finder input with \"only-in\". 5. The first \".grp-row\" should contain \"only-in-b.md\". 6. Call \"make A most recent\". 7. The page hears of it: the drawer's '.conversation-item[data-conversation-id=\"{{A_ID}}\"]' should come to contain the text \"{{A_SLUG}}\". 8. The open finder is still where the user is searching: \".ff-dir-path\" should still have exactly the text \"{{DIR_B}}\", the first \".grp-row\" should still contain \"only-in-b.md\", and the finder input should still have the value \"only-in\". 9. Press Escape. 10. The finder input should be hidden. 11. Press \"p\" (lowercase) with the Control modifier again. 12. \".ff-dir-path\" should come to have exactly the text \"{{DIR_A}}\" (a fresh open takes the new most recent directory).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800,
+      "mobile": false,
+      "touch": false
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".ff-dir-path",
+      "text": "{{DIR_B}}"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "only-in"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".grp-row",
+      "text": "only-in-b.md"
+    },
+    {
+      "action": "call",
+      "value": "make A most recent"
+    },
+    {
+      "action": "wait_text",
+      "text": "{{A_SLUG}}",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{A_ID}}']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".conversation-item[data-conversation-id='{{A_ID}}']",
+      "text": "{{A_SLUG}}"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".ff-dir-path",
+      "text": "{{DIR_B}}"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".grp-row",
+      "text": "only-in-b.md"
+    },
+    {
+      "action": "assert_value",
+      "selector": ".grp-filter",
+      "value": "only-in"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".ff-dir-path",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".ff-dir-path",
+      "text": "{{DIR_A}}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:02:29.801401675Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 45333,
+    "output_tokens": 1821,
+    "estimated_cost_usd": 0.0693618,
+    "mode": "generated"
+  }
+}

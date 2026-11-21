@@ -1,0 +1,84 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "In the file finder, a stale content response from a superseded keystroke never lands. The conversation /c/{{SLUG}} runs in a git repository holding (untracked) paprika-notes.txt, which reads \"cardamom goes well here\", and other.txt, which reads \"nothing relevant\". The server's answer to the FIRST content-search request (GET /api/find-files with content=only) is held back until call \"release\"; every other request passes. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Open the fuzzy file finder by pressing \"p\" (lowercase) with the Control modifier, without clicking anything first, and wait up to 10s for its input \".grp-filter\" to be visible. 3. Fill the finder input with \"cardamom\". 4. \".ff-grep-pending\" should become visible (up to 10s): that keystroke's content search is now stuck. 5. Fill the finder input with \"paprika\" (this supersedes it; its own phases both land). 6. There should come to be exactly 1 \".grp-row\" (up to 10s), containing \"paprika-notes.txt\". 7. Call \"release\". 8. Sleep 300ms to give the stale response a beat to (not) apply. 9. There must still be exactly 1 \".grp-row\", and exactly 0 \".ff-snippet\" elements.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input'], .grp-filter, textarea",
+      "timeout": "15s"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "cardamom"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".ff-grep-pending",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "paprika"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".grp-row",
+      "count": 1
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".grp-row",
+      "text": "paprika-notes.txt",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".grp-row",
+      "count": 1
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "sleep",
+      "timeout": "300ms"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".grp-row",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": ".ff-snippet",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:00:42.010157607Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 44203,
+    "output_tokens": 1416,
+    "estimated_cost_usd": 0.061229700000000005,
+    "mode": "generated"
+  }
+}

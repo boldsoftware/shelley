@@ -1,0 +1,65 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "In the file finder, a term matching only file content finds the file and shows a snippet. The conversation /c/{{SLUG}} runs in a git repository holding (untracked) recipes.txt, which reads \"secret ingredient: cardamom\", and shopping-list.txt, which reads \"eggs and flour\". Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Open the fuzzy file finder by pressing \"p\" (lowercase) with the Control modifier, without clicking anything first, and wait up to 10s for its input \".grp-filter\" to be visible. 3. Fill the finder input with \"cardamom\". 4. There should come to be exactly 1 \".grp-row\" (up to 10s): \"cardamom\" matches no file name, so the only row is the content hit. 5. It should contain \"recipes.txt\". 6. Its \".ff-snippet\" should be visible and contain \"cardamom\". 7. The snippet should hold exactly one \"mark\" element, with exactly the text \"cardamom\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "cardamom"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".grp-row",
+      "count": 1,
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".grp-row",
+      "text": "recipes.txt"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".grp-row .ff-snippet"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".grp-row .ff-snippet",
+      "text": "cardamom"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".grp-row .ff-snippet mark",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": ".grp-row .ff-snippet mark",
+      "text": "cardamom"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:01:28.60324714Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 161635,
+    "output_tokens": 2037,
+    "estimated_cost_usd": 0.1145463,
+    "mode": "generated"
+  }
+}
