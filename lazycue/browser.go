@@ -1610,41 +1610,85 @@ func locateRole(ctx context.Context, step Step, slot string, world cdpruntime.Ex
 		return lookupErr(ctx, step, err)
 	}
 	want := collapse(step.Name)
-	var ids []cdp.BackendNodeID
+	type match struct {
+		id   cdp.BackendNodeID
+		name string
+		// from are the nodes whose text an exact match's name is, if any.
+		from []cdp.BackendNodeID
+	}
+	var matches []match
 	for _, n := range nodes {
 		if n.Ignored || n.BackendDOMNodeID == 0 {
 			continue
 		}
+		m := match{id: n.BackendDOMNodeID}
 		if want != "" {
 			var name string
 			if n.Name != nil {
 				_ = json.Unmarshal(n.Name.Value, &name) // not a string: no name
 			}
 			name = collapse(name)
-			if step.Exact && name != want || !step.Exact && !strings.Contains(strings.ToLower(name), strings.ToLower(want)) {
+			if step.Exact {
+				if !strings.EqualFold(name, want) {
+					continue
+				}
+				m.name, m.from = name, nameNodes(n)
+				if m.from == nil && name != want {
+					continue
+				}
+			} else if !strings.Contains(strings.ToLower(name), strings.ToLower(want)) {
 				continue
 			}
 		}
-		ids = append(ids, n.BackendDOMNodeID)
+		matches = append(matches, m)
 	}
-	// One round trip each, so all at once: a page may have thousands.
-	args := make([]*cdpruntime.CallArgument, len(ids))
-	errs := make([]error, len(ids))
-	var wg sync.WaitGroup
-	for i, id := range ids {
-		wg.Go(func() {
-			el, err := dom.ResolveNode().WithBackendNodeID(id).WithExecutionContextID(world).WithObjectGroup(group).Do(ctx)
-			if err == nil {
-				args[i] = &cdpruntime.CallArgument{ObjectID: el.ObjectID}
-			}
-			errs[i] = err
-		})
+	// Chrome names elements from their text as rendered, so that
+	// text-transform: uppercase makes "Save" "SAVE"; Playwright, as the DOM
+	// has it. An exact name from text must match it so.
+	var from []cdp.BackendNodeID
+	var sizes []int
+	for _, m := range matches {
+		from = append(from, m.from...)
+		sizes = append(sizes, len(m.from))
 	}
-	wg.Wait()
-	for _, err := range errs {
+	if len(from) > 0 {
+		args, err := resolveNodes(ctx, from, world, group)
 		if err != nil {
 			return lookupErr(ctx, step, err)
 		}
+		sizesJSON, err := json.Marshal(sizes)
+		if err != nil {
+			return err
+		}
+		res, exc, err := cdpruntime.CallFunctionOn(fmt.Sprintf(`function(...nodes) {
+			let k = 0;
+			return %s.map(n => nodes.slice(k, k += n).map(n => n.textContent).join(' '));
+		}`, sizesJSON)).WithObjectID(doc.ObjectID).WithArguments(args).WithReturnByValue(true).Do(ctx)
+		if err != nil {
+			return lookupErr(ctx, step, err)
+		}
+		if exc != nil {
+			return exc
+		}
+		var texts []string
+		if err := json.Unmarshal(res.Value, &texts); err != nil {
+			return err
+		}
+		kept := matches[:0]
+		for i, m := range matches {
+			if m.from == nil || writtenCase(m.name, collapse(texts[i])) == want {
+				kept = append(kept, m)
+			}
+		}
+		matches = kept
+	}
+	ids := make([]cdp.BackendNodeID, len(matches))
+	for i, m := range matches {
+		ids[i] = m.id
+	}
+	args, err := resolveNodes(ctx, ids, world, group)
+	if err != nil {
+		return lookupErr(ctx, step, err)
 	}
 	_, exc, err = cdpruntime.CallFunctionOn(fmt.Sprintf(`function(...els) {
 		window[%q] = els;
@@ -1656,6 +1700,67 @@ func locateRole(ctx context.Context, step Step, slot string, world cdpruntime.Ex
 		return exc
 	}
 	return nil
+}
+
+// resolveNodes resolves nodes in world, all at once: one round trip each,
+// and a page may have thousands.
+func resolveNodes(ctx context.Context, ids []cdp.BackendNodeID, world cdpruntime.ExecutionContextID, group string) ([]*cdpruntime.CallArgument, error) {
+	args := make([]*cdpruntime.CallArgument, len(ids))
+	errs := make([]error, len(ids))
+	var wg sync.WaitGroup
+	for i, id := range ids {
+		wg.Go(func() {
+			obj, err := dom.ResolveNode().WithBackendNodeID(id).WithExecutionContextID(world).WithObjectGroup(group).Do(ctx)
+			if err == nil {
+				args[i] = &cdpruntime.CallArgument{ObjectID: obj.ObjectID}
+			}
+			errs[i] = err
+		})
+	}
+	wg.Wait()
+	return args, errors.Join(errs...)
+}
+
+// nameNodes are the nodes whose text n's name is: n itself, or the
+// elements labelling it. A name from an attribute has none.
+func nameNodes(n *accessibility.Node) []cdp.BackendNodeID {
+	for _, src := range n.Name.Sources {
+		if src.Superseded || src.Value == nil {
+			continue
+		}
+		// The first source with a value is the name's.
+		switch src.Type {
+		case accessibility.ValueSourceTypeContents:
+			return []cdp.BackendNodeID{n.BackendDOMNodeID}
+		case accessibility.ValueSourceTypeRelatedElement:
+			related := src.AttributeValue
+			if related == nil {
+				related = src.NativeSourceValue
+			}
+			if related == nil {
+				return nil
+			}
+			var ids []cdp.BackendNodeID
+			for _, r := range related.RelatedNodes {
+				ids = append(ids, r.BackendDOMNodeID)
+			}
+			return ids
+		}
+		return nil
+	}
+	return nil
+}
+
+// writtenCase is name in the case text has it in, where text holds it in
+// some case; otherwise, as when hidden parts split it in text, it is name.
+func writtenCase(name, text string) string {
+	n, t := len([]rune(name)), []rune(text)
+	for i := 0; i+n <= len(t); i++ {
+		if s := string(t[i : i+n]); strings.EqualFold(s, name) {
+			return s
+		}
+	}
+	return name
 }
 
 // lookupErr is err from finding step's role, which says so when the step's

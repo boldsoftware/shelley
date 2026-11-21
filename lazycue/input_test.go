@@ -561,6 +561,29 @@ func TestCrossOriginFrameInView(t *testing.T) {
 	)
 }
 
+// Chrome names elements from their rendered text, text-transform and all;
+// Playwright, as the DOM has it. An exact name matches the DOM's.
+func TestExactNamesIgnoreTextTransform(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<h3 id="h" style="text-transform: uppercase">Auto compaction</h3>
+<div role="radiogroup" aria-labelledby="h"><input type="radio" aria-label="On"></div>
+<button style="text-transform: uppercase">Save it</button>
+<label style="text-transform: capitalize">the <input> box</label>
+<button aria-label="SHOUT" style="text-transform: lowercase">Shout</button>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionAssertCount, Role: "radiogroup", Name: "Auto compaction", Exact: true, Count: 1},
+		Step{Action: ActionAssertCount, Role: "radiogroup", Name: "AUTO COMPACTION", Exact: true, Count: 0},
+		Step{Action: ActionAssertCount, Role: "button", Name: "Save it", Exact: true, Count: 1},
+		Step{Action: ActionAssertCount, Role: "textbox", Name: "the box", Exact: true, Count: 1},
+		// An aria-label is the name as written.
+		Step{Action: ActionAssertCount, Role: "button", Name: "SHOUT", Exact: true, Count: 1},
+		Step{Action: ActionAssertCount, Role: "button", Name: "Shout", Exact: true, Count: 0},
+	)
+}
+
 // Thousands of matches take under a second (one by one, they took 7s).
 func TestManyRoles(t *testing.T) {
 	if raceEnabled {
