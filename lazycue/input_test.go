@@ -270,6 +270,65 @@ setTimeout(() => document.querySelector('main').insertAdjacentHTML('beforeend', 
 	}
 }
 
+// within scopes a step to the elements inside what it picks out, as
+// Playwright's chained locators do.
+func TestWithin(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<div data-testid="card" style="display: none"><span data-testid="status">Hidden</span></div>
+<div data-testid="card"><span data-testid="status">Passed</span><button>Copy</button></div>
+<div data-testid="card"><span data-testid="status">Failed (exit 7)</span><button>Copy</button></div>
+<section aria-label="Messages">
+<div class="msg">Hello <button aria-label="Copy">c</button></div>
+<div class="msg">Bye <button aria-label="Copy">c</button></div>
+</section>
+<x-card></x-card>
+<script>
+customElements.define('x-card', class extends HTMLElement {
+  connectedCallback() { this.attachShadow({mode: 'open'}).innerHTML = '<button>Shadow</button>'; }
+});
+document.addEventListener('click', e => document.title = e.target.closest('.msg, [data-testid=card]').firstChild.textContent.trim());
+</script>
+</body></html>`)}
+	cards := &Within{Selector: "[data-testid=card]"}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		// Only the step's own matches inside one with the text count; the
+		// first of them is the step's element.
+		Step{Action: ActionAssertText, Within: &Within{Selector: "[data-testid=card]", HasText: "Failed (exit 7)"}, Selector: "[data-testid=status]", Text: "Failed (exit 7)"},
+		Step{Action: ActionAssertCount, Within: cards, Selector: "[data-testid=status]", Count: 3},
+		Step{Action: ActionAssertCount, Within: &Within{Selector: "[data-testid=card]", Visible: true}, Selector: "[data-testid=status]", Count: 2},
+		Step{Action: ActionAssertCount, Within: &Within{Selector: "[data-testid=card]", HasText: "Failed", Exact: true}, Selector: "[data-testid=status]", Count: 0},
+		Step{Action: ActionAssertText, Within: cards, Selector: "[data-testid=status]", Text: "Hidden"},
+		// A within match itself does not count.
+		Step{Action: ActionAssertCount, Within: cards, Selector: "div", Count: 0},
+		// Roles on either side, each with its own name.
+		Step{Action: ActionClick, Within: &Within{Selector: ".msg", HasText: "Bye"}, Role: "button", Name: "Copy"},
+		Step{Action: ActionAssertTitle, Text: "Bye"},
+		Step{Action: ActionAssertCount, Within: &Within{Role: "region", Name: "messages"}, Role: "button", Name: "Copy", Count: 2},
+		Step{Action: ActionAssertCount, Within: &Within{Selector: "section"}, Selector: "button", Count: 2},
+		// The step's has_text applies after within.
+		Step{Action: ActionAssertCount, Within: &Within{Selector: "section"}, Selector: "div", HasText: "Bye", Count: 1},
+		// Shadow DOM is inside its host.
+		Step{Action: ActionAssertText, Within: &Within{Selector: "x-card"}, Role: "button", Text: "Shadow"},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		{Step{Action: ActionClick, Within: &Within{Selector: "[data-testid=card]", HasText: "Nope"}, Selector: "button"}, `no element matches button within [data-testid=card] with text "Nope"`},
+		{Step{Action: ActionClick, Within: &Within{HasText: "Bye"}, Selector: "button"}, "within needs a selector or a role"},
+		{Step{Action: ActionClick, Within: cards}, "within scopes a step's selector or role"},
+		{Step{Action: ActionClick, Within: &Within{Selector: ".msg", Name: "Bye"}, Selector: "button"}, "a name needs a role"},
+		{Step{Action: ActionClick, Within: &Within{Role: "image"}, Selector: "button"}, `unknown role "image"`},
+	} {
+		c.step.Timeout = "300ms"
+		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+}
+
 // Thousands of matches take under a second (one by one, they took 7s).
 func TestManyRoles(t *testing.T) {
 	if raceEnabled {

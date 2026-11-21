@@ -1,6 +1,9 @@
 package lazycue
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestStepSummaries(t *testing.T) {
 	for _, c := range []struct {
@@ -16,5 +19,23 @@ func TestStepSummaries(t *testing.T) {
 		if got := StepSummary(c.step); got != c.want {
 			t.Errorf("StepSummary(%+v) = %q, want %q", c.step, got, c.want)
 		}
+	}
+}
+
+// Placeholders in within are filled in, on a copy.
+func TestSubstituteWithin(t *testing.T) {
+	step := Step{Action: ActionClick, Selector: "button", Within: &Within{Selector: "#{{ID}}", Role: "{{ROLE}}", Name: "{{NAME}}", HasText: "{{TEXT}}"}}
+	got, err := substitute(step, map[string]string{"ID": "card", "ROLE": "listitem", "NAME": "Build", "TEXT": "Failed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (Within{Selector: "#card", Role: "listitem", Name: "Build", HasText: "Failed"}); *got.Within != want {
+		t.Errorf("within = %+v, want %+v", *got.Within, want)
+	}
+	if step.Within.Selector != "#{{ID}}" {
+		t.Errorf("substitute changed the step's within: %+v", *step.Within)
+	}
+	if _, err := substitute(step, nil); err == nil || !strings.Contains(err.Error(), "no value for {{ID}}") {
+		t.Errorf("missing placeholder in within: %v", err)
 	}
 }

@@ -22,7 +22,10 @@ type Step struct {
 	// Exact makes Name and HasText match the whole text, case-sensitively.
 	Exact bool `json:"exact,omitempty"`
 	// Visible keeps only the visible matches.
-	Visible    bool    `json:"visible,omitempty"`
+	Visible bool `json:"visible,omitempty"`
+	// Within keeps only the matches inside an element it picks out, as
+	// Playwright's chained locators do.
+	Within     *Within `json:"within,omitempty"`
 	Value      string  `json:"value,omitempty"`
 	Text       string  `json:"text,omitempty"`
 	Timeout    string  `json:"timeout,omitempty"`
@@ -65,6 +68,21 @@ type Step struct {
 	Touch  *bool   `json:"touch,omitempty"`
 	// Steps are a retry step's steps.
 	Steps []Step `json:"steps,omitempty"`
+}
+
+// Within picks out elements as a step does, for the step to look inside.
+type Within struct {
+	Selector string `json:"selector,omitempty"`
+	Role     string `json:"role,omitempty"`
+	Name     string `json:"name,omitempty"`
+	HasText  string `json:"has_text,omitempty"`
+	Exact    bool   `json:"exact,omitempty"`
+	Visible  bool   `json:"visible,omitempty"`
+}
+
+// step is a step that picks out what w does.
+func (w Within) step() Step {
+	return Step{Selector: w.Selector, Role: w.Role, Name: w.Name, HasText: w.HasText, Exact: w.Exact, Visible: w.Visible}
 }
 
 // Supported action names.
@@ -260,8 +278,8 @@ func stepSummary(s Step) string {
 	}
 }
 
-// describe names what a step's selector, role, name, has_text and visible
-// pick out, e.g. `button "Archive" in nav`, or its point.
+// describe names what a step's selector, role, name, has_text, visible and
+// within pick out, e.g. `button "Archive" in nav`, or its point.
 func describe(s Step) string {
 	if s.Point != "" {
 		return "point " + truncateArg(s.Point, 40)
@@ -281,6 +299,9 @@ func describe(s Step) string {
 	}
 	if s.Visible {
 		d = "visible " + d
+	}
+	if s.Within != nil {
+		d += " within " + describe(s.Within.step())
 	}
 	return d
 }

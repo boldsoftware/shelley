@@ -325,6 +325,10 @@ func substitute(step Step, vars map[string]string) (Step, error) {
 		expect := *step.Expect
 		step.Expect = &expect
 	}
+	if step.Within != nil {
+		within := *step.Within
+		step.Within = &within
+	}
 	step.Texts = slices.Clone(step.Texts)
 	for _, f := range stringFields(&step) {
 		*f = placeholder.ReplaceAllStringFunc(*f, func(m string) string {
@@ -350,6 +354,9 @@ func stringFields(s *Step) []*string {
 	}
 	if s.Expect != nil {
 		fields = append(fields, s.Expect)
+	}
+	if w := s.Within; w != nil {
+		fields = append(fields, &w.Selector, &w.Role, &w.Name, &w.HasText)
 	}
 	for i := range s.Texts {
 		fields = append(fields, &s.Texts[i])
@@ -693,11 +700,23 @@ func (b *Browser) executeStep(ctx context.Context, env *Env, step Step) (string,
 
 // run runs a step whose placeholders have been substituted.
 func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) {
-	if _, ok := axRoles[step.Role]; step.Role != "" && !ok {
-		return "", mistake{fmt.Errorf("unknown role %q; use an ARIA role such as button, link, textbox, checkbox, img or dialog", step.Role)}
+	picks := []Step{step}
+	if w := step.Within; w != nil {
+		if w.Selector == "" && w.Role == "" {
+			return "", mistake{errors.New("within needs a selector or a role")}
+		}
+		if step.Selector == "" && step.Role == "" {
+			return "", mistake{errors.New("within scopes a step's selector or role; set one")}
+		}
+		picks = append(picks, w.step())
 	}
-	if step.Name != "" && step.Role == "" {
-		return "", mistake{errors.New("a name needs a role")}
+	for _, p := range picks {
+		if _, ok := axRoles[p.Role]; p.Role != "" && !ok {
+			return "", mistake{fmt.Errorf("unknown role %q; use an ARIA role such as button, link, textbox, checkbox, img or dialog", p.Role)}
+		}
+		if p.Name != "" && p.Role == "" {
+			return "", mistake{errors.New("a name needs a role")}
+		}
 	}
 	if step.Action == ActionRetry {
 		return "", b.retry(ctx, env, step)
@@ -1305,51 +1324,72 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 	}
 }
 
+// The globals where locate leaves a step's role matches and its within's.
+const (
+	roleSlot   = "__lazycueRole"
+	withinSlot = "__lazycueWithinRole"
+)
+
 // findAllJS is an expression for the elements a step picks out, in document
 // order: those its selector matches or, with a role, those locate found
-// inside what its selector matches; then those whose text has has_text
-// (with a selector alone, an element that holds another match does not
-// count, as with Playwright's getByText); then, with visible, the visible
-// ones. Evaluate it with evalFind.
+// inside what its selector matches; then those inside what its within picks
+// out; then those whose text has has_text (with a selector alone, an element
+// that holds another match does not count, as with Playwright's getByText);
+// then, with visible, the visible ones. Evaluate it with evalFind.
 func findAllJS(step Step) string {
-	return fmt.Sprintf(`(function(sel, role, hasText, exact, visible) {
+	scopes := "null"
+	if step.Within != nil {
+		scopes = pickJS(step.Within.step(), withinSlot, "null")
+	}
+	return pickJS(step, roleSlot, scopes)
+}
+
+// pickJS is findAllJS for step's own fields, with its role matches in the
+// global slot and scopes an expression for the elements to look inside, or
+// null.
+func pickJS(step Step, slot, scopes string) string {
+	return fmt.Sprintf(`(function(sel, role, hasText, exact, visible, slot, scopes) {
 		`+isVisibleJS+`
 		const norm = s => s.replace(/\s+/g, ' ').trim();
 		const has = el => exact ? norm(el.textContent) === norm(hasText) : norm(el.textContent).includes(norm(hasText));
+		// Whether an element is inside one of els, shadow roots included.
+		const inside = els => {
+			const set = new Set(els);
+			return el => {
+				for (let p = el.parentNode || el.host; p; p = p.parentNode || p.host) {
+					if (set.has(p)) return true;
+				}
+				return false;
+			};
+		};
 		let all;
 		if (role) {
-			all = window.__lazycueRole;
+			all = window[slot];
 			// Hold the matches no longer than this expression does.
-			delete window.__lazycueRole;
-			if (sel) {
-				const scopes = new Set(document.querySelectorAll(sel));
-				all = all.filter(el => {
-					for (let p = el.parentNode || el.host; p; p = p.parentNode || p.host) {
-						if (scopes.has(p)) return true;
-					}
-					return false;
-				});
-			}
-			if (hasText !== '') all = all.filter(has);
+			delete window[slot];
+			if (sel) all = all.filter(inside(document.querySelectorAll(sel)));
 		} else {
 			all = Array.from(document.querySelectorAll(sel));
-			if (hasText !== '') {
-				// Text a user can see: in the body, not in scripts or styles.
-				const matches = all.filter(el => document.body.contains(el) && !el.closest('script, style, noscript, template') && has(el));
-				// Keep the innermost: an element holding a match holds its
-				// text too, and "*" would otherwise pick <html>.
-				const outer = new Set();
-				const set = new Set(matches);
-				for (const el of matches) {
-					for (let p = el.parentElement; p && !outer.has(p); p = p.parentElement) {
-						if (set.has(p)) outer.add(p);
-					}
+		}
+		if (scopes) all = all.filter(inside(scopes));
+		if (hasText !== '' && role) {
+			all = all.filter(has);
+		} else if (hasText !== '') {
+			// Text a user can see: in the body, not in scripts or styles.
+			const matches = all.filter(el => document.body.contains(el) && !el.closest('script, style, noscript, template') && has(el));
+			// Keep the innermost: an element holding a match holds its
+			// text too, and "*" would otherwise pick <html>.
+			const outer = new Set();
+			const set = new Set(matches);
+			for (const el of matches) {
+				for (let p = el.parentElement; p && !outer.has(p); p = p.parentElement) {
+					if (set.has(p)) outer.add(p);
 				}
-				all = matches.filter(el => !outer.has(el));
 			}
+			all = matches.filter(el => !outer.has(el));
 		}
 		return visible ? all.filter(isVisible) : all;
-	})(%q, %t, %q, %t, %t)`, step.Selector, step.Role != "", step.HasText, step.Exact, step.Visible)
+	})(%q, %t, %q, %t, %t, %q, %s)`, step.Selector, step.Role != "", step.HasText, step.Exact, step.Visible, slot, scopes)
 }
 
 // evalFind evaluates expr, which uses findAllJS or findJS, once locate has
@@ -1374,78 +1414,89 @@ var axRoles = func() map[string]string {
 	return m
 }()
 
-// locate finds the elements of a step's role and name, as Chrome computes
-// them for its accessibility tree, and puts them into window.__lazycueRole
-// for findAllJS, in the tree's order: document order, shadow DOM included.
-// Elements hidden from the tree (display: none, visibility: hidden,
-// aria-hidden, inert, behind a modal dialog) have none. Steps without a role
-// need nothing.
+// locate finds the elements of a step's role and name, and of its within's,
+// for findAllJS.
 func locate(step Step) chromedp.Action {
 	return chromedp.ActionFunc(func(ctx context.Context) error {
-		if step.Role == "" {
-			return nil
+		if step.Within != nil {
+			if err := locateRole(ctx, step.Within.step(), withinSlot); err != nil {
+				return err
+			}
 		}
-		const group = "lazycue-role"
-		defer cdpruntime.ReleaseObjectGroup(group).Do(ctx) //nolint:errcheck // the page may be gone
-		doc, exc, err := cdpruntime.Evaluate("document").WithObjectGroup(group).Do(ctx)
-		if err != nil {
-			return lookupErr(ctx, step, err)
+		return locateRole(ctx, step, roleSlot)
+	})
+}
+
+// locateRole finds the elements of a step's role and name, as Chrome
+// computes them for its accessibility tree, and puts them into the global
+// slot, in the tree's order: document order, shadow DOM included. Elements
+// hidden from the tree (display: none, visibility: hidden, aria-hidden,
+// inert, behind a modal dialog) have none. Steps without a role need
+// nothing.
+func locateRole(ctx context.Context, step Step, slot string) error {
+	if step.Role == "" {
+		return nil
+	}
+	const group = "lazycue-role"
+	defer cdpruntime.ReleaseObjectGroup(group).Do(ctx) //nolint:errcheck // the page may be gone
+	doc, exc, err := cdpruntime.Evaluate("document").WithObjectGroup(group).Do(ctx)
+	if err != nil {
+		return lookupErr(ctx, step, err)
+	}
+	if exc != nil {
+		return exc
+	}
+	nodes, err := accessibility.QueryAXTree().WithObjectID(doc.ObjectID).WithRole(axRoles[step.Role]).Do(ctx)
+	if err != nil {
+		return lookupErr(ctx, step, err)
+	}
+	want := collapse(step.Name)
+	var ids []cdp.BackendNodeID
+	for _, n := range nodes {
+		if n.Ignored || n.BackendDOMNodeID == 0 {
+			continue
 		}
-		if exc != nil {
-			return exc
-		}
-		nodes, err := accessibility.QueryAXTree().WithObjectID(doc.ObjectID).WithRole(axRoles[step.Role]).Do(ctx)
-		if err != nil {
-			return lookupErr(ctx, step, err)
-		}
-		want := collapse(step.Name)
-		var ids []cdp.BackendNodeID
-		for _, n := range nodes {
-			if n.Ignored || n.BackendDOMNodeID == 0 {
+		if want != "" {
+			var name string
+			if n.Name != nil {
+				_ = json.Unmarshal(n.Name.Value, &name) // not a string: no name
+			}
+			name = collapse(name)
+			if step.Exact && name != want || !step.Exact && !strings.Contains(strings.ToLower(name), strings.ToLower(want)) {
 				continue
 			}
-			if want != "" {
-				var name string
-				if n.Name != nil {
-					_ = json.Unmarshal(n.Name.Value, &name) // not a string: no name
-				}
-				name = collapse(name)
-				if step.Exact && name != want || !step.Exact && !strings.Contains(strings.ToLower(name), strings.ToLower(want)) {
-					continue
-				}
+		}
+		ids = append(ids, n.BackendDOMNodeID)
+	}
+	// One round trip each, so all at once: a page may have thousands.
+	args := make([]*cdpruntime.CallArgument, len(ids))
+	errs := make([]error, len(ids))
+	var wg sync.WaitGroup
+	for i, id := range ids {
+		wg.Go(func() {
+			el, err := dom.ResolveNode().WithBackendNodeID(id).WithObjectGroup(group).Do(ctx)
+			if err == nil {
+				args[i] = &cdpruntime.CallArgument{ObjectID: el.ObjectID}
 			}
-			ids = append(ids, n.BackendDOMNodeID)
-		}
-		// One round trip each, so all at once: a page may have thousands.
-		args := make([]*cdpruntime.CallArgument, len(ids))
-		errs := make([]error, len(ids))
-		var wg sync.WaitGroup
-		for i, id := range ids {
-			wg.Go(func() {
-				el, err := dom.ResolveNode().WithBackendNodeID(id).WithObjectGroup(group).Do(ctx)
-				if err == nil {
-					args[i] = &cdpruntime.CallArgument{ObjectID: el.ObjectID}
-				}
-				errs[i] = err
-			})
-		}
-		wg.Wait()
-		for _, err := range errs {
-			if err != nil {
-				return lookupErr(ctx, step, err)
-			}
-		}
-		_, exc, err = cdpruntime.CallFunctionOn(`function(...els) {
-			window.__lazycueRole = els;
-		}`).WithObjectID(doc.ObjectID).WithArguments(args).Do(ctx)
+			errs[i] = err
+		})
+	}
+	wg.Wait()
+	for _, err := range errs {
 		if err != nil {
-			return err
+			return lookupErr(ctx, step, err)
 		}
-		if exc != nil {
-			return exc
-		}
-		return nil
-	})
+	}
+	_, exc, err = cdpruntime.CallFunctionOn(fmt.Sprintf(`function(...els) {
+		window[%q] = els;
+	}`, slot)).WithObjectID(doc.ObjectID).WithArguments(args).Do(ctx)
+	if err != nil {
+		return err
+	}
+	if exc != nil {
+		return exc
+	}
+	return nil
 }
 
 // lookupErr is err from finding step's role, which says so when the step's
