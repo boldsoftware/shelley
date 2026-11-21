@@ -1428,7 +1428,27 @@ func pickJS(step Step, slot, scopes string) string {
 		`+isVisibleJS+`
 		`+deepAllJS+`
 		const norm = s => s.replace(/\s+/g, ' ').trim();
-		const has = el => exact ? norm(el.textContent) === norm(hasText) : norm(el.textContent).toLowerCase().includes(norm(hasText).toLowerCase());
+		// The text of a node as Playwright has it: its open shadow root's
+		// after its own, none in scripts, styles or the head, and a submit
+		// or button input's value.
+		const texts = new Map();
+		const text = n => {
+			let t = texts.get(n);
+			if (t !== undefined) return t;
+			t = '';
+			if (n instanceof HTMLInputElement && (n.type === 'submit' || n.type === 'button')) {
+				t = n.value;
+			} else if (!['SCRIPT', 'NOSCRIPT', 'STYLE'].includes(n.nodeName) && !document.head?.contains(n)) {
+				for (let c = n.firstChild; c; c = c.nextSibling) {
+					if (c.nodeType === Node.TEXT_NODE) t += c.nodeValue;
+					else if (c.nodeType === Node.ELEMENT_NODE) t += text(c);
+				}
+				if (n.shadowRoot) t += text(n.shadowRoot);
+			}
+			texts.set(n, t);
+			return t;
+		};
+		const has = el => exact ? norm(text(el)) === norm(hasText) : norm(text(el)).toLowerCase().includes(norm(hasText).toLowerCase());
 		// Whether an element is inside one of els, shadow roots included.
 		const inside = els => {
 			const set = new Set(els);
@@ -1452,14 +1472,7 @@ func pickJS(step Step, slot, scopes string) string {
 		if (hasText !== '' && role) {
 			all = all.filter(has);
 		} else if (hasText !== '') {
-			// Text a user can see: in the body, not in scripts or styles.
-			const inBody = el => {
-				for (let p = el; p; p = p.parentNode || p.host) {
-					if (p === document.body) return true;
-				}
-				return false;
-			};
-			const matches = all.filter(el => inBody(el) && !el.closest('script, style, noscript, template') && has(el));
+			const matches = all.filter(has);
 			// Keep the innermost: an element holding a match holds its
 			// text too, and "*" would otherwise pick <html>. Shadow hosts
 			// hold what their shadow roots do.
@@ -1548,14 +1561,21 @@ func locate(ctx context.Context, step Step, world cdpruntime.ExecutionContextID)
 		return nil
 	}
 	if step.Frame != "" {
-		// Chrome stops rendering a cross-origin frame out of view, and its
-		// accessibility tree waits for the next rendering.
+		// Chrome stops rendering a cross-origin frame that is hidden or
+		// out of view, scrollers around it included, and its accessibility
+		// tree waits for the next rendering.
 		var outOfView bool
-		if err := evaluate(0, fmt.Sprintf(`(f => !f.contentDocument && (r => r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth)(f.getBoundingClientRect()))(%s)`, frameJS(step.Frame)), &outOfView).Do(ctx); err != nil {
+		if err := evaluate(0, fmt.Sprintf(`(f => !f.contentDocument && new Promise(done => {
+			const o = new IntersectionObserver(([e]) => {
+				o.disconnect();
+				done(!e.isIntersecting);
+			});
+			o.observe(f);
+		}))(%s)`, frameJS(step.Frame)), &outOfView).Do(ctx); err != nil {
 			return err
 		}
 		if outOfView {
-			return fmt.Errorf("roles in the cross-origin frame %s cannot be found while it is out of view; scroll to it, or pick by selector", step.Frame)
+			return fmt.Errorf("roles in the cross-origin frame %s cannot be found while it is hidden or out of view; scroll to it, or pick by selector", step.Frame)
 		}
 	}
 	if step.Within != nil {
@@ -1806,8 +1826,8 @@ func hitEvents(step Step) []string {
 }
 
 // hitTestJS defines hitTest(el, sel, x, y): {x, y} when the element at that
-// point in the viewport, shadow DOM included, is el or inside it, else {err}
-// naming what is there instead.
+// point in the viewport, shadow DOM included, is el or inside it (or slotted
+// into it), else {err} naming what is there instead.
 const hitTestJS = `function hitTest(el, sel, x, y) {
 	let hit = document.elementFromPoint(x, y);
 	while (hit && hit.shadowRoot) {
@@ -1816,7 +1836,7 @@ const hitTestJS = `function hitTest(el, sel, x, y) {
 		hit = inner;
 	}
 	if (!hit) return {err: 'point ' + x + ',' + y + ' on ' + sel + ' is outside the viewport'};
-	for (let n = hit; n; n = n.parentNode || n.host) {
+	for (let n = hit; n; n = n.assignedSlot || n.parentNode || n.host) {
 		if (n === el) return {x, y};
 	}
 	const desc = hit.tagName.toLowerCase() + (hit.id ? '#' + hit.id : '') + (typeof hit.className === 'string' && hit.className ? '.' + hit.className.trim().split(/\s+/).join('.') : '');
@@ -1895,6 +1915,20 @@ func (b *Browser) atPoint(ctx, tabCtx context.Context, st *tabState, timeout tim
 	var sendErr error
 	err = b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
 		target.Err = ""
+		if step.Frame != "" {
+			// targetJS waits for frames, which a hidden cross-origin frame
+			// never renders.
+			var shown bool
+			if err := chromedp.Run(runCtx, evaluate(0, fmt.Sprintf(`(function(f) {
+				`+isVisibleJS+`
+				return !f || isVisible(f);
+			})(%s)`, frameJS(step.Frame)), &shown)); err != nil {
+				return err
+			}
+			if !shown {
+				return fmt.Errorf("%s: frame %s is not visible", step.Action, step.Frame)
+			}
+		}
 		if err := evalFind(runCtx, step, expr, &target); err != nil {
 			return err
 		}

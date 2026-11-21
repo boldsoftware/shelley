@@ -147,6 +147,8 @@ func TestHasText(t *testing.T) {
 <div>Outer <div>Inner</div></div>
 <ul><li><button>Rename</button></li><li><button title="a">Archive
   this</button></li><li><button>Archive that</button></li></ul>
+<div><style>.styled {}</style>Styled</div>
+<input type="submit" value="Send">
 <script>document.addEventListener('click', e => document.title = e.target.title || e.target.textContent)</script>
 </body></html>`)}
 	runSteps(t, br, env,
@@ -165,6 +167,12 @@ func TestHasText(t *testing.T) {
 		Step{Action: ActionAssertCount, Selector: "*", HasText: "Inner", Count: 1},
 		Step{Action: ActionAssertCount, Selector: "*", HasText: "app", Count: 0},
 		Step{Action: ActionAssertNotVisible, Selector: "*", HasText: "app"},
+		// As in Playwright, scripts and styles have no text, and a submit
+		// or button input's is its value.
+		Step{Action: ActionAssertCount, Selector: "*", HasText: "addEventListener", Count: 0},
+		Step{Action: ActionAssertCount, Selector: "div", HasText: ".styled", Count: 0},
+		Step{Action: ActionAssertCount, Selector: "div", HasText: "Styled", Count: 1},
+		Step{Action: ActionAssertCount, Selector: "input", HasText: "send", Count: 1},
 		Step{Action: ActionAssertCount, Selector: "*", HasText: "Archive", Count: 2},
 		Step{Action: ActionClick, Selector: "button", HasText: "that"},
 		Step{Action: ActionAssertTitle, Text: "Archive that"},
@@ -389,7 +397,14 @@ func TestShadowSelectors(t *testing.T) {
 <span class="deep">Light</span>
 <x-closed></x-closed>
 <x-embed></x-embed>
+<x-button><span id="lbl">Label</span></x-button>
 <script>
+customElements.define('x-button', class extends HTMLElement {
+  connectedCallback() {
+    this.attachShadow({mode: 'open'}).innerHTML = '<button id="inner" style="padding: 0; border: 0"><slot></slot></button>';
+    this.shadowRoot.querySelector('button').onclick = () => document.title = 'slotted';
+  }
+});
 customElements.define('x-inner', class extends HTMLElement {
   connectedCallback() { this.attachShadow({mode: 'open'}).innerHTML = '<span class="deep">Nested</span>'; }
 });
@@ -421,6 +436,12 @@ customElements.define('x-embed', class extends HTMLElement {
 		Step{Action: ActionAssertCount, Selector: "x-picker input", Count: 0},
 		Step{Action: ActionAssertCount, Within: &Within{Selector: "x-picker"}, Selector: "input", Count: 1},
 		Step{Action: ActionWaitVisible, Frame: "iframe", Selector: "p", HasText: "Framed"},
+		// What is slotted into an element is in it.
+		Step{Action: ActionClick, Selector: "#inner"},
+		Step{Action: ActionAssertTitle, Text: "slotted"},
+		// A host has the text of its shadow root, as in Playwright.
+		Step{Action: ActionAssertCount, Selector: "x-picker", HasText: "Linked up", Count: 1},
+		Step{Action: ActionAssertText, Selector: "*", HasText: "Nested", Text: "Nested"},
 	)
 }
 
@@ -496,6 +517,48 @@ func TestFrames(t *testing.T) {
 	if err := failSteps(t, br, env, Step{Action: ActionAssertCount, Frame: "#cross", Role: "button", Count: 1, Timeout: "300ms"}); !strings.Contains(err.Error(), "out of view") {
 		t.Errorf("role in a cross-origin frame out of view: %v", err)
 	}
+}
+
+// Whether Chrome renders a cross-origin frame, so that its roles can be
+// read and its elements wait for frames, is whether the frame intersects
+// the viewport through every scroller around it.
+func TestCrossOriginFrameInView(t *testing.T) {
+	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
+		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
+	}
+	br, err := NewBrowser(context.Background(), Launch{Hosts: map[string]http.Handler{"https://other.test": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<!doctype html><body style="margin: 0"><button id="go">Go</button>`))
+	})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(br.Close)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin: 0">
+<iframe id="thin" style="position: absolute; left: 0; top: 0; width: 0; height: 100px; border: 0" src="https://other.test/"></iframe>
+<div id="scroller" style="height: 100px; overflow: auto"><div style="height: 300px"></div><iframe id="clipped" src="https://other.test/"></iframe></div>
+<iframe id="none" style="display: none" src="https://other.test/"></iframe>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionAssertCount, Frame: "#thin", Role: "button", Count: 1},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		{Step{Action: ActionAssertCount, Frame: "#clipped", Role: "button", Count: 1}, "roles in the cross-origin frame #clipped cannot be found while it is hidden or out of view"},
+		{Step{Action: ActionAssertCount, Frame: "#none", Role: "button", Count: 1}, "roles in the cross-origin frame #none cannot be found while it is hidden or out of view"},
+		{Step{Action: ActionClick, Frame: "#none", Selector: "#go"}, "frame #none is not visible"},
+	} {
+		c.step.Timeout = "1s"
+		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+	runSteps(t, br, env,
+		Step{Action: ActionEval, Expression: `scroller.scrollTop = 300`},
+		Step{Action: ActionAssertCount, Frame: "#clipped", Role: "button", Count: 1},
+	)
 }
 
 // Thousands of matches take under a second (one by one, they took 7s).
