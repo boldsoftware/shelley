@@ -443,3 +443,48 @@ func TestRequestTraceCapturesIDWhenIdleDisabled(t *testing.T) {
 		t.Errorf("UpstreamRequestID = %q, want req_nodeadline", trace.Value("upstream_request_id"))
 	}
 }
+
+func TestTransportAddsOpenRouterAttribution(t *testing.T) {
+	for _, tc := range []struct {
+		url  string
+		want bool
+	}{
+		{"https://openrouter.ai/api/v1/chat/completions", true},
+		{"https://openrouter.int.exe.xyz/v1/responses", true},
+		{"https://api.openrouter.ai/v1/responses", true},
+		{"https://api.openrouter.int.exe.xyz/v1/chat/completions", true},
+		{"https://OPENROUTER.AI:443/api/v1/responses", true},
+		{"https://api.openai.com/v1/responses", false},
+		{"https://notopenrouter.ai/v1/responses", false},
+		{"https://openrouter.ai.example.com/v1/responses", false},
+		{"https://notopenrouter.int.exe.xyz/v1/responses", false},
+		{"https://openrouter.int.exe.xyz.example.com/v1/responses", false},
+	} {
+		var got http.Header
+		base := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			got = r.Header.Clone()
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("ok")), Request: r}, nil
+		})}
+		req, _ := http.NewRequestWithContext(t.Context(), "GET", tc.url, nil)
+		resp, err := NewClient(base).Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		for name, want := range map[string]string{
+			"HTTP-Referer":            "https://github.com/boldsoftware/shelley",
+			"X-OpenRouter-Title":      "Shelley",
+			"X-OpenRouter-Categories": "cloud-agent",
+		} {
+			if !tc.want {
+				want = ""
+			}
+			if value := got.Get(name); value != want {
+				t.Errorf("%s: %s = %q, want %q", tc.url, name, value, want)
+			}
+		}
+		if len(req.Header) != 0 {
+			t.Errorf("%s: original request headers changed: %v", tc.url, req.Header)
+		}
+	}
+}
