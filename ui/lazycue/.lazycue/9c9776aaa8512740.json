@@ -1,0 +1,248 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A custom model's max output tokens are preserved, tested, saved, and blanked. The screen is the default 393x727 phone. To \"open the model picker\": wait for \".header\" to be visible; when the window is narrower than 768px, the picker is in the overflow menu: if \".chat-overflow-popover\" is not visible, click the button with aria-label exactly \"More options\", then click the visible \".model-picker.p-select\" inside \".chat-overflow-popover\"; on a wider window, click the visible \".model-picker.p-select\" inside \".status-bar\". The element clicked is \"the picker\"; its panel is \".model-picker-panel\". The server is faked: there are no built-in models, and one custom model \"Existing custom model\" (id custom-1, max_tokens 200000, with a saved API key); saving it stores what the page sent (except the API key), and testing it answers success. Calls report the JSON value of a field of the last request, or \"absent\" when it lacks the field, or \"none\" before any: \"update max_tokens\" and \"update api_key\" for the last save of the model, \"test max_tokens\", \"test api_key\" and \"test model_id\" for the last test. Name elements by ARIA role and accessible name, as Playwright's getByRole does. \"The form\" is the topmost dialog, the one editing the model: the CSS selector '[role=\"dialog\"]:has(.modal.modal-wide)' (the models list beneath it is \".modal-xwide\"). \"The form's max tokens input\" is the input inside the form's \".form-group\" containing the text \"Max output tokens\" (\"#custom-model-max-output-tokens\"); \"the form's key input\" is the form's input[type=\"password\"]; \"the form's display name input\" is the input inside the form's \".form-group\" containing \"Display Name\". \"Edit Model\" is the models list's button named \"Edit Model\". Perform the steps in order. 1. Navigate to /new and open the model picker. 2. Click the button whose name contains \"Manage Models\", then the button whose name contains \"Edit Model\". 3. The form's key input should have the value \"\" (empty) and the placeholder attribute exactly \"Leave blank to keep the saved key\". The form's max tokens input should have the value exactly \"200000\". 4. Fill the form's display name input with \"Renamed custom model\", then click the form's button whose name contains \"Save\". 5. Call \"update max_tokens\" until it returns \"200000\"; call \"update api_key\": it must return \"\\\"\\\"\" (the empty string, JSON-encoded). 6. Click the button whose name contains \"Edit Model\" again. The form's max tokens input should have the value \"200000\"; fill it with \"123456\". 7. Click the form's button whose name contains \"Test\". Call \"test max_tokens\" until it returns \"123456\"; \"test api_key\" must return \"\\\"\\\"\" and \"test model_id\" must return \"\\\"custom-1\\\"\". 8. Click the form's button whose name contains \"Save\". Call \"update max_tokens\" until it returns \"123456\". 9. Blank saves as 0 (the provider default) and reopens blank, the placeholder naming what blank resolves to: click \"Edit Model\" again. The form's max tokens input should have the value \"123456\"; fill it with \"\" (empty). It should then have the placeholder exactly \"Model's published limit\". Click the form's \"Save\" button; call \"update max_tokens\" until it returns \"0\". 10. Click \"Edit Model\" again. The form's max tokens input should have the value \"\" and the placeholder exactly \"Model's published limit\". 11. The form's key input should have the value \"\"; fill it with \"replacement-key\" and click the form's \"Save\" button. Call \"update api_key\" until it returns \"\\\"replacement-key\\\"\". 12. Click \"Edit Model\" again: the form's key input should have the value \"\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker.p-select",
+      "visible": true,
+      "within": {
+        "selector": ".chat-overflow-popover"
+      }
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Manage Models"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Edit Model",
+      "within": {
+        "selector": ".modal-xwide"
+      }
+    },
+    {
+      "action": "assert_value",
+      "selector": "[role='dialog']:has(.modal.modal-wide) input[type='password']",
+      "value": ""
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[role='dialog']:has(.modal.modal-wide) input[type='password']",
+      "attribute": "placeholder",
+      "value": "Leave blank to keep the saved key"
+    },
+    {
+      "action": "assert_value",
+      "selector": "#custom-model-max-output-tokens",
+      "value": "200000"
+    },
+    {
+      "action": "fill",
+      "selector": "input",
+      "within": {
+        "selector": "[role='dialog']:has(.modal.modal-wide) .form-group",
+        "has_text": "Display Name"
+      },
+      "value": "Renamed custom model"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save",
+      "within": {
+        "selector": "[role='dialog']:has(.modal.modal-wide)"
+      }
+    },
+    {
+      "action": "call",
+      "value": "update max_tokens",
+      "expect": "200000"
+    },
+    {
+      "action": "call",
+      "value": "update api_key",
+      "expect": "\"\""
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Edit Model",
+      "within": {
+        "selector": ".modal-xwide"
+      }
+    },
+    {
+      "action": "assert_value",
+      "selector": "#custom-model-max-output-tokens",
+      "value": "200000"
+    },
+    {
+      "action": "fill",
+      "selector": "#custom-model-max-output-tokens",
+      "value": "123456"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Test",
+      "within": {
+        "selector": "[role='dialog']:has(.modal.modal-wide)"
+      }
+    },
+    {
+      "action": "call",
+      "value": "test max_tokens",
+      "expect": "123456"
+    },
+    {
+      "action": "call",
+      "value": "test api_key",
+      "expect": "\"\""
+    },
+    {
+      "action": "call",
+      "value": "test model_id",
+      "expect": "\"custom-1\""
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save",
+      "within": {
+        "selector": "[role='dialog']:has(.modal.modal-wide)"
+      }
+    },
+    {
+      "action": "call",
+      "value": "update max_tokens",
+      "expect": "123456"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Edit Model",
+      "within": {
+        "selector": ".modal-xwide"
+      }
+    },
+    {
+      "action": "assert_value",
+      "selector": "#custom-model-max-output-tokens",
+      "value": "123456"
+    },
+    {
+      "action": "fill",
+      "selector": "#custom-model-max-output-tokens",
+      "value": ""
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#custom-model-max-output-tokens",
+      "attribute": "placeholder",
+      "value": "Model's published limit"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save",
+      "within": {
+        "selector": "[role='dialog']:has(.modal.modal-wide)"
+      }
+    },
+    {
+      "action": "call",
+      "value": "update max_tokens",
+      "expect": "0"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Edit Model",
+      "within": {
+        "selector": ".modal-xwide"
+      }
+    },
+    {
+      "action": "assert_value",
+      "selector": "#custom-model-max-output-tokens",
+      "value": ""
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#custom-model-max-output-tokens",
+      "attribute": "placeholder",
+      "value": "Model's published limit"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[role='dialog']:has(.modal.modal-wide) input[type='password']",
+      "value": ""
+    },
+    {
+      "action": "fill",
+      "selector": "[role='dialog']:has(.modal.modal-wide) input[type='password']",
+      "value": "replacement-key"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save",
+      "within": {
+        "selector": "[role='dialog']:has(.modal.modal-wide)"
+      }
+    },
+    {
+      "action": "call",
+      "value": "update api_key",
+      "expect": "\"replacement-key\""
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Edit Model",
+      "within": {
+        "selector": ".modal-xwide"
+      }
+    },
+    {
+      "action": "assert_value",
+      "selector": "[role='dialog']:has(.modal.modal-wide) input[type='password']",
+      "value": ""
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:49:55.58093423Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 71946,
+    "output_tokens": 4362,
+    "estimated_cost_usd": 0.11744025,
+    "mode": "generated"
+  }
+}
