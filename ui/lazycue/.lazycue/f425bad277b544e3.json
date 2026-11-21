@@ -1,0 +1,117 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Offscreen completed tool cards are deferred as placeholders and hydrate near the viewport. A 12-turn generated conversation with many tool calls is at /c/{{ID}}. \"The placeholder\" is the FIRST element matching \".tool-card-mount-placeholder\". Check every assertion with an assert_* or wait_* step, or an eval that has \"expect\": an eval without \"expect\" asserts nothing. Perform the steps in order.\n1. Navigate to /c/{{ID}} and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. Wait for the placeholder to exist in the DOM (allow 30s; it need not be visible).\n3. The placeholder is NOT in the viewport (assert_not_in_viewport).\n4. The placeholder has data-testid exactly \"tool-call-completed\", role exactly \"group\", and an aria-label that ends with \" tool result\" (check this one with an eval that has \"expect\").\n5. In one eval with expect \"282\": create a div with className \"tool-card-mount-placeholder tool-card-mount-placeholder--media\", append it to document.body, compute its getBoundingClientRect().height + parseFloat(marginTop) + parseFloat(marginBottom) from getComputedStyle, remove it, and return that number. The media placeholder's outer height must be exactly 282.\n6. In one eval (no expect), store the placeholder's data-tool-use-id in window.__toolId. Then check with an eval that has \"expect\" that window.__toolId is a non-empty string.\n7. Set window.location.hash to \"t-\" followed by window.__toolId with every character that is not a-z, A-Z or 0-9 removed, cut to its first 8 characters (in an eval, without reloading or navigating).\n8. Wait (allow 10s) until no element matches .tool-card-mount-placeholder[data-tool-use-id=\"<window.__toolId>\"]: the targeted card hydrates.\n9. \"The hydrated card\" is the element matching .toc-tool-anchor[data-tool-use-id=\"<window.__toolId>\"] + [data-testid=\"tool-call-completed\"] (the card right after the tool's anchor). It becomes visible (allow 10s) and its class list contains \"message-highlight\".\n10. Then, within 5s, the hydrated card's class list no longer contains \"message-highlight\".\n11. Hydration is sticky: scroll the messages container (\".messages-container\") to the bottom by setting its scrollTop to its scrollHeight. Right after that, there is still no .tool-card-mount-placeholder[data-tool-use-id=\"<window.__toolId>\"] element, and the hydrated card is still in the DOM.\n12. Printing is eager: dispatch a \"beforeprint\" event on window. Then, within 10s, no \".tool-card-mount-placeholder\" element remains at all.\nWhere a selector depends on window.__toolId, check it in an eval with \"expect\" that builds the selector from window.__toolId at run time (CSS.escape is not needed); never write the ID literally.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve, reject) => { const timeout = setTimeout(() => reject(new Error('timeout')), 30000); const check = () => { const el = document.querySelector('.tool-card-mount-placeholder'); if (el) { clearTimeout(timeout); resolve(true); } else { setTimeout(check, 100); } }; check(); })",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_in_viewport",
+      "selector": ".tool-card-mount-placeholder"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".tool-card-mount-placeholder",
+      "attribute": "data-testid",
+      "value": "tool-call-completed"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".tool-card-mount-placeholder",
+      "attribute": "role",
+      "value": "group"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.tool-card-mount-placeholder').getAttribute('aria-label').endsWith(' tool result')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const d = document.createElement('div'); d.className = 'tool-card-mount-placeholder tool-card-mount-placeholder--media'; document.body.appendChild(d); const r = d.getBoundingClientRect(); const cs = getComputedStyle(d); const h = r.height + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom); document.body.removeChild(d); return h; })()",
+      "expect": "282"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__toolId = document.querySelector('.tool-card-mount-placeholder').getAttribute('data-tool-use-id'); undefined"
+    },
+    {
+      "action": "eval",
+      "expression": "typeof window.__toolId === 'string' && window.__toolId.length > 0",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "const id = window.__toolId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8); window.location.hash = 't-' + id; undefined"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.tool-card-mount-placeholder[data-tool-use-id=\"' + window.__toolId + '\"]')",
+      "expect": "null",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('.toc-tool-anchor[data-tool-use-id=\"' + window.__toolId + '\"] + [data-testid=\"tool-call-completed\"]'); if (!el) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && el.checkVisibility({visibilityProperty: true}); })()",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.toc-tool-anchor[data-tool-use-id=\"' + window.__toolId + '\"] + [data-testid=\"tool-call-completed\"]').classList.contains('message-highlight')",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.toc-tool-anchor[data-tool-use-id=\"' + window.__toolId + '\"] + [data-testid=\"tool-call-completed\"]').classList.contains('message-highlight')",
+      "expect": "false",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "const mc = document.querySelector('.messages-container'); mc.scrollTop = mc.scrollHeight; undefined"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.tool-card-mount-placeholder[data-tool-use-id=\"' + window.__toolId + '\"]')",
+      "expect": "null"
+    },
+    {
+      "action": "eval",
+      "expression": "!!document.querySelector('.toc-tool-anchor[data-tool-use-id=\"' + window.__toolId + '\"] + [data-testid=\"tool-call-completed\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.dispatchEvent(new Event('beforeprint')); undefined"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.tool-card-mount-placeholder').length === 0",
+      "expect": "true",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:12:53.746813458Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 54946,
+    "output_tokens": 2734,
+    "estimated_cost_usd": 0.07347855,
+    "mode": "generated"
+  }
+}
