@@ -150,6 +150,7 @@ func TestStepSummary(t *testing.T) {
 		{Step{Action: "assert_not_focused", Selector: "#a"}, `assert_not_focused #a`},
 		{Step{Action: "click", Selector: "li", Has: &Pick{Selector: ".name", HasText: "Default", Exact: true}, Within: &Pick{Selector: "ul", Has: &Pick{Role: "heading"}}}, `click li has .name with text "Default" within ul has heading`},
 		{Step{Action: "assert_download", Value: "colors.txt"}, `assert_download colors.txt`},
+		{Step{Action: "eval", Expression: "document.title", Expect: ptr("Hi"), Save: "TITLE"}, `eval document.title expect=Hi save=TITLE`},
 		{Step{Action: "click", Point: "cell(1, 2)"}, `click point cell(1, 2)`},
 		{Step{Action: "mouse_down", Point: "handle()", Button: "right"}, `mouse_down point handle() right`},
 		{Step{Action: "wheel", Point: "p", X: ptr(0.0), Y: ptr(10.0)}, `wheel 0,10 at point p`},

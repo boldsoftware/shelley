@@ -41,10 +41,13 @@ type Step struct {
 	Timeout    string  `json:"timeout,omitempty"`
 	Expression string  `json:"expression,omitempty"`
 	Expect     *string `json:"expect,omitempty"` // set, even to "", makes eval and call assertions
-	Attribute  string  `json:"attribute,omitempty"`
-	Key        string  `json:"key,omitempty"`
-	Modifiers  string  `json:"modifiers,omitempty"`
-	Count      int     `json:"count,omitempty"`
+	// Save names the placeholder an eval keeps its result in, for the steps
+	// after it.
+	Save      string `json:"save,omitempty"`
+	Attribute string `json:"attribute,omitempty"`
+	Key       string `json:"key,omitempty"`
+	Modifiers string `json:"modifiers,omitempty"`
+	Count     int    `json:"count,omitempty"`
 	// Texts are what an assert_texts step expects of its matches, in order.
 	Texts []string `json:"texts,omitempty"`
 	// Ratio is the share of an element an assert_in_viewport step needs in
@@ -274,11 +277,14 @@ func stepSummary(s Step) string {
 	case ActionScreenshot:
 		return "screenshot"
 	case ActionEval:
-		expr := truncateArg(s.Expression, 40) + inFrame(s)
+		summary := "eval " + truncateArg(s.Expression, 40) + inFrame(s)
 		if s.Expect != nil {
-			return "eval " + expr + " expect=" + truncateArg(*s.Expect, 20)
+			summary += " expect=" + truncateArg(*s.Expect, 20)
 		}
-		return "eval " + expr
+		if s.Save != "" {
+			summary += " save=" + s.Save
+		}
+		return summary
 	case ActionAssertText:
 		return "assert_text " + describe(s) + " " + truncateArg(s.Text, 30)
 	case ActionAssertTextContains, ActionAssertTextNotContains:

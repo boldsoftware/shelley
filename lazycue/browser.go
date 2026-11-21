@@ -53,6 +53,9 @@ type Browser struct {
 	launch    Launch
 	closeOnce sync.Once
 
+	// saved are the values evals saved, by placeholder name.
+	saved map[string]string
+
 	// tabs holds the other tabs, by name: those steps opened and the popups
 	// pages opened. changed is closed and replaced when it changes.
 	mu      sync.Mutex
@@ -190,6 +193,7 @@ func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 		ctxCancel:   ctxCancel,
 		ctx:         ctx,
 		launch:      launch,
+		saved:       map[string]string{},
 		tabs:        map[string]*tab{},
 		changed:     make(chan struct{}),
 	}
@@ -306,20 +310,11 @@ func applyMedia(ctx context.Context, st *tabState) error {
 // placeholder matches a {{NAME}} placeholder.
 var placeholder = regexp.MustCompile(`\{\{([A-Za-z0-9_]+)\}\}`)
 
-// substitute replaces a step's {{NAME}} placeholders, and those of the steps
-// it holds, with their values in vars. A placeholder vars has no value for is
-// an error rather than text to type or look for.
+// substitute replaces a step's {{NAME}} placeholders with their values in
+// vars; the steps it holds get theirs as they run, so that they see what the
+// steps before them saved. A placeholder vars has no value for is a mistake
+// rather than text to type or look for.
 func substitute(step Step, vars map[string]string) (Step, error) {
-	if step.Steps != nil {
-		steps := make([]Step, len(step.Steps))
-		for i, s := range step.Steps {
-			var err error
-			if steps[i], err = substitute(s, vars); err != nil {
-				return step, err
-			}
-		}
-		step.Steps = steps
-	}
 	var missing []string
 	if step.Expect != nil {
 		expect := *step.Expect
@@ -339,7 +334,7 @@ func substitute(step Step, vars map[string]string) (Step, error) {
 		})
 	}
 	if missing != nil {
-		return step, fmt.Errorf("no value for %s", strings.Join(missing, ", "))
+		return step, mistake{fmt.Errorf("no value for %s", strings.Join(missing, ", "))}
 	}
 	return step, nil
 }
@@ -688,15 +683,31 @@ func (b *Browser) ExecuteSteps(ctx context.Context, env *Env, steps []Step) ([]S
 // an error if the step failed. The eval result is surfaced so the generating
 // agent can read the value it probed for instead of flying blind.
 func (b *Browser) executeStep(ctx context.Context, env *Env, step Step) (string, error) {
-	step, err := substitute(step, env.Vars)
+	vars := maps.Clone(b.saved)
+	maps.Copy(vars, env.Vars)
+	step, err := substitute(step, vars)
 	if err != nil {
 		return "", err
 	}
 	return b.run(ctx, env, step)
 }
 
+// saveName matches the names an eval may save its result as.
+var saveName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+
 // run runs a step whose placeholders have been substituted.
 func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) {
+	if step.Save != "" {
+		if step.Action != ActionEval {
+			return "", mistake{fmt.Errorf("save keeps an eval's result; %s has none", step.Action)}
+		}
+		if !saveName.MatchString(step.Save) {
+			return "", mistake{errors.New("save takes a name of letters, digits and _")}
+		}
+		if _, ok := env.Vars[step.Save]; ok {
+			return "", mistake{fmt.Errorf("save: {{%s}} is one of the test's placeholders; pick another name", step.Save)}
+		}
+	}
 	if w := step.Within; w != nil {
 		if w.Selector == "" && w.Role == "" {
 			return "", mistake{errors.New("within needs a selector or a role")}
@@ -751,13 +762,17 @@ func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) 
 		// budget expired instead of failing this step.
 		runCtx, cancel := context.WithTimeout(tabCtx, timeout)
 		defer cancel()
-		return expectResult(ctx, step, timeout, func() (string, error) {
+		out, err := expectResult(ctx, step, timeout, func() (string, error) {
 			var result any
 			if err := chromedp.Run(runCtx, evalStep(step.Frame, step.Expression, &result)); err != nil {
 				return "", err
 			}
 			return formatResult(result), nil
 		})
+		if err == nil && step.Save != "" {
+			b.saved[step.Save] = out
+		}
+		return out, err
 	}
 	return "", b.executeStepErr(ctx, tabCtx, st, env.BaseURL, step)
 }
@@ -802,7 +817,7 @@ func (b *Browser) retry(ctx context.Context, env *Env, step Step) error {
 	for pass := 0; ; pass++ {
 		err := func() error {
 			for i, s := range steps {
-				if _, err := b.run(ctx, env, s); err != nil {
+				if _, err := b.executeStep(ctx, env, s); err != nil {
 					return fmt.Errorf("its step %d (%s) still fails: %w", i, s.Action, err)
 				}
 			}

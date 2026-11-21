@@ -1280,6 +1280,48 @@ func TestPlaceholdersAndCalls(t *testing.T) {
 
 // A retry block starts its steps over until a whole pass succeeds, as
 // Playwright's expect.poll and toPass do.
+// An eval's save keeps its result as a placeholder for the steps after it,
+// so a value in the page can be looked for in a frame.
+func TestSave(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{
+		BaseURL: serveHTML(t, `<!doctype html><html><head><style>:root { --bg-base: #123456 }</style></head><body>
+<iframe srcdoc="<p id='c'>#123456</p>"></iframe>
+</body></html>`),
+		Vars: map[string]string{"ID": "c"},
+	}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: `getComputedStyle(document.documentElement).getPropertyValue('--bg-base').trim()`, Save: "BG"},
+		Step{Action: ActionAssertText, Frame: "iframe", Selector: "#{{ID}}", Text: "{{BG}}"},
+		// A step in a retry block sees what one before it saved in the
+		// same pass.
+		Step{Action: ActionRetry, Steps: []Step{
+			{Action: ActionEval, Expression: `window.n = (window.n || 0) + 1`, Save: "N"},
+			{Action: ActionEval, Expression: `{{N}} >= 2`, Expect: ptr("true"), Timeout: "100ms"},
+		}},
+		Step{Action: ActionEval, Expression: `{{N}}`, Expect: ptr("2")},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		// A failed eval saves nothing.
+		{Step{Action: ActionEval, Expression: `'x'`, Expect: ptr("y"), Save: "X"}, `expected "y"`},
+		{Step{Action: ActionEval, Expression: `'{{X}}'`}, "no value for {{X}}"},
+		// A retry block fails at once on a placeholder with no value.
+		{Step{Action: ActionRetry, Steps: []Step{{Action: ActionEval, Expression: `'{{X}}'`}}}, "(retry): its step 0 (eval) still fails: no value for {{X}}"},
+		{Step{Action: ActionEval, Expression: `1`, Save: "ID"}, "save: {{ID}} is one of the test's placeholders; pick another name"},
+		{Step{Action: ActionEval, Expression: `1`, Save: "a-b"}, "save takes a name of letters, digits and _"},
+		{Step{Action: ActionClick, Selector: "iframe", Save: "X"}, "save keeps an eval's result"},
+	} {
+		c.step.Timeout = "300ms"
+		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+}
+
 func TestRetry(t *testing.T) {
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
