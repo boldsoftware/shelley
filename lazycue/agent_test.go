@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -154,5 +155,38 @@ func TestToolSchemasAreJSON(t *testing.T) {
 		if err := json.Unmarshal(tool.InputSchema, &v); err != nil {
 			t.Errorf("%s: %v", tool.Name, err)
 		}
+	}
+}
+
+func TestInlinedVar(t *testing.T) {
+	vars := map[string]string{"DIR": "/tmp/fixture-123", "N": "7"}
+	if got := inlinedVar([]Step{{Action: ActionFill, Value: "cd {{DIR}}"}, {Action: ActionAssertText, Text: "7 items"}}, vars); got != "" {
+		t.Errorf("placeholders and short values: got %q, want none", got)
+	}
+	if got := inlinedVar([]Step{{Action: ActionEval, Expression: "x('/tmp/fixture-123/a')"}}, vars); got != "DIR" {
+		t.Errorf("inlined value: got %q, want DIR", got)
+	}
+}
+
+func TestCacheConversationMarksOnlyTheLastBlock(t *testing.T) {
+	msgs := []apiMessage{
+		{Role: "user", Content: "describe"},
+		{Role: "assistant", Content: []apiContentBlock{{Type: "text", Text: "ok"}}},
+		{Role: "user", Content: []apiContentBlock{{Type: "tool_result", ToolUseID: "a"}, {Type: "tool_result", ToolUseID: "b"}}},
+	}
+	out := cacheConversation(msgs)
+	b, _ := json.Marshal(out)
+	if n := strings.Count(string(b), "cache_control"); n != 1 {
+		t.Fatalf("%d cache_control markers, want 1: %s", n, b)
+	}
+	last := out[2].Content.([]apiContentBlock)
+	if last[1].CacheControl == nil || last[0].CacheControl != nil {
+		t.Errorf("marker not on the last block: %+v", last)
+	}
+	if msgs[2].Content.([]apiContentBlock)[1].CacheControl != nil {
+		t.Error("cacheConversation modified its input")
+	}
+	if out := cacheConversation(msgs[:1]); out[0].Content.([]apiContentBlock)[0].CacheControl == nil {
+		t.Error("a string prompt should become a marked block")
 	}
 }

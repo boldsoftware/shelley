@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net/http"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 )
@@ -25,13 +27,14 @@ const (
 
 // AgentConfig configures an agent run.
 type AgentConfig struct {
-	Mode             AgentMode
-	Description      string
-	PreviousSteps    []byte // JSON of previous steps (fix mode)
-	PreviousError    string // Error from previous run (fix mode)
-	CacheFilePath    string // Path to the cached steps JSON for this test (fix mode); lets the agent inspect its git history for prior flakiness
-	Browser          *Browser
-	BaseURL          string
+	Mode          AgentMode
+	Description   string
+	PreviousSteps []byte // JSON of previous steps (fix mode)
+	PreviousError string // Error from previous run (fix mode)
+	CacheFilePath string // Path to the cached steps JSON for this test (fix mode); lets the agent inspect its git history for prior flakiness
+	// Launch starts a fresh app and a browser on it. Every run of steps gets
+	// its own, as a cached run does.
+	Launch           func() (*Env, *Browser, error)
 	Model            string
 	AnthropicBaseURL string
 	AnthropicAPIKey  string
@@ -46,8 +49,9 @@ type AgentResult struct {
 	StepsJSON      []byte
 	StepResults    []StepResult
 	ScreenshotPath string
-	InputTokens    int
+	InputTokens    int // including tokens written to and read from the prompt cache
 	OutputTokens   int
+	Cost           float64 // estimated USD
 	// Effort diagnostics, surfaced so a human can see how hard the agent
 	// worked (e.g. did a heal converge in 1-2 turns, or thrash to the limit?).
 	Turns       int  // number of API round trips the agent took
@@ -86,11 +90,11 @@ var anthropicRetryBackoff = 2 * time.Second
 // --- Anthropic API types ---
 
 type apiRequest struct {
-	Model     string       `json:"model"`
-	MaxTokens int          `json:"max_tokens"`
-	System    string       `json:"system"`
-	Messages  []apiMessage `json:"messages"`
-	Tools     []apiTool    `json:"tools"`
+	Model     string            `json:"model"`
+	MaxTokens int               `json:"max_tokens"`
+	System    []apiContentBlock `json:"system"`
+	Messages  []apiMessage      `json:"messages"`
+	Tools     []apiTool         `json:"tools"`
 }
 
 type apiMessage struct {
@@ -107,6 +111,8 @@ type apiContentBlock struct {
 	ToolUseID string          `json:"tool_use_id,omitempty"`
 	Content   interface{}     `json:"content,omitempty"` // string or []apiContentBlock for tool_result
 	Source    *apiImageSource `json:"source,omitempty"`
+	// CacheControl marks the end of a prompt prefix to cache.
+	CacheControl *apiCacheControl `json:"cache_control,omitempty"`
 }
 
 type apiImageSource struct {
@@ -122,8 +128,20 @@ type apiTool struct {
 }
 
 type apiUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+}
+
+// cost estimates a response's USD cost at Claude Sonnet prices.
+func (u apiUsage) cost() float64 {
+	return (float64(u.InputTokens)*3 + float64(u.CacheCreationInputTokens)*3.75 +
+		float64(u.CacheReadInputTokens)*0.3 + float64(u.OutputTokens)*15) / 1_000_000
+}
+
+type apiCacheControl struct {
+	Type string `json:"type"`
 }
 
 type apiResponse struct {
@@ -167,12 +185,20 @@ Available DSL actions:
 - wait_hidden: {"action": "wait_hidden", "selector": "...", "timeout": "10s"} - Wait for element to be hidden
 - wait_text: {"action": "wait_text", "text": "...", "timeout": "30s"} - Wait for text in page body
 - wait_text_gone: {"action": "wait_text_gone", "text": "...", "timeout": "10s"} - Wait for text to disappear
-- fill: {"action": "fill", "selector": "...", "value": "..."} - Fill input/textarea (React compatible)
-- click: {"action": "click", "selector": "..."} - Click element
-- hover: {"action": "hover", "selector": "..."} - Move the mouse over the element's center (mouseenter fires and CSS :hover applies) without clicking, scrolling it into view if needed. Optional "x" and "y" (numbers, both or neither) put the pointer that many CSS pixels from the element's top-left corner instead
-- press_key: {"action": "press_key", "key": "Enter", "modifiers": "Shift"} - Press one key on the focused element. "key" is a KeyboardEvent.key name (Enter, Tab, Escape, Backspace, Delete, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown, F1-F12, Insert), "Space", or a single character. Optional modifiers: Shift, Control, Alt, Meta (combine with "+"). Focus the target first (e.g. click it); fill does not focus.
+- fill: {"action": "fill", "selector": "...", "value": "..."} - Focus a visible input, textarea, select (value = an option's value) or contenteditable element and set its value at once, firing input and change events. Fails on a disabled or read-only element.
+- type: {"action": "type", "value": "..."} - Type text key by key into the focused element; "\n" presses Enter. Use it when key events matter; otherwise fill.
+- click: {"action": "click", "selector": "..."} - Click the element's center. Like a user, it waits until the element is visible, holding still, enabled and not covered by another element there, scrolling it into view. Optional: "x" and "y" (both or neither) click that many CSS pixels from the element's top-left corner instead (without a selector, at that point of the viewport); "button": "right" or "middle"; "count": 2 for a double click; "modifiers": "Shift" (as for press_key) to hold keys during it.
+- hover: {"action": "hover", "selector": "..."} - Move the mouse over the element (mouseenter fires and CSS :hover applies) without clicking; waits like click, takes "x"/"y" like click, and "count": N moves there in N steps from where the pointer was (to drag).
+- mouse_down / mouse_up: {"action": "mouse_down", "button": "left"} - Press or release a mouse button where the pointer is. Drag: hover the start, mouse_down, hover the end with "count": 10, mouse_up. Hover, mouse_down, mouse_up and wheel take "modifiers" like click.
+- wheel: {"action": "wheel", "x": 0, "y": 300} - Turn the mouse wheel where the pointer is, scrolling by x,y pixels.
+- touch: {"action": "touch", "value": "start", "selector": "..."} - Touch screen: "value" is start (fingers down), move, end or cancel (all fingers up; no selector). Start and move put one finger where a click would land ("x"/"y" as for click), or several at "points": "10,10 60,10" (x,y offsets from the element's top-left corner, or the viewport's without a selector).
+- press_key: {"action": "press_key", "key": "Enter", "modifiers": "Shift"} - Press one key on the focused element. "key" is a KeyboardEvent.key name (Enter, Tab, Escape, Backspace, Delete, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown, F1-F12, Insert), "Space", or a single character. Optional modifiers: Shift, Control, Alt, Meta (combine with "+"). Focus the target first (click or fill it).
+- key_down / key_up: {"action": "key_down", "key": "Shift"} - Press a key and keep it held until key_up, as for press_key. A held Shift, Control, Alt or Meta modifies every later key and mouse step.
+- set_viewport: {"action": "set_viewport", "width": 1280, "height": 800, "scale": 1, "mobile": false, "touch": false} - Change the emulated device for the rest of the test; omitted fields keep their value. Whether the page sees a touch screen changes on the next navigate.
+- emulate_media: {"action": "emulate_media", "value": "prefers-color-scheme: dark"} - Override a CSS media feature for the rest of the test; "prefers-reduced-motion:" with no value drops the override.
 - screenshot: {"action": "screenshot"} - Take screenshot
-- eval: {"action": "eval", "expression": "...", "expect": "..."} - Evaluate JS; if "expect" is set, assert the stringified result equals it. The run_steps result echoes the evaluated value back to you ("=> <value>"), so use eval WITHOUT expect to probe page state (selectors, scrollHeight, classes, etc.) while developing the test.
+- eval: {"action": "eval", "expression": "...", "expect": "..."} - Evaluate JS, waiting for a promise it returns to settle (so fetch and async functions work). The result renders as a string: strings as they are, anything else as JSON (true, 3, {"a":1}). If "expect" is set, the expression is re-run until its result equals expect or the timeout passes, so it must have no side effects. The run_steps result echoes the value back to you ("=> <value>"), so use eval WITHOUT expect to probe page state (selectors, scrollHeight, classes, etc.) while developing the test.
+- call: {"action": "call", "value": "name", "expect": "..."} - Run a function the test provides on the host (the user prompt lists them), for what the page cannot do or see. It returns a string; "expect" re-runs it until the result equals expect, like eval.
 - assert_visible: {"action": "assert_visible", "selector": "..."} - Assert element is visible
 - assert_not_visible: {"action": "assert_not_visible", "selector": "..."} - Assert element is not visible
 - assert_text: {"action": "assert_text", "selector": "...", "text": "..."} - Assert exact text content
@@ -185,10 +211,12 @@ Available DSL actions:
 - sleep: {"action": "sleep", "timeout": "1s"}
 - close_tab: {"action": "close_tab", "tab": "B"} - Close a tab opened by an earlier step, as a user would.
 
+Visible means rendered with a box of some size and not visibility: hidden; opacity does not matter. Selectors are CSS and match the first element. Any step with a selector may add "has_text": "..." to keep only the elements whose text contains it (whitespace collapsed), e.g. {"action": "click", "selector": "button", "has_text": "Archive"}; prefer it to eval for picking an element by its text. The browser emulates a Pixel 5 phone (393x727, touch screen) that prefers reduced motion and may use the clipboard, unless the test launched it otherwise.
+
 TABS: any step may add "tab": "<name>" to act in another tab of the same browser profile — like a user with two tabs open, the tabs share localStorage, cookies and IndexedDB but have their own windows. The tab the browser started with has no name: steps without "tab" act in it, and a description's "this tab", "the first tab" or "tab A" means it, so never give it a name (a navigate with a new name opens ANOTHER tab). A navigate step with a not-yet-open tab name opens that tab; {"action": "navigate", "tab": "B"} with no url opens it on the page the first tab is currently on (use this for a URL the app assigned, like a conversation's /c/<slug>). When a description says "in tab B" or "another tab", use this rather than iframes or window.open.
 
 WORKFLOW:
-1. Start by navigating to the appropriate page.
+1. Every run_steps call gets a fresh app and browser, exactly as a cached run will: nothing carries over from an earlier call (no page, storage or server state), so start each one by navigating to the appropriate page.
 2. Use wait_visible and wait_text with appropriate timeouts before asserting.
 3. Use the run_steps tool to test your DSL steps. Review the results and fix any failures.
 4. Use screenshot to see what the page looks like if you're unsure about selectors or page state.
@@ -289,7 +317,7 @@ func buildTools() []apiTool {
 	return []apiTool{
 		{
 			Name:        "run_steps",
-			Description: "Execute an array of DSL test steps against the browser. Returns structured results showing which step passed/failed and why. The browser keeps its state between runs (only tabs opened by steps are closed), while a cached run starts from a fresh browser, so the final steps must not depend on an earlier run. Use this to test your generated DSL. When you have the COMPLETE test that exercises everything in the description and it passes, call run_steps one last time with \"final\": true to submit it for caching.",
+			Description: "Execute an array of DSL test steps against a fresh app and browser, exactly as a cached run will: nothing carries over from an earlier call. Returns structured results showing which step passed/failed and why; the screenshot tool then shows the browser as the steps left it. Use this to test your generated DSL. When you have the COMPLETE test that exercises everything in the description and it passes, call run_steps one last time with \"final\": true to submit it for caching.",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
@@ -337,6 +365,77 @@ func buildTools() []apiTool {
 	}
 }
 
+// envPrompt tells the agent about the placeholders and calls its app offers.
+func envPrompt(env *Env) string {
+	var sb strings.Builder
+	if len(env.Vars) > 0 {
+		sb.WriteString("\n\nPLACEHOLDERS: their values change from run to run (each run_steps result lists that run's). Steps must write the placeholder, never the value; the harness substitutes it in every string field. In the first run:\n")
+		for _, name := range slices.Sorted(maps.Keys(env.Vars)) {
+			fmt.Fprintf(&sb, "- {{%s}} = %s\n", name, env.Vars[name])
+		}
+	}
+	if len(env.Calls) > 0 {
+		sb.WriteString("\n\nCALLS available to call steps: " + strings.Join(slices.Sorted(maps.Keys(env.Calls)), ", ") + "\n")
+	}
+	return sb.String()
+}
+
+// varsLine lists a run's placeholder values on one line.
+func varsLine(vars map[string]string) string {
+	var parts []string
+	for _, name := range slices.Sorted(maps.Keys(vars)) {
+		parts = append(parts, fmt.Sprintf("{{%s}} = %s", name, vars[name]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// inlinedVar returns the name of a var whose value in any of runs a step
+// spells out instead of using its placeholder, or "" if none does.
+func inlinedVar(steps []Step, runs ...map[string]string) string {
+	for _, vars := range runs {
+		for _, name := range slices.Sorted(maps.Keys(vars)) {
+			v := vars[name]
+			if len(v) < 4 {
+				continue
+			}
+			for _, s := range steps {
+				for _, f := range []string{s.URL, s.Selector, s.HasText, s.Value, s.Text, s.Expression, s.Expect, s.Attribute, s.Key, s.Points} {
+					if strings.Contains(f, v) {
+						return name
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// cacheConversation returns messages with the last block marked for prompt
+// caching, so each turn re-reads the conversation so far from the cache
+// instead of paying for it again.
+func cacheConversation(messages []apiMessage) []apiMessage {
+	if len(messages) == 0 {
+		return messages
+	}
+	out := slices.Clone(messages)
+	last := &out[len(out)-1]
+	var blocks []apiContentBlock
+	switch c := last.Content.(type) {
+	case string:
+		blocks = []apiContentBlock{{Type: "text", Text: c}}
+	case []apiContentBlock:
+		blocks = slices.Clone(c)
+	default:
+		return out
+	}
+	if len(blocks) == 0 {
+		return out
+	}
+	blocks[len(blocks)-1].CacheControl = &apiCacheControl{Type: "ephemeral"}
+	last.Content = blocks
+	return out
+}
+
 // RunAgent executes the LLM agent loop to generate or fix DSL test steps.
 func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 	logf := func(format string, args ...any) {
@@ -350,6 +449,34 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, agentBudget)
 	defer cancel()
 
+	// The app and browser the last run of steps had, which the screenshot
+	// tool looks at; the next run gets fresh ones.
+	var env *Env
+	var br *Browser
+	var used bool
+	var runVars []map[string]string // every run's placeholder values
+	closeSession := func() {
+		if br != nil {
+			br.Close()
+			env.close()
+			br, env = nil, nil
+		}
+	}
+	defer closeSession()
+	fresh := func() error {
+		closeSession()
+		e, b, err := cfg.Launch()
+		if err != nil {
+			return err
+		}
+		env, br, used = e, b, false
+		runVars = append(runVars, e.Vars)
+		return nil
+	}
+	if err := fresh(); err != nil {
+		return nil, err
+	}
+
 	systemPrompt := buildSystemPrompt()
 	var userPrompt string
 	if cfg.Mode == AgentModeFix {
@@ -357,6 +484,7 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 	} else {
 		userPrompt = buildGenerateUserPrompt(cfg.Description)
 	}
+	userPrompt += envPrompt(env)
 
 	messages := []apiMessage{
 		{Role: "user", Content: userPrompt},
@@ -375,12 +503,14 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 	var lastError string
 	var genuineFailure bool // set when agent determines the APP is broken, not the test
 	var totalInputTokens, totalOutputTokens int
+	var totalCost float64
 	// Effort accounting for heal diagnostics: how many API round trips and tool
 	// calls the agent took, and whether it exhausted its turn budget.
 	var turnsTaken, toolCallCount int
 	finish := func(r *AgentResult) (*AgentResult, error) {
 		r.InputTokens = totalInputTokens
 		r.OutputTokens = totalOutputTokens
+		r.Cost = totalCost
 		r.Turns = turnsTaken
 		r.ToolCalls = toolCallCount
 		r.HitMaxTurns = turnsTaken >= maxAgentTurns
@@ -400,8 +530,9 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 			return nil, fmt.Errorf("anthropic error: %s: %s", resp.Error.Type, resp.Error.Message)
 		}
 
-		totalInputTokens += resp.Usage.InputTokens
+		totalInputTokens += resp.Usage.InputTokens + resp.Usage.CacheCreationInputTokens + resp.Usage.CacheReadInputTokens
 		totalOutputTokens += resp.Usage.OutputTokens
+		totalCost += resp.Usage.cost()
 
 		// Check for tool_use blocks. Track whether this assistant turn declared
 		// its run_steps as the FINAL, complete test (vs. an exploratory probe).
@@ -518,12 +649,26 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 					logf("  [%d] %s", si, StepSummary(s))
 				}
 
-				results, execErr := cfg.Browser.ExecuteSteps(ctx, cfg.BaseURL, steps)
-				lastStepResults = results
-				lastStepsJSON = input.Steps
 				// A call is the final test if the agent set the explicit `final`
 				// flag on the tool call OR wrote the legacy "// FINAL" marker.
-				if input.Final || turnIsFinal {
+				final := input.Final || turnIsFinal
+				if final {
+					if v := inlinedVar(steps, runVars...); v != "" {
+						toolResults = append(toolResults, makeToolResult(tu.ID, fmt.Sprintf("Not run: a step contains the value of {{%s}}, which changes from run to run. Write the placeholder instead.", v)))
+						continue
+					}
+				}
+				if used {
+					if err := fresh(); err != nil {
+						toolResults = append(toolResults, makeToolResult(tu.ID, fmt.Sprintf("Not run: could not start a fresh app: %v", err)))
+						continue
+					}
+				}
+				used = true
+				results, execErr := br.ExecuteSteps(ctx, env, steps)
+				lastStepResults = results
+				lastStepsJSON = input.Steps
+				if final {
 					finalStepResults = results
 					finalStepsJSON = input.Steps
 					finalSubmittedThisTurn = true
@@ -554,6 +699,9 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 				} else {
 					sb.WriteString("\nOverall: ALL STEPS PASSED")
 				}
+				if len(env.Vars) > 0 {
+					sb.WriteString("\nPlaceholders in this run: " + varsLine(env.Vars))
+				}
 
 				toolResults = append(toolResults, makeToolResult(tu.ID, sb.String()))
 
@@ -568,7 +716,7 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 				} else {
 					logf("tool: screenshot tab %s", input.Tab)
 				}
-				png, err := cfg.Browser.Screenshot(ctx, input.Tab)
+				png, err := br.Screenshot(ctx, input.Tab)
 				if err != nil {
 					toolResults = append(toolResults, makeToolResult(tu.ID, fmt.Sprintf("Screenshot failed: %v", err)))
 					continue
@@ -817,8 +965,8 @@ func callAnthropicOnce(ctx context.Context, cfg *AgentConfig, systemPrompt strin
 	reqBody := apiRequest{
 		Model:     cfg.Model,
 		MaxTokens: 8192,
-		System:    systemPrompt,
-		Messages:  messages,
+		System:    []apiContentBlock{{Type: "text", Text: systemPrompt, CacheControl: &apiCacheControl{Type: "ephemeral"}}},
+		Messages:  cacheConversation(messages),
 		Tools:     tools,
 	}
 

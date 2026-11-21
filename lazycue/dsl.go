@@ -7,9 +7,12 @@ import (
 
 // Step represents a single action in a DSL test script.
 type Step struct {
-	Action     string `json:"action"`
-	URL        string `json:"url,omitempty"`
-	Selector   string `json:"selector,omitempty"`
+	Action   string `json:"action"`
+	URL      string `json:"url,omitempty"`
+	Selector string `json:"selector,omitempty"`
+	// HasText narrows a selector to the elements whose text contains it,
+	// whitespace collapsed.
+	HasText    string `json:"has_text,omitempty"`
 	Value      string `json:"value,omitempty"`
 	Text       string `json:"text,omitempty"`
 	Timeout    string `json:"timeout,omitempty"`
@@ -19,13 +22,28 @@ type Step struct {
 	Key        string `json:"key,omitempty"`
 	Modifiers  string `json:"modifiers,omitempty"`
 	Count      int    `json:"count,omitempty"`
-	// X and Y are a hover step's pointer offset in CSS pixels from the
-	// element's top-left corner; unset means its center.
+	// X and Y are a pointer step's offset in CSS pixels from the element's
+	// top-left corner (unset means its center), a point in the viewport
+	// without a selector, or a wheel step's scroll distances.
 	X *float64 `json:"x,omitempty"`
 	Y *float64 `json:"y,omitempty"`
 	// Tab names the browser tab the step acts on; empty is the tab the browser
 	// started with. A navigate step to a name not yet open opens that tab.
 	Tab string `json:"tab,omitempty"`
+	// Button is the mouse button of a click, mouse_down or mouse_up step:
+	// left (the default), right or middle.
+	Button string `json:"button,omitempty"`
+	// Points lists a touch step's fingers as "x,y" offsets in CSS pixels from
+	// the element's top-left corner, separated by spaces; unset is one finger
+	// at x,y (or the element's center).
+	Points string `json:"points,omitempty"`
+	// Width, Height, Scale, Mobile and Touch describe a set_viewport step's
+	// device; unset fields keep their current value.
+	Width  int     `json:"width,omitempty"`
+	Height int     `json:"height,omitempty"`
+	Scale  float64 `json:"scale,omitempty"`
+	Mobile *bool   `json:"mobile,omitempty"`
+	Touch  *bool   `json:"touch,omitempty"`
 }
 
 // Supported action names.
@@ -39,6 +57,8 @@ const (
 	ActionClick              = "click"
 	ActionHover              = "hover"
 	ActionPressKey           = "press_key"
+	ActionKeyDown            = "key_down"
+	ActionKeyUp              = "key_up"
 	ActionScreenshot         = "screenshot"
 	ActionEval               = "eval"
 	ActionAssertVisible      = "assert_visible"
@@ -52,6 +72,14 @@ const (
 	ActionAssertCount        = "assert_count"
 	ActionSleep              = "sleep"
 	ActionCloseTab           = "close_tab"
+	ActionSetViewport        = "set_viewport"
+	ActionEmulateMedia       = "emulate_media"
+	ActionCall               = "call"
+	ActionType               = "type"
+	ActionMouseDown          = "mouse_down"
+	ActionMouseUp            = "mouse_up"
+	ActionWheel              = "wheel"
+	ActionTouch              = "touch"
 )
 
 // ParseSteps parses a JSON array of steps.
@@ -85,18 +113,53 @@ func stepSummary(s Step) string {
 		}
 		return "navigate " + s.URL
 	case ActionWaitVisible, ActionWaitHidden, ActionAssertVisible, ActionAssertNotVisible:
-		return s.Action + " " + s.Selector
+		return s.Action + " " + picked(s)
 	case ActionWaitText, ActionWaitTextGone:
 		return s.Action + " " + truncateArg(s.Text, 40)
 	case ActionFill:
-		return "fill " + s.Selector + " " + truncateArg(s.Value, 30)
+		return "fill " + picked(s) + " " + truncateArg(s.Value, 30)
 	case ActionClick:
-		return "click " + s.Selector
+		return "click " + picked(s) + pointSuffix(s)
 	case ActionHover:
-		if s.X != nil && s.Y != nil {
-			return fmt.Sprintf("hover %s at %g,%g", s.Selector, *s.X, *s.Y)
+		return "hover " + picked(s) + pointSuffix(s)
+	case ActionMouseDown, ActionMouseUp:
+		if s.Button != "" {
+			return s.Action + " " + s.Button
 		}
-		return "hover " + s.Selector
+		return s.Action
+	case ActionWheel:
+		if s.X != nil && s.Y != nil {
+			return fmt.Sprintf("wheel %g,%g", *s.X, *s.Y)
+		}
+		return "wheel"
+	case ActionTouch:
+		if s.Points != "" {
+			return "touch " + s.Value + " " + picked(s) + " at " + s.Points
+		}
+		return "touch " + s.Value + " " + picked(s) + pointSuffix(s)
+	case ActionType:
+		return "type " + truncateArg(s.Value, 30)
+	case ActionCall:
+		if s.Expect != "" {
+			return "call " + s.Value + " expect=" + truncateArg(s.Expect, 30)
+		}
+		return "call " + s.Value
+	case ActionSetViewport:
+		summary := fmt.Sprintf("set_viewport %dx%d", s.Width, s.Height)
+		if s.Scale != 0 {
+			summary += fmt.Sprintf(" scale=%g", s.Scale)
+		}
+		if s.Mobile != nil {
+			summary += fmt.Sprintf(" mobile=%t", *s.Mobile)
+		}
+		if s.Touch != nil {
+			summary += fmt.Sprintf(" touch=%t", *s.Touch)
+		}
+		return summary
+	case ActionEmulateMedia:
+		return s.Action + " " + s.Value
+	case ActionKeyDown, ActionKeyUp:
+		return s.Action + " " + s.Key
 	case ActionPressKey:
 		if s.Modifiers != "" {
 			return "press_key " + s.Modifiers + "+" + s.Key
@@ -111,11 +174,11 @@ func stepSummary(s Step) string {
 		}
 		return "eval " + expr
 	case ActionAssertText:
-		return "assert_text " + s.Selector + " " + truncateArg(s.Text, 30)
+		return "assert_text " + picked(s) + " " + truncateArg(s.Text, 30)
 	case ActionAssertTextContains:
-		return "assert_text_contains " + s.Selector + " " + truncateArg(s.Text, 30)
+		return "assert_text_contains " + picked(s) + " " + truncateArg(s.Text, 30)
 	case ActionAssertAttribute:
-		return "assert_attribute " + s.Selector + " " + s.Attribute + "=" + truncateArg(s.Value, 20)
+		return "assert_attribute " + picked(s) + " " + s.Attribute + "=" + truncateArg(s.Value, 20)
 	case ActionWaitURL:
 		if s.Value != "" {
 			return s.Action + " " + s.Value
@@ -129,12 +192,35 @@ func stepSummary(s Step) string {
 	case ActionAssertTitle:
 		return "assert_title " + truncateArg(s.Text, 30)
 	case ActionAssertCount:
-		return fmt.Sprintf("assert_count %s %d", s.Selector, s.Count)
+		return fmt.Sprintf("assert_count %s %d", picked(s), s.Count)
 	case ActionSleep:
 		return "sleep " + s.Timeout
 	default:
 		return s.Action
 	}
+}
+
+// picked is the summary of what a step's selector and has_text pick out.
+func picked(s Step) string {
+	if s.HasText == "" {
+		return s.Selector
+	}
+	return s.Selector + "[" + truncateArg(s.HasText, 20) + "]"
+}
+
+// pointSuffix describes a pointer step's offset, button and click count.
+func pointSuffix(s Step) string {
+	var out string
+	if s.X != nil && s.Y != nil {
+		out += fmt.Sprintf(" at %g,%g", *s.X, *s.Y)
+	}
+	if s.Button != "" {
+		out += " " + s.Button
+	}
+	if s.Count > 1 {
+		out += fmt.Sprintf(" x%d", s.Count)
+	}
+	return out
 }
 
 func truncateArg(s string, max int) string {

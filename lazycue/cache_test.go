@@ -164,6 +164,15 @@ func TestSameSteps(t *testing.T) {
 	if sameSteps(a, d) {
 		t.Error("differing length should compare unequal")
 	}
+	// Optional fields are pointers; equal values at different addresses are
+	// the same step.
+	e := []byte(`[{"action":"hover","selector":"#a","x":1,"y":2}]`)
+	if !sameSteps(e, []byte(`[{"action":"hover","selector":"#a","y":2,"x":1}]`)) {
+		t.Error("identical offsets should compare equal")
+	}
+	if sameSteps(e, []byte(`[{"action":"hover","selector":"#a","x":1,"y":3}]`)) {
+		t.Error("differing offsets should compare unequal")
+	}
 	// Unparseable input is never "same".
 	if sameSteps(a, []byte(`not json`)) {
 		t.Error("unparseable steps should compare unequal")

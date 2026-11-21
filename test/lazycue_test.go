@@ -125,7 +125,9 @@ func TestMain(m *testing.M) {
 	}
 	appOpts = opts
 	app = lazycue.New(opts)
-	opts.InitScript = string(recordingMock)
+	opts.Setup = func(context.Context) (*lazycue.Env, error) {
+		return &lazycue.Env{BaseURL: ts.URL, Launch: lazycue.Launch{InitScript: string(recordingMock)}}, nil
+	}
 	recordingApp = lazycue.New(opts)
 
 	code := m.Run()

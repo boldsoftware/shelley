@@ -117,12 +117,16 @@ and the app shows "Y", that's a genuine failure.
 | `--api-url` | `ANTHROPIC_BASE_URL` or `https://api.anthropic.com` | Anthropic API base URL |
 | `--api-key` | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `--verbose` | false | Verbose output |
-| `Options.InitScript` | | JavaScript evaluated before every page's own scripts (Go harness only) |
+| `Options.Setup` | | Starts a fresh app for every attempt at a test (and every run of steps by the agent) and returns its `Env`: base URL, `{{NAME}}` placeholder values, host-side `call` functions and the browser's `Launch` settings (init script, device, CSS media, time zone; default a Pixel 5 with touch that prefers reduced motion) (Go harness only) |
+| `LAZYCUE_MAX_AGENT_RUNS` | unlimited | Agent runs (generations and heals) a process may start; 0 runs cached scripts only |
+| `LAZYCUE_AGENT_CONCURRENCY` | 4 | Agents running at once |
 
 ## Screenshots & Video Artifacts
 
-LazyCue can capture a screenshot after every executed step and, optionally,
-stitch them into a short MP4.
+LazyCue can capture a screenshot after every executed step of an attempt that
+follows a failure (a retry, the agent's runs) and,
+optionally, stitch them into a short MP4. A cached script that passes first
+time has nothing to debug and takes none.
 
 - `--artifact-dir DIR` writes per-step PNGs into `DIR/<prompt-hash>/` (so
   screenshots are arranged by prompt) plus an HTML report at `DIR/index.html`.

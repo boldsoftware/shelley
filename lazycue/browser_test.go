@@ -25,7 +25,7 @@ func newBrowserOrSkip(t *testing.T) *Browser {
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
-	br, err := NewBrowser(context.Background(), "")
+	br, err := NewBrowser(context.Background(), Launch{})
 	if err != nil {
 		t.Skipf("no browser available: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestInitScriptRunsBeforePageScripts(t *testing.T) {
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
-	br, err := NewBrowser(context.Background(), `window.__lazycueInit = "ready"`)
+	br, err := NewBrowser(context.Background(), Launch{InitScript: `window.__lazycueInit = "ready"`})
 	if err != nil {
 		t.Skipf("no browser available: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestInitScriptRunsBeforePageScripts(t *testing.T) {
 		{Action: ActionNavigate, URL: url},
 		{Action: ActionAssertAttribute, Selector: "body", Attribute: "data-init-value", Value: "ready"},
 	}
-	if results, err := br.ExecuteSteps(context.Background(), url, steps); err != nil {
+	if results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps); err != nil {
 		t.Fatalf("ExecuteSteps returned error: %v (results=%+v)", err, results)
 	}
 }
@@ -82,7 +82,7 @@ func TestAssertPollsUntilSettled(t *testing.T) {
 		{Action: ActionNavigate, URL: url},
 		{Action: ActionAssertCount, Selector: ".spinner", Count: 0},
 	}
-	results, err := br.ExecuteSteps(context.Background(), url, steps)
+	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 	if err != nil {
 		t.Fatalf("ExecuteSteps returned error: %v (results=%+v)", err, results)
 	}
@@ -109,7 +109,7 @@ func TestAssertStillFailsWhenNeverTrue(t *testing.T) {
 		{Action: ActionAssertCount, Selector: ".spinner", Count: 0, Timeout: "1s"},
 	}
 	start := time.Now()
-	results, err := br.ExecuteSteps(context.Background(), url, steps)
+	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 	if err == nil {
 		t.Fatalf("expected assert_count to fail for a persistent spinner, got success: %+v", results)
 	}
@@ -151,7 +151,7 @@ func TestAssertVariantsPollUntilSettled(t *testing.T) {
 				{Action: ActionNavigate, URL: url},
 				tc.step,
 			}
-			results, err := br.ExecuteSteps(context.Background(), url, steps)
+			results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 			if err != nil {
 				t.Fatalf("%s: ExecuteSteps error: %v (results=%+v)", tc.name, err, results)
 			}
@@ -195,7 +195,7 @@ func TestBlockingStepsHonorTheirTimeout(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			steps := []Step{{Action: ActionNavigate, URL: url}, tc.step}
 			start := time.Now()
-			results, err := br.ExecuteSteps(context.Background(), url, steps)
+			results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 			elapsed := time.Since(start)
 			// The step must fail (its target never exists) ...
 			failed := err != nil
@@ -253,7 +253,7 @@ document.addEventListener('keydown', function (e) {
 			Expect:     "Enter Tab Escape ArrowUp F5 Shift+Enter Control+a Alt+  x Shift+!",
 		},
 	}
-	results, err := br.ExecuteSteps(context.Background(), url, steps)
+	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 	if err != nil {
 		t.Fatalf("ExecuteSteps returned error: %v", err)
 	}
@@ -287,7 +287,7 @@ b.addEventListener('click', function () { window.log.push('click'); });
 		{Action: ActionHover, Selector: "#b"},
 		{Action: ActionEval, Expression: `window.log.join(' ') + ' ' + document.getElementById('b').getBoundingClientRect().width`, Expect: "enter 30"},
 	}
-	results, err := br.ExecuteSteps(context.Background(), url, steps)
+	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 	if err != nil {
 		t.Fatalf("ExecuteSteps returned error: %v", err)
 	}
@@ -324,7 +324,7 @@ b.addEventListener('mousemove', function (e) {
 		{Action: ActionHover, Selector: "#b", X: &x26, Y: &y26},
 		{Action: ActionEval, Expression: `window.at.join(' ')`, Expect: "2,2 26,26"},
 	}
-	results, err := br.ExecuteSteps(context.Background(), url, steps)
+	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 	if err != nil {
 		t.Fatalf("ExecuteSteps returned error: %v", err)
 	}
@@ -372,7 +372,7 @@ document.getElementById('t').addEventListener('keydown', function (e) {
 		{Action: ActionPressKey, Key: "E"},
 		{Action: ActionEval, Expression: value, Expect: `"abc\nd E"`},
 	}
-	results, err := br.ExecuteSteps(context.Background(), url, steps)
+	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 	if err != nil {
 		t.Fatalf("ExecuteSteps returned error: %v", err)
 	}
@@ -391,12 +391,12 @@ func TestPressKeyRejectsUnknownKeysAndModifiers(t *testing.T) {
 		{"Shift+Enter", ""},
 		{"", ""},
 	} {
-		if _, err := pressKey(tc.key, tc.mods); err == nil {
+		if _, err := pressKey(tc.key, tc.mods, 0); err == nil {
 			t.Errorf("pressKey(%q, %q): expected an error", tc.key, tc.mods)
 		}
 	}
 	for _, name := range []string{"Enter", "Tab", "Escape", "Backspace", "Delete", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Insert", "F1", "F12", "Space", "a", "Z", "1", "@", "é"} {
-		if _, err := pressKey(name, "Shift+Control"); err != nil {
+		if _, err := pressKey(name, "Shift+Control", 0); err != nil {
 			t.Errorf("pressKey(%q): %v", name, err)
 		}
 	}
@@ -426,7 +426,7 @@ func TestTabsShareProfile(t *testing.T) {
 		{Action: ActionAssertText, Selector: "#o", Text: "from B"},
 		{Action: ActionEval, Expression: "localStorage.getItem('k')", Expect: "from B"},
 	}
-	results, err := br.ExecuteSteps(context.Background(), url, steps)
+	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 	if err != nil {
 		t.Fatalf("ExecuteSteps error: %v (results=%+v)", err, results)
 	}
@@ -438,13 +438,13 @@ func TestTabsGetTheInitScript(t *testing.T) {
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
-	br, err := NewBrowser(context.Background(), "window.__init = 'ran'")
+	br, err := NewBrowser(context.Background(), Launch{InitScript: "window.__init = 'ran'"})
 	if err != nil {
 		t.Skipf("no browser available: %v", err)
 	}
 	t.Cleanup(br.Close)
 	url := serveHTML(t, `<!doctype html><html><body></body></html>`)
-	if _, err := br.ExecuteSteps(context.Background(), url, []Step{
+	if _, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, []Step{
 		{Action: ActionNavigate, URL: url},
 		{Action: ActionEval, Expression: "window.__init", Expect: "ran"},
 		{Action: ActionNavigate, URL: url, Tab: "B"},
@@ -465,7 +465,7 @@ func TestTabMustBeOpenedByNavigate(t *testing.T) {
 	url := serveHTML(t, `<!doctype html><html><body><p id="o">hi</p></body></html>`)
 
 	start := time.Now()
-	_, err := br.ExecuteSteps(context.Background(), url, []Step{
+	_, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, []Step{
 		{Action: ActionNavigate, URL: url},
 		{Action: ActionAssertText, Selector: "#o", Text: "hi", Tab: "B"},
 	})
@@ -476,7 +476,7 @@ func TestTabMustBeOpenedByNavigate(t *testing.T) {
 		t.Fatalf("unopened tab took %v to fail; it should not poll", time.Since(start))
 	}
 
-	_, err = br.ExecuteSteps(context.Background(), url, []Step{
+	_, err = br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, []Step{
 		{Action: ActionNavigate, URL: url, Tab: "B"},
 		{Action: ActionAssertText, Selector: "#o", Text: "hi", Tab: "B"},
 		{Action: ActionCloseTab, Tab: "B"},
@@ -488,17 +488,17 @@ func TestTabMustBeOpenedByNavigate(t *testing.T) {
 	}
 	waitForPageCount(t, br, 1)
 
-	if _, err := br.ExecuteSteps(context.Background(), url, []Step{{Action: ActionNavigate, URL: url, Tab: "B"}}); err != nil {
+	if _, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, []Step{{Action: ActionNavigate, URL: url, Tab: "B"}}); err != nil {
 		t.Fatal(err)
 	}
 	waitForPageCount(t, br, 2)
-	_, err = br.ExecuteSteps(context.Background(), url, []Step{{Action: ActionAssertText, Selector: "#o", Text: "hi", Tab: "B"}})
+	_, err = br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, []Step{{Action: ActionAssertText, Selector: "#o", Text: "hi", Tab: "B"}})
 	if err == nil || !strings.Contains(err.Error(), `tab "B" is not open`) {
 		t.Fatalf("tab left open by the previous script: got %v", err)
 	}
 	waitForPageCount(t, br, 1)
 
-	if _, err := br.ExecuteSteps(context.Background(), url, []Step{{Action: ActionCloseTab}}); err == nil {
+	if _, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, []Step{{Action: ActionCloseTab}}); err == nil {
 		t.Fatal("close_tab without a tab name must fail; the main tab stays open")
 	}
 }
@@ -509,11 +509,11 @@ func TestNavigateWithoutURL(t *testing.T) {
 	br := newBrowserOrSkip(t)
 	url := serveHTML(t, `<!doctype html><html><body><p id="o">hi</p></body></html>`)
 
-	_, err := br.ExecuteSteps(context.Background(), url, []Step{{Action: ActionNavigate, Tab: "B"}})
+	_, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, []Step{{Action: ActionNavigate, Tab: "B"}})
 	if err == nil || !strings.Contains(err.Error(), "first tab has not been navigated") {
 		t.Fatalf("tab opened on a first tab still on about:blank: got %v", err)
 	}
-	if _, err := br.ExecuteSteps(context.Background(), url, []Step{
+	if _, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, []Step{
 		{Action: ActionNavigate},
 		{Action: ActionAssertURL, Value: url + "/"},
 	}); err != nil {
@@ -536,7 +536,7 @@ func TestScreenshotsFollowTheStepsTab(t *testing.T) {
 		{Action: ActionAssertVisible, Selector: "#d"},
 		{Action: ActionAssertVisible, Selector: "#d", Tab: "B"},
 	}
-	if _, err := br.ExecuteSteps(context.Background(), red, steps); err != nil {
+	if _, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: red}, steps); err != nil {
 		t.Fatal(err)
 	}
 	for i, want := range map[int]string{2: "red", 3: "blue"} {

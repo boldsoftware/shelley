@@ -9,20 +9,31 @@ package lazycue
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
 // Options configures a lazycue test run.
 type Options struct {
-	BaseURL          string // Base URL of the application under test (required)
+	BaseURL string // Base URL of a long-running app under test; Setup replaces it
+	// Setup starts a fresh instance of the app under test. Run calls it for
+	// every attempt at a test (a cached run, each retry, the agent's session
+	// and the check of what the agent wrote), so a script never passes only
+	// because of what an earlier attempt left behind.
+	Setup            func(ctx context.Context) (*Env, error)
 	CacheDir         string // Directory holding cache JSON files (default: ".lazycue")
 	Model            string // LLM model (default: "claude-sonnet-4-6")
 	AnthropicBaseURL string // Anthropic API base URL (default: ANTHROPIC_BASE_URL or https://api.anthropic.com)
@@ -31,7 +42,43 @@ type Options struct {
 	ArtifactDir      string // If set, write per-step screenshots here and record their paths on StepResults
 	VideoDir         string // If set, render an MP4 per test (prompt title card + captioned screenshots) here, named <DescriptionHash>.mp4
 	RepoRoot         string // Repository root passed to the heal agent's git_command tool (default: `git rev-parse --show-toplevel` from the cwd, falling back to ".")
-	InitScript       string // JavaScript evaluated before every page's own scripts
+}
+
+// Env is one instance of the app under test.
+type Env struct {
+	BaseURL string
+	// Launch is how the browser's tabs start out.
+	Launch Launch
+	// Vars holds the values {{NAME}} placeholders in steps stand for.
+	// Placeholders keep a script independent of values that change from run
+	// to run (a temporary directory, an id the test created). Each step reads
+	// them as it runs, so a call may set one for the steps after it.
+	Vars map[string]string
+	// Calls are host-side functions that call steps run by name, for what a
+	// page can neither do nor see: write a file, release a barrier in the
+	// server, read what the server stored. A call returns a value that an
+	// expectation can match.
+	Calls map[string]func(ctx context.Context) (string, error)
+	// Close tears the instance down; nil needs nothing.
+	Close func()
+}
+
+func (e *Env) close() {
+	if e.Close != nil {
+		e.Close()
+	}
+}
+
+// call runs a call step.
+func (e *Env) call(ctx context.Context, step Step) (string, error) {
+	f, ok := e.Calls[step.Value]
+	if !ok {
+		return "", fmt.Errorf("call: no function %q (have: %s)", step.Value, strings.Join(slices.Sorted(maps.Keys(e.Calls)), ", "))
+	}
+	timeout := parseTimeout(step.Timeout, defaultStepTimeout)
+	callCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return expectResult(ctx, step, timeout, func() (string, error) { return f(callCtx) })
 }
 
 func (o *Options) defaults() {
@@ -54,6 +101,10 @@ func (o *Options) defaults() {
 	if o.RepoRoot == "" {
 		o.RepoRoot = detectRepoRoot()
 	}
+	if o.Setup == nil && o.BaseURL != "" {
+		baseURL := o.BaseURL
+		o.Setup = func(context.Context) (*Env, error) { return &Env{BaseURL: baseURL}, nil }
+	}
 }
 
 // detectRepoRoot returns the git repository root for the current working
@@ -72,19 +123,16 @@ func detectRepoRoot() string {
 	return root
 }
 
-// perTestBudget bounds the whole resolution of a single lazycue test (cached
-// execution + one retry + an optional LLM heal). It is kept under the `go test`
-// package deadline (10m default) so that a single stuck test fails cleanly via
-// t.Fatal rather than letting the package time out and panic, which would abort
-// every other test in the package.
+// perTestBudget bounds the whole resolution of a single lazycue test: the
+// cached attempt and its retries, the wait for an agent slot, and the agent
+// (agentBudget). It
+// is kept under the `go test` package deadline (10m default) so that a single
+// stuck test fails cleanly via t.Fatal rather than letting the package time
+// out and panic, which would abort every other test in the package.
 //
-// It is set comfortably above agentBudget (the heal budget) rather than just
-// above it: the heal does not start at t=0 — the cache check, browser launch,
-// cached execution, and the one-shot retry all run under this same budget
-// first, and under the flaky-long-wait conditions that trigger heals that
-// pre-heal work (executed twice, with long wait timeouts) can consume a
-// minute or more. The margin here ensures a legitimate heal still gets close
-// to its full agentBudget while staying under the package deadline.
+// It is set comfortably above agentBudget rather than just above it: under
+// the flaky-long-wait conditions that trigger heals, the attempts before the
+// agent (each with long wait timeouts) can consume a minute or more.
 const perTestBudget = 8 * time.Minute
 
 // RunMode describes how the test was resolved.
@@ -172,8 +220,8 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 	ctx, cancel := context.WithTimeout(ctx, perTestBudget)
 	defer cancel()
 
-	if opts.BaseURL == "" {
-		return nil, fmt.Errorf("BaseURL is required")
+	if opts.Setup == nil {
+		return nil, fmt.Errorf("BaseURL or Setup is required")
 	}
 
 	logf := func(format string, args ...any) {
@@ -188,22 +236,11 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 	if err != nil {
 		logf("[lazycue] warning: get cached test: %v", err)
 	}
-	if cachedTest != nil {
-		logf("[lazycue] cache hit: v%d", cacheHit.Version)
-	}
-
 	var version int
 	if cacheHit != nil {
 		version = cacheHit.Version
+		logf("[lazycue] cache hit: v%d", version)
 	}
-
-	// Step 2: Launch browser
-	logf("[lazycue] launching browser for %s", opts.BaseURL)
-	browser, err := NewBrowser(ctx, opts.InitScript)
-	if err != nil {
-		return nil, fmt.Errorf("launch browser: %w", err)
-	}
-	defer browser.Close()
 
 	// Optional artifact collection: per-step screenshots written to a per-test
 	// subdirectory (named by description hash, so screenshots are "arranged by
@@ -218,117 +255,137 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 		subdir := filepath.Join(screenshotRoot, DescriptionHash(description))
 		if c, cErr := newArtifactCollector(subdir); cErr == nil {
 			collector = c
-			browser.SetScreenshotSink(c.sink())
 		} else {
 			logf("[lazycue] warning: artifact collector: %v", cErr)
 		}
 	}
 
-	// finalize is the single exit point for all success/agent return paths.
-	// Video rendering is deliberately NOT done here: an MP4 is a non-trivial
-	// ffmpeg job, so rendering inline would add seconds to every test's wall
-	// time (and its timeout budget). Screenshots are captured during execution;
-	// callers render videos afterward via RenderVideos (see Harness / TestMain).
-	finalize := func(r *TestResult) (*TestResult, error) {
-		return r, nil
+	// launch starts a fresh app instance and browser for one attempt, which
+	// takes screenshots if shots is set. Only attempts after a failure take
+	// them: there is nothing to debug in a passing cached run, and
+	// screenshotting every step of every test costs real time.
+	launch := func(shots bool) (*Env, *Browser, error) {
+		env, err := opts.Setup(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("set up app: %w", err)
+		}
+		br, err := NewBrowser(ctx, env.Launch)
+		if err != nil {
+			env.close()
+			return nil, nil, fmt.Errorf("launch browser: %w", err)
+		}
+		if shots && collector != nil {
+			br.SetScreenshotSink(collector.sink())
+		}
+		return env, br, nil
+	}
+	// attempt runs steps against a fresh app instance and browser.
+	attempt := func(steps []Step, shots bool) ([]StepResult, bool, error) {
+		env, br, err := launch(shots)
+		if err != nil {
+			return nil, false, err
+		}
+		defer env.close()
+		defer br.Close()
+		results, execErr := br.ExecuteSteps(ctx, env, steps)
+		return results, stepsAllPassed(results, execErr), nil
+	}
+	// runAgent runs the generating or healing agent, which gets a fresh app
+	// instance and browser for every run of steps, its final one included.
+	runAgent := func(cfg AgentConfig) (*AgentResult, error) {
+		release, err := acquireAgent(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer release()
+		cfg.Description = description
+		cfg.Launch = func() (*Env, *Browser, error) { return launch(true) }
+		cfg.Model = opts.Model
+		cfg.AnthropicBaseURL = opts.AnthropicBaseURL
+		cfg.AnthropicAPIKey = opts.AnthropicAPIKey
+		cfg.RepoRoot = opts.RepoRoot
+		cfg.Verbose = opts.Verbose
+		return RunAgent(ctx, &cfg)
 	}
 
-	// Step 3: If cached, try executing
+	// Step 2: If cached, try executing.
 	if cachedTest != nil {
 		steps, parseErr := ParseSteps(cachedTest.Steps)
 		if parseErr == nil {
 			logf("[lazycue] found cached v%d (%d steps)", version, len(steps))
-			results, execErr := browser.ExecuteSteps(ctx, opts.BaseURL, steps)
-			allPassed := stepsAllPassed(results, execErr)
+			results, allPassed, err := attempt(steps, false)
+			if err != nil {
+				return nil, err
+			}
 			// A cached test can fail spuriously under load (e.g. the app is slow
 			// to deliver the first message and an element doesn't appear within a
-			// wait timeout). Retry with a fresh browser before paying for an LLM
-			// heal — a genuine app/test mismatch will fail every time. We retry up
-			// to maxRetriesBeforeHeal times; a transient timeout (the common flake)
-			// almost always clears on the next attempt, so this keeps the LLM out
-			// of the loop entirely. This work only happens on the failure path, so
-			// it never slows the happy path.
+			// wait timeout). Retry with a fresh app and browser before paying for
+			// an LLM heal — a genuine app/test mismatch will fail every time. A
+			// transient timeout (the common flake) almost always clears on the
+			// next attempt, so this keeps the LLM out of the loop entirely. This
+			// work only happens on the failure path, so it never slows the happy
+			// path.
 			const maxRetriesBeforeHeal = 2
 			retriesBeforeHeal := 0
-			for attempt := 0; !allPassed && attempt < maxRetriesBeforeHeal && ctx.Err() == nil; attempt++ {
-				if isTimeoutFailure(results) {
-					logf("[lazycue] cached test failed with a transient timeout; retry %d/%d with a fresh browser", attempt+1, maxRetriesBeforeHeal)
-				} else {
-					logf("[lazycue] cached test failed; retry %d/%d with a fresh browser", attempt+1, maxRetriesBeforeHeal)
+			for ; !allPassed && retriesBeforeHeal < maxRetriesBeforeHeal && ctx.Err() == nil; retriesBeforeHeal++ {
+				logf("[lazycue] cached test failed (%s); retry %d/%d", summarizeFailure(results), retriesBeforeHeal+1, maxRetriesBeforeHeal)
+				if results, allPassed, err = attempt(steps, true); err != nil {
+					return nil, err
 				}
-				browser.Close()
-				rb, rErr := NewBrowser(ctx, opts.InitScript)
-				if rErr != nil {
-					return nil, fmt.Errorf("relaunch browser for retry: %w", rErr)
-				}
-				browser = rb
-				if collector != nil {
-					browser.SetScreenshotSink(collector.sink())
-				}
-				results, execErr = browser.ExecuteSteps(ctx, opts.BaseURL, steps)
-				allPassed = stepsAllPassed(results, execErr)
-				retriesBeforeHeal++
 			}
 			if allPassed {
 				logf("[lazycue] cached test passed")
 				if collector != nil {
 					collector.attach(results)
 				}
-				return finalize(&TestResult{
+				return &TestResult{
 					Pass:          true,
 					Steps:         results,
 					CacheVersion:  version,
 					Description:   description,
 					Mode:          RunModeCached,
 					TotalDuration: time.Since(totalStart),
-				})
+				}, nil
 			}
 
 			// Cached test failed — need to fix it
 			logf("[lazycue] cached test failed, spawning agent to fix")
-			failureDesc := summarizeFailure(results)
 			triggerStep, triggerErr := failedStep(results)
-
-			// Reset browser for agent
-			browser.Close()
-			browser, err = NewBrowser(ctx, opts.InitScript)
-			if err != nil {
-				return nil, fmt.Errorf("relaunch browser: %w", err)
-			}
-			if collector != nil {
-				browser.SetScreenshotSink(collector.sink())
-			}
-
 			agentStart := time.Now()
-			agentResult, agentErr := RunAgent(ctx, &AgentConfig{
-				Mode:             AgentModeFix,
-				Description:      description,
-				PreviousSteps:    cachedTest.Steps,
-				PreviousError:    failureDesc,
-				CacheFilePath:    CacheFilePath(opts.CacheDir, description),
-				Browser:          browser,
-				BaseURL:          opts.BaseURL,
-				Model:            opts.Model,
-				AnthropicBaseURL: opts.AnthropicBaseURL,
-				AnthropicAPIKey:  opts.AnthropicAPIKey,
-				RepoRoot:         opts.RepoRoot,
-				Verbose:          opts.Verbose,
+			agentResult, agentErr := runAgent(AgentConfig{
+				Mode:          AgentModeFix,
+				PreviousSteps: cachedTest.Steps,
+				PreviousError: summarizeFailure(results),
+				CacheFilePath: CacheFilePath(opts.CacheDir, description),
 			})
 			agentDur := time.Since(agentStart)
+			if errors.Is(agentErr, errNoAgent) {
+				if collector != nil {
+					collector.attach(results)
+				}
+				return &TestResult{
+					Pass:          false,
+					Error:         summarizeFailure(results) + "; not healing: " + agentErr.Error(),
+					Steps:         results,
+					CacheVersion:  version,
+					Description:   description,
+					Mode:          RunModeCached,
+					TotalDuration: time.Since(totalStart),
+				}, nil
+			}
 			if agentErr != nil {
 				return nil, fmt.Errorf("agent fix: %w", agentErr)
 			}
 
 			newVersion := version + 1
 			stepsChanged := !sameSteps(cachedTest.Steps, agentResult.StepsJSON)
-			cost := float64(agentResult.InputTokens)*3.0/1_000_000 + float64(agentResult.OutputTokens)*15.0/1_000_000
 			if agentResult.Success {
 				// A cached test can fail spuriously under heavy CI load even after
-				// the in-process retry (e.g. a 60s wait that just barely times out
-				// when many tests run in parallel). The heal agent then often
-				// concludes the steps were already correct and re-emits the SAME
-				// steps. Rewriting the cache in that case only churns the tracked
-				// JSON (bumping the version, refreshing metadata) for no behavioral
+				// the retries (e.g. a 60s wait that just barely times out when
+				// many tests run in parallel). The heal agent then often concludes
+				// the steps were already correct and re-emits the SAME steps.
+				// Rewriting the cache in that case only churns the tracked JSON
+				// (bumping the version, refreshing metadata) for no behavioral
 				// change, which breaks the queue's commit-back step. Only persist a
 				// heal when the steps actually differ from what's already cached.
 				if !stepsChanged {
@@ -358,7 +415,7 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 			if collector != nil {
 				collector.attach(agentResult.StepResults)
 			}
-			return finalize(&TestResult{
+			return &TestResult{
 				Pass:           agentResult.Success,
 				Error:          agentResult.Error,
 				ScreenshotPath: agentResult.ScreenshotPath,
@@ -370,34 +427,32 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 				AgentDuration:  agentDur,
 				InputTokens:    agentResult.InputTokens,
 				OutputTokens:   agentResult.OutputTokens,
-				EstimatedCost:  cost,
+				EstimatedCost:  agentResult.Cost,
 				Heal:           heal,
-			})
+			}, nil
 		}
 		// Parse error — treat as uncached
 		logf("[lazycue] cached test parse error: %v, regenerating", parseErr)
 	}
 
-	// Step 4: No cache — generate from scratch
+	// Step 3: No cache — generate from scratch
 	logf("[lazycue] no cached test, spawning agent to generate")
 	agentStart := time.Now()
-	agentResult, agentErr := RunAgent(ctx, &AgentConfig{
-		Mode:             AgentModeGenerate,
-		Description:      description,
-		Browser:          browser,
-		BaseURL:          opts.BaseURL,
-		Model:            opts.Model,
-		AnthropicBaseURL: opts.AnthropicBaseURL,
-		AnthropicAPIKey:  opts.AnthropicAPIKey,
-		RepoRoot:         opts.RepoRoot,
-		Verbose:          opts.Verbose,
-	})
+	agentResult, agentErr := runAgent(AgentConfig{Mode: AgentModeGenerate})
 	agentDur := time.Since(agentStart)
+	if errors.Is(agentErr, errNoAgent) {
+		return &TestResult{
+			Pass:          false,
+			Error:         "no cached script; not generating one: " + agentErr.Error(),
+			Description:   description,
+			Mode:          RunModeGenerated,
+			TotalDuration: time.Since(totalStart),
+		}, nil
+	}
 	if agentErr != nil {
 		return nil, fmt.Errorf("agent generate: %w", agentErr)
 	}
 
-	cost := float64(agentResult.InputTokens)*3.0/1_000_000 + float64(agentResult.OutputTokens)*15.0/1_000_000
 	if agentResult.Success {
 		meta := buildCacheMetadata(opts, agentResult, "generated")
 		if saveErr := SaveCachedTest(opts.CacheDir, description, agentResult.StepsJSON, 1, meta); saveErr != nil {
@@ -408,7 +463,7 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 	if collector != nil {
 		collector.attach(agentResult.StepResults)
 	}
-	return finalize(&TestResult{
+	return &TestResult{
 		Pass:           agentResult.Success,
 		Error:          agentResult.Error,
 		ScreenshotPath: agentResult.ScreenshotPath,
@@ -420,8 +475,65 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 		AgentDuration:  agentDur,
 		InputTokens:    agentResult.InputTokens,
 		OutputTokens:   agentResult.OutputTokens,
-		EstimatedCost:  cost,
-	})
+		EstimatedCost:  agentResult.Cost,
+	}, nil
+}
+
+var (
+	// agentSlots bounds how many agents run at once;
+	// LAZYCUE_AGENT_CONCURRENCY sets it (default 4). When a change breaks
+	// many tests at once, their heals queue for a slot within each test's
+	// budget rather than all running.
+	agentSlots chan struct{}
+	// agentRunsLeft is how many more agents this process may start;
+	// LAZYCUE_MAX_AGENT_RUNS sets it (default, or negative: unlimited). Zero
+	// runs cached scripts only, failing any test without one that passes.
+	agentRunsLeft atomic.Int64
+)
+
+func init() {
+	n := envInt("LAZYCUE_AGENT_CONCURRENCY", 4)
+	if n < 1 {
+		panic("LAZYCUE_AGENT_CONCURRENCY must be at least 1")
+	}
+	agentSlots = make(chan struct{}, n)
+	agentRunsLeft.Store(int64(envInt("LAZYCUE_MAX_AGENT_RUNS", -1)))
+}
+
+// errNoAgent is why a test got no agent to generate or heal its script.
+var errNoAgent = errors.New("no agent")
+
+// acquireAgent waits for an agent slot, failing with errNoAgent when the
+// process may start no more agents or the test runs out of time waiting.
+func acquireAgent(ctx context.Context) (release func(), err error) {
+	for {
+		n := agentRunsLeft.Load()
+		if n == 0 {
+			return nil, fmt.Errorf("%w: LAZYCUE_MAX_AGENT_RUNS agent runs used up", errNoAgent)
+		}
+		if n < 0 || agentRunsLeft.CompareAndSwap(n, n-1) {
+			break
+		}
+	}
+	select {
+	case agentSlots <- struct{}{}:
+		return func() { <-agentSlots }, nil
+	case <-ctx.Done():
+		return nil, fmt.Errorf("%w: waiting for a slot: %w", errNoAgent, ctx.Err())
+	}
+}
+
+// envInt reads an integer from the environment, def when unset.
+func envInt(name string, def int) int {
+	v := os.Getenv(name)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		panic(fmt.Sprintf("%s=%q is not an integer", name, v))
+	}
+	return n
 }
 
 func summarizeFailure(results []StepResult) string {
@@ -551,8 +663,7 @@ func (h *Harness) Test(t testing.TB, description string) {
 		sb.WriteByte('\n')
 	}
 	if result.InputTokens > 0 {
-		cost := float64(result.InputTokens)*3.0/1_000_000 + float64(result.OutputTokens)*15.0/1_000_000
-		fmt.Fprintf(&sb, "  ⚡ %d in / %d out tokens  ~$%.3f\n", result.InputTokens, result.OutputTokens, cost)
+		fmt.Fprintf(&sb, "  ⚡ %d in / %d out tokens  ~$%.3f\n", result.InputTokens, result.OutputTokens, result.EstimatedCost)
 	}
 	if h := result.Heal; h != nil {
 		fmt.Fprintf(&sb, "  🩹 %s\n", h.Summary())
@@ -578,19 +689,12 @@ func sameSteps(a, b []byte) bool {
 	if err != nil {
 		return false
 	}
-	if len(sa) != len(sb) {
-		return false
-	}
-	for i := range sa {
-		if sa[i] != sb[i] {
-			return false
-		}
-	}
-	return true
+	// DeepEqual, not ==: optional fields are pointers, which == compares by
+	// address.
+	return reflect.DeepEqual(sa, sb)
 }
 
 func buildCacheMetadata(opts Options, agentResult *AgentResult, mode string) *CacheMetadata {
-	cost := float64(agentResult.InputTokens)*3.0/1_000_000 + float64(agentResult.OutputTokens)*15.0/1_000_000
 	hostname, _ := os.Hostname()
 	return &CacheMetadata{
 		CreatedAt:        time.Now().UTC(),
@@ -598,7 +702,7 @@ func buildCacheMetadata(opts Options, agentResult *AgentResult, mode string) *Ca
 		Model:            opts.Model,
 		InputTokens:      agentResult.InputTokens,
 		OutputTokens:     agentResult.OutputTokens,
-		EstimatedCostUSD: cost,
+		EstimatedCostUSD: agentResult.Cost,
 		CIRun:            detectCIRun(),
 		GitSHA:           detectGitSHA(),
 		Mode:             mode,
