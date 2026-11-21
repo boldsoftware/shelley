@@ -1,0 +1,140 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the send button\" is [data-testid=\"send-button\"]; \"queued badges\" are [data-testid=\"queued-badge\"]. \"Send X and wait for work\" means: fill the input with X, click the send button, and wait (up to 30s) for the thinking indicator [data-testid=\"agent-thinking\"] to be visible. Keys pressed \"in the input\" go to the input while it has focus (filling it focuses it). \"Press M+Enter\" presses its modifiers as a keyboard does: a key_down step for each modifier M in the order written, then a press_key step \"Enter\" (without modifiers of its own; the held keys apply), then a key_up step for each modifier in reverse order. Every test starts: navigate to /c/queue-shortcut and wait (up to 30s) for the input to be visible. Alt+Enter keeps a pending upload in the composer and queues it once it is ready. Uploads (/api/upload) are held back until call \"release upload\", and then answered with the path \"/tmp/queue-shortcut.txt\". window.setInputFiles(selector, files) chooses files in a file input, as a user picking them would: call it in an eval, e.g. window.setInputFiles('input[type=\"file\"]', [[\"a.txt\", \"content\"]]). Call \"queued chat\" describes the first /chat request whose JSON body has queue true: \"none\" before there is one, else whether its message mentions the uploaded file's path (\"with attachment\" or \"without attachment\"). 1. Navigate to /c/queue-shortcut and wait for the input. 2. Send \"delay: 60\" and wait for work, then for the input's value to be exactly \"\" (the send has gone through: files chosen while it is in flight are cleared with it). 3. Eval window.setInputFiles('input[type=\"file\"]', [[\"queue-shortcut.txt\", \"queued attachment\"]]). 4. There should be exactly one \".message-attachment-uploading\". 5. Fill the input with \"keep my attachment\" and press Alt+Enter in it. 6. The input's value should still be exactly \"keep my attachment\", there should still be exactly one \".message-attachment-uploading\", and there must be no queued badge (count 0). 7. Call \"release upload\". 8. There should be exactly one \".message-attachment-ready\". 9. Call \"queued chat\"; it must be \"none\". 10. Press Alt+Enter in the input again. 11. Call \"queued chat\"; it should become exactly \"with attachment\". 12. The input's value should become exactly \"\", there should be no \".message-attachment\" at all (count 0), and there should be exactly one queued badge.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/queue-shortcut"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "delay: 60"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "eval",
+      "expression": "window.setInputFiles('input[type=\"file\"]', [['queue-shortcut.txt', 'queued attachment']])",
+      "expect": "chosen"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-uploading",
+      "count": 1
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "keep my attachment"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "key_down",
+      "key": "Alt"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "key_up",
+      "key": "Alt"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "keep my attachment"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-uploading",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='queued-badge']",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "release upload"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 1
+    },
+    {
+      "action": "call",
+      "value": "queued chat",
+      "expect": "none"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "key_down",
+      "key": "Alt"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "key_up",
+      "key": "Alt"
+    },
+    {
+      "action": "call",
+      "value": "queued chat",
+      "expect": "with attachment"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='queued-badge']",
+      "count": 1
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:35:10.9225191Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 361657,
+    "output_tokens": 8501,
+    "estimated_cost_usd": 0.30289575,
+    "mode": "generated"
+  }
+}

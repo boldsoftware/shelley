@@ -155,6 +155,23 @@ func (s *shelley) waitTurns(id string, n int) {
 	})
 }
 
+// inputFilesJS gives pages window.setInputFiles(selector, files),
+// which chooses files in the file input matching selector as Playwright's
+// setInputFiles does: it sets the input's files to a text/plain File for
+// every [name, content] pair and dispatches input and change events.
+const inputFilesJS = `window.setInputFiles = (selector, files) => {
+  const input = document.querySelector(selector);
+  if (!input) throw new Error('missing ' + selector);
+  const dataTransfer = new DataTransfer();
+  for (const [name, content] of files) {
+    dataTransfer.items.add(new File([content], name, { type: 'text/plain' }));
+  }
+  input.files = dataTransfer.files;
+  input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  return 'chosen';
+};`
+
 // pixel5Desktop is a desktop window of the given size: no touch screen, at
 // the Pixel 5's scale, as a spec's test.use({ viewport, isMobile: false,
 // hasTouch: false }) over the Pixel 5 project gave.

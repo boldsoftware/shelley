@@ -1,0 +1,85 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the send button\" is [data-testid=\"send-button\"]; \"queued badges\" are [data-testid=\"queued-badge\"]. \"Send X and wait for work\" means: fill the input with X, click the send button, and wait (up to 30s) for the thinking indicator [data-testid=\"agent-thinking\"] to be visible. Keys pressed \"in the input\" go to the input while it has focus (filling it focuses it). \"Press M+Enter\" presses its modifiers as a keyboard does: a key_down step for each modifier M in the order written, then a press_key step \"Enter\" (without modifiers of its own; the held keys apply), then a key_up step for each modifier in reverse order. Every test starts: navigate to /c/queue-shortcut and wait (up to 30s) for the input to be visible. window.textCount(text) counts the innermost elements whose text contains text, ignoring case; window.textCount(text, true) counts those whose whole text is exactly text. Ctrl+Alt neither arms nor invokes queueing. 1. Navigate to /c/queue-shortcut and wait for the input. 2. Send \"delay: 60\" and wait for work. 3. Fill the input with \"sent with control\". 4. Hold Control, then Alt (key_down \"Control\", then key_down \"Alt\"). The send button's aria-label should be exactly \"Send message\". 5. Press \"Enter\" while both are held (a press_key step \"Enter\" without modifiers of its own; the held keys apply). 6. Release Alt, then Control (key_up \"Alt\", then key_up \"Control\"). 7. The input's value should become exactly \"\". 8. There must be no queued badge (count 0). 9. Eval window.textCount(\"sent with control\", true) with expect \"1\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/queue-shortcut"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "delay: 60"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "sent with control"
+    },
+    {
+      "action": "key_down",
+      "key": "Control"
+    },
+    {
+      "action": "key_down",
+      "key": "Alt"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='send-button']",
+      "attribute": "aria-label",
+      "value": "Send message"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "key_up",
+      "key": "Alt"
+    },
+    {
+      "action": "key_up",
+      "key": "Control"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='queued-badge']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "window.textCount('sent with control', true)",
+      "expect": "1"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:34:46.461844353Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13565,
+    "output_tokens": 893,
+    "estimated_cost_usd": 0.023437649999999997,
+    "mode": "generated"
+  }
+}
