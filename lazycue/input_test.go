@@ -379,7 +379,7 @@ document.addEventListener('wheel', e => log.push('wheel:' + e.deltaY));
 func TestTouch(t *testing.T) {
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin: 0">
-<div id="pad" style="margin: 20px; width: 200px; height: 200px"></div>
+<div id="pad" style="margin: 20px; width: 200px; height: 200px; touch-action: none"></div>
 <script>
 window.log = [];
 for (const type of ['touchstart', 'touchmove', 'touchend']) {
@@ -398,6 +398,20 @@ for (const type of ['touchstart', 'touchmove', 'touchend']) {
 			Action: ActionEval, Expression: `log.join(' ')`,
 			// Chrome fires an event per finger that lands or lifts.
 			Expect: ptr("touchstart:1:30,30 touchmove:1:120,120 touchend:0: touchstart:1:30,30 touchstart:2:30,30;120,120 touchmove:2:40,40;130,130 touchend:1:130,130 touchend:0:"),
+		},
+		// A move with a count goes there in even steps from where each
+		// finger was.
+		Step{Action: ActionEval, Expression: `log = []`},
+		Step{Action: ActionTouch, Value: "start", Selector: "#pad", Points: "10,10 100,100"},
+		Step{Action: ActionTouch, Value: "move", Selector: "#pad", Points: "40,40 130,70", Count: 3},
+		Step{Action: ActionTouch, Value: "move", Selector: "#pad", Points: "10,10 100,100", Count: 2},
+		Step{Action: ActionTouch, Value: "end"},
+		Step{Action: ActionTouch, Value: "start", X: ptr(50.0), Y: ptr(50.0)},
+		Step{Action: ActionTouch, Value: "move", X: ptr(150.0), Y: ptr(50.0), Count: 4},
+		Step{Action: ActionTouch, Value: "cancel"},
+		Step{
+			Action: ActionEval, Expression: `log.filter(e => e.startsWith('touchmove')).join(' ')`,
+			Expect: ptr("touchmove:2:40,40;130,110 touchmove:2:50,50;140,100 touchmove:2:60,60;150,90 touchmove:2:45,45;135,105 touchmove:2:30,30;120,120 touchmove:1:75,50 touchmove:1:100,50 touchmove:1:125,50 touchmove:1:150,50"),
 		},
 	)
 }
@@ -424,6 +438,15 @@ document.addEventListener('change', e => log.push('change:' + e.target.id));
 		Step{Action: ActionEval, Expression: `document.getElementById('s').value + ' ' + log.at(-1)`, Expect: ptr("b change:s")},
 		Step{Action: ActionFill, Selector: "#ce", Value: "new"},
 		Step{Action: ActionEval, Expression: `document.getElementById('ce').textContent + ' ' + (document.activeElement.id)`, Expect: ptr("new ce")},
+	)
+	// insert_text inputs text at once, without key events.
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: `document.addEventListener('input', e => log.push('input:' + e.inputType + ':' + e.data))`},
+		Step{Action: ActionFill, Selector: "#t", Value: "a"},
+		Step{Action: ActionEval, Expression: `log = []`},
+		Step{Action: ActionInsertText, Value: "b ü😀"},
+		Step{Action: ActionEval, Expression: `document.getElementById('t').value + ' ' + log.join(' ')`, Expect: ptr("ab ü😀 input:insertText:b ü😀")},
 	)
 	if err := failSteps(t, br, env, Step{Action: ActionFill, Selector: "#off", Value: "x", Timeout: "300ms"}); !strings.Contains(err.Error(), "#off is disabled") {
 		t.Errorf("disabled fill error = %v", err)

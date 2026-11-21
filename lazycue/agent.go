@@ -189,17 +189,20 @@ func buildSystemPrompt() string {
 
 Available DSL actions:
 - navigate: {"action": "navigate", "url": "/path"} - Navigate to URL (relative to base)
+- reload: {"action": "reload"} - Reload the page and wait for it to load.
+- go_back / go_forward: {"action": "go_back"} - Go back or forward in the tab's history, as the browser's buttons do, and wait for the page to load (or just for the URL to change, for an entry the app pushed with pushState). Fails when there is no page to go to.
 - wait_visible: {"action": "wait_visible", "selector": "...", "timeout": "10s"} - Wait for element to be visible
 - wait_hidden: {"action": "wait_hidden", "selector": "...", "timeout": "10s"} - Wait for element to be hidden
 - wait_text: {"action": "wait_text", "text": "...", "timeout": "30s"} - Wait for text in page body
 - wait_text_gone: {"action": "wait_text_gone", "text": "...", "timeout": "10s"} - Wait for text to disappear
 - fill: {"action": "fill", "selector": "...", "value": "..."} - Focus a visible input, textarea, select (value = an option's value) or contenteditable element and set its value at once, firing input and change events. Fails on a disabled or read-only element.
 - type: {"action": "type", "value": "..."} - Type text key by key into the focused element; "\n" presses Enter. Use it when key events matter; otherwise fill.
+- insert_text: {"action": "insert_text", "value": "..."} - Insert text at the caret of the focused element as an IME or emoji picker would: one input event, no key events.
 - click: {"action": "click", "selector": "..."} - Click the element's center. Like a user, it waits until the element is visible, holding still, enabled and not covered by another element there, scrolling it into view. Optional: "x" and "y" (both or neither) click that many CSS pixels from the element's top-left corner instead (without a selector, at that point of the viewport); "button": "right" or "middle"; "count": 2 for a double click; "modifiers": "Shift" (as for press_key) to hold keys during it.
 - hover: {"action": "hover", "selector": "..."} - Move the mouse over the element (mouseenter fires and CSS :hover applies) without clicking; waits like click, takes "x"/"y" like click, and "count": N moves there in N steps from where the pointer was (to drag).
 - mouse_down / mouse_up: {"action": "mouse_down", "button": "left"} - Press or release a mouse button where the pointer is. Drag: hover the start, mouse_down, hover the end with "count": 10, mouse_up. Hover, mouse_down, mouse_up and wheel take "modifiers" like click.
 - wheel: {"action": "wheel", "x": 0, "y": 300} - Turn the mouse wheel where the pointer is, scrolling by x,y pixels.
-- touch: {"action": "touch", "value": "start", "selector": "..."} - Touch screen: "value" is start (fingers down), move, end or cancel (all fingers up; no selector). Start and move put one finger where a click would land ("x"/"y" as for click), or several at "points": "10,10 60,10" (x,y offsets from the element's top-left corner, or the viewport's without a selector).
+- touch: {"action": "touch", "value": "start", "selector": "..."} - Touch screen: "value" is start (fingers down), move, end or cancel (all fingers up; no selector). Start and move put one finger where a click would land ("x"/"y" as for click), or several at "points": "10,10 60,10" (x,y offsets from the element's top-left corner, or the viewport's without a selector). A move with "count": N gets there in N even steps from where each finger was (to drag).
 - press_key: {"action": "press_key", "key": "Enter", "modifiers": "Shift"} - Press one key on the focused element. "key" is a KeyboardEvent.key name (Enter, Tab, Escape, Backspace, Delete, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown, F1-F12, Insert), "Space", or a single character. A capital letter or shifted symbol ("P", "?") also holds Shift, as on a real keyboard, so a shortcut written Ctrl+P is key "p" with modifiers "Control". Optional modifiers: Shift, Control, Alt, Meta (combine with "+"). Focus the target first (click or fill it).
 - key_down / key_up: {"action": "key_down", "key": "Shift"} - Press a key and keep it held until key_up, as for press_key. A held Shift, Control, Alt or Meta modifies every later key and mouse step. A key_down of a key already held repeats it (KeyboardEvent.repeat), as holding a key does.
 - set_viewport: {"action": "set_viewport", "width": 1280, "height": 800, "scale": 1, "mobile": false, "touch": false} - Change the emulated device for the rest of the test; omitted fields keep their value. Whether the page sees a touch screen changes on the next navigate.
@@ -215,12 +218,12 @@ Available DSL actions:
 - assert_value: {"action": "assert_value", "selector": "...", "value": "..."} - Assert the current value of an input, textarea or select (the DOM property, which typing changes; not the value attribute).
 - assert_enabled / assert_disabled: {"action": "assert_enabled", "selector": "..."} - Assert a control is enabled or disabled: disabled means a disabled form control (or one in a disabled fieldset) or inside aria-disabled="true".
 - assert_focused: {"action": "assert_focused", "selector": "..."} - Assert the element has keyboard focus. For a custom element with a shadow root, focus anywhere inside it counts.
-- wait_url: {"action": "wait_url", "text": "...", "timeout": "10s"} (substring) or {"action": "wait_url", "value": "..."} (exact) - Wait for the browser URL to match. Its exact "value" may be a whole URL or just the path, query and hash.
-- assert_url: {"action": "assert_url", "value": "..."} or {"action": "assert_url", "text": "..."} for contains - Assert the URL; an exact "value" must be the whole URL.
+- wait_url / assert_url (the same step): {"action": "assert_url", "value": "/c/abc"} (exact) or {"action": "assert_url", "text": "..."} (substring) - Wait for the browser URL to match. An exact "value" may be the whole URL or just its path, query and hash: for a URL that must equal (or end with) a path, use an exact value rather than text.
 - assert_title: {"action": "assert_title", "text": "..."}
 - assert_count: {"action": "assert_count", "selector": "...", "count": 3}
 - sleep: {"action": "sleep", "timeout": "1s"}
 - close_tab: {"action": "close_tab", "tab": "B"} - Close a tab opened by an earlier step, as a user would.
+- collect_garbage: {"action": "collect_garbage"} - Force a full garbage collection in the page, e.g. before checking that what only a WeakRef holds was freed.
 
 Every assert_* and wait_* step retries until it holds or its timeout (default 15s) passes, so they wait for the app on their own; don't add sleeps or eval polls before them. Dialogs close by themselves: a page may always be left despite a beforeunload handler, and alert, confirm and prompt are cancelled (confirm returns false).
 

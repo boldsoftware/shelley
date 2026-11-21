@@ -49,6 +49,9 @@ type Step struct {
 // Supported action names.
 const (
 	ActionNavigate           = "navigate"
+	ActionReload             = "reload"
+	ActionGoBack             = "go_back"
+	ActionGoForward          = "go_forward"
 	ActionWaitVisible        = "wait_visible"
 	ActionWaitHidden         = "wait_hidden"
 	ActionWaitText           = "wait_text"
@@ -80,10 +83,12 @@ const (
 	ActionEmulateMedia       = "emulate_media"
 	ActionCall               = "call"
 	ActionType               = "type"
+	ActionInsertText         = "insert_text"
 	ActionMouseDown          = "mouse_down"
 	ActionMouseUp            = "mouse_up"
 	ActionWheel              = "wheel"
 	ActionTouch              = "touch"
+	ActionCollectGarbage     = "collect_garbage"
 )
 
 // ParseSteps parses a JSON array of steps.
@@ -138,11 +143,11 @@ func stepSummary(s Step) string {
 		return "wheel"
 	case ActionTouch:
 		if s.Points != "" {
-			return "touch " + s.Value + " " + picked(s) + " at " + s.Points
+			return "touch " + s.Value + " " + picked(s) + " at " + s.Points + countSuffix(s)
 		}
 		return "touch " + s.Value + " " + picked(s) + pointSuffix(s)
-	case ActionType:
-		return "type " + truncateArg(s.Value, 30)
+	case ActionType, ActionInsertText:
+		return s.Action + " " + truncateArg(s.Value, 30)
 	case ActionCall:
 		if s.Expect != nil {
 			return "call " + s.Value + " expect=" + truncateArg(*s.Expect, 30)
@@ -229,10 +234,14 @@ func pointSuffix(s Step) string {
 	if s.Button != "" {
 		out += " " + s.Button
 	}
+	return out + countSuffix(s)
+}
+
+func countSuffix(s Step) string {
 	if s.Count > 1 {
-		out += fmt.Sprintf(" x%d", s.Count)
+		return fmt.Sprintf(" x%d", s.Count)
 	}
-	return out
+	return ""
 }
 
 func truncateArg(s string, max int) string {

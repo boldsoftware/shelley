@@ -3,12 +3,14 @@ package lazycue
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	_ "image/png"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -583,4 +585,84 @@ func dominantHue(t *testing.T, png []byte) string {
 		return "blue"
 	}
 	return "neither"
+}
+
+// reload, go_back and go_forward wait for a new document to load, but not
+// for a same-document (pushState) entry, which never fires load.
+func TestHistory(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	var hold atomic.Bool
+	done := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/img" {
+			w.Header().Set("Cache-Control", "no-store")
+			if hold.Load() {
+				select {
+				case <-done:
+				case <-r.Context().Done():
+				}
+			}
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<!doctype html><html><body><img src="/img"></body></html>`))
+	}))
+	t.Cleanup(ts.Close)
+	t.Cleanup(func() { close(done) })
+	env := &Env{BaseURL: ts.URL, Calls: map[string]func(context.Context) (string, error){
+		"hold": func(context.Context) (string, error) { hold.Store(true); return "", nil },
+	}}
+	// is checks the page at once, without waiting for it.
+	is := func(want string) Step {
+		return Step{Action: ActionEval, Expression: fmt.Sprintf(`(s => { if (s !== %q) throw new Error(s) })(document.readyState + ' ' + location.pathname + ' ' + (window.mark || 'fresh'))`, want)}
+	}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/a"},
+		Step{Action: ActionNavigate, URL: "/b"},
+		Step{Action: ActionEval, Expression: `window.mark = 'old'`},
+		Step{Action: ActionGoBack},
+		is("complete /a fresh"),
+		Step{Action: ActionGoForward},
+		is("complete /b fresh"),
+		Step{Action: ActionEval, Expression: `window.mark = 'old'; history.pushState(null, '', '/c')`},
+		Step{Action: ActionGoBack, Timeout: "2s"},
+		is("complete /b old"),
+		Step{Action: ActionGoForward, Timeout: "2s"},
+		is("complete /c old"),
+		// An exact URL may be just the path, query and hash.
+		Step{Action: ActionAssertURL, Value: "/c"},
+		Step{Action: ActionAssertURL, Value: ts.URL + "/c"},
+		Step{Action: ActionWaitURL, Value: "/c"},
+		Step{Action: ActionReload},
+		is("complete /c fresh"),
+	)
+	if err := failSteps(t, br, env, Step{Action: ActionGoForward}); !strings.Contains(err.Error(), "go_forward: no later page in the tab's history") {
+		t.Errorf("go_forward at the end = %v", err)
+	}
+	if err := failSteps(t, br, env, Step{Action: ActionAssertURL, Value: "/b", Timeout: "300ms"}); !strings.Contains(err.Error(), `assert_url: expected "/b", got "`+ts.URL+`/c"`) {
+		t.Errorf("assert_url of another path = %v", err)
+	}
+	// Back to the about:blank a tab opens on, and no further.
+	if err := failSteps(t, br, env, Step{Action: ActionNavigate, Tab: "B", URL: "/a"}, Step{Action: ActionGoBack, Tab: "B"}, Step{Action: ActionGoBack, Tab: "B"}); !strings.Contains(err.Error(), "go_back: no earlier page in the tab's history") {
+		t.Errorf("go_back at the start = %v", err)
+	}
+	// A page still loading holds them up.
+	for _, step := range []Step{{Action: ActionGoBack, Timeout: "500ms"}, {Action: ActionReload, Timeout: "500ms"}} {
+		if err := failSteps(t, br, env, Step{Action: ActionNavigate, URL: "/a"}, Step{Action: ActionNavigate, URL: "/b"}, Step{Action: ActionCall, Value: "hold"}, step); !strings.Contains(err.Error(), "timeout") {
+			t.Errorf("%s on a loading page = %v", step.Action, err)
+		}
+		hold.Store(false)
+	}
+}
+
+// collect_garbage frees what only a WeakRef holds.
+func TestCollectGarbage(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	runSteps(t, br, &Env{BaseURL: serveHTML(t, blankPage)},
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: `window.ref = new WeakRef({big: new Array(1000).fill(1)}); 'made'`},
+		Step{Action: ActionEval, Expression: `if (!ref.deref()) throw new Error('freed already')`},
+		Step{Action: ActionCollectGarbage},
+		Step{Action: ActionEval, Expression: `if (ref.deref()) throw new Error('not freed')`},
+	)
 }

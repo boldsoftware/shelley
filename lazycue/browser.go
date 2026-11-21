@@ -18,6 +18,7 @@ import (
 	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/heapprofiler"
 	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/cdproto/page"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
@@ -127,6 +128,8 @@ type tabState struct {
 	keys           input.Modifier
 	// The codes of the keys key_down holds.
 	held map[string]bool
+	// The fingers on the touch screen, by ID - 1.
+	touches []*input.TouchPoint
 }
 
 // NewBrowser launches a headless Chrome instance whose tabs start out as
@@ -142,6 +145,9 @@ func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 		// without touch emulation matches neither (hover: hover) nor
 		// (pointer: fine). Touch emulation still makes it a phone's.
 		chromedp.Flag("blink-settings", "primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4"),
+		// As Playwright: going back or forward loads the page again
+		// rather than restoring it as it was left.
+		chromedp.Flag("disable-back-forward-cache", true),
 		chromedp.WindowSize(d.Width, d.Height),
 	)
 
@@ -627,6 +633,12 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 		}
 		return runBounded(chromedp.Navigate(url))
 
+	case ActionReload:
+		return runBounded(chromedp.Reload())
+
+	case ActionGoBack, ActionGoForward:
+		return b.goHistory(ctx, tabCtx, timeout, step)
+
 	case ActionWaitVisible:
 		return b.pollJS(ctx, tabCtx, timeout, visibleJS(step))
 
@@ -713,7 +725,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 		}))
 
 	case ActionTouch:
-		return b.touch(ctx, tabCtx, timeout, step)
+		return b.touch(ctx, tabCtx, st, timeout, step)
 
 	case ActionPressKey:
 		action, err := pressKey(step.Key, step.Modifiers, st.keys)
@@ -765,6 +777,12 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 			actions = append(actions, action)
 		}
 		return runBounded(actions...)
+
+	case ActionInsertText:
+		return runBounded(input.InsertText(step.Value))
+
+	case ActionCollectGarbage:
+		return runBounded(heapprofiler.CollectGarbage())
 
 	case ActionSetViewport:
 		d := st.device
@@ -922,30 +940,19 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 			return nil
 		})
 
-	case ActionWaitURL:
-		// Like assert_url, but an exact value may also be just the path,
-		// query and hash.
-		if step.Value != "" {
-			return b.pollJS(ctx, tabCtx, timeout, fmt.Sprintf(
-				`window.location.href === %q || (window.location.pathname + window.location.search + window.location.hash) === %q`,
-				step.Value, step.Value,
-			))
-		}
-		return b.pollJS(ctx, tabCtx, timeout, fmt.Sprintf(
-			`window.location.href.includes(%q)`, step.Text,
-		))
-
-	case ActionAssertURL:
+	case ActionWaitURL, ActionAssertURL:
+		// An exact value may be the whole URL or just its path, query
+		// and hash.
 		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
-			var got string
-			if err := chromedp.Run(runCtx, chromedp.Location(&got)); err != nil {
+			var got struct{ Href, Path string }
+			if err := chromedp.Run(runCtx, chromedp.Evaluate(`({href: location.href, path: location.pathname + location.search + location.hash})`, &got)); err != nil {
 				return err
 			}
-			if step.Value != "" && got != step.Value {
-				return fmt.Errorf("assert_url: expected %q, got %q", step.Value, got)
+			if step.Value != "" && got.Href != step.Value && got.Path != step.Value {
+				return fmt.Errorf("%s: expected %q, got %q", step.Action, step.Value, got.Href)
 			}
-			if step.Text != "" && !strings.Contains(got, step.Text) {
-				return fmt.Errorf("assert_url: %q not found in %q", step.Text, got)
+			if !strings.Contains(got.Href, step.Text) {
+				return fmt.Errorf("%s: %q not found in %q", step.Action, step.Text, got.Href)
 			}
 			return nil
 		})
@@ -1230,6 +1237,50 @@ func (b *Browser) pollJS(ctx, tabCtx context.Context, timeout time.Duration, exp
 	}
 }
 
+// goHistory runs a go_back or go_forward step: it goes to the tab's previous
+// or next history entry and waits for its document to load. An entry of the
+// same document (pushState) fires no load event, so rather than wait for one
+// it marks the page and polls until the mark is gone (a new document) or the
+// URL changed, and the document is complete.
+func (b *Browser) goHistory(ctx, tabCtx context.Context, timeout time.Duration, step Step) error {
+	by, which := int64(-1), "earlier"
+	if step.Action == ActionGoForward {
+		by, which = 1, "later"
+	}
+	mark := strconv.FormatInt(time.Now().UnixNano(), 36)
+	var from string
+	runCtx, cancel := context.WithTimeout(tabCtx, timeout)
+	defer cancel()
+	if err := chromedp.Run(runCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+		cur, entries, err := page.GetNavigationHistory().Do(ctx)
+		if err != nil {
+			return err
+		}
+		to := cur + by
+		if to < 0 || to >= int64(len(entries)) {
+			return fmt.Errorf("%s: no %s page in the tab's history", step.Action, which)
+		}
+		if err := chromedp.Evaluate(fmt.Sprintf(`window.__lazycueMark = %q; location.href`, mark), &from).Do(ctx); err != nil {
+			return err
+		}
+		return page.NavigateToHistoryEntry(entries[to].ID).Do(ctx)
+	})); err != nil {
+		return err
+	}
+	return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
+		var loaded bool
+		if err := chromedp.Run(runCtx, chromedp.Evaluate(fmt.Sprintf(
+			`(window.__lazycueMark !== %q || location.href !== %q) && document.readyState === 'complete'`, mark, from,
+		), &loaded)); err != nil {
+			return err
+		}
+		if !loaded {
+			return fmt.Errorf("timeout after %s: %s: the page did not load", timeout, step.Action)
+		}
+		return nil
+	})
+}
+
 // parseTimeout parses a duration string like "10s", "5s", etc.
 // Returns the default if the string is empty or unparseable.
 func parseTimeout(s string, def time.Duration) time.Duration {
@@ -1371,8 +1422,9 @@ var touchTypes = map[string]input.TouchType{
 // touch runs a touch step: fingers going down (start), moving (move) or
 // lifting (end, cancel). Start and move put one finger where a click would
 // land, or several at step.Points, offsets from the element's top-left corner
-// (or the viewport's without a selector).
-func (b *Browser) touch(ctx, tabCtx context.Context, timeout time.Duration, step Step) error {
+// (or the viewport's without a selector). A move goes there in step.Count
+// even steps from where each finger was.
+func (b *Browser) touch(ctx, tabCtx context.Context, st *tabState, timeout time.Duration, step Step) error {
 	typ, ok := touchTypes[step.Value]
 	if !ok {
 		return fmt.Errorf("touch: value %q is not start, move, end or cancel", step.Value)
@@ -1380,11 +1432,37 @@ func (b *Browser) touch(ctx, tabCtx context.Context, timeout time.Duration, step
 	if typ == input.TouchEnd || typ == input.TouchCancel {
 		runCtx, cancel := context.WithTimeout(tabCtx, timeout)
 		defer cancel()
+		st.touches = nil
 		return chromedp.Run(runCtx, input.DispatchTouchEvent(typ, []*input.TouchPoint{}))
+	}
+	steps := 1
+	if typ == input.TouchMove {
+		steps = max(step.Count, 1)
+	}
+	// send moves the fingers from where they were to points.
+	send := func(ctx context.Context, points []*input.TouchPoint) error {
+		from := st.touches
+		for n := 1; n <= steps; n++ {
+			f := float64(n) / float64(steps)
+			at := make([]*input.TouchPoint, len(points))
+			for i, p := range points {
+				q := *p
+				if i < len(from) {
+					q.X = from[i].X + (p.X-from[i].X)*f
+					q.Y = from[i].Y + (p.Y-from[i].Y)*f
+				}
+				at[i] = &q
+			}
+			if err := input.DispatchTouchEvent(typ, at).Do(ctx); err != nil {
+				return err
+			}
+			st.touches = at
+		}
+		return nil
 	}
 	if step.Points == "" {
 		return b.atPoint(ctx, tabCtx, timeout, step, false, func(ctx context.Context, x, y float64) error {
-			return input.DispatchTouchEvent(typ, []*input.TouchPoint{{X: x, Y: y, ID: 1}}).Do(ctx)
+			return send(ctx, []*input.TouchPoint{{X: x, Y: y, ID: 1}})
 		})
 	}
 	var offsets [][2]float64
@@ -1406,7 +1484,7 @@ func (b *Browser) touch(ctx, tabCtx context.Context, timeout time.Duration, step
 		for i, o := range offsets {
 			points = append(points, &input.TouchPoint{X: x + o[0] - offsets[0][0], Y: y + o[1] - offsets[0][1], ID: float64(i + 1)})
 		}
-		return input.DispatchTouchEvent(typ, points).Do(ctx)
+		return send(ctx, points)
 	})
 }
 
