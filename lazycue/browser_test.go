@@ -666,3 +666,65 @@ func TestCollectGarbage(t *testing.T) {
 		Step{Action: ActionEval, Expression: `if (ref.deref()) throw new Error('not freed')`},
 	)
 }
+
+// A page a page opens becomes tab "popup" (then "popup2", ...), set up as
+// the launch says before it runs, as Playwright's popups are.
+func TestPopups(t *testing.T) {
+	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
+		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
+	}
+	br, err := NewBrowser(context.Background(), Launch{InitScript: `window.__init = 'yes'`, Timezone: "Asia/Tokyo"})
+	if err != nil {
+		t.Skipf("no browser available: %v", err)
+	}
+	t.Cleanup(br.Close)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		if r.URL.Path == "/p" {
+			// The alert would hold the page if nothing answered it.
+			_, _ = w.Write([]byte(`<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body><script>
+alert('hi');
+document.title = 'init=' + window.__init + ' w=' + innerWidth + ' opener=' + (window.opener !== null) + ' tz=' + Intl.DateTimeFormat().resolvedOptions().timeZone;
+</script></body></html>`))
+			return
+		}
+		_, _ = w.Write([]byte(`<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<a id="blank" href="/p?x=1" target="_blank">open</a>
+<button id="open" onclick="window.open('/p?y=2')">open</button>
+</body></html>`))
+	}))
+	t.Cleanup(ts.Close)
+	env := &Env{BaseURL: ts.URL}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionClick, Selector: "#blank"},
+		Step{Action: ActionAssertURL, Tab: "popup", Value: "/p?x=1"},
+		Step{Action: ActionAssertTitle, Tab: "popup", Text: "init=yes w=393 opener=false tz=Asia/Tokyo"},
+		Step{Action: ActionClick, Selector: "#open"},
+		Step{Action: ActionAssertTitle, Tab: "popup2", Text: "init=yes w=393 opener=true tz=Asia/Tokyo"},
+		// Its name is free again once it closes.
+		Step{Action: ActionCloseTab, Tab: "popup"},
+		Step{Action: ActionClick, Selector: "#blank"},
+		Step{Action: ActionAssertURL, Tab: "popup", Value: "/p?x=1"},
+	)
+	if err := failSteps(t, br, env, Step{Action: ActionEval, Tab: "popup3", Expression: "1", Timeout: "300ms"}); !strings.Contains(err.Error(), `no page opened a popup for tab "popup3" in 300ms`) {
+		t.Errorf("unopened popup: %v", err)
+	}
+	// A popup that closes itself is gone too.
+	runSteps(t, br, env, Step{Action: ActionEval, Tab: "popup2", Expression: "setTimeout(() => window.close(), 100)"})
+	deadline := time.After(5 * time.Second)
+	for {
+		br.mu.Lock()
+		_, open := br.tabs["popup2"]
+		changed := br.changed
+		br.mu.Unlock()
+		if !open {
+			break
+		}
+		select {
+		case <-changed:
+		case <-deadline:
+			t.Fatal("popup2 is still open after closing itself")
+		}
+	}
+}

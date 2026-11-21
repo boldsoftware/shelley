@@ -43,13 +43,18 @@ type Browser struct {
 	allocCancel context.CancelFunc
 	ctxCancel   context.CancelFunc
 	ctx         context.Context
+	control     *control
 	// first is the state of the unnamed tab the browser started with, whose
-	// context is ctx. tabs holds the extra tabs opened by steps naming a tab,
-	// by name.
+	// context is ctx.
 	first     *tabState
-	tabs      map[string]tab
 	launch    Launch
 	closeOnce sync.Once
+
+	// tabs holds the other tabs, by name: those steps opened and the popups
+	// pages opened. changed is closed and replaced when it changes.
+	mu      sync.Mutex
+	tabs    map[string]*tab
+	changed chan struct{}
 
 	// screenshotSink, when non-nil, is invoked after every executed step with
 	// the step index and a PNG screenshot of the page. Used to capture a
@@ -64,9 +69,13 @@ func (b *Browser) SetScreenshotSink(sink func(stepIndex int, action string, png 
 }
 
 type tab struct {
+	id target.ID
+	// ready is closed once ctx and state, or err, are set.
+	ready  chan struct{}
 	ctx    context.Context
 	cancel context.CancelFunc
 	state  *tabState
+	err    error
 }
 
 // Device is the screen a browser emulates.
@@ -120,8 +129,11 @@ func (l Launch) media() map[string]string {
 
 // tabState is what steps change about a tab, which ExecuteSteps puts back.
 type tabState struct {
-	device Device
-	media  map[string]string
+	// session is the tab's session on the control connection, which holds
+	// its emulation.
+	session session
+	device  Device
+	media   map[string]string
 	// The mouse pointer's position, its pressed buttons (an
 	// input.DispatchMouseEventParams Buttons mask) and the one pressed last,
 	// and the modifier keys key_down holds, which Chrome does not report.
@@ -139,6 +151,7 @@ type tabState struct {
 // launch says and may use the clipboard.
 func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 	d := launch.device()
+	url := make(chan string, 1)
 	opts := append(
 		chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("no-sandbox", true),
@@ -152,26 +165,33 @@ func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 		// rather than restoring it as it was left.
 		chromedp.Flag("disable-back-forward-cache", true),
 		chromedp.WindowSize(d.Width, d.Height),
+		chromedp.CombinedOutput(devtoolsURL(url)),
 	)
 
 	allocCtx, allocCancel := chromedp.NewExecAllocator(parentCtx, opts...)
 	ctx, ctxCancel := chromedp.NewContext(allocCtx)
-
-	first := &tabState{}
-	if err := chromedp.Run(ctx, grantClipboard(), setUpTab(launch, first)); err != nil {
-		ctxCancel()
-		allocCancel()
-		return nil, err
-	}
-
-	return &Browser{
+	b := &Browser{
 		allocCancel: allocCancel,
 		ctxCancel:   ctxCancel,
 		ctx:         ctx,
-		first:       first,
 		launch:      launch,
-		tabs:        map[string]tab{},
-	}, nil
+		tabs:        map[string]*tab{},
+		changed:     make(chan struct{}),
+	}
+	err := chromedp.Run(ctx, grantClipboard())
+	if err == nil {
+		b.control, err = dialControl(ctx, <-url, launch, b.popup, b.closed)
+	}
+	if err == nil {
+		setupCtx, cancel := context.WithTimeout(parentCtx, defaultStepTimeout)
+		b.first, err = b.control.page(setupCtx, chromedp.FromContext(ctx).Target.TargetID)
+		cancel()
+	}
+	if err != nil {
+		b.Close()
+		return nil, err
+	}
+	return b, nil
 }
 
 // grantClipboard lets every page read and write the clipboard without asking,
@@ -196,38 +216,32 @@ func grantClipboard() chromedp.Action {
 
 // setUpTab makes a new tab start out as launch says. All of it is per tab in
 // Chrome, so a tab opened later needs it as much as the first.
-func setUpTab(launch Launch, st *tabState) chromedp.Action {
-	return chromedp.ActionFunc(func(ctx context.Context) error {
-		if launch.Timezone != "" {
-			if err := emulation.SetTimezoneOverride(launch.Timezone).Do(ctx); err != nil {
-				return fmt.Errorf("set time zone: %w", err)
-			}
+func setUpTab(ctx context.Context, launch Launch, st *tabState) error {
+	// For the dialogs control answers.
+	if err := page.Enable().Do(ctx); err != nil {
+		return fmt.Errorf("enable page events: %w", err)
+	}
+	if launch.Timezone != "" {
+		if err := emulation.SetTimezoneOverride(launch.Timezone).Do(ctx); err != nil {
+			return fmt.Errorf("set time zone: %w", err)
 		}
-		// Before any of the app's: keep the browser's own
-		// requestAnimationFrame, so steps can wait on frames even when the
-		// page fakes its clock.
-		if _, err := page.AddScriptToEvaluateOnNewDocument(`Object.defineProperty(window, '__lazycueRAF', {value: requestAnimationFrame.bind(window)})`).Do(ctx); err != nil {
+	}
+	// Before any of the app's: keep the browser's own
+	// requestAnimationFrame, so steps can wait on frames even when the
+	// page fakes its clock.
+	if _, err := page.AddScriptToEvaluateOnNewDocument(`Object.defineProperty(window, '__lazycueRAF', {value: requestAnimationFrame.bind(window)})`).Do(ctx); err != nil {
+		return fmt.Errorf("install init script: %w", err)
+	}
+	if launch.InitScript != "" {
+		if _, err := page.AddScriptToEvaluateOnNewDocument(launch.InitScript).Do(ctx); err != nil {
 			return fmt.Errorf("install init script: %w", err)
 		}
-		if launch.InitScript != "" {
-			if _, err := page.AddScriptToEvaluateOnNewDocument(launch.InitScript).Do(ctx); err != nil {
-				return fmt.Errorf("install init script: %w", err)
-			}
-		}
-		// Close dialogs as Playwright does when no test listens for them:
-		// leave the page on beforeunload, cancel alerts, confirms and
-		// prompts. Otherwise the page hangs on them.
-		chromedp.ListenTarget(ctx, func(ev any) {
-			if e, ok := ev.(*page.EventJavascriptDialogOpening); ok {
-				go page.HandleJavaScriptDialog(e.Type == page.DialogTypeBeforeunload).Do(ctx) //nolint:errcheck // the page may be gone
-			}
-		})
-		*st = tabState{media: launch.media()}
-		if err := setDevice(ctx, st, launch.device()); err != nil {
-			return err
-		}
-		return applyMedia(ctx, st)
-	})
+	}
+	st.media = launch.media()
+	if err := setDevice(ctx, st, launch.device()); err != nil {
+		return err
+	}
+	return applyMedia(ctx, st)
 }
 
 // setDevice makes a tab emulate d.
@@ -312,26 +326,73 @@ func stringFields(s *Step) []*string {
 	return fields
 }
 
-// tabCtx returns the chromedp context of the tab a step acts on. Only navigate
-// opens a tab, so any other step naming an unopened tab is a script mistake
-// and fails at once.
-func (b *Browser) tabCtx(step Step) (context.Context, error) {
-	ctx, _, err := b.tab(step)
-	return ctx, err
-}
+// popupName matches the names of popups' tabs: popup, popup2, ...
+var popupName = regexp.MustCompile(`^popup\d*$`)
 
-// tab is tabCtx with the tab's state.
+// tab returns the chromedp context and state of the tab a step acts on. Only
+// navigate opens a tab, so any other step naming an unopened tab is a script
+// mistake and fails at once, except for a popup's, which waits for a page to
+// open it.
 func (b *Browser) tab(step Step) (context.Context, *tabState, error) {
 	if step.Tab == "" {
 		return b.ctx, b.first, nil
 	}
-	if t, ok := b.tabs[step.Tab]; ok {
-		return t.ctx, t.state, nil
+	timeout := parseTimeout(step.Timeout, defaultStepTimeout)
+	deadline := time.After(timeout)
+	for {
+		b.mu.Lock()
+		t, ok := b.tabs[step.Tab]
+		changed := b.changed
+		b.mu.Unlock()
+		if ok {
+			select {
+			case <-t.ready:
+				return t.ctx, t.state, t.err
+			case <-deadline:
+				return nil, nil, fmt.Errorf("tab %q is not ready after %s", step.Tab, timeout)
+			}
+		}
+		if !popupName.MatchString(step.Tab) {
+			if step.Action == ActionNavigate {
+				return b.openTab(step.Tab, timeout)
+			}
+			return nil, nil, fmt.Errorf("tab %q is not open; open it with a navigate step", step.Tab)
+		}
+		select {
+		case <-changed:
+		case <-deadline:
+			return nil, nil, fmt.Errorf("no page opened a popup for tab %q in %s", step.Tab, timeout)
+		}
 	}
-	if step.Action == ActionNavigate {
-		return b.openTab(step.Tab, parseTimeout(step.Timeout, defaultStepTimeout))
+}
+
+// openTabCtx returns the chromedp context of an open tab, without waiting.
+func (b *Browser) openTabCtx(name string) (context.Context, error) {
+	if name == "" {
+		return b.ctx, nil
 	}
-	return nil, nil, fmt.Errorf("tab %q is not open; open it with a navigate step", step.Tab)
+	b.mu.Lock()
+	t, ok := b.tabs[name]
+	b.mu.Unlock()
+	if ok {
+		select {
+		case <-t.ready:
+			if t.err == nil {
+				return t.ctx, nil
+			}
+		default:
+		}
+	}
+	return nil, fmt.Errorf("tab %q is not open", name)
+}
+
+// changeTabs runs f on the tabs and wakes the steps waiting for one.
+func (b *Browser) changeTabs(f func(tabs map[string]*tab)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	f(b.tabs)
+	close(b.changed)
+	b.changed = make(chan struct{})
 }
 
 // openTab opens another tab of the same browser profile, which shares
@@ -359,23 +420,14 @@ func (b *Browser) openTab(name string, timeout time.Duration) (context.Context, 
 	})); err != nil {
 		return nil, nil, fmt.Errorf("open tab %q: %w", name, err)
 	}
-	ctx, cancel := chromedp.NewContext(b.ctx, chromedp.WithTargetID(id))
-	st := &tabState{}
-	// The first Run on a context attaches its target for as long as that Run's
-	// context lives, so it must be ctx itself, not a bounded child; bound it
-	// from outside instead (cancelling ctx unblocks a stalled Run).
-	errc := make(chan error, 1)
-	go func() { errc <- chromedp.Run(ctx, setUpTab(b.launch, st)) }()
-	var err error
-	select {
-	case err = <-errc:
-	case <-time.After(timeout):
-		err = fmt.Errorf("timeout after %s", timeout)
+	st, err := b.control.page(openCtx, id)
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if err == nil {
+		ctx, cancel, err = b.attach(id, timeout)
 	}
 	if err != nil {
-		// Cancelling a context that never attached does not close its target.
 		// openCtx may have expired by now, so close on a fresh one.
-		cancel()
 		closeCtx, cancelClose := context.WithTimeout(b.ctx, time.Second)
 		defer cancelClose()
 		_ = chromedp.Run(closeCtx, chromedp.ActionFunc(func(ctx context.Context) error {
@@ -383,20 +435,94 @@ func (b *Browser) openTab(name string, timeout time.Duration) (context.Context, 
 		}))
 		return nil, nil, fmt.Errorf("open tab %q: %w", name, err)
 	}
-	b.tabs[name] = tab{ctx: ctx, cancel: cancel, state: st}
+	t := &tab{id: id, ready: make(chan struct{}), ctx: ctx, cancel: cancel, state: st}
+	close(t.ready)
+	b.changeTabs(func(tabs map[string]*tab) { tabs[name] = t })
 	return ctx, st, nil
 }
 
-// closeTab closes a tab opened by a step, as a user closing it would.
-func (b *Browser) closeTab(name string) error {
-	if name == "" {
+// attach gives chromedp a context on page id, which control has set up.
+func (b *Browser) attach(id target.ID, timeout time.Duration) (context.Context, context.CancelFunc, error) {
+	ctx, cancel := chromedp.NewContext(b.ctx, chromedp.WithTargetID(id))
+	// The first Run on a context attaches its target for as long as that Run's
+	// context lives, so it must be ctx itself, not a bounded child; bound it
+	// from outside instead (cancelling ctx unblocks a stalled Run).
+	errc := make(chan error, 1)
+	go func() { errc <- chromedp.Run(ctx) }()
+	var err error
+	select {
+	case err = <-errc:
+	case <-time.After(timeout):
+		err = fmt.Errorf("timeout after %s", timeout)
+	}
+	if err != nil {
+		cancel()
+		return nil, nil, err
+	}
+	return ctx, cancel, nil
+}
+
+// popup gives the tab of a page a page opened, in the order they open, the
+// first free name of popup, popup2, ..., and attaches to it once control has
+// set it up.
+func (b *Browser) popup(id target.ID) {
+	t := &tab{id: id, ready: make(chan struct{})}
+	name := "popup"
+	b.changeTabs(func(tabs map[string]*tab) {
+		for n := 2; tabs[name] != nil; n++ {
+			name = fmt.Sprintf("popup%d", n)
+		}
+		tabs[name] = t
+	})
+	go func() {
+		defer close(t.ready)
+		ctx, cancel := context.WithTimeout(b.ctx, defaultStepTimeout)
+		defer cancel()
+		t.state, t.err = b.control.page(ctx, id)
+		if t.err == nil {
+			t.ctx, t.cancel, t.err = b.attach(id, defaultStepTimeout)
+		}
+		if t.err != nil {
+			t.err = fmt.Errorf("set up tab %q: %w", name, t.err)
+		}
+	}()
+}
+
+// closed forgets the tab of a page that is gone, such as a popup that closed
+// itself.
+func (b *Browser) closed(id target.ID) {
+	b.changeTabs(func(tabs map[string]*tab) {
+		for name, t := range tabs {
+			if t.id == id {
+				delete(tabs, name)
+				go func() {
+					<-t.ready
+					if t.cancel != nil {
+						t.cancel()
+					}
+				}()
+			}
+		}
+	})
+}
+
+// closeTab closes a tab opened by a step or a page, as a user closing it
+// would.
+func (b *Browser) closeTab(step Step) error {
+	if step.Tab == "" {
 		return errors.New("close_tab needs a tab name; the tab the browser started with stays open")
 	}
-	t, ok := b.tabs[name]
-	if !ok {
-		return fmt.Errorf("tab %q is not open", name)
+	if _, _, err := b.tab(step); err != nil {
+		return err
 	}
-	delete(b.tabs, name)
+	var t *tab
+	b.changeTabs(func(tabs map[string]*tab) {
+		t = tabs[step.Tab]
+		delete(tabs, step.Tab)
+	})
+	if t == nil {
+		return nil // the page closed itself meanwhile
+	}
 	err := chromedp.Cancel(t.ctx)
 	t.cancel()
 	return err
@@ -428,6 +554,9 @@ func (b *Browser) Close() {
 			case <-time.After(10 * time.Second):
 			}
 		}
+		if b.control != nil {
+			b.control.close()
+		}
 		if b.ctxCancel != nil {
 			b.ctxCancel()
 		}
@@ -452,7 +581,7 @@ func (b *Browser) Context() context.Context {
 // never worth hanging the whole test, so we cap it and let callers ignore the
 // error.
 func (b *Browser) Screenshot(ctx context.Context, tabName string) ([]byte, error) {
-	tabCtx, err := b.tabCtx(Step{Tab: tabName})
+	tabCtx, err := b.openTabCtx(tabName)
 	if err != nil {
 		return nil, err
 	}
@@ -500,7 +629,7 @@ func (b *Browser) ExecuteSteps(ctx context.Context, env *Env, steps []Step) ([]S
 		if b.screenshotSink != nil {
 			// Show the tab the step acted on; after close_tab (or a step on
 			// a tab that is not open) fall back to the first tab.
-			shotCtx, tErr := b.tabCtx(Step{Tab: step.Tab})
+			shotCtx, tErr := b.openTabCtx(step.Tab)
 			if tErr != nil {
 				shotCtx = b.ctx
 			}
@@ -543,7 +672,7 @@ func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) 
 		return env.call(ctx, step)
 	}
 	if step.Action == ActionCloseTab {
-		return "", b.closeTab(step.Tab)
+		return "", b.closeTab(step)
 	}
 	tabCtx, st, err := b.tab(step)
 	if err != nil {
@@ -905,7 +1034,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 			d.Touch = *step.Touch
 		}
 		return runBounded(chromedp.ActionFunc(func(ctx context.Context) error {
-			return setDevice(ctx, st, d)
+			return setDevice(cdp.WithExecutor(ctx, st.session), st, d)
 		}))
 
 	case ActionEmulateMedia:
@@ -920,7 +1049,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 			} else {
 				st.media[name] = value
 			}
-			return applyMedia(ctx, st)
+			return applyMedia(cdp.WithExecutor(ctx, st.session), st)
 		}))
 
 	case ActionScreenshot:
