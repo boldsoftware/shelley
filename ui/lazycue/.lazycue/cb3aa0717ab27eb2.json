@@ -1,0 +1,87 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The test shrinks the app's tail-first mounting so that a 15-turn conversation at /c/{{SLUG}} spans many chunks: on load only the last few chunks mount (as \".messages-chunk\" elements) and older history renders as placeholders ([data-testid=\"pending-chunk\"]). \"The counts\" are pending = document.querySelectorAll('[data-testid=\"pending-chunk\"]').length and mounted = document.querySelectorAll('.messages-chunk').length. \"The gap\" is the messages container's (\".messages-container\") scrollHeight - scrollTop - clientHeight. To \"open the conversation\", navigate to /c/{{SLUG}}, wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s), then wait until the LAST element matching [data-testid=\"message\"] is visible (its getBoundingClientRect() has a non-zero width and height; allow 30s). The test has already set the shelley.tailFirstTest knob; do not set it yourself. Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. Wait with such steps and a timeout, not with polling loops inside the expression. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable in a separate eval with \"expect\". Perform the steps in order. A cached refresh keeps history unmounted while waiting for the server; the background sweep is off and the conversation, {{ID}}, is archived. Once call \"hold\" has run, the server's answers to incremental loads of the conversation (a GET of /api/conversation/{{ID}} with a last_sequence_id query parameter) are held back until call \"release\"; call \"incremental\" says whether such a load has arrived (\"true\" or \"false\").\n1. Navigate to /c/{{SLUG}}.\n2. Wait until window.__shelleyPerf?.loads().some((load) =\u003e load.conversationId === \"{{ID}}\") is true.\n3. Record the counts: window.__initial = {pending, mounted}. window.__initial.pending must be greater than 0.\n4. Leave the conversation the way the router would: eval history.pushState({}, \"\", \"/new\") and then dispatch a PopStateEvent(\"popstate\") on window.\n5. Wait until there are exactly 0 [data-testid=\"message\"] elements.\n6. Call \"hold\".\n7. Go back in the browser history, as its back button does (the app pushed that entry, so the same document stays loaded and window.__initial survives).\n8. Call \"incremental\" until it returns \"true\".\n9. Wait until the last [data-testid=\"message\"] element is visible (non-zero width and height).\n10. While the incremental load is still held, record the counts in window.__refreshing = {pending, mounted}; then JSON.stringify({pending: window.__refreshing.pending \u003e 0, fewer: window.__refreshing.mounted \u003c window.__initial.pending + window.__initial.mounted, overlays: document.querySelectorAll(\".conversation-loading-overlay\").length}) must be exactly {\"pending\":true,\"fewer\":true,\"overlays\":0}.\n11. Call \"release\".\n12. Wait until window.__shelleyPerf.loads().filter((load) =\u003e load.conversationId === \"{{ID}}\").length is exactly 2.\n13. pending must still be greater than 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__shelleyPerf?.loads().some((load) =\u003e load.conversationId === '{{ID}}')",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__initial = {pending: document.querySelectorAll('[data-testid=\"pending-chunk\"]').length, mounted: document.querySelectorAll('.messages-chunk').length}; undefined"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__initial.pending \u003e 0",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "history.pushState({}, '', '/new'); window.dispatchEvent(new PopStateEvent('popstate')); undefined"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"message\"]').length",
+      "expect": "0",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "hold"
+    },
+    {
+      "action": "go_back"
+    },
+    {
+      "action": "call",
+      "value": "incremental",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var els = document.querySelectorAll('[data-testid=\"message\"]'); if (!els.length) return false; var last = els[els.length-1]; var r = last.getBoundingClientRect(); return r.width \u003e 0 \u0026\u0026 r.height \u003e 0; })()",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__refreshing = {pending: document.querySelectorAll('[data-testid=\"pending-chunk\"]').length, mounted: document.querySelectorAll('.messages-chunk').length}; undefined"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify({pending: window.__refreshing.pending \u003e 0, fewer: window.__refreshing.mounted \u003c window.__initial.pending + window.__initial.mounted, overlays: document.querySelectorAll('.conversation-loading-overlay').length})",
+      "expect": "{\"pending\":true,\"fewer\":true,\"overlays\":0}"
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__shelleyPerf.loads().filter((load) =\u003e load.conversationId === '{{ID}}').length",
+      "expect": "2",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"pending-chunk\"]').length \u003e 0",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:27:20.011147543Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 36345,
+    "output_tokens": 2603,
+    "estimated_cost_usd": 0.0644781,
+    "mode": "generated"
+  }
+}

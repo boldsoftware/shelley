@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -112,4 +113,20 @@ func (s *shelley) counter(call string) *atomic.Int64 {
 	var n atomic.Int64
 	s.call(call, func() string { return strconv.FormatInt(n.Load(), 10) })
 	return &n
+}
+
+// loremipsum makes a conversation with /debug/loremipsum of the given size
+// ("15", "medium", ...) and returns it.
+func (s *shelley) loremipsum(size string) convo {
+	var created struct {
+		ID string `json:"conversation_id"`
+	}
+	s.check(json.Unmarshal(s.postForm("/debug/loremipsum?json=1", url.Values{"size": {size}, "model": {"predictable"}}), &created))
+	var got struct {
+		Conversation struct {
+			Slug string `json:"slug"`
+		} `json:"conversation"`
+	}
+	s.api("GET", "/api/conversation/"+created.ID, nil, &got)
+	return convo{ID: created.ID, Slug: got.Conversation.Slug}
 }
