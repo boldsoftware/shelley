@@ -28,6 +28,9 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
+	"shelley.exe.dev/server/resource"
+
 	lazycue "github.com/boldsoftware/shelley/lazycue"
 )
 
@@ -73,6 +76,16 @@ func startE2E() (err error) {
 	e2eRoot, err = os.MkdirTemp("", fmt.Sprintf("se2e-%d-", os.Getpid()))
 	if err != nil {
 		return err
+	}
+	// Below resource.DiskThreshold free, shelley shows a low-disk notice on
+	// every page, which moves the layout under test. Leave the run room for
+	// its own files.
+	var fs unix.Statfs_t
+	if err := unix.Statfs(e2eRoot, &fs); err != nil {
+		return err
+	}
+	if free := fs.Bavail * uint64(fs.Bsize); free < 2*resource.DiskThreshold {
+		return fmt.Errorf("only %d MB free in %s; shelley's low-disk notice (below %d MB) would change every page", free>>20, e2eRoot, resource.DiskThreshold>>20)
 	}
 	// Servers are in process groups of their own, which miss the terminal's
 	// interrupt.
