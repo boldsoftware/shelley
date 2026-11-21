@@ -33,8 +33,9 @@
       "value": "keep my current unsent note"
     },
     {
-      "action": "wait_text",
-      "text": "Failed to start conversation: chat creation failed",
+      "action": "wait_visible",
+      "selector": "*",
+      "has_text": "Failed to start conversation: chat creation failed",
       "timeout": "15s"
     },
     {

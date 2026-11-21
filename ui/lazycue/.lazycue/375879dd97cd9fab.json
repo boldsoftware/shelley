@@ -59,8 +59,9 @@
       "action": "reload"
     },
     {
-      "action": "wait_text",
-      "text": "This conversation is archived.",
+      "action": "wait_visible",
+      "selector": "*",
+      "has_text": "This conversation is archived.",
       "timeout": "15s"
     },
     {

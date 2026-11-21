@@ -43,9 +43,12 @@
       "timeout": "10s"
     },
     {
-      "action": "assert_text_contains",
-      "selector": "[data-testid='user-filter-panel']",
-      "text": "No matching users"
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='user-filter-panel']"
+      },
+      "selector": "*",
+      "has_text": "No matching users"
     },
     {
       "action": "eval",

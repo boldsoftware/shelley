@@ -13,8 +13,9 @@
       "name": "More options"
     },
     {
-      "action": "wait_text",
-      "text": "MCP Servers"
+      "action": "wait_visible",
+      "selector": "*",
+      "has_text": "MCP Servers"
     },
     {
       "action": "assert_count",
