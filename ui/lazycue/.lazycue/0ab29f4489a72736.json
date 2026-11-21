@@ -1,0 +1,546 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Daily grouping pages and counts last-touched chats and selects calendar dates. The page runs in New York with its clock fixed at 2026-10-08T16:00:00Z (noon there). The test lists exactly four conversations, which every search and the archive list (as archived) return too: {{TODAY}} updated at 00:00 that day in New York and {{ALSO_TODAY}} at 13:00, both tagged day-today; {{YESTERDAY}} updated at 23:59:59 the day before, tagged day-yesterday; and {{EARLIER}} updated on Tuesday, October 6, tagged day-earlier. The live update stream stays open and quiet. Call \"mark-searches\" notes how many searches were requested, and call \"searched\" says \"true\" once a search was requested since. \"The picker\" is data-testid \"conversation-day-filter\"; \"the date\" is its \".drawer-day-date\" and \"the count\" its \".drawer-day-count\". The picker's buttons \"Previous day\", \"Next day\", \"Today\" and \"Turn off Daily\" are {\"selector\": \"[data-testid='conversation-day-filter']\", \"role\": \"button\", \"name\": \"...\", \"exact\": true}. To \"group by L\": click the button \"View options\", then click {\"selector\": \".group-by-menu\", \"role\": \"button\", \"name\": \"L\", \"exact\": true}. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"). The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The calendar\" is the dialog named exactly \"Choose last-touched day\" (role dialog); its CSS selector is \".drawer-day-calendar\". \"Day N\" is \".drawer-day-calendar [data-pc-section='daycell'][aria-label='N']:not([data-p-other-month='true']) [data-pc-section='day']\". \"The picker fits\" means: eval with expect \"true\" of (() =\u003e { const el = document.querySelector(\"[data-testid='conversation-day-filter']\"); return String(!!el \u0026\u0026 el.scrollWidth \u003c= el.clientWidth); })(). \"Check the group menu\" means: eval with expect '[\"Tags\",\"Daily\"]' of JSON.stringify([...document.querySelectorAll(\".group-by-menu-item\")].slice(3, 5).map(e =\u003e e.textContent.trim())). In this test, to group by L, check the group menu between opening it and clicking L. 1. Navigate to /. 2. Click the button \"Open conversations\". 3. The picker is not visible (assert_not_visible). 4. Click the button \"Search conversations...\". 5. \".drawer-search-shell\" is visible. 6. The search sits 8px below the header: eval with expect \"8\" of (() =\u003e { const el = document.querySelector(\".drawer-search-shell\"); const header = el.closest(\".drawer\").querySelector(\".drawer-header\"); return String(el.getBoundingClientRect().top - header.getBoundingClientRect().bottom); })(). 7. The picker is not visible. 8. Group by Daily. 9. The date reads exactly \"Today\" and the count exactly \"2\". 10. The row of {{TODAY}} is visible and the row of {{YESTERDAY}} is not visible. 11. The first row sits 4px below the search: eval with expect \"4\" of (() =\u003e { const el = [...document.querySelectorAll(\".conversation-list .conversation-item\")].find(e =\u003e { const r = e.getBoundingClientRect(); return r.width \u003e 0 \u0026\u0026 r.height \u003e 0 \u0026\u0026 getComputedStyle(e).visibility !== \"hidden\"; }); const search = el.closest(\".drawer\").querySelector(\".drawer-search\"); return String(el.getBoundingClientRect().top - search.getBoundingClientRect().bottom); })(). 12. The picker's button \"Next day\" is disabled. 13. Click the picker's button \"Previous day\". 14. The date reads exactly \"Yesterday\" and the count exactly \"1\"; the row of {{YESTERDAY}} is visible and the row of {{TODAY}} is not visible. 15. Click the button \"Add tag filter\". 16. \"[data-testid='tag-filter-option'][data-tag='day-yesterday']\" is visible, and there is no \"[data-testid='tag-filter-option'][data-tag='day-today']\". 17. Click \"[data-testid='tag-filter-option'][data-tag='day-yesterday']\". 18. Click the picker's button \"Next day\". 19. The count reads exactly \"0\". 20. Click the button \"Clear search\". 21. The count reads exactly \"2\". 22. Group by Directory. 23. The picker is not visible; the rows of {{TODAY}} and {{YESTERDAY}} are visible. 24. Group by Daily. 25. Call \"mark-searches\". 26. Set the query to \"day paging\". 27. Call \"searched\" with expect \"true\". 28. The count reads exactly \"2\". 29. Click the picker's button \"Previous day\". 30. The count reads exactly \"1\", and the row of {{YESTERDAY}} is visible. 31. Click the button \"Clear search\". 32. Click the button \"View Archived\". 33. The count reads exactly \"1\"; the row of {{YESTERDAY}} is visible and the row of {{TODAY}} is not visible. 34. Click the button \"Back to conversations\". 35. Click the picker's \".drawer-day-label\". 36. The calendar is visible. 37. The \".drawer-calendar-count\" of day 8 reads exactly \"2\", that of day 7 exactly \"1\" and that of day 6 exactly \"1\"; day 5 has no \".drawer-calendar-count\" (assert_count 0). 38. There is no \".drawer-day-calendar .drawer-calendar-circle\". 39. Day 7 is shaded: eval with expect \"true\" of (() =\u003e { const el = document.querySelector(\".drawer-day-calendar [data-pc-section='daycell'][aria-label='7']:not([data-p-other-month='true']) [data-pc-section='day']\"); return String(!!el \u0026\u0026 getComputedStyle(el).backgroundColor !== \"rgba(0, 0, 0, 0)\"); })(). 40. Day 9's aria-disabled is exactly \"true\". 41. Click day 6. 42. The calendar is not visible. 43. The date reads exactly \"Tue, Oct 6\" and the count exactly \"1\"; the row of {{EARLIER}} is visible. 44. The picker fits. 45. Click the picker's button \"Previous day\". 46. The count reads exactly \"0\"; data-testid \"day-filter-empty\" is visible; the picker's button \"Next day\" is enabled. 47. Click the picker's \".drawer-day-label\". 48. The calendar is visible. 49. The \".drawer-calendar-count\" of day 8 reads exactly \"2\" and that of day 7 exactly \"1\". 50. Click the button \"Today\" inside the calendar ({\"selector\": \".drawer-day-calendar\", \"role\": \"button\", \"name\": \"Today\", \"exact\": true}). 51. The calendar is not visible. 52. The date reads exactly \"Today\" and the count exactly \"2\". 53. Click the picker's button \"Previous day\". 54. Click the picker's button \"Today\". 55. The date reads exactly \"Today\" and the count exactly \"2\"; the picker's button \"Today\" is not visible. 56. Click the button \"Search conversations...\". 57. The picker is visible. 58. Click the picker's button \"Turn off Daily\". 59. The picker is not visible; the rows of {{TODAY}} and {{YESTERDAY}} are visible. 60. Group by Daily. 61. The date reads exactly \"Today\" and the count exactly \"2\". 62. Reload the page (reload action). 63. Click the button \"Open conversations\". 64. The date reads exactly \"Today\" and the count exactly \"2\". 65. Set the viewport to 1280x800 (set_viewport). 66. The picker fits.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='conversation-day-filter']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".drawer-search-shell"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('.drawer-search-shell'); const header = el.closest('.drawer').querySelector('.drawer-header'); return String(el.getBoundingClientRect().top - header.getBoundingClientRect().bottom); })()",
+      "expect": "8"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='conversation-day-filter']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll('.group-by-menu-item')].slice(3, 5).map(e =\u003e e.textContent.trim()))",
+      "expect": "[\"Tags\",\"Daily\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".group-by-menu",
+      "role": "button",
+      "name": "Daily",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-date",
+      "text": "Today"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "2"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{TODAY}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{YESTERDAY}}']"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = [...document.querySelectorAll('.conversation-list .conversation-item')].find(e =\u003e { const r = e.getBoundingClientRect(); return r.width \u003e 0 \u0026\u0026 r.height \u003e 0 \u0026\u0026 getComputedStyle(e).visibility !== 'hidden'; }); const search = el.closest('.drawer').querySelector('.drawer-search'); return String(el.getBoundingClientRect().top - search.getBoundingClientRect().bottom); })()",
+      "expect": "4"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "[data-testid='conversation-day-filter']",
+      "role": "button",
+      "name": "Next day",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-day-filter']",
+      "role": "button",
+      "name": "Previous day",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-date",
+      "text": "Yesterday"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "1"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{YESTERDAY}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{TODAY}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add tag filter",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tag-filter-option'][data-tag='day-yesterday']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='tag-filter-option'][data-tag='day-today']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='tag-filter-option'][data-tag='day-yesterday']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-day-filter']",
+      "role": "button",
+      "name": "Next day",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "0"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Clear search",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "2"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll('.group-by-menu-item')].slice(3, 5).map(e =\u003e e.textContent.trim()))",
+      "expect": "[\"Tags\",\"Daily\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".group-by-menu",
+      "role": "button",
+      "name": "Directory",
+      "exact": true
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='conversation-day-filter']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{TODAY}}']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{YESTERDAY}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll('.group-by-menu-item')].slice(3, 5).map(e =\u003e e.textContent.trim()))",
+      "expect": "[\"Tags\",\"Daily\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".group-by-menu",
+      "role": "button",
+      "name": "Daily",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "mark-searches"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='conversation-query-editor']\").focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "day paging"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "data-query-value",
+      "value": "day paging"
+    },
+    {
+      "action": "call",
+      "value": "searched",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "2"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-day-filter']",
+      "role": "button",
+      "name": "Previous day",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "1"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{YESTERDAY}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Clear search",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View Archived",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "1"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{YESTERDAY}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{TODAY}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Back to conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-label"
+    },
+    {
+      "action": "assert_visible",
+      "role": "dialog",
+      "name": "Choose last-touched day",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-day-calendar [data-pc-section='daycell'][aria-label='8']:not([data-p-other-month='true']) [data-pc-section='day'] .drawer-calendar-count",
+      "text": "2"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-day-calendar [data-pc-section='daycell'][aria-label='7']:not([data-p-other-month='true']) [data-pc-section='day'] .drawer-calendar-count",
+      "text": "1"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-day-calendar [data-pc-section='daycell'][aria-label='6']:not([data-p-other-month='true']) [data-pc-section='day'] .drawer-calendar-count",
+      "text": "1"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer-day-calendar [data-pc-section='daycell'][aria-label='5']:not([data-p-other-month='true']) [data-pc-section='day'] .drawer-calendar-count",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer-day-calendar .drawer-calendar-circle",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector(\".drawer-day-calendar [data-pc-section='daycell'][aria-label='7']:not([data-p-other-month='true']) [data-pc-section='day']\"); return String(!!el \u0026\u0026 getComputedStyle(el).backgroundColor !== 'rgba(0, 0, 0, 0)'); })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".drawer-day-calendar [data-pc-section='daycell'][aria-label='9']:not([data-p-other-month='true']) [data-pc-section='day']",
+      "attribute": "aria-disabled",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-day-calendar [data-pc-section='daycell'][aria-label='6']:not([data-p-other-month='true']) [data-pc-section='day']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".drawer-day-calendar"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-date",
+      "text": "Tue, Oct 6"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "1"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{EARLIER}}']"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector(\"[data-testid='conversation-day-filter']\"); return String(!!el \u0026\u0026 el.scrollWidth \u003c= el.clientWidth); })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-day-filter']",
+      "role": "button",
+      "name": "Previous day",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "0"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='day-filter-empty']"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='conversation-day-filter']",
+      "role": "button",
+      "name": "Next day",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-label"
+    },
+    {
+      "action": "assert_visible",
+      "role": "dialog",
+      "name": "Choose last-touched day",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-day-calendar [data-pc-section='daycell'][aria-label='8']:not([data-p-other-month='true']) [data-pc-section='day'] .drawer-calendar-count",
+      "text": "2"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-day-calendar [data-pc-section='daycell'][aria-label='7']:not([data-p-other-month='true']) [data-pc-section='day'] .drawer-calendar-count",
+      "text": "1"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-day-calendar",
+      "role": "button",
+      "name": "Today",
+      "exact": true
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".drawer-day-calendar"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-date",
+      "text": "Today"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "2"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-day-filter']",
+      "role": "button",
+      "name": "Previous day",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-day-filter']",
+      "role": "button",
+      "name": "Today",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-date",
+      "text": "Today"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "2"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='conversation-day-filter']",
+      "role": "button",
+      "name": "Today",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='conversation-day-filter']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-day-filter']",
+      "role": "button",
+      "name": "Turn off Daily",
+      "exact": true
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='conversation-day-filter']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{TODAY}}']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{YESTERDAY}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll('.group-by-menu-item')].slice(3, 5).map(e =\u003e e.textContent.trim()))",
+      "expect": "[\"Tags\",\"Daily\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".group-by-menu",
+      "role": "button",
+      "name": "Daily",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-date",
+      "text": "Today"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "2"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-date",
+      "text": "Today"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "2"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector(\"[data-testid='conversation-day-filter']\"); return String(!!el \u0026\u0026 el.scrollWidth \u003c= el.clientWidth); })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:45:46.495272218Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 88864,
+    "output_tokens": 13335,
+    "estimated_cost_usd": 0.2830554,
+    "mode": "generated"
+  }
+}

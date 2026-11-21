@@ -1,0 +1,167 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Daily returns to today only after sending in an older conversation. The page runs in New York with its clock fixed at 2026-10-08T16:00:00Z. The test lists exactly two conversations: {{OLDER}} (slug {{OLDER_SLUG}}), updated the day before, and {{TODAY}} (slug {{TODAY_SLUG}}), updated at that moment. The live update stream is held until call \"release-list\", after which it reports both as updated at that moment. The test fails the first message sent to {{OLDER}} with a 500 \"daily send failed\" and passes the rest to the server; call \"chat-statuses\" lists how each message sent to {{OLDER}} was answered: \"500\" for that failure, \"ok\" for a 2xx, else the status. \"The picker\" is data-testid \"conversation-day-filter\"; \"the date\" is its \".drawer-day-date\" and \"the count\" its \".drawer-day-count\". The picker's buttons \"Previous day\", \"Next day\", \"Today\" and \"Turn off Daily\" are {\"selector\": \"[data-testid='conversation-day-filter']\", \"role\": \"button\", \"name\": \"...\", \"exact\": true}. To \"group by L\": click the button \"View options\", then click {\"selector\": \".group-by-menu\", \"role\": \"button\", \"name\": \"L\", \"exact\": true}. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"). Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /c/{{TODAY_SLUG}}. 2. Click the button \"Open conversations\". 3. Group by Daily. 4. Click the picker's button \"Previous day\". 5. The date reads exactly \"Yesterday\". 6. Click the \".conversation-title\" inside the row of {{OLDER}}. 7. The URL is exactly /c/{{OLDER_SLUG}} (assert_url value). 8. Click the button \"Open conversations\". 9. The date reads exactly \"Yesterday\", and the row of {{OLDER}} is visible. 10. Click the button \"Close conversations\". 11. Fill data-testid \"message-input\" with \"Hello\". 12. Click data-testid \"send-button\". 13. Call \"chat-statuses\" with expect '[\"500\"]'. 14. The message input's value is still exactly \"Hello\" (assert_value). 15. Click the button \"Open conversations\". 16. The date reads exactly \"Yesterday\", and the row of {{OLDER}} is visible. 17. Click the button \"Close conversations\". 18. Click data-testid \"send-button\". 19. Call \"chat-statuses\" with expect '[\"500\",\"ok\"]'. 20. Click the button \"Open conversations\". 21. The date reads exactly \"Today\" and the count exactly \"1\". 22. The row of {{OLDER}} is not visible (assert_not_visible). 23. Call \"release-list\". 24. The row of {{OLDER}} is visible, and it has the class active. 25. The count reads exactly \"2\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{TODAY_SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".group-by-menu",
+      "role": "button",
+      "name": "Daily",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-day-filter']",
+      "role": "button",
+      "name": "Previous day",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-date",
+      "text": "Yesterday"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{OLDER}}'] .conversation-title"
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/{{OLDER_SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-date",
+      "text": "Yesterday"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{OLDER}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close conversations",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Hello"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "call",
+      "value": "chat-statuses",
+      "expect": "[\"500\"]"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Hello"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-date",
+      "text": "Yesterday"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{OLDER}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "call",
+      "value": "chat-statuses",
+      "expect": "[\"500\",\"ok\"]"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-date",
+      "text": "Today"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "1"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{OLDER}}']"
+    },
+    {
+      "action": "call",
+      "value": "release-list"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{OLDER}}']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".conversation-item[data-conversation-id='{{OLDER}}']\").classList.contains('active')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "2"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:46:19.317013032Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 15815,
+    "output_tokens": 1947,
+    "estimated_cost_usd": 0.04484925,
+    "mode": "generated"
+  }
+}

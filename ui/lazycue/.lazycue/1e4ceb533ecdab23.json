@@ -1,0 +1,66 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Daily grouping expands subagents last touched on other days. The page runs in New York with its clock fixed at 2026-10-08T16:00:00Z. The test lists exactly nine conversations: {{PARENT}} (slug {{PARENT_SLUG}}), updated at that moment, with 8 subagents, and its subagents older-subagent-0 to older-subagent-7, updated one or two days before; the live update stream is cut off. \"The picker\" is data-testid \"conversation-day-filter\"; \"the date\" is its \".drawer-day-date\" and \"the count\" its \".drawer-day-count\". The picker's buttons \"Previous day\", \"Next day\", \"Today\" and \"Turn off Daily\" are {\"selector\": \"[data-testid='conversation-day-filter']\", \"role\": \"button\", \"name\": \"...\", \"exact\": true}. To \"group by L\": click the button \"View options\", then click {\"selector\": \".group-by-menu\", \"role\": \"button\", \"name\": \"L\", \"exact\": true}. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"). Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /c/{{PARENT_SLUG}}. 2. Click the button \"Open conversations\". 3. Group by Daily. 4. The count reads exactly \"1\". 5. The \".subagent-count-badge\" inside \"[data-conversation-id='{{PARENT}}']\" reads exactly \"8\". 6. Click the button \"Expand subagents\" inside \"[data-conversation-id='{{PARENT}}']\". 7. There are exactly 8 \".drawer-subagent-list .subagent-item\". 8. The subagents' titles, trimmed and sorted, are exactly older-subagent-0 to older-subagent-7: eval with expect '[\"older-subagent-0\",\"older-subagent-1\",\"older-subagent-2\",\"older-subagent-3\",\"older-subagent-4\",\"older-subagent-5\",\"older-subagent-6\",\"older-subagent-7\"]' of JSON.stringify([...document.querySelectorAll(\".drawer-subagent-list .conversation-title\")].map(e =\u003e e.textContent.trim()).sort()).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{PARENT_SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".group-by-menu",
+      "role": "button",
+      "name": "Daily",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='conversation-day-filter'] .drawer-day-count",
+      "text": "1"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id='{{PARENT}}'] .subagent-count-badge",
+      "text": "8"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id='{{PARENT}}']",
+      "role": "button",
+      "name": "Expand subagents",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer-subagent-list .subagent-item",
+      "count": 8
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll('.drawer-subagent-list .conversation-title')].map(e =\u003e e.textContent.trim()).sort())",
+      "expect": "[\"older-subagent-0\",\"older-subagent-1\",\"older-subagent-2\",\"older-subagent-3\",\"older-subagent-4\",\"older-subagent-5\",\"older-subagent-6\",\"older-subagent-7\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:41:53.824689389Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 14591,
+    "output_tokens": 949,
+    "estimated_cost_usd": 0.02603445,
+    "mode": "generated"
+  }
+}
