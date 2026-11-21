@@ -860,7 +860,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 	case ActionAssertValue:
 		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
 			got, err := elementString(runCtx, step, `(function() {
-				if (!('value' in el) || el instanceof HTMLButtonElement || el instanceof HTMLLIElement) throw new Error('a <' + el.tagName.toLowerCase() + '> has no value');
+				if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement)) throw new Error('a <' + el.tagName.toLowerCase() + '> is not an input, textarea or select');
 				return el.value;
 			})()`)
 			if err != nil {
@@ -887,10 +887,14 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 
 	case ActionAssertFocused:
 		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
+			// As in Playwright, el is focused when it is its root's active
+			// element: a custom element counts while focus is inside its
+			// shadow root, since selectors cannot reach in there.
 			got, err := elementString(runCtx, step, `(function() {
+				if (el.getRootNode().activeElement === el) return 'focused';
 				let a = document.activeElement;
 				while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
-				return a === el ? 'focused' : a ? a.tagName.toLowerCase() + (a.id ? '#' + a.id : '') : 'nothing';
+				return a ? a.tagName.toLowerCase() + (a.id ? '#' + a.id : '') : 'nothing';
 			})()`)
 			if err != nil {
 				return fmt.Errorf("assert_focused: %w", err)
@@ -1029,7 +1033,7 @@ const fillJS = `(function(el, sel, value) {
 	` + isVisibleJS + `
 	if (!el) throw new Error('no element matches ' + sel);
 	if (!isVisible(el)) throw new Error(sel + ' is not visible');
-	if (el.closest(':disabled')) throw new Error(sel + ' is disabled');
+	if ((` + isDisabledJS + `)(el)) throw new Error(sel + ' is disabled');
 	if (el.readOnly) throw new Error(sel + ' is read-only');
 	el.focus();
 	if (el.isContentEditable) {

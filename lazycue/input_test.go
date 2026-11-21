@@ -163,6 +163,13 @@ func TestFormStateAssertions(t *testing.T) {
 <div aria-disabled="true"><button id="aria">aria</button></div>
 <button id="empty" data-x="">empty</button>
 <select id="pick"><option>a</option><option selected>b</option></select>
+<div aria-disabled="true"><input id="ariain"></div>
+<x-picker></x-picker>
+<script>
+customElements.define('x-picker', class extends HTMLElement {
+  connectedCallback() { this.attachShadow({mode: 'open'}).innerHTML = '<input id="search">'; }
+});
+</script>
 </body></html>`)}
 	runSteps(t, br, env,
 		Step{Action: ActionNavigate, URL: "/"},
@@ -179,6 +186,8 @@ func TestFormStateAssertions(t *testing.T) {
 		Step{Action: ActionAssertFocused, Selector: "#name"},
 		Step{Action: ActionClick, Selector: "#on"},
 		Step{Action: ActionAssertFocused, Selector: "#on"},
+		Step{Action: ActionEval, Expression: "document.querySelector('x-picker').shadowRoot.querySelector('input').focus()"},
+		Step{Action: ActionAssertFocused, Selector: "x-picker"},
 	)
 	for _, c := range []struct {
 		step Step
@@ -186,7 +195,10 @@ func TestFormStateAssertions(t *testing.T) {
 	}{
 		{Step{Action: ActionAssertAttribute, Selector: "#on", Attribute: "disabled", Value: ""}, `#on has no "disabled" attribute`},
 		{Step{Action: ActionAssertValue, Selector: "#name", Value: "attr"}, `expected "attr", got "typed"`},
-		{Step{Action: ActionAssertValue, Selector: "#on", Value: ""}, "a <button> has no value"},
+		{Step{Action: ActionAssertValue, Selector: "#on", Value: ""}, "a <button> is not an input, textarea or select"},
+		{Step{Action: ActionAssertValue, Selector: "option", Value: "a"}, "a <option> is not an input, textarea or select"},
+		{Step{Action: ActionFill, Selector: "#ariain", Value: "x"}, "#ariain is disabled"},
+		{Step{Action: ActionAssertFocused, Selector: "x-picker"}, "x-picker is not focused; button#on is"},
 		{Step{Action: ActionAssertEnabled, Selector: "#off"}, "#off is disabled"},
 		{Step{Action: ActionAssertDisabled, Selector: "#on"}, "#on is enabled"},
 		{Step{Action: ActionAssertFocused, Selector: "#name"}, "#name is not focused; button#on is"},
