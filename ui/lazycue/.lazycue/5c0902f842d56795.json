@@ -1,0 +1,96 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A historical keyword_search call renders its failed result (the stored call has an array of terms). \"The card\" is the completed tool card, .tool[data-testid=\"tool-call-completed\"], whose \".tool-command\" contains \"find authentication handlers\"; all checks below are inside the card unless said otherwise. Perform the steps in order. 1. Call \"tool registry\"; it must return \"keyword_search is not registered\". 2. Navigate to /c/historical-search. 3. The card should be visible. 4. Its \".tool-emoji\" text should be exactly \"🔍\". 5. Its \".tool-header .tool-status-icon\" count must be 0, and its \".tool-header\" text must contain neither \"✓\" nor \"✗\". 6. Its \".tool-details\" must be hidden (or absent). 7. Click the card's \".tool-header\", then move the mouse away to the viewport's top-left corner (a hover step with no selector at x 0, y 0). 8. There must be no message action bar anywhere on the page: \"[data-action-bar]\" count 0. 9. The card's \".tool-code\" elements must be exactly three, with whitespace-normalised texts, in order, exactly \"find authentication handlers\", \"auth, handler\" and \"Search failed: directory not found\". 10. The card's \".tool-time\" text should be exactly \"1.0s\". 11. The card's last \".tool-label\" should contain \"Results (Error):\". 12. The card's \".tool-code.error\" count should be exactly 1. 13. Click the card's collapse button, button[aria-label=\"Collapse\"] inside the card. 14. The card's \".tool-details\" should become hidden (or absent).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "call",
+      "value": "tool registry",
+      "expect": "keyword_search is not registered"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/historical-search"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".tool[data-testid='tool-call-completed']",
+      "has_text": "find authentication handlers"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".tool[data-testid='tool-call-completed'] .tool-emoji",
+      "text": "🔍"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool[data-testid='tool-call-completed'] .tool-header .tool-status-icon",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const h = document.querySelector('.tool[data-testid=\"tool-call-completed\"] .tool-header'); const t = h.textContent; return (!t.includes('✓') && !t.includes('✗')) ? 'ok' : 'fail'; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".tool[data-testid='tool-call-completed'] .tool-details"
+    },
+    {
+      "action": "click",
+      "selector": ".tool[data-testid='tool-call-completed'] .tool-header"
+    },
+    {
+      "action": "hover",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-action-bar]",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool[data-testid='tool-call-completed'] .tool-code",
+      "count": 3
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.tool[data-testid=\"tool-call-completed\"] .tool-code')).map(el => el.textContent.replace(/\\s+/g, ' ').trim()).join('|||')",
+      "expect": "find authentication handlers|||auth, handler|||Search failed: directory not found"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".tool[data-testid='tool-call-completed'] .tool-time",
+      "text": "1.0s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const labels = document.querySelectorAll('.tool[data-testid=\"tool-call-completed\"] .tool-label'); const last = labels[labels.length - 1]; if (!last) return 'no labels'; const t = last.textContent.replace(/\\s+/g, ' ').trim(); return t.includes(\"Results (Error):\") ? 'ok' : t; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool[data-testid='tool-call-completed'] .tool-code.error",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": ".tool[data-testid='tool-call-completed'] button[aria-label='Collapse']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".tool[data-testid='tool-call-completed'] .tool-details"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:38:10.147226971Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 88656,
+    "output_tokens": 4234,
+    "estimated_cost_usd": 0.1155312,
+    "mode": "generated"
+  }
+}
