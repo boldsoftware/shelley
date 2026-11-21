@@ -162,8 +162,10 @@
     },
     {
       "action": "assert_attribute",
-      "selector": ".model-picker-panel [role='radio']",
-      "has_text": "high",
+      "selector": ".model-picker-panel",
+      "role": "radio",
+      "name": "high",
+      "exact": true,
       "attribute": "aria-checked",
       "value": "true"
     },

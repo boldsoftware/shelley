@@ -32,9 +32,11 @@
       "selector": ".status-field-model .model-picker.p-select .p-select-dropdown"
     },
     {
-      "action": "eval",
-      "expression": "Array.from(document.querySelectorAll('.status-bar-new button')).filter(b => { const name = b.getAttribute('aria-label') || b.textContent.replace(/[\\s]+/g,' ').trim(); return name.startsWith('Profile'); }).length",
-      "expect": "0"
+      "action": "assert_count",
+      "selector": ".status-bar-new",
+      "role": "button",
+      "name": "Profile",
+      "count": 0
     },
     {
       "action": "eval",
@@ -141,13 +143,17 @@
     },
     {
       "action": "assert_visible",
-      "selector": ".chat-overflow-popover button",
-      "has_text": "Directory"
+      "selector": ".chat-overflow-popover",
+      "role": "button",
+      "name": "Directory {{CWD}}",
+      "exact": true
     },
     {
-      "action": "eval",
-      "expression": "Array.from(document.querySelectorAll('.chat-overflow-popover button')).filter(b => { const name = b.getAttribute('aria-label') || b.textContent.replace(/[\\s]+/g,' ').trim(); return name.startsWith('Profile'); }).length",
-      "expect": "0"
+      "action": "assert_count",
+      "selector": ".chat-overflow-popover",
+      "role": "button",
+      "name": "Profile",
+      "count": 0
     }
   ],
   "metadata": {

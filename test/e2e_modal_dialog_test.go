@@ -42,7 +42,7 @@ func TestE2EModalDialogPaletteOpensTrapsFocusAndCloses(t *testing.T) {
 // mobile viewport the panel is near-full-width, so this can only regress on
 // desktop -- hence the viewport override.
 func TestE2EModalDialogBackdropBesidePanelDismisses(t *testing.T) {
-	e2e(t, `On a 1280x800 screen, the base modal dismisses when the backdrop is clicked beside the panel at the panel's mid-height. 1. Navigate to /c/{{SLUG}} and wait for the message input (data-testid "message-input") to be visible. 2. Press Control+k, wait for ".command-palette-input" to be visible, fill it with "feature" and click the first ".command-palette-item". 3. Wait for the panel (".modal") to be visible and measure its bounding box with an eval (the layout is fixed, so the numbers hold on every run). 4. Click the page with no selector at the viewport point x = (panel left) / 2, y = panel top + panel height / 2: in the empty gap left of the panel, at its vertical middle. 5. ".modal" count should become 0.`, func(s *shelley) {
+	e2e(t, `On a 1280x800 screen, the base modal dismisses when the backdrop is clicked beside the panel at the panel's mid-height. 1. Navigate to /c/{{SLUG}} and wait for the message input (data-testid "message-input") to be visible. 2. Press Control+k, wait for ".command-palette-input" to be visible, fill it with "feature" and click the first ".command-palette-item". 3. Wait for the panel (".modal") to be visible. 4. Click the viewport point x = (panel left) / 2, y = panel top + panel height / 2, computed from the panel's bounding box as the click runs: in the empty gap left of the panel, at its vertical middle. 5. ".modal" count should become 0.`, func(s *shelley) {
 		s.viewport(1280, 800)
 		s.v("SLUG", s.conversation("Hello", "").Slug)
 	})
