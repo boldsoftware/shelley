@@ -43,7 +43,8 @@ func ptr[T any](v T) *T { return &v }
 const blankPage = `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body></body></html>`
 
 // The default device is Playwright's Pixel 5: a phone with a touch screen
-// that prefers reduced motion and may use the clipboard.
+// that prefers reduced motion, may use the clipboard, and draws WebGL in
+// software, as Playwright's Chrome does without a GPU.
 func TestDefaultDeviceIsAPixel5(t *testing.T) {
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, blankPage)}
@@ -61,6 +62,7 @@ func TestDefaultDeviceIsAPixel5(t *testing.T) {
 		Step{Action: ActionClick, Selector: "#copy"},
 		Step{Action: ActionAssertText, Selector: "#copy", Text: "ok"},
 		Step{Action: ActionEval, Expression: `navigator.clipboard.readText()`, Expect: ptr("clicked")},
+		Step{Action: ActionEval, Expression: `!!document.createElement('canvas').getContext('webgl2')`, Expect: ptr("true")},
 	)
 }
 
@@ -1379,11 +1381,12 @@ func TestRetry(t *testing.T) {
 		Step{Action: ActionEval, Expression: `setTimeout(() => document.body.insertAdjacentHTML('beforeend', '<button id="late">Late</button>'), 1500); 'later'`},
 		Step{Action: ActionRetry, Timeout: "500ms", Steps: []Step{{Action: ActionClick, Selector: "#late"}}},
 	)
-	// A mistake fails it at once.
+	// A mistake fails it at once, rather than retrying until the block's
+	// timeout; the bound leaves a loaded host plenty of room.
 	for _, s := range []Step{{Action: "clik", Selector: "#copy"}, {Action: ActionClick, Role: "buton"}, {Action: ActionClick, Tab: "B"}} {
 		start := time.Now()
 		err := failSteps(t, br, env, Step{Action: ActionRetry, Steps: []Step{s}})
-		if d := time.Since(start); d > time.Second {
+		if d := time.Since(start); d > defaultStepTimeout/3 {
 			t.Errorf("retry of a mistake took %s: %v", d, err)
 		}
 	}

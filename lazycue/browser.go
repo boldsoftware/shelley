@@ -181,6 +181,9 @@ func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("disable-dev-shm-usage", true),
+		// Software WebGL, as Playwright launches Chrome: without a GPU,
+		// Chrome otherwise refuses SwiftShader and pages get no WebGL.
+		chromedp.Flag("enable-unsafe-swiftshader", true),
 		// A mouse, as Playwright's headless Chrome has: without it a page
 		// without touch emulation matches neither (hover: hover) nor
 		// (pointer: fine). Touch emulation still makes it a phone's.
