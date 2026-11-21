@@ -1,0 +1,107 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the send button\" is [data-testid=\"send-button\"]; \"the chevron\" is the send options button [data-testid=\"send-options-button\"]; \"the thinking indicator\" is [data-testid=\"agent-thinking\"]; \"the Stop button\" is button[aria-label=\"Stop\"]; \"queued badges\" are [data-testid=\"queued-badge\"]. \"Tap X\" means a touch step \"start\" on X immediately followed by a touch step \"end\" (a tap, not a click). \"Send X and wait for work\" means: fill the input with X; the send button should become enabled (up to 5s); tap it; the thinking indicator should become visible (up to 30s). \"Queue X\" means: fill the input with X; the chevron should be enabled and visible (up to 5s each); tap it; the queue option [data-testid=\"queue-option\"] should become visible (up to 5s); tap it. Every test starts: navigate to /c/queue and wait (up to 30s) for the input to be visible. A queued message runs once the agent finishes. 1. Navigate to /c/queue and wait for the input. 2. Send \"delay: 3\" and wait for work. 3. Queue \"echo: queued drain test\". 4. A queued badge should become visible (up to 10s). 5. Wait (up to 30s) for the page's text to include \"Delayed for 3 seconds\" (a page-wide wait_text). 6. The queued badge should become hidden (up to 15s). 7. Wait (up to 30s) for the page's text to include \"queued drain test\" (a page-wide wait_text).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/queue"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "delay: 3"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='send-button']:enabled",
+      "timeout": "5s"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: queued drain test"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='send-options-button']:enabled",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='send-options-button']",
+      "timeout": "5s"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid='send-options-button']"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='queue-option']",
+      "timeout": "5s"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid='queue-option']"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='queued-badge']",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_text",
+      "text": "Delayed for 3 seconds",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='queued-badge']",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_text",
+      "text": "queued drain test",
+      "timeout": "30s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:27:03.202524729Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13705,
+    "output_tokens": 1161,
+    "estimated_cost_usd": 0.02804475,
+    "mode": "generated"
+  }
+}

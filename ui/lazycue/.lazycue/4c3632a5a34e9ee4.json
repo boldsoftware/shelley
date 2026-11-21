@@ -1,0 +1,84 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the send button\" is [data-testid=\"send-button\"]; \"the chevron\" is the send options button [data-testid=\"send-options-button\"]; \"the thinking indicator\" is [data-testid=\"agent-thinking\"]; \"the Stop button\" is button[aria-label=\"Stop\"]; \"queued badges\" are [data-testid=\"queued-badge\"]. \"Tap X\" means a touch step \"start\" on X immediately followed by a touch step \"end\" (a tap, not a click). \"Send X and wait for work\" means: fill the input with X; the send button should become enabled (up to 5s); tap it; the thinking indicator should become visible (up to 30s). \"Queue X\" means: fill the input with X; the chevron should be enabled and visible (up to 5s each); tap it; the queue option [data-testid=\"queue-option\"] should become visible (up to 5s); tap it. Every test starts: navigate to /c/queue and wait (up to 30s) for the input to be visible. The chevron goes inactive when the agent finishes: with a conversation open the split button stays, but with nothing to queue behind its chevron is disabled. 1. Navigate to /c/queue and wait for the input. 2. Send \"delay: 2\" and wait for work. 3. Wait (up to 30s) for the page's text to include \"Delayed for 2 seconds\" (a page-wide wait_text). 4. Fill the input with \"test\". 5. The chevron should be visible, and should become disabled (up to 10s). 6. The send button should be visible and enabled.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/queue"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "delay: 2"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-button\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_text",
+      "text": "Delayed for 2 seconds",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "test"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"send-options-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-options-button\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "[data-testid=\"send-options-button\"]"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"send-button\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:36:48.42020598Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13510,
+    "output_tokens": 941,
+    "estimated_cost_usd": 0.02406525,
+    "mode": "generated"
+  }
+}

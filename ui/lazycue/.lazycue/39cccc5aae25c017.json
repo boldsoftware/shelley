@@ -1,0 +1,161 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the send button\" is [data-testid=\"send-button\"]; \"the chevron\" is the send options button [data-testid=\"send-options-button\"]; \"the thinking indicator\" is [data-testid=\"agent-thinking\"]; \"the Stop button\" is button[aria-label=\"Stop\"]; \"queued badges\" are [data-testid=\"queued-badge\"]. \"Tap X\" means a touch step \"start\" on X immediately followed by a touch step \"end\" (a tap, not a click). \"Send X and wait for work\" means: fill the input with X; the send button should become enabled (up to 5s); tap it; the thinking indicator should become visible (up to 30s). \"Queue X\" means: fill the input with X; the chevron should be enabled and visible (up to 5s each); tap it; the queue option [data-testid=\"queue-option\"] should become visible (up to 5s); tap it. Every test starts: navigate to /c/queue and wait (up to 30s) for the input to be visible. Stopping the agent restores all queued messages to the composer. Call \"cancel answered\" reports \"true\" once the server has answered a request to /cancel (or /cancel-queued) with 200, \"false\" before. 1. Navigate to /c/queue and wait for the input. 2. Send \"delay: 60\" and wait for work. 3. Queue \"echo: first queued message\", then queue \"echo: second queued message\". 4. There should be exactly two queued badges (up to 10s). 5. Call \"cancel answered\"; it must be \"false\". 6. Tap the Stop button. 7. Call \"cancel answered\"; it should become \"true\" (up to 10s). 8. The input's value should be exactly \"echo: first queued message\\necho: second queued message\" (the two joined by a newline; check JSON.stringify of the value). 9. There should be no queued badge (count 0, up to 10s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/queue"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "delay: 60"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-button\"]:enabled",
+      "timeout": "5s"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo: first queued message"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-options-button\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-options-button\"]:enabled",
+      "timeout": "5s"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"send-options-button\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"queue-option\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"queue-option\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo: second queued message"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-options-button\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-options-button\"]:enabled",
+      "timeout": "5s"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"send-options-button\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"queue-option\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"queue-option\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"queued-badge\"]",
+      "count": 2
+    },
+    {
+      "action": "call",
+      "value": "cancel answered",
+      "expect": "false"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "button[aria-label=\"Stop\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "call",
+      "value": "cancel answered",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "\"echo: first queued message\\necho: second queued message\""
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"queued-badge\"]",
+      "count": 0,
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:36:02.73328745Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 28996,
+    "output_tokens": 1999,
+    "estimated_cost_usd": 0.049689,
+    "mode": "generated"
+  }
+}

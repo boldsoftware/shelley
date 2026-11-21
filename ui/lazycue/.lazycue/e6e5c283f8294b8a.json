@@ -1,0 +1,58 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the send button\" is [data-testid=\"send-button\"]; \"the chevron\" is the send options button [data-testid=\"send-options-button\"]; \"the thinking indicator\" is [data-testid=\"agent-thinking\"]; \"the Stop button\" is button[aria-label=\"Stop\"]; \"queued badges\" are [data-testid=\"queued-badge\"]. \"Tap X\" means a touch step \"start\" on X immediately followed by a touch step \"end\" (a tap, not a click). \"Send X and wait for work\" means: fill the input with X; the send button should become enabled (up to 5s); tap it; the thinking indicator should become visible (up to 30s). \"Queue X\" means: fill the input with X; the chevron should be enabled and visible (up to 5s each); tap it; the queue option [data-testid=\"queue-option\"] should become visible (up to 5s); tap it. Every test starts: navigate to /c/queue and wait (up to 30s) for the input to be visible. A message the server queues while the agent is idle (as it does behind a recording whose transcription failed) does not show the agent working. The server answers every /chat request with 202 {\"status\":\"queued\"} without starting a turn. 1. Navigate to /c/queue and wait for the input. 2. Fill the input with \"waits behind a failed recording\" and tap the send button. 3. The input's value should become exactly \"\". 4. There must be no thinking indicator (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/queue"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "waits behind a failed recording"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-button\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:39:46.823917658Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 27616,
+    "output_tokens": 806,
+    "estimated_cost_usd": 0.02785755,
+    "mode": "generated"
+  }
+}

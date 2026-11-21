@@ -1,0 +1,109 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the send button\" is [data-testid=\"send-button\"]; \"the chevron\" is the send options button [data-testid=\"send-options-button\"]; \"the thinking indicator\" is [data-testid=\"agent-thinking\"]; \"the Stop button\" is button[aria-label=\"Stop\"]; \"queued badges\" are [data-testid=\"queued-badge\"]. \"Tap X\" means a touch step \"start\" on X immediately followed by a touch step \"end\" (a tap, not a click). \"Send X and wait for work\" means: fill the input with X; the send button should become enabled (up to 5s); tap it; the thinking indicator should become visible (up to 30s). \"Queue X\" means: fill the input with X; the chevron should be enabled and visible (up to 5s each); tap it; the queue option [data-testid=\"queue-option\"] should become visible (up to 5s); tap it. Every test starts: navigate to /c/queue and wait (up to 30s) for the input to be visible. Stopping the agent restores a queued message whose request the server has not accepted yet. Queueing requests (/chat requests whose JSON body has queue true) are held back until call \"release queue\"; call \"queue started\" reports \"true\" once one has reached the server. 1. Navigate to /c/queue and wait for the input. 2. Send \"delay: 60\" and wait for work. 3. Queue \"echo: pending steering\". 4. Call \"queue started\"; it should become \"true\". 5. Tap the Stop button. 6. The input's value should be exactly \"echo: pending steering\". 7. Call \"release queue\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/queue"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "delay: 60"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-button\"]:not([disabled])",
+      "timeout": "5s"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo: pending steering"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-options-button\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"send-options-button\"]"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"send-options-button\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"queue-option\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"queue-option\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "call",
+      "value": "queue started",
+      "expect": "true"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "button[aria-label=\"Stop\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo: pending steering"
+    },
+    {
+      "action": "call",
+      "value": "release queue"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:35:31.990148359Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13719,
+    "output_tokens": 1149,
+    "estimated_cost_usd": 0.02790345,
+    "mode": "generated"
+  }
+}
