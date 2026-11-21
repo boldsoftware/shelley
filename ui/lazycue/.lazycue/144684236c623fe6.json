@@ -1,0 +1,39 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Resource notices drop a notice whose kind a reconnect no longer reports. The page's live stream (/api/stream2) reports low disk space and high memory pressure; each connection ends at once and the page reconnects about a second later. Call \"drop memory\" makes later connections report only the low disk space, as a restarted server whose memory monitor could not start would. Perform the steps in order. 1. Navigate to /. 2. The element with data-testid \"memory-notice\" should be visible (allow 30s). 3. Call \"drop memory\". 4. There should then be exactly 0 elements with data-testid \"memory-notice\" (allow 30s). 5. The element with data-testid \"disk-notice\" should be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='memory-notice']",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "drop memory"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='memory-notice']",
+      "count": 0,
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='disk-notice']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:22:01.725997318Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6432,
+    "output_tokens": 193,
+    "estimated_cost_usd": 0.007303649999999999,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Resource notices announce critical memory pressure as an alert. The page's live stream (/api/stream2) reports critical memory pressure with 300 MB available. Perform the steps in order. 1. Navigate to /. 2. The element with data-testid \"memory-notice\" should be visible (allow 30s). 3. Its text should contain \"Memory pressure is critical\". 4. It should contain \"300 MB available\". 5. The element with data-testid \"memory-notice-title\" must have the attribute role exactly \"alert\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='memory-notice']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='memory-notice']",
+      "text": "Memory pressure is critical"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='memory-notice']",
+      "text": "300 MB available"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='memory-notice-title']",
+      "attribute": "role",
+      "value": "alert"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:22:08.474492788Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6372,
+    "output_tokens": 225,
+    "estimated_cost_usd": 0.007558649999999999,
+    "mode": "generated"
+  }
+}

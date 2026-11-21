@@ -1,0 +1,35 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Resource notices omit the stall share when nothing is stalled. The page's live stream (/api/stream2) reports high memory pressure with 1.2 GB available and a stall share of only 0.4%. Perform the steps in order. 1. Navigate to /. 2. The text of the element with data-testid \"memory-notice\" should contain \"1.2 GB available\" (allow 30s). 3. Its text must not contain \"stalled\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_text",
+      "text": "1.2 GB available",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='memory-notice']",
+      "text": "1.2 GB available"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": "[data-testid='memory-notice']",
+      "text": "stalled"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:22:18.206439008Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 145204,
+    "output_tokens": 1195,
+    "estimated_cost_usd": 0.10562684999999998,
+    "mode": "generated"
+  }
+}

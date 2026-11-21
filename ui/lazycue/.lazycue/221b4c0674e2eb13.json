@@ -1,0 +1,36 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Resource notices announce critical disk status as an alert. The page's live stream (/api/stream2) reports critically low disk space. Perform the steps in order. 1. Navigate to /. 2. The element with data-testid \"disk-notice\" should be visible (allow 30s). 3. Its text should contain \"Disk space is critically low\". 4. The element with data-testid \"disk-notice-title\" must have the attribute role exactly \"alert\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='disk-notice']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='disk-notice']",
+      "text": "Disk space is critically low"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='disk-notice-title']",
+      "attribute": "role",
+      "value": "alert"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:22:23.753644219Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6357,
+    "output_tokens": 192,
+    "estimated_cost_usd": 0.0070074,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Resource notices link disk, not memory, to an exe.dev resize on exe.dev hosts. The page believes it runs on exe.dev as host myvm.exe.xyz, and its live stream (/api/stream2) reports both low disk space and high memory pressure. Perform the steps in order. 1. Navigate to /. 2. The element with data-testid \"disk-notice-link\" should have exactly the text \"Resize this VM\" (allow 30s). 3. Its href attribute must be exactly \"https://exe.dev/suggest?command=resize%20myvm%20--disk%3D90GB\". 4. The element with data-testid \"memory-notice\" should be visible. 5. There must be exactly 0 elements with data-testid \"memory-notice-link\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"disk-notice-link\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"disk-notice-link\"]",
+      "text": "Resize this VM"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"disk-notice-link\"]",
+      "attribute": "href",
+      "value": "https://exe.dev/suggest?command=resize%20myvm%20--disk%3D90GB"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"memory-notice\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"memory-notice-link\"]",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:23:13.898914541Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 247278,
+    "output_tokens": 2262,
+    "estimated_cost_usd": 0.18014925000000004,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Resource notices show memory pressure beside disk and dismiss it alone. The page's live stream (/api/stream2) reports low disk space and high memory pressure (1.2 GB available, 41.7% stalled), and dismissing a notice is faked; call \"dismissals\" lists every dismiss request as \"\u003cpath\u003e episode \u003cepisode_id in its body\u003e\", one per line, or \"none\". Perform the steps in order. 1. Navigate to /. 2. The element with data-testid \"memory-notice\" (the notice) should be visible (allow 30s). 3. The notice's text should contain \"Memory pressure is high\". 4. It should contain \"1.2 GB available\". 5. It should contain \"42% stalled\". 6. The element with data-testid \"memory-notice-title\" must have the attribute role exactly \"status\". 7. Call \"dismissals\": it must return exactly \"none\". 8. Click the element with data-testid \"memory-notice-dismiss\". 9. Call \"dismissals\" until it returns exactly \"/api/resources/memory/dismiss episode 2\". 10. There must then be exactly 0 elements with data-testid \"memory-notice\". 11. The element with data-testid \"disk-notice\" should still be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='memory-notice']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='memory-notice']",
+      "text": "Memory pressure is high"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='memory-notice']",
+      "text": "1.2 GB available"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='memory-notice']",
+      "text": "42% stalled"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='memory-notice-title']",
+      "attribute": "role",
+      "value": "status"
+    },
+    {
+      "action": "call",
+      "value": "dismissals",
+      "expect": "none"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='memory-notice-dismiss']"
+    },
+    {
+      "action": "call",
+      "value": "dismissals",
+      "expect": "/api/resources/memory/dismiss episode 2"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='memory-notice']",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='disk-notice']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:22:16.642096668Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6554,
+    "output_tokens": 391,
+    "estimated_cost_usd": 0.01073115,
+    "mode": "generated"
+  }
+}
