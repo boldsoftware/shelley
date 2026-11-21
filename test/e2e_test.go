@@ -766,13 +766,27 @@ func killTerminalSessions(dir string) {
 	if err != nil {
 		return
 	}
+	groups, servers := terminalKillTargets(string(out), dir)
+	for _, g := range groups {
+		syscall.Kill(-g, syscall.SIGKILL)
+	}
+	for _, pid := range servers {
+		syscall.Kill(pid, syscall.SIGKILL)
+	}
+}
+
+// terminalKillTargets reads ps rows, "pid ppid pgid sess command", for
+// what killTerminalSessions kills: the process groups of the sessions that
+// exe-scroll session servers under dir run, and the servers. sess is
+// opaque: Darwin's ps prints it as an address in hex.
+func terminalKillTargets(ps, dir string) (groups, servers []int) {
 	type proc struct {
 		pid, ppid, pgid int
 		sess, command   string
 	}
 	var procs []proc
 	line := regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$`)
-	for _, l := range strings.Split(string(out), "\n") {
+	for _, l := range strings.Split(ps, "\n") {
 		m := line.FindStringSubmatch(l)
 		if m == nil {
 			continue
@@ -782,30 +796,25 @@ func killTerminalSessions(dir string) {
 		pgid, _ := strconv.Atoi(m[3])
 		procs = append(procs, proc{pid, ppid, pgid, m[4], m[5]})
 	}
-	servers := map[int]string{} // pid -> session
+	serverSess := map[int]string{} // pid -> session
 	for _, p := range procs {
 		if strings.HasPrefix(p.command, "exe-scroll: session "+dir+"/") {
-			servers[p.pid] = p.sess
+			serverSess[p.pid] = p.sess
 		}
 	}
 	sessions := map[string]bool{}
 	for _, p := range procs {
-		if sess, ok := servers[p.ppid]; ok && p.pid == p.pgid && p.sess != sess {
+		if sess, ok := serverSess[p.ppid]; ok && p.pid == p.pgid && p.sess != sess {
 			sessions[p.sess] = true
 		}
 	}
-	groups := map[int]bool{}
+	groupSet := map[int]bool{}
 	for _, p := range procs {
 		if sessions[p.sess] {
-			groups[p.pgid] = true
+			groupSet[p.pgid] = true
 		}
 	}
-	for g := range groups {
-		syscall.Kill(-g, syscall.SIGKILL)
-	}
-	for pid := range servers {
-		syscall.Kill(pid, syscall.SIGKILL)
-	}
+	return slices.Sorted(maps.Keys(groupSet)), slices.Sorted(maps.Keys(serverSess))
 }
 
 // do sends the server an API request with a JSON body (nil for none) and
