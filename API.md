@@ -103,7 +103,7 @@ Unless noted, results exclude **archived** conversations.
 | `working` | mirror of `agent_working`, kept for the patch-stream contract |
 | `git_repo_root`, `git_worktree_root`, `git_commit`, `git_subject` | optional, from a cached HEAD lookup keyed by `cwd` |
 | `subagent_count` | number of subagent conversations whose `parent_conversation_id` matches this row |
-| `preview`, `preview_updated_at` | trailing text of the most recent agent message and its timestamp (RFC 3339); empty if no agent reply yet, or if this conversation is outside the 500-most-recent window the server tracks for previews |
+| `preview`, `preview_updated_at` | the start (300 chars) of the agent's latest reply to the user, and that message's time (RFC 3339): the last text block, or the trimmed `text` of a `message_user`, `send_to_thread` or `send_to_channel` call, in the newest agent message with one; with `message_user` on, text blocks don't count. Empty until there is one |
 | `last_attention_at` | Server timestamp for the latest qualifying reply, error or directed notice, in Unix milliseconds. Absent until one arrives. |
 
 `GET /api/conversations` adds the user's effective `read_at` and `unread`.

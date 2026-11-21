@@ -900,8 +900,9 @@ func (db *DB) GetConversationBySlug(ctx context.Context, slug string) (*generate
 // so we never scan or JSON-decode messages for conversations off-window.
 type ConversationListItem struct {
 	generated.Conversation
-	// Preview is the trailing text of the most recent agent message, so the
-	// list can show a one-line summary without a separate fetch.
+	// Preview is the start of the agent's latest reply to the user, from a
+	// text block or a message_user or Slack call (the conversation_previews
+	// view), so the list can show a one-line summary without a separate fetch.
 	Preview string `json:"preview,omitempty"`
 	// PreviewUpdatedAt is that message's CreatedAt, RFC 3339 (trailing Z).
 	PreviewUpdatedAt string `json:"preview_updated_at,omitempty"`
@@ -959,8 +960,8 @@ func decodeParticipants(raw string) ([]ConversationParticipant, error) {
 
 // previewTimestampLen is the fixed width of the RFC3339 timestamp
 // ("2006-01-02T15:04:05Z") that the list/search queries prepend to the
-// preview text in the preview_packed column. See the preview_packed note in
-// conversations.sql.
+// preview text in the preview_packed column. See the conversation_previews
+// view (schema/084-conversation-previews.sql).
 const previewTimestampLen = len("2006-01-02T15:04:05Z")
 
 // splitPreviewPacked splits the preview_packed column back into its timestamp
@@ -1750,8 +1751,8 @@ func nullableString(s string) *string {
 // date/time functions parse directly. Millisecond precision is enough to
 // order rows the lorem generator writes 200ms apart; nanosecond-precision
 // Go formats (e.g. time.RFC3339Nano) are NOT parsed by strftime(), which
-// would leave conversations.sql's preview/timestamp queries unable to read
-// an explicitly-stamped created_at back out.
+// would leave strftime-based queries such as the conversation_previews view
+// unable to read an explicitly-stamped created_at back out.
 const sqliteDateTimeFormat = "2006-01-02T15:04:05.000Z"
 
 // sqliteTimeArg formats an explicit CreatedAt override for the generated

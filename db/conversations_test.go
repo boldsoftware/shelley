@@ -1742,3 +1742,144 @@ func TestGetOrCreateSubagentConversationCrowdedSlug(t *testing.T) {
 		t.Fatalf("reuse %q: got %q, %v; want %q", slug, again, err, id)
 	}
 }
+
+// TestConversationListPreviewMessageUser checks that every conversation-list
+// query previews the newest user-facing agent text, whether the agent wrote it
+// as a text block or sent it with message_user or a Slack tool (as the
+// Assistant does), and stamps the preview with that message's time.
+func TestConversationListPreviewMessageUser(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	ctx := t.Context()
+
+	base := time.Date(2026, 11, 20, 21, 0, 0, 0, time.UTC)
+	agent := func(convID string, minute int, content ...map[string]any) {
+		t.Helper()
+		at := base.Add(time.Duration(minute) * time.Minute)
+		if _, err := db.CreateMessage(ctx, CreateMessageParams{
+			ConversationID: convID,
+			Type:           MessageTypeAgent,
+			LLMData:        map[string]any{"Content": content},
+			CreatedAt:      &at,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	text := func(s string) map[string]any { return map[string]any{"Type": 2, "Text": s} }
+	tool := func(name string, input map[string]any) map[string]any {
+		return map[string]any{"Type": 5, "ToolName": name, "ToolInput": input}
+	}
+	conv := func(slug string) string {
+		t.Helper()
+		c, err := db.CreateConversation(ctx, stringPtr(slug), true, nil, nil, ConversationOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.ConversationID
+	}
+
+	// The newest reply is a message_user call. Later agent messages without
+	// text for the user don't count: other tools, even with a text input, and
+	// message_user sending only an attachment (no text to preview) or a
+	// reaction (whose blank text message_user ignores).
+	texted := conv("preview-texted")
+	agent(texted, 0, text("plain reply"))
+	agent(texted, 1, tool("bash", map[string]any{"command": "ls"}))
+	agent(texted, 2, tool("message_user", map[string]any{"text": "texted reply", "reply_to": 7}))
+	agent(texted, 3, tool("other", map[string]any{"text": "not for the user"}))
+	agent(texted, 4, tool("message_user", map[string]any{"attachments": []string{"/tmp/a.png"}}))
+	agent(texted, 5, tool("message_user", map[string]any{"text": " \n\t\v", "reaction": "👍", "reply_to": 8}))
+	// Nor do user messages, whatever their content.
+	userAt := base.Add(6 * time.Minute)
+	if _, err := db.CreateMessage(ctx, CreateMessageParams{
+		ConversationID: texted,
+		Type:           MessageTypeUser,
+		LLMData:        map[string]any{"Content": []any{text("user words")}},
+		CreatedAt:      &userAt,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The Assistant answers Slack with the Slack tools.
+	slack := conv("preview-slack")
+	agent(slack, 0, tool("message_user", map[string]any{"text": "texted reply"}))
+	agent(slack, 1, tool("send_to_thread", map[string]any{"channel": "C1", "thread_ts": "1.0", "text": "thread reply"}))
+	agent(slack, 2, tool("add_reaction", map[string]any{"channel": "C1", "ts": "1.0", "emoji": "eyes"}))
+	posted := conv("preview-posted")
+	agent(posted, 0, text("plain reply"))
+	agent(posted, 1, tool("send_to_channel", map[string]any{"channel": "C2", "text": "channel post"}))
+
+	// Within one message, the last user-facing block wins, whichever kind.
+	narrated := conv("preview-narrated")
+	agent(narrated, 0, text("on it"), tool("message_user", map[string]any{"text": "done, see attached"}), tool("bash", map[string]any{"command": "ls"}))
+	trailing := conv("preview-trailing")
+	agent(trailing, 0, tool("message_user", map[string]any{"text": "sent"}), text("wrapping up"))
+
+	// With message_user on, the user sees only what the agent sends; its
+	// text is hidden, so it doesn't count.
+	chatConv, err := db.CreateConversation(ctx, stringPtr("preview-chat"), true, nil, nil,
+		ConversationOptions{ToolOverrides: map[string]string{"message_user": "on"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chat := chatConv.ConversationID
+	agent(chat, 0, tool("message_user", map[string]any{"text": "sent"}), text("wrapping up"))
+	agent(chat, 1, text("let me check"), tool("bash", map[string]any{"command": "ls"}))
+
+	// message_user text is capped like any other preview.
+	long := conv("preview-long")
+	agent(long, 0, tool("message_user", map[string]any{"text": strings.Repeat("y", 5000)}))
+
+	type preview struct{ text, at string }
+	want := map[string]preview{
+		texted:   {"texted reply", "2026-11-20T21:02:00Z"},
+		slack:    {"thread reply", "2026-11-20T21:01:00Z"},
+		posted:   {"channel post", "2026-11-20T21:01:00Z"},
+		narrated: {"done, see attached", "2026-11-20T21:00:00Z"},
+		trailing: {"wrapping up", "2026-11-20T21:00:00Z"},
+		chat:     {"sent", "2026-11-20T21:00:00Z"},
+		long:     {strings.Repeat("y", 300), "2026-11-20T21:00:00Z"},
+	}
+	check := func(name string, items []ConversationListItem) {
+		t.Helper()
+		got := map[string]preview{}
+		for _, item := range items {
+			got[item.ConversationID] = preview{item.Preview, item.PreviewUpdatedAt}
+		}
+		for id, w := range want {
+			if got[id] != w {
+				t.Errorf("%s: preview of %s = %+v, want %+v", name, id, got[id], w)
+			}
+		}
+	}
+
+	items, err := db.ListConversations(ctx, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("ListConversations", items)
+	items, err = db.ListAllConversations(ctx, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("ListAllConversations", items)
+	items, err = db.SearchConversations(ctx, "preview", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("SearchConversations", items)
+	items, err = db.SearchConversationsWithMessages(ctx, "preview", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("SearchConversationsWithMessages", items)
+	hits, err := db.SearchConversationsFTS(ctx, "preview", false, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items = make([]ConversationListItem, len(hits))
+	for i, h := range hits {
+		items[i] = h.ConversationListItem
+	}
+	check("SearchConversationsFTS", items)
+}

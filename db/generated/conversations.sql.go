@@ -833,26 +833,10 @@ func (q *Queries) ListAgentWorkingConversationIDs(ctx context.Context) ([]string
 
 const listAllConversations = `-- name: ListAllConversations :many
 SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq,
-  -- preview_packed: locate the newest agent message that actually contains a
-  -- text block (the EXISTS short-circuits on the first one), then pull that
-  -- block. The outer ORDER BY rides idx_messages_conv_type_seq, so we stop at
-  -- the first qualifying message instead of expanding and globally sorting
-  -- every agent message's content blocks. The first 20 bytes are the fixed
-  -- RFC3339 timestamp (strftime '%Y-%m-%dT%H:%M:%SZ'); the rest is the preview
-  -- text capped to 300 chars so we don't haul multi-KB replies across the
-  -- driver + JSON + gzip for a one-line UI field. db.splitPreviewPacked splits
-  -- it back apart.
+  -- See conversation_previews.
   CAST(COALESCE((
-    SELECT strftime('%Y-%m-%dT%H:%M:%SZ', m.created_at) || substr((
-             SELECT je.value ->> 'Text'
-               FROM json_each(m.llm_data, '$.Content') je
-              WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> ''
-              ORDER BY je.key DESC LIMIT 1), 1, 300)
-      FROM messages m
-     WHERE m.conversation_id = c.conversation_id AND m.type = 'agent'
-       AND EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') je
-                   WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> '')
-     ORDER BY m.sequence_id DESC LIMIT 1), '') AS TEXT) AS preview_packed,
+    SELECT p.preview_packed FROM conversation_previews p
+     WHERE p.conversation_id = c.conversation_id), '') AS TEXT) AS preview_packed,
   CAST(COALESCE((
     SELECT MAX(m.sequence_id) FROM messages m
      WHERE m.conversation_id = c.conversation_id), 0) AS INTEGER) AS max_sequence_id,
@@ -1062,26 +1046,10 @@ func (q *Queries) ListChannelConversationsWithQueuedMessages(ctx context.Context
 
 const listConversations = `-- name: ListConversations :many
 SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq,
-  -- preview_packed: locate the newest agent message that actually contains a
-  -- text block (the EXISTS short-circuits on the first one), then pull that
-  -- block. The outer ORDER BY rides idx_messages_conv_type_seq, so we stop at
-  -- the first qualifying message instead of expanding and globally sorting
-  -- every agent message's content blocks. The first 20 bytes are the fixed
-  -- RFC3339 timestamp (strftime '%Y-%m-%dT%H:%M:%SZ'); the rest is the preview
-  -- text capped to 300 chars so we don't haul multi-KB replies across the
-  -- driver + JSON + gzip for a one-line UI field. db.splitPreviewPacked splits
-  -- it back apart.
+  -- See conversation_previews.
   CAST(COALESCE((
-    SELECT strftime('%Y-%m-%dT%H:%M:%SZ', m.created_at) || substr((
-             SELECT je.value ->> 'Text'
-               FROM json_each(m.llm_data, '$.Content') je
-              WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> ''
-              ORDER BY je.key DESC LIMIT 1), 1, 300)
-      FROM messages m
-     WHERE m.conversation_id = c.conversation_id AND m.type = 'agent'
-       AND EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') je
-                   WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> '')
-     ORDER BY m.sequence_id DESC LIMIT 1), '') AS TEXT) AS preview_packed,
+    SELECT p.preview_packed FROM conversation_previews p
+     WHERE p.conversation_id = c.conversation_id), '') AS TEXT) AS preview_packed,
   CAST(COALESCE((
     SELECT MAX(m.sequence_id) FROM messages m
      WHERE m.conversation_id = c.conversation_id), 0) AS INTEGER) AS max_sequence_id,
@@ -1372,26 +1340,10 @@ func (q *Queries) SearchArchivedConversations(ctx context.Context, arg SearchArc
 
 const searchConversations = `-- name: SearchConversations :many
 SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq,
-  -- preview_packed: locate the newest agent message that actually contains a
-  -- text block (the EXISTS short-circuits on the first one), then pull that
-  -- block. The outer ORDER BY rides idx_messages_conv_type_seq, so we stop at
-  -- the first qualifying message instead of expanding and globally sorting
-  -- every agent message's content blocks. The first 20 bytes are the fixed
-  -- RFC3339 timestamp (strftime '%Y-%m-%dT%H:%M:%SZ'); the rest is the preview
-  -- text capped to 300 chars so we don't haul multi-KB replies across the
-  -- driver + JSON + gzip for a one-line UI field. db.splitPreviewPacked splits
-  -- it back apart.
+  -- See conversation_previews.
   CAST(COALESCE((
-    SELECT strftime('%Y-%m-%dT%H:%M:%SZ', m.created_at) || substr((
-             SELECT je.value ->> 'Text'
-               FROM json_each(m.llm_data, '$.Content') je
-              WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> ''
-              ORDER BY je.key DESC LIMIT 1), 1, 300)
-      FROM messages m
-     WHERE m.conversation_id = c.conversation_id AND m.type = 'agent'
-       AND EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') je
-                   WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> '')
-     ORDER BY m.sequence_id DESC LIMIT 1), '') AS TEXT) AS preview_packed,
+    SELECT p.preview_packed FROM conversation_previews p
+     WHERE p.conversation_id = c.conversation_id), '') AS TEXT) AS preview_packed,
   CAST(COALESCE((
     SELECT MAX(m.sequence_id) FROM messages m
      WHERE m.conversation_id = c.conversation_id), 0) AS INTEGER) AS max_sequence_id,
@@ -1499,26 +1451,10 @@ WITH fts_hits AS (
 )
 SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq,
   CAST(CASE WHEN c.slug LIKE ?1 ESCAPE '\' THEN 0 ELSE 1 END AS INTEGER) AS slug_rank,
-  -- preview_packed: locate the newest agent message that actually contains a
-  -- text block (the EXISTS short-circuits on the first one), then pull that
-  -- block. The outer ORDER BY rides idx_messages_conv_type_seq, so we stop at
-  -- the first qualifying message instead of expanding and globally sorting
-  -- every agent message's content blocks. The first 20 bytes are the fixed
-  -- RFC3339 timestamp (strftime '%Y-%m-%dT%H:%M:%SZ'); the rest is the preview
-  -- text capped to 300 chars so we don't haul multi-KB replies across the
-  -- driver + JSON + gzip for a one-line UI field. db.splitPreviewPacked splits
-  -- it back apart.
+  -- See conversation_previews.
   CAST(COALESCE((
-    SELECT strftime('%Y-%m-%dT%H:%M:%SZ', m.created_at) || substr((
-             SELECT je.value ->> 'Text'
-               FROM json_each(m.llm_data, '$.Content') je
-              WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> ''
-              ORDER BY je.key DESC LIMIT 1), 1, 300)
-      FROM messages m
-     WHERE m.conversation_id = c.conversation_id AND m.type = 'agent'
-       AND EXISTS (SELECT 1 FROM json_each(m.llm_data, '$.Content') je
-                   WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> '')
-     ORDER BY m.sequence_id DESC LIMIT 1), '') AS TEXT) AS preview_packed,
+    SELECT p.preview_packed FROM conversation_previews p
+     WHERE p.conversation_id = c.conversation_id), '') AS TEXT) AS preview_packed,
   CAST(COALESCE((
     SELECT MAX(m.sequence_id) FROM messages m
      WHERE m.conversation_id = c.conversation_id), 0) AS INTEGER) AS max_sequence_id,
@@ -1707,19 +1643,10 @@ func (q *Queries) SearchConversationsFTSSnippets(ctx context.Context, arg Search
 const searchConversationsWithMessages = `-- name: SearchConversationsWithMessages :many
 SELECT DISTINCT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq,
   CAST(CASE WHEN c.slug LIKE '%' || ?1 || '%' THEN 0 ELSE 1 END AS INTEGER) AS slug_rank,
-  -- See preview_packed note on ListConversations. Inner messages alias is
-  -- pm here to avoid colliding with the outer LEFT JOIN messages m.
+  -- See conversation_previews.
   CAST(COALESCE((
-    SELECT strftime('%Y-%m-%dT%H:%M:%SZ', pm.created_at) || substr((
-             SELECT je.value ->> 'Text'
-               FROM json_each(pm.llm_data, '$.Content') je
-              WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> ''
-              ORDER BY je.key DESC LIMIT 1), 1, 300)
-      FROM messages pm
-     WHERE pm.conversation_id = c.conversation_id AND pm.type = 'agent'
-       AND EXISTS (SELECT 1 FROM json_each(pm.llm_data, '$.Content') je
-                   WHERE je.value ->> 'Type' = 2 AND je.value ->> 'Text' <> '')
-     ORDER BY pm.sequence_id DESC LIMIT 1), '') AS TEXT) AS preview_packed,
+    SELECT p.preview_packed FROM conversation_previews p
+     WHERE p.conversation_id = c.conversation_id), '') AS TEXT) AS preview_packed,
   CAST(COALESCE((
     SELECT MAX(pm.sequence_id) FROM messages pm
      WHERE pm.conversation_id = c.conversation_id), 0) AS INTEGER) AS max_sequence_id,

@@ -1,9 +1,14 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"shelley.exe.dev/claudetool"
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/llm"
 )
@@ -33,11 +38,11 @@ func previewToolBlock(name string) llm.Content {
 }
 
 // TestConversationListPreview exercises the SQL-side preview extraction that
-// the conversation-list query computes inline (correlated subqueries against
-// messages, see conversations.sql): it must pick the most recent agent
-// message that has a usable text block, and within that message use the LAST
-// non-empty text block (the summary/conclusion in tool-calling turns). It also
-// checks the tool-only fallback and that a preview carries a timestamp.
+// the conversation-list query reads from the conversation_previews view: it
+// must pick the most recent agent message that has a reply block, and
+// within that message use the LAST non-empty reply block (the
+// summary/conclusion in tool-calling turns). It also checks the tool-only
+// fallback and that a preview carries a timestamp.
 func TestConversationListPreview(t *testing.T) {
 	t.Parallel()
 	srv, database, _ := newTestServer(t)
@@ -119,4 +124,48 @@ func TestConversationListPreview(t *testing.T) {
 	if byID[convD.ConversationID].PreviewUpdatedAt == "" {
 		t.Errorf("convD preview should carry an updatedAt timestamp")
 	}
+}
+
+// TestConversationListPatchStreamPreviewsMessageUser checks the live path: an
+// agent reply sent with message_user, as the Assistant and channel
+// conversations reply, reaches /api/stream2 subscribers as a preview patch.
+func TestConversationListPatchStreamPreviewsMessageUser(t *testing.T) {
+	t.Parallel()
+	srv, database, _ := newTestServer(t)
+	conv, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeAgentMsg(t, database, conv.ConversationID, []llm.Content{previewTextBlock("plain reply")})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	rec := newFlusherRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/stream2", nil).WithContext(ctx)
+	done := make(chan struct{})
+	go func() {
+		srv.handleStream(rec, req)
+		close(done)
+	}()
+	initial := waitForPatchEventAfter(t, rec, "")
+	state := mustApplyPatch(t, []ConversationWithState{}, initial.Patch)
+	if len(state) != 1 || state[0].Preview != "plain reply" {
+		t.Fatalf("initial state = %+v, want one conversation previewing %q", state, "plain reply")
+	}
+
+	input, err := json.Marshal(claudetool.MessageUserInput{Text: "texted reply", ReplyTo: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeAgentMsg(t, database, conv.ConversationID, []llm.Content{
+		{Type: llm.ContentTypeToolUse, ToolName: claudetool.MessageUserName, ToolInput: input},
+	})
+	update := waitForPatchEventAfter(t, rec, initial.NewHash)
+	state = mustApplyPatch(t, state, update.Patch)
+	verifyHash(t, state, update.NewHash)
+	if state[0].Preview != "texted reply" {
+		t.Errorf("preview after message_user = %q, want %q (patch %s)", state[0].Preview, "texted reply", patchSummary(update.Patch))
+	}
+	cancel()
+	<-done
 }
