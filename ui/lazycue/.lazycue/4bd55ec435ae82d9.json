@@ -28,7 +28,8 @@
       "value": "notes.md"
     },
     {
-      "action": "wait_text",
+      "action": "assert_text_contains",
+      "selector": ".grp-row",
       "text": "notes.md",
       "timeout": "10s"
     },

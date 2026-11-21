@@ -33,9 +33,9 @@
       "value": "draft.md"
     },
     {
-      "action": "wait_visible",
+      "action": "assert_text_contains",
       "selector": ".grp-row",
-      "has_text": "draft.md",
+      "text": "draft.md",
       "timeout": "10s"
     },
     {
@@ -44,7 +44,7 @@
     },
     {
       "action": "wait_visible",
-      "selector": "[role='dialog'][aria-label*='Edit ']",
+      "selector": "[role='dialog'][aria-label^='Edit '][aria-label$='draft.md'] .monaco-editor",
       "timeout": "15s"
     },
     {

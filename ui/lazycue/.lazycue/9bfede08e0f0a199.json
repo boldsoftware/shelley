@@ -75,13 +75,15 @@
     },
     {
       "action": "assert_visible",
-      "selector": "[role=region][aria-label='Markdown preview'] :is(td,th)",
-      "has_text": "Ready"
+      "selector": "[role=region][aria-label='Markdown preview'] table",
+      "role": "cell",
+      "name": "Ready"
     },
     {
-      "action": "eval",
-      "expression": "(() =\u003e { const preview = document.querySelector('[role=region][aria-label=\"Markdown preview\"]'); const ps = [...preview.querySelectorAll('p')]; const wp = ps.find(p =\u003e p.textContent.includes('Wrapped paragraph')); return wp ? wp.textContent.trim().replace(/\\s+/g, ' ') : 'NOT FOUND'; })()",
-      "expect": "Wrapped paragraph continues here."
+      "action": "assert_text",
+      "selector": "[role=region][aria-label='Markdown preview'] p",
+      "has_text": "Wrapped paragraph",
+      "text": "Wrapped paragraph continues here."
     },
     {
       "action": "eval",

@@ -28,7 +28,8 @@
       "value": "long.md"
     },
     {
-      "action": "wait_text",
+      "action": "assert_text_contains",
+      "selector": ".grp-row",
       "text": "long.md",
       "timeout": "10s"
     },
@@ -38,7 +39,7 @@
     },
     {
       "action": "wait_visible",
-      "selector": "[role='dialog'][aria-label*='Edit '] .monaco-editor",
+      "selector": "[role='dialog'][aria-label^='Edit '][aria-label$='long.md'] .monaco-editor",
       "timeout": "15s"
     },
     {

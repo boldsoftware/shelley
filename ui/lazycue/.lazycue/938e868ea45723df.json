@@ -136,9 +136,9 @@
       "has_text": "Second file"
     },
     {
-      "action": "eval",
-      "expression": "document.querySelector(\"[role=\\\"dialog\\\"][aria-label*=\\\"second.md\\\"]\").textContent.includes(\"Pending edit\")",
-      "expect": "false"
+      "action": "assert_text_not_contains",
+      "selector": "[role='dialog'][aria-label^='Edit '][aria-label$='second.md']",
+      "text": "Pending edit"
     },
     {
       "action": "call",

@@ -33,7 +33,7 @@
     },
     {
       "action": "wait_visible",
-      "selector": "[role='dialog'][aria-label*='Edit '] .monaco-editor",
+      "selector": "[role='dialog'][aria-label^='Edit '][aria-label$='draft.md'] .monaco-editor",
       "timeout": "15s"
     },
     {

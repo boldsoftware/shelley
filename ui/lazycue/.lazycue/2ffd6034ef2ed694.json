@@ -8,26 +8,16 @@
       "url": "/"
     },
     {
-      "action": "eval",
-      "expression": "localStorage.setItem('shelley-group-by', 'none')"
-    },
-    {
-      "action": "navigate",
-      "url": "/"
-    },
-    {
-      "action": "eval",
-      "expression": "document.querySelector('h1.header-title')?.textContent",
-      "expect": "Assistant"
-    },
-    {
       "action": "assert_text",
       "selector": "h1.header-title",
-      "text": "Assistant"
+      "text": "Assistant",
+      "timeout": "30s"
     },
     {
       "action": "click",
-      "selector": "button[aria-label='Open tasks']"
+      "role": "button",
+      "name": "Open tasks",
+      "exact": true
     },
     {
       "action": "wait_visible",
@@ -40,22 +30,25 @@
       "count": 0
     },
     {
-      "action": "wait_visible",
-      "selector": "section[aria-label='Self']",
-      "timeout": "10s"
+      "action": "assert_visible",
+      "role": "region",
+      "name": "Self",
+      "exact": true
     },
     {
       "action": "click",
-      "selector": "button[aria-label='View options']"
+      "role": "button",
+      "name": "View options"
     },
     {
-      "action": "wait_visible",
-      "selector": "[role='group'][aria-labelledby='drawer-row-size-heading']",
-      "timeout": "10s"
+      "action": "assert_visible",
+      "role": "group",
+      "name": "Row size"
     },
     {
       "action": "assert_count",
-      "selector": "button[aria-label='No grouping']",
+      "role": "button",
+      "name": "No grouping",
       "count": 0
     }
   ],

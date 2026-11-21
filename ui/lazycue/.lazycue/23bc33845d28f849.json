@@ -28,7 +28,8 @@
       "value": "notes.txt"
     },
     {
-      "action": "wait_text",
+      "action": "assert_text_contains",
+      "selector": ".grp-row",
       "text": "notes.txt",
       "timeout": "10s"
     },

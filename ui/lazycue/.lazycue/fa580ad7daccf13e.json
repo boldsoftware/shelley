@@ -8,10 +8,6 @@
       "url": "/c/{{SLUG}}"
     },
     {
-      "action": "sleep",
-      "timeout": "2s"
-    },
-    {
       "action": "key_down",
       "key": "Control"
     },

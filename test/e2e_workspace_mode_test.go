@@ -45,7 +45,13 @@ func TestE2EWorkspaceModeNoUserFilterSeed(t *testing.T) {
 				http.Error(w, err.Error(), http.StatusBadGateway)
 				return
 			}
-			conversations, _ := body["conversations"].([]any)
+			conversations, ok := body["conversations"].([]any)
+			if !ok {
+				// Failing beats passing an unpatched list through, which
+				// would leave the test checking nothing.
+				http.Error(w, "snapshot: conversations is not a list", http.StatusInternalServerError)
+				return
+			}
 			for _, c := range conversations {
 				c := c.(map[string]any)
 				if c["conversation_id"] == shared {

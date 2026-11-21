@@ -130,7 +130,7 @@
     },
     {
       "action": "wait_hidden",
-      "selector": "[role='dialog']",
+      "selector": "[role='dialog'][aria-label='Edit {{FILE}}']",
       "timeout": "10s"
     },
     {

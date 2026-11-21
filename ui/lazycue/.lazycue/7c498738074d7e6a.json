@@ -1,0 +1,104 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The Markdown file editor keeps Monaco's delete-line shortcut while the editor has focus. The conversation /c/{{SLUG}} runs in a directory holding keys.md, whose lines are \"# Keep\", \"Remove this line\" and \"Keep this too\". To \"open F\": press \"p\" (lowercase) with the Control modifier (on whatever has focus); wait for the finder input \".grp-filter\" to be visible; fill it with F; wait for the FIRST \".grp-row\" to contain F (assert_text_contains on \".grp-row\", which checks the first match: the finder lists every file until the query applies, and Enter opens the top row, so waiting for any row with the text is not enough); press Enter in the finder input; the dialog (role \"dialog\") whose accessible name matches the regular expression /Edit .*F/ is then \"the modal\" for F, and its \".monaco-editor\" should become visible (up to 15s). \"The preview\" is the modal's region (role \"region\") named \"Markdown preview\". \"The editor input\" is the modal's \".monaco-editor textarea.inputarea\"; to focus it, eval its focus(). Key presses go to whatever has focus; do not click anything to focus first unless a step says so. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Open keys.md. 3. Focus the editor input. 4. Press \"Home\" with the Control modifier. 5. Press \"ArrowDown\". 6. Press \"K\" with the modifiers Control+Shift (Monaco's delete line). 7. The modal's \".view-lines\" should come to not contain \"Remove this line\" (assert_text_not_contains, which polls). 8. The modal must hold exactly 0 regions named \"Markdown preview\". 9. Press \"p\" (lowercase) with the modifiers Control+Alt. 10. The preview should be visible. 11. Press \"K\" with the modifiers Control+Shift. 12. The modal's \".monaco-editor\" should be visible. 13. Its \".view-lines\" must still not contain \"Remove this line\" (assert_text_not_contains: Monaco draws spaces as U+00A0, so do not compare raw textContent).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "keys.md"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".grp-row",
+      "text": "keys.md",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog'][aria-label^='Edit '][aria-label$='keys.md'] .monaco-editor",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[role='dialog'][aria-label^='Edit '][aria-label$='keys.md'] .monaco-editor textarea.inputarea\").focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "Home",
+      "modifiers": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "press_key",
+      "key": "K",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": "[role='dialog'][aria-label^='Edit '][aria-label$='keys.md'] .view-lines",
+      "text": "Remove this line",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role='dialog'][aria-label*='Edit '] [role='region'][aria-label='Markdown preview']",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control+Alt"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog'][aria-label*='Edit '] [role='region'][aria-label='Markdown preview']",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "K",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog'][aria-label*='Edit '] .monaco-editor",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": "[role='dialog'][aria-label^='Edit '][aria-label$='keys.md'] .view-lines",
+      "text": "Remove this line"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:07:11.386703086Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 50695,
+    "output_tokens": 1954,
+    "estimated_cost_usd": 0.07268175,
+    "mode": "generated"
+  }
+}

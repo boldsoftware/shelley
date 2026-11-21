@@ -32,9 +32,9 @@
       "expect": "yes"
     },
     {
-      "action": "eval",
-      "expression": "document.querySelector('.diff-viewer-overlay .diff-viewer-editor .editor.modified .view-lines')?.textContent?.replace(/\\s+/g, ' ').includes('update story') ? 'yes' : 'no'",
-      "expect": "yes"
+      "action": "assert_text_contains",
+      "selector": ".diff-viewer-overlay .diff-viewer-editor .editor.modified .view-lines",
+      "text": "update story"
     },
     {
       "action": "assert_count",
@@ -44,11 +44,6 @@
     {
       "action": "call",
       "value": "release"
-    },
-    {
-      "action": "eval",
-      "expression": "document.querySelectorAll('.diff-viewer-overlay select.diff-viewer-select option[value=\"story.txt\"]').length",
-      "expect": "1"
     },
     {
       "action": "assert_count",
