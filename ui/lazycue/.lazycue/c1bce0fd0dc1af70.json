@@ -54,9 +54,9 @@
       "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .vim-toggle"
     },
     {
-      "action": "wait_text",
-      "text": "NORMAL",
+      "action": "assert_text_contains",
       "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-vim-status",
+      "text": "NORMAL",
       "timeout": "10s"
     },
     {
@@ -72,9 +72,9 @@
       "value": "gqip"
     },
     {
-      "action": "wait_text",
-      "text": "papa quebec romeo",
+      "action": "assert_text_contains",
       "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-editor .view-lines",
+      "text": "papa quebec romeo",
       "timeout": "10s"
     },
     {
@@ -102,9 +102,9 @@
       "value": "u"
     },
     {
-      "action": "wait_text",
-      "text": "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa",
+      "action": "assert_text_contains",
       "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-editor .view-lines",
+      "text": "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa",
       "timeout": "10s"
     },
     {

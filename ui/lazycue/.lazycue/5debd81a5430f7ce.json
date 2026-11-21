@@ -36,12 +36,16 @@
     },
     {
       "action": "wait_visible",
-      "selector": "[role=\"dialog\"]:has(.modal-wide)"
+      "role": "dialog",
+      "name": "oauth tools",
+      "exact": true
     },
     {
       "action": "assert_text_contains",
       "within": {
-        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+        "role": "dialog",
+        "name": "oauth tools",
+        "exact": true
       },
       "role": "alert",
       "text": "Remote server failed"
@@ -49,7 +53,9 @@
     {
       "action": "assert_count",
       "within": {
-        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+        "role": "dialog",
+        "name": "oauth tools",
+        "exact": true
       },
       "role": "link",
       "count": 0

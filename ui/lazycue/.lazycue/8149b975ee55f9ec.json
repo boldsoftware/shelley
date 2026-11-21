@@ -36,14 +36,18 @@
     },
     {
       "action": "wait_visible",
-      "selector": "[role='dialog']:has(.modal-wide)"
+      "role": "dialog",
+      "name": "kagi tools",
+      "exact": true
     },
     {
       "action": "assert_attribute",
       "role": "link",
       "name": "Manage on exe.dev",
       "within": {
-        "selector": "[role='dialog']:has(.modal-wide)"
+        "role": "dialog",
+        "name": "kagi tools",
+        "exact": true
       },
       "attribute": "href",
       "value": "https://exe.dev/integrations",
@@ -54,7 +58,9 @@
       "role": "link",
       "name": "Manage on exe.dev",
       "within": {
-        "selector": "[role='dialog']:has(.modal-wide)"
+        "role": "dialog",
+        "name": "kagi tools",
+        "exact": true
       },
       "attribute": "target",
       "value": "_blank",
@@ -63,15 +69,19 @@
     {
       "action": "assert_count",
       "within": {
-        "selector": "[role='dialog']:has(.modal-wide)"
+        "role": "dialog",
+        "name": "kagi tools",
+        "exact": true
       },
       "role": "alert",
       "count": 0
     },
     {
       "action": "assert_text_not_contains",
-      "selector": "[role='dialog']:has(.modal-wide)",
-      "text": "/mcp/login/"
+      "text": "/mcp/login/",
+      "role": "dialog",
+      "name": "kagi tools",
+      "exact": true
     },
     {
       "action": "call",
@@ -89,7 +99,9 @@
     {
       "action": "assert_visible",
       "within": {
-        "selector": "[role='dialog']:has(.modal-wide)"
+        "role": "dialog",
+        "name": "kagi tools",
+        "exact": true
       },
       "selector": "*",
       "has_text": "ready_tool",
@@ -100,7 +112,9 @@
       "role": "link",
       "name": "Manage on exe.dev",
       "within": {
-        "selector": "[role='dialog']:has(.modal-wide)"
+        "role": "dialog",
+        "name": "kagi tools",
+        "exact": true
       },
       "count": 0,
       "exact": true

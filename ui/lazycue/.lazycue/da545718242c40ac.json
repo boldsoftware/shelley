@@ -36,12 +36,16 @@
     },
     {
       "action": "assert_visible",
-      "selector": "[role=\"dialog\"]:has(.modal-wide)"
+      "role": "dialog",
+      "name": "oauth tools",
+      "exact": true
     },
     {
       "action": "assert_attribute",
       "within": {
-        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+        "role": "dialog",
+        "name": "oauth tools",
+        "exact": true
       },
       "role": "link",
       "name": "Sign in",
@@ -52,7 +56,9 @@
     {
       "action": "assert_attribute",
       "within": {
-        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+        "role": "dialog",
+        "name": "oauth tools",
+        "exact": true
       },
       "role": "link",
       "name": "Sign in",
@@ -63,15 +69,19 @@
     {
       "action": "assert_count",
       "within": {
-        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+        "role": "dialog",
+        "name": "oauth tools",
+        "exact": true
       },
       "role": "alert",
       "count": 0
     },
     {
       "action": "assert_text_not_contains",
-      "selector": "[role=\"dialog\"]:has(.modal-wide)",
-      "text": "/mcp/login/"
+      "text": "/mcp/login/",
+      "role": "dialog",
+      "name": "oauth tools",
+      "exact": true
     },
     {
       "action": "call",
@@ -89,7 +99,9 @@
     {
       "action": "assert_visible",
       "within": {
-        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+        "role": "dialog",
+        "name": "oauth tools",
+        "exact": true
       },
       "selector": "*",
       "has_text": "ready_tool",
@@ -98,7 +110,9 @@
     {
       "action": "assert_count",
       "within": {
-        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+        "role": "dialog",
+        "name": "oauth tools",
+        "exact": true
       },
       "role": "link",
       "name": "Sign in",
