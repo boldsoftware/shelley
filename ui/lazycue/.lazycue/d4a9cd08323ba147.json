@@ -1,0 +1,61 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A stale \"tool-pills\" feature flag override still renders bursts of tool calls as inline cards. The page's localStorage already holds the override ff:tool-pills = \"true\" (do not set it yourself). The conversation at /c/{{ID}} is a generated one whose turns each contain several consecutive tool calls: the burst shape that used to collapse into one pill row. \"The cards\" are the elements matching '[data-testid=\"tool-call-completed\"], [data-testid=\"tool-call-running\"]', in document order. Perform the steps in order.\n1. Navigate to /c/{{ID}} and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. The override really is in place: localStorage.getItem(\"ff:tool-pills\") is exactly \"true\".\n3. Wait until there are more than 1 cards (allow 30s): every tool call is an inline card (or its cheap geometry placeholder, for the ones far offscreen).\n4. There are no \".tool-pill\", no \".tool-pills-row\" and no \".tool-detail-modal\" elements (count 0 each).\n5. Two tool calls from the same burst sit next to each other in the stream, each as its own full-width card rather than side by side in a row: in an eval with expect \"true\", each of the first two cards has getBoundingClientRect().width greater than 0.5 times the messages container's (\".messages-container\") clientWidth.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('ff:tool-pills')",
+      "expect": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"tool-call-completed\"], [data-testid=\"tool-call-running\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"tool-call-completed\"], [data-testid=\"tool-call-running\"]').length \u003e 1 ? 'true' : 'false'",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool-pill",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool-pills-row",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool-detail-modal",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const cards = document.querySelectorAll('[data-testid=\"tool-call-completed\"], [data-testid=\"tool-call-running\"]'); const container = document.querySelector('.messages-container'); if (!container || cards.length \u003c 2) return 'false'; const containerWidth = container.clientWidth; const w0 = cards[0].getBoundingClientRect().width; const w1 = cards[1].getBoundingClientRect().width; return (w0 \u003e 0.5 * containerWidth \u0026\u0026 w1 \u003e 0.5 * containerWidth) ? 'true' : 'false'; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:16:40.892525547Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 20156,
+    "output_tokens": 1235,
+    "estimated_cost_usd": 0.031627499999999996,
+    "mode": "generated"
+  }
+}

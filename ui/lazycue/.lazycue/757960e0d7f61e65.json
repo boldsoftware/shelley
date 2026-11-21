@@ -1,0 +1,62 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Tool output is read inline, never in a modal. The conversation at /c/{{PATCH}} applied a patch to test-patch-success.txt; the conversation at /c/{{BASH}} ran the bash command \"echo inline-only\". Perform the steps in order.\n1. Navigate to /c/{{PATCH}}. \"The patch card\" is the first '.patch-tool[data-testid=\"tool-call-completed\"]' element whose text contains \"test-patch-success.txt\". Wait for it to be visible (allow 30s).\n2. It is expanded on arrival, with no click: the patch card's \".patch-tool-details\" element is visible.\n3. Navigate to /c/{{BASH}}. \"The bash card\" is the first '.bash-tool[data-testid=\"tool-call-completed\"]' element. Wait for it to be visible (allow 30s).\n4. Click the bash card's \".bash-tool-header\". The bash card's \".bash-tool-details\" element becomes visible and its text contains \"inline-only\".\n5. It expanded in place, inside the card, with no modal opened: there are no \".modal\" and no \".tool-detail-modal\" elements (count 0 each).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{PATCH}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".patch-tool[data-testid=\"tool-call-completed\"]",
+      "has_text": "test-patch-success.txt",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".patch-tool[data-testid=\"tool-call-completed\"] .patch-tool-details"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{BASH}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-header"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details",
+      "text": "inline-only"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".modal",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool-detail-modal",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:17:35.819943832Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 70872,
+    "output_tokens": 2237,
+    "estimated_cost_usd": 0.074085,
+    "mode": "generated"
+  }
+}

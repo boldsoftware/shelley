@@ -1,0 +1,63 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The removed feature flags \"tool-pills\" and \"reflection-emoji-favicon\" are absent from the API and the flags modal. Perform the steps in order.\n1. Call \"flags\": it reads the server's feature flag registry (GET /feature-flags) and must return exactly \"served=true tool-pills=absent reflection-emoji-favicon=absent\" (the registry is non-empty, so the absence means something, and neither removed flag is in it).\n2. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n3. Press Control+k to open the command palette. The command palette's search box (\".command-palette-input\") becomes visible.\n4. Fill the search box with \"feature\", then click the FIRST \".command-palette-item\".\n5. The modal title (\".modal-title\") has exactly the text \"Feature flags\".\n6. The first \".feature-flag-name\" element is visible.\n7. In an eval with expect \"true\", collect the textContent of every \".feature-flag-name\" element into a list; the list must be non-empty and must not include an entry equal to \"tool-pills\" or to \"reflection-emoji-favicon\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "call",
+      "value": "flags",
+      "expect": "served=true tool-pills=absent reflection-emoji-favicon=absent"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "15s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "feature"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".modal-title",
+      "text": "Feature flags"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".feature-flag-name"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const names = Array.from(document.querySelectorAll('.feature-flag-name')).map(el =\u003e el.textContent.trim()); return names.length \u003e 0 \u0026\u0026 !names.includes('tool-pills') \u0026\u0026 !names.includes('reflection-emoji-favicon'); })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:16:02.713078693Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 12706,
+    "output_tokens": 580,
+    "estimated_cost_usd": 0.016822049999999998,
+    "mode": "generated"
+  }
+}
