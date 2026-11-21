@@ -1,0 +1,125 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The Gemini model provider discovers models and connects using its native endpoint. The screen is the default 393x727 phone. To \"open the model picker\": wait for \".header\" to be visible; when the window is narrower than 768px, the picker is in the overflow menu: if \".chat-overflow-popover\" is not visible, click the button with aria-label exactly \"More options\", then click the visible \".model-picker.p-select\" inside \".chat-overflow-popover\"; on a wider window, click the visible \".model-picker.p-select\" inside \".status-bar\". The element clicked is \"the picker\"; its panel is \".model-picker-panel\". The server is faked: there are no custom models and no providers yet; checking a provider answers one model, \"gemini-3.8-flash\" (named \"Gemini Flash\"); connecting saves the provider \"Google\". Call \"check input\" returns the JSON body of the last provider check the page sent (\"\" if none), call \"connect input\" that of the last connect request, and call \"connected\" says whether a connect request has arrived (\"true\" or \"false\"). Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match. \"The form\" is the element with data-testid \"model-provider-form\". Perform the steps in order. 1. Navigate to /new and open the model picker. 2. Click the button named \"Manage Models\", then the button named \"+ Add Models\". 3. Click the form's button named \"Google Gemini\". 4. The form's data-testid \"provider-endpoint\" input should have the value exactly \"https://generativelanguage.googleapis.com/v1beta\". 5. Fill the form's data-testid \"provider-api-key\" input with \"gemini-secret\" and its data-testid \"provider-display-name\" input with \"Google\". 6. Click the form's button named \"Check models\". 7. The form's element with role \"status\" should contain the text \"1 chat models: gemini-3.8-flash\". 8. Call \"check input\": it must return exactly {\"api_key\":\"gemini-secret\",\"display_name\":\"Google\",\"endpoint\":\"https://generativelanguage.googleapis.com/v1beta\",\"provider_type\":\"gemini\"}. 9. Call \"connected\": it must return \"false\". 10. Click the form's button named \"Connect\". 11. The form should be hidden. 12. Call \"connect input\": it must return exactly the same JSON as step 8. 13. The element with data-testid \"provider-connection\" should contain the text \"Google\", and the element with data-testid \"model-provider-list\" the text \"Gemini\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker.p-select",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Manage Models",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "+ Add Models",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=model-provider-form]",
+      "role": "button",
+      "name": "Google Gemini",
+      "exact": true
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=provider-endpoint]",
+      "value": "https://generativelanguage.googleapis.com/v1beta"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=provider-api-key]",
+      "value": "gemini-secret"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=provider-display-name]",
+      "value": "Google"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=model-provider-form]",
+      "role": "button",
+      "name": "Check models",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=model-provider-form] [role=status]",
+      "text": "1 chat models: gemini-3.8-flash"
+    },
+    {
+      "action": "call",
+      "value": "check input",
+      "expect": "{\"api_key\":\"gemini-secret\",\"display_name\":\"Google\",\"endpoint\":\"https://generativelanguage.googleapis.com/v1beta\",\"provider_type\":\"gemini\"}"
+    },
+    {
+      "action": "call",
+      "value": "connected",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=model-provider-form]",
+      "role": "button",
+      "name": "Connect",
+      "exact": true
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=model-provider-form]"
+    },
+    {
+      "action": "call",
+      "value": "connect input",
+      "expect": "{\"api_key\":\"gemini-secret\",\"display_name\":\"Google\",\"endpoint\":\"https://generativelanguage.googleapis.com/v1beta\",\"provider_type\":\"gemini\"}"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=provider-connection]",
+      "text": "Google"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=model-provider-list]",
+      "text": "Gemini"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:38:15.987753982Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 130661,
+    "output_tokens": 3656,
+    "estimated_cost_usd": 0.12048854999999999,
+    "mode": "generated"
+  }
+}
