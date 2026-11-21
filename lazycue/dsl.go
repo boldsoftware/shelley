@@ -163,6 +163,7 @@ const (
 	ActionWaitURL               = "wait_url"
 	ActionAssertURL             = "assert_url"
 	ActionAssertTitle           = "assert_title"
+	ActionAssertDownload        = "assert_download"
 	ActionAssertCount           = "assert_count"
 	ActionSleep                 = "sleep"
 	ActionCloseTab              = "close_tab"
@@ -261,7 +262,7 @@ func stepSummary(s Step) string {
 			summary += fmt.Sprintf(" touch=%t", *s.Touch)
 		}
 		return summary
-	case ActionEmulateMedia:
+	case ActionEmulateMedia, ActionAssertDownload:
 		return s.Action + " " + s.Value
 	case ActionKeyDown, ActionKeyUp:
 		return s.Action + " " + s.Key

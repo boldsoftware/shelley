@@ -632,6 +632,50 @@ func TestFrames(t *testing.T) {
 // Whether Chrome renders a cross-origin frame, so that its roles can be
 // read and its elements wait for frames, is whether the frame intersects
 // the viewport through every scroller around it.
+// assert_download waits for a download to begin with the file name, in the
+// page or a frame, as Playwright's download event and suggestedFilename,
+// and takes it and those before it.
+func TestDownloads(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	// The frame's begins later than the page's.
+	save := func(name, delay string) string {
+		return `<button onclick="const a = document.createElement('a'); a.href = window.URL.createObjectURL(new Blob(['red'])); a.download = '` + name + `'; setTimeout(() => a.click(), ` + delay + `)">Save</button>`
+	}
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+`+save("colors.txt", "0")+`
+<iframe srcdoc="`+html.EscapeString(save("frame.txt", "300"))+`"></iframe>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionClick, Role: "button", Name: "Save"},
+		Step{Action: ActionAssertDownload, Value: "colors.txt"},
+		Step{Action: ActionClick, Frame: "iframe", Role: "button", Name: "Save"},
+		Step{Action: ActionAssertDownload, Value: "frame.txt"},
+		Step{Action: ActionClick, Role: "button", Name: "Save"},
+		Step{Action: ActionClick, Frame: "iframe", Role: "button", Name: "Save"},
+		Step{Action: ActionAssertDownload, Value: "frame.txt"},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		// The last took the colors.txt before it.
+		{Step{Action: ActionAssertDownload, Value: "colors.txt"}, `assert_download: expected a download of "colors.txt", got none`},
+		{Step{Action: ActionClick, Role: "button", Name: "Save"}, ""},
+		{Step{Action: ActionAssertDownload, Value: "Colors.txt"}, `assert_download: expected a download of "Colors.txt", got ["colors.txt"]`},
+		{Step{Action: ActionAssertDownload}, "assert_download needs a value: the file name"},
+	} {
+		if c.err == "" {
+			runSteps(t, br, env, c.step)
+			continue
+		}
+		c.step.Timeout = "500ms"
+		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+}
+
 // A frame's eval runs in the frame's own world, as Playwright's do, so it
 // sees the globals the frame's scripts define and waits for their promises.
 func TestFrameEvalSeesTheFramesGlobals(t *testing.T) {

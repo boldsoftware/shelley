@@ -1436,6 +1436,26 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 			return nil
 		})
 
+	case ActionAssertDownload:
+		if step.Value == "" {
+			return mistake{errors.New("assert_download needs a value: the file name")}
+		}
+		return b.pollCheck(ctx, tabCtx, timeout, func(context.Context) error {
+			began, ok := b.control.download(step.Value)
+			if ok {
+				return nil
+			}
+			got := "none"
+			if len(began) > 0 {
+				quoted, err := json.Marshal(began)
+				if err != nil {
+					return err
+				}
+				got = string(quoted)
+			}
+			return fmt.Errorf("assert_download: expected a download of %q, got %s", step.Value, got)
+		})
+
 	case ActionAssertCount:
 		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
 			var count int

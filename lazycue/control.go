@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/page"
@@ -45,7 +47,10 @@ type control struct {
 	replies map[int64]chan *cdproto.Message
 	pages   map[target.ID]*setup
 	targets map[target.SessionID]target.ID
-	lost    chan struct{} // closed when the connection is gone
+	// downloads are the suggested file names of the downloads begun since
+	// the browser launched or download last took them.
+	downloads []string
+	lost      chan struct{} // closed when the connection is gone
 }
 
 // setup is a page's set-up, done once ready is closed.
@@ -87,12 +92,31 @@ func dialControl(ctx context.Context, url string, launch Launch, popup, closed f
 		lost:    make(chan struct{}),
 	}
 	go c.read()
+	bctx := cdp.WithExecutor(ctx, session{c, ""})
 	attach := target.SetAutoAttach(true, true).WithFlatten(true).WithFilter(target.Filter{{Type: "page"}, {Exclude: true}})
-	if err := attach.Do(cdp.WithExecutor(ctx, session{c, ""})); err != nil {
+	if err := attach.Do(bctx); err != nil {
+		c.close()
+		return nil, err
+	}
+	// Report downloads, as Playwright does, but save none.
+	if err := browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorDeny).WithEventsEnabled(true).Do(bctx); err != nil {
 		c.close()
 		return nil, err
 	}
 	return c, nil
+}
+
+// download takes the downloads begun so far if one of them is name's, and
+// reports which had begun.
+func (c *control) download(name string) (began []string, ok bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	began = c.downloads
+	if !slices.Contains(began, name) {
+		return began, false
+	}
+	c.downloads = nil
+	return began, true
 }
 
 // close closes the connection and waits for read to stop, which unblocks
@@ -165,6 +189,10 @@ func (c *control) read() {
 			delete(c.pages, id)
 			c.mu.Unlock()
 			c.closed(id)
+		case *browser.EventDownloadWillBegin:
+			c.mu.Lock()
+			c.downloads = append(c.downloads, ev.SuggestedFilename)
+			c.mu.Unlock()
 		case *fetch.EventRequestPaused:
 			// Off this loop: a handler may take its time.
 			go func() {
