@@ -1,0 +1,35 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The file picker does not restrict file types. Navigate to /new and wait for the message input (data-testid \"message-input\") to be visible. There should be exactly one hidden file input, input[type=\"file\"].message-input-hidden, and it must have no accept attribute at all (hasAttribute(\"accept\") is false).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "input[type='file'].message-input-hidden",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('input[type=\"file\"].message-input-hidden').hasAttribute('accept')",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:05:14.218121728Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 4171,
+    "output_tokens": 191,
+    "estimated_cost_usd": 0.005988149999999999,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Focus stays in the message input after pasting an image. Perform the steps in order. 1. Navigate to /new and wait for the message input (data-testid \"message-input\") to be visible. 2. Fill it with \"Testing paste focus: \" (note the trailing space), which focuses it. 3. In an eval, dispatch on the message input new ClipboardEvent(\"paste\", {clipboardData: dt, bubbles: true, cancelable: true}), where dt is a new DataTransfer holding new File([new Blob([\"test\"], {type: \"image/png\"})], \"test-paste.png\", {type: \"image/png\"}). 4. Wait 100ms. 5. The message input must be the focused element (document.activeElement === the message input is true). 6. Its value must still be exactly \"Testing paste focus: \". 7. There should be exactly one attachment chip (\".message-attachment\").",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Testing paste focus: "
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var input = document.querySelector('[data-testid=\"message-input\"]'); var file = new File([new Blob(['test'], {type: 'image/png'})], 'test-paste.png', {type: 'image/png'}); var dt = new DataTransfer(); dt.items.add(file); var ev = new ClipboardEvent('paste', {clipboardData: dt, bubbles: true, cancelable: true}); input.dispatchEvent(ev); return 'dispatched'; })()"
+    },
+    {
+      "action": "sleep",
+      "timeout": "100ms"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value",
+      "expect": "Testing paste focus: "
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment",
+      "count": 1
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:07:32.469310658Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 44238,
+    "output_tokens": 1414,
+    "estimated_cost_usd": 0.0483402,
+    "mode": "generated"
+  }
+}

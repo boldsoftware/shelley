@@ -1,0 +1,25 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The upload endpoint accepts files and returns their path. 1. Navigate to /new. 2. In one eval, POST to /api/upload with fetch a multipart form (FormData) whose field \"file\" is a file named \"test.txt\" of type text/plain containing \"test file content\", read the response's JSON, and return JSON.stringify({status: response.status, path: typeof json.path, uploads: json.path.includes(\"/tmp/shelley-uploads/\"), txt: json.path.includes(\".txt\")}). It must be exactly {\"status\":200,\"path\":\"string\",\"uploads\":true,\"txt\":true}.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const fd = new FormData(); fd.append('file', new File(['test file content'], 'test.txt', {type: 'text/plain'})); const response = await fetch('/api/upload', {method: 'POST', body: fd}); const json = await response.json(); return JSON.stringify({status: response.status, path: typeof json.path, uploads: json.path.includes('/tmp/shelley-uploads/'), txt: json.path.includes('.txt')}); })()",
+      "expect": "{\"status\":200,\"path\":\"string\",\"uploads\":true,\"txt\":true}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:08:45.941906584Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 19140,
+    "output_tokens": 924,
+    "estimated_cost_usd": 0.0254046,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "An uploaded file can be read back with the /api/read endpoint. 1. Navigate to /new. 2. In one eval: POST to /api/upload with fetch a multipart form (FormData) whose field \"file\" is a file named \"readable.txt\" of type text/plain containing \"hello from test\"; take the path from the response's JSON; then GET /api/read?path= followed by encodeURIComponent of that path; and return JSON.stringify({upload: \u003cthe upload response's status\u003e, read: \u003cthe read response's status\u003e, text: \u003cthe read response's text\u003e}). It must be exactly {\"upload\":200,\"read\":200,\"text\":\"hello from test\"}.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "eval",
+      "expression": "(async function() { const fd = new FormData(); const file = new File(['hello from test'], 'readable.txt', {type: 'text/plain'}); fd.append('file', file); const uploadRes = await fetch('/api/upload', {method: 'POST', body: fd}); const uploadJson = await uploadRes.json(); const path = uploadJson.path; const readRes = await fetch('/api/read?path=' + encodeURIComponent(path)); const readText = await readRes.text(); return JSON.stringify({upload: uploadRes.status, read: readRes.status, text: readText}); })()",
+      "expect": "{\"upload\":200,\"read\":200,\"text\":\"hello from test\"}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:08:01.441432768Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 9026,
+    "output_tokens": 573,
+    "estimated_cost_usd": 0.01524735,
+    "mode": "generated"
+  }
+}

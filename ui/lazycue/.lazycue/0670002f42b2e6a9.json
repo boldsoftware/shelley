@@ -1,0 +1,116 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "window.dropFiles(files) drops files on the composer: it dispatches a \"drop\" DragEvent carrying a text/plain File for each [name, content] pair on \".message-input-container\"; call it in an eval, e.g. window.dropFiles([[\"a.txt\", \"some content\"]]). Unsent attachments stay with their conversation. There are two conversations: /c/attachment-first, whose drawer item is [data-conversation-id=\"{{FIRST_ID}}\"], and an archived one whose drawer item is [data-conversation-id=\"{{SECOND_ID}}\"]. The server's answer to uploads (/api/upload) is held back until call \"release\". Perform the steps in order. 1. Navigate to /c/attachment-first and wait (up to 30s) for the message input (data-testid \"message-input\") to be visible. 2. Drop one file, \"draft.txt\" containing \"draft attachment\". 3. There should be exactly one uploading attachment (\".message-attachment-uploading\"). 4. Open the conversations drawer (click button[aria-label=\"Open conversations\"]; it is visible on this phone). 5. Click the \"View archived\" button, then click the archived conversation's item [data-conversation-id=\"{{SECOND_ID}}\"]. 6. The message input should become hidden, and there must be no \".message-attachment\" at all (count 0). 7. Call \"release\". 8. Open the conversations drawer again the same way, click the \"Back to conversations\" button, then click [data-conversation-id=\"{{FIRST_ID}}\"]. 9. There should be exactly one ready attachment (\".message-attachment-ready\"), and the attachment name (\".message-attachment-name\") should be exactly \"draft.txt\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/attachment-first"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.dropFiles([['draft.txt', 'draft attachment']])"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-attachment-uploading",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-uploading",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open conversations']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button",
+      "has_text": "View Archived",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "button",
+      "has_text": "View Archived"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id='{{SECOND_ID}}']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id='{{SECOND_ID}}']"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open conversations']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button",
+      "has_text": "Back to conversations",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "button",
+      "has_text": "Back to conversations"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id='{{FIRST_ID}}']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id='{{FIRST_ID}}']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-attachment-ready",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": ".message-attachment-name",
+      "text": "draft.txt"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:06:34.909433008Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 77029,
+    "output_tokens": 3250,
+    "estimated_cost_usd": 0.10153425000000002,
+    "mode": "generated"
+  }
+}
