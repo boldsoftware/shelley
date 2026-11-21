@@ -114,8 +114,10 @@ func TestMain(m *testing.M) {
 		BaseURL:  ts.URL,
 		CacheDir: cacheDir,
 		// The agent's git_command explores the app's source, not the
-		// fixture repository the tests run in.
-		RepoRoot:    filepath.Join(pkgDir, ".."),
+		// fixture repository the tests run in, and not the tests: it
+		// would copy them instead of following its description.
+		RepoRoot:    filepath.Join(pkgDir, "..", "ui", "src"),
+		GitHidden:   []string{"e2e", ".spec.ts", "_test.go"},
 		Verbose:     true,
 		ArtifactDir: os.Getenv("LAZYCUE_ARTIFACT_DIR"),
 		VideoDir:    os.Getenv("LAZYCUE_VIDEO_DIR"),
@@ -699,8 +701,8 @@ Step D — archive the active conversation from its actions menu: click the butt
 }
 
 // --- Diff viewer file list (regression for untracked/added files missing from
-// the sidebar/picker). The diff viewer can be opened directly via the URL query
-// params ?diff=working&cwd=<repo>. The file picker is a <select> with class
+// the sidebar/picker). The test opens the viewer from a conversation in a
+// repository with working-tree changes. The file picker is a <select> with class
 // "diff-viewer-select" whose <option> labels are prefixed with a status symbol:
 // "+" for added, "~" for modified, "-" for deleted. `git diff --name-status
 // HEAD` omits untracked files, so brand-new files used to be missing from this

@@ -34,6 +34,7 @@
   let wake = null;
   let firing = false; // in a timer's callback
   let advancing = 0; // advances running, which own the time
+  let began = 0; // real time the outermost of them began
   const timers = new Map();
 
   const current = () => (paused || advancing ? now : now + (real.now() - realAt));
@@ -106,7 +107,7 @@
     rebase();
     const until = target(now);
     if (until < now) throw new Error('the clock cannot go back from ' + new RealDate(now).toISOString());
-    advancing++;
+    if (!advancing++) began = real.now();
     schedule(); // no wake-ups meanwhile
     try {
       if (once) {
@@ -121,6 +122,9 @@
     } finally {
       advancing--;
       now = Math.max(now, until); // another advance may have gone further
+      // Flowing time went on while the timers fired; without this the page's
+      // clock falls behind the server's by a task per timer.
+      if (!advancing && !paused) now += real.now() - began;
       realAt = real.now();
       schedule();
     }
@@ -156,6 +160,7 @@
     resume() {
       rebase();
       paused = false;
+      began = real.now();
       schedule();
     },
   };

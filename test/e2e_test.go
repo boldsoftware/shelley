@@ -57,6 +57,7 @@ var (
 	e2eMu        sync.Mutex
 	e2eHarnesses []*lazycue.Harness
 	e2eServers   = map[*shelley]bool{} // not yet closed
+	e2eStopping  bool                  // no new servers
 )
 
 // initE2E prepares for the e2e tests once.
@@ -136,6 +137,7 @@ func startE2E() (err error) {
 // left behind.
 func stopE2E() {
 	e2eMu.Lock()
+	e2eStopping = true
 	servers := slices.Collect(maps.Keys(e2eServers))
 	e2eMu.Unlock()
 	for _, s := range servers {
@@ -151,8 +153,8 @@ func stopE2E() {
 }
 
 // sweepE2E removes what runs that died without stopE2E (a test timeout, a
-// kill) left behind: their terminal sessions and directories. Their servers
-// died with them.
+// kill) left behind: their terminal sessions and directories. On Linux their
+// servers died with them (see serverProcAttr).
 func sweepE2E() {
 	dirs, _ := filepath.Glob(filepath.Join(os.TempDir(), "se2e-*-*"))
 	for _, dir := range dirs {
@@ -194,6 +196,7 @@ func e2e(t *testing.T, description string, setup func(s *shelley)) {
 		if err != nil && ctx.Err() == nil {
 			// Playwright retried a test whose setup failed; so does this,
 			// once.
+			t.Logf("setup failed, retrying: %v", err)
 			env, err = setUp(ctx, setup)
 		}
 		return env, err
@@ -248,11 +251,12 @@ type shelley struct {
 	proxy     *http.Server
 	url       string // the proxy, which the browser talks to
 	backend   string // the server itself
-	cmd       *exec.Cmd
-	exited    chan struct{}
 	closed    sync.Once
 
 	mu       sync.Mutex
+	cmd      *exec.Cmd // until stopped
+	exited   chan struct{}
+	stopped  bool
 	headers  http.Header
 	requests []string
 }
@@ -274,6 +278,11 @@ func newShelley(ctx context.Context) (*shelley, error) {
 		headers:   http.Header{},
 	}
 	e2eMu.Lock()
+	if e2eStopping {
+		e2eMu.Unlock()
+		os.RemoveAll(dir)
+		return nil, errors.New("the e2e tests are stopping")
+	}
 	e2eServers[s] = true
 	e2eMu.Unlock()
 	s.vars["CWD"] = s.cwd
@@ -403,7 +412,7 @@ func hermeticGitEnv(env []string) []string {
 
 // setenv sets server environment variables, "NAME=value", before it starts.
 func (s *shelley) setenv(kv ...string) {
-	if s.cmd != nil {
+	if s.running() {
 		s.fail("setenv after the server started")
 	}
 	s.serverEnv = append(s.serverEnv, kv...)
@@ -565,7 +574,7 @@ func abort(w http.ResponseWriter, r *http.Request) {
 // start starts the server, if it has not yet started. Helpers that talk to
 // it start it, so setup can prepare files and environment first.
 func (s *shelley) start() {
-	if s.cmd != nil {
+	if s.running() {
 		return
 	}
 	log, err := os.Create(filepath.Join(s.dir, "server.log"))
@@ -593,12 +602,22 @@ func (s *shelley) start() {
 	cmd.Env = append(cmd.Env, s.serverEnv...)
 	cmd.SysProcAttr = serverProcAttr()
 	s.check(cmd.Start())
-	s.cmd = cmd
-	s.exited = make(chan struct{})
+	exited := make(chan struct{})
 	go func() {
 		cmd.Wait()
-		close(s.exited)
+		close(exited)
 	}()
+	s.mu.Lock()
+	stopped := s.stopped
+	if !stopped {
+		s.cmd, s.exited = cmd, exited
+	}
+	s.mu.Unlock()
+	if stopped {
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		<-exited
+		s.fail("stopped while starting")
+	}
 
 	var port string
 	deadline := time.Now().Add(30 * time.Second)
@@ -608,7 +627,7 @@ func (s *shelley) start() {
 			break
 		}
 		select {
-		case <-s.exited:
+		case <-exited:
 			s.fail("shelley exited during startup")
 		case <-time.After(20 * time.Millisecond):
 		}
@@ -631,7 +650,7 @@ func (s *shelley) start() {
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	s.check(err)
-	s.proxy = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	proxy := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		s.requests = append(s.requests, r.Method+" "+r.URL.RequestURI())
 		s.mu.Unlock()
@@ -641,7 +660,10 @@ func (s *shelley) start() {
 		}
 		s.pass.ServeHTTP(w, r)
 	})}
-	go s.proxy.Serve(ln)
+	s.mu.Lock()
+	s.proxy = proxy
+	s.mu.Unlock()
+	go proxy.Serve(ln)
 	s.url = "http://" + ln.Addr().String()
 
 	// Next-prompt suggestions would race the tests' own prompts.
@@ -667,20 +689,32 @@ func (s *shelley) close() {
 	})
 }
 
-// stop stops the server and the proxy in front of it.
+// running reports whether the server has started and not yet stopped.
+func (s *shelley) running() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cmd != nil
+}
+
+// stop stops the server and the proxy in front of it. A start still under
+// way stops itself.
 func (s *shelley) stop() {
-	if s.proxy != nil {
-		s.proxy.Close()
+	s.mu.Lock()
+	cmd, exited, proxy := s.cmd, s.exited, s.proxy
+	s.cmd, s.proxy, s.stopped = nil, nil, true
+	s.mu.Unlock()
+	if proxy != nil {
+		proxy.Close()
 	}
 	// The server waits for idle connections to close as it shuts down.
 	s.transport.CloseIdleConnections()
-	if s.cmd != nil {
-		syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
+	if cmd != nil {
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 		select {
-		case <-s.exited:
+		case <-exited:
 		case <-time.After(10 * time.Second):
-			syscall.Kill(-s.cmd.Process.Pid, syscall.SIGKILL)
-			<-s.exited
+			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			<-exited
 		}
 	}
 }

@@ -57,7 +57,7 @@
     },
     {
       "action": "eval",
-      "expression": "window.__clock.runFor(1100); 'done'",
+      "expression": "window.__clock.runFor(1100).then(() =\u003e 'done')",
       "expect": "done"
     },
     {
