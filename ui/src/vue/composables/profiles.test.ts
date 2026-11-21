@@ -39,6 +39,7 @@ const base: Settings = {
   idle_compaction_prompt: "",
   cache_keep_warm_minutes: 0,
   system_prompt: "",
+  disable_notifications: false,
 };
 const diff = (from: Partial<Settings>, to: Partial<Settings>) =>
   settingsDifferences({ ...base, ...from }, { ...base, ...to }, models, tools);
@@ -137,6 +138,11 @@ run("idle compaction remains visible when the context tool is off", () => {
     diff({}, { cache_keep_warm_minutes: 8 }),
     [{ kind: "keepWarm", from: 0, to: 8 }],
     "enabling cache warming",
+  );
+  assertEqual(
+    diff({}, { disable_notifications: true }),
+    [{ kind: "notifications", on: false }],
+    "disabling notifications",
   );
   assertEqual(
     diff({}, { idle_compaction_prompt: "Keep dates." }),

@@ -43,6 +43,9 @@ type Settings struct {
 	// SystemPrompt is the text/template of the system prompt; "" means the
 	// built-in one.
 	SystemPrompt string `json:"system_prompt"`
+	// DisableNotifications keeps turn ends from being announced (see
+	// announcesTurnEnds).
+	DisableNotifications bool `json:"disable_notifications"`
 }
 
 // ConversationSettings are a conversation's settings and the profile they
@@ -70,6 +73,7 @@ func conversationSettings(conv generated.Conversation) ConversationSettings {
 			IdleCompactionPrompt:  opts.IdleCompactionPrompt,
 			CacheKeepWarmMinutes:  opts.CacheKeepWarmMinutes,
 			SystemPrompt:          opts.SystemPrompt,
+			DisableNotifications:  opts.DisableNotifications,
 		},
 	}
 }
@@ -89,7 +93,8 @@ func (st Settings) equal(o Settings) bool {
 		maps.Equal(st.ToolOverrides, o.ToolOverrides) &&
 		st.IdleCompactionMinutes == o.IdleCompactionMinutes && st.IdleCompactionPrompt == o.IdleCompactionPrompt &&
 		st.CacheKeepWarmMinutes == o.CacheKeepWarmMinutes &&
-		compactNudgeTokens(st.CompactNudgeTokens) == compactNudgeTokens(o.CompactNudgeTokens) && st.SystemPrompt == o.SystemPrompt
+		compactNudgeTokens(st.CompactNudgeTokens) == compactNudgeTokens(o.CompactNudgeTokens) && st.SystemPrompt == o.SystemPrompt &&
+		st.DisableNotifications == o.DisableNotifications
 }
 
 // applyTo stores cs, except the model, in opts.
@@ -103,6 +108,7 @@ func (cs ConversationSettings) applyTo(opts *db.ConversationOptions) {
 	opts.IdleCompactionPrompt = cs.IdleCompactionPrompt
 	opts.CacheKeepWarmMinutes = cs.CacheKeepWarmMinutes
 	opts.SystemPrompt = cs.SystemPrompt
+	opts.DisableNotifications = cs.DisableNotifications
 }
 
 // validate reports what's wrong with st, or "". modelList is the catalog. An
@@ -142,6 +148,7 @@ type SettingsChange struct {
 	IdleCompactionPrompt  *string           `json:"idle_compaction_prompt"`
 	CacheKeepWarmMinutes  *int              `json:"cache_keep_warm_minutes"`
 	SystemPrompt          *string           `json:"system_prompt"`
+	DisableNotifications  *bool             `json:"disable_notifications"`
 }
 
 // overlay returns c with the fields present in o replacing its own.
@@ -172,6 +179,9 @@ func (c SettingsChange) overlay(o SettingsChange) SettingsChange {
 	}
 	if o.SystemPrompt != nil {
 		c.SystemPrompt = o.SystemPrompt
+	}
+	if o.DisableNotifications != nil {
+		c.DisableNotifications = o.DisableNotifications
 	}
 	return c
 }
@@ -204,6 +214,9 @@ func storedSettingsChange(model string, opts db.ConversationOptions) SettingsCha
 	}
 	if opts.SystemPrompt != "" {
 		c.SystemPrompt = &opts.SystemPrompt
+	}
+	if opts.DisableNotifications {
+		c.DisableNotifications = &opts.DisableNotifications
 	}
 	return c
 }
@@ -287,6 +300,9 @@ func (s *Server) resolveSettings(ctx context.Context, cur ConversationSettings, 
 	if change.SystemPrompt != nil {
 		next.SystemPrompt = *change.SystemPrompt
 	}
+	if change.DisableNotifications != nil {
+		next.DisableNotifications = *change.DisableNotifications
+	}
 	// Switching a conversation's model needs a ready one, as /model does; a
 	// new conversation's needs only to be constructible.
 	msg := next.validate(modelList, cur.Model != "" && next.Model != cur.Model)
@@ -306,8 +322,20 @@ func (s *Server) resolveSettings(ctx context.Context, cur ConversationSettings, 
 }
 
 // newConversationSettings resolves the settings a new conversation starts
-// with: change applied to the default profile, unless it names another.
+// with: change applied to the default profile, unless it names another. A
+// new Assistant, one naming the Assistant profile, without the profile
+// starts from the default one's settings, as its own, with the tools it
+// answers with on and notifications off, unless change sets them.
 func (s *Server) newConversationSettings(ctx context.Context, change SettingsChange, modelList []ModelInfo) (ConversationSettings, error) {
+	var noProfile bool
+	if change.Profile != nil && *change.Profile == db.AssistantProfile {
+		_, err := s.getProfile(ctx, db.AssistantProfile)
+		if noProfile = errors.Is(err, sql.ErrNoRows); noProfile {
+			change.Profile = nil
+		} else if err != nil {
+			return ConversationSettings{}, err
+		}
+	}
 	if change.Profile == nil {
 		p, err := s.getDefaultProfile(ctx)
 		if err != nil {
@@ -315,23 +343,29 @@ func (s *Server) newConversationSettings(ctx context.Context, change SettingsCha
 		}
 		change.Profile = &p.Name
 	}
-	return s.resolveSettings(ctx, ConversationSettings{}, change, modelList)
+	settings, err := s.resolveSettings(ctx, ConversationSettings{}, change, modelList)
+	if err != nil || !noProfile {
+		return settings, err
+	}
+	settings.Profile, settings.Edited = db.AssistantProfile, true
+	if change.ToolOverrides == nil {
+		settings.ToolOverrides = db.WithAssistantTools(settings.ToolOverrides)
+	}
+	if change.DisableNotifications == nil {
+		settings.DisableNotifications = true
+	}
+	return settings, nil
 }
 
 // followProfile brings a conversation that hasn't edited its profile's
-// settings up to the profile's current ones before its next turn starts. The
-// Assistant keeps message_user, which it answers texts with. It does nothing
-// while a turn runs, and keeps the settings if the profile was deleted or
+// settings up to the profile's current ones before its next turn starts. It
+// does nothing while a turn runs, and keeps the settings if the profile was deleted or
 // can't be used. It returns the service and model it followed to, or nil if
 // it did nothing.
 func (s *Server) followProfile(ctx context.Context, cm *ConversationManager) (llm.Service, string, error) {
-	conv, err := s.db.GetConversationByID(ctx, cm.conversationID)
-	if err != nil {
-		return nil, "", err
-	}
 	modelList := s.getModelList()
 	var next ConversationSettings
-	_, err = cm.ApplySettings(ctx, modelList, func(cur ConversationSettings) (ConversationSettings, error) {
+	_, err := cm.ApplySettings(ctx, modelList, func(cur ConversationSettings) (ConversationSettings, error) {
 		if cur.Edited || cur.Profile == "" || cm.role != roleTopLevel || cm.IsAgentWorking() {
 			return cur, nil
 		}
@@ -343,9 +377,6 @@ func (s *Server) followProfile(ctx context.Context, cm *ConversationManager) (ll
 		}
 		if err != nil {
 			return cur, err
-		}
-		if s.isAssistant(conv.ConversationID) {
-			to.ToolOverrides[claudetool.MessageUserName] = "on"
 		}
 		next = to
 		return to, nil
@@ -385,7 +416,8 @@ func (s *Server) handleGetConversationSettings(w http.ResponseWriter, r *http.Re
 
 // handleConversationSettings handles POST /api/conversation/<id>/settings.
 // It responds with the settings now in effect. A running turn is stopped
-// first, as with /model, unless only the profile label changes.
+// first, as with /model, unless only the profile label or notifications
+// change.
 func (s *Server) handleConversationSettings(w http.ResponseWriter, r *http.Request, conversationID string) {
 	if !s.checkConversationRequest(w, r, conversationID, "settings") {
 		return
@@ -441,8 +473,8 @@ func (s *Server) handleConversationSettings(w http.ResponseWriter, r *http.Reque
 
 // ApplySettings changes the conversation's settings for subsequent turns:
 // change gets the current ones and returns new ones, or an error to abort. It
-// returns the settings in effect. Unless only the profile label changes, it
-// stops a running turn first, keeping queued messages for the caller to
+// returns the settings in effect. Unless only the profile label, other than
+// to or from the Assistant profile, or notifications change, it stops a running turn first, keeping queued messages for the caller to
 // drain, and drops the loop so the next turn is built from the new settings. It renders a new system prompt if the
 // template or the tools changed (the latest system prompt is the one in
 // effect; see compactedContext), and records a marker that says what changed.
@@ -480,6 +512,9 @@ func (cm *ConversationManager) ApplySettings(ctx context.Context, models []Model
 	if marker != nil {
 		marker.Previous = &from
 	}
+	// The Assistant profile's label brings the texting and Slack tools
+	// (see chats).
+	reload = reload || (from.Profile == db.AssistantProfile) != (to.Profile == db.AssistantProfile)
 	// The manual Compact in Place button turns the tool on without nudges.
 	// Configuring tools or the nudge yourself brings them back.
 	keepNudgesOff := opts.DisableCompactNudges &&
@@ -501,8 +536,8 @@ func (cm *ConversationManager) ApplySettings(ctx context.Context, models []Model
 	}
 
 	if !reload {
-		// Only the label or the spelling changed; the loop has nothing to
-		// pick up.
+		// Only the label, notifications, or the spelling changed; the loop
+		// has nothing to pick up.
 		if err := save(); err != nil {
 			return from, err
 		}
@@ -595,7 +630,7 @@ func (cm *ConversationManager) recordSettingsChange(ctx context.Context, prompt 
 // settingsMarker describes the change from from to to, or returns nil if
 // nothing the agent or user sees changes. reload reports whether the agent
 // sees a change, so the loop has to be rebuilt: anything but the profile
-// label changed. regenerate reports whether the system prompt has to be
+// label or notifications changed. regenerate reports whether the system prompt has to be
 // rendered again: its template or the tools listed with it changed. opts are
 // the conversation's options before the change.
 func settingsMarker(opts db.ConversationOptions, from, to ConversationSettings, models []ModelInfo) (marker *ModelChangeUserData, regenerate, reload bool) {
@@ -604,6 +639,14 @@ func settingsMarker(opts db.ConversationOptions, from, to ConversationSettings, 
 	if from.Profile != to.Profile {
 		m.ProfileTo = to.Profile
 		parts = append(parts, fmt.Sprintf("profile changed to %s", to.Profile))
+	}
+	// Nor does the agent see notifications.
+	if from.DisableNotifications != to.DisableNotifications {
+		if to.DisableNotifications {
+			parts = append(parts, "notifications disabled")
+		} else {
+			parts = append(parts, "notifications enabled")
+		}
 	}
 	labelParts := len(parts)
 	if from.Model != to.Model {

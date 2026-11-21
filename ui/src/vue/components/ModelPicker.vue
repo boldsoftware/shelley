@@ -913,6 +913,8 @@ function describe(changes: SettingsDifference[]): string {
           return `Keep cache warm: ${minutes(c.from)} → ${minutes(c.to)}`;
         case "systemPrompt":
           return t("changeSystemPrompt");
+        case "notifications":
+          return t(c.on ? "enableNotifications" : "disableNotifications");
       }
     })
     .join(", ");

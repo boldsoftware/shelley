@@ -88,8 +88,9 @@ Unless noted, results exclude **archived** conversations.
   The conversation starts from the settings of the profile named by
   `conversation_options.profile`, or the default profile (see Profiles
   below). A non-empty `model` overrides the profile's, as do the
-  `thinking_level`, `tool_overrides`, `compact_nudge_tokens`, and
-  `system_prompt` options where present, even as `""`, `{}`, or `0`.
+  `thinking_level`, `tool_overrides`, `compact_nudge_tokens`,
+  `disable_notifications`, and `system_prompt` options where present, even
+  as `""`, `{}`, `0`, or `false`.
 - `POST /api/conversations/distill-new-generation` — ask the agent of
   `source_conversation_id` to compact its context in place, enabling the
   `compact_in_place` tool if needed. Optional `instructions` are appended to
@@ -175,7 +176,8 @@ These timestamps are private to the requesting identity.
   default. When `thinking_level` is left out, a model that lacks the level
   rounds it to one it has; an explicit level the model lacks is a `400`, as
   are unknown fields. Responds with the settings now in effect. Unless only
-  the profile label changes, a running turn is stopped first, and queued
+  the profile label or `disable_notifications` changes, a running turn is
+  stopped first, and queued
   messages then go out on the new settings (those the turn had already taken
   in end with it, as with Stop); `409` if another turn starts before the
   change lands.
@@ -393,8 +395,9 @@ conversation-list hash.
 
 A profile is a named set of conversation settings: `model` (`""` means the
 server's default model), `thinking_level` (`""` means the model's default),
-`tool_overrides`, `compact_nudge_tokens` (`0` means the default), and
-`system_prompt`, a Go [text/template](https://pkg.go.dev/text/template)
+`tool_overrides`, `compact_nudge_tokens` (`0` means the default),
+`disable_notifications` (turn ends aren't announced: no push, email,
+browser notification, or hooks), and `system_prompt`, a Go [text/template](https://pkg.go.dev/text/template)
 (`""` means Shelley's built-in prompt, which changes with Shelley). Exactly
 one profile is the default; new conversations start from it unless they name
 another. A conversation records the profile it came from in
@@ -406,10 +409,12 @@ leaves the settings as they are.
 
 Shelley pre-installs `Default` (the coding profile, initially selected) and
 `Assistant` (an opt-in, text-message-first personal assistant for life and
-work). Assistant enables `message_user` and `compact_in_place` with a
+work). Assistant enables `message_user`, the Slack tools (`send_to_thread`,
+`send_to_channel`, `add_reaction`), and `compact_in_place` with a
 130k-token compaction nudge, disables `llm_one_shot`, `output_html` and `output_iframe`,
 replies in plain text through `message_user`, compacts in place after 8 idle
-minutes and keeps the prompt cache warm until then. Both profiles use the
+minutes and keeps the prompt cache warm until then, and turns
+notifications off. Both profiles use the
 server's default model. Profiles can be edited; a non-default
 profile can be deleted. Built-in profiles have `builtin: true` and start with
 `user_edited: false`; Shelley refreshes them on startup until an actual user
@@ -418,11 +423,8 @@ count as edits. Restore defaults resets their settings and clears that flag.
 Deleted profiles and pre-existing custom profiles with the same name stay
 untouched. Restoring follows the same copy-on-write rule as edits.
 
-New messaging webhook and web chats start from `Assistant` when it exists;
-otherwise they use the server's default model and built-in prompt. They
-always enable `message_user`. A first message's explicit `system_prompt`
-overrides the profile's prompt and makes the chat's settings its own. Later
-events' prompts are ignored.
+Texted and web chats go to the Assistant, a conversation with the
+`Assistant` profile (see Assistant below).
 
 A profile also has a `voice_prompt` (trimmed, up to 4000 characters; `""`
 means none): who voice calls speak as. It is not a setting: conversations
@@ -431,7 +433,7 @@ conversation names.
 
 - `GET /api/profiles` — all profiles, default first:
   `[{"name", "default", "builtin", "user_edited", "model", "thinking_level", "tool_overrides",
-  "compact_nudge_tokens", "system_prompt", "voice_prompt"}]`.
+  "compact_nudge_tokens", "disable_notifications", "system_prompt", "voice_prompt"}]`.
 - `POST /api/profiles` — create one: `name` (trimmed; up to 64 bytes, no
   `/` or control characters, not `.` or `..`), the settings fields and
   optionally `voice_prompt` (unknown fields are a `400`); `409` if the name
@@ -460,6 +462,46 @@ conversation names.
   `{"template"}` → `{"error": null}` or
   `{"error": {"line", "column", "message"}}`, the line and the column (in
   characters) counted from 1 and left out when unknown.
+
+### Assistant
+
+Texted chats (the messages integration, Slack) and web chats go to the
+Assistant, whatever the `workspace` feature flag: the most recently created
+top-level, unarchived, non-draft conversation whose
+`conversation_options.profile` is `Assistant`, whether or not that profile
+still exists, and that is not bound to a chat (`external_conversation_id`
+is null). `GET /api/workspace` names it as `assistant_id` (`""` before
+there is one). The conversation list shows each row's profile, so the
+newest `Assistant` row is usually it, but `assistant_id` is authoritative:
+`created_at` has whole seconds, and the list is paged by `updated_at`.
+
+- Start a new Assistant (a new thread) with `POST /api/conversations/new`
+  and `"conversation_options": {"profile": "Assistant"}`, or by switching a
+  conversation to that profile (which needs the profile), if none with it
+  is newer. Chats go to it
+  from then on. The old one stays an ordinary conversation with its
+  history, and, while it keeps the profile, still answers the texts it
+  took with `message_user`. Like any conversation, the new one is named
+  after its first message. A fork of a conversation with the profile is a
+  new Assistant, too.
+- Without an Assistant, a chat's first message makes one: the most recent
+  texted chat's conversation that is in no project, or a new conversation
+  from the `Assistant` profile. In workspace mode, Shelley makes one at
+  startup. It is named `assistant` unless another conversation has that
+  name.
+- The tools the Assistant answers with, `message_user` for texts and the
+  Slack tools for Slack, are off by default and on in the `Assistant`
+  profile; like any settings, they can be turned off. Only top-level
+  conversations with the profile get the texting and Slack connections
+  that these tools use. A new Assistant without the profile starts from
+  the default profile's settings, as its own, with these tools on and
+  notifications off, labelled `Assistant` all the same.
+- The Assistant can't be archived, deleted, or switched to another profile
+  (`409`); start a new one first. Earlier ones can be. The `Assistant`
+  profile can't be the default (`409`), and no project can be named
+  `Assistant` (`400`).
+- When the Assistant changes, however it changes, `/api/stream2` sends
+  `{"workspace_changed": true}`.
 
 ### Shell
 

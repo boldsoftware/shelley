@@ -3,8 +3,10 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -117,9 +119,12 @@ func TestAssistantAtomicSingleton(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// It is labelled with the Assistant profile, whose settings it didn't
+	// take.
+	options := ParseConversationOptions(assistant.ConversationOptions)
 	if assistant.Slug == nil || *assistant.Slug != AssistantSlug || assistant.Model == nil || *assistant.Model != model || assistant.Cwd != nil ||
 		!assistant.UserInitiated || assistant.ParentConversationID != nil ||
-		ParseConversationOptions(assistant.ConversationOptions).ThinkingLevel != "medium" {
+		options.ThinkingLevel != "medium" || options.Profile != AssistantProfile || !options.SettingsEdited {
 		t.Fatalf("unexpected assistant: %+v", assistant)
 	}
 	meta, err := database.GetWorkspaceConversation(ctx, assistantID)
@@ -632,7 +637,7 @@ func TestPromotesTextedConversation(t *testing.T) {
 	ctx := t.Context()
 	AddTestProject(t, database, "P")
 	texted := func(chat, profile string) string {
-		c, err := database.CreateChannelConversation(ctx, chat, "https://chat.invalid/"+chat, "predictable", ConversationOptions{Profile: profile})
+		c, err := database.CreateChannelConversation(ctx, chat, "https://chat.invalid/"+chat, "predictable", ConversationOptions{Profile: profile, ToolOverrides: map[string]string{"add_reaction": "off"}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -652,7 +657,403 @@ func TestPromotesTextedConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if assistant.ExternalConversationID != nil || assistant.ExternalEndpoint != nil || assistant.Slug == nil || *assistant.Slug != AssistantSlug {
+	// It is labelled with the Assistant profile, whose settings it didn't
+	// take.
+	options := ParseConversationOptions(assistant.ConversationOptions)
+	if assistant.ExternalConversationID != nil || assistant.ExternalEndpoint != nil || assistant.Slug == nil || *assistant.Slug != AssistantSlug ||
+		options.Profile != AssistantProfile || !options.SettingsEdited {
 		t.Fatalf("unexpected Assistant: %+v", assistant)
+	}
+	// Its turn ends go unannounced, as they were in the chat.
+	if !options.DisableNotifications {
+		t.Fatalf("notifications on: %+v", options)
+	}
+	// It answers with the Assistant's tools, unless it chose otherwise.
+	for _, name := range AssistantTools {
+		want := "on"
+		if name == "add_reaction" {
+			want = "off"
+		}
+		if options.ToolOverrides[name] != want {
+			t.Fatalf("%s is %q, want %s: %+v", name, options.ToolOverrides[name], want, options)
+		}
+	}
+}
+
+// The Assistant is the most recently created top-level, unarchived,
+// non-draft conversation with the Assistant profile, so creating one with
+// that profile starts a new Assistant.
+func TestAssistantIsNewestWithProfile(t *testing.T) {
+	t.Parallel()
+	database, cleanup := NewTestDB(t)
+	defer cleanup()
+	ctx := t.Context()
+	assistant := func() string {
+		t.Helper()
+		id, err := database.GetAssistantID(ctx)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ""
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	create := func(profile string) string {
+		t.Helper()
+		c, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{Profile: profile})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.ConversationID
+	}
+	if got := assistant(); got != "" {
+		t.Fatalf("Assistant before any conversation: %q", got)
+	}
+	first := create(AssistantProfile)
+	create("Default")
+	if got := assistant(); got != first {
+		t.Fatalf("Assistant = %q, want %q", got, first)
+	}
+	// Within created_at's second, the later wins.
+	second := create(AssistantProfile)
+	if got := assistant(); got != second {
+		t.Fatalf("Assistant = %q, want the newer %q", got, second)
+	}
+	// Neither a draft, nor a subagent, nor a conversation bound to a chat
+	// is the Assistant.
+	if _, err := database.CreateDraftConversation(ctx, nil, nil, ConversationOptions{Profile: AssistantProfile}, "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.CreateChannelConversation(ctx, "chat", "http://chat", "", ConversationOptions{Profile: AssistantProfile}); err != nil {
+		t.Fatal(err)
+	}
+	sub, err := database.CreateSubagentConversation(ctx, "sub", second, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.UpdateConversationOptions(ctx, sub.ConversationID, ConversationOptions{Profile: AssistantProfile}); err != nil {
+		t.Fatal(err)
+	}
+	if got := assistant(); got != second {
+		t.Fatalf("Assistant = %q, want %q", got, second)
+	}
+	// It goes by created_at.
+	if err := database.pool.Exec(ctx, "UPDATE conversations SET created_at = datetime(created_at, '+1 minute') WHERE conversation_id = ?", first); err != nil {
+		t.Fatal(err)
+	}
+	if got := assistant(); got != first {
+		t.Fatalf("Assistant = %q, want the later created %q", got, first)
+	}
+	// Archiving it gives the place back to the one before.
+	if _, err := database.ArchiveConversation(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	if got := assistant(); got != second {
+		t.Fatalf("Assistant = %q after archiving %q, want %q", got, first, second)
+	}
+}
+
+// Migration 088 labels the conversation the workspace row named with the
+// Assistant profile, keeping its own settings, so it stays the Assistant,
+// even with newer texted chats, which had the profile.
+func TestAssistantProfileMigration(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		options  string
+		archived bool
+	}{
+		{options: `{"profile":"Default","thinking_level":"high"}`},
+		{options: `{"profile":"Assistant","thinking_level":"high"}`},
+		{options: `{"thinking_level":"high"}`},
+		{options: `null`},
+		{options: ``},
+		{options: `[]`},
+		{options: `{"profile":"Assistant","tool_overrides":{"add_reaction":"off","bash":"off"}}`},
+		// Labelled, but no longer the Assistant.
+		{options: `{"profile":"Default","thinking_level":"high"}`, archived: true},
+	} {
+		database := setupDBMigratedThrough(t, 87)
+		ctx := t.Context()
+		if err := database.pool.Exec(ctx, `INSERT INTO conversations(conversation_id, user_initiated, conversation_options, created_at, archived)
+			VALUES('older', 1, '{"profile":"Assistant"}', '2026-01-01 00:00:00', 0), ('a', 1, ?, '2026-01-02 00:00:00', ?);
+			INSERT INTO conversations(conversation_id, user_initiated, conversation_options, created_at, external_conversation_id, external_endpoint)
+			VALUES('chat', 1, '{"profile":"Assistant"}', '2026-01-03 00:00:00', 'chat', 'http://chat');
+			INSERT INTO workspace(singleton, assistant_id) VALUES(1, 'a');
+			INSERT INTO profiles(name, settings, user_edited) VALUES('Assistant', '{"tool_overrides":{"send_to_thread":"off"}}', 1)
+			ON CONFLICT(name) DO UPDATE SET settings = excluded.settings, user_edited = 1`, tc.options, tc.archived); err != nil {
+			t.Fatal(err)
+		}
+		if err := database.runMigration(ctx, "088-assistant-profile.sql", 88); err != nil {
+			t.Fatal(err)
+		}
+		if err := database.Migrate(ctx); err != nil {
+			t.Fatal(err)
+		}
+		want := "a"
+		if tc.archived {
+			want = "older"
+		}
+		if id, err := database.GetAssistantID(ctx); err != nil || id != want {
+			t.Fatalf("%+v: Assistant = %q, %v; want %q", tc, id, err, want)
+		}
+		c, err := database.GetConversationByID(ctx, "a")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := ParseConversationOptions(c.ConversationOptions)
+		wantOpts := ConversationOptions{Profile: AssistantProfile, SettingsEdited: !strings.Contains(tc.options, `"Assistant"`)}
+		if strings.Contains(tc.options, "high") {
+			wantOpts.ThinkingLevel = "high"
+		}
+		if got.Profile != wantOpts.Profile || got.SettingsEdited != wantOpts.SettingsEdited || got.ThinkingLevel != wantOpts.ThinkingLevel {
+			t.Fatalf("%+v: options = %+v, want %+v", tc, got, wantOpts)
+		}
+		// Conversations and the profile with its name turn on the tools the
+		// Assistant answers with, which are no longer on by default, unless
+		// they chose otherwise.
+		var profile string
+		if err := database.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+			return rx.Conn().QueryRowContext(ctx, "SELECT settings FROM profiles WHERE name = 'Assistant'").Scan(&profile)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		profileOpts := ParseConversationOptions(profile)
+		chosen := func(settings, name string) string {
+			if strings.Contains(settings, `"`+name+`":"off"`) {
+				return "off"
+			}
+			return "on"
+		}
+		for _, name := range AssistantTools {
+			if got.ToolOverrides[name] != chosen(tc.options, name) || profileOpts.ToolOverrides[name] != chosen(`"send_to_thread":"off"`, name) {
+				t.Fatalf("%+v: %s is %q in the Assistant, %q in its profile", tc, name, got.ToolOverrides[name], profileOpts.ToolOverrides[name])
+			}
+		}
+		// So do they turn notifications off, now a setting.
+		if !got.DisableNotifications || !profileOpts.DisableNotifications {
+			t.Fatalf("%+v: notifications on in the Assistant (%v) or its profile (%v)", tc, !got.DisableNotifications, !profileOpts.DisableNotifications)
+		}
+		database.Close()
+	}
+}
+
+// A fork from before a settings marker goes back to the settings the
+// marker saved (server.applyForkPointModelState), so migration 088 turns
+// the tools on in those of Assistant conversations too, unless they chose
+// otherwise: a fork from before the upgrade would otherwise be an
+// Assistant that can't answer Slack. Notifications, now a setting too, are
+// off where they were: for the Assistant, or where the conversation turned
+// them off.
+func TestAssistantProfileMigrationMarkers(t *testing.T) {
+	t.Parallel()
+	database := setupDBMigratedThrough(t, 87)
+	ctx := t.Context()
+	markers := map[string]string{
+		"assistant": `{"text":"x","previous":{"profile":"Assistant","model":"m","tool_overrides":{"add_reaction":"off","bash":"off"}}}`,
+		"bare":      `{"text":"x","previous":{"profile":"Assistant"}}`,
+		"null":      `{"text":"x","previous":{"profile":"Assistant","tool_overrides":null}}`,
+		"default":   `{"text":"x","previous":{"profile":"Default","tool_overrides":{"bash":"off"}}}`,
+		"none":      `{"text":"x"}`,
+		"invalid":   `{`,
+		"quiet":     `{"text":"x","previous":{"profile":"Default"}}`,
+	}
+	if err := database.pool.Exec(ctx, `INSERT INTO conversations(conversation_id, user_initiated, conversation_options)
+		VALUES('a', 1, '{"profile":"Assistant"}'), ('quiet', 1, '{"profile":"Default","disable_notifications":true}')`); err != nil {
+		t.Fatal(err)
+	}
+	i := 0
+	for id, data := range markers {
+		i++
+		conv := "a"
+		if id == "quiet" {
+			conv = "quiet"
+		}
+		if err := database.pool.Exec(ctx, `INSERT INTO messages(message_id, conversation_id, sequence_id, type, user_data) VALUES(?, ?, ?, 'modelchange', ?)`, id, conv, i, data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := database.pool.Exec(ctx, `INSERT INTO messages(message_id, conversation_id, sequence_id, type, user_data) VALUES('user', 'a', 99, 'user', ?)`, markers["bare"]); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.runMigration(ctx, "088-assistant-profile.sql", 88); err != nil {
+		t.Fatal(err)
+	}
+	const tools = `"tool_overrides":{"message_user":"on","send_to_thread":"on","send_to_channel":"on","add_reaction":"on"}`
+	want := map[string]string{
+		"assistant": `{"text":"x","previous":{"profile":"Assistant","model":"m","tool_overrides":{"message_user":"on","send_to_thread":"on","send_to_channel":"on","add_reaction":"off","bash":"off"},"disable_notifications":true}}`,
+		"bare":      `{"text":"x","previous":{"profile":"Assistant",` + tools + `,"disable_notifications":true}}`,
+		"null":      `{"text":"x","previous":{"profile":"Assistant",` + tools + `,"disable_notifications":true}}`,
+		"quiet":     `{"text":"x","previous":{"profile":"Default","disable_notifications":true}}`,
+		"user":      markers["bare"],
+	}
+	for id := range markers {
+		if want[id] == "" {
+			want[id] = markers[id]
+		}
+	}
+	parse := func(s string) any {
+		var v any
+		if json.Unmarshal([]byte(s), &v) != nil {
+			return s
+		}
+		return v
+	}
+	for id, w := range want {
+		var got string
+		if err := database.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+			return rx.Conn().QueryRowContext(ctx, "SELECT user_data FROM messages WHERE message_id = ?", id).Scan(&got)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(parse(got), parse(w)) {
+			t.Errorf("%s: user_data = %s, want %s", id, got, w)
+		}
+	}
+}
+
+// Notifications are now a setting, which a conversation following its
+// profile would take from it, so migration 088 keeps a conversation that
+// turned them off from following.
+func TestAssistantProfileMigrationNotifications(t *testing.T) {
+	t.Parallel()
+	database := setupDBMigratedThrough(t, 87)
+	ctx := t.Context()
+	options := map[string]string{
+		"quiet":     `{"profile":"Default","disable_notifications":true}`,
+		"loud":      `{"profile":"Default"}`,
+		"unlabeled": `{"disable_notifications":true}`,
+		"assistant": `{"profile":"Assistant"}`,
+	}
+	for id, o := range options {
+		if err := database.pool.Exec(ctx, `INSERT INTO conversations(conversation_id, user_initiated, conversation_options) VALUES(?, 1, ?)`, id, o); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := database.runMigration(ctx, "088-assistant-profile.sql", 88); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[string]ConversationOptions{
+		"quiet":     {Profile: "Default", DisableNotifications: true, SettingsEdited: true},
+		"loud":      {Profile: "Default"},
+		"unlabeled": {DisableNotifications: true},
+		"assistant": {Profile: AssistantProfile, DisableNotifications: true},
+	} {
+		c, err := database.GetConversationByID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := ParseConversationOptions(c.ConversationOptions)
+		if got.Profile != want.Profile || got.DisableNotifications != want.DisableNotifications || got.SettingsEdited != want.SettingsEdited {
+			t.Errorf("%s: options %s, want %+v", id, c.ConversationOptions, want)
+		}
+	}
+}
+
+// Were the Assistant profile the default, every new conversation would
+// become the Assistant, so migration 088 makes Default the default
+// instead, restoring it if it was deleted. The label said nothing about
+// conversations made with it, so only the stored Assistant keeps it; a
+// newer conversation with it otherwise becomes the Assistant.
+func TestAssistantProfileMigrationDefault(t *testing.T) {
+	t.Parallel()
+	const assistantDefault = `UPDATE profiles SET is_default = FALSE; UPDATE profiles SET is_default = TRUE WHERE name = 'Assistant';`
+	for _, tc := range []struct{ setup, want, assistant, project string }{
+		{setup: assistantDefault, want: "Default (built-in)", assistant: "a"},
+		{setup: assistantDefault + `DELETE FROM profiles WHERE name = 'Default'`, want: "Default (built-in)", assistant: "a"},
+		{setup: `INSERT INTO profiles(name) VALUES('Mine'); UPDATE profiles SET is_default = FALSE; UPDATE profiles SET is_default = TRUE WHERE name = 'Mine'`, want: "Mine", assistant: "b"},
+		// A project's profile can't be the default.
+		{setup: assistantDefault + `INSERT INTO profile_projects(profile, position) VALUES('Default', 0)`, want: "Default 2", assistant: "a", project: "Default"},
+		// Nor can a project be named Assistant; b was its conversation.
+		{setup: `INSERT INTO profiles(name) VALUES('Assistant project'); INSERT INTO profile_projects(profile, position) VALUES('Assistant', 0)`, want: "Default (built-in)", assistant: "a", project: "Assistant project 2"},
+	} {
+		database := setupDBMigratedThrough(t, 87)
+		ctx := t.Context()
+		if err := database.pool.Exec(ctx, `INSERT OR IGNORE INTO profiles(name) VALUES('Assistant');
+			INSERT INTO conversations(conversation_id, user_initiated, conversation_options, created_at)
+			VALUES('a', 1, '{"profile":"Assistant"}', '2026-01-01 00:00:00'), ('b', 1, '{"profile":"Assistant","model":"m"}', '2026-01-02 00:00:00');
+			INSERT INTO messages(message_id, conversation_id, sequence_id, type, user_data)
+			VALUES('a1', 'a', 1, 'modelchange', '{"previous":{"profile":"Assistant"}}'), ('b1', 'b', 1, 'modelchange', '{"previous":{"profile":"Assistant"}}');
+			INSERT INTO workspace(singleton, assistant_id) VALUES(1, 'a');`+tc.setup); err != nil {
+			t.Fatal(err)
+		}
+		if err := database.runMigration(ctx, "088-assistant-profile.sql", 88); err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		if err := database.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+			// A restored Default is the built-in one.
+			rows, err := rx.Conn().QueryContext(ctx, "SELECT name || CASE WHEN builtin AND NOT user_edited THEN ' (built-in)' ELSE '' END FROM profiles WHERE is_default")
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var name string
+				if err := rows.Scan(&name); err != nil {
+					return err
+				}
+				got = append(got, name)
+			}
+			return rows.Err()
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0] != tc.want {
+			t.Errorf("%s: default profiles %q, want %q", tc.setup, got, tc.want)
+		}
+		if id, err := database.GetAssistantID(ctx); err != nil || id != tc.assistant {
+			t.Errorf("%s: Assistant = %q, %v; want %q", tc.setup, id, err, tc.assistant)
+		}
+		var project, bProfile, aSaved, bSaved string
+		if err := database.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+			return rx.Conn().QueryRowContext(ctx, `SELECT COALESCE((SELECT group_concat(profile) FROM profile_projects), ''),
+				COALESCE((SELECT json_extract(conversation_options, '$.profile') FROM conversations WHERE conversation_id = 'b'), ''),
+				COALESCE((SELECT json_extract(user_data, '$.previous.profile') FROM messages WHERE message_id = 'a1'), ''),
+				COALESCE((SELECT json_extract(user_data, '$.previous.profile') FROM messages WHERE message_id = 'b1'), '')`).Scan(&project, &bProfile, &aSaved, &bSaved)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if project != tc.project || tc.project == "Assistant project 2" && bProfile != tc.project {
+			t.Errorf("%s: projects %q, b's profile %q; want project %q", tc.setup, project, bProfile, tc.project)
+		}
+		// The profile a marker saved for forks from before it changes with
+		// its conversation's, so such a fork of b isn't an Assistant if b
+		// isn't one.
+		if aSaved != "Assistant" || bSaved != bProfile {
+			t.Errorf("%s: saved profiles a %q, b %q; want Assistant, %q", tc.setup, aSaved, bSaved, bProfile)
+		}
+		database.Close()
+	}
+}
+
+// Startup drains texted messages queued in any conversation, an earlier
+// Assistant's too, but not in an archived one, such as the Slack
+// Assistant's, which migration 083 retired.
+func TestQueuedTextsToRecover(t *testing.T) {
+	t.Parallel()
+	database := setupDBMigratedThrough(t, 82)
+	ctx := t.Context()
+	if err := database.pool.Exec(ctx, `INSERT INTO conversations(conversation_id, user_initiated, queued_messages, external_conversation_id, external_endpoint)
+		VALUES('slack', 1, '[{"external_message_id":"slack:1"}]', 'slack:assistant', 'http://slack');
+		INSERT INTO conversations(conversation_id, user_initiated, queued_messages)
+		VALUES('old', 1, '[{"external_message_id":"m1"}]'), ('typed', 1, '[{"id":"q"}]')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	if err := database.Queries(ctx, func(q *generated.Queries) error {
+		convs, err := q.ListChannelConversationsWithQueuedMessages(ctx)
+		for _, c := range convs {
+			got = append(got, c.ConversationID)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(got, []string{"old"}) {
+		t.Fatalf("conversations to drain = %q, want [old]", got)
 	}
 }

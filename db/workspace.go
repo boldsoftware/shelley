@@ -85,25 +85,22 @@ const shelleyProjectInstructions = `Customize, maintain, and improve Shelley, th
 // mode creates.
 const SelfProject = "Self"
 
-// AssistantSlug is the workspace Assistant's slug.
+// AssistantSlug is the slug of an Assistant Shelley makes.
 const AssistantSlug = "assistant"
 
-// EnsureAssistant returns the Assistant's id. Without one, the most recent
-// texted chat's conversation becomes it (see promoteTextedConversation),
-// or, with create, a new one is made with model and opts; otherwise the id
-// is "". The Assistant and its workspace row are committed together, and
-// with them, if shelleyCwd is set, Shelley's own project there, unless a
-// profile has its name.
+// EnsureAssistant returns the Assistant's id (see AssistantProfile).
+// Without one, the most recent texted chat's conversation becomes it (see
+// promoteTextedConversation), or, with create, a new one is made with model
+// and opts; otherwise the id is "". The Assistant is committed with, if
+// shelleyCwd is set, Shelley's own project there, unless a profile has its
+// name.
 func (db *DB) EnsureAssistant(ctx context.Context, model string, opts ConversationOptions, create bool, shelleyCwd string) (string, error) {
 	var assistantID string
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
 		q := generated.New(tx.Conn())
-		workspace, err := q.GetWorkspace(ctx)
-		if err == nil {
-			assistantID = workspace.AssistantID
-			return nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
+		var err error
+		assistantID, err = q.GetAssistantID(ctx)
+		if err == nil || !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
 		if assistantID, err = promoteTextedConversation(ctx, q); err != nil {
@@ -124,11 +121,15 @@ func (db *DB) EnsureAssistant(ctx context.Context, model string, opts Conversati
 			}
 		}
 		if assistantID != "" {
-			return q.CreateWorkspace(ctx, assistantID)
+			return nil
 		}
 		assistantID, err = GenerateConversationID()
 		if err != nil {
 			return err
+		}
+		// Settings it didn't take from the Assistant profile are its own.
+		if opts.Profile != AssistantProfile {
+			opts.Profile, opts.SettingsEdited = AssistantProfile, true
 		}
 		options, err := json.Marshal(opts)
 		if err != nil {
@@ -144,19 +145,18 @@ func (db *DB) EnsureAssistant(ctx context.Context, model string, opts Conversati
 		}
 		// No cwd is invented for the assistant; its tools use the normal
 		// configured server working directory.
-		if _, err := q.CreateConversation(ctx, generated.CreateConversationParams{
+		_, err = q.CreateConversation(ctx, generated.CreateConversationParams{
 			ConversationID: assistantID, Slug: slug, UserInitiated: true, Model: modelPtr, ConversationOptions: string(options),
-		}); err != nil {
-			return err
-		}
-		return q.CreateWorkspace(ctx, assistantID)
+		})
+		return err
 	})
 	return assistantID, err
 }
 
-// assistantSlug is the Assistant's slug: it is titled "Assistant", not
-// after its first message, so its slug is "assistant", or none while
-// another conversation has that slug (see 059-assistant-slug.sql).
+// assistantSlug is the slug of an Assistant Shelley makes: "assistant",
+// not one from its first message, which may be a text, or none while
+// another conversation has that slug (see 059-assistant-slug.sql), so it
+// is named after its first web message.
 func assistantSlug(ctx context.Context, q *generated.Queries) (*string, error) {
 	taken, err := found(q.GetConversationBySlug(ctx, ptr(AssistantSlug)))
 	if err != nil || taken {
@@ -167,9 +167,9 @@ func assistantSlug(ctx context.Context, q *generated.Queries) (*string, error) {
 
 // promoteTextedConversation returns the id of the most recent texted
 // chat's conversation (see PromotableTextedConversation), or "" without
-// one, made the Assistant but for its workspace row: its texted messages
-// get routes, so replies to them still reach the chat, it is unbound from
-// the chat, and it is titled like a new Assistant.
+// one, made the Assistant: its texted messages get routes, so replies to
+// them still reach the chat, it is unbound from the chat, and it is
+// labelled with the Assistant profile and titled like a new Assistant.
 func promoteTextedConversation(ctx context.Context, q *generated.Queries) (string, error) {
 	id, err := q.PromotableTextedConversation(ctx)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -193,7 +193,11 @@ func promoteTextedConversation(ctx context.Context, q *generated.Queries) (strin
 			return "", err
 		}
 	}
-	return id, nil
+	tools, err := json.Marshal(WithAssistantTools(nil))
+	if err != nil {
+		return "", err
+	}
+	return id, q.LabelAssistant(ctx, generated.LabelAssistantParams{ConversationID: id, Tools: string(tools)})
 }
 
 // found reports whether a query for one row found it.

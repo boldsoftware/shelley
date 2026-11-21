@@ -2347,6 +2347,7 @@ const composerSettings = computed<Settings>(() => ({
   idle_compaction_prompt: composerProfile.value?.idle_compaction_prompt || "",
   cache_keep_warm_minutes: composerProfile.value?.cache_keep_warm_minutes || 0,
   system_prompt: composerProfile.value?.system_prompt || "",
+  disable_notifications: composerProfile.value?.disable_notifications || false,
 }));
 const settingsInEffect = computed<{ profile: string; settings: Settings }>(() => {
   const conv = props.currentConversation;
@@ -2363,6 +2364,7 @@ const settingsInEffect = computed<{ profile: string; settings: Settings }>(() =>
         idle_compaction_prompt: opts.idle_compaction_prompt || "",
         cache_keep_warm_minutes: opts.cache_keep_warm_minutes || 0,
         system_prompt: opts.system_prompt || "",
+        disable_notifications: opts.disable_notifications || false,
       },
     };
   }
@@ -2620,8 +2622,8 @@ const displayTitle = computed(() => {
   const slug = props.currentConversation?.slug;
   return slug ? conversationTitle(slug) : "Shelley";
 });
-// A click on the title renames the conversation, but not the Assistant's
-// (the server refuses) or a draft's.
+// A click on the title renames the conversation, but not the Assistant's,
+// titled "Assistant" here, or a draft's.
 const titleEditable = computed(
   () =>
     !!props.conversationId &&
@@ -3925,7 +3927,8 @@ const visibleQueuedGhosts = useVisibleQueuedMessages(() => queuedGhosts.value);
 
 // Build the conversation_options bundle from the composer's settings: its
 // profile (for the system prompt), and what the composer shows for the rest,
-// which override the profile's. Used when promoting an autosaved draft on
+// which override the profile's. Notifications, which it doesn't show, come
+// from the profile. Used when promoting an autosaved draft on
 // first send — the draft is created (via POST /draft autosave) without
 // options, so the selection only reaches the server on the promoting chat
 // request.

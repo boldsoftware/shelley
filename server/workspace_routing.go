@@ -226,10 +226,16 @@ func (s *Server) allowConversationMutation(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "The conversation is starting; wait for its first message to be accepted", http.StatusConflict)
 		return false
 	}
-	protected := operation == "archive" || operation == "delete" || operation == "rename"
-	if protected && s.isAssistant(id) {
-		http.Error(w, "The Assistant is permanent; this operation is not available", http.StatusConflict)
-		return false
+	if operation == "archive" || operation == "delete" {
+		assistant, err := s.isAssistant(r.Context(), id)
+		if err != nil {
+			s.internalError(w, "Failed to check for the Assistant", err)
+			return false
+		}
+		if assistant {
+			http.Error(w, "The Assistant can't be archived or deleted; start a new one with the Assistant profile first", http.StatusConflict)
+			return false
+		}
 	}
 	running, err := s.db.HasRunningAction(r.Context(), id)
 	if err != nil {

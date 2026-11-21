@@ -6738,6 +6738,12 @@ svg {
   color: white;
 }
 
+/* A tool off by default looks off, not on. */
+.tool-override-choice.default-off.active,
+.tool-override-choice.default-off.active:hover:not(:disabled) {
+  background: var(--gray-500, #6b7280);
+}
+
 .tool-override-choice:disabled,
 .p-select-overlay.model-picker-panel .model-picker-effort-pill:disabled {
   opacity: 0.5;

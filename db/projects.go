@@ -71,6 +71,10 @@ func validateProject(project *Project) error {
 	if msg := ProfileNameProblem(project.Name); msg != "" {
 		return fmt.Errorf("%w: project %s", ErrInvalid, msg)
 	}
+	// Its conversations have its name as their profile.
+	if project.Name == AssistantProfile {
+		return fmt.Errorf("%w: a project can't be named %q: its conversations would be the Assistant", ErrInvalid, AssistantProfile)
+	}
 	if project.Actions == nil {
 		project.Actions = []ProjectAction{}
 	}

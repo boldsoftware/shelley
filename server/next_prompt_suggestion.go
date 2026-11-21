@@ -55,16 +55,14 @@ func (cm *ConversationManager) suggestNextPrompt(ctx context.Context, endSeq int
 		return err
 	}
 	// Spend nothing on a suggestion the composer will not show: the user
-	// answers channel conversations, and the Assistant's texted messages, in
-	// their chat, and other work will start another turn first.
+	// answers channel conversations, and texted messages, in their chat, and
+	// other work will start another turn first.
 	conversation, err := s.db.GetConversationByID(ctx, cm.conversationID)
 	if err != nil || conversation.ExternalConversationID != nil {
 		return err
 	}
-	if s.isAssistant(cm.conversationID) {
-		if texted, err := s.db.LatestUserExternalMessageID(ctx, cm.conversationID); err != nil || texted != "" {
-			return err
-		}
+	if texted, err := s.db.LatestUserExternalMessageID(ctx, cm.conversationID); err != nil || texted != "" {
+		return err
 	}
 	if quiet, err := s.conversationQuiet(ctx, conversation); err != nil || !quiet {
 		return err

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"shelley.exe.dev/claudetool"
@@ -15,26 +14,15 @@ import (
 // it could not be routed back.
 var errChannelEventNoID = errors.New("channel event has no id")
 
-// recoverAssistantChannelQueue drains the Assistant's queue at startup
-// if it holds a texted message: the user may not open the UI to drain it.
-func (s *Server) recoverAssistantChannelQueue(ctx context.Context) error {
-	id := s.assistantID()
-	if id == "" {
-		return nil
+// chats returns where message_user's messages also go, and what backs the
+// Slack tools, in a conversation with opts. A top-level conversation with
+// the Assistant profile answers the texts and Slack events it took, whether
+// it is the Assistant or was.
+func (cm *ConversationManager) chats(opts db.ConversationOptions) (claudetool.UserChat, claudetool.Slack) {
+	if cm.role != roleTopLevel || opts.Profile != db.AssistantProfile || cm.server == nil {
+		return nil, nil
 	}
-	queued, err := s.db.GetQueuedMessages(ctx, id)
-	if err != nil {
-		return err
-	}
-	if !slices.ContainsFunc(queued, func(qm db.QueuedMessage) bool { return qm.ExternalMessageID != "" }) {
-		return nil
-	}
-	manager, err := s.getOrCreateConversationManager(ctx, id, "")
-	if err != nil {
-		return err
-	}
-	manager.drainQueueIfIdle()
-	return nil
+	return assistantChat{s: cm.server, conversationID: cm.conversationID}, slackChat{s: cm.server, conversationID: cm.conversationID}
 }
 
 // assistantChat is the Assistant's claudetool.UserChat. It is bound to no

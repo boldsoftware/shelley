@@ -91,7 +91,7 @@ func TestProjectGithubReposAndSetup(t *testing.T) {
 		}
 	}
 	setWorkspaceFlag(t, e.srv, "true")
-	assistantID := e.srv.assistantID()
+	assistantID := currentAssistant(t, e.srv)
 	prompt, err := e.srv.workspaceInstructions(t.Context(), assistantID)
 	if err != nil {
 		t.Fatal(err)

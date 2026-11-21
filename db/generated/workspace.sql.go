@@ -41,15 +41,6 @@ func (q *Queries) CreateActionRun(ctx context.Context, arg CreateActionRunParams
 	return err
 }
 
-const createWorkspace = `-- name: CreateWorkspace :exec
-INSERT INTO workspace (singleton, assistant_id) VALUES (1, ?)
-`
-
-func (q *Queries) CreateWorkspace(ctx context.Context, assistantID string) error {
-	_, err := q.db.ExecContext(ctx, createWorkspace, assistantID)
-	return err
-}
-
 const finishActionRun = `-- name: FinishActionRun :exec
 UPDATE action_runs SET status = ?, error = ?, finished_at = ?, exit_code = ? WHERE id = ?
 `
@@ -109,17 +100,6 @@ func (q *Queries) GetAssistantID(ctx context.Context) (string, error) {
 	var assistant_id string
 	err := row.Scan(&assistant_id)
 	return assistant_id, err
-}
-
-const getWorkspace = `-- name: GetWorkspace :one
-SELECT singleton, assistant_id FROM workspace WHERE singleton = 1
-`
-
-func (q *Queries) GetWorkspace(ctx context.Context) (Workspace, error) {
-	row := q.db.QueryRowContext(ctx, getWorkspace)
-	var i Workspace
-	err := row.Scan(&i.Singleton, &i.AssistantID)
-	return i, err
 }
 
 const getWorkspaceConversation = `-- name: GetWorkspaceConversation :one
@@ -211,6 +191,35 @@ WHERE status = 'running'
 
 func (q *Queries) InterruptRunningActionRuns(ctx context.Context, finishedAt *string) error {
 	_, err := q.db.ExecContext(ctx, interruptRunningActionRuns, finishedAt)
+	return err
+}
+
+const labelAssistant = `-- name: LabelAssistant :exec
+UPDATE conversations
+SET conversation_options = json_set(
+    CASE WHEN NOT json_valid(conversation_options) THEN '{}'
+        WHEN json_type(conversation_options) = 'object' THEN conversation_options ELSE '{}' END,
+    '$.profile', 'Assistant', '$.settings_edited', json('true'), '$.disable_notifications', json('true'),
+    '$.tool_overrides', json_patch(
+        CAST(?1 AS TEXT),
+        CASE WHEN NOT json_valid(conversation_options) THEN '{}'
+            WHEN json_type(conversation_options, '$.tool_overrides') = 'object' THEN json_extract(conversation_options, '$.tool_overrides')
+            ELSE '{}' END))
+WHERE conversation_id = ?2
+  AND CASE WHEN json_valid(conversation_options) THEN json_extract(conversation_options, '$.profile') END IS NOT 'Assistant'
+`
+
+type LabelAssistantParams struct {
+	Tools          string `json:"tools"`
+	ConversationID string `json:"conversation_id"`
+}
+
+// Gives the conversation the Assistant profile, making it the Assistant if
+// it is the newest with it, turns on the tools it answers with (tools, a
+// JSON object) unless it chose otherwise, and turns notifications off.
+// Settings it didn't take from that profile stay its own (settings_edited).
+func (q *Queries) LabelAssistant(ctx context.Context, arg LabelAssistantParams) error {
+	_, err := q.db.ExecContext(ctx, labelAssistant, arg.Tools, arg.ConversationID)
 	return err
 }
 

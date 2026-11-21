@@ -31,7 +31,7 @@ func newWorkspaceServer(t *testing.T) (*Server, *db.DB, string) {
 	t.Helper()
 	s, database, _ := newTestServer(t)
 	setWorkspaceFlag(t, s, "true")
-	return s, database, s.assistantID()
+	return s, database, currentAssistant(t, s)
 }
 
 // Workspace mode, not reading the workspace, makes the Assistant; pages
@@ -68,9 +68,9 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 		t.Fatalf("turning workspace mode on announced builds %q", got)
 	}
 	workspace = workspaceResponse[db.Workspace](t, workspaceAPI(s, "GET", "/api/workspace", ""), 200)
-	if workspace.AssistantID == "" || workspace.AssistantID != s.assistantID() || len(workspace.Conversations) != 1 ||
+	if workspace.AssistantID == "" || workspace.AssistantID != currentAssistant(t, s) || len(workspace.Conversations) != 1 ||
 		!workspace.Conversations[0].IsAssistant || len(workspace.Projects) != 1 || workspace.Projects[0].Name != db.SelfProject {
-		t.Fatalf("workspace mode: %+v, cached Assistant %q", workspace, s.assistantID())
+		t.Fatalf("workspace mode: %+v, cached Assistant %q", workspace, currentAssistant(t, s))
 	}
 	if init := indexInitData(t, s); init["workspace"] != true || init["ui_build"] != workspaceBuild {
 		t.Fatalf("workspace init data: workspace=%v ui_build=%v", init["workspace"], init["ui_build"])
@@ -89,7 +89,7 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 		!strings.Contains(options.SystemPrompt, "text-message exchange") {
 		t.Fatalf("assistant did not start as the Assistant: slug %v, options %+v", assistant.Slug, options)
 	}
-	if setWorkspaceFlag(t, s, "true"); s.assistantID() != workspace.AssistantID {
+	if setWorkspaceFlag(t, s, "true"); currentAssistant(t, s) != workspace.AssistantID {
 		t.Fatal("assistant changed")
 	}
 	// The seeded Self project is deletable once empty.
@@ -101,7 +101,7 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 		t.Fatalf("turning workspace mode off announced builds %q", got)
 	}
 	// The Assistant stays; workspace mode only showed it differently.
-	if !s.isAssistant(workspace.AssistantID) {
+	if currentAssistant(t, s) != workspace.AssistantID {
 		t.Fatal("the Assistant went with workspace mode")
 	}
 	if init := indexInitData(t, s); init["workspace"] != false {
@@ -112,6 +112,8 @@ func TestWorkspaceFlagLoadsTheWorkspace(t *testing.T) {
 	}
 }
 
+// The Assistant can't be archived, deleted, or moved, but it can be
+// renamed.
 func TestAssistantMutationGuards(t *testing.T) {
 	t.Parallel()
 	s, _, assistantID := newWorkspaceServer(t)
@@ -126,8 +128,12 @@ func TestAssistantMutationGuards(t *testing.T) {
 		case "rename":
 			s.handleRenameConversation(w, req, assistantID)
 		}
-		if w.Code != http.StatusConflict {
-			t.Errorf("Assistant %s: %d %s", operation, w.Code, w.Body.String())
+		want := http.StatusConflict
+		if operation == "rename" {
+			want = http.StatusOK
+		}
+		if w.Code != want {
+			t.Errorf("Assistant %s: %d, want %d: %.200s", operation, w.Code, want, w.Body.String())
 		}
 	}
 	db.AddTestProject(t, s.db, "Docs")

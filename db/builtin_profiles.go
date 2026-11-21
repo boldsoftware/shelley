@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"maps"
 
 	"shelley.exe.dev/db/generated"
 )
@@ -16,23 +17,43 @@ var assistantSystemPrompt string
 //go:embed assistant_idle_prompt.txt
 var assistantIdlePrompt string
 
+// AssistantProfile names the shipped Assistant profile. The most recently
+// created top-level conversation with it is the Assistant (see
+// 088-assistant-profile.sql), whether or not the profile still exists.
+const AssistantProfile = "Assistant"
+
+// AssistantTools are the tools the Assistant answers with: message_user for
+// texts and the Slack tools for Slack. They are off by default and on in
+// the Assistant profile. A conversation that becomes an Assistant without
+// taking the profile's settings gets them on (see LabelAssistant and
+// server.newConversationSettings).
+var AssistantTools = []string{"message_user", "send_to_thread", "send_to_channel", "add_reaction"}
+
+// WithAssistantTools returns a copy of overrides with AssistantTools on.
+func WithAssistantTools(overrides map[string]string) map[string]string {
+	out := make(map[string]string, len(overrides)+len(AssistantTools))
+	maps.Copy(out, overrides)
+	for _, name := range AssistantTools {
+		out[name] = "on"
+	}
+	return out
+}
+
 // builtinProfiles is the single source of shipped profile settings.
 var builtinProfiles = map[string]string{
-	"Default":   "{}",
-	"Assistant": assistantProfile(),
+	"Default":        "{}",
+	AssistantProfile: assistantProfile(),
 }
 
 // assistantProfile is a chat-first assistant that talks through
-// message_user. In Slack it talks through the Slack tools, which are on
-// wherever Slack is, in the Assistant.
+// message_user, and in Slack through the Slack tools.
 func assistantProfile() string {
-	overrides := map[string]string{
+	overrides := WithAssistantTools(map[string]string{
 		"compact_in_place": "on", // idle compaction needs it, whatever the default
 		"llm_one_shot":     "off",
 		"output_html":      "off",
 		"output_iframe":    "off",
-		"message_user":     "on",
-	}
+	})
 	settings, err := json.Marshal(map[string]any{
 		"system_prompt":        assistantSystemPrompt,
 		"compact_nudge_tokens": 130_000,
@@ -42,6 +63,9 @@ func assistantProfile() string {
 		"idle_compaction_prompt":  assistantIdlePrompt,
 		"cache_keep_warm_minutes": 8,
 		"tool_overrides":          overrides,
+		// It talks to the user through message_user; its turn ends are
+		// nothing to announce.
+		"disable_notifications": true,
 	})
 	if err != nil {
 		panic(err)

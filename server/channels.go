@@ -173,8 +173,8 @@ type chatMessage struct {
 }
 
 // deliverChatMessage delivers m to the Assistant, made if there is none, as
-// a user message. A message that was already delivered (a retry) is
-// dropped.
+// a user message. A message that was already delivered (a retry), to it or
+// to an earlier Assistant, is dropped.
 func (s *Server) deliverChatMessage(ctx context.Context, m chatMessage) error {
 	// One delivery per chat at a time, so that a retry racing its original
 	// is seen as delivered.
@@ -188,6 +188,20 @@ func (s *Server) deliverChatMessage(ctx context.Context, m chatMessage) error {
 	if err != nil {
 		return err
 	}
+	took, err := s.channelMessageTaker(ctx, id, m.route)
+	if err != nil {
+		return err
+	}
+	if took != "" {
+		// The original may wait in a queue nothing drains, as after a
+		// restart.
+		manager, err := s.getOrCreateConversationManager(ctx, took, "")
+		if err != nil {
+			return err
+		}
+		manager.drainQueueIfIdle()
+		return nil
+	}
 	conv, err := s.db.GetConversationByID(ctx, id)
 	if err != nil {
 		return err
@@ -195,16 +209,6 @@ func (s *Server) deliverChatMessage(ctx context.Context, m chatMessage) error {
 	manager, err := s.getOrCreateConversationManager(ctx, id, "")
 	if err != nil {
 		return err
-	}
-	delivered, err := s.channelMessageDelivered(ctx, id, m.route.ExternalMessageID)
-	if err != nil {
-		return err
-	}
-	if delivered {
-		// The original may wait in a queue nothing drains, as after a
-		// restart.
-		manager.drainQueueIfIdle()
-		return nil
 	}
 	if conv.Model == nil {
 		return fmt.Errorf("conversation %s has no model", id)
@@ -305,7 +309,9 @@ func (cm *ConversationManager) answerFirstMessage(ctx context.Context, message l
 		calls = append(calls, claudetool.MessageUserInput{Text: reply})
 	}
 	calls[len(calls)-1].EndTurn = true
-	tool := claudetool.MessageUserTool(cm.userMessageFinder(), cm.userChat, claudetool.NewMutableWorkingDir(cm.HostDir()))
+	// Only the Assistant takes texts.
+	chat := assistantChat{s: cm.server, conversationID: cm.conversationID}
+	tool := claudetool.MessageUserTool(cm.userMessageFinder(), chat, claudetool.NewMutableWorkingDir(cm.HostDir()))
 	record := func(m llm.Message) error {
 		err := cm.recordMessage(ctx, m, "", llm.Usage{}, nil)
 		if err != nil {
@@ -385,7 +391,7 @@ func (s *Server) lockChannelChat(ctx context.Context, chatID string) (func(), er
 }
 
 // recoverChannelQueues drains, at startup, the queues of conversations
-// holding a project action's report, and the Assistant's.
+// holding a texted message or a project action's report.
 // Nobody may be watching their UI, so messages left queued by the previous
 // process would otherwise wait for the conversation's next message.
 func (s *Server) recoverChannelQueues(ctx context.Context) {
@@ -406,9 +412,37 @@ func (s *Server) recoverChannelQueues(ctx context.Context) {
 		}
 		manager.drainQueueIfIdle()
 	}
-	if err := s.recoverAssistantChannelQueue(ctx); err != nil {
-		s.logger.Error("Failed to drain the Assistant's channel queue", "error", err)
+}
+
+// channelMessageTaker returns the conversation that already took route's
+// message, as for a retry: the Assistant, assistantID, or one before it.
+// Without one, it returns "".
+func (s *Server) channelMessageTaker(ctx context.Context, assistantID string, route db.ChannelRoute) (string, error) {
+	var routed []string
+	err := s.db.Queries(ctx, func(q *generated.Queries) (err error) {
+		routed, err = q.ChannelMessageConversations(ctx, generated.ChannelMessageConversationsParams{
+			ChatID: route.ChatID, ExternalMessageID: route.ExternalMessageID,
+		})
+		return err
+	})
+	if err != nil {
+		return "", err
 	}
+	// The Assistant may have the message without a route, as messages
+	// from before routes do.
+	ids := []string{assistantID}
+	for _, id := range routed {
+		if id != assistantID {
+			ids = append(ids, id)
+		}
+	}
+	for _, id := range ids {
+		delivered, err := s.channelMessageDelivered(ctx, id, route.ExternalMessageID)
+		if err != nil || delivered {
+			return id, err
+		}
+	}
+	return "", nil
 }
 
 // channelMessageDelivered reports whether the channel message id is already

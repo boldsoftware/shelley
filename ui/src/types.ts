@@ -155,7 +155,6 @@ export interface ChatRequest {
    *  present override it. The model goes in `model` above. */
   conversation_options?: Omit<SettingsChange, "model"> & {
     disable_all_tools?: boolean;
-    disable_notifications?: boolean;
   };
   queue?: boolean;
   /** Composer-selected skill names; the server prefixes mentions to the message. */
@@ -184,6 +183,8 @@ export interface Settings {
   cache_keep_warm_minutes: number;
   /** A Go text/template; "" means the built-in one. */
   system_prompt: string;
+  /** Turn ends aren't announced (push, email, hooks). */
+  disable_notifications: boolean;
 }
 
 /** A named Settings. Exactly one is the default. */

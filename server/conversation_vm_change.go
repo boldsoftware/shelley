@@ -49,8 +49,12 @@ func (s *Server) handleChangeConversationVM(w http.ResponseWriter, r *http.Reque
 		err = fmt.Errorf("%w: the conversation is archived", db.ErrConflict)
 	case conversation.IsDraft:
 		err = fmt.Errorf("%w: the conversation is still a draft", db.ErrConflict)
-	case s.isAssistant(id):
-		err = fmt.Errorf("%w: the Assistant runs on this host", db.ErrConflict)
+	}
+	if err == nil {
+		var assistant bool
+		if assistant, err = s.isAssistant(ctx, id); assistant {
+			err = fmt.Errorf("%w: the Assistant runs on this host", db.ErrConflict)
+		}
 	}
 	if err == nil {
 		req.Dir, err = s.conversationVMChangeDir(ctx, id, req)

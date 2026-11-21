@@ -63,7 +63,11 @@
           type="button"
           role="radio"
           :aria-checked="(overrides[tool.name] || 'default') === choice.val"
-          :class="`tool-override-choice${(overrides[tool.name] || 'default') === choice.val ? ' active' : ''}`"
+          :class="[
+            'tool-override-choice',
+            { active: (overrides[tool.name] || 'default') === choice.val },
+            { 'default-off': choice.val === 'default' && !defaultOn(tool) },
+          ]"
           @click="setOverride(tool.name, choice.val)"
         >
           {{ choice.label }}
@@ -114,9 +118,13 @@ function setNudge(n: number) {
   nudge.value = n === DEFAULT_COMPACT_NUDGE_TOKENS ? 0 : n;
 }
 
+function defaultOn(tool: ToolInfo): boolean {
+  return tool.default_on && !props.disableAll;
+}
+
 function choicesFor(tool: ToolInfo): { val: "default" | "on" | "off"; label: string }[] {
   return [
-    { val: "default", label: `Default (${tool.default_on && !props.disableAll ? "on" : "off"})` },
+    { val: "default", label: `Default (${defaultOn(tool) ? "on" : "off"})` },
     { val: "on", label: "On" },
     { val: "off", label: "Off" },
   ];

@@ -7,6 +7,10 @@ ON CONFLICT DO NOTHING;
 -- name: GetChannelRoute :one
 SELECT * FROM channel_message_routes WHERE conversation_id = ? AND external_message_id = ?;
 
+-- name: ChannelMessageConversations :many
+-- The conversations a chat's message was routed to.
+SELECT conversation_id FROM channel_message_routes WHERE chat_id = ? AND external_message_id = ?;
+
 -- name: LatestChannelRoute :one
 SELECT * FROM channel_message_routes WHERE chat_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1;
 

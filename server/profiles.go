@@ -236,8 +236,8 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	if !decodeStrict(w, r, &body) {
 		return
 	}
-	st := body.Settings
 	name := r.PathValue("name")
+	st := body.Settings
 	existing, err := s.getProfile(r.Context(), name)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, fmt.Sprintf("profile %q not found", name), http.StatusNotFound)
@@ -329,8 +329,13 @@ func (s *Server) handleRestoreProfile(w http.ResponseWriter, r *http.Request) {
 // handleSetDefaultProfile handles POST /api/profiles/{name}/default: the
 // profile becomes the default, in place of the previous one. A project's
 // profile can't: a conversation that names no profile is in no project.
+// Nor can the Assistant profile: each would become the Assistant.
 func (s *Server) handleSetDefaultProfile(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	if name == db.AssistantProfile {
+		http.Error(w, "the Assistant profile can't be the default: every new conversation would become the Assistant", http.StatusConflict)
+		return
+	}
 	if _, err := s.db.GetProject(r.Context(), name); err == nil {
 		http.Error(w, fmt.Sprintf("profile %q is a project's and can't be the default", name), http.StatusConflict)
 		return

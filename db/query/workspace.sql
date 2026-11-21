@@ -1,9 +1,3 @@
--- name: GetWorkspace :one
-SELECT * FROM workspace WHERE singleton = 1;
-
--- name: CreateWorkspace :exec
-INSERT INTO workspace (singleton, assistant_id) VALUES (1, ?);
-
 -- name: WorkspaceMode :one
 SELECT CAST(EXISTS (SELECT 1 FROM feature_flags WHERE name = 'workspace' AND trim(value) = 'true') AS BOOLEAN);
 
@@ -38,6 +32,24 @@ SET conversation_options = json_set(
     CASE WHEN json_valid(conversation_options) THEN conversation_options ELSE '{}' END,
     '$.profile', CAST(sqlc.arg(profile) AS TEXT))
 WHERE conversation_id = sqlc.arg(conversation_id);
+
+-- name: LabelAssistant :exec
+-- Gives the conversation the Assistant profile, making it the Assistant if
+-- it is the newest with it, turns on the tools it answers with (tools, a
+-- JSON object) unless it chose otherwise, and turns notifications off.
+-- Settings it didn't take from that profile stay its own (settings_edited).
+UPDATE conversations
+SET conversation_options = json_set(
+    CASE WHEN NOT json_valid(conversation_options) THEN '{}'
+        WHEN json_type(conversation_options) = 'object' THEN conversation_options ELSE '{}' END,
+    '$.profile', 'Assistant', '$.settings_edited', json('true'), '$.disable_notifications', json('true'),
+    '$.tool_overrides', json_patch(
+        CAST(sqlc.arg(tools) AS TEXT),
+        CASE WHEN NOT json_valid(conversation_options) THEN '{}'
+            WHEN json_type(conversation_options, '$.tool_overrides') = 'object' THEN json_extract(conversation_options, '$.tool_overrides')
+            ELSE '{}' END))
+WHERE conversation_id = sqlc.arg(conversation_id)
+  AND CASE WHEN json_valid(conversation_options) THEN json_extract(conversation_options, '$.profile') END IS NOT 'Assistant';
 
 -- name: RenameConversationsProfile :exec
 UPDATE conversations

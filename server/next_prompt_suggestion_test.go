@@ -253,7 +253,7 @@ func TestNextPromptSuggestionSkipsChannels(t *testing.T) {
 		}
 		synctest.Wait()
 
-		if route, err := h.db.LatestChannelRoute(t.Context(), "web-usr1"); err != nil || !h.server.isAssistant(route.ConversationID) {
+		if route, err := h.db.LatestChannelRoute(t.Context(), "web-usr1"); err != nil || route.ConversationID != currentAssistant(t, h.server) {
 			t.Fatalf("web chat route: %+v %v", route, err)
 		}
 		if n := len(suggestionRequests(h)); n != 0 {

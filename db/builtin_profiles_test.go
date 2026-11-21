@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"testing"
 
 	"shelley.exe.dev/db/generated"
@@ -198,7 +199,18 @@ func TestBuiltinAssistantKeepsUserProfile(t *testing.T) {
 	if err := db.Migrate(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if got := builtinProfile(t, db, "Assistant"); got.Settings != mine || got.Builtin {
+	// The user's settings stay, with the tools the Assistant answers with on.
+	got := builtinProfile(t, db, "Assistant")
+	var settings struct {
+		Model         string            `json:"model"`
+		SystemPrompt  string            `json:"system_prompt"`
+		ToolOverrides map[string]string `json:"tool_overrides"`
+	}
+	if err := json.Unmarshal([]byte(got.Settings), &settings); err != nil {
+		t.Fatal(err)
+	}
+	if got.Builtin || settings.Model != "custom-assistant" || settings.SystemPrompt != "Keep my instructions" ||
+		!maps.Equal(settings.ToolOverrides, WithAssistantTools(nil)) {
 		t.Fatalf("user's Assistant changed: %+v", got)
 	}
 }

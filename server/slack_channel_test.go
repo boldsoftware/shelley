@@ -168,17 +168,13 @@ func TestSlackBetweenTexts(t *testing.T) {
 	}
 }
 
-// Every Assistant has the Slack tools, even one whose settings predate
-// them.
+// A new Assistant has the tools it answers with, from its profile.
 func TestSlackToolsInEveryAssistant(t *testing.T) {
 	t.Parallel()
 	model := &turnRecordingService{Service: predictable.NewService()}
 	server, database, _ := channelTestServer(t, model)
 	id, err := server.ensureAssistant(t.Context(), true)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := database.UpdateConversationOptions(t.Context(), id, db.ConversationOptions{ToolOverrides: map[string]string{claudetool.MessageUserName: "on"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := server.receiveSlackEvent(t.Context(), "http://slack.invalid", slackEvent{Kind: "message", ID: "1.0", Channel: "C1", TS: "1.0", ThreadTS: "1.0", Text: "hi"}); err != nil {
@@ -199,6 +195,15 @@ func TestSlackToolsInEveryAssistant(t *testing.T) {
 		if !tools[name] {
 			t.Errorf("the Assistant lacks %s", name)
 		}
+	}
+	if got := lastRequestUserText(model.turns[0]); !strings.Contains(got, "sequence_id=") {
+		t.Errorf("the Slack event has no sequence_id to answer it by: %q", got)
+	}
+	if got := currentAssistant(t, server); got != id {
+		t.Errorf("Assistant = %q, want %q", got, id)
+	}
+	if n := len(listMessages(t, database, id)); n < 2 {
+		t.Errorf("the Assistant got no Slack event: %d messages", n)
 	}
 }
 
@@ -247,7 +252,7 @@ func TestSlackEventKinds(t *testing.T) {
 			t.Fatalf("%s: %d %s", ev.Kind, w.Code, w.Body.String())
 		}
 		waitFor(t, 10*time.Second, func() bool {
-			c, err := database.GetConversationByID(t.Context(), server.assistantID())
+			c, err := database.GetConversationByID(t.Context(), currentAssistant(t, server))
 			return err == nil && !c.AgentWorking && c.QueuedMessages == "[]"
 		})
 	}

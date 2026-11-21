@@ -46,8 +46,8 @@ type workspaceState struct {
 	// deleting holds the projects being deleted (handleDeleteProject).
 	deleting map[string]bool
 
-	// assistantID is the Assistant's id, or nil before there is one.
-	assistantID atomic.Pointer[string]
+	// assistant tells clients when the Assistant changes.
+	assistant assistantWatch
 	// mode is the workspace flag (see loadWorkspace).
 	mode atomic.Bool
 }
@@ -72,29 +72,20 @@ func (s *Server) loadWorkspace(ctx context.Context) error {
 
 // ensureAssistant returns the Assistant's id, making the most recent
 // texted chat's conversation the Assistant if there is none, or, with
-// create, a new one. It keeps the id for assistantID.
+// create, a new one.
 func (s *Server) ensureAssistant(ctx context.Context, create bool) (string, error) {
-	if id := s.assistantID(); id != "" {
-		return id, nil
+	if id, err := s.assistantID(ctx); err != nil || id != "" {
+		return id, err
 	}
-	// A new Assistant texts like the shipped Assistant profile and follows its
-	// edits until its own settings change. Without it, it starts from the
-	// default profile. Only creating one needs a model.
+	// Only creating one needs a model.
 	var model string
 	var opts db.ConversationOptions
 	if create {
-		var change SettingsChange
-		if p, err := s.getProfile(ctx, "Assistant"); err == nil {
-			change.Profile = &p.Name
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return "", err
-		}
-		settings, err := s.newConversationSettings(ctx, change, s.getModelList())
+		profile := db.AssistantProfile
+		settings, err := s.newConversationSettings(ctx, SettingsChange{Profile: &profile}, s.getModelList())
 		if err != nil {
 			return "", fmt.Errorf("assistant settings: %w", err)
 		}
-		// It answers texts with message_user.
-		settings.ToolOverrides[claudetool.MessageUserName] = "on"
 		settings.applyTo(&opts)
 		model = settings.Model
 	}
@@ -107,12 +98,7 @@ func (s *Server) ensureAssistant(ctx context.Context, create bool) (string, erro
 		}
 		shelleyCwd = filepath.Join(home, ".config", "shelley", "shelley-customization")
 	}
-	id, err := s.db.EnsureAssistant(ctx, model, opts, create, shelleyCwd)
-	if err != nil || id == "" {
-		return "", err
-	}
-	s.workspace.assistantID.Store(&id)
-	return id, nil
+	return s.db.EnsureAssistant(ctx, model, opts, create, shelleyCwd)
 }
 
 // workspaceMode reports whether the workspace flag is on, as of the last
@@ -122,17 +108,18 @@ func (s *Server) workspaceMode() bool {
 }
 
 // assistantID returns the Assistant's id, or "" before there is one.
-func (s *Server) assistantID() string {
-	if id := s.workspace.assistantID.Load(); id != nil {
-		return *id
+func (s *Server) assistantID(ctx context.Context) (string, error) {
+	id, err := s.db.GetAssistantID(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
 	}
-	return ""
+	return id, err
 }
 
 // isAssistant reports whether conversationID is the Assistant.
-func (s *Server) isAssistant(conversationID string) bool {
-	id := s.assistantID()
-	return id != "" && id == conversationID
+func (s *Server) isAssistant(ctx context.Context, conversationID string) (bool, error) {
+	id, err := s.assistantID(ctx)
+	return id != "" && id == conversationID, err
 }
 
 // workspaceFlagChanged loads the workspace for the new value of its flag,
@@ -873,6 +860,13 @@ func (s *Server) checkProfileSwitch(ctx context.Context, conv generated.Conversa
 	from := db.ParseConversationOptions(conv.ConversationOptions).Profile
 	if change.Profile == nil || *change.Profile == from {
 		return nil
+	}
+	if from == db.AssistantProfile {
+		if current, err := s.isAssistant(ctx, conv.ConversationID); err != nil {
+			return err
+		} else if current {
+			return fmt.Errorf("%w: the Assistant keeps the Assistant profile; start a new one first", db.ErrConflict)
+		}
 	}
 	for _, name := range []string{from, *change.Profile} {
 		if _, err := s.db.GetProject(ctx, name); err == nil {

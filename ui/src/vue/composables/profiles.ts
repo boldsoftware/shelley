@@ -61,6 +61,7 @@ export function settingsOf(s: Settings, base?: Settings): Settings {
     idle_compaction_prompt,
     cache_keep_warm_minutes,
     system_prompt,
+    disable_notifications,
   } = s;
   let model = s.model;
   if (base && !base.model && model === serverDefaultModel()) model = "";
@@ -73,6 +74,7 @@ export function settingsOf(s: Settings, base?: Settings): Settings {
     idle_compaction_prompt,
     cache_keep_warm_minutes,
     system_prompt,
+    disable_notifications,
   };
 }
 
@@ -127,7 +129,8 @@ export type SettingsDifference =
   | { kind: "idleCompaction"; from: number; to: number }
   | { kind: "idleCompactionPrompt" }
   | { kind: "keepWarm"; from: number; to: number }
-  | { kind: "systemPrompt" };
+  | { kind: "systemPrompt" }
+  | { kind: "notifications"; on: boolean };
 
 /** How settings `to` work differently from `from`, which is not how they're
  *  spelled differently: unset model and reasoning mean the server's and the
@@ -184,5 +187,8 @@ export function settingsDifferences(
     });
   }
   if (from.system_prompt !== to.system_prompt) out.push({ kind: "systemPrompt" });
+  if (!!from.disable_notifications !== !!to.disable_notifications) {
+    out.push({ kind: "notifications", on: !to.disable_notifications });
+  }
   return out;
 }

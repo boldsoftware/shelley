@@ -239,7 +239,7 @@ func TestPublishConversationStateSkipsAssistant(t *testing.T) {
 	ch := recordTurnEnds(t, server)
 
 	setWorkspaceFlag(t, server, "true")
-	assistantID := server.assistantID()
+	assistantID := currentAssistant(t, server)
 	conv, err := database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
 	if err != nil {
 		t.Fatal(err)

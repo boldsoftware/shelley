@@ -147,7 +147,7 @@ func chatAssistant(t *testing.T, s *Server, chatID string) string {
 	if err != nil {
 		t.Fatalf("chat %s route: %v", chatID, err)
 	}
-	if id := s.assistantID(); id == "" || route.ConversationID != id {
+	if id := currentAssistant(t, s); id == "" || route.ConversationID != id {
 		t.Fatalf("chat %s went to %s, not the Assistant %q", chatID, route.ConversationID, id)
 	}
 	return route.ConversationID
@@ -186,10 +186,10 @@ func channelUserMessages(t *testing.T, database *db.DB, conversationID string) [
 	return out
 }
 
-// The Assistant a chat's first message makes uses the Assistant profile,
-// not the user's default (unless it was deleted), except that message_user
-// must stay on to answer the chat. It takes the profile's edits, but not
-// its deletion.
+// The Assistant a chat's first message makes uses the Assistant profile's
+// settings, or without it the default's, as its own, with the tools it
+// answers with on and notifications off. It takes the profile's edits, but
+// not its deletion.
 func TestChannelMessageAssistantProfile(t *testing.T) {
 	for _, web := range []bool{false, true} {
 		for _, tc := range []struct {
@@ -206,18 +206,21 @@ func TestChannelMessageAssistantProfile(t *testing.T) {
 				e.want(201, "POST", "/api/profiles", `{"name":"Other","model":"model-b","thinking_level":"low","tool_overrides":{"message_user":"off","bash":"off"},"compact_nudge_tokens":54321,"system_prompt":"Unrelated default profile."}`)
 				e.want(200, "POST", "/api/profiles/Other/default", "")
 				if tc.assistant {
-					e.want(200, "PUT", "/api/profiles/Assistant", `{"model":"model-b","thinking_level":"high","tool_overrides":{"message_user":"off","bash":"off","compact_in_place":"on"},"compact_nudge_tokens":12345,"system_prompt":"Channel assistant in {{.WorkingDirectory}}."}`)
+					e.want(200, "PUT", "/api/profiles/Assistant", `{"model":"model-b","thinking_level":"high","tool_overrides":{"message_user":"on","bash":"off","compact_in_place":"on"},"compact_nudge_tokens":12345,"system_prompt":"Channel assistant in {{.WorkingDirectory}}."}`)
 				} else {
 					e.want(204, "DELETE", "/api/profiles/Assistant", "")
 				}
 
 				// Without the Assistant profile, the Assistant starts from
-				// the default one.
-				want := ConversationSettings{Profile: "Other", Settings: Settings{
+				// the default one's settings, as its own, with the tools it
+				// answers with on and notifications off, labelled with the
+				// Assistant profile all the same.
+				want := ConversationSettings{Profile: "Assistant", Edited: true, Settings: Settings{
 					Model: "model-b", ThinkingLevel: "low",
-					ToolOverrides:      map[string]string{"message_user": "on", "bash": "off"},
-					CompactNudgeTokens: 54321,
-					SystemPrompt:       "Unrelated default profile.",
+					ToolOverrides:        map[string]string{"message_user": "on", "send_to_thread": "on", "send_to_channel": "on", "add_reaction": "on", "bash": "off"},
+					CompactNudgeTokens:   54321,
+					SystemPrompt:         "Unrelated default profile.",
+					DisableNotifications: true,
 				}}
 				promptText := "Unrelated default profile."
 				thinking := llm.ThinkingLevelLow
@@ -257,7 +260,7 @@ func TestChannelMessageAssistantProfile(t *testing.T) {
 					e.waitTurn(assistantID, before)
 					req := e.lastTurnRequest()
 					if !hasTool(req, claudetool.MessageUserName) {
-						t.Error("channel request must offer message_user even when the profile disables it")
+						t.Error("channel request must offer message_user")
 					}
 					for _, name := range tools {
 						if tc.assistant && !hasTool(req, name) {
@@ -288,7 +291,7 @@ func TestChannelMessageAssistantProfile(t *testing.T) {
 					status int
 					body   string
 				}{
-					{"PUT", 200, `{"model":"model-a","thinking_level":"low","tool_overrides":{"bash":"on"},"compact_nudge_tokens":67890,"system_prompt":"Edited Assistant."}`},
+					{"PUT", 200, `{"model":"model-a","thinking_level":"low","tool_overrides":{"message_user":"on","bash":"on"},"compact_nudge_tokens":67890,"system_prompt":"Edited Assistant."}`},
 					{"DELETE", 204, ""},
 				} {
 					e.want(mutation.status, mutation.method, "/api/profiles/Assistant", mutation.body)
@@ -841,7 +844,7 @@ func TestChannelConcurrentFirstMessages(t *testing.T) {
 			t.Fatalf("delivery %d: status %d", i, code)
 		}
 	}
-	assistantID := server.assistantID()
+	assistantID := currentAssistant(t, server)
 	for i := range n {
 		if route, err := database.GetChannelRoute(t.Context(), assistantID, fmt.Sprintf("m%d", i)); err != nil || route.ChatID != fmt.Sprintf("chat-race-%d", i%3) {
 			t.Fatalf("m%d route in the Assistant = %+v, %v", i, route, err)

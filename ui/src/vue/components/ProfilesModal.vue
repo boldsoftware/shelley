@@ -99,6 +99,22 @@
         </p>
       </section>
       <section class="profiles-section">
+        <div class="profiles-row">
+          <div class="profiles-row-text">
+            <label for="profiles-notify">Notify when a turn ends</label>
+            <span class="profiles-hint">Push, email, browser, and hooks.</span>
+          </div>
+          <input
+            id="profiles-notify"
+            type="checkbox"
+            :checked="!draft.settings.disable_notifications"
+            @change="
+              draft.settings.disable_notifications = !($event.target as HTMLInputElement).checked
+            "
+          />
+        </div>
+      </section>
+      <section class="profiles-section">
         <h3 class="advanced-settings-header profiles-section-title">System prompt</h3>
         <SystemPromptEditor
           v-model="draft.settings.system_prompt"
@@ -315,6 +331,7 @@ function summarize(s: Settings): string {
   }
   if (s.idle_compaction_minutes) parts.push(`idle compaction ${s.idle_compaction_minutes} min`);
   if (s.cache_keep_warm_minutes) parts.push(`keep cache warm ${s.cache_keep_warm_minutes} min`);
+  if (s.disable_notifications) parts.push("no notifications");
   parts.push(s.system_prompt ? "custom system prompt" : "built-in system prompt");
   return parts.join(" · ");
 }
@@ -367,6 +384,7 @@ function emptySettings(): Settings {
     idle_compaction_prompt: "",
     cache_keep_warm_minutes: 0,
     system_prompt: "",
+    disable_notifications: false,
   };
 }
 

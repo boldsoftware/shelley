@@ -25,11 +25,21 @@ type assistantChannelTest struct {
 	assistantID string
 }
 
+// currentAssistant returns s's Assistant's id, "" before there is one.
+func currentAssistant(t *testing.T, s *Server) string {
+	t.Helper()
+	id, err := s.assistantID(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 func newAssistantChannelTest(t *testing.T) *assistantChannelTest {
 	t.Helper()
 	server, database, h, _ := debugChannelTestServer(t)
 	setWorkspaceFlag(t, server, "true")
-	id := server.assistantID()
+	id := currentAssistant(t, server)
 	return &assistantChannelTest{t: t, server: server, database: database, h: h, assistantID: id}
 }
 
@@ -250,15 +260,16 @@ func TestTextedConversationBecomesAssistant(t *testing.T) {
 				}
 			}
 			nextID := a.text("debug-q", messageUserText(t, claudetool.MessageUserInput{Text: "hi q"}))
-			if server.assistantID() != texted.ConversationID {
-				t.Fatalf("Assistant = %q, want the texted conversation %q", server.assistantID(), texted.ConversationID)
+			if currentAssistant(t, server) != texted.ConversationID {
+				t.Fatalf("Assistant = %q, want the texted conversation %q", currentAssistant(t, server), texted.ConversationID)
 			}
 			conv, err := database.GetConversationByID(t.Context(), texted.ConversationID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if conv.Slug == nil || *conv.Slug != db.AssistantSlug || conv.ExternalConversationID != nil || conv.ExternalEndpoint != nil {
-				t.Fatalf("promoted conversation: slug %v, chat %v, endpoint %v", conv.Slug, conv.ExternalConversationID, conv.ExternalEndpoint)
+			if conv.Slug == nil || *conv.Slug != db.AssistantSlug || conv.ExternalConversationID != nil || conv.ExternalEndpoint != nil ||
+				db.ParseConversationOptions(conv.ConversationOptions).Profile != db.AssistantProfile {
+				t.Fatalf("promoted conversation: slug %v, chat %v, endpoint %v, options %s", conv.Slug, conv.ExternalConversationID, conv.ExternalEndpoint, conv.ConversationOptions)
 			}
 
 			// The chat's earlier message is answered in the chat; a typed one is not.

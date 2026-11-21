@@ -124,7 +124,7 @@ func TestChannelAttachmentFailureRetries(t *testing.T) {
 	if w := postJSON(t, h, "/api/channels/messages", body); w.Code < 500 {
 		t.Fatalf("failed download acknowledged: %d %s", w.Code, w.Body.String())
 	}
-	assistantID := server.assistantID()
+	assistantID := currentAssistant(t, server)
 	if got := channelUserMessages(t, database, assistantID); len(got) != 0 {
 		t.Fatalf("partial delivery = %q", got)
 	}

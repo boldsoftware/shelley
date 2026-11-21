@@ -390,7 +390,7 @@ func TestConversationSwitchesProfiles(t *testing.T) {
 	if settings.Profile != "Default" || settings.Model != "model-b" || settings.SystemPrompt != "" || settings.ToolOverrides == nil {
 		t.Fatalf("settings after switching: %+v", settings)
 	}
-	if got := e.want(200, "GET", "/api/conversation/"+id+"/settings", ""); strings.TrimSpace(got) != `{"profile":"Default","model":"model-b","thinking_level":"","tool_overrides":{},"compact_nudge_tokens":0,"idle_compaction_minutes":0,"idle_compaction_prompt":"","cache_keep_warm_minutes":0,"system_prompt":""}` {
+	if got := e.want(200, "GET", "/api/conversation/"+id+"/settings", ""); strings.TrimSpace(got) != `{"profile":"Default","model":"model-b","thinking_level":"","tool_overrides":{},"compact_nudge_tokens":0,"idle_compaction_minutes":0,"idle_compaction_prompt":"","cache_keep_warm_minutes":0,"system_prompt":"","disable_notifications":false}` {
 		t.Fatalf("GET settings: %s", got)
 	}
 	marker := lastModelChange(listMessages(t, e.database, id))
@@ -590,6 +590,18 @@ func TestStaleModelSendRejected(t *testing.T) {
 	}
 }
 
+// Turning notifications on or off is marked, but the agent doesn't see it,
+// so it doesn't stop a running turn or reload the loop.
+func TestNotificationsChangeKeepsTheLoop(t *testing.T) {
+	st := ConversationSettings{Settings: Settings{Model: "a", ToolOverrides: map[string]string{}}}
+	quiet := st
+	quiet.DisableNotifications = true
+	m, regenerate, reload := settingsMarker(db.ConversationOptions{}, st, quiet, nil)
+	if m == nil || m.Text != "Notifications disabled." || regenerate || reload {
+		t.Fatalf("marker %+v, regenerate %v, reload %v", m, regenerate, reload)
+	}
+}
+
 // Markers name the reasoning in effect, so an unset level shows as its
 // model's default.
 func TestSettingsMarkerResolvesDefaultReasoning(t *testing.T) {
@@ -713,6 +725,77 @@ func TestProfileIdlePolicyIsCopiedAndCanBeDisabled(t *testing.T) {
 	e.want(400, "POST", path, `{"tool_overrides":{"compact_in_place":"off"}}`)
 	read(e.want(200, "POST", path, `{"idle_compaction_minutes":0,"idle_compaction_prompt":"","cache_keep_warm_minutes":0}`), [2]int{}, "")
 	read(e.want(200, "GET", path, ""), [2]int{}, "")
+}
+
+// Whether a conversation announces its turn ends is a setting, which
+// profiles carry like any other. The built-in Assistant profile turns them
+// off; an Assistant that turns them on announces them.
+func TestNotificationsAreASetting(t *testing.T) {
+	t.Parallel()
+	e := newProfileEnv(t)
+	t.Cleanup(func() { stopActiveConversationLoops(e.srv) })
+	e.want(201, "POST", "/api/profiles", `{"name":"Quiet","disable_notifications":true}`)
+	var profiles []Profile
+	if err := json.Unmarshal([]byte(e.want(200, "GET", "/api/profiles", "")), &profiles); err != nil {
+		t.Fatal(err)
+	}
+	quiet := map[string]bool{}
+	for _, p := range profiles {
+		quiet[p.Name] = p.DisableNotifications
+	}
+	if !quiet["Quiet"] || !quiet["Assistant"] || quiet["Default"] {
+		t.Fatalf("profiles' disable_notifications = %v", quiet)
+	}
+	start := func(options string) string {
+		t.Helper()
+		var created struct {
+			ConversationID string `json:"conversation_id"`
+		}
+		if err := json.Unmarshal([]byte(e.want(201, "POST", "/api/conversations/new",
+			`{"message":"hello","cwd":"`+t.TempDir()+`","conversation_options":`+options+`}`)), &created); err != nil {
+			t.Fatal(err)
+		}
+		e.waitTurn(created.ConversationID, 0)
+		return created.ConversationID
+	}
+	check := func(id string, announced, edited bool) {
+		t.Helper()
+		conv, err := e.database.GetConversationByID(t.Context(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got ConversationSettings
+		if err := json.Unmarshal([]byte(e.want(200, "GET", "/api/conversation/"+id+"/settings", "")), &got); err != nil {
+			t.Fatal(err)
+		}
+		if e.srv.announcesTurnEnds(conv) != announced || got.DisableNotifications == announced ||
+			db.ParseConversationOptions(conv.ConversationOptions).SettingsEdited != edited {
+			t.Fatalf("%s: announced %v, settings %+v, options %s; want announced %v, edited %v",
+				id, e.srv.announcesTurnEnds(conv), got, conv.ConversationOptions, announced, edited)
+		}
+	}
+	check(start(`{}`), true, false)
+	check(start(`{"disable_notifications":true}`), false, true)
+	// A draft's options count when it's sent without any.
+	var draft struct {
+		ConversationID string `json:"conversation_id"`
+	}
+	if err := json.Unmarshal([]byte(e.want(201, "POST", "/api/conversations/draft",
+		`{"draft":"hi","cwd":"`+t.TempDir()+`","conversation_options":{"disable_notifications":true}}`)), &draft); err != nil {
+		t.Fatal(err)
+	}
+	e.want(202, "POST", "/api/conversation/"+draft.ConversationID+"/chat", `{"message":"hello"}`)
+	e.waitTurn(draft.ConversationID, 0)
+	check(draft.ConversationID, false, true)
+	id := start(`{"profile":"Quiet"}`)
+	check(id, false, false)
+	e.want(200, "POST", "/api/conversation/"+id+"/settings", `{"disable_notifications":false}`)
+	check(id, true, true)
+
+	id = start(`{"profile":"Assistant"}`)
+	check(id, false, false)
+	e.want(200, "POST", "/api/conversation/"+id+"/settings", `{"disable_notifications":false}`)
+	check(id, true, true)
 }
 
 // Copy-on-write: a conversation takes its profile's edits at its next turn

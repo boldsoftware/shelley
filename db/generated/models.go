@@ -238,11 +238,6 @@ type ProfileRepo struct {
 	Repository  string `json:"repository"`
 }
 
-type Workspace struct {
-	Singleton   int64  `json:"singleton"`
-	AssistantID string `json:"assistant_id"`
-}
-
 type WorkspaceConversation struct {
 	ConversationID string `json:"conversation_id"`
 	Project        string `json:"project"`

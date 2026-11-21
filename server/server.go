@@ -616,6 +616,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	// invoke notifyConversationListChanged for ordinary database writes.
 	database.Pool().OnCommit(s.notifyConversationListChanged)
 	database.Pool().OnDiskFull(s.onDiskFull)
+	s.watchAssistant()
 
 	// Set up subagent support
 	subagentRunner := NewSubagentRunner(s)
@@ -1254,10 +1255,6 @@ func (s *Server) getOrCreateConversationManager(ctx context.Context, conversatio
 		manager.onTurnStartRejected = func() { go manager.drainPendingMessages() }
 		manager.recordDrainedQueued = func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message) (int64, error) {
 			return s.recordDrainedQueuedMessages(ctx, conversationID, qm, messages)
-		}
-		if role == roleTopLevel && s.isAssistant(conversationID) {
-			manager.userChat = assistantChat{s: s, conversationID: conversationID}
-			manager.slack = slackChat{s: s, conversationID: conversationID}
 		}
 		manager.userEmail = userEmail
 		manager.serverPort = s.listenPort
@@ -1912,14 +1909,13 @@ func (s *Server) announceTurnEnd(conversationID, model string) *notifications.Ev
 // announcesTurnEnds reports whether conv's turn ends are announced at all.
 // Subagent turns are internal and would just be noise for the user.
 // Conversations created with disable_notifications opt out of all end-of-turn
-// notifications (push, email, discord, ntfy) and hooks. So do channel
-// conversations, which the user follows in the chat, and archived ones. The
-// workspace Assistant talks to the user directly (message_user), so its turn
-// ends are not announced either: no push to iOS (exe.dev notify gateway or
-// app hooks), channels, or browser.
+// notifications (push, email, discord, ntfy) and hooks; it is a setting, on
+// in the Assistant profile, whose conversations talk to the user directly
+// (message_user). So do channel conversations, which the user follows in
+// the chat, and archived ones.
 func (s *Server) announcesTurnEnds(conv *generated.Conversation) bool {
 	return !isManagedChild(*conv) && !db.ParseConversationOptions(conv.ConversationOptions).DisableNotifications &&
-		conv.ExternalConversationID == nil && !conv.Archived && !s.isAssistant(conv.ConversationID)
+		conv.ExternalConversationID == nil && !conv.Archived
 }
 
 // settleTurnEnds announces the turn end that conversationID or any of its

@@ -9,6 +9,39 @@ import (
 	"context"
 )
 
+const channelMessageConversations = `-- name: ChannelMessageConversations :many
+SELECT conversation_id FROM channel_message_routes WHERE chat_id = ? AND external_message_id = ?
+`
+
+type ChannelMessageConversationsParams struct {
+	ChatID            string `json:"chat_id"`
+	ExternalMessageID string `json:"external_message_id"`
+}
+
+// The conversations a chat's message was routed to.
+func (q *Queries) ChannelMessageConversations(ctx context.Context, arg ChannelMessageConversationsParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, channelMessageConversations, arg.ChatID, arg.ExternalMessageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var conversation_id string
+		if err := rows.Scan(&conversation_id); err != nil {
+			return nil, err
+		}
+		items = append(items, conversation_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createChannelRoute = `-- name: CreateChannelRoute :exec
 INSERT INTO channel_message_routes (conversation_id, external_message_id, chat_id, endpoint)
 VALUES (?, ?, ?, ?)

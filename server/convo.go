@@ -224,11 +224,6 @@ type ConversationManager struct {
 	// recordDrainedQueued records a queued item's messages and removes the item
 	// from the queue in one transaction.
 	recordDrainedQueued func(ctx context.Context, qm db.QueuedMessage, messages []llm.Message) (int64, error)
-	// userChat, set for a top-level conversation bound to an external chat,
-	// is where message_user's messages also go.
-	userChat claudetool.UserChat
-	// slack, set for the Assistant, backs its Slack tools.
-	slack claudetool.Slack
 
 	// idleWaiters are closed at the next working→idle transition; see idle.
 	idleWaiters []chan struct{}
@@ -1667,10 +1662,9 @@ func messageText(message llm.Message) string {
 // sequence_id, so a client that never sees it observes a hole and throws away
 // its cached history. It is published even when slug assignment failed, since
 // the row exists regardless. Empty source text (a message with no text blocks)
-// is skipped: there is nothing to name the conversation after. So is the
-// workspace Assistant, which is titled "Assistant" (db.AssistantSlug).
+// is skipped: there is nothing to name the conversation after.
 func (s *Server) generateSlugAsync(conversationID, source, modelID string) {
-	if source == "" || s.isAssistant(conversationID) {
+	if source == "" {
 		return
 	}
 	go func() {
@@ -2236,8 +2230,7 @@ func (cm *ConversationManager) systemPromptDisplayData(ctx context.Context, opts
 	cfg.InPlaceCompactor = inPlaceCompactor{cm: cm}
 	cfg.UserMessageFinder = cm.userMessageFinder()
 
-	cfg.UserChat = cm.userChat
-	cfg.Slack = cm.slack
+	cfg.UserChat, cfg.Slack = cm.chats(opts)
 	return systemPromptDisplayData(cfg, promptSkills), nil
 }
 
@@ -2603,8 +2596,7 @@ func (cm *ConversationManager) ensureLoopLocked(service llm.Service, modelID str
 	toolSetConfig.InPlaceCompactor = inPlaceCompactor{cm: cm, generation: generation}
 	toolSetConfig.UserMessageFinder = cm.userMessageFinder()
 
-	toolSetConfig.UserChat = cm.userChat
-	toolSetConfig.Slack = cm.slack
+	toolSetConfig.UserChat, toolSetConfig.Slack = cm.chats(conversationOpts)
 	toolSet := claudetool.NewToolSet(processCtx, toolSetConfig)
 	var nudger *contextNudger
 	if claudetool.IsToolEnabled(claudetool.CompactInPlaceName, toolSetConfig.ToolOverrides, toolSetConfig.DisableAllTools) &&

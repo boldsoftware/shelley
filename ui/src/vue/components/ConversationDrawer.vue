@@ -1898,10 +1898,15 @@ function archive(e: MouseEvent, id: string) {
   void workspace.confirmArchive(id, () => handleArchive(e, id));
 }
 // Stock Shelley's ⋯ and right-click menu; workspace mode's rows have an
-// Archive button instead.
+// Archive button instead. The Assistant can only be renamed.
 function conversationActions(conversation: Conversation): MenuItem[] {
   const id = conversation.conversation_id;
-  if (workspace.isAssistant(id)) return [];
+  const rename: MenuItem = {
+    label: t("rename"),
+    icon: "pi pi-pencil",
+    command: ({ originalEvent }) => handleStartRename(originalEvent as MouseEvent, conversation),
+  };
+  if (workspace.isAssistant(id)) return [rename];
   const note = workspace.archiveNote(id);
   const items: MenuItem[] = [
     {
@@ -1910,11 +1915,7 @@ function conversationActions(conversation: Conversation): MenuItem[] {
       class: note ? "drawer-menu-danger" : undefined,
       command: ({ originalEvent }) => archive(originalEvent as MouseEvent, id),
     },
-    {
-      label: t("rename"),
-      icon: "pi pi-pencil",
-      command: ({ originalEvent }) => handleStartRename(originalEvent as MouseEvent, conversation),
-    },
+    rename,
     {
       label: t("editTags"),
       icon: "pi pi-tag",
