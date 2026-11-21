@@ -298,7 +298,7 @@ func TestE2ELiveDelegationHangupKeepsSentRequest(t *testing.T) {
 3. Call "intercept". Emit {type: "session.output_transcript.delta", delta: "The live chat", start_ms: 1000, end_ms: 1800}. Call "held" should come to return exactly "true".
 4. Emit {type: "session.output_transcript.delta", delta: " panel doesn't get too tall.", start_ms: 1800, end_ms: 3000}. The exchange should contain "The live chat panel doesn't get too tall.", and the request must not contain "The live chat".
 5. Click data-testid "live-stop", then call "release". data-testid "live-bar" should be gone (count 0), and the request must still not contain "The live chat".
-6. Navigate to /c/final again (a reload). The request must not contain "The live chat". Call "livetranscript rows" should return exactly "false".`, func(s *shelley) {
+6. Navigate to /c/final again (a reload). There should again be exactly one message "Spoken request: echo: save the whole transcript" (the request), and it must not contain "The live chat". Call "livetranscript rows" should return exactly "false".`, func(s *shelley) {
 		c := s.conversation("echo: final transcript ready", "final")
 		s.mockVoice(false, false)
 		on := s.intercepting()
@@ -349,7 +349,7 @@ func TestE2ELiveDelegationLatePunctuation(t *testing.T) {
 2. Call window.liveSpeak("punctuation", "echo: keep the period"). There should be exactly one message "Spoken request: echo: keep the period" (the request).
 3. Emit {type: "session.input_transcript.delta", delta: ".", start_ms: 850, end_ms: 900}, then {type: "session.input_transcript.delta", delta: "Next thought.", start_ms: 5000, end_ms: 6000}. The exchange should contain "Next thought.", and must contain neither ".Next thought." nor ". Next thought.".
 4. Click data-testid "live-stop". Call "history" should return exactly {"livetranscript":false,"continued":false} (no livetranscript message, and nothing says "Spoken request (continued)"). The request must not contain "USER: echo: keep the period.".
-5. Navigate to /c/punctuation again (a reload). The request must not contain "USER: echo: keep the period.".`, func(s *shelley) {
+5. Navigate to /c/punctuation again (a reload). There should again be exactly one message "Spoken request: echo: keep the period" (the request), and it must not contain "USER: echo: keep the period.".`, func(s *shelley) {
 		c := s.conversation("echo: punctuation ready", "punctuation")
 		s.mockVoice(false, false)
 		s.call("history", func() string {
@@ -481,20 +481,21 @@ func TestE2ELiveDelegationErrorsOnStrip(t *testing.T) {
 const navigateWithinAppDesc = `"Go within the app to P" means: in an eval, window.history.pushState({}, "", P) and then window.dispatchEvent(new PopStateEvent("popstate")); the page's URL should then end with P (eval location.href.endsWith(P), expect true). `
 
 func TestE2ELiveDelegationPinnedToOriginalChat(t *testing.T) {
-	e2e(t, `A call stays pinned to its original chat while browsing other chats. `+liveTerms+navigateWithinAppDesc+`There are two conversations, /c/origin and /c/other. Call "reply in other" sends "echo: unrelated private reply" to the other conversation through the API, and call "reply in origin" sends "echo: original background reply" to the original one; call "where delegated" says which conversations, as the server has them, mention "delegated to the original chat"; call "sessions" lists the conversations calls were started in (POST /api/conversation/<id>/live-session) as JSON; call "archive other" archives the other conversation. Perform the steps in order.
-1. Navigate to /c/origin and start the call. Emit {type: "session.output_transcript.delta", delta: "Still in the original call.", start_ms: 0, end_ms: 500}. The exchange should contain "Still in the original call.".
-2. Go within the app to /c/other. ".header-title" should have text exactly "other". data-testid "live-bar" should still be visible; the exchange should contain "Still in the original call." and "origin"; data-testid "live-call-header" should have aria-label exactly "End voice call".
+	e2e(t, `A call stays pinned to its original chat while browsing other chats. `+liveTerms+navigateWithinAppDesc+`There are two conversations, /c/kestrel (the original chat) and /c/other. Call "reply in other" sends "echo: unrelated private reply" to the other conversation through the API, and call "reply in origin" sends "echo: original background reply" to the original one; call "where delegated" says which conversations, as the server has them, mention "delegated to the original chat"; call "sessions" lists the conversations calls were started in (POST /api/conversation/<id>/live-session) as JSON; call "archive other" archives the other conversation. Perform the steps in order.
+1. Navigate to /c/kestrel and start the call. Emit {type: "session.output_transcript.delta", delta: "Still in the original call.", start_ms: 0, end_ms: 500}. The exchange should contain "Still in the original call.".
+2. Go within the app to /c/other. ".header-title" should have text exactly "other". data-testid "live-bar" should still be visible; the exchange should contain "Still in the original call." and "kestrel" (the original chat's name); data-testid "live-call-header" should have aria-label exactly "End voice call".
 3. Call "reply in other" (it should return "sent"). The last message containing "unrelated private reply" should become visible.
 4. Call "reply in origin" (it should return "sent"). window.liveNotes() should come to include "Backend reply: original background reply", and must not include "unrelated private reply".
 5. Go within the app to /new. The message input (data-testid "message-input") should be visible.
-6. Call window.liveSpeak("off_view_task", "echo: delegated to the original chat"). Call "where delegated" should come to return exactly {"origin":true,"other":false}. window.liveNotes() should come to include '"delegation_id":"off_view_task","content":"Backend reply: edit predictable.go'. The page's URL should still end with "/new". Call "sessions" should return exactly ["origin"].
-7. data-testid "live-call-origin" should contain "origin". Click it. ".header-title" should have text exactly "origin"; the live bar should be visible; live-call-origin should be disabled.
-8. The strip and its controls fit a phone, in an archive too: call "archive other", then go within the app to /c/other. ".header-title" should have text exactly "other (archived)".
+6. Call window.liveSpeak("off_view_task", "echo: delegated to the original chat"). Call "where delegated" should come to return exactly {"kestrel":true,"other":false}. window.liveNotes() should come to include '"delegation_id":"off_view_task","content":"Backend reply: edit predictable.go'. The page's URL should still end with "/new". Call "sessions" should return exactly ["kestrel"].
+7. data-testid "live-call-origin" should contain "kestrel". Click it. ".header-title" should have text exactly "kestrel"; the live bar should be visible; live-call-origin should be disabled.
+8. The strip and its controls fit a phone, in an archive too: call "archive other"; once the page has learned of the archive, the drawer's row for the other conversation, .conversation-item[data-conversation-id="{{OTHER_ID}}"], is gone (count 0); then go within the app to /c/other. ".header-title" should have text exactly "other (archived)".
 9. Set the viewport to 320x640, keeping this phone's scale 2.75, mobile and touch. The right edge of data-testid "live-stop" (x + width) should be within the live bar's right edge (eval, expect true); document.documentElement.scrollWidth <= innerWidth should be true; data-testid "live-meter" should be visible.
 10. Click data-testid "live-mute"; the live bar should contain "Muted".
 11. Click data-testid "live-stop". The live bar should become hidden, and window.__voiceTracksStopped should be exactly 1.`, func(s *shelley) {
-		origin := s.conversation("echo: original voice chat", "origin")
+		origin := s.conversation("echo: original voice chat", "kestrel")
 		other := s.conversation("echo: other chat", "other")
+		s.v("OTHER_ID", other.ID)
 		s.mockVoice(false, false)
 		l := s.recordLive(nil)
 		chat := func(id, message string) string {
@@ -518,7 +519,7 @@ func TestE2ELiveDelegationPinnedToOriginalChat(t *testing.T) {
 			mentions := func(id string) bool {
 				return strings.Contains(s.conversationJSON(id), "delegated to the original chat")
 			}
-			return fmt.Sprintf(`{"origin":%t,"other":%t}`, mentions(origin.ID), mentions(other.ID))
+			return fmt.Sprintf(`{"kestrel":%t,"other":%t}`, mentions(origin.ID), mentions(other.ID))
 		})
 		s.call("sessions", func() string {
 			l.mu.Lock()
@@ -527,7 +528,7 @@ func TestE2ELiveDelegationPinnedToOriginalChat(t *testing.T) {
 			for _, session := range l.sessions {
 				switch session.Conversation {
 				case origin.ID:
-					names = append(names, "origin")
+					names = append(names, "kestrel")
 				case other.ID:
 					names = append(names, "other")
 				default:

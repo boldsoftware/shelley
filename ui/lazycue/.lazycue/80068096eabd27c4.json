@@ -1,11 +1,11 @@
 {
   "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
-  "description": "A call stays pinned to its original chat while browsing other chats. The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. \"Go within the app to P\" means: in an eval, window.history.pushState({}, \"\", P) and then window.dispatchEvent(new PopStateEvent(\"popstate\")); the page's URL should then end with P (eval location.href.endsWith(P), expect true). There are two conversations, /c/origin and /c/other. Call \"reply in other\" sends \"echo: unrelated private reply\" to the other conversation through the API, and call \"reply in origin\" sends \"echo: original background reply\" to the original one; call \"where delegated\" says which conversations, as the server has them, mention \"delegated to the original chat\"; call \"sessions\" lists the conversations calls were started in (POST /api/conversation/<id>/live-session) as JSON; call \"archive other\" archives the other conversation. Perform the steps in order.\n1. Navigate to /c/origin and start the call. Emit {type: \"session.output_transcript.delta\", delta: \"Still in the original call.\", start_ms: 0, end_ms: 500}. The exchange should contain \"Still in the original call.\".\n2. Go within the app to /c/other. \".header-title\" should have text exactly \"other\". data-testid \"live-bar\" should still be visible; the exchange should contain \"Still in the original call.\" and \"origin\"; data-testid \"live-call-header\" should have aria-label exactly \"End voice call\".\n3. Call \"reply in other\" (it should return \"sent\"). The last message containing \"unrelated private reply\" should become visible.\n4. Call \"reply in origin\" (it should return \"sent\"). window.liveNotes() should come to include \"Backend reply: original background reply\", and must not include \"unrelated private reply\".\n5. Go within the app to /new. The message input (data-testid \"message-input\") should be visible.\n6. Call window.liveSpeak(\"off_view_task\", \"echo: delegated to the original chat\"). Call \"where delegated\" should come to return exactly {\"origin\":true,\"other\":false}. window.liveNotes() should come to include '\"delegation_id\":\"off_view_task\",\"content\":\"Backend reply: edit predictable.go'. The page's URL should still end with \"/new\". Call \"sessions\" should return exactly [\"origin\"].\n7. data-testid \"live-call-origin\" should contain \"origin\". Click it. \".header-title\" should have text exactly \"origin\"; the live bar should be visible; live-call-origin should be disabled.\n8. The strip and its controls fit a phone, in an archive too: call \"archive other\", then go within the app to /c/other. \".header-title\" should have text exactly \"other (archived)\".\n9. Set the viewport to 320x640, keeping this phone's scale 2.75, mobile and touch. The right edge of data-testid \"live-stop\" (x + width) should be within the live bar's right edge (eval, expect true); document.documentElement.scrollWidth <= innerWidth should be true; data-testid \"live-meter\" should be visible.\n10. Click data-testid \"live-mute\"; the live bar should contain \"Muted\".\n11. Click data-testid \"live-stop\". The live bar should become hidden, and window.__voiceTracksStopped should be exactly 1.",
+  "description": "A call stays pinned to its original chat while browsing other chats. The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. \"Go within the app to P\" means: in an eval, window.history.pushState({}, \"\", P) and then window.dispatchEvent(new PopStateEvent(\"popstate\")); the page's URL should then end with P (eval location.href.endsWith(P), expect true). There are two conversations, /c/kestrel (the original chat) and /c/other. Call \"reply in other\" sends \"echo: unrelated private reply\" to the other conversation through the API, and call \"reply in origin\" sends \"echo: original background reply\" to the original one; call \"where delegated\" says which conversations, as the server has them, mention \"delegated to the original chat\"; call \"sessions\" lists the conversations calls were started in (POST /api/conversation/<id>/live-session) as JSON; call \"archive other\" archives the other conversation. Perform the steps in order.\n1. Navigate to /c/kestrel and start the call. Emit {type: \"session.output_transcript.delta\", delta: \"Still in the original call.\", start_ms: 0, end_ms: 500}. The exchange should contain \"Still in the original call.\".\n2. Go within the app to /c/other. \".header-title\" should have text exactly \"other\". data-testid \"live-bar\" should still be visible; the exchange should contain \"Still in the original call.\" and \"kestrel\" (the original chat's name); data-testid \"live-call-header\" should have aria-label exactly \"End voice call\".\n3. Call \"reply in other\" (it should return \"sent\"). The last message containing \"unrelated private reply\" should become visible.\n4. Call \"reply in origin\" (it should return \"sent\"). window.liveNotes() should come to include \"Backend reply: original background reply\", and must not include \"unrelated private reply\".\n5. Go within the app to /new. The message input (data-testid \"message-input\") should be visible.\n6. Call window.liveSpeak(\"off_view_task\", \"echo: delegated to the original chat\"). Call \"where delegated\" should come to return exactly {\"kestrel\":true,\"other\":false}. window.liveNotes() should come to include '\"delegation_id\":\"off_view_task\",\"content\":\"Backend reply: edit predictable.go'. The page's URL should still end with \"/new\". Call \"sessions\" should return exactly [\"kestrel\"].\n7. data-testid \"live-call-origin\" should contain \"kestrel\". Click it. \".header-title\" should have text exactly \"kestrel\"; the live bar should be visible; live-call-origin should be disabled.\n8. The strip and its controls fit a phone, in an archive too: call \"archive other\"; once the page has learned of the archive, the drawer's row for the other conversation, .conversation-item[data-conversation-id=\"{{OTHER_ID}}\"], is gone (count 0); then go within the app to /c/other. \".header-title\" should have text exactly \"other (archived)\".\n9. Set the viewport to 320x640, keeping this phone's scale 2.75, mobile and touch. The right edge of data-testid \"live-stop\" (x + width) should be within the live bar's right edge (eval, expect true); document.documentElement.scrollWidth <= innerWidth should be true; data-testid \"live-meter\" should be visible.\n10. Click data-testid \"live-mute\"; the live bar should contain \"Muted\".\n11. Click data-testid \"live-stop\". The live bar should become hidden, and window.__voiceTracksStopped should be exactly 1.",
   "version": 1,
   "steps": [
     {
       "action": "navigate",
-      "url": "/c/origin"
+      "url": "/c/kestrel"
     },
     {
       "action": "wait_visible",
@@ -55,7 +55,7 @@
     },
     {
       "action": "eval",
-      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').textContent.replace(/\\s+/g, ' ').includes('origin')",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').textContent.replace(/\\s+/g, ' ').includes('kestrel')",
       "expect": "true"
     },
     {
@@ -111,7 +111,7 @@
     {
       "action": "call",
       "value": "where delegated",
-      "expect": "{\"origin\":true,\"other\":false}"
+      "expect": "{\"kestrel\":true,\"other\":false}"
     },
     {
       "action": "eval",
@@ -126,12 +126,12 @@
     {
       "action": "call",
       "value": "sessions",
-      "expect": "[\"origin\"]"
+      "expect": "[\"kestrel\"]"
     },
     {
       "action": "assert_text_contains",
       "selector": "[data-testid='live-call-origin']",
-      "text": "origin"
+      "text": "kestrel"
     },
     {
       "action": "click",
@@ -140,7 +140,7 @@
     {
       "action": "assert_text",
       "selector": ".header-title",
-      "text": "origin"
+      "text": "kestrel"
     },
     {
       "action": "assert_visible",
@@ -153,6 +153,11 @@
     {
       "action": "call",
       "value": "archive other"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id='{{OTHER_ID}}']",
+      "count": 0
     },
     {
       "action": "eval",
@@ -215,12 +220,12 @@
     }
   ],
   "metadata": {
-    "created_at": "2026-11-21T03:23:09.078093699Z",
+    "created_at": "2026-11-21T04:41:49.069438625Z",
     "hostname": "phil-dev",
     "model": "claude-sonnet-4-6",
-    "input_tokens": 136488,
-    "output_tokens": 5224,
-    "estimated_cost_usd": 0.18374415,
+    "input_tokens": 117146,
+    "output_tokens": 5450,
+    "estimated_cost_usd": 0.16458794999999998,
     "mode": "generated"
   }
 }
