@@ -1,0 +1,45 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "/clear appears in the slash-command menu. 1. Navigate to /c/menu-seed and wait (up to 30s) for the message input (data-testid \"message-input\") to be visible. 2. Fill the message input with \"/cle\". 3. The slash-command menu (data-testid \"slash-command-menu\") should become visible (up to 5s). 4. Inside that menu, a command name (\".slash-command-name\") whose trimmed text is exactly \"/clear\" (equal, not merely containing it) should be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/menu-seed"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "/cle"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='slash-command-menu']",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".slash-command-name",
+      "has_text": "/clear"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll(\"[data-testid=slash-command-menu] .slash-command-name\")].some(e => e.textContent.trim() === \"/clear\" && e.getClientRects().length > 0)",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:37:14.197890097Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 5098,
+    "output_tokens": 246,
+    "estimated_cost_usd": 0.0073224,
+    "mode": "generated"
+  }
+}

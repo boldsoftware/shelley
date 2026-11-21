@@ -1,0 +1,61 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "/clear clears the context and starts a new generation, keeping the older messages on screen. Perform the steps in order. 1. Navigate to /c/before-clear and wait (up to 30s) for the message input (data-testid \"message-input\") to be visible. 2. There must be no generation divider yet: \".generation-divider\" count 0. 3. Fill the message input with \"/clear\". 4. The send button (data-testid \"send-button\") should become enabled (up to 5s); click it. 5. Exactly one generation divider (\".generation-divider\") should appear (count 1, wait up to 30s). 6. The message input should become empty (its value is exactly \"\", wait up to 30s; the composer clears only after the send's response arrives, so it may lag the divider). 7. The first message (data-testid \"message\") containing \"before clear\" should still be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/before-clear"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".generation-divider",
+      "count": 0
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "/clear"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='send-button']",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".generation-divider",
+      "count": 1,
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "before clear"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:29:01.399295302Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 5191,
+    "output_tokens": 359,
+    "estimated_cost_usd": 0.02484975,
+    "mode": "generated"
+  }
+}
