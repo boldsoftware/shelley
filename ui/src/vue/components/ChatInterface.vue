@@ -1939,8 +1939,8 @@ let tailPrimedFor: string | null = null;
 let tailFloorKey: string | null = null;
 let pendingIdle: (() => void) | null = null;
 
-// Test knob: Playwright can't practically seed 500+ rows, so it shrinks the
-// tail/chunks and/or freezes the sweep via localStorage (same tab-scoped
+// Test knob: e2e tests can't practically seed 500+ rows, so they shrink the
+// tail/chunks and/or freeze the sweep via localStorage (same tab-scoped
 // pattern as ff:* overrides). Values are clamped to sane minimums so a
 // malformed override can't hang chunking (chunkSize 0) or hide the tail.
 function tailFirstTestOverrides(): { tailChunks?: number; sweep?: boolean; chunkSize?: number } {
@@ -3095,7 +3095,7 @@ const RENDER_CHUNK_SIZE = 50;
 // negligible cost (measured on real Safari 26.4, 17k-message conversation:
 // see the commit message).
 const LIVE_TAIL_CHUNKS = 5;
-// Read once per component: the override is set via addInitScript before the
+// Read once per component: the override is set by an init script before the
 // app boots, and re-reading localStorage on every model rebuild is waste.
 const renderChunkSize = tailFirstTestOverrides().chunkSize ?? RENDER_CHUNK_SIZE;
 function chunkRenderNodes(nodes: RenderNode[]): RenderChunk[] {

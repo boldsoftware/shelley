@@ -1,8 +1,8 @@
 <!-- Vue port of components/DiffViewer.tsx. Monaco diff modal with a file tree
      (DiffFileTree.vue), commit/range selection (CommitPicker.vue +
      RangeToggle.vue), comments, edit/auto-save, and vim (useMonacoVim +
-     VimToggle.vue). PRESERVES EXACTLY the selectors the
-     diff-viewer-find.spec.ts e2e depends on: .diff-viewer-overlay,
+     VimToggle.vue). PRESERVES EXACTLY the selectors the diff viewer e2e
+     tests (test/e2e_diff_viewer_*_test.go) depend on: .diff-viewer-overlay,
      .diff-viewer-editor, select.diff-viewer-select, .monaco-editor,
      .find-widget.visible, the "Find" textbox, and the Ctrl+F-opens-find /
      Escape-closes-find-not-viewer behavior, plus all diff-viewer-* /

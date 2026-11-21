@@ -95,20 +95,11 @@ test-go: exe-scroll ui templates
 	@echo "Running Go tests..."
 	go test -v ./...
 
-# Run end-to-end tests
-test-e2e: ui
+# Run the end-to-end browser tests: the LazyCue tests in test/ (see
+# AGENT_TESTING.md).
+test-e2e: exe-scroll ui templates
 	@echo "Running E2E tests..."
-	$(PNPM) run test:e2e
-
-# Run E2E tests in headed mode (with visible browser)
-test-e2e-headed: ui
-	@echo "Running E2E tests (headed)..."
-	$(PNPM) run test:e2e:headed
-
-# Run E2E tests in UI mode
-test-e2e-ui: ui
-	@echo "Opening E2E test UI..."
-	$(PNPM) run test:e2e:ui
+	LAZYCUE_INTEGRATION=1 go test ./test/ -run 'TestNewPage|TestE2E' -count=1 -timeout 60m
 
 # Run all tests
 test: test-go test-e2e
@@ -129,8 +120,6 @@ clean:
 	rm -rf bin/
 	rm -rf ui/dist/
 	rm -rf ui/node_modules/
-	rm -rf ui/test-results/
-	rm -rf ui/playwright-report/
 	rm -f *.db
 	rm -f templates/*.tar.gz
 
@@ -150,9 +139,7 @@ help:
 	@echo "  templates     Build template tarballs"
 	@echo "  test          Run all tests (Go + E2E)"
 	@echo "  test-go       Run Go tests only"
-	@echo "  test-e2e      Run E2E tests (headless)"
-	@echo "  test-e2e-headed  Run E2E tests (visible browser)"
-	@echo "  test-e2e-ui   Open E2E test UI"
+	@echo "  test-e2e      Run E2E tests (LazyCue, headless)"
 	@echo "  serve         Start Shelley server"
 	@echo "  serve-test    Start Shelley with predictable model"
 	@echo "  clean         Clean build artifacts"

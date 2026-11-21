@@ -35,11 +35,8 @@ echo "==> Running Go tests..."
 go test -v ./...
 
 echo ""
-echo "==> Running Playwright E2E tests..."
-cd ui
-npx playwright install --with-deps chromium
-npx playwright test
-cd ..
+echo "==> Running E2E tests (LazyCue; needs Chrome, Chromium or Headless Shell)..."
+LAZYCUE_INTEGRATION=1 go test ./test/ -run 'TestNewPage|TestE2E' -count=1 -timeout 60m
 
 echo ""
 echo "==> All Shelley tests passed! ✓"

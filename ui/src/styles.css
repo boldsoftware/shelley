@@ -18148,10 +18148,10 @@ kbd {
 
 /* Reduced motion.
  *
- * Users who ask for less motion should get it. This is also what makes the e2e
- * suite quick: PrimeVue's Dialog animates in and out over 0.3s, and Playwright
- * waits for an element to stop moving before clicking it, so every open/close
- * of a dialog costs ~0.6s of pure waiting. The universal rule below
+ * Users who ask for less motion should get it. The e2e tests ask for it too:
+ * PrimeVue's Dialog animates in and out over 0.3s, so every open/close of a
+ * dialog would cost them ~0.6s of waiting, or race a click against a dialog
+ * still moving. The universal rule below
  * covers PrimeVue's runtime-injected theme too -- !important outranks
  * specificity, so `*` beats its single-class .p-dialog-enter-active rule.
  *
@@ -18160,8 +18160,8 @@ kbd {
  * caret) are the UI saying it is still working: freezing those would make a
  * busy app look hung, which is worse than the motion. They are restored below.
  *
- * That restore list is hand-maintained, so `reduced-motion.spec.ts` derives the
- * set of infinite animations from every stylesheet the server ships -- including
+ * That restore list is hand-maintained, so test/e2e_reduced_motion_test.go derives
+ * the set of infinite animations from every stylesheet the server ships -- including
  * dependency CSS, which the rule above reaches too -- and fails if any of them
  * stops animating under reduce, whether by duration or iteration count. Add a
  * spinner, and the test tells you to add it here.

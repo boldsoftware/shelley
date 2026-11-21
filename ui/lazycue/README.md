@@ -2,7 +2,8 @@
 
 Self-healing browser tests for the Shelley UI, powered by
 [LazyCue](../../lazycue). Each test is a plain-English description living in a Go
-test function (`shelley/test/lazycue_test.go`). At run time:
+test function in `shelley/test` (`lazycue_test.go` and the `e2e_*_test.go`
+files). At run time:
 
 - If a cached DSL script exists (in `.lazycue/` next to this file), it
   executes directly — fast, no LLM.
@@ -16,40 +17,47 @@ them; edit the test description instead.
 
 ## Adding a test
 
-Add a Go test function in `shelley/test/lazycue_test.go` that calls
-`lazyTest(t, "<description>")`. Be specific about selectors (prefer
-`data-testid`), expected text, and expected states. The description is the
-source of truth; if the app diverges from it, the test fails.
+Most tests are `TestE2E*` functions in `shelley/test/e2e_*_test.go` that call
+`e2e(t, "<description>", setup)`. Each attempt at one runs against a shelley
+of its own (a fresh database, home and git working directory), which `setup`
+prepares: conversations, files, mocked requests, an init script for the page.
+The simpler `TestNewPage*` functions in `lazycue_test.go` call
+`lazyTest(t, "<description>")` and share one server (`lazyTestIsolated` gives
+one its own; `lazyRecordingTest` injects
+`shelley/test/testdata/recording-mock.js` before the application loads).
 
-Recording tests use `lazyRecordingTest`, which injects
-`shelley/test/testdata/recording-mock.js` before the application loads.
+Be specific about selectors (prefer `data-testid`), expected text, and
+expected states. The description is the source of truth; if the app diverges
+from it, the test fails.
 
 ## Running locally
 
-The tests run as ordinary Go integration tests in `shelley/test`. `TestMain`
-boots one in-process, predictable-mode Shelley server shared by all of them,
-and each `TestNewPage*` drives its description through a package-level
-`lazycue.Harness` — no separate server process and no `lazycue` binary. They're
-gated behind an env var so they stay out of the default `go test ./...` path:
+The tests run as ordinary Go integration tests in `shelley/test`, with no
+`lazycue` binary. `TestMain` boots one in-process, predictable-mode Shelley
+server for the `TestNewPage*` tests; the `TestE2E*` tests start a shelley
+binary, which the package builds once, for every attempt. They're gated
+behind an env var so they stay out of the default `go test ./...` path, and
+need a Chromium-family browser on PATH (see [LazyCue](../../lazycue)):
 
 ```bash
-cd shelley && make ui   # the server embeds ui/dist
+cd shelley && make build   # the server embeds ui/dist, the templates and exe-scroll
 LAZYCUE_INTEGRATION=1 \
   LAZYCUE_ARTIFACT_DIR=/tmp/lazycue-artifacts \
   LAZYCUE_SUMMARY=/tmp/lazycue-summary.json \
-  go test ./test/ -run TestNewPage -count=1 -v
+  go test ./test/ -run 'TestNewPage|TestE2E' -count=1 -v -timeout 60m
 ```
 
-The cache lives in `ui/lazycue/.lazycue/`. The LLM is only needed on a cache
-miss. Point `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY` at any
-Anthropic-compatible endpoint.
+Narrow `-run` to run some of them. The cache lives in `ui/lazycue/.lazycue/`.
+The LLM is only needed on a cache miss or a heal; `LAZYCUE_MAX_AGENT_RUNS=0`
+runs from the cache alone. Point `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY`
+at any Anthropic-compatible endpoint.
 
 ## CI
 
-`.buildkite/steps/test-shelley-lazycue.sh` builds the UI, then runs the
-`TestNewPage*` tests and uploads `lazycue-artifacts/` (per-step screenshots +
-`index.html` report) and `lazycue-summary.json` as artifacts. The summary
-makes the cache hit/miss breakdown explicit. On a green queue build, any new
-or healed cache files in `.lazycue/` are written as a git patch to a directory
-shared between steps on the agent; the rebase-and-push step applies and commits
-that patch onto main (like auto-formatting) so later builds hit the fast path.
+`.buildkite/steps/test-shelley-lazycue.sh` builds the UI, then runs every
+`TestNewPage*` and `TestE2E*` test and uploads `lazycue-summary.json`, and
+`lazycue-artifacts/` (per-step screenshots + `index.html` report) when a test
+failed, healed or was generated. The summary makes the cache hit/miss
+breakdown explicit. On a green queue build, any new or healed cache files in
+`.lazycue/` are handed to the rebase-and-push step, which commits them onto
+main (like auto-formatting) so later builds hit the fast path.

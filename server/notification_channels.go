@@ -478,8 +478,8 @@ func (s *Server) exeNotifyAvailable() bool {
 // and the user must not have disabled it via the exe_notify setting.
 func (s *Server) exeNotifyEnabled(ctx context.Context) bool {
 	// Never send exe.dev push notifications in predictable-only mode. This mode
-	// is used by automated browser tests (the LazyCue/Playwright predictable
-	// server), which drive many end-of-turn events; we don't want those to fire
+	// is used by automated browser tests (the LazyCue predictable server),
+	// which drive many end-of-turn events; we don't want those to fire
 	// real push notifications to the VM owner's devices.
 	if s.predictableOnly {
 		return false

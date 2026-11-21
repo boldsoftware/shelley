@@ -1385,8 +1385,8 @@ func (s *Server) buildCreateMessageParams(conversationID string, message llm.Mes
 	// the agent_working=false flip into the message-INSERT Tx so a single
 	// OnCommit hook emits one list-patch carrying both, instead of two
 	// patches where the first carries the stale pre-flip working=true row
-	// snapshot — that was the scroll-behavior.spec.ts "agent-thinking stays
-	// visible" flake. Mirror of AcceptUserMessage's SetAgentWorking(true)-
+	// snapshot — that was the scroll-behavior e2e tests' "agent-thinking
+	// stays visible" flake. Mirror of AcceptUserMessage's SetAgentWorking(true)-
 	// before-recordMessage ordering on the Send side.
 	markAgentDone := (messageType == db.MessageTypeAgent || messageType == db.MessageTypeError) && message.EndOfTurn
 	params := db.CreateMessageParams{

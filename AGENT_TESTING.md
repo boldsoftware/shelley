@@ -23,13 +23,11 @@ This will:
 - Create template tarballs
 - Build the Go binary to `bin/shelley`
 
-### 2. Install Playwright for E2E Tests
+### 2. A Browser for the E2E Tests
 
-```bash
-cd ui
-pnpm install
-pnpm exec playwright install chromium
-```
+The E2E tests drive a headless Chromium through chromedp: Chrome or Chromium
+on PATH, or [Headless Shell](https://hub.docker.com/r/chromedp/headless-shell/)
+(see `lazycue/README.md`).
 
 ### 3. Start Shelley Server
 
@@ -62,19 +60,27 @@ Test these commands manually:
 
 ### E2E Tests (Automated)
 
-Run the full E2E test suite:
+The E2E tests are LazyCue tests in `test/` (`TestE2E*`, `TestNewPage*`): each
+describes a scenario in plain English, run as a cached script of browser steps
+against a predictable-model server. Each `TestE2E*` attempt gets a server of
+its own; the `TestNewPage*` tests share one. They only run with
+`LAZYCUE_INTEGRATION=1`, and need the UI build, templates and exe-scroll (`make
+build` makes them all). Run the full suite:
 
 ```bash
-cd ui
-pnpm run test:e2e
+make test-e2e
 ```
 
-Run specific test files:
+Run some of them:
 ```bash
-pnpm run test:e2e -- --grep "smoke"
-pnpm run test:e2e -- --grep "conversation"
-pnpm run test:e2e -- --grep "cancellation"
+LAZYCUE_INTEGRATION=1 go test ./test/ -run 'TestE2EConversation' -count=1 -v
 ```
+
+The cached scripts live in `ui/lazycue/.lazycue/`, one JSON file per test, named
+by the hash of its description. A test whose description changed, or whose
+script stopped passing, has an agent write or heal its script, which needs
+`ANTHROPIC_API_KEY`; `LAZYCUE_MAX_AGENT_RUNS=0` runs from the cache only.
+`LAZYCUE_ARTIFACT_DIR` collects per-step screenshots and an HTML report.
 
 ### Headless Browser Testing
 
@@ -193,11 +199,8 @@ make templates
 make build
 ```
 
-### Playwright not finding chromium
-```bash
-cd ui
-pnpm exec playwright install chromium
-```
+### E2E tests skip, or cannot start a browser
+Set `LAZYCUE_INTEGRATION=1`, and put Chrome, Chromium or Headless Shell on PATH.
 
 ### Server already running
 ```bash

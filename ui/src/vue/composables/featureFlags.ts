@@ -45,9 +45,9 @@ export async function refreshFeatureFlags(): Promise<void> {
 }
 
 // Per-page localStorage override, scoped to a single browser tab. This is
-// here mainly for E2E tests: writing the global DB-backed override races
-// across parallel Playwright workers, but a localStorage value set via
-// `page.addInitScript` is private to that page.
+// here mainly for E2E tests: the global DB-backed override reaches every
+// page of the server, but a localStorage value set by an init script is
+// private to that page.
 function localOverride(name: string): boolean | undefined {
   if (typeof window === "undefined") return undefined;
   let raw: string | null = null;

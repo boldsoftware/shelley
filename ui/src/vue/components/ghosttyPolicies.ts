@@ -1,5 +1,5 @@
 // Fixes for ghostty-web@0.4.0-next.14 behaviour, installed on each terminal
-// after open(). e2e/terminal-ghostty.spec.ts covers them.
+// after open(). test/e2e_terminal_ghostty_test.go covers them.
 
 import {
   cursorKeyBytes,

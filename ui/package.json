@@ -17,12 +17,7 @@
     "format": "prettier --write 'src/**/*.{ts,tsx,js,jsx,json,css,html}'",
     "format:check": "prettier --check 'src/**/*.{ts,tsx,js,jsx,json,css,html}'",
     "test": "node scripts/run-tests.mjs",
-    "test:terminal-teardown": "tsx scripts/global-setup.test.ts",
-    "generate-types": "cd .. && go run ./cmd/go2ts.go -o ui/src/generated-types.ts",
-    "test:e2e": "pnpm run build && playwright test",
-    "test:e2e:headed": "pnpm run build && playwright test --headed",
-    "test:e2e:ui": "pnpm run build && playwright test --ui",
-    "test:e2e:debug": "pnpm run build && playwright test --debug"
+    "generate-types": "cd .. && go run ./cmd/go2ts.go -o ui/src/generated-types.ts"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.0",
@@ -65,7 +60,6 @@
   "devDependencies": {
     "@eslint/js": "^9.35.0",
     "@modelcontextprotocol/ext-apps": "2.1.0",
-    "@playwright/test": "^1.60.0",
     "@resvg/resvg-js": "2.6.2",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^22.0.0",

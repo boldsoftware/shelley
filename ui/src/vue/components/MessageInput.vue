@@ -1,7 +1,8 @@
 <!-- Vue port of components/MessageInput.tsx. The composer: textarea,
      send/queue split button, attach, drag/paste upload, inline recording.
-     PRESERVES EXACTLY the e2e contract (file-upload.spec, queue-messages.spec,
-     smoke, conversation): data-testid message-input, send-button,
+     PRESERVES EXACTLY the e2e contract (test/e2e_file_upload_test.go,
+     e2e_queue_messages_test.go, e2e_smoke_test.go,
+     e2e_conversation_test.go): data-testid message-input, send-button,
      send-options-button, queue-option, queued-badge, cancel-queued,
      attach-button, voice-button, message-attachments; aria-label "Message
      input", "Send message", "Send options"; classes .message-input-container,

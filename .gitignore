@@ -4,8 +4,6 @@
 # Database files
 shelley.db
 shelley.db*
-test-playwright.db
-test-playwright.db*
 test-e2e.db
 test-e2e.db*
 test*.db
@@ -22,14 +20,6 @@ ui/dist/
 ui/node_modules/
 ui/.next/
 ui/out/
-
-# Playwright test outputs
-ui/test-results/
-ui/playwright-report/
-
-# Screenshots (keep only example ones)
-ui/e2e/screenshots/*
-!ui/e2e/screenshots/.gitkeep
 
 # Logs
 npm-debug.log*

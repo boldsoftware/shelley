@@ -12,7 +12,8 @@ import (
 // Ported from ui/e2e/terminal-ghostty.spec.ts.
 
 // ghostty-web is the default renderer. These cover what Shelley does on top
-// of it; terminal-*.spec.ts cover the terminal panel on either renderer.
+// of it; the other e2e_terminal_*_test.go cover the terminal panel on
+// either renderer.
 
 // ghosttyScript seeds a conversation at /c/slug whose directory holds t.sh,
 // the lines of script, as the spec's runScript did, and returns the
