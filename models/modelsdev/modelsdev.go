@@ -236,6 +236,7 @@ var knownHosts = map[string]string{
 	"api.anthropic.com":                 "anthropic",
 	"api.openai.com":                    "openai",
 	"generativelanguage.googleapis.com": "google",
+	"gemini.int.exe.xyz":                "google",
 }
 
 // hostOf extracts a normalized host from a URL or bare host string. It strips
