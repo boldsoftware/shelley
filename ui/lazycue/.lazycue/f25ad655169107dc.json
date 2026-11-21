@@ -1,0 +1,160 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A VM opens on its Settings tab, beside its Page tab, and settings changes confirm first. Workspace mode and the VM tabs are on; the screen is the default 393x727 phone. exe.dev is faked: the VM \"web\" (https://web.exe.test) is running in Los Angeles, and its integration key may not add domains (\"Its key reaches only VMs tagged scope.\"). Call \"changes\" returns, as a JSON list, the settings changes the page has sent the server so far; call \"change count\" returns how many. Name elements by ARIA role and accessible name, as Playwright's getByRole does. \"The tabs\" are the buttons inside the navigation element named \"VM tabs\". Elements named by a test id are those with that data-testid. Perform the steps in order. 1. Navigate to /vm/web. \"view-tab-settings\" should have the attribute aria-current=\"page\", and the first of the tabs should have data-testid exactly \"view-tab-settings\". 2. \"vm-status\" should contain the text \"running\", \"vm-denied\" should contain \"tagged scope\", and \"vm-domain-add\" should be disabled. 3. Click \"vm-comment-edit\" and fill \"vm-change-value\" with \"staging\". Call \"changes\": it must return [] (nothing changes before confirming). 4. Click \"vm-change-confirm\". \"vm-comment\" should have exactly the text \"staging\", and call \"changes\" must return [{\"kind\":\"comment\",\"value\":\"staging\"}]. 5. Making it public, from the Share dialog, warns first: click \"vm-share\", then \"vm-visibility-toggle\". The text \"Anyone on the internet can reach https://web.exe.test\" should be visible. Press Escape twice. Call \"change count\": it must return \"1\". 6. Delete wants the VM's name typed: click \"vm-delete\" and fill \"vm-change-typed\" with \"we\": \"vm-change-confirm\" should be disabled. Fill \"vm-change-typed\" with \"web\": \"vm-change-confirm\" should be enabled. Press Escape. Call \"change count\": it must return \"1\". 7. Click \"view-tab-page\": the URL path should become exactly /vm/web/page, and \"vm-frame\" should be visible. 8. Click \"view-tab-settings\": the URL path should become exactly /vm/web, and \"vm-status\" should be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/vm/web"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='view-tab-settings']",
+      "attribute": "aria-current",
+      "value": "page"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "role": "navigation",
+        "name": "VM tabs",
+        "exact": true
+      },
+      "role": "button",
+      "nth": 0,
+      "attribute": "data-testid",
+      "value": "view-tab-settings"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='vm-status']",
+      "text": "running"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='vm-denied']",
+      "text": "tagged scope"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "[data-testid='vm-domain-add']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='vm-comment-edit']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='vm-change-value']",
+      "value": "staging"
+    },
+    {
+      "action": "call",
+      "value": "changes",
+      "expect": "[]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='vm-change-confirm']"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='vm-comment']",
+      "text": "staging"
+    },
+    {
+      "action": "call",
+      "value": "changes",
+      "expect": "[{\"kind\":\"comment\",\"value\":\"staging\"}]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='vm-share']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='vm-visibility-toggle']"
+    },
+    {
+      "action": "wait_text",
+      "text": "Anyone on the internet can reach https://web.exe.test"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "call",
+      "value": "change count",
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='vm-delete']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='vm-change-typed']",
+      "value": "we"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "[data-testid='vm-change-confirm']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='vm-change-typed']",
+      "value": "web"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='vm-change-confirm']"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "call",
+      "value": "change count",
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='view-tab-page']"
+    },
+    {
+      "action": "assert_url",
+      "value": "/vm/web/page"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='vm-frame']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='view-tab-settings']"
+    },
+    {
+      "action": "assert_url",
+      "value": "/vm/web"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='vm-status']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:50:49.761535163Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 126060,
+    "output_tokens": 2688,
+    "estimated_cost_usd": 0.10633544999999998,
+    "mode": "generated"
+  }
+}

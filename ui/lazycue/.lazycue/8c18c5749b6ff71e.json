@@ -1,0 +1,232 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A VM's Terminal tab attaches to its web terminal sessions, until the VM's view closes. Workspace mode and the VM tabs are on; the screen is the default 393x727 phone. exe.dev is faked: the VM \"web\" is running, its settings fail to load, and it lists the web terminal sessions \"ios-1\" and \"coral\" (closing one ends it). The fake terminal server answers each session's \"init\" message with the output \"$ \". Calls: \"open\" returns the sessions with a terminal connection open now, as a JSON list sorted alphabetically except that the session the page created (once there is one) comes last; \"first message\" returns the type, session and whether cols is over 20 of the first message any session got, as JSON (\"none\" before one); \"inits\" returns the sessions that got an \"init\" message, in order, as a JSON list; \"coral got ls\" and \"coral got pwd\" say whether the input data the page sent session coral, joined, contains \"ls\" (resp. \"pwd\"), \"true\" or \"false\"; \"new session\" returns \"ok\" once a session other than ios-1 and coral has connected, and makes {{MINTED}} its name; \"relist\" makes the fake list the sessions ios-1, coral and {{MINTED}}; \"closed\" returns the sessions the page has ended, as a JSON list. Name elements by ARIA role and accessible name, as Playwright's getByRole does. \"The tabs\" are the buttons inside the navigation element named \"VM tabs\"; \"the session tabs\" are the elements with data-testid \"vm-terminal-session\"; \"the terminals\" are the elements with data-testid \"vm-terminal\". Keys are typed key by key into the focused element. Perform the steps in order. 1. Navigate to /vm/web/page. There should be exactly 3 tabs, and the last should have data-testid exactly \"view-tab-terminal\". Unopened, there is no shell: there are no terminals (count 0). 2. Click data-testid \"view-tab-terminal\": the URL path should become exactly /vm/web/terminal, and the element with data-testid \"vm-terminal\" should be visible. 3. The session tabs' texts should be exactly \"ios-1\", \"coral\", in that order, and the last should have aria-selected=\"true\" (the newest is attached). 4. Call \"first message\" until it returns {\"cols_over_20\":true,\"session\":\"coral\",\"type\":\"init\"}. 5. Type \"ls\"; call \"coral got ls\" until it returns \"true\". 6. Picking another session attaches to it too, showing only it: click the first session tab. Call \"open\" until it returns [\"coral\",\"ios-1\"]. There should be exactly 2 terminals, and exactly 1 of them visible. 7. Switching back reuses the first connection: click the second session tab, type \"pwd\", and call \"coral got pwd\" until it returns \"true\". Call \"inits\": it must return [\"coral\",\"ios-1\"]. 8. A new session gets a color name, as the web terminal's do: click data-testid \"vm-terminal-new\". There should be exactly 3 session tabs, and the last one's trimmed text must match /^[a-z]+$/. Call \"new session\" until it returns \"ok\"; the last session tab's trimmed text must be exactly \"{{MINTED}}\". Call \"open\" until it returns [\"coral\",\"ios-1\",\"{{MINTED}}\"]. 9. Another tab keeps the sessions attached; leaving the VM detaches them: click data-testid \"view-tab-page\". No terminal should be visible (visible count 0), and call \"open\" must return [\"coral\",\"ios-1\",\"{{MINTED}}\"]. Navigate to /: call \"open\" until it returns []. 10. Coming back attaches to the session last attached, while it lasts: call \"relist\", then navigate to /vm/web/terminal. The last session tab should have aria-selected=\"true\", and call \"open\" should return [\"{{MINTED}}\"]. 11. Closing it ends it and attaches to the newest left: click the last element with data-testid \"vm-terminal-close\". The session tabs' texts should be exactly \"ios-1\", \"coral\"; call \"closed\" must return [\"{{MINTED}}\"]; call \"open\" should return [\"coral\"].",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/vm/web/page"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "role": "navigation",
+        "name": "VM tabs",
+        "exact": true
+      },
+      "role": "button",
+      "count": 3
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "role": "navigation",
+        "name": "VM tabs",
+        "exact": true
+      },
+      "role": "button",
+      "nth": -1,
+      "attribute": "data-testid",
+      "value": "view-tab-terminal"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='vm-terminal']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='view-tab-terminal']"
+    },
+    {
+      "action": "assert_url",
+      "value": "/vm/web/terminal"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='vm-terminal']"
+    },
+    {
+      "action": "assert_texts",
+      "selector": "[data-testid='vm-terminal-session']",
+      "texts": [
+        "ios-1",
+        "coral"
+      ]
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='vm-terminal-session']",
+      "nth": -1,
+      "attribute": "aria-selected",
+      "value": "true"
+    },
+    {
+      "action": "call",
+      "value": "first message",
+      "expect": "{\"cols_over_20\":true,\"session\":\"coral\",\"type\":\"init\"}"
+    },
+    {
+      "action": "type",
+      "value": "ls"
+    },
+    {
+      "action": "call",
+      "value": "coral got ls",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "tab",
+      "name": "ios-1",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "open",
+      "expect": "[\"coral\",\"ios-1\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='vm-terminal']",
+      "count": 2
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='vm-terminal']",
+      "visible": true,
+      "count": 1
+    },
+    {
+      "action": "click",
+      "role": "tab",
+      "name": "coral",
+      "exact": true
+    },
+    {
+      "action": "type",
+      "value": "pwd"
+    },
+    {
+      "action": "call",
+      "value": "coral got pwd",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "inits",
+      "expect": "[\"coral\",\"ios-1\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='vm-terminal-new']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='vm-terminal-session']",
+      "count": 3
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const tabs = document.querySelectorAll('[data-testid=\"vm-terminal-session\"]'); const text = tabs[tabs.length-1]?.textContent?.trim() ?? ''; return /^[a-z]+$/.test(text) ? 'match' : 'no:' + text; })()",
+      "expect": "match"
+    },
+    {
+      "action": "call",
+      "value": "new session",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='vm-terminal-session']",
+      "nth": -1,
+      "text": "{{MINTED}}"
+    },
+    {
+      "action": "call",
+      "value": "open",
+      "expect": "[\"coral\",\"ios-1\",\"{{MINTED}}\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='view-tab-page']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='vm-terminal']",
+      "visible": true,
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "open",
+      "expect": "[\"coral\",\"ios-1\",\"{{MINTED}}\"]"
+    },
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "call",
+      "value": "open",
+      "expect": "[]"
+    },
+    {
+      "action": "call",
+      "value": "relist"
+    },
+    {
+      "action": "navigate",
+      "url": "/vm/web/terminal"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='vm-terminal']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='vm-terminal-session']",
+      "nth": -1,
+      "attribute": "aria-selected",
+      "value": "true"
+    },
+    {
+      "action": "call",
+      "value": "open",
+      "expect": "[\"{{MINTED}}\"]"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close session {{MINTED}}",
+      "exact": true
+    },
+    {
+      "action": "assert_texts",
+      "selector": "[data-testid='vm-terminal-session']",
+      "texts": [
+        "ios-1",
+        "coral"
+      ]
+    },
+    {
+      "action": "call",
+      "value": "closed",
+      "expect": "[\"{{MINTED}}\"]"
+    },
+    {
+      "action": "call",
+      "value": "open",
+      "expect": "[\"coral\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:07:46.842546379Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 288750,
+    "output_tokens": 8825,
+    "estimated_cost_usd": 0.28952175,
+    "mode": "generated"
+  }
+}
