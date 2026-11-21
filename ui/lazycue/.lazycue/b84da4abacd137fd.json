@@ -1,0 +1,85 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A failed pending relay still ends the call after manual hangup. The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. Once call \"intercept\" has run, the server's answer to every relay of events (POST .../live-session/<session>/events) is held back until call \"release\" and is then 503 \"Relay failed for test\"; call \"held\" says whether one is being held. Call \"hangup\" says how the server answered the first hangup (DELETE .../live-session/<session>): \"ok\" for success. Perform the steps in order.\n1. Navigate to /c/relay and start the call.\n2. Call \"intercept\". Emit {type: \"session.input_transcript.delta\", delta: \"Already received words\", start_ms: 0, end_ms: 1000}. Call \"held\" should come to return exactly \"true\".\n3. Click data-testid \"live-stop\", then call \"release\".\n4. Call \"hangup\" should return exactly \"ok\". data-testid \"live-error\" should contain \"Failed to relay the call to Shelley\" and \"Relay failed for test\". There should be no data-testid \"live-stop\" (count 0), and window.__voiceTracksStopped should be greater than 0 (eval, expect true).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/relay"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='live-call-header']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "call",
+      "value": "intercept"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: 'Already received words', start_ms: 0, end_ms: 1000})"
+    },
+    {
+      "action": "call",
+      "value": "held",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-stop']"
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "call",
+      "value": "hangup",
+      "expect": "ok"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='live-error']",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-error\"]').textContent.replace(/\\s+/g, ' ').includes('Failed to relay the call to Shelley')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-error\"]').textContent.replace(/\\s+/g, ' ').includes('Relay failed for test')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='live-stop']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "window.__voiceTracksStopped > 0",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:05:59.836868343Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 254804,
+    "output_tokens": 2865,
+    "estimated_cost_usd": 0.18411974999999997,
+    "mode": "generated"
+  }
+}

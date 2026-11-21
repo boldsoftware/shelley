@@ -1,0 +1,138 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Live exchange collapse keeps listening and stays closed across handoffs. The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. \"The toggle\" is data-testid \"live-exchange-toggle\" (the exchange's summary); \"the region\" is the exchange's [role=\"region\"][aria-label=\"Live exchange transcript\"]. Call \"snapshot\" saves the conversation as the server has it; call \"unchanged\" says whether it is still exactly the same. Perform the steps in order.\n1. Navigate to /c/collapse and start the call. Call \"snapshot\".\n2. Emit {type: \"session.input_transcript.delta\", delta: \"echo: collapse me\", start_ms: 0, end_ms: 1000}.\n3. Click the toggle. The exchange's JS property open should be false (eval, expect false), and the region should be hidden.\n4. Emit {type: \"session.output_transcript.delta\", delta: \"Still listening.\", start_ms: 1100, end_ms: 1800}. data-testid \"live-bar\" should contain \"On call\". Call \"unchanged\" should return exactly \"true\".\n5. Emit {type: \"session.delegation.created\", offset_ms: 1800, delegation: {id: \"collapsed\", target: \"client\"}}. The message \"Spoken request: echo: collapse me\" should contain \"LIVE: Still listening.\". The exchange should become hidden.\n6. Emit {type: \"session.output_transcript.delta\", delta: \"More words while collapsed. \".repeat(80), start_ms: 2000, end_ms: 12000}. The exchange should become visible, its open property still false, and the region hidden.\n7. Focus the toggle (one-shot eval calling its focus()) and press Space. The region should become visible and contain \"More words while collapsed.\". Its distance from the bottom (scrollHeight - clientHeight - scrollTop) should come to be at most 1.\n8. Click data-testid \"live-stop\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/collapse"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='live-call-header']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "call",
+      "value": "snapshot"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: 'echo: collapse me', start_ms: 0, end_ms: 1000})"
+    },
+    {
+      "action": "wait_text",
+      "text": "echo: collapse me",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-exchange-toggle']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').open",
+      "expect": "false"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='live-exchange'] [role='region'][aria-label='Live exchange transcript']"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: 'Still listening.', start_ms: 1100, end_ms: 1800})"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "call",
+      "value": "unchanged",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.delegation.created', offset_ms: 1800, delegation: {id: 'collapsed', target: 'client'}})"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "Spoken request: echo: collapse me",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: echo: collapse me')).every(el => el.textContent.replace(/\\s+/g, ' ').includes('LIVE: Still listening.'))",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='live-exchange']"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: 'More words while collapsed. '.repeat(80), start_ms: 2000, end_ms: 12000})"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='live-exchange']",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').open",
+      "expect": "false"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='live-exchange'] [role='region'][aria-label='Live exchange transcript']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange-toggle\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "Space"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='live-exchange'] [role='region'][aria-label='Live exchange transcript']",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"] [role=\"region\"][aria-label=\"Live exchange transcript\"]').textContent.replace(/\\s+/g, ' ').includes('More words while collapsed.')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var el = document.querySelector('[data-testid=\"live-exchange\"] [role=\"region\"][aria-label=\"Live exchange transcript\"]'); return el.scrollHeight - el.clientHeight - el.scrollTop <= 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-stop']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:03:55.208221208Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 98770,
+    "output_tokens": 3561,
+    "estimated_cost_usd": 0.123057,
+    "mode": "generated"
+  }
+}

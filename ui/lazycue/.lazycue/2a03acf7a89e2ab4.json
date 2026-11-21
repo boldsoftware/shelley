@@ -1,0 +1,92 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Live keeps a paused thought together without moving an answer before its question. The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. \"The turns\" are the exchange's \".live-exchange-turn\" elements; check the nth one with an eval on document.querySelectorAll(\"[data-testid=live-exchange] .live-exchange-turn\")[n]. Perform the steps in order.\n1. Navigate to /c/boundaries and start the call.\n2. Emit {type: \"session.input_transcript.delta\", delta: \"This is\", start_ms: 0, end_ms: 1000}, then {type: \"session.output_transcript.delta\", delta: \"Mm.\", start_ms: 900, end_ms: 1200}, then {type: \"session.input_transcript.delta\", delta: \" still one thought\", start_ms: 3500, end_ms: 4500}, then {type: \"session.input_transcript.delta\", delta: \"\\n.\", start_ms: 4500, end_ms: 4500} (a newline and a period). There should be exactly 2 turns, and the first turn's p element should have text exactly \"This is still one thought.\".\n3. Emit {type: \"session.output_transcript.delta\", delta: \"Which panel?\", start_ms: 5000, end_ms: 6000}, then {type: \"session.input_transcript.delta\", delta: \"Sidebar.\", start_ms: 6200, end_ms: 7000}. There should be exactly 4 turns; the third (index 2) should contain \"Which panel?\", the fourth (index 3) \"Sidebar.\", and the first must not contain \"Sidebar.\".\n4. Click data-testid \"live-stop\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/boundaries"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='live-call-header']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: 'This is', start_ms: 0, end_ms: 1000})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: 'Mm.', start_ms: 900, end_ms: 1200})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: ' still one thought', start_ms: 3500, end_ms: 4500})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: '\\n.', start_ms: 4500, end_ms: 4500})"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=live-exchange] .live-exchange-turn').length",
+      "expect": "2"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=live-exchange] .live-exchange-turn')[0].querySelector('p').textContent",
+      "expect": "This is still one thought."
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: 'Which panel?', start_ms: 5000, end_ms: 6000})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: 'Sidebar.', start_ms: 6200, end_ms: 7000})"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=live-exchange] .live-exchange-turn').length",
+      "expect": "4"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=live-exchange] .live-exchange-turn')[2].textContent.replace(/\\s+/g, ' ').includes('Which panel?')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=live-exchange] .live-exchange-turn')[3].textContent.replace(/\\s+/g, ' ').includes('Sidebar.')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=live-exchange] .live-exchange-turn')[0].textContent.replace(/\\s+/g, ' ').includes('Sidebar.')",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-stop']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:07:00.03025306Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 247676,
+    "output_tokens": 3659,
+    "estimated_cost_usd": 0.18887505,
+    "mode": "generated"
+  }
+}

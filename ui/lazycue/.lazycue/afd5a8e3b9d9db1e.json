@@ -1,0 +1,156 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A delegated question reaches the chat, and its reply reaches Live. The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. Call \"sessions\" describes the call starts (POST /api/conversation/<id>/live-session) as JSON; call \"relayed session.started\" says whether any event of type \"session.started\" was relayed to the server. Perform the steps in order.\n1. Navigate to /c/ready. data-testid \"live-call-header\" should have aria-label exactly \"Start voice conversation\".\n2. Click it. data-testid \"live-bar\" should contain \"On call\"; the header button's aria-label should become exactly \"End voice call\", and its computed color should equal the computed backgroundColor of data-testid \"live-stop\" (eval the comparison, expect true). data-testid \"live-timer\" should be visible.\n3. The strip sits by the composer, with a wide meter and no captions: the live bar's getBoundingClientRect().y should be >= that of \".message-input-container\" (eval, expect true); data-testid \"live-meter\" should be at least 110px wide (eval, expect true); there should be no data-testid \"live-transcript\" (count 0).\n4. Emit, in order: {type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400}; {type: \"session.output_transcript.delta\", delta: \"Hey there!\", start_ms: 500, end_ms: 900}; {type: \"session.input_transcript.delta\", delta: \"echo: why is this so slow\", start_ms: 1200, end_ms: 1900}; {type: \"session.started\"} (Shelley doesn't need it); and then twice, as Live may repeat an event, {type: \"session.delegation.created\", offset_ms: 1900, delegation: {id: \"captured_question\", target: \"client\"}}.\n5. There should be exactly one message \"Spoken request: Hello echo: why is this so slow\", and it should contain \"Call #1 Voice Exchange [Captions 1-3] (for context only): USER: Hello LIVE: Hey there! USER: echo: why is this so slow\".\n6. Call \"sessions\" should return exactly {\"count\":1,\"conversation_options\":false}, and call \"relayed session.started\" exactly \"false\".\n7. window.liveNotes() should come to include \"The backend accepted this task: Hello echo: why is this so slow\", and also '\"delegation_id\":\"captured_question\",\"content\":\"Backend reply: edit predictable.go' (eval includes, expect true).\n8. Click the header button again. The live bar should become hidden, and the header button's aria-label exactly \"Start voice conversation\". window.liveNotes() should include \"session.close\", window.__voiceTracksStopped should be exactly 1, and there should still be exactly one message \"Spoken request: Hello echo: why is this so slow\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/ready"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='live-call-header']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='live-call-header']",
+      "attribute": "aria-label",
+      "value": "Start voice conversation"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='live-call-header']",
+      "attribute": "aria-label",
+      "value": "End voice call"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=\"live-call-header\"]')).color === getComputedStyle(document.querySelector('[data-testid=\"live-stop\"]')).backgroundColor",
+      "expect": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='live-timer']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-bar\"]').getBoundingClientRect().y >= document.querySelector('.message-input-container').getBoundingClientRect().y",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-meter\"]').getBoundingClientRect().width >= 110",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='live-transcript']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: 'Hello ', start_ms: 0, end_ms: 400})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: 'Hey there!', start_ms: 500, end_ms: 900})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: 'echo: why is this so slow', start_ms: 1200, end_ms: 1900})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.started'})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.delegation.created', offset_ms: 1900, delegation: {id: 'captured_question', target: 'client'}})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.delegation.created', offset_ms: 1900, delegation: {id: 'captured_question', target: 'client'}})"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='message']",
+      "has_text": "Spoken request: Hello echo: why is this so slow",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: Hello echo: why is this so slow')).every(el => el.textContent.replace(/\\s+/g, ' ').includes('Call #1 Voice Exchange [Captions 1-3] (for context only): USER: Hello LIVE: Hey there! USER: echo: why is this so slow'))",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "sessions",
+      "expect": "{\"count\":1,\"conversation_options\":false}"
+    },
+    {
+      "action": "call",
+      "value": "relayed session.started",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveNotes().includes('The backend accepted this task: Hello echo: why is this so slow')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveNotes().includes('\"delegation_id\":\"captured_question\",\"content\":\"Backend reply: edit predictable.go')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='live-bar']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='live-call-header']",
+      "attribute": "aria-label",
+      "value": "Start voice conversation"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveNotes().includes('session.close')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__voiceTracksStopped",
+      "expect": "1"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='message']",
+      "has_text": "Spoken request: Hello echo: why is this so slow",
+      "count": 1
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:02:24.253258095Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 53943,
+    "output_tokens": 3301,
+    "estimated_cost_usd": 0.104463,
+    "mode": "generated"
+  }
+}

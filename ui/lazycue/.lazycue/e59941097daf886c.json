@@ -1,0 +1,82 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Live delivery remains visible and replyable in brief view: the conversation lets the agent message the user (message_user on). The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. Call \"snapshot turns\" counts the conversation's messages that end a turn, as the server has them; call \"more turns\" says whether there are more now; call \"reply\" has the agent reply to the spoken request through the API, with message_user {\"text\": \"On it.\", \"reply_to\": <the spoken request's sequence_id>, \"reaction\": \"👍\", \"end_turn\": true}, and returns \"sent\" once done. Perform the steps in order.\n1. Navigate to /c/brief and start the call. Call \"snapshot turns\".\n2. Emit {type: \"session.input_transcript.delta\", delta: \"Review the build\", start_ms: 0, end_ms: 1000}, then {type: \"session.delegation.created\", offset_ms: 1000, delegation: {id: \"brief\", target: \"client\"}}.\n3. The message \"Spoken request: Review the build\" (the request) should be visible. Call \"more turns\" should come to return exactly \"true\".\n4. Call \"reply\" should return exactly \"sent\".\n5. The data-testid \"message-user-bubble\" containing \"On it.\" should have a data-testid \"message-user-quote\" containing \"Review the build\", and the request's data-testid \"message-reactions\" should have text exactly \"👍\".\n6. Click data-testid \"live-stop\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/brief"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "wait_text",
+      "text": "On call",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "call",
+      "value": "snapshot turns"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: 'Review the build', start_ms: 0, end_ms: 1000})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.delegation.created', offset_ms: 1000, delegation: {id: 'brief', target: 'client'}})"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "Spoken request: Review the build",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "more turns",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "reply",
+      "expect": "sent"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-user-bubble']",
+      "has_text": "On it.",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('[data-testid=\"message-user-bubble\"]')).find(el => el.textContent.replace(/\\s+/g, ' ').includes('On it.'))?.querySelector('[data-testid=\"message-user-quote\"]')?.textContent.replace(/\\s+/g, ' ').includes('Review the build') ?? false",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('[data-testid=\"message\"]')).find(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: Review the build'))?.querySelector('[data-testid=\"message-reactions\"]')?.textContent.replace(/\\s+/g, ' ').trim()",
+      "expect": "👍"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-stop']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:19:47.422644145Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 80665,
+    "output_tokens": 2060,
+    "estimated_cost_usd": 0.09656519999999999,
+    "mode": "generated"
+  }
+}

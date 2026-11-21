@@ -1,0 +1,152 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A call on /new starts one blank draft with the composer's selection, wherever the user browses meanwhile. The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. \"Go within the app to P\" means: in an eval, window.history.pushState({}, \"\", P) and then window.dispatchEvent(new PopStateEvent(\"popstate\")); the page's URL should then end with P (eval location.href.endsWith(P), expect true). The composer has the profile VoicePersonal-test selected (model predictable). The microphone is held: getUserMedia answers only once window.__releaseVoiceMicrophone() is called in an eval. There is a conversation /c/other. Call \"profiles loaded\" says whether the page has loaded the profiles (/api/profiles answered successfully); call \"drafts\" counts the requests to /api/conversations/draft; call \"session\" checks the call start (POST /api/conversation/<id>/live-session) and returns \"ok\" when it is right; call \"promoted\" checks the call's conversation as the server has it and returns \"ok\" when it is right; call \"next session\" describes the latest call start as JSON. Perform the steps in order.\n1. Navigate to /new. Call \"profiles loaded\" should come to return exactly \"true\".\n2. Click data-testid \"live-call-header\". data-testid \"live-bar\" should contain \"Connecting\". Nothing is created before the microphone is granted: call \"drafts\" should return exactly \"0\".\n3. Go within the app to /c/other. \".header-title\" should have text exactly \"other\".\n4. Call window.__releaseVoiceMicrophone(). The live bar should contain \"On call\".\n5. Call \"session\" should return exactly \"ok\": the call was started in a new conversation (not /c/other), which the server has as a draft, with model \"predictable\" and conversation_options carrying the profile VoicePersonal-test and tool overrides, so the call's tasks promote the draft with them.\n6. Call window.liveSpeak(\"first_task\", \"echo: started by voice\"). Call \"promoted\" should come to return exactly \"ok\": the conversation is no longer a draft, has model \"predictable\", and its conversation options name the profile VoicePersonal-test. Call \"drafts\" should return exactly \"1\". \".header-title\" should still have text exactly \"other\". window.liveNotes() should come to include '\"delegation_id\":\"first_task\",\"content\":\"Backend reply: edit predictable.go'.\n7. A conversation under way has its own settings; the next call sends none: click data-testid \"live-call-origin\". There should be exactly one message \"Spoken request: echo: started by voice\". Click data-testid \"live-stop\".\n8. Click data-testid \"live-call-header\" again. The live bar should contain \"Connecting\". Call window.__releaseVoiceMicrophone(); the live bar should contain \"On call\". Call \"next session\" should return exactly {\"sessions\":2,\"conversation_options\":false}.\n9. Click data-testid \"live-call-header\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "call",
+      "value": "profiles loaded",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "Connecting"
+    },
+    {
+      "action": "call",
+      "value": "drafts",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.history.pushState({}, '', '/c/other'); window.dispatchEvent(new PopStateEvent('popstate')); 'done'",
+      "expect": "done"
+    },
+    {
+      "action": "eval",
+      "expression": "location.href.endsWith('/c/other')",
+      "expect": "true"
+    },
+    {
+      "action": "wait_text",
+      "text": "other",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".header-title",
+      "text": "other"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__releaseVoiceMicrophone(); 'done'",
+      "expect": "done"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "call",
+      "value": "session",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveSpeak('first_task', 'echo: started by voice'); 'done'",
+      "expect": "done"
+    },
+    {
+      "action": "call",
+      "value": "promoted",
+      "expect": "ok",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "drafts",
+      "expect": "1"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".header-title",
+      "text": "other"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveNotes().includes('\"delegation_id\":\"first_task\",\"content\":\"Backend reply: edit predictable.go')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-origin']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "Spoken request: echo: started by voice"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='message']",
+      "has_text": "Spoken request: echo: started by voice",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-stop']"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='live-bar']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "Connecting"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__releaseVoiceMicrophone(); 'done'",
+      "expect": "done"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "call",
+      "value": "next session",
+      "expect": "{\"sessions\":2,\"conversation_options\":false}"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:21:13.482399924Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 89345,
+    "output_tokens": 2485,
+    "estimated_cost_usd": 0.10427805,
+    "mode": "generated"
+  }
+}

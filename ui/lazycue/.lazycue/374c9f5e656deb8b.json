@@ -1,0 +1,47 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Shelley's errors about a call show on its strip. The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. Perform the steps in order.\n1. Navigate to /c/ready and start the call.\n2. Emit {type: \"session.delegation.created\", offset_ms: -1, delegation: {id: \"bad\", target: \"client\"}}.\n3. data-testid \"live-error\" should have text exactly \"Live returned an invalid delegation timestamp.\".\n4. Click data-testid \"live-stop\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/ready"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.delegation.created', offset_ms: -1, delegation: {id: 'bad', target: 'client'}})"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='live-error']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='live-error']",
+      "text": "Live returned an invalid delegation timestamp."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-stop']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:57:52.526326277Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 129403,
+    "output_tokens": 4307,
+    "estimated_cost_usd": 0.13404225,
+    "mode": "generated"
+  }
+}

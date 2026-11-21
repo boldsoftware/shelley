@@ -1,0 +1,111 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Live groups overlapping thoughts and keeps the exchange bounded with optional scrollback. The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. \"The turns\" are the exchange's \".live-exchange-turn\" elements; \"the region\" is the exchange's [role=\"region\"][aria-label=\"Live exchange transcript\"]; \"the distance from the bottom\" is the region's scrollHeight - clientHeight - scrollTop. Perform the steps in order.\n1. Navigate to /c/overlap and start the call.\n2. Emit {type: \"session.input_transcript.delta\", delta: \"The transcript keeps\", start_ms: 0, end_ms: 1200}, then {type: \"session.output_transcript.delta\", delta: \"Mm-hmm.\", start_ms: 900, end_ms: 1300}, then {type: \"session.input_transcript.delta\", delta: \" splitting up.\", start_ms: 1300, end_ms: 2500}. There should be exactly 2 turns, and the first should contain \"The transcript keeps splitting up.\".\n3. Emit {type: \"session.output_transcript.delta\", delta: \"A long reply with room to scroll back. \".repeat(80), start_ms: 4000, end_ms: 20000}. The region should come to overflow (scrollHeight - clientHeight \u003e 0, eval expect true); its clientHeight should be at most 192; the distance from the bottom should come to be at most 1.\n4. In a one-shot eval, scroll the region to the top: set its scrollTop = 0 and dispatch a \"scroll\" Event on it. The exchange's \"Latest\" button (\".live-exchange-latest\") should become visible.\n5. Emit {type: \"session.output_transcript.delta\", delta: \" The newest words.\", start_ms: 20000, end_ms: 21000}. The exchange should contain \"The newest words.\", and the region's scrollTop should still be exactly 0.\n6. Click the Latest button. The distance from the bottom should come to be at most 1.\n7. Click data-testid \"live-stop\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/overlap"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='live-bar']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: 'The transcript keeps', start_ms: 0, end_ms: 1200})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: 'Mm-hmm.', start_ms: 900, end_ms: 1300})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: ' splitting up.', start_ms: 1300, end_ms: 2500})"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"live-exchange\"] .live-exchange-turn').length",
+      "expect": "2"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"] .live-exchange-turn').textContent.replace(/\\s+/g, ' ').includes('The transcript keeps splitting up.')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: 'A long reply with room to scroll back. '.repeat(80), start_ms: 4000, end_ms: 20000})"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const r = document.querySelector('[data-testid=\"live-exchange\"] [role=\"region\"][aria-label=\"Live exchange transcript\"]'); return r ? r.scrollHeight - r.clientHeight \u003e 0 : false; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"] [role=\"region\"][aria-label=\"Live exchange transcript\"]').clientHeight \u003c= 192",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const r = document.querySelector('[data-testid=\"live-exchange\"] [role=\"region\"][aria-label=\"Live exchange transcript\"]'); return r.scrollHeight - r.clientHeight - r.scrollTop \u003c= 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const r = document.querySelector('[data-testid=\"live-exchange\"] [role=\"region\"][aria-label=\"Live exchange transcript\"]'); r.scrollTop = 0; r.dispatchEvent(new Event('scroll')); })()"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='live-exchange'] .live-exchange-latest",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: ' The newest words.', start_ms: 20000, end_ms: 21000})"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').textContent.replace(/\\s+/g, ' ').includes('The newest words.')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"] [role=\"region\"][aria-label=\"Live exchange transcript\"]').scrollTop",
+      "expect": "0"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-exchange'] .live-exchange-latest"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const r = document.querySelector('[data-testid=\"live-exchange\"] [role=\"region\"][aria-label=\"Live exchange transcript\"]'); return r.scrollHeight - r.clientHeight - r.scrollTop \u003c= 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-stop']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:59:27.300755439Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 135883,
+    "output_tokens": 4679,
+    "estimated_cost_usd": 0.15054045,
+    "mode": "generated"
+  }
+}

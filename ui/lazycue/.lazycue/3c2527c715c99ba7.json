@@ -1,0 +1,102 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Late punctuation neither amends a sent request nor creates another task. The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. Call \"history\" describes the conversation as the server has it. Perform the steps in order.\n1. Navigate to /c/punctuation and start the call.\n2. Call window.liveSpeak(\"punctuation\", \"echo: keep the period\"). There should be exactly one message \"Spoken request: echo: keep the period\" (the request).\n3. Emit {type: \"session.input_transcript.delta\", delta: \".\", start_ms: 850, end_ms: 900}, then {type: \"session.input_transcript.delta\", delta: \"Next thought.\", start_ms: 5000, end_ms: 6000}. The exchange should contain \"Next thought.\", and must contain neither \".Next thought.\" nor \". Next thought.\".\n4. Click data-testid \"live-stop\". Call \"history\" should return exactly {\"livetranscript\":false,\"continued\":false} (no livetranscript message, and nothing says \"Spoken request (continued)\"). The request must not contain \"USER: echo: keep the period.\".\n5. Navigate to /c/punctuation again (a reload). The request must not contain \"USER: echo: keep the period.\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/punctuation"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveSpeak('punctuation', 'echo: keep the period')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "Spoken request: echo: keep the period",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='message']",
+      "has_text": "Spoken request: echo: keep the period",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: '.', start_ms: 850, end_ms: 900})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: 'Next thought.', start_ms: 5000, end_ms: 6000})"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').textContent.replace(/\\s+/g, ' ').includes('Next thought.')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').textContent.replace(/\\s+/g, ' ').includes('.Next thought.')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').textContent.replace(/\\s+/g, ' ').includes('. Next thought.')",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-stop']"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='live-bar']",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "history",
+      "expect": "{\"livetranscript\":false,\"continued\":false}"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const m = Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: echo: keep the period')); return m.length === 1 && !m[0].textContent.replace(/\\s+/g, ' ').includes('USER: echo: keep the period.'); })()",
+      "expect": "true"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/punctuation"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "Spoken request: echo: keep the period",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const m = Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: echo: keep the period')); return m.length === 1 && !m[0].textContent.replace(/\\s+/g, ' ').includes('USER: echo: keep the period.'); })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:08:42.215189625Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 386458,
+    "output_tokens": 5036,
+    "estimated_cost_usd": 0.27543660000000003,
+    "mode": "generated"
+  }
+}

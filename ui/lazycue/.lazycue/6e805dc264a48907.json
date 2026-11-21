@@ -1,0 +1,75 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A transcript backlog drains in order at hangup. The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. Once call \"intercept\" has run, every relay of events (POST .../live-session/\u003csession\u003e/events) is held back until call \"release\", and call \"offsets\" lists the start_ms of the events relayed so far, in order, as JSON. Call \"hangup\" says how the server answered the first hangup (DELETE .../live-session/\u003csession\u003e): \"ok\" for success. Call \"saved transcript\" says whether the transcript the server saved for call 1 contains the whole backlog. Perform the steps in order.\n1. Navigate to /c/backlog and start the call.\n2. Call \"intercept\". Then in one eval, emit four events at once: for i from 0 to 3, window.liveEmit({type: \"session.input_transcript.delta\", delta: \"声\".repeat(16000), start_ms: i, end_ms: i + 1}).\n3. Call \"offsets\" should come to return exactly [0] (the first relay is held).\n4. Click data-testid \"live-stop\", then call \"release\".\n5. Call \"hangup\" should return exactly \"ok\". Call \"offsets\" should return exactly [0,1,2,3]. There should be no data-testid \"live-error\" (count 0). Call \"saved transcript\" should return exactly \"true\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/backlog"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "wait_text",
+      "text": "On call",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "call",
+      "value": "intercept"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ for(var i=0;i\u003c4;i++){ window.liveEmit({type:'session.input_transcript.delta', delta:'声'.repeat(16000), start_ms:i, end_ms:i+1}); } })()"
+    },
+    {
+      "action": "call",
+      "value": "offsets",
+      "expect": "[0]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-stop']"
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "call",
+      "value": "hangup",
+      "expect": "ok"
+    },
+    {
+      "action": "call",
+      "value": "offsets",
+      "expect": "[0,1,2,3]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='live-error']",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "saved transcript",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:24:04.320505539Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 17680,
+    "output_tokens": 681,
+    "estimated_cost_usd": 0.02301975,
+    "mode": "generated"
+  }
+}

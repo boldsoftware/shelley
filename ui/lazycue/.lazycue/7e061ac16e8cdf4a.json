@@ -1,0 +1,191 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Sent exchanges stay frozen while new Live speech waits for the next handoff. The voice call is faked. In an eval, window.liveEmit(event) delivers event from Live (e.g. window.liveEmit({type: \"session.input_transcript.delta\", delta: \"Hello \", start_ms: 0, end_ms: 400})); emit each event in its own eval, in the order given. window.liveSpeak(id, speech) speaks and delegates: it emits {type: \"session.input_transcript.delta\", delta: speech, start_ms: 0, end_ms: 900} and then {type: \"session.delegation.created\", offset_ms: 900, delegation: {id, target: \"client\"}}. window.liveNotes() returns the JSON of everything Shelley sent to Live. window.__voiceTracksStopped counts the microphone tracks stopped. \"Start the call\" means: click data-testid \"live-call-header\"; data-testid \"live-bar\" should contain \"On call\". \"The exchange\" is data-testid \"live-exchange\". \"The message X\" is the [data-testid=\"message\"] elements whose text contains X (has_text; it collapses whitespace, so a line break is a space). Text checks on messages and the exchange compare whitespace-collapsed text: eval el.textContent.replace(/\\s+/g, \" \").includes(...) with expect true (or false for \"not contain\"), on every matching element. Call \"snapshot\" saves the conversation as the server has it; call \"unchanged\" says whether it is still exactly the same; call \"user messages added\" counts the user messages added since the snapshot. Perform the steps in order.\n1. Navigate to /c/transcript and start the call. Call \"snapshot\".\n2. Emit {type: \"session.input_transcript.delta\", delta: \"Hello.\", start_ms: 0, end_ms: 400}, then {type: \"session.output_transcript.delta\", delta: \"Hi, I'm \", start_ms: 500, end_ms: 900}. The exchange should contain \"Hi, I'm\".\n3. Emit {type: \"session.output_transcript.delta\", delta: \"here.\", start_ms: 900, end_ms: 1100}. The exchange should contain \"Hi, I'm here.\" and \"Not sent to Shelley\", and its className must not match /message-user/. Call \"unchanged\" should return exactly \"true\".\n4. Emit {type: \"session.input_transcript.delta\", delta: \"echo: check the transcript\", start_ms: 1500, end_ms: 2200}, then {type: \"session.delegation.created\", offset_ms: 2200, delegation: {id: \"transcript\", target: \"client\"}}, then {type: \"session.output_transcript.delta\", delta: \"Okay, let\", start_ms: 2300, end_ms: 2600}. The exchange should contain \"Okay, let\".\n5. Emit {type: \"session.output_transcript.delta\", delta: \" me check.\", start_ms: 2600, end_ms: 3000}. There should be exactly one message \"Spoken request: Hello.echo: check the transcript\" (call it the first request); it should contain \"LIVE: Okay, let me check.\". The exchange should become hidden.\n6. Later speech stays unsent; it belongs to the next handoff, not this bubble: emit {type: \"session.output_transcript.delta\", delta: \" I'm still here while that runs.\", start_ms: 3500, end_ms: 4500}. The exchange should contain \"I'm still here while that runs.\" and \"Not sent to Shelley\"; the first request must not contain \"I'm still here while that runs.\". Call \"user messages added\" should return exactly \"1\".\n7. Emit {type: \"session.input_transcript.delta\", delta: \"echo: now lint\", start_ms: 5000, end_ms: 6000}, then {type: \"session.delegation.created\", offset_ms: 6000, delegation: {id: \"next-transcript\", target: \"client\"}}. There should be exactly one message \"Spoken request: echo: now lint\" (the next request), containing \"LIVE: I'm still here while that runs.\". The exchange should become hidden, and the first request must still not contain \"I'm still here while that runs.\". Call \"livetranscript rows\" should return exactly \"false\".\n8. Click data-testid \"live-stop\", then navigate to /c/transcript again (a reload). There should be exactly one first request, still without \"I'm still here while that runs.\", and the next request should contain \"LIVE: I'm still here while that runs.\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/transcript"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-call-header']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='live-bar']",
+      "text": "On call"
+    },
+    {
+      "action": "call",
+      "value": "snapshot"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: 'Hello.', start_ms: 0, end_ms: 400})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: \"Hi, I'm \", start_ms: 500, end_ms: 900})"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').textContent.replace(/\\s+/g, ' ').includes(\"Hi, I'm\")",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: 'here.', start_ms: 900, end_ms: 1100})"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').textContent.replace(/\\s+/g, ' ').includes(\"Hi, I'm here.\")",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').textContent.replace(/\\s+/g, ' ').includes('Not sent to Shelley')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "!/message-user/.test(document.querySelector('[data-testid=\"live-exchange\"]').className)",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "unchanged",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: 'echo: check the transcript', start_ms: 1500, end_ms: 2200})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.delegation.created', offset_ms: 2200, delegation: {id: 'transcript', target: 'client'}})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: 'Okay, let', start_ms: 2300, end_ms: 2600})"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').textContent.replace(/\\s+/g, ' ').includes('Okay, let')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: ' me check.', start_ms: 2600, end_ms: 3000})"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"message\"]').length > 0",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const msgs = Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: Hello.echo: check the transcript')); return msgs.length; })()",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const msgs = Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: Hello.echo: check the transcript')); return msgs.every(el => el.textContent.replace(/\\s+/g, ' ').includes('LIVE: Okay, let me check.')); })()",
+      "expect": "true"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='live-exchange']",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.output_transcript.delta', delta: \" I'm still here while that runs.\", start_ms: 3500, end_ms: 4500})"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').textContent.replace(/\\s+/g, ' ').includes(\"I'm still here while that runs.\")",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"live-exchange\"]').textContent.replace(/\\s+/g, ' ').includes('Not sent to Shelley')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const msgs = Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: Hello.echo: check the transcript')); return msgs.every(el => !el.textContent.replace(/\\s+/g, ' ').includes(\"I'm still here while that runs.\")); })()",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "user messages added",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.input_transcript.delta', delta: 'echo: now lint', start_ms: 5000, end_ms: 6000})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.liveEmit({type: 'session.delegation.created', offset_ms: 6000, delegation: {id: 'next-transcript', target: 'client'}})"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const msgs = Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: echo: now lint')); return msgs.length; })()",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const msgs = Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: echo: now lint')); return msgs.every(el => el.textContent.replace(/\\s+/g, ' ').includes(\"LIVE: I'm still here while that runs.\")); })()",
+      "expect": "true"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='live-exchange']",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const msgs = Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: Hello.echo: check the transcript')); return msgs.every(el => !el.textContent.replace(/\\s+/g, ' ').includes(\"I'm still here while that runs.\")); })()",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "livetranscript rows",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='live-stop']"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/transcript"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const msgs = Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: Hello.echo: check the transcript')); return msgs.length; })()",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const msgs = Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: Hello.echo: check the transcript')); return msgs.every(el => !el.textContent.replace(/\\s+/g, ' ').includes(\"I'm still here while that runs.\")); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const msgs = Array.from(document.querySelectorAll('[data-testid=\"message\"]')).filter(el => el.textContent.replace(/\\s+/g, ' ').includes('Spoken request: echo: now lint')); return msgs.length === 1 && msgs.every(el => el.textContent.replace(/\\s+/g, ' ').includes(\"LIVE: I'm still here while that runs.\")); })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:26:39.09180238Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 172130,
+    "output_tokens": 5493,
+    "estimated_cost_usd": 0.19232234999999998,
+    "mode": "generated"
+  }
+}
